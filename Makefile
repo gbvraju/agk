@@ -6,6 +6,7 @@ governance:
 	$(PY) scripts/agk/check_protected_changes.py
 	$(PY) scripts/agk/check_requirements.py
 	$(PY) scripts/agk/check_adrs.py
+	$(PY) scripts/agk/check_specs.py
 	$(PY) scripts/agk/check_neutrality.py
 	$(PY) scripts/agk/check_build_state.py
 	$(PY) scripts/agk/reviewers.py --check

@@ -13,10 +13,10 @@ jobs:
   governance:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4   # (verify) pin to a commit SHA once confirmed
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5   # (verify) pin to a commit SHA once confirmed
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5.6.0
         with:
           python-version: "3.12"
       - name: Install tooling
@@ -35,6 +35,6 @@ jobs:
       - name: Tests of the checks
         run: make test
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2   # (verify) action version and licence terms
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7   # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

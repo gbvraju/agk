@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.1.0",
+  "kit_version": "0.2.0",
   "verbatim": [
     ".claude/agents/drift-auditor.md",
     ".claude/hooks/stop_check.py",
@@ -19,6 +19,7 @@
     "scripts/agk/check_pr_body.py",
     "scripts/agk/check_protected_changes.py",
     "scripts/agk/check_requirements.py",
+    "scripts/agk/check_specs.py",
     "scripts/agk/common.py",
     "scripts/agk/reviewers.py",
     "scripts/agk/traceability.py",
@@ -29,6 +30,7 @@
     "tests/kit/test_check_pr_body.py",
     "tests/kit/test_check_protected_changes.py",
     "tests/kit/test_check_requirements.py",
+    "tests/kit/test_check_specs.py",
     "tests/kit/test_reviewers.py",
     "tests/kit/test_stop_hook.py",
     "tests/kit/test_workflow.py"

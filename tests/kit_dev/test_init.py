@@ -327,3 +327,12 @@ def test_ac2_failing_project_test_makes_make_test_fail(installed):
     proc = make(installed, "test", PYTEST_ADDOPTS="-rA")
     assert proc.returncode != 0
     assert "FAILED tests/test_sample.py::test_sample_fails" in proc.stdout
+
+
+def test_ac2_installed_adr_records_the_one_direct_commit(installed):
+    """REQ-009 AC2: the rendered ADR-0001 of a target names its creation commit."""
+    text = (installed / "docs" / "adr" / "0001-adopt-agk.md").read_text(encoding="utf-8")
+    assert (
+        "one direct commit to the default branch is the repository's creation commit"
+        in " ".join(text.split())
+    )

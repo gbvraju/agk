@@ -136,3 +136,31 @@ def test_ac2_make_test_and_testpaths_cover_all_of_tests():
         text = (KIT_ROOT / rel).read_text(encoding="utf-8").replace("{{", "").replace("}}", "")
         data = tomllib.loads(text)
         assert data["tool"]["pytest"]["ini_options"]["testpaths"] == ["tests"], rel
+
+
+def test_ac2_kit_version_is_at_least_0_2_0_and_check_specs_is_wired():
+    """REQ-009 AC2: installed content changed (pins, renderer, new check)."""
+    m = manifest()
+    assert tuple(int(x) for x in m["kit_version"].split(".")) >= (0, 2, 0)
+    assert "scripts/agk/check_specs.py" in m["verbatim"]
+    assert "tests/kit/test_check_specs.py" in m["verbatim"]
+    makefile = (KIT_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "scripts/agk/check_specs.py" in makefile
+
+
+def test_ac2_adr_template_names_the_creation_commit_as_the_one_direct_commit():
+    """REQ-009 AC2: decision 3 of the installed ADR-0001 records the one direct commit."""
+    text = (KIT_ROOT / manifest()["templates"]["docs/adr/0001-adopt-agk.md"]).read_text(
+        encoding="utf-8"
+    )
+    flat = " ".join(text.split())
+    assert "one direct commit to the default branch is the repository's creation commit" in flat
+    assert "everything else goes through a pull request" in flat.lower()
+
+
+def test_ac2_readme_has_an_installing_section():
+    """REQ-009 AC2"""
+    text = (KIT_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "## Installing" in text
+    flat = " ".join(text.split())
+    assert "one first commit" in flat and "maintainer-approved" in flat
