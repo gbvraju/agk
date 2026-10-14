@@ -77,8 +77,11 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     nothing, and exits with the code the real run would (0 or 1).
 18. **Tests directories.** `tests/kit/` (tests of the checks) is installed so the target can test its own checks and
     `make test` is green. The kit-only tests, `tests/kit_dev/test_init.py` and `tests/kit_dev/test_kit_manifest.py`,
-    are not installed. The `Makefile` `test` target runs the existing ones of `tests/kit` and `tests/kit_dev`
-    (`$(wildcard ...)`), so the kit's `make test` runs both and the target's runs `tests/kit`.
+    are not installed. The `Makefile` `test` target runs `$(PY) -m pytest tests -q`, and `testpaths` in
+    `[tool.pytest.ini_options]` is `["tests"]` in the kit's and the installed `pyproject.toml`. The kit's `make test`
+    therefore runs `tests/kit` and `tests/kit_dev`; an installed repository's runs `tests/kit` and the project's own
+    tests under `tests/`. A test added under `tests/` in a target is collected and run by `make test`; a failing one
+    makes it fail.
 19. **Branch-rule instructions.** After a run (and in `--dry-run`) init prints, for the user to apply by hand, the
     ruleset `main` and repository settings of ADR-0001 decision 3: Active; no bypass; target the default branch;
     restrict deletions; require linear history; require a pull request (0 approvals, dismiss stale approvals, squash
