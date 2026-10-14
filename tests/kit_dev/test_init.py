@@ -304,3 +304,26 @@ def test_ac2_rendered_output_is_neutral(installed):
         text = (installed / rel).read_text(encoding="utf-8")
         assert not re.findall(r"ADR-(?!0001)\d{4}", text), rel
         assert "{{" not in text, rel
+
+
+# --- Project tests run under make test (SPEC-0001 rule 18, amended) ----------------------------
+
+
+def test_ac2_project_tests_are_collected_and_run_by_make_test(installed):
+    """REQ-009 AC2: rule 18. A project test under tests/ runs in the target's make test."""
+    (installed / "tests" / "test_sample.py").write_text(
+        "def test_sample_runs():\n    assert 1 + 1 == 2\n", encoding="utf-8"
+    )
+    proc = make(installed, "test", PYTEST_ADDOPTS="-rA")
+    assert proc.returncode == 0, proc.stdout[-2000:] + proc.stderr[-2000:]
+    assert "PASSED tests/test_sample.py::test_sample_runs" in proc.stdout
+
+
+def test_ac2_failing_project_test_makes_make_test_fail(installed):
+    """REQ-009 AC2: rule 18."""
+    (installed / "tests" / "test_sample.py").write_text(
+        "def test_sample_fails():\n    assert False\n", encoding="utf-8"
+    )
+    proc = make(installed, "test", PYTEST_ADDOPTS="-rA")
+    assert proc.returncode != 0
+    assert "FAILED tests/test_sample.py::test_sample_fails" in proc.stdout

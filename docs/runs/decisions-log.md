@@ -31,3 +31,5 @@ One row per decision made outside an ADR, so a compacted session can be reconstr
 | 2026-10-14 | `tests/kit_dev/` is protected and kit-only (Q-K1-11) | it guards the installer | SPEC-0001 rule 21, ADR-0004 | reviewer |
 | 2026-10-14 | `config/protected-paths.txt` is a template, not a verbatim copy (Q-K1-12) | the kit protects `kit/` without installing it | SPEC-0001 rule 21, ADR-0004 | reviewer |
 | 2026-10-14 | Approved specs are not yet protected by a check; follow-up after PR #6 (rule 6) | principle 6 has no check yet | this log, ADR-0004 residual | maintainers |
+| 2026-10-14 | Project tests must run under `make test` (`pytest tests`, `testpaths = ["tests"]`) | found while preparing the live proof: installed repositories skipped their own tests | ADR-0005, SPEC-0001 rule 18 amendment | maintainers |
+| 2026-10-14 | Agent scripts that write text containing backticks or `$` use quoted heredocs (`<<'EOF'`) | an unquoted heredoc expanded backticks in PR #6 and split one fix across two commits | this log | maintainers |

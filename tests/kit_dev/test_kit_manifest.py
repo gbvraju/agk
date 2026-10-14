@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tomllib
 
 from conftest import KIT_ROOT, manifest
 
@@ -124,3 +125,14 @@ def test_ac2_branch_rules_text_equals_kit_adr_decision_3():
     assert len(sentences) >= 2
     for sentence in sentences:
         assert sentence in norm_adr, sentence
+
+
+def test_ac2_make_test_and_testpaths_cover_all_of_tests():
+    """REQ-009 AC2: rule 18 (amended). The kit and an installed repository run `pytest tests`."""
+    makefile = (KIT_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "$(PY) -m pytest tests -q" in makefile
+    template = manifest()["templates"]["pyproject.toml"]
+    for rel in ("pyproject.toml", template):
+        text = (KIT_ROOT / rel).read_text(encoding="utf-8").replace("{{", "").replace("}}", "")
+        data = tomllib.loads(text)
+        assert data["tool"]["pytest"]["ini_options"]["testpaths"] == ["tests"], rel

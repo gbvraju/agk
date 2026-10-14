@@ -11,7 +11,7 @@ installed = "{{date}}"
 test_dirs = ["tests"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests/kit"]
+testpaths = ["tests"]
 pythonpath = ["scripts/agk"]
 
 [tool.ruff]
