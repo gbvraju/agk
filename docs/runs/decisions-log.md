@@ -33,3 +33,8 @@ One row per decision made outside an ADR, so a compacted session can be reconstr
 | 2026-10-14 | Approved specs are not yet protected by a check; follow-up after PR #6 (rule 6) | principle 6 has no check yet | this log, ADR-0004 residual | maintainers |
 | 2026-10-14 | Project tests must run under `make test` (`pytest tests`, `testpaths = ["tests"]`) | found while preparing the live proof: installed repositories skipped their own tests | ADR-0005, SPEC-0001 rule 18 amendment | maintainers |
 | 2026-10-14 | Agent scripts that write text containing backticks or `$` use quoted heredocs (`<<'EOF'`) | an unquoted heredoc expanded backticks in PR #6 and split one fix across two commits | this log | maintainers |
+| 2026-10-14 | `init` needs in-session maintainer authorization when run by an agent | a cloned `init.py` is blocked as external code until authorized | docs/runs/k1-live-proof.md | reviewer |
+| 2026-10-14 | The sandbox's one direct first commit is authorized | an empty repository has no base branch for a PR; recorded in the target's ADR-0001 | docs/runs/k1-live-proof.md | maintainers |
+| 2026-10-14 | Briefs say "final commit, then merge"; agents check PR state before pushing | a maintainer merge overtook an agent's final commit (sandbox PR #2) | docs/runs/k1-live-proof.md | reviewer |
+| 2026-10-14 | A stray branch is deleted by maintainers, never by the agent or via the colon refspec | the deny list held and the colon form has no deny rule (ADR-0003 residual) | docs/runs/k1-live-proof.md | reviewer |
+| 2026-10-14 | `date -u` is the authoritative date for every artifact, including briefs' dated lines (Q-K1-15) | the brief's 2026-10-15 disagreed with the session clock | docs/build-state.md, docs/runs/decisions-log.md | reviewer |
