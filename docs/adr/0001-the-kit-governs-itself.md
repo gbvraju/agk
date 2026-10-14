@@ -37,3 +37,6 @@ cannot be trusted. Every rule it ships therefore applies to this repository from
 
 - 2026-10-14: branch protection and required-review settings are GitHub settings, not files; they are documented
   and verified by `agk doctor` in a later milestone (REQ-002 AC1).
+- 2026-10-14: `teams.maintainers.github_team` in `config/reviewers.yaml` maps to a user handle until an
+  organisation team exists. It is a mapping only: authority lists (`approvers`) hold team names, never handles,
+  and test fixtures use placeholders. Replace the handle when the team exists.

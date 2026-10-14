@@ -97,3 +97,23 @@ def test_ac3_stop_hook_is_registered():
     """REQ-002 AC3"""
     hooks = settings()["hooks"]["Stop"][0]["hooks"]
     assert any("stop_check.py" in h["command"] for h in hooks)
+
+
+def test_ac2_deny_covers_push_variants_in_any_flag_position():
+    """REQ-002 AC2: -f, --force-with-lease, +refspec, --delete, :branch, flag after remote."""
+    deny = settings()["permissions"]["deny"]
+    for rule in (
+        "Bash(git push --force*)",
+        "Bash(git push * --force*)",
+        "Bash(git push -f*)",
+        "Bash(git push * -f*)",
+        "Bash(git push --delete*)",
+        "Bash(git push * --delete*)",
+        "Bash(git push -d*)",
+        "Bash(git push * -d*)",
+        "Bash(git push +*)",
+        "Bash(git push * +*)",
+        "Bash(git push * :*)",
+        "Bash(git reset * --hard*)",
+    ):
+        assert rule in deny

@@ -58,3 +58,13 @@ Run on 2026-10-14 in the sandbox:
 - `make test`: 76 passed.
 - `ruff check .`: All checks passed.
 - `python3 scripts/agk/traceability.py`: matrix printed to stdout; nothing written.
+
+## Reviewer interim rulings (2026-10-14)
+
+- Q-K0-1 accepted.
+- Q-K0-3: CODEOWNERS becomes a documented exception to rule 5 (ADR plus a match check) in PR #2 (ADR-0003).
+- Q-K0-4: handle stays in `config/reviewers.yaml` as a mapping only; dated residual added to ADR-0001; fixtures use
+  placeholders; authority lists hold team names only.
+- Deferred to PR #2 (not in #1): CLAUDE.md, push allow (`git push -u origin HEAD` only), decisions-log.
+- Deny rules in #1 tightened: push force/lease/`+refspec`/`--delete`/`:branch` in any flag position and
+  `git reset * --hard`; wildcard rule syntax is (verify).
