@@ -7,11 +7,10 @@ import sys
 from common import (
     ALLOWED_STATUS,
     CheckError,
-    find_markers,
+    markers_for,
     parse_requirements,
     repo_root,
     run,
-    test_dirs,
 )
 
 NAME = "requirements"
@@ -37,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     reqs = parse_requirements(path.read_text(encoding="utf-8"))
     if not reqs:
         raise CheckError(f"{PATH} defines no requirement")
-    markers = find_markers(root, test_dirs(root, dirs_arg(argv)))
+    markers = markers_for(root, dirs_arg(argv))
 
     problems: list[str] = []
     seen: set[str] = set()

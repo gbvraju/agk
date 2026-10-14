@@ -66,6 +66,30 @@ def stamped(target: Path, today: str) -> tuple[str, str]:
     return date or today, branch or detect_default_branch(target) or "main"
 
 
+def install_mode(target: Path) -> str | None:
+    """ "init" or "adopt" when TARGET already carries an agk install, else None.
+
+    Reads the stamp as text (agk.toml `mode`, or a `[tool.agk]` table of an earlier install).
+    """
+    path = target / "agk.toml"
+    if path.is_file():
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return None
+        match = re.search(r'(?m)^mode\s*=\s*"(\w+)"', text)
+        if match:
+            return match.group(1)
+    pyproject = target / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            if re.search(r"(?m)^\[tool\.agk\]", pyproject.read_text(encoding="utf-8")):
+                return "init"
+        except (OSError, UnicodeDecodeError):
+            return None
+    return None
+
+
 def render(text: str, variables: dict[str, str], source: str) -> str:
     def sub(match: re.Match) -> str:
         name = match.group(1)
@@ -131,8 +155,8 @@ def classify(target: Path, items: list[tuple[str, bytes]], entries: list[str]):
     return plan
 
 
-def print_branch_rules(branch: str) -> None:
-    print(f"Apply by hand on GitHub to the default branch `{branch}` (init configures nothing):")
+def print_branch_rules(branch: str, tool: str = "init") -> None:
+    print(f"Apply by hand on GitHub to the default branch `{branch}` ({tool} configures nothing):")
     print((KIT_ROOT / BRANCH_RULES).read_text(encoding="utf-8").rstrip())
 
 
@@ -153,6 +177,8 @@ def main(argv: list[str] | None = None) -> int:
         target = target.resolve()
         if target == KIT_ROOT or KIT_ROOT in target.parents:
             raise Refusal("TARGET is the kit checkout or inside it (path class kit/)")
+        if install_mode(target) == "adopt":
+            raise Refusal("TARGET was installed by adopt (path class agk.toml); init refuses")
         items, entries, branch = build_items(target, datetime.now(UTC).date().isoformat())
         plan = classify(target, items, entries)
     except Refusal as exc:

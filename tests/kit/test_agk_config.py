@@ -11,6 +11,8 @@ DEFAULTS = {
     "test_dirs": ["tests"],
     "lint_paths": ["scripts/agk", "tests/kit", ".claude/hooks"],
     "project_tests": "",
+    "test_patterns": ["test_*.py"],
+    "mode": "",
 }
 
 
@@ -138,3 +140,10 @@ def test_ac1_project_tests_is_read_and_printed(repo):
 def test_ac1_project_tests_is_empty_by_default(repo):
     """REQ-010 AC1: rule 5 (adopt leaves it empty)."""
     assert repo.run("config.py", "project_tests").stdout.strip() == ""
+
+
+def test_ac1_test_patterns_and_mode_are_read(tmp_path):
+    """REQ-010 AC1: rules 5 and 9."""
+    (tmp_path / "agk.toml").write_text('mode = "adopt"\ntest_patterns = ["*_test.py"]\n')
+    cfg = common.load_config(tmp_path)
+    assert cfg["mode"] == "adopt" and cfg["test_patterns"] == ["*_test.py"]

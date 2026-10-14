@@ -16,6 +16,8 @@ NAME = "reviewers"
 CONFIG = "config/reviewers.yaml"
 PROTECTED_LIST = "config/protected-paths.txt"
 CODEOWNERS = ".github/CODEOWNERS"
+BLOCK_BEGIN = "# >>> agk\n"
+BLOCK_END = "# <<< agk\n"
 HANDLE_RE = re.compile(r"^@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 
@@ -191,6 +193,17 @@ def validate(data: dict, protected_list: str) -> list[str]:
     return problems
 
 
+def extract_block(text: str) -> str:
+    """The text between the agk markers of a project CODEOWNERS; the rest of the file is ignored."""
+    if text.count(BLOCK_BEGIN) != 1 or text.count(BLOCK_END) != 1:
+        raise CheckError(f"{CODEOWNERS} has a broken or duplicated agk block")
+    start = text.index(BLOCK_BEGIN) + len(BLOCK_BEGIN)
+    end = text.index(BLOCK_END)
+    if end < start:
+        raise CheckError(f"{CODEOWNERS} has a broken or duplicated agk block")
+    return text[start:end]
+
+
 def render_codeowners(data: dict) -> str:
     owned: dict[str, str] = {}
     for cls in data["classes"].values():
@@ -233,6 +246,8 @@ def main(argv: list[str] | None = None) -> int:
         committed = (root / CODEOWNERS).read_text(encoding="utf-8")
     except OSError as exc:
         raise CheckError(f"{CODEOWNERS} is missing; render it with --codeowners") from exc
+    if BLOCK_BEGIN in committed or BLOCK_END in committed:
+        committed = extract_block(committed)
     if committed != rendered:
         raise CheckError(f"{CODEOWNERS} differs from the rendering of {CONFIG}; re-render it")
     print(f"ok {NAME} ({CODEOWNERS} matches)")

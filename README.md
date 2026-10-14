@@ -34,4 +34,14 @@ Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI t
 
 See `docs/specs/0001-agk-init.md` and `docs/runs/k1-live-proof.md`.
 
+## Adopting an existing repository
+
+    python3 scripts/agk/adopt.py TARGET [--dry-run]
+
+Run from a checkout of agk as a maintainer-approved step. TARGET is an existing git work tree. Adopt touches no
+product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `tests/kit/`, `.claude/`, `config/`,
+`constitution/`, `docs/`, `.github/workflows/governance.yml`), appends one marked block to `.gitignore` and, when they
+exist, to `CLAUDE.md`, `.github/CODEOWNERS` and `.github/PULL_REQUEST_TEMPLATE.md`, and refuses rather than overwrite.
+The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/specs/0002-agk-adopt.md`.
+
 Licence: Apache-2.0.

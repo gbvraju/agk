@@ -19,7 +19,9 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    `gh` calls, no commits, no writes outside TARGET. Refuse before any write. Refuse when a path to write passes
    through a symlink, when TARGET is or is inside the kit checkout, and below Python 3.11.
 3. **Target files are data.** Adopt reads target files only to compare bytes, to find its own marked blocks and to read
-   the default branch (rule 7). It never imports, executes or parses target code, and never runs its tools.
+   the default branch (rule 7). It also scans `agk.toml` for a `mode` line and `pyproject.toml` for a `[tool.agk]`
+   header as plain text (rule 17), and parses its own `agk.toml` to reuse a stamp (rule 14). It never imports,
+   executes or parses target code, and never runs its tools.
 
 ### What a product file is
 
@@ -32,7 +34,8 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    - **Block-appended** (adopt may add one marked block, nothing else): `.gitignore`
      (`# >>> agk` … `# <<< agk`), and, when they already exist, `CLAUDE.md`, `.github/CODEOWNERS`,
      `.github/PULL_REQUEST_TEMPLATE.md` (`<!-- >>> agk -->` … `<!-- <<< agk -->`). When absent, they are created
-     whole.
+     whole; an absent `.gitignore` is created containing the marked block only. An appended block keeps the existing
+     bytes as a prefix, and a file without a final newline gets one newline before the block.
    Adopt **never writes** any other file: in particular `Makefile`, `pyproject.toml`, `setup.*`, `tox.ini`,
    `requirements*`, every other `.github/` file, `README*`, `LICENSE*`, sources and the project's tests.
 5. **Zero-touch design (Q-K2-1).** The kit owns its commands in `agk.mk` (targets `agk-governance`, `agk-lint`,
@@ -47,7 +50,8 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    same `agk.mk` and `agk.toml` and keeps a thin `Makefile` (aliases `governance`, `lint`, `test` to the `agk-*`
    targets; `test` runs `agk-test` then `agk-project-test`), so an earlier init repository behaves as before. `agk-test`
    also runs `tests/kit_dev` when it exists (this repository only). This changes the shared kit: ADR-0007, kit version
-   0.3.0. The agk repository adopts `agk.mk` and `agk.toml` itself (its `Makefile` becomes thin aliases), because the
+   0.3.0 (adopt: ADR-0008, kit version 0.4.0). Adopt templates may also use `{{test_dirs}}`, `{{test_patterns}}` and
+   `{{existing_protected}}`. The agk repository adopts `agk.mk` and `agk.toml` itself (its `Makefile` becomes thin aliases), because the
    workflow is verbatim and calls `make -f agk.mk`; ADR-0007 covers it.
 6. **No project config is reshaped.** Kit tests run with their own `tests/kit/pytest.ini`, selected by `-c`, so the
    project's `[tool.pytest.ini_options]`, `pytest.ini`, `tox.ini` and `conftest.py` are neither read nor changed.
@@ -73,9 +77,12 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
 
 9. **Discovery is configurable.** `agk.toml` `test_dirs` (default `["tests"]`) and `test_patterns` (default
    `["test_*.py"]`); adopt detects `*_test.py` and `test_*.py` files and writes the directories that contain them
-   (for the survey target: `colorama/tests`, `*_test.py`). Markers are `REQ-nnn` strings in matching files
-   (docstring or comment), so unittest-style projects work. Kit tests live in `tests/kit/`, which is excluded from
-   the project's marker search unless listed.
+   (for the survey target: `colorama/tests`, `*_test.py`): the topmost directories holding matching files, `["."]` when a
+   matching file is at the repository root; hidden directories, `node_modules`, `__pycache__`, `venv`, `env`, `build`,
+   `dist`, `site-packages`, `tox`, `tests/kit` and `scripts/agk` are skipped; with no match the defaults apply. A second
+   run reuses the stamped `test_dirs` and `test_patterns`. Markers are `REQ-nnn` strings in matching files (docstring
+   or comment), so unittest-style projects work. Kit tests live in `tests/kit/`, which is excluded from the project's
+   marker search in adopt mode unless a listed directory is inside it.
 10. **Lint scope.** `agk-lint` runs `ruff check --isolated` with the kit's rule set and line length given as flags, over
     `lint_paths` (default `scripts/agk tests/kit .claude/hooks`). It never reads project lint config and never
     covers product paths; product lint stays the project's own.
@@ -88,7 +95,7 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
     | `Makefile`, `pyproject.toml`, `tox.ini`, `requirements*` | nothing |
     | `.github/workflows/*` (other than `governance.yml`), `FUNDING.yml` | nothing; they become protected by class `.github/` (Q-K2-3) |
     | `.gitignore` | append one marked block with the kit's entries; a second block or a changed block refuses |
-    | `CLAUDE.md`, `.github/CODEOWNERS`, `.github/PULL_REQUEST_TEMPLATE.md` | append one marked block (Q-K2-5) |
+    | `CLAUDE.md`, `.github/CODEOWNERS`, `.github/PULL_REQUEST_TEMPLATE.md` | append one marked block (Q-K2-5); `reviewers.py --check-codeowners` compares only the marked block of a CODEOWNERS that has one, and a broken or duplicated block fails |
     | `.claude/settings.json` | refuse (no JSON merge in K2) (Q-K2-4) |
     | `.claude/*` other, `config/*`, `docs/*` colliding with a created path, `scripts/agk/*` | refuse when the path exists and differs |
 ### Protected paths per mode
@@ -103,7 +110,8 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
 
 13. **ADR-0001 for an adopted repository.** `docs/adr/0001-adopt-agk.md` is rendered from an adopt template. It
     records the adoption date, the kit version, the default branch, the list of existing protected-class files it
-    found (`.github/*`), the protected paths, the reviewer model and the ruleset; it states that history before the
+    found (the project's files in a protected class that adopt does not itself write, for example `.github/*`, so the list is
+    the same on a second run), the protected paths, the reviewer model and the ruleset; it states that history before the
     adoption date is not governed, that the adoption PR is the first governed change, and makes no "creation commit"
     claim. Its Status is `Proposed` (maintainers flip it); its text names every protected path class.
 
@@ -114,7 +122,7 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
 15. **Refusal.** Differing created files, a changed or duplicated block, a symlink and an unknown default branch each
     refuse before any write, listing every problem with its path class.
 16. **Dry run.** `--dry-run` prints one line per file (`create`, `append`, `unchanged`, `conflict`), writes nothing, and
-    exits with the code the real run would.
+    exits with the code the real run would; the real run prints the same lines before writing.
 17. **Init and adopt together.** `adopt` on a repository installed by `init` (`agk.toml` or `[tool.agk]` present) refuses
     with "already installed by init"; `init` on an `agk.toml` with `mode = "adopt"` refuses likewise. Upgrades between
     modes are out of scope (K3).
