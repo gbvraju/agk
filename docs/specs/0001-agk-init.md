@@ -1,6 +1,6 @@
 # SPEC-0001: agk init
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-009
 
@@ -101,8 +101,8 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     `pyproject.toml`, so a target cannot change its checks, their tests or its build files without an ADR that names
     the class. The installed `reviewers.yaml` `protected` class lists the same entries (`reviewers.py --check` equality).
     The kit adopts the same entries via ADR-0004 in PR #6; the kit's own list is those entries plus the kit-only
-    `kit/`. The installed list is rendered from `kit/templates/protected-paths.txt`; a test asserts the kit's list
-    equals the template plus `kit/` only.
+    `kit/` and `tests/kit_dev/`. The installed list is rendered from `kit/templates/protected-paths.txt`; a test
+    asserts the kit's list equals the template plus `kit/` and `tests/kit_dev/`.
 
 ### Markers
 

@@ -21,10 +21,9 @@ Date: 2026-10-14 (from `date -u`). Docs only: `docs/specs/0001-agk-init.md` and 
   `Makefile`, `pyproject.toml`, rule 21).
 - Q-K1-8 initial statuses: ruled conservative (`Proposed`, `planned`); maintainers flip ADR-0001 in the proof PR.
 - Q-K1-9 refusal scope and Q-K1-10 inherited action tags / gitleaks licence note: accepted; recorded as residuals.
-- Q-K1-11 (new): is `tests/kit_dev/` a protected path in the kit (like `tests/kit/`)? Not in the ruling; the spec
-  leaves it unprotected. Recommendation: protect it in ADR-0004, since it guards the installer.
-- Q-K1-12 (new): `config/protected-paths.txt` is now a template (kit list = installed list plus `kit/`) instead of a
-  verbatim copy, so the kit can protect `kit/` without installing it. Confirm.
+- Q-K1-11: ruled yes. Rule 21 reads "the template plus `kit/` and `tests/kit_dev/`" (ADR-0004 in PR #6).
+- Q-K1-12: confirmed. `config/protected-paths.txt` is a template (kit list = installed list plus `kit/` and
+  `tests/kit_dev/`) instead of a verbatim copy.
 
 ## Changes after review of the first commit
 
@@ -35,3 +34,8 @@ Date: 2026-10-14 (from `date -u`). Docs only: `docs/specs/0001-agk-init.md` and 
 ## Verified
 
 - Docs only; `make governance`, `make test` and `ruff check .` results are in the PR body.
+
+## Spec status
+
+- SPEC-0001 set to `Approved` on maintainers' clearance. From now on deviations go into
+  `docs/runs/proposed-spec-amendments-1.md`, never into direct edits of the spec.
