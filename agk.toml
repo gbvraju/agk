@@ -1,0 +1,4 @@
+# agk configuration for this repository. Read by the checks before pyproject.toml [tool.agk].
+default_branch = "main"
+test_dirs = ["tests"]
+lint_paths = ["scripts/agk", "tests", ".claude/hooks"]

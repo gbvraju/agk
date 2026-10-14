@@ -16,7 +16,7 @@ import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from common import matches, read_list
+from common import detect_default_branch, matches, read_list
 from reviewers import parse, render_codeowners
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
@@ -43,18 +43,27 @@ def slug(name: str) -> str:
     return out or "project"
 
 
-def stamped_date(target: Path, today: str) -> str:
-    """The `installed` date of an existing pyproject.toml, else today (UTC)."""
-    path = target / "pyproject.toml"
-    if path.is_file():
+def stamped(target: Path, today: str) -> tuple[str, str]:
+    """(installed date, default branch): reused from an install, else today and detected."""
+    date, branch = None, None
+    for rel, getter in (
+        ("agk.toml", lambda d: d),
+        ("pyproject.toml", lambda d: d.get("tool", {}).get("agk", {})),
+    ):
+        path = target / rel
+        if not path.is_file():
+            continue
         try:
-            data = tomllib.loads(path.read_text(encoding="utf-8"))
+            section = getter(tomllib.loads(path.read_text(encoding="utf-8")))
         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
-            return today
-        value = data.get("tool", {}).get("agk", {}).get("installed")
-        if isinstance(value, str) and DATE_RE.match(value):
-            return value
-    return today
+            continue
+        value = section.get("installed")
+        if date is None and isinstance(value, str) and DATE_RE.match(value):
+            date = value
+        value = section.get("default_branch")
+        if branch is None and isinstance(value, str) and value:
+            branch = value
+    return date or today, branch or detect_default_branch(target) or "main"
 
 
 def render(text: str, variables: dict[str, str], source: str) -> str:
@@ -74,13 +83,15 @@ def path_class(rel: str, entries: list[str]) -> str:
     return rel.split("/", 1)[0] + "/" if "/" in rel else "(repository root)"
 
 
-def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list[str]]:
-    """Every file init manages as (relative path, content), and the installed protected entries."""
+def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list[str], str]:
+    """Every file init manages as (relative path, content), protected entries, default branch."""
     manifest = json.loads((KIT_ROOT / MANIFEST).read_text(encoding="utf-8"))
+    date, branch = stamped(target, today)
     variables = {
         "project": slug(target.name),
-        "date": stamped_date(target, today),
+        "date": date,
         "kit_version": manifest["kit_version"],
+        "default_branch": branch,
     }
     items: dict[str, bytes] = {}
     for rel in manifest["verbatim"]:
@@ -91,7 +102,7 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
     codeowners = render_codeowners(parse(items["config/reviewers.yaml"].decode("utf-8")))
     items[".github/CODEOWNERS"] = codeowners.encode("utf-8")
     entries = read_list(items["config/protected-paths.txt"].decode("utf-8"))
-    return sorted(items.items()), entries
+    return sorted(items.items()), entries, branch
 
 
 def passes_symlink(target: Path, rel: str) -> bool:
@@ -120,8 +131,8 @@ def classify(target: Path, items: list[tuple[str, bytes]], entries: list[str]):
     return plan
 
 
-def print_branch_rules() -> None:
-    print("Apply by hand on GitHub (init configures nothing):")
+def print_branch_rules(branch: str) -> None:
+    print(f"Apply by hand on GitHub to the default branch `{branch}` (init configures nothing):")
     print((KIT_ROOT / BRANCH_RULES).read_text(encoding="utf-8").rstrip())
 
 
@@ -142,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
         target = target.resolve()
         if target == KIT_ROOT or KIT_ROOT in target.parents:
             raise Refusal("TARGET is the kit checkout or inside it (path class kit/)")
-        items, entries = build_items(target, datetime.now(UTC).date().isoformat())
+        items, entries, branch = build_items(target, datetime.now(UTC).date().isoformat())
         plan = classify(target, items, entries)
     except Refusal as exc:
         print(f"refused: {exc}")
@@ -155,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{action} {rel}{detail}")
     if any(action == "conflict" for _, action, _, _ in plan):
         print("refused: existing files differ; nothing was written (merging is `agk adopt`)")
-        print_branch_rules()
+        print_branch_rules(branch)
         return 1
 
     created = [(rel, content) for rel, action, content, _ in plan if action == "create"]
@@ -175,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
         print("notice: TARGET is not a git work tree; the checks need git")
     if PLACEHOLDER in dict(items)["config/reviewers.yaml"].decode("utf-8"):
         print(f"notice: config/reviewers.yaml maps `maintainers` to the placeholder {PLACEHOLDER}")
-    print_branch_rules()
+    print_branch_rules(branch)
     return 0
 
 

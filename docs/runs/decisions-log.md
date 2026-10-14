@@ -48,3 +48,8 @@ One row per decision made outside an ADR, so a compacted session can be reconstr
 | 2026-10-14 | gitleaks-action licence stays a residual; proposed resolution: the MIT gitleaks binary (verify licence), K2 or K4 (Q-K1-17) | org-owned targets should need no key | ADR-0006 residual | reviewer |
 | 2026-10-14 | The K2 target is a fork of `tartley/colorama` (`gbvraju/colorama`) | a real codebase for `agk adopt`; read-only until the fork exists | this log | maintainers |
 | 2026-10-14 | K2 is split into three specs (adopt, reviewer agent, drift audit), each approved before its implementation | one reviewable step at a time | this log | reviewer |
+| 2026-10-14 | The kit's commands live in `agk.mk` and its configuration in `agk.toml`; init and this repository use them, the `Makefile` is thin aliases (Q-K2-1) | adopt must not edit a project's Makefile or pyproject.toml; one workflow serves every mode | ADR-0007 | reviewer |
+| 2026-10-14 | Kit tests are collected only through `agk.mk` (`AGK_KIT_TESTS=1`) and run with their own `tests/kit/pytest.ini` (Q-K2-2) | a project's `pytest .` must not collect or be configured by kit tests | ADR-0007 | reviewer |
+| 2026-10-14 | The base branch comes from `agk.toml` (default `main`), and the workflow has no branch name | adopted repositories may use `master` or any default branch | ADR-0007 | reviewer |
+| 2026-10-14 | Installed protected list gains `agk.mk` and `agk.toml`; this repository's list also has `kit/` and `tests/kit_dev/` | the kit's commands and config are law | ADR-0007 | reviewer |
+| 2026-10-14 | "main" in installed text becomes "the default branch"; kit version is 0.3.0 (Q-K2-7) | installed content changed | ADR-0007 | reviewer |

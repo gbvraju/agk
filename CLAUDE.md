@@ -5,8 +5,8 @@ rules in short form:
 
 1. You implement; you never decide. Decisions are ADRs or requirement statuses written by the reviewers. Where a
    brief leaves something open, record it as a `Q-…` question and choose the most conservative reading.
-2. One PR per item, branched from `origin/main`, never stacked; one open PR at a time. Push and stop; never poll
-   CI; never merge; never enable auto-merge.
+2. One PR per item, branched from the default branch (`origin/<default branch>`), never stacked; one open PR at a
+   time. Push and stop; never poll CI; never merge; never enable auto-merge.
 3. Protected paths (`config/protected-paths.txt`) change only with an ADR in the same PR that names each changed
    path class.
 4. Tests first. Every check ships with tests of the check (`tests/kit/`). You never mark anything done.

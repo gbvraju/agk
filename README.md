@@ -9,9 +9,12 @@ Status: **K0 — self-governed skeleton** (see `docs/adr/0002-milestones.md`). T
 
 ## Run the checks
 
-    make governance   # all checks against the base branch (origin/main by default)
+    make governance   # all checks against the base branch (the default branch in agk.toml)
     make test         # tests of the checks (needs pytest)
-    make lint         # ruff
+    make lint         # ruff over the kit paths in agk.toml
+
+The kit's own commands are in `agk.mk` (`make -f agk.mk agk-governance | agk-lint | agk-test`); the `Makefile` is thin
+aliases of them. Kit tests are collected only through `agk.mk` (they need `AGK_KIT_TESTS=1`).
 
 Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI the pull-request base SHA is used.
 `python3 scripts/agk/traceability.py` prints the requirement-to-test matrix to stdout; it is never committed.

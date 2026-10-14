@@ -45,7 +45,7 @@ def _verify(root: Path, ref: str) -> str | None:
 
 
 def resolve_base(root: Path, cli_base: str | None = None) -> str | None:
-    """Base commit: --base, AGK_BASE, GITHUB_BASE_REF, then origin/main or main.
+    """Base commit: --base, AGK_BASE, GITHUB_BASE_REF, then the default branch (agk.toml or main).
 
     Returns None only outside CI when nothing resolves (the check is then skipped).
     """
@@ -62,7 +62,8 @@ def resolve_base(root: Path, cli_base: str | None = None) -> str | None:
             if sha:
                 return sha
         raise CheckError("GITHUB_BASE_REF does not resolve")
-    for candidate in ("origin/main", "main"):
+    branch = load_config(root)["default_branch"]
+    for candidate in (f"origin/{branch}", branch):
         sha = _verify(root, candidate)
         if sha:
             return sha
@@ -136,16 +137,54 @@ def parse_requirements(text: str) -> list[dict]:
     return reqs
 
 
+DEFAULT_CONFIG = {
+    "default_branch": "main",
+    "test_dirs": ["tests"],
+    "lint_paths": ["scripts/agk", "tests/kit", ".claude/hooks"],
+}
+
+
+def load_config(root: Path) -> dict:
+    """agk.toml first, then [tool.agk] in pyproject.toml (earlier installs); defaults fill gaps."""
+    cfg = {k: list(v) if isinstance(v, list) else v for k, v in DEFAULT_CONFIG.items()}
+    source: dict = {}
+    agk_toml = root / "agk.toml"
+    pyproject = root / "pyproject.toml"
+    if agk_toml.is_file():
+        source = tomllib.loads(agk_toml.read_text(encoding="utf-8"))
+    elif pyproject.is_file():
+        source = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("tool", {}).get("agk", {})
+    for key in DEFAULT_CONFIG:
+        if key in source:
+            cfg[key] = source[key]
+    return cfg
+
+
+def detect_default_branch(target: Path) -> str | None:
+    """Default branch from .git files, without calling git; None when it cannot be told."""
+    git = target / ".git"
+    if not git.is_dir():
+        return None
+    head = git / "refs" / "remotes" / "origin" / "HEAD"
+    prefix = "ref: refs/remotes/origin/"
+    if head.is_file():
+        line = head.read_text(encoding="utf-8").strip()
+        return line[len(prefix) :] if line.startswith(prefix) and line[len(prefix) :] else None
+    config = git / "config"
+    has_origin = (git / "refs" / "remotes" / "origin").exists() or (
+        config.is_file() and '[remote "origin"]' in config.read_text(encoding="utf-8")
+    )
+    if has_origin:
+        return None
+    line = (git / "HEAD").read_text(encoding="utf-8").strip() if (git / "HEAD").is_file() else ""
+    prefix = "ref: refs/heads/"
+    return line[len(prefix) :] if line.startswith(prefix) and line[len(prefix) :] else None
+
+
 def test_dirs(root: Path, cli_dirs: Sequence[str] | None = None) -> list[str]:
     if cli_dirs:
         return list(cli_dirs)
-    pyproject = root / "pyproject.toml"
-    if pyproject.is_file():
-        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-        dirs = data.get("tool", {}).get("agk", {}).get("test_dirs")
-        if dirs:
-            return list(dirs)
-    return ["tests"]
+    return list(load_config(root)["test_dirs"])
 
 
 def find_markers(root: Path, dirs: Sequence[str]) -> dict[str, list[str]]:

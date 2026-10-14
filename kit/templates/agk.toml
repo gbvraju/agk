@@ -1,0 +1,7 @@
+# agk configuration. Read by the checks before pyproject.toml [tool.agk].
+mode = "init"
+version = "{{kit_version}}"
+installed = "{{date}}"
+default_branch = "{{default_branch}}"
+test_dirs = ["tests"]
+lint_paths = ["scripts/agk", "tests/kit", ".claude/hooks"]

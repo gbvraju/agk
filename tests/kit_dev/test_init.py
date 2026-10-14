@@ -10,7 +10,16 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from conftest import INIT, KIT_ROOT, clean_env, expected_files, manifest, run_init, snapshot
+from conftest import (
+    INIT,
+    KIT_ROOT,
+    clean_env,
+    expected_files,
+    make_repo,
+    manifest,
+    run_init,
+    snapshot,
+)
 
 INSTALLED_PROTECTED = [
     "constitution/",
@@ -23,6 +32,8 @@ INSTALLED_PROTECTED = [
     "tests/kit/",
     "Makefile",
     "pyproject.toml",
+    "agk.mk",
+    "agk.toml",
 ]
 
 
@@ -336,3 +347,87 @@ def test_ac2_installed_adr_records_the_one_direct_commit(installed):
         "one direct commit to the default branch is the repository's creation commit"
         in " ".join(text.split())
     )
+
+
+# --- Shared kit layout: agk.mk, agk.toml, thin Makefile (SPEC-0002 rules 5-8, 10, 12) ---------
+
+
+def test_ac1_installs_agk_mk_and_agk_toml_with_the_stamp(installed):
+    """REQ-010 AC1: rule 5."""
+    import tomllib
+
+    assert (installed / "agk.mk").read_bytes() == (KIT_ROOT / "agk.mk").read_bytes()
+    cfg = tomllib.loads((installed / "agk.toml").read_text(encoding="utf-8"))
+    assert cfg["mode"] == "init"
+    assert cfg["version"] == manifest()["kit_version"]
+    assert cfg["installed"] == datetime.now(UTC).date().isoformat()
+    assert cfg["default_branch"] == "main"
+    assert cfg["test_dirs"] == ["tests"]
+    assert cfg["lint_paths"] == ["scripts/agk", "tests/kit", ".claude/hooks"]
+
+
+def test_ac1_makefile_is_thin_aliases_of_agk_mk(installed):
+    """REQ-010 AC1: rule 5."""
+    text = (installed / "Makefile").read_text(encoding="utf-8")
+    assert "include agk.mk" in text
+    for alias in ("governance: agk-governance", "lint: agk-lint", "test: agk-test"):
+        assert alias in text
+
+
+def test_ac1_both_forms_are_green_in_the_target(installed):
+    """REQ-010 AC1: rule 5. make governance (alias) and make -f agk.mk agk-governance agree."""
+    assert make(installed, "governance").returncode == 0
+    for target in ("agk-governance", "agk-test"):
+        proc = subprocess.run(
+            ["make", "-f", "agk.mk", target],
+            cwd=installed,
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+        )
+        assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-1500:]
+
+
+def test_ac1_bare_pytest_in_the_target_collects_no_kit_test(installed):
+    """REQ-010 AC1: rule 6."""
+    (installed / "tests" / "test_sample.py").write_text("def test_sample():\n    assert True\n")
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", "."],
+        cwd=installed,
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert "tests/test_sample.py::test_sample" in proc.stdout
+    assert "tests/kit/" not in proc.stdout
+
+
+def test_ac1_default_branch_is_detected_and_governance_is_green_on_master(tmp_path):
+    """REQ-010 AC1: rules 7-8. A master repository gets default_branch = master."""
+    import tomllib
+
+    tgt = make_repo(tmp_path / "proj", "master")
+    assert run_init(tgt).returncode == 0
+    cfg = tomllib.loads((tgt / "agk.toml").read_text(encoding="utf-8"))
+    assert cfg["default_branch"] == "master"
+    assert make(tgt, "governance").returncode == 0
+    adr = (tgt / "docs" / "adr" / "0001-adopt-agk.md").read_text(encoding="utf-8")
+    assert "master" in adr and "ruleset `main`" not in adr
+    out = run_init(tgt, "--dry-run").stdout
+    assert "master" in out
+
+
+def test_ac1_stamped_default_branch_survives_a_branch_rename(installed):
+    """REQ-010 AC1: rule 8 and SPEC-0001 rule 15. The second run reads agk.toml."""
+    subprocess.run(["git", "branch", "-m", "trunk"], cwd=installed, check=True)
+    proc = run_init(installed)
+    assert proc.returncode == 0 and "nothing to do" in proc.stdout
+
+
+def test_ac1_installed_text_does_not_assume_main(installed):
+    """REQ-010 AC1: rule 8."""
+    claude = (installed / "CLAUDE.md").read_text(encoding="utf-8")
+    principles = (installed / "constitution" / "principles.md").read_text(encoding="utf-8")
+    assert "origin/main" not in claude
+    assert "branched from main" not in principles
+    assert "default branch" in claude and "default branch" in principles

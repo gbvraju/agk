@@ -31,3 +31,24 @@ def test_ac2_every_action_is_pinned_to_a_full_commit_sha():
     assert uses, "the workflow uses at least one action"
     for line in uses:
         assert re.fullmatch(r"\S+@[0-9a-f]{40}\s+# v\d+(\.\d+){1,2}", line.strip()), line
+
+
+def test_ac2_workflow_has_no_branch_name_and_gates_on_the_default_branch():
+    """REQ-010 AC1 (SPEC-0002 rule 8): push runs everywhere; the job gates on the default branch."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    on_block = text.split("permissions:")[0]
+    assert "branches:" not in on_block
+    assert re.search(r"^\s*push:\s*$", on_block, flags=re.M)
+    assert (
+        "github.event_name == 'pull_request' || "
+        "github.ref_name == github.event.repository.default_branch"
+    ) in text
+    assert re.search(r"^\s*if:\s*\$\{\{", text, flags=re.M)
+
+
+def test_ac2_workflow_calls_the_agk_mk_form():
+    """REQ-010 AC1 (SPEC-0002 rule 5): governance, lint and tests are called through agk.mk."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    for target in ("agk-governance", "agk-lint", "agk-test"):
+        assert f"run: make -f agk.mk {target}" in text
+    assert not re.search(r"run: make (governance|lint|test)\b", text)

@@ -10,6 +10,13 @@ from pathlib import Path
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
+sys.path.insert(0, str(SCRIPTS))
+
+# Kit tests are collected only when run through agk.mk (agk-test sets AGK_KIT_TESTS=1), so a
+# project's own `pytest .` never collects them.
+if os.environ.get("AGK_KIT_TESTS") != "1":
+    collect_ignore_glob = ["*"]
+
 
 PROTECTED = "constitution/\nconfig/\n.claude/\n.github/\ndocs/requirements.md\n"
 

@@ -4,7 +4,7 @@ The twelve rules. Briefs cite them by number.
 
 1. A protected change requires an ADR in the same PR.
 2. Agents never merge, and never bypass checks.
-3. One PR per item, branched from main; no stacks.
+3. One PR per item, branched from the default branch; no stacks.
 4. Build-state is only appended, and only by docs commits.
 5. Generated files are never committed.
 6. Approved specs are owned by a reviewer group; agents propose patches.

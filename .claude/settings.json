@@ -7,6 +7,9 @@
       "Bash(make governance)",
       "Bash(make test)",
       "Bash(make lint)",
+      "Bash(make -f agk.mk agk-governance)",
+      "Bash(make -f agk.mk agk-lint)",
+      "Bash(make -f agk.mk agk-test)",
       "Bash(python3 scripts/agk/*)",
       "Bash(python3 -m pytest tests/kit*)",
       "Bash(git status:*)",
@@ -27,6 +30,8 @@
       "Edit(/tests/kit/**)",
       "Edit(/Makefile)",
       "Edit(/pyproject.toml)",
+      "Edit(/agk.mk)",
+      "Edit(/agk.toml)",
       "Edit(/kit/**)",
       "Edit(/tests/kit_dev/**)"
     ],
