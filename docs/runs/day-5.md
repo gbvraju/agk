@@ -12,28 +12,25 @@ Date: 2026-10-14 (from `date -u`). Docs only: `docs/runs/k2-target-survey.md`, `
 - Test discovery by `test_dirs` and `test_patterns`; kit lint by flags over kit paths only (rules 9-10).
 - Existing files: one marked block for `.gitignore`, `CLAUDE.md`, `CODEOWNERS`, PR template; refuse on an existing
   `.claude/settings.json` (rule 11).
-- Adopted ADR-0001 makes no creation-commit claim (rule 12).
-- Init and adopt refuse each other's installs (rule 16).
-- Safety rules for the fork recorded as rule 19.
+- Adopted ADR-0001 makes no creation-commit claim (rule 13).
+- Init and adopt refuse each other's installs (rule 17).
+- Safety rules for the fork recorded as rule 20.
+- Per-mode protected lists, each rendered from its own template (rule 12, reviewer fix 1).
+- The agk repository adopts `agk.mk` and `agk.toml` itself, its `Makefile` becoming thin aliases, covered by ADR-0007
+  (rule 5, reviewer fix 2).
+- The proof plan adds that a bare `pytest .` in the target collects no `tests/kit` test (rule 18, reviewer fix 3).
 
-## Questions
+## Questions and reviewer rulings
 
-- Q-K2-1: introduce `agk.mk` and `agk.toml` in the shared kit (init too; ADR-0007; kit 0.3.0; thin `Makefile` alias in
-  init installs) rather than an adopt-only fork of the layout. Recommendation: shared, so one set of checks and one
-  workflow serve both modes.
-- Q-K2-2: should the project's own `pytest .` collect the kit's `tests/kit`? The target's `lint_python.yml:22` runs
-  `pytest .`. Spec default: no, kit tests are collected only through `agk.mk`.
-- Q-K2-3: in an adopted repository the whole `.github/` becomes protected (existing workflows included). Spec default:
-  keep `.github/` whole (CI is law); alternative: protect only `governance.yml`.
-- Q-K2-4: an existing `.claude/settings.json` is refused in K2 (no JSON merge). Accept?
-- Q-K2-5: existing `CLAUDE.md`, `CODEOWNERS` and PR template get an appended marked block (spec default) instead of
-  refusal. Accept?
-- Q-K2-6: reading the default branch by parsing `.git/refs/remotes/origin/HEAD` and `.git/HEAD` is not a git call but
-  is coupled to the on-disk format; a packed or absent `origin/HEAD` refuses. Accept?
-- Q-K2-7: replacing "main" with "the default branch" in installed text changes `constitution/principles.md`
-  (principle 3) and `CLAUDE.md`, both protected, by ADR-0007. Accept?
-- Q-K2-8: the checks need Python 3.11 while the target supports 3.9 (`pyproject.toml:12`); CI uses 3.12. Accept the
-  local-run limit (residual in the spec)?
+- Q-K2-1: shared kit (`agk.mk`, `agk.toml`; init too). Ruling: shared, ADR-0007, kit 0.3.0.
+- Q-K2-2: the project's `pytest .` collecting `tests/kit`. Ruling: no.
+- Q-K2-3: protected scope in adopted repositories. Ruling: all of `.github/`.
+- Q-K2-4: existing `.claude/settings.json` refused (no JSON merge). Ruling: accepted as the spec default.
+- Q-K2-5: existing `CLAUDE.md`, `CODEOWNERS`, PR template get an appended marked block. Ruling: accepted as the spec
+  default.
+- Q-K2-6: default branch read from `.git` files without calling git. Ruling: accepted as the spec default.
+- Q-K2-7: "main" becomes "the default branch" in installed text, by ADR-0007. Ruling: accepted as the spec default.
+- Q-K2-8: Python 3.11 needed to run the checks locally. Ruling: accepted as the spec default (spec Residual).
 
 ## Not done here
 

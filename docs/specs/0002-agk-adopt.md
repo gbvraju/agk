@@ -19,7 +19,7 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    `gh` calls, no commits, no writes outside TARGET. Refuse before any write. Refuse when a path to write passes
    through a symlink, when TARGET is or is inside the kit checkout, and below Python 3.11.
 3. **Target files are data.** Adopt reads target files only to compare bytes, to find its own marked blocks and to read
-   the default branch (rule 9). It never imports, executes or parses target code, and never runs its tools.
+   the default branch (rule 7). It never imports, executes or parses target code, and never runs its tools.
 
 ### What a product file is
 
@@ -41,7 +41,8 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    `default_branch`, `test_dirs`, `test_patterns`, `lint_paths`. The checks read `agk.toml` first and fall back to
    `[tool.agk]` in `pyproject.toml` (installs from K1). `init` installs the same `agk.mk` and `agk.toml` and keeps a
    thin `Makefile` (aliases `governance`, `test`, `lint` to the `agk-*` targets), so a K1 repository behaves as before.
-   This changes the shared kit: ADR-0007, kit version 0.3.0.
+   This changes the shared kit: ADR-0007, kit version 0.3.0. The agk repository adopts `agk.mk` and `agk.toml` itself (its
+   `Makefile` becomes thin aliases), because the workflow is verbatim and calls `make -f agk.mk`; ADR-0007 covers it.
 6. **No project config is reshaped.** Kit tests run with their own `tests/kit/pytest.ini`, selected by `-c`, so the
    project's `[tool.pytest.ini_options]`, `pytest.ini`, `tox.ini` and `conftest.py` are neither read nor changed.
    `tests/kit/conftest.py` puts `scripts/agk` on `sys.path`. Kit tests are collected only when run through `agk.mk`
@@ -82,7 +83,17 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
     | `CLAUDE.md`, `.github/CODEOWNERS`, `.github/PULL_REQUEST_TEMPLATE.md` | append one marked block (Q-K2-5) |
     | `.claude/settings.json` | refuse (no JSON merge in K2) (Q-K2-4) |
     | `.claude/*` other, `config/*`, `docs/*` colliding with a created path, `scripts/agk/*` | refuse when the path exists and differs |
-12. **ADR-0001 for an adopted repository.** `docs/adr/0001-adopt-agk.md` is rendered from an adopt template. It
+### Protected paths per mode
+
+12. **Per-mode protected list.** Each mode renders `config/protected-paths.txt` and the `protected` class of
+    `config/reviewers.yaml` from its own template. Adopted repositories protect `constitution/`, `config/`, `.claude/`,
+    `.github/` (all of it), `docs/requirements.md`, `CLAUDE.md`, `scripts/agk/`, `tests/kit/`, `agk.mk` and `agk.toml`,
+    and never the project's `Makefile` or `pyproject.toml`. Init repositories keep their current list (`Makefile` and
+    `pyproject.toml` included) and add `agk.mk` and `agk.toml`. The agk repository's own list is the init list plus
+    `kit/` and `tests/kit_dev/`. `reviewers.py --check` keeps each rendered pair equal. Tests render both modes and
+    compare with the expected lists, and assert the adopted list contains neither `Makefile` nor `pyproject.toml`.
+
+13. **ADR-0001 for an adopted repository.** `docs/adr/0001-adopt-agk.md` is rendered from an adopt template. It
     records the adoption date, the kit version, the default branch, the list of existing protected-class files it
     found (`.github/*`), the protected paths, the reviewer model and the ruleset; it states that history before the
     adoption date is not governed, that the adoption PR is the first governed change, and makes no "creation commit"
@@ -90,41 +101,41 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
 
 ### Idempotence, refusal, dry run
 
-13. **Idempotence.** A second run changes nothing and prints `nothing to do` (hashes and mtimes equal). A block-appended
+14. **Idempotence.** A second run changes nothing and prints `nothing to do` (hashes and mtimes equal). A block-appended
     file whose block equals the kit's is unchanged. Partial installs complete.
-14. **Refusal.** Differing created files, a changed or duplicated block, a symlink and an unknown default branch each
+15. **Refusal.** Differing created files, a changed or duplicated block, a symlink and an unknown default branch each
     refuse before any write, listing every problem with its path class.
-15. **Dry run.** `--dry-run` prints one line per file (`create`, `append`, `unchanged`, `conflict`), writes nothing, and
+16. **Dry run.** `--dry-run` prints one line per file (`create`, `append`, `unchanged`, `conflict`), writes nothing, and
     exits with the code the real run would.
-16. **Init and adopt together.** `adopt` on a repository installed by `init` (`agk.toml` or `[tool.agk]` present) refuses
+17. **Init and adopt together.** `adopt` on a repository installed by `init` (`agk.toml` or `[tool.agk]` present) refuses
     with "already installed by init"; `init` on an `agk.toml` with `mode = "adopt"` refuses likewise. Upgrades between
     modes are out of scope (K3).
 
 ### Proof
 
-17. **Tests (`tests/kit_dev/test_adopt.py`)** build synthetic existing repositories in `tmp_path`: (a) a `Makefile` with
+18. **Tests (`tests/kit_dev/test_adopt.py`)** build synthetic existing repositories in `tmp_path`: (a) a `Makefile` with
     its own `test` target, (b) a hatch `pyproject.toml`, (c) default branch `master` with `origin/HEAD` set,
     (d) `*_test.py` unittest tests under `pkg/tests/`, (e) `.gitignore`, a `.github/workflows/ci.yml` and a
     `CODEOWNERS`. After adopt: every pre-existing file is byte-identical except the marked blocks; `make -f agk.mk
     agk-governance` and `agk-test` pass in the target; the project's `make test` still runs its own tests; a marker in
-    `pkg/tests/x_test.py` is found; a second run changes nothing; each refusal case writes nothing; init after adopt
+    `pkg/tests/x_test.py` is found; a bare `pytest .` in the target (no `-c`) collects no `tests/kit` test; a second run changes nothing; each refusal case writes nothing; init after adopt
     and adopt after init refuse.
-18. **Live proof** (maintainers' and agents' steps, recorded in `docs/runs/`): adopt into `gbvraju/colorama`, a fork of
+19. **Live proof** (maintainers' and agents' steps, recorded in `docs/runs/`): adopt into `gbvraju/colorama`, a fork of
     `tartley/colorama` (BSD-3-Clause). The adoption PR changes **no product file**, verified by listing its diff
     (only adopt-owned paths and the `.gitignore` block); the project's existing CI (`test.yml`, `lint_python.yml`) still
     passes; `governance` is green; then one small change traced to a requirement.
-19. **Safety.** In the fork, every PR targets `gbvraju/colorama` `master`, never the upstream repository. Agents run
+20. **Safety.** In the fork, every PR targets `gbvraju/colorama` `master`, never the upstream repository. Agents run
     `gh repo set-default gbvraju/colorama` and pass `--repo gbvraju/colorama` explicitly on every `gh` call. Opening
     anything on `tartley/colorama` is forbidden. Agents never run the target's code.
 
 ## Tests
 
-- Rules 1–3, 13–16: `tests/kit_dev/test_adopt.py`, marker `REQ-010 AC2` (idempotent, refusals).
-- Rules 4–12, 17: `tests/kit_dev/test_adopt.py` and `tests/kit_dev/test_kit_manifest.py`, marker `REQ-010 AC1`
-  (no product file modified).
+- Rules 1–3, 14–17: `tests/kit_dev/test_adopt.py`, marker `REQ-010 AC2` (idempotent, refusals).
+- Rules 4–13, 18: `tests/kit_dev/test_adopt.py` and `tests/kit_dev/test_kit_manifest.py`, marker `REQ-010 AC1`
+  (no product file modified); rule 12 also compares both modes' rendered protected lists.
 - Rules 5–8, 10 (shared kit): `tests/kit/` tests of `common.py`, `agk.mk` and the workflow, markers `REQ-009 AC2`
   and `REQ-010 AC1`.
-- Rules 18–19: the live proof, recorded in `docs/runs/`.
+- Rules 19–20: the live proof, recorded in `docs/runs/`.
 
 ## Residual
 
