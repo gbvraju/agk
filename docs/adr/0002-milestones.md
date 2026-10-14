@@ -23,7 +23,7 @@ The kit is delivered in stages so that each stage is proven before the next buil
 - K3 — plugin and metrics: Claude Code plugin packaging (`/agk:init`, `/agk:brief`, `/agk:review`,
   `/agk:doctor`), per-PR metrics recorded in the PR body and aggregated weekly; optional adopted components
   behind profile flags.
-- K4 — public: docs site, handbook, profiles (solo / team / enterprise), licence review of adopted components.
+- Repository public from K0 (2026-10-14, reason: CI minutes on a private plan); K4 = public launch: docs site, handbook, profiles, licence review of adopted components.
 
 Non-goals for v0: other agents or hosts; Jira/Linear; hosted services; UI.
 

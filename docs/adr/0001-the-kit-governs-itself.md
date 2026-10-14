@@ -25,6 +25,7 @@ cannot be trusted. Every rule it ships therefore applies to this repository from
    tests in `tests/kit/`. `make governance` runs them; `make test` runs the tests.
 5. Reviewer model: path classes map to reviewer groups in `config/reviewers.yaml`; approvers are teams, never
    personal names. Agents implement; maintainers decide.
+   Repository visibility: public; fork PRs need maintainer approval before workflows run.
 6. This PR creates the protected paths and is covered by this ADR.
 
 ## Consequences
