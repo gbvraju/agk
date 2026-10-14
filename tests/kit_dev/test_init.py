@@ -212,7 +212,7 @@ def test_ac2_branch_rules_are_printed_not_applied(target):
     proc = run_init(target)
     out = " ".join(proc.stdout.split())
     for phrase in (
-        "ruleset `main` is exactly",
+        "ruleset for the default branch is exactly",
         "required status check `governance`",
         "allow auto-merge; auto-delete head branches",
     ):

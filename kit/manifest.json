@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.4.0",
+  "kit_version": "0.4.1",
   "verbatim": [
     ".claude/agents/drift-auditor.md",
     ".claude/hooks/stop_check.py",

@@ -329,6 +329,8 @@ def test_ac2_unknown_default_branch_refuses_and_writes_nothing(tmp_path):
     before = snapshot(root)
     proc = adopt(root)
     assert proc.returncode == 1 and "default branch" in proc.stdout.lower()
+    assert "git remote set-head origin --auto" in proc.stdout
+    assert ".git/refs/remotes/origin/HEAD" in proc.stdout
     assert snapshot(root) == before
 
 
@@ -583,3 +585,23 @@ def test_ac2_adopt_refuses_a_repository_with_a_tool_agk_table(tmp_path):
     proc = adopt(root)
     assert proc.returncode == 1 and "already installed by init" in proc.stdout
     assert snapshot(root) == before
+
+
+def test_ac2_adopt_gains_no_option_for_the_default_branch(tmp_path):
+    """REQ-010 AC2: the refusal names the fix; there is no new option (usage error)."""
+    root = make_existing(tmp_path / "p")
+    for flag in ("--set-head", "--default-branch=master", "--branch"):
+        proc = subprocess.run(
+            [sys.executable, str(ADOPT), str(root), flag],
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+        )
+        assert proc.returncode == 2, flag
+
+
+def test_ac2_printed_branch_rules_in_adopt_say_default_branch(adopted):
+    """REQ-010 AC2: the printed rule text names no branch called main."""
+    out = " ".join(adopt(adopted, "--dry-run").stdout.split())
+    assert "The ruleset for the default branch is exactly:" in out
+    assert "ruleset `main`" not in out

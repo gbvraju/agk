@@ -127,14 +127,20 @@ def test_ac2_templates_reviewers_protected_class_equals_template_list():
     assert paths == lines(manifest()["templates"]["config/protected-paths.txt"])
 
 
-def test_ac2_branch_rules_text_equals_kit_adr_decision_3():
-    """REQ-009 AC2: rule 19."""
+def test_ac2_branch_rules_say_default_branch_and_match_the_kit_adr_apart_from_the_name():
+    """REQ-009 AC2: rule 19 (amended). The ruleset named `main` in this repository's immutable
+    ADR-0001 reads "ruleset for the default branch" in the printed text; the rest is equal."""
     rules = (KIT_ROOT / "kit" / "templates" / "branch-rules.txt").read_text(encoding="utf-8")
     adr = (KIT_ROOT / "docs" / "adr" / "0001-the-kit-governs-itself.md").read_text(encoding="utf-8")
     norm_adr = " ".join(adr.split())
+    assert "The ruleset `main` is exactly:" in norm_adr  # the ADR itself is untouched
     sentences = [" ".join(s.split()) for s in rules.strip().split("\n") if s.strip()]
     assert len(sentences) >= 2
-    for sentence in sentences:
+    assert sentences[0].startswith("The ruleset for the default branch is exactly: ")
+    assert "ruleset `main`" not in " ".join(sentences)
+    tail = sentences[0].split("is exactly: ", 1)[1]
+    assert tail in norm_adr
+    for sentence in sentences[1:]:
         assert sentence in norm_adr, sentence
 
 
@@ -154,10 +160,10 @@ def test_ac2_make_test_and_testpaths_cover_all_of_tests():
         assert data["tool"]["pytest"]["ini_options"]["testpaths"] == ["tests"], rel
 
 
-def test_ac2_kit_version_is_at_least_0_3_0_and_check_specs_is_wired():
+def test_ac2_kit_version_is_at_least_0_4_1_and_check_specs_is_wired():
     """REQ-009 AC2: installed content changed (pins, renderer, new check)."""
     m = manifest()
-    assert tuple(int(x) for x in m["kit_version"].split(".")) >= (0, 3, 0)
+    assert tuple(int(x) for x in m["kit_version"].split(".")) >= (0, 4, 1)
     assert "scripts/agk/check_specs.py" in m["verbatim"]
     assert "tests/kit/test_check_specs.py" in m["verbatim"]
     agk_mk = (KIT_ROOT / "agk.mk").read_text(encoding="utf-8")

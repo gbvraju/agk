@@ -174,3 +174,106 @@ def test_ac2_codeowners_with_broken_markers_fails(repo):
         }
     )
     assert repo.run("reviewers.py", "--check-codeowners").returncode == 1
+
+
+def write_repo(repo, mode=None, codeowners=None):
+    files = {"config/reviewers.yaml": GOOD, "config/protected-paths.txt": PROTECTED}
+    if mode:
+        files["agk.toml"] = f'mode = "{mode}"\n'
+    if codeowners is not None:
+        files[".github/CODEOWNERS"] = codeowners
+    repo.commit(files)
+
+
+def rendered():
+    from reviewers import parse, render_codeowners
+
+    return render_codeowners(parse(GOOD))
+
+
+def test_ac2_plain_codeowners_still_prints_and_writes_nothing(repo):
+    """REQ-005 AC2 (finding b)."""
+    write_repo(repo)
+    proc = repo.run("reviewers.py", "--codeowners")
+    assert proc.returncode == 0 and proc.stdout == rendered()
+    assert not (repo.root / ".github" / "CODEOWNERS").exists()
+
+
+def test_ac2_write_creates_the_whole_file_and_check_passes(repo):
+    """REQ-005 AC2 (finding b): init and this repository write the whole file."""
+    write_repo(repo)
+    proc = repo.run("reviewers.py", "--codeowners", "--write")
+    assert proc.returncode == 0 and "wrote .github/CODEOWNERS" in proc.stdout
+    assert (repo.root / ".github" / "CODEOWNERS").read_text() == rendered()
+    assert repo.run("reviewers.py", "--check-codeowners").returncode == 0
+
+
+def test_ac2_write_replaces_a_stale_file_and_is_idempotent(repo):
+    """REQ-005 AC2 (finding b)."""
+    write_repo(repo, codeowners="/docs/ @stale\n")
+    assert repo.run("reviewers.py", "--codeowners", "--write").returncode == 0
+    path = repo.root / ".github" / "CODEOWNERS"
+    assert path.read_text() == rendered()
+    before = path.stat().st_mtime_ns
+    proc = repo.run("reviewers.py", "--codeowners", "--write")
+    assert proc.returncode == 0 and "unchanged" in proc.stdout
+    assert path.stat().st_mtime_ns == before
+
+
+def test_ac2_write_in_adopt_mode_appends_the_block_after_project_lines(repo):
+    """REQ-005 AC2 (finding b): adopt mode writes only the marked block."""
+    write_repo(repo, mode="adopt", codeowners="* @project\n")
+    proc = repo.run("reviewers.py", "--codeowners", "--write")
+    assert proc.returncode == 0 and "agk block" in proc.stdout
+    text = (repo.root / ".github" / "CODEOWNERS").read_text()
+    assert text == "* @project\n# >>> agk\n" + rendered() + "# <<< agk\n"
+    assert repo.run("reviewers.py", "--check-codeowners").returncode == 0
+
+
+def test_ac2_write_in_adopt_mode_replaces_a_stale_block_and_keeps_the_rest(repo):
+    """REQ-005 AC2 (finding b)."""
+    stale = "* @project\n# >>> agk\n/docs/ @stale\n# <<< agk\n/pkg/ @project\n"
+    write_repo(repo, mode="adopt", codeowners=stale)
+    assert repo.run("reviewers.py", "--codeowners", "--write").returncode == 0
+    text = (repo.root / ".github" / "CODEOWNERS").read_text()
+    assert text == "* @project\n# >>> agk\n" + rendered() + "# <<< agk\n/pkg/ @project\n"
+    again = repo.run("reviewers.py", "--codeowners", "--write")
+    assert again.returncode == 0 and "unchanged" in again.stdout
+
+
+def test_ac2_write_in_adopt_mode_creates_an_absent_file_whole(repo):
+    """REQ-005 AC2 (finding b): the same as adopt, which creates an absent CODEOWNERS whole."""
+    write_repo(repo, mode="adopt")
+    assert repo.run("reviewers.py", "--codeowners", "--write").returncode == 0
+    assert (repo.root / ".github" / "CODEOWNERS").read_text() == rendered()
+
+
+def test_ac2_write_refuses_a_broken_block_and_leaves_the_file_alone(repo):
+    """REQ-005 AC2 (finding b)."""
+    broken = "* @project\n# >>> agk\nno end marker\n"
+    write_repo(repo, mode="adopt", codeowners=broken)
+    proc = repo.run("reviewers.py", "--codeowners", "--write")
+    assert proc.returncode == 1 and "CODEOWNERS" in proc.stdout
+    assert (repo.root / ".github" / "CODEOWNERS").read_text() == broken
+
+
+def test_ac2_write_refuses_an_invalid_config_and_writes_nothing(repo):
+    """REQ-005 AC2 (finding b)."""
+    repo.commit(
+        {
+            "config/reviewers.yaml": GOOD.replace("version: 1", "version: 2"),
+            "config/protected-paths.txt": PROTECTED,
+        }
+    )
+    proc = repo.run("reviewers.py", "--codeowners", "--write")
+    assert proc.returncode == 1
+    assert not (repo.root / ".github" / "CODEOWNERS").exists()
+
+
+def test_ac2_write_needs_codeowners_and_nothing_else(repo):
+    """REQ-005 AC2 (finding b): --write alone, or with another mode, is a usage error."""
+    write_repo(repo)
+    for args in (["--write"], ["--check", "--write"], ["--check-codeowners", "--write"]):
+        proc = repo.run("reviewers.py", *args)
+        assert proc.returncode == 1 and "usage" in proc.stdout
+    assert not (repo.root / ".github" / "CODEOWNERS").exists()
