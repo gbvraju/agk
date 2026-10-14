@@ -31,14 +31,15 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
    installed in the target (K3's plugin form may change this).
 7. **Verbatim set** (the law and its tests; never project-specific): `.claude/settings.json`,
    `.claude/hooks/stop_check.py`, `.claude/agents/drift-auditor.md`, `.github/workflows/governance.yml`,
-   `.github/PULL_REQUEST_TEMPLATE.md`, `CLAUDE.md`, `Makefile`, `.gitignore`,
+   `.github/PULL_REQUEST_TEMPLATE.md`, `CLAUDE.md`, `Makefile` (thin aliases of `agk.mk`), `agk.mk`, `.gitignore`,
    `constitution/principles.md`, `docs/adr/TEMPLATE.md`, `docs/specs/TEMPLATE.md`, `docs/briefs/TEMPLATE.md`, every
-   check and helper in `scripts/agk/` except `init.py` (`common.py`, `check_*.py`, `reviewers.py`,
-   `traceability.py`), and `tests/kit/` (rule 18). Kit-only files are never installed: `scripts/agk/init.py`, `kit/`, `tests/kit_dev/`.
+   check and helper in `scripts/agk/` except `init.py` (`common.py`, `check_*.py`, `config.py`, `reviewers.py`,
+   `traceability.py`), and `tests/kit/` (rule 18, including `tests/kit/pytest.ini`). Kit-only files are never installed: `scripts/agk/init.py`, `kit/`, `tests/kit_dev/`.
 8. **Template set** (project-specific): `constitution/vision.md`, `docs/requirements.md`,
    `docs/adr/0001-adopt-agk.md`, `config/reviewers.yaml`, `config/protected-paths.txt` (rule 21),
-   `config/neutrality.txt`, `docs/build-state.md`, `docs/runs/decisions-log.md`, `pyproject.toml`. Templates may use these variables only: `{{project}}` (TARGET's
-   directory name), `{{date}}` (rule 14), `{{kit_version}}`.
+   `config/neutrality.txt`, `docs/build-state.md`, `docs/runs/decisions-log.md`, `pyproject.toml`, `agk.toml`.
+   Templates may use these variables only: `{{project}}` (TARGET's directory name), `{{date}}` (rule 14),
+   `{{kit_version}}`, `{{default_branch}}`.
 9. **Duplication versus divergence.** The verbatim set is not duplicated under `kit/`: the manifest points at the kit's
    own files, so they cannot diverge. Templates are the only duplicated text. Tests (rule 23) fail when a file the kit
    uses as law is missing from the manifest, when a manifest path does not exist, or when a template does not pass
@@ -61,9 +62,11 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
 13. **ADR-0001.** `docs/adr/0001-adopt-agk.md` records the install: kit version, date, layout, the protected paths, the
     reviewer model, and the ruleset (rule 19). Its Status is `Proposed`; maintainers flip it to `Accepted` in the live-proof PR (rule 24). Its text contains every entry of the
     installed `config/protected-paths.txt`, so the target's first pull request is covered by an ADR that names every changed class.
-14. **Version stamp and dates.** The installed `pyproject.toml` carries `[tool.agk]` with `version`, `installed`
-    (a `YYYY-MM-DD` date), and `test_dirs = ["tests"]`. The first run takes the date from the UTC clock; a later run
-    reads `installed` from the existing `pyproject.toml` and renders the same date, so output stays identical.
+14. **Version stamp and dates.** The installed `agk.toml` carries `mode = "init"`, `version`, `installed` (a
+    `YYYY-MM-DD` date), `default_branch`, `test_dirs = ["tests"]`, `lint_paths` and `project_tests`; the installed
+    `pyproject.toml` carries no `[tool.agk]` table. The first run takes the date from the UTC clock; a later run reads
+    `installed` (and `default_branch`) from the existing `agk.toml`, or from `[tool.agk]` in the `pyproject.toml` of an
+    older install, and renders the same values, so output stays identical.
 
 ### Idempotence, refusal, dry run
 
@@ -77,11 +80,12 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     nothing, and exits with the code the real run would (0 or 1).
 18. **Tests directories.** `tests/kit/` (tests of the checks) is installed so the target can test its own checks and
     `make test` is green. The kit-only tests, `tests/kit_dev/test_init.py` and `tests/kit_dev/test_kit_manifest.py`,
-    are not installed. The `Makefile` `test` target runs `$(PY) -m pytest tests -q`, and `testpaths` in
-    `[tool.pytest.ini_options]` is `["tests"]` in the kit's and the installed `pyproject.toml`. The kit's `make test`
-    therefore runs `tests/kit` and `tests/kit_dev`; an installed repository's runs `tests/kit` and the project's own
-    tests under `tests/`. A test added under `tests/` in a target is collected and run by `make test`; a failing one
-    makes it fail.
+    are not installed. `make test` runs `agk-test` (the kit tests, with `tests/kit_dev` when it exists) and then
+    `agk-project-test`, which runs the `project_tests` command of `agk.toml` (for an init repository `python3 -m
+    pytest tests -q --ignore=tests/kit_dev`, treating pytest exit 5, nothing collected, as success). `testpaths` in
+    `[tool.pytest.ini_options]` is `["tests"]` in the kit's and the installed `pyproject.toml`. A test added under
+    `tests/` in a target is collected and run by `make test` and by the CI step `agk-project-test`; a failing one
+    makes both fail.
 19. **Branch-rule instructions.** After a run (and in `--dry-run`) init prints, for the user to apply by hand, the
     ruleset `main` and repository settings of ADR-0001 decision 3: Active; no bypass; target the default branch;
     restrict deletions; require linear history; require a pull request (0 approvals, dismiss stale approvals, squash
@@ -101,7 +105,7 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
 
 21. **Installed protected list.** The installed `config/protected-paths.txt` is `constitution/`, `config/`, `.claude/`,
     `.github/`, `docs/requirements.md`, `CLAUDE.md`, and also `scripts/agk/`, `tests/kit/`, `Makefile`,
-    `pyproject.toml`, so a target cannot change its checks, their tests or its build files without an ADR that names
+    `pyproject.toml`, `agk.mk`, `agk.toml`, so a target cannot change its checks, their tests or its build files without an ADR that names
     the class. The installed `reviewers.yaml` `protected` class lists the same entries (`reviewers.py --check` equality).
     The kit adopts the same entries via ADR-0004 in PR #6; the kit's own list is those entries plus the kit-only
     `kit/` and `tests/kit_dev/`. The installed list is rendered from `kit/templates/protected-paths.txt`; a test

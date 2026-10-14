@@ -11,5 +11,7 @@ scripts/agk/
 tests/kit/
 Makefile
 pyproject.toml
+agk.mk
+agk.toml
 kit/
 tests/kit_dev/

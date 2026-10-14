@@ -2,10 +2,12 @@
 # Later lines win: broad paths first, narrow paths last.
 /kit/ @gbvraju
 /docs/ @gbvraju
+/agk.mk @gbvraju
 /config/ @gbvraju
 /.claude/ @gbvraju
 /.github/ @gbvraju
 /Makefile @gbvraju
+/agk.toml @gbvraju
 /CLAUDE.md @gbvraju
 /README.md @gbvraju
 /constitution/ @gbvraju

@@ -14,6 +14,7 @@ RENDERED = {".github/CODEOWNERS"}
 SINGLES = {
     "CLAUDE.md",
     "Makefile",
+    "agk.mk",
     ".gitignore",
     "constitution/principles.md",
     "docs/adr/TEMPLATE.md",
@@ -21,7 +22,7 @@ SINGLES = {
     "docs/briefs/TEMPLATE.md",
 }
 FORBIDDEN = [r"gbvraju", r"day-\d", r"\bK[0-4]\b", r"PR #\d+", r"Q-K\d"]
-ALLOWED_VARS = {"project", "date", "kit_version"}
+ALLOWED_VARS = {"project", "date", "kit_version", "default_branch"}
 
 
 def tracked() -> list[str]:
@@ -102,6 +103,8 @@ def test_ac2_kit_protected_list_is_template_plus_kit_only_entries():
         "tests/kit/",
         "Makefile",
         "pyproject.toml",
+        "agk.mk",
+        "agk.toml",
     ]
     assert lines("config/protected-paths.txt") == template + ["kit/", "tests/kit_dev/"]
 
@@ -128,9 +131,14 @@ def test_ac2_branch_rules_text_equals_kit_adr_decision_3():
 
 
 def test_ac2_make_test_and_testpaths_cover_all_of_tests():
-    """REQ-009 AC2: rule 18 (amended). The kit and an installed repository run `pytest tests`."""
+    """REQ-009 AC2: rule 18 (amended). `make test` runs agk-test then the project tests."""
     makefile = (KIT_ROOT / "Makefile").read_text(encoding="utf-8")
-    assert "$(PY) -m pytest tests -q" in makefile
+    assert "test: agk-test agk-project-test" in makefile
+    for rel in ("agk.toml", manifest()["templates"]["agk.toml"]):
+        cfg = tomllib.loads(
+            (KIT_ROOT / rel).read_text(encoding="utf-8").replace("{{", "").replace("}}", "")
+        )
+        assert "-m pytest tests -q" in cfg["project_tests"], rel
     template = manifest()["templates"]["pyproject.toml"]
     for rel in ("pyproject.toml", template):
         text = (KIT_ROOT / rel).read_text(encoding="utf-8").replace("{{", "").replace("}}", "")
@@ -138,14 +146,14 @@ def test_ac2_make_test_and_testpaths_cover_all_of_tests():
         assert data["tool"]["pytest"]["ini_options"]["testpaths"] == ["tests"], rel
 
 
-def test_ac2_kit_version_is_at_least_0_2_0_and_check_specs_is_wired():
+def test_ac2_kit_version_is_at_least_0_3_0_and_check_specs_is_wired():
     """REQ-009 AC2: installed content changed (pins, renderer, new check)."""
     m = manifest()
-    assert tuple(int(x) for x in m["kit_version"].split(".")) >= (0, 2, 0)
+    assert tuple(int(x) for x in m["kit_version"].split(".")) >= (0, 3, 0)
     assert "scripts/agk/check_specs.py" in m["verbatim"]
     assert "tests/kit/test_check_specs.py" in m["verbatim"]
-    makefile = (KIT_ROOT / "Makefile").read_text(encoding="utf-8")
-    assert "scripts/agk/check_specs.py" in makefile
+    agk_mk = (KIT_ROOT / "agk.mk").read_text(encoding="utf-8")
+    assert "scripts/agk/check_specs.py" in agk_mk
 
 
 def test_ac2_adr_template_names_the_creation_commit_as_the_one_direct_commit():
@@ -164,3 +172,45 @@ def test_ac2_readme_has_an_installing_section():
     assert "## Installing" in text
     flat = " ".join(text.split())
     assert "one first commit" in flat and "maintainer-approved" in flat
+
+
+def test_ac1_shared_layout_files_are_in_the_manifest_and_the_repository():
+    """REQ-010 AC1: SPEC-0002 rules 5 and 10."""
+    m = manifest()
+    for rel in ("agk.mk", "scripts/agk/config.py", "tests/kit/pytest.ini", "tests/kit/conftest.py"):
+        assert rel in m["verbatim"], rel
+    assert "agk.toml" in m["templates"]
+    toml = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))
+    assert toml["default_branch"] == "main"
+    assert "tests" in toml["lint_paths"]
+
+
+def test_ac1_this_repository_makefile_is_thin_aliases():
+    """REQ-010 AC1: SPEC-0002 rule 5 (the repository adopts agk.mk itself)."""
+    makefile = (KIT_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "include agk.mk" in makefile
+    for alias in (
+        "governance: agk-governance",
+        "lint: agk-lint",
+        "test: agk-test agk-project-test",
+    ):
+        assert alias in makefile
+    assert "scripts/agk/check_" not in makefile
+
+
+def test_ac1_adr_template_uses_the_default_branch_variable():
+    """REQ-010 AC1: SPEC-0002 rule 8."""
+    text = (KIT_ROOT / manifest()["templates"]["docs/adr/0001-adopt-agk.md"]).read_text()
+    assert "{{default_branch}}" in text
+    assert "ruleset `main`" not in text
+
+
+def test_ac1_templates_carry_project_tests_and_no_pyproject_stamp():
+    """REQ-010 AC1: SPEC-0002 rule 5 and SPEC-0001 rule 14 (amended)."""
+    templates = manifest()["templates"]
+    agk = (KIT_ROOT / templates["agk.toml"]).read_text(encoding="utf-8")
+    assert "project_tests" in agk and "pytest tests" in agk and "exit $rc" in agk
+    pyproject = (KIT_ROOT / templates["pyproject.toml"]).read_text(encoding="utf-8")
+    assert "[tool.agk]" not in pyproject
+    own = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))
+    assert "pytest tests" in own["project_tests"]

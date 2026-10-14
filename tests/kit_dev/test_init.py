@@ -10,7 +10,16 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from conftest import INIT, KIT_ROOT, clean_env, expected_files, manifest, run_init, snapshot
+from conftest import (
+    INIT,
+    KIT_ROOT,
+    clean_env,
+    expected_files,
+    make_repo,
+    manifest,
+    run_init,
+    snapshot,
+)
 
 INSTALLED_PROTECTED = [
     "constitution/",
@@ -23,6 +32,8 @@ INSTALLED_PROTECTED = [
     "tests/kit/",
     "Makefile",
     "pyproject.toml",
+    "agk.mk",
+    "agk.toml",
 ]
 
 
@@ -184,16 +195,16 @@ def test_ac2_adr_names_every_protected_entry_and_is_proposed(installed):
 
 
 def test_ac2_version_stamp_and_date(installed):
-    """REQ-009 AC2: rule 14."""
+    """REQ-009 AC2: rule 14 (amended): the stamp lives in agk.toml only, not in pyproject.toml."""
     import tomllib
 
-    data = tomllib.loads((installed / "pyproject.toml").read_text(encoding="utf-8"))
-    agk = data["tool"]["agk"]
-    assert agk["version"] == manifest()["kit_version"]
-    assert agk["test_dirs"] == ["tests"]
-    today = datetime.now(UTC).date().isoformat()
-    assert agk["installed"] == today
-    assert data["project"]["name"] == "my-project"
+    pyproject = tomllib.loads((installed / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "agk" not in pyproject.get("tool", {})
+    cfg = tomllib.loads((installed / "agk.toml").read_text(encoding="utf-8"))
+    assert cfg["version"] == manifest()["kit_version"]
+    assert cfg["test_dirs"] == ["tests"]
+    assert cfg["installed"] == datetime.now(UTC).date().isoformat()
+    assert pyproject["project"]["name"] == "my-project"
 
 
 def test_ac2_branch_rules_are_printed_not_applied(target):
@@ -336,3 +347,153 @@ def test_ac2_installed_adr_records_the_one_direct_commit(installed):
         "one direct commit to the default branch is the repository's creation commit"
         in " ".join(text.split())
     )
+
+
+# --- Shared kit layout: agk.mk, agk.toml, thin Makefile (SPEC-0002 rules 5-8, 10, 12) ---------
+
+
+def test_ac1_installs_agk_mk_and_agk_toml_with_the_stamp(installed):
+    """REQ-010 AC1: rule 5."""
+    import tomllib
+
+    assert (installed / "agk.mk").read_bytes() == (KIT_ROOT / "agk.mk").read_bytes()
+    cfg = tomllib.loads((installed / "agk.toml").read_text(encoding="utf-8"))
+    assert cfg["mode"] == "init"
+    assert cfg["version"] == manifest()["kit_version"]
+    assert cfg["installed"] == datetime.now(UTC).date().isoformat()
+    assert cfg["default_branch"] == "main"
+    assert cfg["test_dirs"] == ["tests"]
+    assert cfg["lint_paths"] == ["scripts/agk", "tests/kit", ".claude/hooks"]
+
+
+def test_ac1_makefile_is_thin_aliases_of_agk_mk(installed):
+    """REQ-010 AC1: rule 5."""
+    text = (installed / "Makefile").read_text(encoding="utf-8")
+    assert "include agk.mk" in text
+    for alias in ("governance: agk-governance", "lint: agk-lint", "test: agk-test"):
+        assert alias in text
+
+
+def test_ac1_both_forms_are_green_in_the_target(installed):
+    """REQ-010 AC1: rule 5. make governance (alias) and make -f agk.mk agk-governance agree."""
+    assert make(installed, "governance").returncode == 0
+    for target in ("agk-governance", "agk-test"):
+        proc = subprocess.run(
+            ["make", "-f", "agk.mk", target],
+            cwd=installed,
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+        )
+        assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-1500:]
+
+
+def test_ac1_bare_pytest_in_the_target_collects_no_kit_test(installed):
+    """REQ-010 AC1: rule 6."""
+    (installed / "tests" / "test_sample.py").write_text("def test_sample():\n    assert True\n")
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", "."],
+        cwd=installed,
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert "tests/test_sample.py::test_sample" in proc.stdout
+    assert "tests/kit/" not in proc.stdout
+
+
+def test_ac1_default_branch_is_detected_and_governance_is_green_on_master(tmp_path):
+    """REQ-010 AC1: rules 7-8. A master repository gets default_branch = master."""
+    import tomllib
+
+    tgt = make_repo(tmp_path / "proj", "master")
+    assert run_init(tgt).returncode == 0
+    cfg = tomllib.loads((tgt / "agk.toml").read_text(encoding="utf-8"))
+    assert cfg["default_branch"] == "master"
+    assert make(tgt, "governance").returncode == 0
+    adr = (tgt / "docs" / "adr" / "0001-adopt-agk.md").read_text(encoding="utf-8")
+    assert "master" in adr and "ruleset `main`" not in adr
+    out = run_init(tgt, "--dry-run").stdout
+    assert "master" in out
+
+
+def test_ac1_stamped_default_branch_survives_a_branch_rename(installed):
+    """REQ-010 AC1: rule 8 and SPEC-0001 rule 15. The second run reads agk.toml."""
+    subprocess.run(["git", "branch", "-m", "trunk"], cwd=installed, check=True)
+    proc = run_init(installed)
+    assert proc.returncode == 0 and "nothing to do" in proc.stdout
+
+
+def test_ac1_installed_text_does_not_assume_main(installed):
+    """REQ-010 AC1: rule 8."""
+    claude = (installed / "CLAUDE.md").read_text(encoding="utf-8")
+    principles = (installed / "constitution" / "principles.md").read_text(encoding="utf-8")
+    assert "origin/main" not in claude
+    assert "branched from main" not in principles
+    assert "default branch" in claude and "default branch" in principles
+
+
+def test_ac1_older_install_stamp_in_pyproject_is_still_read(tmp_path):
+    """REQ-010 AC1: rule 5 (earlier installs): init reads the stamp from pyproject [tool.agk]."""
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import init
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.agk]\ninstalled = "2020-01-02"\ndefault_branch = "trunk"\n'
+    )
+    assert init.stamped(tmp_path, "2026-01-01") == ("2020-01-02", "trunk")
+
+
+CI_STEP = re.compile(r"^\s*run:\s*(make -f agk\.mk \S+)\s*$", re.M)
+
+
+def ci_steps(root: Path) -> list[str]:
+    text = (root / ".github" / "workflows" / "governance.yml").read_text(encoding="utf-8")
+    return CI_STEP.findall(text)
+
+
+def run_ci(root: Path) -> list[int]:
+    codes = []
+    for step in ci_steps(root):
+        proc = subprocess.run(
+            step.split(), cwd=root, capture_output=True, text=True, env=clean_env()
+        )
+        codes.append(proc.returncode)
+    return codes
+
+
+def test_ac1_ci_steps_include_the_project_tests_and_pass_when_they_pass(installed):
+    """REQ-010 AC1: rule 5 (project_tests)."""
+    assert [s.split()[-1] for s in ci_steps(installed)] == [
+        "agk-governance",
+        "agk-lint",
+        "agk-test",
+        "agk-project-test",
+    ]
+    (installed / "tests" / "test_p.py").write_text("def test_p():\n    assert True\n")
+    assert run_ci(installed) == [0, 0, 0, 0]
+
+
+def test_ac1_failing_project_test_makes_the_ci_steps_fail(installed):
+    """REQ-010 AC1: rule 5. The regression guard: CI runs the project's own tests."""
+    (installed / "tests" / "test_p.py").write_text("def test_p():\n    assert False\n")
+    codes = run_ci(installed)
+    assert codes[-1] != 0
+    assert codes[:3] == [0, 0, 0]
+
+
+def test_ac1_agk_toml_of_an_init_repo_has_project_tests_with_exit_5_handling(installed):
+    """REQ-010 AC1: rule 5."""
+    import tomllib
+
+    cfg = tomllib.loads((installed / "agk.toml").read_text(encoding="utf-8"))
+    assert "pytest tests" in cfg["project_tests"] and "exit $rc" in cfg["project_tests"]
+    # a fresh install has no project tests: pytest exits 5, which the command treats as success
+    proc = subprocess.run(
+        ["make", "-f", "agk.mk", "agk-project-test"],
+        cwd=installed,
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr

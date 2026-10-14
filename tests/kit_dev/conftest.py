@@ -21,7 +21,7 @@ def manifest() -> dict:
 
 
 def clean_env() -> dict[str, str]:
-    drop = ("GITHUB_BASE_REF", "AGK_BASE", "CI")
+    drop = ("GITHUB_BASE_REF", "AGK_BASE", "CI", "AGK_KIT_TESTS")
     return {k: v for k, v in os.environ.items() if k not in drop}
 
 
@@ -73,3 +73,16 @@ def installed(target: Path) -> Path:
 def expected_files() -> set[str]:
     m = manifest()
     return set(m["verbatim"]) | set(m["templates"]) | set(m["rendered"])
+
+
+def make_repo(root: Path, branch: str = "main") -> Path:
+    """A git repository with one commit (a README) on the given branch."""
+    root.mkdir(parents=True, exist_ok=True)
+    git(root, "init", "-q", "-b", branch)
+    git(root, "config", "user.email", "t@example.invalid")
+    git(root, "config", "user.name", "t")
+    git(root, "config", "commit.gpgsign", "false")
+    (root / "README.md").write_text("# hello\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "initial")
+    return root

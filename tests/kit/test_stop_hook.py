@@ -24,7 +24,7 @@ def run_hook(project: Path, payload: dict):
 
 
 def project(tmp_path: Path, recipe: str) -> Path:
-    (tmp_path / "Makefile").write_text(f"governance:\n\t{recipe}\n")
+    (tmp_path / "agk.mk").write_text(f"agk-governance:\n\t{recipe}\n")
     return tmp_path
 
 
@@ -42,7 +42,7 @@ def test_ac3_red_governance_blocks_stop(tmp_path):
     assert out["decision"] == "block" and "FAIL demo" in out["reason"]
 
 
-def test_ac3_missing_makefile_blocks_stop(tmp_path):
+def test_ac3_missing_agk_mk_blocks_stop(tmp_path):
     """REQ-002 AC3"""
     assert json.loads(run_hook(tmp_path, {}).stdout)["decision"] == "block"
 
@@ -162,3 +162,17 @@ def test_ac2_push_allow_is_exactly_one_command_and_no_deny_matches_it():
     for rule in perms["deny"]:
         if rule.startswith("Bash("):
             assert not _matches(rule, command), rule
+
+
+def test_ac3_hook_calls_the_agk_mk_form_not_the_makefile_alias(tmp_path):
+    """REQ-002 AC3 (SPEC-0002 rule 5): a project whose only target is the Makefile alias is red."""
+    (tmp_path / "Makefile").write_text("governance:\n\t@true\n")
+    out = json.loads(run_hook(tmp_path, {}).stdout)
+    assert out["decision"] == "block"
+
+
+def test_ac2_settings_allow_the_agk_mk_targets():
+    """REQ-002 AC2 (SPEC-0002 rule 5): the settings call the same form as the workflow."""
+    allow = settings()["permissions"]["allow"]
+    for target in ("agk-governance", "agk-lint", "agk-test"):
+        assert f"Bash(make -f agk.mk {target})" in allow

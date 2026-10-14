@@ -1,8 +1,8 @@
 version: 1
 classes:
-  protected:     {paths: [constitution/, config/, .claude/, .github/, docs/requirements.md, CLAUDE.md, scripts/agk/, tests/kit/, Makefile, pyproject.toml], approvers: [maintainers]}
+  protected:     {paths: [constitution/, config/, .claude/, .github/, docs/requirements.md, CLAUDE.md, scripts/agk/, tests/kit/, Makefile, pyproject.toml, agk.mk, agk.toml], approvers: [maintainers]}
   architecture:  {paths: [docs/adr/, docs/specs/], approvers: [maintainers]}
-  kit:           {paths: [scripts/agk/, tests/kit/, Makefile, pyproject.toml], approvers: [maintainers]}
+  kit:           {paths: [scripts/agk/, tests/kit/, Makefile, pyproject.toml, agk.mk, agk.toml], approvers: [maintainers]}
   docs:          {paths: [docs/, README.md], approvers: [maintainers]}
 teams:
   maintainers: {github_team: "@REPLACE-ME"}   # replace with a user handle or @org/team

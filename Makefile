@@ -1,22 +1,14 @@
 PY ?= python3
 
+include agk.mk
+
 .PHONY: governance test lint traceability
 
-governance:
-	$(PY) scripts/agk/check_protected_changes.py
-	$(PY) scripts/agk/check_requirements.py
-	$(PY) scripts/agk/check_adrs.py
-	$(PY) scripts/agk/check_specs.py
-	$(PY) scripts/agk/check_neutrality.py
-	$(PY) scripts/agk/check_build_state.py
-	$(PY) scripts/agk/reviewers.py --check
-	$(PY) scripts/agk/reviewers.py --check-codeowners
+governance: agk-governance
 
-test:
-	$(PY) -m pytest tests -q
+lint: agk-lint
 
-lint:
-	ruff check .
+traceability: agk-traceability
 
-traceability:
-	$(PY) scripts/agk/traceability.py
+# Kit tests, then the project's own tests (agk.toml project_tests).
+test: agk-test agk-project-test

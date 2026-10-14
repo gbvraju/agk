@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.2.0",
+  "kit_version": "0.3.0",
   "verbatim": [
     ".claude/agents/drift-auditor.md",
     ".claude/hooks/stop_check.py",
@@ -9,6 +9,7 @@
     ".gitignore",
     "CLAUDE.md",
     "Makefile",
+    "agk.mk",
     "constitution/principles.md",
     "docs/adr/TEMPLATE.md",
     "docs/briefs/TEMPLATE.md",
@@ -21,9 +22,13 @@
     "scripts/agk/check_requirements.py",
     "scripts/agk/check_specs.py",
     "scripts/agk/common.py",
+    "scripts/agk/config.py",
     "scripts/agk/reviewers.py",
     "scripts/agk/traceability.py",
     "tests/kit/conftest.py",
+    "tests/kit/pytest.ini",
+    "tests/kit/test_agk_config.py",
+    "tests/kit/test_agk_mk.py",
     "tests/kit/test_check_adrs.py",
     "tests/kit/test_check_build_state.py",
     "tests/kit/test_check_neutrality.py",
@@ -36,6 +41,7 @@
     "tests/kit/test_workflow.py"
   ],
   "templates": {
+    "agk.toml": "kit/templates/agk.toml",
     "config/neutrality.txt": "kit/templates/neutrality.txt",
     "config/protected-paths.txt": "kit/templates/protected-paths.txt",
     "config/reviewers.yaml": "kit/templates/reviewers.yaml",
