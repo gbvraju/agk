@@ -29,10 +29,11 @@ seen in the listing and not adopted).
 
 ## Questions
 
-- Q-K1-16: should a newer major of an action be adopted at pinning time (checkout v7, setup-python v7, gitleaks-action
-  v3 exist as tags)? I kept the existing majors; changing a major is a behaviour change for maintainers to approve.
-- Q-K1-17: the `gitleaks-action` licence terms for organisations remain unconfirmed (ADR-0006 residual); the previous
-  `(verify)` note on the workflow line is replaced by the tag comment. Keep it as a residual only?
+- Q-K1-16: newer majors of the actions exist as tags (checkout v7, setup-python v7, gitleaks-action v3). Ruling: keep
+  the current majors; residual "evaluate newer majors in a dedicated PR" recorded in ADR-0006.
+- Q-K1-17: gitleaks-action licence terms for organisations. Ruling: residual only, with the proposed resolution
+  "replace gitleaks-action with the MIT gitleaks binary (verify licence) so org-owned targets need no key; K2 or K4".
+- Pin provenance: the SHAs came from `git ls-remote` only; signatures were not checked (noted in ADR-0006).
 
 ## Verified
 
