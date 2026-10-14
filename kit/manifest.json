@@ -1,0 +1,50 @@
+{
+  "kit_version": "0.1.0",
+  "verbatim": [
+    ".claude/agents/drift-auditor.md",
+    ".claude/hooks/stop_check.py",
+    ".claude/settings.json",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/workflows/governance.yml",
+    ".gitignore",
+    "CLAUDE.md",
+    "Makefile",
+    "constitution/principles.md",
+    "docs/adr/TEMPLATE.md",
+    "docs/briefs/TEMPLATE.md",
+    "docs/specs/TEMPLATE.md",
+    "scripts/agk/check_adrs.py",
+    "scripts/agk/check_build_state.py",
+    "scripts/agk/check_neutrality.py",
+    "scripts/agk/check_pr_body.py",
+    "scripts/agk/check_protected_changes.py",
+    "scripts/agk/check_requirements.py",
+    "scripts/agk/common.py",
+    "scripts/agk/reviewers.py",
+    "scripts/agk/traceability.py",
+    "tests/kit/conftest.py",
+    "tests/kit/test_check_adrs.py",
+    "tests/kit/test_check_build_state.py",
+    "tests/kit/test_check_neutrality.py",
+    "tests/kit/test_check_pr_body.py",
+    "tests/kit/test_check_protected_changes.py",
+    "tests/kit/test_check_requirements.py",
+    "tests/kit/test_reviewers.py",
+    "tests/kit/test_stop_hook.py",
+    "tests/kit/test_workflow.py"
+  ],
+  "templates": {
+    "config/neutrality.txt": "kit/templates/neutrality.txt",
+    "config/protected-paths.txt": "kit/templates/protected-paths.txt",
+    "config/reviewers.yaml": "kit/templates/reviewers.yaml",
+    "constitution/vision.md": "kit/templates/vision.md",
+    "docs/adr/0001-adopt-agk.md": "kit/templates/adr-0001.md",
+    "docs/build-state.md": "kit/templates/build-state.md",
+    "docs/requirements.md": "kit/templates/requirements.md",
+    "docs/runs/decisions-log.md": "kit/templates/decisions-log.md",
+    "pyproject.toml": "kit/templates/pyproject.toml"
+  },
+  "rendered": [
+    ".github/CODEOWNERS"
+  ]
+}

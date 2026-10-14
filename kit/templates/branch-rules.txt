@@ -1,0 +1,2 @@
+The ruleset `main` is exactly: Active; no bypass; target the default branch; restrict deletions; require linear history; require a pull request (0 approvals, dismiss stale approvals, squash merge only); block force pushes; required status check `governance`.
+Repository settings: allow auto-merge; auto-delete head branches.

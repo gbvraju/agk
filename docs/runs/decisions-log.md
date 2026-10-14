@@ -22,3 +22,12 @@ One row per decision made outside an ADR, so a compacted session can be reconstr
 | 2026-10-14 | Edit rules cover Write, and a leading `/` anchors at the project root; `Write(...)` rules removed (Q-K1-2) | Claude Code consults only Edit and Read path rules | ADR-0003, docs/runs/day-1.md | reviewer |
 | 2026-10-14 | `permissions.ask` is a documented key; order deny, ask, allow; (verify) removed (Q-K1-3) | confirmed in the permissions and settings-reference pages | docs/runs/day-1.md | reviewer |
 | 2026-10-14 | One ADR must name every changed protected class (Q-K1-4) | cover must state its scope | ADR-0003 decision 4 | reviewer |
+| 2026-10-14 | Placeholder team `@REPLACE-ME`: warn only; `agk doctor` residual (Q-K1-5) | a failing check would break REQ-009 AC2 | SPEC-0001 rule 12 and Residual | reviewer |
+| 2026-10-14 | Kit-defined requirement ids are `REQ-001..099`; project ids start at `REQ-101` (Q-K1-6) | installed tests carry kit markers | SPEC-0001 rule 11 | reviewer |
+| 2026-10-14 | `kit/` is a protected path (Q-K1-7) | the installed law is made of it | ADR-0004 | reviewer |
+| 2026-10-14 | Initial statuses conservative: ADR-0001 `Proposed`, REQ-001..003 `planned`; maintainers flip ADR-0001 in the proof PR (Q-K1-8) | agents do not decide | SPEC-0001 rules 11, 13, 24 | reviewer |
+| 2026-10-14 | A target with its own pyproject.toml, Makefile, CLAUDE.md or .gitignore is refused in K1 (Q-K1-9) | merging is K2 `agk adopt` | SPEC-0001 rule 16 and Residual | reviewer |
+| 2026-10-14 | Installed repositories inherit unpinned action tags and the gitleaks-action licence note until K1-exit SHA pinning (Q-K1-10) | residual | SPEC-0001 Residual | reviewer |
+| 2026-10-14 | `tests/kit_dev/` is protected and kit-only (Q-K1-11) | it guards the installer | SPEC-0001 rule 21, ADR-0004 | reviewer |
+| 2026-10-14 | `config/protected-paths.txt` is a template, not a verbatim copy (Q-K1-12) | the kit protects `kit/` without installing it | SPEC-0001 rule 21, ADR-0004 | reviewer |
+| 2026-10-14 | Approved specs are not yet protected by a check; follow-up after PR #6 (rule 6) | principle 6 has no check yet | this log, ADR-0004 residual | maintainers |

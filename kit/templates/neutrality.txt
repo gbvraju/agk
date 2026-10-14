@@ -1,0 +1,3 @@
+# Product-neutrality token list: one case-insensitive token per line.
+# Fill this with names that must not appear in tracked files (company, product,
+# person, environment). Files under docs/adr/ are exempt.

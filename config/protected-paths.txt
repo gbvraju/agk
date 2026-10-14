@@ -7,3 +7,9 @@ config/
 .github/
 docs/requirements.md
 CLAUDE.md
+scripts/agk/
+tests/kit/
+Makefile
+pyproject.toml
+kit/
+tests/kit_dev/

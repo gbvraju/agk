@@ -129,3 +129,17 @@ def test_markers_only_count_in_test_files(repo):
     assert check(repo).returncode == 1
     repo.commit({"tests/data/test_x.py": "# REQ-001\n"})
     assert check(repo).returncode == 0
+
+
+def test_ac2_marker_for_undefined_id_never_fails(repo):
+    """REQ-003 AC2: a REQ-999 marker with no REQ-999 requirement is ignored (SPEC-0001 rule 22)."""
+    repo.commit(
+        {
+            "docs/requirements.md": reqs(("REQ-001", "done")),
+            "tests/test_t.py": "# REQ-001\n# REQ-999\n# REQ-004\n",
+        }
+    )
+    assert check(repo).returncode == 0
+    proc = repo.run("traceability.py")
+    assert proc.returncode == 0
+    assert "REQ-999" not in proc.stdout and "REQ-004" not in proc.stdout

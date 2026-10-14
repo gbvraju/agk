@@ -22,7 +22,13 @@
       "Edit(/.claude/**)",
       "Edit(/.github/**)",
       "Edit(/docs/requirements.md)",
-      "Edit(/CLAUDE.md)"
+      "Edit(/CLAUDE.md)",
+      "Edit(/scripts/agk/**)",
+      "Edit(/tests/kit/**)",
+      "Edit(/Makefile)",
+      "Edit(/pyproject.toml)",
+      "Edit(/kit/**)",
+      "Edit(/tests/kit_dev/**)"
     ],
     "deny": [
       "Bash(git push --force:*)",
