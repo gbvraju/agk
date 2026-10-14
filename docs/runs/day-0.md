@@ -68,3 +68,15 @@ Run on 2026-10-14 in the sandbox:
 - Deferred to PR #2 (not in #1): CLAUDE.md, push allow (`git push -u origin HEAD` only), decisions-log.
 - Deny rules in #1 tightened: push force/lease/`+refspec`/`--delete`/`:branch` in any flag position and
   `git reset * --hard`; wildcard rule syntax is (verify).
+
+## CI result (2026-10-14)
+
+- Governance runs 38587251218 and 38593030035 on PR #1: failed, 5-6 s. Job 115952558042 never started: the check
+  annotation says recent account payments failed or the spending limit needs raising (GitHub Billing & plans).
+  No step ran, so no gitleaks, lint or test output exists; no secret finding. `gh run view --log-failed` returned
+  Forbidden and the logs API returned 404, so the annotation is the only evidence. This is not a code failure;
+  no check was changed. The founder must fix billing and re-run.
+- Added: test that the stop hook exits 0 silently when `stop_hook_active` is true; tests that the build-state
+  creation exemption holds only when the file is absent at base (editing an existing file fails, committed or not).
+- Deferred to PR #2: markers only in `test_*.py` (Q-K0-12), verification of Q-K0-8 facts, the `Advances: none` escape.
+- Local after this commit: `make governance` exit 0; `make test` 80 passed; `ruff check .` passed.

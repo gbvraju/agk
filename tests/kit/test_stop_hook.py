@@ -117,3 +117,12 @@ def test_ac2_deny_covers_push_variants_in_any_flag_position():
         "Bash(git reset * --hard*)",
     ):
         assert rule in deny
+
+
+def test_ac3_stop_hook_active_exits_zero_silently_even_when_red(tmp_path):
+    """REQ-002 AC3: with stop_hook_active true the hook exits 0 and prints nothing."""
+    for proj in (project(tmp_path, "@exit 1"), tmp_path / "empty"):
+        proj.mkdir(exist_ok=True)
+        proc = run_hook(proj, {"stop_hook_active": True})
+        assert proc.returncode == 0
+        assert proc.stdout == "" and proc.stderr == ""

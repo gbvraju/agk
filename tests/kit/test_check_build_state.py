@@ -56,3 +56,20 @@ def test_deleting_build_state_fails(base):
     """REQ-006 AC1"""
     base.commit({"docs/build-state.md": None, "docs/x.md": "y\n"})
     assert check(base).returncode == 1
+
+
+def test_creation_exemption_only_when_absent_at_base(repo):
+    """REQ-006 AC1: with the file present at base, an edit alongside code fails."""
+    repo.commit({"docs/build-state.md": BS, "src/a.py": "1\n"}, "base")
+    repo.branch()
+    repo.commit({"docs/build-state.md": BS + "edited\n", "src/a.py": "2\n"})
+    proc = check(repo)
+    assert proc.returncode == 1
+    assert "docs/build-state.md" in proc.stdout
+
+
+def test_editing_existing_file_uncommitted_fails(base):
+    """REQ-006 AC1: uncommitted edits to an existing file are judged against the base too."""
+    base.write("docs/build-state.md", BS + "edited\n")
+    base.write("src/a.py", "3\n")
+    assert check(base).returncode == 1
