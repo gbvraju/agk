@@ -6,7 +6,7 @@ Only the Status line may change without an ADR. `done` requires at least one tes
 ### REQ-001 — Protected paths change only with an ADR in the same PR
 
 - Acceptance: AC1 check fails without ADR; AC2 Status-only change in requirements exempt; AC3 message names the path class
-- Status: in-progress
+- Status: done
 
 ### REQ-002 — Agents never merge or bypass checks
 
@@ -16,7 +16,7 @@ Only the Status line may change without an ADR. `done` requires at least one tes
 ### REQ-003 — Every requirement is traceable to tests
 
 - Acceptance: AC1 matrix generated; AC2 done requires a marker; AC3 matrix never committed
-- Status: in-progress
+- Status: done
 
 ### REQ-004 — Accepted decisions are immutable except Status
 
