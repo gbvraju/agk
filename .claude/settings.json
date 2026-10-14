@@ -1,0 +1,50 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(make governance)",
+      "Bash(make test)",
+      "Bash(make lint)",
+      "Bash(python3 scripts/agk/*)",
+      "Bash(python3 -m pytest tests/kit*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(gh pr merge:*)",
+      "mcp__github__merge_pull_request",
+      "mcp__github__enable_pr_auto_merge",
+      "Edit(./constitution/**)",
+      "Write(./constitution/**)",
+      "Edit(./config/**)",
+      "Write(./config/**)",
+      "Edit(./.claude/**)",
+      "Write(./.claude/**)",
+      "Edit(./.github/**)",
+      "Write(./.github/**)",
+      "Edit(./docs/requirements.md)",
+      "Write(./docs/requirements.md)"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop_check.py"
+          }
+        ]
+      }
+    ]
+  }
+}

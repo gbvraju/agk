@@ -1,0 +1,22 @@
+[project]
+name = "agk"
+version = "0.0.0"
+description = "Agentic Governance Kit"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = []
+
+[tool.agk]
+# Directories scanned for REQ-nnn test markers.
+test_dirs = ["tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/kit"]
+pythonpath = ["scripts/agk"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
