@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.3.0",
+  "kit_version": "0.4.0",
   "verbatim": [
     ".claude/agents/drift-auditor.md",
     ".claude/hooks/stop_check.py",
@@ -54,5 +54,27 @@
   },
   "rendered": [
     ".github/CODEOWNERS"
-  ]
+  ],
+  "adopt": {
+    "skip": [
+      "Makefile"
+    ],
+    "blocks": {
+      ".gitignore": "hash",
+      "CLAUDE.md": "html",
+      ".github/PULL_REQUEST_TEMPLATE.md": "html",
+      ".github/CODEOWNERS": "hash"
+    },
+    "templates": {
+      "agk.toml": "kit/templates/agk.adopt.toml",
+      "config/neutrality.txt": "kit/templates/neutrality.txt",
+      "config/protected-paths.txt": "kit/templates/protected-paths.adopt.txt",
+      "config/reviewers.yaml": "kit/templates/reviewers.adopt.yaml",
+      "constitution/vision.md": "kit/templates/vision.md",
+      "docs/adr/0001-adopt-agk.md": "kit/templates/adr-0001-adopt.md",
+      "docs/build-state.md": "kit/templates/build-state.md",
+      "docs/requirements.md": "kit/templates/requirements.md",
+      "docs/runs/decisions-log.md": "kit/templates/decisions-log.md"
+    }
+  }
 }

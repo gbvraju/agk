@@ -9,7 +9,7 @@ import tomllib
 from conftest import KIT_ROOT, manifest
 
 ROOTS = (".claude/", ".github/", "scripts/agk/", "tests/kit/")
-KIT_ONLY = {"scripts/agk/init.py"}
+KIT_ONLY = {"scripts/agk/init.py", "scripts/agk/adopt.py"}
 RENDERED = {".github/CODEOWNERS"}
 SINGLES = {
     "CLAUDE.md",
@@ -22,7 +22,15 @@ SINGLES = {
     "docs/briefs/TEMPLATE.md",
 }
 FORBIDDEN = [r"gbvraju", r"day-\d", r"\bK[0-4]\b", r"PR #\d+", r"Q-K\d"]
-ALLOWED_VARS = {"project", "date", "kit_version", "default_branch"}
+ALLOWED_VARS = {
+    "project",
+    "date",
+    "kit_version",
+    "default_branch",
+    "test_dirs",
+    "test_patterns",
+    "existing_protected",
+}
 
 
 def tracked() -> list[str]:
@@ -40,7 +48,7 @@ def lines(rel: str) -> list[str]:
 def test_ac2_manifest_shape_and_version():
     """REQ-009 AC2: rule 6."""
     m = manifest()
-    assert set(m) == {"kit_version", "verbatim", "templates", "rendered"}
+    assert set(m) == {"kit_version", "verbatim", "templates", "rendered", "adopt"}
     assert re.fullmatch(r"\d+\.\d+\.\d+", m["kit_version"])
     assert sorted(m["verbatim"]) == m["verbatim"]
     assert not set(m["verbatim"]) & set(m["templates"])
@@ -214,3 +222,69 @@ def test_ac1_templates_carry_project_tests_and_no_pyproject_stamp():
     assert "[tool.agk]" not in pyproject
     own = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))
     assert "pytest tests" in own["project_tests"]
+
+
+def test_ac1_adopt_section_shape_and_paths():
+    """REQ-010 AC1: SPEC-0002 rules 4 and 11."""
+    a = manifest()["adopt"]
+    assert set(a) == {"skip", "blocks", "templates"}
+    assert a["skip"] == ["Makefile"]
+    assert a["blocks"] == {
+        ".gitignore": "hash",
+        "CLAUDE.md": "html",
+        ".github/PULL_REQUEST_TEMPLATE.md": "html",
+        ".github/CODEOWNERS": "hash",
+    }
+    for src in a["templates"].values():
+        assert (KIT_ROOT / src).is_file(), src
+    assert "Makefile" not in a["templates"] and "pyproject.toml" not in a["templates"]
+    assert set(a["blocks"]) - {".github/CODEOWNERS"} <= set(manifest()["verbatim"])
+
+
+def test_ac1_adopt_templates_are_neutral_and_use_allowed_variables():
+    """REQ-010 AC1: SPEC-0002 rules 9 and 13."""
+    for src in manifest()["adopt"]["templates"].values():
+        text = (KIT_ROOT / src).read_text(encoding="utf-8")
+        assert set(re.findall(r"\{\{(\w+)\}\}", text)) <= ALLOWED_VARS, src
+        for pat in FORBIDDEN:
+            assert not re.search(pat, text), (src, pat)
+        assert not re.findall(r"ADR-(?!0001)\d{4}", text), src
+
+
+def test_ac1_adopt_protected_template_and_reviewers_are_equal_and_exclude_project_files():
+    """REQ-010 AC1: SPEC-0002 rule 12 (adopted mode)."""
+    templates = manifest()["adopt"]["templates"]
+    listed = lines(templates["config/protected-paths.txt"])
+    assert listed == [
+        "constitution/",
+        "config/",
+        ".claude/",
+        ".github/",
+        "docs/requirements.md",
+        "CLAUDE.md",
+        "scripts/agk/",
+        "tests/kit/",
+        "agk.mk",
+        "agk.toml",
+    ]
+    text = (KIT_ROOT / templates["config/reviewers.yaml"]).read_text(encoding="utf-8")
+    match = re.search(r"protected:\s*\{paths: \[([^\]]*)\]", text)
+    assert [p.strip() for p in match.group(1).split(",")] == listed
+    assert "Makefile" not in text and "pyproject.toml" not in text
+
+
+def test_ac1_adopt_agk_toml_template_has_empty_project_tests_and_adopt_mode():
+    """REQ-010 AC1: SPEC-0002 rules 5 and 9."""
+    src = manifest()["adopt"]["templates"]["agk.toml"]
+    text = (KIT_ROOT / src).read_text(encoding="utf-8")
+    assert 'mode = "adopt"' in text and 'project_tests = ""' in text
+    assert "{{test_dirs}}" in text and "{{test_patterns}}" in text
+
+
+def test_ac1_adopt_adr_template_has_no_creation_commit_claim():
+    """REQ-010 AC1: SPEC-0002 rule 13."""
+    src = manifest()["adopt"]["templates"]["docs/adr/0001-adopt-agk.md"]
+    flat = " ".join((KIT_ROOT / src).read_text(encoding="utf-8").split())
+    assert "creation commit" not in flat
+    assert "first governed change" in flat and "not governed" in flat
+    assert "{{existing_protected}}" in flat

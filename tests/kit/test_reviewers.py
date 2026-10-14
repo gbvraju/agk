@@ -141,3 +141,36 @@ def test_ac2_committed_codeowners_of_this_repository_has_no_duplicate_paths():
         if ln and not ln.startswith("#")
     ]
     assert len(paths) == len(set(paths))
+
+
+def test_ac2_codeowners_block_is_checked_alone(repo):
+    """REQ-005 AC2: a marked block inside a project CODEOWNERS is compared, the rest is ignored."""
+    from reviewers import parse, render_codeowners
+
+    rendered = render_codeowners(parse(GOOD))
+    block = "# >>> agk\n" + rendered + "# <<< agk\n"
+    repo.commit(
+        {
+            "config/reviewers.yaml": GOOD,
+            "config/protected-paths.txt": PROTECTED,
+            ".github/CODEOWNERS": "* @project\n" + block,
+        }
+    )
+    assert repo.run("reviewers.py", "--check-codeowners").returncode == 0
+    repo.commit({".github/CODEOWNERS": "* @other\n" + block})
+    assert repo.run("reviewers.py", "--check-codeowners").returncode == 0
+    repo.commit({".github/CODEOWNERS": "* @project\n" + block.replace("@some-team", "@x")})
+    proc = repo.run("reviewers.py", "--check-codeowners")
+    assert proc.returncode == 1 and "x" not in proc.stdout.replace("CODEOWNERS", "")
+
+
+def test_ac2_codeowners_with_broken_markers_fails(repo):
+    """REQ-005 AC2"""
+    repo.commit(
+        {
+            "config/reviewers.yaml": GOOD,
+            "config/protected-paths.txt": PROTECTED,
+            ".github/CODEOWNERS": "# >>> agk\nno end marker\n",
+        }
+    )
+    assert repo.run("reviewers.py", "--check-codeowners").returncode == 1

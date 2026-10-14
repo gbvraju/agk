@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 
 from check_requirements import dirs_arg
-from common import CheckError, find_markers, parse_requirements, repo_root, run, test_dirs
+from common import CheckError, markers_for, parse_requirements, repo_root, run
 
 NAME = "traceability"
 
@@ -17,7 +17,7 @@ def main(argv: list[str] | None = None) -> int:
     if not path.is_file():
         raise CheckError("docs/requirements.md is missing")
     reqs = parse_requirements(path.read_text(encoding="utf-8"))
-    markers = find_markers(root, test_dirs(root, dirs_arg(argv)))
+    markers = markers_for(root, dirs_arg(argv))
     print("| REQ | Status | Tests |")
     print("| --- | ------ | ----- |")
     for req in reqs:

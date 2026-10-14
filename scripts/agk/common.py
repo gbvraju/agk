@@ -142,6 +142,8 @@ DEFAULT_CONFIG = {
     "test_dirs": ["tests"],
     "lint_paths": ["scripts/agk", "tests/kit", ".claude/hooks"],
     "project_tests": "",
+    "test_patterns": ["test_*.py"],
+    "mode": "",
 }
 
 
@@ -188,23 +190,48 @@ def test_dirs(root: Path, cli_dirs: Sequence[str] | None = None) -> list[str]:
     return list(load_config(root)["test_dirs"])
 
 
-def find_markers(root: Path, dirs: Sequence[str]) -> dict[str, list[str]]:
-    """REQ id -> sorted files (relative) named test_*.py under dirs that contain the marker."""
+def find_markers(
+    root: Path,
+    dirs: Sequence[str],
+    patterns: Sequence[str] = ("test_*.py",),
+    exclude: Sequence[str] = (),
+) -> dict[str, list[str]]:
+    """REQ id -> sorted files (relative) matching patterns under dirs that contain the marker.
+
+    Files under an excluded directory are skipped unless a listed dir is inside that directory.
+    """
     found: dict[str, set[str]] = {}
+    skip = tuple(
+        e.strip("/") + "/"
+        for e in exclude
+        if not any(d.strip("/").startswith(e.strip("/")) for d in dirs)
+    )
     for d in dirs:
         base = root / d
         if not base.is_dir():
             continue
-        for path in sorted(base.rglob("test_*.py")):
-            if not path.is_file() or "__pycache__" in path.parts:
+        paths = {p for pattern in patterns for p in base.rglob(pattern)}
+        for path in sorted(paths):
+            rel = path.relative_to(root).as_posix()
+            if not path.is_file() or "__pycache__" in path.parts or rel.startswith(skip):
                 continue
             try:
                 text = path.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 continue
             for req in set(REQ_ID.findall(text)):
-                found.setdefault(req, set()).add(path.relative_to(root).as_posix())
+                found.setdefault(req, set()).add(rel)
     return {k: sorted(v) for k, v in found.items()}
+
+
+def markers_for(root: Path, cli_dirs: Sequence[str] | None = None) -> dict[str, list[str]]:
+    """Markers from the configured directories and patterns (agk.toml).
+
+    In adopt mode tests/kit is left out of the search unless a listed directory is inside it.
+    """
+    cfg = load_config(root)
+    exclude = ["tests/kit"] if cfg["mode"] == "adopt" else []
+    return find_markers(root, test_dirs(root, cli_dirs), cfg["test_patterns"], exclude)
 
 
 def run(name: str, fn: Callable[[], int]) -> int:

@@ -143,3 +143,41 @@ def test_ac2_marker_for_undefined_id_never_fails(repo):
     proc = repo.run("traceability.py")
     assert proc.returncode == 0
     assert "REQ-999" not in proc.stdout and "REQ-004" not in proc.stdout
+
+
+def test_ac1_markers_are_found_by_configured_patterns(repo):
+    """REQ-010 AC1: SPEC-0002 rule 9 (unittest-style *_test.py files)."""
+    repo.commit(
+        {
+            "docs/requirements.md": reqs(("REQ-001", "done")),
+            "agk.toml": 'test_dirs = ["pkg/tests"]\ntest_patterns = ["*_test.py"]\n',
+            "pkg/tests/a_test.py": "# REQ-001\n",
+            "pkg/tests/test_b.py": "# REQ-002\n",
+        }
+    )
+    assert check(repo).returncode == 0
+    proc = repo.run("traceability.py")
+    assert "a_test.py" in proc.stdout and "test_b.py" not in proc.stdout
+
+
+def test_ac1_default_pattern_ignores_underscore_test_files(repo):
+    """REQ-010 AC1: rule 9."""
+    repo.commit(
+        {"docs/requirements.md": reqs(("REQ-001", "done")), "tests/a_test.py": "# REQ-001\n"}
+    )
+    assert check(repo).returncode == 1
+
+
+def test_ac1_adopt_mode_excludes_tests_kit_unless_listed(repo):
+    """REQ-010 AC1: rule 9."""
+    files = {
+        "docs/requirements.md": reqs(("REQ-001", "done")),
+        "tests/kit/test_k.py": "# REQ-001\n",
+        "agk.toml": 'mode = "adopt"\ntest_dirs = ["tests"]\n',
+    }
+    repo.commit(files)
+    assert check(repo).returncode == 1
+    repo.commit({"agk.toml": 'mode = "adopt"\ntest_dirs = ["tests/kit"]\n'})
+    assert check(repo).returncode == 0
+    repo.commit({"agk.toml": 'mode = "init"\ntest_dirs = ["tests"]\n'})
+    assert check(repo).returncode == 0

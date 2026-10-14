@@ -1,0 +1,14 @@
+# Protected path classes. A prefix ending in "/" matches everything below it;
+# any other entry matches that exact file. Must equal classes.protected.paths
+# in config/reviewers.yaml (checked by scripts/agk/reviewers.py --check).
+# The project's own Makefile and pyproject.toml are not protected by agk.
+constitution/
+config/
+.claude/
+.github/
+docs/requirements.md
+CLAUDE.md
+scripts/agk/
+tests/kit/
+agk.mk
+agk.toml
