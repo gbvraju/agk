@@ -7,7 +7,7 @@ license = "Apache-2.0"
 dependencies = []
 
 [tool.agk]
-# Directories scanned for REQ-nnn test markers.
+# Directories scanned for REQ-nnn test markers (only files named test_*.py count).
 test_dirs = ["tests"]
 
 [tool.pytest.ini_options]

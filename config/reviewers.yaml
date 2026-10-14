@@ -1,6 +1,6 @@
 version: 1
 classes:
-  protected:     {paths: [constitution/, config/, .claude/, .github/, docs/requirements.md], approvers: [maintainers]}
+  protected:     {paths: [constitution/, config/, .claude/, .github/, docs/requirements.md, CLAUDE.md], approvers: [maintainers]}
   architecture:  {paths: [docs/adr/, docs/specs/], approvers: [maintainers]}
   kit:           {paths: [scripts/agk/, tests/kit/, Makefile, pyproject.toml], approvers: [maintainers]}
   docs:          {paths: [docs/, README.md], approvers: [maintainers]}

@@ -72,9 +72,11 @@ def validate(name: str, text: str, known: set[str]) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     root = repo_root()
     adr_dir = root / "docs" / "adr"
-    files = sorted(
-        p for p in adr_dir.glob("*.md") if p.name != "TEMPLATE.md"
-    ) if adr_dir.is_dir() else []
+    files = (
+        sorted(p for p in adr_dir.glob("*.md") if p.name != "TEMPLATE.md")
+        if adr_dir.is_dir()
+        else []
+    )
     known = {m.group(1) for p in files if (m := FILE_RE.match(p.name))}
     problems: list[str] = []
 

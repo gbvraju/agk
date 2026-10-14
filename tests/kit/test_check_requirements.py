@@ -44,9 +44,7 @@ def test_missing_status_fails(repo):
 
 def test_two_status_lines_fail(repo):
     """REQ-003"""
-    repo.commit(
-        {"docs/requirements.md": "### REQ-001 — t\n\n- Status: planned\n- Status: done\n"}
-    )
+    repo.commit({"docs/requirements.md": "### REQ-001 — t\n\n- Status: planned\n- Status: done\n"})
     assert check(repo).returncode == 1
 
 
@@ -58,7 +56,9 @@ def test_no_requirements_fails(repo):
 
 def test_ac2_done_without_marker_fails(repo):
     """REQ-003 AC2"""
-    repo.commit({"docs/requirements.md": reqs(("REQ-001", "done")), "tests/t.py": "# REQ-002\n"})
+    repo.commit(
+        {"docs/requirements.md": reqs(("REQ-001", "done")), "tests/test_t.py": "# REQ-002\n"}
+    )
     proc = check(repo)
     assert proc.returncode == 1
     assert "REQ-001" in proc.stdout
@@ -66,13 +66,17 @@ def test_ac2_done_without_marker_fails(repo):
 
 def test_ac2_done_with_marker_passes(repo):
     """REQ-003 AC2"""
-    repo.commit({"docs/requirements.md": reqs(("REQ-001", "done")), "tests/t.py": "# REQ-001\n"})
+    repo.commit(
+        {"docs/requirements.md": reqs(("REQ-001", "done")), "tests/test_t.py": "# REQ-001\n"}
+    )
     assert check(repo).returncode == 0
 
 
 def test_marker_dirs_configurable_by_flag(repo):
     """REQ-003 AC2"""
-    repo.commit({"docs/requirements.md": reqs(("REQ-001", "done")), "spec/t.py": "# REQ-001\n"})
+    repo.commit(
+        {"docs/requirements.md": reqs(("REQ-001", "done")), "spec/test_t.py": "# REQ-001\n"}
+    )
     assert check(repo).returncode == 1
     assert check(repo, "--tests-dir", "spec").returncode == 0
 
@@ -82,7 +86,7 @@ def test_marker_dirs_configurable_by_pyproject(repo):
     repo.commit(
         {
             "docs/requirements.md": reqs(("REQ-001", "done")),
-            "spec/t.py": "# REQ-001\n",
+            "spec/test_t.py": "# REQ-001\n",
             "pyproject.toml": '[tool.agk]\ntest_dirs = ["spec"]\n',
         }
     )
@@ -94,12 +98,12 @@ def test_ac1_matrix_lists_requirements_and_tests(repo):
     repo.commit(
         {
             "docs/requirements.md": reqs(("REQ-001", "done"), ("REQ-002", "planned")),
-            "tests/t.py": "# REQ-001\n",
+            "tests/test_t.py": "# REQ-001\n",
         }
     )
     proc = repo.run("traceability.py")
     assert proc.returncode == 0
-    assert "REQ-001" in proc.stdout and "tests/t.py" in proc.stdout
+    assert "REQ-001" in proc.stdout and "tests/test_t.py" in proc.stdout
     row2 = next(ln for ln in proc.stdout.splitlines() if "REQ-002" in ln)
     assert "tests/" not in row2
 
@@ -110,3 +114,18 @@ def test_ac3_matrix_never_written_to_disk(repo):
     before = repo.git("status", "--porcelain")
     repo.run("traceability.py")
     assert repo.git("status", "--porcelain") == before
+
+
+def test_markers_only_count_in_test_files(repo):
+    """REQ-003 AC2: a REQ-001 string in a non-test file is not a marker."""
+    repo.commit(
+        {
+            "docs/requirements.md": reqs(("REQ-001", "done")),
+            "tests/helper.py": "# REQ-001\n",
+            "tests/notes.md": "REQ-001\n",
+            "tests/data/fixture.txt": "REQ-001\n",
+        }
+    )
+    assert check(repo).returncode == 1
+    repo.commit({"tests/data/test_x.py": "# REQ-001\n"})
+    assert check(repo).returncode == 0

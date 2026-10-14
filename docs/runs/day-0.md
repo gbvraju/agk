@@ -83,7 +83,7 @@ Run on 2026-10-14 in the sandbox:
 
 ## Reviewer fix list 2 (2026-10-14)
 
-- Edit/Write rules for protected paths moved from `deny` to `ask` in `.claude/settings.json` (key `ask`: verify).
+- Edit/Write rules for protected paths moved from `deny` to `ask` in `.claude/settings.json` (key `ask`: confirmed in day-1.md).
   `deny` keeps force-push variants, `git reset --hard`, `gh pr merge` and the merge/auto-merge tools.
 - `Bash(git push * :*)` removed: the middle-wildcard form is not confirmed against Claude Code's prefix rule syntax
   (verify), so it may match more or less than intended. Colon-refspec branch deletion (`git push origin :branch`)
