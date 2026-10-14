@@ -40,3 +40,10 @@ Date: 2026-10-14 (from `date -u`). Docs only: `docs/runs/k2-target-survey.md`, `
 ## Verified
 
 See the PR body.
+
+## Spec status
+
+- SPEC-0002 set to `Approved` on maintainers' clearance. From now on deviations go into
+  `docs/runs/proposed-spec-amendments-2.md`, never into direct edits of the spec. Implementation is split: PR #12
+  (ADR-0007, shared kit: rules 5-8, 10 and 12 for init and the agk repository itself, kit 0.3.0) and PR #13 (adopt:
+  everything else), the latter opened only after PR #12 merges and maintainers say go.

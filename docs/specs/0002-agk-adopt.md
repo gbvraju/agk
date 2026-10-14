@@ -1,6 +1,6 @@
 # SPEC-0002: agk adopt
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-010
 
