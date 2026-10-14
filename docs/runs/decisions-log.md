@@ -38,3 +38,11 @@ One row per decision made outside an ADR, so a compacted session can be reconstr
 | 2026-10-14 | Briefs say "final commit, then merge"; agents check PR state before pushing | a maintainer merge overtook an agent's final commit (sandbox PR #2) | docs/runs/k1-live-proof.md | reviewer |
 | 2026-10-14 | A stray branch is deleted by maintainers, never by the agent or via the colon refspec | the deny list held and the colon form has no deny rule (ADR-0003 residual) | docs/runs/k1-live-proof.md | reviewer |
 | 2026-10-14 | `date -u` is the authoritative date for every artifact, including briefs' dated lines (Q-K1-15) | the brief's 2026-10-15 disagreed with the session clock | docs/build-state.md, docs/runs/decisions-log.md | reviewer |
+| 2026-10-14 | Actions in `governance.yml` are pinned to full commit SHAs (latest patch of the existing majors) with the tag in a comment | unpinned tags were a residual since ADR-0003 | ADR-0006, docs/runs/day-4.md | reviewer |
+| 2026-10-14 | CODEOWNERS renders each path once, the later class winning | duplicate lines when a path is in two classes | ADR-0006 | reviewer |
+| 2026-10-14 | A change to an Approved spec needs a proposed-spec-amendments file naming it (`check_specs.py`) | principle 6 had no check | ADR-0006 | reviewer |
+| 2026-10-14 | The `maintainers` handle mapping stays until a second maintainer joins, then becomes an organisation team | K1 exit passed without an organisation | ADR-0006 (amends ADR-0001 residual) | reviewer |
+| 2026-10-14 | The installed ADR-0001 names the repository's creation commit as its one direct commit | an empty repository needs one direct first commit | ADR-0006, kit/templates/adr-0001.md | reviewer |
+| 2026-10-14 | README gains an "Installing" section; kit version is 0.2.0 | installed content changed | ADR-0006, kit/manifest.json | reviewer |
+| 2026-10-14 | Keep the current action majors; evaluate newer majors in a dedicated PR (Q-K1-16) | a major change is a behaviour change | ADR-0006 residual | reviewer |
+| 2026-10-14 | gitleaks-action licence stays a residual; proposed resolution: the MIT gitleaks binary (verify licence), K2 or K4 (Q-K1-17) | org-owned targets should need no key | ADR-0006 residual | reviewer |

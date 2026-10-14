@@ -16,12 +16,19 @@ Status: **K0 — self-governed skeleton** (see `docs/adr/0002-milestones.md`). T
 Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI the pull-request base SHA is used.
 `python3 scripts/agk/traceability.py` prints the requirement-to-test matrix to stdout; it is never committed.
 
-## Install into a new repository
+## Installing
 
-    python3 scripts/agk/init.py TARGET [--dry-run]
+1. Create the target repository empty (no files).
+2. Make one first commit directly on the default branch (a PR needs a base branch); record it in the target's
+   ADR-0001.
+3. From a checkout of agk, run init as a maintainer-approved step (an agent session blocks running a cloned script
+   until a maintainer authorizes it):
 
-Run from a checkout of agk. TARGET is an existing directory (a git repository with one commit). Init installs the
-kit, never overwrites a differing file (it refuses and lists it), and prints the branch-rule settings to apply by
-hand. A second run changes nothing. See `docs/specs/0001-agk-init.md`.
+       python3 scripts/agk/init.py TARGET [--dry-run]
+
+   Init never overwrites a differing file (it refuses and lists it) and a second run changes nothing.
+4. Apply the printed ruleset and repository settings by hand on GitHub; init configures nothing there.
+
+See `docs/specs/0001-agk-init.md` and `docs/runs/k1-live-proof.md`.
 
 Licence: Apache-2.0.

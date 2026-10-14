@@ -22,3 +22,12 @@ def test_ac2_pr_body_step_reads_event_body_via_env_not_inline():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "PR_BODY: ${{ github.event.pull_request.body }}" in text
     assert "printf '%s\\n' \"$PR_BODY\"" in text
+
+
+def test_ac2_every_action_is_pinned_to_a_full_commit_sha():
+    """REQ-009 AC2: each `uses:` line is pinned to a 40-character SHA with the tag in a comment."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    uses = re.findall(r"^\s*-?\s*uses:\s*(.+)$", text, flags=re.M)
+    assert uses, "the workflow uses at least one action"
+    for line in uses:
+        assert re.fullmatch(r"\S+@[0-9a-f]{40}\s+# v\d+(\.\d+){1,2}", line.strip()), line

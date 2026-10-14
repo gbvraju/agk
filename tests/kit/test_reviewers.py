@@ -100,3 +100,44 @@ def test_ac2_missing_codeowners_fails(repo):
     codeowners_repo(repo)
     repo.commit({".github/CODEOWNERS": None})
     assert repo.run("reviewers.py", "--check-codeowners").returncode == 1
+
+
+DUP = """version: 1
+classes:
+  first:  {paths: [x/, y/z.md], approvers: [t1]}
+  second: {paths: [x/, w/], approvers: [t2]}
+teams:
+  t1: {github_team: "@one"}
+  t2: {github_team: "@two"}
+"""
+
+
+def test_ac2_codeowners_emits_each_path_once_last_class_wins():
+    """REQ-005 AC2: a path in two classes is rendered once, with the later class's owners."""
+    out = render_codeowners(parse(DUP))
+    lines = [ln for ln in out.splitlines() if ln and not ln.startswith("#")]
+    paths = [ln.split()[0] for ln in lines]
+    assert len(paths) == len(set(paths))
+    assert "/x/ @two" in lines and "/x/ @one" not in lines
+    assert "/y/z.md @one" in lines and "/w/ @two" in lines
+
+
+def test_ac2_codeowners_order_rule_is_unchanged_for_unique_paths():
+    """REQ-005 AC2: broad first, narrow last (depth, then length)."""
+    out = render_codeowners(parse(DUP))
+    lines = [ln.split()[0] for ln in out.splitlines() if ln and not ln.startswith("#")]
+    assert lines == sorted(lines, key=lambda p: (p.lstrip("/").rstrip("/").count("/"), len(p) - 1))
+
+
+def test_ac2_committed_codeowners_of_this_repository_has_no_duplicate_paths():
+    """REQ-005 AC2: the rendering of the repository's own config is duplicate-free."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "config" / "reviewers.yaml").read_text(encoding="utf-8")
+    paths = [
+        ln.split()[0]
+        for ln in render_codeowners(parse(text)).splitlines()
+        if ln and not ln.startswith("#")
+    ]
+    assert len(paths) == len(set(paths))
