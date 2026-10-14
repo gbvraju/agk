@@ -1,0 +1,39 @@
+name: governance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4   # (verify) pin to a commit SHA once confirmed
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5   # (verify) pin to a commit SHA once confirmed
+        with:
+          python-version: "3.12"
+      - name: Install tooling
+        run: python -m pip install pytest ruff
+      - name: Governance checks
+        env:
+          AGK_BASE: ${{ github.event.pull_request.base.sha }}
+        run: make governance
+      - name: PR body shape
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n' "$PR_BODY" | python scripts/agk/check_pr_body.py -
+      - name: Lint
+        run: make lint
+      - name: Tests of the checks
+        run: make test
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2   # (verify) action version and licence terms
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
