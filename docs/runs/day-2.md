@@ -12,25 +12,25 @@ Date: 2026-10-14 (from `date -u`). Docs only: `docs/specs/0001-agk-init.md` and 
 - Init does not need git in TARGET, never calls git or gh, and refuses under Python 3.11 (rules 3–4).
 - Seeded REQ-001..003 are `planned`; init marks nothing done (rule 11).
 
-## Questions (continuing from Q-K1-1..4, all closed)
+## Questions (continuing from Q-K1-1..4, all closed) and reviewer rulings
 
-- Q-K1-5: the placeholder team `@REPLACE-ME`. A check that fails while it is present breaks REQ-009 AC2 ("governance
-  green after init"). Options: (a) warn only (spec default); (b) `reviewers.py --check` warns and a separate
-  `--strict` fails, run by the target's CI on `main` but not on the first PR; (c) fail, and make AC2 read "green after
-  the placeholder is replaced". Recommendation: (b).
-- Q-K1-6: marker namespace. Installed `tests/kit/` carries markers `REQ-001`..`REQ-012`, so a project requirement with
-  one of those ids would count as traced. Options: reserve `REQ-001..099` for kit-defined ids and start project ids
-  at `REQ-101` (spec default); or add an ignore list to `find_markers`. Recommendation: the reservation.
-- Q-K1-7: is `kit/` (manifest, templates) a protected path and part of the `kit` reviewer class? Recommendation: yes;
-  the implementation PR then carries ADR-0004 naming it.
-- Q-K1-8: initial statuses: ADR-0001 as `Proposed` and REQ-001..003 as `planned`, so maintainers decide. Alternative:
-  `Accepted` and `in-progress`. Recommendation: the spec's conservative choice.
-- Q-K1-9: refusal scope. A target that already has `pyproject.toml`, `Makefile`, `CLAUDE.md` or `.gitignore` cannot
-  be initialised in K1 even if only the stamp is missing; K2 `adopt` merges. Accept as a K1 limit, or add a
-  `.gitignore` append mode now? Recommendation: accept.
-- Q-K1-10: the verbatim `governance.yml` carries action major tags and gitleaks-action (licence terms for
-  organisations were marked (verify) in ADR-0003's residual). Installed repositories inherit that residual. Accept
-  until the K1-exit SHA pinning?
+- Q-K1-5 placeholder team `@REPLACE-ME`: ruled warn only; residual for `agk doctor` recorded in the spec.
+- Q-K1-6 marker collision: ruled reservation (`REQ-001..099` kit ids, project ids from `REQ-101`); rule 22 adds that a
+  marker for an undefined id never fails a check.
+- Q-K1-7 `kit/` protected: ruled yes (ADR-0004 in PR #6; installed list also gains `scripts/agk/`, `tests/kit/`,
+  `Makefile`, `pyproject.toml`, rule 21).
+- Q-K1-8 initial statuses: ruled conservative (`Proposed`, `planned`); maintainers flip ADR-0001 in the proof PR.
+- Q-K1-9 refusal scope and Q-K1-10 inherited action tags / gitleaks licence note: accepted; recorded as residuals.
+- Q-K1-11 (new): is `tests/kit_dev/` a protected path in the kit (like `tests/kit/`)? Not in the ruling; the spec
+  leaves it unprotected. Recommendation: protect it in ADR-0004, since it guards the installer.
+- Q-K1-12 (new): `config/protected-paths.txt` is now a template (kit list = installed list plus `kit/`) instead of a
+  verbatim copy, so the kit can protect `kit/` without installing it. Confirm.
+
+## Changes after review of the first commit
+
+- First commit had wrong cross-references between rules (fixed in the second commit).
+- Fix list: new rule 21 (installed protected list), kit-only tests in `tests/kit_dev/` (rules 7, 18, 23), rule 20
+  covers verbatim files with a CLAUDE.md note, new rule 22 (undefined marker ids), rulings applied.
 
 ## Verified
 
