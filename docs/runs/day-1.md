@@ -1,14 +1,15 @@
 # Run report: day 1 (PR #3, ADR-0003)
 
 Date: 2026-10-14 (from `date -u`). Source for every row: Claude Code documentation, fetched 2026-10-14 —
-Permissions (https://code.claude.com/docs/en/permissions) and Hooks (https://code.claude.com/docs/en/hooks).
+Permissions (https://code.claude.com/docs/en/permissions), Settings reference
+(https://code.claude.com/docs/en/settings-reference) and Hooks (https://code.claude.com/docs/en/hooks).
 
 ## Documentation checks
 
 | Fact | Result | Evidence |
 | --- | --- | --- |
 | `ask` rules exist and prompt | confirmed | Permissions: "Ask rules prompt for confirmation whenever Claude Code tries to use the specified tool." |
-| JSON key literally named `permissions.ask` | not confirmed (verify) | The pages read name "Ask rules" and the order below; no JSON snippet with an `ask` array was seen. The key stays marked (verify) in `day-0.md`. |
+| `permissions.ask` key | confirmed (reviewer, 2026-10-14) | Settings reference, `permissions.ask`: "Always prompt before listed tool uses" (https://code.claude.com/docs/en/settings-reference#permissions-ask), beside `permissions.allow` and `permissions.deny`; Permissions page gives the order deny, ask, allow. |
 | Deny beats allow | confirmed | "Rules are evaluated in order: deny, then ask, then allow. The first match … determines the outcome"; "An allow rule can't carve an exception out of a deny rule." |
 | Ask beats allow | confirmed | "a matching ask rule prompts even when a more specific allow rule also matches." |
 | `:*` prefix syntax | confirmed, end of pattern only | "The `:*` suffix is an equivalent way to write a trailing wildcard, so `Bash(ls:*)` matches the same commands as `Bash(ls *)`"; "The `:*` form is only recognized at the end of a pattern." |
@@ -22,6 +23,6 @@ Permissions (https://code.claude.com/docs/en/permissions) and Hooks (https://cod
 
 ## Notes
 
-- Pages were read through a summarising fetch and, for the permissions page, a saved copy searched with grep; the
-  `ask` array key is the one item not seen verbatim.
+- Pages were read through a summarising fetch and, for the permissions page, a saved copy searched with grep.
+  The settings-reference page was fetched on 2026-10-14 to cite the `permissions.ask` key.
 - Q-K1-2: the inert `Write(...)` rules were an error from day 0; they are removed here and recorded in ADR-0003.

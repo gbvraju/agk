@@ -1,6 +1,6 @@
 # ADR-0003: Agent context, push rule, CODEOWNERS, check hardening
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Deciders: maintainers
 - Related: ADR-0001, ADR-0002
@@ -47,3 +47,7 @@ This PR changes these protected path classes, all named here: `CLAUDE.md`, `conf
 - 2026-10-14: colon-refspec branch deletion (`git push origin :branch`) has no deny rule; `main` is protected by the
   ruleset only. Revisit when `agk doctor` exists.
 - 2026-10-14: GitHub Action versions stay on major tags until K1 exit, then SHA pins.
+- 2026-10-14: class naming (decision 4) is a substring match on the ADR text, so an incidental mention counts as naming.
+  Replace it with a required `Protected classes:` line in each covering ADR.
+- 2026-10-14: `ask` rules (decision 2) cover Claude's file-edit tools, not writes made through shell commands. CI and
+  maintainer review are the gate for those.

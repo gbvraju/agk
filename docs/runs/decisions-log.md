@@ -19,3 +19,6 @@ One row per decision made outside an ADR, so a compacted session can be reconstr
 | 2026-10-14 | `governance` added as required status check before merging PR #1 | merge gated by CI | ADR-0001 | maintainers |
 | 2026-10-14 | Docs-only PRs carry their own dated build-state row; check_pr_body unchanged (Q-K1-1) | the check requires a dated row; `none (...)` was rejected | this log, PR #2 body | reviewer |
 | 2026-10-14 | The governance workflow re-runs on PR body edits (`edited` type) | a body fix needs no empty commit | ADR-0003, governance.yml | reviewer |
+| 2026-10-14 | Edit rules cover Write, and a leading `/` anchors at the project root; `Write(...)` rules removed (Q-K1-2) | Claude Code consults only Edit and Read path rules | ADR-0003, docs/runs/day-1.md | reviewer |
+| 2026-10-14 | `permissions.ask` is a documented key; order deny, ask, allow; (verify) removed (Q-K1-3) | confirmed in the permissions and settings-reference pages | docs/runs/day-1.md | reviewer |
+| 2026-10-14 | One ADR must name every changed protected class (Q-K1-4) | cover must state its scope | ADR-0003 decision 4 | reviewer |
