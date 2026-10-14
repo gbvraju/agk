@@ -20,9 +20,15 @@ rule 22 test were written before `init.py`; the first run was red (init missing)
 ## Questions
 
 - Q-K1-13: the installed `.claude/settings.json` is verbatim, so it also asks before editing `kit/` and
-  `tests/kit_dev/`, which do not exist in a target (harmless). Alternative: render settings from a template. Accept?
+  `tests/kit_dev/`, which do not exist in a target (harmless). Ruling: accepted.
 - Q-K1-14: `make governance` in a target needs a base branch; with no `main`/`origin/main` the diff checks skip
-  with a notice outside CI. Accept for K1?
+  with a notice outside CI. Ruling: accepted for K1, recorded as a residual in ADR-0004.
+
+## Review fixes
+
+- `CLAUDE.md` title is now `CLAUDE.md — agent operating rules (agk)`; rule 8 reads "No token listed in
+  config/neutrality.txt appears in tracked files (check_neutrality.py); refusals name the setting, never the value."
+- ADR-0004 set to `Accepted` on maintainers' ruling.
 
 ## Verified
 
