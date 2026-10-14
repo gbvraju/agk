@@ -16,7 +16,7 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
 2. **Exit codes.** 0: success, including "nothing to do". 1: refusal (a conflict, or TARGET unusable); nothing is
    written. 2: usage error. 3: an I/O error while writing. Every non-zero exit prints a message that names the path
    class (the `config/protected-paths.txt` entry, or `scripts/`, `tests/`, `docs/`, …) and the file; never file
-   content or a setting value (rule 8).
+   content or a setting value (principle 8).
 3. **No side effects beyond TARGET.** No network, no `git` or `gh` calls, no `git push`, no commits, no writes
    outside TARGET. Init refuses when a path it would write passes through a symlink. It does not require TARGET to be
    a git work tree; when it is not, init prints a notice (the checks need git).
@@ -34,15 +34,15 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
    `.github/PULL_REQUEST_TEMPLATE.md`, `CLAUDE.md`, `Makefile`, `.gitignore`, `config/protected-paths.txt`,
    `constitution/principles.md`, `docs/adr/TEMPLATE.md`, `docs/specs/TEMPLATE.md`, `docs/briefs/TEMPLATE.md`, every
    check and helper in `scripts/agk/` except `init.py` (`common.py`, `check_*.py`, `reviewers.py`,
-   `traceability.py`), and `tests/kit/` (rule 17).
+   `traceability.py`), and `tests/kit/` (rule 18).
 8. **Template set** (project-specific): `constitution/vision.md`, `docs/requirements.md`,
    `docs/adr/0001-adopt-agk.md`, `config/reviewers.yaml`, `config/neutrality.txt`, `docs/build-state.md`,
    `docs/runs/decisions-log.md`, `pyproject.toml`. Templates may use these variables only: `{{project}}` (TARGET's
    directory name), `{{date}}` (rule 14), `{{kit_version}}`.
 9. **Duplication versus divergence.** The verbatim set is not duplicated under `kit/`: the manifest points at the kit's
-   own files, so they cannot diverge. Templates are the only duplicated text. Tests (rule 20) fail when a file the kit
+   own files, so they cannot diverge. Templates are the only duplicated text. Tests (rule 21) fail when a file the kit
    uses as law is missing from the manifest, when a manifest path does not exist, or when a template does not pass
-   neutrality (rule 18).
+   neutrality (rule 20).
 
 ### Target result
 
@@ -59,7 +59,7 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     makes a check fail is Q-K1-5; until decided, init prints a notice naming `config/reviewers.yaml` and the placeholder
     and the checks do not fail on it.
 13. **ADR-0001.** `docs/adr/0001-adopt-agk.md` records the install: kit version, date, layout, the protected paths, the
-    reviewer model, and the ruleset (rule 16). Its Status is `Proposed` (Q-K1-8). Its text contains every entry of the
+    reviewer model, and the ruleset (rule 19). Its Status is `Proposed` (Q-K1-8). Its text contains every entry of the
     installed `config/protected-paths.txt`, so the target's first pull request is covered by ADR-0003-style cover.
 14. **Version stamp and dates.** The installed `pyproject.toml` carries `[tool.agk]` with `version`, `installed`
     (a `YYYY-MM-DD` date), and `test_dirs = ["tests"]`. The first run takes the date from the UTC clock; a later run
@@ -81,7 +81,7 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     ruleset `main` and repository settings of ADR-0001 decision 3: Active; no bypass; target the default branch;
     restrict deletions; require linear history; require a pull request (0 approvals, dismiss stale approvals, squash
     only); block force pushes; required status check `governance`; allow auto-merge; auto-delete head branches. The
-    text comes from `kit/templates/branch-rules.txt`; a test keeps it equal to the kit's ADR-0001 decision 3 (rule 20).
+    text comes from `kit/templates/branch-rules.txt`; a test keeps it equal to the kit's ADR-0001 decision 3 (rule 21).
     Init does not configure GitHub.
 
 ### Neutrality
