@@ -1,6 +1,6 @@
 # ADR-0004: Protected list expansion, kit-only paths, neutral CLAUDE.md
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Deciders: maintainers
 - Related: ADR-0001, ADR-0003
@@ -45,3 +45,5 @@ Protected classes: `constitution/`, `config/`, `.claude/`, `.github/`, `docs/req
 
 - 2026-10-14: approved specs are not yet protected by a check; follow-up after this PR (principle 6).
 - 2026-10-14: class naming in an ADR is still a substring match (ADR-0003 residual).
+- 2026-10-14: in a target with no `main` or `origin/main`, the diff checks of `make governance` skip with a notice outside
+  CI (Q-K1-14, accepted for K1); CI always has a base.
