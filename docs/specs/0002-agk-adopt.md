@@ -36,13 +36,19 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    Adopt **never writes** any other file: in particular `Makefile`, `pyproject.toml`, `setup.*`, `tox.ini`,
    `requirements*`, every other `.github/` file, `README*`, `LICENSE*`, sources and the project's tests.
 5. **Zero-touch design (Q-K2-1).** The kit owns its commands in `agk.mk` (targets `agk-governance`, `agk-lint`,
-   `agk-test`), called as `make -f agk.mk agk-governance`; the workflow, the stop hook and the settings call that form.
-   The kit's configuration lives in `agk.toml`: `mode` (`"init"` or `"adopt"`), `version`, `installed`,
-   `default_branch`, `test_dirs`, `test_patterns`, `lint_paths`. The checks read `agk.toml` first and fall back to
-   `[tool.agk]` in `pyproject.toml` (installs from K1). `init` installs the same `agk.mk` and `agk.toml` and keeps a
-   thin `Makefile` (aliases `governance`, `test`, `lint` to the `agk-*` targets), so a K1 repository behaves as before.
-   This changes the shared kit: ADR-0007, kit version 0.3.0. The agk repository adopts `agk.mk` and `agk.toml` itself (its
-   `Makefile` becomes thin aliases), because the workflow is verbatim and calls `make -f agk.mk`; ADR-0007 covers it.
+   `agk-test`, `agk-project-test`), called as `make -f agk.mk agk-governance`; the workflow, the stop hook and the
+   settings call that form. The kit's configuration lives in `agk.toml`: `mode` (`"init"` or `"adopt"`), `version`,
+   `installed`, `default_branch`, `test_dirs`, `lint_paths`, `project_tests` and, from rule 9 on, `test_patterns`; keys
+   a repository does not need may be omitted (this repository's `agk.toml` carries no stamp). `scripts/agk/config.py
+   KEY` prints one value so `agk.mk` can read it. The checks read `agk.toml` first and fall back to `[tool.agk]` in
+   `pyproject.toml` (earlier installs). `project_tests` is a shell command: for init, the project's pytest command with
+   exit 5 (nothing collected) treated as success; for adopt, empty, which makes `agk-project-test` print a notice (the
+   project's own CI runs its tests). The workflow runs `agk-project-test` after the kit tests. `init` installs the
+   same `agk.mk` and `agk.toml` and keeps a thin `Makefile` (aliases `governance`, `lint`, `test` to the `agk-*`
+   targets; `test` runs `agk-test` then `agk-project-test`), so an earlier init repository behaves as before. `agk-test`
+   also runs `tests/kit_dev` when it exists (this repository only). This changes the shared kit: ADR-0007, kit version
+   0.3.0. The agk repository adopts `agk.mk` and `agk.toml` itself (its `Makefile` becomes thin aliases), because the
+   workflow is verbatim and calls `make -f agk.mk`; ADR-0007 covers it.
 6. **No project config is reshaped.** Kit tests run with their own `tests/kit/pytest.ini`, selected by `-c`, so the
    project's `[tool.pytest.ini_options]`, `pytest.ini`, `tox.ini` and `conftest.py` are neither read nor changed.
    `tests/kit/conftest.py` puts `scripts/agk` on `sys.path`. Kit tests are collected only when run through `agk.mk`
@@ -53,12 +59,14 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
 7. **From the target, not assumed.** Adopt reads the default branch from `TARGET/.git` files without calling git:
    `refs/remotes/origin/HEAD` (a `ref: refs/remotes/origin/<name>` line), else `HEAD` of a repository with no
    `origin` remote, else it refuses and asks the user to set it (exit 1). The name is written to
-   `agk.toml` (`default_branch`) (Q-K2-6).
+   `agk.toml` (`default_branch`) (Q-K2-6). Init uses the same detection and falls back to `main` instead of refusing; it
+   reuses the stamped `default_branch` of an existing `agk.toml`.
 8. **Shared fix, init too (Q-K2-1).** `scripts/agk/common.py` resolves the base as `--base`, `AGK_BASE`,
    `GITHUB_BASE_REF`, then `origin/<default_branch>` and `<default_branch>` from `agk.toml` (K1 installs default to
    `main`). The workflow runs on `pull_request` and on every `push`, with a job condition
    `github.event_name == 'pull_request' || github.ref_name == github.event.repository.default_branch`, so no branch
-   name is written into it. Printed ruleset instructions name the detected branch. The words "main" in installed
+   name is written into it. Printed ruleset instructions name the detected branch; the installed ADR template uses the
+   variable `{{default_branch}}` and `kit/templates/branch-rules.txt` keeps its text. The words "main" in installed
    text (`CLAUDE.md`, `constitution/principles.md`, the ADR template) become "the default branch" (ADR-0007).
 
 ### Tests, markers, lint

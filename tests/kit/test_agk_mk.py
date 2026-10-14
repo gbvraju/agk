@@ -128,3 +128,39 @@ def test_ac1_bare_pytest_in_a_project_collects_no_kit_test(tmp_path):
     )
     assert "tests/test_own.py::test_own" in proc.stdout
     assert "tests/kit/" not in proc.stdout
+
+
+def project_with(tmp_path: Path, toml: str) -> Path:
+    shutil.copytree(
+        ROOT / "scripts" / "agk",
+        tmp_path / "scripts" / "agk",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    shutil.copy(ROOT / "agk.mk", tmp_path / "agk.mk")
+    (tmp_path / "agk.toml").write_text(toml)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+    return tmp_path
+
+
+def run_target(project: Path, target: str):
+    return subprocess.run(
+        ["make", "-f", "agk.mk", target], cwd=project, capture_output=True, text=True
+    )
+
+
+def test_ac1_project_test_target_runs_the_configured_command(tmp_path):
+    """REQ-010 AC1: rule 5. project_tests is run, and its exit code is the target's."""
+    proj = project_with(tmp_path, 'project_tests = "echo RAN_PROJECT_TESTS; exit 7"\n')
+    proc = run_target(proj, "agk-project-test")
+    assert proc.returncode != 0
+    assert "RAN_PROJECT_TESTS" in proc.stdout
+    ok = project_with(tmp_path / "ok", 'project_tests = "echo FINE"\n')
+    assert run_target(ok, "agk-project-test").returncode == 0
+
+
+def test_ac1_project_test_target_prints_a_notice_when_empty(tmp_path):
+    """REQ-010 AC1: rule 5 (adopt: empty)."""
+    proj = project_with(tmp_path, "default_branch = 'main'\n")
+    proc = run_target(proj, "agk-project-test")
+    assert proc.returncode == 0
+    assert "no project_tests configured" in proc.stdout

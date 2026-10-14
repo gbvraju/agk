@@ -52,3 +52,11 @@ def test_ac2_workflow_calls_the_agk_mk_form():
     for target in ("agk-governance", "agk-lint", "agk-test"):
         assert f"run: make -f agk.mk {target}" in text
     assert not re.search(r"run: make (governance|lint|test)\b", text)
+
+
+def test_ac2_project_tests_step_follows_the_tests_of_the_checks():
+    """REQ-010 AC1 (SPEC-0002 rule 5): CI runs the project's own tests after the kit tests."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "run: make -f agk.mk agk-project-test" in text
+    assert text.index("name: Tests of the checks") < text.index("name: Project tests")
+    assert text.index("agk-test") < text.index("agk-project-test")

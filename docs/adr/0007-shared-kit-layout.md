@@ -25,11 +25,12 @@ changes all of them except `docs/requirements.md` and `pyproject.toml`.
 1. **`agk.mk`** holds the kit's commands: `agk-governance`, `agk-lint`, `agk-test`, `agk-traceability`. The
    workflow, the stop hook and the settings call `make -f agk.mk agk-<name>`.
 2. **`agk.toml`** holds the kit's configuration: `mode`, `version`, `installed`, `default_branch`, `test_dirs`,
-   `lint_paths`. The checks read it first and fall back to `[tool.agk]` in `pyproject.toml` (earlier installs); an
-   absent key takes its default. `scripts/agk/config.py KEY` prints a value for `agk.mk`.
+   `lint_paths`, `project_tests`. The checks read it first and fall back to `[tool.agk]` in `pyproject.toml` (earlier
+   installs); an absent key takes its default. New installs write no `[tool.agk]` table (Q-K2-11).
+   `scripts/agk/config.py KEY` prints a value for `agk.mk`.
 3. **Thin `Makefile`.** It includes `agk.mk` and aliases `governance`, `lint`, `test` and `traceability`. `test` runs
-   the kit tests through `agk-test`, then the project's own tests under `tests/` (`pytest tests`, exit 5 meaning none
-   collected counts as success). This amends ADR-0005 decision 1: project tests still run under `make test`.
+   `agk-test` (the kit tests) and then `agk-project-test`. This amends ADR-0005 decision 1: project tests still run
+   under `make test` (Q-K2-9).
 4. **This repository adopts `agk.mk` and `agk.toml` itself**, because the workflow is verbatim. Its `agk-test` also
    runs `tests/kit_dev` when it exists.
 5. **Kit tests run in isolation.** `tests/kit/pytest.ini`, selected with `-c`, replaces project pytest config for
@@ -48,12 +49,18 @@ changes all of them except `docs/requirements.md` and `pyproject.toml`.
    rendered from `kit/templates/protected-paths.txt` with the matching `reviewers.yaml` template. This repository's
    list is that plus `kit/` and `tests/kit_dev/`. The adopted-mode list comes with `agk adopt`.
 10. **Kit version** is `0.3.0`: installed content changed.
+11. **`project_tests`.** `agk.toml` key `project_tests` is the shell command that runs the project's own tests. For
+    init it is the project pytest command with exit 5 (nothing collected) treated as success; for adopt it is empty.
+    `agk-project-test` runs it, or prints a notice when it is empty. The workflow runs `agk-project-test` after
+    "Tests of the checks", so CI still runs the project's tests (the ADR-0005 guarantee that the thin Makefile and
+    `agk-test` alone would have lost). A test asserts that a failing project test makes the CI steps fail.
 
 ## Consequences
 
 - A repository installed by init at 0.1 or 0.2 keeps working: `[tool.agk]` is still read; upgrading is out of scope.
 - The installed `.claude/settings.json` also asks before editing `kit/` and `tests/kit_dev/`, which do not exist in
   a target.
+- `project_tests` is a shell command string from a file the maintainers own (`agk.toml` is protected).
 - Kit tests need `AGK_KIT_TESTS=1` (or `make test`) to run; a bare `pytest tests/kit` collects nothing.
 
 ## Residual

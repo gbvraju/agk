@@ -34,6 +34,8 @@ jobs:
         run: make -f agk.mk agk-lint
       - name: Tests of the checks
         run: make -f agk.mk agk-test
+      - name: Project tests
+        run: make -f agk.mk agk-project-test
       - name: Secret scan
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7   # v2.3.9
         env:

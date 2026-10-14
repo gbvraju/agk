@@ -141,6 +141,7 @@ DEFAULT_CONFIG = {
     "default_branch": "main",
     "test_dirs": ["tests"],
     "lint_paths": ["scripts/agk", "tests/kit", ".claude/hooks"],
+    "project_tests": "",
 }
 
 

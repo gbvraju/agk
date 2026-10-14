@@ -10,6 +10,7 @@ DEFAULTS = {
     "default_branch": "main",
     "test_dirs": ["tests"],
     "lint_paths": ["scripts/agk", "tests/kit", ".claude/hooks"],
+    "project_tests": "",
 }
 
 
@@ -125,3 +126,15 @@ def test_ac1_detect_default_branch_is_none_without_a_git_directory(tmp_path):
     assert common.detect_default_branch(tmp_path) is None
     (tmp_path / ".git").write_text("gitdir: elsewhere\n")
     assert common.detect_default_branch(tmp_path) is None
+
+
+def test_ac1_project_tests_is_read_and_printed(repo):
+    """REQ-010 AC1: rule 5 (project_tests)."""
+    repo.commit({"agk.toml": 'project_tests = "echo hi; exit 0"\n'})
+    assert common.load_config(repo.root)["project_tests"] == "echo hi; exit 0"
+    assert repo.run("config.py", "project_tests").stdout.strip() == "echo hi; exit 0"
+
+
+def test_ac1_project_tests_is_empty_by_default(repo):
+    """REQ-010 AC1: rule 5 (adopt leaves it empty)."""
+    assert repo.run("config.py", "project_tests").stdout.strip() == ""

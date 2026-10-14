@@ -10,6 +10,5 @@ lint: agk-lint
 
 traceability: agk-traceability
 
-# Kit tests first (agk-test), then the project's own tests under tests/ (pytest exit 5 = none collected).
-test: agk-test
-	@$(PY) -m pytest tests -q --ignore=tests/kit_dev; rc=$$?; if [ $$rc -eq 5 ]; then exit 0; fi; exit $$rc
+# Kit tests, then the project's own tests (agk.toml project_tests).
+test: agk-test agk-project-test

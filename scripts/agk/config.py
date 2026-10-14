@@ -1,6 +1,7 @@
 """Print one agk configuration value (lists space-joined); used by agk.mk.
 
-Usage: python3 scripts/agk/config.py KEY   (KEY: default_branch, test_dirs, lint_paths)
+Usage: python3 scripts/agk/config.py KEY
+KEY is one of default_branch, test_dirs, lint_paths, project_tests.
 """
 
 from __future__ import annotations

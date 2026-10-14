@@ -195,16 +195,16 @@ def test_ac2_adr_names_every_protected_entry_and_is_proposed(installed):
 
 
 def test_ac2_version_stamp_and_date(installed):
-    """REQ-009 AC2: rule 14."""
+    """REQ-009 AC2: rule 14 (amended): the stamp lives in agk.toml only, not in pyproject.toml."""
     import tomllib
 
-    data = tomllib.loads((installed / "pyproject.toml").read_text(encoding="utf-8"))
-    agk = data["tool"]["agk"]
-    assert agk["version"] == manifest()["kit_version"]
-    assert agk["test_dirs"] == ["tests"]
-    today = datetime.now(UTC).date().isoformat()
-    assert agk["installed"] == today
-    assert data["project"]["name"] == "my-project"
+    pyproject = tomllib.loads((installed / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "agk" not in pyproject.get("tool", {})
+    cfg = tomllib.loads((installed / "agk.toml").read_text(encoding="utf-8"))
+    assert cfg["version"] == manifest()["kit_version"]
+    assert cfg["test_dirs"] == ["tests"]
+    assert cfg["installed"] == datetime.now(UTC).date().isoformat()
+    assert pyproject["project"]["name"] == "my-project"
 
 
 def test_ac2_branch_rules_are_printed_not_applied(target):
@@ -431,3 +431,69 @@ def test_ac1_installed_text_does_not_assume_main(installed):
     assert "origin/main" not in claude
     assert "branched from main" not in principles
     assert "default branch" in claude and "default branch" in principles
+
+
+def test_ac1_older_install_stamp_in_pyproject_is_still_read(tmp_path):
+    """REQ-010 AC1: rule 5 (earlier installs): init reads the stamp from pyproject [tool.agk]."""
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import init
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.agk]\ninstalled = "2020-01-02"\ndefault_branch = "trunk"\n'
+    )
+    assert init.stamped(tmp_path, "2026-01-01") == ("2020-01-02", "trunk")
+
+
+CI_STEP = re.compile(r"^\s*run:\s*(make -f agk\.mk \S+)\s*$", re.M)
+
+
+def ci_steps(root: Path) -> list[str]:
+    text = (root / ".github" / "workflows" / "governance.yml").read_text(encoding="utf-8")
+    return CI_STEP.findall(text)
+
+
+def run_ci(root: Path) -> list[int]:
+    codes = []
+    for step in ci_steps(root):
+        proc = subprocess.run(
+            step.split(), cwd=root, capture_output=True, text=True, env=clean_env()
+        )
+        codes.append(proc.returncode)
+    return codes
+
+
+def test_ac1_ci_steps_include_the_project_tests_and_pass_when_they_pass(installed):
+    """REQ-010 AC1: rule 5 (project_tests)."""
+    assert [s.split()[-1] for s in ci_steps(installed)] == [
+        "agk-governance",
+        "agk-lint",
+        "agk-test",
+        "agk-project-test",
+    ]
+    (installed / "tests" / "test_p.py").write_text("def test_p():\n    assert True\n")
+    assert run_ci(installed) == [0, 0, 0, 0]
+
+
+def test_ac1_failing_project_test_makes_the_ci_steps_fail(installed):
+    """REQ-010 AC1: rule 5. The regression guard: CI runs the project's own tests."""
+    (installed / "tests" / "test_p.py").write_text("def test_p():\n    assert False\n")
+    codes = run_ci(installed)
+    assert codes[-1] != 0
+    assert codes[:3] == [0, 0, 0]
+
+
+def test_ac1_agk_toml_of_an_init_repo_has_project_tests_with_exit_5_handling(installed):
+    """REQ-010 AC1: rule 5."""
+    import tomllib
+
+    cfg = tomllib.loads((installed / "agk.toml").read_text(encoding="utf-8"))
+    assert "pytest tests" in cfg["project_tests"] and "exit $rc" in cfg["project_tests"]
+    # a fresh install has no project tests: pytest exits 5, which the command treats as success
+    proc = subprocess.run(
+        ["make", "-f", "agk.mk", "agk-project-test"],
+        cwd=installed,
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr

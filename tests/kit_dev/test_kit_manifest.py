@@ -131,9 +131,14 @@ def test_ac2_branch_rules_text_equals_kit_adr_decision_3():
 
 
 def test_ac2_make_test_and_testpaths_cover_all_of_tests():
-    """REQ-009 AC2: rule 18 (amended). The kit and an installed repository run `pytest tests`."""
+    """REQ-009 AC2: rule 18 (amended). `make test` runs agk-test then the project tests."""
     makefile = (KIT_ROOT / "Makefile").read_text(encoding="utf-8")
-    assert "$(PY) -m pytest tests -q" in makefile
+    assert "test: agk-test agk-project-test" in makefile
+    for rel in ("agk.toml", manifest()["templates"]["agk.toml"]):
+        cfg = tomllib.loads(
+            (KIT_ROOT / rel).read_text(encoding="utf-8").replace("{{", "").replace("}}", "")
+        )
+        assert "-m pytest tests -q" in cfg["project_tests"], rel
     template = manifest()["templates"]["pyproject.toml"]
     for rel in ("pyproject.toml", template):
         text = (KIT_ROOT / rel).read_text(encoding="utf-8").replace("{{", "").replace("}}", "")
@@ -184,7 +189,11 @@ def test_ac1_this_repository_makefile_is_thin_aliases():
     """REQ-010 AC1: SPEC-0002 rule 5 (the repository adopts agk.mk itself)."""
     makefile = (KIT_ROOT / "Makefile").read_text(encoding="utf-8")
     assert "include agk.mk" in makefile
-    for alias in ("governance: agk-governance", "lint: agk-lint", "test: agk-test"):
+    for alias in (
+        "governance: agk-governance",
+        "lint: agk-lint",
+        "test: agk-test agk-project-test",
+    ):
         assert alias in makefile
     assert "scripts/agk/check_" not in makefile
 
@@ -194,3 +203,14 @@ def test_ac1_adr_template_uses_the_default_branch_variable():
     text = (KIT_ROOT / manifest()["templates"]["docs/adr/0001-adopt-agk.md"]).read_text()
     assert "{{default_branch}}" in text
     assert "ruleset `main`" not in text
+
+
+def test_ac1_templates_carry_project_tests_and_no_pyproject_stamp():
+    """REQ-010 AC1: SPEC-0002 rule 5 and SPEC-0001 rule 14 (amended)."""
+    templates = manifest()["templates"]
+    agk = (KIT_ROOT / templates["agk.toml"]).read_text(encoding="utf-8")
+    assert "project_tests" in agk and "pytest tests" in agk and "exit $rc" in agk
+    pyproject = (KIT_ROOT / templates["pyproject.toml"]).read_text(encoding="utf-8")
+    assert "[tool.agk]" not in pyproject
+    own = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))
+    assert "pytest tests" in own["project_tests"]
