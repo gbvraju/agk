@@ -46,3 +46,5 @@ One row per decision made outside an ADR, so a compacted session can be reconstr
 | 2026-10-14 | README gains an "Installing" section; kit version is 0.2.0 | installed content changed | ADR-0006, kit/manifest.json | reviewer |
 | 2026-10-14 | Keep the current action majors; evaluate newer majors in a dedicated PR (Q-K1-16) | a major change is a behaviour change | ADR-0006 residual | reviewer |
 | 2026-10-14 | gitleaks-action licence stays a residual; proposed resolution: the MIT gitleaks binary (verify licence), K2 or K4 (Q-K1-17) | org-owned targets should need no key | ADR-0006 residual | reviewer |
+| 2026-10-14 | The K2 target is a fork of `tartley/colorama` (`gbvraju/colorama`) | a real codebase for `agk adopt`; read-only until the fork exists | this log | maintainers |
+| 2026-10-14 | K2 is split into three specs (adopt, reviewer agent, drift audit), each approved before its implementation | one reviewable step at a time | this log | reviewer |

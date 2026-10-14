@@ -12,8 +12,11 @@ Appended by docs commits only; feature PRs carry their row in the PR body (`Buil
 | 2026-10-14 | SPEC-0001 agk init (Approved) and day-2 report | REQ-009 |
 | 2026-10-14 | agk init implemented per SPEC-0001; kit manifest and templates; ADR-0004 (Accepted): protected list expanded, kit/ and tests/kit_dev/ protected, neutral CLAUDE.md | REQ-009, REQ-001, REQ-003, REQ-005 |
 | 2026-10-14 | Installed repositories' make test runs the project's own tests; ADR-0005 (Proposed, amends ADR-0004); SPEC-0001 rule 18 amended | REQ-009 |
+| 2026-10-14 | K1 live proof record; build-state rows for PRs #5-#7 | REQ-009 |
+| 2026-10-14 | K1 exit: actions pinned to SHAs, CODEOWNERS dedupe, Approved-spec check, installed ADR-0001 records the creation commit, README Installing, kit 0.2.0; ADR-0006 (Accepted, amends ADR-0001) | REQ-005, REQ-009 |
 
 ## Decisions
 2026-10-14 — K0 exit met: make governance green; PR #1 merged under its own rules.
 2026-10-14 — K0 closed: PRs #1–#3 merged; ADR-0003 Accepted.
 2026-10-14 — K1 live proof met on agk-sandbox (SPEC-0001 rule 24).
+2026-10-14 — K1 closed: agk init (SPEC-0001) proven live; ADR-0006 Accepted.
