@@ -12,7 +12,7 @@ governance:
 	$(PY) scripts/agk/reviewers.py --check-codeowners
 
 test:
-	$(PY) -m pytest tests/kit -q
+	$(PY) -m pytest $(wildcard tests/kit tests/kit_dev) -q
 
 lint:
 	ruff check .

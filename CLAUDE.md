@@ -1,7 +1,7 @@
 # CLAUDE.md — agent operating rules for agk
 
-`constitution/principles.md` is authoritative (twelve numbered rules). Read it first. These are the day-0 §0
-rules 1–9 in short form:
+`constitution/principles.md` is authoritative (twelve numbered rules). Read it first. These are the operating
+rules in short form:
 
 1. You implement; you never decide. Decisions are ADRs or requirement statuses written by the reviewers. Where a
    brief leaves something open, record it as a `Q-…` question and choose the most conservative reading.

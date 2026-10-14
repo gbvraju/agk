@@ -11,7 +11,7 @@ dependencies = []
 test_dirs = ["tests"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests/kit"]
+testpaths = ["tests/kit", "tests/kit_dev"]
 pythonpath = ["scripts/agk"]
 
 [tool.ruff]
