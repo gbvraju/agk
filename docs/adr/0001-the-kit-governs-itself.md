@@ -20,7 +20,10 @@ cannot be trusted. Every rule it ships therefore applies to this repository from
    `docs/requirements.md`. They change only with a new or modified ADR in the same PR. A change that touches only
    `- Status:` lines of `docs/requirements.md` is exempt.
 3. The one direct push to `main` is the repository creation commit (README and LICENSE). Everything else goes
-   through a pull request that passes the `governance` job.
+   through a pull request that passes the `governance` job. The ruleset `main` is exactly: Active; no bypass;
+   target the default branch; restrict deletions; require linear history; require a pull request (0 approvals,
+   dismiss stale approvals, squash merge only); block force pushes; required status check `governance`.
+   Repository settings: allow auto-merge; auto-delete head branches.
 4. Checks live in `scripts/agk/`, use the standard library only, make no network calls, and are exercised by
    tests in `tests/kit/`. `make governance` runs them; `make test` runs the tests.
 5. Reviewer model: path classes map to reviewer groups in `config/reviewers.yaml`; approvers are teams, never
@@ -40,4 +43,4 @@ cannot be trusted. Every rule it ships therefore applies to this repository from
   and verified by `agk doctor` in a later milestone (REQ-002 AC1).
 - 2026-10-14: `teams.maintainers.github_team` in `config/reviewers.yaml` maps to a user handle until an
   organisation team exists. It is a mapping only: authority lists (`approvers`) hold team names, never handles,
-  and test fixtures use placeholders. Replace the handle when the team exists.
+  and test fixtures use placeholders. Replace by K1 exit.

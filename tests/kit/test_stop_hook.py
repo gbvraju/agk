@@ -82,9 +82,11 @@ def test_ac2_settings_deny_agent_merge():
     assert "mcp__github__enable_pr_auto_merge" in deny
 
 
-def test_ac2_settings_deny_edits_to_every_protected_path():
-    """REQ-001 REQ-002 AC2"""
-    deny = settings()["permissions"]["deny"]
+def test_ac2_settings_ask_before_editing_every_protected_path():
+    """REQ-001 REQ-002 AC2: protected-path edits prompt (key `ask`, verify)."""
+    perms = settings()["permissions"]
+    deny = perms["ask"]
+    assert not [r for r in perms["deny"] if r.startswith(("Edit(", "Write("))]
     for entry in (ROOT / "config" / "protected-paths.txt").read_text().splitlines():
         if not entry.strip() or entry.startswith("#"):
             continue
@@ -100,7 +102,7 @@ def test_ac3_stop_hook_is_registered():
 
 
 def test_ac2_deny_covers_push_variants_in_any_flag_position():
-    """REQ-002 AC2: -f, --force-with-lease, +refspec, --delete, :branch, flag after remote."""
+    """REQ-002 AC2: -f, --force-with-lease, +refspec, --delete, flag after remote."""
     deny = settings()["permissions"]["deny"]
     for rule in (
         "Bash(git push --force*)",
@@ -113,7 +115,6 @@ def test_ac2_deny_covers_push_variants_in_any_flag_position():
         "Bash(git push * -d*)",
         "Bash(git push +*)",
         "Bash(git push * +*)",
-        "Bash(git push * :*)",
         "Bash(git reset * --hard*)",
     ):
         assert rule in deny
@@ -126,3 +127,12 @@ def test_ac3_stop_hook_active_exits_zero_silently_even_when_red(tmp_path):
         proc = run_hook(proj, {"stop_hook_active": True})
         assert proc.returncode == 0
         assert proc.stdout == "" and proc.stderr == ""
+
+
+def test_ac2_deny_keeps_merge_and_history_rewrite_rules():
+    """REQ-002 AC2"""
+    perms = settings()["permissions"]
+    assert "Bash(git push * :*)" not in perms["deny"]
+    for rule in ("Bash(gh pr merge:*)", "mcp__github__merge_pull_request",
+                 "mcp__github__enable_pr_auto_merge", "Bash(git reset --hard:*)"):
+        assert rule in perms["deny"]

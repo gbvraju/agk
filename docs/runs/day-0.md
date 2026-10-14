@@ -80,3 +80,14 @@ Run on 2026-10-14 in the sandbox:
   creation exemption holds only when the file is absent at base (editing an existing file fails, committed or not).
 - Deferred to PR #2: markers only in `test_*.py` (Q-K0-12), verification of Q-K0-8 facts, the `Advances: none` escape.
 - Local after this commit: `make governance` exit 0; `make test` 80 passed; `ruff check .` passed.
+
+## Reviewer fix list 2 (2026-10-14)
+
+- Edit/Write rules for protected paths moved from `deny` to `ask` in `.claude/settings.json` (key `ask`: verify).
+  `deny` keeps force-push variants, `git reset --hard`, `gh pr merge` and the merge/auto-merge tools.
+- `Bash(git push * :*)` removed: the middle-wildcard form is not confirmed against Claude Code's prefix rule syntax
+  (verify), so it may match more or less than intended. Colon-refspec branch deletion (`git push origin :branch`)
+  is therefore not denied by a rule; `--delete`, `-d`, `+refspec` and force variants remain denied. Residual:
+  branch protection (blocked deletions on `main`) is the control for that form; revisit when the syntax is verified.
+- ADR-0001 Decision 3 now lists ruleset `main` and repository settings exactly; handle residual is
+  "replace by K1 exit".
