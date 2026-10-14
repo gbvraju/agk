@@ -9,6 +9,7 @@ governance:
 	$(PY) scripts/agk/check_neutrality.py
 	$(PY) scripts/agk/check_build_state.py
 	$(PY) scripts/agk/reviewers.py --check
+	$(PY) scripts/agk/reviewers.py --check-codeowners
 
 test:
 	$(PY) -m pytest tests/kit -q

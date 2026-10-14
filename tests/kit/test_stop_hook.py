@@ -83,16 +83,16 @@ def test_ac2_settings_deny_agent_merge():
 
 
 def test_ac2_settings_ask_before_editing_every_protected_path():
-    """REQ-001 REQ-002 AC2: protected-path edits prompt (key `ask`, verify)."""
+    """REQ-001 REQ-002 AC2: Edit rules (the form Claude Code consults) prompt, root-anchored."""
     perms = settings()["permissions"]
-    deny = perms["ask"]
+    ask = perms["ask"]
     assert not [r for r in perms["deny"] if r.startswith(("Edit(", "Write("))]
+    assert not [r for r in ask if r.startswith("Write(")]
     for entry in (ROOT / "config" / "protected-paths.txt").read_text().splitlines():
         if not entry.strip() or entry.startswith("#"):
             continue
-        glob = f"./{entry}**" if entry.endswith("/") else f"./{entry}"
-        for tool in ("Edit", "Write"):
-            assert f"{tool}({glob})" in deny
+        glob = f"/{entry}**" if entry.endswith("/") else f"/{entry}"
+        assert f"Edit({glob})" in ask
 
 
 def test_ac3_stop_hook_is_registered():
@@ -133,6 +133,32 @@ def test_ac2_deny_keeps_merge_and_history_rewrite_rules():
     """REQ-002 AC2"""
     perms = settings()["permissions"]
     assert "Bash(git push * :*)" not in perms["deny"]
-    for rule in ("Bash(gh pr merge:*)", "mcp__github__merge_pull_request",
-                 "mcp__github__enable_pr_auto_merge", "Bash(git reset --hard:*)"):
+    for rule in (
+        "Bash(gh pr merge:*)",
+        "mcp__github__merge_pull_request",
+        "mcp__github__enable_pr_auto_merge",
+        "Bash(git reset --hard:*)",
+    ):
         assert rule in perms["deny"]
+
+
+def _matches(rule: str, command: str) -> bool:
+    import fnmatch
+
+    inner = rule[len("Bash(") : -1]
+    if inner.endswith(":*"):
+        inner = inner[:-2] + " *"
+    if inner.endswith(" *") and fnmatch.fnmatchcase(command, inner[:-2]):
+        return True
+    return fnmatch.fnmatchcase(command, inner)
+
+
+def test_ac2_push_allow_is_exactly_one_command_and_no_deny_matches_it():
+    """REQ-002 AC2: deny beats allow, so no deny rule may match the allowed push."""
+    perms = settings()["permissions"]
+    pushes = [r for r in perms["allow"] if r.startswith("Bash(git push")]
+    assert pushes == ["Bash(git push -u origin HEAD)"]
+    command = "git push -u origin HEAD"
+    for rule in perms["deny"]:
+        if rule.startswith("Bash("):
+            assert not _matches(rule, command), rule

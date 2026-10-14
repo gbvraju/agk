@@ -15,6 +15,7 @@ from common import CheckError, read_list, repo_root, run
 NAME = "reviewers"
 CONFIG = "config/reviewers.yaml"
 PROTECTED_LIST = "config/protected-paths.txt"
+CODEOWNERS = ".github/CODEOWNERS"
 HANDLE_RE = re.compile(r"^@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 
@@ -207,8 +208,8 @@ def render_codeowners(data: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    if len(argv) != 1 or argv[0] not in ("--check", "--codeowners"):
-        raise CheckError("usage: reviewers.py --check | --codeowners")
+    if len(argv) != 1 or argv[0] not in ("--check", "--codeowners", "--check-codeowners"):
+        raise CheckError("usage: reviewers.py --check | --codeowners | --check-codeowners")
     root = repo_root()
     try:
         data = parse((root / CONFIG).read_text(encoding="utf-8"))
@@ -224,7 +225,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if problems else 0
     if problems:
         raise CheckError(f"{CONFIG} is invalid; run --check")
-    sys.stdout.write(render_codeowners(data))
+    rendered = render_codeowners(data)
+    if argv[0] == "--codeowners":
+        sys.stdout.write(rendered)
+        return 0
+    try:
+        committed = (root / CODEOWNERS).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CheckError(f"{CODEOWNERS} is missing; render it with --codeowners") from exc
+    if committed != rendered:
+        raise CheckError(f"{CODEOWNERS} differs from the rendering of {CONFIG}; re-render it")
+    print(f"ok {NAME} ({CODEOWNERS} matches)")
     return 0
 
 

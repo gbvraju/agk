@@ -13,19 +13,16 @@
       "Bash(git diff:*)",
       "Bash(git log:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push -u origin HEAD)"
     ],
     "ask": [
-      "Edit(./constitution/**)",
-      "Write(./constitution/**)",
-      "Edit(./config/**)",
-      "Write(./config/**)",
-      "Edit(./.claude/**)",
-      "Write(./.claude/**)",
-      "Edit(./.github/**)",
-      "Write(./.github/**)",
-      "Edit(./docs/requirements.md)",
-      "Write(./docs/requirements.md)"
+      "Edit(/constitution/**)",
+      "Edit(/config/**)",
+      "Edit(/.claude/**)",
+      "Edit(/.github/**)",
+      "Edit(/docs/requirements.md)",
+      "Edit(/CLAUDE.md)"
     ],
     "deny": [
       "Bash(git push --force:*)",

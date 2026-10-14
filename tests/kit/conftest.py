@@ -43,9 +43,7 @@ class Repo:
 
     def run(self, script: str, *args: str, stdin: str | None = None, **env: str):
         full_env = {
-            k: v
-            for k, v in os.environ.items()
-            if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")
+            k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")
         }
         full_env.update(env)
         return subprocess.run(

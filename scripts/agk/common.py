@@ -28,9 +28,7 @@ def git(root: Path, *args: str, check: bool = True) -> str:
 
 
 def repo_root() -> Path:
-    proc = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
-    )
+    proc = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
     if proc.returncode != 0:
         raise CheckError("not inside a git repository")
     return Path(proc.stdout.strip())
@@ -116,9 +114,7 @@ def show(root: Path, rev: str, path: str) -> str | None:
 
 def read_list(text: str) -> list[str]:
     """Non-blank, non-comment lines."""
-    return [
-        ln.strip() for ln in text.splitlines() if ln.strip() and not ln.strip().startswith("#")
-    ]
+    return [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.strip().startswith("#")]
 
 
 def matches(path: str, entry: str) -> bool:
@@ -153,13 +149,13 @@ def test_dirs(root: Path, cli_dirs: Sequence[str] | None = None) -> list[str]:
 
 
 def find_markers(root: Path, dirs: Sequence[str]) -> dict[str, list[str]]:
-    """REQ id -> sorted list of files (relative) under dirs that contain the marker."""
+    """REQ id -> sorted files (relative) named test_*.py under dirs that contain the marker."""
     found: dict[str, set[str]] = {}
     for d in dirs:
         base = root / d
         if not base.is_dir():
             continue
-        for path in sorted(base.rglob("*")):
+        for path in sorted(base.rglob("test_*.py")):
             if not path.is_file() or "__pycache__" in path.parts:
                 continue
             try:

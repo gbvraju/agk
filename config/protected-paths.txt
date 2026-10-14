@@ -6,3 +6,4 @@ config/
 .claude/
 .github/
 docs/requirements.md
+CLAUDE.md

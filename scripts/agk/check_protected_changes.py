@@ -1,4 +1,4 @@
-"""Fail when a protected path changes without a new or modified ADR in the same change set."""
+"""Fail when a protected path changes without an ADR in the same change set that names its class."""
 
 from __future__ import annotations
 
@@ -31,6 +31,22 @@ def is_adr(path: str, status: str) -> bool:
     )
 
 
+def covering_adrs(root, mb, changed: dict[str, str], classes: list[str]) -> list[str]:
+    """ADRs added or modified (not Status-only) whose text names every changed class."""
+    found = []
+    for path, status in sorted(changed.items()):
+        if not is_adr(path, status):
+            continue
+        if status == "M":
+            lines = changed_lines(root, mb, path)
+            if all(ln[1:].startswith("- Status:") for ln in lines):
+                continue
+        text = (root / path).read_text(encoding="utf-8")
+        if all(entry in text for entry in classes):
+            found.append(path)
+    return found
+
+
 def main(argv: list[str] | None = None) -> int:
     root = repo_root()
     mb = base_context(root, NAME, base_arg(argv))
@@ -61,11 +77,14 @@ def main(argv: list[str] | None = None) -> int:
     if not classes:
         print(f"ok {NAME}")
         return 0
-    if any(is_adr(p, s) for p, s in changed.items()):
+    if covering_adrs(root, mb, changed, classes):
         print(f"ok {NAME} (protected change covered by an ADR)")
         return 0
     for entry in classes:
-        print(f"FAIL {NAME}: protected path class '{entry}' changed without a new or modified ADR")
+        print(
+            f"FAIL {NAME}: protected path class '{entry}' changed without an ADR that names it "
+            "(added or modified, not a Status-only edit)"
+        )
     return 1
 
 

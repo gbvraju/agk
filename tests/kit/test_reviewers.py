@@ -66,3 +66,37 @@ def test_cli_check_and_codeowners(repo):
     assert proc.returncode == 0 and "@some-team" in proc.stdout
     repo.commit({"config/protected-paths.txt": "config/\n"})
     assert repo.run("reviewers.py", "--check").returncode == 1
+
+
+def codeowners_repo(repo, text=None):
+    from reviewers import parse, render_codeowners
+
+    rendered = render_codeowners(parse(GOOD))
+    repo.commit(
+        {
+            "config/reviewers.yaml": GOOD,
+            "config/protected-paths.txt": PROTECTED,
+            ".github/CODEOWNERS": rendered if text is None else text,
+        }
+    )
+
+
+def test_ac2_committed_codeowners_matching_rendering_passes(repo):
+    """REQ-005 AC2"""
+    codeowners_repo(repo)
+    assert repo.run("reviewers.py", "--check-codeowners").returncode == 0
+
+
+def test_ac2_codeowners_mismatch_fails_and_names_file_not_content(repo):
+    """REQ-005 AC2"""
+    codeowners_repo(repo, "/docs/ @someone-else\n")
+    proc = repo.run("reviewers.py", "--check-codeowners")
+    assert proc.returncode == 1
+    assert "CODEOWNERS" in proc.stdout and "someone-else" not in proc.stdout
+
+
+def test_ac2_missing_codeowners_fails(repo):
+    """REQ-005 AC2"""
+    codeowners_repo(repo)
+    repo.commit({".github/CODEOWNERS": None})
+    assert repo.run("reviewers.py", "--check-codeowners").returncode == 1

@@ -17,3 +17,5 @@ One row per decision made outside an ADR, so a compacted session can be reconstr
 | 2026-10-14 | Protected-path Edit/Write are `ask`, not `deny` | agents may change protected paths with an ADR (day-0 rule 0.3); CI and maintainers are the gate | settings.json, ADR-0001 | reviewer |
 | 2026-10-14 | Colon-refspec deny removed; feature-branch deletion uncovered, `main` protected by ruleset | unconfirmed pattern syntax | day-0.md | reviewer |
 | 2026-10-14 | `governance` added as required status check before merging PR #1 | merge gated by CI | ADR-0001 | maintainers |
+| 2026-10-14 | Docs-only PRs carry their own dated build-state row; check_pr_body unchanged (Q-K1-1) | the check requires a dated row; `none (...)` was rejected | this log, PR #2 body | reviewer |
+| 2026-10-14 | The governance workflow re-runs on PR body edits (`edited` type) | a body fix needs no empty commit | ADR-0003, governance.yml | reviewer |
