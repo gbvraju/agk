@@ -16,4 +16,4 @@ Appended by docs commits only; feature PRs carry their row in the PR body (`Buil
 ## Decisions
 2026-10-14 — K0 exit met: make governance green; PR #1 merged under its own rules.
 2026-10-14 — K0 closed: PRs #1–#3 merged; ADR-0003 Accepted.
-2026-10-15 — K1 live proof met on agk-sandbox (SPEC-0001 rule 24).
+2026-10-14 — K1 live proof met on agk-sandbox (SPEC-0001 rule 24).

@@ -1,8 +1,7 @@
 # K1 live proof (SPEC-0001 rule 24)
 
-Source of the sandbox facts: the day-4 brief from the maintainers. This agent has no access to
-`gbvraju/agk-sandbox`; those facts are recorded as reported and were not re-checked here. Kit facts were checked in
-this repository.
+Sandbox facts verified by the reviewer from a clone of the public sandbox repository (SHAs, file count, test
+counts, negative test).
 
 ## Record
 
@@ -28,8 +27,3 @@ this repository.
 - pytest may be missing in a session; a throwaway venv outside the repository is acceptable; CI installs its own.
 - Agent scripts use quoted heredocs (`<<'EOF'`); unquoted ones expand backticks.
 - CODEOWNERS renders duplicate lines when a path is in two classes (fixed in PR #9, ADR-0006).
-
-## Questions
-
-- Q-K1-15: the brief dates the K1 Decisions line `2026-10-15`, but `date -u` in this session reads 2026-10-14. The
-  line is recorded as given; this PR's own rows use `date -u`. Maintainers to confirm which date is authoritative.
