@@ -1,8 +1,7 @@
 # Proposed spec amendments 3
 
 Date: 2026-10-14 (from `date -u`). Found while implementing SPEC-0002 rules 1-4, 7, 9, 11, 13-18 (ADR-0008).
-Approved specs change only through a proposal like this one (principle 6). Nothing here is applied to a spec;
-maintainers decide.
+Approved specs change only through a proposal like this one (principle 6).
 
 ## SPEC-0002 (`docs/specs/0002-agk-adopt.md`)
 
@@ -30,4 +29,6 @@ maintainers decide.
 
 ## Status
 
-Proposed. Not applied.
+**Applied on maintainers' instruction, in the same PR as this file (PR #13).** `docs/specs/0002-agk-adopt.md` now
+carries every item above (items 1-8). The matching Q-K2-12 (item 1), Q-K2-13 (item 3) and Q-K2-14 (item 5) were
+accepted by the reviewer.

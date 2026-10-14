@@ -1,6 +1,6 @@
 # ADR-0008: agk adopt and the shared-kit changes it needs
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Deciders: maintainers
 - Related: ADR-0001, ADR-0007
