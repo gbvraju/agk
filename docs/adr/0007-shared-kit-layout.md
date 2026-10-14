@@ -1,6 +1,6 @@
 # ADR-0007: Shared kit layout: agk.mk, agk.toml, per-mode protected lists
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Deciders: maintainers
 - Related: ADR-0004, ADR-0006
@@ -60,7 +60,7 @@ changes all of them except `docs/requirements.md` and `pyproject.toml`.
 - A repository installed by init at 0.1 or 0.2 keeps working: `[tool.agk]` is still read; upgrading is out of scope.
 - The installed `.claude/settings.json` also asks before editing `kit/` and `tests/kit_dev/`, which do not exist in
   a target.
-- `project_tests` is a shell command string from a file the maintainers own (`agk.toml` is protected).
+- `project_tests` is a shell command run by CI; it is safe only because `agk.toml` is protected (changing it needs an ADR).
 - Kit tests need `AGK_KIT_TESTS=1` (or `make test`) to run; a bare `pytest tests/kit` collects nothing.
 
 ## Residual
