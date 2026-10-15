@@ -94,3 +94,31 @@ No agent finding exists, so no finding is marked valid or noise.
   the instruction); in particular the verdict for #22's first commit.
 - Q-SR2-2: whether the three human findings should become checkable rules (an amendment to SPEC-0003 rule 11), or the
   reviewer agent is meant to stay limited to Approved-text conformance. Not decided here.
+
+## Appendix: what each context contained (diagnostic)
+
+Read from the three saved contexts (the local files used in this run; not committed). Every context has all twelve
+principles, `Truncated: no`, and lists each embedded document under "Referenced specs and ADRs" by path.
+
+| | #12 at bd381ef | #6 at e001628 | #22 at 071ded6 |
+|---|---|---|---|
+| ADRs included | 0001, 0002, 0003, 0004, 0005, 0006, 0007, TEMPLATE | 0001, 0002, 0003, 0004, TEMPLATE | 0001, 0002, 0003, 0008, 0009, 0010, 0011, TEMPLATE |
+| Specs included | 0001, 0002, TEMPLATE | 0001, TEMPLATE | 0001, 0002, 0003, TEMPLATE |
+| Principles | 1-12 (rule 3 reads "default branch") | 1-12 (rule 3 reads "branched from main", the wording at that commit) | 1-12 (rule 3 reads "default branch") |
+| `CLAUDE.md` | hunk H8 only (rule 2 reworded) | hunk H3 only (title and intro, lines 1-7) | no hunk; named only inside quoted ADR and spec text |
+
+- **ADR-0005 for #12: present, in full.** The whole text (Status Proposed; Decision 1: the `Makefile` `test` target runs
+  `pytest tests`, "project tests run under `make test`"; Consequences) is embedded, and ADR-0007 in the diff names it
+  with `Amends: ADR-0005`. The agent had the text of the decision that the CI defect contradicts (CI not running the
+  project tests), and still returned `cleared`; no Approved rule in SPEC-0003 rule 11 ties a workflow step to it.
+- **CLAUDE.md for #22: absent.** Its first commit does not touch `CLAUDE.md`, and the context embeds `CLAUDE.md` only
+  as a diff hunk of a changed file; it appears in the #22 context only inside quoted ADR and spec text. The context
+  holds no copy of the file.
+- **CLAUDE.md in #6 (the file with the human finding): the finding's text is not in the context.** Hunk H3 covers
+  lines 1-7; rule 8 ("Product-neutral: nothing names a company, product, person or environment...") is unchanged
+  in that commit and so sits outside the diff. No line numbered `8.` of `CLAUDE.md` appears in the #6 context.
+  (The first commit's `CLAUDE.md` rule 8 is the old wording; the `+8.`/` 8.` lines found in the #12 and #22
+  contexts belong to other documents.)
+- The context carries a file only when the diff changes it, or a spec or ADR is referenced by id or path. Unchanged
+  parts of changed files and untouched files such as `CLAUDE.md` are never included. This is a fact about the
+  context, not a finding on the agent; whether the context should carry them is for the maintainers (principle 1).
