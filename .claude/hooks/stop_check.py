@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 
 TAIL_LINES = 30
@@ -34,7 +34,7 @@ def main() -> int:
         return 0
     root = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd()
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
             ["make", "-f", "agk.mk", "agk-governance"],
             cwd=root,
             capture_output=True,

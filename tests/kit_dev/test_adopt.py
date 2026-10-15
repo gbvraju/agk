@@ -605,3 +605,11 @@ def test_ac2_printed_branch_rules_in_adopt_say_default_branch(adopted):
     out = " ".join(adopt(adopted, "--dry-run").stdout.split())
     assert "The ruleset for the default branch is exactly:" in out
     assert "ruleset `main`" not in out
+
+
+def test_scanner_excludes_are_printed_by_adopt_and_not_written(adopted):
+    """REQ-010: ADR-0010 decision 3. Print only, as with the ruleset."""
+    template = (KIT_ROOT / "kit" / "templates" / "scanner-excludes.txt").read_text(encoding="utf-8")
+    out = " ".join(adopt(adopted, "--dry-run").stdout.split())
+    assert " ".join(template.split()) in out
+    assert not any(p.name == "scanner-excludes.txt" for p in adopted.rglob("*"))

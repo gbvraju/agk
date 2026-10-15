@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
@@ -16,7 +16,7 @@ def env_without_flag() -> dict[str, str]:
 
 
 def make_n(target: str) -> str:
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["make", "-f", "agk.mk", "-n", target], cwd=ROOT, capture_output=True, text=True
     )
     assert proc.returncode == 0, proc.stderr
@@ -44,7 +44,7 @@ def test_ac1_agk_lint_is_isolated_and_limited_to_lint_paths():
     """REQ-010 AC1: rule 10."""
     out = make_n("agk-lint")
     assert "--isolated" in out
-    paths = subprocess.run(
+    paths = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "scripts/agk/config.py", "lint_paths"],
         cwd=ROOT,
         capture_output=True,
@@ -59,7 +59,7 @@ def test_ac1_agk_lint_is_isolated_and_limited_to_lint_paths():
 
 def test_ac1_kit_tests_are_not_collected_without_the_flag():
     """REQ-010 AC1: rule 6. A bare pytest run collects no tests/kit test."""
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-m", "pytest", "tests/kit", "--collect-only", "-q"],
         cwd=ROOT,
         capture_output=True,
@@ -72,7 +72,7 @@ def test_ac1_kit_tests_are_not_collected_without_the_flag():
 
 def test_ac1_kit_tests_are_collected_with_the_flag():
     """REQ-010 AC1: rule 6."""
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-m", "pytest", "tests/kit", "--collect-only", "-q"],
         cwd=ROOT,
         capture_output=True,
@@ -95,7 +95,7 @@ def test_ac1_project_pytest_config_is_neither_read_nor_needed(tmp_path):
     (tmp_path / "pyproject.toml").write_text(
         '[tool.pytest.ini_options]\naddopts = "--definitely-not-a-flag"\n'
     )
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [
             sys.executable,
             "-m",
@@ -119,7 +119,7 @@ def test_ac1_bare_pytest_in_a_project_collects_no_kit_test(tmp_path):
     """REQ-010 AC1: rule 6. The project's own run (no -c, no flag) ignores tests/kit."""
     copy_kit(tmp_path)
     (tmp_path / "tests" / "test_own.py").write_text("def test_own():\n    assert True\n")
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-m", "pytest", "--collect-only", "-q", "."],
         cwd=tmp_path,
         capture_output=True,
@@ -138,12 +138,12 @@ def project_with(tmp_path: Path, toml: str) -> Path:
     )
     shutil.copy(ROOT / "agk.mk", tmp_path / "agk.mk")
     (tmp_path / "agk.toml").write_text(toml)
-    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)  # nosec B603 B607 - fixed argument list, no shell
     return tmp_path
 
 
 def run_target(project: Path, target: str):
-    return subprocess.run(
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["make", "-f", "agk.mk", target], cwd=project, capture_output=True, text=True
     )
 
