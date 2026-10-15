@@ -1,6 +1,7 @@
 # Notes on SPEC-0005 (distribution)
 
-Date: 2026-10-15 (from `date -u`). Day-8 brief, item 2. The spec is a Draft; nothing here is implemented, and REQ-014 is
+Date: 2026-10-15 (from `date -u`). Day-8 brief, item 2. The spec was written Draft and set Approved on the
+maintainers' instruction on 2026-10-15 (final commit of the pull request); nothing here is implemented, and REQ-014 is
 not added (`docs/requirements.md` is protected; an ADR adds it). The maintainers' direction was to recommend the hybrid
 (law vendored in the repository and enforced by CI; the plugin carries the workflow commands), to compare A, B and C
 honestly, to list eight commands, and to state that GitHub issues are intake only.

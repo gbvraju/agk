@@ -1,6 +1,6 @@
 # SPEC-0005: Distribution (plugin, marketplace, and where the law lives)
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-014 (to be added by ADR)
 
@@ -43,8 +43,8 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    equal to `kit_version` in `kit/manifest.json`), `skills/<command>/SKILL.md` for each command of rule 8, and the
    existing `scripts/agk/` and `kit/`. Claude Code copies only the plugin directory into its cache, so a plugin
    subdirectory could not reach `scripts/agk/` or `kit/`; a generated copy would be a generated file committed
-   (principle 5). Commands are written as skills; `commands/` is the older format `(verify)` that `skills/` gives the
-   same `/agk:<name>` as the brief's `commands/`).
+   (principle 5). Commands are written as skills; `commands/` is the older format ((verify) that `skills/<name>/SKILL.md` gives the same
+   `/agk:<name>` as `commands/<name>.md`).
 7. **Footprint.** The plugin ships no hook, no MCP or LSP server, no monitor and no `bin/` directory in K3. Installing
    a plugin trusts its hooks and `bin/`; the plugin asks for neither. The stop hook stays in the project's
    `.claude/hooks/`. `/agk:review` uses the project's `reviewer` subagent (installed by init and adopt); the plugin
@@ -146,8 +146,9 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
 
 - 2026-10-15: option B (pinned external checks) is not built; revisit if the doctor comparison proves too weak
   (due 2026-12-01).
-- 2026-10-15: the facts marked `(verify)` (skill frontmatter keys, permission rules naming the plugin path,
-  auto-update default) are checked when the plugin is built (due 2026-11-30).
+- 2026-10-15: five facts are marked `(verify)` and are checked when the plugin is built: the frontmatter key for
+  user-only invocation, permission rules naming `${CLAUDE_PLUGIN_ROOT}`, skills against commands giving the same
+  name, the `github` source form with `ref` in `extraKnownMarketplaces`, and the auto-update default (due 2026-11-30).
 - 2026-10-15: each command may ask for approval once per session, because a permission rule may not be able to name
   the plugin's script path (rule 16); revisit when the `(verify)` fact is checked (due 2026-11-30).
 - 2026-10-15: the doctor comparison detects a changed vendored file only when the plugin version equals the version in
