@@ -1,6 +1,6 @@
 # ADR-0010: Kit code under project scanners
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-15
 - Deciders: maintainers
 - Related: ADR-0008, ADR-0009
