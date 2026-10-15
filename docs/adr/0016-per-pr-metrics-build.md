@@ -1,6 +1,6 @@
 # ADR-0016: Per-PR metrics: the build of SPEC-0007
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-15
 - Deciders: maintainers
 - Related: ADR-0002, ADR-0011, ADR-0012, ADR-0015
