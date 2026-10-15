@@ -5,8 +5,8 @@
 - Requirements: REQ-014 (to be added by ADR)
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
-Open points are raised as `Q-K3-n` in `docs/runs/spec-0005-notes.md`; a rule that depends on one says so. REQ-014 is
-not added by this spec: `docs/requirements.md` is protected, so an ADR adds it (proposed text in the notes).
+The open points Q-K3-4 to Q-K3-11 were ruled on by the maintainers on 2026-10-15 (`docs/runs/spec-0005-notes.md`).
+REQ-014 is not added by this spec: `docs/requirements.md` is protected, so an ADR adds it (proposed text in the notes).
 Claude Code facts used here were read from https://code.claude.com/docs/en/plugins on 2026-10-15; a fact not
 reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
 
@@ -19,17 +19,18 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    `agk init` and `agk adopt` today (SPEC-0001, SPEC-0002). The plugin carries the workflow commands and nothing that
    CI or the checks depend on. Options A (vendored, the plugin only drives init, adopt, doctor, brief and review) and B
    (the repository keeps configuration and the law only; CI installs the checks at a pinned kit version) are compared
-   in `docs/runs/spec-0005-notes.md`; C is A plus a lock (rule 3) and the workflow commands (rule 8).
+   in `docs/runs/spec-0005-notes.md`; C is A plus the doctor comparison (rule 3) and the workflow commands (rule 8).
 2. **The repository works without the plugin.** `make governance`, `make test`, the stop hook, the governance
    workflow and the installed `reviewer` subagent run with no plugin installed. The plugin is needed for the
    commands of rule 8 only. A cloud session may not have the plugin at all (rule 15), so nothing in the law may depend
    on it.
-3. **The lock.** The kit version and a digest of every vendored file are recorded in the repository by the commands
-   that write them (init, adopt, upgrade). The format and the place are SPEC-0008 (Q-K3-4). `/agk:doctor` (SPEC-0006)
-   compares the lock and the files with the manifest of the installed plugin; the plugin, outside the project tree, is
-   the anchor.
+3. **The doctor comparison; no lock file.** `/agk:doctor` (SPEC-0006) compares every vendored file with the installed
+   plugin's copy when the plugin version equals the version in `agk.toml`, and reports each difference; on a version
+   mismatch it reports the mismatch and suggests `/agk:upgrade`. The plugin, outside the project tree, is the anchor.
+   The kit keeps no lock file (it would be a second exception to principle 5); the version is already in `agk.toml`.
 4. **What C does not claim.** A pull request can edit a vendored check; what stops a weakened check is the protected
-   paths with an ADR, CODEOWNERS and the ruleset (human review), and, after the fact, the doctor comparison of rule 3.
+   paths with an ADR, CODEOWNERS and the ruleset (human review), and, after the fact, the doctor comparison of rule 3, which detects a difference only when the plugin and `agk.toml`
+   versions match.
    Option B would remove the check code from a pull request's reach and leave only the pin; K3 does not build it.
    The name of a future opt-in profile flag is reserved: `distribution = "pinned"` in `agk.toml` (not read in K3).
 5. **Plugin and script are one code.** Every command that writes (rule 8) runs the script of the same name in
@@ -42,12 +43,12 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    equal to `kit_version` in `kit/manifest.json`), `skills/<command>/SKILL.md` for each command of rule 8, and the
    existing `scripts/agk/` and `kit/`. Claude Code copies only the plugin directory into its cache, so a plugin
    subdirectory could not reach `scripts/agk/` or `kit/`; a generated copy would be a generated file committed
-   (principle 5) (Q-K3-5). Commands are written as skills; `commands/` is the older format (Q-K3-6, `(verify)` that the
-   brief's `commands/` and the current `skills/` give the same `/agk:<name>`).
+   (principle 5). Commands are written as skills; `commands/` is the older format `(verify)` that `skills/` gives the
+   same `/agk:<name>` as the brief's `commands/`).
 7. **Footprint.** The plugin ships no hook, no MCP or LSP server, no monitor and no `bin/` directory in K3. Installing
    a plugin trusts its hooks and `bin/`; the plugin asks for neither. The stop hook stays in the project's
    `.claude/hooks/`. `/agk:review` uses the project's `reviewer` subagent (installed by init and adopt); the plugin
-   ships no copy of it, so there is no second `agk:reviewer` (Q-K3-7).
+   ships no copy of it, so there is no second `agk:reviewer`.
 8. **The commands.** Namespaced `/agk:<command>`. A command that writes does not commit, push or merge, and never sets
    a spec `Approved` or an ADR `Accepted` (principle 6).
 
@@ -56,7 +57,7 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    | `/agk:init` | `init.py .` (SPEC-0001) | new files in the repository | none |
    | `/agk:adopt` | `adopt.py .` (SPEC-0002) | owned files and marked blocks | none |
    | `/agk:doctor` | the SPEC-0006 script | nothing (report) | read-only `gh api` for settings it must check |
-   | `/agk:upgrade` | the SPEC-0008 script | vendored files, the lock | none |
+   | `/agk:upgrade` | the SPEC-0008 script | vendored files | none |
    | `/agk:spec` | `new_spec.py`: a Draft spec, or a requirement proposal with its ADR draft, from the templates | new files | none (`--from-issue N`: the command reads the issue with `gh issue view`, read-only, and passes the text to the script) |
    | `/agk:issue` | the command renders an issue from a template and runs `gh issue create` | one GitHub issue | write, after asking |
    | `/agk:brief` | a brief from `docs/briefs/TEMPLATE.md` | one file | none |
@@ -76,8 +77,8 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
 
 12. **Where.** This repository is the marketplace: `.claude-plugin/marketplace.json` (`name` `agk`, an `owner`, one
     plugin entry `agk` whose `source` is `"."`, the repository root). Users add it with
-    `claude plugin marketplace add gbvraju/agk` and install with `claude plugin install agk@agk` (Q-K3-8: this
-    repository or a separate one). `claude plugin validate .` passes.
+    `claude plugin marketplace add gbvraju/agk` and install with `claude plugin install agk@agk`.
+    `claude plugin validate .` passes.
 13. **Versions.** One number: the kit version. A release is a git tag `vX.Y.Z` on the default branch with the same
     version in `kit/manifest.json` and `.claude-plugin/plugin.json` (a test compares them). The entry sets no `version`
     of its own, so the manifest version wins. The default is no auto-update for a third-party marketplace
@@ -88,7 +89,7 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
 14. **Committed settings.** A team enables the plugin through `.claude/settings.json`: an `extraKnownMarketplaces`
     entry for `agk` (a `github` source with `ref` set to the release tag) and `"agk@agk": true` under `enabledPlugins`.
     `.claude/` is a protected class, so a change needs an ADR. Init and adopt print the two entries after a run (print
-    only, as the scanner exclusions; adopt does not merge JSON, SPEC-0002 residual) (Q-K3-9).
+    only, as the scanner exclusions; adopt does not merge JSON, SPEC-0002 residual).
 15. **Trust caveats, stated in the README.**
     - A project-scope plugin loads only after the user accepts the workspace trust dialog for the folder, and each
       collaborator installs it on their own machine.
@@ -100,7 +101,8 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
       protected class and its edit is an `ask` rule in `.claude/settings.json`.
 16. **Approval friction.** In K1 and K2 each kit script run from outside the project needed an approval. The plugin
     changes this only if a permission rule can name the plugin's script path `(verify: ${CLAUDE_PLUGIN_ROOT} in a
-    permission rule)`; otherwise each command asks once per session. The spec does not promise zero prompts (Q-K3-10).
+    permission rule)`; otherwise each command asks once per session, which is accepted and recorded as a residual. The
+    spec does not promise zero prompts.
 
 ### Intake
 
@@ -108,11 +110,12 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
     else. An issue may propose, ask or report; it decides nothing. Concretely: (a) no requirement, spec rule or
     decision exists only in an issue or a comment; (b) `/agk:spec --from-issue N` copies the text into a repository
     file and records `N` there as a reference, and the file, not the issue, is what is reviewed; (c) a pull request that
-    implements work from an issue links it with a line `Issue: #N` in its body; (d) no check, workflow or command reads
+    implements work from an issue may link it with a line `Issue: #N` in its body (optional: `check_pr_body.py` does
+    not require it); (d) no check, workflow or command reads
     an issue to decide anything, closing an issue changes no status, and `/agk:issue` links the REQ and spec ids it was
     given in the issue body but leaves their status alone; (e) the drift-audit issue (SPEC-0004) is a report, not an
-    authority. The `Issue:` line and the issue templates (`.github/ISSUE_TEMPLATE/`, installed verbatim) are protected
-    changes made in the implementation PR with an ADR (Q-K3-11).
+    authority. The issue templates (`.github/ISSUE_TEMPLATE/`, installed verbatim) and the optional `Issue:` line in the
+    pull request template are protected changes made in the implementation PR with an ADR.
 
 ### Proof
 
@@ -145,3 +148,7 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
   (due 2026-12-01).
 - 2026-10-15: the facts marked `(verify)` (skill frontmatter keys, permission rules naming the plugin path,
   auto-update default) are checked when the plugin is built (due 2026-11-30).
+- 2026-10-15: each command may ask for approval once per session, because a permission rule may not be able to name
+  the plugin's script path (rule 16); revisit when the `(verify)` fact is checked (due 2026-11-30).
+- 2026-10-15: the doctor comparison detects a changed vendored file only when the plugin version equals the version in
+  `agk.toml` (rule 3) (due 2026-11-30).
