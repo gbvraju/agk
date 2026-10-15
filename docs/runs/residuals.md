@@ -28,6 +28,7 @@ bullet. K3 and K4 have no dates yet (ADR-0002 residual), so the dates for their 
 - docs/specs/0004-drift-audit.md 2026-10-14 | the model summary is not in the first implementation (K3) | (due 2027-01-31) | open
 - docs/specs/0004-drift-audit.md 2026-10-14 | scheduled-workflow behaviour (jitter, the period after which GitHub may disable schedules) is (verify) against current documentation | (due 2026-11-15) | open
 - docs/adr/0012-drift-audit.md 2026-10-15 | workflow token label creation (verify on first live run) | (due 2026-10-22) | open
+- docs/adr/0014-installed-tests-check.md 2026-10-15 | installed-tests check is syntactic: a string naming the check outside a comparison counts even if the test does not run it | (due 2027-01-31) | open
 
 ## Closed (not findings)
 

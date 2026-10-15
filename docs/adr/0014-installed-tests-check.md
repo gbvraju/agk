@@ -1,6 +1,6 @@
 # ADR-0014: Every installed check ships with an installed test
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-15
 - Deciders: maintainers
 - Related: ADR-0011, ADR-0013
