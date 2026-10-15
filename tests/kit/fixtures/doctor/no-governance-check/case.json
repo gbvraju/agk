@@ -1,0 +1,8 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "required-check-governance"
+  ],
+  "origin_head": true
+}

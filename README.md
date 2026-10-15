@@ -69,6 +69,17 @@ sha>`, `Verdict: fix list` or `Verdict: rejected`. The installed workflow `.gith
 Monday and files one issue per week labelled `agk-metrics` (it needs `issues: write`); a week with no closed pull
 request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
 
+## Doctor
+
+    python3 scripts/agk/doctor.py [--kit-root PATH] [--repo OWNER/REPO] [--json] [ROOT]
+
+A read-only report of what is misconfigured: the ruleset on the default branch against ADR-0001 decision 3 (a minimum, so
+stricter is fine), the required status check `governance`, the placeholder team in `config/reviewers.yaml` and CODEOWNERS, a
+missing `refs/remotes/origin/HEAD`, the drift-audit workflow (file, schedule, state), and with `--kit-root` the version and every
+vendored file against the kit's copy. It reads GitHub with `gh api` (GET only) and holds no credential. A check it could not make
+prints `??` with the reason (`gh-unauthenticated`, `no-admin`, `no-kit-root`, ...), never `ok`; exit 0 only when every check is
+ok, 1 for an error finding, 4 for a warning or an unchecked item. See `docs/specs/0006-doctor.md` and ADR-0017.
+
 ## Reviewer agent
 
     python3 scripts/agk/review_context.py [--base REF] --body PR_BODY.md > review-context.md

@@ -1,0 +1,8 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "vendored-differs"
+  ],
+  "origin_head": true
+}

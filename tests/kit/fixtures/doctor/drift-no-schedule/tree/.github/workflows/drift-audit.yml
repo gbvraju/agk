@@ -1,0 +1,4 @@
+name: drift-audit
+
+on:
+  workflow_dispatch:

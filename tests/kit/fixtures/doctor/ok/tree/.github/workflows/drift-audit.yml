@@ -1,0 +1,6 @@
+name: drift-audit
+
+on:
+  schedule:
+    - cron: "17 6 * * 6"
+  workflow_dispatch:

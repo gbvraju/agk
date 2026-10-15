@@ -1,0 +1,11 @@
+{
+  "cannot": {
+    "vendored-differs": "version-mismatch",
+    "vendored-missing": "version-mismatch"
+  },
+  "delete": [],
+  "fail": [
+    "kit-version"
+  ],
+  "origin_head": true
+}

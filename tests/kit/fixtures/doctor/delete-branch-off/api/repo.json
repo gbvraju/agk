@@ -1,0 +1,14 @@
+{
+  "allow_auto_merge": true,
+  "default_branch": "main",
+  "delete_branch_on_merge": false,
+  "full_name": "example-owner/example-repo",
+  "name": "example-repo",
+  "permissions": {
+    "admin": true,
+    "maintain": true,
+    "pull": true,
+    "push": true,
+    "triage": true
+  }
+}

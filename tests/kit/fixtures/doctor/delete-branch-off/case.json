@@ -1,0 +1,8 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "repo-delete-branch"
+  ],
+  "origin_head": true
+}
