@@ -22,9 +22,10 @@ def test_ac1_drift_audit_files_are_installed_by_init_and_adopt():
     assert INSTALLED <= expected_files()
 
 
-def test_ac1_kit_version_is_0_6_0():
-    """REQ-011 AC1: ADR-0012."""
-    assert manifest()["kit_version"] == "0.6.0"
+def test_ac1_kit_version_is_at_least_0_6_0():
+    """REQ-011 AC1: ADR-0012 shipped the drift audit in 0.6.0; later versions keep it."""
+    version = tuple(int(part) for part in manifest()["kit_version"].split("."))
+    assert version >= (0, 6, 0)
 
 
 def test_ac1_requirement_011_is_unchanged_and_planned():

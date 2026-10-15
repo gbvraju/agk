@@ -67,7 +67,8 @@ The reviewer reads one pull request against its stated intent and the repository
 verdict (`cleared`, `fix list`, `rejected`) with cited findings. It is read-only (`Read`, `Grep`, `Glob`), advises
 and never approves or merges; the context and the report are local files and are never committed. The optional
 `agk.toml` keys `review_diff_cap` (default 4000) and `review_other_cap` (default 1500) set the line caps of the
-context. See `docs/specs/0003-reviewer-agent.md`, ADR-0011 and `docs/runs/shadow-review-template.md`.
+context. The context holds the full current text of every changed file and the operating rules of `CLAUDE.md`,
+so a rule next to a change is visible. See `docs/specs/0003-reviewer-agent.md`, ADR-0011 and `docs/runs/shadow-review-template.md`.
 
 ## Existing scanners
 

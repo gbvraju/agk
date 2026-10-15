@@ -1,9 +1,9 @@
 """Assemble the review context of one pull request (SPEC-0003 rules 4-7).
 
 Standard library only; no network, no `gh`, no writes. The document goes to stdout: the PR body,
-the numbered hunks of the diff from the merge base to the work tree, the advanced requirements, the
-protected classes touched, the referenced specs and ADRs, and the principles. The same inputs give
-the same bytes.
+the numbered hunks of the diff from the merge base to the work tree, the full current text of every
+changed file, the advanced requirements, the protected classes touched, the referenced specs and
+ADRs, the principles and the operating rules of CLAUDE.md. The same inputs give the same bytes.
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ DEFAULT_CAPS = {"review_diff_cap": 4000, "review_other_cap": 1500}
 PROTECTED = "config/protected-paths.txt"
 REQUIREMENTS = "docs/requirements.md"
 PRINCIPLES = "constitution/principles.md"
+OPERATING_RULES = "CLAUDE.md"
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 DIFF_HEADER = re.compile(r"^diff --git a/(.*) b/(.*)$")
 SPEC_ID = re.compile(r"SPEC-(\d{4})")
@@ -299,6 +300,28 @@ def documents_section(root: Path, paths: list[str], limit: int) -> tuple[list[st
     return lines or ["none"], bool(budget.omitted)
 
 
+def changed_files_section(
+    root: Path, changed: dict[str, str], limit: int
+) -> tuple[list[str], bool]:
+    """The full current text of every changed file, so a rule next to a change is visible."""
+    budget = Budget(limit)
+    lines: list[str] = []
+    for rel, status in sorted(changed.items()):
+        if status == "D":
+            lines.append(f"### {rel} (deleted)")
+            continue
+        text = read_text(root, rel)
+        if text is None or "\0" in text:
+            lines.append(f"### {rel} (not shown: binary or too large)")
+            continue
+        shown = budget.take(text.splitlines())
+        if not shown and text:
+            continue
+        lines += [f"### {rel}", *fenced(shown)]
+    lines += budget.marker()
+    return lines or ["none"], bool(budget.omitted)
+
+
 def text_section(text: str | None, limit: int) -> tuple[list[str], bool]:
     if text is None:
         return ["none"], False
@@ -348,18 +371,25 @@ def assemble(root: Path, cli_base: str | None, body: str) -> str:
     if principles is None:
         problems.append(f"{PRINCIPLES} is missing")
     principle_lines, cut_principles = text_section(principles, other)
+    rules = read_text(root, OPERATING_RULES)
+    if rules is None:
+        problems.append(f"{OPERATING_RULES} is missing")
+    rule_lines, cut_rules = text_section(rules, other)
+    files_lines, cut_files = changed_files_section(root, changed, other)
     body_lines, cut_body = text_section(body, other)
 
-    truncated = any((cut_diff, cut_reqs, cut_docs, cut_principles, cut_body))
+    truncated = any((cut_diff, cut_files, cut_reqs, cut_docs, cut_principles, cut_rules, cut_body))
     out = ["# Review context", "", f"Truncated: {'yes' if truncated else 'no'}", ""]
     for title, lines in (
         ("Context problems", [f"- {p}" for p in problems] or ["- none"]),
         ("PR body", body_lines),
         ("Diff", diff),
+        ("Changed files", files_lines),
         ("Requirements", reqs),
         ("Protected classes touched", protected_section(root, mb, changed)),
         ("Referenced specs and ADRs", docs_lines),
         ("Principles", principle_lines),
+        ("Operating rules", rule_lines),
     ):
         out += [f"## {title}", "", *lines, ""]
     return "\n".join(out)

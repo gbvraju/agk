@@ -50,3 +50,23 @@ def test_ac3_reviewer_fixes_the_output_format_of_the_validator():
         "cleared", "fix list", "rejected", "review-context.md", "check_review_report.py",
     ):  # fmt: skip
         assert token in body, token
+
+
+def test_ac3_reviewer_checks_every_decision_and_rule_against_the_whole_diff():
+    """REQ-013 AC3: SPEC-0003 rules 11 and 12 as amended (shadow review 2)."""
+    _, body = frontmatter_and_body()
+    low = " ".join(body.lower().split())
+    assert (
+        "for every accepted adr decision and approved spec rule in the context, state whether "
+        "the diff, including its effect on other files, contradicts it"
+    ) in low
+    assert "operating rules" in low and "changed files" in low
+
+
+def test_ac3_reviewer_scope_stays_with_approved_text():
+    """REQ-013 AC3: rule 11 is unchanged: only rules stated in Approved text, no style opinions."""
+    _, body = frontmatter_and_body()
+    low = " ".join(body.lower().split())
+    assert "only rules stated in approved text" in low
+    assert "no style opinions and no speculation about intent" in low
+    assert "claude.md is context, not a source of rules to cite" in low

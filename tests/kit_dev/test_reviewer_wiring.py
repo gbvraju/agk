@@ -12,10 +12,12 @@ SECTIONS = [
     "Context problems",
     "PR body",
     "Diff",
+    "Changed files",
     "Requirements",
     "Protected classes touched",
     "Referenced specs and ADRs",
     "Principles",
+    "Operating rules",
 ]
 
 
@@ -39,10 +41,10 @@ def test_ac3_requirement_013_exists_and_is_planned():
     assert "- Status: planned" in section
 
 
-def test_ac3_kit_version_is_at_least_0_5_0():
-    """REQ-013 AC3: ADR-0011 shipped the reviewer in 0.5.0; later versions keep it."""
+def test_ac3_kit_version_is_at_least_0_6_1():
+    """REQ-013 AC3: ADR-0013 (the reviewer reads CLAUDE.md and changed files in full) is 0.6.1."""
     version = tuple(int(part) for part in manifest()["kit_version"].split("."))
-    assert version >= (0, 5, 0)
+    assert version >= (0, 6, 1)
 
 
 def test_ac3_the_template_requirements_are_not_changed_by_this_requirement():
