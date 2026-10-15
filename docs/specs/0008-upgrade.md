@@ -1,12 +1,11 @@
 # SPEC-0008: agk upgrade
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-014 (to be added by ADR, see SPEC-0005); REQ-009 (init), REQ-010 (adopt)
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
-Open points are raised as `Q-K3-n` (this spec uses 50 to 69) in `docs/runs/spec-0008-notes.md`; a rule that depends on
-one says so. This spec is K3 criterion c of ADR-0015. It follows SPEC-0001 (init), SPEC-0002 (adopt) and SPEC-0005
+The open points Q-K3-50 to Q-K3-56 were ruled on by the maintainers on 2026-10-15 (`docs/runs/spec-0008-notes.md`). This spec is K3 criterion c of ADR-0015. It follows SPEC-0001 (init), SPEC-0002 (adopt) and SPEC-0005
 rule 3 (no lock file in the target; the installed version is `version` in `agk.toml`). Facts about the repository
 history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
 
@@ -22,12 +21,16 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
    present file.
 2. **The table.** `kit/hashes.json` is `{"table": 1, "releases": {"X.Y.Z": {"commits": [..], "verbatim": {path:
    [sha256, ..]}, "blocks": {path: [sha256, ..]}, "templates": {path: [sha256, ..]}}}}`. The hash lists hold more than
-   one entry when a release's files changed without a version bump (rule 5). It is kit-only (not installed), written
-   by a kit-only script `scripts/agk/kit_hashes.py` from a commit of the kit's history, and a kit test fails when the
-   entry for the current `kit_version` does not equal the working tree, or when `kit_version` has no entry. The table
-   is the one new source of truth; it is in the kit, not in the target.
-3. **Tags are optional.** Release tags `vX.Y.Z` (SPEC-0005 rule 13) are the way to regenerate a row from the history;
-   upgrade does not read them and needs no network and no `git`. Today the repository has no tag and no release
+   one entry only for 0.1.0, whose files changed without a version bump (rules 22, 25). It is kit-only (not installed),
+   written by a kit-only script `scripts/agk/kit_hashes.py` from the commits of the kit's history that each
+   release's `commits` list names. It is a **committed generated file**, an exception to principle 5, and the
+   implementation's ADR records that decision. It is acceptable where a lock file in the target was not because it is
+   one file, in the kit only, never written into targets, and fully regenerable from history. A kit test regenerates
+   **every** row from git history and compares it with the committed table, not only the current row, so the table can
+   never drift; it also fails when `kit_version` has no row. The kit-dev tests therefore need `fetch-depth: 0` in CI.
+   The table is the one new source of truth; it is in the kit, not in the target.
+3. **Tags are not read.** Release tags `vX.Y.Z` (SPEC-0005 rule 13) start with the K3 release; rows are regenerated from
+   the commits each row names, not from tags, and upgrade does not read them and needs no network and no `git`. Today the repository has no tag and no release
    (rule 22).
 
 ### Interface and effects
@@ -63,9 +66,9 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
 
    File modes of created and replaced files are those the installer sets (SPEC-0001).
 8. **A conflict stops the run.** If any path is `conflict`, the real run writes nothing and exits 1, naming each
-   edited path (a refusal lists them all, not the first). Partial application is not done (Q-K3-51). The printed
+   edited path (a refusal lists them all, not the first). Partial application is not done. The printed
    fix per edited path: restore the kit's copy by hand, or move the edit out of the vendored file, then run again.
-9. **Never rewritten.** `agk.toml` values, `config/reviewers.yaml`, `config/protected-paths.txt`, `config/neutrality.txt`,
+9. **Never rewritten.** `agk.toml` values (except the one `version` line of rule 11), `config/reviewers.yaml`, `config/protected-paths.txt`, `config/neutrality.txt`,
    ADRs, specs, `docs/requirements.md`, `docs/build-state.md`, `docs/runs/`, `constitution/` and `pyproject.toml` (the
    `templates` of the manifest for `init`, `adopt.templates` for `adopt`; the table keys them by kit source path) and the rendered `.github/CODEOWNERS` are not written by the upgrade. A test checks the
    bytes and modification times of each after a run.
@@ -75,9 +78,10 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     target file lacks. For `agk.toml`, print each key of the kit's present template that the target lacks, with the
     template's value; a key is never merged (as SPEC-0002 prints settings entries). `.claude/settings.json` is a
     verbatim file in the manifest (adopt refuses to merge an existing one, SPEC-0002), so it follows rule 7.
-11. **The version stamp.** The upgrade prints the line `version = "<kit version>"` for `agk.toml` and does not write
-    it (rule 9). The next `agk doctor` run reports `kit-version` until it is changed (SPEC-0006). Q-K3-52 asks whether
-    this one line may be rewritten.
+11. **The version stamp.** The upgrade rewrites exactly the line `version = "..."` of `agk.toml` to the kit's version, as
+    its last write and only when every other write succeeded. Every other line of `agk.toml` stays byte for byte as it
+    was. With a conflict, a refusal or an I/O error the line is not written, so the next run starts from the same
+    `version`.
 12. **CODEOWNERS.** After a run the script prints `python3 scripts/agk/reviewers.py --codeowners --write` when
     `config/reviewers.yaml` or the generator was part of the change, because the file is rendered from the target's
     own configuration (SPEC-0001 rule on rendered files).
@@ -92,7 +96,7 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     modification times are equal).
 15. **Order and atomicity.** All decisions are made before the first write. Writes are in sorted path order, each file
     through a temporary file in its directory and a rename; an I/O error stops the run (exit 3) and reports the files
-    already written.
+    already written; the `agk.toml` version line (rule 11) is the last write and is skipped in that case.
 
 ### The pull request in the target
 
@@ -101,7 +105,7 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     `check_protected_changes` requires an ADR in the same pull request that names each changed class. After the lines
     of rule 14 the script prints, from the target's own list, the `Protected classes:` line for the paths it would write
     and an ADR skeleton (title, `Status: Proposed`, empty Context and Decision) to stdout. It writes no ADR: the number,
-    the reasons and the decision are the maintainers' (Q-K3-54 asks whether `--draft-adr` should write it).
+    the reasons and the decision are the maintainers', and there is no `--draft-adr`.
 17. **The skill.** `/agk:upgrade` (SPEC-0005 rule 8) runs `--dry-run`, shows the lines, asks, then runs the real command.
     It does not commit, push or open the pull request, and does not write the ADR.
 
@@ -112,7 +116,7 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     row of rule 7; a file edited by the user stops the run with nothing written and lists every edited path; a file
     deleted locally; a file removed from the kit; a new file in the kit; a key added to the kit's `agk.toml`
     template; each block with markers intact, edited, and missing; rules 9, 14, 15; X equal to the kit's, X above it,
-    X unknown; a symlinked path.
+    X unknown; a symlinked path; the `version` line rewritten last and only on full success (and left alone on a conflict or an I/O error), every other `agk.toml` line byte for byte.
 19. **An older kit fixture.** A test builds a second, smaller kit directory (two versions of a few files and a manifest
     with a `hashes.json`) so the old and new versions are known without the real history. The real table is tested for
     shape, for the current version's entry (rule 2), and for the listed versions of rule 22.
@@ -121,8 +125,8 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
 22. **The 0.1.0 gap (what is missing today).** The repository has no tag and no release. The table can be built from
     the history of `kit/manifest.json` for 0.1.0, 0.2.0, 0.3.0, 0.4.0, 0.4.1, 0.4.2, 0.5.0, 0.6.0, 0.6.1 and 0.6.2, but
     0.1.0 spans two commits that changed kit files (the second changed `Makefile`, a verbatim file, without a version
-    bump), so its entries carry both hashes. The maintainers decide whether tags are created for the past versions
-    (Q-K3-53); the table does not depend on them.
+    bump), so its entries carry both hashes. No tag is created retroactively: the first tag is the K3 release, and
+    tagging is a maintainers' step at each release. The table does not depend on tags.
 23. **Proof (criterion c of ADR-0015; a maintainers' step, not done by an agent).** On the 0.1.0 sandbox
     (`gbvraju/agk-sandbox`): run `--dry-run` and then the real command from the current kit; record the lines; open the
     upgrade pull request with the ADR of rule 16; expect `governance` green and `git diff --stat` against the sandbox's
@@ -132,11 +136,15 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     (`scripts/agk/`, `kit/`), `tests/kit_dev/` and `skills/upgrade/SKILL.md`; the PR carries an ADR naming each.
     Neither the script nor the table is installed into targets.
 
+25. **Bump rule.** From the next release, a change to any installed path needs a `kit_version` bump in the same pull
+    request. The full-history regeneration test of rule 2 enforces it: it fails when any version other than 0.1.0 has
+    a second hash for a path. 0.1.0 is the one recorded exception.
+
 ## Tests
 
 - Rules 4-8, 13-15, 18, 20, 21: `tests/kit_dev/test_upgrade.py`, marker `REQ-014 AC5`.
 - Rules 9-12, 16: the same file, marker `REQ-014 AC5`.
-- Rules 1-3, 19, 22: `tests/kit_dev/test_kit_hashes.py`, marker `REQ-014 AC5`.
+- Rules 1-3, 19, 22, 25: `tests/kit_dev/test_kit_hashes.py`, marker `REQ-014 AC5`.
 - Rule 17: `tests/kit_dev/test_distribution.py` (SPEC-0005 rule 19), marker `REQ-014 AC2`.
 - Rule 23: a record in `docs/runs/`, checked by the maintainers, not by a test.
 
@@ -145,7 +153,7 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
 - 2026-10-15: no release tag exists; the hash table is generated from history and checked in the kit tests. A release
   without a table row is caught by a kit test, not by a tag check (due 2026-11-30).
 - 2026-10-15: a release whose files changed without a version bump (0.1.0) makes the "outdated" test weaker for that
-  version (any listed hash passes). The remedy is a bump rule for the kit, which is the maintainers' (Q-K3-55) (due 2026-11-30).
+  version (any listed hash passes); rule 25 stops it for later releases (due 2026-11-30).
 - 2026-10-15: templates are compared and printed only; a user cannot be told which of their edits to a template
   conflict with the kit's change (due 2026-12-31).
 - 2026-10-15: the plugin cache may hold only the current version `(verify)`; the table makes old versions
