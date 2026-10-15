@@ -27,6 +27,7 @@ bullet. K3 and K4 have no dates yet (ADR-0002 residual), so the dates for their 
 - docs/specs/0003-reviewer-agent.md 2026-10-14 | no inline review comments in K2; one advisory comment at most | (due 2027-01-31) | open
 - docs/specs/0004-drift-audit.md 2026-10-14 | the model summary is not in the first implementation (K3) | (due 2027-01-31) | open
 - docs/specs/0004-drift-audit.md 2026-10-14 | scheduled-workflow behaviour (jitter, the period after which GitHub may disable schedules) is (verify) against current documentation | (due 2026-11-15) | open
+- docs/adr/0012-drift-audit.md 2026-10-15 | workflow token label creation (verify on first live run) | (due 2026-10-22) | open
 
 ## Closed (not findings)
 

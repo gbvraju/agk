@@ -30,4 +30,5 @@ proposal like this one (principle 6). Nothing here is applied; maintainers decid
 
 ## Status
 
-Proposed. Not applied.
+Applied 2026-10-15 on maintainers' instruction (final commit of PR #23). SPEC-0004 rules 6, 7, 9, 13, 15, 21
+and 23 and its Tests section carry the proposed text (Q-K2-23: yes); nothing else in the spec changed.

@@ -1,6 +1,6 @@
 # ADR-0005: Project tests run under make test
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Deciders: maintainers
 - Related: ADR-0004

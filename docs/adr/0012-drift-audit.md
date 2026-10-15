@@ -1,6 +1,6 @@
 # ADR-0012: Drift audit (SPEC-0004)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-15
 - Deciders: maintainers
 - Related: ADR-0003, ADR-0010, ADR-0011
@@ -10,8 +10,8 @@
 
 SPEC-0004 (Approved, with amendments 5) describes a weekly, read-only audit of the default branch: what reached it
 without passing the per-PR checks, and drift that builds up with time. This PR implements rules 1 to 21 and 23; rule
-22 (the one live run on GitHub) is a maintainers' step after merge. Deviations from the Approved spec are proposed in
-`docs/runs/proposed-spec-amendments-8.md`, not applied.
+22 (the one live run on GitHub) is a maintainers' step after merge. Deviations from the Approved spec were proposed in
+`docs/runs/proposed-spec-amendments-8.md` and applied on the maintainers' instruction in this PR.
 
 Protected classes: `.github/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`. This PR changes all five.
 
