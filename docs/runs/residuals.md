@@ -9,7 +9,7 @@ bullet. K3 and K4 have no dates yet (ADR-0002 residual), so the dates for their 
 ## Open
 
 - docs/adr/0001-the-kit-governs-itself.md 2026-10-14 | branch protection and required-review settings are GitHub settings, not files; `agk doctor` documents and verifies them (REQ-002 AC1) | (due 2026-12-31) | open
-- docs/adr/0002-milestones.md 2026-10-14 | exit criteria for K3 and K4 need measurable thresholds before those milestones start | (due 2026-11-30) | open
+- docs/adr/0002-milestones.md 2026-10-14 | exit criteria for K4 need measurable thresholds before K4 starts (K3: ADR-0015) | (due 2027-03-31) | open
 - docs/adr/0003-agent-context-push-rule-codeowners-check-hardening.md 2026-10-14 | colon-refspec branch deletion (`git push origin :branch`) has no deny rule; revisit when `agk doctor` exists | (due 2026-12-31) | open
 - docs/adr/0003-agent-context-push-rule-codeowners-check-hardening.md 2026-10-14 | class naming in an ADR is a substring match on the ADR text (repeated in ADR-0004, ADR-0006, ADR-0007, ADR-0008 and ADR-0009); replace it with a required `Protected classes:` line check | (due 2026-12-15) | open
 - docs/adr/0004-init-protected-list-and-neutral-context.md 2026-10-14 | in a target with no `main` or `origin/main`, the diff checks of `make governance` skip with a notice outside CI | (due 2026-12-31) | open
