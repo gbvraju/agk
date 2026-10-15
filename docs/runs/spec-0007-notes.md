@@ -1,6 +1,6 @@
 # Notes on SPEC-0007 (per-PR metrics)
 
-Date: 2026-10-15 (from `date -u`). Overnight brief 2, item C. The spec is Draft; nothing is implemented. No protected
+Date: 2026-10-15 (from `date -u`). Overnight brief 2, item C. The spec was written Draft and set Approved on the maintainers' rulings of 2026-10-15 (final commit of the pull request); nothing is implemented. No protected
 path is changed by this pull request.
 
 ## REQ-012 as written, and what the draft adds
@@ -18,15 +18,15 @@ acceptance text for that ADR:
 ## Decisions taken in the draft
 
 - Everything is derived after the close; nothing is typed into the pull request body (rule 1). So `check_pr_body.py`
-  and the pull request template do not change, and no agent can inflate a number. The cost: two fields are `unknown`
-  until a definition exists (rules 6, 9, 13).
+  and the pull request template do not change, and no agent can inflate a number. The one human input is the verdict
+  line of rule 4, relayed by the session. `blocked_weakenings` is `unknown` until `governance.yml` is split (rule 13).
 - One place for the weekly numbers: a GitHub issue per ISO week, written by its own workflow on Monday, not by the
   drift audit (rule 11). Reasons: SPEC-0004 rule 14 says a clean drift run writes nothing, which cannot evidence two
   weeks; mixing the two would change a read-only audit; a file committed by a workflow needs a pull request and the
   ruleset allows no bypass (SPEC-0006 rule 5, `ruleset-bypass`). The issue is a record an admin can edit; recomputation
   with `--today` is the check (rule 12 and the last residual).
 - A week with nothing closed is still written (rule 14), because the issue is the evidence the run happened. This is
-  the opposite of SPEC-0004 rule 14; Q-K3-31 asks if that is accepted.
+  the opposite of SPEC-0004 rule 14; accepted (Q-K3-31).
 - The window is the full ISO week before the run, half-open, so a Monday-morning run sees a complete week (rule 12).
 - Completeness is counted by two queries and printed (`INCOMPLETE`, exit 1) (rule 16).
 - Two consecutive weeks are evidenced by two issues created by the workflow on schedule, each with `closed in window`
@@ -37,39 +37,31 @@ acceptance text for that ADR:
 | Field | Source | Recorded by | When |
 | --- | --- | --- | --- |
 | `hours_open_to_merge`, `size` | `pulls/N` | `metrics.py` | the Monday run after the close |
-| `rejected`, `rejection_reviews` | `pulls/N`, `pulls/N/reviews` | `metrics.py` | same |
-| `review_rounds` | `issues/N/comments`, `pulls/N/reviews`, `pulls/N/commits` | `metrics.py` | same |
+| `review_rounds`, `rejected`, `merged_head_cleared` | `Verdict:` comments in `issues/N/comments` (posted by the session from the reviewer's paste), `pulls/N` | `metrics.py` | same |
 | `blocked_weakenings`, `governance_failures` | check runs and job steps per head commit | `metrics.py` | same |
 | `deviations`, `adrs_added`, `protected_classes` | `pulls/N/files`, `config/protected-paths.txt` at the merge base | `metrics.py` | same |
 | `tests_before`, `tests_after` | local git objects | `metrics.py` (`fetch-depth: 0`) | same |
-| `merged_head_cleared` | `pulls/N/reviews` `commit_id` | `metrics.py` | same |
-| `cost_class` | none | not defined | Q-K3-34 |
+| `cost_class` | `review_rounds`, `hours_open_to_merge` | `metrics.py` | same |
 
-## Open
+## Rulings (maintainers, 2026-10-15)
 
-- **Q-K3-30.** What does "the merged head was the cleared commit" mean on this repository? Maintainers clear by a
-  comment and a comment names no commit; the repository requires 0 approvals, so there is no approving review either.
-  Draft: `yes` only for an `APPROVED` review on the head, else `no` or `unknown`. A convention such as "cleared
-  <short sha>" in a maintainer comment would make it derivable; the draft does not invent one.
-- **Q-K3-31.** A week with no closed pull request is written (rule 14) while a clean drift run writes nothing
-  (SPEC-0004 rule 14). Accept the difference?
-- **Q-K3-32.** Rejections and review rounds: the maintainers' fix lists are comments, not `CHANGES_REQUESTED` reviews,
-  and one account may write both the work and the comments, so `rejected` misses comment rejections and
-  `review_rounds` may over-count. Options: a marker line in a fix-list comment (for example `Fix list:`), or accept the
-  proxy. Draft: the proxy, with the limit stated.
-- **Q-K3-33.** What counts as a "blocked weakening", and may `governance.yml` be split into one step per check so a
-  failing check can be named? Draft set: `check_protected_changes`, `check_adrs`, `check_specs`, `check_neutrality`.
-  Splitting the workflow is a protected change in the implementation PR.
-- **Q-K3-34.** Define "cost class": the value set, what it measures (tokens, wall time, review effort), and who records
-  it. Draft: the field is absent.
-- **Q-K3-35.** Are the supporting fields in scope for REQ-012, given its one acceptance criterion? An ADR must widen
-  the text (proposal above).
-- **Q-K3-36.** Should `agk init` and `agk adopt` install the metrics workflow by default (draft: yes, as for the drift
-  audit, SPEC-0004 rule 16)? A target without admin rights to create labels or issues would see it fail.
+| Q | Ruling | Where in the spec |
+| --- | --- | --- |
+| Q-K3-30, Q-K3-32 | Verdicts become derivable: every reviewer verdict starts with `Verdict: cleared <short sha>`, `Verdict: fix list` or `Verdict: rejected`, and the session posts that line verbatim as a PR comment. `merged_head_cleared`, `review_rounds` and `rejected` derive from those comments; the `CHANGES_REQUESTED` and comment-then-commit proxies are dropped; residual: a relayed record, not a signed one | rules 4, 5, 8, residual |
+| Q-K3-31 | Accepted: an empty week is still written | rule 14 |
+| Q-K3-33 | Weakening set: `check_protected_changes`, `check_requirements`, `check_adrs`, `check_specs`, `reviewers --check-codeowners`, `check_kit_tests`; `governance.yml` split into one step per check, job and required check unchanged; the field counts law checks that blocked a head commit, including honest mistakes | rules 6, 13 |
+| Q-K3-34 | Cost class is the maintainers' review cost, derived: S (0 rounds, under 24 h), M (at most 2 rounds, under 72 h), L (else or closed unmerged); `unknown` when rounds are unknown | rule 9 |
+| Q-K3-35 | In scope; the implementation's ADR amends REQ-012 with the text below plus the cost class line | rule 19 |
+| Q-K3-36 | Installed by default, as the drift audit; init and adopt print that it needs `issues: write` | rule 19 |
+
+No question is open.
+
+The cost class line for the ADR's REQ-012 text: "AC4 cost class is the maintainers' review cost, derived from fix-list rounds and hours
+open to merge: S, M or L; `unknown` when the rounds are unknown."
 
 ## Decisions-log rows (for the maintainers' log; not edited in this pull request)
 
 | Date | Decision | Reason | Recorded in | By |
 | --- | --- | --- | --- | --- |
 | 2026-10-15 | SPEC-0007 drafted: all fields derived, none typed by an agent; weekly issue by its own run | a derived number is a measurement; a clean drift run cannot evidence two weeks | `docs/specs/0007-metrics.md` | agent |
-| 2026-10-15 | Q-K3-30 to Q-K3-36 opened | cleared commit, empty weeks, review rounds, weakening set, cost class, scope, default install | `docs/runs/spec-0007-notes.md` | agent |
+| 2026-10-15 | Q-K3-30 to Q-K3-36 ruled (verdict lines make rounds, rejection and cleared derivable; weakening set; derived cost class; default install); SPEC-0007 Approved | maintainers' rulings | `docs/runs/spec-0007-notes.md`, SPEC-0007 | reviewer |
