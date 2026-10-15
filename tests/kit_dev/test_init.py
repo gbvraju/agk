@@ -497,3 +497,14 @@ def test_ac1_agk_toml_of_an_init_repo_has_project_tests_with_exit_5_handling(ins
         env=clean_env(),
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_scanner_excludes_are_printed_not_written(target):
+    """REQ-010: ADR-0010 decision 3. The snippet printed after a run is the template file."""
+    template = (KIT_ROOT / "kit" / "templates" / "scanner-excludes.txt").read_text(encoding="utf-8")
+    proc = run_init(target)
+    assert " ".join(template.split()) in " ".join(proc.stdout.split())
+    dry = run_init(target, "--dry-run")
+    assert " ".join(template.split()) in " ".join(dry.stdout.split())
+    assert not (target / "scanner-excludes.txt").exists()
+    assert not any(p.name == "scanner-excludes.txt" for p in target.rglob("*"))

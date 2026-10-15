@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
 from collections.abc import Callable, Sequence
@@ -21,21 +21,21 @@ class CheckError(Exception):
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:
-    proc = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
+    proc = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)  # nosec B603 B607 - fixed argument list, no shell
     if check and proc.returncode != 0:
         raise CheckError(f"git {args[0]} failed")
     return proc.stdout
 
 
 def repo_root() -> Path:
-    proc = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    proc = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)  # nosec B603 B607 - fixed argument list, no shell
     if proc.returncode != 0:
         raise CheckError("not inside a git repository")
     return Path(proc.stdout.strip())
 
 
 def _verify(root: Path, ref: str) -> str | None:
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["git", "rev-parse", "--verify", "-q", f"{ref}^{{commit}}"],
         cwd=root,
         capture_output=True,
@@ -107,7 +107,7 @@ def changed_lines(root: Path, mb: str, path: str) -> list[str]:
 
 
 def show(root: Path, rev: str, path: str) -> str | None:
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["git", "show", f"{rev}:{path}"], cwd=root, capture_output=True, text=True
     )
     return proc.stdout if proc.returncode == 0 else None

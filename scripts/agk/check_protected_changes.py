@@ -54,10 +54,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     listing = show(root, mb, LIST_PATH)
     if listing is None:
-        path = root / LIST_PATH
-        if not path.is_file():
+        list_file = root / LIST_PATH
+        if not list_file.is_file():
             raise CheckError(f"{LIST_PATH} is missing")
-        listing = path.read_text(encoding="utf-8")
+        listing = list_file.read_text(encoding="utf-8")
     entries = read_list(listing)
     changed = changed_files(root, mb)
 

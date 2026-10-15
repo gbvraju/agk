@@ -45,4 +45,21 @@ product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `t
 exist, to `CLAUDE.md`, `.github/CODEOWNERS` and `.github/PULL_REQUEST_TEMPLATE.md`, and refuses rather than overwrite.
 The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/specs/0002-agk-adopt.md`.
 
+## Existing scanners
+
+Project-wide scanners (bandit, flake8, pylint, mypy) that read the whole tree also read the kit's code. The kit's
+subprocess calls carry justified `# nosec` comments and its type findings are fixed, so what remains for bandit is
+the bare `assert` of the kit's tests (rule B101). Init and adopt print the exclusions below after a run and write
+none of them (ADR-0010, `docs/runs/scanner-fix.md`):
+
+```
+Scanner exclusions (print only; the kit writes none of this). The kit's code under scripts/agk, tests/kit and
+.claude/hooks is the kit's, not yours. If a scanner you run reads the whole tree, exclude those paths in your own
+configuration:
+  bandit:  bandit -r . -x ./scripts/agk,./tests/kit,./.claude/hooks
+  flake8:  flake8 --extend-exclude scripts/agk,tests/kit,.claude/hooks
+  pylint:  [tool.pylint.main] ignore-paths = ['^scripts/agk/.*$', '^tests/kit/.*$'] and ignore = ['.claude']
+  mypy:    [tool.mypy] exclude = ['^scripts/agk/', '^tests/kit/', '^\.claude/hooks/']
+```
+
 Licence: Apache-2.0.

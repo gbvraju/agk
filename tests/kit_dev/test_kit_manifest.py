@@ -294,3 +294,25 @@ def test_ac1_adopt_adr_template_has_no_creation_commit_claim():
     assert "creation commit" not in flat
     assert "first governed change" in flat and "not governed" in flat
     assert "{{existing_protected}}" in flat
+
+
+def test_scanner_excludes_template_covers_each_tool_and_each_kit_path():
+    """REQ-010: ADR-0010 decision 3. One source file; kit-only (not installed)."""
+    text = (KIT_ROOT / "kit" / "templates" / "scanner-excludes.txt").read_text(encoding="utf-8")
+    for tool in ("bandit", "flake8", "pylint", "mypy"):
+        line = next(ln for ln in text.splitlines() if ln.strip().startswith(f"{tool}:"))
+        for path in ("scripts/agk", "tests/kit"):
+            assert path in line, (tool, path)
+        assert ".claude" in line, tool
+    installed = set(manifest()["verbatim"]) | set(manifest()["templates"].values())
+    assert "kit/templates/scanner-excludes.txt" not in installed
+
+
+def test_readme_existing_scanners_section_quotes_the_template():
+    """REQ-010: ADR-0010 decision 3. The README quotes the template line for line."""
+    readme = (KIT_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "## Existing scanners" in readme
+    section = readme.split("## Existing scanners", 1)[1].split("\n## ", 1)[0]
+    template = (KIT_ROOT / "kit" / "templates" / "scanner-excludes.txt").read_text(encoding="utf-8")
+    for line in template.rstrip().splitlines():
+        assert line in section, line

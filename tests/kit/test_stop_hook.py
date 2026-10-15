@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
@@ -14,7 +14,7 @@ HOOK = ROOT / ".claude" / "hooks" / "stop_check.py"
 
 def run_hook(project: Path, payload: dict):
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project)}
-    return subprocess.run(
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(HOOK)],
         input=json.dumps(payload),
         capture_output=True,
@@ -56,7 +56,7 @@ def test_ac3_second_stop_attempt_is_allowed_to_avoid_loop(tmp_path):
 def test_garbage_stdin_does_not_crash(tmp_path):
     """REQ-002 AC3"""
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project(tmp_path, "@exit 1"))}
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(HOOK)], input="not json", capture_output=True, text=True, env=env
     )
     assert json.loads(proc.stdout)["decision"] == "block"

@@ -47,7 +47,7 @@ def validate(name: str, text: str, known: set[str]) -> list[str]:
         problems.append(f"{name}: first line must be '# ADR-NNNN: Title'")
     elif tm.group(1) != fm.group(1):
         problems.append(f"{name}: title number differs from file number")
-    fields = {}
+    fields: dict[str, str] = {}
     for line in lines[1:]:
         m = FIELD_RE.match(line)
         if m:
