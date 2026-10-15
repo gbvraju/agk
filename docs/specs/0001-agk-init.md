@@ -90,7 +90,8 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     ruleset `main` and repository settings of ADR-0001 decision 3: Active; no bypass; target the default branch;
     restrict deletions; require linear history; require a pull request (0 approvals, dismiss stale approvals, squash
     only); block force pushes; required status check `governance`; allow auto-merge; auto-delete head branches. The
-    text comes from `kit/templates/branch-rules.txt`; a test keeps it equal to the kit's ADR-0001 decision 3 (rule 23).
+    text comes from `kit/templates/branch-rules.txt`; a test keeps it equal to the kit's ADR-0001 decision 3 except
+    that the phrase `The ruleset main` reads `The ruleset for the default branch` (ADR-0009).
     Init does not configure GitHub.
 
 ### Neutrality

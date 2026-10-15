@@ -20,4 +20,5 @@ through a proposal like this one (principle 6). Nothing here is applied; maintai
 
 ## Status
 
-Proposed. Not applied.
+Applied 2026-10-15 on maintainers' instruction (final commit of the item E PR). SPEC-0001 rule 19 and SPEC-0002
+rules 7 and 8 carry the proposed text; nothing else in either spec changed.

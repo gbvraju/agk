@@ -1,6 +1,6 @@
 # ADR-0009: Adopt refusal names its fix, CODEOWNERS --write, branch-rule wording
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Deciders: maintainers
 - Related: ADR-0001, ADR-0007, ADR-0008
