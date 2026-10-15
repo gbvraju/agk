@@ -17,6 +17,11 @@ Appended by docs commits only; feature PRs carry their row in the PR body (`Buil
 | 2026-10-14 | K2 target survey (tartley/colorama, read-only) and SPEC-0002 agk adopt (Approved) | REQ-010 |
 | 2026-10-14 | Shared kit layout (SPEC-0002 rules 5-8, 10, 12 for init and this repository): agk.mk, agk.toml, thin Makefile, project_tests and agk-project-test, default-branch resolution, isolated kit tests, per-mode protected list; ADR-0007 (Accepted, amends ADR-0005); kit 0.3.0; spec amendments applied | REQ-010, REQ-009 |
 | 2026-10-14 | agk adopt implemented per SPEC-0002 (rules 1-4, 7, 9, 11, 13-18 and the adopted-mode templates of rule 12): adopt.py, adopt templates and manifest `adopt` section, marked-block appends, refusals, marker patterns, CODEOWNERS block check; ADR-0008 (Accepted); SPEC-0002 amendments applied; kit 0.4.0 | REQ-010 |
+| 2026-10-14 | K2 adopt live proof record; build-state rows for PRs #11-#13 | REQ-010 |
+| 2026-10-14 | Design note: making kit code clean under project scanners (bandit, flake8, mypy, pylint, codespell measured on a fresh init target) | REQ-010 |
+| 2026-10-14 | SPEC-0003 reviewer agent (Approved) and notes; REQ-013 not added | REQ-010 |
+| 2026-10-14 | SPEC-0004 drift audit (Approved) and notes | REQ-011 |
+| 2026-10-14 | Adopt refusal names `git remote set-head origin --auto`; `reviewers.py --codeowners --write`; printed branch-rule text says "ruleset for the default branch"; ADR-0009 (Accepted); kit 0.4.1 | REQ-010, REQ-005 |
 
 ## Decisions
 2026-10-14 — K0 exit met: make governance green; PR #1 merged under its own rules.
@@ -24,3 +29,4 @@ Appended by docs commits only; feature PRs carry their row in the PR body (`Buil
 2026-10-14 — K1 live proof met on agk-sandbox (SPEC-0001 rule 24).
 2026-10-14 — K1 closed: agk init (SPEC-0001) proven live; ADR-0006 Accepted.
 2026-10-14 — K2 adopt proven live on gbvraju/colorama (SPEC-0002 rules 19–20).
+2026-10-15 — SPEC-0003 and SPEC-0004 Approved; kit 0.4.1.
