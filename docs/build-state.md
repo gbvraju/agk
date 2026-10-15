@@ -32,7 +32,7 @@ Appended by docs commits only; feature PRs carry their row in the PR body (`Buil
 | 2026-10-15 | Reviewer fix from shadow review 2: the context always includes the operating rules of CLAUDE.md and the full current text of every changed file, and the agent checks every Accepted ADR decision and Approved spec rule against the whole diff; fixtures F11 and F12; SPEC-0003 amendments 9 applied; ADR-0013 (Accepted); kit 0.6.1 | REQ-013 |
 | 2026-10-15 | Shadow review 3 (SPEC-0003 rule 23): reviewer agent re-run on #12 (bd381ef), #6 (e001628) and #22 (071ded6) against origin/main fa06529 (kit 0.6.1) with the same minimal bodies; reports verbatim in docs/runs/shadow-review-3.md; validator ok on all three | REQ-013 |
 | 2026-10-15 | Installed-tests check: scripts/agk/check_kit_tests.py fails when a scripts/agk/check_*.py of the manifest's verbatim set has no test file under tests/kit/ in the same set that imports or runs it; run by agk-governance; ADR-0014 (Proposed); kit 0.6.2 | REQ-009 |
-| 2026-10-15 | SPEC-0005 distribution (Approved): recommends the hybrid (law vendored and enforced by CI, plugin carries the workflow commands, no lock file), compares options A, B and C, lists eight /agk: commands, states that GitHub issues are intake only; Q-K3-4 to Q-K3-11 ruled; REQ-014 to be added by ADR | REQ-012 |
+| 2026-10-15 | SPEC-0005 distribution (Approved): recommends the hybrid (law vendored and enforced by CI, plugin carries the workflow commands, no lock file), compares options A, B and C, lists eight /agk: commands, states that GitHub issues are intake only; Q-K3-4 to Q-K3-11 ruled; REQ-014 to be added by ADR | REQ-009, REQ-010 |
 
 ## Decisions
 2026-10-14 — K0 exit met: make governance green; PR #1 merged under its own rules.
