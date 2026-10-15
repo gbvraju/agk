@@ -27,8 +27,8 @@ def test_ac1_agk_governance_runs_every_check():
     """REQ-010 AC1: rule 5."""
     out = make_n("agk-governance")
     for script in sorted((ROOT / "scripts" / "agk").glob("check_*.py")):
-        if script.name == "check_pr_body.py":
-            continue  # runs in CI against the PR body, not in the local target
+        if script.name in ("check_pr_body.py", "check_review_report.py"):
+            continue  # these take a PR body or a report as input; not part of the local target
         assert f"scripts/agk/{script.name}" in out, script.name
     assert "reviewers.py --check" in out and "reviewers.py --check-codeowners" in out
 
