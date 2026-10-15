@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import ast
 import re
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 
 import pytest
-from conftest import KIT_ROOT, clean_env, snapshot
-from review_fixtures import BUILDERS, GOOD_BODY, build
+from review_fixtures import BUILDERS, GOOD_BODY, ROOT, build, clean_env, snapshot
 
-SCRIPT = KIT_ROOT / "scripts" / "agk" / "review_context.py"
-CHECKS = KIT_ROOT / "scripts" / "agk"
+SCRIPT = ROOT / "scripts" / "agk" / "review_context.py"
+CHECKS = ROOT / "scripts" / "agk"
 SECTIONS = [
     "Context problems",
     "PR body",
@@ -30,7 +29,7 @@ def context(fx, *extra: str, body: str | None = "file", stdin: str | None = None
         args += ["--body", str(fx.body)]
     elif body == "stdin":
         args += ["--body", "-"]
-    return subprocess.run(
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
         args, cwd=fx.repo, capture_output=True, text=True, env=clean_env(), input=stdin
     )
 
@@ -162,7 +161,7 @@ def test_ac1_unknown_req_missing_spec_and_empty_diff_are_context_problems(tmp_pa
     problems = problems_of(context(fx).stdout)
     assert "REQ-777" in problems and "SPEC-0099" in problems and "ADR-0042" in problems
     empty = build("F8", tmp_path / "e")
-    subprocess.run(["git", "checkout", "-q", "main"], cwd=empty.repo, check=True)
+    subprocess.run(["git", "checkout", "-q", "main"], cwd=empty.repo, check=True)  # nosec B603 B607 - fixed argument list, no shell
     assert "the diff is empty" in problems_of(context(empty).stdout)
 
 
@@ -265,7 +264,7 @@ def test_ac1_existing_check_fails_on_the_fixture(tmp_path, name):
     args = [sys.executable, str(CHECKS / script), "--base", "main"]
     if name == "F5":
         args = [sys.executable, str(CHECKS / script), str(fx.body)]
-    proc = subprocess.run(args, cwd=fx.repo, capture_output=True, text=True, env=clean_env())
+    proc = subprocess.run(args, cwd=fx.repo, capture_output=True, text=True, env=clean_env())  # nosec B603 - fixed argument list, no shell
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert needle in proc.stdout
 
@@ -295,31 +294,15 @@ def test_ac1_f6_f7_context_shows_the_diff_against_the_body(tmp_path):
     assert "docs/other.md" in f7 and "docs/other.md" not in f7.split("## Diff")[0]
 
 
-def test_ac1_context_runs_in_an_installed_repository(installed):
-    """REQ-013 AC1: rule 13. The installed scripts work without the kit checkout."""
-    from conftest import git
-
-    git(installed, "checkout", "-q", "-b", "feature")
-    (installed / "notes.txt").write_text("hello\n", encoding="utf-8")
-    body = installed / ".." / "body.md"
-    body.write_text(GOOD_BODY, encoding="utf-8")
-    proc = subprocess.run(
-        [sys.executable, "scripts/agk/review_context.py", "--base", "main", "--body", str(body)],
-        cwd=installed, capture_output=True, text=True, env=clean_env(),
-    )  # fmt: skip
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert top_headings(proc.stdout) == SECTIONS
-
-
 def test_ac1_base_may_come_from_the_environment(tmp_path):
     """REQ-013 AC1: rule 4 (--base, AGK_BASE, then the default branch)."""
     fx = build("F8", tmp_path)
     env = {**clean_env(), "AGK_BASE": "main"}
     args = [sys.executable, str(SCRIPT), "--body", str(fx.body)]
-    via_env = subprocess.run(args, cwd=fx.repo, capture_output=True, text=True, env=env)
+    via_env = subprocess.run(args, cwd=fx.repo, capture_output=True, text=True, env=env)  # nosec B603 - fixed argument list, no shell
     assert via_env.returncode == 0, via_env.stdout
     assert via_env.stdout == context(fx).stdout
-    default = subprocess.run(args, cwd=fx.repo, capture_output=True, text=True, env=clean_env())
+    default = subprocess.run(args, cwd=fx.repo, capture_output=True, text=True, env=clean_env())  # nosec B603 - fixed argument list, no shell
     assert default.returncode == 0, default.stdout  # the default branch of agk.toml is main
     assert default.stdout == via_env.stdout
 

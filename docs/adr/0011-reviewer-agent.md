@@ -1,6 +1,6 @@
 # ADR-0011: Reviewer agent (SPEC-0003), REQ-013
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-15
 - Deciders: maintainers
 - Related: ADR-0008, ADR-0009, ADR-0010
@@ -36,9 +36,10 @@ changes all six.
    templates are unchanged (the two cap keys are optional and documented in the README).
 5. **REQ-013** is added to `docs/requirements.md` with Status `planned` (AC1 deterministic context, AC2 validated
    report, AC3 read-only, AC4 verdicts measured). It is not marked done by this PR.
-6. **Proof without a model.** Fixture pull requests F1 to F10 (`tests/kit_dev/review_fixtures.py`) are built in
-   temporary git repositories; tests cover the context, the validator, the definition and the manifest; F1 to F6 also
-   fail the existing checks. No test uses a model or the network.
+6. **Proof without a model.** Fixture pull requests F1 to F10 (`tests/kit/review_fixtures.py`) are built in
+   temporary git repositories; tests cover the context, the validator and the definition (`tests/kit/`, installed with
+   the scripts, SPEC-0003 rule 18 as amended in `docs/runs/proposed-spec-amendments-7.md`) and the manifest and the
+   installed layout (`tests/kit_dev/`); F1 to F6 also fail the existing checks. No test uses a model or the network.
 7. **Kit version** `0.5.0`: installed content changed.
 8. **`agk-governance` and the validator.** `check_review_report.py` needs a context and a report, so it is not run by
    `agk-governance`. The kit test that every `check_*.py` script is run by that target skips it, as it already skips
@@ -50,7 +51,7 @@ changes all six.
 
 - A maintainer or an agent can produce a reproducible review context and check a report mechanically before reading
   it; the model's own judgement is not measured in CI.
-- Installed repositories gain two scripts and one agent definition (three files).
+- Installed repositories gain two scripts, one agent definition and the tests of the scripts (seven files).
 - AC4 (verdicts measured) has no test yet: the footers are aggregated later (SPEC-0003 rule 17).
 
 ## Residual

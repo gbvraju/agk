@@ -1,12 +1,12 @@
-"""Tests of .claude/agents/reviewer.md and of the REQ-013 wiring (SPEC-0003 rules 2, 12, 13, 21)."""
+"""Tests of .claude/agents/reviewer.md (SPEC-0003 rules 2, 3, 12, 21)."""
 
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
-from conftest import KIT_ROOT, expected_files, manifest
-
-AGENT = KIT_ROOT / ".claude" / "agents" / "reviewer.md"
+ROOT = Path(__file__).resolve().parents[2]
+AGENT = ROOT / ".claude" / "agents" / "reviewer.md"
 
 
 def frontmatter_and_body() -> tuple[dict[str, str], str]:
@@ -50,34 +50,3 @@ def test_ac3_reviewer_fixes_the_output_format_of_the_validator():
         "cleared", "fix list", "rejected", "review-context.md", "check_review_report.py",
     ):  # fmt: skip
         assert token in body, token
-
-
-def test_ac3_reviewer_and_scripts_are_installed_by_init_and_adopt():
-    """REQ-013 AC3: rule 13."""
-    wanted = {
-        ".claude/agents/reviewer.md",
-        "scripts/agk/review_context.py",
-        "scripts/agk/check_review_report.py",
-    }
-    assert wanted <= set(manifest()["verbatim"])
-    assert wanted <= expected_files()
-
-
-def test_ac3_requirement_013_exists_and_is_planned():
-    """REQ-013 AC3: rule 15 (an ADR adds the requirement). Never marked done by an agent."""
-    text = (KIT_ROOT / "docs" / "requirements.md").read_text(encoding="utf-8")
-    section = text.split("### REQ-013", 1)[1].split("\n### ", 1)[0]
-    for ac in ("AC1", "AC2", "AC3", "AC4"):
-        assert ac in section
-    assert "- Status: planned" in section
-
-
-def test_ac3_kit_version_is_0_5_0():
-    """REQ-013 AC3: ADR-0011."""
-    assert manifest()["kit_version"] == "0.5.0"
-
-
-def test_ac3_the_template_requirements_are_not_changed_by_this_requirement():
-    """REQ-013 AC3: installed repositories get no REQ-013."""
-    template = (KIT_ROOT / "kit" / "templates" / "requirements.md").read_text(encoding="utf-8")
-    assert "REQ-013" not in template

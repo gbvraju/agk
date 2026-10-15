@@ -2,9 +2,30 @@
 
 from __future__ import annotations
 
-import subprocess
+import hashlib
+import os
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 from dataclasses import dataclass
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def clean_env() -> dict[str, str]:
+    """The environment without the variables that change how the checks resolve the base."""
+    drop = ("GITHUB_BASE_REF", "AGK_BASE", "CI", "AGK_KIT_TESTS")
+    return {k: v for k, v in os.environ.items() if k not in drop}
+
+
+def snapshot(root: Path) -> dict[str, tuple[str, int]]:
+    """Relative path -> (sha256, mtime_ns) of every file below root, excluding .git."""
+    out = {}
+    for path in sorted(root.rglob("*")):
+        if path.is_file() and ".git" not in path.relative_to(root).parts:
+            rel = path.relative_to(root).as_posix()
+            out[rel] = (hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_mtime_ns)
+    return out
+
 
 GOOD_BODY = """Advances: REQ-001
 
@@ -53,7 +74,7 @@ class Fixture:
 
 
 def _git(root: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True)
+    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True)  # nosec B603 B607 - fixed argument list, no shell
 
 
 def _write(root: Path, rel: str, text: str) -> None:

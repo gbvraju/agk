@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 
 import pytest
-from conftest import KIT_ROOT, clean_env
-from review_fixtures import build
+from review_fixtures import ROOT, build, clean_env
 from test_review_context import context
 
-VALIDATOR = KIT_ROOT / "scripts" / "agk" / "check_review_report.py"
-SECRET = "SENTINEL-CONTENT-MUST-NOT-BE-ECHOED"
+VALIDATOR = ROOT / "scripts" / "agk" / "check_review_report.py"
+CONTENT_MARK = "SENTINEL-CONTENT-MUST-NOT-BE-ECHOED"
 
 
 @pytest.fixture
@@ -24,7 +23,7 @@ def ctx(tmp_path):
 
 
 def finding(n=1, where="scripts/agk/tool.py:H1", rule="ADR-0001 decision 1", wrong=None, fix=None):
-    wrong = wrong or f"the tool changes without a covering ADR {SECRET}."
+    wrong = wrong or f"the tool changes without a covering ADR {CONTENT_MARK}."
     fix = fix or "Add an ADR that names the class."
     lines = [f"{n}. Where: {where}"]
     if rule is not None:
@@ -45,7 +44,7 @@ def report(verdict="fix list", truncated="no", findings=None, extra=""):
 def validate(tmp_path, ctx_path, text):
     rep = tmp_path / "report.md"
     rep.write_text(text, encoding="utf-8")
-    return subprocess.run(
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(VALIDATOR), "--context", str(ctx_path), "--report", str(rep)],
         capture_output=True, text=True, env=clean_env(),
     )  # fmt: skip
@@ -147,7 +146,7 @@ def test_ac2_bad_report_is_rejected_naming_the_finding_and_the_field(tmp_path, c
     out = proc.stdout
     assert out.startswith("FAIL review-report"), out
     assert where.lower() in out.lower() and field.lower() in out.lower(), out
-    assert SECRET not in out
+    assert CONTENT_MARK not in out
 
 
 def test_ac2_footer_in_the_report_must_match(tmp_path, ctx):
@@ -196,10 +195,10 @@ def test_ac2_f9_forged_hunk_in_the_body_is_not_a_valid_location(tmp_path):
 
 def test_ac2_usage_and_unreadable_inputs(tmp_path, ctx):
     """REQ-013 AC2: rule 10."""
-    no_args = subprocess.run([sys.executable, str(VALIDATOR)], capture_output=True, text=True)
+    no_args = subprocess.run([sys.executable, str(VALIDATOR)], capture_output=True, text=True)  # nosec B603 - fixed argument list, no shell
     assert no_args.returncode == 2
     missing = str(tmp_path / "none.md")
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(VALIDATOR), "--context", str(ctx), "--report", missing],
         capture_output=True,
         text=True,
