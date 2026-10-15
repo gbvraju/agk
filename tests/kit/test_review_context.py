@@ -16,10 +16,12 @@ SECTIONS = [
     "Context problems",
     "PR body",
     "Diff",
+    "Changed files",
     "Requirements",
     "Protected classes touched",
     "Referenced specs and ADRs",
     "Principles",
+    "Operating rules",
 ]
 
 
@@ -106,7 +108,7 @@ def test_ac1_untracked_files_are_part_of_the_diff(tmp_path):
 
 
 def test_ac1_requirement_section_and_markers_are_included(tmp_path):
-    """REQ-013 AC1: rule 5(c)."""
+    """REQ-013 AC1: rule 5(d)."""
     out = context(build("F8", tmp_path)).stdout
     reqs = section(out, "Requirements")
     assert "### REQ-001" in reqs and "AC2 does another" in reqs and "Status: done" in reqs
@@ -114,7 +116,7 @@ def test_ac1_requirement_section_and_markers_are_included(tmp_path):
 
 
 def test_ac1_protected_classes_touched_and_adr_coverage_are_listed(tmp_path):
-    """REQ-013 AC1: rule 5(d); F1 is detectable from the context."""
+    """REQ-013 AC1: rule 5(e); F1 is detectable from the context."""
     out = context(build("F1", tmp_path)).stdout
     classes = section(out, "Protected classes touched")
     assert "scripts/agk/" in classes
@@ -124,7 +126,7 @@ def test_ac1_protected_classes_touched_and_adr_coverage_are_listed(tmp_path):
 
 
 def test_ac1_specs_and_adrs_of_the_advanced_requirement_are_included(tmp_path):
-    """REQ-013 AC1: rule 5(e)."""
+    """REQ-013 AC1: rule 5(f)."""
     out = context(build("F8", tmp_path)).stdout
     refs = section(out, "Referenced specs and ADRs")
     assert "### docs/specs/0001-demo.md" in refs and "### docs/adr/0001-demo.md" in refs
@@ -132,7 +134,7 @@ def test_ac1_specs_and_adrs_of_the_advanced_requirement_are_included(tmp_path):
 
 
 def test_ac1_ids_named_in_the_body_pull_in_their_files(tmp_path):
-    """REQ-013 AC1: rule 5(e), named by id in the PR body."""
+    """REQ-013 AC1: rule 5(f), named by id in the PR body."""
     fx = build("F8", tmp_path)
     fx.body.write_text(GOOD_BODY.replace("Advances: REQ-001", "Advances: REQ-002 SPEC-0001"))
     out = context(fx).stdout
@@ -141,7 +143,7 @@ def test_ac1_ids_named_in_the_body_pull_in_their_files(tmp_path):
 
 
 def test_ac1_principles_are_included(tmp_path):
-    """REQ-013 AC1: rule 5(f)."""
+    """REQ-013 AC1: rule 5(g)."""
     out = context(build("F8", tmp_path)).stdout
     principles = section(out, "Principles")
     assert "2. Agents never merge." in principles
@@ -308,7 +310,7 @@ def test_ac1_base_may_come_from_the_environment(tmp_path):
 
 
 def test_ac1_a_path_named_in_a_changed_file_pulls_in_that_document(tmp_path):
-    """REQ-013 AC1: rule 5(e), named in the text of a changed file."""
+    """REQ-013 AC1: rule 5(f), named in the text of a changed file."""
     fx = build("F8", tmp_path)
     (fx.repo / "docs" / "notes.md").write_text("see docs/specs/0001-demo.md\n", encoding="utf-8")
     fx.body.write_text(
@@ -316,3 +318,96 @@ def test_ac1_a_path_named_in_a_changed_file_pulls_in_that_document(tmp_path):
     )
     refs = section(context(fx).stdout, "Referenced specs and ADRs")
     assert "### docs/specs/0001-demo.md" in refs
+
+
+# --- amendments 9: operating rules, changed files in full (shadow review 2) ---------------------
+
+
+def test_ac1_operating_rules_of_claude_md_are_always_included(tmp_path):
+    """REQ-013 AC1: SPEC-0003 rule 5 as amended. CLAUDE.md is in the context even when untouched."""
+    out = context(build("F8", tmp_path)).stdout
+    rules = section(out, "Operating rules")
+    assert "4. Tests first. Every check ships with tests of the check (`tests/kit/`)." in rules
+    assert "8. Product-neutral: nothing names a company, product, person or environment." in rules
+    assert "CLAUDE.md" not in section(out, "Diff")
+
+
+def test_ac1_missing_claude_md_is_a_context_problem(tmp_path):
+    """REQ-013 AC1: rule 7 as amended."""
+    fx = build("F8", tmp_path)
+    (fx.repo / "CLAUDE.md").unlink()
+    out = context(fx).stdout
+    assert "CLAUDE.md is missing" in problems_of(out)
+    assert section(out, "Operating rules").strip() == "none"
+
+
+def test_ac1_changed_files_are_included_with_their_full_current_text(tmp_path):
+    """REQ-013 AC1: rule 5 as amended, in path order."""
+    out = context(build("F7", tmp_path)).stdout
+    changed = section(out, "Changed files")
+    assert changed.index("### docs/notes.md") < changed.index("### docs/other.md")
+    assert "notes\n" in changed and "other\n" in changed
+
+
+def test_ac1_f11_a_rule_next_to_a_change_is_now_visible(tmp_path):
+    """REQ-013 AC1: a case from shadow review 2. The unchanged rule 8 sits outside the hunk."""
+    out = context(build("F11", tmp_path)).stdout
+    rule_8 = "8. Product-neutral: nothing names a company, product, person or environment."
+    assert rule_8 not in section(out, "Diff")
+    changed = section(out, "Changed files")
+    assert "### CLAUDE.md" in changed and rule_8 in changed
+    assert rule_8 in section(out, "Operating rules")
+
+
+def test_ac1_f12_installed_check_without_installed_tests_is_visible(tmp_path):
+    """REQ-013 AC1: a case from shadow review 2. The context holds what a reviewer needs to see it.
+
+    The check is listed by the manifest, its tests sit in an uninstalled directory, and CLAUDE.md
+    (principle 4 in operating form) says every check ships with tests under tests/kit/.
+    """
+    out = context(build("F12", tmp_path)).stdout
+    assert "Every check ships with tests of the check" in section(out, "Operating rules")
+    changed = section(out, "Changed files")
+    for path in (
+        "kit/manifest.json",
+        "scripts/agk/check_new.py",
+        "tests/kit_dev/test_check_new.py",
+    ):
+        assert f"### {path}" in changed, path
+    manifest = changed.split("### kit/manifest.json", 1)[1].split("\n### ", 1)[0]
+    assert '"scripts/agk/check_new.py"' in manifest
+    assert '"tests/kit/test_check_a.py"' in manifest  # a line outside the hunk
+    assert "check_new" not in manifest.replace('"scripts/agk/check_new.py"', "")
+    assert "tests/kit/test_check_new.py" not in out.split("## Operating rules", 1)[0].replace(
+        "tests/kit_dev/test_check_new.py", ""
+    )
+    protected = section(out, "Protected classes touched")
+    assert "scripts/agk/" in protected and "named in docs/adr/0002-new-check.md" in protected
+
+
+def test_ac1_changed_files_deleted_binary_and_oversized(tmp_path):
+    """REQ-013 AC1: rules 5 and 6 as amended. Deleted and binary files are named, not embedded."""
+    fx = build("F8", tmp_path)
+    (fx.repo / "tests" / "test_demo.py").unlink()
+    (fx.repo / "docs" / "blob.bin").write_bytes(b"\x00\x01\x02")
+    changed = section(context(fx).stdout, "Changed files")
+    assert "### tests/test_demo.py (deleted)" in changed
+    assert "### docs/blob.bin (not shown: binary or too large)" in changed
+
+
+def test_ac1_changed_files_are_capped_by_review_other_cap(tmp_path):
+    """REQ-013 AC1: rule 6 as amended. The cut is marked and the header says Truncated: yes."""
+    fx = build("F8", tmp_path)
+    (fx.repo / "agk.toml").write_text(
+        'default_branch = "main"\ntest_dirs = ["tests"]\nreview_other_cap = 8\n', encoding="utf-8"
+    )
+    (fx.repo / "docs" / "long.md").write_text("".join(f"row {i}\n" for i in range(50)))
+    out = context(fx).stdout
+    assert re.search(r"^Truncated: yes$", out, re.M)
+    assert re.search(r"^\[truncated: \d+ lines omitted\]$", section(out, "Changed files"), re.M)
+
+
+def test_ac1_context_with_full_files_stays_deterministic(tmp_path):
+    """REQ-013 AC1: rule 6."""
+    fx = build("F12", tmp_path)
+    assert context(fx).stdout == context(fx).stdout

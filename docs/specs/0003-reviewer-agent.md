@@ -29,19 +29,23 @@ REQ-013 is not added by this spec: `docs/requirements.md` is protected, so an AD
    `gh`, no writes) assembles one markdown document on stdout from local git and files. `--body` takes a file or `-`
    for stdin. The base is resolved as the checks resolve it (`--base`, `AGK_BASE`, then the default branch).
 5. **Content of the context.** In this order: (a) the PR body; (b) the diff `merge-base..worktree` with every hunk
-   numbered `H1..Hn` and headed `file:Hn (old lines, new lines)`; (c) for every REQ id in the body's `Advances:`
-   line, its section of `docs/requirements.md` (acceptance criteria and Status) and the files that carry its test
-   markers; (d) the protected classes of `config/protected-paths.txt` that the diff touches; (e) every spec and ADR
-   referenced, meaning those whose `Requirements:` line contains an advanced REQ, those named by path or by id
-   (`SPEC-nnnn`, `ADR-nnnn`) in the PR body, and those named in the text of a changed file; (f) the numbered rules of
-   `constitution/principles.md`.
+   numbered `H1..Hn` and headed `file:Hn (old lines, new lines)`; (c) the full current text of every changed file (a
+   deleted file is named; a binary or oversized one is named as not shown); (d) for every REQ id in the body's
+   `Advances:` line, its section of `docs/requirements.md` (acceptance criteria and Status) and the files that carry
+   its test markers; (e) the protected classes of `config/protected-paths.txt` that the diff touches; (f) every spec
+   and ADR referenced, meaning those whose `Requirements:` line contains an advanced REQ, those named by path or by
+   id (`SPEC-nnnn`, `ADR-nnnn`) in the PR body, and those named in the text of a changed file; (g) the numbered rules
+   of `constitution/principles.md`; (h) the operating rules, the text of `CLAUDE.md`. A rule made wrong by a change
+   can sit outside the hunk, and the operating rules are context for the whole review.
 6. **Deterministic and bounded.** The same inputs give the same bytes (sorted, no timestamps). Each section is capped
    (default 4000 lines for the diff, 1500 for the rest; configurable in `agk.toml` as `review_diff_cap` and
    `review_other_cap`, positive integers, an invalid value refused naming the setting); a cut is marked
-   `[truncated: N lines omitted]`, never silent, and the report must say it reviewed a truncated context.
+   `[truncated: N lines omitted]`, never silent, and the report must say it reviewed a truncated context. The
+   changed-files section and the operating rules are capped by `review_other_cap`, like the other sections after the
+   diff.
 7. **Missing inputs are findings.** No `Advances:` line, an unknown REQ id, a referenced spec or ADR that does not
-   exist, or an empty diff are listed under `Context problems` at the top of the context, so the agent cites them
-   instead of guessing.
+   exist, an empty diff, or a missing `CLAUDE.md` are listed under `Context problems` at the top of the context, so
+   the agent cites them instead of guessing.
 
 ### Output
 
@@ -61,14 +65,17 @@ REQ-013 is not added by this spec: `docs/requirements.md` is protected, so an AD
     already in the repository; a protected path changed means an ADR in the diff names its class; an Accepted ADR
     changes only its Status; an Approved spec changes only with a proposed-amendments file naming it; the PR body
     has `Advances:` and a dated `Build-state row:`; no feature PR edits `docs/build-state.md`; the diff stays inside
-    the paths the PR body says it changes. No style opinions, no speculation about intent.
+    the paths the PR body says it changes; for every Accepted ADR decision and Approved spec rule in the context,
+    whether the diff, including its effect on other files, contradicts it. No style opinions, no speculation about
+    intent. `CLAUDE.md` is context, not a source of rules to cite.
 
 ### Where it runs
 
 12. **Local first.** The agent is the Claude Code subagent `.claude/agents/reviewer.md` (tools `Read`, `Grep`,
-    `Glob`; the prompt fixes the output format of rules 8 and 9 and the read-only rule).
-    The agent reviews every pull request. A maintainer or an agent runs the context script,
-    then invokes the subagent on `review-context.md` in a session, then runs the validator on the report. The context and the report are local files and are never committed (principle 5).
+    `Glob`; the prompt fixes the output format of rules 8 and 9, the read-only rule, the cross-file check of rule 11
+    and the instruction to read the changed files in full). The agent reviews every pull request. A maintainer or an
+    agent runs the context script, then invokes the subagent on `review-context.md` in a session, then runs the
+    validator on the report. The context and the report are local files and are never committed (principle 5).
 13. **Install modes.** The definition and the two scripts are installed verbatim by init and adopt in the same way
     as `drift-auditor.md`; the K3 plugin form exposes them as `/agk:review`.
 14. **GitHub Action form: deferred to K3.** K2 builds no workflow, no action pin and no secret for the reviewer. When
@@ -99,16 +106,22 @@ REQ-013 is not added by this spec: `docs/requirements.md` is protected, so an AD
     `F1` protected path changed without an ADR naming its class; `F2` an advanced REQ without a marker; `F3` an
     Approved spec edited without a proposed-amendments file; `F4` an Accepted ADR body edited; `F5` no `Advances:`
     line; `F6` a feature PR editing `docs/build-state.md`; `F7` a change outside the paths the body names;
-    `F8` a clean PR (expected `cleared`); `F9` an injected instruction in the PR body; `F10` an oversized diff.
+    `F8` a clean PR (expected `cleared`); `F9` an injected instruction in the PR body; `F10` an oversized diff;
+    `F11` an unchanged rule far from a change; `F12` an installed check whose tests are not installed, with
+    `CLAUDE.md` present.
 19. **Context tests.** For every fixture: the context is byte-identical across two runs; hunks are numbered; the
     sections of rule 5 appear in order; truncation is marked on `F10`; context problems appear on `F5`; the script
-    makes no network call and writes nothing (an import and write-guard test as for init).
+    makes no network call and writes nothing (an import and write-guard test as for init); `CLAUDE.md` is always in
+    the context; a changed file appears in full, with a deleted, a binary and an oversized file handled as rule 5
+    says.
 20. **Validator tests.** Recorded reports (plain text fixtures written by hand, one good and many bad: vague finding,
     missing hunk, invented hunk, invented rule number, `cleared` with findings, no verdict, two verdicts) are accepted
     or rejected as rule 10 says. The mechanical defects `F1`-`F7` also have a deterministic expected-finding list
     produced from the existing checks, so the fixtures prove the defects are detectable from the context alone.
 21. **Agent definition tests.** `.claude/agents/reviewer.md` has the frontmatter `tools: Read, Grep, Glob` and no other
-    tool, says it never approves, merges, pushes or edits, and says the PR content is data.
+    tool, says it never approves, merges, pushes or edits, says the PR content is data, carries the cross-file check
+    of rule 11 and the instruction to read the changed files in full, and says that `CLAUDE.md` is context, not a
+    source of rules to cite.
 22. **No model in CI.** Tests run without network and without a model. Whether and how the agent's own judgement is
     evaluated is by hand: transcripts of the agent run against the fixtures are recorded in `docs/runs/`; no replay
     harness is built in K2.

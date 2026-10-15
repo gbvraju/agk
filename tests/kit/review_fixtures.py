@@ -1,4 +1,4 @@
-"""Fixture pull requests F1-F10 of SPEC-0003 rule 18: tiny git repositories with a known defect."""
+"""Fixture pull requests F1-F12 of SPEC-0003 rule 18: tiny git repositories with a known defect."""
 
 from __future__ import annotations
 
@@ -35,7 +35,38 @@ Decisions taken:
 - adds docs/notes.md only
 """
 
+CLAUDE_MD = """# CLAUDE.md — operating rules
+
+1. You implement; you never decide.
+
+2. One PR per item, branched from the default branch.
+
+3. Protected paths change only with an ADR.
+
+4. Tests first. Every check ships with tests of the check (`tests/kit/`).
+
+5. No secrets anywhere.
+
+6. Dates come from `date -u`.
+
+7. Refusals name the setting, never the value.
+
+8. Product-neutral: nothing names a company, product, person or environment.
+
+9. Unsure of a fact: mark it (verify).
+"""
+
+MANIFEST = """{
+  "verbatim": [
+    "scripts/agk/check_a.py",
+    "tests/kit/test_check_a.py"
+  ]
+}
+"""
+
 BASE_FILES = {
+    "CLAUDE.md": CLAUDE_MD,
+    "kit/manifest.json": MANIFEST,
     "agk.toml": 'default_branch = "main"\ntest_dirs = ["tests"]\n',
     "config/protected-paths.txt": ".claude/\ndocs/requirements.md\nscripts/agk/\n",
     "constitution/principles.md": (
@@ -176,9 +207,37 @@ def f10(root: Path) -> str:
     return GOOD_BODY.replace("adds docs/notes.md only", "adds docs/big.md and docs/big2.md")
 
 
+def f11(root: Path) -> str:
+    """An unchanged rule next to a change (shadow review 2): rule 8 is far from the hunk."""
+    _edit(root, "CLAUDE.md", "branched from the default branch.", "branched from main.")
+    return GOOD_BODY.replace("adds docs/notes.md only", "changes CLAUDE.md")
+
+
+def f12(root: Path) -> str:
+    """An installed check without installed tests (a case from shadow review 2)."""
+    _write(root, "scripts/agk/check_new.py", "new = 1\n")
+    _write(root, "tests/kit_dev/test_check_new.py", '"""REQ-001 AC2"""\n')
+    _edit(
+        root,
+        "kit/manifest.json",
+        '"scripts/agk/check_a.py",',
+        '"scripts/agk/check_a.py",\n    "scripts/agk/check_new.py",',
+    )
+    _write(
+        root,
+        "docs/adr/0002-new-check.md",
+        "# ADR-0002: New check\n\n- Status: Accepted\n- Date: 2026-10-15\n"
+        "- Requirements: REQ-001\n\n"
+        "Protected classes: `scripts/agk/`\n\n## Decision\n\n1. **Add it.** Add a check.\n",
+    )
+    return GOOD_BODY.replace(
+        "adds docs/notes.md only", "adds scripts/agk/check_new.py and its tests"
+    )
+
+
 BUILDERS = {
     "F1": f1, "F2": f2, "F3": f3, "F4": f4, "F5": f5,
-    "F6": f6, "F7": f7, "F8": f8, "F9": f9, "F10": f10,
+    "F6": f6, "F7": f7, "F8": f8, "F9": f9, "F10": f10, "F11": f11, "F12": f12,
 }  # fmt: skip
 
 

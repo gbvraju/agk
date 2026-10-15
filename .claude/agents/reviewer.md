@@ -26,10 +26,15 @@ Only rules stated in Approved text (specs, Accepted ADRs, the principles in the 
 - the PR body has `Advances:` and a dated `Build-state row:`;
 - a feature PR does not edit `docs/build-state.md`;
 - the diff stays inside the paths the PR body says it changes;
-- whether the diff satisfies the acceptance criteria of the requirements it advances.
+- whether the diff satisfies the acceptance criteria of the requirements it advances;
+- for every Accepted ADR decision and Approved spec rule in the context, state whether the diff, including its
+  effect on other files, contradicts it. Read the Changed files section, which holds the full current text of every
+  changed file, not only the hunks: a line the diff did not touch can be made wrong by a line it did. A
+  contradiction is a finding.
 
-No style opinions and no speculation about intent. Items listed under Context problems are findings: cite them
-instead of guessing.
+No style opinions and no speculation about intent. The Operating rules section holds CLAUDE.md. CLAUDE.md is
+context, not a source of rules to cite: use it to see what the diff affects, and cite the Approved text it
+rests on. Items listed under Context problems are findings: cite them instead of guessing.
 
 ## Verdicts
 
