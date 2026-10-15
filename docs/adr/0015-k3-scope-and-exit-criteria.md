@@ -1,6 +1,6 @@
 # ADR-0015: K3 scope and exit criteria
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-15
 - Deciders: maintainers
 - Related: ADR-0001, ADR-0002, ADR-0007, ADR-0011, ADR-0012, ADR-0014
@@ -36,12 +36,16 @@ advisory and human review stays required).
       decision 3, required check missing, placeholder team, missing `origin/HEAD`, drift-audit schedule disabled) and
       reports none on a correctly configured repository; proven live on the sandbox;
    c. the 0.1.0 sandbox upgrades to the current kit with zero product files changed and governance green;
-   d. per-PR metrics are recorded for every PR merged in agk for two consecutive weeks and aggregated by the drift
-      audit issue;
-   e. the reviewer agent either catches at least 2 of the 3 recorded shadow findings on a fresh run, or is removed
-      from the default profile and documented as experimental. Either outcome closes the criterion.
-3. **K4 exit criteria are deferred** to a K4-opening ADR, written before K4 starts (residual below).
-4. **Unchanged.** ADR-0002's other lines (K0 to K2, the non-goals of v0, repository public from K0) stand. The K2
+   d. per-PR metrics are recorded for every PR merged in agk for two consecutive weeks and aggregated weekly by the
+      mechanism SPEC-0007 defines;
+   e. the reviewer agent catches at least 3 of 5 recorded findings on a fresh run (the 3 from shadow reviews 2 and 3,
+      plus at least 2 new human findings recorded during K3 that the reviewer was not tuned on, with at least 1 of
+      those caught); otherwise it is removed from the default profile and documented as experimental. Either outcome
+      closes the criterion.
+3. **Dates.** The K3 target is 2026-11-30 and the K4 target is 2026-12-31. Residuals that fall due at K3 start are
+   due 2026-11-30 in `docs/runs/residuals.md`.
+4. **K4 exit criteria are deferred** to a K4-opening ADR, written before K4 starts and due 2026-12-01 (residual below).
+5. **Unchanged.** ADR-0002's other lines (K0 to K2, the non-goals of v0, repository public from K0) stand. The K2
    rulings stand: the reviewer is advisory, human review stays required, and a recurring finding becomes a
    deterministic check, not a reviewer prompt.
 
@@ -51,11 +55,11 @@ advisory and human review stays required).
 - Four specs mean four reviews before any K3 code; the order of the specs is not fixed here.
 - Criteria a to c need things this repository cannot show by itself (a marketplace install, a live sandbox); the
   proofs are recorded in `docs/runs/`, as for K1 and K2.
-- Criterion d depends on the weekly aggregation of SPEC-0007 and on the drift audit issue, which a clean run does
-  not write (SPEC-0004 rule 14); SPEC-0007 has to say how a week with metrics but no findings is aggregated.
+- Criterion d leaves the aggregation mechanism to SPEC-0007. The drift audit issue is not assumed to be it: a clean
+  run writes nothing (SPEC-0004 rule 14).
+- Criterion e needs at least 2 new human findings recorded during K3; they are recorded in the repository (K2
+  ruling: human verdicts are recorded in-repo) before the reviewer is run on them.
 
 ## Residual
 
-- 2026-10-15: K4 exit criteria need measurable thresholds before K4 starts; a K4-opening ADR states them (due 2027-03-31).
-- 2026-10-15: the dates of K3 and K4 are not fixed; due dates that say "K3 start" or "K4 start" use placeholders until
-  they are (due 2027-01-31).
+- 2026-10-15: K4 exit criteria need measurable thresholds before K4 starts; a K4-opening ADR states them (due 2026-12-01).
