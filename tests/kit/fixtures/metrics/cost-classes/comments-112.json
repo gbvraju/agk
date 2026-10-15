@@ -1,0 +1,18 @@
+[
+  {
+    "body": "Verdict: fix list",
+    "created_at": "2026-10-06T10:00:00Z",
+    "user": {
+      "login": "reviewer",
+      "type": "User"
+    }
+  },
+  {
+    "body": "Verdict: fix list",
+    "created_at": "2026-10-06T10:01:00Z",
+    "user": {
+      "login": "reviewer",
+      "type": "User"
+    }
+  }
+]

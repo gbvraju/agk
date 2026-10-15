@@ -1,0 +1,59 @@
+# Weekly per-PR metrics (SPEC-0007). It runs Mondays at 06:43 UTC and by hand (workflow_dispatch, with an optional
+# `today` date); the window is the full ISO week before it. GitHub may disable scheduled workflows after a period of
+# repository inactivity (the period is (verify) against current GitHub documentation); then run it by hand.
+# Its only writes: creating or updating the one issue labelled agk-metrics for that week, and creating the label.
+# It needs `issues: write` with the workflow token.
+name: metrics
+
+on:
+  schedule:
+    - cron: "43 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      today:
+        description: "Run as if today were this date (YYYY-MM-DD); the window is the ISO week before it"
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+  actions: read
+  issues: write
+
+jobs:
+  metrics:
+    if: ${{ github.ref_name == github.event.repository.default_branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Report the week and file one issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TODAY: ${{ github.event.inputs.today }}
+        run: |
+          today="${INPUT_TODAY:-$(date -u +%F)}"
+          issues="$RUNNER_TEMP/issues.json"
+          gh issue list --label agk-metrics --state all --json number,title,body --limit 200 > "$issues"
+          title=$(python3 scripts/agk/metrics.py --today "$today" --print-title)
+          action=$(python3 scripts/agk/metrics.py --today "$today" --issues "$issues" --print-action)
+          status=0
+          python3 scripts/agk/metrics.py --today "$today" --issues "$issues" > "$RUNNER_TEMP/report.md" || status=$?
+          head -n 3 "$RUNNER_TEMP/report.md"
+          if ! grep -q '^agk metrics [0-9]' "$RUNNER_TEMP/report.md"; then
+            echo "no report was produced; nothing written"
+            exit 1
+          fi
+          case "$action" in
+            create)
+              gh label create agk-metrics --description "Weekly per-PR metrics" --color 0e8a16 || true
+              gh issue create --title "$title" --label agk-metrics --body-file "$RUNNER_TEMP/report.md"
+              ;;
+            update\ *)
+              gh issue edit "${action#update }" --title "$title" --body-file "$RUNNER_TEMP/report.md"
+              ;;
+          esac
+          exit "$status"

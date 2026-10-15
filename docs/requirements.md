@@ -60,7 +60,7 @@ Only the Status line may change without an ADR. `done` requires at least one tes
 
 ### REQ-012 — Metrics per merged PR (K3)
 
-- Acceptance: AC1 rejections, blocked weakenings, deviations, cost class
+- Acceptance: AC1 each closed pull request has a derived record of rejections, blocked weakenings, deviations and cost class; AC2 the record also carries hours open to merge, review rounds, protected classes touched, ADRs added, tests before and after, and whether the merged head was cleared; AC3 a weekly issue lists every pull request closed in the week; AC4 cost class is the maintainers' review cost, derived from fix-list rounds and hours open to merge: S, M or L, and unknown when the rounds are unknown
 - Status: planned
 
 ### REQ-013 — Reviewer agent (K2)

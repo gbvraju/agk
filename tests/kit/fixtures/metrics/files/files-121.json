@@ -1,0 +1,22 @@
+[
+  {
+    "filename": "docs/adr/0016-metrics.md",
+    "status": "added"
+  },
+  {
+    "filename": "docs/adr/0003-old.md",
+    "status": "modified"
+  },
+  {
+    "filename": "docs/runs/proposed-spec-amendments-10.md",
+    "status": "added"
+  },
+  {
+    "filename": "docs/runs/proposed-spec-amendments-9.md",
+    "status": "modified"
+  },
+  {
+    "filename": "scripts/agk/metrics.py",
+    "status": "added"
+  }
+]

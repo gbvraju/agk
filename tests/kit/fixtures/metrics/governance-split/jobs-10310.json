@@ -1,0 +1,16 @@
+{
+  "steps": [
+    {
+      "conclusion": "success",
+      "name": "Set up job"
+    },
+    {
+      "conclusion": "success",
+      "name": "check_protected_changes"
+    },
+    {
+      "conclusion": "failure",
+      "name": "check_adrs"
+    }
+  ]
+}
