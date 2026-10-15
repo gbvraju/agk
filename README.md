@@ -45,6 +45,18 @@ product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `t
 exist, to `CLAUDE.md`, `.github/CODEOWNERS` and `.github/PULL_REQUEST_TEMPLATE.md`, and refuses rather than overwrite.
 The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/specs/0002-agk-adopt.md`.
 
+## Drift audit
+
+    python3 scripts/agk/drift_audit.py [--today YYYY-MM-DD]
+
+A read-only audit of the default branch: protected changes that reached it without an ADR (the last 7 days), done
+requirements without a test marker, stale Draft specs and Proposed ADRs, overdue residuals (`(due YYYY-MM-DD)` on
+a bullet, or a line of `docs/runs/residuals.md`), and reviewers and CODEOWNERS drift. The installed workflow
+`.github/workflows/drift-audit.yml` runs it every Saturday and files at most one issue labelled `agk-drift-audit`;
+a clean run writes nothing. GitHub may disable scheduled workflows after a period of repository inactivity: if
+scheduled runs stop, start the workflow by hand (`workflow_dispatch`). See `docs/specs/0004-drift-audit.md` and
+ADR-0012.
+
 ## Reviewer agent
 
     python3 scripts/agk/review_context.py [--base REF] --body PR_BODY.md > review-context.md

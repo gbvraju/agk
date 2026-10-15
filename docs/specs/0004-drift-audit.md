@@ -40,11 +40,14 @@ REQ-011 (drift audit): AC1 weekly; AC2 one issue per run; AC3 read-only. Rules m
 6. **D1 protected change without an ADR.** For each first-parent commit on the default branch in the window that
    touches a path of `config/protected-paths.txt`: the commit must add or modify a `docs/adr/*.md` (not
    `TEMPLATE.md`, not a Status-only edit) whose text names every touched protected class, exactly the rule of
-   `check_protected_changes`, applied per commit. A commit that fails is a finding (commit id, protected class,
-   never content). The Status-only exemption for `docs/requirements.md` applies as in the check.
+   `check_protected_changes`, applied per commit. The protected list used is the one at the commit's parent. A commit
+   that fails yields one finding per touched protected class that no single ADR of the commit covers together, as
+   the per-PR check prints one failure per class (the subject is the first 12 characters of the commit id, then the
+   protected class, never content). The Status-only exemption for `docs/requirements.md` applies as in the check.
 7. **D2 done requirements without markers.** At the head of the default branch, every requirement with
    `- Status: done` has a marker in the configured test directories and patterns (the logic of
-   `check_requirements`).
+   `check_requirements`). D2, D4 and D5 read the work tree and D1 and D3 read the history of the default branch, so
+   the audit is meant to run on a checkout of the default branch, as the workflow does.
 8. **D3 stale drafts.** A spec with `Status: Draft` older than N days and an ADR with `Status: Proposed` older than N
    days (N = 14). The age of an ADR is its `Date:` field; the age of a spec is the date of the commit
    that added the file (`git log --diff-filter=A`), because specs carry no date.
@@ -54,7 +57,9 @@ REQ-011 (drift audit): AC1 weekly; AC2 one issue per run; AC3 read-only. Rules m
    section has the form `- <source> | <text> | (due YYYY-MM-DD) | <status>`; a line whose date is before the run date
    is a finding naming its source. A bullet in a new ADR or spec carries its own `(due YYYY-MM-DD)`; the register
    exists for bullets of Accepted ADRs and Approved specs, which cannot change. A malformed line in the `## Open`
-   section is reported as a finding, not skipped.
+   section is reported as a finding, not skipped. The subject of an overdue ADR or spec bullet is the file path, of
+   an overdue register line its source field, of a malformed register line `docs/runs/residuals.md:LINE`; only
+   bullet lines (`- `) of the `## Open` section are register entries.
 10. **D5 reviewers and CODEOWNERS drift.** The committed `.github/CODEOWNERS` equals the rendering of
     `config/reviewers.yaml` (or its marked block in an adopted repository); the `protected` class equals
     `config/protected-paths.txt`; a team handle is still the placeholder `@REPLACE-ME` (an `agk doctor` residual of
@@ -69,15 +74,20 @@ REQ-011 (drift audit): AC1 weekly; AC2 one issue per run; AC3 read-only. Rules m
 
 13. **Exactly one issue per run (AC2).** A run that has findings creates one issue, or updates the one open issue
     carrying the label `agk-drift-audit` by replacing its body; it never opens a second one. Its title is
-    `agk drift audit YYYY-MM-DD` (updated on each run). The body is the report and ends with the marker
-    `<!-- agk-drift-audit -->`. The workflow's only write calls are `gh issue create` and `gh issue edit` for that
-    issue (and creating the label if it is missing).
+    `agk drift audit YYYY-MM-DD` (updated on each run). The body is the report; its last text line is the note of
+    rule 23 and its final line is the marker `<!-- agk-drift-audit -->`. The workflow's only write calls are
+    `gh issue create` and `gh issue edit` for that issue (and creating the label if it is missing); it also reads
+    with `gh issue list` to find the open audit issue.
 14. **Clean runs.** A run with no findings writes nothing, whether or not an audit issue is open, and prints a
     one-line summary to the job log. An open audit issue is left for maintainers to close. The audit never closes an
     issue.
 15. **Selecting the issue.** A pure function `choose_action(open_issues, has_findings)` returns `create`, `update N` or
     `none` (always `none` when there are no findings); more than one open audit issue is itself reported in the
-    body as finding D6 (`duplicate audit issues`) and the lowest-numbered issue is the one updated.
+    body as finding D6 (`duplicate audit issues`) and the lowest-numbered issue is the one updated. So that the
+    decision stays in the tested script, `drift_audit.py` takes `--open-issues 'N N'` (the numbers of the open
+    audit issues, used for D6 and for the action), `--print-action` (`create`, `update N` or `none`),
+    `--print-title` (`agk drift audit YYYY-MM-DD`) and `--branch NAME` (the default branch; default from
+    `agk.toml`).
 
 ### Install
 
@@ -104,23 +114,23 @@ REQ-011 (drift audit): AC1 weekly; AC2 one issue per run; AC3 read-only. Rules m
     open issue with no findings (`none`).
 21. **Workflow shape tests.** A test reads `.github/workflows/drift-audit.yml`: triggers are only `schedule` and
     `workflow_dispatch`; one weekly cron; `permissions` is exactly `contents: read` and `issues: write`; every `uses:`
-    is a 40-character SHA; the only `gh` verbs are `issue create` and `issue edit` (and `label create`); no `git push`,
-    no `gh pr`, no `gh issue close`, no `gh issue comment`.
+    is a 40-character SHA; the only `gh` verbs are `issue list` (read-only), `issue create` and `issue edit`
+    (and `label create`); no `git push`, no `gh pr`, no `gh issue close`, no `gh issue comment`.
 22. **No network in tests.** Tests use no network and no model. The live behaviour on GitHub (cron, label, issue) is
     proven once by hand on a repository maintainers choose, recorded in `docs/runs/`.
 23. **Scheduled workflows may be disabled.** GitHub may disable scheduled workflows in a repository after a period of
     inactivity (the period is (verify) against current GitHub documentation). The audit documents this in a comment
     at the top of `drift-audit.yml` and in the installed documentation, and reports it: the body of every audit
-    issue ends with a line saying that scheduled runs can stop after repository inactivity and that
-    `workflow_dispatch` runs the audit by hand. A test checks that the workflow carries the comment and that the
+    issue has, as its last text line before the marker, a line saying that scheduled runs can stop after
+    repository inactivity and that `workflow_dispatch` runs the audit by hand. A test checks that the workflow carries the comment and that the
     report ends with the line.
 
 ## Tests
 
-- Rules 5-12, 18-19: `tests/kit_dev/test_drift_audit.py`, marker `REQ-011 AC1`.
-- Rules 13-15, 20: `tests/kit_dev/test_drift_audit.py`, marker `REQ-011 AC2`.
-- Rules 2, 17, 21, 23 (comment): `tests/kit/test_workflow.py` style tests of `drift-audit.yml`, marker `REQ-011 AC3`.
-- Rules 11-12, 23 (report line): `tests/kit_dev/test_drift_audit.py`, marker `REQ-011 AC1`.
+- Rules 5-12, 18-19: `tests/kit/test_drift_audit.py` and `tests/kit/drift_fixtures.py`, marker `REQ-011 AC1`.
+- Rules 13-15, 20: `tests/kit/test_drift_audit.py`, marker `REQ-011 AC2`.
+- Rules 2, 17, 21, 23 (comment): `tests/kit/test_drift_workflow.py`, marker `REQ-011 AC3`.
+- Rules 11-12, 23 (report line): `tests/kit/test_drift_audit.py`, marker `REQ-011 AC1`.
 - Rule 22: the one live run, recorded in `docs/runs/`.
 
 ## Residual

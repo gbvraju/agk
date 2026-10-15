@@ -1,0 +1,46 @@
+# Weekly drift audit of the default branch (SPEC-0004). It runs on a schedule and by hand (workflow_dispatch).
+# GitHub may disable scheduled workflows after a period of repository inactivity (the period is (verify) against
+# current GitHub documentation). If scheduled runs stop, start this workflow by hand with workflow_dispatch.
+# Its only writes: creating or updating the one open issue labelled agk-drift-audit, and creating that label.
+name: drift-audit
+
+on:
+  schedule:
+    - cron: "17 6 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift-audit:
+    if: ${{ github.ref_name == github.event.repository.default_branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Audit and file at most one issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          today=$(date -u +%F)
+          open=$(gh issue list --label agk-drift-audit --state open --json number --jq '.[].number' | tr '\n' ' ')
+          title=$(python3 scripts/agk/drift_audit.py --today "$today" --print-title)
+          action=$(python3 scripts/agk/drift_audit.py --today "$today" --open-issues "$open" --print-action)
+          python3 scripts/agk/drift_audit.py --today "$today" --open-issues "$open" > "$RUNNER_TEMP/report.md"
+          head -n 1 "$RUNNER_TEMP/report.md"
+          case "$action" in
+            create)
+              gh label create agk-drift-audit --description "Weekly drift audit" --color d93f0b || true
+              gh issue create --title "$title" --label agk-drift-audit --body-file "$RUNNER_TEMP/report.md"
+              ;;
+            update\ *)
+              gh issue edit "${action#update }" --title "$title" --body-file "$RUNNER_TEMP/report.md"
+              ;;
+            *)
+              echo "no findings; nothing written"
+              ;;
+          esac
