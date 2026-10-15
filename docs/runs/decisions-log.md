@@ -61,3 +61,20 @@ One row per decision made outside an ADR, so a compacted session can be reconstr
 | 2026-10-14 | Finding (a): adopt's refusal when `origin/HEAD` is missing names the fix `git remote set-head origin --auto` | session clones may lack `refs/remotes/origin/HEAD` | docs/runs/k2-live-proof.md (item E, ADR-0009) | reviewer |
 | 2026-10-14 | Finding (b): `reviewers.py --codeowners --write` writes CODEOWNERS or the marked block; plain `--codeowners` still prints | agents cannot always redirect stdout | docs/runs/k2-live-proof.md (item E, ADR-0009) | reviewer |
 | 2026-10-14 | Finding (c): project-wide linters scanning `.` flag kit files (bandit 255 findings in the fork); a design note comes before any code change | kit files are scanned like product files | docs/runs/k2-live-proof.md, docs/runs/design-kit-lint-clean.md | reviewer |
+| 2026-10-15 | Suffixed branch names (`-b` ... `-e`) accepted for parallel overnight PRs | one session-mandated name, several PRs (Q-ON-1) | PR #14 | reviewer |
+| 2026-10-15 | Kit-code scanner policy: documented exclude snippets plus justified `# nosec` for the 31 subprocess findings and 4 mypy fixes now; plugin form at K3 (Q-ON-2) | no directory is skipped by all five tools | PR #15, docs/runs/design-kit-lint-clean.md | reviewer |
+| 2026-10-15 | init and adopt print the scanner exclude snippets after a run, print only (Q-ON-3) | consistent with the printed ruleset | PR #15 | reviewer |
+| 2026-10-15 | flake8, pylint and mypy findings on kit code are advisory (Q-ON-4) | the kit keeps `ruff` at 100 columns | PR #15 | reviewer |
+| 2026-10-15 | The `# nosec` code PR is separate and later (Q-ON-5) | it changes installed files: ADR and kit version | PR #15 | reviewer |
+| 2026-10-15 | Reviewer definition and scripts are installed by init and adopt (Q-ON-6) | SPEC-0003 rule 13 | PR #16, docs/specs/0003-reviewer-agent.md | reviewer |
+| 2026-10-15 | The reviewer's GitHub Action form and its cost budget are deferred to K3 (Q-ON-7, Q-ON-8) | needs a maintainer-held secret and K3 metrics | PR #16, SPEC-0003 rule 14 | reviewer |
+| 2026-10-15 | Reviewer metrics are aggregated at K3; K2 uses hand-recorded transcripts and no replay harness (Q-ON-9, Q-ON-10) | SPEC-0003 rules 17, 22 | PR #16 | reviewer |
+| 2026-10-15 | The reviewer reviews every PR (Q-ON-11) | SPEC-0003 rule 12 | PR #16 | reviewer |
+| 2026-10-15 | Reviewer truncation caps are configurable in `agk.toml` as `review_diff_cap` and `review_other_cap` (Q-ON-12) | caps were placeholders | PR #16, SPEC-0003 rule 6 | reviewer |
+| 2026-10-15 | The reviewer shadow-reviews real PRs alongside the human reviewer; agreements and misses are recorded in `docs/runs/` | live proof before reliance | PR #16, SPEC-0003 rule 23 | reviewer |
+| 2026-10-15 | Drift audit: staleness limit N = 14 days for Draft specs and Proposed ADRs (Q-ON-13) | SPEC-0004 rule 8 | PR #17, docs/specs/0004-drift-audit.md | reviewer |
+| 2026-10-15 | Drift audit: residual due dates use `(due YYYY-MM-DD)`, with a later backfill (Q-ON-14) | without it D4 finds nothing | PR #17, SPEC-0004 rule 9 | reviewer |
+| 2026-10-15 | Drift audit: a clean run writes nothing; an open audit issue stays until a maintainer closes it (Q-ON-15) | SPEC-0004 rules 14, 15 | PR #17 | reviewer |
+| 2026-10-15 | Drift audit workflow is installed by default by init and adopt (Q-ON-16); the model summary is deferred to K3 (Q-ON-17) | needs only the `GITHUB_TOKEN` | PR #17, SPEC-0004 rules 3, 16 | reviewer |
+| 2026-10-15 | Drift audit schedule is Saturday 06:17 UTC (Q-ON-18), final | placeholder confirmed | PR #17, SPEC-0004 rule 4 | reviewer |
+| 2026-10-15 | Drift audit issue title, label and label creation accepted (Q-ON-19); the audit documents and reports that GitHub may disable schedules after inactivity and keeps `workflow_dispatch` | SPEC-0004 rules 13, 23 | PR #17 | reviewer |
