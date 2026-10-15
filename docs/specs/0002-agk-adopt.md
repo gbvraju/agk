@@ -62,7 +62,8 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
 
 7. **From the target, not assumed.** Adopt reads the default branch from `TARGET/.git` files without calling git:
    `refs/remotes/origin/HEAD` (a `ref: refs/remotes/origin/<name>` line), else `HEAD` of a repository with no
-   `origin` remote, else it refuses and asks the user to set it (exit 1). The name is written to
+   `origin` remote, else it refuses (exit 1), names the path class `.git/refs/remotes/origin/HEAD` and the command
+   `git remote set-head origin --auto`; adopt has no option to set the branch. The name is written to
    `agk.toml` (`default_branch`) (Q-K2-6). Init uses the same detection and falls back to `main` instead of refusing; it
    reuses the stamped `default_branch` of an existing `agk.toml`.
 8. **Shared fix, init too (Q-K2-1).** `scripts/agk/common.py` resolves the base as `--base`, `AGK_BASE`,
@@ -70,7 +71,7 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    `main`). The workflow runs on `pull_request` and on every `push`, with a job condition
    `github.event_name == 'pull_request' || github.ref_name == github.event.repository.default_branch`, so no branch
    name is written into it. Printed ruleset instructions name the detected branch; the installed ADR template uses the
-   variable `{{default_branch}}` and `kit/templates/branch-rules.txt` keeps its text. The words "main" in installed
+   variable `{{default_branch}}` and `kit/templates/branch-rules.txt` says `ruleset for the default branch` (ADR-0009). The words "main" in installed
    text (`CLAUDE.md`, `constitution/principles.md`, the ADR template) become "the default branch" (ADR-0007).
 
 ### Tests, markers, lint

@@ -148,8 +148,9 @@ def build_plan(target: Path, today: str):
     branch = stamp.get("default_branch") or detect_default_branch(target)
     if not branch:
         raise Refusal(
-            "cannot tell the default branch from TARGET/.git (path class .git/); "
-            "create refs/remotes/origin/HEAD or check out the default branch first"
+            "cannot tell the default branch (path class .git/refs/remotes/origin/HEAD); "
+            "run `git remote set-head origin --auto` in TARGET, or check out the default branch "
+            "of a repository without an origin remote, then run adopt again"
         )
     if "test_dirs" in stamp and "test_patterns" in stamp:
         dirs, patterns = list(stamp["test_dirs"]), list(stamp["test_patterns"])

@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import sys
 
-from common import CheckError, read_list, repo_root, run
+from common import CheckError, load_config, read_list, repo_root, run
 
 NAME = "reviewers"
 CONFIG = "config/reviewers.yaml"
@@ -204,6 +204,28 @@ def extract_block(text: str) -> str:
     return text[start:end]
 
 
+def write_codeowners(root, rendered: str, adopt_mode: bool) -> str:
+    """Write CODEOWNERS (in adopt mode only the marked block) and say what changed."""
+    path = root / CODEOWNERS
+    existing = path.read_text(encoding="utf-8") if path.is_file() else None
+    if not adopt_mode or existing is None:
+        new, what = rendered, CODEOWNERS
+    elif BLOCK_BEGIN in existing or BLOCK_END in existing:
+        extract_block(existing)  # refuses a broken or duplicated block
+        start = existing.index(BLOCK_BEGIN) + len(BLOCK_BEGIN)
+        end = existing.index(BLOCK_END)
+        new, what = existing[:start] + rendered + existing[end:], f"agk block of {CODEOWNERS}"
+    else:
+        sep = "" if existing == "" or existing.endswith("\n") else "\n"
+        new = existing + sep + BLOCK_BEGIN + rendered + BLOCK_END
+        what = f"agk block of {CODEOWNERS}"
+    if existing == new:
+        return f"unchanged {what}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(new, encoding="utf-8")
+    return f"wrote {what}"
+
+
 def render_codeowners(data: dict) -> str:
     owned: dict[str, str] = {}
     for cls in data["classes"].values():
@@ -221,8 +243,13 @@ def render_codeowners(data: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    if len(argv) != 1 or argv[0] not in ("--check", "--codeowners", "--check-codeowners"):
-        raise CheckError("usage: reviewers.py --check | --codeowners | --check-codeowners")
+    modes = (["--check"], ["--codeowners"], ["--codeowners", "--write"], ["--check-codeowners"])
+    if argv not in modes:
+        raise CheckError(
+            "usage: reviewers.py --check | --codeowners [--write] | --check-codeowners"
+        )
+    write = "--write" in argv
+    argv = [a for a in argv if a != "--write"]
     root = repo_root()
     try:
         data = parse((root / CONFIG).read_text(encoding="utf-8"))
@@ -240,7 +267,10 @@ def main(argv: list[str] | None = None) -> int:
         raise CheckError(f"{CONFIG} is invalid; run --check")
     rendered = render_codeowners(data)
     if argv[0] == "--codeowners":
-        sys.stdout.write(rendered)
+        if write:
+            print(write_codeowners(root, rendered, load_config(root)["mode"] == "adopt"))
+        else:
+            sys.stdout.write(rendered)
         return 0
     try:
         committed = (root / CODEOWNERS).read_text(encoding="utf-8")

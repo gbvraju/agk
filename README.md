@@ -17,7 +17,8 @@ The kit's own commands are in `agk.mk` (`make -f agk.mk agk-governance | agk-lin
 aliases of them. Kit tests are collected only through `agk.mk` (they need `AGK_KIT_TESTS=1`).
 
 Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI the pull-request base SHA is used.
-`python3 scripts/agk/traceability.py` prints the requirement-to-test matrix to stdout; it is never committed.
+`python3 scripts/agk/reviewers.py --codeowners` prints the rendered CODEOWNERS; with `--write` it writes the file (in an
+adopted repository only the marked block). `python3 scripts/agk/traceability.py` prints the requirement-to-test matrix to stdout; it is never committed.
 
 ## Installing
 
