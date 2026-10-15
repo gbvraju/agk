@@ -50,8 +50,11 @@ REQ-011 (drift audit): AC1 weekly; AC2 one issue per run; AC3 read-only. Rules m
    that added the file (`git log --diff-filter=A`), because specs carry no date.
 9. **D4 overdue residuals.** A `## Residual` bullet of an ADR or spec that carries `(due YYYY-MM-DD)` with a date before
    the run date. Residual bullets without a due date are counted in the report but are not findings. The convention
-   is `(due YYYY-MM-DD)` at the end of the bullet; a later PR backfills the existing residuals, and until then D4
-   finds nothing.
+   is `(due YYYY-MM-DD)` at the end of the bullet. D4 also reads `docs/runs/residuals.md`: each line of its `## Open`
+   section has the form `- <source> | <text> | (due YYYY-MM-DD) | <status>`; a line whose date is before the run date
+   is a finding naming its source. A bullet in a new ADR or spec carries its own `(due YYYY-MM-DD)`; the register
+   exists for bullets of Accepted ADRs and Approved specs, which cannot change. A malformed line in the `## Open`
+   section is reported as a finding, not skipped.
 10. **D5 reviewers and CODEOWNERS drift.** The committed `.github/CODEOWNERS` equals the rendering of
     `config/reviewers.yaml` (or its marked block in an adopted repository); the `protected` class equals
     `config/protected-paths.txt`; a team handle is still the placeholder `@REPLACE-ME` (an `agk doctor` residual of
@@ -90,7 +93,8 @@ REQ-011 (drift audit): AC1 weekly; AC2 one issue per run; AC3 read-only. Rules m
     a direct commit touching `.claude/settings.json` without an ADR 3 days ago (D1: found), the same 20 days ago
     (outside the window: not found), the same with an ADR naming `.claude/` in the same commit (not found); a
     `done` requirement without a marker (D2); a Draft spec added 30 days ago and a Proposed ADR dated 20 days ago
-    (D3); an ADR residual `(due 2026-01-01)` (D4); a CODEOWNERS edited by hand, and a placeholder team (D5); a clean
+    (D3); an ADR residual `(due 2026-01-01)` (D4); a register line past its date (found), one in the future (not
+    found) and a malformed one (found) (D4); a CODEOWNERS edited by hand, and a placeholder team (D5); a clean
     repository (no findings).
 19. **Script tests.** The same repository and `--today` give byte-identical reports; the report order is stable; the
     script writes nothing (a before/after snapshot) and has no network or process imports beyond `git`; the window

@@ -91,7 +91,11 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     restrict deletions; require linear history; require a pull request (0 approvals, dismiss stale approvals, squash
     only); block force pushes; required status check `governance`; allow auto-merge; auto-delete head branches. The
     text comes from `kit/templates/branch-rules.txt`; a test keeps it equal to the kit's ADR-0001 decision 3 except
-    that the phrase `The ruleset main` reads `The ruleset for the default branch` (ADR-0009).
+    that the phrase `The ruleset main` reads `The ruleset for the default branch` (ADR-0009). After the ruleset text
+    init prints the scanner-exclusion block of `kit/templates/scanner-excludes.txt`: the bandit, flake8, pylint and
+    mypy settings that exclude `scripts/agk`, `tests/kit` and `.claude/hooks`. It is printed only, nothing is written,
+    and a test keeps the printed block equal to the template and to the README's "Existing scanners" section
+    (ADR-0010).
     Init does not configure GitHub.
 
 ### Neutrality
