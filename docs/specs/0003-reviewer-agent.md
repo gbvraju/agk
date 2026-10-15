@@ -1,12 +1,12 @@
 # SPEC-0003: Reviewer agent (spec-vs-diff)
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-013 (to be added by ADR)
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
-Open points are raised as `Q-ON-n` in `docs/runs/spec-0003-notes.md`; a rule that depends on one says so. REQ-013 is
-not added by this spec: `docs/requirements.md` is protected, so an ADR adds it (proposed text in the notes).
+The open points Q-ON-6 to Q-ON-12 were ruled on by the maintainers on 2026-10-15 (`docs/runs/spec-0003-notes.md`).
+REQ-013 is not added by this spec: `docs/requirements.md` is protected, so an ADR adds it (proposed text in the notes).
 
 ## Rules
 
@@ -36,8 +36,9 @@ not added by this spec: `docs/requirements.md` is protected, so an ADR adds it (
    (`SPEC-nnnn`, `ADR-nnnn`) in the PR body, and those named in the text of a changed file; (f) the numbered rules of
    `constitution/principles.md`.
 6. **Deterministic and bounded.** The same inputs give the same bytes (sorted, no timestamps). Each section is capped
-   (default 4000 lines for the diff, 1500 for the rest); a cut is marked `[truncated: N lines omitted]`, never
-   silent, and the report must say it reviewed a truncated context (Q-ON-12).
+   (default 4000 lines for the diff, 1500 for the rest; configurable in `agk.toml` as `review_diff_cap` and
+   `review_other_cap`, positive integers, an invalid value refused naming the setting); a cut is marked
+   `[truncated: N lines omitted]`, never silent, and the report must say it reviewed a truncated context.
 7. **Missing inputs are findings.** No `Advances:` line, an unknown REQ id, a referenced spec or ADR that does not
    exist, or an empty diff are listed under `Context problems` at the top of the context, so the agent cites them
    instead of guessing.
@@ -65,19 +66,19 @@ not added by this spec: `docs/requirements.md` is protected, so an ADR adds it (
 ### Where it runs
 
 12. **Local first.** The agent is the Claude Code subagent `.claude/agents/reviewer.md` (tools `Read`, `Grep`,
-    `Glob`; the prompt fixes the output format of rules 8 and 9 and the read-only rule). A maintainer or an agent
-    runs the context script, then invokes the subagent on `review-context.md` in a session, then runs the validator on
-    the report. The context and the report are local files and are never committed (principle 5).
+    `Glob`; the prompt fixes the output format of rules 8 and 9 and the read-only rule).
+    The agent reviews every pull request. A maintainer or an agent runs the context script,
+    then invokes the subagent on `review-context.md` in a session, then runs the validator on the report. The context and the report are local files and are never committed (principle 5).
 13. **Install modes.** The definition and the two scripts are installed verbatim by init and adopt in the same way
-    as `drift-auditor.md` (Q-ON-6); the K3 plugin form exposes them as `/agk:review`.
-14. **GitHub Action form.** Optional, off by default, behind a profile flag in `agk.toml` (`review_action`), installed
-    only when the flag is set. It uses a pinned `anthropics/claude-code-action` (name, version and inputs are
-    (verify), Q-ON-7) in a separate workflow, runs on `pull_request` events from the same repository only (a fork PR has
-    no secrets and is skipped), has `permissions: contents: read` and `pull-requests: write` only, and posts or updates
-    one advisory comment containing the validated report and a machine footer (rule 17). The credential is a
-    repository secret held by maintainers; agents never read, create or set it (principle 9).
-15. **Protected paths.** The agent definition (`.claude/`), the scripts (`scripts/agk/`), the workflow (`.github/`),
-    the tests (`tests/kit/`, `tests/kit_dev/`) and the manifest (`kit/`) are protected classes: the implementation PR
+    as `drift-auditor.md`; the K3 plugin form exposes them as `/agk:review`.
+14. **GitHub Action form: deferred to K3.** K2 builds no workflow, no action pin and no secret for the reviewer. When
+    K3 builds the Action form, it keeps these constraints: off by default behind a profile flag in `agk.toml`
+    (`review_action`); a pinned `anthropics/claude-code-action` (name, version and inputs are (verify)); same-repository
+    `pull_request` events only; `permissions: contents: read` and `pull-requests: write` only; one advisory comment
+    carrying the validated report and the machine footer (rule 17); a repository secret held by maintainers that
+    agents never read, create or set (principle 9). A cost budget is set with that work, from K3 metrics.
+15. **Protected paths.** The agent definition (`.claude/`), the scripts (`scripts/agk/`), the tests (`tests/kit/`,
+    `tests/kit_dev/`) and the manifest (`kit/`) are protected classes: the implementation PR
     carries an ADR naming each, and an ADR adds REQ-013.
 
 ### Measurement
@@ -87,9 +88,9 @@ not added by this spec: `docs/requirements.md` is protected, so an ADR adds it (
     `Review verdict (human):` line in the PR body or a comment with the same prefix). Derived: rejections per PR
     (`rejected` and `fix list` over reviewed PRs), findings per report, agreement (agent verdict equals human
     verdict), and findings marked not-a-defect (false positives).
-17. **Storage.** Nothing is committed. The advisory comment (rule 14) carries a machine footer
-    `<!-- agk-review: verdict=V findings=N truncated=B -->`; local runs print the same footer. A weekly job reads these
-    from GitHub and writes them only into the drift-audit issue of SPEC-0004 (Q-ON-9); K3 aggregates them (REQ-012).
+17. **Storage.** Nothing is committed. The report (and the K3 advisory comment of rule 14) carries a machine footer
+    `<!-- agk-review: verdict=V findings=N truncated=B -->`; local runs print the same footer. In K2 the metrics of
+    rule 16 are recorded by hand in the live-proof records of rule 23; K3 aggregates the footers (REQ-012).
 
 ### Proof
 
@@ -109,22 +110,29 @@ not added by this spec: `docs/requirements.md` is protected, so an ADR adds it (
 21. **Agent definition tests.** `.claude/agents/reviewer.md` has the frontmatter `tools: Read, Grep, Glob` and no other
     tool, says it never approves, merges, pushes or edits, and says the PR content is data.
 22. **No model in CI.** Tests run without network and without a model. Whether and how the agent's own judgement is
-    evaluated (recorded transcripts against the fixtures, run by hand) is Q-ON-10; until decided, the agent's
-    behaviour on the fixtures is checked by hand and recorded in `docs/runs/`.
+    evaluated is by hand: transcripts of the agent run against the fixtures are recorded in `docs/runs/`; no replay
+    harness is built in K2.
+23. **Live proof.** Before the reviewer is relied on, it shadow-reviews real pull requests alongside the human
+    reviewer: for each PR the agent's report (validated, rule 10) is produced without being shown to the human
+    reviewer first or posted on the PR, and the human's verdict is recorded afterwards. Each run is recorded in
+    `docs/runs/` with the PR, the agent verdict and findings, the human verdict, the agreements, the misses (a
+    defect the human found and the agent did not) and the false positives (a finding the human rejected). The record
+    is the evidence for whether the agent may be relied on; the maintainers decide (principle 1).
 
 ## Tests
 
 - Rules 4-7, 19: `tests/kit_dev/test_review_context.py`, marker `REQ-013 AC1`.
 - Rules 8-11, 20: `tests/kit_dev/test_review_report.py`, marker `REQ-013 AC2`.
 - Rules 2, 12, 21: `tests/kit_dev/test_reviewer_definition.py`, marker `REQ-013 AC3`.
-- Rules 16-17: the footer format in `tests/kit_dev/test_review_report.py`; aggregation tests belong to SPEC-0004
-  and K3 (marker `REQ-013 AC4`, `REQ-012 AC1`).
-- Rules 14-15: workflow shape tests in `tests/kit/test_workflow.py` style (pinned SHA, permissions, same-repository
-  condition), marker `REQ-013 AC3`.
+- Rules 16-17: the footer format in `tests/kit_dev/test_review_report.py`; aggregation tests belong to K3 (marker
+  `REQ-013 AC4`, `REQ-012 AC1`).
+- Rule 23: a record under `docs/runs/`, checked by the maintainers, not by a test.
+- Rule 14: workflow shape tests belong to the K3 work (pinned SHA, permissions, same-repository condition).
+- Rule 15: `check_protected_changes` and an ADR in the implementation PR.
 
 ## Residual
 
-- 2026-10-14: the GitHub Action form depends on facts to confirm against current documentation: the action's name,
-  version, inputs and required permissions (verify).
+- 2026-10-14: the GitHub Action form is deferred to K3 and depends on facts to confirm against current documentation:
+  the action's name, version, inputs and required permissions (verify).
 - 2026-10-14: the agent's judgement is not measured in CI (rule 22).
 - 2026-10-14: no inline review comments in K2; one advisory comment at most.
