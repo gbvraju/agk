@@ -108,7 +108,7 @@ def test_ac1_untracked_files_are_part_of_the_diff(tmp_path):
 
 
 def test_ac1_requirement_section_and_markers_are_included(tmp_path):
-    """REQ-013 AC1: rule 5(c)."""
+    """REQ-013 AC1: rule 5(d)."""
     out = context(build("F8", tmp_path)).stdout
     reqs = section(out, "Requirements")
     assert "### REQ-001" in reqs and "AC2 does another" in reqs and "Status: done" in reqs
@@ -116,7 +116,7 @@ def test_ac1_requirement_section_and_markers_are_included(tmp_path):
 
 
 def test_ac1_protected_classes_touched_and_adr_coverage_are_listed(tmp_path):
-    """REQ-013 AC1: rule 5(d); F1 is detectable from the context."""
+    """REQ-013 AC1: rule 5(e); F1 is detectable from the context."""
     out = context(build("F1", tmp_path)).stdout
     classes = section(out, "Protected classes touched")
     assert "scripts/agk/" in classes
@@ -126,7 +126,7 @@ def test_ac1_protected_classes_touched_and_adr_coverage_are_listed(tmp_path):
 
 
 def test_ac1_specs_and_adrs_of_the_advanced_requirement_are_included(tmp_path):
-    """REQ-013 AC1: rule 5(e)."""
+    """REQ-013 AC1: rule 5(f)."""
     out = context(build("F8", tmp_path)).stdout
     refs = section(out, "Referenced specs and ADRs")
     assert "### docs/specs/0001-demo.md" in refs and "### docs/adr/0001-demo.md" in refs
@@ -134,7 +134,7 @@ def test_ac1_specs_and_adrs_of_the_advanced_requirement_are_included(tmp_path):
 
 
 def test_ac1_ids_named_in_the_body_pull_in_their_files(tmp_path):
-    """REQ-013 AC1: rule 5(e), named by id in the PR body."""
+    """REQ-013 AC1: rule 5(f), named by id in the PR body."""
     fx = build("F8", tmp_path)
     fx.body.write_text(GOOD_BODY.replace("Advances: REQ-001", "Advances: REQ-002 SPEC-0001"))
     out = context(fx).stdout
@@ -143,7 +143,7 @@ def test_ac1_ids_named_in_the_body_pull_in_their_files(tmp_path):
 
 
 def test_ac1_principles_are_included(tmp_path):
-    """REQ-013 AC1: rule 5(f)."""
+    """REQ-013 AC1: rule 5(g)."""
     out = context(build("F8", tmp_path)).stdout
     principles = section(out, "Principles")
     assert "2. Agents never merge." in principles
@@ -310,7 +310,7 @@ def test_ac1_base_may_come_from_the_environment(tmp_path):
 
 
 def test_ac1_a_path_named_in_a_changed_file_pulls_in_that_document(tmp_path):
-    """REQ-013 AC1: rule 5(e), named in the text of a changed file."""
+    """REQ-013 AC1: rule 5(f), named in the text of a changed file."""
     fx = build("F8", tmp_path)
     (fx.repo / "docs" / "notes.md").write_text("see docs/specs/0001-demo.md\n", encoding="utf-8")
     fx.body.write_text(

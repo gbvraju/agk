@@ -1,6 +1,6 @@
 # ADR-0013: The reviewer sees CLAUDE.md and changed files in full
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-15
 - Deciders: maintainers
 - Related: ADR-0011
@@ -33,7 +33,7 @@ Protected classes: `scripts/agk/`, `.claude/`, `tests/kit/`, `tests/kit_dev/`, `
    whose tests are not installed, with CLAUDE.md present). The tests show that the context contains what a reviewer
    needs to see; whether the agent notices is judged by the shadow reviews (rule 22), not by CI.
 5. **Kit version** `0.6.1`: installed content changed (`scripts/agk/review_context.py`, `.claude/agents/reviewer.md`,
-   the installed tests). Proposed spec changes are in `docs/runs/proposed-spec-amendments-9.md`, not applied here.
+   the installed tests). The spec changes are in `docs/runs/proposed-spec-amendments-9.md`, applied on the maintainers' instruction in this PR.
 
 ## Consequences
 
@@ -41,8 +41,8 @@ Protected classes: `scripts/agk/`, `.claude/`, `tests/kit/`, `tests/kit_dev/`, `
   and the report must then say the context was truncated.
 - The reviewer can see a change next to the rule it breaks, and the operating rules of the project, without being
   allowed to cite anything but Approved text.
-- Until the maintainers apply amendments 9, the code is ahead of the Approved text of SPEC-0003 rules 5, 6, 7, 11, 12,
-  18 and 19.
+- SPEC-0003 rules 5, 6, 7, 11, 12, 18, 19 and 21 carry the change (amendments 9). The report carries no record of the
+  cross-file check (no `Checked:` line); shadow reviews measure it.
 
 ## Residual
 

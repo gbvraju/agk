@@ -27,13 +27,12 @@ until the maintainers apply it, the code is ahead of the Approved text of the ru
 7. **Rule 19, context tests.** The sections appear in the order of rule 5 as amended; `CLAUDE.md` is always present
    in the context; a changed file appears in full, with a deleted, a binary and an oversized file handled as stated.
 
-## Question
+## Question (answered)
 
-- Q-K2-25: the cross-file statement of rule 11 (item 4) is part of the agent's reasoning; the report format and the
-  validator are unchanged, so nothing in the report records that every decision and rule was checked. Should the
-  report carry a line for it (for example `Checked: ADR-0003 decisions 1-5; SPEC-0001 rules 1-24`) and the validator
-  check that the cited documents exist in the context?
+- Q-K2-25: no `Checked:` line. The cross-file statement of rule 11 stays part of the agent's reasoning, the report
+  format and the validator are unchanged, and the effectiveness of the check is measured by the shadow reviews.
 
 ## Status
 
-Proposed. Not applied.
+Applied 2026-10-15 on maintainers' instruction (final commit of PR #26). SPEC-0003 rules 5, 6, 7, 11, 12, 18, 19 and
+21 carry the proposed text; the test docstrings that cite rule 5 use the new letters; nothing else in the spec changed.
