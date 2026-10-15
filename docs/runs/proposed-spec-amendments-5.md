@@ -24,8 +24,8 @@ existing residuals can never receive a due date, and D4 would find nothing for t
 
 ## The draft register
 
-`docs/runs/residuals.md` is in this PR, marked "proposed": 19 open lines (one per residual, the substring-matching
-residual of ADR-0003 counted once for the five ADRs that repeat it) and 7 apparently closed ones. The due dates are my
+`docs/runs/residuals.md` is in this PR: 19 open lines (one per residual, the substring-matching
+residual of ADR-0003 counted once for the five ADRs that repeat it) and 8 closed ones. The due dates are my
 proposals.
 
 ## Questions
@@ -37,4 +37,7 @@ proposals.
 
 ## Status
 
-Proposed. Not applied.
+Applied 2026-10-15 on maintainers' instruction (final commit of the item 1 PR). SPEC-0004 rules 9 and 18 carry
+the proposed text; amendment 3 (upkeep) is a practice, not spec text. Q-K2-15 and Q-K2-17 were answered by the
+maintainers: the closed list is confirmed and the register stays at `docs/runs/residuals.md`; Q-K2-16 was answered
+by adding ADR-0001's residual to the closed table.

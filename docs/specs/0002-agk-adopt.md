@@ -71,7 +71,8 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    `main`). The workflow runs on `pull_request` and on every `push`, with a job condition
    `github.event_name == 'pull_request' || github.ref_name == github.event.repository.default_branch`, so no branch
    name is written into it. Printed ruleset instructions name the detected branch; the installed ADR template uses the
-   variable `{{default_branch}}` and `kit/templates/branch-rules.txt` says `ruleset for the default branch` (ADR-0009). The words "main" in installed
+   variable `{{default_branch}}` and `kit/templates/branch-rules.txt` says `ruleset for the default branch` (ADR-0009). After the ruleset text adopt prints the same scanner-exclusion
+   block from `kit/templates/scanner-excludes.txt` (print only; adopt writes no scanner configuration) (ADR-0010). The words "main" in installed
    text (`CLAUDE.md`, `constitution/principles.md`, the ADR template) become "the default branch" (ADR-0007).
 
 ### Tests, markers, lint

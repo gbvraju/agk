@@ -1,41 +1,39 @@
-# Residuals register (proposed)
+# Residuals register
 
-Date: 2026-10-15 (from `date -u`). **Proposed**: nothing here is in force until the maintainers apply
-`docs/runs/proposed-spec-amendments-5.md`. Accepted ADRs and Approved specs cannot change except their Status line
+Date: 2026-10-15 (from `date -u`). SPEC-0004 rule 9 reads this register (amendments 5, applied). Accepted ADRs and Approved specs cannot change except their Status line
 (and, for specs, through an amendment), so the due dates of their `## Residual` bullets live here instead.
 
-Each open line is `- <source> | <text> | (due YYYY-MM-DD) | proposed`. The source is the file and the date of the
-bullet. The due dates are my proposals; K3 and K4 have no dates yet (ADR-0002 residual), so the dates are placeholders.
+Each open line is `- <source> | <text> | (due YYYY-MM-DD) | open`. The source is the file and the date of the
+bullet. K3 and K4 have no dates yet (ADR-0002 residual), so the dates for their items are placeholders.
 
 ## Open
 
-(ADR-0001's `github_team` residual is in neither list: see Q-K2-16.)
+- docs/adr/0001-the-kit-governs-itself.md 2026-10-14 | branch protection and required-review settings are GitHub settings, not files; `agk doctor` documents and verifies them (REQ-002 AC1) | (due 2026-12-31) | open
+- docs/adr/0002-milestones.md 2026-10-14 | exit criteria for K3 and K4 need measurable thresholds before those milestones start | (due 2026-11-30) | open
+- docs/adr/0003-agent-context-push-rule-codeowners-check-hardening.md 2026-10-14 | colon-refspec branch deletion (`git push origin :branch`) has no deny rule; revisit when `agk doctor` exists | (due 2026-12-31) | open
+- docs/adr/0003-agent-context-push-rule-codeowners-check-hardening.md 2026-10-14 | class naming in an ADR is a substring match on the ADR text (repeated in ADR-0004, ADR-0006, ADR-0007, ADR-0008 and ADR-0009); replace it with a required `Protected classes:` line check | (due 2026-12-15) | open
+- docs/adr/0004-init-protected-list-and-neutral-context.md 2026-10-14 | in a target with no `main` or `origin/main`, the diff checks of `make governance` skip with a notice outside CI | (due 2026-12-31) | open
+- docs/adr/0006-k1-exit.md 2026-10-14 | the action SHAs were confirmed only by `git ls-remote`; signatures not checked, no attestation verified | (due 2026-12-15) | open
+- docs/adr/0006-k1-exit.md 2026-10-14 | evaluate newer majors of the actions (checkout v7, setup-python v7, gitleaks-action v3) in a dedicated PR (Q-K1-16) | (due 2026-11-30) | open
+- docs/adr/0006-k1-exit.md 2026-10-14 | gitleaks-action licence terms for organisations unconfirmed; proposed replacement by the MIT gitleaks binary (verify licence) (Q-K1-17) | (due 2026-12-15) | open
+- docs/adr/0006-k1-exit.md 2026-10-14 | `check_specs.py` treats a Status-only change of an Approved spec as needing an amendment (conservative) | (due 2026-12-15) | open
+- docs/adr/0007-shared-kit-layout.md 2026-10-14 | no upgrade path between kit versions (K3); also SPEC-0002 and ADR-0008 | (due 2027-01-31) | open
+- docs/adr/0009-adopt-refusal-fix-codeowners-write-branch-wording.md 2026-10-14 | `--write` is not atomic (temporary file plus rename would be) | (due 2026-12-15) | open
+- docs/specs/0001-agk-init.md 2026-10-14 | nothing flags the placeholder team `@REPLACE-ME` after init; `agk doctor` or the drift audit (D5) should report it | (due 2026-12-15) | open
+- docs/specs/0002-agk-adopt.md 2026-10-14 | Python 3.11 is required to run the checks even where the project supports 3.9 | (due 2027-01-31) | open
+- docs/specs/0002-agk-adopt.md 2026-10-14 | no JSON merge for an existing `.claude/settings.json` | (due 2027-01-31) | open
+- docs/specs/0003-reviewer-agent.md 2026-10-14 | the GitHub Action form is deferred to K3 and depends on facts to confirm: the action's name, version, inputs and permissions (verify) | (due 2027-01-31) | open
+- docs/specs/0003-reviewer-agent.md 2026-10-14 | the agent's judgement is not measured in CI (rule 22); shadow-review records stand in | (due 2027-01-31) | open
+- docs/specs/0003-reviewer-agent.md 2026-10-14 | no inline review comments in K2; one advisory comment at most | (due 2027-01-31) | open
+- docs/specs/0004-drift-audit.md 2026-10-14 | the model summary is not in the first implementation (K3) | (due 2027-01-31) | open
+- docs/specs/0004-drift-audit.md 2026-10-14 | scheduled-workflow behaviour (jitter, the period after which GitHub may disable schedules) is (verify) against current documentation | (due 2026-11-15) | open
 
-- docs/adr/0001-the-kit-governs-itself.md 2026-10-14 | branch protection and required-review settings are GitHub settings, not files; `agk doctor` documents and verifies them (REQ-002 AC1) | (due 2026-12-31) | proposed
-- docs/adr/0002-milestones.md 2026-10-14 | exit criteria for K3 and K4 need measurable thresholds before those milestones start | (due 2026-11-30) | proposed
-- docs/adr/0003-agent-context-push-rule-codeowners-check-hardening.md 2026-10-14 | colon-refspec branch deletion (`git push origin :branch`) has no deny rule; revisit when `agk doctor` exists | (due 2026-12-31) | proposed
-- docs/adr/0003-agent-context-push-rule-codeowners-check-hardening.md 2026-10-14 | class naming in an ADR is a substring match on the ADR text (repeated in ADR-0004, ADR-0006, ADR-0007, ADR-0008 and ADR-0009); replace it with a required `Protected classes:` line check | (due 2026-12-15) | proposed
-- docs/adr/0004-init-protected-list-and-neutral-context.md 2026-10-14 | in a target with no `main` or `origin/main`, the diff checks of `make governance` skip with a notice outside CI | (due 2026-12-31) | proposed
-- docs/adr/0006-k1-exit.md 2026-10-14 | the action SHAs were confirmed only by `git ls-remote`; signatures not checked, no attestation verified | (due 2026-12-15) | proposed
-- docs/adr/0006-k1-exit.md 2026-10-14 | evaluate newer majors of the actions (checkout v7, setup-python v7, gitleaks-action v3) in a dedicated PR (Q-K1-16) | (due 2026-11-30) | proposed
-- docs/adr/0006-k1-exit.md 2026-10-14 | gitleaks-action licence terms for organisations unconfirmed; proposed replacement by the MIT gitleaks binary (verify licence) (Q-K1-17) | (due 2026-12-15) | proposed
-- docs/adr/0006-k1-exit.md 2026-10-14 | `check_specs.py` treats a Status-only change of an Approved spec as needing an amendment (conservative) | (due 2026-12-15) | proposed
-- docs/adr/0007-shared-kit-layout.md 2026-10-14 | no upgrade path between kit versions (K3); also SPEC-0002 and ADR-0008 | (due 2027-01-31) | proposed
-- docs/adr/0009-adopt-refusal-fix-codeowners-write-branch-wording.md 2026-10-14 | `--write` is not atomic (temporary file plus rename would be) | (due 2026-12-15) | proposed
-- docs/specs/0001-agk-init.md 2026-10-14 | nothing flags the placeholder team `@REPLACE-ME` after init; `agk doctor` or the drift audit (D5) should report it | (due 2026-12-15) | proposed
-- docs/specs/0002-agk-adopt.md 2026-10-14 | Python 3.11 is required to run the checks even where the project supports 3.9 | (due 2027-01-31) | proposed
-- docs/specs/0002-agk-adopt.md 2026-10-14 | no JSON merge for an existing `.claude/settings.json` | (due 2027-01-31) | proposed
-- docs/specs/0003-reviewer-agent.md 2026-10-14 | the GitHub Action form is deferred to K3 and depends on facts to confirm: the action's name, version, inputs and permissions (verify) | (due 2027-01-31) | proposed
-- docs/specs/0003-reviewer-agent.md 2026-10-14 | the agent's judgement is not measured in CI (rule 22); shadow-review records stand in | (due 2027-01-31) | proposed
-- docs/specs/0003-reviewer-agent.md 2026-10-14 | no inline review comments in K2; one advisory comment at most | (due 2027-01-31) | proposed
-- docs/specs/0004-drift-audit.md 2026-10-14 | the model summary is not in the first implementation (K3) | (due 2027-01-31) | proposed
-- docs/specs/0004-drift-audit.md 2026-10-14 | scheduled-workflow behaviour (jitter, the period after which GitHub may disable schedules) is (verify) against current documentation | (due 2026-11-15) | proposed
+## Closed (not findings)
 
-## Apparently closed (not findings; proposed for the maintainers to confirm, Q-K2-15)
-
-| Source | Text | Why I think it is closed |
+| Source | Text | Why it is closed |
 | --- | --- | --- |
 | docs/adr/0003-agent-context-push-rule-codeowners-check-hardening.md | action versions stay on major tags until K1 exit, then SHA pins | ADR-0006 pinned them to SHAs |
+| docs/adr/0001-the-kit-governs-itself.md | `teams.maintainers.github_team` maps to a user handle until an organisation team exists; replace by K1 exit | ADR-0006 amended it: the handle stays until a second maintainer joins |
 | docs/adr/0004-init-protected-list-and-neutral-context.md | approved specs are not yet protected by a check | `check_specs.py` exists (ADR-0006) |
 | docs/adr/0005-project-tests-run-under-make-test.md | approved specs are not yet protected by a check | same |
 | docs/adr/0007-shared-kit-layout.md | `agk adopt` and the adopted-mode protected list are not part of this ADR | ADR-0008 and PR #13 |
