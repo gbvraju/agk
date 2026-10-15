@@ -76,6 +76,17 @@ def test_ac2_governance_is_one_step_per_check_named_by_its_check_id():
     assert "Governance checks" not in names
 
 
+def test_ac2_every_check_step_runs_unless_cancelled():
+    """REQ-012 AC1 (SPEC-0007 rule 13): each failure shows on its own step; the job still fails."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    checks = {n: b for n, b in step_blocks(text).items() if n.startswith(("check_", "reviewers"))}
+    assert len(checks) == 9
+    for name, block in checks.items():
+        assert "        if: ${{ !cancelled() }}\n" in block, name
+    # the job is not marked to continue on error, so one failing step fails the job
+    assert "continue-on-error" not in text
+
+
 def test_ac2_the_job_is_still_named_governance():
     """REQ-012 AC1 (SPEC-0007 rule 13): the required status check does not change."""
     text = WORKFLOW.read_text(encoding="utf-8")

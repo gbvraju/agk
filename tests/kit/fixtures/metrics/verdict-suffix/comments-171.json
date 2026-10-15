@@ -1,0 +1,42 @@
+[
+  {
+    "body": "Verdict: cleared 00ab000 (#171)",
+    "created_at": "2026-10-06T10:00:00Z",
+    "user": {
+      "login": "reviewer",
+      "type": "User"
+    }
+  },
+  {
+    "body": "Verdict: fix list (round 2)",
+    "created_at": "2026-10-06T10:01:00Z",
+    "user": {
+      "login": "reviewer",
+      "type": "User"
+    }
+  },
+  {
+    "body": "Verdict: fix list now",
+    "created_at": "2026-10-06T10:02:00Z",
+    "user": {
+      "login": "reviewer",
+      "type": "User"
+    }
+  },
+  {
+    "body": "verdict: fix list",
+    "created_at": "2026-10-06T10:03:00Z",
+    "user": {
+      "login": "reviewer",
+      "type": "User"
+    }
+  },
+  {
+    "body": " Verdict: rejected soon",
+    "created_at": "2026-10-06T10:04:00Z",
+    "user": {
+      "login": "reviewer",
+      "type": "User"
+    }
+  }
+]

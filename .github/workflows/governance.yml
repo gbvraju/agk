@@ -1,5 +1,6 @@
 # One step per governance check, each named by its check id (SPEC-0007 rule 13); the job name `governance` is the
-# required status check and does not change. The same checks run locally as `make -f agk.mk agk-governance`.
+# required status check and does not change. Each check step runs unless the run is cancelled, so every failure shows
+# on its own step; the job still fails if any step fails. The same checks run locally as `make -f agk.mk agk-governance`.
 name: governance
 
 on:
@@ -26,22 +27,31 @@ jobs:
       - name: Install tooling
         run: python -m pip install pytest ruff
       - name: check_protected_changes
+        if: ${{ !cancelled() }}
         run: python scripts/agk/check_protected_changes.py
       - name: check_requirements
+        if: ${{ !cancelled() }}
         run: python scripts/agk/check_requirements.py
       - name: check_adrs
+        if: ${{ !cancelled() }}
         run: python scripts/agk/check_adrs.py
       - name: check_specs
+        if: ${{ !cancelled() }}
         run: python scripts/agk/check_specs.py
       - name: check_neutrality
+        if: ${{ !cancelled() }}
         run: python scripts/agk/check_neutrality.py
       - name: check_build_state
+        if: ${{ !cancelled() }}
         run: python scripts/agk/check_build_state.py
       - name: check_kit_tests
+        if: ${{ !cancelled() }}
         run: python scripts/agk/check_kit_tests.py
       - name: reviewers --check
+        if: ${{ !cancelled() }}
         run: python scripts/agk/reviewers.py --check
       - name: reviewers --check-codeowners
+        if: ${{ !cancelled() }}
         run: python scripts/agk/reviewers.py --check-codeowners
       - name: PR body shape
         if: github.event_name == 'pull_request'

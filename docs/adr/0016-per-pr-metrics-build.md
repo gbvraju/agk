@@ -36,7 +36,7 @@ body"; SPEC-0007 rule 1 derives them instead, so ADR-0002 is amended on that poi
    week is still written. A week whose listed and recorded counts differ is flagged `INCOMPLETE` and fails the job.
 4. **`governance.yml` is split into one step per check**, each named by its check id (`check_protected_changes`,
    `check_requirements`, `check_adrs`, `check_specs`, `check_neutrality`, `check_build_state`, `check_kit_tests`,
-   `reviewers --check`, `reviewers --check-codeowners`), so a failing check is readable from the check run. The job
+   `reviewers --check`, `reviewers --check-codeowners`), so a failing check is readable from the check run. Every check step carries `if: ${{ !cancelled() }}`, so every check runs and each failure shows on its own step; the job still fails if any step fails. The job
    name `governance`, and so the required status check, is unchanged. `make governance` and
    `make -f agk.mk agk-governance` are unchanged; a test keeps the steps equal to that recipe.
 5. **The workflow is installed by default** by init and adopt, as the drift audit is, with its script, tests and the JSON
@@ -59,3 +59,5 @@ body"; SPEC-0007 rule 1 derives them instead, so ADR-0002 is amended on that poi
   run of this repository by a GET on 2026-10-15; the script treats a missing job as unknown (due 2026-11-15).
 - 2026-10-15: the check-runs list is read with `per_page=100`, enough for the `governance` run of one commit
   (due 2026-12-31).
+- 2026-10-15: the manifest lists fixture files one by one and targets receive about 140 JSON files; propose directory
+  entries in the manifest before the doctor adds more fixtures (due 2026-11-30).

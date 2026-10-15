@@ -120,6 +120,16 @@ def test_ac1_fix_lists_clear_and_hours(repo):
     assert row["cost_class"] == "M"
 
 
+def test_ac1_a_verdict_line_with_trailing_text_is_not_a_verdict(repo):
+    """REQ-012 AC1: rule 4 (the first line is exactly one of the three forms)."""
+    row = rows_of(repo, "verdict-suffix")[171]
+    assert row["review_rounds"] == "unknown"  # no verdict comment at all
+    assert row["merged_head_cleared"] == "unknown"
+    assert row["rejected"] == "no"
+    assert row["rejected_verdicts"] == "0"
+    assert row["cost_class"] == "unknown"
+
+
 def test_ac1_cleared_naming_another_commit_is_no(repo):
     """REQ-012 AC2: rule 8."""
     row = rows_of(repo, "cleared-other-commit")[103]
