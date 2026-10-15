@@ -1,12 +1,12 @@
 # SPEC-0006: agk doctor
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-002 (AC1), REQ-014 (to be added by ADR, see SPEC-0005)
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
-Open points are raised as `Q-K3-n` (this spec uses 12 to 29) in `docs/runs/spec-0006-notes.md`; a rule that depends on
-one says so. Claude Code and GitHub facts not reconfirmed are marked `(verify)`. This spec is K3 criterion b of
+The open points Q-K3-12 to Q-K3-17 were ruled on by the maintainers on 2026-10-15 (`docs/runs/spec-0006-notes.md`).
+Claude Code and GitHub facts not reconfirmed are marked `(verify)`. This spec is K3 criterion b of
 ADR-0015. The GitHub response shapes used here were read (GET only) from `gbvraju/agk` on 2026-10-15.
 
 ## Rules
@@ -19,7 +19,7 @@ ADR-0015. The GitHub response shapes used here were read (GET only) from `gbvraj
    runs this same script and passes `--kit-root` the plugin root (rule 20); it has no logic of its own.
 2. **Read-only.** The script writes no file, makes no commit, runs no `git` command that changes anything, and calls
    `gh` only as `gh api` with `GET` on the four paths of rule 6. It never reads, prints or stores a token: it holds no
-   credential, `gh` does (SPEC-0005 rule 11; Q-K3-14 asks whether this reading of that rule is right). It is not run by
+   credential, `gh` does (SPEC-0005 rule 11). It is not run by
    `make governance` or by any workflow: it needs the network and, for rulesets, rights a CI token lacks.
 3. **Honest result.** Each check ends in exactly one status: `ok`, `fail`, or `cannot-check`. A check that could not
    read what it needs is `cannot-check` with the reason class (`gh-missing`, `gh-unauthenticated`, `no-admin`,
@@ -38,17 +38,17 @@ and the JSON keep it.
 
    | Id | Severity | Fails when | Printed fix |
    | --- | --- | --- | --- |
-   | `ruleset-missing` | error | no ruleset whose conditions include `~DEFAULT_BRANCH` (or the default branch's ref) | create the ruleset of ADR-0001 decision 3 (the report prints its elements) |
+   | `ruleset-missing` | error | no ruleset whose conditions include `~DEFAULT_BRANCH` (or the default branch's ref) | create the ruleset of ADR-0001 decision 3 (the report prints its elements); classic branch protection is not read; use a ruleset (ADR-0001 decision 3) |
    | `ruleset-enforcement` | error | `enforcement` is not `active` | set the ruleset to Active |
    | `ruleset-bypass` | error | `bypass_actors` is not empty | remove every bypass actor |
    | `ruleset-target` | error | the ruleset does not target the default branch | target the default branch |
    | `ruleset-deletion` | error | no `deletion` rule | restrict deletions |
    | `ruleset-linear-history` | error | no `required_linear_history` rule | require linear history |
    | `ruleset-force-push` | error | no `non_fast_forward` rule | block force pushes |
-   | `ruleset-pull-request` | error | no `pull_request` rule, or approvals differ from 0, or stale approvals are not dismissed on push, or the allowed merge methods are not exactly squash | require a pull request: 0 approvals, dismiss stale approvals, squash merge only |
+   | `ruleset-pull-request` | error | no `pull_request` rule, or stale approvals are not dismissed on push, or merge commits (`merge`) are an allowed merge method | require a pull request, dismiss stale approvals on push, and do not allow merge commits (ADR-0001 decision 3 uses squash only) |
    | `required-check-governance` | error | no `required_status_checks` rule with the context `governance` | require the status check `governance` |
-   | `repo-auto-merge` | warn | repository setting `allow_auto_merge` is false (Q-K3-13) | allow auto-merge |
-   | `repo-delete-branch` | warn | repository setting `delete_branch_on_merge` is false (Q-K3-13) | auto-delete head branches |
+   | `repo-auto-merge` | warn | repository setting `allow_auto_merge` is false | allow auto-merge |
+   | `repo-delete-branch` | warn | repository setting `delete_branch_on_merge` is false | auto-delete head branches |
    | `placeholder-team-reviewers` | error | `config/reviewers.yaml` contains `@REPLACE-ME` | replace the placeholder with a real team or user, then `python3 scripts/agk/reviewers.py --codeowners --write` |
    | `placeholder-team-codeowners` | error | `.github/CODEOWNERS` contains `@REPLACE-ME` | same fix |
    | `origin-head` | warn | `refs/remotes/origin/HEAD` does not exist | `git remote set-head origin <default_branch>` (no network; `-a` asks the remote) |
@@ -56,8 +56,8 @@ and the JSON keep it.
    | `drift-workflow-state` | error | the workflow's `state` is not `active` on GitHub | enable the workflow (GitHub disables scheduled workflows after inactivity `(verify)`) |
    | `kit-version` | warn | the installed kit's `kit_version` differs from `version` in `agk.toml` | run `/agk:upgrade` (SPEC-0008) |
    | `vendored-missing` | error | a file the installer for `mode` writes verbatim is absent | restore it from the kit |
-   | `vendored-differs` | error | a vendored file differs byte for byte from the kit's copy, and the versions match | review `git log -p -- <path>`; restore the kit's copy, or record the deliberate edit in an ADR that names the path class (Q-K3-16) |
-   | `default-branch-config` | warn | `default_branch` in `agk.toml` differs from the repository's `default_branch` (Q-K3-13) | set `default_branch` in `agk.toml` |
+   | `vendored-differs` | error | a vendored file differs byte for byte from the kit's copy, and the versions match | review `git log -p -- <path>`; restore the kit's copy, or record the deliberate edit in an ADR that names the path class |
+   | `default-branch-config` | warn | `default_branch` in `agk.toml` differs from the repository's `default_branch` | set `default_branch` in `agk.toml` |
 
 6. **The four reads.** `gh api repos/{o}/{r}` (default branch, `allow_auto_merge`, `delete_branch_on_merge`,
    `permissions`), `gh api repos/{o}/{r}/rulesets` (the list carries no rules), `gh api repos/{o}/{r}/rulesets/{id}` for
@@ -66,16 +66,17 @@ and the JSON keep it.
    the remote `origin` (read from `.git/config` or `git remote get-url origin`); a host other than github.com is
    `not-github`. Whether a non-admin can read a ruleset's rules is `(verify)`; a 403 or 404 on a ruleset read is
    `cannot-check` (`no-admin`), and never `ruleset-missing`.
-7. **Strictness.** ADR-0001 decision 3 says the ruleset "is exactly" its list. Any element absent is `fail` with the
-   id above. An element that is present and stricter than decision 3 (for example one required approval) is also
-   `fail` for `ruleset-pull-request` with the message "differs from ADR-0001 decision 3", because the check is of
-   equality (Q-K3-12 asks whether stricter should be a `warn`). An extra rule not named in decision 3 is not a
-   failure.
+7. **The ruleset elements are a minimum.** The elements of ADR-0001 decision 3 are what must be at least present. An
+   element absent is `fail` with the id above. An element that is stricter is `ok`: one or more required approvals,
+   a team or user as an approver, a required check in addition to `governance`, or a merge method set that excludes
+   `merge` and is not exactly squash. Teams that require reviews must not fail the doctor. For merge methods, `fail`
+   only when `merge` (merge commits) is allowed. An extra rule not named in decision 3 is not a failure.
 8. **The kit comparison.** With `--kit-root`, the script reads `kit/manifest.json` in it and compares, byte for byte,
    each `verbatim` path that the installer for the target's `mode` writes (the `verbatim` list minus the files
    SPEC-0001 rule 3 keeps kit-only for `init`; minus the `adopt.skip` set, and for `adopt` the marked blocks compared
    inside their markers only) with the file of the same relative path in the kit root. `templates` and `rendered` files
-   are not compared: the target owns them, and CODEOWNERS is checked by `reviewers.py --check-codeowners`. The
+   are not compared: the target owns them, and CODEOWNERS is checked by `reviewers.py --check-codeowners`. `.claude/settings.json` is a verbatim file, so a weakened
+   deny list (REQ-002 AC2) already shows as `vendored-differs` on a version match; there is no separate settings check. The
    comparison runs only when the kit's `kit_version` equals `version` in `agk.toml` (SPEC-0005 rule 3); otherwise
    `kit-version` is the finding and `vendored-differs` and `vendored-missing` are `cannot-check` (`version-mismatch`). Without `--kit-root` the three kit checks
    are `cannot-check` (`no-kit-root`).
@@ -109,7 +110,7 @@ and the JSON keep it.
     `api/workflow-drift-audit.json` recorded with `gh api` from a real repository (owner and ids changed; the
     responses carry no secret), and a `tree/` of the few local files a case needs. One case per misconfiguration:
     `ok` (reports none), `no-ruleset`, `weak-enforcement`, `bypass-actor`, `no-deletion`, `no-linear-history`,
-    `no-force-push-block`, `approvals-required`, `merge-methods`, `no-governance-check`, `placeholder-reviewers`,
+    `no-force-push-block`, `stricter-ok` (one approval, a team approver, an extra check: reports none), `merge-commits-allowed`, `no-governance-check`, `placeholder-reviewers`,
     `placeholder-codeowners`, `no-origin-head`, `drift-disabled`, `drift-no-schedule`, `version-mismatch`,
     `vendored-edited`, `vendored-missing`, `auto-merge-off`, `no-gh` (every remote check `cannot-check`),
     `no-admin` (403 on the ruleset read: `cannot-check`, not `no-ruleset`). Each case asserts the ids that fail and
@@ -147,9 +148,10 @@ and the JSON keep it.
 - 2026-10-15: whether a non-admin can read a ruleset's rules, and the exact `state` values of a
   disabled workflow (`disabled_manually`, `disabled_inactivity`), are `(verify)`; the code treats any `state` other
   than `active` as `fail` and any 403 or 404 on a ruleset as `cannot-check` (due 2026-11-30).
-- 2026-10-15: ADR-0003's open point (colon-refspec branch deletion has no deny rule) is not a doctor check in this
-  draft; the ruleset's `deletion` rule already covers the default branch (Q-K3-15) (due 2026-12-15).
+- 2026-10-15: ADR-0003's open point (colon-refspec branch deletion has no deny rule) is not a separate doctor check:
+  the ruleset's `deletion` rule covers the default branch, and a weakened `.claude/settings.json` shows as
+  `vendored-differs` on a version match (due 2026-12-15).
 - 2026-10-15: the doctor sees GitHub settings as they are when it runs; it cannot say who changed one. The audit log
   is not read (due 2026-12-31).
 - 2026-10-15: a legitimate local edit of a vendored file is reported on every run until it is reverted or the kit
-  copy changes; there is no allow-list (Q-K3-16) (due 2026-11-30).
+  copy changes; there is no allow-list (due 2026-11-30).

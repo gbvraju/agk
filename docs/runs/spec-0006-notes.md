@@ -1,7 +1,7 @@
 # Notes on SPEC-0006 (agk doctor)
 
-Date: 2026-10-15 (from `date -u`). Overnight brief 2, item B. The spec is Draft; nothing is implemented. The maintainers
-set it Approved. No protected path is changed by this pull request.
+Date: 2026-10-15 (from `date -u`). Overnight brief 2, item B. The spec was written Draft and set Approved on the maintainers'
+rulings of 2026-10-15 (final commit of the pull request); nothing is implemented. No protected path is changed by this pull request.
 
 ## Decisions taken in the draft (each is a numbered rule)
 
@@ -32,36 +32,29 @@ set it Approved. No protected path is changed by this pull request.
 - Workflow: `state` `active`. Other states are `(verify)`.
 - `branches/main/protection` answers 404 "Branch not protected": the repository uses a ruleset, so the doctor does not
   read classic branch protection. A repository that uses classic protection instead of a ruleset gets
-  `ruleset-missing`; Q-K3-17 asks whether that is intended.
+  `ruleset-missing` (ruled intended, Q-K3-17).
 
 ## Live proof (maintainers' step; not done)
 
 Rule 18. It needs admin rights on `gbvraju/agk-sandbox` and changes its settings one at a time. Nothing was run
 against the sandbox, `colorama` or any repository other than `gbvraju/agk`.
 
-## Open
+## Rulings (maintainers, 2026-10-15)
 
-- **Q-K3-12.** Should a ruleset element stricter than ADR-0001 decision 3 (one required approval, say) be `fail` or
-  `warn`? Draft: `fail` for `ruleset-pull-request` (decision 3 says "exactly"). Conservative reading kept.
-- **Q-K3-13.** Three checks go beyond the brief's list: `repo-auto-merge` and `repo-delete-branch` (decision 3 lists
-  them as repository settings) and `default-branch-config`. Keep, or drop? Draft: kept as `warn`.
-- **Q-K3-14.** The script runs `gh api` itself with the user's own `gh`. SPEC-0005 rule 11 says the network is used "by
-  the command with the user's own `gh`, never by a script that holds a credential", and CLAUDE.md says "no network
-  calls in checks". The draft reads both as met (the script holds no credential; the doctor is not a check and not in
-  CI). If not, the alternative is that the command fetches and the script reads `--api-dir` only, which makes
-  `python3 scripts/agk/doctor.py` without the plugin useless for the GitHub checks.
-- **Q-K3-15.** ADR-0003's residual (colon-refspec deletion of branches) and REQ-002 AC2 (settings deny force-push and
-  reset): should the doctor check that `.claude/settings.json` contains named deny entries? That needs the maintainers
-  to fix the list of required entries. Draft: no such check.
-- **Q-K3-16.** A deliberately edited vendored file is reported on every run (`vendored-differs`). Allow a declared
-  exception? Any list of exceptions is a second source of truth next to `agk.toml` (SPEC-0005 rule 3, no lock file).
-  Draft: no exception.
-- **Q-K3-17.** A repository protected by classic branch protection instead of a ruleset: `ruleset-missing` (draft), or
-  a separate check that reads `branches/{b}/protection`? ADR-0001 decision 3 names a ruleset only.
+| Q | Ruling | Where in the spec |
+| --- | --- | --- |
+| Q-K3-12 | The ruleset elements are a minimum: stricter is `ok` (1+ approvals, a team approver, an extra check); merge methods `fail` only if `merge` is allowed; an extra rule is not a failure | rule 7, table row `ruleset-pull-request`, fixture `stricter-ok` |
+| Q-K3-13 | Keep `repo-auto-merge`, `repo-delete-branch` and `default-branch-config`, all `warn` | rule 5 |
+| Q-K3-14 | Confirmed: the doctor is not a check and does not run in CI; it runs `gh api` GET with the user's own `gh` and holds no credential | rule 2 |
+| Q-K3-15 | No separate settings check: `.claude/settings.json` is verbatim, so a weakened deny list shows as `vendored-differs` on a version match (covers REQ-002 AC2) | rule 8, residual |
+| Q-K3-16 | No exception list; the residual stays | residual |
+| Q-K3-17 | Keep `ruleset-missing`; its fix adds "classic branch protection is not read; use a ruleset (ADR-0001 decision 3)" | rule 5 |
+
+No question is open.
 
 ## Decisions-log rows (for the maintainers' log; not edited in this pull request)
 
 | Date | Decision | Reason | Recorded in | By |
 | --- | --- | --- | --- | --- |
 | 2026-10-15 | SPEC-0006 drafted: one stdlib script, read-only, `cannot-check` never `ok`, `--json` kept | the plugin command and fixture tests read the structure; criterion b of ADR-0015 | `docs/specs/0006-doctor.md` | agent |
-| 2026-10-15 | Q-K3-12 to Q-K3-17 opened | the draft chose the conservative reading of each | `docs/runs/spec-0006-notes.md` | agent |
+| 2026-10-15 | Q-K3-12 to Q-K3-17 ruled (ruleset elements are a minimum; settings covered by vendored-differs; no exception list); SPEC-0006 Approved | maintainers' rulings | `docs/runs/spec-0006-notes.md`, SPEC-0006 | reviewer |
