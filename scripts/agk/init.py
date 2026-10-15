@@ -156,11 +156,20 @@ def classify(target: Path, items: list[tuple[str, bytes]], entries: list[str]):
     return plan
 
 
+ISSUES_NOTICE = (
+    "notice: the workflows drift-audit.yml and metrics.yml write GitHub issues with the "
+    "workflow token (`issues: write`); delete a workflow file if the repository must not allow "
+    "that."
+)
+
+
 def print_branch_rules(branch: str, tool: str = "init") -> None:
     print(f"Apply by hand on GitHub to the default branch `{branch}` ({tool} configures nothing):")
     print((KIT_ROOT / BRANCH_RULES).read_text(encoding="utf-8").rstrip())
     print()
     print((KIT_ROOT / SCANNER_EXCLUDES).read_text(encoding="utf-8").rstrip())
+    print()
+    print(ISSUES_NOTICE)
 
 
 def main(argv: list[str] | None = None) -> int:

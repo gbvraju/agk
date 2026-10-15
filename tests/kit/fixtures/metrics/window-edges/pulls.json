@@ -1,0 +1,34 @@
+[
+  {
+    "closed_at": "2026-10-05T00:00:00Z",
+    "created_at": "2026-10-04T00:00:00Z",
+    "merged_at": "2026-10-05T00:00:00Z",
+    "number": 141,
+    "state": "closed",
+    "updated_at": "2026-10-05T00:00:00Z"
+  },
+  {
+    "closed_at": "2026-10-12T00:00:00Z",
+    "created_at": "2026-10-10T00:00:00Z",
+    "merged_at": "2026-10-12T00:00:00Z",
+    "number": 142,
+    "state": "closed",
+    "updated_at": "2026-10-12T00:00:00Z"
+  },
+  {
+    "closed_at": "2026-10-04T23:59:59Z",
+    "created_at": "2026-10-04T00:00:00Z",
+    "merged_at": "2026-10-04T23:59:59Z",
+    "number": 143,
+    "state": "closed",
+    "updated_at": "2026-10-04T23:59:59Z"
+  },
+  {
+    "closed_at": "2026-10-11T23:59:59Z",
+    "created_at": "2026-10-11T00:00:00Z",
+    "merged_at": "2026-10-11T23:59:59Z",
+    "number": 144,
+    "state": "closed",
+    "updated_at": "2026-10-11T23:59:59Z"
+  }
+]

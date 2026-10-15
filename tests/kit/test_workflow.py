@@ -46,10 +46,53 @@ def test_ac2_workflow_has_no_branch_name_and_gates_on_the_default_branch():
     assert re.search(r"^\s*if:\s*\$\{\{", text, flags=re.M)
 
 
-def test_ac2_workflow_calls_the_agk_mk_form():
-    """REQ-010 AC1 (SPEC-0002 rule 5): governance, lint and tests are called through agk.mk."""
+def step_blocks(text: str) -> dict[str, str]:
+    """Step name -> its block of lines."""
+    parts = re.split(r"^      - ", text, flags=re.M)[1:]
+    out = {}
+    for part in parts:
+        match = re.match(r"name:\s*(.+)", part)
+        if match:
+            out[match.group(1).strip()] = part
+    return out
+
+
+def test_ac2_governance_is_one_step_per_check_named_by_its_check_id():
+    """REQ-012 AC1 (SPEC-0007 rule 13): the steps equal the commands of agk-governance, in order."""
     text = WORKFLOW.read_text(encoding="utf-8")
-    for target in ("agk-governance", "agk-lint", "agk-test"):
+    mk = (WORKFLOW.parents[2] / "agk.mk").read_text(encoding="utf-8")
+    recipe = mk.split("agk-governance:\n", 1)[1].split("\n\n", 1)[0]
+    commands = [ln.strip().removeprefix("$(PY) ") for ln in recipe.splitlines()]
+    blocks = step_blocks(text)
+    names = list(blocks)
+    for command in commands:
+        script, _, flag = command.removeprefix("scripts/agk/").partition(".py")
+        check_id = script if script.startswith("check_") else f"reviewers{flag}"
+        assert check_id in blocks, check_id
+        assert f"run: python {command}" in blocks[check_id], check_id
+    ids = [n for n in names if n.startswith(("check_", "reviewers"))]
+    assert len(ids) == len(commands) == 9
+    assert names.index(ids[0]) < names.index("PR body shape")
+    assert "Governance checks" not in names
+
+
+def test_ac2_the_job_is_still_named_governance():
+    """REQ-012 AC1 (SPEC-0007 rule 13): the required status check does not change."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert re.search(r"^jobs:\n  governance:\n", text, flags=re.M)
+    assert re.search(r"^name: governance$", text, flags=re.M)
+
+
+def test_ac2_pull_request_base_reaches_the_checks_through_the_job_environment():
+    """REQ-012 AC1: AGK_BASE is set for every step, so each check sees the base."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "    env:\n      AGK_BASE: ${{ github.event.pull_request.base.sha }}" in text
+
+
+def test_ac2_workflow_calls_the_agk_mk_form_for_lint_and_tests():
+    """REQ-010 AC1 (SPEC-0002 rule 5): lint and tests are called through agk.mk."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    for target in ("agk-lint", "agk-test"):
         assert f"run: make -f agk.mk {target}" in text
     assert not re.search(r"run: make (governance|lint|test)\b", text)
 

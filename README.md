@@ -57,6 +57,18 @@ a clean run writes nothing. GitHub may disable scheduled workflows after a perio
 scheduled runs stop, start the workflow by hand (`workflow_dispatch`). See `docs/specs/0004-drift-audit.md` and
 ADR-0012.
 
+## Per-PR metrics
+
+    python3 scripts/agk/metrics.py [--today YYYY-MM-DD] [--repo OWNER/REPO]
+
+Reads the GitHub REST API (`gh api`, GET only) and local git objects, and prints the report for the ISO week before
+`--today`: one derived record per closed pull request (rejections, blocked weakenings, deviations, cost class, review
+rounds, protected classes, ADRs added, tests before and after, hours open to merge, whether the merged head was
+cleared). Review rounds, rejection and the cleared head come from comments whose first line is `Verdict: cleared <short
+sha>`, `Verdict: fix list` or `Verdict: rejected`. The installed workflow `.github/workflows/metrics.yml` runs every
+Monday and files one issue per week labelled `agk-metrics` (it needs `issues: write`); a week with no closed pull
+request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
+
 ## Reviewer agent
 
     python3 scripts/agk/review_context.py [--base REF] --body PR_BODY.md > review-context.md

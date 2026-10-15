@@ -1,0 +1,18 @@
+{
+  "additions": 10,
+  "base": {
+    "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "changed_files": 1,
+  "closed_at": "2026-10-04T23:59:59Z",
+  "created_at": "2026-10-04T00:00:00Z",
+  "deletions": 2,
+  "head": {
+    "sha": "008f000000000000000000000000000000000000"
+  },
+  "merge_commit_sha": "008fffffffffffffffffffffffffffffffffffff",
+  "merged": true,
+  "merged_at": "2026-10-04T23:59:59Z",
+  "number": 143,
+  "state": "closed"
+}
