@@ -44,6 +44,21 @@ Date: 2026-10-14 (from `date -u`). Overnight item D. The spec is a Draft for REQ
 | two open audit issues (selection test only) | duplicate issues | D6 | lowest updated, duplicate reported |
 | a clean repository | none | none | no findings |
 
+## Rulings (maintainers, 2026-10-15)
+
+Applied in the final commit of this PR, with a `workflow_dispatch` trigger (already in rule 4, now explicit) and a
+rule on disabled schedules (23) added on the maintainers' instruction, and the status set to Approved.
+
+| Question | Ruling | Where |
+| --- | --- | --- |
+| Q-ON-13 | N = 14 days | rule 8 |
+| Q-ON-14 | `(due YYYY-MM-DD)` convention plus a later backfill | rule 9 |
+| Q-ON-15 | a clean run writes nothing; an open issue is also left untouched (my reading) | rules 14, 15, 20 |
+| Q-ON-16 | install by default | rule 16 |
+| Q-ON-17 | model summary at K3 | rule 3 |
+| Q-ON-18 | open: the schedule time (a placeholder); the inactivity period is (verify) | rules 4, 23 |
+| Q-ON-19 | accepted; the run may create the label | rule 13 |
+
 ## Questions for maintainers
 
 - **Q-ON-13:** the staleness limit N for Draft specs and Proposed ADRs (draft: 14 days each).
