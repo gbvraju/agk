@@ -45,6 +45,18 @@ product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `t
 exist, to `CLAUDE.md`, `.github/CODEOWNERS` and `.github/PULL_REQUEST_TEMPLATE.md`, and refuses rather than overwrite.
 The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/specs/0002-agk-adopt.md`.
 
+## Reviewer agent
+
+    python3 scripts/agk/review_context.py [--base REF] --body PR_BODY.md > review-context.md
+    # ask the `reviewer` subagent (.claude/agents/reviewer.md) to review review-context.md, save its answer
+    python3 scripts/agk/check_review_report.py --context review-context.md --report report.md
+
+The reviewer reads one pull request against its stated intent and the repository's Approved text, and returns a
+verdict (`cleared`, `fix list`, `rejected`) with cited findings. It is read-only (`Read`, `Grep`, `Glob`), advises
+and never approves or merges; the context and the report are local files and are never committed. The optional
+`agk.toml` keys `review_diff_cap` (default 4000) and `review_other_cap` (default 1500) set the line caps of the
+context. See `docs/specs/0003-reviewer-agent.md`, ADR-0011 and `docs/runs/shadow-review-template.md`.
+
 ## Existing scanners
 
 Project-wide scanners (bandit, flake8, pylint, mypy) that read the whole tree also read the kit's code. The kit's

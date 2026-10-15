@@ -94,7 +94,7 @@ REQ-013 is not added by this spec: `docs/requirements.md` is protected, so an AD
 
 ### Proof
 
-18. **Fixture pull requests.** A builder in `tests/kit_dev/` creates tiny git repositories in `tmp_path`, each a base
+18. **Fixture pull requests.** A builder in `tests/kit/` creates tiny git repositories in `tmp_path`, each a base
     commit and a head commit plus a PR body, with a known defect and the expected finding code:
     `F1` protected path changed without an ADR naming its class; `F2` an advanced REQ without a marker; `F3` an
     Approved spec edited without a proposed-amendments file; `F4` an Accepted ADR body edited; `F5` no `Advances:`
@@ -121,10 +121,10 @@ REQ-013 is not added by this spec: `docs/requirements.md` is protected, so an AD
 
 ## Tests
 
-- Rules 4-7, 19: `tests/kit_dev/test_review_context.py`, marker `REQ-013 AC1`.
-- Rules 8-11, 20: `tests/kit_dev/test_review_report.py`, marker `REQ-013 AC2`.
-- Rules 2, 12, 21: `tests/kit_dev/test_reviewer_definition.py`, marker `REQ-013 AC3`.
-- Rules 16-17: the footer format in `tests/kit_dev/test_review_report.py`; aggregation tests belong to K3 (marker
+- Rules 4-7, 19: `tests/kit/test_review_context.py`, marker `REQ-013 AC1`.
+- Rules 8-11, 20: `tests/kit/test_review_report.py`, marker `REQ-013 AC2`.
+- Rules 2, 12, 21: `tests/kit/test_reviewer_definition.py`, marker `REQ-013 AC3`.
+- Rules 16-17: the footer format in `tests/kit/test_review_report.py`; aggregation tests belong to K3 (marker
   `REQ-013 AC4`, `REQ-012 AC1`).
 - Rule 23: a record under `docs/runs/`, checked by the maintainers, not by a test.
 - Rule 14: workflow shape tests belong to the K3 work (pinned SHA, permissions, same-repository condition).

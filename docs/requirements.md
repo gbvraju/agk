@@ -62,3 +62,8 @@ Only the Status line may change without an ADR. `done` requires at least one tes
 
 - Acceptance: AC1 rejections, blocked weakenings, deviations, cost class
 - Status: planned
+
+### REQ-013 — Reviewer agent (K2)
+
+- Acceptance: AC1 the review context of a PR is deterministic and complete; AC2 a report is validated (verdict, findings with a hunk and a rule); AC3 the agent is read-only; AC4 verdicts are measured (rejections per PR)
+- Status: planned
