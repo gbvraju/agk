@@ -1,8 +1,8 @@
 # Proposed spec amendments 10 (SPEC-0007)
 
 Date: 2026-10-15 (from `date -u`). Found while building SPEC-0007 (day 9, item B; ADR-0016). Approved specs change
-only through a proposal like this one (principle 6). Nothing here is applied; until the maintainers apply it, the code
-is ahead of the Approved text of the rules below.
+only through a proposal like this one (principle 6). **Applied on 2026-10-15, on the maintainers' instruction, by the docs pull
+request that also adds `docs/runs/metrics-run-1.md`**; before that, the code was ahead of the Approved text of the rules below.
 
 ## SPEC-0007 (`docs/specs/0007-metrics.md`)
 
@@ -30,6 +30,9 @@ is ahead of the Approved text of the rules below.
    Proposed: add the two classes.
 7. **Rule 17, `fetch-depth: 0` and the workflow input.** Built as stated; one addition: the `today` input reaches the
    shell through an environment variable (`INPUT_TODAY`), never interpolated into the script text. Proposed: say so.
+7b. **Rule 20, the verdict-suffix case.** Added at the maintainers' fix list on the build pull request: a fixture case whose
+   verdict lines carry trailing text (`Verdict: cleared <sha> (#N)`, `Verdict: fix list (round 2)`) shows they are not
+   verdicts. Applied to the list of cases in rule 20.
 
 ## Question (answered)
 

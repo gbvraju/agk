@@ -35,14 +35,14 @@ the implementation's ADR amends REQ-012 (rule 19). GitHub response shapes marked
 6. **`blocked_weakenings`** (core). The number of head commits of the pull request on which the check run named
    `governance` concluded `failure` and a step named by a check of the weakening set (rule 13) failed. The field counts
    law checks that blocked a head commit, including honest mistakes; it does not say a change was a weakening. Source:
-   `commits/SHA/check-runs`, then the job's `steps` from `actions/jobs/ID` (verify: that steps are not in the check-run itself).
+   `commits/SHA/check-runs`, then the job's `steps` from `actions/jobs/ID` (the check run `id` equals the Actions job id, confirmed by a GET on 2026-10-15).
    `governance_failures` (supporting) counts head commits where `governance` failed for any step.
 7. **`deviations`** (core). The number of files the pull request adds under `docs/runs/` named
    `proposed-spec-amendments-*.md` (SPEC-0001 to SPEC-0005 practice, `check_specs` rule). Source: `pulls/N/files`
    (`status` `added`). A pull request that departs from an Approved spec without that file is not counted here; that is
    what a human review is for.
 8. **Supporting fields, from the files and the git history.**
-   - `protected_classes`: the sorted class names of `config/protected-paths.txt` at the merge base that any path in
+   - `protected_classes`: the sorted class names of `config/protected-paths.txt` at the parent of the merge commit (merged) or at the pull request's base commit (closed) that any path in
      `pulls/N/files` matches (substring match, as `check_protected_changes`). Empty when none.
    - `adrs_added`: the count of added files matching `docs/adr/NNNN-*.md`.
    - `size`: `additions`, `deletions`, `changed_files` from `pulls/N`.
@@ -79,13 +79,15 @@ the implementation's ADR amends REQ-012 (rule 19). GitHub response shapes marked
 14. **Body shape.** The first line is `agk metrics YYYY-Www (window YYYY-MM-DD to YYYY-MM-DD)`, then a table with one
     row per record sorted by `number`, with the fields of rules 2 to 9 as columns, then a totals line per core field,
     then `closed in window: N; recorded: N; unknown cells: N`, then the note "Derived from git and the GitHub REST
-    API; no field is typed by an agent." and the final line `<!-- agk-metrics YYYY-Www -->`. A week with no closed
+    API; no field is typed by an agent." and the final line `<!-- agk-metrics YYYY-Www -->`. A line before the header carries a flag (rules 15 and 16: `duplicate metrics issues: ...`, then `INCOMPLETE: ...`); a clean body
+    starts with the header. A week with no closed
     pull request is still written, with `closed in window: 0` (the issue is the evidence that the run happened).
 15. **One issue per week.** A pure function `choose_action(open_and_closed_issues, week)` returns `create` or
     `update N` (never `none`): the issue with the marker of that week is updated by replacing its body. More than one
     issue with the same marker is reported on the first line of the body as `duplicate metrics issues` and the
     lowest-numbered issue is updated. The script takes `--issues FILE` (JSON of issues with `number`, `title`, `body`),
-    `--print-action`, `--print-title` and `--print-body`.
+    `--print-action`, `--print-title` and `--print-body` (the default mode), and `--repo OWNER/REPO` for live runs
+    (default: `GITHUB_REPOSITORY`, then the URL of `origin`) and `--api-dir DIR` to read recorded responses.
 16. **Completeness is measured twice.** The script lists the closed pull requests of the window by `pulls?state=closed`
     (sorted by update, paged until `closed_at` is before the window) and counts `closed in window` from that list; it
     then fetches the details of each and counts `recorded`. A difference is printed on the first line as
@@ -94,22 +96,23 @@ the implementation's ADR amends REQ-012 (rule 19). GitHub response shapes marked
     credential (as SPEC-0006 rule 2). The workflow's
     permissions are `contents: read`, `pull-requests: read`, `checks: read`, `actions: read` and `issues: write`; its
     only write calls are `gh issue create`, `gh issue edit` and creating the label if missing. The checkout has
-    `fetch-depth: 0` for rule 8.
+    `fetch-depth: 0` for rule 8. The `today` input of `workflow_dispatch` reaches the shell through an environment
+    variable (`INPUT_TODAY`), never interpolated into the script text.
 18. **Pinned actions.** The workflow's `uses:` lines are pinned to full commit SHAs with the tag in a comment.
 19. **Files and ownership.** The workflow (`.github/`), the script (`scripts/agk/`), its tests (`tests/kit/`) and the
-    manifest (`kit/`) are protected classes; the implementation PR carries an ADR naming each, and an ADR that amends
+    manifest (`kit/`), the wiring tests (`tests/kit_dev/`) and the requirements text (`docs/requirements.md`) are protected classes; the implementation PR carries an ADR naming each, and an ADR that amends
     REQ-012's acceptance text (the proposed text is in the notes). Init and adopt install the workflow by
     default, as for the drift audit (SPEC-0004 rule 16), and print that it needs `issues: write`. The ADR also states
     the cost class definition of rule 9 in REQ-012's text.
 
 ### Tests and proof
 
-20. **Fixtures, no network, no model.** `tests/kit/fixtures/metrics/<case>/` holds recorded GitHub responses as JSON
+20. **Fixtures, no network, no model.** `tests/kit/fixtures/metrics/<case>/` holds responses in the shape of the recorded ones, as JSON
     (`pulls.json`, `pull-N.json`, `reviews-N.json`, `comments-N.json`, `commits-N.json`, `files-N.json`,
     `checks-SHA.json`, `jobs-ID.json`) and `issues.json`, with the author names replaced. The test count of rule 8 is
     tested on a git repository built in `tmp_path` with dated commits. Cases: a merged pull request with no verdict
     comment; one with two `Verdict: fix list` comments and a `Verdict: cleared` naming the head; one whose last verdict
-    names another commit; one with `Verdict: rejected`; one closed unmerged; each cost class `S`, `M`, `L` and
+    names another commit; one with `Verdict: rejected`; one whose verdict lines carry trailing text (not verdicts); one closed unmerged; each cost class `S`, `M`, `L` and
     `unknown`; one that adds an ADR; one that touches two protected classes; one
     that adds a `proposed-spec-amendments` file; a failed `governance` run; a week with no closed pull request; a
     week that spans a month and a year boundary; and a pull request closed at exactly the window's start and end.
@@ -139,6 +142,5 @@ the implementation's ADR amends REQ-012 (rule 19). GitHub response shapes marked
   request, so it is a relayed record, not a signed one; the maintainers check it at merge (due 2026-12-31).
 - 2026-10-15: `blocked_weakenings` is `unknown` until `governance.yml` is split into one step per check; the first weeks
   may carry `unknown` (due 2026-11-15).
-- 2026-10-15: the check-run and job step shapes used by rule 6 are `(verify)` (due 2026-11-15).
 - 2026-10-15: the weekly record lives in a GitHub issue, which a repository admin can edit or delete; the numbers can be
   recomputed with the script and `--today` (due 2026-12-31).
