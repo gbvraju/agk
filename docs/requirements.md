@@ -72,3 +72,33 @@ Only the Status line may change without an ADR. `done` requires at least one tes
 
 - Acceptance: AC1 the plugin manifest and the marketplace file are valid and `plugin.json` carries the kit version (`claude plugin validate .`); AC2 the plugin has one skill per command (`/agk:<command>`), no hooks, servers, monitors or `bin/`, user-invoked writers, and no skill runs a forbidden verb; AC3 the repository's own checks, hooks, workflow and reviewer run with no plugin installed; AC4 GitHub issues are intake only: no script or workflow reads an issue for a decision; AC5 `agk upgrade` brings an init or adopt target from kit version X to the current kit, never overwriting an edited file or a user-owned file
 - Status: planned
+
+### REQ-015 — Every acceptance criterion is proven by a test
+
+- Acceptance: AC1 the check fails a fixture with a `done` requirement whose second criterion has no test marker `REQ-nnn ACn`; AC2 the check passes on this repository's default branch and on the sandbox; AC3 every `done` requirement of this repository has a test marker for each of its criteria, or its status is set back to `in-progress`
+- Status: planned
+
+### REQ-016 — New tests prove behaviour (red-then-green)
+
+- Acceptance: AC1 the check flags a seeded pull request whose new test passes on the base commit, in this repository and in the pilot repository (a different language); AC2 over two consecutive weeks of this repository's real pull requests the check reports no unresolved false flag; AC3 a repository with no `project_tests` reports `unknown`, never `ok`
+- Status: planned
+
+### REQ-017 — Decision inbox: every item waiting for a person is listed, none is missed
+
+- Acceptance: AC1 on two weekly hand counts in this repository and two in the pilot repository, the inbox misses zero items (an extra item is a finding, not a failure)
+- Status: planned
+
+### REQ-018 — Weekly product report answers the five questions from derived facts
+
+- Acceptance: AC1 for two consecutive ISO weeks the weekly product report is created on schedule in the pilot repository, and for each week the product owner's written answers to the five questions, given from the report alone, are checked by the maintainers against the repository as 5 of 5 correct (an answer the report could not give counts as wrong); AC2 a test shows every number and every status in the report is computed from the facts document, the report names the facts commit, and no field is read from a PR body except the `Behaviour:` and `Verdict:` lines; AC3 the README says in plain words what the kit does and for whom, with the measured results and their limits (including the experimental reviewer), and a product-owner guide explains the weekly report and the inbox in one page
+- Status: planned
+
+### REQ-019 — Plain-language intake: a sentence becomes a Draft requirement with acceptance criteria
+
+- Acceptance: AC1 given one plain-language sentence, `/agk:spec` writes a requirement with Given/When/Then acceptance criteria and a Draft spec as files in a branch; AC2 a draft is treated as a proposal: no derived fact, report or inbox line counts it before it is merged
+- Status: planned
+
+### REQ-020 — Playbook: a new repository is started and run from a problem statement to a governed merge using only the kit's own commands, roles and templates
+
+- Acceptance: AC1 the pilot fork, started from nothing, is set up and run using only the playbook, from a written problem statement through `/agk:start`, the architect session, `/agk:init` or `/agk:adopt`, one Approved spec and one brief, to its first governed merged pull request with a `Verdict: cleared` line; AC2 every decision is recorded in the pilot's own repository, and no step is taken from memory or from this repository's chat history; AC3 the record names each step and the file or comment it produced
+- Status: planned

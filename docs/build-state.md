@@ -59,3 +59,4 @@ Appended by docs commits only; feature PRs carry their row in the PR body (`Buil
 2026-10-15 — SPEC-0005 Approved (distribution: hybrid, no lock file).
 2026-10-15 — SPEC-0006, SPEC-0007 and SPEC-0008 Approved; K3 build starts.
 2026-10-16 — K3 criteria a, b, c met live; criterion e not met (reviewer experimental); d pending weeks 42–43.
+2026-10-16 — K3 complete except criterion d (scheduled metrics weeks 42–43; closes 2026-10-26); K4 opened (ADR-0021, Proposed).
