@@ -283,3 +283,48 @@ ok default-branch-config warn default_branch in agk.toml equals the repository's
 summary: 20 ok, 0 fail, 0 cannot-check
 exit 0
 ```
+
+
+## Run 1 (2026-10-16)
+
+The maintainers' change: the ruleset was set to disabled (read back with GET: `enforcement` is `disabled`). Command (from the baseline clone, `/home/user/sandbox-baseline`, unchanged): `python3 /home/user/agk/scripts/agk/doctor.py --repo gbvraju/agk-sandbox --kit-root /home/user/agk`.
+Direct GET read before the run: `GET repos/gbvraju/agk-sandbox/rulesets` gives `[{"enforcement":"disabled","id":25107038}]`. With no active ruleset the bypass check and every element check fail (ADR-0017 decision 2; the rule that only an active ruleset protects).
+
+| Expected failed ids | Observed failed ids | Match |
+| --- | --- | --- |
+| `ruleset-enforcement` plus every element check | `ruleset-enforcement`, `ruleset-bypass`, `ruleset-deletion`, `ruleset-linear-history`, `ruleset-force-push`, `ruleset-pull-request`, `required-check-governance` (13 ok, 7 fail, 0 cannot-check, exit 1; `ruleset-missing` and `ruleset-target` stay ok: a branch ruleset still targets the default branch) | match |
+
+Output, verbatim:
+
+```
+agk doctor 0.9.0
+ok ruleset-missing error a ruleset targets the default branch
+FAIL ruleset-enforcement error ruleset: enforcement is not active
+  fix: set the ruleset to Active
+FAIL ruleset-bypass error ruleset: bypass_actors is not empty
+  fix: remove every bypass actor
+ok ruleset-target error the ruleset targets the default branch
+FAIL ruleset-deletion error ruleset: the deletion rule is missing
+  fix: restrict deletions
+FAIL ruleset-linear-history error ruleset: the required_linear_history rule is missing
+  fix: require linear history
+FAIL ruleset-force-push error ruleset: the non_fast_forward rule is missing
+  fix: block force pushes
+FAIL ruleset-pull-request error ruleset: pull_request rule missing, stale approvals not dismissed on push, or merge commits allowed
+  fix: require a pull request, dismiss stale approvals on push, and do not allow merge commits (ADR-0001 decision 3 uses squash only)
+FAIL required-check-governance error ruleset: the required status check `governance` is missing
+  fix: require the status check `governance`
+ok repo-auto-merge warn repository setting allow_auto_merge is on
+ok repo-delete-branch warn repository setting delete_branch_on_merge is on
+ok placeholder-team-reviewers error config/reviewers.yaml has no placeholder team
+ok placeholder-team-codeowners error .github/CODEOWNERS has no placeholder team
+ok origin-head warn refs/remotes/origin/HEAD exists
+ok drift-workflow-file error .github/workflows/drift-audit.yml has a schedule
+ok drift-workflow-state error the drift-audit workflow is active
+ok kit-version warn the kit version equals version in agk.toml
+ok vendored-missing error every vendored file is present
+ok vendored-differs error every vendored file equals the kit's copy
+ok default-branch-config warn default_branch in agk.toml equals the repository's default branch
+summary: 13 ok, 7 fail, 0 cannot-check
+exit 1
+```
