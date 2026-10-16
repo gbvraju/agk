@@ -1,8 +1,8 @@
 # Notes on SPEC-0013 (playbook)
 
-Date: 2026-10-16 (from `date -u`). Overnight brief 4, item B. The spec is written **Draft**; nothing is implemented and no protected path is
+Date: 2026-10-16 (from `date -u`). Overnight brief 4, item B. The spec was written Draft and set **Approved** on the maintainers' rulings of 2026-10-16 (final commit of the pull request); nothing is implemented and no protected path is
 changed by this pull request. It is the fifth and last of the K4 specs of ADR-0021 (decision 2) and serves REQ-020 and exit criterion g.
-Every question below is raised, not ruled: for each, the spec takes the conservative reading and says so.
+Every question below was raised with a conservative reading and has been ruled (section Rulings); none is open.
 
 ## What exists today (read on 2026-10-16, on `main` at 0c19763)
 
@@ -81,7 +81,7 @@ allowed still flags SPEC-0002 (its ids Q-K2-1 to Q-K2-6 are named in prose) and 
 | Lifecycle (a) | in `check_specs.py` with `--body` | in `check_pr_body.py` (the body check does not read specs; the brief names `check_specs`) |
 | Lifecycle (b) | the narrow definition of open | any mention counts (flags SPEC-0002 and SPEC-0011 for example ids) |
 
-## Questions
+## Questions raised (all ruled; see Rulings)
 
 | Q | Question | Reading taken in the spec |
 | --- | --- | --- |
@@ -116,7 +116,53 @@ allowed still flags SPEC-0002 (its ids Q-K2-1 to Q-K2-6 are named in prose) and 
 | Q-K4-108 | Three new skills change the eight-skill assertions of SPEC-0005. | amendment item 1 |
 | Q-K4-109 | Where the criterion g record lives. | the fork's own repository; one outcome line here (rule 28) |
 
-## Sibling specs touched (amendments proposed in `docs/runs/proposed-spec-amendments-15.md`, none applied)
+## Rulings (maintainers, 2026-10-16)
+
+The default ruling is that every reading the draft took is accepted (`Q-K4-80` to `Q-K4-109`), with the clarifications below. The spec is set
+`Approved` on the maintainers' instruction. No question is open.
+
+| Q | Ruling | Where in the spec |
+| --- | --- | --- |
+| Q-K4-80 ruled | accepted: `/agk:start` refuses until `init`/`adopt` have run | rule 2 |
+| Q-K4-81 ruled | accepted: the kit's path `constitution/vision.md` | rule 4 |
+| Q-K4-82 ruled | accepted: `principles.md` not edited; project rules in the vision, marked | rule 4 |
+| Q-K4-83 ruled | accepted: the next free ADR as a project charter; the ruleset is cited | rule 4 |
+| Q-K4-84 ruled | accepted as **no**, as `Q-K4-61`: skills never commit, push or open a pull request; the script prints the commands and the body and the session runs them under its `CLAUDE.md`. The amendment item that would let skills commit is **withdrawn** (it is deleted from `proposed-spec-amendments-14.md`; see the notes of SPEC-0012) | rule 3 |
+| Q-K4-85 ruled | accepted: `claude --agent architect` is primary; the skill is a fallback that says its restrictions are not enforced | rule 7 |
+| Q-K4-86 ruled | accepted: the architect reads CI results through `gh api` GET and does not run the pull request's code | rule 8 |
+| Q-K4-87 ruled | accepted: the guard's lists; frontmatter hooks `(verify)` | rule 9 |
+| Q-K4-88 ruled | accepted: the architect posts issue comments only, limited by the guard | rule 9 |
+| Q-K4-89 ruled | accepted **as a role rule** (not enforced by the guard) **plus a residual**: a deterministic check that the author of a `Verdict: cleared` comment is not the author of the cleared commit, due 2027-01-31 (K5) | rule 8; Residual |
+| Q-K4-90 ruled | accepted: no `Approved`/`Accepted` except in a final commit a person orders | rule 8 |
+| Q-K4-91 ruled | accepted: the file is a subagent definition used as a main session through `--agent` | rule 6 |
+| Q-K4-92 ruled | accepted: templates kit-only, copied on request | rule 14 |
+| Q-K4-93 ruled | accepted: what "parses" means | rule 15 |
+| Q-K4-94 ruled | accepted: `playbook.py brief` fills numbers and branch names | rule 16 |
+| Q-K4-95 ruled | accepted: the one `CLAUDE.md` line; ADR and kit bump at implementation | rule 17 |
+| Q-K4-96 ruled | accepted: the metrics field plus an "At risk" line by amendment; never blocks; no new drift finding | rule 18; amendments-15 item 3 |
+| Q-K4-97 ruled | accepted: `/agk:ruleset` is the second command that writes outside the working tree; the founder asked for it. The amendment (`proposed-spec-amendments-15.md` item 1) is **applied at implementation**, by the ADR of the SPEC-0013 implementation pull request, **not on the merge of these specs** (as `Q-K4-52`) | rule 19; amendments-15 item 1 |
+| Q-K4-98 ruled | accepted: the person's `gh` login only; no stored secret | rule 19 |
+| Q-K4-99 ruled | accepted: add-only; a looser value is reported and changes only with `--tighten` | rule 20 |
+| Q-K4-100 ruled | accepted: a **second fresh fork**; the maintainers pick its upstream at proof time; it need not be in a third language; the date for criterion g stays the K4 date, the pilot's first week, 2026-12-01 | rule 28 |
+| Q-K4-101 ruled | accepted **with the `(verify)`**: the implementation proves on the sandbox repository what GitHub does for a required check that has never run, before relying on phase detection, and records it | rule 21; Residual |
+| Q-K4-102 ruled | accepted: the doctor stays strict in phase 1; only the printed fix changes | rule 22; amendments-15 item 4 |
+| Q-K4-103 ruled | accepted: lifecycle (a) in `check_specs.py` with `--body` | rule 23 |
+| Q-K4-104 ruled | accepted: the exemption for a requirement no spec names and an ADR names | rule 23 |
+| Q-K4-105 ruled | accepted: the narrow definition of an open question | rule 24 |
+| Q-K4-106 ruled | accepted: only specs whose Approved status line is added or changed are checked | rule 24 |
+| Q-K4-107 ruled | accepted: shared parsers `common.find_questions` and `common.next_free_ids`. The SPEC-0009 amendment (`proposed-spec-amendments-15.md` item 2) is **applied at implementation** by the ADR of the SPEC-0013 implementation pull request | rule 25; amendments-15 item 2 |
+| Q-K4-108 ruled | accepted: three new skills; the SPEC-0005 amendment (item 1) is **applied at implementation** by the same ADR, as `Q-K4-97` | rule 27; amendments-15 item 1 |
+| Q-K4-109 ruled | accepted: the criterion g record lives in the fork; one outcome line here | rule 28 |
+
+**Amendments.** `proposed-spec-amendments-15.md` keeps its five items, none applied by this pull request. Applied **at implementation** by the ADR of
+the SPEC-0013 implementation pull request: item 1 (SPEC-0005, three skills; `/agk:ruleset` the second outside writer), item 2 (SPEC-0009, the
+`questions` row), item 3 (SPEC-0011, the merged-before-cleared line), item 4 (SPEC-0006, the printed fix) and item 5 (SPEC-0001 and SPEC-0002, one
+printed line). The commit amendment of `proposed-spec-amendments-14.md` is withdrawn (`Q-K4-84`, `Q-K4-61`); that file is edited by the SPEC-0012 pull request.
+
+**The merged-before-cleared baseline.** The pull requests that the metrics field `merged_head_cleared` already reports are **#45** and **#50**
+(`no`: the verdict names an earlier head) and **#46** (`unknown`: no verdict line). They are the baseline; no retroactive action is taken.
+
+## Sibling specs touched (amendments in `docs/runs/proposed-spec-amendments-15.md`, applied at implementation, none by this pull request)
 
 SPEC-0005 (three skills; `/agk:ruleset` as a second outside writer), SPEC-0009 (the questions parser is shared), SPEC-0011 ("At risk" gains
 a merged-before-cleared line), SPEC-0006 (the printed fix of one check), SPEC-0001 and SPEC-0002 (one printed line). This pull request edits
@@ -133,4 +179,5 @@ run the steps; the agent of this repository records the outcome only. The mechan
 
 | Date | Decision | Reason | Recorded in | By |
 | --- | --- | --- | --- | --- |
-| 2026-10-16 | SPEC-0013 playbook drafted: `/agk:start`, the architect role as a project agent file started with `claude --agent architect` and a guard hook, kit-only templates and scripts, `/agk:ruleset` (add-only, two-phase), two lifecycle checks in `check_specs.py`, criterion g on a second fresh fork with the record in the fork | REQ-020; ADR-0021 decision 2 and 5g | `docs/specs/0013-playbook.md` | agent |
+| 2026-10-16 | SPEC-0013 playbook Approved (drafted: `/agk:start`, the architect role as a project agent file started with `claude --agent architect` and a guard hook, kit-only templates and scripts, `/agk:ruleset` (add-only, two-phase), two lifecycle checks in `check_specs.py`, criterion g on a second fresh fork with the record in the fork) | REQ-020; ADR-0021 decision 2 and 5g | `docs/specs/0013-playbook.md` | agent |
+| 2026-10-16 | Q-K4-80 to Q-K4-109 ruled: every reading of the draft accepted; Q-K4-84 no (skills never commit); Q-K4-89 role rule plus a residual (author check, due 2027-01-31, K5); Q-K4-97, Q-K4-107, Q-K4-108 amendments-15 items 1 and 2 applied at implementation by the SPEC-0013 implementation ADR; Q-K4-100 second fresh fork, upstream picked at proof time, criterion g date 2026-12-01; Q-K4-101 accepted with `(verify)`, proven on the sandbox first | maintainers' rulings of 2026-10-16 | `docs/runs/spec-0013-notes.md` (Rulings), `docs/specs/0013-playbook.md` | reviewer |

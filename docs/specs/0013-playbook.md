@@ -1,13 +1,13 @@
 # SPEC-0013: playbook (the method this kit was built with, as kit files)
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-020 (AC1, AC2, AC3)
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
 This is the fifth and last of the K4 specs of ADR-0021 (decision 2) and serves exit criterion g. It packages what SPEC-0009 to SPEC-0012
 prove: the method of an architect session that writes decisions and reviews, an implementation session that builds and stops, and a person
-who decides and merges. The points `Q-K4-80` to `Q-K4-109` are in `docs/runs/spec-0013-notes.md`; none is ruled. Claude Code and GitHub
+who decides and merges. The points `Q-K4-80` to `Q-K4-109` are in `docs/runs/spec-0013-notes.md`; all are ruled (section Rulings) and the spec is set `Approved` on the maintainers' instruction of 2026-10-16. Claude Code and GitHub
 facts not reconfirmed are marked `(verify)`. The repository facts quoted here were read on 2026-10-16 (`docs/runs/spec-0013-notes.md`).
 
 ## Rules
@@ -140,7 +140,9 @@ facts not reconfirmed are marked `(verify)`. The repository facts quoted here we
     the default branch with `status=success` returns one run or more), the plan adds the `required_status_checks` rule with the context
     `governance`. `--phase auto` (the default) picks the phase from that read. The reason is the first merge: a check that has never run
     cannot be required without blocking the pull request that is meant to produce it (`(verify)` against current GitHub behaviour:
-    whether a required context that has never reported blocks a merge; the pilot's first day reported that it does).
+    whether a required context that has never reported blocks a merge; the pilot's first day reported that it does). Before relying on
+    phase detection, the implementation proves on the sandbox repository what GitHub does for a required check that has never run, and
+    records the result (`Q-K4-101`).
 22. **The doctor, by amendment at implementation.** The doctor (SPEC-0006) verifies the result. In phase 1 it correctly reports
     `required-check-governance` as failing; the printed fix of that check changes to name `/agk:ruleset` (phase 2). No check id is
     added or removed; `docs/runs/proposed-spec-amendments-15.md` item 4 has the text. `init` and `adopt` print one line pointing to
@@ -178,7 +180,8 @@ facts not reconfirmed are marked `(verify)`. The repository facts quoted here we
 28. **Proof of criterion g (the maintainers and sessions together; not done in this pull request).** A fresh fork of a small public
     repository is taken from a written problem statement to its first governed merged pull request with a `Verdict: cleared` line,
     using only the playbook (ADR-0021 decision 5g; decision 7 allows a second fresh fork or the same fork reset to upstream).
-    **Which:** a second fresh fork (`Q-K4-100`); resetting the pilot fork would destroy the pilot's records that criteria a, c and d rely on.
+    **Which:** a second fresh fork (`Q-K4-100`); the maintainers pick its upstream at proof time, and it need not be in a third language;
+    resetting the pilot fork would destroy the pilot's records that criteria a, c and d rely on.
     **The maintainers:** choose the upstream repository and create the fork; attach the sessions; write the problem statement
     (the one input); approve by merging; and decide. **The sessions:** run steps 1 to 7 of rule 1 in the fork's own sessions, under the
     fork's own `CLAUDE.md` and the playbook files, with no step taken from memory or from this repository's chat history; the architect
@@ -186,6 +189,7 @@ facts not reconfirmed are marked `(verify)`. The repository facts quoted here we
     **fork's own repository**, `docs/runs/playbook-proof.md`, committed through a pull request, names each step of rule 1, the command or
     skill used, and the file or comment it produced (a link); this repository's `docs/runs/` records the outcome only, with the fork
     unnamed: met or not met, the date, and a link. A step done from memory, or a decision with no file or comment, makes the criterion not met.
+    The date for criterion g stays the K4 date: the pilot's first week, 2026-12-01 (`Q-K4-100`).
 29. **Installed files and classes.** Installed (verbatim): `.claude/agents/architect.md`, `.claude/hooks/architect_guard.py`, `CLAUDE.md`
     (one line), `scripts/agk/check_specs.py`, `scripts/agk/common.py`, the installed tests of rules 23 to 26. Plugin: `skills/start/SKILL.md`,
     `skills/architect/SKILL.md`, `skills/ruleset/SKILL.md`. Kit-only: `scripts/agk/playbook.py`, `scripts/agk/ruleset.py`,
@@ -219,4 +223,7 @@ chat history. The record names each step and the file or comment it produced.* R
   `(verify)` again when the role is built (due 2026-11-30).
 - 2026-10-16: whether GitHub blocks a merge on a required check that has never reported is `(verify)` and decides how much phase 1 matters
   (due 2026-11-30).
+- 2026-10-16: the rule that the architect never posts `Verdict: cleared` on a pull request it authored (rule 8) is a role rule that the guard does
+  not enforce; a deterministic check that the author of a `Verdict: cleared` comment is not the author of the cleared commit is due
+  2027-01-31 (K5) (`Q-K4-89`).
 - 2026-10-16: the CODEOWNERS-markers fix in `adopt` (Q-PL-1) is a separate code pull request after these specs.
