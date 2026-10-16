@@ -1,8 +1,8 @@
 # Notes on SPEC-0010 (proof checks)
 
-Date: 2026-10-16 (from `date -u`). Overnight brief 3, item B. The spec is written **Draft**; nothing is implemented and no
-protected path is changed by this pull request. It is the second of the five K4 specs of ADR-0021 (decision 2) and serves exit
-criteria b and c. Every question below is raised, not ruled: for each, the spec takes the conservative reading and says so.
+Date: 2026-10-16 (from `date -u`). Overnight brief 3, item B. The spec was written Draft and set **Approved** on the maintainers'
+rulings of 2026-10-16 (final commit of the pull request); nothing is implemented and no protected path is changed by this pull request. It is the second of the five K4 specs of ADR-0021 (decision 2) and serves exit
+criteria b and c. Every question below was raised with a conservative reading and has been ruled (section Rulings); none is open.
 
 ## What exists today (read on 2026-10-16, on `main` at 94a807d)
 
@@ -33,8 +33,8 @@ criteria b and c. Every question below is raised, not ruled: for each, the spec 
   path, so loosening it later needs an ADR (rule 5).
 - (b) is one new script, `proof.py`, kept out of `make governance` (it runs the tests twice) and run by a CI job of its own that
   is not a required check in K4 (rules 7, 16).
-- "Placed onto the base" is a copy of the changed test files over a `git archive` export of the base, with deletions applied
-  (rule 10). The head is run from its own export, not from ROOT (rule 11).
+- "Placed onto the base" is a copy of the changed test files over a detached `git worktree` of the base, with deletions applied
+  (rule 10; the draft used `git archive`, changed by the ruling on Q-K4-25). The head is run from its own export, not from ROOT (rule 11).
 - Four outcomes, one precedence order, exit 0 only for `proven` and `skipped`, `unknown` is exit 4 and never `ok` (rules 12, 13).
 - A compile or import failure on the base is red in every language, as ADR-0021 decision 2 says (rule 11); the spec states plainly
   what that does and does not prove (rule 14).
@@ -46,15 +46,15 @@ criteria b and c. Every question below is raised, not ruled: for each, the spec 
 | Question | Option taken | Not taken, and why |
 | --- | --- | --- |
 | Where rule (a) lives | inside `check_requirements` with a `warn`/`block` switch | a new check script (a second reader of the same file); an immediate block (existing targets would fail on their first upgrade) |
-| Base with the tests | `git archive` of the base plus the test files | a `git worktree` (keeps `.git`, so a test that runs `git` sees the repository; also writes under `.git` of ROOT, which breaks "read-only"); stashing in ROOT (touches the work tree) |
+| Base with the tests | a detached `git worktree` of the base plus the test files (ruling on Q-K4-25; it keeps `.git`, so a test that runs `git` sees a repository; it writes and removes administrative entries under ROOT's `.git/worktrees`) | `git archive` (no `.git`, so a test that runs `git` is a false red: the draft's choice, changed); stashing in ROOT (touches the work tree) |
 | Which files are "tests" | `test_dirs` and `test_patterns` only | any file with "test" in its path (language-dependent guessing); the diff of the pull request minus non-test code (needs a language) |
-| Head run | an export of the head | ROOT itself (a dirty tree would change the answer) |
+| Head run | a detached worktree of the head | ROOT itself (a dirty tree would change the answer) |
 | Result transport | the step conclusions of the `proof` job | a `Proof:` comment (needs `pull-requests: write` in a job that runs the pull request's code, or a second job); an artifact (more API calls); a check-run output title (needs `checks: write`) |
 | Required check | no, in K4 | required from the start (a false flag would block merges before the false-flag record exists) |
 | Escape hatch | `Behaviour: unchanged`, counted | a label (not in the repository); a per-path allow-list (a second configuration to keep right) |
 | Mutation testing | not in K4 | it would prove more; it needs a per-language tool, which breaks "language-agnostic by construction" |
 
-## Open questions (none is ruled; the spec takes the conservative reading)
+## Questions raised (all ruled; see Rulings)
 
 | Q | Question | Reading taken in the spec |
 | --- | --- | --- |
@@ -63,7 +63,7 @@ criteria b and c. Every question below is raised, not ruled: for each, the spec 
 | Q-K4-22 | Is a stray marker (`REQ-007 AC9` when there is no AC9) a failure? | no: a drift-audit finding `D7` (rule 4) |
 | Q-K4-23 | A bare `REQ-nnn` marker: does it still satisfy the existing "some marker" rule? | yes, unchanged (rule 2) |
 | Q-K4-24 | Is `proof.py` a `check_*` script? | no: it runs the tests, so it stays out of `agk-governance` and of `check_kit_tests` (rule 7) |
-| Q-K4-25 | `git archive` drops `.git`; a test that runs `git` fails on the base and counts as red. | accepted and written in rule 14 as a false red; a residual notes it |
+| Q-K4-25 | `git archive` drops `.git`; a test that runs `git` fails on the base and counts as red. | (draft) accepted as a false red. **Changed by the ruling:** a detached worktree (rules 8, 10, 11) |
 | Q-K4-26 | Head from an export instead of ROOT. | yes (rule 11) |
 | Q-K4-27 | Timeout 900 seconds per run; a timeout is `unknown`. | yes (rule 15); the value is a placeholder for the maintainers |
 | Q-K4-28 | `red-on-head` as a reason of `not-proven`, or a fifth outcome? | a reason of `not-proven` (rule 12) |
@@ -75,9 +75,42 @@ criteria b and c. Every question below is raised, not ruled: for each, the spec 
 | Q-K4-34 | A test that depends on a changed helper that is not matched by `test_patterns`: the helper is not copied. | the base then has the old helper; the outcome may be a false red or a false green; accepted and written in rule 14 |
 | Q-K4-35 | A local `make` target (`agk-proof`) for running the proof before pushing. | not added in the spec; `proof.py` runs by hand |
 | Q-K4-36 | Criterion b on the sandbox: the agent reads the sandbox read-only with the kit's script. | rule 21; the sandbox is already attached by the maintainers' approval (K3); confirm it still is |
-| Q-K4-37 | Criterion c on the pilot: who opens the seeded pull requests, and with what access? | the agent, in the pilot's own sessions, under the same rules as the K2 fork (rule 20); the pilot does not exist yet |
+| Q-K4-37 | Criterion c on the pilot: who opens the seeded pull requests, and with what access? | (draft) the agent, in the pilot's own sessions. **Changed by the ruling:** the pilot's own session, under its `CLAUDE.md`, from a brief the maintainers paste (rule 20) |
 | Q-K4-38 | "Unresolved false flag" = a false flag with no fix merged and no declaration by the Friday of its week. | rule 22; the maintainers may choose another cut-off |
 | Q-K4-39 | REQ-003 AC4 text. | proposed below; added by ADR when this spec is Approved |
+
+## Rulings (maintainers, 2026-10-16)
+
+The default ruling is that every reading the draft took is accepted; the table lists each question and the exceptions. Pilot: the
+pilot repository now exists (a Go module with `go test ./...` as `project_tests`, `test_dirs = ["."]`, `test_patterns = ["*_test.go"]`,
+adopted on kit 0.11.0, ruleset applied, doctor 20 ok); it is still "the pilot repository" here and never named. The draft's sentence
+that the pilot "does not exist yet" (Q-K4-37) is replaced.
+
+| Q | Ruling | Where in the spec |
+| --- | --- | --- |
+| Q-K4-20 | accepted. Templates ship `ac_coverage = "warn"`; this repository sets `block` in the implementation ADR, because its `done` requirements already comply | rule 5 |
+| Q-K4-21 | accepted as drafted: a `done` requirement without `ACn` structure fails | rule 3 |
+| Q-K4-22 | accepted as drafted: a stray marker is drift finding `D7` | rule 4 |
+| Q-K4-23 | accepted as drafted: a bare `REQ-nnn` still satisfies the existing rule | rule 2 |
+| Q-K4-24 | accepted as drafted: `proof.py` is not a `check_*` script | rule 7 |
+| Q-K4-25 | **changed:** no `git archive`. The base run uses a detached **`git worktree` of the base commit** (it has `.git`) with the pull request's test files copied in; the head run uses a worktree of the head. The false-red note for a missing `.git` is removed; the residual for helper files (Q-K4-34) is kept | rules 8, 10, 11; Residual |
+| Q-K4-26 | accepted as drafted: the head is run from its own worktree, not ROOT | rule 11 |
+| Q-K4-27 | accepted as drafted: 900 seconds per run; a timeout is `unknown` | rule 15 |
+| Q-K4-28 | accepted as drafted: `red-on-head` is a reason of `not-proven` | rule 12 |
+| Q-K4-29 | accepted as drafted: a declaration with no `project_tests` is `unknown` | rule 12 |
+| Q-K4-30 | accepted with the `(verify)`: the implementation proves on this repository that the jobs API returns every step name and conclusion before the facts rely on it, and the Residual names the fallback | rule 17; Residual |
+| Q-K4-31 | accepted as drafted: `proof` is not a required check in K4 | rule 16 |
+| Q-K4-32 | accepted as drafted: the hosted image's tools, none installed by the kit | rule 16 |
+| Q-K4-33 | accepted as drafted: `check_pr_body.py` fails a `Behaviour:` value other than `unchanged` | rule 18 |
+| Q-K4-34 | accepted as drafted, and now written in rule 14 and the Residual: a changed helper outside `test_patterns` is not copied | rules 9, 14; Residual |
+| Q-K4-35 | accepted as drafted: no local `make` target | not in the spec |
+| Q-K4-36 | the sandbox attachment is per session; the implementation session asks for it again when criterion b is proven. The spec says so | rule 21 |
+| Q-K4-37 | **changed:** the pilot exists; the seeded pull request there is opened by the **pilot's own session**, under its `CLAUDE.md`, from a brief the maintainers paste; this repository records only the outcome | rule 20 |
+| Q-K4-38 | accepted as drafted: unresolved means no fix and no declaration by the Friday of the week | rule 22 |
+| Q-K4-39 | accepted as drafted: REQ-003 AC4 is added by ADR when this spec is Approved | below |
+
+**Sibling specs touched.** None. The `proof` field stays in SPEC-0009 rule 14 as drafted; the change to a worktree does not alter it.
+The ruling on Q-K4-48 (a `drift` section) is in SPEC-0009 and SPEC-0011 and does not touch this spec.
 
 ## REQ-003 AC4, proposed (for the ADR that adds it)
 
@@ -103,4 +136,5 @@ REQ-003, whose status stays `done` (its three criteria already have markers, and
 
 | Date | Decision | Reason | Recorded in | By |
 | --- | --- | --- | --- | --- |
-| 2026-10-16 | SPEC-0010 proof checks drafted: a `done` requirement needs a marker for each criterion (`warn`, then `block` by ADR); `proof.py` runs `project_tests` on the base with the pull request's test files and on the head, four outcomes, `unknown` never `ok`; a separate non-required CI job; result read from step conclusions | criteria b and c of ADR-0021 | `docs/specs/0010-proof-checks.md` | agent |
+| 2026-10-16 | SPEC-0010 proof checks Approved: a `done` requirement needs a marker for each criterion (`warn`, then `block` by ADR); `proof.py` runs `project_tests` on a worktree of the base with the pull request's test files and on a worktree of the head, four outcomes, `unknown` never `ok`; a separate non-required CI job; result read from step conclusions | criteria b and c of ADR-0021 | `docs/specs/0010-proof-checks.md` | reviewer |
+| 2026-10-16 | Q-K4-20 to Q-K4-39 ruled: every reading of the draft accepted; Q-K4-20 templates ship `ac_coverage = "warn"`; Q-K4-25 a `git worktree` replaces `git archive`; Q-K4-30 accepted with the `(verify)` proved before the facts rely on it; Q-K4-36 the sandbox is attached again per session; Q-K4-37 the pilot's own session opens the seeded pull request | maintainers' rulings of 2026-10-16 on the Draft SPEC-0010 | `docs/runs/spec-0010-notes.md` | reviewer |

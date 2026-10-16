@@ -1,13 +1,13 @@
 # SPEC-0010: proof checks (every criterion has a test; a new test can fail)
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-015 (AC1 to AC3), REQ-016 (AC1 to AC3); REQ-003 (AC4, proposed in the notes and added later by ADR)
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
 This is the second of the five K4 specs of ADR-0021 and serves exit criteria b and c. It reads the parsers of SPEC-0009
-(`common.parse_acceptance`, `common.find_ac_markers`) and writes one field into the facts document (rule 17). The open
-points `Q-K4-20` to `Q-K4-39` are in `docs/runs/spec-0010-notes.md`; none is ruled. Claude Code and GitHub facts not
+(`common.parse_acceptance`, `common.find_ac_markers`) and writes one field into the facts document (rule 17). The
+points `Q-K4-20` to `Q-K4-39` were ruled by the maintainers on 2026-10-16 (`docs/runs/spec-0010-notes.md`). Claude Code and GitHub facts not
 reconfirmed are marked `(verify)`. The repository facts quoted here were read on 2026-10-16.
 
 ## Rules
@@ -50,19 +50,22 @@ reconfirmed are marked `(verify)`. The repository facts quoted here were read on
    `HEAD`; `--body` is the pull request body (a file, or `-` for stdin), read for one line (rule 18). It is not run by
    `make governance`: it runs the project's tests twice and needs the project's toolchain.
 8. **What it reads.** `project_tests` (a shell command), `test_dirs`, `test_patterns` and `proof_timeout` (seconds, default 900)
-   from `agk.toml`; the file changes between base and head from `git diff --name-status`; and the body line of rule 18. It writes
-   nothing in ROOT: all work happens in a temporary directory created outside ROOT and removed at the end, also on a failure.
+   from `agk.toml`; the file changes between base and head from `git diff --name-status`; and the body line of rule 18. It changes
+   nothing in ROOT's work tree. It adds two detached git worktrees (`git worktree add --detach`, rules 10 and 11) in a temporary directory
+   created outside ROOT; that writes administrative entries under ROOT's `.git/worktrees`, and both worktrees are removed at the end
+   (`git worktree remove --force`, then `git worktree prune`), also on a failure. If a removal fails the script says so, naming the
+   path class, and exits 3.
 9. **The test file set.** The files changed between base and head (status added, modified, renamed or deleted) that lie under one of
    `test_dirs` and whose name matches one of `test_patterns` (shell-style globs on the file name, as `common.find_markers`). Nothing
    else is a test file: a changed fixture or helper outside the patterns is part of the change, not of the tests. A repository whose
    test files cannot be told apart this way has an empty set (rule 12, `unknown`).
-10. **Placing the tests on the base.** The base commit is exported into the temporary directory (`git archive`, so no `.git` and
-    no history). Each test file added or modified at head is copied from the head over the same path; each test file deleted at head
+10. **Placing the tests on the base.** The base commit is checked out as a detached worktree (`git worktree add --detach DIR BASE`)
+    in the temporary directory; it has a `.git`, so a test that runs `git` sees a repository. Each test file added or modified at head is copied from the head over the same path; each test file deleted at head
     is removed; a renamed one is the deletion of the old path and the addition of the new. No other file of the pull request is copied.
     The result is "the base code with the pull request's tests".
 11. **The two runs.** Run 1: `project_tests` in the temporary directory (the base with the new tests), expected to fail. Run 2:
-    `project_tests` in a second temporary export of the head (not ROOT, so a dirty tree cannot change the answer), expected to pass.
-    The command is run through the shell with the same environment as the caller, no extra variables, working directory the export, and
+    `project_tests` in a second detached worktree of the head (not ROOT, so a dirty tree cannot change the answer), expected to pass.
+    The command is run through the shell with the same environment as the caller, no extra variables, working directory the worktree, and
     its output is shown (the last 40 lines of each run) and never stored. Exit status 0 is a pass, any other status is a fail; a
     compile or import error on the base (the new test cannot be built without the change) is a fail and so counts as red, in every
     language alike.
@@ -83,7 +86,8 @@ reconfirmed are marked `(verify)`. The repository facts quoted here were read on
     outside the test files is what turns them green. *It does not prove:* that a test checks the right thing; that every new test is
     red, only that the run as a whole is; that a red base is red for the reason the pull request claims (a missing dependency that the
     pull request adds also makes the base red); that a test that was already red on the base for an unrelated reason is meaningful;
-    anything about code or behaviour with no test change (rule 18 exists for that); or that the marker in a test names a criterion that
+    a test that depends on a helper, fixture or data file that the pull request changes but that `test_patterns` does not match (it runs
+    against the old file on the base, which can give a false red or a false green, rule 9); anything about code or behaviour with no test change (rule 18 exists for that); or that the marker in a test names a criterion that
     the test exercises (SPEC-0009 rule 9 counts a marker in a comment). It makes no judgement of quality and uses no model.
     Mutation testing is a K5 candidate (ADR-0021).
 15. **Timeouts.** `proof_timeout` applies to each of the two runs separately. A run that exceeds it is killed, with its children,
@@ -101,7 +105,8 @@ reconfirmed are marked `(verify)`. The repository facts quoted here were read on
     on the step's output, so that exactly one of them ends `success` and three end `skipped`. The job itself ends `failure` only
     when `proof.py` itself failed (usage, I/O). `facts.py` reads, for each pull request in its window, the workflow run of the head SHA
     named `proof` and its job's steps (`GET repos/{o}/{r}/actions/runs?head_sha=SHA` and `GET repos/{o}/{r}/actions/runs/{id}/jobs`
-    `(verify)` that a step's name and conclusion are returned for every step) and sets the field `proof` of that pull request to the
+    `(verify)` that a step's name and conclusion are returned for every step; the implementation proves it on this repository, with a
+    recorded response, before `facts.py` relies on it, and the Residual names the fallback) and sets the field `proof` of that pull request to the
     outcome word, or `"unknown"` when there is no run, more than one step succeeded, or the API could not be read. SPEC-0009 rule
     14 carries the field. No write permission is needed and no comment is posted.
 18. **`Behaviour: unchanged`.** A pull request that changes no behaviour (a refactor, documentation, a rename) declares it with the
@@ -132,13 +137,15 @@ reconfirmed are marked `(verify)`. The repository facts quoted here were read on
     with `test_dirs = ["."]`: a seeded pull request that adds a `Test...` function calling existing code and asserting what it already
     does, expected `not-proven`; and a pull request that adds a test for a changed behaviour, expected `proven`; a compile error on the
     base (a test calling a function that the change adds) is the Go form of the build failure case and must be `proven`. The commands
-    and the outputs are recorded in `docs/runs/`. The agent opens the seeded pull requests; the maintainers decide what is flagged
-    wrongly.
+    and the outputs are recorded in `docs/runs/`. In this repository the agent opens the seeded pull requests. In the pilot repository the seeded pull request is opened by the
+    **pilot's own session**, under its own `CLAUDE.md`, from a brief that the maintainers paste; this repository records only the outcome
+    (the `proof:` line, the exit status and the result), with the pilot unnamed. The maintainers decide what is flagged wrongly.
 21. **Live proof of criterion b.** (a) The fixture of rule 19 fails in `block` mode. (b) This repository's default branch passes in
     `block` mode, with the list of rule 6 recomputed. (c) The sandbox passes: the kit's `check_requirements.py` is run read-only against
     the sandbox work tree, and the requirements it inherits from the template (all `planned`) and its own are reported; if the sandbox has
     a `done` requirement with an untested criterion, the finding is recorded and the sandbox's requirement is set back to `in-progress`
-    in the sandbox's own pull request, or the criterion is tested, by the maintainers' choice. Recorded in `docs/runs/`.
+    in the sandbox's own pull request, or the criterion is tested, by the maintainers' choice. The sandbox attachment is per session: the implementation session asks the maintainers to attach it again
+    when criterion b is proven, and does not assume it. Recorded in `docs/runs/`.
 22. **The weekly false-flag record.** For two consecutive weeks of this repository's real pull requests, every `not-proven` and
     every `unknown` that is not `no-test-files` is listed with its pull request number in `docs/runs/`, and the maintainers write
     against each: *correct* (the tests really pass on the base: fixed or declared), or *false flag* with the cause. **An unresolved
@@ -183,6 +190,8 @@ flag; a repository with no `project_tests` reports `unknown`, never `ok`.* Rules
   false-flag records (due 2026-12-31).
 - 2026-10-16: the outcome reaches the facts through the step conclusions of the `proof` job (rule 17); if GitHub does not return
   step names for every run `(verify)`, the fallback is the job summary, which is not machine-read today (due 2026-11-16).
+- 2026-10-16: a test that depends on a changed helper, fixture or data file outside `test_patterns` runs against the old file on the base
+  and may be a false red or a false green; `proof.py` does not copy such files (due 2026-12-31).
 - 2026-10-16: a base that is red because the pull request adds a dependency is counted as proof; the report cannot tell the two
   apart (due 2026-12-31).
 - 2026-10-16: `proof.py` runs the project's whole suite twice per pull request; a project with a slow suite times out to `unknown`
