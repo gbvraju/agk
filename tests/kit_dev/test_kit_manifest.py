@@ -9,7 +9,12 @@ import tomllib
 from conftest import KIT_ROOT, manifest
 
 ROOTS = (".claude/", ".github/", "scripts/agk/", "tests/kit/")
-KIT_ONLY = {"scripts/agk/init.py", "scripts/agk/adopt.py"}
+KIT_ONLY = {
+    "scripts/agk/init.py",
+    "scripts/agk/adopt.py",
+    "scripts/agk/kit_hashes.py",
+    "scripts/agk/upgrade.py",
+}
 RENDERED = {".github/CODEOWNERS"}
 SINGLES = {
     "CLAUDE.md",
