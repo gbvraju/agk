@@ -1,6 +1,6 @@
 # ADR-0019: the agk plugin, its marketplace, the issue intake and REQ-014
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-16
 - Deciders: maintainers
 - Related: ADR-0001, ADR-0015, ADR-0017, ADR-0018

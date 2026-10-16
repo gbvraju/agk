@@ -43,3 +43,13 @@ Confirmed. Proposed: remove the mark and keep the sentence.
 add "(one warning: `CLAUDE.md` at the plugin root is not loaded as plugin context)". The Residual item that lists five
 `(verify)` facts becomes: two confirmed (key, skills against commands), one confirmed for a different place
 (`allowed-tools`), one not confirmed (`ref`), one confirmed (auto-update default), as in the record.
+
+## Rulings (maintainers, 2026-10-16)
+
+Recorded in the final commit of the pull request. Amendments A to E are still not applied to SPEC-0005.
+
+| Item | Ruling | Effect |
+| --- | --- | --- |
+| Q-K3-72 (amendment B) | Keep `ref` in the printed entry; the criterion-a live proof decides it. If the committed entry with `ref` fails to load, propose switching to `claude plugin marketplace add gbvraju/agk#vX.Y.Z` | no change to the build; the `(verify)` line stays until the proof |
+| Q-K3-73 (amendment A) | No `allowed-tools` pre-approval in K3; one approval per command per session stays a residual, revisited after the proof | no change to the build; the test that no skill sets `allowed-tools` stays |
+| C, D, E | Accepted, to be applied after merge | applied to SPEC-0005 by a later change on the maintainers' instruction, not here |
