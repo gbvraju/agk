@@ -96,8 +96,8 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
 15. **`issues` and `drift`.** *`issues`:* the open and closed issues labelled `agk-metrics`, `agk-drift-audit` or `agk-product-report`, as
     `{"number", "title", "label", "state"}` sorted by number; nothing from their bodies. `"unknown"` without a GitHub source. *`drift`:*
     the findings of the drift audit (SPEC-0004) at the same commit and `today`, counted and not described:
-    `{"counts": {"D1": n, "D2": n, "D3": n, "D4": n, "D5": n, "D6": n}, "total": n}`, with every kind present and `0` for a kind with no
-    finding. It is computed by calling `drift_audit.audit(root, today, branch, open_issues)` (the audit's own finding functions, which
+    `{"counts": {"<kind>": n, ...}, "total": n}` with one count for every finding kind the audit defines (`drift_audit.CODES`; `D1` to
+    `D7` today), each present and `0` for a kind with no finding, and `total` the number of findings of all those kinds. It is computed by calling `drift_audit.audit(root, today, branch, open_issues)` (the audit's own finding functions, which
     read the repository and write nothing), where `branch` is `config.default_branch` and `open_issues` is the list of numbers of the
     open issues labelled `agk-drift-audit` taken from `issues`, so that D6 (duplicate audit issues) sees them. The body of the drift
     issue is never read; the issue's number stays in `issues` for linking. When `issues` is `"unknown"`, `D6` and `total` are
@@ -151,7 +151,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     `pr-states` (open, merged, closed; verdicts in time order; `Behaviour: unchanged` in a code fence ignored; each of the four `proof`
     outcomes, and a run with two succeeded outcome steps, which is `"unknown"`), and
     `dirty` (a modified tracked file), and `drift-counts` (a repository built as in the drift-audit fixtures of SPEC-0004,
-    `tests/kit/drift_fixtures.py`, with known counts for D1 to D6, once with and once without the list of `agk-drift-audit` issues). The goldens are changed only by a person running the documented command in the test
+    `tests/kit/drift_fixtures.py`, with known counts for every kind the audit defines, once with and once without the list of `agk-drift-audit` issues). The goldens are changed only by a person running the documented command in the test
     file; no test rewrites a golden.
 
 ### Installed files, proof

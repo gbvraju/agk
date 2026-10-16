@@ -49,8 +49,6 @@ ORIGIN = re.compile(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?$")
 SPEC_TITLE = re.compile(r"^# SPEC-\d{4}:\s*(.+?)\s*$")
 SPEC_STATUSES = ("Draft", "Approved")
 LABELS = ("agk-metrics", "agk-drift-audit", "agk-product-report")
-# The kinds SPEC-0009 rule 15 counts; a later kind (D7) is in the audit, not yet in the document.
-FACT_CODES = ("D1", "D2", "D3", "D4", "D5", "D6")
 OUTCOMES = ("proven", "not-proven", "skipped", "unknown")
 BEHAVIOUR = "Behaviour: unchanged"
 FENCE = re.compile(r"^\s*(```|~~~)")
@@ -511,8 +509,8 @@ def drift_section(root: Path, today: date, cfg: dict | None, issues: Any) -> Any
         found, _ = drift_audit.audit(root, today, cfg["default_branch"], open_numbers)
     except CheckError:
         return UNKNOWN
-    counts: dict[str, Any] = {c: sum(1 for f in found if f.code == c) for c in FACT_CODES}
-    total: Any = sum(counts.values())
+    counts: dict[str, Any] = {c: sum(1 for f in found if f.code == c) for c in drift_audit.CODES}
+    total: Any = len(found)
     if not isinstance(issues, list):
         counts["D6"] = total = UNKNOWN
     return {"counts": counts, "total": total}

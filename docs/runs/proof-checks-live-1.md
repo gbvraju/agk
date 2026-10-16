@@ -1,7 +1,7 @@
 # Proof checks: live run 1, criterion b (SPEC-0010 rules 1 to 6 and 21)
 
 Date: 2026-10-16 (from `date -u`). The check of part (a), run read-only on this repository at the commit `8bdbbe3da9d0f79c909ef8c1096e4983b039358a`
-(the code commit of the pull request that adds it; `docs/requirements.md` is the one on `main`, and `ac_coverage = "block"` in `agk.toml`).
+(the code commit of the pull request that adds it; `docs/requirements.md` is the one on `main` plus the AC4 of REQ-003, and `ac_coverage = "block"` in `agk.toml`).
 
 ## 1. This repository, in block mode
 
@@ -12,7 +12,7 @@ $ echo $?
 0
 ```
 
-Both `done` requirements comply: REQ-001 (AC1 to AC3) and REQ-003 (AC1 to AC3) have a marker for every criterion. **No `done` requirement
+Both `done` requirements comply: REQ-001 (AC1 to AC3) and REQ-003 (AC1 to AC4: AC4 was added on the ruling of Q-K4-121 and the fixture test of the check carries its marker) have a marker for every criterion. **No `done` requirement
 fails, so no status is changed in the pull request** and `block` is set in this repository's `agk.toml` (Q-K4-20).
 
 The drift audit at the same commit:
@@ -31,7 +31,7 @@ This is what `block` would fail if the maintainers set the requirement `done` to
 
 | Requirement | Status | Criteria with no `REQ-nnn ACn` marker |
 | --- | --- | --- |
-| REQ-001, REQ-003 | done | none |
+| REQ-001, REQ-003 | done | none (REQ-003 AC4 is covered by `tests/kit/test_check_requirements_ac.py`) |
 | REQ-002, REQ-004, REQ-006, REQ-007, REQ-009, REQ-010, REQ-011, REQ-012, REQ-014 | not done | none |
 | REQ-005 | planned | AC3 |
 | REQ-008 | planned | AC1 |
@@ -67,4 +67,4 @@ The message names the requirement and the criterion id and not the criterion's t
 ## 4. Not done here
 
 - The sandbox run (rule 21 (c)) needs the sandbox attached to a session; it is asked for in the pull request report and is not assumed.
-- REQ-003's AC4 (rule 6) is not added (Q-K4-121).
+- The sandbox record is added to this file through the pull request of part (b), after this one is merged.

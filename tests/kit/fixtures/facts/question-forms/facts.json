@@ -28,7 +28,7 @@
       "title": "Proposed"
     }
   ],
-  "commit": "080b07be9531968e8615f185d4364ef7850a2684",
+  "commit": "2e97534e04287b988d7149d93bd10c1406fba32b",
   "config": {
     "default_branch": "main",
     "inbox_hours": 48,
@@ -48,7 +48,8 @@
       "D3": 0,
       "D4": 0,
       "D5": 0,
-      "D6": 0
+      "D6": 0,
+      "D7": 0
     },
     "total": 0
   },
@@ -56,6 +57,12 @@
   "markers": [
     {
       "ac": "AC1",
+      "file": "tests/probe_demo.py",
+      "line": 1,
+      "req": "REQ-001"
+    },
+    {
+      "ac": "AC2",
       "file": "tests/probe_demo.py",
       "line": 1,
       "req": "REQ-001"

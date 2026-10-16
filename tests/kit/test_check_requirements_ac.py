@@ -40,7 +40,7 @@ def check(repo):
 
 
 def test_ac1_a_done_requirement_with_an_untested_second_criterion_fails_in_block(repo):
-    """REQ-015 AC1: rule 1 (the fixture of criterion b)."""
+    """REQ-003 AC4, REQ-015 AC1: rule 1 (the fixture of criterion b)."""
     setup(repo, requirement("@007", "done"), "# @007 AC1\n", "block")
     proc = check(repo)
     assert proc.returncode == 1
