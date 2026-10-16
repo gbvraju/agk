@@ -4,3 +4,4 @@ test_dirs = ["tests"]
 lint_paths = ["scripts/agk", "tests", ".claude/hooks"]
 # The project's own tests (run by agk-project-test; exit 5 = none collected is success).
 project_tests = "python3 -m pytest tests -q --ignore=tests/kit_dev; rc=$?; [ $rc -eq 5 ] && exit 0; exit $rc"
+experimental_reviewer = true

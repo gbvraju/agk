@@ -20,6 +20,18 @@ class CheckError(Exception):
     """A check failed; the message names a setting or path class, never a value."""
 
 
+EXPERIMENTAL_KEY = "experimental_reviewer"
+
+
+def experimental_enabled(target: Path) -> bool:
+    """True only when TARGET's agk.toml sets `experimental_reviewer = true` (a boolean)."""
+    try:
+        data = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return False
+    return data.get(EXPERIMENTAL_KEY) is True
+
+
 def git(root: Path, *args: str, check: bool = True) -> str:
     proc = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)  # nosec B603 B607 - fixed argument list, no shell
     if check and proc.returncode != 0:

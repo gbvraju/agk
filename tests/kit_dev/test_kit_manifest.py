@@ -54,7 +54,7 @@ def lines(rel: str) -> list[str]:
 def test_ac2_manifest_shape_and_version():
     """REQ-009 AC2: rule 6."""
     m = manifest()
-    assert set(m) == {"kit_version", "verbatim", "templates", "rendered", "adopt"}
+    assert set(m) == {"kit_version", "verbatim", "experimental", "templates", "rendered", "adopt"}
     assert re.fullmatch(r"\d+\.\d+\.\d+", m["kit_version"])
     assert sorted(m["verbatim"]) == m["verbatim"]
     assert not set(m["verbatim"]) & set(m["templates"])
@@ -63,7 +63,7 @@ def test_ac2_manifest_shape_and_version():
 def test_ac2_every_manifest_path_exists():
     """REQ-009 AC2: rule 9."""
     m = manifest()
-    for rel in m["verbatim"]:
+    for rel in [*m["verbatim"], *m["experimental"]]:
         assert (KIT_ROOT / rel).is_file(), rel
     for src in m["templates"].values():
         assert (KIT_ROOT / src).is_file(), src
@@ -73,8 +73,11 @@ def test_ac2_law_files_are_all_in_the_manifest_and_kit_only_are_not():
     """REQ-009 AC2: rules 7 and 9."""
     m = manifest()
     verbatim = set(m["verbatim"])
+    optional = set(m["experimental"])
+    assert not optional & verbatim
     law = {p for p in tracked() if p.startswith(ROOTS) and p not in KIT_ONLY and p not in RENDERED}
-    assert law | SINGLES == verbatim
+    assert (law - optional) | SINGLES == verbatim
+    assert optional <= law
     for rel in verbatim:
         assert not rel.startswith(("kit/", "tests/kit_dev/")) and rel not in KIT_ONLY
 

@@ -94,7 +94,14 @@ prints the target's protected classes and an ADR skeleton for the upgrade pull r
 `pyproject.toml [tool.agk]` (kits 0.1.0 and 0.2.0) is upgraded through that stamp: `agk.toml` is created last and `pyproject.toml` is
 never written. See `docs/specs/0008-upgrade.md` and ADR-0018.
 
-## Reviewer agent
+## Experimental: reviewer agent
+
+Experimental, advisory and never a gate: the reviewer is not counted as review and human review stays required. In
+the shadow reviews it caught 0 of 5 human findings, 3 recorded and 2 held-out (`docs/runs/shadow-review-4.md`).
+It is not installed by default: `agk init` and `agk adopt` do not write `.claude/agents/reviewer.md`,
+`scripts/agk/review_context.py`, `scripts/agk/check_review_report.py` or their tests. To opt in, set
+`experimental_reviewer = true` in `agk.toml` and run `agk upgrade` (or `/agk:upgrade`); `agk doctor` then checks those files
+too. This repository keeps its own copies for the experiment.
 
     python3 scripts/agk/review_context.py [--base REF] --body PR_BODY.md > review-context.md
     # ask the `reviewer` subagent (.claude/agents/reviewer.md) to review review-context.md, save its answer

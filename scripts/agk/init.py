@@ -16,7 +16,7 @@ import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from common import detect_default_branch, matches, read_list
+from common import detect_default_branch, experimental_enabled, matches, read_list
 from reviewers import parse, render_codeowners
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
@@ -120,7 +120,8 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
         "default_branch": branch,
     }
     items: dict[str, bytes] = {}
-    for rel in manifest["verbatim"]:
+    extra = manifest.get("experimental", []) if experimental_enabled(target) else []
+    for rel in [*manifest["verbatim"], *extra]:
         items[rel] = (KIT_ROOT / rel).read_bytes()
     for dest, src in manifest["templates"].items():
         text = (KIT_ROOT / src).read_text(encoding="utf-8")

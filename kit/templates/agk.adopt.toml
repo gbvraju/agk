@@ -8,3 +8,4 @@ test_patterns = {{test_patterns}}
 lint_paths = ["scripts/agk", "tests/kit", ".claude/hooks"]
 # The project runs its own tests in its own CI; agk-project-test only prints a notice.
 project_tests = ""
+# Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.

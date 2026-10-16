@@ -454,13 +454,15 @@ def find_block(text: str, style: str) -> tuple[str, str | None]:
     return "ok", "".join(lines[begins[0] + 1 : ends[0]])
 
 
-def installed_files(manifest: dict, mode: str) -> tuple[list[str], dict[str, str]]:
+def installed_files(
+    manifest: dict, mode: str, experimental: bool = False
+) -> tuple[list[str], dict[str, str]]:
     """(verbatim paths the installer for `mode` writes, marked blocks compared inside markers)."""
-    verbatim = [
-        p
-        for p in manifest.get("verbatim", [])
-        if not p.startswith(KIT_ONLY) and p not in KIT_ONLY_FILES
+    listed = [
+        *manifest.get("verbatim", []),
+        *(manifest.get("experimental", []) if experimental else []),
     ]
+    verbatim = [p for p in listed if not p.startswith(KIT_ONLY) and p not in KIT_ONLY_FILES]
     if mode == "init":
         return sorted(verbatim), {}
     spec = manifest.get("adopt") or {}
@@ -515,7 +517,7 @@ def kit_results(root: Path, kit_root: Path | None, config: dict) -> tuple[dict[s
         out = {n: Result("cannot-check", "version-mismatch") for n in names}
         out["kit-version"] = Result("fail")
         return out, kit_version
-    files, blocks = installed_files(manifest, mode)
+    files, blocks = installed_files(manifest, mode, config.get("experimental_reviewer") is True)
     try:
         missing, differs = compare_tree(root, kit_root, files, blocks)
     except (OSError, UnicodeDecodeError):

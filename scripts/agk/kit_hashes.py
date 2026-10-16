@@ -61,7 +61,7 @@ def snapshot_of(manifest: dict, read: Any) -> Snapshot:
         (adopt.get("templates") or {}).values()
     )
     snap: Snapshot = {name: {} for name in MAPS}
-    for path in manifest.get("verbatim", []):
+    for path in [*manifest.get("verbatim", []), *manifest.get("experimental", [])]:
         data = read(path)
         if data is not None:
             snap["verbatim"][path] = hashlib.sha256(data).hexdigest()
@@ -117,7 +117,8 @@ def snapshot_commit(root: Path, blobs: Blobs, commit: str) -> tuple[str, Snapsho
         return None
     blobs.fetch([tree[MANIFEST]])
     manifest = json.loads(blobs.cache[tree[MANIFEST]].decode("utf-8"))
-    wanted = set(manifest.get("verbatim", [])) | set(manifest.get("templates", {}).values())
+    wanted = set(manifest.get("verbatim", [])) | set(manifest.get("experimental", []))
+    wanted |= set(manifest.get("templates", {}).values())
     wanted |= set((manifest.get("adopt") or {}).get("templates", {}).values())
     wanted |= set((manifest.get("adopt") or {}).get("blocks", {}))
     blobs.fetch([tree[p] for p in wanted if p in tree])
