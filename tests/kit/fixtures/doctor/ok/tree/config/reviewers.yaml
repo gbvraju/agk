@@ -1,0 +1,3 @@
+version: 1
+teams:
+  maintainers: {github_team: "@example-owner/maintainers"}

@@ -1,0 +1,8 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "ruleset-bypass"
+  ],
+  "origin_head": true
+}

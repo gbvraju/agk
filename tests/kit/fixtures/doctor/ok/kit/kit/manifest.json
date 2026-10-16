@@ -1,0 +1,16 @@
+{
+  "adopt": {
+    "blocks": {},
+    "skip": [],
+    "templates": {}
+  },
+  "kit_version": "9.9.9",
+  "rendered": [
+    ".github/CODEOWNERS"
+  ],
+  "templates": {},
+  "verbatim": [
+    ".claude/hooks/x.txt",
+    "scripts/agk/y.txt"
+  ]
+}

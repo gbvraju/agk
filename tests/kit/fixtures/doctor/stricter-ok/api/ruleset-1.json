@@ -1,0 +1,72 @@
+{
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
+    }
+  },
+  "current_user_can_bypass": "never",
+  "enforcement": "active",
+  "id": 1,
+  "name": "Main",
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_linear_history"
+    },
+    {
+      "parameters": {
+        "allowed_merge_methods": [
+          "squash",
+          "rebase"
+        ],
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": true,
+        "require_extra_approval_for_unattributed_changes": true,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 1,
+        "required_review_thread_resolution": false,
+        "required_reviewers": [
+          {
+            "minimum_approvals": 1,
+            "reviewer": {
+              "id": 7,
+              "type": "Team"
+            }
+          }
+        ]
+      },
+      "type": "pull_request"
+    },
+    {
+      "parameters": {
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {
+            "context": "governance",
+            "integration_id": 15368
+          },
+          {
+            "context": "lint"
+          }
+        ],
+        "strict_required_status_checks_policy": false
+      },
+      "type": "required_status_checks"
+    },
+    {
+      "type": "required_signatures"
+    }
+  ],
+  "source": "example-owner/example-repo",
+  "source_type": "Repository",
+  "target": "branch"
+}

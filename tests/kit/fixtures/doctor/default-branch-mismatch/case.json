@@ -1,0 +1,8 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "default-branch-config"
+  ],
+  "origin_head": true
+}

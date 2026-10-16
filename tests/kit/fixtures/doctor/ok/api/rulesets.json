@@ -1,0 +1,10 @@
+[
+  {
+    "enforcement": "active",
+    "id": 1,
+    "name": "Main",
+    "source": "example-owner/example-repo",
+    "source_type": "Repository",
+    "target": "branch"
+  }
+]

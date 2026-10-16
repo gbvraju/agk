@@ -1,0 +1,8 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "ruleset-linear-history"
+  ],
+  "origin_head": true
+}

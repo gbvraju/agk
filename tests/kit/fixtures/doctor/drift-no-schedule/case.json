@@ -1,0 +1,8 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "drift-workflow-file"
+  ],
+  "origin_head": true
+}

@@ -1,0 +1,10 @@
+{
+  "cannot": {},
+  "delete": [
+    "scripts/agk/y.txt"
+  ],
+  "fail": [
+    "vendored-missing"
+  ],
+  "origin_head": true
+}

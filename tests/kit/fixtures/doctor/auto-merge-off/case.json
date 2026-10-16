@@ -1,0 +1,8 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "repo-auto-merge"
+  ],
+  "origin_head": true
+}

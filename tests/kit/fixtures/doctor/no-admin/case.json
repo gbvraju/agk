@@ -1,0 +1,16 @@
+{
+  "cannot": {
+    "required-check-governance": "no-admin",
+    "ruleset-bypass": "no-admin",
+    "ruleset-deletion": "no-admin",
+    "ruleset-enforcement": "no-admin",
+    "ruleset-force-push": "no-admin",
+    "ruleset-linear-history": "no-admin",
+    "ruleset-missing": "no-admin",
+    "ruleset-pull-request": "no-admin",
+    "ruleset-target": "no-admin"
+  },
+  "delete": [],
+  "fail": [],
+  "origin_head": true
+}
