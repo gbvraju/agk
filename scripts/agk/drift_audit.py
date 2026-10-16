@@ -276,11 +276,12 @@ def d4_documents(root: Path, today: date) -> tuple[list[Finding], int]:
     return found, undated
 
 
-def d4_register(root: Path, today: date) -> list[Finding]:
-    text = read(root, REGISTER)
-    if text is None:
-        return []
-    found, in_open = [], False
+def register_lines(text: str) -> list[dict]:
+    """The lines of `## Open` of the register as {number, source, text, due, owner, well_formed}.
+
+    A line with a missing or invalid due date, or an empty field, has `well_formed` False.
+    """
+    lines, in_open = [], False
     for number, line in enumerate(text.splitlines(), 1):
         if line.startswith("## "):
             in_open = line.strip() == "## Open"
@@ -289,10 +290,31 @@ def d4_register(root: Path, today: date) -> list[Finding]:
             due = DUE.fullmatch(parts[-2]) if len(parts) >= 4 else None
             when = parse_date(due.group(1)) if due else None
             fields = [parts[0], " | ".join(parts[1:-2]), parts[-1]] if len(parts) >= 4 else []
-            if when is None or not all(f.strip() for f in fields):
-                found.append(Finding("D4", f"{REGISTER}:{number}", "malformed register line"))
-            elif when < today:
-                found.append(Finding("D4", parts[0], f"register line is overdue since {when}"))
+            lines.append(
+                {
+                    "number": number,
+                    "source": parts[0],
+                    "text": fields[1] if fields else line[2:],
+                    "due": when,
+                    "owner": fields[2] if fields else "",
+                    "well_formed": when is not None and all(f.strip() for f in fields),
+                }
+            )
+    return lines
+
+
+def d4_register(root: Path, today: date) -> list[Finding]:
+    text = read(root, REGISTER)
+    if text is None:
+        return []
+    found = []
+    for item in register_lines(text):
+        if not item["well_formed"]:
+            found.append(Finding("D4", f"{REGISTER}:{item['number']}", "malformed register line"))
+        elif item["due"] < today:
+            found.append(
+                Finding("D4", item["source"], f"register line is overdue since {item['due']}")
+            )
     return found
 
 
