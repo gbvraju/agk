@@ -120,3 +120,166 @@ The workflows of the sandbox are `drift-audit`, `governance` and `metrics`, all 
 
 Next (the maintainers' step, one change at a time; the agent re-runs the doctor and records each run verbatim in this file): the table of steps 1 to 14
 above, each followed by its restore. The agent changes no setting.
+
+
+## Local cases (2026-10-16)
+
+Done before run 1, on the baseline clone only (`/home/user/sandbox-baseline`, never pushed), each restored afterwards. The command of every run is the
+baseline command, from the clone: `python3 /home/user/agk/scripts/agk/doctor.py --repo gbvraju/agk-sandbox --kit-root /home/user/agk`. The output is
+verbatim, the full report; the expected failed ids are those of the brief.
+
+| Case | Change | Restore | Expected | Observed | Match |
+| --- | --- | --- | --- | --- | --- |
+| L1 | `@gbvraju` replaced by `@REPLACE-ME` in `config/reviewers.yaml` and `.github/CODEOWNERS` | `git checkout -- config/reviewers.yaml .github/CODEOWNERS` | `placeholder-team-reviewers`, `placeholder-team-codeowners` | the same two `FAIL`, exit 1 | match |
+| L2 | `git remote set-head origin --delete` | `git remote set-head origin main` (no network) | `origin-head` | `origin-head` `FAIL`, exit 4 (a warning) | match |
+| L3 | one line appended to `scripts/agk/check_adrs.py` (a vendored file) | `git checkout -- scripts/agk/check_adrs.py` | `vendored-differs` | `vendored-differs` `FAIL` naming that path, exit 1 | match |
+| L4 | `version = "0.8.0"` in `agk.toml` | `git checkout -- agk.toml` | `kit-version` | `kit-version` `FAIL`; `vendored-missing` and `vendored-differs` `??` (`version-mismatch`), as SPEC-0006 rule 8 says; exit 4 | match |
+
+### L1
+
+```
+agk doctor 0.9.0
+ok ruleset-missing error a ruleset targets the default branch
+ok ruleset-enforcement error ruleset enforcement is active
+ok ruleset-bypass error ruleset has no bypass actors
+ok ruleset-target error the ruleset targets the default branch
+ok ruleset-deletion error ruleset restricts deletions
+ok ruleset-linear-history error ruleset requires linear history
+ok ruleset-force-push error ruleset blocks force pushes
+ok ruleset-pull-request error ruleset requires a pull request
+ok required-check-governance error the status check `governance` is required
+ok repo-auto-merge warn repository setting allow_auto_merge is on
+ok repo-delete-branch warn repository setting delete_branch_on_merge is on
+FAIL placeholder-team-reviewers error config/reviewers.yaml still names the placeholder team
+  fix: replace the placeholder with a real team or user, then run `python3 scripts/agk/reviewers.py --codeowners --write`
+FAIL placeholder-team-codeowners error .github/CODEOWNERS still names the placeholder team
+  fix: replace the placeholder with a real team or user, then run `python3 scripts/agk/reviewers.py --codeowners --write`
+ok origin-head warn refs/remotes/origin/HEAD exists
+ok drift-workflow-file error .github/workflows/drift-audit.yml has a schedule
+ok drift-workflow-state error the drift-audit workflow is active
+ok kit-version warn the kit version equals version in agk.toml
+ok vendored-missing error every vendored file is present
+ok vendored-differs error every vendored file equals the kit's copy
+ok default-branch-config warn default_branch in agk.toml equals the repository's default branch
+summary: 18 ok, 2 fail, 0 cannot-check
+exit 1
+```
+
+### L2
+
+```
+agk doctor 0.9.0
+ok ruleset-missing error a ruleset targets the default branch
+ok ruleset-enforcement error ruleset enforcement is active
+ok ruleset-bypass error ruleset has no bypass actors
+ok ruleset-target error the ruleset targets the default branch
+ok ruleset-deletion error ruleset restricts deletions
+ok ruleset-linear-history error ruleset requires linear history
+ok ruleset-force-push error ruleset blocks force pushes
+ok ruleset-pull-request error ruleset requires a pull request
+ok required-check-governance error the status check `governance` is required
+ok repo-auto-merge warn repository setting allow_auto_merge is on
+ok repo-delete-branch warn repository setting delete_branch_on_merge is on
+ok placeholder-team-reviewers error config/reviewers.yaml has no placeholder team
+ok placeholder-team-codeowners error .github/CODEOWNERS has no placeholder team
+FAIL origin-head warn refs/remotes/origin/HEAD is missing
+  fix: run `git remote set-head origin <default_branch>` (no network; `-a` asks the remote)
+ok drift-workflow-file error .github/workflows/drift-audit.yml has a schedule
+ok drift-workflow-state error the drift-audit workflow is active
+ok kit-version warn the kit version equals version in agk.toml
+ok vendored-missing error every vendored file is present
+ok vendored-differs error every vendored file equals the kit's copy
+ok default-branch-config warn default_branch in agk.toml equals the repository's default branch
+summary: 19 ok, 1 fail, 0 cannot-check
+exit 4
+```
+
+### L3
+
+```
+agk doctor 0.9.0
+ok ruleset-missing error a ruleset targets the default branch
+ok ruleset-enforcement error ruleset enforcement is active
+ok ruleset-bypass error ruleset has no bypass actors
+ok ruleset-target error the ruleset targets the default branch
+ok ruleset-deletion error ruleset restricts deletions
+ok ruleset-linear-history error ruleset requires linear history
+ok ruleset-force-push error ruleset blocks force pushes
+ok ruleset-pull-request error ruleset requires a pull request
+ok required-check-governance error the status check `governance` is required
+ok repo-auto-merge warn repository setting allow_auto_merge is on
+ok repo-delete-branch warn repository setting delete_branch_on_merge is on
+ok placeholder-team-reviewers error config/reviewers.yaml has no placeholder team
+ok placeholder-team-codeowners error .github/CODEOWNERS has no placeholder team
+ok origin-head warn refs/remotes/origin/HEAD exists
+ok drift-workflow-file error .github/workflows/drift-audit.yml has a schedule
+ok drift-workflow-state error the drift-audit workflow is active
+ok kit-version warn the kit version equals version in agk.toml
+ok vendored-missing error every vendored file is present
+FAIL vendored-differs error vendored files differ from the kit's copy (scripts/agk/check_adrs.py)
+  fix: review `git log -p -- <path>`; restore the kit's copy, or record the deliberate edit in an ADR that names the path class
+ok default-branch-config warn default_branch in agk.toml equals the repository's default branch
+summary: 19 ok, 1 fail, 0 cannot-check
+exit 1
+```
+
+### L4
+
+```
+agk doctor 0.9.0
+ok ruleset-missing error a ruleset targets the default branch
+ok ruleset-enforcement error ruleset enforcement is active
+ok ruleset-bypass error ruleset has no bypass actors
+ok ruleset-target error the ruleset targets the default branch
+ok ruleset-deletion error ruleset restricts deletions
+ok ruleset-linear-history error ruleset requires linear history
+ok ruleset-force-push error ruleset blocks force pushes
+ok ruleset-pull-request error ruleset requires a pull request
+ok required-check-governance error the status check `governance` is required
+ok repo-auto-merge warn repository setting allow_auto_merge is on
+ok repo-delete-branch warn repository setting delete_branch_on_merge is on
+ok placeholder-team-reviewers error config/reviewers.yaml has no placeholder team
+ok placeholder-team-codeowners error .github/CODEOWNERS has no placeholder team
+ok origin-head warn refs/remotes/origin/HEAD exists
+ok drift-workflow-file error .github/workflows/drift-audit.yml has a schedule
+ok drift-workflow-state error the drift-audit workflow is active
+FAIL kit-version warn the kit version differs from version in agk.toml
+  fix: run /agk:upgrade (SPEC-0008)
+?? vendored-missing error cannot check (version-mismatch)
+  to check: use a kit of the same version as version in agk.toml, or run /agk:upgrade
+?? vendored-differs error cannot check (version-mismatch)
+  to check: use a kit of the same version as version in agk.toml, or run /agk:upgrade
+ok default-branch-config warn default_branch in agk.toml equals the repository's default branch
+summary: 17 ok, 1 fail, 2 cannot-check
+exit 4
+```
+
+### After the four restores
+
+`git status -sb` of the clone: `## main...origin/main` (clean); `refs/remotes/origin/HEAD` is `refs/remotes/origin/main`. The doctor again:
+
+```
+agk doctor 0.9.0
+ok ruleset-missing error a ruleset targets the default branch
+ok ruleset-enforcement error ruleset enforcement is active
+ok ruleset-bypass error ruleset has no bypass actors
+ok ruleset-target error the ruleset targets the default branch
+ok ruleset-deletion error ruleset restricts deletions
+ok ruleset-linear-history error ruleset requires linear history
+ok ruleset-force-push error ruleset blocks force pushes
+ok ruleset-pull-request error ruleset requires a pull request
+ok required-check-governance error the status check `governance` is required
+ok repo-auto-merge warn repository setting allow_auto_merge is on
+ok repo-delete-branch warn repository setting delete_branch_on_merge is on
+ok placeholder-team-reviewers error config/reviewers.yaml has no placeholder team
+ok placeholder-team-codeowners error .github/CODEOWNERS has no placeholder team
+ok origin-head warn refs/remotes/origin/HEAD exists
+ok drift-workflow-file error .github/workflows/drift-audit.yml has a schedule
+ok drift-workflow-state error the drift-audit workflow is active
+ok kit-version warn the kit version equals version in agk.toml
+ok vendored-missing error every vendored file is present
+ok vendored-differs error every vendored file equals the kit's copy
+ok default-branch-config warn default_branch in agk.toml equals the repository's default branch
+summary: 20 ok, 0 fail, 0 cannot-check
+exit 0
+```
