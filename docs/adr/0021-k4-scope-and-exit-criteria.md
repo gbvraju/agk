@@ -1,10 +1,10 @@
 # ADR-0021: K4 scope and exit criteria: proof of delivery, and the method in the kit
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-16
 - Deciders: maintainers
 - Related: ADR-0002, ADR-0011, ADR-0015, ADR-0016, ADR-0019, ADR-0020
-- Amends: ADR-0002 (K4 only), ADR-0015 (decision 4: this is the K4-opening ADR, early)
+- Amends: ADR-0002
 - Requirements: REQ-003, REQ-012, REQ-015, REQ-016, REQ-017, REQ-018, REQ-019, REQ-020
 
 Protected classes: `docs/requirements.md`
@@ -36,7 +36,7 @@ drift findings); it is not assembled, and two of its foundations are weaker than
 
 ADR-0002 defined K4 as "public launch: docs site, handbook, profiles, licence review of adopted components". A launch of
 a kit that proves process but not delivery would launch the weaker half. This ADR amends K4 to put proof of delivery
-first and keeps the smallest launch set that the proof needs.
+first and keeps the smallest launch set that the proof needs. This is the K4-opening ADR that ADR-0015 decision 4 required by 2026-12-01.
 
 ## Decision
 

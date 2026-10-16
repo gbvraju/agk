@@ -90,7 +90,7 @@ Only the Status line may change without an ADR. `done` requires at least one tes
 
 ### REQ-018 — Weekly product report answers the five questions from derived facts
 
-- Acceptance: AC1 for two consecutive ISO weeks the weekly product report is created on schedule in the pilot repository, and for each week the product owner's written answers to the five questions, given from the report alone, are checked by the maintainers against the repository as 5 of 5 correct (an answer the report could not give counts as wrong); AC2 a test shows every number and every status in the report is computed from the facts document, the report names the facts commit, and no field is read from a PR body except the `Behaviour:` and `Verdict:` lines; AC3 the README says in plain words what the kit does and for whom, with the measured results and their limits (including the experimental reviewer), and a product-owner guide explains the weekly report and the inbox in one page
+- Acceptance: AC1 for two consecutive ISO weeks the weekly product report is created on schedule in the pilot repository, and for each week the product owner's written answers to the five questions, given from the report alone, are checked by the maintainers against the repository as 5 of 5 correct (an answer the report could not give counts as wrong); AC2 a test shows every number and every status in the report is computed from the facts document, the report names the facts commit, and no field is read from a PR body except the `Behaviour:` and `Verdict:` lines
 - Status: planned
 
 ### REQ-019 — Plain-language intake: a sentence becomes a Draft requirement with acceptance criteria
