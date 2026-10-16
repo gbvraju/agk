@@ -1,0 +1,379 @@
+"""agk upgrade (SPEC-0008): bring an init or adopt target from kit version X to this kit.
+
+Kit-only (never installed): run it from the kit checkout or the plugin root, as init.py and
+adopt.py. Standard library only; no network, no `git`, no commit. The target keeps no lock file: the
+installed version is `version` in `agk.toml`, and `kit/hashes.json` says what each file was at that
+version, so a locally edited file is told from an outdated one. An edited file stops the whole run;
+nothing is written. Files the user owns are never rewritten; only the `version = "..."` line of
+`agk.toml` is set, as the last write.
+
+    python3 scripts/agk/upgrade.py TARGET [--dry-run]
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import sys
+import tomllib
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
+from common import matches, read_list
+from init import KIT_ROOT as KIT_ROOT  # noqa: PLC0414 - tests point it at an older kit fixture
+from init import MANIFEST, Refusal, check_interpreter, passes_symlink, path_class
+
+USAGE = "usage: upgrade.py TARGET [--dry-run]"
+TABLE = "kit/hashes.json"
+KIT_ONLY = ("kit/", "tests/kit_dev/")
+KIT_ONLY_FILES = ("scripts/agk/init.py", "scripts/agk/adopt.py")
+LINE_TEMPLATES = ("config/protected-paths.txt", "config/neutrality.txt")
+GENERATOR = "scripts/agk/reviewers.py"
+CODEOWNERS_COMMAND = "python3 scripts/agk/reviewers.py --codeowners --write"
+FIX = (
+    "fix: restore the kit's copy of each edited file by hand, or move the edit out of the vendored "
+    "file, then run again"
+)
+
+
+@dataclass
+class Item:
+    rel: str
+    action: str
+    detail: str = ""
+    content: bytes | None = None
+
+
+@dataclass
+class Plan:
+    version: str
+    kit_version: str
+    mode: str
+    items: list[Item] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    entries: list[str] = field(default_factory=list)
+
+    @property
+    def writes(self) -> list[Item]:
+        return [i for i in self.items if i.action in ("create", "replace")]
+
+    @property
+    def conflicts(self) -> list[Item]:
+        return [i for i in self.items if i.action == "conflict"]
+
+
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def version_key(text: str) -> tuple[int, ...]:
+    parts = text.split(".")
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        raise ValueError(text)
+    return tuple(int(p) for p in parts)
+
+
+def read_stamp(target: Path) -> tuple[str, str]:
+    path = target / "agk.toml"
+    if not path.is_file():
+        raise Refusal(
+            "agk.toml is missing (path class agk.toml); an install stamped only in pyproject.toml "
+            "[tool.agk] (kit 0.1.0 and 0.2.0) is not supported"
+        )
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        raise Refusal("agk.toml is not readable TOML (path class agk.toml)") from None
+    version, mode = data.get("version"), data.get("mode")
+    if not isinstance(version, str):
+        raise Refusal("agk.toml has no version (path class agk.toml)")
+    if mode not in ("init", "adopt"):
+        raise Refusal("mode in agk.toml is not init or adopt (path class agk.toml)")
+    return version, mode
+
+
+def locate(text: str, style: str) -> tuple[str, int, int, list[str]]:
+    """("none"|"broken"|"ok", begin line, end line, lines) for the agk markers of a file."""
+    begin, end = MARKERS[style]
+    lines = text.splitlines(keepends=True)
+    begins = [i for i, ln in enumerate(lines) if ln.rstrip("\r\n") == begin]
+    ends = [i for i, ln in enumerate(lines) if ln.rstrip("\r\n") == end]
+    if not begins and not ends:
+        return "none", -1, -1, lines
+    if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
+        return "broken", -1, -1, lines
+    return "ok", begins[0], ends[0], lines
+
+
+def installed_set(manifest: dict, mode: str) -> tuple[list[str], dict[str, str]]:
+    """(whole-file paths the installer for `mode` writes, marked blocks of an adopt install)."""
+    verbatim = [
+        p for p in manifest["verbatim"] if not p.startswith(KIT_ONLY) and p not in KIT_ONLY_FILES
+    ]
+    if mode == "init":
+        return sorted(verbatim), {}
+    spec = manifest["adopt"]
+    rendered = set(manifest.get("rendered") or [])
+    blocks = {p: s for p, s in spec["blocks"].items() if p not in rendered}
+    whole = set(verbatim) - set(spec["skip"]) - set(spec["blocks"])
+    return sorted(whole), dict(sorted(blocks.items()))
+
+
+def whole_file(target: Path, rel: str, new: bytes, old: set[str], entries: list[str]) -> Item:
+    path = target / rel
+    cls = path_class(rel, entries)
+    if not path.exists() and not path.is_symlink():
+        return Item(rel, "deleted-locally") if old else Item(rel, "create", content=new)
+    if not path.is_file():
+        return Item(rel, "conflict", f" (path class {cls}: not a file)")
+    data = path.read_bytes()
+    if data == new:
+        return Item(rel, "unchanged")
+    if digest(data) in old:
+        return Item(rel, "replace", content=new)
+    return Item(rel, "conflict", f" (path class {cls}: differs from every released copy)")
+
+
+def block_file(
+    target: Path, rel: str, style: str, body: str, old: set[str], entries: list[str]
+) -> Item:
+    path = target / rel
+    cls = path_class(rel, entries)
+    whole = body.rstrip("\n") + "\n"
+    if not path.exists() and not path.is_symlink():
+        if old:
+            return Item(rel, "deleted-locally")
+        content = block_of(style, body) if rel in ABSENT_AS_BLOCK else whole
+        return Item(rel, "create", content=content.encode("utf-8"))
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return Item(rel, "conflict", f" (path class {cls}: not readable as text)")
+    state, begin, end, lines = locate(text, style)
+    if state == "broken":
+        return Item(rel, "conflict", f" (path class {cls}: broken or duplicated agk block)")
+    if state == "none":
+        # adopt writes a whole file, without markers, when the file did not exist
+        if rel in ABSENT_AS_BLOCK:
+            return Item(rel, "conflict", f" (path class {cls}: marked block, no agk markers)")
+        if text == whole:
+            return Item(rel, "unchanged")
+        if digest(text.rstrip("\n").encode() + b"\n") in old:
+            return Item(rel, "replace", content=whole.encode("utf-8"))
+        return Item(rel, "conflict", f" (path class {cls}: marked block, no agk markers)")
+    inner = "".join(lines[begin + 1 : end])
+    if inner == whole:
+        return Item(rel, "unchanged")
+    if digest(inner.encode("utf-8")) in old:
+        fresh = "".join([*lines[: begin + 1], whole, *lines[end:]])
+        return Item(rel, "replace", content=fresh.encode("utf-8"))
+    return Item(rel, "conflict", f" (path class {cls}: marked block, agk block differs)")
+
+
+def template_notes(target: Path, kit_root: Path, templates: dict[str, str], row: dict) -> list[str]:
+    notes = []
+    for dest, src in sorted(templates.items()):
+        source = (kit_root / src).read_bytes()
+        if digest(source) in row["templates"].get(src, []):
+            continue
+        notes.append(f"template-changed {dest} ({src})")
+        text = source.decode("utf-8")
+        have = target / dest
+        if dest in LINE_TEMPLATES:
+            mine = read_list(have.read_text(encoding="utf-8")) if have.is_file() else []
+            for line in read_list(text):
+                if "{{" not in line and line not in mine:
+                    notes.append(f"template-line {dest} {line}")
+        if dest == "agk.toml" and have.is_file():
+            keys = set(tomllib.loads(have.read_text(encoding="utf-8")))
+            for line in text.split("\n[", 1)[0].splitlines():
+                match = re.match(r"^([A-Za-z_][\w-]*)\s*=\s*(.*)$", line)
+                if match and match.group(1) not in keys:
+                    notes.append(f"template-key {dest} {match.group(1)} = {match.group(2)}")
+    return notes
+
+
+def build_plan(target: Path, kit_root: Path) -> Plan:
+    version, mode = read_stamp(target)
+    manifest = json.loads((kit_root / MANIFEST).read_text(encoding="utf-8"))
+    try:
+        table = json.loads((kit_root / TABLE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise Refusal(f"{TABLE} is missing or not JSON (path class {TABLE})") from None
+    kit_version = str(manifest["kit_version"])
+    if version_key(version) > version_key(kit_version):
+        raise Refusal("version in agk.toml is newer than this kit (path class agk.toml)")
+    row = table.get("releases", {}).get(version)
+    if row is None:
+        raise Refusal(f"version in agk.toml is not in the table (path class {TABLE})")
+    listed = target / "config" / "protected-paths.txt"
+    entries = read_list(listed.read_text(encoding="utf-8")) if listed.is_file() else []
+    plan = Plan(version, kit_version, mode, entries=entries)
+
+    whole, blocks = installed_set(manifest, mode)
+    for rel in whole:
+        new = (kit_root / rel).read_bytes()
+        old = set(row["verbatim"].get(rel, []))
+        plan.items.append(whole_file(target, rel, new, old, entries))
+    for rel, style in blocks.items():
+        body = (kit_root / rel).read_text(encoding="utf-8")
+        old = set(row["blocks"].get(rel, []))
+        plan.items.append(block_file(target, rel, style, body, old, entries))
+    current = set(manifest["verbatim"])
+    for rel in sorted(set(row["verbatim"]) - current):
+        if (target / rel).exists() or (target / rel).is_symlink():
+            plan.items.append(Item(rel, "removed-in-kit"))
+    plan.items.sort(key=lambda i: i.rel)
+
+    templates = manifest["templates"] if mode == "init" else manifest["adopt"]["templates"]
+    plan.notes = template_notes(target, kit_root, templates, row)
+    for item in plan.writes:
+        if passes_symlink(target, item.rel):
+            raise Refusal(f"{item.rel} passes through a symlink (path class symlink)")
+    return plan
+
+
+def protected_classes(plan: Plan) -> list[str]:
+    paths = [i.rel for i in plan.writes] + (
+        ["agk.toml"] if plan.version != plan.kit_version else []
+    )
+    found: list[str] = []
+    for rel in paths:
+        for entry in plan.entries:
+            if matches(rel, entry):
+                if entry not in found:
+                    found.append(entry)
+                break
+    return found
+
+
+def report(plan: Plan, dry_run: bool) -> list[str]:
+    lines = [f"{i.action} {i.rel}{i.detail}" for i in plan.items]
+    lines += plan.notes
+    if plan.conflicts:
+        lines.append(
+            "refused: edited vendored files differ from every released copy; nothing was written"
+        )
+        lines.append(FIX)
+        return lines
+    count = len(plan.writes)
+    stamp = plan.version != plan.kit_version
+    if dry_run:
+        tail = f"; the version line of agk.toml would be set to {plan.kit_version}" if stamp else ""
+        lines.append(f"dry run: {count} files would change{tail}; nothing was written")
+    elif count == 0 and not stamp:
+        lines.append("nothing to do")
+    else:
+        lines.append(
+            f"upgraded {count} files; the version line of agk.toml is set to {plan.kit_version}"
+        )
+    classes = protected_classes(plan)
+    if classes:
+        lines += [
+            f"Protected classes: {', '.join(f'`{c}`' for c in classes)}",
+            "The target's check needs an ADR in the same pull request that names each class. "
+            "Skeleton (write the ADR yourself; the upgrade writes none):",
+            f"# ADR-NNNN: Upgrade agk from {plan.version} to {plan.kit_version}",
+            "- Status: Proposed",
+            "- Date: YYYY-MM-DD",
+            "- Deciders: maintainers",
+            "- Related: none",
+            "- Requirements: REQ-nnn",
+            f"Protected classes: {', '.join(f'`{c}`' for c in classes)}",
+            "## Context",
+            "## Decision",
+        ]
+    touched = {i.rel for i in plan.writes}
+    if GENERATOR in touched or any(
+        n.startswith("template-changed config/reviewers.yaml") for n in plan.notes
+    ):
+        lines.append(f"run: {CODEOWNERS_COMMAND}")
+    return lines
+
+
+def write_atomic(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.agk-upgrade")
+    try:
+        temp.write_bytes(data)
+        os.replace(temp, path)
+    finally:
+        if temp.exists():
+            temp.unlink()
+
+
+def apply(target: Path, plan: Plan) -> tuple[bool, list[str]]:
+    """Write in sorted path order, then the version line. (ok, files already written)."""
+    done: list[str] = []
+    for item in plan.writes:
+        try:
+            write_atomic(target / item.rel, item.content or b"")
+        except OSError:
+            print(
+                f"error: cannot write {item.rel} (path class {path_class(item.rel, plan.entries)})"
+            )
+            return False, done
+        done.append(item.rel)
+    if plan.version != plan.kit_version:
+        path = target / "agk.toml"
+        text = path.read_bytes()
+        new = re.sub(
+            rb'(?m)^(version\s*=\s*)"[^"]*"',
+            rb'\1"' + plan.kit_version.encode() + b'"',
+            text,
+            count=1,
+        )
+        try:
+            write_atomic(path, new)
+        except OSError:
+            print("error: cannot write agk.toml (path class agk.toml)")
+            return False, done
+    return True, done
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    dry_run = "--dry-run" in args
+    rest = [a for a in args if a != "--dry-run"]
+    if len(rest) != 1 or rest[0].startswith("-"):
+        print(USAGE, file=sys.stderr)
+        return 2
+    try:
+        problem = check_interpreter(tuple(sys.version_info[:3]))
+        if problem:
+            raise Refusal(problem)
+        target = Path(rest[0])
+        if not target.is_dir():
+            raise Refusal("TARGET is not an existing directory (path class: the target root)")
+        target = target.resolve()
+        kit_root = Path(KIT_ROOT)
+        if target == kit_root or kit_root in target.parents:
+            raise Refusal("TARGET is the kit checkout or inside it (path class kit/)")
+        if not (target / ".git").exists():
+            raise Refusal("TARGET is not a git work tree (path class .git/)")
+        plan = build_plan(target, kit_root)
+    except Refusal as exc:
+        print(f"refused: {exc}")
+        return 1
+    except (OSError, ValueError, KeyError):
+        print("error: cannot read the target or the kit sources (path class: the target root)")
+        return 3
+
+    for line in report(plan, dry_run):
+        print(line)
+    if plan.conflicts:
+        return 1
+    if dry_run or (not plan.writes and plan.version == plan.kit_version):
+        return 0
+    ok, done = apply(target, plan)
+    if not ok:
+        print(f"already written: {', '.join(done) if done else 'none'}")
+        return 3
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
