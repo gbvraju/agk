@@ -1,6 +1,6 @@
 # ADR-0022: shared helpers for the facts engine (behaviour-preserving, kit 0.11.1)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-16
 - Deciders: maintainers
 - Related: ADR-0021, ADR-0015
