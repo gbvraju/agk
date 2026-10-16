@@ -1,0 +1,22 @@
+[
+  {
+    "id": 3,
+    "body": "Verdict: cleared 0bccccc\n\nfinal",
+    "created_at": "2026-10-08T12:00:00Z"
+  },
+  {
+    "id": 1,
+    "body": "Verdict: fix list\n\n1. a thing",
+    "created_at": "2026-10-06T12:00:00Z"
+  },
+  {
+    "id": 2,
+    "body": "just a remark\nVerdict: rejected",
+    "created_at": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": 4,
+    "body": "Verdict: cleared ab",
+    "created_at": "2026-10-08T13:00:00Z"
+  }
+]

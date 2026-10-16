@@ -191,6 +191,7 @@ DEFAULT_CONFIG = {
     "project_tests": "",
     "test_patterns": ["test_*.py"],
     "mode": "",
+    "inbox_hours": 48,
 }
 
 

@@ -1,0 +1,18 @@
+[
+  {
+    "number": 5,
+    "state": "closed",
+    "created_at": "2026-10-05T09:00:00Z",
+    "closed_at": "2026-10-08T09:00:00Z",
+    "merged_at": "2026-10-08T09:00:00Z",
+    "head": {
+      "sha": "05cccccccccccccccccccccccccccccccccccccc"
+    },
+    "base": {
+      "ref": "main"
+    },
+    "title": "Change number 5",
+    "body": "Advances: REQ-001\n",
+    "updated_at": "2026-10-08T09:00:00Z"
+  }
+]

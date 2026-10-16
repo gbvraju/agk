@@ -1,0 +1,10 @@
+{
+  "total_count": 1,
+  "workflow_runs": [
+    {
+      "id": 9011,
+      "name": "proof",
+      "created_at": "2026-10-06T10:00:00Z"
+    }
+  ]
+}

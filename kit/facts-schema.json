@@ -1,0 +1,752 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agk facts document, schema 1",
+  "description": "Hand-written; changed by hand with scripts/agk/facts.py (SPEC-0009 rule 19).",
+  "type": "object",
+  "required": [
+    "schema",
+    "commit",
+    "dirty",
+    "today",
+    "repo",
+    "config",
+    "requirements",
+    "markers",
+    "specs",
+    "adrs",
+    "residuals",
+    "questions",
+    "pull_requests",
+    "issues",
+    "drift"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "dirty": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "today": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^([^/ ]+/[^/ ]+|unknown)$"
+    },
+    "config": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "default_branch",
+            "test_dirs",
+            "test_patterns",
+            "inbox_hours",
+            "project_tests_declared"
+          ],
+          "properties": {
+            "default_branch": {
+              "type": "string"
+            },
+            "test_dirs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "test_patterns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "inbox_hours": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "project_tests_declared": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "requirements": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "status",
+              "line",
+              "criteria",
+              "criteria_form"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^REQ-[0-9]{3}$"
+              },
+              "title": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "planned",
+                  "in-progress",
+                  "done",
+                  "unknown"
+                ]
+              },
+              "line": {
+                "type": "integer"
+              },
+              "criteria": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "text"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^AC[0-9]+$"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "criteria_form": {
+                "enum": [
+                  "structured",
+                  "unstructured"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "markers": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "req",
+              "ac",
+              "file",
+              "line"
+            ],
+            "properties": {
+              "req": {
+                "type": "string",
+                "pattern": "^REQ-[0-9]{3}$"
+              },
+              "ac": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^AC[0-9]+$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "requirements",
+          "notes",
+          "open_questions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^SPEC-[0-9]{4}$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "Draft",
+              "Approved",
+              "unknown"
+            ]
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^REQ-[0-9]{3}$"
+            }
+          },
+          "notes": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open_questions": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^Q-[A-Z0-9]+-[0-9]+$"
+                }
+              },
+              {
+                "const": "unknown"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "adrs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "date",
+          "amends",
+          "requirements",
+          "protected_classes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^ADR-[0-9]{4}$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "Proposed",
+              "Accepted",
+              "Superseded",
+              "Rejected",
+              "unknown"
+            ]
+          },
+          "date": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              {
+                "const": "unknown"
+              }
+            ]
+          },
+          "amends": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^ADR-[0-9]{4}$"
+            }
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^REQ-[0-9]{3}$"
+            }
+          },
+          "protected_classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "residuals": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "source",
+              "text",
+              "due",
+              "state"
+            ],
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "due": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "state": {
+                "enum": [
+                  "open",
+                  "closed"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "questions": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "files",
+              "ruled",
+              "named_in_log",
+              "open_in"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^Q-[A-Z0-9]+-[0-9]+$"
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ruled": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "named_in_log": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "open_in": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "pull_requests": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "number",
+              "state",
+              "created_at",
+              "closed_at",
+              "merged_at",
+              "head",
+              "base",
+              "title",
+              "files",
+              "proof",
+              "verdicts",
+              "behaviour"
+            ],
+            "properties": {
+              "number": {
+                "type": "integer"
+              },
+              "state": {
+                "enum": [
+                  "open",
+                  "merged",
+                  "closed"
+                ]
+              },
+              "created_at": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "closed_at": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "merged_at": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "head": {
+                "type": "string"
+              },
+              "base": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "files": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "proof": {
+                "enum": [
+                  "proven",
+                  "not-proven",
+                  "skipped",
+                  "unknown"
+                ]
+              },
+              "verdicts": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "kind",
+                        "sha",
+                        "at"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "cleared",
+                            "fix",
+                            "rejected"
+                          ]
+                        },
+                        "sha": {
+                          "oneOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[0-9a-f]{4,40}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "at": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "behaviour": {
+                "oneOf": [
+                  {
+                    "const": "unchanged"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "issues": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "number",
+              "title",
+              "label",
+              "state"
+            ],
+            "properties": {
+              "number": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              },
+              "label": {
+                "enum": [
+                  "agk-metrics",
+                  "agk-drift-audit",
+                  "agk-product-report"
+                ]
+              },
+              "state": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "drift": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "counts",
+            "total"
+          ],
+          "properties": {
+            "counts": {
+              "type": "object",
+              "required": [
+                "D1",
+                "D2",
+                "D3",
+                "D4",
+                "D5",
+                "D6"
+              ],
+              "properties": {
+                "D1": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "const": "unknown"
+                    }
+                  ]
+                },
+                "D2": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "const": "unknown"
+                    }
+                  ]
+                },
+                "D3": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "const": "unknown"
+                    }
+                  ]
+                },
+                "D4": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "const": "unknown"
+                    }
+                  ]
+                },
+                "D5": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "const": "unknown"
+                    }
+                  ]
+                },
+                "D6": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "const": "unknown"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "total": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

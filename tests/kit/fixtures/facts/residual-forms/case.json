@@ -1,0 +1,9 @@
+{
+  "today": "2026-10-14",
+  "weeks": 8,
+  "args": [
+    "--repo",
+    "demo-org/demo-repo"
+  ],
+  "api": true
+}
