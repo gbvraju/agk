@@ -1,0 +1,31 @@
+{
+  "total_count": 1,
+  "jobs": [
+    {
+      "id": 90120,
+      "name": "proof",
+      "steps": [
+        {
+          "name": "run proof.py",
+          "conclusion": "success"
+        },
+        {
+          "name": "outcome: proven",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "outcome: not-proven",
+          "conclusion": "success"
+        },
+        {
+          "name": "outcome: skipped",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "outcome: unknown",
+          "conclusion": "skipped"
+        }
+      ]
+    }
+  ]
+}

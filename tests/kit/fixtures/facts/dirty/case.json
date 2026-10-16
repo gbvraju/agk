@@ -1,0 +1,12 @@
+{
+  "today": "2026-10-14",
+  "weeks": 8,
+  "args": [
+    "--repo",
+    "demo-org/demo-repo"
+  ],
+  "api": true,
+  "modify": {
+    "docs/requirements.md": "\n### REQ-003 \u2014 Added after the commit\n\n- Acceptance: AC1 x\n- Status: planned\n"
+  }
+}

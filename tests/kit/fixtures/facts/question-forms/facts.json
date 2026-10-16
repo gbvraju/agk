@@ -1,0 +1,243 @@
+{
+  "adrs": [
+    {
+      "amends": [
+        "ADR-0002"
+      ],
+      "date": "2026-09-01",
+      "id": "ADR-0001",
+      "protected_classes": [
+        "scripts/agk/",
+        ".claude/"
+      ],
+      "requirements": [
+        "REQ-001"
+      ],
+      "status": "Accepted",
+      "title": "Demo"
+    },
+    {
+      "amends": [],
+      "date": "2026-10-12",
+      "id": "ADR-0002",
+      "protected_classes": [],
+      "requirements": [
+        "REQ-002"
+      ],
+      "status": "Proposed",
+      "title": "Proposed"
+    }
+  ],
+  "commit": "080b07be9531968e8615f185d4364ef7850a2684",
+  "config": {
+    "default_branch": "main",
+    "inbox_hours": 48,
+    "project_tests_declared": true,
+    "test_dirs": [
+      "tests"
+    ],
+    "test_patterns": [
+      "probe_*.py"
+    ]
+  },
+  "dirty": false,
+  "drift": {
+    "counts": {
+      "D1": 0,
+      "D2": 0,
+      "D3": 0,
+      "D4": 0,
+      "D5": 0,
+      "D6": 0
+    },
+    "total": 0
+  },
+  "issues": [],
+  "markers": [
+    {
+      "ac": "AC1",
+      "file": "tests/probe_demo.py",
+      "line": 1,
+      "req": "REQ-001"
+    }
+  ],
+  "pull_requests": [],
+  "questions": [
+    {
+      "files": [
+        "docs/runs/other.md",
+        "docs/runs/spec-0002-notes.md"
+      ],
+      "id": "Q-X1-1",
+      "named_in_log": false,
+      "open_in": [
+        "docs/runs/spec-0002-notes.md"
+      ],
+      "ruled": false
+    },
+    {
+      "files": [
+        "docs/runs/other.md"
+      ],
+      "id": "Q-X1-10",
+      "named_in_log": false,
+      "open_in": [],
+      "ruled": false
+    },
+    {
+      "files": [
+        "docs/runs/decisions-log.md",
+        "docs/runs/spec-0002-notes.md"
+      ],
+      "id": "Q-X1-2",
+      "named_in_log": true,
+      "open_in": [
+        "docs/runs/spec-0002-notes.md"
+      ],
+      "ruled": true
+    },
+    {
+      "files": [
+        "docs/runs/decisions-log.md",
+        "docs/runs/spec-0002-notes.md"
+      ],
+      "id": "Q-X1-3",
+      "named_in_log": true,
+      "open_in": [
+        "docs/runs/spec-0002-notes.md"
+      ],
+      "ruled": false
+    },
+    {
+      "files": [
+        "docs/runs/spec-0001-notes.md"
+      ],
+      "id": "Q-X1-4",
+      "named_in_log": false,
+      "open_in": [],
+      "ruled": false
+    },
+    {
+      "files": [
+        "docs/runs/spec-0001-notes.md"
+      ],
+      "id": "Q-X1-5",
+      "named_in_log": false,
+      "open_in": [
+        "docs/runs/spec-0001-notes.md"
+      ],
+      "ruled": false
+    },
+    {
+      "files": [
+        "docs/adr/0002-proposed.md"
+      ],
+      "id": "Q-X1-6",
+      "named_in_log": false,
+      "open_in": [
+        "docs/adr/0002-proposed.md"
+      ],
+      "ruled": false
+    },
+    {
+      "files": [
+        "docs/runs/other.md"
+      ],
+      "id": "Q-X1-7",
+      "named_in_log": false,
+      "open_in": [],
+      "ruled": false
+    }
+  ],
+  "repo": "demo-org/demo-repo",
+  "requirements": [
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "given a, when b, then c"
+        },
+        {
+          "id": "AC2",
+          "text": "given d, when e, then f"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-001",
+      "line": 3,
+      "status": "done",
+      "title": "First thing"
+    },
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "given g, when h, then i"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-002",
+      "line": 8,
+      "status": "planned",
+      "title": "Second thing"
+    }
+  ],
+  "residuals": [
+    {
+      "due": null,
+      "source": "docs/adr/0001-demo.md",
+      "state": "open",
+      "text": "2026-09-01: open item"
+    },
+    {
+      "due": "2027-01-01",
+      "source": "docs/runs/residuals.md",
+      "state": "open",
+      "text": "an open item"
+    },
+    {
+      "due": "2026-12-31",
+      "source": "docs/runs/residuals.md",
+      "state": "open",
+      "text": "another item"
+    },
+    {
+      "due": null,
+      "source": "docs/runs/residuals.md",
+      "state": "closed",
+      "text": "an old item"
+    },
+    {
+      "due": "2027-01-01",
+      "source": "docs/specs/0001-demo.md",
+      "state": "open",
+      "text": "2026-10-01: nothing (due 2027-01-01)"
+    }
+  ],
+  "schema": 1,
+  "specs": [
+    {
+      "id": "SPEC-0001",
+      "notes": "docs/runs/spec-0001-notes.md",
+      "open_questions": [
+        "Q-X1-5"
+      ],
+      "requirements": [
+        "REQ-001"
+      ],
+      "status": "Approved",
+      "title": "Demo"
+    },
+    {
+      "id": "SPEC-0002",
+      "notes": "docs/runs/spec-0002-notes.md",
+      "open_questions": [],
+      "requirements": [
+        "REQ-002"
+      ],
+      "status": "Draft",
+      "title": "Draft"
+    }
+  ],
+  "today": "2026-10-14"
+}

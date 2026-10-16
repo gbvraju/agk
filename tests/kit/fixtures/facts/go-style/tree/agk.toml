@@ -1,0 +1,4 @@
+default_branch = "main"
+test_dirs = ["."]
+test_patterns = ["*_test.go"]
+project_tests = "go test ./..."

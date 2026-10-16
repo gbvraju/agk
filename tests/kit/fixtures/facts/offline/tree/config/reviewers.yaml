@@ -1,0 +1,5 @@
+version: 1
+classes:
+  protected: {paths: [.claude/, docs/requirements.md, scripts/agk/], approvers: [maintainers]}
+teams:
+  maintainers: {github_team: "@demo-org/maintainers"}

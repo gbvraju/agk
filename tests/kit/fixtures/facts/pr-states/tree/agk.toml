@@ -1,0 +1,4 @@
+default_branch = "main"
+test_dirs = ["tests"]
+test_patterns = ["probe_*.py"]
+project_tests = "python3 -m pytest"
