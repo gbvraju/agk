@@ -663,7 +663,8 @@
                 "D3",
                 "D4",
                 "D5",
-                "D6"
+                "D6",
+                "D7"
               ],
               "properties": {
                 "D1": {
@@ -717,6 +718,16 @@
                   ]
                 },
                 "D6": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "const": "unknown"
+                    }
+                  ]
+                },
+                "D7": {
                   "oneOf": [
                     {
                       "type": "integer"

@@ -17,7 +17,7 @@
       "title": "Demo"
     }
   ],
-  "commit": "a2f49cef972c28e46ed10e36783622986e02ab40",
+  "commit": "e87a39cc6a7cd802bf2f5f468eaa886a7632172b",
   "config": {
     "default_branch": "main",
     "inbox_hours": 48,
@@ -37,7 +37,8 @@
       "D3": 0,
       "D4": 3,
       "D5": 0,
-      "D6": 0
+      "D6": 0,
+      "D7": 0
     },
     "total": 3
   },
@@ -45,6 +46,12 @@
   "markers": [
     {
       "ac": "AC1",
+      "file": "tests/probe_demo.py",
+      "line": 1,
+      "req": "REQ-001"
+    },
+    {
+      "ac": "AC2",
       "file": "tests/probe_demo.py",
       "line": 1,
       "req": "REQ-001"

@@ -14,6 +14,7 @@ DEFAULTS = {
     "test_patterns": ["test_*.py"],
     "mode": "",
     "inbox_hours": 48,
+    "ac_coverage": "warn",
 }
 
 

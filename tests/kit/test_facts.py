@@ -185,7 +185,7 @@ def test_ac2_without_gh_exactly_the_github_sections_are_unknown(tmp_path):
     doc = document("ok", tmp_path / "none", api=False)
     assert doc["pull_requests"] == "unknown" and doc["issues"] == "unknown"
     assert doc["drift"]["counts"]["D6"] == "unknown" and doc["drift"]["total"] == "unknown"
-    assert all(doc["drift"]["counts"][k] != "unknown" for k in ("D1", "D2", "D3", "D4", "D5"))
+    assert all(doc["drift"]["counts"][k] != "unknown" for k in ("D1", "D2", "D3", "D4", "D5", "D7"))
     for key in doc:
         if key not in ("pull_requests", "issues", "drift"):
             assert doc[key] == baseline[key], key
@@ -479,14 +479,16 @@ def test_ac2_drift_counts_equal_the_audit_with_and_without_open_audit_issues(tmp
     root = drift_repo(tmp_path)
     found, _ = drift_audit.audit(root, __import__("datetime").date(2026, 10, 15), "main", [])
     expected = {c: sum(1 for f in found if f.code == c) for c in drift_audit.CODES}
-    assert all(expected[c] >= 1 for c in ("D1", "D2", "D3", "D4", "D5")), expected
+    assert list(expected) == ["D1", "D2", "D3", "D4", "D5", "D6", "D7"]
+    assert all(expected[c] >= 1 for c in ("D1", "D2", "D3", "D4", "D5", "D7")), expected
+    total = len(found)
     without = drift_counts(root, tmp_path / "a", None)
-    assert without == {"counts": expected, "total": len(found)}
+    assert without == {"counts": expected, "total": total}
     assert without["counts"]["D6"] == 0
     duplicated = drift_counts(root, tmp_path / "b", [10, 11])
-    assert duplicated["counts"]["D6"] == 1 and duplicated["total"] == len(found) + 1
+    assert duplicated["counts"]["D6"] == 1 and duplicated["total"] == total + 1
     single = drift_counts(root, tmp_path / "c", [10])
-    assert single["counts"]["D6"] == 0 and single["total"] == len(found)
+    assert single["counts"]["D6"] == 0 and single["total"] == total
 
 
 # --- rules 16, 18: reuse, never re-parse ------------------------------------------------------
@@ -520,7 +522,7 @@ def test_ac2_facts_imports_the_parsers_it_reuses_and_copies_no_pattern():
     ):
         assert needle in source, needle
     assert "Verdict:" not in source and "VERDICT" not in source  # the rule is metrics'
-    assert "def d1" not in source and "D4" not in source.replace("drift_audit.CODES", "")
+    assert "def d1" not in source and "d4_" not in source
 
 
 def test_ac2_facts_writes_nothing_and_never_posts_or_prints_a_credential():

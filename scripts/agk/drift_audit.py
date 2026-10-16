@@ -17,6 +17,9 @@ from pathlib import Path
 import reviewers
 from common import (
     CheckError,
+    ac_coverage_mode,
+    ac_markers_for,
+    ac_shortfalls,
     git,
     load_config,
     markers_for,
@@ -26,6 +29,7 @@ from common import (
     repo_root,
     run,
     show,
+    stray_markers,
 )
 
 NAME = "drift-audit"
@@ -44,7 +48,7 @@ PROTECTED_LIST = "config/protected-paths.txt"
 REQUIREMENTS = "docs/requirements.md"
 REGISTER = "docs/runs/residuals.md"
 PLACEHOLDER = "@REPLACE-ME"
-CODES = ("D1", "D2", "D3", "D4", "D5", "D6")
+CODES = ("D1", "D2", "D3", "D4", "D5", "D6", "D7")
 RULES = {
     "D1": "principle 1",
     "D2": "principle 10",
@@ -52,6 +56,7 @@ RULES = {
     "D4": "SPEC-0004 rule 9",
     "D5": "SPEC-0004 rule 10",
     "D6": "SPEC-0004 rule 15",
+    "D7": "SPEC-0010 rule 4",
 }
 DATE_TEXT = re.compile(r"\d{4}-\d{2}-\d{2}")
 DUE = re.compile(r"\(due (\d{4}-\d{2}-\d{2})\)")
@@ -366,6 +371,29 @@ def d5(root: Path) -> list[Finding]:
     return found
 
 
+# --- D7 ---------------------------------------------------------------------------------------
+
+
+def d7(root: Path) -> list[Finding]:
+    """Stray markers always; in `warn` mode also each criterion shortfall (in `block` it fails)."""
+    text = read(root, REQUIREMENTS)
+    if text is None:
+        return []
+    reqs = parse_requirements(text)
+    markers = ac_markers_for(root)
+    found = [
+        Finding(
+            "D7",
+            f"{m['file']}:{m['line']}",
+            f"marker names {m['req']} {m['ac']}, which the requirement does not have",
+        )
+        for m in stray_markers(reqs, markers)
+    ]
+    if ac_coverage_mode(root) == "warn":
+        found += [Finding("D7", rid, message) for rid, message in ac_shortfalls(reqs, markers)]
+    return found
+
+
 # --- the report -------------------------------------------------------------------------------
 
 
@@ -375,7 +403,7 @@ def audit(
     ref = resolve_ref(root, branch or load_config(root)["default_branch"])
     found = d1(root, ref, today) + d2(root) + d3(root, ref, today)
     documents, undated = d4_documents(root, today)
-    found += documents + d4_register(root, today) + d5(root)
+    found += documents + d4_register(root, today) + d5(root) + d7(root)
     if len(open_issues) > 1:
         ordered = sorted(open_issues)
         subject = ",".join(f"#{n}" for n in ordered)

@@ -15,7 +15,7 @@ Only the Status line may change without an ADR. `done` requires at least one tes
 
 ### REQ-003 — Every requirement is traceable to tests
 
-- Acceptance: AC1 matrix generated; AC2 done requires a marker; AC3 matrix never committed
+- Acceptance: AC1 matrix generated; AC2 done requires a marker; AC3 matrix never committed; AC4 every acceptance criterion of a `done` requirement has a test marker `REQ-nnn ACn`
 - Status: done
 
 ### REQ-004 — Accepted decisions are immutable except Status
