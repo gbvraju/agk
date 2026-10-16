@@ -36,7 +36,8 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
 5. **Unknown, never a default.** A value that could not be read is the string `"unknown"`, at the smallest level that
    fits: one field, or the whole section when the section's source is unavailable (offline mode, a failed `gh` call, a missing
    file). An empty section that was read is `[]`. A number is never filled with `0` when the source is missing. An
-   `"unknown"` is not an error: the exit status is 0 (rule 6).
+   `"unknown"` is not an error: the exit status is 0 (rule 6). With no `agk.toml` and no `[tool.agk]` table in `pyproject.toml`,
+   `config`, `markers` and `drift` are `"unknown"`: the defaults of `common.load_config` are not the repository's settings.
 6. **Exit codes and refusals.** 0 when the document was written, whatever it contains. 1 for a refusal, before any output:
    ROOT is not a directory, is not a git work tree, or has no commit (messages name the path class, never a value). 2 usage.
    3 I/O error on a file that is required to exist (`.git` unreadable). `facts.py` never fails because a section is `"unknown"`.
@@ -45,7 +46,8 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
 
 7. **`config`.** The values the K4 features need from `agk.toml` (read with `common.load_config`): `default_branch`,
    `test_dirs`, `test_patterns`, `inbox_hours` (SPEC-0011; default 48 when the key is absent) and `project_tests_declared`
-   (`true` when the `project_tests` key is non-empty; the command itself is not copied). No other key is copied.
+   (`true` when the `project_tests` key is non-empty; the command itself is not copied). No other key is copied. `inbox_hours` is a
+   key of `common.DEFAULT_CONFIG` (value 48), so that `load_config` returns it (rule 17 (d)).
 8. **`requirements`.** One object per `### REQ-nnn` section of `docs/requirements.md`, sorted by id: `id`, `title` (the text
    after the em dash), `status` (`planned`, `in-progress` or `done`, else `"unknown"`), `line`, and `criteria`: an array of
    `{"id": "AC1", "text": "..."}` in file order. **Acceptance grammar.** The `- Acceptance:` line is split at each
@@ -82,7 +84,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     `open_in` is non-empty and `ruled` is `false` (SPEC-0011 rule 4); the facts script states the three booleans and no more.
 14. **`pull_requests`.** Read from the GitHub REST API (`gh api --method GET`, paged by hand as `metrics.Gh`), or from the
     recorded files of `--api-dir` (names as in `metrics.ApiDir`). The set is every pull request that is open, plus every
-    pull request created or closed in the last `--weeks` ISO weeks (default 8; the window is a field `weeks`). Each object, sorted
+    pull request created or closed in the last `--weeks` ISO weeks (default 8). Each object, sorted
     by number: `number`, `state` (`open`, `merged` or `closed`), `created_at`, `closed_at`, `merged_at`, `head` (SHA), `base`,
     `title`, `files` (sorted paths), `proof` (`proven`, `not-proven`, `skipped` or `unknown`: the outcome of the workflow run named
     `proof` for the head SHA, read from the step conclusions of its job as SPEC-0010 rule 17 defines; `"unknown"` when there is no such
@@ -123,7 +125,8 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     `common.parse_acceptance(text)` implements the grammar of rule 8; `common.find_ac_markers(root, dirs, patterns, exclude)`
     implements rule 9 and is built beside `find_markers`, which keeps its signature and result. (c) `drift_audit.register_lines(text)`
     is extracted from `d4_register` (the loop that splits a register line into its four fields) and returns the parsed lines;
-    `d4_register` calls it. For each change a test shows that the output of the existing scripts is byte-identical before and
+    `d4_register` calls it. (d) `common.DEFAULT_CONFIG` gains `inbox_hours` (48), which `load_config` returns to every caller; no existing
+    caller reads it, and the test of the default configuration lists it. For each of (a) to (c) a test shows that the output of the existing scripts is byte-identical before and
     after on the repository and on the existing fixtures. If the three changes together exceed about 150 changed lines, the implementation splits them into a first pull request that lands
     before the one that adds `facts.py`. Where an import is impossible, the reason is stated here and a residual records the
     convergence (none is known today).

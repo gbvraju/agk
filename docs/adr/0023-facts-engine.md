@@ -1,6 +1,6 @@
 # ADR-0023: the facts engine (SPEC-0009), kit 0.12.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-16
 - Deciders: maintainers
 - Related: ADR-0021, ADR-0022
@@ -39,8 +39,12 @@ brief.
    when `agk.toml` lacks the key (SPEC-0009 rule 7). No other consumer reads the key.
 6. **Kit 0.12.0** (a minor: a new installed script, test and fixtures); the plugin version follows;
    `kit/hashes.json` is regenerated with `kit_hashes.py --write`.
-7. **Questions** `Q-K4-110` to `Q-K4-120`, below, are readings the Approved text does not settle; each takes the conservative
-   one. The one that needs an amendment is `Q-K4-111`: `docs/runs/proposed-spec-amendments-16.md`.
+7. **Questions** `Q-K4-110` to `Q-K4-120`, below, were readings the Approved text did not settle; the maintainers ruled every one
+   accepted on 2026-10-16.
+8. **Amendments 16, applied by this ADR** on the maintainers' acceptance of the proposal: `docs/specs/0009-facts.md` rule 14 loses the
+   sentence "the window is a field `weeks`" (option (a)); rule 5 and rule 7 gain the sentences of items 3 and 2; rule 17 gains (d). The
+   spec is not in a protected class (`config/protected-paths.txt`), so no class is added; `check_specs` is satisfied by the amendments
+   file that names the spec in the same change set.
 
 ## Consequences
 
@@ -51,19 +55,19 @@ brief.
 
 ## Questions
 
-| Q | Question | Reading taken |
+| Q | Question | Reading taken (ruled: accepted) |
 | --- | --- | --- |
-| Q-K4-110 | `inbox_hours` has no source: `load_config` returns only the keys of `DEFAULT_CONFIG`. | the key is added to `DEFAULT_CONFIG` with default 48 (decision 5) |
-| Q-K4-111 | Rule 14 says "the window is a field `weeks`", and rule 3 fixes the top-level keys and makes `pull_requests` an array of pull requests; there is no place for it. | `--weeks` selects the window and no field records it; the window is the ISO week of `today` and the `weeks - 1` before it; amendment 16 |
-| Q-K4-112 | With no `agk.toml` and no `[tool.agk]`, `load_config` silently uses defaults, which rule 5 forbids. | `config`, `markers` and `drift` are `"unknown"` (the defaults are not the repository's settings) |
-| Q-K4-113 | A missing single file: `docs/requirements.md`, `docs/runs/residuals.md`, `docs/runs/decisions-log.md`. | `requirements`, `residuals` and `questions` are `"unknown"`; `specs[].open_questions` is `"unknown"` without the log; a missing directory (`docs/specs`, `docs/adr`) is `[]` |
-| Q-K4-114 | `open_questions` and `open_in` use "the `## Open` section of a notes file". | the heading is exactly `## Open` in a file `docs/runs/spec-NNNN-notes.md`; `## Open questions` does not count until amendment 14 item 2 is applied |
-| Q-K4-115 | A verdict entry of kind `fix` or `rejected` has no sha; `at` has no source but the comment. | `sha` is `null` for those kinds; `at` is the comment's `created_at` |
-| Q-K4-116 | `base` of a pull request: a branch name or a commit. | the base branch name (`head` is the SHA) |
-| Q-K4-117 | The pull request set and the API names. | open pull requests, plus closed ones whose `closed_at` is on or after the Monday `weeks - 1` weeks before the Monday of `today`'s week and created on or before `today`; the list items carry the body, so no per-pull-request detail call; recorded files are `pulls-open`, `pulls`, `files-N`, `comments-N`, `runs-SHA`, `jobs-RUNID`, `issues-LABEL`; the paging of `metrics.Gh` is used through its `pages` method because `Gh.get` pages only the names `metrics.py` uses |
-| Q-K4-118 | `residuals` from the register: the `source` of a line. | the register's own path (`docs/runs/residuals.md`); the `text` is the line's text field (the origin file and date of the bullet are not kept) |
-| Q-K4-119 | `criteria_form` when two criteria share a number. | `"structured"` with `criteria: "unknown"` |
-| Q-K4-120 | `repo` from `origin`. | parsed in `facts.py` (`metrics.origin_repo` reads the current directory and an environment variable, not ROOT) |
+| Q-K4-110 ruled | `inbox_hours` has no source: `load_config` returns only the keys of `DEFAULT_CONFIG`. | the key is added to `DEFAULT_CONFIG` with default 48 (decision 5) |
+| Q-K4-111 ruled | Rule 14 says "the window is a field `weeks`", and rule 3 fixes the top-level keys and makes `pull_requests` an array of pull requests; there is no place for it. | `--weeks` selects the window and no field records it; the window is the ISO week of `today` and the `weeks - 1` before it; amendment 16 |
+| Q-K4-112 ruled | With no `agk.toml` and no `[tool.agk]`, `load_config` silently uses defaults, which rule 5 forbids. | `config`, `markers` and `drift` are `"unknown"` (the defaults are not the repository's settings) |
+| Q-K4-113 ruled | A missing single file: `docs/requirements.md`, `docs/runs/residuals.md`, `docs/runs/decisions-log.md`. | `requirements`, `residuals` and `questions` are `"unknown"`; `specs[].open_questions` is `"unknown"` without the log; a missing directory (`docs/specs`, `docs/adr`) is `[]` |
+| Q-K4-114 ruled | `open_questions` and `open_in` use "the `## Open` section of a notes file". | the heading is exactly `## Open` in a file `docs/runs/spec-NNNN-notes.md`; `## Open questions` does not count until amendment 14 item 2 is applied |
+| Q-K4-115 ruled | A verdict entry of kind `fix` or `rejected` has no sha; `at` has no source but the comment. | `sha` is `null` for those kinds; `at` is the comment's `created_at` |
+| Q-K4-116 ruled | `base` of a pull request: a branch name or a commit. | the base branch name (`head` is the SHA) |
+| Q-K4-117 ruled | The pull request set and the API names. | open pull requests, plus closed ones whose `closed_at` is on or after the Monday `weeks - 1` weeks before the Monday of `today`'s week and created on or before `today`; the list items carry the body, so no per-pull-request detail call; recorded files are `pulls-open`, `pulls`, `files-N`, `comments-N`, `runs-SHA`, `jobs-RUNID`, `issues-LABEL`; the paging of `metrics.Gh` is used through its `pages` method because `Gh.get` pages only the names `metrics.py` uses |
+| Q-K4-118 ruled | `residuals` from the register: the `source` of a line. | the register's own path (`docs/runs/residuals.md`); the `text` is the line's text field (the origin file and date of the bullet are not kept) |
+| Q-K4-119 ruled | `criteria_form` when two criteria share a number. | `"structured"` with `criteria: "unknown"` |
+| Q-K4-120 ruled | `repo` from `origin`. | parsed in `facts.py` (`metrics.origin_repo` reads the current directory and an environment variable, not ROOT) |
 
 ## Residual
 

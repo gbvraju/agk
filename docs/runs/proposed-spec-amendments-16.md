@@ -3,6 +3,8 @@
 Date: 2026-10-16 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). Nothing here is
 applied. The path: `docs/specs/0009-facts.md`.
 
+**Applied by ADR-0023** (2026-10-16) on the maintainers' acceptance: item 1 option (a), items 2 and 3 as proposed.
+
 ## SPEC-0009 (`docs/specs/0009-facts.md`)
 
 1. **Rule 14, "the window is a field `weeks`".** Rule 3 fixes the top-level keys and makes `pull_requests` an array of pull
