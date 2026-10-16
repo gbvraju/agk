@@ -328,3 +328,42 @@ ok default-branch-config warn default_branch in agk.toml equals the repository's
 summary: 13 ok, 7 fail, 0 cannot-check
 exit 1
 ```
+
+
+## Run 2 (2026-10-16)
+
+The maintainers' change: a bypass actor was added to the ruleset (read back with GET: `enforcement` `active`, `bypass_actors` `[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"always"}]`). Command (from the baseline clone, `/home/user/sandbox-baseline`, unchanged): `python3 /home/user/agk/scripts/agk/doctor.py --repo gbvraju/agk-sandbox --kit-root /home/user/agk`.
+The ruleset is active again (run 1's change was restored); the bypass actor is the only difference from the baseline.
+
+| Expected failed ids | Observed failed ids | Match |
+| --- | --- | --- |
+| `ruleset-bypass` | `ruleset-bypass` only (19 ok, 1 fail, 0 cannot-check, exit 1) | match |
+
+Output, verbatim:
+
+```
+agk doctor 0.9.0
+ok ruleset-missing error a ruleset targets the default branch
+ok ruleset-enforcement error ruleset enforcement is active
+FAIL ruleset-bypass error ruleset: bypass_actors is not empty
+  fix: remove every bypass actor
+ok ruleset-target error the ruleset targets the default branch
+ok ruleset-deletion error ruleset restricts deletions
+ok ruleset-linear-history error ruleset requires linear history
+ok ruleset-force-push error ruleset blocks force pushes
+ok ruleset-pull-request error ruleset requires a pull request
+ok required-check-governance error the status check `governance` is required
+ok repo-auto-merge warn repository setting allow_auto_merge is on
+ok repo-delete-branch warn repository setting delete_branch_on_merge is on
+ok placeholder-team-reviewers error config/reviewers.yaml has no placeholder team
+ok placeholder-team-codeowners error .github/CODEOWNERS has no placeholder team
+ok origin-head warn refs/remotes/origin/HEAD exists
+ok drift-workflow-file error .github/workflows/drift-audit.yml has a schedule
+ok drift-workflow-state error the drift-audit workflow is active
+ok kit-version warn the kit version equals version in agk.toml
+ok vendored-missing error every vendored file is present
+ok vendored-differs error every vendored file equals the kit's copy
+ok default-branch-config warn default_branch in agk.toml equals the repository's default branch
+summary: 19 ok, 1 fail, 0 cannot-check
+exit 1
+```
