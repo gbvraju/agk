@@ -64,7 +64,40 @@ $ echo $?
 
 The message names the requirement and the criterion id and not the criterion's text. The same fixture is `tests/kit/test_check_requirements_ac.py`.
 
-## 4. Not done here
+## 4. The sandbox (SPEC-0010 rule 21 (c))
 
-- The sandbox run (rule 21 (c)) needs the sandbox attached to a session; it is asked for in the pull request report and is not assumed.
-- The sandbox record is added to this file through the pull request of part (b), after this one is merged.
+Date: 2026-10-16 (from `date -u`). The sandbox (`gbvraju/agk-sandbox`, installed on kit 0.9.0, HEAD `15330b1`) was attached to the session
+with `add_repo` (read access) after #58 and #59 merged. The kit's `check_requirements.py` of `main` (a11eaf3) was run from the
+sandbox work tree, read-only (`PYTHONDONTWRITEBYTECODE=1`; `git status --short` is empty before and after):
+
+```
+$ python3 <agk>/scripts/agk/check_requirements.py        # the sandbox's agk.toml has no ac_coverage: warn
+ok requirements (5 requirements)
+$ echo $?
+0
+```
+
+Then in a throwaway local clone of the sandbox with `ac_coverage = "block"` appended to its `agk.toml`:
+
+```
+$ python3 <agk>/scripts/agk/check_requirements.py
+ok requirements (5 requirements)
+$ echo $?
+0
+```
+
+The sandbox has no `done` requirement (REQ-001 to REQ-003 inherited from the template and its own REQ-101 and REQ-102 are all
+`planned`), so nothing can fail. Read as if each were `done`, every criterion has a marker (REQ-101 and REQ-102 by
+`tests/test_wordcount.py`); no requirement would fail in `block` mode, and **no status needed setting back**.
+
+One finding for the sandbox's own drift audit: 239 stray markers (`D7`), all in the 17 kit test files under `tests/kit/` that the kit
+installed there (`tests/kit/test_drift_audit.py` 37, `test_review_context.py` 32, `test_metrics.py` 29, ...): their fixtures
+write `REQ-nnn ACn` for requirements the sandbox does not have. Strays never block (rule 4); they would show as `D7` findings in the
+sandbox's weekly audit. In `adopt` mode `tests/kit` is excluded from the search; in `init` mode it is not. Recorded as a question
+for the maintainers (Q-K4-134 in ADR-0026); nothing was changed in the sandbox.
+
+## 5. Not done here
+
+- The first real `proof` job and the seeded pull requests of SPEC-0010 rule 20 are recorded in `docs/runs/proof-checks-live-2.md`, a docs
+  pull request of its own, after the pull request of part (b) is merged.
+

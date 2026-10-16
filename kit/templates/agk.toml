@@ -9,4 +9,6 @@ lint_paths = ["scripts/agk", "tests/kit", ".claude/hooks"]
 project_tests = "python3 -m pytest tests -q --ignore=tests/kit_dev; rc=$?; [ $rc -eq 5 ] && exit 0; exit $rc"
 # Every criterion ACn of a done requirement needs a REQ-nnn ACn test marker: warn prints, block fails.
 ac_coverage = "warn"
+# Seconds each of the two runs of the proof check (proof.py) may take; a slow suite reads unknown.
+proof_timeout = 900
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.

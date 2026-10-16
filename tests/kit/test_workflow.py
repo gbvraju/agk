@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 from pathlib import Path
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "governance.yml"
@@ -114,3 +115,128 @@ def test_ac2_project_tests_step_follows_the_tests_of_the_checks():
     assert "run: make -f agk.mk agk-project-test" in text
     assert text.index("name: Tests of the checks") < text.index("name: Project tests")
     assert text.index("agk-test") < text.index("agk-project-test")
+
+
+# --- the proof workflow (SPEC-0010 rules 16 and 17) --------------------------------------------
+
+PROOF = WORKFLOW.parent / "proof.yml"
+OUTCOMES = ("proven", "not-proven", "skipped", "unknown")
+
+
+def proof_steps() -> dict[str, str]:
+    return {n.strip('"'): b for n, b in step_blocks(PROOF.read_text(encoding="utf-8")).items()}
+
+
+def test_ac1_proof_job_is_named_proof_and_is_not_the_governance_job():
+    """REQ-016 AC1: rule 16 (a separate job; the governance job and its name do not change)."""
+    text = PROOF.read_text(encoding="utf-8")
+    assert re.search(r"^name: proof$", text, flags=re.M)
+    assert re.search(r"^jobs:\n  proof:\n", text, flags=re.M)
+    assert "governance" not in text.replace("`governance`", "")
+
+
+def test_ac1_proof_runs_on_pull_request_events_with_read_only_contents_and_no_secret():
+    """REQ-016 AC1: rule 16."""
+    text = PROOF.read_text(encoding="utf-8")
+    match = re.search(r"pull_request:\s*\n\s*types:\s*\[([^\]]*)\]", text)
+    assert match
+    assert {t.strip() for t in match.group(1).split(",")} == {
+        "opened",
+        "synchronize",
+        "reopened",
+        "edited",
+    }
+    assert re.search(r"^permissions:\n  contents: read\n", text, flags=re.M)
+    assert text.count("permissions:") == 1
+    assert "pull_request_target" not in text.replace("never pull_request_target", "")
+    assert "secrets." not in text and "GITHUB_TOKEN" not in text
+    assert "fetch-depth: 0" in text
+
+
+def test_ac1_proof_actions_are_pinned_and_it_is_not_a_required_check_in_the_ruleset_text():
+    """REQ-016 AC1: rule 16 (SHA-pinned like governance)."""
+    uses = re.findall(r"^\s*-?\s*uses:\s*(.+)$", PROOF.read_text(encoding="utf-8"), flags=re.M)
+    assert uses
+    for line in uses:
+        assert re.fullmatch(r"\S+@[0-9a-f]{40}\s+# v\d+(\.\d+){1,2}", line.strip()), line
+
+
+def test_ac1_proof_has_one_run_step_and_four_outcome_steps_guarded_by_its_output():
+    """REQ-016 AC1: rule 17."""
+    steps = proof_steps()
+    assert "Red-then-green" in steps and "id: proof" in steps["Red-then-green"]
+    assert "--json" in steps["Red-then-green"] and "--body -" in steps["Red-then-green"]
+    assert '--head "$HEAD_SHA"' in steps["Red-then-green"]  # the pull request head, not the merge
+    for word in OUTCOMES:
+        block = steps[f"outcome: {word}"]
+        assert f"if: ${{{{ steps.proof.outputs.outcome == '{word}' }}}}" in block
+    assert [n for n in steps if n.startswith("outcome: ")] == [f"outcome: {w}" for w in OUTCOMES]
+    assert "continue-on-error" not in PROOF.read_text(encoding="utf-8")
+
+
+def run_block() -> str:
+    block = proof_steps()["Red-then-green"].split("run: |\n", 1)[1]
+    return "\n".join(line[10:] for line in block.splitlines())
+
+
+def call(args: list[str], cwd, env):
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        args, cwd=cwd, env=env, capture_output=True, text=True
+    )
+
+
+def run_step(tmp_path, body: str, command: str | None, extra: str = ""):
+    """Run the shell of the `Red-then-green` step in a throwaway repository."""
+    import os
+    import sys
+
+    scripts = Path(__file__).resolve().parents[2] / "scripts"
+    work = tmp_path / "work"
+    (work / "tests").mkdir(parents=True)
+    (work / "scripts").symlink_to(scripts)
+    toml = 'default_branch = "main"\ntest_dirs = ["tests"]\n' + extra
+    toml += f"project_tests = '{command}'\n" if command else ""
+    (work / "agk.toml").write_text(toml, encoding="utf-8")
+    (tmp_path / "tmp").mkdir()
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    (shim / "python").symlink_to(sys.executable)
+    env = {
+        **os.environ,
+        "PR_BODY": body,
+        "RUNNER_TEMP": str(tmp_path / "tmp"),
+        "GITHUB_OUTPUT": str(tmp_path / "output"),
+        "HEAD_SHA": "",
+        "PATH": f"{shim}:{os.environ['PATH']}",
+    }
+    ident = ["-c", "user.name=t", "-c", "user.email=t@e.invalid"]
+    call(["git", "init", "-q", "-b", "main"], work, env)
+    call(["git", "add", "-A"], work, env)
+    call(["git", *ident, "commit", "-qm", "base"], work, env)
+    (work / "tests" / "test_n.py").write_text("# n\n", encoding="utf-8")
+    call(["git", "add", "-A"], work, env)
+    call(["git", *ident, "commit", "-qm", "test"], work, env)
+    env["AGK_BASE"] = call(["git", "rev-parse", "HEAD~1"], work, env).stdout.strip()
+    env["HEAD_SHA"] = call(["git", "rev-parse", "HEAD"], work, env).stdout.strip()
+    proc = call(["bash", "-e", "-c", run_block()], work, env)
+    out = Path(env["GITHUB_OUTPUT"])
+    return proc, out.read_text(encoding="utf-8") if out.is_file() else ""
+
+
+def test_ac1_the_run_step_writes_the_outcome_and_exits_zero_for_every_outcome(tmp_path):
+    """REQ-016 AC1: rule 17 (the step never fails on an outcome)."""
+    cases = {
+        "unknown": ("", None),  # no project_tests
+        "skipped": ("Behaviour: unchanged\n", "true"),
+        "not-proven": ("", "true"),  # the test passes on the base: green-on-base
+    }
+    for index, (word, (body, command)) in enumerate(cases.items()):
+        proc, output = run_step(tmp_path / str(index), body, command)
+        assert proc.returncode == 0, (word, proc.stdout, proc.stderr)
+        assert output.strip() == f"outcome={word}", (word, output)
+
+
+def test_ac1_the_run_step_fails_when_proof_itself_fails(tmp_path):
+    """REQ-016 AC1: rule 17 (the job fails only when proof.py failed: a refused setting here)."""
+    proc, output = run_step(tmp_path, "", "true", "proof_timeout = 0\n")
+    assert proc.returncode == 2 and output == ""

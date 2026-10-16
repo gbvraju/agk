@@ -20,6 +20,8 @@ MARKER_RUN = re.compile(r"(REQ-\d{3}(?:[ ,/]+REQ-\d{3})*)(?: AC(\d+)\b)?")
 MARKER_SKIP_PARTS = frozenset({".git", "node_modules", "vendor", "target", "__pycache__", ".venv"})
 ALLOWED_STATUS = ("planned", "in-progress", "done")
 AC_COVERAGE = ("warn", "block")
+BEHAVIOUR_UNCHANGED = "Behaviour: unchanged"
+FENCE = re.compile(r"^\s*(```|~~~)")
 
 
 class CheckError(Exception):
@@ -194,6 +196,7 @@ DEFAULT_CONFIG = {
     "mode": "",
     "inbox_hours": 48,
     "ac_coverage": "warn",
+    "proof_timeout": 900,
 }
 
 
@@ -369,6 +372,30 @@ def stray_markers(reqs: list[dict], markers: list[dict]) -> list[dict]:
     """The `REQ-nnn ACn` markers whose requirement does not exist or has no such criterion."""
     criteria = {r["id"]: {ac for ac, _ in parse_acceptance(r["acceptance"] or "")} for r in reqs}
     return [m for m in markers if m["ac"] and m["ac"] not in criteria.get(m["req"], set())]
+
+
+def behaviour_lines(body: str) -> list[str]:
+    """The lines of a pull request body that start with `Behaviour:`, outside fenced code."""
+    found, fenced = [], False
+    for line in body.splitlines():
+        if FENCE.match(line):
+            fenced = not fenced
+        elif not fenced and line.startswith("Behaviour:"):
+            found.append(line)
+    return found
+
+
+def declares_unchanged(body: str) -> bool:
+    """True when a line of the body, outside fenced code, is exactly `Behaviour: unchanged`."""
+    return BEHAVIOUR_UNCHANGED in behaviour_lines(body)
+
+
+def proof_timeout(root: Path) -> int:
+    """`proof_timeout` (seconds) from agk.toml; anything but a positive integer is a refusal."""
+    value = load_config(root)["proof_timeout"]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CheckError("proof_timeout must be a positive integer (setting: proof_timeout)")
+    return value
 
 
 def run(name: str, fn: Callable[[], int]) -> int:
