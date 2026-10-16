@@ -1,8 +1,8 @@
 # Notes on SPEC-0009 (facts)
 
-Date: 2026-10-16 (from `date -u`). Overnight brief 3, item A. The spec is written **Draft**; nothing is implemented and no
-protected path is changed by this pull request. It is the first of the five K4 specs of ADR-0021 (decision 2) and serves exit
-criterion e. Every question below is raised, not ruled: for each the spec takes the conservative reading and says so.
+Date: 2026-10-16 (from `date -u`). Overnight brief 3, item A. The spec was written Draft and set **Approved** on the maintainers'
+rulings of 2026-10-16 (final commit of the pull request); nothing is implemented and no protected path is changed by this pull request. It is the first of the five K4 specs of ADR-0021 (decision 2) and serves exit
+criterion e. Every question below was raised with a conservative reading and has been ruled (section Rulings); none is open.
 
 ## What exists today (read on 2026-10-16, on `main` at 94a807d)
 
@@ -53,7 +53,7 @@ criterion e. Every question below is raised, not ruled: for each the spec takes 
 | Acceptance split | at `AC<digits>` at the start or after `; ` | also after `. ` (not needed by any of the 20 lines today and would split a sentence that names an `AC` in prose) |
 | Schema validator | a small stdlib function in the test | the `jsonschema` package (a new dependency, rule 5 of CLAUDE.md allows none in checks) |
 
-## Open questions (none is ruled; the spec takes the conservative reading)
+## Questions raised (all ruled; see Rulings)
 
 | Q | Question | Reading taken in the spec |
 | --- | --- | --- |
@@ -77,6 +77,39 @@ criterion e. Every question below is raised, not ruled: for each the spec takes 
 | Q-K4-18 | `files` per pull request costs one API call each. | read for the PRs in the window only; a residual records a cache (rule 14) |
 | Q-K4-19 | `today` defaults to the UTC date. The rules say "dates from `date -u`"; a Python script reads the same clock. | `datetime.now(UTC).date()`; `--today` overrides (rule 1) |
 
+## Rulings (maintainers, 2026-10-16)
+
+The default ruling is that every reading the draft took is accepted; the table lists each question and the exceptions. Pilot: the
+pilot repository now exists (a Go module with `go test ./...` as `project_tests`, `test_dirs = ["."]`, `test_patterns = ["*_test.go"]`,
+adopted on kit 0.11.0, ruleset applied, doctor 20 ok); here it is still "the pilot repository" and never named. Nothing in this spec
+said it did not exist.
+
+| Q | Ruling | Where in the spec |
+| --- | --- | --- |
+| Q-K4-1 | accepted as drafted: `Behaviour:` from the PR body, `Verdict:` from comments | rule 14 |
+| Q-K4-2 | accepted as drafted: `dirty` is in the document | rules 3, 4, 24 |
+| Q-K4-3 | accepted as drafted: a `config` section of five values | rule 7 |
+| Q-K4-4 | accepted as drafted: open pull requests plus the last 8 ISO weeks | rule 14 |
+| Q-K4-5 | yes: `agk-product-report` is included in `issues` | rule 15 |
+| Q-K4-6 | accepted; `testdata` is added to the skipped directories only if a test shows that a marker there would be a false positive, otherwise the list stays as drafted. No such test exists today, so the list is unchanged | rule 9 |
+| Q-K4-7 | accepted as drafted: split at `; ` only | rule 8 |
+| Q-K4-8 | accepted as drafted: `criteria: []` and `criteria_form: "unstructured"` | rule 8 |
+| Q-K4-9 | accepted as drafted: a run of `REQ` tokens attaches the `AC` to each | rule 9 |
+| Q-K4-10 | the narrow definition (`<id> ruled`) is accepted. **Convention from now on:** every ruling row in the decisions log names its id and says `ruled` (for example `Q-K4-1 ruled: ...`) | rule 13 |
+| Q-K4-11 | accepted as drafted: open means named in a Draft spec's notes, a Proposed ADR or an `## Open` section | rule 13 |
+| Q-K4-12 | accepted as drafted: a spec or ADR residual bullet is `open`; only the register has a closed table | rule 12 |
+| Q-K4-13 | accepted as drafted: `metrics`, `drift_audit`, `check_specs` and `check_adrs` are imported, each tested for a side-effect-free import | rules 16, 22 |
+| Q-K4-14 | accepted. If the three refactors exceed about 150 changed lines, the implementation splits them into a first pull request; the spec says so | rule 17 |
+| Q-K4-15 | accepted as drafted: the keyword list and a stdlib validator | rule 19 |
+| Q-K4-16 | accepted as drafted: the schema is kit-only | rule 19 |
+| Q-K4-17 | accepted as drafted: a person regenerates a golden | rule 20 |
+| Q-K4-18 | accepted as drafted: `files` for pull requests in the window only | rule 14 |
+| Q-K4-19 | accepted as drafted: `today` is the UTC date | rule 1 |
+| Q-K4-48 | **ruled here, and it affects SPEC-0011 (#53):** the document gains a `drift` section computed by calling the drift audit's own finding functions at the same commit and `today`: the count per kind D1 to D6 and the total. The drift issue's body is never parsed; its number stays in `issues`. SPEC-0011 prints these counts under "At risk" | rule 15 (new key `drift`, rule 3) |
+
+**Sibling specs touched.** SPEC-0011's rule 10 (At risk) reads the new `drift` section; the edit is made in that pull request (#53) and
+nowhere else. SPEC-0010 is not touched by these rulings.
+
 ## Dependencies on the other K4 specs (read together)
 
 - SPEC-0010 rule 17 defines the `proof` field of a pull request (the outcome of the `proof` job, read from step conclusions); rule 14 of
@@ -99,4 +132,6 @@ criterion e. Every question below is raised, not ruled: for each the spec takes 
 
 | Date | Decision | Reason | Recorded in | By |
 | --- | --- | --- | --- | --- |
-| 2026-10-16 | SPEC-0009 facts drafted: one script, one JSON document, a fixed key list, `unknown` never a default, imports instead of new parsers, a committed hand-written schema | criterion e of ADR-0021 | `docs/specs/0009-facts.md` | agent |
+| 2026-10-16 | SPEC-0009 facts Approved: one script, one JSON document, a fixed key list (with `drift` counts), `unknown` never a default, imports instead of new parsers, a committed hand-written schema | criterion e of ADR-0021 | `docs/specs/0009-facts.md` | reviewer |
+| 2026-10-16 | Q-K4-1 to Q-K4-19 ruled: every reading of the draft accepted; Q-K4-5 yes (`agk-product-report` in `issues`); Q-K4-6 `testdata` only if a test shows a false positive; Q-K4-10 narrow `<id> ruled` definition and the convention that every ruling row names its id and says `ruled`; Q-K4-14 refactors split into a first pull request above about 150 changed lines | maintainers' rulings of 2026-10-16 on the Draft SPEC-0009 | `docs/runs/spec-0009-notes.md` | reviewer |
+| 2026-10-16 | Q-K4-48 ruled: the facts document gains a `drift` section (counts per finding kind D1 to D6 and the total, from the drift audit's own finding functions); the drift issue body is not parsed | the report's "At risk" needs drift counts without a second parser | `docs/specs/0009-facts.md` rule 15, `docs/specs/0011-inbox-and-report.md` rule 10 | reviewer |

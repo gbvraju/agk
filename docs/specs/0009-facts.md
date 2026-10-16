@@ -1,12 +1,12 @@
 # SPEC-0009: facts (one document that every K4 feature reads)
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-018 (AC2, the foundation of "no typed numbers"); REQ-015, REQ-016, REQ-017 (they read this document)
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
-This spec is the first of the five K4 specs of ADR-0021 and serves exit criterion e (no typed numbers). The open points
-`Q-K4-1` to `Q-K4-19` are in `docs/runs/spec-0009-notes.md`; none is ruled. Facts about GitHub not reconfirmed are marked
+This spec is the first of the five K4 specs of ADR-0021 and serves exit criterion e (no typed numbers). The points
+`Q-K4-1` to `Q-K4-19` were ruled by the maintainers on 2026-10-16 (`docs/runs/spec-0009-notes.md`). Facts about GitHub not reconfirmed are marked
 `(verify)`. The repository facts quoted here were read on 2026-10-16 (`docs/runs/spec-0009-notes.md`).
 
 ## Rules
@@ -19,11 +19,12 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
    `kit/manifest.json` `verbatim`) and runs without the plugin (SPEC-0005 rule 2). The document goes to stdout; nothing is
    written to a file.
 2. **Read-only, no credential.** The script writes no file, makes no commit, runs no `git` command that changes anything
-   (it uses `rev-parse`, `ls-files`, `status --porcelain` and `show`), and reads GitHub only with `gh api --method GET`
+   (it uses `rev-parse`, `ls-files`, `status --porcelain` and `show`, and the read-only commands of the drift audit's finding
+   functions, rule 15), and reads GitHub only with `gh api --method GET`
    (the Gh and ApiDir readers of `metrics.py`, rule 16). It never reads, prints or stores a token: `gh` holds the credential.
    It makes no other network call.
 3. **One document, a fixed set of keys.** The top-level keys are exactly `schema`, `commit`, `dirty`, `today`, `repo`,
-   `config`, `requirements`, `markers`, `specs`, `adrs`, `residuals`, `questions`, `pull_requests` and `issues`. `schema` is
+   `config`, `requirements`, `markers`, `specs`, `adrs`, `residuals`, `questions`, `pull_requests`, `issues` and `drift`. `schema` is
    the integer `1`. `commit` is the SHA of `HEAD` in ROOT. `dirty` is `true`, `false` or `"unknown"` (a tracked file differs from
    `HEAD`, from `git status --porcelain`). `today` is the date of rule 1. `repo` is `OWNER/REPO` from `--repo` or from the URL of
    `origin`, else `"unknown"`. Every other key is a section (rules 7 to 15). A K4 feature reads this document and nothing
@@ -76,7 +77,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     not a field: a consumer compares `due` with `today`.
 13. **`questions`.** One object per `Q-<family>-<n>` id (pattern `Q-[A-Z0-9]+-[0-9]+`) found in any `.md` file under `docs/`,
     sorted by id: `id`, `files` (sorted paths), `ruled` (`true` when a row of `docs/runs/decisions-log.md` contains the text
-    `<id> ruled`), `named_in_log` (a row contains the id in any form), and `open_in` (the sorted paths among `files` that are
+    `<id> ruled`; from 2026-10-16 every ruling row of the log names its id and says `ruled`), `named_in_log` (a row contains the id in any form), and `open_in` (the sorted paths among `files` that are
     a notes file of a `Draft` spec, a `Proposed` ADR or the `## Open` section of a notes file). A question is *waiting* when
     `open_in` is non-empty and `ruled` is `false` (SPEC-0011 rule 4); the facts script states the three booleans and no more.
 14. **`pull_requests`.** Read from the GitHub REST API (`gh api --method GET`, paged by hand as `metrics.Gh`), or from the
@@ -90,8 +91,15 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     line of the body, outside fenced code, is exactly `Behaviour: unchanged`; `null` when the body has no `Behaviour:` line;
     `"unknown"` when the body could not be read). With no GitHub source (offline, no `gh`, unauthenticated) the section is
     `"unknown"`. The body is read for the `Behaviour:` line and for nothing else (ADR-0021 criterion e).
-15. **`issues`.** The open and closed issues labelled `agk-metrics`, `agk-drift-audit` or `agk-product-report`, as `{"number",
-    "title", "label", "state"}` sorted by number; nothing from their bodies. `"unknown"` without a GitHub source.
+15. **`issues` and `drift`.** *`issues`:* the open and closed issues labelled `agk-metrics`, `agk-drift-audit` or `agk-product-report`, as
+    `{"number", "title", "label", "state"}` sorted by number; nothing from their bodies. `"unknown"` without a GitHub source. *`drift`:*
+    the findings of the drift audit (SPEC-0004) at the same commit and `today`, counted and not described:
+    `{"counts": {"D1": n, "D2": n, "D3": n, "D4": n, "D5": n, "D6": n}, "total": n}`, with every kind present and `0` for a kind with no
+    finding. It is computed by calling `drift_audit.audit(root, today, branch, open_issues)` (the audit's own finding functions, which
+    read the repository and write nothing), where `branch` is `config.default_branch` and `open_issues` is the list of numbers of the
+    open issues labelled `agk-drift-audit` taken from `issues`, so that D6 (duplicate audit issues) sees them. The body of the drift
+    issue is never read; the issue's number stays in `issues` for linking. When `issues` is `"unknown"`, `D6` and `total` are
+    `"unknown"` and D1 to D5 are still counted; when the default branch cannot be resolved the whole section is `"unknown"`.
 
 ### Reuse, never re-parse
 
@@ -106,6 +114,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     | spec status | `check_specs.status_of` |
     | ADR status, fields, title and number patterns | `check_adrs.status_of`, `check_adrs.FIELD_RE`, `check_adrs.TITLE_RE`, `check_adrs.FILE_RE` |
     | residual bullets, due date, date parse, register lines | `drift_audit.residual_bullets`, `drift_audit.DUE`, `drift_audit.parse_date`; `drift_audit.register_lines` (new, rule 17) |
+    | drift counts | `drift_audit.audit` and the finding functions it calls (rule 15) |
     | verdict comments | `metrics.VERDICT`, `metrics.verdicts` |
     | `gh api` GET and recorded files | `metrics.Gh`, `metrics.ApiDir` |
 
@@ -115,9 +124,10 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     implements rule 9 and is built beside `find_markers`, which keeps its signature and result. (c) `drift_audit.register_lines(text)`
     is extracted from `d4_register` (the loop that splits a register line into its four fields) and returns the parsed lines;
     `d4_register` calls it. For each change a test shows that the output of the existing scripts is byte-identical before and
-    after on the repository and on the existing fixtures. Where an import is impossible, the reason is stated here and a residual
-    records the convergence (none is known today).
-18. **What it does not do.** It counts nothing the existing scripts count: `tests_before`, `tests_after` and every metrics
+    after on the repository and on the existing fixtures. If the three changes together exceed about 150 changed lines, the implementation splits them into a first pull request that lands
+    before the one that adds `facts.py`. Where an import is impossible, the reason is stated here and a residual records the
+    convergence (none is known today).
+18. **What it does not do.** It counts nothing the existing scripts count (the `drift` counts of rule 15 are the audit's own findings, called and not recounted): `tests_before`, `tests_after` and every metrics
     field stay in `metrics.py` (ADR-0021 residual). It judges nothing: no field says a requirement is well tested, only that a
     marker exists. It runs no test, no model and no check.
 
@@ -137,7 +147,8 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     date, register open and closed), `question-forms` (ruled, named only, in a Draft notes file, in an Approved spec's notes),
     `pr-states` (open, merged, closed; verdicts in time order; `Behaviour: unchanged` in a code fence ignored; each of the four `proof`
     outcomes, and a run with two succeeded outcome steps, which is `"unknown"`), and
-    `dirty` (a modified tracked file). The goldens are changed only by a person running the documented command in the test
+    `dirty` (a modified tracked file), and `drift-counts` (a repository built as in the drift-audit fixtures of SPEC-0004,
+    `tests/kit/drift_fixtures.py`, with known counts for D1 to D6, once with and once without the list of `agk-drift-audit` issues). The goldens are changed only by a person running the documented command in the test
     file; no test rewrites a golden.
 
 ### Installed files, proof
@@ -161,7 +172,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
 ## Tests
 
 - Rules 1 to 6, 22: `tests/kit/test_facts.py`, marker `REQ-018 AC2`.
-- Rules 7 to 15 over the fixture cases of rule 20: the same file, marker `REQ-018 AC2`.
+- Rules 7 to 15 over the fixture cases of rule 20 (including the `drift` counts): the same file, marker `REQ-018 AC2`.
 - Rules 16, 17: the same file (the import list is asserted by reading `facts.py`) and the before-and-after tests of the existing
   scripts, marker `REQ-018 AC2`.
 - Rules 19, 23: `tests/kit_dev/test_facts_wiring.py`, marker `REQ-018 AC2`.
@@ -180,6 +191,8 @@ sections.
 
 ## Residual
 
+- 2026-10-16: the `drift` section calls the drift audit's finding functions a second time at facts time; the audit and the facts both
+  read the repository for D1 to D5 until the audit moves onto the facts (due 2027-01-31).
 - 2026-10-16: metrics and the drift audit read the repository with their own parsers; moving them onto this document is a later
   change by amendment (due 2027-01-31).
 - 2026-10-16: the facts script reads every pull request of an 8-week window page by page; a repository with many pull
