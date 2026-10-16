@@ -522,3 +522,42 @@ ok default-branch-config warn default_branch in agk.toml equals the repository's
 summary: 20 ok, 0 fail, 0 cannot-check
 exit 0
 ```
+
+
+## Run 6, second attempt (2026-10-16)
+
+The maintainers' change: auto-merge was turned off in the repository settings (read back with GET: `allow_auto_merge` `false`, `delete_branch_on_merge` `true`). Command (from the baseline clone, `/home/user/sandbox-baseline`, unchanged): `python3 /home/user/agk/scripts/agk/doctor.py --repo gbvraju/agk-sandbox --kit-root /home/user/agk`.
+This is the second attempt at run 6; the first one (above) found the setting still on and is kept as it was. The drift-audit workflow `state` is `active` (run 5 restored). The repository's `updated_at` still reads `2026-10-16T06:24:26Z`: it is not moved by this setting, so it cannot date the change.
+
+| Expected failed ids | Observed failed ids | Match |
+| --- | --- | --- |
+| `repo-auto-merge`, exit 4 | `repo-auto-merge` only (19 ok, 1 fail, 0 cannot-check, exit 4, a warning) | match |
+
+Output, verbatim:
+
+```
+agk doctor 0.9.0
+ok ruleset-missing error a ruleset targets the default branch
+ok ruleset-enforcement error ruleset enforcement is active
+ok ruleset-bypass error ruleset has no bypass actors
+ok ruleset-target error the ruleset targets the default branch
+ok ruleset-deletion error ruleset restricts deletions
+ok ruleset-linear-history error ruleset requires linear history
+ok ruleset-force-push error ruleset blocks force pushes
+ok ruleset-pull-request error ruleset requires a pull request
+ok required-check-governance error the status check `governance` is required
+FAIL repo-auto-merge warn repository setting allow_auto_merge is off
+  fix: allow auto-merge
+ok repo-delete-branch warn repository setting delete_branch_on_merge is on
+ok placeholder-team-reviewers error config/reviewers.yaml has no placeholder team
+ok placeholder-team-codeowners error .github/CODEOWNERS has no placeholder team
+ok origin-head warn refs/remotes/origin/HEAD exists
+ok drift-workflow-file error .github/workflows/drift-audit.yml has a schedule
+ok drift-workflow-state error the drift-audit workflow is active
+ok kit-version warn the kit version equals version in agk.toml
+ok vendored-missing error every vendored file is present
+ok vendored-differs error every vendored file equals the kit's copy
+ok default-branch-config warn default_branch in agk.toml equals the repository's default branch
+summary: 19 ok, 1 fail, 0 cannot-check
+exit 4
+```
