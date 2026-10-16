@@ -1,6 +1,6 @@
 # ADR-0017: agk doctor: the build of SPEC-0006
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-15
 - Deciders: maintainers
 - Related: ADR-0001, ADR-0003, ADR-0015, ADR-0016
