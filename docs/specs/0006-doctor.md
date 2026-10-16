@@ -23,8 +23,12 @@ ADR-0015. The GitHub response shapes used here were read (GET only) from `gbvraj
    `make governance` or by any workflow: it needs the network and, for rulesets, rights a CI token lacks.
 3. **Honest result.** Each check ends in exactly one status: `ok`, `fail`, or `cannot-check`. A check that could not
    read what it needs is `cannot-check` with the reason class (`gh-missing`, `gh-unauthenticated`, `no-admin`,
-   `not-github`, `no-kit-root`, `version-mismatch`, `offline`, `bad-response`), never `ok`. A `cannot-check` is never turned into `ok` by
-   any option.
+   `not-github`, `no-kit-root`, `version-mismatch`, `offline`, `bad-response`, `no-ruleset`), never `ok`. A `cannot-check` is never turned into `ok` by
+   any option. `no-ruleset`: when no ruleset targets the default branch, the other ruleset checks cannot be read from a ruleset
+   that does not exist; they are `cannot-check` with this reason, so that a case asserts the ids that fail and only those (rule 15).
+   `bad-response` also covers unreadable local input: an unreadable `config/reviewers.yaml` or `.github/CODEOWNERS`, a
+   directory that is not a git work tree for `origin-head`, a kit without a manifest, or a missing `mode` or `version` in
+   `agk.toml`.
 4. **Messages name the setting or path class, never a value** (rule 6 of CLAUDE.md). A message says, for example,
    "ruleset: `required_approving_review_count` differs from ADR-0001 decision 3", not the found number. The printed
    fix may state the expected value, which is the kit's own text.
@@ -38,10 +42,10 @@ and the JSON keep it.
 
    | Id | Severity | Fails when | Printed fix |
    | --- | --- | --- | --- |
-   | `ruleset-missing` | error | no ruleset whose conditions include `~DEFAULT_BRANCH` (or the default branch's ref) | create the ruleset of ADR-0001 decision 3 (the report prints its elements); classic branch protection is not read; use a ruleset (ADR-0001 decision 3) |
+   | `ruleset-missing` | error | no branch ruleset exists (the list is empty, and `permissions.admin` is not false, rule 6) | create the ruleset of ADR-0001 decision 3 (the report prints its elements); classic branch protection is not read; use a ruleset (ADR-0001 decision 3) |
    | `ruleset-enforcement` | error | `enforcement` is not `active` | set the ruleset to Active |
    | `ruleset-bypass` | error | `bypass_actors` is not empty | remove every bypass actor |
-   | `ruleset-target` | error | the ruleset does not target the default branch | target the default branch |
+   | `ruleset-target` | error | branch rulesets exist and none targets the default branch: a ruleset targets it when `conditions.ref_name.include` has `~DEFAULT_BRANCH`, `~ALL` or `refs/heads/<default>`, and `conditions.ref_name.exclude` has none of `~DEFAULT_BRANCH`, `~ALL` and `refs/heads/<default>` | target the default branch |
    | `ruleset-deletion` | error | no `deletion` rule | restrict deletions |
    | `ruleset-linear-history` | error | no `required_linear_history` rule | require linear history |
    | `ruleset-force-push` | error | no `non_fast_forward` rule | block force pushes |
@@ -63,14 +67,22 @@ and the JSON keep it.
    `permissions`), `gh api repos/{o}/{r}/rulesets` (the list carries no rules), `gh api repos/{o}/{r}/rulesets/{id}` for
    each ruleset that targets the default branch (rules, `enforcement`, `bypass_actors`, `conditions`), and
    `gh api repos/{o}/{r}/actions/workflows/drift-audit.yml` (`state`). `{o}/{r}` comes from `--repo`, else from the URL of
-   the remote `origin` (read from `.git/config` or `git remote get-url origin`); a host other than github.com is
-   `not-github`. Whether a non-admin can read a ruleset's rules is `(verify)`; a 403 or 404 on a ruleset read is
-   `cannot-check` (`no-admin`), and never `ruleset-missing`.
+   the remote `origin` (read with `git config --get remote.origin.url`, read-only); a host other than github.com, or no
+   `origin`, is `not-github`. Whether a non-admin can read a ruleset's rules is `(verify)`; a 403 or 404 on a ruleset read is
+   `cannot-check` (`no-admin`), and never `ruleset-missing`. An empty ruleset list is `ruleset-missing` only when
+   `permissions.admin` in the repository read is not false; with `permissions.admin` false it is `cannot-check` (`no-admin`). A
+   missing `allow_auto_merge` or `delete_branch_on_merge` key (shown only to users with push access) is `cannot-check`
+   (`no-admin`). An omitted `allowed_merge_methods` counts as all methods allowed `(verify)`.
 7. **The ruleset elements are a minimum.** The elements of ADR-0001 decision 3 are what must be at least present. An
    element absent is `fail` with the id above. An element that is stricter is `ok`: one or more required approvals,
    a team or user as an approver, a required check in addition to `governance`, or a merge method set that excludes
    `merge` and is not exactly squash. Teams that require reviews must not fail the doctor. For merge methods, `fail`
-   only when `merge` (merge commits) is allowed. An extra rule not named in decision 3 is not a failure.
+   only when `merge` (merge commits) is allowed. An extra rule not named in decision 3 is not a failure. Several rulesets may target the default branch: they are read
+   together, and only rulesets whose `enforcement` is `active` provide protection. `ruleset-enforcement` fails when no
+   candidate is active. `ruleset-bypass` and every element check (`ruleset-deletion`, `ruleset-linear-history`,
+   `ruleset-force-push`, `ruleset-pull-request`, `required-check-governance`) read the active candidates only: an element
+   present only on a disabled or evaluate-mode ruleset does not count, and a bypass actor on a disabled ruleset is not a
+   bypass. With no active candidate, `ruleset-bypass` and every element check fail.
 8. **The kit comparison.** With `--kit-root`, the script reads `kit/manifest.json` in it and compares, byte for byte,
    each `verbatim` path that the installer for the target's `mode` writes (the `verbatim` list minus the files
    SPEC-0001 rule 3 keeps kit-only for `init`; minus the `adopt.skip` set, and for `adopt` the marked blocks compared
@@ -100,21 +112,30 @@ and the JSON keep it.
     with `cannot-check` never exits 0.
 13. **Refusals.** `ROOT` not a directory, a missing `agk.toml` (the target is not an agk target: exit 1, "agk.toml
     missing", no checks), and an `--api-dir` file that is not JSON (exit 3, names the file class) are refusals; each
-    writes nothing.
+    writes nothing. The wording is `refused: agk.toml missing (path class agk.toml); this is not an agk target` (exit 1) and
+    `refused: ... api-dir` (exit 3), printed on stdout.
 
 ### Tests and proof
 
 14. **Tests, no network.** `tests/kit/test_doctor.py` (installed with the kit, as the script is): `gh` is never
-    called; a test that puts a `gh` executable on `PATH` fails if it is run (it records any call).
-15. **Fixture set.** `tests/kit/fixtures/doctor/<case>/`: `api/repo.json`, `api/rulesets.json`, `api/ruleset-<id>.json`,
-    `api/workflow-drift-audit.json` recorded with `gh api` from a real repository (owner and ids changed; the
-    responses carry no secret), and a `tree/` of the few local files a case needs. One case per misconfiguration:
+    called; a test that puts a `gh` executable on `PATH` fails if it is run (it records any call). The tests of
+    `tests/kit/` build a mini kit, because the kit's `init.py` is not installed in targets; the comparison against this
+    repository's own checkout is `tests/kit_dev/test_doctor_wiring.py`.
+15. **Fixture set.** `tests/kit/fixtures/doctor/<case>/`. `ok/` holds `api/` (the four responses: `repo.json`, `rulesets.json`,
+    `ruleset-<id>.json`, `workflow-drift-audit.json`, sanitized from the real ones of `gbvraju/agk`: names and ids changed, only
+    the keys the script reads kept; they carry no secret), `tree/` (the local files), `kit/` (a mini kit with a manifest and two
+    files) and `case.json`. Every other case holds only the files that differ plus a `case.json` (`fail`, `cannot`, `delete`,
+    `origin_head`). A recorded error body `{"message", "status"}` in an API file stands for that HTTP error. Vendored
+    stand-ins are `.txt` files. One case per misconfiguration:
     `ok` (reports none), `no-ruleset`, `weak-enforcement`, `bypass-actor`, `no-deletion`, `no-linear-history`,
-    `no-force-push-block`, `stricter-ok` (one approval, a team approver, an extra check: reports none), `merge-commits-allowed`, `no-governance-check`, `placeholder-reviewers`,
+    `no-force-push-block`, `stricter-ok` (one approval, a team approver, an extra check: reports none), `merge-commits-allowed`, `wrong-target`,
+    `no-dismiss-stale`, `delete-branch-off`, `default-branch-mismatch`, `no-admin-empty-list`, `no-governance-check`, `placeholder-reviewers`,
     `placeholder-codeowners`, `no-origin-head`, `drift-disabled`, `drift-no-schedule`, `version-mismatch`,
     `vendored-edited`, `vendored-missing`, `auto-merge-off`, `no-gh` (every remote check `cannot-check`),
     `no-admin` (403 on the ruleset read: `cannot-check`, not `no-ruleset`). Each case asserts the ids that fail and
-    only those.
+    only those. The `approvals-required` and `merge-methods` cases of the Draft became `stricter-ok` and
+    `merge-commits-allowed` by the rulings. `no-gh` is tested in live mode with no `gh` on `PATH` (and `gh` stubs for
+    unauthenticated, 403, offline and bad output), not as a fixture directory.
 16. **A correctly configured repository reports none.** The `ok` case exits 0 with no `fail` and no `??`; the
     sandbox in the live proof does the same (rule 18).
 17. **Determinism.** A test runs each case twice and compares the text and the JSON byte for byte.

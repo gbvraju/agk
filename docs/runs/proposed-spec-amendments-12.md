@@ -4,6 +4,8 @@ Date: 2026-10-16 (from `date -u`). Found while building SPEC-0008 (day 9, item D
 through a proposal like this one (principle 6). Nothing here is applied; until the maintainers apply it, the code is ahead
 of the Approved text of the rules below.
 
+**Applied 2026-10-16 (from `date -u`) on the maintainers' instruction (day 10, item B):** items 1 to 10 are in `docs/specs/0008-upgrade.md` (item 1 in rules 5 and 11, 2 in rule 2, 3 in rule 5, 4 in rule 7, 5 in rule 10, 6 in rule 13, 7 in rules 14 and 16, 8 in rule 15, 9 in rule 19, 10 in rule 24); item 11 asked for no change.
+
 ## SPEC-0008 (`docs/specs/0008-upgrade.md`)
 
 1. **Rule 5 and rule 11: an install stamped only in `pyproject.toml` (ruled: Q-K3-71, option (a)).** Kits 0.1.0 and 0.2.0

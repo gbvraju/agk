@@ -9,7 +9,7 @@ rulings of 2026-10-15 (final commit of the pull request); nothing is implemented
   passes `--kit-root` (rules 1, 20).
 - Read-only by construction: GET on four paths, no write, no token handled by the script, not run in CI (rules 2, 6).
 - Three statuses, and `cannot-check` is never `ok` and never exits 0 (rules 3, 12).
-- Nineteen checks, each with id, severity and printed fix (rule 5). The brief's six groups map to: ruleset and
+- Twenty checks, each with id, severity and printed fix (rule 5). The brief's six groups map to: ruleset and
   `governance` (nine ids), placeholder team (two), `origin-head`, drift audit (two), vendored files and version
   (three). The residual lines naming doctor: ADR-0001 (the ruleset and review settings, covered by the ruleset ids),
   SPEC-0001 (`@REPLACE-ME`, covered), ADR-0003 (colon-refspec deletion, see Q-K3-15).

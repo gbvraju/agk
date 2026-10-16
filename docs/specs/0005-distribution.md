@@ -43,8 +43,8 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    equal to `kit_version` in `kit/manifest.json`), `skills/<command>/SKILL.md` for each command of rule 8, and the
    existing `scripts/agk/` and `kit/`. Claude Code copies only the plugin directory into its cache, so a plugin
    subdirectory could not reach `scripts/agk/` or `kit/`; a generated copy would be a generated file committed
-   (principle 5). Commands are written as skills; `commands/` is the older format ((verify) that `skills/<name>/SKILL.md` gives the same
-   `/agk:<name>` as `commands/<name>.md`).
+   (principle 5). Commands are written as skills; `commands/` is the older format (a skill and a command file give the same name, and the
+   skill wins on a collision; confirmed against the Claude Code documentation on 2026-10-16).
 7. **Footprint.** The plugin ships no hook, no MCP or LSP server, no monitor and no `bin/` directory in K3. Installing
    a plugin trusts its hooks and `bin/`; the plugin asks for neither. The stop hook stays in the project's
    `.claude/hooks/`. `/agk:review` uses the project's `reviewer` subagent (installed by init and adopt); the plugin
@@ -58,9 +58,9 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    | `/agk:adopt` | `adopt.py .` (SPEC-0002) | owned files and marked blocks | none |
    | `/agk:doctor` | the SPEC-0006 script | nothing (report) | read-only `gh api` for settings it must check |
    | `/agk:upgrade` | the SPEC-0008 script | vendored files | none |
-   | `/agk:spec` | `new_spec.py`: a Draft spec, or a requirement proposal with its ADR draft, from the templates | new files | none (`--from-issue N`: the command reads the issue with `gh issue view`, read-only, and passes the text to the script) |
+   | `/agk:spec` | `new_spec.py spec` (a Draft spec) or `new_spec.py requirement` (a requirement proposal with its ADR draft), from the templates | new files | none (`--from-issue N`: the command reads the issue with `gh issue view`, read-only, and passes the text to the script with `--issue N --issue-text FILE`; the script never reads an issue) |
    | `/agk:issue` | the command renders an issue from a template and runs `gh issue create` | one GitHub issue | write, after asking |
-   | `/agk:brief` | a brief from `docs/briefs/TEMPLATE.md` | one file | none |
+   | `/agk:brief` | `new_spec.py brief`: a brief from `docs/briefs/TEMPLATE.md` | one file | none |
    | `/agk:review` | `review_context.py`, the `reviewer` subagent, `check_review_report.py` (SPEC-0003) | local files, never committed | none |
 
    `/agk:review` stays advisory: its output is never an approval and human review stays required (K2 ruling).
@@ -78,7 +78,7 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
 12. **Where.** This repository is the marketplace: `.claude-plugin/marketplace.json` (`name` `agk`, an `owner`, one
     plugin entry `agk` whose `source` is `"."`, the repository root). Users add it with
     `claude plugin marketplace add gbvraju/agk` and install with `claude plugin install agk@agk`.
-    `claude plugin validate .` passes.
+    `claude plugin validate .` passes (one warning: `CLAUDE.md` at the plugin root is not loaded as plugin context).
 13. **Versions.** One number: the kit version. A release is a git tag `vX.Y.Z` on the default branch with the same
     version in `kit/manifest.json` and `.claude-plugin/plugin.json` (a test compares them). The entry sets no `version`
     of its own, so the manifest version wins. The default is no auto-update for a third-party marketplace
@@ -146,9 +146,11 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
 
 - 2026-10-15: option B (pinned external checks) is not built; revisit if the doctor comparison proves too weak
   (due 2026-12-01).
-- 2026-10-15: five facts are marked `(verify)` and are checked when the plugin is built: the frontmatter key for
-  user-only invocation, permission rules naming `${CLAUDE_PLUGIN_ROOT}`, skills against commands giving the same
-  name, the `github` source form with `ref` in `extraKnownMarketplaces`, and the auto-update default (due 2026-11-30).
+- 2026-10-15: five facts were marked `(verify)` and were checked when the plugin was built (`docs/runs/spec-0005-verify-facts.md`,
+  2026-10-16): the frontmatter key for user-only invocation, skills against commands giving the same name, and the
+  auto-update default are confirmed; `${CLAUDE_PLUGIN_ROOT}` is confirmed in a skill's `allowed-tools` but not in a
+  `settings.json` permission rule (Q-K3-73: no pre-approval in K3); the `github` source form with `ref` in
+  `extraKnownMarketplaces` is not confirmed there and is decided by the criterion-a live proof (Q-K3-72) (due 2026-11-30).
 - 2026-10-15: each command may ask for approval once per session, because a permission rule may not be able to name
   the plugin's script path (rule 16); revisit when the `(verify)` fact is checked (due 2026-11-30).
 - 2026-10-15: the doctor comparison detects a changed vendored file only when the plugin version equals the version in

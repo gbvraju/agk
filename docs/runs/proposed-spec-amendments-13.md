@@ -1,5 +1,7 @@
 # Proposed amendments to SPEC-0005 (found while building the plugin, ADR-0019)
 
+**Partly applied 2026-10-16 (from `date -u`) on the maintainers' instruction (day 10, item B), to `docs/specs/0005-distribution.md`:** C (rule 8, the `/agk:spec` and `/agk:brief` rows), D (rule 6, the `(verify)` mark removed) and E (rule 12, the validate warning, and the Residual item on the five facts). A (Q-K3-73) and B (Q-K3-72) are not applied: the rulings below keep the text of rules 14 and 16 as Approved.
+
 Date: 2026-10-16 (from `date -u`). SPEC-0005 is Approved; these changes are proposed, not applied. They take effect only
 on the maintainers' instruction. Evidence: `docs/runs/spec-0005-verify-facts.md`.
 

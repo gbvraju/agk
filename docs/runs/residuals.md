@@ -29,6 +29,10 @@ bullet. The K3 target is 2026-11-30 and the K4 target is 2026-12-31 (ADR-0015); 
 - docs/specs/0004-drift-audit.md 2026-10-14 | scheduled-workflow behaviour (jitter, the period after which GitHub may disable schedules) is (verify) against current documentation | (due 2026-11-15) | open
 - docs/adr/0012-drift-audit.md 2026-10-15 | workflow token label creation (verify on first live run) | (due 2026-10-22) | open
 - docs/runs/shadow-review-summary.md 2026-10-15 | reviewer effectiveness: 0 of 3 human findings caught in each of shadow reviews 2 and 3; measure again and improve | (due 2026-11-30) | open
+- docs/runs/plugin-live-proof.md 2026-10-16 | a doctor `warn` check for the repository's Pull requests feature turned off (a comment on a pull request was refused with "Pull requests are disabled" while the repository was otherwise healthy) | (due 2026-11-30) | open
+- docs/runs/plugin-live-proof.md 2026-10-16 | a drift-audit check that every tag matches `vX.Y.Z` (lowercase); a tag `V0.10.0` existed beside `v0.10.0` | (due 2026-11-30) | open
+- docs/runs/plugin-live-proof.md 2026-10-16 | the skills quote the script path, so a simple `Bash(python3 …/init.py *)` allow rule does not match; the rule needs `Bash(python3 *scripts/agk/init.py* *)` (Q-K3-73) | (due 2026-11-30) | open
+- docs/runs/plugin-live-proof.md 2026-10-16 | Q-K3-72: the committed project-scope `.claude/settings.json` form with `ref` is untested, because it needs an interactive workspace-trust dialog | (due 2026-11-30) | open
 
 ## Closed (not findings)
 
