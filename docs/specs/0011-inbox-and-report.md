@@ -6,7 +6,7 @@
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
 This is the third of the five K4 specs of ADR-0021 and serves exit criteria a, d and e. Its only input is the facts document of
-SPEC-0009 (and the field `proof` of SPEC-0010 rule 17). The points `Q-K4-40` to `Q-K4-59` were ruled by
+SPEC-0009 (and the field `proof` of SPEC-0010 rule 17). The points `Q-K4-40` to `Q-K4-60` were ruled by
 the maintainers on 2026-10-16 (`docs/runs/spec-0011-notes.md`). GitHub facts not reconfirmed are marked `(verify)`. The repository facts quoted here
 were read on 2026-10-16.
 
@@ -142,11 +142,17 @@ were read on 2026-10-16.
     that file`), with the pilot unnamed; it may run the facts script and the renderer at the facts commit named in the footer, so that the
     maintainers can reproduce the issue. **What it never does:** it does not write an answer, does not read the pilot's product code, and
     does not mark an answer correct. The answers and the maintainers' marks are the record, and they live in the pilot repository.
-20. **Proof of criterion d.** On two weekly hand counts in this repository and two in the pilot: on a day the maintainers choose, before
+20. **Proof of criterion d.** On two weekly hand counts in this repository and two in the pilot. On a day the maintainers choose, before
     seeing the inbox, they list by hand every item that waits for them (specs, ADRs, questions, pull requests, overdue residuals,
-    unspecced requirements), and send the list to the agent; only then does the agent run `facts.py` and `product_report.py --inbox` at the
-    same moment and put both lists side by side in `docs/runs/`. The criterion is met when the inbox misses no item of the hand count; an
-    extra item is a finding to read, not a failure. The agent does not edit the inbox to match.
+    unspecced requirements); only then is the inbox produced with `facts.py` and `product_report.py --inbox` at the same moment, and both
+    lists are put side by side. The criterion is met when the inbox misses no item of the hand count; an extra item is a finding to read,
+    not a failure. The inbox is never edited to match.
+    - *This repository's two counts* stay as drafted: the maintainers send their list to the agent, who runs the two scripts and records
+      both lists side by side in this repository's `docs/runs/`.
+    - *The pilot's two counts* (ruling on Q-K4-60) live in the pilot repository: the hand-count list and the inbox side by side are in the
+      pilot's own `docs/runs/`, committed by the pilot session through a pull request, like the answers of rule 19. This repository's
+      `docs/runs/` records, per pilot week, only: the week, `match` or `mismatch` for each count, and a link to the pilot's file, with the
+      pilot unnamed. A count is `match` when the inbox misses no item of the hand count.
 21. **Proof of criterion e.** Rule 13, and the footer `facts: <commit>` of every report; the maintainers may rerun
     `facts.py` at that commit and `product_report.py` on it and diff the result against the issue.
 22. **Installed files and classes.** Installed (verbatim): `scripts/agk/product_report.py`, `.github/workflows/product-report.yml`,

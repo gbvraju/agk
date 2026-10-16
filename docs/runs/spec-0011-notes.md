@@ -73,6 +73,7 @@ criteria a, d and e. Every question below was raised with a conservative reading
 | Q-K4-57 | How does the product owner get the report (notification)? | not specified: GitHub issue notifications of the repository; the pilot sets watching |
 | Q-K4-58 | The hand count of criterion d: the maintainers list the items before seeing the inbox; the agent compares afterwards. | rule 20 |
 | Q-K4-59 | Where the pilot answers are recorded, given that this repository never names the pilot. | `docs/runs/` here, without the pilot's name and without product code (rule 19); the maintainers may choose the pilot's own repository instead |
+| Q-K4-60 | (raised after the first rulings, from the observation on rule 20) Where the pilot's criterion d hand counts are kept, given that Q-K4-59 puts the pilot's answers in the pilot repository. | (draft) as drafted: in this repository. **Ruled below** |
 
 ## Rulings (maintainers, 2026-10-16)
 
@@ -101,10 +102,11 @@ pilot repository now exists and is described above; it is still "the pilot repos
 | Q-K4-57 | accepted as drafted: GitHub issue notifications; the pilot sets watching | not in the spec |
 | Q-K4-58 | accepted as drafted: the hand count is written before the inbox is shown | rule 20 |
 | Q-K4-59 | **changed:** the product owner's answers and the maintainers' marks are recorded **in the pilot's own repository** (`docs/runs/product-report-week-N.md`), committed by the pilot's session through a pull request. This repository records only the score (5 of 5, the week, a link to that file) in `docs/runs/`, with the pilot unnamed | rule 19 |
+| Q-K4-60 | **ruled (raised from the rule-20 observation):** the pilot's criterion d material lives in the pilot repository: its hand-count lists in its own `docs/runs/`, committed by the pilot session through a pull request. This repository's `docs/runs/` records, per pilot week, the week, `match` or `mismatch` per count, and a link to the pilot file, with the pilot unnamed. This repository's own hand counts stay here as drafted | rule 20 |
 
 **Sibling specs touched.** The `drift` section that rule 10 reads is added to SPEC-0009 (#51, rules 3 and 15); this pull request edits
-only SPEC-0011. The amendment of SPEC-0006 (Q-K4-52) is made at implementation, not here. Rule 20, the criterion d hand counts, is
-accepted as drafted (Q-K4-58); where the pilot's side of those lists is kept was not ruled and the drafted text stands.
+only SPEC-0011. The amendment of SPEC-0006 (Q-K4-52) is made at implementation, not here. Rule 20 follows Q-K4-58 (hand count written
+before the inbox is shown) for both repositories, and Q-K4-60 for where the pilot's side is kept.
 
 ## Proof plan
 
@@ -120,4 +122,5 @@ accepted as drafted (Q-K4-58); where the pilot's side of those lists is kept was
 | Date | Decision | Reason | Recorded in | By |
 | --- | --- | --- | --- | --- |
 | 2026-10-16 | SPEC-0011 inbox and weekly product report Approved: a renderer that reads only the facts document, six inbox kinds, five sections in the order of the five questions, every line linked, a `facts:` footer, one issue per ISO week at Monday 07:13 UTC | criteria a, d, e of ADR-0021 | `docs/specs/0011-inbox-and-report.md` | reviewer |
+| 2026-10-16 | Q-K4-60 ruled: the pilot's criterion d hand-count lists live in the pilot repository's own `docs/runs/`, committed by the pilot session through a pull request; this repository records per pilot week only the week, match or mismatch per count, and a link, with the pilot unnamed; this repository's own hand counts stay here | the pilot is never named here, and its records live with it (as for Q-K4-59) | `docs/runs/spec-0011-notes.md`, `docs/specs/0011-inbox-and-report.md` rule 20 | reviewer |
 | 2026-10-16 | Q-K4-40 to Q-K4-59 ruled: every reading of the draft accepted; Q-K4-46 the unspecced `planned` requirements are real items and are cleaned up as K4 work; Q-K4-48 "At risk" prints the drift counts from the facts' `drift` section; Q-K4-52 the doctor's `drift-workflow-state` is extended at implementation without a new check id; Q-K4-59 the pilot answers and marks live in the pilot repository and this repository records only the score | maintainers' rulings of 2026-10-16 on the Draft SPEC-0011 | `docs/runs/spec-0011-notes.md` | reviewer |
