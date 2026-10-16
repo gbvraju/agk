@@ -2946,7 +2946,7 @@
     "tests/kit/fixtures/metrics/window-edges/pulls.json": ["2fb7bbc0eae73cada1ad0baad7f054363429c4e9c5d3afee57e74e8669098295"],
     "tests/kit/pytest.ini": ["65e6856a27f9ade23ef94ce5d5dc606836a6b4b61e57dfc9a090731497724996"],
     "tests/kit/review_fixtures.py": ["db837d106f6cbf389280bb49f1c738b6f184a8dbd65d4cb13cd8d5da7bca7745"],
-    "tests/kit/test_agk_config.py": ["6389732dd958ec0eab3dc505dba71031feb9d2b7a68eb4daf51bf583ce425bd1"],
+    "tests/kit/test_agk_config.py": ["2ce22fee1b1916b50776d27c890dd9fb09d81c9707ffb1618bf1234014d84bc9"],
     "tests/kit/test_agk_mk.py": ["2ab26040a057acdff020f9b77062cbb8f71a2a2a38fce3db2ab8fb8e5369c4b3"],
     "tests/kit/test_check_adrs.py": ["4c7ca9485c99ad29c652f4fb351dd7a6c5d0e6bbf57ae2878bbc9fc95e17cec1"],
     "tests/kit/test_check_build_state.py": ["18252608caecc1b73b7a713ac41d96f1a2b3032284950106750082c5209565da"],

@@ -13,6 +13,7 @@ DEFAULTS = {
     "project_tests": "",
     "test_patterns": ["test_*.py"],
     "mode": "",
+    "inbox_hours": 48,
 }
 
 
@@ -28,6 +29,13 @@ def test_ac1_agk_toml_is_read(tmp_path):
     cfg = common.load_config(tmp_path)
     assert cfg["default_branch"] == "master"
     assert cfg["test_dirs"] == ["pkg/tests"] and cfg["lint_paths"] == ["x"]
+
+
+def test_ac1_inbox_hours_defaults_to_48_and_is_read_from_agk_toml(tmp_path):
+    """REQ-010 AC1: rule 5; REQ-018 AC2: SPEC-0009 rule 7 carries the setting."""
+    assert common.load_config(tmp_path)["inbox_hours"] == 48
+    (tmp_path / "agk.toml").write_text("inbox_hours = 24\n")
+    assert common.load_config(tmp_path)["inbox_hours"] == 24
 
 
 def test_ac1_pyproject_tool_agk_is_the_fallback(tmp_path):
