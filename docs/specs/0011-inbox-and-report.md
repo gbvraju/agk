@@ -1,13 +1,13 @@
 # SPEC-0011: decision inbox and weekly product report
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-017 (AC1), REQ-018 (AC1, AC2)
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
 This is the third of the five K4 specs of ADR-0021 and serves exit criteria a, d and e. Its only input is the facts document of
-SPEC-0009 (and the field `proof` of SPEC-0010 rule 17). The open points `Q-K4-40` to `Q-K4-59` are in
-`docs/runs/spec-0011-notes.md`; none is ruled. GitHub facts not reconfirmed are marked `(verify)`. The repository facts quoted here
+SPEC-0009 (and the field `proof` of SPEC-0010 rule 17). The points `Q-K4-40` to `Q-K4-59` were ruled by
+the maintainers on 2026-10-16 (`docs/runs/spec-0011-notes.md`). GitHub facts not reconfirmed are marked `(verify)`. The repository facts quoted here
 were read on 2026-10-16.
 
 ## Rules
@@ -74,8 +74,9 @@ were read on 2026-10-16.
     - *Needs you.* The inbox of rule 3, all items, grouped by kind in the order of the table, each group headed by its count.
     - *At risk.* (i) each overdue residual (rule 3's kind, with its days overdue = `today - due`); (ii) each open pull request older
       than 7 days (days = `today - date(created_at)`); (iii) each pull request merged or closed in the week with two or more `fix`
-      verdicts or any `rejected` verdict (`was sent back N times`); (iv) the link to the open drift-audit issue (`issues[]` with label
-      `agk-drift-audit`), printed as `drift audit: #N "<title>"` with no count of its findings, which the facts do not carry (Q-K4-48).
+      verdicts or any `rejected` verdict (`was sent back N times`); (iv) the drift counts of the facts' `drift` section (SPEC-0009 rule 15): `drift audit: N findings (D1 a, D2 b, D3 c, D4 d, D5 e, D6 f)`,
+      with the link to the open drift-audit issue (`issues[]` with label `agk-drift-audit`); a count that the document marks `"unknown"` is
+      printed as `unknown`, and with no open drift issue the line has no link and says `no open drift issue` (ruling on Q-K4-48).
     - *Cost.* For each pull request merged in the week: the hours from `created_at` to `merged_at`, rounded half-up to 0.1 as
       `metrics.hours_between` does, and the number of `fix` verdicts; then the totals for the week: pull requests merged, hours
       (sum), `fix` verdicts, and the number of pull requests that declared `Behaviour: unchanged` (`behaviour` is `"unchanged"`), so
@@ -111,8 +112,8 @@ were read on 2026-10-16.
     `checks: read`, `actions: read` (the facts script reads the `proof` runs), `issues: write`. A single job, run only on the default
     branch, SHA-pinned actions as the other workflows, a full checkout. Steps: run `facts.py --today "$today"` into a file in
     `$RUNNER_TEMP`, run `product_report.py --facts` on it, and create or update the issue (rule 16). GitHub may disable scheduled
-    workflows after inactivity `(verify)`; the doctor already reports a disabled drift-audit workflow, and the same check is extended to this
-    one by the implementation (the doctor's table gains no row; the check reads both workflow files).
+    workflows after inactivity `(verify)`; the doctor already reports a disabled drift-audit workflow, and at implementation an amendment of SPEC-0006 extends
+    `drift-workflow-state` to also cover the product-report workflow, without a new check id (ruling on Q-K4-52).
 16. **One issue per week, updated in place.** The step lists the issues labelled `agk-product-report` through the facts document
     (`issues[]`, all states), and `--print-action` prints `create` when none has the week's title, `update N` for the lowest number that has
     it, and `update N` plus a notice line when two do (as metrics). Creating the label is allowed (`gh label create ... || true`).
@@ -133,14 +134,14 @@ were read on 2026-10-16.
     name, cron, permissions, default-branch guard, pinned actions, no `pull_request_target`. The tests of rule 13. Fixtures
     `tests/kit/fixtures/report/<case>/` hold `facts.json` and the golden `report.md` and `inbox.md`.
 19. **Proof of criterion a (a maintainers' step with the agent's help, not done in this pull request).** In the pilot repository, which
-    adopts the kit by 2026-11-02: for two consecutive ISO weeks the workflow creates the issue on its Monday schedule. For each week the
-    product owner (the maintainer) writes, from the issue alone, an answer to each of the five questions, in a file in this repository's
-    `docs/runs/`. The maintainers then check each answer against the pilot repository's own records (its pull requests, its files, its
+    exists and runs the kit (adopted on kit 0.11.0): for two consecutive ISO weeks the workflow creates the issue on its Monday schedule. For each week the
+    product owner (the maintainer) writes, from the issue alone, an answer to each of the five questions, in a file of the **pilot's own repository**, `docs/runs/product-report-week-N.md`,
+    committed by the pilot's session through a pull request (ruling on Q-K4-59). The maintainers then check each answer against the pilot repository's own records (its pull requests, its files, its
     issues) and mark it correct or wrong; an answer the report could not give is wrong. The criterion needs 5 of 5 correct in both weeks.
-    **What the agent does:** it runs the facts script and the renderer at the facts commit named in the footer, so the maintainers can
-    reproduce the issue, and it copies the maintainers' answers and marks verbatim into the record. **What the agent never does:** it does
-    not write an answer, does not read the pilot's product code, and does not mark an answer correct. The maintainers' marks are the
-    record.
+    **What the agent of this repository does:** it records the score only, in `docs/runs/` here (for example `5 of 5, week N, link to
+    that file`), with the pilot unnamed; it may run the facts script and the renderer at the facts commit named in the footer, so that the
+    maintainers can reproduce the issue. **What it never does:** it does not write an answer, does not read the pilot's product code, and
+    does not mark an answer correct. The answers and the maintainers' marks are the record, and they live in the pilot repository.
 20. **Proof of criterion d.** On two weekly hand counts in this repository and two in the pilot: on a day the maintainers choose, before
     seeing the inbox, they list by hand every item that waits for them (specs, ADRs, questions, pull requests, overdue residuals,
     unspecced requirements), and send the list to the agent; only then does the agent run `facts.py` and `product_report.py --inbox` at the
