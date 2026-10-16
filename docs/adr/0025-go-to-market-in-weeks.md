@@ -1,6 +1,6 @@
 # ADR-0025: go to market in weeks; the portal is built with AGK
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-16
 - Deciders: maintainers
 - Amends: ADR-0021
