@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -41,7 +42,10 @@ NEW = {
     "CLAUDE.md": "# rules new\n",
 }
 TEMPLATES_OLD = {
-    "kit/templates/agk.toml": 'mode = "init"\nversion = "{{kit_version}}"\nbranch = "main"\n',
+    "kit/templates/agk.toml": (
+        'mode = "init"\nversion = "{{kit_version}}"\ninstalled = "{{date}}"\n'
+        'default_branch = "{{default_branch}}"\n'
+    ),
     "kit/templates/agk.adopt.toml": 'mode = "adopt"\nversion = "{{kit_version}}"\n',
     "kit/templates/protected-paths.txt": "config/\n.claude/\n",
     "kit/templates/reviewers.yaml": "teams: old\n",
@@ -474,12 +478,22 @@ def test_ac1_refusals_of_rule_5_write_nothing(tmp_path, kit, capsys, over, needl
     assert snapshot(target) == before
 
 
-def test_ac1_an_install_without_agk_toml_is_refused(tmp_path, kit, capsys):
-    """REQ-014 AC5: rule 5 (kit 0.1.0 and 0.2.0 stamp `[tool.agk]` in pyproject.toml only)."""
-    target = init_target(tmp_path)
-    (target / "agk.toml").unlink()
-    code, out = run(capsys, target)
-    assert code == 1 and "agk.toml is missing (path class agk.toml)" in out[0]
+def test_ac1_a_target_without_agk_toml_and_without_a_legacy_stamp_is_refused(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 5 and ruling Q-K3-71 (any other target without agk.toml is refused)."""
+    for i, pyproject in enumerate(
+        [None, "[project]\nname = 'x'\n", "[tool.agk]\ninstalled = '2020-01-02'\n"]
+    ):
+        target = init_target(tmp_path / str(i))
+        (target / "agk.toml").unlink()
+        if pyproject:
+            (target / "pyproject.toml").write_text(pyproject)
+        before = snapshot(target)
+        code, out = run(capsys, target)
+        assert (
+            code == 1
+            and "agk.toml is missing and pyproject.toml has no [tool.agk] version" in out[0]
+        )
+        assert snapshot(target) == before
 
 
 def test_ac1_a_symlinked_path_to_write_is_refused(tmp_path, kit, capsys):
@@ -516,6 +530,106 @@ def test_ac1_usage_errors_exit_2(kit, args):
     assert upgrade.main(args) == 2
 
 
+# --- an install stamped only in pyproject.toml (kits 0.1.0 and 0.2.0; ruling Q-K3-71) ---
+
+STAMP = '[tool.agk]\nversion = "1.0.0"\ninstalled = "2019-05-06"\ndefault_branch = "trunk"\n'
+
+
+def legacy_target(tmp_path: Path, stamp: str = STAMP) -> Path:
+    target = init_target(tmp_path)
+    (target / "agk.toml").unlink()
+    (target / "pyproject.toml").write_text('[project]\nname = "mine"\n\n' + stamp)
+    return target
+
+
+def test_ac1_a_legacy_install_gets_agk_toml_from_the_template_as_the_last_write(
+    tmp_path, kit, capsys, monkeypatch
+):
+    """REQ-014 AC5: ruling Q-K3-71 (mode init; installed and default_branch from the stamp)."""
+    target = legacy_target(tmp_path)
+    pyproject = (target / "pyproject.toml").read_bytes()
+    seen: list[str] = []
+    real = upgrade.write_atomic
+
+    def spy(path: Path, data: bytes) -> None:
+        seen.append(path.relative_to(target).as_posix())
+        real(path, data)
+
+    monkeypatch.setattr(upgrade, "write_atomic", spy)
+    code, out = run(capsys, target)
+    assert code == 0, out
+    assert seen[-1] == "agk.toml" and seen[:-1] == sorted(seen[:-1]) and len(seen) == 9
+    assert (target / "agk.toml").read_text() == (
+        'mode = "init"\nversion = "2.0.0"\ninstalled = "2019-05-06"\ndefault_branch = "trunk"\n'
+        "review_diff_cap = 4000\n"
+    )
+    assert (target / "pyproject.toml").read_bytes() == pyproject  # never written
+    assert (
+        "legacy-stamp pyproject.toml [tool.agk]: obsolete after this upgrade; "
+        "remove it in your own change"
+    ) in out
+    assert "create agk.toml" in out
+    assert "upgraded 9 files; agk.toml is created with version 2.0.0" in out
+    assert not any(ln.startswith("template-changed agk.toml") for ln in out)
+
+
+def test_ac1_a_legacy_install_uses_the_template_default_branch_without_a_stamp_value(
+    tmp_path, kit, capsys
+):
+    """REQ-014 AC5: ruling Q-K3-71."""
+    target = legacy_target(tmp_path, '[tool.agk]\nversion = "1.0.0"\ninstalled = "2019-05-06"\n')
+    assert run(capsys, target)[0] == 0
+    assert 'default_branch = "main"' in (target / "agk.toml").read_text()
+
+
+def test_ac1_a_legacy_second_run_is_nothing_to_do(tmp_path, kit, capsys):
+    """REQ-014 AC5: ruling Q-K3-71 (agk.toml now exists, so the stamp is not read again)."""
+    target = legacy_target(tmp_path)
+    assert run(capsys, target)[0] == 0
+    before = snapshot(target)
+    code, out = run(capsys, target)
+    assert code == 0 and out[-1] == "nothing to do" and snapshot(target) == before
+
+
+def test_ac1_a_legacy_conflict_creates_no_agk_toml(tmp_path, kit, capsys):
+    """REQ-014 AC5: ruling Q-K3-71 (a re-run starts from the stamp again)."""
+    target = legacy_target(tmp_path)
+    put(target, {"b.txt": "my edit\n"})
+    before = snapshot(target)
+    code, out = run(capsys, target)
+    assert code == 1 and snapshot(target) == before and not (target / "agk.toml").exists()
+
+
+def test_ac1_a_legacy_write_error_creates_no_agk_toml(tmp_path, kit, capsys, monkeypatch):
+    """REQ-014 AC5: ruling Q-K3-71 (exit 3; the next run starts from the stamp and completes)."""
+    target = legacy_target(tmp_path)
+    real = upgrade.write_atomic
+
+    def failing(path: Path, data: bytes) -> None:
+        if path.name == "d.txt":
+            raise OSError("disk")
+        real(path, data)
+
+    monkeypatch.setattr(upgrade, "write_atomic", failing)
+    code, _ = run(capsys, target)
+    assert code == 3 and not (target / "agk.toml").exists()
+    monkeypatch.setattr(upgrade, "write_atomic", real)
+    code, out = run(capsys, target)
+    assert code == 0 and (target / "agk.toml").is_file()
+
+
+def test_ac1_a_legacy_dry_run_writes_nothing_and_says_what_it_would_do(tmp_path, kit, capsys):
+    """REQ-014 AC5: ruling Q-K3-71 and rule 14."""
+    target = legacy_target(tmp_path)
+    before = snapshot(target)
+    code, out = run(capsys, target, "--dry-run")
+    assert code == 0 and snapshot(target) == before
+    assert "create agk.toml" in out
+    assert any(
+        ln.startswith("dry run: 9 files would change; agk.toml would be created") for ln in out
+    )
+
+
 # --- the real history: every kit version that wrote agk.toml upgrades to this kit ---
 
 
@@ -538,9 +652,9 @@ def checkout(commit: str, dest: Path) -> Path:
     return dest
 
 
-def old_install(tmp_path: Path, version: str, mode: str) -> Path | None:
+def old_install(tmp_path: Path, version: str, mode: str, index: int = 0) -> Path | None:
     rows = json.loads((KIT_ROOT / "kit" / "hashes.json").read_text(encoding="utf-8"))["releases"]
-    old = checkout(rows[version]["commits"][0], tmp_path / "old_kit")
+    old = checkout(rows[version]["commits"][index], tmp_path / "old_kit")
     script = old / "scripts" / "agk" / f"{mode}.py"
     if not script.is_file():
         return None
@@ -585,10 +699,26 @@ def test_ac1_a_real_old_install_upgrades_with_no_conflict(tmp_path, version, mod
     assert again.returncode == 0 and again.stdout.splitlines()[-1] == "nothing to do"
 
 
-@pytest.mark.parametrize("version", ["0.1.0", "0.2.0"])
-def test_ac1_an_install_stamped_only_in_pyproject_is_refused(tmp_path, version):
-    """REQ-014 AC5: rule 5 (the gap recorded in docs/runs/proposed-spec-amendments-12.md)."""
-    target = old_install(tmp_path, version, "init")
+@pytest.mark.parametrize(("version", "index"), [("0.1.0", 0), ("0.1.0", 1), ("0.2.0", 0)])
+def test_ac1_a_real_legacy_install_upgrades_and_pyproject_stays_the_same(tmp_path, version, index):
+    """REQ-014 AC5: ruling Q-K3-71 (kits 0.1.0, both commits, and 0.2.0, with their own init.py)."""
+    target = old_install(tmp_path, version, "init", index)
     assert target is not None and not (target / "agk.toml").exists()
+    pyproject = (target / "pyproject.toml").read_bytes()
+    stamp = tomllib.loads(pyproject.decode())["tool"]["agk"]
     proc = upgrade_cli(target)
-    assert proc.returncode == 1 and proc.stdout.startswith("refused: agk.toml is missing")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    out = proc.stdout.splitlines()
+    assert not [ln for ln in out if ln.startswith("conflict ")]
+    note = "legacy-stamp pyproject.toml [tool.agk]: obsolete after this upgrade; "
+    assert note + "remove it in your own change" in out
+    manifest = json.loads((KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    whole, _ = upgrade.installed_set(manifest, "init")
+    for rel in whole:
+        assert (target / rel).read_bytes() == (KIT_ROOT / rel).read_bytes(), rel
+    assert (target / "pyproject.toml").read_bytes() == pyproject
+    config = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
+    assert config["mode"] == "init" and config["version"] == manifest["kit_version"]
+    assert config["installed"] == stamp["installed"]
+    again = upgrade_cli(target)
+    assert again.returncode == 0 and again.stdout.splitlines()[-1] == "nothing to do"

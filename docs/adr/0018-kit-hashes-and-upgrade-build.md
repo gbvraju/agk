@@ -33,9 +33,14 @@ scripts (`scripts/agk/upgrade.py`, `scripts/agk/kit_hashes.py`), the table `kit/
    exit 0 / 1 / 2 / 3; a locally edited file stops the whole run and lists every edited path; only the `version = "..."` line of
    `agk.toml` is rewritten, as the last write; templates and new `agk.toml` keys are printed, not merged; the target's
    protected classes and an ADR skeleton are printed, and no ADR is written. Neither script nor table is installed.
-5. **An install stamped only in `pyproject.toml [tool.agk]` is refused** (kits 0.1.0 and 0.2.0 wrote no `agk.toml`; SPEC-0008
-   rule 5). Criterion c names the 0.1.0 sandbox, so it cannot be met until the maintainers rule on Q-K3-71
-   (`docs/runs/proposed-spec-amendments-12.md`). Every kit from 0.3.0 upgrades with no conflict in the tests.
+5. **An install stamped only in `pyproject.toml [tool.agk]` is upgraded through its stamp** (ruling Q-K3-71, option (a); kits
+   0.1.0 and 0.2.0 wrote no `agk.toml`). When `agk.toml` is absent and `pyproject.toml` has a `[tool.agk]` table with a
+   `version`, the target is mode init at that version; `installed` and `default_branch` come from the stamp (or the template
+   default); `agk.toml` is created from the kit's template with the kit's current version, as the last write and only when every
+   other write succeeded (on a conflict, a refusal or an I/O error it is not created, so a re-run starts from the stamp again).
+   `pyproject.toml` is never written; the upgrade prints `legacy-stamp pyproject.toml [tool.agk]: obsolete after this upgrade;
+   remove it in your own change`. Any other target without `agk.toml` is refused. Kits 0.1.0 (both commits) and 0.2.0 upgrade with
+   no conflict in the tests, as does every kit from 0.3.0.
 6. **Kit version 0.9.0** (the next minor, one bump for this item). No installed file changes in this item.
 7. **Deviations** from the Approved text are in `docs/runs/proposed-spec-amendments-12.md`, not applied.
 
@@ -48,6 +53,7 @@ scripts (`scripts/agk/upgrade.py`, `scripts/agk/kit_hashes.py`), the table `kit/
 
 ## Residual
 
-- 2026-10-16: kits 0.1.0 and 0.2.0 targets cannot be upgraded until Q-K3-71 is ruled (due 2026-11-15).
+- 2026-10-16: the legacy path assumes mode init; a `[tool.agk]` stamp of an adopt install does not exist in any kit
+  (adopt appeared at 0.4.0, with `agk.toml`) (due 2026-11-30).
 - 2026-10-16: `kit/hashes.json` is about 170 KB and grows by one row per release; a compact form is a later option
   (due 2026-12-31).

@@ -6,15 +6,18 @@ of the Approved text of the rules below.
 
 ## SPEC-0008 (`docs/specs/0008-upgrade.md`)
 
-1. **Rule 5 against criterion c: an install stamped only in `pyproject.toml`.** Kits 0.1.0 and 0.2.0 wrote no `agk.toml`; the
-   stamp is `version` and `installed` in `[tool.agk]` of `pyproject.toml`, and there is no `mode` (init only). The sandbox
-   `gbvraju/agk-sandbox` is such an install (read on 2026-10-16: `pyproject.toml` has `[tool.agk]` with `version = "0.1.0"`, and
-   no `agk.toml`). Rule 5 refuses it (`agk.toml` absent), so the proof of rule 23 and criterion c of ADR-0015 ("the 0.1.0 sandbox
-   upgrades") cannot pass as written. Built: the refusal, with a message that names this case. **Q-K3-71.** Options for the
-   maintainers: (a) the upgrade reads the `[tool.agk]` stamp when `agk.toml` is absent (mode `init`), creates `agk.toml` from the
-   kit template with the stamp's `installed` and `default_branch`, and leaves `[tool.agk]` in `pyproject.toml` alone; (b) a
-   one-time migration step for 0.1.0 and 0.2.0 outside `upgrade`; (c) change criterion c to the oldest kit whose installs have
-   `agk.toml` (0.3.0). The draft makes no choice.
+1. **Rule 5 and rule 11: an install stamped only in `pyproject.toml` (ruled: Q-K3-71, option (a)).** Kits 0.1.0 and 0.2.0
+   wrote no `agk.toml`; the stamp is `version` and `installed` in `[tool.agk]` of `pyproject.toml`, and there is no `mode` (init
+   only). The sandbox `gbvraju/agk-sandbox` is such an install (read on 2026-10-16: `[tool.agk] version = "0.1.0"` and no
+   `agk.toml`). Rule 5 as Approved refused it, so criterion c ("the 0.1.0 sandbox upgrades") could not pass. The maintainers
+   ruled option (a): when `agk.toml` is absent and `pyproject.toml` has a `[tool.agk]` table with `version`, the upgrade treats the
+   target as mode init at that version; takes `installed` and `default_branch` from the stamp (or the template default); creates
+   `agk.toml` from the kit's template with the kit's current version, as the last write and only when every other write
+   succeeded (on a conflict, a refusal or an I/O error it is not created, so a re-run starts from the stamp again). It never writes
+   `pyproject.toml`; it prints `legacy-stamp pyproject.toml [tool.agk]: obsolete after this upgrade; remove it in your own change`.
+   Any other target without `agk.toml` is still refused. Built as ruled; the `agk.toml` line counts in `N files`, the summary reads
+   `upgraded N files; agk.toml is created with version V`, and the `template-changed agk.toml` line is not printed for it.
+   Proposed: replace the `agk.toml` precondition of rule 5 and add the legacy case to rule 11.
 2. **Rule 2, regeneration and the commit list.** Built: the history is the first-parent history up to the merge base with the
    default branch (`AGK_BASE`, else `origin/<default>`), plus the working tree as the current version. A past version's row
    names exactly the commits at which its files changed (full SHAs); the current version's row is taken from the working tree
@@ -49,7 +52,6 @@ of the Approved text of the rules below.
 11. **Rule 25, no installed file changes.** The build changes no installed path, yet the kit version is bumped to 0.9.0 (the day 9
     brief: one bump per item). Proposed: none.
 
-## Question (open)
+## Question (answered)
 
-- **Q-K3-71.** How should the 0.1.0 and 0.2.0 installs be upgraded (item 1)? Until it is ruled, `upgrade.py` refuses them and the
-  sandbox proof cannot pass.
+- **Q-K3-71** ruled on 2026-10-16: option (a), item 1.

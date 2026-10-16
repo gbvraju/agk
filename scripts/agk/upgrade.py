@@ -19,12 +19,22 @@ import re
 import sys
 import tomllib
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
 from common import matches, read_list
+from init import (
+    DATE_RE,
+    MANIFEST,
+    Refusal,
+    check_interpreter,
+    passes_symlink,
+    path_class,
+    render,
+    slug,
+)
 from init import KIT_ROOT as KIT_ROOT  # noqa: PLC0414 - tests point it at an older kit fixture
-from init import MANIFEST, Refusal, check_interpreter, passes_symlink, path_class
 
 USAGE = "usage: upgrade.py TARGET [--dry-run]"
 TABLE = "kit/hashes.json"
@@ -33,6 +43,10 @@ KIT_ONLY_FILES = ("scripts/agk/init.py", "scripts/agk/adopt.py")
 LINE_TEMPLATES = ("config/protected-paths.txt", "config/neutrality.txt")
 GENERATOR = "scripts/agk/reviewers.py"
 CODEOWNERS_COMMAND = "python3 scripts/agk/reviewers.py --codeowners --write"
+LEGACY_NOTE = (
+    "legacy-stamp pyproject.toml [tool.agk]: obsolete after this upgrade; "
+    "remove it in your own change"
+)
 FIX = (
     "fix: restore the kit's copy of each edited file by hand, or move the edit out of the vendored "
     "file, then run again"
@@ -55,10 +69,16 @@ class Plan:
     items: list[Item] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     entries: list[str] = field(default_factory=list)
+    legacy: bool = False  # the stamp is [tool.agk] in pyproject.toml; agk.toml is created, last
 
     @property
     def writes(self) -> list[Item]:
         return [i for i in self.items if i.action in ("create", "replace")]
+
+    @property
+    def stamp(self) -> bool:
+        """True when the version line of an existing agk.toml is to be set."""
+        return not self.legacy and self.version != self.kit_version
 
     @property
     def conflicts(self) -> list[Item]:
@@ -76,13 +96,29 @@ def version_key(text: str) -> tuple[int, ...]:
     return tuple(int(p) for p in parts)
 
 
-def read_stamp(target: Path) -> tuple[str, str]:
+def legacy_stamp(target: Path) -> dict | None:
+    """The `[tool.agk]` table of pyproject.toml when it carries a version (kits 0.1.0 and 0.2.0)."""
+    path = target / "pyproject.toml"
+    if not path.is_file():
+        return None
+    try:
+        table = tomllib.loads(path.read_text(encoding="utf-8")).get("tool", {}).get("agk")
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return None
+    return table if isinstance(table, dict) and isinstance(table.get("version"), str) else None
+
+
+def read_stamp(target: Path) -> tuple[str, str, dict | None]:
+    """(version, mode, legacy stamp). Without agk.toml a `[tool.agk]` version means mode init."""
     path = target / "agk.toml"
     if not path.is_file():
-        raise Refusal(
-            "agk.toml is missing (path class agk.toml); an install stamped only in pyproject.toml "
-            "[tool.agk] (kit 0.1.0 and 0.2.0) is not supported"
-        )
+        stamp = legacy_stamp(target)
+        if stamp is None:
+            raise Refusal(
+                "agk.toml is missing and pyproject.toml has no [tool.agk] version "
+                "(path class agk.toml)"
+            )
+        return stamp["version"], "init", stamp
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
@@ -92,7 +128,23 @@ def read_stamp(target: Path) -> tuple[str, str]:
         raise Refusal("agk.toml has no version (path class agk.toml)")
     if mode not in ("init", "adopt"):
         raise Refusal("mode in agk.toml is not init or adopt (path class agk.toml)")
-    return version, mode
+    return version, mode, None
+
+
+def legacy_agk_toml(target: Path, kit_root: Path, manifest: dict, stamp: dict) -> bytes:
+    """agk.toml from the kit's template: the stamp's installed and default_branch, kit version."""
+    installed = stamp.get("installed")
+    if not (isinstance(installed, str) and DATE_RE.match(installed)):
+        installed = datetime.now(UTC).date().isoformat()
+    branch = stamp.get("default_branch")
+    variables = {
+        "project": slug(target.name),
+        "date": installed,
+        "kit_version": str(manifest["kit_version"]),
+        "default_branch": branch if isinstance(branch, str) and branch else "main",
+    }
+    src = manifest["templates"]["agk.toml"]
+    return render((kit_root / src).read_text(encoding="utf-8"), variables, src).encode("utf-8")
 
 
 def locate(text: str, style: str) -> tuple[str, int, int, list[str]]:
@@ -197,7 +249,7 @@ def template_notes(target: Path, kit_root: Path, templates: dict[str, str], row:
 
 
 def build_plan(target: Path, kit_root: Path) -> Plan:
-    version, mode = read_stamp(target)
+    version, mode, legacy = read_stamp(target)
     manifest = json.loads((kit_root / MANIFEST).read_text(encoding="utf-8"))
     try:
         table = json.loads((kit_root / TABLE).read_text(encoding="utf-8"))
@@ -211,7 +263,7 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
         raise Refusal(f"version in agk.toml is not in the table (path class {TABLE})")
     listed = target / "config" / "protected-paths.txt"
     entries = read_list(listed.read_text(encoding="utf-8")) if listed.is_file() else []
-    plan = Plan(version, kit_version, mode, entries=entries)
+    plan = Plan(version, kit_version, mode, entries=entries, legacy=legacy is not None)
 
     whole, blocks = installed_set(manifest, mode)
     for rel in whole:
@@ -230,6 +282,12 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
 
     templates = manifest["templates"] if mode == "init" else manifest["adopt"]["templates"]
     plan.notes = template_notes(target, kit_root, templates, row)
+    if legacy is not None:
+        plan.notes = [n for n in plan.notes if not n.startswith("template-changed agk.toml ")]
+        plan.notes.insert(0, LEGACY_NOTE)
+        content = legacy_agk_toml(target, kit_root, manifest, legacy)
+        plan.items.append(Item("agk.toml", "create", content=content))
+        plan.items.sort(key=lambda i: i.rel)
     for item in plan.writes:
         if passes_symlink(target, item.rel):
             raise Refusal(f"{item.rel} passes through a symlink (path class symlink)")
@@ -237,9 +295,7 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
 
 
 def protected_classes(plan: Plan) -> list[str]:
-    paths = [i.rel for i in plan.writes] + (
-        ["agk.toml"] if plan.version != plan.kit_version else []
-    )
+    paths = [i.rel for i in plan.writes] + (["agk.toml"] if plan.stamp else [])
     found: list[str] = []
     for rel in paths:
         for entry in plan.entries:
@@ -260,16 +316,19 @@ def report(plan: Plan, dry_run: bool) -> list[str]:
         lines.append(FIX)
         return lines
     count = len(plan.writes)
-    stamp = plan.version != plan.kit_version
+    stamp = plan.stamp
+    where = f"the version line of agk.toml is set to {plan.kit_version}"
+    if plan.legacy:
+        where = f"agk.toml is created with version {plan.kit_version}"
     if dry_run:
-        tail = f"; the version line of agk.toml would be set to {plan.kit_version}" if stamp else ""
+        tail = f"; {where.replace('is ', 'would be ', 1)}" if stamp else ""
+        if plan.legacy:
+            tail = f"; {where.replace('is ', 'would be ', 1)}"
         lines.append(f"dry run: {count} files would change{tail}; nothing was written")
     elif count == 0 and not stamp:
         lines.append("nothing to do")
     else:
-        lines.append(
-            f"upgraded {count} files; the version line of agk.toml is set to {plan.kit_version}"
-        )
+        lines.append(f"upgraded {count} files; {where}")
     classes = protected_classes(plan)
     if classes:
         lines += [
@@ -306,9 +365,10 @@ def write_atomic(path: Path, data: bytes) -> None:
 
 
 def apply(target: Path, plan: Plan) -> tuple[bool, list[str]]:
-    """Write in sorted path order, then the version line. (ok, files already written)."""
+    """Write in sorted path order, then agk.toml last. (ok, files already written)."""
     done: list[str] = []
-    for item in plan.writes:
+    last = [i for i in plan.writes if plan.legacy and i.rel == "agk.toml"]
+    for item in [i for i in plan.writes if i not in last]:
         try:
             write_atomic(target / item.rel, item.content or b"")
         except OSError:
@@ -317,20 +377,17 @@ def apply(target: Path, plan: Plan) -> tuple[bool, list[str]]:
             )
             return False, done
         done.append(item.rel)
-    if plan.version != plan.kit_version:
-        path = target / "agk.toml"
-        text = path.read_bytes()
-        new = re.sub(
-            rb'(?m)^(version\s*=\s*)"[^"]*"',
-            rb'\1"' + plan.kit_version.encode() + b'"',
-            text,
-            count=1,
-        )
-        try:
-            write_atomic(path, new)
-        except OSError:
-            print("error: cannot write agk.toml (path class agk.toml)")
-            return False, done
+    path = target / "agk.toml"
+    try:
+        if last:
+            write_atomic(path, last[0].content or b"")
+        elif plan.stamp:
+            pattern = rb'(?m)^(version\s*=\s*)"[^"]*"'
+            replacement = rb'\1"' + plan.kit_version.encode() + b'"'
+            write_atomic(path, re.sub(pattern, replacement, path.read_bytes(), count=1))
+    except OSError:
+        print("error: cannot write agk.toml (path class agk.toml)")
+        return False, done
     return True, done
 
 
@@ -366,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
         print(line)
     if plan.conflicts:
         return 1
-    if dry_run or (not plan.writes and plan.version == plan.kit_version):
+    if dry_run or (not plan.writes and not plan.stamp):
         return 0
     ok, done = apply(target, plan)
     if not ok:
