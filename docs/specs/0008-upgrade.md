@@ -27,7 +27,12 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
    implementation's ADR records that decision. It is acceptable where a lock file in the target was not because it is
    one file, in the kit only, never written into targets, and fully regenerable from history. A kit test regenerates
    **every** row from git history and compares it with the committed table, not only the current row, so the table can
-   never drift; it also fails when `kit_version` has no row. The kit-dev tests therefore need `fetch-depth: 0` in CI.
+   never drift; it also fails when `kit_version` has no row. The history is the first-parent history up to the merge base with
+   the default branch (`AGK_BASE`, else `origin/<default>`), plus the working tree as the current version. A past version's row
+   names exactly the commits at which its files changed (full SHAs); the current version's row is taken from the working tree
+   and may name fewer commits (none, until the next bump), because the commit that releases it does not exist yet. A shallow
+   clone is a failure. `kit_hashes.py --check` (the default) and `--write` are the interface. The kit-dev tests therefore need
+   `fetch-depth: 0` in CI.
    The table is the one new source of truth; it is in the kit, not in the target.
 3. **Tags are not read.** Release tags `vX.Y.Z` (SPEC-0005 rule 13) start with the K3 release; rows are regenerated from
    the commits each row names, not from tags, and upgrade does not read them and needs no network and no `git`. Today the repository has no tag and no release
@@ -41,9 +46,11 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
    work tree with an `agk.toml`. No other options in K3. Exit codes, refusal order and the no-network, no-`git`, no
    commit, no write outside TARGET guarantees are those of SPEC-0001 rule 2: 0 success (including `nothing to do`);
    1 refusal (nothing written); 2 usage; 3 I/O error. Refusals name the path class and the file, never content.
-5. **Preconditions (refusals, before any write).** `agk.toml` is absent or has no `version`, or `mode` is not `init` or
-   `adopt` (class `agk.toml`); `version` is not in the table (class `kit/hashes.json`); `version` is greater than the
-   kit's (downgrade); a path to write passes through a symlink; the script runs below Python 3.11; TARGET is or is
+5. **Preconditions (refusals, before any write).** `agk.toml` is absent and `pyproject.toml` has no `[tool.agk]` table with a
+   `version` (the legacy case of rule 11), or `agk.toml` has no `version`, or `mode` is not `init` or `adopt` (class
+   `agk.toml`); `version` is greater than the kit's (downgrade, "newer than this kit"; checked before the table lookup, because
+   such a version is also not in the table); `version` is not in the table (class `kit/hashes.json`); a path to write passes
+   through a symlink; the script runs below Python 3.11; TARGET is or is
    inside the kit. When `version` equals the kit's, the run still checks every file and prints `nothing to do` if all
    are current.
 6. **The installed set.** The paths the installer for `mode` writes: for `init`, `verbatim` without the kit-only paths
@@ -64,7 +71,10 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
    | absent, path in H | deleted locally | `deleted-locally` | none; reported |
    | present, path not in N | removed from the kit | `removed-in-kit` | none; never deleted |
 
-   File modes of created and replaced files are those the installer sets (SPEC-0001).
+   File modes of created and replaced files are those the installer sets (SPEC-0001). `deleted-locally` applies when the file is
+   absent and the path is in the row of X (for a block file, the block hashes); `removed-in-kit` applies when the row of X lists
+   a path that the present manifest does not and the file exists in the target (in the target's mode, whether or not the file
+   was installed in X's mode).
 8. **A conflict stops the run.** If any path is `conflict`, the real run writes nothing and exits 1, naming each
    edited path (a refusal lists them all, not the first). Partial application is not done. The printed
    fix per edited path: restore the kit's copy by hand, or move the edit out of the vendored file, then run again.
@@ -77,11 +87,23 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     (`config/protected-paths.txt`, `config/neutrality.txt`) also print each line of the kit's present template that the
     target file lacks. For `agk.toml`, print each key of the kit's present template that the target lacks, with the
     template's value; a key is never merged (as SPEC-0002 prints settings entries). `.claude/settings.json` is a
-    verbatim file in the manifest (adopt refuses to merge an existing one, SPEC-0002), so it follows rule 7.
+    verbatim file in the manifest (adopt refuses to merge an existing one, SPEC-0002), so it follows rule 7. The printed
+    forms are `template-changed DEST (SRC)`; for `config/protected-paths.txt` and `config/neutrality.txt`,
+    `template-line DEST LINE` for each non-placeholder line of the present template that the target lacks; for `agk.toml`,
+    `template-key agk.toml KEY = VALUE` for each top-level key the target lacks. All of them are printed only when the
+    template's hash differs from X's, so a second run prints none.
 11. **The version stamp.** The upgrade rewrites exactly the line `version = "..."` of `agk.toml` to the kit's version, as
     its last write and only when every other write succeeded. Every other line of `agk.toml` stays byte for byte as it
     was. With a conflict, a refusal or an I/O error the line is not written, so the next run starts from the same
-    `version`.
+    `version`. **The legacy stamp** (ruling Q-K3-71, option (a)): kits 0.1.0 and 0.2.0 wrote no `agk.toml`; the stamp is
+    `version` and `installed` in `[tool.agk]` of `pyproject.toml`, and there is no `mode` (init only). When `agk.toml` is absent
+    and `pyproject.toml` has a `[tool.agk]` table with a `version`, the upgrade treats the target as mode init at that version;
+    takes `installed` and `default_branch` from the stamp (or the template default); and creates `agk.toml` from the kit's
+    template with the kit's current version, as the last write and only when every other write succeeded (on a conflict, a
+    refusal or an I/O error it is not created, so a re-run starts from the stamp again). It never writes `pyproject.toml`; it
+    prints `legacy-stamp pyproject.toml [tool.agk]: obsolete after this upgrade; remove it in your own change`. The created
+    `agk.toml` counts in `N files`, the summary reads `upgraded N files; agk.toml is created with version V`, and the
+    `template-changed agk.toml` line is not printed for it. Any other target without `agk.toml` is still refused.
 12. **CODEOWNERS.** After a run the script prints `python3 scripts/agk/reviewers.py --codeowners --write` when
     `config/reviewers.yaml` or the generator was part of the change, because the file is rendered from the target's
     own configuration (SPEC-0001 rule on rendered files).
@@ -89,13 +111,17 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     the markers (`# >>> agk` and `<!-- >>> agk -->` styles of SPEC-0002) and N is the kit's block. The rules of rule 7
     apply to the text between the markers; a replacement rewrites only that text. A file with no markers, or an end
     marker without a start, is `conflict` (class `marked block`). Text outside the markers is never read for the
-    comparison and never written. A second run changes nothing.
+    comparison and never written. A second run changes nothing. adopt writes a block file that did not exist (`CLAUDE.md`,
+    the pull request template) whole, without markers: such a file with no markers whose text equals the present kit text is
+    `unchanged`; whose text hashes as an old block body is `replace` (the whole file); otherwise it is `conflict` (class
+    `marked block`). `.gitignore` is created with markers.
 14. **Dry run.** `--dry-run` prints one line per path (`create`, `replace`, `unchanged`, `conflict`, `deleted-locally`,
     `removed-in-kit`, `template-changed`), sorted by path, writes nothing, and exits with the code the real run would;
     the real run prints the same lines before it writes. Under `nothing to do` no file is touched (hashes and
     modification times are equal).
 15. **Order and atomicity.** All decisions are made before the first write. Writes are in sorted path order, each file
-    through a temporary file in its directory and a rename; an I/O error stops the run (exit 3) and reports the files
+    through a temporary file `.<name>.agk-upgrade` in its directory and a rename (a created or replaced file has the default mode of
+    a new file); an I/O error stops the run (exit 3) and reports the files
     already written; the `agk.toml` version line (rule 11) is the last write and is skipped in that case.
 
 ### The pull request in the target
@@ -105,7 +131,11 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     `check_protected_changes` requires an ADR in the same pull request that names each changed class. After the lines
     of rule 14 the script prints, from the target's own list, the `Protected classes:` line for the paths it would write
     and an ADR skeleton (title, `Status: Proposed`, empty Context and Decision) to stdout. It writes no ADR: the number,
-    the reasons and the decision are the maintainers', and there is no `--draft-adr`.
+    the reasons and the decision are the maintainers', and there is no `--draft-adr`. The summary lines are `dry run: N files
+    would change; the version line of agk.toml would be set to V; nothing was written`, `upgraded N files; the version line of
+    agk.toml is set to V` and `nothing to do`. The `Protected classes:` line is built from the target's own list for the written
+    paths, and includes `agk.toml` when its version line is written; the skeleton's date is `YYYY-MM-DD`, so the output is
+    deterministic.
 17. **The skill.** `/agk:upgrade` (SPEC-0005 rule 8) runs `--dry-run`, shows the lines, asks, then runs the real command.
     It does not commit, push or open the pull request, and does not write the ADR.
 
@@ -119,7 +149,10 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     X unknown; a symlinked path; the `version` line rewritten last and only on full success (and left alone on a conflict or an I/O error), every other `agk.toml` line byte for byte.
 19. **An older kit fixture.** A test builds a second, smaller kit directory (two versions of a few files and a manifest
     with a `hashes.json`) so the old and new versions are known without the real history. The real table is tested for
-    shape, for the current version's entry (rule 2), and for the listed versions of rule 22.
+    shape, for the current version's entry (rule 2), and for the listed versions of rule 22. In addition, a test installs each
+    real kit version from 0.3.0 to 0.8.0 with its own `init.py` (and `adopt.py` from 0.4.0), taken from the commit that the table
+    names, and upgrades it with this kit and the real table: no conflict, every installed file equals the kit's, and a second run
+    says `nothing to do`. Kits 0.1.0 and 0.2.0 are tested through the legacy stamp (rule 11).
 20. **Determinism.** The same inputs give byte-identical output; a dry run and the following real run print the same lines.
 21. **Idempotence.** An upgraded target is upgraded again with `nothing to do`.
 22. **The 0.1.0 gap (what is missing today).** The repository has no tag and no release. The table can be built from
@@ -134,7 +167,8 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     and the result are recorded in `docs/runs/`.
 24. **Protected classes of the implementation.** `scripts/agk/upgrade.py`, `scripts/agk/kit_hashes.py`, `kit/hashes.json`
     (`scripts/agk/`, `kit/`), `tests/kit_dev/` and `skills/upgrade/SKILL.md`; the PR carries an ADR naming each.
-    Neither the script nor the table is installed into targets.
+    Neither the script nor the table is installed into targets. The ADR of the build names `scripts/agk/`, `kit/` and
+    `tests/kit_dev/`; `skills/upgrade/SKILL.md` belongs to the plugin item (SPEC-0005) and is not part of the upgrade build.
 
 25. **Bump rule.** From the next release, a change to any installed path needs a `kit_version` bump in the same pull
     request. The full-history regeneration test of rule 2 enforces it: it fails when any version other than 0.1.0 has

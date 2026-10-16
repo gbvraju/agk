@@ -4,6 +4,8 @@ Date: 2026-10-15 (from `date -u`). Found while building SPEC-0006 (day 9, item C
 through a proposal like this one (principle 6). Nothing here is applied; until the maintainers apply it, the code is ahead
 of the Approved text of the rules below.
 
+**Applied 2026-10-16 (from `date -u`) on the maintainers' instruction (day 10, item B):** items 1 to 11 are in `docs/specs/0006-doctor.md` (item 1 is the count in `docs/runs/spec-0006-notes.md`, now twenty; item 11 is the wording of rule 13).
+
 ## SPEC-0006 (`docs/specs/0006-doctor.md`)
 
 1. **Rule 5, the number of checks.** The table has twenty rows (the notes said nineteen). Proposed: none to the table; fix the

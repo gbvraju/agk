@@ -36,6 +36,16 @@ Appended by docs commits only; feature PRs carry their row in the PR body (`Buil
 | 2026-10-15 | SPEC-0006 agk doctor (Approved): read-only script, 19 checks with id, severity and fix, ruleset elements are a minimum, cannot-check never ok, --json, recorded-JSON fixtures; live proof on the sandbox is a maintainers' step | REQ-002 |
 | 2026-10-15 | SPEC-0007 per-PR metrics (Approved): all fields derived; verdict lines make rounds, rejection and cleared head derivable; derived cost class S/M/L; one issue per ISO week from its own Monday run | REQ-012 |
 | 2026-10-15 | SPEC-0008 agk upgrade (Approved): kit-side hash table (committed generated file) as the anchor, edited file stops the run, version line rewritten last, bump rule from the next release; proof on the 0.1.0 sandbox is a maintainers' step | REQ-009, REQ-010 |
+| 2026-10-15 | K3 item B: per-PR metrics built as Approved (SPEC-0007): scripts/agk/metrics.py, weekly workflow metrics.yml, governance.yml split into one step per check, installed by default, kit 0.7.0, ADR-0016 (Accepted) (#38) | REQ-012 |
+| 2026-10-15 | Metrics run 1 (workflow_dispatch) succeeded: issue #39 agk metrics 2026-W41, empty week; SPEC-0007 amendments 10 applied (#40) | REQ-012 |
+| 2026-10-15 | K3 item C: agk doctor built as Approved (SPEC-0006): scripts/agk/doctor.py (20 checks, cannot-check never ok, --json, exit 0/1/4), only active rulesets protect, recorded-JSON fixtures, installed by init and adopt, kit 0.8.0, ADR-0017 (Accepted); live proof on the sandbox is the maintainers' step (#41) | REQ-002 |
+| 2026-10-16 | K3 item D: agk upgrade built as Approved (SPEC-0008): scripts/agk/upgrade.py and kit_hashes.py (kit-only), kit/hashes.json (committed generated file, rows 0.1.0 to 0.9.0, 0.1.0 has two commits), full-history regeneration test and bump rule, installs stamped only in pyproject.toml upgraded through the stamp (Q-K3-71 ruled), kit 0.9.0, ADR-0018 (Accepted) (#42) | REQ-009, REQ-010 |
+| 2026-10-16 | Upgrade live proof on gbvraju/agk-sandbox (criterion c): kit 0.1.0 to 0.9.0 by agk upgrade, no product file changed; the sandbox pull request was merged by the maintainers with `governance` green (#43) | REQ-009, REQ-010 |
+| 2026-10-16 | Doctor live proof on gbvraju/agk-sandbox (criterion b): baseline 20 ok, local cases L1-L4, runs 1-6 each failed exactly the expected check ids, final run 20 ok exit 0 (#44) | REQ-002 |
+| 2026-10-16 | Claude Code plugin and marketplace (SPEC-0005): manifest, eight `/agk:` skills, `new_spec.py`, issue templates, optional `Issue:` line, print-only settings entries, README trust caveats; ADR-0019 adds REQ-014; kit 0.10.0 (#45) | REQ-014 |
+| 2026-10-16 | Plugin live proof (criterion a of ADR-0015): plugin installed from the marketplace, `/agk:init` run from it into a fresh repository, `governance` green on GitHub for the first push (#46) | REQ-014 |
+| 2026-10-16 | Shadow review 4: K3 criterion e not met (0 of 5 caught, 0 held-out) (#47) | REQ-013 |
+| 2026-10-16 | Proposed spec amendments 11, 12 and 13 (items C, D, E) applied to SPEC-0006, SPEC-0008 and SPEC-0005; residuals register extended | REQ-002, REQ-009, REQ-014 |
 
 ## Decisions
 2026-10-14 — K0 exit met: make governance green; PR #1 merged under its own rules.
@@ -48,3 +58,4 @@ Appended by docs commits only; feature PRs carry their row in the PR body (`Buil
 2026-10-15 — K2 closed.
 2026-10-15 — SPEC-0005 Approved (distribution: hybrid, no lock file).
 2026-10-15 — SPEC-0006, SPEC-0007 and SPEC-0008 Approved; K3 build starts.
+2026-10-16 — K3 criteria a, b, c met live; criterion e not met (reviewer experimental); d pending weeks 42–43.
