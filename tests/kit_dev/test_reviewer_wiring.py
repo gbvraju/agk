@@ -21,15 +21,29 @@ SECTIONS = [
 ]
 
 
-def test_ac3_reviewer_and_scripts_are_installed_by_init_and_adopt():
-    """REQ-013 AC3: rule 13."""
+def enable_reviewer(root):
+    """Opt in the way the README says: set the key, then run the kit's upgrade."""
+    with open(root / "agk.toml", "a", encoding="utf-8") as fh:
+        fh.write("experimental_reviewer = true\n")
+    proc = subprocess.run(
+        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "upgrade.py"), str(root)],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_ac3_reviewer_and_scripts_are_experimental_not_installed_by_default():
+    """REQ-013 AC3: rule 13 as amended by ADR-0020."""
     wanted = {
         ".claude/agents/reviewer.md",
         "scripts/agk/review_context.py",
         "scripts/agk/check_review_report.py",
     }
-    assert wanted <= set(manifest()["verbatim"])
-    assert wanted <= expected_files()
+    assert wanted <= set(manifest()["experimental"])
+    assert not wanted & set(manifest()["verbatim"])
+    assert not wanted & expected_files()
 
 
 def test_ac3_requirement_013_exists_and_is_planned():
@@ -54,7 +68,8 @@ def test_ac3_the_template_requirements_are_not_changed_by_this_requirement():
 
 
 def test_ac1_context_runs_in_an_installed_repository(installed):
-    """REQ-013 AC1: rule 13. The installed scripts work without the kit checkout."""
+    """REQ-013 AC1: rule 13. After opt-in the scripts work without the kit checkout."""
+    enable_reviewer(installed)
     git(installed, "checkout", "-q", "-b", "feature")
     (installed / "notes.txt").write_text("hello\n", encoding="utf-8")
     body = installed / ".." / "body.md"

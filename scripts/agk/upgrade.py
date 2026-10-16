@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
-from common import matches, read_list
+from common import experimental_enabled, matches, read_list
 from init import (
     DATE_RE,
     MANIFEST,
@@ -160,11 +160,12 @@ def locate(text: str, style: str) -> tuple[str, int, int, list[str]]:
     return "ok", begins[0], ends[0], lines
 
 
-def installed_set(manifest: dict, mode: str) -> tuple[list[str], dict[str, str]]:
+def installed_set(
+    manifest: dict, mode: str, experimental: bool = False
+) -> tuple[list[str], dict[str, str]]:
     """(whole-file paths the installer for `mode` writes, marked blocks of an adopt install)."""
-    verbatim = [
-        p for p in manifest["verbatim"] if not p.startswith(KIT_ONLY) and p not in KIT_ONLY_FILES
-    ]
+    listed = [*manifest["verbatim"], *(manifest.get("experimental", []) if experimental else [])]
+    verbatim = [p for p in listed if not p.startswith(KIT_ONLY) and p not in KIT_ONLY_FILES]
     if mode == "init":
         return sorted(verbatim), {}
     spec = manifest["adopt"]
@@ -265,16 +266,20 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
     entries = read_list(listed.read_text(encoding="utf-8")) if listed.is_file() else []
     plan = Plan(version, kit_version, mode, entries=entries, legacy=legacy is not None)
 
-    whole, blocks = installed_set(manifest, mode)
+    enabled = experimental_enabled(target)
+    optional = set(manifest.get("experimental", []))
+    whole, blocks = installed_set(manifest, mode, enabled)
     for rel in whole:
         new = (kit_root / rel).read_bytes()
         old = set(row["verbatim"].get(rel, []))
+        if rel in optional and not (target / rel).exists():
+            old = set()  # opting in creates the file; it was never installed, so it is not deleted
         plan.items.append(whole_file(target, rel, new, old, entries))
     for rel, style in blocks.items():
         body = (kit_root / rel).read_text(encoding="utf-8")
         old = set(row["blocks"].get(rel, []))
         plan.items.append(block_file(target, rel, style, body, old, entries))
-    current = set(manifest["verbatim"])
+    current = set(manifest["verbatim"]) | (optional if enabled else set())
     for rel in sorted(set(row["verbatim"]) - current):
         if (target / rel).exists() or (target / rel).is_symlink():
             plan.items.append(Item(rel, "removed-in-kit"))

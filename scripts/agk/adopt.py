@@ -18,7 +18,7 @@ import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from common import detect_default_branch, matches, read_list
+from common import detect_default_branch, experimental_enabled, matches, read_list
 from init import (
     DATE_RE,
     KIT_ROOT,
@@ -159,9 +159,9 @@ def build_plan(target: Path, today: str):
     date = stamp.get("installed")
     date = date if isinstance(date, str) and DATE_RE.match(date) else today
 
-    owned_created = (set(manifest["verbatim"]) - set(spec["skip"]) - set(spec["blocks"])) | set(
-        spec["templates"]
-    )
+    extra = manifest.get("experimental", []) if experimental_enabled(target) else []
+    verbatim = set(manifest["verbatim"]) | set(extra)
+    owned_created = (verbatim - set(spec["skip"]) - set(spec["blocks"])) | set(spec["templates"])
     owned = owned_created | set(spec["blocks"])
     protected_src = (KIT_ROOT / spec["templates"]["config/protected-paths.txt"]).read_text(
         encoding="utf-8"
@@ -180,7 +180,7 @@ def build_plan(target: Path, today: str):
         or "- none",
     }
     created: dict[str, bytes] = {}
-    for rel in sorted(set(manifest["verbatim"]) - set(spec["skip"]) - set(spec["blocks"])):
+    for rel in sorted(verbatim - set(spec["skip"]) - set(spec["blocks"])):
         created[rel] = (KIT_ROOT / rel).read_bytes()
     for dest, src in spec["templates"].items():
         created[dest] = render((KIT_ROOT / src).read_text(encoding="utf-8"), variables, src).encode(
