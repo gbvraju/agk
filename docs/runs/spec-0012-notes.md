@@ -1,8 +1,8 @@
 # Notes on SPEC-0012 (intake)
 
-Date: 2026-10-16 (from `date -u`). Overnight brief 4, item A. The spec is written **Draft**; nothing is implemented and no protected path is
-changed by this pull request. It is the fourth of the five K4 specs of ADR-0021 (decision 2) and serves REQ-019. Every question below is
-raised, not ruled: for each, the spec takes the conservative reading and says so.
+Date: 2026-10-16 (from `date -u`). Overnight brief 4, item A. The spec was written Draft and set **Approved** on the maintainers' rulings of
+2026-10-16 (final commit of the pull request); nothing is implemented and no protected path is changed by this pull request. It is the fourth of the five K4 specs of ADR-0021 (decision 2) and serves REQ-019. Every question below was
+raised with a conservative reading and has been ruled (section Rulings); none is open.
 
 ## What exists today (read on 2026-10-16, on `main` at 0c19763)
 
@@ -48,11 +48,11 @@ raised, not ruled: for each, the spec takes the conservative reading and says so
 | Commit and pull request | printed by the script | the skill commits and opens it (needs an amendment of SPEC-0005, drafted); the person writes the body by hand (the body shape is easy to get wrong) |
 | Id source | `origin/<default>` | the work tree (a stale branch allocates a used id); open pull requests too (needs the API in a pre-draft step) |
 
-## Questions
+## Questions raised (all ruled; see Rulings)
 
 | Q | Question | Reading taken in the spec |
 | --- | --- | --- |
-| Q-K4-61 | May the intake skill commit, push and open the pull request? SPEC-0005 rule 8 says a command that writes does not commit, push or merge, and rule 10 makes a test fail on `git push`, `git commit`, `gh pr`. | no; the script prints the commands and the body (rule 13). The amendment that would allow it is in `docs/runs/proposed-spec-amendments-14.md` |
+| Q-K4-61 | May the intake skill commit, push and open the pull request? SPEC-0005 rule 8 says a command that writes does not commit, push or merge, and rule 10 makes a test fail on `git push`, `git commit`, `gh pr`. | no; the script prints the commands and the body (rule 13). The amendment that would have allowed it was withdrawn (see Rulings) |
 | Q-K4-62 | A new kit-only script `intake.py`, or a new mode of `new_spec.py`? | a new script (rules 2, 8, 11, 18) |
 | Q-K4-63 | Ids from `origin/<default>` only; two open intake pull requests allocate the same ids. | accepted; a residual, and the second pull request is renumbered after the conflict (rule 2) |
 | Q-K4-64 | The ADR stub is rendered by the script from a fixed text. | yes (rule 8) |
@@ -61,7 +61,7 @@ raised, not ruled: for each, the spec takes the conservative reading and says so
 | Q-K4-67 | 1 to 8 criteria. | accepted as a conservative limit; a requirement that needs more is split (rule 5) |
 | Q-K4-68 | Given/When/Then strictness: the three words in order, case-insensitive, text after each. | rule 5; commas are not required |
 | Q-K4-69 | No `; ` inside a criterion, because the grammar of SPEC-0009 rule 8 splits there. | rule 5 and check C3 |
-| Q-K4-70 | Open questions of an intake spec live in the spec (`## Open questions`) with ids `Q-S<spec>-<n>`; SPEC-0009 rule 13 defines `open_in` as notes files, Proposed ADRs and `## Open` of notes files, so a `Draft` spec file is not covered. | the id family is built from the allocated spec number; the sibling gap is in `docs/runs/proposed-spec-amendments-14.md` item 3 (an amendment of SPEC-0009), not applied |
+| Q-K4-70 | Open questions of an intake spec live in the spec (`## Open questions`) with ids `Q-S<spec>-<n>`; SPEC-0009 rule 13 defines `open_in` as notes files, Proposed ADRs and `## Open` of notes files, so a `Draft` spec file is not covered. | the id family is built from the allocated spec number; the sibling gap is in `docs/runs/proposed-spec-amendments-14.md` item 2, numbered 3 when raised (an amendment of SPEC-0009), not applied |
 | Q-K4-71 | No notes file for an intake spec: three files only. | yes (rule 4); the maintainers write a notes file when they approve the spec |
 | Q-K4-72 | Entry points: the session only; the issue form plus `--from-issue N` for a person with a session; no issue-to-pull-request workflow. | rule 15 |
 | Q-K4-73 | Does `--from-issue N` supply the sentence (the "What you propose" paragraph), asking for a one-sentence version if it is longer? | yes (rule 15) |
@@ -72,11 +72,36 @@ raised, not ruled: for each, the spec takes the conservative reading and says so
 | Q-K4-78 | The sentence: one sentence, at most 300 characters. | rule 1 |
 | Q-K4-79 | The existing `requirement` form of `new_spec.py` (an ADR draft that carries the text, no edit of the protected file) coexists with the new form. | yes, unchanged; it is for a requirement the maintainers want to read before it enters `docs/requirements.md` |
 
-## Sibling specs touched (amendments proposed, none applied)
+## Rulings (maintainers, 2026-10-16)
 
-`docs/runs/proposed-spec-amendments-14.md` lists: item 1, SPEC-0005 rule 8 (the `/agk:spec` row gains the sentence form); item 2, only if
-Q-K4-61 is ruled yes, SPEC-0005 rules 8 and 10; item 3, SPEC-0009 rule 13 (`open_in` gains a Draft spec's `## Open questions`). The spec
-template `docs/specs/TEMPLATE.md` also gains a section (rule 18); it is not an Approved spec. This pull request edits none of those files.
+The default ruling is that every reading the draft took is accepted (`Q-K4-61` to `Q-K4-79`), with the clarifications below. The spec is set
+`Approved` on the maintainers' instruction. No question is open.
+
+| Q | Ruling | Where in the spec |
+| --- | --- | --- |
+| Q-K4-61 ruled | accepted as **no**: skills still never commit, push or open a pull request; the script prints the commands and the body and the session runs them under its `CLAUDE.md`. SPEC-0005 rule 8 is a safety boundary and the session already does the git steps, so there is no saving. The amendment item that would let skills commit is **withdrawn** and deleted from `proposed-spec-amendments-14.md` (its former item 3 is now item 2) | rule 13 |
+| Q-K4-62 ruled | accepted: a new kit-only script `intake.py` | rules 2, 8, 11, 18 |
+| Q-K4-63 ruled | accepted: ids from `origin/<default>`; parallel intake pull requests are renumbered after the conflict (residual) | rule 2 |
+| Q-K4-64 ruled | accepted: the ADR stub is rendered by the script | rule 8 |
+| Q-K4-65 ruled | accepted: at most three questions, then `Q-S<spec>-<n>` ids | rule 10 |
+| Q-K4-66 ruled | accepted: the negative-case word list | rule 6 |
+| Q-K4-67 ruled | accepted: 1 to 8 criteria | rule 5 |
+| Q-K4-68 ruled | accepted: the three words in order, case-insensitive | rule 5 |
+| Q-K4-69 ruled | accepted: no `; ` inside a criterion | rule 5, check C3 |
+| Q-K4-70 ruled | accepted: the amendment of SPEC-0009 rule 13 (`open_in` gains a Draft spec's `## Open questions`) is item 2 of `proposed-spec-amendments-14.md`. **Applied at implementation, not on the merge of these specs**, by the ADR of the SPEC-0012 implementation pull request (as Q-K4-52 for the doctor) | rule 10; amendments-14 item 2 |
+| Q-K4-71 ruled | accepted: three files only, no notes file | rule 4 |
+| Q-K4-72 ruled | accepted, with a clarification: **the issue form is the product owner's phone path**. The Proof gains: the pilot's intake starts from the issue form | rules 15, 17 |
+| Q-K4-73 ruled | accepted: `--from-issue N` supplies the sentence | rule 15 |
+| Q-K4-74 ruled | accepted: at most three correction rounds | rule 11 |
+| Q-K4-75 ruled | accepted: the next steps are printed by the script | rule 13 |
+| Q-K4-76 ruled | accepted, with a clarification the spec now states in a sentence: **merging an intake pull request approves the requirement** (it enters `docs/requirements.md` as `planned`); the spec stays `Draft` until its `Q-S` questions are ruled. ADR-0021 says "a person approves it by merging", and a reader must see what is approved | rule 14 |
+| Q-K4-77 ruled | accepted: the pilot's intake is recorded in the pilot repository; here the outcome only | rule 17 |
+| Q-K4-78 ruled | accepted: one sentence of at most 300 characters | rule 1 |
+| Q-K4-79 ruled | accepted: the `requirement` form of `new_spec.py` coexists | not in the spec |
+
+**Amendments.** `proposed-spec-amendments-14.md` keeps two items, both applied at implementation by the ADR of the SPEC-0012 implementation pull
+request: item 1 (SPEC-0005 rule 8, the `/agk:spec` row gains the sentence form) and item 2 (SPEC-0009 rule 13). The spec template
+`docs/specs/TEMPLATE.md` also gains a section (rule 18); it is not an Approved spec. This pull request edits none of those files.
 
 ## Proof plan
 
@@ -89,4 +114,6 @@ template `docs/specs/TEMPLATE.md` also gains a section (rule 18); it is not an A
 
 | Date | Decision | Reason | Recorded in | By |
 | --- | --- | --- | --- | --- |
-| 2026-10-16 | SPEC-0012 intake drafted: `/agk:spec "<sentence>"` writes a requirement with Given/When/Then criteria in the form SPEC-0010 parses, a Draft spec and a script-rendered ADR stub on a new branch, ids read from the default branch, nine deterministic checks, the skill stops before the commit | REQ-019; ADR-0021 decision 2 | `docs/specs/0012-intake.md` | agent |
+| 2026-10-16 | SPEC-0012 intake Approved: `/agk:spec "<sentence>"` writes a requirement with Given/When/Then criteria in the form SPEC-0010 parses, a Draft spec and a script-rendered ADR stub on a new branch, ids read from the default branch, nine deterministic checks, the skill stops before the commit | REQ-019; ADR-0021 decision 2 | `docs/specs/0012-intake.md` | reviewer |
+| 2026-10-16 | Q-K4-61 ruled: no; skills never commit, push or open a pull request (SPEC-0005 rule 8 is a safety boundary and the session already does the git steps); the amendment item that would allow it is withdrawn | no saving from the exception | `docs/specs/0012-intake.md` rule 13, `docs/runs/proposed-spec-amendments-14.md` | reviewer |
+| 2026-10-16 | Q-K4-62 to Q-K4-79 ruled: every reading of the draft accepted; Q-K4-70 the SPEC-0009 `open_in` amendment is applied at implementation by the SPEC-0012 implementation ADR; Q-K4-72 the issue form is the product owner's phone path and the pilot's intake starts from it; Q-K4-76 merging an intake pull request approves the requirement and the spec stays Draft | maintainers' rulings of 2026-10-16 on the Draft SPEC-0012 | `docs/runs/spec-0012-notes.md` | reviewer |

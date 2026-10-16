@@ -1,13 +1,13 @@
 # SPEC-0012: intake (one sentence becomes a Draft requirement, a Draft spec and an ADR stub)
 
-- Status: Draft
+- Status: Approved
 - Owner: maintainers
 - Requirements: REQ-019 (AC1, AC2)
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
 This is the fourth of the five K4 specs of ADR-0021 (decision 2). It extends the `/agk:spec` skill of SPEC-0005, writes in the forms that
 SPEC-0010 parses and SPEC-0009 reads, and is the one place where a model writes proposal text in K4. The points `Q-K4-61` to `Q-K4-79`
-are in `docs/runs/spec-0012-notes.md`; none is ruled. GitHub and Claude Code facts not reconfirmed are marked `(verify)`. The repository
+were ruled by the maintainers on 2026-10-16 (`docs/runs/spec-0012-notes.md`). GitHub and Claude Code facts not reconfirmed are marked `(verify)`. The repository
 facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
 
 ## Rules
@@ -92,8 +92,8 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
     step runs `python3 ".../intake.py" next-steps`, which prints the commit message, the push command and a pull request body
     (`Advances: REQ-021`, a dated `Build-state row:` line, `Decisions taken:`, `Questions:`, `Verified:` with the output of rule 11) for
     the person or their session to use. The commands are printed by the script, so no skill text names a forbidden verb (SPEC-0005 rule
-    10). Whether the skill itself may commit and open the pull request is `Q-K4-61`; the amendment that would allow it is in
-    `docs/runs/proposed-spec-amendments-14.md`, not applied.
+    10). The session runs those commands under its own `CLAUDE.md`; a skill never commits, pushes or opens a pull request (ruling on
+    Q-K4-61: SPEC-0005 rule 8 is a safety boundary, and the session already does the git steps, so there is no saving).
 
 ### A draft is not a fact
 
@@ -102,12 +102,14 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
     is not in `requirements`, `specs` or `adrs`; an open pull request appears in `pull_requests` with its changed file names and nothing
     of their content (SPEC-0009 rule 14). The weekly report counts a requirement as delivered only when its status is `done`
     (SPEC-0011 rule 9). After the merge the requirement is `planned`, the spec is `Draft` and the ADR is `Proposed`: the inbox then lists
-    the spec and the ADR as waiting for approval (SPEC-0011 rule 3). Merging approves the proposal **as a proposal**; the spec becomes
-    `Approved` only by its own later change (SPEC-0013).
+    the spec and the ADR as waiting for approval (SPEC-0011 rule 3). **Merging an intake pull request approves the requirement** (it enters
+    `docs/requirements.md` as `planned`); the spec stays `Draft` until its `Q-S` questions are ruled and it is set `Approved` by its own later
+    change (SPEC-0013 rule 24). A reader of "a person approves it by merging" (ADR-0021 decision 2) must see this: what the merge approves is the
+    requirement, not the spec.
 15. **Entry points in K4.** A Claude Code session with the plugin installed (terminal, desktop app or IDE). A cloud session does not carry
-    the plugin (SPEC-0005 rule 15), so a product owner on a phone has no entry point of this spec in K4. The existing issue form
-    (`.github/ISSUE_TEMPLATE/proposal.md`) and `/agk:spec --from-issue N` (SPEC-0005 rule 17) remain: a person with a session can turn a
-    proposal issue into the same three files, with the issue's "What you propose" paragraph as the sentence (rule 1: if it is longer than one
+    the plugin (SPEC-0005 rule 15). **The issue form is the product owner's phone path:** the product owner files a proposal issue
+    (`.github/ISSUE_TEMPLATE/proposal.md`) from anywhere, and a person with a session runs `/agk:spec --from-issue N` (SPEC-0005 rule 17),
+    which turns the proposal issue into the same three files, with the issue's "What you propose" paragraph as the sentence (rule 1: if it is longer than one
     sentence the skill asks the person to say it in one). An automatic issue-to-pull-request workflow is not built (`Q-K4-72`).
 
 ### Tests and proof
@@ -127,7 +129,8 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
     real intake in the pilot repository, run by **the pilot's own session**, under its `CLAUDE.md`, merged through review. This repository's
     `docs/runs/intake-proof.md` records for this repository the sentence, the pull request, the output of `check` and of `make
     governance`, and the verdict; for the pilot it records only the outcome (merged or not, the pull request number as a link) with the
-    pilot unnamed (`Q-K4-77`).
+    pilot unnamed (`Q-K4-77`). **The pilot's intake starts from the issue form** (rule 15): the sentence is the proposal issue's paragraph, filed by the
+    product owner, and the pilot's session runs `--from-issue`.
 18. **Installed files and classes.** Kit-only (not installed, like `new_spec.py`): `scripts/agk/intake.py` and
     `tests/kit_dev/test_intake.py`. The `skills/spec/SKILL.md` of the plugin changes. `docs/specs/TEMPLATE.md` (installed, verbatim) gains
     the section `## Open questions`. The classes touched are `scripts/agk/`, `skills/`, `tests/kit_dev/` and `kit/`; the implementation pull
@@ -152,5 +155,5 @@ before it is merged.* Rules 14, 16. ADR-0021 decision 2 (SPEC-0012) and decision
 - 2026-10-16: id allocation reads the default branch only; two open intake pull requests allocate the same ids, and the second to merge
   is renumbered by hand after the conflict (due 2026-12-31).
 - 2026-10-16: the negative-case rule is a word list; a criterion can satisfy it without being a real negative case (due 2026-12-31).
-- 2026-10-16: no entry point exists for a product owner without a plugin session (due 2027-01-31).
-- 2026-10-16: the skill does not commit or open the pull request; the person or their session does (due 2026-11-30, see `Q-K4-61`).
+- 2026-10-16: the issue form is the only entry point for a product owner without a plugin session, and a person with a session still has to run
+  `--from-issue`; an automatic issue-to-pull-request workflow is not built (due 2027-01-31).
