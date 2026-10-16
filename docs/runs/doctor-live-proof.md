@@ -445,3 +445,42 @@ ok default-branch-config warn default_branch in agk.toml equals the repository's
 summary: 19 ok, 1 fail, 0 cannot-check
 exit 1
 ```
+
+
+## Run 5 (2026-10-16)
+
+The maintainers' change: the drift-audit workflow was disabled (read back with GET: `state` `disabled_manually`; `governance` and `metrics` stay `active`). Command (from the baseline clone, `/home/user/sandbox-baseline`, unchanged): `python3 /home/user/agk/scripts/agk/doctor.py --repo gbvraju/agk-sandbox --kit-root /home/user/agk`.
+Run 4's change was restored (the ruleset's `allowed_merge_methods` is `["squash"]` again). `drift-workflow-file` stays ok: the file and its schedule are unchanged; only the state on GitHub differs. This confirms one of the `(verify)` facts of SPEC-0006: a workflow disabled by hand reads `disabled_manually`; `disabled_inactivity` is still not observed.
+
+| Expected failed ids | Observed failed ids | Match |
+| --- | --- | --- |
+| `drift-workflow-state` | `drift-workflow-state` only (19 ok, 1 fail, 0 cannot-check, exit 1) | match |
+
+Output, verbatim:
+
+```
+agk doctor 0.9.0
+ok ruleset-missing error a ruleset targets the default branch
+ok ruleset-enforcement error ruleset enforcement is active
+ok ruleset-bypass error ruleset has no bypass actors
+ok ruleset-target error the ruleset targets the default branch
+ok ruleset-deletion error ruleset restricts deletions
+ok ruleset-linear-history error ruleset requires linear history
+ok ruleset-force-push error ruleset blocks force pushes
+ok ruleset-pull-request error ruleset requires a pull request
+ok required-check-governance error the status check `governance` is required
+ok repo-auto-merge warn repository setting allow_auto_merge is on
+ok repo-delete-branch warn repository setting delete_branch_on_merge is on
+ok placeholder-team-reviewers error config/reviewers.yaml has no placeholder team
+ok placeholder-team-codeowners error .github/CODEOWNERS has no placeholder team
+ok origin-head warn refs/remotes/origin/HEAD exists
+ok drift-workflow-file error .github/workflows/drift-audit.yml has a schedule
+FAIL drift-workflow-state error the drift-audit workflow is not active on GitHub
+  fix: enable the workflow (GitHub disables scheduled workflows after inactivity (verify))
+ok kit-version warn the kit version equals version in agk.toml
+ok vendored-missing error every vendored file is present
+ok vendored-differs error every vendored file equals the kit's copy
+ok default-branch-config warn default_branch in agk.toml equals the repository's default branch
+summary: 19 ok, 1 fail, 0 cannot-check
+exit 1
+```
