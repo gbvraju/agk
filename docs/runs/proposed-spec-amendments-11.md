@@ -15,8 +15,16 @@ of the Approved text of the rules below.
 3. **Rule 5, `ruleset-target` versus `ruleset-missing`.** Built: `ruleset-missing` fails when no branch ruleset exists;
    `ruleset-target` fails when branch rulesets exist and none includes the default branch (`~DEFAULT_BRANCH` or
    `refs/heads/<default>`). Proposed: say so in the table.
-4. **Rule 7, several rulesets.** Built: rulesets that target the default branch are read together (an element present in any of
-   them counts; a bypass actor in any of them fails; `enforcement` is ok when at least one is active). Proposed: say so.
+4. **Rule 7, several rulesets and active rulesets only.** Built: rulesets that target the default branch are read
+   together, and only rulesets whose `enforcement` is `active` provide protection. `ruleset-enforcement` fails when no
+   candidate is active. `ruleset-bypass` and every element check (`ruleset-deletion`, `ruleset-linear-history`,
+   `ruleset-force-push`, `ruleset-pull-request`, `required-check-governance`) read the active candidates only; an element
+   present only on a disabled or evaluate-mode ruleset does not count, and a bypass actor on a disabled ruleset is not a
+   bypass. With no active candidate, `ruleset-bypass` and every element check fail. Proposed: say so in rule 7.
+4b. **Rule 5 (`ruleset-target`), what targets the default branch.** Built: a ruleset targets the default branch when
+   `conditions.ref_name.include` has `~DEFAULT_BRANCH`, `~ALL` or `refs/heads/<default>`, and `conditions.ref_name.exclude`
+   has none of `~DEFAULT_BRANCH`, `~ALL` and `refs/heads/<default>`. Proposed: replace "includes `~DEFAULT_BRANCH` (or the
+   default branch's ref)" with this.
 5. **Rule 6, empty list and permissions.** Built: an empty ruleset list is `ruleset-missing` only when `permissions.admin` in the
    repository read is not false; with `permissions.admin` false it is `cannot-check` (`no-admin`). A missing
    `allow_auto_merge` or `delete_branch_on_merge` key (shown only to users with push access) is `cannot-check` (`no-admin`).

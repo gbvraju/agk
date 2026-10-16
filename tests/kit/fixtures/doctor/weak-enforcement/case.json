@@ -2,7 +2,13 @@
   "cannot": {},
   "delete": [],
   "fail": [
-    "ruleset-enforcement"
+    "required-check-governance",
+    "ruleset-bypass",
+    "ruleset-deletion",
+    "ruleset-enforcement",
+    "ruleset-force-push",
+    "ruleset-linear-history",
+    "ruleset-pull-request"
   ],
   "origin_head": true
 }

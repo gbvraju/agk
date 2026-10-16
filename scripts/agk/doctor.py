@@ -291,9 +291,14 @@ def origin_repo(root: Path) -> str | None:
 
 
 def targets_default(ruleset: dict, branch: str) -> bool:
+    """Includes the default branch (`~DEFAULT_BRANCH`, `~ALL`, its ref) and does not exclude it."""
     ref_name = (ruleset.get("conditions") or {}).get("ref_name") or {}
     include = ref_name.get("include") or []
-    return "~DEFAULT_BRANCH" in include or f"refs/heads/{branch}" in include
+    exclude = ref_name.get("exclude") or []
+    ref = f"refs/heads/{branch}"
+    if "~DEFAULT_BRANCH" in exclude or "~ALL" in exclude or ref in exclude:
+        return False
+    return "~DEFAULT_BRANCH" in include or "~ALL" in include or ref in include
 
 
 def rule_params(rulesets: list[dict], kind: str) -> list[dict]:
@@ -348,12 +353,14 @@ def ruleset_results(reads: Reads, repo_data: Any, branch: str) -> dict[str, Resu
     def verdict(check: str, good: bool) -> None:
         out[check] = Result("ok" if good else "fail")
 
-    verdict("ruleset-enforcement", any(d.get("enforcement") == "active" for d in candidates))
-    verdict("ruleset-bypass", not any(d.get("bypass_actors") for d in candidates))
-    verdict("ruleset-deletion", has_rule(candidates, "deletion"))
-    verdict("ruleset-linear-history", has_rule(candidates, "required_linear_history"))
-    verdict("ruleset-force-push", has_rule(candidates, "non_fast_forward"))
-    pulls = rule_params(candidates, "pull_request")
+    active = [d for d in candidates if d.get("enforcement") == "active"]
+    verdict("ruleset-enforcement", bool(active))
+    # only an active ruleset protects: every other element reads active rulesets alone
+    verdict("ruleset-bypass", bool(active) and not any(d.get("bypass_actors") for d in active))
+    verdict("ruleset-deletion", has_rule(active, "deletion"))
+    verdict("ruleset-linear-history", has_rule(active, "required_linear_history"))
+    verdict("ruleset-force-push", has_rule(active, "non_fast_forward"))
+    pulls = rule_params(active, "pull_request")
     methods = [p.get("allowed_merge_methods", ["merge", "squash", "rebase"]) for p in pulls]
     verdict(
         "ruleset-pull-request",
@@ -363,7 +370,7 @@ def ruleset_results(reads: Reads, repo_data: Any, branch: str) -> dict[str, Resu
     )
     contexts = [
         c.get("context")
-        for p in rule_params(candidates, "required_status_checks")
+        for p in rule_params(active, "required_status_checks")
         for c in (p.get("required_status_checks") or [])
         if isinstance(c, dict)
     ]

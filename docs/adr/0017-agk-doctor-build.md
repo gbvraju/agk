@@ -23,10 +23,10 @@ test (`tests/kit_dev/`) and manifest entries with a version bump (`kit/`).
    GET on four paths and `git` only to read; it holds no credential and is not run by `make governance` or by any
    workflow.
 2. **The ruleset elements of ADR-0001 decision 3 are a minimum** (ruling Q-K3-12): stricter is `ok`; merge methods fail only
-   when `merge` is allowed. Several rulesets that target the default branch are read together. When no ruleset targets
+   when `merge` is allowed. Several rulesets that target the default branch are read together, and only active ones protect: `ruleset-enforcement` fails when no candidate is active, `ruleset-bypass` and every element check read the active candidates only (a rule on a disabled ruleset does not count; a bypass actor on a disabled ruleset is not a bypass), and with no active candidate those checks fail. A ruleset targets the default branch when its `include` has `~DEFAULT_BRANCH`, `~ALL` or the default branch's ref and its `exclude` has none of them. When no ruleset targets
    the default branch, the other ruleset checks are `cannot-check` with the reason `no-ruleset`, so that only
    `ruleset-missing` or `ruleset-target` fails.
-3. **It is vendored**: init and adopt install `scripts/agk/doctor.py`, `tests/kit/test_doctor.py` and the 63 files of
+3. **It is vendored**: init and adopt install `scripts/agk/doctor.py`, `tests/kit/test_doctor.py` and the files of
    `tests/kit/fixtures/doctor/` (listed in `kit/manifest.json` one by one, see ADR-0016's residual). The fixtures are a base
    case `ok` and per-case overlays, not a full tree per case, to keep the file count low.
 4. **A fresh install is compared with this kit in a kit-only test** (`tests/kit_dev/test_doctor_wiring.py`): no vendored

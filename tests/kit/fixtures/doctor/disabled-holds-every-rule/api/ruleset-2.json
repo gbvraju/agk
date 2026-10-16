@@ -1,0 +1,23 @@
+{
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
+    }
+  },
+  "current_user_can_bypass": "never",
+  "enforcement": "active",
+  "id": 2,
+  "name": "Second 2",
+  "rules": [
+    {
+      "type": "deletion"
+    }
+  ],
+  "source": "example-owner/example-repo",
+  "source_type": "Repository",
+  "target": "branch"
+}

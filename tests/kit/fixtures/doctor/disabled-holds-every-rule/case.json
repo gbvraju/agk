@@ -1,0 +1,11 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "required-check-governance",
+    "ruleset-force-push",
+    "ruleset-linear-history",
+    "ruleset-pull-request"
+  ],
+  "origin_head": true
+}

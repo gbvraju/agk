@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from doctor import CHECKS, RULESET_IDS
+from doctor import CHECKS, RULESET_IDS, targets_default
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "agk" / "doctor.py"
 FIXTURES = Path(__file__).parent / "fixtures" / "doctor"
@@ -483,3 +483,55 @@ def test_ac1_every_id_has_a_severity_and_a_printed_fix():
     for severity, ok_text, fail_text, fix in CHECKS.values():
         assert severity in ("error", "warn") and ok_text and fail_text and fix
     assert CHECKS["ruleset-missing"][3].endswith("use a ruleset (ADR-0001 decision 3)")
+
+
+def test_ac1_only_an_active_ruleset_protects(tmp_path):
+    """REQ-002 AC1: rule 7 (a disabled ruleset holding every rule adds nothing to an active one)."""
+    proc, _, _ = run_case("disabled-holds-every-rule", tmp_path, "--json")
+    report = checks_of(proc.stdout)
+    failing = sorted(i for i, c in report.items() if c["status"] == "fail")
+    assert failing == [
+        "required-check-governance",
+        "ruleset-force-push",
+        "ruleset-linear-history",
+        "ruleset-pull-request",
+    ]
+    assert report["ruleset-enforcement"]["status"] == "ok"
+    assert report["ruleset-deletion"]["status"] == "ok"  # the active ruleset has it
+    assert proc.returncode == 1
+
+
+def test_ac1_no_active_ruleset_fails_every_element_check(tmp_path):
+    """REQ-002 AC1: rule 7 (with no active candidate the element checks fail, not pass)."""
+    proc, _, _ = run_case("weak-enforcement", tmp_path, "--json")
+    report = checks_of(proc.stdout)
+    failing = {i for i, c in report.items() if c["status"] == "fail"}
+    assert failing == {"ruleset-enforcement", *RULESET_IDS} - {"ruleset-target"}
+
+
+def test_ac1_a_bypass_actor_on_a_disabled_ruleset_is_not_a_bypass(tmp_path):
+    """REQ-002 AC1: rule 7."""
+    proc, _, _ = run_case("bypass-on-disabled-ruleset", tmp_path, "--json")
+    report = checks_of(proc.stdout)
+    assert report["ruleset-bypass"]["status"] == "ok"
+    assert proc.returncode == 0, proc.stdout
+
+
+@pytest.mark.parametrize(
+    ("include", "exclude", "expected"),
+    [
+        (["~DEFAULT_BRANCH"], [], True),
+        (["~ALL"], [], True),
+        (["refs/heads/main"], [], True),
+        (["refs/heads/dev"], [], False),
+        ([], [], False),
+        (["~DEFAULT_BRANCH"], ["~DEFAULT_BRANCH"], False),
+        (["~ALL"], ["~DEFAULT_BRANCH"], False),
+        (["~ALL"], ["refs/heads/main"], False),
+        (["~ALL"], ["refs/heads/dev"], True),
+    ],
+)
+def test_ac1_targets_default_branch(include, exclude, expected):
+    """REQ-002 AC1: rule 5 (`~ALL` includes the default branch; an exclude removes it)."""
+    ruleset = {"conditions": {"ref_name": {"include": include, "exclude": exclude}}}
+    assert targets_default(ruleset, "main") is expected
