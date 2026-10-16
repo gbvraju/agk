@@ -133,6 +133,11 @@ def test_ac2_parse_acceptance_grammar(text, expected):
     assert common.parse_acceptance(text) == expected
 
 
+def marked(text: str) -> str:
+    """Test data: `@` stands for `REQ-`, so that no line of this file is itself a marker."""
+    return text.replace("@", "REQ-")
+
+
 def write(root: Path, rel: str, text: str) -> None:
     path = root / rel
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -144,10 +149,9 @@ def test_ac2_find_ac_markers_reads_runs_of_requirements_in_any_language(tmp_path
     write(
         tmp_path,
         "tests/test_a.py",
-        '"""REQ-909 AC2"""\n# REQ-901 REQ-902 AC2\n# REQ-903/REQ-904 AC1, REQ-905\n'
-        "REQ-906, REQ-907 AC3\n",
+        marked('"""@909 AC2"""\n# @901 @902 AC2\n# @903/@904 AC1, @905\n@906, @907 AC3\n'),
     )
-    write(tmp_path, "pkg/x_test.go", "// REQ-910 AC1\nfunc TestX() {}\n")
+    write(tmp_path, "pkg/x_test.go", marked("// @910 AC1\nfunc TestX() {}\n"))
     got = common.find_ac_markers(tmp_path, ["tests", "pkg"], ["test_*.py", "*_test.go"])
     summary = [(m["file"], m["line"], m["req"], m["ac"]) for m in got]
     assert summary == [
@@ -166,9 +170,9 @@ def test_ac2_find_ac_markers_reads_runs_of_requirements_in_any_language(tmp_path
 
 def test_ac2_find_ac_markers_one_ac_per_run_and_skipped_directories(tmp_path):
     """REQ-018 AC2: rule 9; `AC1 AC2` is one run, and the six directories are skipped."""
-    write(tmp_path, "tests/test_b.py", "# REQ-901 AC1 AC2\n# REQ-902 AC1 REQ-903 AC2\n")
+    write(tmp_path, "tests/test_b.py", marked("# @901 AC1 AC2\n# @902 AC1 @903 AC2\n"))
     for skipped in (".git", "node_modules", "vendor", "target", "__pycache__", ".venv"):
-        write(tmp_path, f"tests/{skipped}/test_hidden.py", "# REQ-999 AC1\n")
+        write(tmp_path, f"tests/{skipped}/test_hidden.py", marked("# @999 AC1\n"))
     got = common.find_ac_markers(tmp_path, ["tests"])
     assert [(m["line"], m["req"], m["ac"]) for m in got] == [
         (1, "REQ-901", "AC1"),
@@ -179,8 +183,8 @@ def test_ac2_find_ac_markers_one_ac_per_run_and_skipped_directories(tmp_path):
 
 def test_ac2_find_ac_markers_keeps_the_adopt_mode_exclusion(tmp_path):
     """REQ-018 AC2: rule 9 keeps the `tests/kit` exclusion of find_markers."""
-    write(tmp_path, "tests/kit/test_k.py", "# REQ-901 AC1\n")
-    write(tmp_path, "tests/test_p.py", "# REQ-902 AC1\n")
+    write(tmp_path, "tests/kit/test_k.py", marked("# @901 AC1\n"))
+    write(tmp_path, "tests/test_p.py", marked("# @902 AC1\n"))
     got = common.find_ac_markers(tmp_path, ["tests"], exclude=["tests/kit"])
     assert [m["req"] for m in got] == ["REQ-902"]
 

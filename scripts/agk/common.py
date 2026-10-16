@@ -19,6 +19,7 @@ AC_MARKER = re.compile(r"(?:^|(?<=; ))AC(\d+)\b")
 MARKER_RUN = re.compile(r"(REQ-\d{3}(?:[ ,/]+REQ-\d{3})*)(?: AC(\d+)\b)?")
 MARKER_SKIP_PARTS = frozenset({".git", "node_modules", "vendor", "target", "__pycache__", ".venv"})
 ALLOWED_STATUS = ("planned", "in-progress", "done")
+AC_COVERAGE = ("warn", "block")
 
 
 class CheckError(Exception):
@@ -192,6 +193,7 @@ DEFAULT_CONFIG = {
     "test_patterns": ["test_*.py"],
     "mode": "",
     "inbox_hours": 48,
+    "ac_coverage": "warn",
 }
 
 
@@ -320,6 +322,53 @@ def markers_for(root: Path, cli_dirs: Sequence[str] | None = None) -> dict[str, 
     cfg = load_config(root)
     exclude = ["tests/kit"] if cfg["mode"] == "adopt" else []
     return find_markers(root, test_dirs(root, cli_dirs), cfg["test_patterns"], exclude)
+
+
+def ac_markers_for(root: Path, cli_dirs: Sequence[str] | None = None) -> list[dict]:
+    """The `REQ-nnn ACn` markers from the configured directories and patterns (as markers_for)."""
+    cfg = load_config(root)
+    exclude = ["tests/kit"] if cfg["mode"] == "adopt" else []
+    return find_ac_markers(root, test_dirs(root, cli_dirs), cfg["test_patterns"], exclude)
+
+
+def ac_coverage_mode(root: Path) -> str:
+    """`warn` or `block` from agk.toml; any other value is a refusal that names the setting."""
+    value = load_config(root)["ac_coverage"]
+    if value not in AC_COVERAGE:
+        raise CheckError("ac_coverage must be 'warn' or 'block' (setting: ac_coverage in agk.toml)")
+    return value
+
+
+def ac_shortfalls(reqs: list[dict], markers: list[dict]) -> list[tuple[str, str]]:
+    """(requirement id, message) for each `done` requirement criterion with no `REQ-nnn ACn` marker.
+
+    Also an acceptance line with no `ACn` token, and one that repeats a number. The message names
+    the requirement and the criterion id, never the criterion's text.
+    """
+    covered = {(m["req"], m["ac"]) for m in markers if m["ac"]}
+    found: list[tuple[str, str]] = []
+    for req in reqs:
+        if req["status"] != "done":
+            continue
+        rid = req["id"]
+        ids = [ac for ac, _ in parse_acceptance(req["acceptance"] or "")]
+        if not ids:
+            found.append((rid, f"{rid}: done requires an acceptance line with AC1, AC2, ..."))
+            continue
+        for ac in sorted({a for a in ids if ids.count(a) > 1}):
+            found.append((rid, f"{rid}: acceptance repeats {ac}"))
+        found += [
+            (rid, f"{rid}: done requires a test marker for {ac}")
+            for ac in dict.fromkeys(ids)
+            if (rid, ac) not in covered
+        ]
+    return found
+
+
+def stray_markers(reqs: list[dict], markers: list[dict]) -> list[dict]:
+    """The `REQ-nnn ACn` markers whose requirement does not exist or has no such criterion."""
+    criteria = {r["id"]: {ac for ac, _ in parse_acceptance(r["acceptance"] or "")} for r in reqs}
+    return [m for m in markers if m["ac"] and m["ac"] not in criteria.get(m["req"], set())]
 
 
 def run(name: str, fn: Callable[[], int]) -> int:

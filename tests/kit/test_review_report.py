@@ -106,7 +106,7 @@ BAD = {
     ),
     "invented spec": (report(findings=[finding(rule="SPEC-0002 rule 1")]), "finding 1", "Rule"),
     "invented requirement ac": (
-        report(findings=[finding(rule="REQ-001 AC9")]),
+        report(findings=[finding(rule="REQ-001 " "AC9")]),
         "finding 1",
         "Rule",
     ),

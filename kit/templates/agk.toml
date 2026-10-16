@@ -7,4 +7,6 @@ test_dirs = ["tests"]
 lint_paths = ["scripts/agk", "tests/kit", ".claude/hooks"]
 # The project's own tests (run by agk-project-test; exit 5 = none collected is success).
 project_tests = "python3 -m pytest tests -q --ignore=tests/kit_dev; rc=$?; [ $rc -eq 5 ] && exit 0; exit $rc"
+# Every criterion ACn of a done requirement needs a REQ-nnn ACn test marker: warn prints, block fails.
+ac_coverage = "warn"
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.

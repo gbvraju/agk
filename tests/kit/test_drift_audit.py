@@ -17,7 +17,7 @@ SCRIPT = ROOT / "scripts" / "agk" / "drift_audit.py"
 TODAY = "2026-10-15"
 SUMMARY = re.compile(
     r"^agk drift audit (\d{4}-\d{2}-\d{2}) \(window (\S+) to (\S+)\): findings=(\d+)"
-    r" D1=(\d+) D2=(\d+) D3=(\d+) D4=(\d+) D5=(\d+) D6=(\d+)$"
+    r" D1=(\d+) D2=(\d+) D3=(\d+) D4=(\d+) D5=(\d+) D6=(\d+) D7=(\d+)$"
 )
 FINDING = re.compile(r"^- (D\d) (.+?) \| (.+?) \| (.+)$")
 

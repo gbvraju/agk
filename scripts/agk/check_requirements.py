@@ -1,4 +1,5 @@
-"""Requirements file: unique ids, valid Status, and a test marker for every `done`."""
+"""Requirements file: unique ids, valid Status, a test marker for every `done` requirement and, per
+the `ac_coverage` setting (`warn` or `block`), for every criterion `ACn` of it (SPEC-0010)."""
 
 from __future__ import annotations
 
@@ -7,6 +8,9 @@ import sys
 from common import (
     ALLOWED_STATUS,
     CheckError,
+    ac_coverage_mode,
+    ac_markers_for,
+    ac_shortfalls,
     markers_for,
     parse_requirements,
     repo_root,
@@ -36,7 +40,9 @@ def main(argv: list[str] | None = None) -> int:
     reqs = parse_requirements(path.read_text(encoding="utf-8"))
     if not reqs:
         raise CheckError(f"{PATH} defines no requirement")
-    markers = markers_for(root, dirs_arg(argv))
+    dirs = dirs_arg(argv)
+    markers = markers_for(root, dirs)
+    mode = ac_coverage_mode(root)
 
     problems: list[str] = []
     seen: set[str] = set()
@@ -51,8 +57,13 @@ def main(argv: list[str] | None = None) -> int:
             problems.append(f"{rid}: Status is not one of {', '.join(ALLOWED_STATUS)}")
         elif req["status"] == "done" and rid not in markers:
             problems.append(f"{rid}: done requires a test marker under the test directories")
+    shortfalls = [text for _, text in ac_shortfalls(reqs, ac_markers_for(root, dirs))]
+    problems += shortfalls if mode == "block" else []
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
+    if mode == "warn":
+        for text in shortfalls:
+            print(f"warn {NAME}: {text}")
     if not problems:
         print(f"ok {NAME} ({len(reqs)} requirements)")
     return 1 if problems else 0
