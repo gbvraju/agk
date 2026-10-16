@@ -9,8 +9,8 @@ purpose, one at a time, and restore each. Nothing here touches `gbvraju/colorama
 The plan below was run on `gbvraju/agk-sandbox` on 2026-10-16: the baseline on the upgraded sandbox (20 ok, exit 0), the four
 local cases L1 to L4, the maintainers' six settings changes one at a time (runs 1 to 6; run 6 matched on its second attempt,
 after GitHub reported the new setting), and a final run after the restore (20 ok, 0 fail, 0 cannot-check, exit 0). Each run failed
-exactly the expected ids. The maintainers record criterion b as met. Step 15 (not an admin: `??`) has no run in this record
-(Q-D10-2).
+exactly the expected ids. The maintainers record criterion b as met. Step 15 (not an admin: `??`) has no run in this record;
+the maintainers accepted criterion b without it (Q-D10-2), and a live run with a non-admin token is a residual (due 2026-11-30).
 
 ## Setup
 

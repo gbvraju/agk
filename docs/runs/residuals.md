@@ -33,6 +33,7 @@ bullet. The K3 target is 2026-11-30 and the K4 target is 2026-12-31 (ADR-0015); 
 - docs/runs/plugin-live-proof.md 2026-10-16 | a drift-audit check that every tag matches `vX.Y.Z` (lowercase); a tag `V0.10.0` existed beside `v0.10.0` | (due 2026-11-30) | open
 - docs/runs/plugin-live-proof.md 2026-10-16 | the skills quote the script path, so a simple `Bash(python3 …/init.py *)` allow rule does not match; the rule needs `Bash(python3 *scripts/agk/init.py* *)` (Q-K3-73) | (due 2026-11-30) | open
 - docs/runs/plugin-live-proof.md 2026-10-16 | Q-K3-72: the committed project-scope `.claude/settings.json` form with `ref` is untested, because it needs an interactive workspace-trust dialog | (due 2026-11-30) | open
+- docs/runs/doctor-live-proof.md 2026-10-16 | a live doctor run with a non-admin token (plan step 15: the ruleset checks should print `??` with `no-admin`, never `ok`); accepted without it for criterion b (Q-D10-2) | (due 2026-11-30) | open
 
 ## Closed (not findings)
 
