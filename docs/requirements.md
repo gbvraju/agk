@@ -67,3 +67,8 @@ Only the Status line may change without an ADR. `done` requires at least one tes
 
 - Acceptance: AC1 the review context of a PR is deterministic and complete; AC2 a report is validated (verdict, findings with a hunk and a rule); AC3 the agent is read-only; AC4 verdicts are measured (rejections per PR)
 - Status: planned
+
+### REQ-014 — Install and run agk as a Claude Code plugin (K3)
+
+- Acceptance: AC1 the plugin manifest and the marketplace file are valid and `plugin.json` carries the kit version (`claude plugin validate .`); AC2 the plugin has one skill per command (`/agk:<command>`), no hooks, servers, monitors or `bin/`, user-invoked writers, and no skill runs a forbidden verb; AC3 the repository's own checks, hooks, workflow and reviewer run with no plugin installed; AC4 GitHub issues are intake only: no script or workflow reads an issue for a decision; AC5 `agk upgrade` brings an init or adopt target from kit version X to the current kit, never overwriting an edited file or a user-owned file
+- Status: planned
