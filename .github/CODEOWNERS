@@ -4,6 +4,7 @@
 /docs/ @gbvraju
 /agk.mk @gbvraju
 /config/ @gbvraju
+/skills/ @gbvraju
 /.claude/ @gbvraju
 /.github/ @gbvraju
 /Makefile @gbvraju
@@ -12,6 +13,7 @@
 /README.md @gbvraju
 /constitution/ @gbvraju
 /pyproject.toml @gbvraju
+/.claude-plugin/ @gbvraju
 /docs/adr/ @gbvraju
 /tests/kit/ @gbvraju
 /docs/specs/ @gbvraju

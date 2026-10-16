@@ -23,6 +23,7 @@ KIT_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = "kit/manifest.json"
 BRANCH_RULES = "kit/templates/branch-rules.txt"
 SCANNER_EXCLUDES = "kit/templates/scanner-excludes.txt"
+PLUGIN_SETTINGS = "kit/templates/plugin-settings.txt"
 PLACEHOLDER = "@REPLACE-ME"
 MIN_PYTHON = (3, 11)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -163,11 +164,20 @@ ISSUES_NOTICE = (
 )
 
 
+def plugin_settings() -> str:
+    """The print-only settings entries for the plugin, at this kit's version."""
+    manifest = json.loads((KIT_ROOT / MANIFEST).read_text(encoding="utf-8"))
+    text = (KIT_ROOT / PLUGIN_SETTINGS).read_text(encoding="utf-8").rstrip()
+    return text.replace("{{kit_version}}", manifest["kit_version"])
+
+
 def print_branch_rules(branch: str, tool: str = "init") -> None:
     print(f"Apply by hand on GitHub to the default branch `{branch}` ({tool} configures nothing):")
     print((KIT_ROOT / BRANCH_RULES).read_text(encoding="utf-8").rstrip())
     print()
     print((KIT_ROOT / SCANNER_EXCLUDES).read_text(encoding="utf-8").rstrip())
+    print()
+    print(plugin_settings())
     print()
     print(ISSUES_NOTICE)
 

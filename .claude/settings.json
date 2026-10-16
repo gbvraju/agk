@@ -33,7 +33,9 @@
       "Edit(/agk.mk)",
       "Edit(/agk.toml)",
       "Edit(/kit/**)",
-      "Edit(/tests/kit_dev/**)"
+      "Edit(/tests/kit_dev/**)",
+      "Edit(/.claude-plugin/**)",
+      "Edit(/skills/**)"
     ],
     "deny": [
       "Bash(git push --force:*)",

@@ -14,6 +14,7 @@ KIT_ONLY = {
     "scripts/agk/adopt.py",
     "scripts/agk/kit_hashes.py",
     "scripts/agk/upgrade.py",
+    "scripts/agk/new_spec.py",
 }
 RENDERED = {".github/CODEOWNERS"}
 SINGLES = {
@@ -119,7 +120,12 @@ def test_ac2_kit_protected_list_is_template_plus_kit_only_entries():
         "agk.mk",
         "agk.toml",
     ]
-    assert lines("config/protected-paths.txt") == template + ["kit/", "tests/kit_dev/"]
+    assert lines("config/protected-paths.txt") == template + [
+        "kit/",
+        "tests/kit_dev/",
+        ".claude-plugin/",
+        "skills/",
+    ]
 
 
 def test_ac2_templates_reviewers_protected_class_equals_template_list():

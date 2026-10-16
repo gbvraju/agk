@@ -107,6 +107,45 @@ and never approves or merges; the context and the report are local files and are
 context. The context holds the full current text of every changed file and the operating rules of `CLAUDE.md`,
 so a rule next to a change is visible. See `docs/specs/0003-reviewer-agent.md`, ADR-0011 and `docs/runs/shadow-review-template.md`.
 
+## Plugin
+
+The workflow commands are also a Claude Code plugin; this repository is its marketplace. The repository works without it
+(`make governance`, the stop hook, the workflows and the `reviewer` subagent need no plugin).
+
+    claude plugin marketplace add gbvraju/agk
+    claude plugin install agk@agk
+
+| Command | What it runs | Writes |
+| --- | --- | --- |
+| `/agk:init` | `scripts/agk/init.py` | new files in the repository |
+| `/agk:adopt` | `scripts/agk/adopt.py` | owned files and marked blocks |
+| `/agk:doctor` | `scripts/agk/doctor.py --kit-root` the plugin | nothing (a report) |
+| `/agk:upgrade` | `scripts/agk/upgrade.py` | vendored files |
+| `/agk:spec` | `scripts/agk/new_spec.py` | a Draft spec, or a requirement proposal with its ADR draft |
+| `/agk:issue` | the issue templates and your own `gh issue create`, after asking | one GitHub issue |
+| `/agk:brief` | `scripts/agk/new_spec.py` | one brief |
+| `/agk:review` | `review_context.py`, the project's `reviewer` subagent, `check_review_report.py` | local files, never committed |
+
+No command commits, pushes or merges, and none sets a spec `Approved` or an ADR `Accepted`. `/agk:review` is advisory.
+GitHub issues are intake only: decisions, requirements, specs and ADRs live in the repository, and an issue decides
+nothing (`.github/ISSUE_TEMPLATE/`; a pull request may link one with an optional `Issue: #nnn` line).
+
+To let a team enable the plugin, `agk init` and `agk adopt` print two entries for `.claude/settings.json`
+(`extraKnownMarketplaces` and `enabledPlugins`); they merge nothing. What to know before you rely on it:
+
+- A project-scope plugin loads only after the user accepts the workspace trust dialog for the folder, and each
+  collaborator installs it on their own machine.
+- A cloud session does not add the marketplaces a repository lists under `extraKnownMarketplaces`, so the plugin is
+  absent there; the repository's checks do not depend on it.
+- A plugin runs with the user's privileges. This one ships no hook, server, monitor or `bin/`, and its scripts are the
+  ones in this repository.
+- An agent that edits `.claude/settings.json` could point `extraKnownMarketplaces` at another source; the file is a
+  protected path class and its edit is an `ask` rule in `.claude/settings.json`.
+- Each command may ask for approval once per session. Releases are tags `vX.Y.Z`; a third-party marketplace does not
+  auto-update by default, so an installed version changes only when the user updates.
+
+See `docs/specs/0005-distribution.md`, ADR-0019 and `docs/runs/spec-0005-verify-facts.md`.
+
 ## Existing scanners
 
 Project-wide scanners (bandit, flake8, pylint, mypy) that read the whole tree also read the kit's code. The kit's

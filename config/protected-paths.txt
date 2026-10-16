@@ -15,3 +15,5 @@ agk.mk
 agk.toml
 kit/
 tests/kit_dev/
+.claude-plugin/
+skills/

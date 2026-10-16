@@ -1,0 +1,8 @@
+Plugin settings entries (print only; the kit merges no JSON). To let a team enable the agk plugin, add these two keys to
+`.claude/settings.json` (a protected path class: the change needs an ADR) and have each collaborator trust the folder;
+each collaborator installs the plugin on their own machine, and a cloud session does not load it. The repository's
+checks and CI work without the plugin.
+  "extraKnownMarketplaces": {"agk": {"source": {"source": "github", "repo": "gbvraju/agk", "ref": "v{{kit_version}}"}}}
+  "enabledPlugins": {"agk@agk": true}
+The `ref` field of a `github` source here is a branch or tag; the docs show it for the source types table but the
+`extraKnownMarketplaces` section lists only `repo` (verify).

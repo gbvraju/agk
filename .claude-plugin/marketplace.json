@@ -1,0 +1,14 @@
+{
+  "name": "agk",
+  "description": "The Agentic Governance Kit.",
+  "owner": {
+    "name": "agk maintainers"
+  },
+  "plugins": [
+    {
+      "name": "agk",
+      "source": ".",
+      "description": "Workflow commands for repositories governed by agk."
+    }
+  ]
+}

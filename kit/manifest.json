@@ -1,10 +1,13 @@
 {
-  "kit_version": "0.9.0",
+  "kit_version": "0.10.0",
   "verbatim": [
     ".claude/agents/drift-auditor.md",
     ".claude/agents/reviewer.md",
     ".claude/hooks/stop_check.py",
     ".claude/settings.json",
+    ".github/ISSUE_TEMPLATE/proposal.md",
+    ".github/ISSUE_TEMPLATE/question.md",
+    ".github/ISSUE_TEMPLATE/report.md",
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/workflows/drift-audit.yml",
     ".github/workflows/governance.yml",
