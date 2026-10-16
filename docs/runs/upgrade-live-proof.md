@@ -9,8 +9,8 @@ default branch, work only through a branch and a pull request; `gbvraju/colorama
 | Kit | this repository at `main` `2497161` (PR #42), `kit_version` 0.9.0 |
 | Sandbox | `gbvraju/agk-sandbox`, default branch `main` at `88337bd`, a kit 0.1.0 install (no `agk.toml`; `[tool.agk] version = "0.1.0"` in `pyproject.toml`) |
 | Clone and branch | `/home/user/agk-sandbox`, branch `agk-upgrade-0.9.0` |
-| Sandbox pull request | https://github.com/gbvraju/agk-sandbox/pull/4 (open, against `main`; not merged) |
-| Commit | `b417482` `chore: upgrade the kit from 0.1.0 to 0.9.0 (agk upgrade) with ADR-0003` |
+| Sandbox pull request | https://github.com/gbvraju/agk-sandbox/pull/4 (against `main`; merged by `gbvraju` on 2026-10-16T06:24:21Z as `b4fce6f` `chore: upgrade the kit from 0.1.0 to 0.9.0 (agk upgrade) (#4)`) |
+| Commits | `b417482` `chore: upgrade the kit from 0.1.0 to 0.9.0 (agk upgrade) with ADR-0003`, then `3888f3d` `docs: ADR-0003 residual due dates; Accepted on the maintainers' instruction` (cleared head) |
 
 ## Result in one paragraph
 
@@ -1042,7 +1042,43 @@ Also in the sandbox, on the same tree: `make lint`: `All checks passed!` (exit 0
 2. **Protected list.** The sandbox's `config/protected-paths.txt` does not have `agk.mk` and `agk.toml`, which the 0.9.0 template has; they are
    unprotected in the sandbox until a separate change adds them (the upgrade printed `template-line` for both). The same holds for the
    other `template-changed` lines (`config/reviewers.yaml`, `docs/adr/0001-adopt-agk.md`, `pyproject.toml`): user-owned, not rewritten.
-3. **Pull request checks.** The pull request's own `governance` run on GitHub was not polled (rule: never poll CI). The local runs above are
-   the evidence available to the agent.
-4. **Criterion c** is met when the maintainers have reviewed and merged the sandbox pull request and the `governance` check of that
-   pull request is green; the agent did not merge or approve anything.
+3. **Pull request checks.** Read after the merge (GET only, nothing polled): see "Merge and GitHub governance result" below. The checks on the
+   head are green.
+4. **Criterion c** is met by this record: the sandbox pull request was reviewed and merged by the maintainers and the `governance` check of its
+   head `3888f3d` is green on GitHub. The agent did not merge or approve anything.
+
+## Merge and GitHub governance result
+
+Read on 2026-10-16 after the maintainers merged sandbox pull request #4, with `gh api` GET on `gbvraju/agk-sandbox`:
+
+| Item | Value |
+| --- | --- |
+| Pull request | #4, state closed, merged by `gbvraju`, `merged_at` 2026-10-16T06:24:21Z |
+| Merge commit on `main` | `b4fce6f619715efb08553afb8eecd86ada510260` (squash; parent `88337bd`) |
+| Head that was merged | `3888f3d52e132fae9591851059704d3b88047456` (the cleared head) |
+| `governance` on the head | two `pull_request` runs, 38860785977 and 38860817816, both `completed` / `success`; jobs 116842348844 and 116842444848 `success` |
+| A third check run on the head | 116842335950 `governance`, `completed` / `skipped` (the `push` run of the branch; the job runs for a push only on the default branch) |
+| `governance` on the merge commit | the `push` run 38861017468 was `in_progress` when read; not polled afterwards |
+
+The steps of the green job 116842348844 (the upgraded workflow, one step per check):
+
+```
+4 Install tooling: success
+5 check_protected_changes: success
+6 check_requirements: success
+7 check_adrs: success
+8 check_specs: success
+9 check_neutrality: success
+10 check_build_state: success
+11 check_kit_tests: success
+12 reviewers --check: success
+13 reviewers --check-codeowners: success
+14 PR body shape: success
+15 Lint: success
+16 Tests of the checks: success
+17 Project tests: success
+18 Secret scan: success
+```
+
+Job 116842444848 has the same steps, all `success`. These are the per-check steps of ADR-0016 running in a target after an upgrade, with the
+job still named `governance`.
