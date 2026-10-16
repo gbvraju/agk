@@ -406,3 +406,42 @@ ok default-branch-config warn default_branch in agk.toml equals the repository's
 summary: 19 ok, 1 fail, 0 cannot-check
 exit 1
 ```
+
+
+## Run 4 (2026-10-16)
+
+The maintainers' change: merge commits were allowed in the ruleset's pull request rule (read back with GET: `allowed_merge_methods` `["squash","merge"]`, `dismiss_stale_reviews_on_push` `true`, `required_approving_review_count` `0`; `enforcement` `active`, `bypass_actors` `[]`, required check `governance` back). Command (from the baseline clone, `/home/user/sandbox-baseline`, unchanged): `python3 /home/user/agk/scripts/agk/doctor.py --repo gbvraju/agk-sandbox --kit-root /home/user/agk`.
+Run 3's change was restored (the required check `governance` is back). The merge method list is the only difference from the baseline; `merge` in it is what fails the check (SPEC-0006 rule 7: only `merge` allowed fails; squash alone, or squash and rebase, passes).
+
+| Expected failed ids | Observed failed ids | Match |
+| --- | --- | --- |
+| `ruleset-pull-request` | `ruleset-pull-request` only (19 ok, 1 fail, 0 cannot-check, exit 1) | match |
+
+Output, verbatim:
+
+```
+agk doctor 0.9.0
+ok ruleset-missing error a ruleset targets the default branch
+ok ruleset-enforcement error ruleset enforcement is active
+ok ruleset-bypass error ruleset has no bypass actors
+ok ruleset-target error the ruleset targets the default branch
+ok ruleset-deletion error ruleset restricts deletions
+ok ruleset-linear-history error ruleset requires linear history
+ok ruleset-force-push error ruleset blocks force pushes
+FAIL ruleset-pull-request error ruleset: pull_request rule missing, stale approvals not dismissed on push, or merge commits allowed
+  fix: require a pull request, dismiss stale approvals on push, and do not allow merge commits (ADR-0001 decision 3 uses squash only)
+ok required-check-governance error the status check `governance` is required
+ok repo-auto-merge warn repository setting allow_auto_merge is on
+ok repo-delete-branch warn repository setting delete_branch_on_merge is on
+ok placeholder-team-reviewers error config/reviewers.yaml has no placeholder team
+ok placeholder-team-codeowners error .github/CODEOWNERS has no placeholder team
+ok origin-head warn refs/remotes/origin/HEAD exists
+ok drift-workflow-file error .github/workflows/drift-audit.yml has a schedule
+ok drift-workflow-state error the drift-audit workflow is active
+ok kit-version warn the kit version equals version in agk.toml
+ok vendored-missing error every vendored file is present
+ok vendored-differs error every vendored file equals the kit's copy
+ok default-branch-config warn default_branch in agk.toml equals the repository's default branch
+summary: 19 ok, 1 fail, 0 cannot-check
+exit 1
+```
