@@ -1,6 +1,6 @@
 # ADR-0020: the reviewer agent becomes experimental and is no longer installed by default
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-16
 - Deciders: maintainers
 - Amends: ADR-0011
