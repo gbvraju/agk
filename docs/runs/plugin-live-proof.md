@@ -4,22 +4,27 @@ Date: 2026-10-16 (from `date -u`). Run by the implementation agent in a cloud co
 maintainers' instruction, with the plugin installed from GitHub: release `v0.10.0`, commit `3a3686f`. Repository settings
 were never changed. Outputs below are verbatim; session ids and temporary paths are as printed.
 
+The first attempt to push (steps 5 and "Result" as first written) was refused with HTTP 403 because the Claude GitHub App
+had no access to the proof repository. After the maintainers gave it access, the same local commit `124d92c` was pushed
+to `main` and `governance` ran green: see "Step 5b".
+
 ## Result
 
 | Step | Result |
 | --- | --- |
-| 1 `v0.10.0` points at `3a3686f` | yes (a second tag `V0.10.0`, same commit, was still listed) |
+| 1 `v0.10.0` points at `3a3686f` | yes; `V0.10.0` was still listed at the first check and is gone at the second (Step 1) |
 | 2 marketplace add, install, list, details | done; installed version `0.10.0`; 8 skills; 0 agents, hooks, MCP and LSP servers |
 | 3 attach `gbvraju/agk-plugin-proof` with push access | attached; the push check said **refused** |
 | 4 `/agk:init` through Claude Code, no hand-copied file | done: 294 files; 283 of 283 verbatim files identical to the plugin cache copy |
 | 5 `make governance` locally | all steps ok (the base-dependent checks skip outside CI) |
-| 5 first commit pushed to `main` | **not done: `git push` was refused with HTTP 403** (the Claude GitHub App has no access to the repository). Local commit `124d92c`, not on GitHub |
-| 5 `governance` green on GitHub for that push | **not done**: no push, so no run |
+| 5 first commit pushed to `main` | **done** on the second attempt: `124d92c` is `main` of `gbvraju/agk-plugin-proof` (the first attempt was refused with HTTP 403, no App access) |
+| 5 `governance` green on GitHub for that push | **yes**: run 38890313928, `success`, https://github.com/gbvraju/agk-plugin-proof/actions/runs/38890313928 |
 | Q-K3-72 tag pin | works with the CLI and with a user-scope settings entry; the project-scope committed form is not testable headless (below) |
 
-Criterion a is therefore **not met yet**. The one missing piece is the first push to `gbvraju/agk-plugin-proof` and its
-green `governance` run. The container needs the Claude GitHub App on that repository, or the maintainers push the
-commit; nothing was worked around.
+Criterion a is met: the plugin installed from the agk marketplace, `/agk:init` ran from the installed plugin's cache with no
+file copied by hand, the first commit reached `main`, and `governance` is green on GitHub for that push. The approval-friction
+evidence for Q-K3-73 is in Step 4. Q-K3-72 is answered for the CLI and the user-scope settings; the committed project-scope
+file is not tested headless (last section).
 
 ## Step 1: the tag
 
@@ -31,6 +36,13 @@ $ git ls-remote --tags https://github.com/gbvraju/agk
 
 `v0.10.0` points at `3a3686f`, as briefed. The tag `V0.10.0` (capital V) was still listed at this check although the
 maintainers reported it deleted. The marketplace clone below reports both tags on `3a3686f`.
+
+After the maintainers confirmed that `V0.10.0` was deleted, the same command printed:
+
+```
+$ git ls-remote --tags https://github.com/gbvraju/agk
+3a3686f0abce67a50e3f4d5b9e257825790f770a	refs/tags/v0.10.0
+```
 
 ## Step 2: add the marketplace, install, list, details
 
@@ -359,7 +371,43 @@ remote: Claude doesn't have GitHub access to gbvraju/agk-plugin-proof for your o
 fatal: unable to access 'https://github.com/gbvraju/agk-plugin-proof/': The requested URL returned error: 403
 ```
 
-No second attempt and no other route. The commit exists only in the container's clone.
+No other route was tried. The commit then existed only in the container's clone.
+
+## Step 5b: the push, and the governance run on GitHub
+
+The maintainers gave the Claude GitHub App access to `gbvraju/agk-plugin-proof`. The same commit, unchanged, was pushed as
+the repository's first commit (the repository was empty and had no ruleset, as in K1 step 2):
+
+```
+$ git push -u origin HEAD
+warning: push negotiation failed; proceeding anyway with push
+To https://github.com/gbvraju/agk-plugin-proof
+ * [new branch]      HEAD -> main
+branch 'main' set up to track 'origin/main'.
+$ git ls-remote origin refs/heads/main
+124d92c329f96db27395e279c1f6a8e774dcdd4d	refs/heads/main
+```
+
+The push started one workflow run, the only one in the repository. Read with `gh api` (GET), once the run had completed:
+
+```
+run:        https://github.com/gbvraju/agk-plugin-proof/actions/runs/38890313928
+workflow:   governance (id 38890313928, attempt 1, event push, branch main)
+head_sha:   124d92c329f96db27395e279c1f6a8e774dcdd4d
+created:    2026-10-16T10:54:36Z    updated: 2026-10-16T10:55:41Z
+status:     completed
+conclusion: success
+job:        governance  success  https://github.com/gbvraju/agk-plugin-proof/actions/runs/38890313928/job/116937928237
+steps:      Set up job; checkout; setup-python; Install tooling: success
+            check_protected_changes, check_requirements, check_adrs, check_specs, check_neutrality,
+            check_build_state, check_kit_tests, reviewers --check, reviewers --check-codeowners: success
+            PR body shape: skipped (a push, not a pull request)
+            Lint, Tests of the checks, Project tests, Secret scan: success
+            Post run and Complete job: success
+```
+
+`governance` is green for the first commit: **this is criterion a.** No second commit was made and nothing else was pushed to
+`main`; no repository setting was changed.
 
 ## Q-K3-72: does a tag pin work?
 
