@@ -1,6 +1,6 @@
 # ADR-0018: kit/hashes.json and agk upgrade: the build of SPEC-0008
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-16
 - Deciders: maintainers
 - Related: ADR-0001, ADR-0015, ADR-0016, ADR-0017
