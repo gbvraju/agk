@@ -1,6 +1,6 @@
 # ADR-0027: this repository's project tests install pytest when it is missing
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-17
 - Deciders: maintainers
 - Related: ADR-0026
@@ -39,3 +39,6 @@ Left as it is, every pull request of this repository would read `not-proven (red
 
 - 2026-10-17: the `proof` job needs network access to `pip` the first time on a runner without pytest; an air-gapped runner would read
   `red-on-head` again (due 2026-12-31).
+- 2026-10-17: the proof job has only the runner's preinstalled tools; a project whose tests need more must set it up inside
+  `project_tests`; the playbook and the existing-codebase guide say so, with one example per language the kit has proven (Python, Go)
+  (due 2026-11-07, the SPEC-0013 build).
