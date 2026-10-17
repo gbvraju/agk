@@ -1,0 +1,70 @@
+{
+  "adrs": [],
+  "commit": "c0ffee0000000000000000000000000000000000",
+  "config": {
+    "default_branch": "main",
+    "inbox_hours": 48,
+    "project_tests_declared": true,
+    "test_dirs": [
+      "tests"
+    ],
+    "test_patterns": [
+      "probe_*.py"
+    ]
+  },
+  "dirty": false,
+  "drift": {
+    "counts": {
+      "D1": 0,
+      "D2": 0,
+      "D3": 0,
+      "D4": 0,
+      "D5": 0,
+      "D6": 0,
+      "D7": 0
+    },
+    "total": 0
+  },
+  "issues": [
+    {
+      "label": "agk-drift-audit",
+      "number": 7,
+      "state": "closed",
+      "title": "agk drift audit 2026-10-03"
+    }
+  ],
+  "markers": [],
+  "pull_requests": [],
+  "questions": [],
+  "repo": "demo-org/demo-repo",
+  "requirements": [
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "t"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-001",
+      "line": 3,
+      "status": "planned",
+      "title": "Only thing"
+    }
+  ],
+  "residuals": [],
+  "schema": 1,
+  "specs": [
+    {
+      "id": "SPEC-0001",
+      "notes": null,
+      "open_questions": [],
+      "requirements": [
+        "REQ-001"
+      ],
+      "status": "Approved",
+      "title": "Approved one"
+    }
+  ],
+  "today": "2026-10-14"
+}
