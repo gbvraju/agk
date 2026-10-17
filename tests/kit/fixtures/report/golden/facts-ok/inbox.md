@@ -10,7 +10,7 @@ The inbox as of 2026-10-14.
 - Question Q-X1-1 is waiting, asked in docs/runs/spec-0002-notes.md — https://github.com/demo-org/demo-repo/blob/ef034592bfb70ae28e72baae0b2cd3d4ded8c89d/docs/runs/spec-0002-notes.md
 
 ### Pull requests without a verdict (1)
-- PR #7 "Change number 7" has had no verdict for 9 days — https://github.com/demo-org/demo-repo/pull/7
+- <pr>7 "Change number 7" has had no verdict for 9 days — https://github.com/demo-org/demo-repo/pull/7
 
 ---
 facts: ef034592bfb70ae28e72baae0b2cd3d4ded8c89d

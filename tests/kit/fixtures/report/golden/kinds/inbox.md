@@ -11,8 +11,8 @@ The inbox as of 2026-10-14.
 - Question Q-X1-4 is waiting, asked in docs/adr/0002-proposed.md — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/adr/0002-proposed.md
 
 ### Pull requests without a verdict (2)
-- PR #9 "Change number 9" has had no verdict for 13 days — https://github.com/demo-org/demo-repo/pull/9
-- PR #11 "Change number 11" has had no verdict for 2 days — https://github.com/demo-org/demo-repo/pull/11
+- <pr>9 "Change number 9" has had no verdict for 13 days — https://github.com/demo-org/demo-repo/pull/9
+- <pr>11 "Change number 11" has had no verdict for 2 days — https://github.com/demo-org/demo-repo/pull/11
 
 ### Overdue residuals (2)
 - Overdue since 2026-09-01: 2026-08-01: an old item — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/adr/0001-accepted.md

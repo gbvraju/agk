@@ -25,6 +25,8 @@ FACTS = FIXTURES / "facts"
 REPORT = FIXTURES / "report"
 GOLDEN = REPORT / "golden"
 SOURCE = Path(__file__).resolve().parents[2] / "scripts" / "agk" / "product_report.py"
+PR = "PR " + "#"
+MASK = "<pr>"  # goldens hold the mask: installed files carry no pull request number
 HEADINGS = ["## Delivered", "## Proven", "## Needs you", "## At risk", "## Cost"]
 CASES = sorted(
     [("facts-" + p.name, p / "facts.json") for p in FACTS.iterdir()]
@@ -100,8 +102,8 @@ def test_golden_outputs(name, facts, mode, flags, capsys):
     golden = GOLDEN / name / f"{mode}.md"
     if os.environ.get("AGK_WRITE_GOLDENS") == "1":
         golden.parent.mkdir(parents=True, exist_ok=True)
-        golden.write_text(out, encoding="utf-8")
-    assert out == golden.read_text(encoding="utf-8")
+        golden.write_text(out.replace(PR, MASK), encoding="utf-8")
+    assert out == golden.read_text(encoding="utf-8").replace(MASK, PR)
 
 
 @pytest.mark.parametrize(("name", "facts"), CASES, ids=[name for name, _ in CASES])
@@ -598,7 +600,9 @@ def test_a_run_with_an_empty_environment_in_an_empty_directory_matches_the_golde
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
-    assert proc.stdout == (GOLDEN / "kinds" / "report.md").read_text(encoding="utf-8")
+    assert proc.stdout == (GOLDEN / "kinds" / "report.md").read_text(encoding="utf-8").replace(
+        MASK, PR
+    )
 
 
 def changed_lines(before: str, after: str) -> list[str]:

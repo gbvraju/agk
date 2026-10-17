@@ -10,8 +10,8 @@ The inbox as of 2026-10-14.
 - unknown: questions could not be read — https://github.com/demo-org/demo-repo/tree/c0ffee0000000000000000000000000000000000/docs
 
 ### Pull requests without a verdict (2)
-- PR #9 "Change number 9" has had no verdict for 13 days — https://github.com/demo-org/demo-repo/pull/9
-- PR #11 "Change number 11" has had no verdict for 2 days — https://github.com/demo-org/demo-repo/pull/11
+- <pr>9 "Change number 9" has had no verdict for 13 days — https://github.com/demo-org/demo-repo/pull/9
+- <pr>11 "Change number 11" has had no verdict for 2 days — https://github.com/demo-org/demo-repo/pull/11
 
 ### Overdue residuals (unknown)
 - unknown: residuals could not be read — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/runs/residuals.md
