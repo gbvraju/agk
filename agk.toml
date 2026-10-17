@@ -3,7 +3,8 @@ default_branch = "main"
 test_dirs = ["tests"]
 lint_paths = ["scripts/agk", "tests", ".claude/hooks"]
 # The project's own tests (run by agk-project-test and by the proof check): the kit tests, exactly as agk-test collects them.
-project_tests = "AGK_KIT_TESTS=1 python3 -m pytest -c tests/kit/pytest.ini tests/kit tests/kit_dev -q"
+# The proof job installs no toolchain (SPEC-0010 rule 16), so the command installs pytest when it is missing.
+project_tests = "python3 -m pytest --version >/dev/null 2>&1 || python3 -m pip install -q pytest; AGK_KIT_TESTS=1 python3 -m pytest -c tests/kit/pytest.ini tests/kit tests/kit_dev -q"
 # Every criterion ACn of a done requirement needs a REQ-nnn ACn test marker (SPEC-0010).
 ac_coverage = "block"
 experimental_reviewer = true
