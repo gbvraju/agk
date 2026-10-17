@@ -11,4 +11,6 @@ project_tests = "python3 -m pytest tests -q --ignore=tests/kit_dev; rc=$?; [ $rc
 ac_coverage = "warn"
 # Seconds each of the two runs of the proof check (proof.py) may take; a slow suite reads unknown.
 proof_timeout = 900
+# Hours a pull request may wait for a verdict before the decision inbox lists it (the weekly product report).
+inbox_hours = 48
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.

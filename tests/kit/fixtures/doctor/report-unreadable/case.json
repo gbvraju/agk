@@ -1,0 +1,8 @@
+{
+  "cannot": {
+    "drift-workflow-state": "bad-response"
+  },
+  "delete": [],
+  "fail": [],
+  "origin_head": true
+}

@@ -159,9 +159,9 @@ def classify(target: Path, items: list[tuple[str, bytes]], entries: list[str]):
 
 
 ISSUES_NOTICE = (
-    "notice: the workflows drift-audit.yml and metrics.yml write GitHub issues with the "
-    "workflow token (`issues: write`); delete a workflow file if the repository must not allow "
-    "that."
+    "notice: the workflows drift-audit.yml, metrics.yml and product-report.yml write GitHub "
+    "issues with the workflow token (`issues: write`); delete a workflow file if the repository "
+    "must not allow that."
 )
 
 

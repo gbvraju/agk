@@ -398,6 +398,40 @@ def test_ac1_live_mode_makes_only_get_reads_on_the_four_paths(tmp_path):
     )
 
 
+def test_ac1_an_installed_report_workflow_adds_the_fifth_read_to_the_one_check(tmp_path):
+    """REQ-002 AC1: the state of the product-report workflow is read only where the file exists."""
+    api = FIXTURES / "report-installed" / "api"
+    ok = FIXTURES / "ok" / "api"
+    dirs = prepare("report-installed", tmp_path)
+    stub = tmp_path / "bin"
+    body = (
+        'case "$*" in\n'
+        f"  *rulesets/1) /bin/cat '{ok}/ruleset-1.json';;\n"
+        f"  *rulesets) /bin/cat '{ok}/rulesets.json';;\n"
+        f"  *workflows/drift-audit.yml) /bin/cat '{ok}/workflow-drift-audit.json';;\n"
+        f"  *workflows/product-report.yml) /bin/cat '{api}/workflow-product-report.json';;\n"
+        f"  *) /bin/cat '{ok}/repo.json';;\n"
+        "esac"
+    )
+    log = stub_gh(stub, body)
+    proc = doctor(
+        "--repo", "example-owner/example-repo", "--kit-root", str(dirs["kit"]), "--json",
+        str(dirs["root"]), path=f"{stub}{os.pathsep}{os.environ['PATH']}",
+    )  # fmt: skip
+    assert proc.returncode == 0, proc.stdout
+    calls = log.read_text(encoding="utf-8").splitlines()
+    base = "api --method GET repos/example-owner/example-repo"
+    assert f"{base}/actions/workflows/product-report.yml" in calls
+    assert len(calls) == 5
+    assert checks_of(proc.stdout)["drift-workflow-state"]["status"] == "ok"
+
+
+def test_ac1_no_new_check_id_for_the_report_workflow():
+    """REQ-002 AC1: the amendment extends drift-workflow-state and adds no id."""
+    assert not [i for i in IDS if "report" in i]
+    assert IDS.count("drift-workflow-state") == 1
+
+
 def test_ac1_no_github_origin_is_not_github(tmp_path):
     """REQ-002 AC1: rule 3 (no --repo and no origin remote on github.com)."""
     dirs = prepare("ok", tmp_path)
