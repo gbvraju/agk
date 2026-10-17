@@ -22,6 +22,8 @@ USAGE = "usage: doctor.py [--repo OWNER/REPO] [--kit-root PATH] [--api-dir DIR] 
 PLACEHOLDER = "@REPLACE-ME"
 DRIFT_WORKFLOW = ".github/workflows/drift-audit.yml"
 DRIFT_NAME = "drift-audit.yml"
+REPORT_WORKFLOW = ".github/workflows/product-report.yml"
+REPORT_NAME = "product-report.yml"
 KIT_ONLY = ("kit/", "tests/kit_dev/")
 KIT_ONLY_FILES = ("scripts/agk/init.py", "scripts/agk/adopt.py")
 MARKERS = {
@@ -132,8 +134,8 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
     ),
     "drift-workflow-state": (
         "error",
-        "the drift-audit workflow is active",
-        "the drift-audit workflow is not active on GitHub",
+        "the drift-audit workflow (and the product-report workflow, where installed) is active",
+        "the drift-audit workflow or the product-report workflow is not active on GitHub",
         "enable the workflow (GitHub disables scheduled workflows after inactivity (verify))",
     ),
     "kit-version": (
@@ -378,14 +380,31 @@ def ruleset_results(reads: Reads, repo_data: Any, branch: str) -> dict[str, Resu
     return out
 
 
-def remote_results(reads: Reads, config: dict) -> dict[str, Result]:
+def workflow_state_result(reads: Reads, report_installed: bool) -> Result:
+    """Every scheduled workflow is active: the drift audit, and the product report where installed.
+
+    A workflow that is not active fails the check even when the other could not be read; a file
+    that is absent from the repository is reported by `vendored-missing`, not read here.
+    """
+    names = [("workflow-drift-audit", DRIFT_NAME)]
+    if report_installed:
+        names.append(("workflow-product-report", REPORT_NAME))
+    states, reasons = [], []
+    for fixture, name in names:
+        data, why = reads.get(fixture, f"/actions/workflows/{name}")
+        if isinstance(data, dict) and "state" in data:
+            states.append(data["state"])
+        else:
+            reasons.append(why or "bad-response")
+    if any(s != "active" for s in states):
+        return Result("fail")
+    return Result("cannot-check", reasons[0]) if reasons else Result("ok")
+
+
+def remote_results(reads: Reads, config: dict, report_installed: bool) -> dict[str, Result]:
     out: dict[str, Result] = {}
     repo_data, reason = reads.get("repo", "")
-    state, state_reason = reads.get("workflow-drift-audit", f"/actions/workflows/{DRIFT_NAME}")
-    if isinstance(state, dict) and "state" in state:
-        out["drift-workflow-state"] = Result("ok" if state["state"] == "active" else "fail")
-    else:
-        out["drift-workflow-state"] = Result("cannot-check", state_reason or "bad-response")
+    out["drift-workflow-state"] = workflow_state_result(reads, report_installed)
     if not isinstance(repo_data, dict):
         for check in [
             "ruleset-missing",
@@ -549,7 +568,11 @@ def run_checks(
     except (OSError, ValueError):
         raise Refusal("agk.toml is not readable TOML (path class agk.toml)", 3) from None
     results: dict[str, Result] = {}
-    results.update(remote_results(Reads(repo or origin_repo(root), api_dir), config))
+    results.update(
+        remote_results(
+            Reads(repo or origin_repo(root), api_dir), config, (root / REPORT_WORKFLOW).is_file()
+        )
+    )
     results["placeholder-team-reviewers"] = placeholder_result(root / "config" / "reviewers.yaml")
     results["placeholder-team-codeowners"] = placeholder_result(root / ".github" / "CODEOWNERS")
     results["origin-head"] = origin_head_result(root)

@@ -1,0 +1,66 @@
+# Weekly product report (SPEC-0011). It runs Mondays at 07:13 UTC (after the metrics at 06:43) and by hand
+# (workflow_dispatch, with an optional `today` date); the report covers the full ISO week before it. GitHub may disable
+# scheduled workflows after a period of repository inactivity (the period is (verify) against current GitHub
+# documentation); then run it by hand. The report is a pure function of the facts document (facts.py), written to the
+# one issue labelled agk-product-report for that week: created, or its body replaced. Its only writes: that issue and
+# the label. It needs `issues: write` with the workflow token; `actions: read` lets the facts read the proof runs.
+name: product-report
+
+on:
+  schedule:
+    - cron: "13 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      today:
+        description: "Run as if today were this date (YYYY-MM-DD); the report covers the ISO week before it"
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+  actions: read
+  issues: write
+
+jobs:
+  product-report:
+    if: ${{ github.ref_name == github.event.repository.default_branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Write the week's report to one issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TODAY: ${{ github.event.inputs.today }}
+        run: |
+          today="${INPUT_TODAY:-$(date -u +%F)}"
+          facts="$RUNNER_TEMP/facts.json"
+          report="$RUNNER_TEMP/report.md"
+          python3 scripts/agk/facts.py --today "$today" --repo "$GITHUB_REPOSITORY" > "$facts"
+          python3 scripts/agk/product_report.py --facts "$facts" --today "$today" > "$report"
+          week=$(sed -n '1s/^<!-- agk-product-report: \(.*\) -->$/\1/p' "$report")
+          if ! printf '%s' "$week" | grep -Eq '^[0-9]{4}-W[0-9]{2}$'; then
+            echo "no report was produced; nothing written"
+            exit 1
+          fi
+          decision=$(python3 scripts/agk/product_report.py --facts "$facts" --today "$today" --print-action)
+          action=$(printf '%s\n' "$decision" | sed -n 1p)
+          printf '%s\n' "$decision" | sed -n '2,$p'
+          title="agk product report $week"
+          head -n 3 "$report"
+          case "$action" in
+            create)
+              gh label create agk-product-report --description "Weekly product report" --color 1d76db || true
+              gh issue create --title "$title" --label agk-product-report --body-file "$report"
+              ;;
+            update\ *)
+              gh issue edit "${action#update }" --title "$title" --body-file "$report"
+              ;;
+            *)
+              echo "no action was chosen; nothing written"
+              exit 1
+              ;;
+          esac

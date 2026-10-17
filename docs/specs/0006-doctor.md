@@ -18,7 +18,7 @@ ADR-0015. The GitHub response shapes used here were read (GET only) from `gbvraj
    target (listed in `kit/manifest.json` `verbatim`) and runs without the plugin (SPEC-0005 rule 2). `/agk:doctor`
    runs this same script and passes `--kit-root` the plugin root (rule 20); it has no logic of its own.
 2. **Read-only.** The script writes no file, makes no commit, runs no `git` command that changes anything, and calls
-   `gh` only as `gh api` with `GET` on the four paths of rule 6. It never reads, prints or stores a token: it holds no
+   `gh` only as `gh api` with `GET` on the paths of rule 6. It never reads, prints or stores a token: it holds no
    credential, `gh` does (SPEC-0005 rule 11). It is not run by
    `make governance` or by any workflow: it needs the network and, for rulesets, rights a CI token lacks.
 3. **Honest result.** Each check ends in exactly one status: `ok`, `fail`, or `cannot-check`. A check that could not
@@ -57,16 +57,16 @@ and the JSON keep it.
    | `placeholder-team-codeowners` | error | `.github/CODEOWNERS` contains `@REPLACE-ME` | same fix |
    | `origin-head` | warn | `refs/remotes/origin/HEAD` does not exist | `git remote set-head origin <default_branch>` (no network; `-a` asks the remote) |
    | `drift-workflow-file` | error | `.github/workflows/drift-audit.yml` is absent, or has no `schedule` with a `cron` | restore the file from the kit |
-   | `drift-workflow-state` | error | the workflow's `state` is not `active` on GitHub | enable the workflow (GitHub disables scheduled workflows after inactivity `(verify)`) |
+   | `drift-workflow-state` | error | the `state` of the drift-audit workflow, or of the product-report workflow where its file is installed, is not `active` on GitHub | enable the workflow (GitHub disables scheduled workflows after inactivity `(verify)`) |
    | `kit-version` | warn | the installed kit's `kit_version` differs from `version` in `agk.toml` | run `/agk:upgrade` (SPEC-0008) |
    | `vendored-missing` | error | a file the installer for `mode` writes verbatim is absent | restore it from the kit |
    | `vendored-differs` | error | a vendored file differs byte for byte from the kit's copy, and the versions match | review `git log -p -- <path>`; restore the kit's copy, or record the deliberate edit in an ADR that names the path class |
    | `default-branch-config` | warn | `default_branch` in `agk.toml` differs from the repository's `default_branch` | set `default_branch` in `agk.toml` |
 
-6. **The four reads.** `gh api repos/{o}/{r}` (default branch, `allow_auto_merge`, `delete_branch_on_merge`,
+6. **The reads (four, and a fifth where the product report is installed).** `gh api repos/{o}/{r}` (default branch, `allow_auto_merge`, `delete_branch_on_merge`,
    `permissions`), `gh api repos/{o}/{r}/rulesets` (the list carries no rules), `gh api repos/{o}/{r}/rulesets/{id}` for
    each ruleset that targets the default branch (rules, `enforcement`, `bypass_actors`, `conditions`), and
-   `gh api repos/{o}/{r}/actions/workflows/drift-audit.yml` (`state`). `{o}/{r}` comes from `--repo`, else from the URL of
+   `gh api repos/{o}/{r}/actions/workflows/drift-audit.yml` (`state`); and, only where `.github/workflows/product-report.yml` exists in ROOT, `gh api repos/{o}/{r}/actions/workflows/product-report.yml` (`state`), read by the same check `drift-workflow-state` (a file the repository removed is reported by `vendored-missing`, not read here). `{o}/{r}` comes from `--repo`, else from the URL of
    the remote `origin` (read with `git config --get remote.origin.url`, read-only); a host other than github.com, or no
    `origin`, is `not-github`. Whether a non-admin can read a ruleset's rules is `(verify)`; a 403 or 404 on a ruleset read is
    `cannot-check` (`no-admin`), and never `ruleset-missing`. An empty ruleset list is `ruleset-missing` only when
