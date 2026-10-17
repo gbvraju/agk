@@ -96,7 +96,37 @@ write `REQ-nnn ACn` for requirements the sandbox does not have. Strays never blo
 sandbox's weekly audit. In `adopt` mode `tests/kit` is excluded from the search; in `init` mode it is not. Recorded as a question
 for the maintainers (Q-K4-134 in ADR-0026); nothing was changed in the sandbox.
 
-## 5. Not done here
+## 5. The proof check on this repository, after Q-K4-133 was ruled
+
+Date: 2026-10-17 (from `date -u`). `project_tests` of this repository now runs the kit tests (`AGK_KIT_TESTS=1 python3 -m pytest -c
+tests/kit/pytest.ini tests/kit tests/kit_dev -q`). `proof.py --base origin/main` was run on the branch of the pull request that adds it
+(base `a11eaf3`; the tests of the pull request placed on the base; each run took 9 to 10 minutes of the 900 seconds allowed).
+
+First run, on the commit that changed `agk.toml`:
+
+```
+$ python3 scripts/agk/proof.py --base origin/main
+proof: not-proven (red-on-head)
+exit=1        # run 1 (base): 39 failed, 821 passed, 3 skipped; run 2 (head): 2 failed, 860 passed, 3 skipped
+```
+
+The head was red: two kit-only tests (`test_ac2_make_test_and_testpaths_cover_all_of_tests`, `test_ac1_templates_carry_project_tests_and_no_pyproject_stamp`)
+still asserted the old `project_tests` of this repository's `agk.toml`. The check found a defect of the change that the pull request's own
+tests had not exercised (`make test` was not yet run on that commit). They were corrected.
+
+Second run, on the corrected commit:
+
+```
+$ python3 scripts/agk/proof.py --base origin/main
+proof: proven
+exit=0        # run 1 (base): 40 failed, 820 passed, 3 skipped; run 2 (head): 862 passed, 3 skipped
+```
+
+So for a real change with its tests here the check now reads `proven`; before Q-K4-133 it read `not-proven (green-on-base)` on every pull
+request (the same command run on the earlier head of the pull request, recorded in ADR-0026). The `proof` job of the pull request itself
+reads the same way on CI.
+
+## 6. Not done here
 
 - The first real `proof` job and the seeded pull requests of SPEC-0010 rule 20 are recorded in `docs/runs/proof-checks-live-2.md`, a docs
   pull request of its own, after the pull request of part (b) is merged.

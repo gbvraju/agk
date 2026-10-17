@@ -4096,7 +4096,7 @@
     "tests/kit/test_check_pr_body.py": ["7e1614c63e68b3c9f31bfd12502824f3f154f9490d057590a13a6013f1f64756"],
     "tests/kit/test_check_protected_changes.py": ["b147ae0f0956dfb4afdcb49459fe2aaba062c5c9c5bd627ade904a2a4c27961b"],
     "tests/kit/test_check_requirements.py": ["5ed4d3e9f2d0b14e6016116530254fb20c68948c555e2e550dfdcecf81f1a766"],
-    "tests/kit/test_check_requirements_ac.py": ["8577c302d6f107595a5d113f7c18d3f16114ff8bcf1e847d6131c74262bc4b1f"],
+    "tests/kit/test_check_requirements_ac.py": ["f1f65f99f0de3d38e55a2f1cf971d56298262a066c8164dc3e758d508245b65f"],
     "tests/kit/test_check_specs.py": ["5f65640ad6582efcd8f7eb2a8c94bc1f29208487d42bd191d33c8d2440c88826"],
     "tests/kit/test_common_refactors.py": ["2c6695dc44b6f0d3f4f9ac61fd9848b90ce18bc6933176ed8a8cbe0bf1706f0a"],
     "tests/kit/test_doctor.py": ["72b05c8011035008ce42261e146e80667240a6de9042609149aa1425595b9cc2"],

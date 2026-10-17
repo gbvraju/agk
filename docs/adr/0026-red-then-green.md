@@ -1,12 +1,12 @@
 # ADR-0026: red-then-green, the proof check (SPEC-0010 (b)), kit 0.14.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-16
 - Deciders: maintainers
 - Related: ADR-0021, ADR-0023, ADR-0024
 - Requirements: REQ-016
 
-Protected classes: `scripts/agk/`, `.github/`, `tests/kit/`, `kit/`, `.claude-plugin/`
+Protected classes: `scripts/agk/`, `.github/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `.claude-plugin/`, `agk.toml`
 
 ## Context
 
@@ -40,29 +40,49 @@ request is opened by the pilot's own session).
    and additions to `tests/kit/test_workflow.py` (job name, events, permissions, no `pull_request_target`, pins, the four outcome
    steps, and the step's shell run in a throwaway repository).
 7. **Live proof of the sandbox** (criterion b, rule 21 (c)) is recorded in `docs/runs/proof-checks-live-1.md`: the sandbox passes.
-8. **Kit 0.14.0** (a minor: a new installed script, workflow and tests); the plugin version follows; `kit/hashes.json` is regenerated.
+8. **This repository's `project_tests` runs the kit tests** (`Q-K4-133`, ruled): `AGK_KIT_TESTS=1 python3 -m pytest -c tests/kit/pytest.ini
+   tests/kit tests/kit_dev -q`, the command `agk-test` collects them with, so the proof check reads `proven` for a real behaviour change
+   here. `agk.toml` is a protected path and this ADR names the class. Which job ran what, before and after:
+
+   | Where | Before | After |
+   | --- | --- | --- |
+   | governance, step "Tests of the checks" (`agk-test`) | the kit tests, once | the kit tests, once (unchanged) |
+   | governance, step "Project tests" (`agk-project-test`) | `pytest tests --ignore=tests/kit_dev`, which collects nothing without `AGK_KIT_TESTS` and exits 5, mapped to 0 | the kit tests, the same command as above |
+   | `make test` | `agk-test`, then the empty project tests | `agk-test`, then the kit tests again |
+   | `proof` (not required) | the empty command twice: always `green-on-base` | the kit tests twice: base with the pull request's tests, head |
+
+   The kit tests therefore run **twice** in a governance run (before: once). The duplicate `agk-project-test` run is **not removed**: the
+   step is in `governance.yml`, and `agk.mk` and the `Makefile` carry the target, all verbatim kit files, so removing it would change
+   every installed repository, not only this one; the instruction was to remove it only if the kit tests still ran exactly once. **No
+   check is weakened**: every check and every test that ran before still runs, with the same command and the same exit handling for the
+   kit tests; the only change is added work (about one more run of the suite per governance run). `Q-K4-135` asks whether to remove it.
+9. **`D7` leaves out `tests/kit` in an adopted repository** (`Q-K4-134`, ruled): the marker search of `adopt` mode already excludes it
+   (`common.ac_markers_for`), and `D7` uses that search; one test shows an `adopt` repository with a stray marker under `tests/kit` has no
+   `D7` while an `init` repository has one. No code change was needed.
+10. **Kit 0.14.0** (a minor: a new installed script, workflow and tests); the plugin version follows; `kit/hashes.json` is regenerated.
 
 ## Consequences
 
 - Installed repositories receive the workflow and the script at their next `agk upgrade`; the job reports only, and blocks nothing.
 - The first real `proof` job on `main` is read after this merges (`docs/runs/proof-checks-live-2.md`, a docs pull request of its own),
   together with the seeded pull request of rule 20.
-- This repository's own `project_tests` runs no kit test (see `Q-K4-133`), so until that is decided a pull request that only adds kit
-  tests reads `not-proven (green-on-base)` here.
+- This repository's `project_tests` runs the kit tests (item 8), so a pull request that adds a kit test for a real change reads `proven`
+  here; the cost is a second run of the suite in each governance run and two in each `proof` run.
 
 ## Questions
 
-| Q | Question | Reading taken |
+| Q | Question | Ruling (accepted unless said) |
 | --- | --- | --- |
-| Q-K4-126 | Exit status of a refused setting and of an environment error. | an invalid `proof_timeout` is exit 2 (a refusal, with usage); an unresolved ref, no base, a directory that is not a work tree, or a worktree that cannot be added or removed is exit 3 |
-| Q-K4-127 | Where the shown output goes when stdout is one line or one JSON object. | stderr, the last 40 lines of each run |
-| Q-K4-128 | Rule 12 puts `timeout` before `proven` and `green-on-base`. | both runs are made unless run 1 times out, so that a timeout in run 2 wins over `green-on-base` |
-| Q-K4-129 | An unedited template line `Behaviour: unchanged (optional; ...)` is not the exact line. | it fails the check, so the author deletes it or edits it to the exact line; indented lines and lines in a code fence are neither checked nor a declaration |
-| Q-K4-130 | How the command is run and how tests are placed. | `sh -c COMMAND` in its own process group (the scanner-hygiene rule forbids `shell=True`), killed as a group on a timeout; a test file is read from the head commit with `git show` and written over the same path on the base worktree |
-| Q-K4-131 | In a `pull_request` run `HEAD` is the merge commit. | the workflow passes `--head` the pull request's head SHA, which is also the `head_sha` that `facts.py` reads; the base is the merge base of `AGK_BASE` (the pull request base) and that head |
-| Q-K4-132 | A `Behaviour:` declaration with no test change. | `skipped` is decided before `no-test-files`, as rule 12 orders |
-| Q-K4-133 | This repository's `project_tests` is `python3 -m pytest tests -q --ignore=tests/kit_dev; ...`, and the kit tests are collected only with `AGK_KIT_TESTS=1` (as `agk-test` sets). The command collects nothing, exits 0 and so reads `green-on-base` on every pull request here (confirmed by running `proof.py --base origin/main` on this branch: `proof: not-proven (green-on-base)`). | nothing changed: the maintainers choose (point `project_tests` at the kit tests and drop the duplicate `agk-project-test` run, or keep the reading as a known false flag for rule 22) |
-| Q-K4-134 | The sandbox (kit 0.9.0, `init` mode) counts 239 stray markers from the kit's own tests under `tests/kit/`. | nothing changed in the sandbox; strays never block; the maintainers decide whether its audit should exclude `tests/kit` as `adopt` mode does |
+| Q-K4-126 ruled | Exit status of a refused setting and of an environment error. | an invalid `proof_timeout` is exit 2 (a refusal, with usage); an unresolved ref, no base, a directory that is not a work tree, or a worktree that cannot be added or removed is exit 3 |
+| Q-K4-127 ruled | Where the shown output goes when stdout is one line or one JSON object. | stderr, the last 40 lines of each run |
+| Q-K4-128 ruled | Rule 12 puts `timeout` before `proven` and `green-on-base`. | both runs are made unless run 1 times out, so that a timeout in run 2 wins over `green-on-base` |
+| Q-K4-129 ruled | An unedited template line `Behaviour: unchanged (optional; ...)` is not the exact line. | it fails the check, so the author deletes it or edits it to the exact line; indented lines and lines in a code fence are neither checked nor a declaration |
+| Q-K4-130 ruled | How the command is run and how tests are placed. | `sh -c COMMAND` in its own process group (the scanner-hygiene rule forbids `shell=True`), killed as a group on a timeout; a test file is read from the head commit with `git show` and written over the same path on the base worktree |
+| Q-K4-131 ruled | In a `pull_request` run `HEAD` is the merge commit. | the workflow passes `--head` the pull request's head SHA, which is also the `head_sha` that `facts.py` reads; the base is the merge base of `AGK_BASE` (the pull request base) and that head |
+| Q-K4-132 ruled | A `Behaviour:` declaration with no test change. | `skipped` is decided before `no-test-files`, as rule 12 orders |
+| Q-K4-133 ruled | This repository's `project_tests` is `python3 -m pytest tests -q --ignore=tests/kit_dev; ...`, and the kit tests are collected only with `AGK_KIT_TESTS=1` (as `agk-test` sets). The command collects nothing, exits 0 and so reads `green-on-base` on every pull request here (confirmed by running `proof.py --base origin/main` on this branch: `proof: not-proven (green-on-base)`). | ruled: `project_tests` runs the kit tests (item 8) |
+| Q-K4-134 ruled | The sandbox (kit 0.9.0, `init` mode) counts 239 stray markers from the kit's own tests under `tests/kit/`. | ruled: `D7` excludes `tests/kit` in adopted repositories, as `adopt` mode does (item 9); the sandbox is in `init` mode and is unchanged |
+| Q-K4-135 (open) | The duplicate `agk-project-test` run (item 8) costs one more run of the kit tests per governance run. Removing the step or the target changes verbatim kit files for every installed repository. | not removed; the maintainers decide, in a pull request of its own |
 
 ## Residual
 

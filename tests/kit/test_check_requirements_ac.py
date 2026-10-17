@@ -153,3 +153,25 @@ def test_ac1_shortfalls_and_strays_are_computed_once_in_common():
     for name in ("check_requirements.py", "drift_audit.py"):
         source = (ROOT / "scripts" / "agk" / name).read_text(encoding="utf-8")
         assert "parse_acceptance" not in source and "find_ac_markers" not in source
+
+
+def test_ac1_d7_leaves_out_the_kit_tests_in_an_adopted_repository_only(repo):
+    """REQ-015 AC1: rule 4 (the search of `adopt` mode leaves out `tests/kit`, and so does D7)."""
+    requirements = "# Requirements\n\n" + requirement("@001", "planned").replace("@", "REQ-")
+    files = {
+        "docs/requirements.md": requirements,
+        "tests/test_t.py": "# @001 AC1\n".replace("@", "REQ-"),
+        "tests/kit/test_k.py": "# @077 AC1\n".replace("@", "REQ-"),
+    }
+    base = 'default_branch = "main"\ntest_dirs = ["tests"]\nac_coverage = "block"\n'
+    repo.commit({"agk.toml": base + 'mode = "init"\n', **files})
+    init = [ln for ln in repo.run("drift_audit.py", "--today", "2026-10-15").stdout.splitlines()]
+    assert (
+        [ln for ln in init if ln.startswith("- D7 ")]
+        == [ln for ln in init if ln.startswith("- D7 ") and "tests/kit/test_k.py:1" in ln]
+        != []
+    )
+    repo.commit({"agk.toml": base + 'mode = "adopt"\n'})
+    adopted = repo.run("drift_audit.py", "--today", "2026-10-15").stdout
+    assert "- D7 " not in adopted
+    assert check(repo).returncode == 0
