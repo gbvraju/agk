@@ -74,7 +74,7 @@ were read on 2026-10-16.
     - *Needs you.* The inbox of rule 3, all items, grouped by kind in the order of the table, each group headed by its count.
     - *At risk.* (i) each overdue residual (rule 3's kind, with its days overdue = `today - due`); (ii) each open pull request older
       than 7 days (days = `today - date(created_at)`); (iii) each pull request merged or closed in the week with two or more `fix`
-      verdicts or any `rejected` verdict (`was sent back N times`); (iv) the drift counts of the facts' `drift` section (SPEC-0009 rule 15): `drift audit: N findings (D1 a, D2 b, D3 c, D4 d, D5 e, D6 f)`,
+      verdicts or any `rejected` verdict (`was sent back N times`); (iv) the drift counts of the facts' `drift` section (SPEC-0009 rule 15): `drift audit: N findings (D1 a, D2 b, ...)`, one count for every kind that `drift.counts` holds (`D1` to `D7` today), in order,
       with the link to the open drift-audit issue (`issues[]` with label `agk-drift-audit`); a count that the document marks `"unknown"` is
       printed as `unknown`, and with no open drift issue the line has no link and says `no open drift issue` (ruling on Q-K4-48).
     - *Cost.* For each pull request merged in the week: the hours from `created_at` to `merged_at`, rounded half-up to 0.1 as

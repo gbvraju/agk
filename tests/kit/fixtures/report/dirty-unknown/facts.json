@@ -1,0 +1,431 @@
+{
+  "adrs": [
+    {
+      "amends": [],
+      "date": "2026-09-01",
+      "id": "ADR-0001",
+      "protected_classes": [],
+      "requirements": [],
+      "status": "Accepted",
+      "title": "Accepted one"
+    },
+    {
+      "amends": [],
+      "date": "2026-10-12",
+      "id": "ADR-0002",
+      "protected_classes": [],
+      "requirements": [],
+      "status": "Proposed",
+      "title": "Proposed one"
+    }
+  ],
+  "commit": "c0ffee0000000000000000000000000000000000",
+  "config": {
+    "default_branch": "main",
+    "inbox_hours": 48,
+    "project_tests_declared": true,
+    "test_dirs": [
+      "tests"
+    ],
+    "test_patterns": [
+      "probe_*.py"
+    ]
+  },
+  "dirty": true,
+  "drift": {
+    "counts": {
+      "D1": 0,
+      "D2": 0,
+      "D3": 0,
+      "D4": 0,
+      "D5": 0,
+      "D6": "unknown",
+      "D7": 0
+    },
+    "total": "unknown"
+  },
+  "issues": [
+    {
+      "label": "agk-metrics",
+      "number": 2,
+      "state": "closed",
+      "title": "agk metrics 2026-W40"
+    },
+    {
+      "label": "agk-metrics",
+      "number": 3,
+      "state": "closed",
+      "title": "agk metrics 2026-W41"
+    },
+    {
+      "label": "agk-drift-audit",
+      "number": 4,
+      "state": "open",
+      "title": "agk drift audit 2026-10-10"
+    },
+    {
+      "label": "agk-product-report",
+      "number": 5,
+      "state": "closed",
+      "title": "agk product report 2026-W40"
+    }
+  ],
+  "markers": "unknown",
+  "pull_requests": [
+    {
+      "base": "main",
+      "behaviour": null,
+      "closed_at": "2026-10-08T10:00:00Z",
+      "created_at": "2026-10-06T10:00:00Z",
+      "files": [
+        "docs/a.md",
+        "tests/probe_a.py"
+      ],
+      "head": "05dddddddddddddddddddddddddddddddddddddd",
+      "merged_at": "2026-10-08T10:00:00Z",
+      "number": 5,
+      "proof": "proven",
+      "state": "merged",
+      "title": "Change number 5",
+      "verdicts": [
+        {
+          "at": "2026-10-07T12:00:00Z",
+          "kind": "cleared",
+          "sha": "05abcde"
+        }
+      ]
+    },
+    {
+      "base": "main",
+      "behaviour": "unchanged",
+      "closed_at": "2026-10-09T09:45:00Z",
+      "created_at": "2026-10-07T08:30:00Z",
+      "files": [
+        "tests/probe_b.py"
+      ],
+      "head": "06dddddddddddddddddddddddddddddddddddddd",
+      "merged_at": "2026-10-09T09:45:00Z",
+      "number": 6,
+      "proof": "not-proven",
+      "state": "merged",
+      "title": "Change number 6",
+      "verdicts": [
+        {
+          "at": "2026-10-07T12:00:00Z",
+          "kind": "fix",
+          "sha": null
+        },
+        {
+          "at": "2026-10-08T12:00:00Z",
+          "kind": "fix",
+          "sha": null
+        },
+        {
+          "at": "2026-10-09T09:00:00Z",
+          "kind": "cleared",
+          "sha": "06abcde"
+        }
+      ]
+    },
+    {
+      "base": "main",
+      "behaviour": null,
+      "closed_at": "2026-10-10T10:00:00Z",
+      "created_at": "2026-10-09T23:59:00Z",
+      "files": [
+        "tests/probe_c.py"
+      ],
+      "head": "07dddddddddddddddddddddddddddddddddddddd",
+      "merged_at": "2026-10-10T10:00:00Z",
+      "number": 7,
+      "proof": "unknown",
+      "state": "merged",
+      "title": "Change number 7",
+      "verdicts": [
+        {
+          "at": "2026-10-07T12:00:00Z",
+          "kind": "cleared",
+          "sha": "07abcde"
+        }
+      ]
+    },
+    {
+      "base": "main",
+      "behaviour": "unchanged",
+      "closed_at": "2026-10-07T10:00:00Z",
+      "created_at": "2026-10-07T10:00:00Z",
+      "files": [
+        "tests/probe_d.py"
+      ],
+      "head": "08dddddddddddddddddddddddddddddddddddddd",
+      "merged_at": "2026-10-07T10:00:00Z",
+      "number": 8,
+      "proof": "skipped",
+      "state": "merged",
+      "title": "Change number 8",
+      "verdicts": [
+        {
+          "at": "2026-10-07T12:00:00Z",
+          "kind": "cleared",
+          "sha": "08abcde"
+        }
+      ]
+    },
+    {
+      "base": "main",
+      "behaviour": null,
+      "closed_at": null,
+      "created_at": "2026-10-01T10:00:00Z",
+      "files": [],
+      "head": "09dddddddddddddddddddddddddddddddddddddd",
+      "merged_at": null,
+      "number": 9,
+      "proof": "unknown",
+      "state": "open",
+      "title": "Change number 9",
+      "verdicts": []
+    },
+    {
+      "base": "main",
+      "behaviour": null,
+      "closed_at": null,
+      "created_at": "2026-10-13T10:00:00Z",
+      "files": [],
+      "head": "0adddddddddddddddddddddddddddddddddddddd",
+      "merged_at": null,
+      "number": 10,
+      "proof": "unknown",
+      "state": "open",
+      "title": "Change number 10",
+      "verdicts": []
+    },
+    {
+      "base": "main",
+      "behaviour": null,
+      "closed_at": null,
+      "created_at": "2026-10-12T10:00:00Z",
+      "files": [],
+      "head": "0bdddddddddddddddddddddddddddddddddddddd",
+      "merged_at": null,
+      "number": 11,
+      "proof": "unknown",
+      "state": "open",
+      "title": "Change number 11",
+      "verdicts": []
+    },
+    {
+      "base": "main",
+      "behaviour": null,
+      "closed_at": "2026-10-08T10:00:00Z",
+      "created_at": "2026-10-05T10:00:00Z",
+      "files": [],
+      "head": "0cdddddddddddddddddddddddddddddddddddddd",
+      "merged_at": null,
+      "number": 12,
+      "proof": "unknown",
+      "state": "closed",
+      "title": "Change number 12",
+      "verdicts": [
+        {
+          "at": "2026-10-07T12:00:00Z",
+          "kind": "rejected",
+          "sha": null
+        }
+      ]
+    },
+    {
+      "base": "main",
+      "behaviour": null,
+      "closed_at": null,
+      "created_at": "2026-10-02T10:00:00Z",
+      "files": [],
+      "head": "0ddddddddddddddddddddddddddddddddddddddd",
+      "merged_at": null,
+      "number": 13,
+      "proof": "unknown",
+      "state": "open",
+      "title": "Change number 13",
+      "verdicts": [
+        {
+          "at": "2026-10-07T12:00:00Z",
+          "kind": "cleared",
+          "sha": "0dabcde"
+        }
+      ]
+    },
+    {
+      "base": "main",
+      "behaviour": null,
+      "closed_at": "2026-09-22T10:00:00Z",
+      "created_at": "2026-09-20T10:00:00Z",
+      "files": [
+        "tests/probe_a.py"
+      ],
+      "head": "0edddddddddddddddddddddddddddddddddddddd",
+      "merged_at": "2026-09-22T10:00:00Z",
+      "number": 14,
+      "proof": "proven",
+      "state": "merged",
+      "title": "Change number 14",
+      "verdicts": [
+        {
+          "at": "2026-10-07T12:00:00Z",
+          "kind": "cleared",
+          "sha": "0eabcde"
+        }
+      ]
+    }
+  ],
+  "questions": "unknown",
+  "repo": "demo-org/demo-repo",
+  "requirements": [
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "t"
+        },
+        {
+          "id": "AC2",
+          "text": "t"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-001",
+      "line": 3,
+      "status": "done",
+      "title": "Alpha thing"
+    },
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "t"
+        },
+        {
+          "id": "AC2",
+          "text": "t"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-002",
+      "line": 8,
+      "status": "done",
+      "title": "Beta thing"
+    },
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "t"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-003",
+      "line": 13,
+      "status": "in-progress",
+      "title": "Gamma thing"
+    },
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "t"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-004",
+      "line": 18,
+      "status": "in-progress",
+      "title": "Delta thing"
+    },
+    {
+      "criteria": [],
+      "criteria_form": "unstructured",
+      "id": "REQ-005",
+      "line": 23,
+      "status": "done",
+      "title": "Epsilon thing"
+    },
+    {
+      "criteria": "unknown",
+      "criteria_form": "structured",
+      "id": "REQ-006",
+      "line": 28,
+      "status": "done",
+      "title": "Zeta thing"
+    },
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "t"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-007",
+      "line": 33,
+      "status": "planned",
+      "title": "Eta thing"
+    },
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "t"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-008",
+      "line": 38,
+      "status": "planned",
+      "title": "Theta thing"
+    },
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "t"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-009",
+      "line": 43,
+      "status": "done",
+      "title": "Iota thing"
+    }
+  ],
+  "residuals": "unknown",
+  "schema": 1,
+  "specs": [
+    {
+      "id": "SPEC-0001",
+      "notes": null,
+      "open_questions": [],
+      "requirements": [
+        "REQ-001",
+        "REQ-002",
+        "REQ-003",
+        "REQ-004",
+        "REQ-005",
+        "REQ-006",
+        "REQ-009"
+      ],
+      "status": "Approved",
+      "title": "Approved one"
+    },
+    {
+      "id": "SPEC-0002",
+      "notes": "docs/runs/spec-0002-notes.md",
+      "open_questions": [
+        "Q-X1-1"
+      ],
+      "requirements": [
+        "REQ-008"
+      ],
+      "status": "Draft",
+      "title": "Draft one"
+    }
+  ],
+  "today": "2026-10-14"
+}
