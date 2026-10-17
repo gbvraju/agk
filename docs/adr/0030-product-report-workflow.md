@@ -1,6 +1,6 @@
 # ADR-0030: the weekly product report workflow, its installation and the doctor's coverage (SPEC-0011 (b)), kit 0.16.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-17
 - Deciders: maintainers
 - Related: ADR-0021, ADR-0025, ADR-0029
@@ -50,11 +50,11 @@ maintainers run from `docs/runs/pilot-upgrade-brief.md`, and the live run in thi
 
 | Q | Question | Reading taken (conservative) |
 | --- | --- | --- |
-| Q-K4-143 | The brief wants the live run recorded in this pull request; a new workflow cannot be dispatched before it is on the default branch. | the live run and `docs/runs/product-report-live-1.md` are a docs pull request after the merge; this one carries the workflow's tests, run against a stub `gh` and a fixture |
-| Q-K4-144 | Rule 6 of SPEC-0006 names four reads; a fifth is needed for the state of the second workflow. | the fifth read is made only where the file exists; a non-active state fails the check even when the other workflow could not be read |
-| Q-K4-145 | Rule 15 shows `facts.py --today "$today"`; the repository is otherwise taken from `origin`. | the workflow also passes `--repo "$GITHUB_REPOSITORY"` (no guess from a remote URL); `--print-action` prints one or two lines, the first is the action and the second a notice |
-| Q-K4-146 | A target that was installed before this kit has no `inbox_hours`. | no change to its `agk.toml`; the facts default of 48 applies |
-| Q-K4-147 | The brief asks for a "dry run" of the report in the pilot; the workflow has no dry-run mode and its one write is the issue. | the pilot brief renders locally from `facts.py` first (writes nothing), then dispatches once, which creates or updates the week's issue |
+| Q-K4-143 ruled | The brief wants the live run recorded in this pull request; a new workflow cannot be dispatched before it is on the default branch. | the live run and `docs/runs/product-report-live-1.md` are a docs pull request after the merge; this one carries the workflow's tests, run against a stub `gh` and a fixture |
+| Q-K4-144 ruled | Rule 6 of SPEC-0006 names four reads; a fifth is needed for the state of the second workflow. | the fifth read is made only where the file exists; a non-active state fails the check even when the other workflow could not be read |
+| Q-K4-145 ruled | Rule 15 shows `facts.py --today "$today"`; the repository is otherwise taken from `origin`. | the workflow also passes `--repo "$GITHUB_REPOSITORY"` (no guess from a remote URL); `--print-action` prints one or two lines, the first is the action and the second a notice |
+| Q-K4-146 ruled | A target that was installed before this kit has no `inbox_hours`. | no change to its `agk.toml`; the facts default of 48 applies |
+| Q-K4-147 ruled | The brief asks for a "dry run" of the report in the pilot; the workflow has no dry-run mode and its one write is the issue. | the pilot brief renders locally from `facts.py` first (writes nothing), then dispatches once, which creates or updates the week's issue |
 
 ## Residual
 
