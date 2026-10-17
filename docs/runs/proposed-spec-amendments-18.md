@@ -3,7 +3,7 @@
 Date: 2026-10-17 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). The paths:
 `docs/specs/0011-inbox-and-report.md`, `docs/specs/0009-facts.md`.
 
-**Not applied.** The readings `Q-K4-136` and `Q-K4-137` of ADR-0029 stand until the maintainers rule on them.
+**Item 1 applied by ADR-0029** (2026-10-17) on the maintainers' ruling of `Q-K4-137`. **Item 2 not applied**: the interim reading of `Q-K4-136` (link the directory) stands, and ADR-0029 carries the residual (due 2026-11-30).
 
 ## SPEC-0011 (`docs/specs/0011-inbox-and-report.md`)
 

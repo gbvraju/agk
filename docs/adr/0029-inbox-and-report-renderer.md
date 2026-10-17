@@ -1,6 +1,6 @@
 # ADR-0029: the decision inbox and the product report renderer (SPEC-0011 (a)), kit 0.15.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-17
 - Deciders: maintainers
 - Related: ADR-0021, ADR-0023, ADR-0025
@@ -34,8 +34,12 @@ checked by tests alone is reviewed first. Nothing in this pull request runs on a
    `AGK_WRITE_GOLDENS=1` rewrites them and a person reads the diff.
 5. **Kit 0.15.0**: `kit/manifest.json` lists the script, the test and the fixtures; `kit/hashes.json` is regenerated; the plugin version
    follows.
-6. **Where the text differs from SPEC-0011** (readings, below, and `docs/runs/proposed-spec-amendments-18.md`): the drift line prints
-   every kind the facts carry, `D1` to `D7`.
+6. **SPEC-0011 rule 10 (iv) is amended** (Q-K4-137, item 1 of `docs/runs/proposed-spec-amendments-18.md`, accepted by the maintainers): the
+   drift line prints one count for every kind the facts' `drift.counts` holds (`D1` to `D7` today). The interim reading of Q-K4-136 stands:
+   an inbox line for a spec or an ADR links the `docs/specs` or `docs/adr` directory at the facts commit, until the facts carry a path
+   (residual below); item 2 of the proposal is not applied.
+7. **Goldens store `<pr>` in place of the pull request marker** so that installed files stay neutral; the test restores it before
+   comparing; nothing is excluded from the neutrality check.
 
 ## Consequences
 
@@ -51,16 +55,17 @@ checked by tests alone is reviewed first. Nothing in this pull request runs on a
 
 | Q | Question | Reading taken (conservative) |
 | --- | --- | --- |
-| Q-K4-136 | Rules 3 and 11 want every line to link to evidence, and the facts carry no path for a spec or an ADR. | the line links to `docs/specs` or `docs/adr` at the facts commit (a directory), not to the file; the facts could carry the path (proposal 18, item 2) |
-| Q-K4-137 | Rule 10 (iv) names `D1` to `D6`; the facts' `drift.counts` now hold `D7`. | the line prints every kind present, sorted (proposal 18, item 1); an unknown count is `unknown` |
-| Q-K4-138 | Rule 9 words a proven line `REQ-001 is proven`; the reader needs the evidence. | `REQ-001 is proven (last change PR #44: proven)` or `skipped (declared unchanged)`; two reasons are added to the rule's four, `it lists no acceptance criteria` and `its acceptance criteria are unknown` |
-| Q-K4-139 | `inbox_hours` from the facts is `unknown` when the key is not an integer. | the pull-request group prints one `unknown` line naming `inbox_hours`; no default is invented in the renderer (the 48 comes from the facts) |
-| Q-K4-140 | Rules 11 and 16 give no way to print the issue title. | the title is derived by the workflow from the marker line; there is no `--print-title` |
-| Q-K4-141 | Rule 11: a footer line for an issue that does not exist. | `metrics: none found` and `drift audit: none found`; `unknown` when `issues` is unknown |
-| Q-K4-142 | The Cost totals when one figure is unknown. | the total is `unknown`, never a sum of the known ones |
+| Q-K4-136 ruled | Rules 3 and 11 want every line to link to evidence, and the facts carry no path for a spec or an ADR. | the line links to `docs/specs` or `docs/adr` at the facts commit (a directory), not to the file; the facts could carry the path (proposal 18, item 2) |
+| Q-K4-137 ruled | Rule 10 (iv) names `D1` to `D6`; the facts' `drift.counts` now hold `D7`. | the line prints every kind present, sorted (proposal 18, item 1); an unknown count is `unknown` |
+| Q-K4-138 ruled | Rule 9 words a proven line `REQ-001 is proven`; the reader needs the evidence. | `REQ-001 is proven (last change PR #44: proven)` or `skipped (declared unchanged)`; two reasons are added to the rule's four, `it lists no acceptance criteria` and `its acceptance criteria are unknown` |
+| Q-K4-139 ruled | `inbox_hours` from the facts is `unknown` when the key is not an integer. | the pull-request group prints one `unknown` line naming `inbox_hours`; no default is invented in the renderer (the 48 comes from the facts) |
+| Q-K4-140 ruled | Rules 11 and 16 give no way to print the issue title. | the title is derived by the workflow from the marker line; there is no `--print-title` |
+| Q-K4-141 ruled | Rule 11: a footer line for an issue that does not exist. | `metrics: none found` and `drift audit: none found`; `unknown` when `issues` is unknown |
+| Q-K4-142 ruled | The Cost totals when one figure is unknown. | the total is `unknown`, never a sum of the known ones |
 
 ## Residual
 
+- 2026-10-17: the facts carry a path for each spec and ADR so inbox lines link the file (due 2026-11-30).
 - 2026-10-17: the dates `2026-10-31` (the report in the pilot) and `2026-11-02` (its first run) depend on the second pull request;
   no step of it is done here (due 2026-10-31).
 - 2026-10-17: the spec's tests of rule 18 for the workflow (`test_product_report_workflow.py`) are not in this pull request; they come
