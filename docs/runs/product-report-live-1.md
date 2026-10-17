@@ -47,6 +47,13 @@ Date: 2026-10-17 (from `date -u`). Kit 0.16.0 on `main` at `8cb925c` (the merge 
 - `(verify)`: whether GitHub keeps the scheduled run enabled after 60 days without repository activity (SPEC-0011 residual); the
   doctor's `drift-workflow-state` now reports this workflow too.
 
+## Maintainers' ruling (2026-10-18)
+
+REQ-001 and REQ-003 read `not-proven` because the proof job of PR #60 ran without pytest (`red-on-head`, an environment fault fixed by
+PR #61 and PR #63), not because their behaviour is unproven. This is a known false flag for criterion c. It is resolved when the next
+change to either requirement reads `proven`, and is tracked as a residual (due 2026-10-31). A second residual asks that the Proven
+line print the proof reason next to `not-proven` (for example `red-on-head`), due 2026-11-15. Both are in `docs/runs/residuals.md`.
+
 ## Not done here
 
 The pilot upgrade (`docs/runs/pilot-upgrade-brief.md`) and the two weeks of product-owner answers (criterion a) are the maintainers'
