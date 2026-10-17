@@ -1,11 +1,13 @@
-"""PR body must carry `Advances: REQ-nnn` and a dated `Build-state row:` (file or stdin)."""
+"""PR body must carry `Advances: REQ-nnn` and a dated `Build-state row:` (file or stdin).
+
+An optional `Behaviour:` line must be exactly `Behaviour: unchanged` (SPEC-0010 rule 18)."""
 
 from __future__ import annotations
 
 import re
 import sys
 
-from common import REQ_ID, CheckError, run
+from common import BEHAVIOUR_UNCHANGED, REQ_ID, CheckError, behaviour_lines, run
 
 NAME = "pr-body"
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -37,6 +39,8 @@ def main(argv: list[str] | None = None) -> int:
     row = field(text, "Build-state row:")
     if not row or not DATE.search(row):
         problems.append("'Build-state row:' line with a YYYY-MM-DD date is required")
+    if any(line != BEHAVIOUR_UNCHANGED for line in behaviour_lines(text)):
+        problems.append("'Behaviour:' must be 'unchanged'")
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     if not problems:

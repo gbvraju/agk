@@ -26,6 +26,7 @@ import metrics
 from common import (
     REQ_ID,
     CheckError,
+    declares_unchanged,
     find_ac_markers,
     git,
     load_config,
@@ -50,8 +51,6 @@ SPEC_TITLE = re.compile(r"^# SPEC-\d{4}:\s*(.+?)\s*$")
 SPEC_STATUSES = ("Draft", "Approved")
 LABELS = ("agk-metrics", "agk-drift-audit", "agk-product-report")
 OUTCOMES = ("proven", "not-proven", "skipped", "unknown")
-BEHAVIOUR = "Behaviour: unchanged"
-FENCE = re.compile(r"^\s*(```|~~~)")
 
 
 # --- the git facts ----------------------------------------------------------------------------
@@ -384,13 +383,7 @@ def behaviour_of(body: Any) -> str | None:
         return None
     if not isinstance(body, str):
         return UNKNOWN
-    fenced = False
-    for line in body.splitlines():
-        if FENCE.match(line):
-            fenced = not fenced
-        elif not fenced and line.strip() == BEHAVIOUR and line == line.strip():
-            return "unchanged"
-    return None
+    return "unchanged" if declares_unchanged(body) else None
 
 
 def verdicts_of(comments: list | None) -> Any:

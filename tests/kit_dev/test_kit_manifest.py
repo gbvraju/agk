@@ -166,7 +166,12 @@ def test_ac2_make_test_and_testpaths_cover_all_of_tests():
         cfg = tomllib.loads(
             (KIT_ROOT / rel).read_text(encoding="utf-8").replace("{{", "").replace("}}", "")
         )
-        assert "-m pytest tests -q" in cfg["project_tests"], rel
+        if rel == "agk.toml":
+            # this repository's own tests are the kit tests, collected as `agk-test` collects them
+            command = cfg["project_tests"]
+            assert "AGK_KIT_TESTS=1" in command and "tests/kit tests/kit_dev" in command, rel
+        else:
+            assert "-m pytest tests -q" in cfg["project_tests"], rel
     template = manifest()["templates"]["pyproject.toml"]
     for rel in ("pyproject.toml", template):
         text = (KIT_ROOT / rel).read_text(encoding="utf-8").replace("{{", "").replace("}}", "")
@@ -241,7 +246,7 @@ def test_ac1_templates_carry_project_tests_and_no_pyproject_stamp():
     pyproject = (KIT_ROOT / templates["pyproject.toml"]).read_text(encoding="utf-8")
     assert "[tool.agk]" not in pyproject
     own = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))
-    assert "pytest tests" in own["project_tests"]
+    assert "pytest" in own["project_tests"] and "tests/kit" in own["project_tests"]
 
 
 def test_ac1_adopt_section_shape_and_paths():
