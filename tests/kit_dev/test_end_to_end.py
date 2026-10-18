@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import clean_env, git
+from conftest import KIT_ROOT, clean_env, git
 
 TODAY = "2026-10-14"  # a Wednesday; the report covers 2026-10-05 to 2026-10-11 (ISO week 2026-W41)
 MERGED = "2026-10-08T10:00:00Z"
@@ -221,3 +221,86 @@ def test_ac1_the_same_flow_in_a_go_layout_with_the_fixtures_under_testdata(stage
         ln.startswith("- REQ-101 is proven (last change PR #1: proven)")
         for ln in section(out["report"], "Proven")
     )
+
+
+def intake(root: Path, *args: str) -> subprocess.CompletedProcess:
+    """The kit-only script, run from the kit against the installed target."""
+    return subprocess.run(
+        [
+            sys.executable,
+            str(KIT_ROOT / "scripts" / "agk" / "intake.py"),
+            *args,
+            "--root",
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+
+
+def test_ac1_an_intake_passes_its_checks_and_governance_and_waits_in_the_report(stage):
+    """REQ-019 AC1: a sentence becomes three files that every check accepts.
+
+    REQ-019 AC2: after the merge the report lists the Draft spec and the Proposed ADR as waiting
+    and delivers nothing.
+    """
+    existing = (
+        "# Requirements\n\n### REQ-101 — Existing\n\n- Acceptance: AC1 x\n- Status: planned\n"
+    )
+    (stage / "docs" / "requirements.md").write_text(existing, encoding="utf-8")
+    commit(stage, "base")
+    git(stage, "switch", "-q", "-c", "intake/work")
+    num = "102"
+    sentence = "Let a visitor export a saved list as a file."
+    out = intake(stage, "ids", "--sentence", sentence, "--ref", "main")
+    ids = json.loads(out.stdout)
+    assert (ids["req"], ids["spec"]) == ("REQ-102", "0001")
+    title = "Export a saved list"
+    stub = intake(
+        stage,
+        "stub",
+        "--req",
+        ids["req"],
+        "--title",
+        title,
+        "--sentence",
+        sentence,
+        "--ref",
+        "main",
+    )
+    assert stub.returncode == 0, stub.stdout
+    ac = (
+        "AC1 Given a saved list, when the visitor exports it, then a file with every item is "
+        "downloaded; AC2 Given an empty list, when the visitor exports it, then no file is made"
+    )
+    with (stage / "docs" / "requirements.md").open("a", encoding="utf-8") as fh:
+        fh.write(f"\n### {ids['req']} — {title}\n\n- Acceptance: {ac}\n- Status: planned\n")
+    spec = (
+        f"# SPEC-{ids['spec']}: {title}\n\n- Status: Draft\n- Owner: reviewer group\n"
+        f"- Requirements: {ids['req']}\n\n## Rules\n\n1. The export lists every item.\n\n"
+        "## Tests\n\n"
+        f"- Rule 1: {marker(num, 'AC1')}\n- Rule 1: {marker(num, 'AC2')}\n\n"
+        "## Proof\n\nRule 1.\n\n## Residual\n\nnone\n\n"
+        f"## Open questions\n\n- Q-S{ids['spec']}-1 which file format?\n"
+    )
+    (stage / "docs" / "specs" / f"{ids['spec']}-{ids['slug']}.md").write_text(
+        spec, encoding="utf-8"
+    )
+    check = intake(stage, "check", "--base", "main")
+    assert check.stdout == "ok intake\n", check.stdout
+    gov = make(stage, "governance")
+    assert gov.returncode == 0, gov.stdout + gov.stderr
+    commit(stage, "intake")
+    git(stage, "switch", "-q", "main")
+    git(stage, "merge", "-q", "--ff-only", "intake/work")
+    facts = script(
+        stage, "facts.py", "--today", TODAY, "--repo", "demo-org/demo-repo", PATH=no_gh_path(stage)
+    )
+    assert facts.returncode == 0, facts.stdout + facts.stderr
+    (stage / "facts-input.json").write_text(facts.stdout, encoding="utf-8")
+    report = script(stage, "product_report.py", "--facts", "facts-input.json", "--today", TODAY)
+    assert report.returncode == 0, report.stdout
+    assert ids["req"] not in "\n".join(section(report.stdout, "Delivered"))
+    needs = "\n".join(section(report.stdout, "Needs you"))
+    assert f"SPEC-{ids['spec']}" in needs and "ADR-" in needs and f"Q-S{ids['spec']}-1" in needs

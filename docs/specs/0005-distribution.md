@@ -58,7 +58,7 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    | `/agk:adopt` | `adopt.py .` (SPEC-0002) | owned files and marked blocks | none |
    | `/agk:doctor` | the SPEC-0006 script | nothing (report) | read-only `gh api` for settings it must check |
    | `/agk:upgrade` | the SPEC-0008 script | vendored files | none |
-   | `/agk:spec` | `new_spec.py spec` (a Draft spec) or `new_spec.py requirement` (a requirement proposal with its ADR draft), from the templates | new files | none (`--from-issue N`: the command reads the issue with `gh issue view`, read-only, and passes the text to the script with `--issue N --issue-text FILE`; the script never reads an issue) |
+   | `/agk:spec` | `new_spec.py spec` (a Draft spec), `new_spec.py requirement` (a requirement proposal with its ADR draft), or, for one plain-language sentence, `intake.py` (SPEC-0012): a requirement, a Draft spec and an ADR stub on a new branch | new files | none (`--from-issue N`: the command reads the issue with `gh issue view`, read-only, and passes the text to the script with `--issue N --issue-text FILE`; the script never reads an issue) |
    | `/agk:issue` | the command renders an issue from a template and runs `gh issue create` | one GitHub issue | write, after asking |
    | `/agk:brief` | `new_spec.py brief`: a brief from `docs/briefs/TEMPLATE.md` | one file | none |
    | `/agk:review` | `review_context.py`, the `reviewer` subagent, `check_review_report.py` (SPEC-0003) | local files, never committed | none |

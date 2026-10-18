@@ -10,6 +10,8 @@ maintainers decide there.
 
 ## What you propose
 
+One plain sentence, at most 300 characters. A maintainer with a Claude Code session turns it into a draft.
+
 ## Why
 
 ## Requirements or specs it touches

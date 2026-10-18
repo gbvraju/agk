@@ -14,3 +14,7 @@ Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group
 ## Tests
 
 - Rule 1: test file and marker `REQ-nnn`.
+
+## Open questions
+
+none

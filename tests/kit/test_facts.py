@@ -375,6 +375,11 @@ def test_ac2_question_states(tmp_path):
         "docs/runs/spec-0002-notes.md",
     ]
     assert found["Q-X1-10"]["ruled"] is False  # `Q-X1-1 ruled` must not match `Q-X1-10`
+    assert found["Q-X1-11"]["open_in"] == [
+        "docs/specs/0002-draft.md"
+    ]  # a Draft spec file's section
+    assert found["Q-X1-12"]["open_in"] == []  # named in a rule, not in the section
+    assert found["Q-X1-13"]["open_in"] == []  # an Approved spec file is not an open place
     assert list(found) == sorted(found)
 
 

@@ -1,10 +1,11 @@
-"""agk intake: the ids, the ADR stub and the checks of an intake (SPEC-0012 rules 1, 2, 8 and 11).
+"""agk intake: the ids, the ADR stub, the checks and the next steps of an intake (SPEC-0012).
 
 Usage:
     python3 intake.py ids --sentence TEXT [--ref REF] [--root DIR]
     python3 intake.py stub --req REQ-nnn --title TEXT --sentence TEXT [--ref REF] [--root DIR]
         [--date D]
     python3 intake.py check [--base REF] [--root DIR]
+    python3 intake.py next-steps [--base REF] [--root DIR] [--date D]
 
 Kit-only (never installed): the plugin runs it from its own root against the repository in `--root`
 (default `.`). Standard library and the installed `common.py` only; no network (the skill fetches
@@ -35,7 +36,7 @@ from common import (
     show,
 )
 
-USAGE = "usage: intake.py ids|stub|check ... (see the module text)"
+USAGE = "usage: intake.py ids|stub|check|next-steps ... (see the module text)"
 MAX_SENTENCE = 300
 MAX_TITLE = 80
 MAX_CRITERIA = 8
@@ -359,13 +360,47 @@ def cmd_check(root: Path, base: str | None) -> int:
     return 1 if problems else 0
 
 
+# --- the next steps (rule 13) -----------------------------------------------------------------
+
+
+def cmd_next_steps(root: Path, base: str | None, today: str) -> int:
+    branch = git(root, "branch", "--show-current").strip()
+    if not branch or branch == load_config(root)["default_branch"]:
+        raise Refusal(
+            "rule 3: the work is not on an intake branch (detached or the default branch)"
+        )
+    draft = draft_of(root, base)
+    problems = draft.run()
+    if problems or draft.req is None:
+        for problem in problems:
+            print(f"FAIL intake: {problem}")
+        print("the intake does not pass `check`; no next steps are printed")
+        return 1
+    req = draft.req
+    advance = f"Advances: {req['id']}"
+    print(f"Commit message:\n\nintake: add {req['id']} {req['title']}\n")
+    print(f"Push command:\n\ngit push -u origin {branch}\n")
+    print("Open the pull request from that branch into the default branch with this body.\n")
+    print("Pull request body:\n")
+    print(advance)
+    print(f"Build-state row: {today} {req['id']} proposed (planned), intake only")
+    print("Decisions taken: none; the sentence became a requirement, a Draft spec and an ADR stub")
+    print("Questions: see `## Open questions` of the spec")
+    print("Verified: `python3 scripts/agk/intake.py check` printed `ok intake`\n")
+    print(
+        "The checks cannot tell that the criteria are the right ones, that they say what you\n"
+        "meant, or that the spec can be built. That is the review of the pull request."
+    )
+    return 0
+
+
 # --- entry ------------------------------------------------------------------------------------
 
 FLAGS = ("--sentence", "--ref", "--root", "--req", "--title", "--base", "--date")
 
 
 def parse(args: list[str]) -> tuple[str, dict[str, str]]:
-    if not args or args[0] not in ("ids", "stub", "check"):
+    if not args or args[0] not in ("ids", "stub", "check", "next-steps"):
         raise ValueError("command")
     opts: dict[str, str] = {}
     it = iter(args[1:])
@@ -401,7 +436,9 @@ def main(argv: list[str] | None = None) -> int:
                 opts.get("ref"),
                 today,
             )
-        return cmd_check(root, opts.get("base"))
+        if command == "check":
+            return cmd_check(root, opts.get("base"))
+        return cmd_next_steps(root, opts.get("base"), today)
     except Refusal as exc:
         print(f"refused: {exc}")
         return 1

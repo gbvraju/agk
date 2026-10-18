@@ -4,6 +4,8 @@ Date: 2026-10-16 (from `date -u`). Approved specs change only through a proposal
 implementation pull request of SPEC-0012 (as for Q-K4-52); until then SPEC-0012 (Approved) is ahead of the Approved text of the rules below. The paths: `docs/specs/0005-distribution.md`,
 `docs/specs/0009-facts.md`.
 
+**Applied by ADR-0039** (2026-10-18): item 1 in `docs/specs/0005-distribution.md` rule 8 and item 2 in `docs/specs/0009-facts.md` rule 13.
+
 ## SPEC-0005 (`docs/specs/0005-distribution.md`)
 
 1. **Rule 8, the `/agk:spec` row.** Proposed cell: "`new_spec.py spec` (a Draft spec), `new_spec.py requirement` (a requirement proposal with its
