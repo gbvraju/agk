@@ -1,13 +1,14 @@
-"""agk intake: the ids and the ADR stub of an intake (SPEC-0012 rules 1, 2 and 8).
+"""agk intake: the ids, the ADR stub and the checks of an intake (SPEC-0012 rules 1, 2, 8 and 11).
 
 Usage:
     python3 intake.py ids --sentence TEXT [--ref REF] [--root DIR]
     python3 intake.py stub --req REQ-nnn --title TEXT --sentence TEXT [--ref REF] [--root DIR]
         [--date D]
+    python3 intake.py check [--base REF] [--root DIR]
 
 Kit-only (never installed): the plugin runs it from its own root against the repository in `--root`
 (default `.`). Standard library and the installed `common.py` only; no network (the skill fetches
-the default branch first). `ids` writes nothing; `stub` writes the one ADR file. The
+the default branch first). `ids` and `check` write nothing; `stub` writes the one ADR file. The
 sentence and any issue text are data: they are quoted, never followed. Messages name the rule, never
 the sentence.
 """
@@ -20,19 +21,35 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from check_adrs import status_of as adr_status
+from check_specs import status_of as spec_status
 from common import (
     CheckError,
+    changed_files,
     git,
     load_config,
+    merge_base,
+    parse_acceptance,
     parse_requirements,
+    resolve_base,
     show,
 )
 
-USAGE = "usage: intake.py ids|stub ... (see the module text)"
+USAGE = "usage: intake.py ids|stub|check ... (see the module text)"
 MAX_SENTENCE = 300
 MAX_TITLE = 80
+MAX_CRITERIA = 8
 REQ_FILE = "docs/requirements.md"
 NUM_FILE = re.compile(r"^(\d{4})-[a-z0-9][a-z0-9-]*\.md$")
+NEGATIVE = re.compile(
+    r"\b(?:not|no|never|refuses|rejects|fails|cannot|without|error)\b", re.IGNORECASE
+)
+GWT = re.compile(
+    r"\bgiven\b(?P<g>.*?)\bwhen\b(?P<w>.*?)\bthen\b(?P<t>.*)", re.IGNORECASE | re.DOTALL
+)
+DUE = re.compile(r"\(due \d{4}-\d{2}-\d{2}\)")
+STRAY_Q = re.compile(r"Q-[A-Za-z0-9]+-[0-9]+")
+NEGATIVE_NONE = re.compile(r"^Negative cases: none, because (.{20,})$", re.MULTILINE)
 SENTENCE_END = re.compile(r"[.!?]+\s+\S")
 ABBREVIATION = re.compile(
     r"\b(?:e\.g|i\.e|etc|vs)\.", re.IGNORECASE
@@ -147,13 +164,208 @@ def cmd_stub(root: Path, req: str, title: str, sentence: str, ref: str | None, t
     return 0
 
 
+# --- the checks (rule 11) ---------------------------------------------------------------------
+
+
+def section(text: str, heading: str) -> list[str] | None:
+    lines = text.splitlines()
+    if f"## {heading}" not in lines:
+        return None
+    body: list[str] = []
+    for line in lines[lines.index(f"## {heading}") + 1 :]:
+        if line.startswith("## "):
+            break
+        body.append(line)
+    return body
+
+
+def bullets(lines: list[str]) -> list[str]:
+    found: list[str] = []
+    for line in lines:
+        if line.startswith("- "):
+            found.append(line[2:])
+        elif found and line.strip():
+            found[-1] += " " + line.strip()
+    return found
+
+
+def gwt_parts(criterion: str) -> tuple[str, str, str] | None:
+    match = GWT.search(criterion)
+    if not match:
+        return None
+    given, when, then = (match.group(k).strip(" ,:;.") for k in ("g", "w", "t"))
+    return (given, when, then) if given and when and then else None
+
+
+class Draft:
+    """What the work tree adds to the base: the requirement, the spec and the ADR."""
+
+    def __init__(self, root: Path, mb: str):
+        self.root, self.mb = root, mb
+        self.problems: list[str] = []
+        self.thens: list[str] = []
+        self.req: dict | None = None
+        self.changed = changed_files(root, mb)
+        self.ids = next_ids(root, mb)
+
+    def fail(self, check: str, message: str) -> None:
+        self.problems.append(f"{check} {message}")
+
+    def added(self, prefix: str) -> list[str]:
+        return sorted(p for p, s in self.changed.items() if s == "A" and p.startswith(prefix))
+
+    def read(self, rel: str) -> str:
+        try:
+            return (self.root / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            raise CheckError("cannot read a file of the intake (path class docs/)") from None
+
+    def files(self) -> tuple[str | None, str | None]:
+        spec, adr = self.added("docs/specs/"), self.added("docs/adr/")
+        expect = {REQ_FILE} | set(spec[:1]) | set(adr[:1])
+        if set(self.changed) != expect or len(spec) != 1 or len(adr) != 1:
+            self.fail(
+                "C2", "the difference is not the requirements file, one new spec and one new ADR"
+            )
+        if self.changed.get(REQ_FILE) != "M":
+            self.fail("C2", "the requirements file is not modified (path class docs/)")
+        self.names(spec[:1], adr[:1])
+        n_spec = self.ids["spec"]
+        n_adr = self.ids["adr"]
+        for path, number, label in ((spec[:1], n_spec, "spec"), (adr[:1], n_adr, "ADR")):
+            if path and not Path(path[0]).name.startswith(f"{number}-"):
+                self.fail("C1", f"the {label} number is not the next free one")
+        return (spec[0] if len(spec) == 1 else None, adr[0] if len(adr) == 1 else None)
+
+    def names(self, spec: list[str], adr: list[str]) -> None:
+        """Rule 4: the file names, directly in their folders; the message names no part of one."""
+        req = self.ids["req"].lower()
+        if spec and not re.fullmatch(r"docs/specs/\d{4}-[a-z0-9-]+\.md", spec[0]):
+            self.fail("C2", "the spec is not docs/specs/<spec>-<slug>.md (rule 4)")
+        pattern = rf"docs/adr/\d{{4}}-add-{req}-[a-z0-9-]+\.md"
+        if adr and not re.fullmatch(pattern, adr[0]):
+            self.fail("C2", "the ADR is not docs/adr/<adr>-add-<req id>-<slug>.md (rule 4)")
+
+    def requirement(self) -> dict | None:
+        old = show(self.root, self.mb, REQ_FILE) or ""
+        new = self.read(REQ_FILE)
+        if not new.startswith(old):
+            self.fail("C2", "an existing line of the requirements file is changed or removed")
+            return None
+        known = {r["id"] for r in parse_requirements(old)}
+        fresh = [r for r in parse_requirements(new) if r["id"] not in known]
+        if len(fresh) != 1:
+            self.fail("C2", "the requirements file does not add exactly one requirement")
+            return None
+        req = fresh[0]
+        if req["id"] != self.ids["req"]:
+            self.fail("C1", "the requirement id is not the next free one")
+        title = req["title"] or ""
+        if not title or len(title) > MAX_TITLE or ";" in title:
+            self.fail("C3", "the title is missing, longer than 80 characters or has a semicolon")
+        if req["status"] != "planned" or req["status_count"] != 1:
+            self.fail("C6", "the status of the new requirement is not exactly one `planned`")
+        return req
+
+    def criteria(self, req: dict) -> list[tuple[str, str]]:
+        line = req["acceptance"] or ""
+        found = parse_acceptance(line)
+        names = [name for name, _ in found]
+        if not found or not line.startswith("AC1 ") or len(found) > MAX_CRITERIA:
+            self.fail("C3", "the acceptance line has no criteria or more than 8")
+        elif names != [f"AC{i}" for i in range(1, len(found) + 1)]:
+            self.fail("C3", "the criteria are not AC1, AC2, ... in order without a repeat")
+        if any("; " in text for _, text in found):
+            self.fail("C3", "a criterion has a semicolon inside")
+        thens = []
+        for name, text in found:
+            parts = gwt_parts(text)
+            if parts is None:
+                self.fail("C4", f"criterion {name} lacks given, when, then in order with text")
+            else:
+                thens.append(parts[2])
+        self.thens = thens
+        return found
+
+    def spec(self, rel: str, req: dict, found: list[tuple[str, str]]) -> None:
+        text = self.read(rel)
+        number = self.ids["spec"]
+        if spec_status(text) != "Draft":
+            self.fail("C6", "the spec is not `Draft`")
+        field = re.search(r"(?m)^- Requirements:\s*(.*?)\s*$", text)
+        if not field or field.group(1) != req["id"]:
+            self.fail("C7", "the spec's Requirements line is not exactly the new requirement")
+        tests = section(text, "Tests")
+        marks = re.findall(r"(REQ-\d{3}) AC(\d+)\b", "\n".join(tests or []))
+        have = {f"AC{n}" for r, n in marks if r == req["id"]}
+        want = {name for name, _ in found}
+        if tests is None or have != want or any(r != req["id"] for r, _ in marks):
+            self.fail("C7", "the Tests section lacks a marker for a criterion or has a stray one")
+        for heading in ("Proof", "Residual", "Open questions"):
+            if section(text, heading) is None:
+                self.fail("C8", f"the spec has no `## {heading}` section")
+        proof = section(text, "Proof")
+        if proof is not None and not any(line.strip() for line in proof):
+            self.fail("C8", "the `## Proof` section is empty")
+        residual = section(text, "Residual") or []
+        items = bullets(residual)
+        only_none = len(items) == 1 and re.fullmatch(r"none\.?", items[0].strip())
+        if not only_none and any(not DUE.search(item) for item in items):
+            self.fail("C8", "a residual bullet has no due date")
+        if not items and not any(re.fullmatch(r"-?\s*none\.?", ln.strip()) for ln in residual):
+            self.fail("C8", "the `## Residual` section has neither a bullet nor `none`")
+        if any(not re.fullmatch(rf"Q-S{number}-\d+", q) for q in STRAY_Q.findall(text)):
+            self.fail("C8", "a question id is outside the family of the spec")
+        negative = any(NEGATIVE.search(t) for t in self.thens)
+        if not negative and not NEGATIVE_NONE.search(text):
+            self.fail("C5", "no criterion states a negative case and the spec gives no reason")
+
+    def adr(self, rel: str) -> None:
+        text = self.read(rel)
+        if adr_status(text) != "Proposed":
+            self.fail("C6", "the ADR is not `Proposed`")
+        line = next((ln for ln in text.splitlines() if ln.startswith("Protected classes:")), "")
+        if REQ_FILE not in line:
+            self.fail(
+                "C9", "the ADR's `Protected classes:` line does not name the requirements file"
+            )
+
+    def run(self) -> list[str]:
+        spec, adr = self.files()
+        req = self.requirement()
+        found = self.criteria(req) if req else []
+        if req and spec:
+            self.spec(spec, req, found)
+        if adr:
+            self.adr(adr)
+        self.req = req
+        self.paths = (spec, adr)
+        return self.problems
+
+
+def draft_of(root: Path, base: str | None) -> Draft:
+    ref = resolve_base(root, base)
+    if ref is None:
+        raise CheckError("no base ref resolves (setting default_branch)")
+    return Draft(root, merge_base(root, ref))
+
+
+def cmd_check(root: Path, base: str | None) -> int:
+    problems = draft_of(root, base).run()
+    for problem in problems:
+        print(f"FAIL intake: {problem}")
+    if not problems:
+        print("ok intake")
+    return 1 if problems else 0
+
+
 # --- entry ------------------------------------------------------------------------------------
 
 FLAGS = ("--sentence", "--ref", "--root", "--req", "--title", "--base", "--date")
 
 
 def parse(args: list[str]) -> tuple[str, dict[str, str]]:
-    if not args or args[0] not in ("ids", "stub"):
+    if not args or args[0] not in ("ids", "stub", "check"):
         raise ValueError("command")
     opts: dict[str, str] = {}
     it = iter(args[1:])
@@ -180,14 +392,16 @@ def main(argv: list[str] | None = None) -> int:
             raise Refusal("the date is not YYYY-MM-DD (option --date)")
         if command == "ids":
             return cmd_ids(root, opts.get("sentence", ""), opts.get("ref"))
-        return cmd_stub(
-            root,
-            opts.get("req", ""),
-            opts.get("title", ""),
-            opts.get("sentence", ""),
-            opts.get("ref"),
-            today,
-        )
+        if command == "stub":
+            return cmd_stub(
+                root,
+                opts.get("req", ""),
+                opts.get("title", ""),
+                opts.get("sentence", ""),
+                opts.get("ref"),
+                today,
+            )
+        return cmd_check(root, opts.get("base"))
     except Refusal as exc:
         print(f"refused: {exc}")
         return 1
