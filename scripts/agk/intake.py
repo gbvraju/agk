@@ -229,12 +229,22 @@ class Draft:
             )
         if self.changed.get(REQ_FILE) != "M":
             self.fail("C2", "the requirements file is not modified (path class docs/)")
+        self.names(spec[:1], adr[:1])
         n_spec = self.ids["spec"]
         n_adr = self.ids["adr"]
         for path, number, label in ((spec[:1], n_spec, "spec"), (adr[:1], n_adr, "ADR")):
             if path and not Path(path[0]).name.startswith(f"{number}-"):
                 self.fail("C1", f"the {label} number is not the next free one")
         return (spec[0] if len(spec) == 1 else None, adr[0] if len(adr) == 1 else None)
+
+    def names(self, spec: list[str], adr: list[str]) -> None:
+        """Rule 4: the file names, directly in their folders; the message names no part of one."""
+        req = self.ids["req"].lower()
+        if spec and not re.fullmatch(r"docs/specs/\d{4}-[a-z0-9-]+\.md", spec[0]):
+            self.fail("C2", "the spec is not docs/specs/<spec>-<slug>.md (rule 4)")
+        pattern = rf"docs/adr/\d{{4}}-add-{req}-[a-z0-9-]+\.md"
+        if adr and not re.fullmatch(pattern, adr[0]):
+            self.fail("C2", "the ADR is not docs/adr/<adr>-add-<req id>-<slug>.md (rule 4)")
 
     def requirement(self) -> dict | None:
         old = show(self.root, self.mb, REQ_FILE) or ""
@@ -299,7 +309,8 @@ class Draft:
             self.fail("C8", "the `## Proof` section is empty")
         residual = section(text, "Residual") or []
         items = bullets(residual)
-        if any(not DUE.search(item) for item in items):
+        only_none = len(items) == 1 and re.fullmatch(r"none\.?", items[0].strip())
+        if not only_none and any(not DUE.search(item) for item in items):
             self.fail("C8", "a residual bullet has no due date")
         if not items and not any(re.fullmatch(r"-?\s*none\.?", ln.strip()) for ln in residual):
             self.fail("C8", "the `## Residual` section has neither a bullet nor `none`")

@@ -329,6 +329,27 @@ def test_ac1_the_adr_of_a_good_draft_is_the_stub_that_the_script_renders(repo):
     assert check(repo).stdout == "ok intake\n"
 
 
+def test_ac1_c2_the_stubs_own_file_name_passes(repo):
+    """REQ-019 AC1: rule 4 and C2 (the name `stub` writes is the name `check` accepts)."""
+    write(repo, "docs/requirements.md", requirement(), "a")
+    write(repo, "docs/specs/0014-export.md", spec_text())
+    stub = run(
+        repo,
+        "stub",
+        "--req",
+        "REQ-004",
+        "--title",
+        "Export",
+        "--sentence",
+        SENTENCE,
+        "--ref",
+        "main",
+    )
+    assert stub.returncode == 0, stub.stdout
+    assert "add-req-004-let-a-visitor" in stub.stdout
+    assert check(repo).stdout == "ok intake\n"
+
+
 def failed(repo, code):
     proc = check(repo)
     assert proc.returncode == 1, proc.stdout
@@ -501,6 +522,52 @@ def test_ac1_c8_sections_due_dates_and_question_ids(repo):
     subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
     draft(repo, spec=spec_text(open_questions="- Q-S0014-1 which format?\n", residual="none\n"))
     assert check(repo).stdout == "ok intake\n"
+
+
+@pytest.mark.parametrize("residual", ["- none\n", "- none.\n", "none\n", "none.\n"])
+def test_ac1_c8_a_residual_of_none_is_empty_and_passes(repo, residual):
+    """REQ-019 AC1: rule 11 C8 (Q-K4-175 ruled: none, - none, with or without a final dot)."""
+    draft(repo, spec=spec_text(open_questions="- Q-S0014-1 x?\n", residual=residual))
+    assert check(repo).stdout == "ok intake\n"
+
+
+def test_ac1_c8_a_none_bullet_mixed_with_a_dated_bullet_is_undated_and_fails(repo):
+    """REQ-019 AC1: rule 11 C8 (a `none` bullet among others has no due date)."""
+    residual = "- none\n- 2026-10-18: later (due 2027-01-31).\n"
+    draft(repo, spec=spec_text(residual=residual))
+    failed(repo, "C8")
+
+
+def test_ac1_c2_the_spec_must_be_directly_in_its_folder(repo):
+    """REQ-019 AC1: rule 4 and C2 (a subfolder fails; the message names no part of the name)."""
+    draft(repo)
+    (repo / "docs/specs/sub").mkdir()
+    (repo / "docs/specs/0014-export.md").rename(repo / "docs/specs/sub/0014-export.md")
+    out = failed(repo, "C2")
+    assert "sub" not in out and "0014-export" not in out
+
+
+def test_ac1_c2_the_adr_name_must_carry_add_and_the_requirement_id(repo):
+    """REQ-019 AC1: rule 4 and C2 (no `add-req-nnn-`, a wrong id, a bad slug)."""
+    for name in (
+        "0022-export.md",
+        "0022-add-req-005-export.md",
+        "0022-add-req-004-Export_List.md",
+        "0022-add-req-004-.md",
+    ):
+        git(repo, "checkout", "-q", "--", ".")
+        subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
+        draft(repo)
+        (repo / "docs/adr/0022-add-req-004-export.md").rename(repo / "docs/adr" / name)
+        out = failed(repo, "C2")
+        assert name[5:] not in out
+
+
+def test_ac1_c2_the_spec_slug_has_only_lowercase_letters_digits_and_hyphens(repo):
+    """REQ-019 AC1: rule 4 and C2."""
+    draft(repo)
+    (repo / "docs/specs/0014-export.md").rename(repo / "docs/specs/0014-Export_List.md")
+    failed(repo, "C2")
 
 
 def test_ac1_c9_the_adr_must_name_the_requirements_file(repo):
