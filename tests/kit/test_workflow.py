@@ -248,3 +248,14 @@ def test_ac1_the_run_step_fails_when_proof_itself_fails(tmp_path):
     """REQ-016 AC1: rule 17 (the job fails only when proof.py failed: a refused setting here)."""
     proc, output = run_step(tmp_path, "", "true", "proof_timeout = 0\n")
     assert proc.returncode == 2 and output == ""
+
+
+def test_ac1_check_specs_reads_the_pull_request_body_from_a_file_written_first():
+    """REQ-020 AC1 (SPEC-0013 rule 23): the body reaches rule a."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    blocks = step_blocks(text)
+    names = list(blocks)
+    assert names.index("PR body file") < names.index("check_specs")
+    assert "github.event.pull_request.body" in blocks["PR body file"]
+    assert 'check_specs.py --body "$RUNNER_TEMP/pr-body.md"' in blocks["check_specs"]
+    assert "if: ${{ !cancelled() }}" in blocks["check_specs"]

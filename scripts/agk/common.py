@@ -187,6 +187,97 @@ def parse_acceptance(text: str) -> list[tuple[str, str]]:
     return found
 
 
+QUESTION = re.compile(r"Q-[A-Z0-9]+-[0-9]+")
+DECISIONS_LOG = "docs/runs/decisions-log.md"
+NUM_FILE = re.compile(r"^(\d{4})-[a-z0-9][a-z0-9-]*\.md$")
+
+
+def read_text(root: Path, rel: str) -> str | None:
+    """The text of a file under ROOT, or None when it is absent or unreadable."""
+    path = root / rel
+    try:
+        return path.read_text(encoding="utf-8") if path.is_file() else None
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def whole_id(question: str) -> re.Pattern[str]:
+    return re.compile(r"(?<![A-Za-z0-9-])" + re.escape(question) + r"(?![A-Za-z0-9-])")
+
+
+def ruled_in(lines: list[str] | None, question: str) -> bool | str:
+    """True when a decisions-log row has `<id> ruled`; "unknown" when there is no log."""
+    if lines is None:
+        return "unknown"
+    return any(re.search(whole_id(question).pattern + r" ruled", ln) for ln in lines)
+
+
+def open_section_ids(text: str, heading: str = "Open") -> set[str]:
+    """The `Q-` ids named under `## <heading>` of a Markdown text."""
+    found: set[str] = set()
+    inside = False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            inside = line.strip() == f"## {heading}"
+        elif inside:
+            found.update(QUESTION.findall(line))
+    return found
+
+
+def log_lines(root: Path) -> list[str] | None:
+    text = read_text(root, DECISIONS_LOG)
+    return None if text is None else text.splitlines()
+
+
+def question_index(root: Path) -> dict[str, set[str]]:
+    """Each `Q-` id found in a `.md` file under docs/, with the files that name it."""
+    index: dict[str, set[str]] = {}
+    base = root / "docs"
+    for path in sorted(base.rglob("*.md")) if base.is_dir() else []:
+        rel = path.relative_to(root).as_posix()
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for question in QUESTION.findall(text):
+            index.setdefault(question, set()).add(rel)
+    return index
+
+
+def find_questions(root: Path) -> list[dict] | None:
+    """Question ids and their state (SPEC-0009 rule 13): id, files, ruled, named_in_log.
+
+    None when the decisions log is absent. `facts.py` adds `open_in` to these records;
+    `check_specs.py` reads `ruled` and `files`: both parse questions here.
+    """
+    lines = log_lines(root)
+    if lines is None:
+        return None
+    return [
+        {
+            "id": question,
+            "files": sorted(files),
+            "ruled": ruled_in(lines, question),
+            "named_in_log": any(whole_id(question).search(ln) for ln in lines),
+        }
+        for question, files in sorted(question_index(root).items())
+    ]
+
+
+def next_free_ids(root: Path, ref: str) -> dict[str, str]:
+    """The next free requirement, spec and ADR numbers in the tree of REF, never the work tree."""
+    text = show(root, ref, "docs/requirements.md")
+    if text is None:
+        raise CheckError("the base has no requirements file (path class docs/)")
+    reqs = [int(r["id"][4:]) for r in parse_requirements(text)]
+    out = {"req": f"REQ-{max(reqs, default=0) + 1:03d}"}
+    for kind, key in (("specs", "spec"), ("adr", "adr")):
+        names = git(root, "ls-tree", "--name-only", ref, f"docs/{kind}/").splitlines()
+        nums = [int(m.group(1)) for n in names if (m := NUM_FILE.match(Path(n).name))]
+        out[key] = f"{max(nums, default=0) + 1:04d}"
+    return out
+
+
 DEFAULT_CONFIG = {
     "default_branch": "main",
     "test_dirs": ["tests"],

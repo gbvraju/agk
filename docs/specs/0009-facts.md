@@ -113,6 +113,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     | requirement sections, status, line | `common.parse_requirements` (rule 17 adds `title` and `acceptance`) |
     | acceptance criteria | `common.parse_acceptance` (new, rule 17) |
     | marker search and its adopt-mode exclusion | `common.find_markers` and `common.load_config`; `common.find_ac_markers` (new, rule 17) |
+    | question ids, asked and ruled | `common.find_questions` (new, SPEC-0013 rule 25) |
     | spec status | `check_specs.status_of` |
     | ADR status, fields, title and number patterns | `check_adrs.status_of`, `check_adrs.FIELD_RE`, `check_adrs.TITLE_RE`, `check_adrs.FILE_RE` |
     | residual bullets, due date, date parse, register lines | `drift_audit.residual_bullets`, `drift_audit.DUE`, `drift_audit.parse_date`; `drift_audit.register_lines` (new, rule 17) |
@@ -126,7 +127,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     implements rule 9 and is built beside `find_markers`, which keeps its signature and result. (c) `drift_audit.register_lines(text)`
     is extracted from `d4_register` (the loop that splits a register line into its four fields) and returns the parsed lines;
     `d4_register` calls it. (d) `common.DEFAULT_CONFIG` gains `inbox_hours` (48), which `load_config` returns to every caller; no existing
-    caller reads it, and the test of the default configuration lists it. For each of (a) to (c) a test shows that the output of the existing scripts is byte-identical before and
+    caller reads it, and the test of the default configuration lists it. (e) `common.find_questions(root)` is extracted from the facts' own parsing of the `questions` section (the id index, the decisions-log reading and the `ruled` and `named_in_log` booleans); `facts.py` calls it and adds `open_in`. A test shows the `questions` section byte-identical before and after. For each of (a) to (c) a test shows that the output of the existing scripts is byte-identical before and
     after on the repository and on the existing fixtures. If the three changes together exceed about 150 changed lines, the implementation splits them into a first pull request that lands
     before the one that adds `facts.py`. Where an import is impossible, the reason is stated here and a residual records the
     convergence (none is known today).

@@ -28,10 +28,14 @@ from common import (
     CheckError,
     declares_unchanged,
     find_ac_markers,
+    find_questions,
     git,
     load_config,
+    log_lines,
+    open_section_ids,
     parse_acceptance,
     parse_requirements,
+    ruled_in,
     run,
 )
 
@@ -44,7 +48,6 @@ USAGE = (
 REQUIREMENTS = "docs/requirements.md"
 LOG = "docs/runs/decisions-log.md"
 REGISTER = drift_audit.REGISTER
-QUESTION = re.compile(r"Q-[A-Z0-9]+-[0-9]+")
 NOTES_FILE = re.compile(r"docs/runs/spec-\d{4}-notes\.md")
 ORIGIN = re.compile(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?$")
 SPEC_TITLE = re.compile(r"^# SPEC-\d{4}:\s*(.+?)\s*$")
@@ -228,46 +231,6 @@ def adr_records(root: Path) -> list[dict]:
 # --- questions --------------------------------------------------------------------------------
 
 
-def log_lines(root: Path) -> list[str] | None:
-    text = drift_audit.read(root, LOG)
-    return None if text is None else text.splitlines()
-
-
-def whole_id(question: str) -> re.Pattern[str]:
-    return re.compile(r"(?<![A-Za-z0-9-])" + re.escape(question) + r"(?![A-Za-z0-9-])")
-
-
-def ruled_in(lines: list[str] | None, question: str) -> bool | str:
-    if lines is None:
-        return UNKNOWN
-    return any(re.search(whole_id(question).pattern + r" ruled", ln) for ln in lines)
-
-
-def open_section_ids(text: str, heading: str = "Open") -> set[str]:
-    found: set[str] = set()
-    inside = False
-    for line in text.splitlines():
-        if line.startswith("## "):
-            inside = line.strip() == f"## {heading}"
-        elif inside:
-            found.update(QUESTION.findall(line))
-    return found
-
-
-def question_index(root: Path) -> dict[str, set[str]]:
-    index: dict[str, set[str]] = {}
-    base = root / "docs"
-    for path in sorted(base.rglob("*.md")) if base.is_dir() else []:
-        rel = path.relative_to(root).as_posix()
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for question in QUESTION.findall(text):
-            index.setdefault(question, set()).add(rel)
-    return index
-
-
 def open_places(root: Path, specs: list[dict], adrs: list[dict]) -> tuple[set[str], set[str]]:
     """(the files that are open places as a whole, the notes files with an `## Open` section)."""
     whole = {s["notes"] for s in specs if s["status"] == "Draft" and s["notes"]}
@@ -277,8 +240,8 @@ def open_places(root: Path, specs: list[dict], adrs: list[dict]) -> tuple[set[st
 
 
 def questions_section(root: Path, specs: list[dict], adrs: list[dict]) -> Any:
-    lines = log_lines(root)
-    if lines is None:
+    base = find_questions(root)
+    if base is None:
         return UNKNOWN
     whole, notes = open_places(root, specs, adrs)
     open_ids = {
@@ -288,21 +251,17 @@ def questions_section(root: Path, specs: list[dict], adrs: list[dict]) -> Any:
         if spec["status"] == "Draft":
             text = (root / spec["path"]).read_text(encoding="utf-8", errors="replace")
             open_ids[spec["path"]] = open_section_ids(text, "Open questions")
-    found = []
-    for question, files in sorted(question_index(root).items()):
-        places = sorted(
-            f for f in files if f in whole or (f in open_ids and question in open_ids[f])
-        )
-        found.append(
-            {
-                "id": question,
-                "files": sorted(files),
-                "ruled": ruled_in(lines, question),
-                "named_in_log": any(whole_id(question).search(ln) for ln in lines),
-                "open_in": places,
-            }
-        )
-    return found
+    return [
+        {
+            **record,
+            "open_in": sorted(
+                f
+                for f in record["files"]
+                if f in whole or (f in open_ids and record["id"] in open_ids[f])
+            ),
+        }
+        for record in base
+    ]
 
 
 def open_questions_of(root: Path, spec: dict) -> Any:
