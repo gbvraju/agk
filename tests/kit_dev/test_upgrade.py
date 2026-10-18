@@ -863,3 +863,89 @@ def test_ac1_the_deleted_paths_name_their_protected_classes(tmp_path, kit, capsy
     assert code == 0
     line = next(ln for ln in out if ln.startswith("Protected classes:"))
     assert "`.claude/`" in line
+
+
+# --- create-only templates: an absent register is created, an existing one is never touched ---
+
+REGISTER = "docs/runs/residuals.md"
+REGISTER_TEXT = "# Residuals register\n\n## Open\n"
+
+
+def with_register(root: Path) -> None:
+    """Add the create-only template to the fake kit at 2.0.0 (both modes), and to its table row."""
+    src = "kit/templates/residuals.md"
+    (root / src).parent.mkdir(parents=True, exist_ok=True)
+    (root / src).write_text(REGISTER_TEXT, encoding="utf-8")
+    path = root / "kit" / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["templates"][REGISTER] = src
+    manifest["adopt"]["templates"][REGISTER] = src
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    table_path = root / "kit" / "hashes.json"
+    table = json.loads(table_path.read_text(encoding="utf-8"))
+    table["releases"]["2.0.0"]["templates"][src] = [upgrade.digest(REGISTER_TEXT.encode())]
+    table_path.write_text(kit_hashes.dump(table), encoding="utf-8")
+
+
+def test_ac1_an_absent_create_only_template_is_created_and_the_next_run_is_nothing(
+    tmp_path, kit, capsys
+):
+    """REQ-014 AC5: rule 7 (created only when absent, as init and adopt do)."""
+    with_register(kit)
+    target = init_target(tmp_path)
+    code, out = run(capsys, target)
+    assert code == 0
+    assert f"create {REGISTER} (absent)" in out
+    assert (target / REGISTER).read_text(encoding="utf-8") == REGISTER_TEXT
+    assert not any(ln.startswith("template-changed docs/runs/residuals.md") for ln in out)
+    summary = next(ln for ln in out if ln.startswith("upgraded"))
+    assert summary.startswith("upgraded 9 files")
+    again = run(capsys, target)
+    assert again[0] == 0 and again[1][-1] == "nothing to do"
+    assert (target / REGISTER).read_text(encoding="utf-8") == REGISTER_TEXT
+
+
+def test_ac1_an_existing_create_only_template_is_untouched_whatever_it_holds(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 9 (never compared, never rewritten, not listed)."""
+    with_register(kit)
+    own = "# our register\n\n## Open\n\n- a | b | (due 2026-12-01) | open\n"
+    target = init_target(tmp_path, **{REGISTER: own})
+    os.utime(target / REGISTER, ns=(1_000_000_000, 1_000_000_000))
+    before = snapshot(target)[REGISTER]
+    code, out = run(capsys, target)
+    assert code == 0
+    assert not any(REGISTER in ln for ln in out if not ln.startswith("template"))
+    assert snapshot(target)[REGISTER] == before and (target / REGISTER).read_text() == own
+
+
+def test_ac1_a_dry_run_lists_the_absent_template_and_writes_nothing(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 14 (`create (absent)` in the dry run, as in the real run)."""
+    with_register(kit)
+    target = init_target(tmp_path)
+    before = snapshot(target)
+    code, dry = run(capsys, target, "--dry-run")
+    assert code == 0 and f"create {REGISTER} (absent)" in dry
+    assert snapshot(target) == before and not (target / REGISTER).exists()
+    assert any(ln.startswith("dry run: 9 files would change") for ln in dry)
+
+
+def test_ac1_a_symlink_at_the_path_stops_the_run(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 8 (a symlink is refused, as init and adopt refuse it)."""
+    with_register(kit)
+    target = init_target(tmp_path)
+    (tmp_path / "elsewhere.md").write_text("x\n", encoding="utf-8")
+    (target / "docs" / "runs").mkdir(parents=True, exist_ok=True)
+    (target / REGISTER).symlink_to(tmp_path / "elsewhere.md")
+    before = snapshot(target)
+    code, out = run(capsys, target)
+    assert code == 1 and f"conflict {REGISTER}" in " ".join(out)
+    assert snapshot(target) == before and (tmp_path / "elsewhere.md").read_text() == "x\n"
+
+
+def test_ac1_an_adopt_target_gets_the_absent_register_too(tmp_path, kit, capsys):
+    """REQ-014 AC5: the same rule in adopt mode."""
+    with_register(kit)
+    target = adopt_target(tmp_path)
+    code, out = run(capsys, target)
+    assert code == 0 and f"create {REGISTER} (absent)" in out
+    assert (target / REGISTER).read_text(encoding="utf-8") == REGISTER_TEXT

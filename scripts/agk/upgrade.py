@@ -25,6 +25,7 @@ from pathlib import Path
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
 from common import experimental_enabled, matches, read_list
 from init import (
+    CREATE_ONLY,
     DATE_RE,
     MANIFEST,
     Refusal,
@@ -287,6 +288,52 @@ def template_notes(target: Path, kit_root: Path, templates: dict[str, str], row:
     return notes
 
 
+def absent_templates(
+    target: Path, kit_root: Path, manifest: dict, templates: dict[str, str]
+) -> list[Item]:
+    """Every create-only template that is absent from the target (rule of init and adopt).
+
+    Created only when absent, never compared and never overwritten: a file that exists, with any
+    content, is left alone and not listed. A symlink or a non-file at the path stops the run.
+    """
+    items: list[Item] = []
+    variables: dict[str, str] | None = None
+    for rel in CREATE_ONLY:
+        src = templates.get(rel)
+        path = target / rel
+        if src is None:
+            continue
+        if path.is_symlink():
+            items.append(Item(rel, "conflict", " (not a regular file: symlink)"))
+        elif path.exists():
+            if not path.is_file():
+                items.append(Item(rel, "conflict", " (not a regular file)"))
+        else:
+            if variables is None:
+                variables = template_variables(target, manifest)
+            text = render((kit_root / src).read_text(encoding="utf-8"), variables, src)
+            items.append(Item(rel, "create", " (absent)", content=text.encode("utf-8")))
+    return items
+
+
+def template_variables(target: Path, manifest: dict) -> dict[str, str]:
+    """The variables of the templates: the stamp's date and default branch, else today and main."""
+    data: dict = {}
+    try:
+        data = tomllib.loads((target / "agk.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        pass
+    installed, branch = data.get("installed"), data.get("default_branch")
+    return {
+        "project": slug(target.name),
+        "date": installed
+        if isinstance(installed, str) and DATE_RE.match(installed)
+        else datetime.now(UTC).date().isoformat(),
+        "kit_version": str(manifest["kit_version"]),
+        "default_branch": branch if isinstance(branch, str) and branch else "main",
+    }
+
+
 def build_plan(target: Path, kit_root: Path) -> Plan:
     version, mode, legacy = read_stamp(target)
     manifest = json.loads((kit_root / MANIFEST).read_text(encoding="utf-8"))
@@ -330,7 +377,13 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
     plan.items.sort(key=lambda i: i.rel)
 
     templates = manifest["templates"] if mode == "init" else manifest["adopt"]["templates"]
-    plan.notes = template_notes(target, kit_root, templates, row)
+    plan.items += absent_templates(target, kit_root, manifest, templates)
+    plan.items.sort(key=lambda i: i.rel)
+    plan.notes = [
+        n
+        for n in template_notes(target, kit_root, templates, row)
+        if not any(n.startswith(f"template-changed {rel} ") for rel in CREATE_ONLY)
+    ]
     if legacy is not None:
         plan.notes = [n for n in plan.notes if not n.startswith("template-changed agk.toml ")]
         plan.notes.insert(0, LEGACY_NOTE)
