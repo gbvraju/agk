@@ -1,6 +1,6 @@
 # ADR-0038: intake, part 2 of 3: `intake.py check` C1 to C9 and the draft-is-not-a-fact test (SPEC-0012 rules 11 and 14)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-18
 - Deciders: maintainers
 - Related: ADR-0021, ADR-0037
