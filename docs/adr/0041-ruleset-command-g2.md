@@ -1,6 +1,6 @@
 # ADR-0041: `/agk:ruleset` and `ruleset.py plan` (SPEC-0013 rules 19 to 22), kit 0.21.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-18
 - Deciders: maintainers
 - Related: ADR-0001, ADR-0021, ADR-0040
@@ -44,6 +44,9 @@ lacks admin; never ask for or handle a token.
    access to this GitHub API path is not permitted through this proxy"). No retry, no other route, no token. A second GET shows the rulesets unchanged.
    The record gives the maintainers the exact payload and command and what to observe. Until then the behaviour of GitHub for a never-run required check
    stays `(verify)` and phase 1 stays the default whenever `governance` has not succeeded.
+   **Ruled by the maintainers (2026-10-18), Q-K4-101: no further write for the session; G2 merges with the proof open.** Phase detection is safe
+   under either behaviour of GitHub (phase 1 until `governance` has succeeded), so the open proof is a residual, not a blocker. The maintainers run the
+   steps of `docs/runs/ruleset-sandbox-proof.md` from their own login by 2026-11-30 and record the result by a docs pull request.
 7. **Tests**: `tests/kit_dev/test_ruleset.py` on the doctor's recorded `ok` responses with variants (no ruleset; phase 1 and 2; auto from the runs read;
    unknown runs; a missing rule; the check added; another context; a stricter value; looser values with and without `--tighten`; a bypass actor; a disabled
    ruleset; the PUT payload without read-only fields; repository settings; idempotence; rules spread over two rulesets; not admin; unreadable; no `gh`;
@@ -59,15 +62,15 @@ lacks admin; never ask for or handle a token.
 
 ## Questions
 
-| Q | Question | Reading taken |
+| Q | Question | Reading taken, and the ruling (maintainers, 2026-10-18) |
 | --- | --- | --- |
-| Q-K4-177 | Rule 19 says `plan` writes nothing; the skill must run commands "from payload files in a temporary directory". Who writes the files? | `plan --payload-dir DIR` writes them, only there, only when asked; without it the payloads are printed inline. No file in the repository, nothing to GitHub. |
-| Q-K4-178 | `--phase auto` when the runs read fails. | Phase 1 (never require a check on a guess). |
-| Q-K4-179 | Which values count as "looser" than the kit's? Rule 20 gives examples. | Enforcement not active; any bypass actor; stale approvals not dismissed on push; a merge method list other than exactly `squash`. The approval count only goes up (stricter is left). |
-| Q-K4-180 | The proxy of this environment refuses writes to the rulesets path. | Reported, not worked around; the proof is left to the maintainers' login (see Decision 6). |
+| Q-K4-177 ruled | Rule 19 says `plan` writes nothing; the skill must run commands "from payload files in a temporary directory". Who writes the files? | `plan --payload-dir DIR` writes them, only there, only when asked; without it the payloads are printed inline. No file in the repository, nothing to GitHub. Ruled as read. |
+| Q-K4-178 ruled | `--phase auto` when the runs read fails. | Phase 1 (never require a check on a guess). Ruled as read. |
+| Q-K4-179 ruled | Which values count as "looser" than the kit's? Rule 20 gives examples. | Enforcement not active; any bypass actor; stale approvals not dismissed on push; a merge method list other than exactly `squash`. The approval count only goes up (stricter is left). Ruled as read. |
+| Q-K4-180 ruled | The proxy of this environment refuses writes to the rulesets path. | Reported, not worked around; the proof is left to the maintainers' login (see Decision 6). Ruled as read. |
 
 ## Residual
 
-- 2026-10-18: what GitHub does for a required check that has never run is not proven on the sandbox (due 2026-11-30, as the Residual of SPEC-0013).
+- 2026-10-18 (Q-K4-101 ruled): what GitHub does for a required check that has never run is not proven on the sandbox; the maintainers run the steps of `docs/runs/ruleset-sandbox-proof.md` and record the result by a docs pull request (due 2026-11-30, as the Residual of SPEC-0013).
 - 2026-10-18: the plan finds the ruleset to extend by the default branch it targets, not by name; a repository with several matching rulesets gets additions in
   the first active one by id (due 2026-12-31).
