@@ -163,12 +163,18 @@ def age_days(item: dict, today: date) -> int | None:
     return None if opened is None else (today - opened).days
 
 
+def document_link(item: dict, links: Links, directory: str) -> str:
+    """The file at the facts commit when the facts carry its path, else the directory."""
+    path = item.get("path")
+    return links.file(path) if isinstance(path, str) and path else links.tree(directory)
+
+
 def spec_items(doc: dict, links: Links) -> list[str]:
     rows = sorted((s for s in doc["specs"] if s.get("status") == "Draft"), key=lambda s: s["id"])
     return [
         bullet(
             f'Draft spec {s["id"]} "{s["title"]}" waits for approval',
-            links.tree("docs/specs"),
+            document_link(s, links, "docs/specs"),
         )
         for s in rows
     ]
@@ -179,7 +185,7 @@ def adr_items(doc: dict, links: Links) -> list[str]:
     return [
         bullet(
             f'Proposed {a["id"]} "{a["title"]}" waits for a decision',
-            links.tree("docs/adr"),
+            document_link(a, links, "docs/adr"),
         )
         for a in rows
     ]
@@ -339,6 +345,26 @@ def last_change(doc: dict, req_id: str) -> dict | None:
     return max(related, key=lambda p: (p.get("merged_at") or "", p["number"]), default=None)
 
 
+REASON_WORDS = {
+    "green-on-base": "the new tests already pass without the change",
+    "red-on-head": "the tests fail on the change itself",
+    "timeout": "the test run took too long",
+    "no-project-tests": "no test command is configured",
+    "no-test-files": "the change adds no test file",
+}
+
+
+def why(change: dict) -> str:
+    """The outcome and its reason, as `not-proven: red-on-head, the tests fail on the change`."""
+    reason = change.get("proof_reason")
+    if not isinstance(reason, str) or reason == UNKNOWN:
+        return f"{change.get('proof')}: reason unknown"
+    words = REASON_WORDS.get(reason)
+    return (
+        f"{change.get('proof')}: {reason}, {words}" if words else f"{change.get('proof')}: {reason}"
+    )
+
+
 def proof_words(proof) -> str:
     return "skipped (declared unchanged)" if proof == "skipped" else str(proof)
 
@@ -374,10 +400,13 @@ def proven(doc: dict, links: Links) -> list[str]:
             reasons.append("no merged change was found")
         elif change.get("proof") == "not-proven":
             reasons.append(
-                f"the last change (PR #{change['number']}) was not shown to need its test"
+                f"the last change (PR #{change['number']}) was not shown to need its test "
+                f"({why(change)})"
             )
         elif change.get("proof") not in ("proven", "skipped"):
-            reasons.append(f"the last change (PR #{change['number']}) has an unknown proof")
+            reasons.append(
+                f"the last change (PR #{change['number']}) has an unknown proof ({why(change)})"
+            )
         if reasons:
             lines.append(bullet(f"{r['id']} is not proven: " + "; ".join(reasons), link))
         else:

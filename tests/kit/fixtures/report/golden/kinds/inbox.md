@@ -1,10 +1,10 @@
 The inbox as of 2026-10-14.
 
 ### Draft specs (1)
-- Draft spec SPEC-0002 "Draft one" waits for approval — https://github.com/demo-org/demo-repo/tree/c0ffee0000000000000000000000000000000000/docs/specs
+- Draft spec SPEC-0002 "Draft one" waits for approval — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/specs/0002-draft.md
 
 ### Proposed ADRs (1)
-- Proposed ADR-0002 "Proposed one" waits for a decision — https://github.com/demo-org/demo-repo/tree/c0ffee0000000000000000000000000000000000/docs/adr
+- Proposed ADR-0002 "Proposed one" waits for a decision — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/adr/0002-proposed.md
 
 ### Questions waiting (2)
 - Question Q-X1-1 is waiting, asked in docs/runs/spec-0002-notes.md — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/runs/spec-0002-notes.md

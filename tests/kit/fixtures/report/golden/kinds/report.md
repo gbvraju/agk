@@ -16,8 +16,8 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 ## Proven
 
 - REQ-001 is proven (last change <pr>5: proven) — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L3
-- REQ-002 is not proven: AC2 has no test; the last change (<pr>6) was not shown to need its test — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L8
-- REQ-003 is not proven: the last change (<pr>7) has an unknown proof — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L13
+- REQ-002 is not proven: AC2 has no test; the last change (<pr>6) was not shown to need its test (not-proven: green-on-base, the new tests already pass without the change) — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L8
+- REQ-003 is not proven: the last change (<pr>7) has an unknown proof (unknown: timeout, the test run took too long) — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L13
 - REQ-004 is not proven: AC1 has no test; no merged change was found — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L18
 - REQ-005 is not proven: it lists no acceptance criteria; no merged change was found — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L23
 - REQ-006 is not proven: its acceptance criteria are unknown — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L28
@@ -27,10 +27,10 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 ## Needs you
 
 ### Draft specs (1)
-- Draft spec SPEC-0002 "Draft one" waits for approval — https://github.com/demo-org/demo-repo/tree/c0ffee0000000000000000000000000000000000/docs/specs
+- Draft spec SPEC-0002 "Draft one" waits for approval — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/specs/0002-draft.md
 
 ### Proposed ADRs (1)
-- Proposed ADR-0002 "Proposed one" waits for a decision — https://github.com/demo-org/demo-repo/tree/c0ffee0000000000000000000000000000000000/docs/adr
+- Proposed ADR-0002 "Proposed one" waits for a decision — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/adr/0002-proposed.md
 
 ### Questions waiting (2)
 - Question Q-X1-1 is waiting, asked in docs/runs/spec-0002-notes.md — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/runs/spec-0002-notes.md

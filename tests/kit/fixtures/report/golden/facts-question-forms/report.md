@@ -13,10 +13,10 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 ## Needs you
 
 ### Draft specs (1)
-- Draft spec SPEC-0002 "Draft" waits for approval — https://github.com/demo-org/demo-repo/tree/2e97534e04287b988d7149d93bd10c1406fba32b/docs/specs
+- Draft spec SPEC-0002 "Draft" waits for approval — https://github.com/demo-org/demo-repo/blob/2e97534e04287b988d7149d93bd10c1406fba32b/docs/specs/0002-draft.md
 
 ### Proposed ADRs (1)
-- Proposed ADR-0002 "Proposed" waits for a decision — https://github.com/demo-org/demo-repo/tree/2e97534e04287b988d7149d93bd10c1406fba32b/docs/adr
+- Proposed ADR-0002 "Proposed" waits for a decision — https://github.com/demo-org/demo-repo/blob/2e97534e04287b988d7149d93bd10c1406fba32b/docs/adr/0002-proposed.md
 
 ### Questions waiting (4)
 - Question Q-X1-1 is waiting, asked in docs/runs/spec-0002-notes.md — https://github.com/demo-org/demo-repo/blob/2e97534e04287b988d7149d93bd10c1406fba32b/docs/runs/spec-0002-notes.md

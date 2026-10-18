@@ -20,10 +20,10 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 ## Needs you
 
 ### Draft specs (1)
-- Draft spec SPEC-0002 "Draft one" waits for approval — https://github.com/demo-org/demo-repo/tree/c0ffee0000000000000000000000000000000000/docs/specs
+- Draft spec SPEC-0002 "Draft one" waits for approval — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/specs/0002-draft.md
 
 ### Proposed ADRs (1)
-- Proposed ADR-0002 "Proposed one" waits for a decision — https://github.com/demo-org/demo-repo/tree/c0ffee0000000000000000000000000000000000/docs/adr
+- Proposed ADR-0002 "Proposed one" waits for a decision — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/adr/0002-proposed.md
 
 ### Questions waiting (unknown)
 - unknown: questions could not be read — https://github.com/demo-org/demo-repo/tree/c0ffee0000000000000000000000000000000000/docs

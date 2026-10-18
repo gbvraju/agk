@@ -4,6 +4,7 @@
       "amends": [],
       "date": "2026-09-01",
       "id": "ADR-0001",
+      "path": "docs/adr/0001-accepted.md",
       "protected_classes": [],
       "requirements": [],
       "status": "Accepted",
@@ -13,6 +14,7 @@
       "amends": [],
       "date": "2026-10-12",
       "id": "ADR-0002",
+      "path": "docs/adr/0002-proposed.md",
       "protected_classes": [],
       "requirements": [],
       "status": "Proposed",
@@ -122,6 +124,7 @@
       "merged_at": "2026-10-08T10:00:00Z",
       "number": 5,
       "proof": "proven",
+      "proof_reason": null,
       "state": "merged",
       "title": "Change number 5",
       "verdicts": [
@@ -144,6 +147,7 @@
       "merged_at": "2026-10-09T09:45:00Z",
       "number": 6,
       "proof": "not-proven",
+      "proof_reason": "green-on-base",
       "state": "merged",
       "title": "Change number 6",
       "verdicts": [
@@ -176,6 +180,7 @@
       "merged_at": "2026-10-10T10:00:00Z",
       "number": 7,
       "proof": "unknown",
+      "proof_reason": "timeout",
       "state": "merged",
       "title": "Change number 7",
       "verdicts": [
@@ -198,6 +203,7 @@
       "merged_at": "2026-10-07T10:00:00Z",
       "number": 8,
       "proof": "skipped",
+      "proof_reason": null,
       "state": "merged",
       "title": "Change number 8",
       "verdicts": [
@@ -218,6 +224,7 @@
       "merged_at": null,
       "number": 9,
       "proof": "unknown",
+      "proof_reason": "unknown",
       "state": "open",
       "title": "Change number 9",
       "verdicts": []
@@ -232,6 +239,7 @@
       "merged_at": null,
       "number": 10,
       "proof": "unknown",
+      "proof_reason": "unknown",
       "state": "open",
       "title": "Change number 10",
       "verdicts": []
@@ -246,6 +254,7 @@
       "merged_at": null,
       "number": 11,
       "proof": "unknown",
+      "proof_reason": "unknown",
       "state": "open",
       "title": "Change number 11",
       "verdicts": []
@@ -260,6 +269,7 @@
       "merged_at": null,
       "number": 12,
       "proof": "unknown",
+      "proof_reason": "unknown",
       "state": "closed",
       "title": "Change number 12",
       "verdicts": [
@@ -280,6 +290,7 @@
       "merged_at": null,
       "number": 13,
       "proof": "unknown",
+      "proof_reason": "unknown",
       "state": "open",
       "title": "Change number 13",
       "verdicts": [
@@ -302,6 +313,7 @@
       "merged_at": "2026-09-22T10:00:00Z",
       "number": 14,
       "proof": "proven",
+      "proof_reason": null,
       "state": "merged",
       "title": "Change number 14",
       "verdicts": [
@@ -525,6 +537,7 @@
       "id": "SPEC-0001",
       "notes": null,
       "open_questions": [],
+      "path": "docs/specs/0001-approved.md",
       "requirements": [
         "REQ-001",
         "REQ-002",
@@ -543,6 +556,7 @@
       "open_questions": [
         "Q-X1-1"
       ],
+      "path": "docs/specs/0002-draft.md",
       "requirements": [
         "REQ-008"
       ],

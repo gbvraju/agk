@@ -6,6 +6,7 @@
       ],
       "date": "2026-09-01",
       "id": "ADR-0001",
+      "path": "docs/adr/0001-demo.md",
       "protected_classes": [
         "scripts/agk/",
         ".claude/"
@@ -20,6 +21,7 @@
       "amends": [],
       "date": "2026-10-12",
       "id": "ADR-0002",
+      "path": "docs/adr/0002-proposed.md",
       "protected_classes": [],
       "requirements": [
         "REQ-002"
@@ -88,6 +90,7 @@
       "merged_at": "2026-10-08T09:00:00Z",
       "number": 5,
       "proof": "proven",
+      "proof_reason": null,
       "state": "merged",
       "title": "Change number 5",
       "verdicts": [
@@ -111,6 +114,7 @@
       "merged_at": null,
       "number": 7,
       "proof": "skipped",
+      "proof_reason": null,
       "state": "open",
       "title": "Change number 7",
       "verdicts": []
@@ -221,6 +225,7 @@
       "id": "SPEC-0001",
       "notes": null,
       "open_questions": [],
+      "path": "docs/specs/0001-demo.md",
       "requirements": [
         "REQ-001"
       ],
@@ -233,6 +238,7 @@
       "open_questions": [
         "Q-X1-1"
       ],
+      "path": "docs/specs/0002-draft.md",
       "requirements": [
         "REQ-002"
       ],

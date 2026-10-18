@@ -59,6 +59,7 @@
       "id": "SPEC-0001",
       "notes": null,
       "open_questions": [],
+      "path": "docs/specs/0001-approved.md",
       "requirements": [
         "REQ-001"
       ],

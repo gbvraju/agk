@@ -700,3 +700,83 @@ def test_the_age_arithmetic_counts_whole_calendar_days(created, listed, tmp_path
     ]
     out = render_doc(doc, tmp_path, "--inbox", capsys=capsys)
     assert bool(group(out, "Pull requests without a verdict")) is listed
+
+
+# --- E2: the proof reason in the Proven line, and the file link of a spec or an ADR -------------
+
+
+def proven_lines(doc, tmp_path, capsys) -> str:
+    return "\n".join(section(render_doc(doc, tmp_path, capsys=capsys), "## Proven"))
+
+
+def with_last_change(doc: dict, proof: str, reason) -> dict:
+    """REQ-002 in the `kinds` facts has its last change at PR 6; give that PR a proof and reason."""
+    for p in doc["pull_requests"]:
+        if p["number"] == 6:
+            p["proof"], p["proof_reason"] = proof, reason
+    return doc
+
+
+@pytest.mark.parametrize(
+    ("reason", "words"),
+    [
+        ("red-on-head", "the tests fail on the change itself"),
+        ("green-on-base", "the new tests already pass without the change"),
+        ("timeout", "the test run took too long"),
+        ("no-project-tests", "no test command is configured"),
+        ("no-test-files", "the change adds no test file"),
+    ],
+)
+def test_the_proven_line_prints_the_reason_next_to_not_proven(reason, words, tmp_path, capsys):
+    """REQ-018 AC2: rule 9 as amended (an environment fault reads differently from a real gap)."""
+    doc = with_last_change(kinds(), "not-proven", reason)
+    lines = proven_lines(doc, tmp_path, capsys)
+    needle = f"(PR #{6}) was not shown to need its test (not-proven: {reason}, {words})"
+    assert needle in lines
+
+
+def test_an_unknown_proof_prints_its_reason_too(tmp_path, capsys):
+    """REQ-018 AC2: the same, for an outcome of unknown."""
+    doc = with_last_change(kinds(), "unknown", "timeout")
+    assert "has an unknown proof (unknown: timeout, the test run took too long)" in proven_lines(
+        doc, tmp_path, capsys
+    )
+
+
+@pytest.mark.parametrize("reason", ["unknown", "a-reason-the-renderer-has-no-words-for"])
+def test_a_reason_that_is_unknown_or_has_no_words_is_printed_as_it_is(reason, tmp_path, capsys):
+    """REQ-018 AC2: rule 12 (unknown stays unknown; a reason without words is not hidden)."""
+    lines = proven_lines(with_last_change(kinds(), "not-proven", reason), tmp_path, capsys)
+    if reason == "unknown":
+        assert "(not-proven: reason unknown)" in lines
+    else:
+        assert f"(not-proven: {reason})" in lines
+
+
+def test_a_document_without_proof_reason_still_renders(tmp_path, capsys):
+    """REQ-018 AC2: schema 1 is unchanged; a document made before the field existed has none."""
+    doc = kinds()
+    for p in doc["pull_requests"]:
+        p.pop("proof_reason", None)
+    assert "(not-proven: reason unknown)" in proven_lines(doc, tmp_path, capsys)
+
+
+def test_a_draft_spec_and_a_proposed_adr_link_their_files_when_the_facts_carry_a_path(
+    tmp_path, capsys
+):
+    """Residual of SPEC-0011 (due 2026-11-30): the inbox links the file, not the directory."""
+    out = render_doc(kinds(), tmp_path, "--inbox", capsys=capsys)
+    commit = kinds()["commit"]
+    base = f"https://github.com/demo-org/demo-repo/blob/{commit}/"
+    assert group(out, "Draft specs")[0].endswith(f" — {base}docs/specs/0002-draft.md")
+    assert group(out, "Proposed ADRs")[0].endswith(f" — {base}docs/adr/0002-proposed.md")
+
+
+def test_without_a_path_the_inbox_links_the_directory_as_before(tmp_path, capsys):
+    """REQ-017 AC1: a document without `path` (made before the field existed) still renders."""
+    doc = kinds()
+    for item in (*doc["specs"], *doc["adrs"]):
+        item.pop("path", None)
+    out = render_doc(doc, tmp_path, "--inbox", capsys=capsys)
+    assert group(out, "Draft specs")[0].endswith("/tree/" + doc["commit"] + "/docs/specs")
+    assert group(out, "Proposed ADRs")[0].endswith("/tree/" + doc["commit"] + "/docs/adr")

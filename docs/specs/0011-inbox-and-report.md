@@ -68,7 +68,7 @@ were read on 2026-10-16.
      include a file that carries a marker of that requirement (a derived link; no pull request body is read, Q-K4-47). The line is
      `REQ-001 is proven` when k = n and the last change's `proof` is `proven` or `skipped`, and otherwise `REQ-001 is not proven:`
      followed by every reason that holds, in this order: `AC2 has no test`; `the last change (PR #44) was not shown to need its test`
-     (`not-proven`); `the last change (PR #44) has an unknown proof` (`unknown`); `no merged change was found` (no related pull request).
+     (`not-proven`; followed by the reason in parentheses, `(not-proven: red-on-head, the tests fail on the change itself)`, or `(not-proven: reason unknown)`); `the last change (PR #44) has an unknown proof` (`unknown`; the same form); `no merged change was found` (no related pull request).
      `skipped` is printed as `skipped (declared unchanged)`. `planned` requirements are counted in one closing line, not listed.
 10. **Needs you, At risk, Cost.**
     - *Needs you.* The inbox of rule 3, all items, grouped by kind in the order of the table, each group headed by its count.

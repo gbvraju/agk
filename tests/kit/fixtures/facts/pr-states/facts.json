@@ -6,6 +6,7 @@
       ],
       "date": "2026-09-01",
       "id": "ADR-0001",
+      "path": "docs/adr/0001-demo.md",
       "protected_classes": [
         "scripts/agk/",
         ".claude/"
@@ -71,6 +72,7 @@
       "merged_at": "2026-10-09T10:00:00Z",
       "number": 11,
       "proof": "proven",
+      "proof_reason": null,
       "state": "merged",
       "title": "Change number 11",
       "verdicts": [
@@ -99,6 +101,7 @@
       "merged_at": null,
       "number": 12,
       "proof": "not-proven",
+      "proof_reason": "red-on-head",
       "state": "closed",
       "title": "Change number 12",
       "verdicts": [
@@ -122,6 +125,7 @@
       "merged_at": "2026-10-07T10:00:00Z",
       "number": 13,
       "proof": "unknown",
+      "proof_reason": "unknown",
       "state": "merged",
       "title": "Change number 13",
       "verdicts": []
@@ -139,6 +143,7 @@
       "merged_at": "2026-10-06T10:00:00Z",
       "number": 14,
       "proof": "skipped",
+      "proof_reason": null,
       "state": "merged",
       "title": "Change number 14",
       "verdicts": []
@@ -156,6 +161,7 @@
       "merged_at": "2026-10-05T10:00:00Z",
       "number": 15,
       "proof": "unknown",
+      "proof_reason": "timeout",
       "state": "merged",
       "title": "Change number 15",
       "verdicts": []
@@ -173,6 +179,7 @@
       "merged_at": "2026-10-04T10:00:00Z",
       "number": 16,
       "proof": "unknown",
+      "proof_reason": "unknown",
       "state": "merged",
       "title": "Change number 16",
       "verdicts": []
@@ -190,6 +197,7 @@
       "merged_at": null,
       "number": 18,
       "proof": "proven",
+      "proof_reason": null,
       "state": "open",
       "title": "Change number 18",
       "verdicts": []
@@ -204,6 +212,7 @@
       "merged_at": null,
       "number": 19,
       "proof": "unknown",
+      "proof_reason": "unknown",
       "state": "open",
       "title": "Change number 19",
       "verdicts": "unknown"
@@ -300,6 +309,7 @@
       "id": "SPEC-0001",
       "notes": null,
       "open_questions": [],
+      "path": "docs/specs/0001-demo.md",
       "requirements": [
         "REQ-001"
       ],
