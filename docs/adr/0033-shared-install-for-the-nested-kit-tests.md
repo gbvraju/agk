@@ -1,6 +1,6 @@
 # ADR-0033: one shared installed target for the nested init tests (Q-K4-158)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-18
 - Deciders: maintainers
 - Related: ADR-0028, ADR-0032
@@ -67,9 +67,9 @@ them) and the adopt test (90 to 108 s).
 
 | Q | Question | Reading taken (conservative) |
 | --- | --- | --- |
-| Q-K4-159 | `make -o agk-test test` runs the real `test` target without its kit-suite prerequisite; is that the same `make test`? | yes for what those tests assert (the project tests are collected, run, and fail the target); the kit-suite half is asserted by `kit_suite.alias`, and the new structural test pins the composition |
-| Q-K4-160 | Should the adopt test share a target too? | no: its target is an adopt-mode install of a synthetic project, different from an init install; one run stays |
-| Q-K4-161 | The suite results are shared within one pytest session. | one process only; a re-run of a single test (`-k`) pays its own `kit_suite` cost |
+| Q-K4-159 ruled | `make -o agk-test test` runs the real `test` target without its kit-suite prerequisite; is that the same `make test`? | yes for what those tests assert (the project tests are collected, run, and fail the target); the kit-suite half is asserted by `kit_suite.alias`, and the new structural test pins the composition |
+| Q-K4-160 ruled | Should the adopt test share a target too? | no: its target is an adopt-mode install of a synthetic project, different from an init install; one run stays |
+| Q-K4-161 ruled | The suite results are shared within one pytest session. | one process only; a re-run of a single test (`-k`) pays its own `kit_suite` cost |
 
 ## Residual
 
