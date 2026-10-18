@@ -1,6 +1,7 @@
 """Tests of scripts/agk/facts.py (SPEC-0009 rules 1-15, 20, 22). No network, no model, no `gh`.
 
-Each case of `fixtures/facts/<case>/` holds `tree/` (the repository files), `api/` (recorded API
+Each case of `fixtures/facts/<case>/` holds `tree/` (the repository files; `testdata/tree/` where
+the tree holds files a language toolchain could discover, such as Go tests), `api/` (recorded API
 responses), `case.json` (arguments) and `facts.json` (the golden document). A golden is changed only
 by a person who runs `python3 tests/kit/test_facts.py --write-goldens`; no test rewrites one.
 """
@@ -45,10 +46,16 @@ def git(root: Path, *args: str) -> str:
     return proc.stdout
 
 
+def tree_of(case: str) -> Path:
+    """The case's repository files: under `testdata/` (Go ignores it) when the case has Go files."""
+    hidden = FIXTURES / case / "testdata" / "tree"
+    return hidden if hidden.is_dir() else FIXTURES / case / "tree"
+
+
 def build_repo(case: str, dest: Path, skip: tuple[str, ...] = ()) -> Path:
     """The case's tree, committed once with fixed identity and date, then its `modify` applied."""
     root = dest / "work"
-    shutil.copytree(FIXTURES / case / "tree", root)
+    shutil.copytree(tree_of(case), root)
     for rel in skip:
         (root / rel).unlink()
     git(root, "init", "-q", "-b", "main")

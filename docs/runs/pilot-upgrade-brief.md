@@ -34,8 +34,10 @@ kit = json.load(open(os.environ["KIT"] + "/kit/manifest.json"))
 owned = set(kit["verbatim"]) | {"agk.toml"}
 changed = subprocess.run(["git", "status", "--porcelain", "-z", "--untracked-files=all"],
                          capture_output=True, text=True, check=True).stdout.split("\0")
-paths = sorted(entry[3:] for entry in changed if entry)
-foreign = [p for p in paths if p not in owned]
+legacy = "tests/kit/fixtures/facts/go-style/tree/"  # kit 0.16.1 deletes this old kit tree (step 3b)
+entries = sorted((entry[3:], entry[:2]) for entry in changed if entry)
+paths = [p for p, _ in entries]
+foreign = [p for p, code in entries if p not in owned and not ("D" in code and p.startswith(legacy))]
 print(len(paths), "paths changed;", len(foreign), "are not kit files")
 for p in foreign:
     print("NOT A KIT FILE:", p)
@@ -45,6 +47,21 @@ PY
 
 Export `KIT` (the path of the kit checkout) before running it. The result must be `0 are not kit files`. Also run `git diff --stat -- agk.toml`: the only
 change in `agk.toml` is the `version` line. Anything else: stop and report the output verbatim.
+
+## 3b. Kit 0.16.1 only: delete the old Go fixture tree
+
+Skip this step when `KIT` is 0.16.0. From 0.16.1 the kit's fixture tree for Go lives under a `testdata` directory, which `go test` does
+not read. `upgrade.py` lists the old paths as `removed-in-kit` and never deletes them. In a Go repository they make `go test ./...`
+fail (`setup failed` for `tests/kit/fixtures/facts/go-style/tree/...`). In your branch, delete the old tree as part of the same
+change and run `go test ./...` once more:
+
+```sh
+git rm -r -q tests/kit/fixtures/facts/go-style/tree
+go test -count=1 ./...
+```
+
+It must pass. The deleted paths are all old kit files (the upgrade lists them as `removed-in-kit`), and the step 3 script allows exactly that
+deletion: run it again before the pull request; its `NOT A KIT FILE` list must stay empty.
 
 ## 4. The pilot's own checks
 
