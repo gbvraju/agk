@@ -1,0 +1,25 @@
+# ADR-0022: Add REQ-004: Export
+
+- Status: @STATUS@
+- Date: 2026-10-18
+- Deciders: maintainers
+- Related: SPEC-0014
+- Requirements: REQ-004
+
+Protected classes: @CLASSES@
+
+## Context
+
+x
+
+## Decision
+
+x
+
+## Consequences
+
+x
+
+## Residual
+
+None.

@@ -20,6 +20,59 @@ BASE_REQS = (
 )
 
 
+ACCEPTANCE = (
+    "AC1 Given a saved list, when the visitor exports it, then a file with every item is "
+    "downloaded; AC2 Given an empty list, when the visitor exports it, then the export is "
+    "no file and shows an error message"
+)
+
+
+def marker(req: str, ac: str) -> str:
+    return f"@{req[3:]} {ac}".replace("@", "REQ")
+
+
+def requirement(
+    acceptance: str = ACCEPTANCE, status: str = "planned", title: str = "Export"
+) -> str:
+    return f"\n### REQ-004 — {title}\n\n- Acceptance: {acceptance}\n- Status: {status}\n"
+
+
+def spec_text(
+    status: str = "Draft",
+    reqs: str = "REQ-004",
+    tests: str | None = None,
+    residual: str = "- 2026-10-18: later (due 2027-01-31).\n",
+    extra: str = "",
+    negative: str = "",
+    proof: str = "Rules 1 to 2.\n",
+    open_questions: str = "none\n",
+) -> str:
+    tests = (
+        tests
+        if tests is not None
+        else (
+            f"- Rule 1: test, marker {marker('REQ-004', 'AC1')}.\n"
+            f"- Rule 2: test, marker {marker('REQ-004', 'AC2')}.\n"
+        )
+    )
+    return (
+        f"# SPEC-0014: Export\n\n- Status: {status}\n- Owner: reviewer group\n"
+        f"- Requirements: {reqs}\n\n{negative}## Rules\n\n"
+        f"1. The export lists every item.{extra}\n\n"
+        f"## Tests\n\n{tests}\n## Proof\n\n{proof}\n## Residual\n\n{residual}\n"
+        f"## Open questions\n\n{open_questions}"
+    )
+
+
+def adr_text(status: str = "Proposed", classes: str = "`docs/requirements.md`") -> str:
+    return (
+        (KIT_ROOT / "tests" / "kit_dev" / "intake_adr.txt")
+        .read_text(encoding="utf-8")
+        .replace("@STATUS@", status)
+        .replace("@CLASSES@", classes)
+    )
+
+
 @pytest.fixture
 def repo(tmp_path):
     root = make_repo(tmp_path / "proj")
@@ -29,6 +82,8 @@ def repo(tmp_path):
         ("docs/specs/0002-older.md", "# SPEC-0002: Older\n"),
         ("docs/adr/0021-old.md", "# ADR-0021: Old\n"),
         ("docs/adr/0007-older.md", "# ADR-0007: Older\n"),
+        ("docs/runs/decisions-log.md", "# Decisions log\n\n| Date | Decision |\n| --- | --- |\n"),
+        ("docs/runs/residuals.md", "# Residuals\n\n## Open\n\n## Closed (not findings)\n"),
     ):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(text, encoding="utf-8")
@@ -52,6 +107,16 @@ def write(repo, rel, text, mode="w"):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, mode, encoding="utf-8") as fh:
         fh.write(text)
+
+
+def draft(repo, req=None, spec=None, adr=None):
+    write(repo, "docs/requirements.md", req if req is not None else requirement(), "a")
+    write(repo, "docs/specs/0014-export.md", spec if spec is not None else spec_text())
+    write(repo, "docs/adr/0022-add-req-004-export.md", adr if adr is not None else adr_text())
+
+
+def check(repo):
+    return run(repo, "check", "--base", "main")
 
 
 # --- ids and the sentence (rules 1, 2) ----------------------------------------------------------
@@ -231,3 +296,285 @@ def test_ac1_the_stub_refuses_a_title_over_80_characters_or_with_a_semicolon(rep
             "main",
         )
         assert proc.returncode == 1, title
+
+
+# --- the checks C1 to C9 (rule 11) --------------------------------------------------------------
+
+
+def test_ac1_a_good_draft_passes_the_checks(repo):
+    """REQ-019 AC1: rule 11 (all of C1 to C9 pass)."""
+    draft(repo)
+    proc = check(repo)
+    assert (proc.returncode, proc.stdout) == (0, "ok intake\n")
+
+
+def test_ac1_the_adr_of_a_good_draft_is_the_stub_that_the_script_renders(repo):
+    """REQ-019 AC1: rules 8 and 11."""
+    run(
+        repo,
+        "stub",
+        "--req",
+        "REQ-004",
+        "--title",
+        "Export",
+        "--sentence",
+        SENTENCE,
+        "--ref",
+        "main",
+    )
+    stub = next((repo / "docs" / "adr").glob("0022*"))
+    adr = stub.read_text(encoding="utf-8")
+    stub.unlink()
+    draft(repo, adr=adr)
+    assert check(repo).stdout == "ok intake\n"
+
+
+def failed(repo, code):
+    proc = check(repo)
+    assert proc.returncode == 1, proc.stdout
+    assert any(line.startswith(f"FAIL intake: {code} ") for line in proc.stdout.splitlines()), (
+        proc.stdout
+    )
+    return proc.stdout
+
+
+def test_ac1_c1_ids_that_are_not_the_next_free_ones_fail(repo):
+    """REQ-019 AC1: rule 11 C1."""
+    draft(repo)
+    (repo / "docs/specs/0014-export.md").rename(repo / "docs/specs/0015-export.md")
+    failed(repo, "C1")
+
+
+def test_ac1_c1_a_requirement_that_skips_a_number_fails(repo):
+    """REQ-019 AC1: rule 11 C1."""
+    draft(repo, req=requirement().replace("REQ-004", "REQ-006"))
+    failed(repo, "C1")
+
+
+def test_ac1_c2_a_fourth_file_fails(repo):
+    """REQ-019 AC1: rule 11 C2 (and rule 4: no notes file, no test, no code)."""
+    draft(repo)
+    write(repo, "docs/runs/spec-0014-notes.md", "notes\n")
+    failed(repo, "C2")
+
+
+def test_ac1_c2_a_changed_existing_line_of_the_requirements_fails(repo):
+    """REQ-019 AC1: rule 11 C2."""
+    draft(repo)
+    path = repo / "docs/requirements.md"
+    path.write_text(path.read_text(encoding="utf-8").replace("Three", "Tres"), encoding="utf-8")
+    failed(repo, "C2")
+
+
+def test_ac1_c2_a_missing_adr_fails(repo):
+    """REQ-019 AC1: rule 11 C2."""
+    draft(repo)
+    (repo / "docs/adr/0022-add-req-004-export.md").unlink()
+    failed(repo, "C2")
+
+
+def test_ac1_c3_the_acceptance_line_forms(repo):
+    """REQ-019 AC1: rule 11 C3 (a repeat; a semicolon inside; more than eight; none)."""
+    base = "Given a, when b, then c is not allowed"
+    cases = {
+        "repeat": f"AC1 {base}; AC1 {base}",
+        "gap": f"AC1 {base}; AC3 {base}",
+        "semicolon": "AC1 Given a; or a2, when b, then c is not allowed",
+        "nine": "; ".join(f"AC{i} {base}" for i in range(1, 10)),
+        "free text": "it works",
+        "not from one": f"AC2 {base}",
+    }
+    for name, acceptance in cases.items():
+        git(repo, "checkout", "-q", "--", ".")
+        subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
+        tests = "".join(f"- {marker('REQ-004', f'AC{i}')}\n" for i in range(1, 10))
+        draft(repo, req=requirement(acceptance), spec=spec_text(tests=tests))
+        failed(repo, "C3")
+        assert name
+
+
+def test_ac1_c3_eight_criteria_are_accepted(repo):
+    """REQ-019 AC1: rule 11 C3 (the limit)."""
+    base = "Given a, when b, then c is not allowed"
+    acceptance = "; ".join(f"AC{i} {base}" for i in range(1, 9))
+    tests = "".join(f"- {marker('REQ-004', f'AC{i}')}\n" for i in range(1, 9))
+    draft(repo, req=requirement(acceptance), spec=spec_text(tests=tests))
+    assert check(repo).stdout == "ok intake\n"
+
+
+def test_ac1_c3_the_title_limits(repo):
+    """REQ-019 AC1: rule 5 (80 characters, no semicolon)."""
+    draft(repo, req=requirement(title="x" * 81))
+    failed(repo, "C3")
+
+
+def test_ac1_c4_a_criterion_without_then_or_out_of_order_fails(repo):
+    """REQ-019 AC1: rule 11 C4 (case-insensitive; each word followed by text)."""
+    for bad in ("Given a, when b", "When b, given a, then c is not", "Given a, when, then c no"):
+        git(repo, "checkout", "-q", "--", ".")
+        subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
+        draft(
+            repo,
+            req=requirement(f"AC1 {bad}"),
+            spec=spec_text(tests=f"- {marker('REQ-004', 'AC1')}\n"),
+        )
+        failed(repo, "C4")
+    git(repo, "checkout", "-q", "--", ".")
+    subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
+    draft(
+        repo,
+        req=requirement("AC1 GIVEN a, WHEN b, THEN c is never shown"),
+        spec=spec_text(tests=f"- {marker('REQ-004', 'AC1')}\n"),
+    )
+    assert check(repo).stdout == "ok intake\n"
+
+
+def test_ac1_c5_a_negative_case_or_a_stated_reason(repo):
+    """REQ-019 AC1: rule 6 (with and without the reason; the reason is at least 20 characters)."""
+    positive = "AC1 Given a, when b, then c is shown"
+    tests = f"- {marker('REQ-004', 'AC1')}\n"
+    draft(repo, req=requirement(positive), spec=spec_text(tests=tests))
+    failed(repo, "C5")
+    git(repo, "checkout", "-q", "--", ".")
+    subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
+    short = spec_text(tests=tests, negative="Negative cases: none, because short\n\n")
+    draft(repo, req=requirement(positive), spec=short)
+    failed(repo, "C5")
+    git(repo, "checkout", "-q", "--", ".")
+    subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
+    why = "Negative cases: none, because the sentence names no refusal\n\n"
+    draft(repo, req=requirement(positive), spec=spec_text(tests=tests, negative=why))
+    assert check(repo).stdout == "ok intake\n"
+
+
+@pytest.mark.parametrize("status", ["done", "in-progress"])
+def test_ac1_c6_a_requirement_status_other_than_planned_fails(repo, status):
+    """REQ-019 AC1: rule 11 C6."""
+    draft(repo, req=requirement(status=status))
+    failed(repo, "C6")
+
+
+def test_ac1_c6_a_spec_approved_or_an_adr_accepted_fails(repo):
+    """REQ-019 AC1: rule 11 C6."""
+    draft(repo, spec=spec_text(status="Approved"))
+    failed(repo, "C6")
+    git(repo, "checkout", "-q", "--", ".")
+    subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
+    draft(repo, adr=adr_text(status="Accepted"))
+    failed(repo, "C6")
+
+
+def test_ac1_c7_requirements_line_and_test_markers(repo):
+    """REQ-019 AC1: rule 11 C7 (a missing marker; a stray marker; another requirement)."""
+    for spec in (
+        spec_text(reqs="REQ-004, REQ-001"),
+        spec_text(tests=f"- {marker('REQ-004', 'AC1')}\n"),
+        spec_text(tests="".join(f"- {marker('REQ-004', f'AC{i}')}\n" for i in (1, 2, 3))),
+        spec_text(tests=f"- {marker('REQ-001', 'AC1')}\n- {marker('REQ-004', 'AC2')}\n"),
+    ):
+        git(repo, "checkout", "-q", "--", ".")
+        subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
+        draft(repo, spec=spec)
+        failed(repo, "C7")
+
+
+def test_ac1_c8_sections_due_dates_and_question_ids(repo):
+    """REQ-019 AC1: rule 11 C8."""
+    good = spec_text()
+    cases = {
+        "no proof": good.replace("## Proof", "## Evidence"),
+        "empty proof": spec_text(proof=""),
+        "no residual": good.replace("## Residual", "## Left"),
+        "undated bullet": spec_text(residual="- 2026-10-18: later.\n"),
+        "empty residual": spec_text(residual=""),
+        "no open questions": good.replace("## Open questions", "## Questions"),
+        "foreign question": spec_text(open_questions="- Q-S0013-1 which?\n"),
+        "family of another": spec_text(extra=" See Q-K4-9."),
+    }
+    for name, spec in cases.items():
+        git(repo, "checkout", "-q", "--", ".")
+        subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
+        draft(repo, spec=spec)
+        failed(repo, "C8")
+        assert name
+    git(repo, "checkout", "-q", "--", ".")
+    subprocess.run(["git", "clean", "-fdq"], cwd=repo, check=True)
+    draft(repo, spec=spec_text(open_questions="- Q-S0014-1 which format?\n", residual="none\n"))
+    assert check(repo).stdout == "ok intake\n"
+
+
+def test_ac1_c9_the_adr_must_name_the_requirements_file(repo):
+    """REQ-019 AC1: rule 11 C9."""
+    draft(repo, adr=adr_text(classes="`docs/specs/`"))
+    failed(repo, "C9")
+
+
+def test_ac1_a_failure_names_the_rule_and_never_the_sentence(repo):
+    """REQ-019 AC1: rule 11 (messages name the rule, never the sentence)."""
+    draft(
+        repo, req=requirement("AC1 Given the secret-word-xyz, when b").replace("Export", "Export")
+    )
+    out = failed(repo, "C4")
+    assert "secret-word-xyz" not in out
+
+
+def test_ac1_check_without_a_base_fails_rather_than_passing(repo):
+    """REQ-019 AC1: rule 11 (a check that cannot read its base does not pass)."""
+    draft(repo)
+    proc = run(repo, "check", "--base", "no-such-ref")
+    assert proc.returncode == 1 and proc.stdout.startswith("FAIL intake:")
+
+
+# --- a draft is not a fact (rule 14) ------------------------------------------------------------
+
+FACTS = KIT_ROOT / "scripts" / "agk" / "facts.py"
+REPORT = KIT_ROOT / "scripts" / "agk" / "product_report.py"
+
+
+def facts_of(root, tmp_path) -> dict:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(FACTS),
+            "--today",
+            "2026-10-18",
+            "--repo",
+            "demo-org/demo-repo",
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    (tmp_path / "facts.json").write_text(proc.stdout, encoding="utf-8")
+    return json.loads(proc.stdout)
+
+
+def render(tmp_path, *flags) -> str:
+    proc = subprocess.run(
+        [sys.executable, str(REPORT), "--facts", str(tmp_path / "facts.json"), *flags],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout
+    return proc.stdout
+
+
+def commit_draft(repo, spec=None):
+    draft(repo, spec=spec)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "intake")
+
+
+def test_ac2_the_facts_of_the_default_branch_do_not_contain_the_draft(repo, tmp_path):
+    """REQ-019 AC2: rule 14 (a draft on the intake branch is not in requirements, specs, adrs)."""
+    commit_draft(repo)
+    git(repo, "switch", "-q", "main")
+    doc = facts_of(repo, tmp_path)
+    assert "REQ-004" not in [r["id"] for r in doc["requirements"]]
+    assert "SPEC-0014" not in [s["id"] for s in doc["specs"]]
+    assert not [a for a in doc["adrs"] if a["path"].startswith("docs/adr/0022")]
+    assert "REQ-004" not in render(tmp_path) and "SPEC-0014" not in render(tmp_path, "--inbox")
+    git(repo, "switch", "-q", "intake/req-004-export")  # the control: the branch itself has it
+    assert "REQ-004" in [r["id"] for r in facts_of(repo, tmp_path)["requirements"]]
