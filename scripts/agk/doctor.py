@@ -24,6 +24,7 @@ DRIFT_WORKFLOW = ".github/workflows/drift-audit.yml"
 DRIFT_NAME = "drift-audit.yml"
 REPORT_WORKFLOW = ".github/workflows/product-report.yml"
 REPORT_NAME = "product-report.yml"
+ISSUE_WRITERS = ("metrics.yml", "drift-audit.yml", "product-report.yml")  # `issues: write`
 KIT_ONLY = ("kit/", "tests/kit_dev/")
 KIT_ONLY_FILES = ("scripts/agk/init.py", "scripts/agk/adopt.py")
 MARKERS = {
@@ -137,6 +138,14 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "the drift-audit workflow (and the product-report workflow, where installed) is active",
         "the drift-audit workflow or the product-report workflow is not active on GitHub",
         "enable the workflow (GitHub disables scheduled workflows after inactivity (verify))",
+    ),
+    "issues-disabled": (
+        "error",
+        "Issues are enabled, or no workflow that writes issues is installed",
+        "repository setting has_issues is off and workflows that write issues are installed",
+        "enable Issues in the repository settings (General, Features), or delete the workflow "
+        "files that write issues (.github/workflows/metrics.yml, drift-audit.yml, "
+        "product-report.yml)",
     ),
     "kit-version": (
         "warn",
@@ -401,10 +410,27 @@ def workflow_state_result(reads: Reads, report_installed: bool) -> Result:
     return Result("cannot-check", reasons[0]) if reasons else Result("ok")
 
 
-def remote_results(reads: Reads, config: dict, report_installed: bool) -> dict[str, Result]:
+def issues_result(repo_data: Any, reason: str, writers: list[str]) -> Result:
+    """Fails when has_issues is false and an issue-writing workflow is installed (no new read)."""
+    if not writers:
+        return Result("ok")
+    if not isinstance(repo_data, dict):
+        return Result("cannot-check", reason or "bad-response")
+    enabled = repo_data.get("has_issues")
+    if not isinstance(enabled, bool):
+        return Result("cannot-check", "bad-response")
+    if enabled:
+        return Result("ok")
+    return Result("fail", message=f" ({', '.join(writers)})")
+
+
+def remote_results(
+    reads: Reads, config: dict, report_installed: bool, writers: list[str]
+) -> dict[str, Result]:
     out: dict[str, Result] = {}
     repo_data, reason = reads.get("repo", "")
     out["drift-workflow-state"] = workflow_state_result(reads, report_installed)
+    out["issues-disabled"] = issues_result(repo_data, reason, writers)
     if not isinstance(repo_data, dict):
         for check in [
             "ruleset-missing",
@@ -568,9 +594,13 @@ def run_checks(
     except (OSError, ValueError):
         raise Refusal("agk.toml is not readable TOML (path class agk.toml)", 3) from None
     results: dict[str, Result] = {}
+    writers = [n for n in ISSUE_WRITERS if (root / ".github" / "workflows" / n).is_file()]
     results.update(
         remote_results(
-            Reads(repo or origin_repo(root), api_dir), config, (root / REPORT_WORKFLOW).is_file()
+            Reads(repo or origin_repo(root), api_dir),
+            config,
+            (root / REPORT_WORKFLOW).is_file(),
+            writers,
         )
     )
     results["placeholder-team-reviewers"] = placeholder_result(root / "config" / "reviewers.yaml")

@@ -1,0 +1,10 @@
+{
+  "cannot": {},
+  "delete": [
+    ".github/workflows/drift-audit.yml"
+  ],
+  "fail": [
+    "drift-workflow-file"
+  ],
+  "origin_head": true
+}

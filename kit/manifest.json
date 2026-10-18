@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.16.1",
+  "kit_version": "0.17.0",
   "verbatim": [
     ".claude/agents/drift-auditor.md",
     ".claude/hooks/stop_check.py",
@@ -64,6 +64,12 @@
     "tests/kit/fixtures/doctor/excluded-default-branch/case.json",
     "tests/kit/fixtures/doctor/excluded-default-ref/api/ruleset-1.json",
     "tests/kit/fixtures/doctor/excluded-default-ref/case.json",
+    "tests/kit/fixtures/doctor/issues-disabled-no-workflows/api/repo.json",
+    "tests/kit/fixtures/doctor/issues-disabled-no-workflows/case.json",
+    "tests/kit/fixtures/doctor/issues-disabled/api/repo.json",
+    "tests/kit/fixtures/doctor/issues-disabled/case.json",
+    "tests/kit/fixtures/doctor/issues-unknown/api/repo.json",
+    "tests/kit/fixtures/doctor/issues-unknown/case.json",
     "tests/kit/fixtures/doctor/merge-commits-allowed/api/ruleset-1.json",
     "tests/kit/fixtures/doctor/merge-commits-allowed/case.json",
     "tests/kit/fixtures/doctor/no-admin-empty-list/api/repo.json",

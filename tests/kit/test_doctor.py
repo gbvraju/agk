@@ -23,6 +23,7 @@ REMOTE = {
     "repo-auto-merge",
     "repo-delete-branch",
     "drift-workflow-state",
+    "issues-disabled",
     "default-branch-config",
 }
 LOCAL = set(IDS) - REMOTE
@@ -118,7 +119,7 @@ def test_ac1_the_ok_case_reports_none_and_exits_0(tmp_path):
     assert proc.returncode == 0, proc.stdout
     assert "FAIL" not in proc.stdout and "??" not in proc.stdout
     assert proc.stdout.splitlines()[0] == "agk doctor 9.9.9"
-    assert proc.stdout.splitlines()[-1] == "summary: 20 ok, 0 fail, 0 cannot-check"
+    assert proc.stdout.splitlines()[-1] == "summary: 21 ok, 0 fail, 0 cannot-check"
 
 
 def test_ac1_stricter_than_the_minimum_is_ok(tmp_path):
@@ -180,7 +181,7 @@ def test_ac1_text_report_shape(tmp_path):
     assert lines[i + 1] == "  fix: run /agk:upgrade (SPEC-0008)"
     j = lines.index(next(ln for ln in lines if ln.startswith("?? vendored-missing error ")))
     assert lines[j + 1].startswith("  to check: ")
-    assert lines[-1] == "summary: 17 ok, 1 fail, 2 cannot-check"
+    assert lines[-1] == "summary: 18 ok, 1 fail, 2 cannot-check"
 
 
 def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
@@ -188,7 +189,7 @@ def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
     proc, _, _ = run_case("vendored-edited", tmp_path, "--json")
     data = json.loads(proc.stdout)
     assert list(data) == sorted(data) == ["checks", "doctor", "summary"]
-    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 19}
+    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 20}
     for check in data["checks"]:
         assert list(check) == sorted(check)
         assert (check["status"] == "cannot-check") == ("reason" in check)
@@ -513,7 +514,7 @@ def test_ac1_default_root_is_the_current_directory(tmp_path):
 
 def test_ac1_every_id_has_a_severity_and_a_printed_fix():
     """REQ-002 AC1: rule 5."""
-    assert len(IDS) == 20
+    assert len(IDS) == 21
     for severity, ok_text, fail_text, fix in CHECKS.values():
         assert severity in ("error", "warn") and ok_text and fail_text and fix
     assert CHECKS["ruleset-missing"][3].endswith("use a ruleset (ADR-0001 decision 3)")
@@ -569,3 +570,47 @@ def test_ac1_targets_default_branch(include, exclude, expected):
     """REQ-002 AC1: rule 5 (`~ALL` includes the default branch; an exclude removes it)."""
     ruleset = {"conditions": {"ref_name": {"include": include, "exclude": exclude}}}
     assert targets_default(ruleset, "main") is expected
+
+
+# --- issues-disabled (SPEC-0006 amendment): Issues off, an issue-writing workflow installed ---
+
+
+def test_ac1_issues_off_with_an_issue_writing_workflow_fails_and_names_the_setting(tmp_path):
+    """REQ-002 AC1: the check reads has_issues from the repository read it already makes."""
+    proc, log, _ = run_case("issues-disabled", tmp_path, "--json")
+    check = checks_of(proc.stdout)["issues-disabled"]
+    assert check["status"] == "fail" and check["severity"] == "error"
+    assert "has_issues" in check["message"] and "drift-audit.yml" in check["message"]
+    assert "enable Issues" in check["fix"] and "metrics.yml" in check["fix"]
+    assert proc.returncode == 1  # an error-severity failure: the weekly outputs are lost
+    assert not log.exists()
+
+
+def test_ac1_issues_off_with_no_issue_writing_workflow_is_ok(tmp_path):
+    """REQ-002 AC1: nothing writes an issue, so nothing fails; no read of the setting is needed."""
+    proc, _, _ = run_case("issues-disabled-no-workflows", tmp_path, "--json")
+    assert checks_of(proc.stdout)["issues-disabled"]["status"] == "ok"
+
+
+def test_ac1_issues_off_names_every_installed_issue_writer(tmp_path):
+    """REQ-002 AC1: the three workflows that need `issues: write` are the ones listed."""
+    dirs = prepare("issues-disabled", tmp_path)
+    workflows = dirs["root"] / ".github" / "workflows"
+    for name in ("metrics.yml", "product-report.yml"):
+        (workflows / name).write_text("name: x\n", encoding="utf-8")
+    stub = tmp_path / "bin"
+    stub_gh(stub)
+    proc = doctor(
+        "--api-dir", str(dirs["api"]), "--repo", "example-owner/example-repo",
+        "--kit-root", str(dirs["kit"]), "--json", str(dirs["root"]),
+        path=f"{stub}{os.pathsep}{os.environ['PATH']}",
+    )  # fmt: skip
+    message = checks_of(proc.stdout)["issues-disabled"]["message"]
+    assert "(metrics.yml, drift-audit.yml, product-report.yml)" in message
+
+
+def test_ac1_a_repository_read_without_has_issues_cannot_be_checked(tmp_path):
+    """REQ-002 AC1: an unknown setting is cannot-check, never ok."""
+    proc, _, _ = run_case("issues-unknown", tmp_path, "--json")
+    check = checks_of(proc.stdout)["issues-disabled"]
+    assert (check["status"], check["reason"]) == ("cannot-check", "bad-response")
