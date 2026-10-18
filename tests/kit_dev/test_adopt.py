@@ -613,3 +613,32 @@ def test_scanner_excludes_are_printed_by_adopt_and_not_written(adopted):
     out = " ".join(adopt(adopted, "--dry-run").stdout.split())
     assert " ".join(template.split()) in out
     assert not any(p.name == "scanner-excludes.txt" for p in adopted.rglob("*"))
+
+
+OWN_REGISTER = (
+    "# Ours\n\n## Open\n\n- docs/adr/0001-x.md 2026-10-01 | ours | (due 2026-12-01) | open\n"
+)
+
+# --- the residuals register (Day 14 E1c): created when absent, never overwritten ---------------
+
+
+def test_ac1_adopt_creates_an_empty_residuals_register_when_none_exists(existing):
+    """REQ-010 AC1: additive only; the register has its Open heading and no line."""
+    assert adopt(existing).returncode == 0
+    text = (existing / "docs" / "runs" / "residuals.md").read_text(encoding="utf-8")
+    assert "\n## Open\n" in text
+    assert not [ln for ln in text.splitlines() if ln.startswith("- ")]
+
+
+def test_ac1_adopt_leaves_an_existing_residuals_register_alone(existing):
+    """REQ-010 AC1: a register that exists is never compared, rewritten or refused."""
+    own = OWN_REGISTER
+    path = existing / "docs" / "runs" / "residuals.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(own, encoding="utf-8")
+    first = adopt(existing)
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert path.read_text(encoding="utf-8") == own
+    again = adopt(existing)
+    assert again.returncode == 0
+    assert path.read_text(encoding="utf-8") == own
