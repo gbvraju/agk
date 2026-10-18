@@ -195,10 +195,11 @@ def test_ac1_each_row_of_rule_7_for_an_init_target(tmp_path, kit, capsys):
         "skipme.txt",
     ]
     assert lines_of(out, "removed-in-kit") == ["c.txt"]
-    assert (target / "c.txt").read_text() == OLD["c.txt"]  # never deleted
+    assert "removed-in-kit c.txt (unmodified, deleted)" in out
+    assert not (target / "c.txt").exists()  # an unmodified kit file the new kit no longer ships
     for rel, text in NEW.items():
         assert (target / rel).read_text() == text, rel
-    assert "upgraded 8 files; the version line of agk.toml is set to 2.0.0" in out
+    assert "upgraded 8 files and deleted 1; the version line of agk.toml is set to 2.0.0" in out
 
 
 def test_ac1_a_file_deleted_locally_is_reported_and_not_recreated(tmp_path, kit, capsys):
@@ -569,7 +570,7 @@ def test_ac1_a_legacy_install_gets_agk_toml_from_the_template_as_the_last_write(
         "remove it in your own change"
     ) in out
     assert "create agk.toml" in out
-    assert "upgraded 9 files; agk.toml is created with version 2.0.0" in out
+    assert "upgraded 9 files and deleted 1; agk.toml is created with version 2.0.0" in out
     assert not any(ln.startswith("template-changed agk.toml") for ln in out)
 
 
@@ -626,7 +627,10 @@ def test_ac1_a_legacy_dry_run_writes_nothing_and_says_what_it_would_do(tmp_path,
     assert code == 0 and snapshot(target) == before
     assert "create agk.toml" in out
     assert any(
-        ln.startswith("dry run: 9 files would change; agk.toml would be created") for ln in out
+        ln.startswith(
+            "dry run: 9 files would change, 1 would be deleted; agk.toml would be created"
+        )
+        for ln in out
     )
 
 
@@ -722,3 +726,140 @@ def test_ac1_a_real_legacy_install_upgrades_and_pyproject_stays_the_same(tmp_pat
     assert config["installed"] == stamp["installed"]
     again = upgrade_cli(target)
     assert again.returncode == 0 and again.stdout.splitlines()[-1] == "nothing to do"
+
+
+# --- removed-in-kit: an unmodified kit file is deleted, anything else is kept (ADR-0031) ---
+
+
+def know(root: Path, version: str, files: dict[str, str], new_row: bool = False) -> None:
+    """Make the table list `files` in the row of `version` (a new row when asked)."""
+    path = root / "kit" / "hashes.json"
+    table = json.loads(path.read_text(encoding="utf-8"))
+    row = table["releases"].setdefault(
+        version, {"commits": [], "verbatim": {}, "blocks": {}, "templates": {}}
+    )
+    for rel, text in files.items():
+        row["verbatim"].setdefault(rel, []).append(upgrade.digest(text.encode()))
+    path.write_text(kit_hashes.dump(table), encoding="utf-8")
+
+
+def test_ac1_a_modified_removed_file_is_kept_and_reported(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 7 (removed-in-kit, modified: kept)."""
+    target = init_target(tmp_path, **{"c.txt": "c edited by me\n"})
+    code, out = run(capsys, target)
+    assert code == 0
+    assert "removed-in-kit c.txt (modified, kept)" in out
+    assert (target / "c.txt").read_text() == "c edited by me\n"
+    summary = next(ln for ln in out if ln.startswith("upgraded"))
+    assert summary.startswith("upgraded 8 files;") and "deleted" not in summary
+
+
+def test_ac1_a_dry_run_shows_both_and_deletes_nothing(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 14 (the dry run names what would be deleted and what is kept)."""
+    know(kit, "1.0.0", {"x/old.txt": "old kit file\n"})
+    target = init_target(tmp_path, **{"x/old.txt": "old kit file\n", "c.txt": "mine\n"})
+    before = snapshot(target)
+    code, out = run(capsys, target, "--dry-run")
+    assert code == 0
+    assert "removed-in-kit x/old.txt (unmodified, deleted)" in out
+    assert "removed-in-kit c.txt (modified, kept)" in out
+    assert any(ln.startswith("dry run: 8 files would change, 1 would be deleted;") for ln in out)
+    assert snapshot(target) == before
+
+
+def test_ac1_a_copy_from_any_release_of_the_path_counts_as_unmodified(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 7 (the history of the path in kit/hashes.json, not one release)."""
+    know(kit, "0.9.0", {"c.txt": "c ancient\n"}, new_row=True)
+    target = init_target(tmp_path, **{"c.txt": "c ancient\n"})
+    code, out = run(capsys, target)
+    assert code == 0 and "removed-in-kit c.txt (unmodified, deleted)" in out
+    assert not (target / "c.txt").exists()
+
+
+def test_ac1_nothing_outside_the_kit_paths_is_ever_deleted(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 7 (a path the table does not list is not a kit path, whatever it holds)."""
+    target = init_target(
+        tmp_path,
+        **{
+            "src/copy.txt": OLD["c.txt"],  # the bytes of a removed kit file, at a path of its own
+            "docs/notes.md": "mine\n",
+        },
+    )
+    before = snapshot(target)
+    code, _ = run(capsys, target)
+    assert code == 0
+    after = snapshot(target)
+    for rel in ("src/copy.txt", "docs/notes.md", "src/app.py", "docs/adr/0001.md"):
+        assert after[rel] == before[rel], rel
+    assert not (target / "c.txt").exists()
+
+
+def test_ac1_a_removed_path_that_is_not_a_regular_file_is_kept(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 7 (a symlink at the path is not deleted)."""
+    target = init_target(tmp_path)
+    (target / "c.txt").unlink()
+    (target / "elsewhere.txt").write_text(OLD["c.txt"], encoding="utf-8")
+    (target / "c.txt").symlink_to("elsewhere.txt")
+    code, out = run(capsys, target)
+    assert code == 0 and "removed-in-kit c.txt (not a regular file, kept)" in out
+    assert (target / "c.txt").is_symlink() and (target / "elsewhere.txt").exists()
+
+
+def test_ac1_emptied_directories_go_with_the_file_and_others_stay(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 7 (only the directories the deletion emptied)."""
+    know(kit, "1.0.0", {"old/deep/gone.txt": "g\n", "old/keep/gone2.txt": "g2\n"})
+    target = init_target(
+        tmp_path,
+        **{"old/deep/gone.txt": "g\n", "old/keep/gone2.txt": "g2\n", "old/keep/mine.txt": "m\n"},
+    )
+    code, _ = run(capsys, target)
+    assert code == 0
+    assert not (target / "old" / "deep").exists()
+    assert (target / "old" / "keep" / "mine.txt").exists()
+    assert not (target / "old" / "keep" / "gone2.txt").exists()
+
+
+def test_ac1_a_run_that_only_deletes_is_not_nothing_to_do_and_the_next_is(tmp_path, kit, capsys):
+    """REQ-014 AC5: rules 5 and 21 (the same version, one removed file left behind)."""
+    target = init_target(tmp_path)
+    put(target, {k: v for k, v in NEW.items()})
+    put(target, {"agk.toml": AGK_TOML.format(mode="init").replace("1.0.0", "2.0.0")})
+    know(kit, "2.0.0", {"c.txt": OLD["c.txt"]})
+    put(target, {"c.txt": OLD["c.txt"]})
+    code, out = run(capsys, target)
+    assert code == 0 and out[-1] == "upgraded 0 files and deleted 1; the version line is unchanged"
+    assert not (target / "c.txt").exists()
+    assert run(capsys, target)[1][-1] == "nothing to do"
+
+
+def test_ac1_an_adopt_target_gets_the_same_rule(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 7 (in the target's mode, installed in X's mode or not)."""
+    target = adopt_target(tmp_path)
+    code, out = run(capsys, target)
+    assert code == 0 and "removed-in-kit c.txt (unmodified, deleted)" in out
+    assert not (target / "c.txt").exists()
+    assert (target / "Makefile").read_text() == "the project's own\n"
+
+
+def test_ac1_a_path_the_adopt_install_leaves_to_the_project_is_never_deleted(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 7 (the adopt skip list and the marked blocks belong to the project)."""
+    know(kit, "1.0.0", {"Makefile": "the project's own\n"})
+    path = kit / "kit" / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["verbatim"] = [p for p in manifest["verbatim"] if p != "Makefile"]
+    manifest["adopt"]["skip"] = [*manifest["adopt"]["skip"], "Makefile"]
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    target = adopt_target(tmp_path)
+    code, out = run(capsys, target)
+    assert code == 0 and "removed-in-kit Makefile (kept: left to the project in adopt mode)" in out
+    assert (target / "Makefile").read_text() == "the project's own\n"
+
+
+def test_ac1_the_deleted_paths_name_their_protected_classes(tmp_path, kit, capsys):
+    """REQ-014 AC5: rule 12 (a deletion in a protected class needs the same ADR as a write)."""
+    know(kit, "1.0.0", {".claude/old.txt": "o\n"})
+    target = init_target(tmp_path, **{".claude/old.txt": "o\n"})
+    code, out = run(capsys, target)
+    assert code == 0
+    line = next(ln for ln in out if ln.startswith("Protected classes:"))
+    assert "`.claude/`" in line
