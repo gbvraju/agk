@@ -681,6 +681,23 @@ def test_ac1_next_steps_refuse_when_the_checks_fail(repo):
     assert proc.returncode == 1 and "git push" not in proc.stdout
 
 
+def test_ac1_next_steps_refuse_on_a_detached_head_or_the_default_branch(repo):
+    """REQ-019 AC1: rule 3 (no push of the default branch, no push of nothing)."""
+    draft(repo)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "intake")
+    git(repo, "switch", "-q", "--detach")
+    for _ in range(2):
+        proc = run(repo, "next-steps", "--base", "main~1")
+        assert proc.returncode == 1 and proc.stdout.startswith("refused: rule 3")
+        assert "git push" not in proc.stdout and "main" not in proc.stdout.replace("rule 3", "")
+        git(repo, "switch", "-q", "main")
+        git(repo, "merge", "-q", "--ff-only", "intake/req-004-export")
+    git(repo, "switch", "-q", "intake/req-004-export")
+    proc = run(repo, "next-steps", "--base", "main~1")
+    assert proc.returncode == 0 and "git push -u origin intake/req-004-export" in proc.stdout
+
+
 def test_ac2_after_the_merge_the_requirement_is_planned_and_the_spec_and_adr_wait(repo, tmp_path):
     """REQ-019 AC2: rule 14 (merging approves the requirement; the spec stays Draft)."""
     commit_draft(repo, spec=spec_text(open_questions="- Q-S0014-1 which format?\n"))

@@ -18,7 +18,7 @@ place. This part installs the pieces a target needs and applies the two amendmen
 ## Decision
 
 1. **`python3 scripts/agk/intake.py next-steps [--base REF] [--date D]`** (rule 13) runs the checks first; if any fails it prints the failures and
-   no next steps (exit 1). Otherwise it prints the commit message (`intake: add REQ-nnn <title>`), the push command for the current branch and a
+   no next steps (exit 1). It first refuses (exit 1, `refused: rule 3`, no branch name, no next steps) when the current branch is empty (a detached HEAD) or is the default branch, so it never prints a push of nothing or of the default branch. Otherwise it prints the commit message (`intake: add REQ-nnn <title>`), the push command for the current branch and a
    pull request body: `Advances: REQ-nnn`, a dated `Build-state row:`, `Decisions taken:`, `Questions:`, `Verified:`, and the statement that the
    checks cannot say that the criteria are the right ones (rule 12). The body passes `check_pr_body`. The commands are printed by the script,
    so the skill names no forbidden verb.
@@ -33,7 +33,7 @@ place. This part installs the pieces a target needs and applies the two amendmen
    section (not an open place); its golden and the two report goldens built from it (`facts-question-forms`) are regenerated and read: the inbox now lists the Draft spec's question as waiting.
 4. **Installed text**: `docs/specs/TEMPLATE.md` gains `## Open questions` (rule 18); the proposal issue form says to propose in one plain
    sentence of at most 300 characters (rule 15).
-5. **Tests**: next steps (commit, push, body passes `check_pr_body`, refusal on a failing draft); the skill (no forbidden verb, no file other than the
+5. **Tests**: next steps (commit, push, body passes `check_pr_body`, refusal on a failing draft, refusal on a detached HEAD and on the default branch, the push of an `intake/` branch); the skill (no forbidden verb, no file other than the
    three of rule 4, user-invoked, the four script calls in order, the questions limit); after a merge the requirement is `planned`, the spec `Draft`,
    the ADR `Proposed`, the question is open and waiting in the inbox, and nothing is delivered (rule 14); the end-to-end test (`test_end_to_end.py`)
    runs a sentence through `ids`, `stub`, the written files, `check`, `make governance`, the merge, `facts.py` and the report. `test_distribution.py`

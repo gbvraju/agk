@@ -364,6 +364,11 @@ def cmd_check(root: Path, base: str | None) -> int:
 
 
 def cmd_next_steps(root: Path, base: str | None, today: str) -> int:
+    branch = git(root, "branch", "--show-current").strip()
+    if not branch or branch == load_config(root)["default_branch"]:
+        raise Refusal(
+            "rule 3: the work is not on an intake branch (detached or the default branch)"
+        )
     draft = draft_of(root, base)
     problems = draft.run()
     if problems or draft.req is None:
@@ -372,7 +377,6 @@ def cmd_next_steps(root: Path, base: str | None, today: str) -> int:
         print("the intake does not pass `check`; no next steps are printed")
         return 1
     req = draft.req
-    branch = git(root, "branch", "--show-current").strip()
     advance = f"Advances: {req['id']}"
     print(f"Commit message:\n\nintake: add {req['id']} {req['title']}\n")
     print(f"Push command:\n\ngit push -u origin {branch}\n")
