@@ -1,6 +1,6 @@
 # ADR-0031: installed fixtures are invisible to a project's own test runners, kit 0.16.1
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-18
 - Deciders: maintainers
 - Related: ADR-0008, ADR-0023
@@ -91,14 +91,15 @@ with the output in the Context.
 
 | Q | Question | Reading taken (conservative) |
 | --- | --- | --- |
-| Q-K4-148 | Move only the Go files, or the whole tree? | the whole `go-style` tree moves, so the facts engine still sees one repository and its other files (`docs/`, `agk.toml`) stay with the Go files; the golden does not change |
-| Q-K4-149 | The brief asks for a rule about `.go` only. | the test also rejects Python and JavaScript test names outside `testdata`, because the ADR claims those two are safe and a claim without a test is a guess |
-| Q-K4-150 | The Go check needs a Go toolchain. | it runs where `go` is on `PATH` and is skipped elsewhere; the live proof above is the record that it ran, on Go 1.24.7 |
-| Q-K4-151 | What upgrade does with the paths the new kit no longer lists. | nothing new: it lists them as `removed-in-kit` and never deletes; the pilot deletes the old go-style tree itself (Consequences) |
+| Q-K4-148 ruled | Move only the Go files, or the whole tree? | the whole `go-style` tree moves, so the facts engine still sees one repository and its other files (`docs/`, `agk.toml`) stay with the Go files; the golden does not change |
+| Q-K4-149 ruled | The brief asks for a rule about `.go` only. | the test also rejects Python and JavaScript test names outside `testdata`, because the ADR claims those two are safe and a claim without a test is a guess |
+| Q-K4-150 ruled | The Go check needs a Go toolchain. | it runs where `go` is on `PATH` and is skipped elsewhere; the live proof above is the record that it ran, on Go 1.24.7 |
+| Q-K4-151 ruled | What upgrade does with the paths the new kit no longer lists. | nothing new: it lists them as `removed-in-kit` and never deletes; the pilot deletes the old go-style tree itself (Consequences) |
 
 ## Residual
 
 - 2026-10-18: the discovery test covers Go, Python and JavaScript names only; extend it when a fixture in another language
   (Rust, Java, Ruby) is added (due 2026-11-30).
-- 2026-10-18: upgrade leaves the old go-style tree in place in every repository that adopted 0.16.0 or earlier, and the Go ones fail
-  until it is deleted by hand; whether upgrade should offer to remove `removed-in-kit` fixture paths is the maintainers' ruling (due 2026-10-31).
+- 2026-10-18: upgrade deletes a path the new kit no longer ships only when its content matches a hash of that path in `kit/hashes.json`
+  history (an unmodified kit file); otherwise it reports the path and leaves it (maintainers' ruling; due 2026-11-07, before launch).
+  Until then the pilot's step 3b (delete the old go-style tree by hand) stays.
