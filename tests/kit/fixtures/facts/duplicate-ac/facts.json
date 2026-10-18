@@ -6,6 +6,7 @@
       ],
       "date": "2026-09-01",
       "id": "ADR-0001",
+      "path": "docs/adr/0001-demo.md",
       "protected_classes": [
         "scripts/agk/",
         ".claude/"
@@ -127,6 +128,7 @@
       "id": "SPEC-0001",
       "notes": null,
       "open_questions": [],
+      "path": "docs/specs/0001-demo.md",
       "requirements": [
         "REQ-001"
       ],

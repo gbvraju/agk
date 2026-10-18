@@ -562,3 +562,79 @@ if __name__ == "__main__":  # pragma: no cover
                 raise SystemExit(f"{name}: {proc.stdout}{proc.stderr}")
             (FIXTURES / name / "facts.json").write_text(proc.stdout, encoding="utf-8")
             print("wrote", name)
+
+
+# --- E2: the reason of the proof, and the path of a spec or an ADR --------------------------------
+
+
+def test_ac2_proof_reason_is_read_from_the_name_of_the_outcome_step(tmp_path):
+    """REQ-018 AC2: SPEC-0010 rule 17 as amended (`outcome: not-proven (red-on-head)`)."""
+    found = pulls(tmp_path)
+    assert found[12]["proof_reason"] == "red-on-head"  # not-proven (red-on-head)
+    assert found[15]["proof_reason"] == "timeout"  # unknown (timeout)
+    assert found[11]["proof_reason"] is None and found[14]["proof_reason"] is None
+    assert found[18]["proof_reason"] is None  # proven and skipped have no reason
+    for number in (13, 16, 19):  # the outcome could not be read: the reason is unknown too
+        assert found[number]["proof"] == "unknown" and found[number]["proof_reason"] == "unknown"
+
+
+def test_ac2_a_run_made_before_the_names_carried_a_reason_reads_unknown(tmp_path):
+    """REQ-018 AC2: no guess, no default; an old step name gives a reason of `unknown`."""
+    api = tmp_path / "api"
+    shutil.copytree(FIXTURES / "pr-states" / "api", api)
+    path = api / "jobs-9012.json"
+    path.write_text(
+        path.read_text().replace("outcome: not-proven (red-on-head)", "outcome: not-proven")
+    )
+    root = build_repo("pr-states", tmp_path)
+    proc = run_facts(root, "pr-states", tmp_path, "--api-dir", str(api), api=False)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    found = {p["number"]: p for p in json.loads(proc.stdout)["pull_requests"]}
+    assert found[12]["proof"] == "not-proven" and found[12]["proof_reason"] == "unknown"
+
+
+@pytest.mark.parametrize("name", ["outcome: not-proven (Red On Head)", "outcome: not-proven ()"])
+def test_ac2_a_malformed_reason_reads_unknown(name, tmp_path):
+    """REQ-018 AC2: a reason must be lowercase words joined by hyphens."""
+    api = tmp_path / "api"
+    shutil.copytree(FIXTURES / "pr-states" / "api", api)
+    path = api / "jobs-9012.json"
+    path.write_text(path.read_text().replace("outcome: not-proven (red-on-head)", name))
+    root = build_repo("pr-states", tmp_path)
+    proc = run_facts(root, "pr-states", tmp_path, "--api-dir", str(api), api=False)
+    found = {p["number"]: p for p in json.loads(proc.stdout)["pull_requests"]}
+    assert found[12]["proof_reason"] == "unknown"
+
+
+def test_ac2_each_spec_and_adr_carries_its_path(tmp_path):
+    """REQ-018 AC2: SPEC-0009 rules 10 and 11 as amended (the inbox links the file)."""
+    doc = document("ok", tmp_path)
+    assert [s["path"] for s in doc["specs"]] == [
+        "docs/specs/0001-demo.md",
+        "docs/specs/0002-draft.md",
+    ]
+    assert [a["path"] for a in doc["adrs"]] == [
+        "docs/adr/0001-demo.md",
+        "docs/adr/0002-proposed.md",
+    ]
+
+
+def test_ac2_a_residual_bullet_named_by_a_closed_row_is_marked_closed(tmp_path):
+    """REQ-018 AC2: SPEC-0009 rule 12 and SPEC-0004 rule 9 as amended (the same rule as D4)."""
+    root = build_repo("ok", tmp_path)
+    adr = root / "docs" / "adr" / "0001-demo.md"
+    adr.write_text(
+        adr.read_text().rstrip("\n") + "\n- 2026-09-01: a delivered item (due 2026-10-01)\n",
+        encoding="utf-8",
+    )
+    register = root / "docs" / "runs" / "residuals.md"
+    register.write_text(
+        register.read_text().rstrip("\n")
+        + "\n| docs/adr/0001-demo.md | a delivered item | done |\n",
+        encoding="utf-8",
+    )
+    proc = run_facts(root, "ok", tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    items = [r for r in json.loads(proc.stdout)["residuals"] if "a delivered item" in r["text"]]
+    states = sorted((r["source"], r["state"]) for r in items)
+    assert ("docs/adr/0001-demo.md", "closed") in states

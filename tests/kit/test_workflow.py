@@ -167,10 +167,17 @@ def test_ac1_proof_has_one_run_step_and_four_outcome_steps_guarded_by_its_output
     assert "Red-then-green" in steps and "id: proof" in steps["Red-then-green"]
     assert "--json" in steps["Red-then-green"] and "--body -" in steps["Red-then-green"]
     assert '--head "$HEAD_SHA"' in steps["Red-then-green"]  # the pull request head, not the merge
+    reasoned = {"not-proven", "unknown"}  # the reason of proof.py is in the name of these two
+    expected = {
+        w: f"outcome: {w} (${{{{ steps.proof.outputs.reason }}}})"
+        if w in reasoned
+        else f"outcome: {w}"
+        for w in OUTCOMES
+    }
     for word in OUTCOMES:
-        block = steps[f"outcome: {word}"]
+        block = steps[expected[word]]
         assert f"if: ${{{{ steps.proof.outputs.outcome == '{word}' }}}}" in block
-    assert [n for n in steps if n.startswith("outcome: ")] == [f"outcome: {w}" for w in OUTCOMES]
+    assert [n for n in steps if n.startswith("outcome: ")] == [expected[w] for w in OUTCOMES]
     assert "continue-on-error" not in PROOF.read_text(encoding="utf-8")
 
 
@@ -233,7 +240,8 @@ def test_ac1_the_run_step_writes_the_outcome_and_exits_zero_for_every_outcome(tm
     for index, (word, (body, command)) in enumerate(cases.items()):
         proc, output = run_step(tmp_path / str(index), body, command)
         assert proc.returncode == 0, (word, proc.stdout, proc.stderr)
-        assert output.strip() == f"outcome={word}", (word, output)
+        reason = {"unknown": "no-project-tests", "skipped": "", "not-proven": "green-on-base"}[word]
+        assert output.splitlines() == [f"outcome={word}", f"reason={reason}"], (word, output)
 
 
 def test_ac1_the_run_step_fails_when_proof_itself_fails(tmp_path):

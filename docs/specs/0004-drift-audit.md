@@ -57,7 +57,9 @@ REQ-011 (drift audit): AC1 weekly; AC2 one issue per run; AC3 read-only. Rules m
    section has the form `- <source> | <text> | (due YYYY-MM-DD) | <status>`; a line whose date is before the run date
    is a finding naming its source. A bullet in a new ADR or spec carries its own `(due YYYY-MM-DD)`; the register
    exists for bullets of Accepted ADRs and Approved specs, which cannot change. A malformed line in the `## Open`
-   section is reported as a finding, not skipped. The subject of an overdue ADR or spec bullet is the file path, of
+   section is reported as a finding, not skipped. A bullet that a row of the register's `## Closed` table names is not a finding: the row's first
+   cell is the bullet's source and its second cell is the bullet's text without the leading `YYYY-MM-DD: ` and the trailing `(due YYYY-MM-DD)`, or the
+   whole bullet text (whitespace collapsed, otherwise an exact match; a different text, source or case does not close it). The subject of an overdue ADR or spec bullet is the file path, of
    an overdue register line its source field, of a malformed register line `docs/runs/residuals.md:LINE`; only
    bullet lines (`- `) of the `## Open` section are register entries.
 10. **D5 reviewers and CODEOWNERS drift.** The committed `.github/CODEOWNERS` equals the rendering of

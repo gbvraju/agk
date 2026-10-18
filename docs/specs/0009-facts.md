@@ -66,9 +66,9 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
    rule 14). Directories named `.git`, `node_modules`, `vendor`, `target`, `__pycache__` and `.venv` are skipped (Q-K4-6).
 10. **`specs`.** One object per `docs/specs/NNNN-*.md` (not `TEMPLATE.md`), sorted by id: `id` (`SPEC-NNNN`), `title`,
     `status` (`Draft` or `Approved`, from `check_specs.status_of`), `requirements` (the sorted `REQ-nnn` tokens of its
-    `- Requirements:` line), `notes` (the path of `docs/runs/spec-NNNN-notes.md` when it exists, else `null`), and `open_questions`
+    `- Requirements:` line), `path` (the repository path of the file), `notes` (the path of `docs/runs/spec-NNNN-notes.md` when it exists, else `null`), and `open_questions`
     (the `Q-` ids named in the notes file under `## Open` that the decisions log does not rule, rule 13).
-11. **`adrs`.** One object per `docs/adr/NNNN-*.md` (not `TEMPLATE.md`), sorted by id: `id` (`ADR-NNNN`), `title`, `status` (from
+11. **`adrs`.** One object per `docs/adr/NNNN-*.md` (not `TEMPLATE.md`), sorted by id: `id` (`ADR-NNNN`), `path` (the repository path of the file), `title`, `status` (from
     `check_adrs.status_of`; one of its four), `date`, `amends` (the list from the `- Amends:` field, `[]` if none),
     `requirements`, and `protected_classes` (the backticked entries of its `Protected classes:` line, `[]` if none).
 12. **`residuals`.** One object per residual line, from three sources, sorted by source then position: the `## Residual` bullets
@@ -88,7 +88,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     by number: `number`, `state` (`open`, `merged` or `closed`), `created_at`, `closed_at`, `merged_at`, `head` (SHA), `base`,
     `title`, `files` (sorted paths), `proof` (`proven`, `not-proven`, `skipped` or `unknown`: the outcome of the workflow run named
     `proof` for the head SHA, read from the step conclusions of its job as SPEC-0010 rule 17 defines; `"unknown"` when there is no such
-    run or the API could not be read), `verdicts` (the list `[{"kind": "cleared"|"fix"|"rejected", "sha", "at"}]` in time order,
+    run or the API could not be read), `proof_reason` (the word in parentheses in the name of the succeeded `not-proven` or `unknown` step; `null` for `proven` and `skipped`; `"unknown"` when the outcome is `"unknown"` because it could not be read, or the step name carries no reason), `verdicts` (the list `[{"kind": "cleared"|"fix"|"rejected", "sha", "at"}]` in time order,
     from the first line of each comment by the rule `metrics.VERDICT`/`metrics.verdicts`), and `behaviour` (`"unchanged"` when a
     line of the body, outside fenced code, is exactly `Behaviour: unchanged`; `null` when the body has no `Behaviour:` line;
     `"unknown"` when the body could not be read). With no GitHub source (offline, no `gh`, unauthenticated) the section is

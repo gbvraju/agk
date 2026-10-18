@@ -263,11 +263,50 @@ def residual_bullets(text: str) -> list[str]:
     return bullets
 
 
+BULLET_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}:\s*")
+BULLET_DUE = re.compile(r"\s*\(due \d{4}-\d{2}-\d{2}\)\.?\s*$")
+
+
+def bullet_names(bullet: str) -> set[str]:
+    """How the register's Closed table may name a residual bullet of an ADR or a spec.
+
+    Its text without the leading `YYYY-MM-DD: ` and the trailing `(due YYYY-MM-DD)`, or the whole
+    bullet text; whitespace collapsed, otherwise exact.
+    """
+    body = " ".join((bullet[2:] if bullet.startswith("- ") else bullet).split())
+    return {BULLET_DUE.sub("", BULLET_DATE.sub("", body)).strip(), body}
+
+
+def closed_rows(text: str) -> list[tuple[int, str, str]]:
+    """(line number, source, text) of each row of the register's `## Closed` table."""
+    rows, inside = [], False
+    for number, line in enumerate(text.splitlines(), 1):
+        if line.startswith("## "):
+            inside = line.strip().startswith("## Closed")
+        elif inside and line.startswith("|"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) >= 3 and cells[0] not in ("Source", "") and not set(cells[0]) <= {"-"}:
+                rows.append((number, cells[0], cells[1]))
+    return rows
+
+
+def closed_pairs(register: str | None) -> set[tuple[str, str]]:
+    """The (source, text) pairs the register's Closed table names, whitespace collapsed."""
+    return {(s, " ".join(t.split())) for _, s, t in closed_rows(register or "")}
+
+
+def is_closed(closed: set[tuple[str, str]], source: str, bullet: str) -> bool:
+    return any((source, name) in closed for name in bullet_names(bullet))
+
+
 def d4_documents(root: Path, today: date) -> tuple[list[Finding], int]:
     found, undated = [], 0
+    closed = closed_pairs(read(root, REGISTER))
     for rel in docs(root, "specs") + docs(root, "adr"):
         for number, bullet in enumerate(residual_bullets(read(root, rel) or ""), 1):
             due = DUE.search(bullet)
+            if is_closed(closed, rel, bullet):
+                continue  # named by a row of the register's Closed table: delivered, not a finding
             if not due:
                 undated += 1
             elif (when := parse_date(due.group(1))) is None:

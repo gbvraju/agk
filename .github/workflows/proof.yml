@@ -1,6 +1,7 @@
 # Red-then-green (SPEC-0010 rules 16 and 17). Not a required status check: the `governance` job and the ruleset are unchanged.
 # One step runs proof.py and never fails on an outcome; exactly one of the four `outcome:` steps then ends success and three
-# end skipped, so the outcome is readable from the job's steps (`facts.py`). The job fails only when proof.py itself failed.
+# end skipped, so the outcome is readable from the job's steps (`facts.py`). The names of the not-proven and unknown steps
+# carry the reason of proof.py in parentheses, so the reason is readable there too. The job fails only when proof.py itself failed.
 # It runs the project's tests on the pull request head, as `governance` does; the event is pull_request, never pull_request_target.
 name: proof
 
@@ -37,15 +38,16 @@ jobs:
             *) exit "$rc" ;;
           esac
           echo "outcome=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['outcome'])" "$RUNNER_TEMP/proof.json")" >> "$GITHUB_OUTPUT"
+          echo "reason=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['reason'] or '')" "$RUNNER_TEMP/proof.json")" >> "$GITHUB_OUTPUT"
       - name: "outcome: proven"
         if: ${{ steps.proof.outputs.outcome == 'proven' }}
         run: echo "proof proven"
-      - name: "outcome: not-proven"
+      - name: "outcome: not-proven (${{ steps.proof.outputs.reason }})"
         if: ${{ steps.proof.outputs.outcome == 'not-proven' }}
         run: echo "proof not-proven"
       - name: "outcome: skipped"
         if: ${{ steps.proof.outputs.outcome == 'skipped' }}
         run: echo "proof skipped"
-      - name: "outcome: unknown"
+      - name: "outcome: unknown (${{ steps.proof.outputs.reason }})"
         if: ${{ steps.proof.outputs.outcome == 'unknown' }}
         run: echo "proof unknown"

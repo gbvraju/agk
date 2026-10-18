@@ -101,8 +101,9 @@ reconfirmed are marked `(verify)`. The repository facts quoted here were read on
     reports it). The workflow runs the project's code on the pull request head, as `governance` does; it uses the `pull_request` event,
     never `pull_request_target`.
 17. **How the result reaches the facts.** The job has one step that runs `proof.py` with `--json` and exits 0 whatever the outcome,
-    and four steps named `outcome: proven`, `outcome: not-proven`, `outcome: skipped` and `outcome: unknown`, each guarded by an `if:`
-    on the step's output, so that exactly one of them ends `success` and three end `skipped`. The job itself ends `failure` only
+    and four steps named `outcome: proven`, `outcome: not-proven (<reason>)`, `outcome: skipped` and `outcome: unknown (<reason>)`, where `<reason>` is
+    the `reason` output of the run step (the `reason` of `proof.py --json`: `green-on-base`, `red-on-head`, `timeout`, `no-project-tests` or
+    `no-test-files`), each guarded by an `if:` on the step's `outcome` output, so that exactly one of them ends `success` and three end `skipped`. The job itself ends `failure` only
     when `proof.py` itself failed (usage, I/O). `facts.py` reads, for each pull request in its window, the workflow run of the head SHA
     named `proof` and its job's steps (`GET repos/{o}/{r}/actions/runs?head_sha=SHA` and `GET repos/{o}/{r}/actions/runs/{id}/jobs`
     `(verify)` that a step's name and conclusion are returned for every step; the implementation proves it on this repository, with a

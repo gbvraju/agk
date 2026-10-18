@@ -14,7 +14,7 @@
           "conclusion": "skipped"
         },
         {
-          "name": "outcome: not-proven",
+          "name": "outcome: not-proven ()",
           "conclusion": "skipped"
         },
         {
@@ -22,7 +22,7 @@
           "conclusion": "success"
         },
         {
-          "name": "outcome: unknown",
+          "name": "outcome: unknown ()",
           "conclusion": "skipped"
         }
       ]

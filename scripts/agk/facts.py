@@ -51,6 +51,7 @@ SPEC_TITLE = re.compile(r"^# SPEC-\d{4}:\s*(.+?)\s*$")
 SPEC_STATUSES = ("Draft", "Approved")
 LABELS = ("agk-metrics", "agk-drift-audit", "agk-product-report")
 OUTCOMES = ("proven", "not-proven", "skipped", "unknown")
+REASON = re.compile(r"(?!unknown$)[a-z]+(-[a-z]+)*")
 
 
 # --- the git facts ----------------------------------------------------------------------------
@@ -320,34 +321,24 @@ def due_of(text: str) -> Any:
     return match.group(1) if drift_audit.parse_date(match.group(1)) else UNKNOWN
 
 
-def closed_rows(text: str) -> list[tuple[int, str, str]]:
-    rows, inside = [], False
-    for number, line in enumerate(text.splitlines(), 1):
-        if line.startswith("## "):
-            inside = line.strip().startswith("## Closed")
-        elif inside and line.startswith("|"):
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cells) >= 3 and cells[0] not in ("Source", "") and not set(cells[0]) <= {"-"}:
-                rows.append((number, cells[0], cells[1]))
-    return rows
-
-
 def residuals_section(root: Path, specs: list[dict], adrs: list[dict]) -> Any:
     register = drift_audit.read(root, REGISTER)
     if register is None:
         return UNKNOWN
     found: list[tuple[str, int, dict]] = []
+    closed = drift_audit.closed_pairs(register)
     for rel in sorted(s["path"] for s in specs) + sorted(a["path"] for a in adrs):
         bullets = drift_audit.residual_bullets(drift_audit.read(root, rel) or "")
         for position, bullet in enumerate(bullets):
             body = bullet[2:]
-            item = {"source": rel, "text": body, "due": due_of(body), "state": "open"}
+            state = "closed" if drift_audit.is_closed(closed, rel, bullet) else "open"
+            item = {"source": rel, "text": body, "due": due_of(body), "state": state}
             found.append((rel, position, item))
     for entry in drift_audit.register_lines(register):
         due = entry["due"].isoformat() if entry["due"] else UNKNOWN
         item = {"source": REGISTER, "text": entry["text"], "due": due, "state": "open"}
         found.append((REGISTER, entry["number"], item))
-    for number, _source, body in closed_rows(register):
+    for number, _source, body in drift_audit.closed_rows(register):
         item = {"source": REGISTER, "text": body, "due": None, "state": "closed"}
         found.append((REGISTER, number, item))
     return [item for _, _, item in sorted(found, key=lambda f: (f[0], f[1]))]
@@ -398,29 +389,43 @@ def verdicts_of(comments: list | None) -> Any:
     return found
 
 
-def proof_of(src: Any, head: str) -> str:
+def proof_of(src: Any, head: str) -> tuple[str, Any]:
+    """(outcome, reason) of the `proof` job on this head: the outcome step that succeeded.
+
+    The reason is in parentheses in the name of a not-proven or unknown step (`outcome: not-proven
+    (red-on-head)`). It is None for proven and skipped, and "unknown" when the name carries none
+    (a run made before the names did) or the job could not be read.
+    """
     runs = get_object(src, f"runs-{head}", f"repos/{{repo}}/actions/runs?head_sha={head}")
     if runs is None or not isinstance(runs.get("workflow_runs"), list):
-        return UNKNOWN
+        return UNKNOWN, UNKNOWN
     named = [r for r in runs["workflow_runs"] if r.get("name") == "proof"]
     if not named:
-        return UNKNOWN
+        return UNKNOWN, UNKNOWN
     latest = max(named, key=lambda r: (r.get("created_at") or "", r.get("id") or 0))
     jobs = get_object(
         src, f"jobs-{latest.get('id')}", f"repos/{{repo}}/actions/runs/{latest.get('id')}/jobs"
     )
     if jobs is None or not isinstance(jobs.get("jobs"), list):
-        return UNKNOWN
+        return UNKNOWN, UNKNOWN
     job = next((j for j in jobs["jobs"] if j.get("name") == "proof"), None)
     steps = job.get("steps") if isinstance(job, dict) else None
     if not isinstance(steps, list):
-        return UNKNOWN
+        return UNKNOWN, UNKNOWN
     won = [
         s["name"][len("outcome: ") :]
         for s in steps
         if str(s.get("name", "")).startswith("outcome: ") and s.get("conclusion") == "success"
     ]
-    return won[0] if len(won) == 1 and won[0] in OUTCOMES else UNKNOWN
+    if len(won) != 1:
+        return UNKNOWN, UNKNOWN
+    outcome, _, rest = won[0].partition(" (")
+    if outcome not in OUTCOMES:
+        return UNKNOWN, UNKNOWN
+    if outcome in ("proven", "skipped"):
+        return outcome, None
+    reason = rest[:-1] if rest.endswith(")") else ""
+    return outcome, reason if REASON.fullmatch(reason) else UNKNOWN
 
 
 def pull_record(src: Any, item: dict) -> dict:
@@ -429,6 +434,7 @@ def pull_record(src: Any, item: dict) -> dict:
     files = get_list(src, f"files-{number}", f"repos/{{repo}}/pulls/{number}/files")
     comments = get_list(src, f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
     merged = bool(item.get("merged_at"))
+    proof = proof_of(src, head) if head else (UNKNOWN, UNKNOWN)
     return {
         "number": number,
         "state": "open" if item.get("state") == "open" else ("merged" if merged else "closed"),
@@ -439,7 +445,8 @@ def pull_record(src: Any, item: dict) -> dict:
         "base": (item.get("base") or {}).get("ref") or UNKNOWN,
         "title": item.get("title") or "",
         "files": UNKNOWN if files is None else sorted(f.get("filename", "") for f in files),
-        "proof": proof_of(src, head) if head else UNKNOWN,
+        "proof": proof[0],
+        "proof_reason": proof[1],
         "verdicts": verdicts_of(comments),
         "behaviour": behaviour_of(item["body"]) if "body" in item else UNKNOWN,
     }
@@ -528,6 +535,7 @@ def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
         "specs": [
             {
                 "id": s["id"],
+                "path": s["path"],
                 "title": s["title"],
                 "status": s["status"],
                 "requirements": s["requirements"],
@@ -536,7 +544,7 @@ def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
             }
             for s in specs
         ],
-        "adrs": [{k: v for k, v in a.items() if k != "path"} for a in adrs],
+        "adrs": adrs,
         "residuals": residuals_section(root, specs, adrs),
         "questions": questions_section(root, specs, adrs),
         "pull_requests": pulls_section(src, today, weeks),

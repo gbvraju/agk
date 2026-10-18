@@ -269,6 +269,9 @@
                 "const": "unknown"
               }
             ]
+          },
+          "path": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -334,6 +337,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "path": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -593,6 +599,20 @@
                   },
                   {
                     "type": "null"
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "proof_reason": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^(?!unknown$)[a-z]+(-[a-z]+)*$"
                   },
                   {
                     "const": "unknown"
