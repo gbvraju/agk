@@ -58,7 +58,7 @@ and the JSON keep it.
    | `origin-head` | warn | `refs/remotes/origin/HEAD` does not exist | `git remote set-head origin <default_branch>` (no network; `-a` asks the remote) |
    | `drift-workflow-file` | error | `.github/workflows/drift-audit.yml` is absent, or has no `schedule` with a `cron` | restore the file from the kit |
    | `drift-workflow-state` | error | the `state` of the drift-audit workflow, or of the product-report workflow where its file is installed, is not `active` on GitHub | enable the workflow (GitHub disables scheduled workflows after inactivity `(verify)`) |
-   | `issues-disabled` | warn | the repository setting `has_issues` is false and any of `.github/workflows/metrics.yml`, `drift-audit.yml`, `product-report.yml` exists in ROOT (the workflows that write issues) | enable Issues in the repository settings (General, Features), or delete the workflow files that write issues |
+   | `issues-disabled` | error | the repository setting `has_issues` is false and any of `.github/workflows/metrics.yml`, `drift-audit.yml`, `product-report.yml` exists in ROOT (the workflows that write issues) | enable Issues in the repository settings (General, Features), or delete the workflow files that write issues |
    | `kit-version` | warn | the installed kit's `kit_version` differs from `version` in `agk.toml` | run `/agk:upgrade` (SPEC-0008) |
    | `vendored-missing` | error | a file the installer for `mode` writes verbatim is absent | restore it from the kit |
    | `vendored-differs` | error | a vendored file differs byte for byte from the kit's copy, and the versions match | review `git log -p -- <path>`; restore the kit's copy, or record the deliberate edit in an ADR that names the path class |

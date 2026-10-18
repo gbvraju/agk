@@ -579,10 +579,10 @@ def test_ac1_issues_off_with_an_issue_writing_workflow_fails_and_names_the_setti
     """REQ-002 AC1: the check reads has_issues from the repository read it already makes."""
     proc, log, _ = run_case("issues-disabled", tmp_path, "--json")
     check = checks_of(proc.stdout)["issues-disabled"]
-    assert check["status"] == "fail" and check["severity"] == "warn"
+    assert check["status"] == "fail" and check["severity"] == "error"
     assert "has_issues" in check["message"] and "drift-audit.yml" in check["message"]
     assert "enable Issues" in check["fix"] and "metrics.yml" in check["fix"]
-    assert proc.returncode == 4  # a warn-severity failure is not an error exit
+    assert proc.returncode == 1  # an error-severity failure: the weekly outputs are lost
     assert not log.exists()
 
 

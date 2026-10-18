@@ -140,7 +140,7 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "enable the workflow (GitHub disables scheduled workflows after inactivity (verify))",
     ),
     "issues-disabled": (
-        "warn",
+        "error",
         "Issues are enabled, or no workflow that writes issues is installed",
         "repository setting has_issues is off and workflows that write issues are installed",
         "enable Issues in the repository settings (General, Features), or delete the workflow "

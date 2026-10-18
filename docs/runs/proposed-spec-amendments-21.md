@@ -8,7 +8,7 @@ issues (the metrics, the drift audit and the product report) could not write the
 
 ## SPEC-0006 (`docs/specs/0006-doctor.md`)
 
-1. **Rule 5, a new check `issues-disabled`** (warn): fails when the repository setting `has_issues` is false and any of the three workflow
+1. **Rule 5, a new check `issues-disabled`** (error, maintainers' ruling of Q-K4-162): fails when the repository setting `has_issues` is false and any of the three workflow
    files that write issues exists in ROOT; ok otherwise (also when nothing writes an issue, whatever the setting). `cannot-check` when the
    repository read fails (its reason class) or lacks `has_issues` (`bad-response`). Printed fix: enable Issues in the repository settings,
    or delete the workflow files that write issues. The fail message names the setting and the installed files, never a value.
