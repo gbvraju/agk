@@ -13,6 +13,8 @@ from pathlib import Path
 from conftest import (
     INIT,
     KIT_ROOT,
+    KitSuite,
+    Run,
     clean_env,
     expected_files,
     make_repo,
@@ -142,11 +144,11 @@ def test_ac2_kit_only_files_are_not_installed(installed):
         assert not (installed / rel).exists(), rel
 
 
-def test_ac2_governance_and_tests_green_in_target(installed):
-    """REQ-009 AC2: rule 23 (governance green after init)."""
-    gov = make(installed, "governance")
+def test_ac2_governance_and_tests_green_in_target(shared_copy, kit_suite: KitSuite):
+    """REQ-009 AC2: rule 23 (governance green after init). `make test` ran once, in a copy."""
+    gov = make(shared_copy, "governance")
     assert gov.returncode == 0, gov.stdout + gov.stderr
-    test = make(installed, "test")
+    test = kit_suite.alias
     assert test.returncode == 0, test.stdout[-2000:] + test.stderr[-2000:]
 
 
@@ -320,24 +322,41 @@ def test_ac2_rendered_output_is_neutral(installed):
 # --- Project tests run under make test (SPEC-0001 rule 18, amended) ----------------------------
 
 
-def test_ac2_project_tests_are_collected_and_run_by_make_test(installed):
-    """REQ-009 AC2: rule 18. A project test under tests/ runs in the target's make test."""
-    (installed / "tests" / "test_sample.py").write_text(
+def test_ac2_project_tests_are_collected_and_run_by_make_test(shared_copy):
+    """REQ-009 AC2: rule 18. A project test under tests/ runs in the target's make test.
+
+    `make -o agk-test test` is the `test` target without its kit-suite prerequisite, which
+    `kit_suite` runs once; `test_ac2_make_test_is_the_kit_suite_then_the_project_tests` pins that
+    the prerequisite is the only difference.
+    """
+    (shared_copy / "tests" / "test_sample.py").write_text(
         "def test_sample_runs():\n    assert 1 + 1 == 2\n", encoding="utf-8"
     )
-    proc = make(installed, "test", PYTEST_ADDOPTS="-rA")
+    proc = make(shared_copy, "-o", "agk-test", "test", PYTEST_ADDOPTS="-rA")
     assert proc.returncode == 0, proc.stdout[-2000:] + proc.stderr[-2000:]
     assert "PASSED tests/test_sample.py::test_sample_runs" in proc.stdout
+    assert "tests/kit" not in proc.stdout  # the kit suite did not run again
 
 
-def test_ac2_failing_project_test_makes_make_test_fail(installed):
-    """REQ-009 AC2: rule 18."""
-    (installed / "tests" / "test_sample.py").write_text(
+def test_ac2_failing_project_test_makes_make_test_fail(shared_copy):
+    """REQ-009 AC2: rule 18 (`make -o agk-test test`, as in the test above)."""
+    (shared_copy / "tests" / "test_sample.py").write_text(
         "def test_sample_fails():\n    assert False\n", encoding="utf-8"
     )
-    proc = make(installed, "test", PYTEST_ADDOPTS="-rA")
+    proc = make(shared_copy, "-o", "agk-test", "test", PYTEST_ADDOPTS="-rA")
     assert proc.returncode != 0
     assert "FAILED tests/test_sample.py::test_sample_fails" in proc.stdout
+
+
+def test_ac2_make_test_is_the_kit_suite_then_the_project_tests(shared_copy):
+    """REQ-009 AC2: rule 18. `make test` runs agk-test, then agk-project-test, and nothing else."""
+    plan = make(shared_copy, "-n", "test").stdout
+    suite = plan.index("pytest -c tests/kit/pytest.ini")
+    project = plan.index("scripts/agk/config.py project_tests")
+    assert suite < project
+    skipped = make(shared_copy, "-n", "-o", "agk-test", "test").stdout
+    assert "pytest -c tests/kit/pytest.ini" not in skipped
+    assert "scripts/agk/config.py project_tests" in skipped
 
 
 def test_ac2_installed_adr_records_the_one_direct_commit(installed):
@@ -374,18 +393,22 @@ def test_ac1_makefile_is_thin_aliases_of_agk_mk(installed):
         assert alias in text
 
 
-def test_ac1_both_forms_are_green_in_the_target(installed):
-    """REQ-010 AC1: rule 5. make governance (alias) and make -f agk.mk agk-governance agree."""
-    assert make(installed, "governance").returncode == 0
-    for target in ("agk-governance", "agk-test"):
-        proc = subprocess.run(
-            ["make", "-f", "agk.mk", target],
-            cwd=installed,
-            capture_output=True,
-            text=True,
-            env=clean_env(),
-        )
-        assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-1500:]
+def test_ac1_both_forms_are_green_in_the_target(shared_copy, kit_suite: KitSuite):
+    """REQ-010 AC1: rule 5. make governance (alias) and make -f agk.mk agk-governance agree.
+
+    `make -f agk.mk agk-test` ran once, in a copy of the same install (`kit_suite.direct`).
+    """
+    assert make(shared_copy, "governance").returncode == 0
+    proc = subprocess.run(
+        ["make", "-f", "agk.mk", "agk-governance"],
+        cwd=shared_copy,
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-1500:]
+    direct = kit_suite.direct
+    assert direct.returncode == 0, direct.stdout[-1500:] + direct.stderr[-1500:]
 
 
 def test_ac1_bare_pytest_in_the_target_collects_no_kit_test(installed):
@@ -452,9 +475,16 @@ def ci_steps(root: Path) -> list[str]:
     return CI_STEP.findall(text)
 
 
-def run_ci(root: Path) -> list[int]:
+KIT_SUITE_STEP = "make -f agk.mk agk-test"
+
+
+def run_ci(root: Path, kit_suite: Run) -> list[int]:
+    """The exit status of each CI step; the kit-suite step is the one `kit_suite.direct` ran."""
     codes = []
     for step in ci_steps(root):
+        if step == KIT_SUITE_STEP:
+            codes.append(kit_suite.returncode)
+            continue
         argv = step.split()
         if argv[0] == "python":
             argv[0] = sys.executable
@@ -463,20 +493,23 @@ def run_ci(root: Path) -> list[int]:
     return codes
 
 
-def test_ac1_ci_steps_include_the_project_tests_and_pass_when_they_pass(installed):
+def test_ac1_ci_steps_include_the_project_tests_and_pass_when_they_pass(
+    shared_copy, kit_suite: KitSuite
+):
     """REQ-010 AC1: rule 5 (project_tests)."""
-    steps = ci_steps(installed)
+    steps = ci_steps(shared_copy)
     assert len(steps) == 12  # nine checks, one step each (SPEC-0007 rule 13), then three makes
     assert all(s.startswith("python scripts/agk/") for s in steps[:9])
     assert [s.split()[-1] for s in steps[9:]] == ["agk-lint", "agk-test", "agk-project-test"]
-    (installed / "tests" / "test_p.py").write_text("def test_p():\n    assert True\n")
-    assert run_ci(installed) == [0] * 12
+    assert KIT_SUITE_STEP in steps
+    (shared_copy / "tests" / "test_p.py").write_text("def test_p():\n    assert True\n")
+    assert run_ci(shared_copy, kit_suite.direct) == [0] * 12
 
 
-def test_ac1_failing_project_test_makes_the_ci_steps_fail(installed):
+def test_ac1_failing_project_test_makes_the_ci_steps_fail(shared_copy, kit_suite: KitSuite):
     """REQ-010 AC1: rule 5. The regression guard: CI runs the project's own tests."""
-    (installed / "tests" / "test_p.py").write_text("def test_p():\n    assert False\n")
-    codes = run_ci(installed)
+    (shared_copy / "tests" / "test_p.py").write_text("def test_p():\n    assert False\n")
+    codes = run_ci(shared_copy, kit_suite.direct)
     assert codes[-1] != 0
     assert codes[:-1] == [0] * 11
 
