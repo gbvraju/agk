@@ -1,7 +1,7 @@
-# Proposed spec amendments 23 (SPEC-0009, SPEC-0010 and SPEC-0011; Day 14 E2)
+# Proposed spec amendments 23 (SPEC-0004, SPEC-0009, SPEC-0010 and SPEC-0011; Day 14 E2)
 
 Date: 2026-10-18 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). The paths:
-`docs/specs/0009-facts.md`, `docs/specs/0010-proof-checks.md`, `docs/specs/0011-inbox-and-report.md`.
+`docs/specs/0004-drift-audit.md`, `docs/specs/0009-facts.md`, `docs/specs/0010-proof-checks.md`, `docs/specs/0011-inbox-and-report.md`.
 
 **Applied by ADR-0036** (2026-10-18). It closes the two residuals of the product report: the Proven line prints the proof reason (due
 2026-11-15), and the facts carry a path for each spec and ADR so that inbox lines link the file (due 2026-11-30; proposals 18, item 2).
@@ -18,3 +18,8 @@ Date: 2026-10-18 (from `date -u`). Approved specs change only through a proposal
    reasons; a reason without a gloss is printed as it is; a missing or unknown reason reads `reason unknown`.
 6. **SPEC-0011 rules 3 and 11.** Inbox lines for a Draft spec and a Proposed ADR link the file (`path`) at the facts commit; with no `path`
    in the document they link the directory, as before.
+7. **SPEC-0004 rule 9, retiring a delivered bullet** (the maintainers' ruling of Q-K4-172). D4 skips a dated `## Residual` bullet of an ADR or a
+   spec when a row of the register's `## Closed` table names that source and that text: the first cell is the bullet's file, the second is
+   the bullet's text without its leading `YYYY-MM-DD: ` and its trailing `(due YYYY-MM-DD)` (or the whole bullet text), whitespace collapsed,
+   otherwise an exact match; another text, another source or another case does not close it. `facts.py` marks the same bullet
+   `"state": "closed"` in `residuals`, so the report's Needs-you and At-risk sections drop it (SPEC-0009 rule 12).

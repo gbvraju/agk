@@ -157,6 +157,14 @@ def register(repo: Repo, lines: list[str]) -> None:
     repo.commit(1, "register lines")
 
 
+def close(repo: Repo, source: str, text: str) -> None:
+    """A row of the register's `## Closed` table: source, text, why it is closed."""
+    repo.edit(
+        "docs/runs/residuals.md", "| a | b |\n", f"| a | b |\n| {source} | {text} | delivered |\n"
+    )
+    repo.commit(1, "close a residual")
+
+
 def clean(root: Path) -> Path:
     base(root)
     return root

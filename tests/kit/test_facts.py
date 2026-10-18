@@ -617,3 +617,24 @@ def test_ac2_each_spec_and_adr_carries_its_path(tmp_path):
         "docs/adr/0001-demo.md",
         "docs/adr/0002-proposed.md",
     ]
+
+
+def test_ac2_a_residual_bullet_named_by_a_closed_row_is_marked_closed(tmp_path):
+    """REQ-018 AC2: SPEC-0009 rule 12 and SPEC-0004 rule 9 as amended (the same rule as D4)."""
+    root = build_repo("ok", tmp_path)
+    adr = root / "docs" / "adr" / "0001-demo.md"
+    adr.write_text(
+        adr.read_text().rstrip("\n") + "\n- 2026-09-01: a delivered item (due 2026-10-01)\n",
+        encoding="utf-8",
+    )
+    register = root / "docs" / "runs" / "residuals.md"
+    register.write_text(
+        register.read_text().rstrip("\n")
+        + "\n| docs/adr/0001-demo.md | a delivered item | done |\n",
+        encoding="utf-8",
+    )
+    proc = run_facts(root, "ok", tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    items = [r for r in json.loads(proc.stdout)["residuals"] if "a delivered item" in r["text"]]
+    states = sorted((r["source"], r["state"]) for r in items)
+    assert ("docs/adr/0001-demo.md", "closed") in states

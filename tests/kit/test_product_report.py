@@ -780,3 +780,12 @@ def test_without_a_path_the_inbox_links_the_directory_as_before(tmp_path, capsys
     out = render_doc(doc, tmp_path, "--inbox", capsys=capsys)
     assert group(out, "Draft specs")[0].endswith("/tree/" + doc["commit"] + "/docs/specs")
     assert group(out, "Proposed ADRs")[0].endswith("/tree/" + doc["commit"] + "/docs/adr")
+
+
+def test_a_residual_marked_closed_is_in_neither_the_inbox_nor_at_risk(tmp_path, capsys):
+    """REQ-017 AC1: a delivered bullet (state closed in the facts) is not overdue."""
+    doc = kinds()
+    for r in doc["residuals"]:
+        r["state"] = "closed"
+    out = render_doc(doc, tmp_path, capsys=capsys)
+    assert "Overdue" not in out and "Residual overdue" not in out

@@ -321,34 +321,24 @@ def due_of(text: str) -> Any:
     return match.group(1) if drift_audit.parse_date(match.group(1)) else UNKNOWN
 
 
-def closed_rows(text: str) -> list[tuple[int, str, str]]:
-    rows, inside = [], False
-    for number, line in enumerate(text.splitlines(), 1):
-        if line.startswith("## "):
-            inside = line.strip().startswith("## Closed")
-        elif inside and line.startswith("|"):
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cells) >= 3 and cells[0] not in ("Source", "") and not set(cells[0]) <= {"-"}:
-                rows.append((number, cells[0], cells[1]))
-    return rows
-
-
 def residuals_section(root: Path, specs: list[dict], adrs: list[dict]) -> Any:
     register = drift_audit.read(root, REGISTER)
     if register is None:
         return UNKNOWN
     found: list[tuple[str, int, dict]] = []
+    closed = drift_audit.closed_pairs(register)
     for rel in sorted(s["path"] for s in specs) + sorted(a["path"] for a in adrs):
         bullets = drift_audit.residual_bullets(drift_audit.read(root, rel) or "")
         for position, bullet in enumerate(bullets):
             body = bullet[2:]
-            item = {"source": rel, "text": body, "due": due_of(body), "state": "open"}
+            state = "closed" if drift_audit.is_closed(closed, rel, bullet) else "open"
+            item = {"source": rel, "text": body, "due": due_of(body), "state": state}
             found.append((rel, position, item))
     for entry in drift_audit.register_lines(register):
         due = entry["due"].isoformat() if entry["due"] else UNKNOWN
         item = {"source": REGISTER, "text": entry["text"], "due": due, "state": "open"}
         found.append((REGISTER, entry["number"], item))
-    for number, _source, body in closed_rows(register):
+    for number, _source, body in drift_audit.closed_rows(register):
         item = {"source": REGISTER, "text": body, "due": None, "state": "closed"}
         found.append((REGISTER, number, item))
     return [item for _, _, item in sorted(found, key=lambda f: (f[0], f[1]))]

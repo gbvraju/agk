@@ -1,6 +1,6 @@
 # ADR-0036: the Proven line prints the proof reason; the facts carry a path for each spec and ADR, kit 0.18.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-18
 - Deciders: maintainers
 - Related: ADR-0026, ADR-0028, ADR-0029
@@ -38,7 +38,15 @@ inbox linked the directory, not the file. Both are done here.
    is read from the name; an old step name reads `unknown`; a malformed reason reads `unknown`; the paths of specs and ADRs; the five
    reasons in the Proven line; a document without the new fields still renders; the file link and the directory fallback; the workflow's
    step names and its `reason` output.
-6. **Kit 0.18.0**: manifest, hashes, plugin version. The register's two lines are closed (below).
+6. **A delivered bullet is retired by the register** (the maintainers' ruling of Q-K4-172). `drift_audit.d4_documents` skips a dated
+   bullet of an ADR or a spec when a row of the register's `## Closed` table names that source and that text (the text without its
+   leading date and its trailing `(due ...)`, or the whole bullet text; whitespace collapsed, otherwise exact). `facts.py` marks the same
+   bullet `"state": "closed"`. The two helper functions live in `drift_audit.py` (`closed_rows` moves there from `facts.py`). Tests: an
+   overdue bullet not closed is a D4 finding; the same bullet closed in the register is not; the whole bullet text closes it; a row with
+   another text, another source or another case does not; the facts mark the bullet closed. SPEC-0004 rule 9 is amended in the same
+   amendments file.
+7. **Kit 0.18.0**: manifest, hashes, plugin version. The register's two lines are closed (below), and the ADR-0029 bullet no longer
+   reads as overdue after 2026-11-30.
 
 ## Verified in a clean environment (ADR-0028)
 
@@ -68,12 +76,11 @@ that is not on this `PATH`.)
 
 | Q | Question | Reading taken (conservative) |
 | --- | --- | --- |
-| Q-K4-169 | Where can the reason travel from the proof job to the facts? | in the name of the succeeded outcome step: the only place `facts.py` already reads; a log download or an artifact would add a read and a permission |
-| Q-K4-170 | Schema 1 or 2 for `proof_reason` and `path`? | 1: additive optional properties, no released consumer reads either, the renderer tolerates their absence; stated in the amendments file |
-| Q-K4-171 | The kit version. | 0.18.0: installed files (`proof.yml`, `facts.py`, the renderer, fixtures, tests) change and the facts document gains fields |
-| Q-K4-172 | The Closed rows of the register do not silence the D4 finding for an overdue bullet of an Accepted ADR. | the two lines are closed in the register's Closed table as for the earlier ones; the ADR-0029 bullet (due 2026-11-30) stays in an Accepted ADR and `drift_audit.d4_documents` does not read the Closed table, so it will report as overdue on 2026-12-01 unless the maintainers rule how a delivered bullet is retired |
+| Q-K4-169 ruled | Where can the reason travel from the proof job to the facts? | in the name of the succeeded outcome step: the only place `facts.py` already reads; a log download or an artifact would add a read and a permission |
+| Q-K4-170 ruled | Schema 1 or 2 for `proof_reason` and `path`? | 1: additive optional properties, no released consumer reads either, the renderer tolerates their absence; stated in the amendments file |
+| Q-K4-171 ruled | The kit version. | 0.18.0: installed files (`proof.yml`, `facts.py`, the renderer, fixtures, tests) change and the facts document gains fields |
+| Q-K4-172 ruled | The Closed rows of the register did not silence the D4 finding for an overdue bullet of an Accepted ADR. | fixed here, as the maintainers ruled: D4 and the facts read the Closed table (decision 6) |
 
 ## Residual
 
-- 2026-10-18: the Closed table of the register is informational; a delivered residual bullet in an Accepted ADR keeps reading as
-  overdue after its due date (Q-K4-172) (due 2026-11-30).
+None. The residual recorded in the first head (Q-K4-172) is closed by decision 6.

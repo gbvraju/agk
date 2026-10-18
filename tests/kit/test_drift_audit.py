@@ -254,6 +254,31 @@ def test_ac1_d4_overdue_residual_in_an_adr_is_found(repo):
     assert [f[1] for f in found] == ["docs/adr/0001-demo.md"]
 
 
+def test_ac1_d4_a_bullet_named_by_a_closed_row_is_not_a_finding(repo):
+    """REQ-011 AC1: rule 9 as amended (the register's Closed table retires a delivered bullet)."""
+    fx.overdue_adr_residual(repo)
+    assert "D4" in codes(repo.root)
+    fx.close(repo, "docs/adr/0001-demo.md", "open item")  # the text without its date and due
+    assert "D4" not in codes(repo.root)
+
+
+def test_ac1_d4_the_whole_bullet_text_names_it_too(repo):
+    """REQ-011 AC1: rule 9 as amended (exact match on source and text, either form)."""
+    fx.overdue_adr_residual(repo)
+    fx.close(repo, "docs/adr/0001-demo.md", "2026-09-01: open item (due 2026-01-01)")
+    assert "D4" not in codes(repo.root)
+
+
+def test_ac1_d4_a_closed_row_with_another_text_or_another_source_does_not_close_it(repo):
+    """REQ-011 AC1: rule 9 as amended (nothing is closed by a near match)."""
+    fx.overdue_adr_residual(repo)
+    fx.close(repo, "docs/adr/0001-demo.md", "an open item")  # another text
+    fx.close(repo, "docs/adr/0002-other.md", "open item")  # another source
+    fx.close(repo, "docs/adr/0001-demo.md", "OPEN ITEM")  # another case
+    found = [f for f in findings(repo.root) if f[0] == "D4"]
+    assert [f[1] for f in found] == ["docs/adr/0001-demo.md"]
+
+
 def test_ac1_d4_future_due_date_is_not_found_and_the_boundary_is_the_run_date(repo):
     """REQ-011 AC1: rule 9. A date before the run date is overdue; the run date itself is not."""
     repo.edit("docs/adr/0001-demo.md", "open item", "open item (due 2026-10-14)")
