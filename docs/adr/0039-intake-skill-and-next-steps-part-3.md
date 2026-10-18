@@ -1,6 +1,6 @@
 # ADR-0039: intake, part 3 of 3: `next-steps`, the `/agk:spec "<sentence>"` form, the template and form edits, kit 0.19.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-18
 - Deciders: maintainers
 - Related: ADR-0019, ADR-0021, ADR-0037, ADR-0038
