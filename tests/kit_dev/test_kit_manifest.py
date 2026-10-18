@@ -15,6 +15,7 @@ KIT_ONLY = {
     "scripts/agk/kit_hashes.py",
     "scripts/agk/upgrade.py",
     "scripts/agk/new_spec.py",
+    "scripts/agk/intake.py",
 }
 RENDERED = {".github/CODEOWNERS"}
 SINGLES = {
