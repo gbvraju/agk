@@ -30,7 +30,7 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    - **Created** (only when absent; a differing existing file is a conflict): `agk.mk`, `agk.toml`,
      `.github/workflows/governance.yml`, `scripts/agk/*` (checks and helpers), `tests/kit/*`, `.claude/settings.json`,
      `.claude/hooks/stop_check.py`, `.claude/agents/drift-auditor.md`, `config/*`, `constitution/*`, `docs/requirements.md`,
-     `docs/adr/*`, `docs/specs/TEMPLATE.md`, `docs/briefs/TEMPLATE.md`, `docs/build-state.md`, `docs/runs/decisions-log.md`.
+     `docs/adr/*`, `docs/specs/TEMPLATE.md`, `docs/briefs/TEMPLATE.md`, `docs/build-state.md`, `docs/runs/decisions-log.md`, `docs/runs/residuals.md` (an existing file of any content is left as it is, never a conflict).
    - **Block-appended** (adopt may add one marked block, nothing else): `.gitignore`
      (`# >>> agk` … `# <<< agk`), and, when they already exist, `CLAUDE.md`, `.github/CODEOWNERS`,
      `.github/PULL_REQUEST_TEMPLATE.md` (`<!-- >>> agk -->` … `<!-- <<< agk -->`). When absent, they are created

@@ -132,6 +132,10 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
     return sorted(items.items()), entries, branch
 
 
+# Created when absent, left as it is when it exists (never compared, so never a conflict).
+CREATE_ONLY = ("docs/runs/residuals.md",)
+
+
 def passes_symlink(target: Path, rel: str) -> bool:
     current = target
     for part in Path(rel).parts:
@@ -152,6 +156,8 @@ def classify(target: Path, items: list[tuple[str, bytes]], entries: list[str]):
         elif not path.exists():
             plan.append((rel, "create", content, ""))
         elif path.is_file() and path.read_bytes() == content:
+            plan.append((rel, "unchanged", content, ""))
+        elif path.is_file() and rel in CREATE_ONLY:
             plan.append((rel, "unchanged", content, ""))
         else:
             plan.append((rel, "conflict", content, f" (path class {cls}: differs)"))

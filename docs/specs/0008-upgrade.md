@@ -75,6 +75,10 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
    absent and the path is in the row of X (for a block file, the block hashes); `removed-in-kit` applies when the row of X lists
    a path that the present manifest does not and the file exists in the target (in the target's mode, whether or not the file
    was installed in X's mode).
+   **Create-only templates.** For each path that init and adopt create only when absent (`docs/runs/residuals.md`), the upgrade creates
+   it when the target lacks it, from the present kit's template rendered as init renders it (`create PATH (absent)`; the dry run
+   lists it the same way). A file that exists, with any content, is not read, compared, listed or rewritten. A symlink or a non-file at
+   the path is a `conflict` (rule 8). The `template-changed` note for such a path is not printed.
 8. **A conflict stops the run.** If any path is `conflict`, the real run writes nothing and exits 1, naming each
    edited path (a refusal lists them all, not the first). Partial application is not done. The printed
    fix per edited path: restore the kit's copy by hand, or move the edit out of the vendored file, then run again.

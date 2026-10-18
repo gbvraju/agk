@@ -540,3 +540,54 @@ def test_scanner_excludes_are_printed_not_written(target):
     assert " ".join(template.split()) in " ".join(dry.stdout.split())
     assert not (target / "scanner-excludes.txt").exists()
     assert not any(p.name == "scanner-excludes.txt" for p in target.rglob("*"))
+
+
+OWN_REGISTER = (
+    "# Ours\n\n## Open\n\n- docs/adr/0001-x.md 2026-10-01 | ours | (due 2026-12-01) | open\n"
+)
+
+# --- the residuals register (Day 14 E1c): created when absent, never overwritten ---------------
+
+REGISTER = "docs/runs/residuals.md"
+
+
+def test_ac2_an_empty_residuals_register_is_installed_and_facts_reads_a_list(installed):
+    """REQ-009 AC2: the register exists with its Open heading and no line; facts is not unknown."""
+    import json
+
+    text = (installed / REGISTER).read_text(encoding="utf-8")
+    assert "\n## Open\n" in text
+    assert not [ln for ln in text.splitlines() if ln.startswith("- ")]
+    proc = subprocess.run(
+        [sys.executable, "scripts/agk/facts.py", "--today", "2026-10-14", "--repo", "o/r"],
+        cwd=installed,
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    residuals = json.loads(proc.stdout)["residuals"]
+    assert isinstance(residuals, list)  # not the string "unknown"
+    assert [r for r in residuals if r["source"] == REGISTER] == []
+
+
+def test_ac1_an_existing_residuals_register_is_left_as_it_is(target):
+    """REQ-009 AC2: additive only; an existing register is never rewritten or refused."""
+    own = OWN_REGISTER
+    (target / "docs" / "runs").mkdir(parents=True)
+    (target / REGISTER).write_text(own, encoding="utf-8")
+    first = run_init(target)
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert (target / REGISTER).read_text(encoding="utf-8") == own
+    before = snapshot(target)
+    second = run_init(target)
+    assert second.returncode == 0 and snapshot(target) == before
+
+
+def test_ac1_a_symlinked_residuals_register_is_still_refused(target, tmp_path):
+    """REQ-009 AC2: the symlink rule of init holds for the register as for every file."""
+    (target / "docs" / "runs").mkdir(parents=True)
+    (tmp_path / "elsewhere.md").write_text("x\n", encoding="utf-8")
+    (target / REGISTER).symlink_to(tmp_path / "elsewhere.md")
+    proc = run_init(target)
+    assert proc.returncode == 1 and "symlink" in proc.stdout

@@ -20,6 +20,7 @@ from pathlib import Path
 
 from common import detect_default_branch, experimental_enabled, matches, read_list
 from init import (
+    CREATE_ONLY,
     DATE_RE,
     KIT_ROOT,
     MANIFEST,
@@ -206,6 +207,8 @@ def classify_created(target: Path, rel: str, content: bytes, entries: list[str])
     if not path.exists():
         return (rel, "create", content, "")
     if path.is_file() and path.read_bytes() == content:
+        return (rel, "unchanged", content, "")
+    if path.is_file() and rel in CREATE_ONLY:
         return (rel, "unchanged", content, "")
     return (rel, "conflict", content, f" (path class {cls}: differs)")
 

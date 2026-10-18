@@ -37,7 +37,8 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
    `traceability.py`), and `tests/kit/` (rule 18, including `tests/kit/pytest.ini`). Kit-only files are never installed: `scripts/agk/init.py`, `kit/`, `tests/kit_dev/`.
 8. **Template set** (project-specific): `constitution/vision.md`, `docs/requirements.md`,
    `docs/adr/0001-adopt-agk.md`, `config/reviewers.yaml`, `config/protected-paths.txt` (rule 21),
-   `config/neutrality.txt`, `docs/build-state.md`, `docs/runs/decisions-log.md`, `pyproject.toml`, `agk.toml`.
+   `config/neutrality.txt`, `docs/build-state.md`, `docs/runs/decisions-log.md`, `docs/runs/residuals.md` (created only when absent; an existing file of any content
+   is left as it is, never a conflict), `pyproject.toml`, `agk.toml`.
    Templates may use these variables only: `{{project}}` (TARGET's directory name), `{{date}}` (rule 14),
    `{{kit_version}}`, `{{default_branch}}`.
 9. **Duplication versus divergence.** The verbatim set is not duplicated under `kit/`: the manifest points at the kit's
