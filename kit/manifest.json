@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.19.0",
+  "kit_version": "0.20.0",
   "verbatim": [
     ".claude/agents/drift-auditor.md",
     ".claude/hooks/stop_check.py",
@@ -576,6 +576,7 @@
     "tests/kit/test_check_requirements.py",
     "tests/kit/test_check_requirements_ac.py",
     "tests/kit/test_check_specs.py",
+    "tests/kit/test_check_specs_lifecycle.py",
     "tests/kit/test_common_refactors.py",
     "tests/kit/test_doctor.py",
     "tests/kit/test_drift_audit.py",

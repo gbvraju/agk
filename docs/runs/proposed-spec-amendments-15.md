@@ -5,6 +5,9 @@ maintainers apply it, SPEC-0013 (Draft) is ahead of the Approved text of the rul
 `docs/specs/0006-doctor.md`, `docs/specs/0009-facts.md`, `docs/specs/0011-inbox-and-report.md`, `docs/specs/0001-agk-init.md`,
 `docs/specs/0002-agk-adopt.md`.
 
+**Item 2 applied by ADR-0040** (2026-10-18; SPEC-0009 rules 16 and 17 in `docs/specs/0009-facts.md`). The other items are applied by the later
+implementation pull requests of SPEC-0013.
+
 ## SPEC-0005 (`docs/specs/0005-distribution.md`)
 
 1. **Rules 8, 9, 10 and 19: three more commands.** Proposed: the table of rule 8 gains `/agk:start` (`playbook.py`: a vision and a project charter,

@@ -26,6 +26,10 @@ jobs:
           python-version: "3.12"
       - name: Install tooling
         run: python -m pip install pytest ruff
+      - name: PR body file
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
       - name: check_protected_changes
         if: ${{ !cancelled() }}
         run: python scripts/agk/check_protected_changes.py
@@ -37,7 +41,7 @@ jobs:
         run: python scripts/agk/check_adrs.py
       - name: check_specs
         if: ${{ !cancelled() }}
-        run: python scripts/agk/check_specs.py
+        run: python scripts/agk/check_specs.py --body "$RUNNER_TEMP/pr-body.md"
       - name: check_neutrality
         if: ${{ !cancelled() }}
         run: python scripts/agk/check_neutrality.py

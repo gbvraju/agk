@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import os
 import re
+import shlex
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -481,14 +482,18 @@ KIT_SUITE_STEP = "make -f agk.mk agk-test"
 def run_ci(root: Path, kit_suite: Run) -> list[int]:
     """The exit status of each CI step; the kit-suite step is the one `kit_suite.direct` ran."""
     codes = []
+    runner_temp = root.parent / "runner-temp"  # the workflow's "PR body file" step writes this
+    runner_temp.mkdir(exist_ok=True)
+    (runner_temp / "pr-body.md").write_text("\n", encoding="utf-8")
+    env = {**clean_env(), "RUNNER_TEMP": str(runner_temp)}
     for step in ci_steps(root):
         if step == KIT_SUITE_STEP:
             codes.append(kit_suite.returncode)
             continue
-        argv = step.split()
+        argv = [a.replace("$RUNNER_TEMP", str(runner_temp)) for a in shlex.split(step)]
         if argv[0] == "python":
             argv[0] = sys.executable
-        proc = subprocess.run(argv, cwd=root, capture_output=True, text=True, env=clean_env())
+        proc = subprocess.run(argv, cwd=root, capture_output=True, text=True, env=env)
         codes.append(proc.returncode)
     return codes
 

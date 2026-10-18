@@ -30,6 +30,7 @@ from common import (
     git,
     load_config,
     merge_base,
+    next_free_ids,
     parse_acceptance,
     parse_requirements,
     resolve_base,
@@ -41,7 +42,6 @@ MAX_SENTENCE = 300
 MAX_TITLE = 80
 MAX_CRITERIA = 8
 REQ_FILE = "docs/requirements.md"
-NUM_FILE = re.compile(r"^(\d{4})-[a-z0-9][a-z0-9-]*\.md$")
 NEGATIVE = re.compile(
     r"\b(?:not|no|never|refuses|rejects|fails|cannot|without|error)\b", re.IGNORECASE
 )
@@ -86,23 +86,9 @@ def default_ref(root: Path, ref: str | None) -> str:
     return ref or f"origin/{load_config(root)['default_branch']}"
 
 
-def next_ids(root: Path, ref: str) -> dict[str, str]:
-    """The next free ids in the tree of REF (a commit-ish): never the work tree."""
-    text = show(root, ref, REQ_FILE)
-    if text is None:
-        raise CheckError("the base has no requirements file (path class docs/)")
-    reqs = [int(r["id"][4:]) for r in parse_requirements(text)]
-    out = {"req": f"REQ-{max(reqs, default=0) + 1:03d}"}
-    for kind, key in (("specs", "spec"), ("adr", "adr")):
-        names = git(root, "ls-tree", "--name-only", ref, f"docs/{kind}/").splitlines()
-        nums = [int(m.group(1)) for n in names if (m := NUM_FILE.match(Path(n).name))]
-        out[key] = f"{max(nums, default=0) + 1:04d}"
-    return out
-
-
 def cmd_ids(root: Path, sentence: str, ref: str | None) -> int:
     text = check_sentence(sentence)
-    ids = next_ids(root, default_ref(root, ref))
+    ids = next_free_ids(root, default_ref(root, ref))
     print(json.dumps({**ids, "slug": slug(text)}))
     return 0
 
@@ -152,7 +138,7 @@ def cmd_stub(root: Path, req: str, title: str, sentence: str, ref: str | None, t
     title = title.strip()
     if not title or len(title) > MAX_TITLE or ";" in title or "\n" in title:
         raise Refusal("rule 5: the title is empty, longer than 80 characters or has a semicolon")
-    ids = next_ids(root, default_ref(root, ref))
+    ids = next_free_ids(root, default_ref(root, ref))
     if req != ids["req"]:
         raise Refusal("rule 2: the requirement id is not the next free one (option --req)")
     rel = f"docs/adr/{ids['adr']}-add-{req.lower()}-{slug(text)}.md"
@@ -207,7 +193,7 @@ class Draft:
         self.thens: list[str] = []
         self.req: dict | None = None
         self.changed = changed_files(root, mb)
-        self.ids = next_ids(root, mb)
+        self.ids = next_free_ids(root, mb)
 
     def fail(self, check: str, message: str) -> None:
         self.problems.append(f"{check} {message}")
