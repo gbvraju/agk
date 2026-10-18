@@ -69,7 +69,7 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
    | differs from N, hash in H | outdated | `replace` | the kit's file |
    | differs from N, hash not in H | edited | `conflict` | none; the run refuses (rule 8) |
    | absent, path in H | deleted locally | `deleted-locally` | none; reported |
-   | present, path not in N | removed from the kit | `removed-in-kit` | none; never deleted |
+   | present, path not in N | removed from the kit | `removed-in-kit` | deleted only when a regular file whose bytes equal a copy the table lists for that path in any release (`(unmodified, deleted)`); otherwise none (`(modified, kept)`) |
 
    File modes of created and replaced files are those the installer sets (SPEC-0001). `deleted-locally` applies when the file is
    absent and the path is in the row of X (for a block file, the block hashes); `removed-in-kit` applies when the row of X lists
@@ -117,9 +117,9 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     `marked block`). `.gitignore` is created with markers.
 14. **Dry run.** `--dry-run` prints one line per path (`create`, `replace`, `unchanged`, `conflict`, `deleted-locally`,
     `removed-in-kit`, `template-changed`), sorted by path, writes nothing, and exits with the code the real run would;
-    the real run prints the same lines before it writes. Under `nothing to do` no file is touched (hashes and
+    the real run prints the same lines before it writes (the summary line says how many files would change and how many would be deleted). Under `nothing to do` no file is touched (hashes and
     modification times are equal).
-15. **Order and atomicity.** All decisions are made before the first write. Writes are in sorted path order, each file
+15. **Order and atomicity.** All decisions are made before the first write. Writes are in sorted path order, then the deletions of rule 7 in sorted path order (and the directories they emptied, never the target root), each file
     through a temporary file `.<name>.agk-upgrade` in its directory and a rename (a created or replaced file has the default mode of
     a new file); an I/O error stops the run (exit 3) and reports the files
     already written; the `agk.toml` version line (rule 11) is the last write and is skipped in that case.

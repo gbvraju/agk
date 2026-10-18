@@ -59,6 +59,7 @@ class Item:
     action: str
     detail: str = ""
     content: bytes | None = None
+    delete: bool = False  # an unmodified kit file the new kit no longer ships (ADR-0031)
 
 
 @dataclass
@@ -74,6 +75,10 @@ class Plan:
     @property
     def writes(self) -> list[Item]:
         return [i for i in self.items if i.action in ("create", "replace")]
+
+    @property
+    def deletions(self) -> list[Item]:
+        return [i for i in self.items if i.delete]
 
     @property
     def stamp(self) -> bool:
@@ -226,6 +231,39 @@ def block_file(
     return Item(rel, "conflict", f" (path class {cls}: marked block, agk block differs)")
 
 
+def history(table: dict) -> dict[str, set[str]]:
+    """Path -> every hash the table lists for it in any release (every copy the kit shipped)."""
+    seen: dict[str, set[str]] = {}
+    for row in table.get("releases", {}).values():
+        for rel, hashes in row.get("verbatim", {}).items():
+            seen.setdefault(rel, set()).update(hashes)
+    return seen
+
+
+def removed_item(
+    target: Path, rel: str, seen: dict[str, set[str]], optional: set[str], kept: set[str]
+) -> Item:
+    """A path the row of the installed version lists and the present manifest does not.
+
+    Deleted only when it is a regular file whose bytes equal a copy the kit once shipped at that
+    path; a modified file, a file the project owns, a symlink and an optional file are kept.
+    """
+    path = target / rel
+    if rel in optional:
+        return Item(rel, "removed-in-kit", " (optional file, kept)")
+    if rel in kept:
+        return Item(rel, "removed-in-kit", " (kept: left to the project in adopt mode)")
+    if path.is_symlink() or not path.is_file() or passes_symlink(target, rel):
+        return Item(rel, "removed-in-kit", " (not a regular file, kept)")
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return Item(rel, "removed-in-kit", " (not readable, kept)")
+    if digest(data) in seen.get(rel, set()):
+        return Item(rel, "removed-in-kit", " (unmodified, deleted)", delete=True)
+    return Item(rel, "removed-in-kit", " (modified, kept)")
+
+
 def template_notes(target: Path, kit_root: Path, templates: dict[str, str], row: dict) -> list[str]:
     notes = []
     for dest, src in sorted(templates.items()):
@@ -280,9 +318,15 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
         old = set(row["blocks"].get(rel, []))
         plan.items.append(block_file(target, rel, style, body, old, entries))
     current = set(manifest["verbatim"]) | (optional if enabled else set())
+    seen = history(table)
+    kept = (
+        set(manifest["adopt"]["skip"]) | set(manifest["adopt"]["blocks"])
+        if mode == "adopt"
+        else set()
+    )
     for rel in sorted(set(row["verbatim"]) - current):
         if (target / rel).exists() or (target / rel).is_symlink():
-            plan.items.append(Item(rel, "removed-in-kit"))
+            plan.items.append(removed_item(target, rel, seen, optional, kept))
     plan.items.sort(key=lambda i: i.rel)
 
     templates = manifest["templates"] if mode == "init" else manifest["adopt"]["templates"]
@@ -300,7 +344,7 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
 
 
 def protected_classes(plan: Plan) -> list[str]:
-    paths = [i.rel for i in plan.writes] + (["agk.toml"] if plan.stamp else [])
+    paths = [i.rel for i in plan.writes + plan.deletions] + (["agk.toml"] if plan.stamp else [])
     found: list[str] = []
     for rel in paths:
         for entry in plan.entries:
@@ -321,19 +365,24 @@ def report(plan: Plan, dry_run: bool) -> list[str]:
         lines.append(FIX)
         return lines
     count = len(plan.writes)
+    gone = len(plan.deletions)
     stamp = plan.stamp
     where = f"the version line of agk.toml is set to {plan.kit_version}"
     if plan.legacy:
         where = f"agk.toml is created with version {plan.kit_version}"
+    elif not stamp:
+        where = "the version line is unchanged"
     if dry_run:
         tail = f"; {where.replace('is ', 'would be ', 1)}" if stamp else ""
         if plan.legacy:
             tail = f"; {where.replace('is ', 'would be ', 1)}"
-        lines.append(f"dry run: {count} files would change{tail}; nothing was written")
-    elif count == 0 and not stamp:
+        more = f", {gone} would be deleted" if gone else ""
+        lines.append(f"dry run: {count} files would change{more}{tail}; nothing was written")
+    elif count == 0 and not stamp and not gone:
         lines.append("nothing to do")
     else:
-        lines.append(f"upgraded {count} files; {where}")
+        more = f" and deleted {gone}" if gone else ""
+        lines.append(f"upgraded {count} files{more}; {where}")
     classes = protected_classes(plan)
     if classes:
         lines += [
@@ -369,8 +418,23 @@ def write_atomic(path: Path, data: bytes) -> None:
             temp.unlink()
 
 
+def remove_file(target: Path, rel: str) -> None:
+    """Delete one file, then the directories that deletion emptied (never the target itself)."""
+    path = target / rel
+    path.unlink()
+    parent = path.parent
+    while parent != target and target in parent.parents:
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+        parent = parent.parent
+
+
 def apply(target: Path, plan: Plan) -> tuple[bool, list[str]]:
-    """Write in sorted path order, then agk.toml last. (ok, files already written)."""
+    """Write in sorted path order, delete unmodified removed files, then agk.toml last.
+
+    (ok, files already written or deleted)."""
     done: list[str] = []
     last = [i for i in plan.writes if plan.legacy and i.rel == "agk.toml"]
     for item in [i for i in plan.writes if i not in last]:
@@ -379,6 +443,15 @@ def apply(target: Path, plan: Plan) -> tuple[bool, list[str]]:
         except OSError:
             print(
                 f"error: cannot write {item.rel} (path class {path_class(item.rel, plan.entries)})"
+            )
+            return False, done
+        done.append(item.rel)
+    for item in plan.deletions:
+        try:
+            remove_file(target, item.rel)
+        except OSError:
+            print(
+                f"error: cannot delete {item.rel} (path class {path_class(item.rel, plan.entries)})"
             )
             return False, done
         done.append(item.rel)
@@ -428,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
         print(line)
     if plan.conflicts:
         return 1
-    if dry_run or (not plan.writes and not plan.stamp):
+    if dry_run or (not plan.writes and not plan.deletions and not plan.stamp):
         return 0
     ok, done = apply(target, plan)
     if not ok:

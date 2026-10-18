@@ -34,7 +34,7 @@ kit = json.load(open(os.environ["KIT"] + "/kit/manifest.json"))
 owned = set(kit["verbatim"]) | {"agk.toml"}
 changed = subprocess.run(["git", "status", "--porcelain", "-z", "--untracked-files=all"],
                          capture_output=True, text=True, check=True).stdout.split("\0")
-legacy = "tests/kit/fixtures/facts/go-style/tree/"  # kit 0.16.1 deletes this old kit tree (step 3b)
+legacy = "tests/kit/fixtures/facts/go-style/tree/"  # the upgrade deletes this old kit tree (step 3b)
 entries = sorted((entry[3:], entry[:2]) for entry in changed if entry)
 paths = [p for p, _ in entries]
 foreign = [p for p, code in entries if p not in owned and not ("D" in code and p.startswith(legacy))]
@@ -48,20 +48,19 @@ PY
 Export `KIT` (the path of the kit checkout) before running it. The result must be `0 are not kit files`. Also run `git diff --stat -- agk.toml`: the only
 change in `agk.toml` is the `version` line. Anything else: stop and report the output verbatim.
 
-## 3b. Kit 0.16.1 only: delete the old Go fixture tree
+## 3b. The old Go fixture tree (no longer a manual step)
 
-Skip this step when `KIT` is 0.16.0. From 0.16.1 the kit's fixture tree for Go lives under a `testdata` directory, which `go test` does
-not read. `upgrade.py` lists the old paths as `removed-in-kit` and never deletes them. In a Go repository they make `go test ./...`
-fail (`setup failed` for `tests/kit/fixtures/facts/go-style/tree/...`). In your branch, delete the old tree as part of the same
-change and run `go test ./...` once more:
+Earlier versions of this brief had a step here: delete `tests/kit/fixtures/facts/go-style/tree` by hand after the upgrade. It is no
+longer needed: `upgrade.py` deletes an unmodified kit file the new kit no longer ships, and the dry run in step 2.1 lists each such path
+as `removed-in-kit PATH (unmodified, deleted)`. Check, after the upgrade:
 
-```sh
-git rm -r -q tests/kit/fixtures/facts/go-style/tree
-go test -count=1 ./...
-```
+- the summary line says `upgraded N files and deleted M` (with `deleted`); if it has no `deleted`, your kit checkout predates the
+  change: update it and run step 2 again;
+- `ls tests/kit/fixtures/facts/go-style` shows `api case.json facts.json testdata` and no `tree`;
+- in a Go repository, `go test -count=1 ./...` passes.
 
-It must pass. The deleted paths are all old kit files (the upgrade lists them as `removed-in-kit`), and the step 3 script allows exactly that
-deletion: run it again before the pull request; its `NOT A KIT FILE` list must stay empty.
+A line `removed-in-kit PATH (modified, kept)` means the target edited that file: report the path to the maintainers; do not delete it.
+The step 3 script allows exactly the deletion of the old tree and nothing else.
 
 ## 4. The pilot's own checks
 
