@@ -98,7 +98,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "adopt": {"adopt"},
         "doctor": {"doctor"},
         "upgrade": {"upgrade"},
-        "spec": {"new_spec"},
+        "spec": {"new_spec", "intake"},
         "brief": {"new_spec"},
         "review": {"review_context", "check_review_report"},
         "issue": set(),

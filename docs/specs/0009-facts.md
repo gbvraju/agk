@@ -80,7 +80,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
 13. **`questions`.** One object per `Q-<family>-<n>` id (pattern `Q-[A-Z0-9]+-[0-9]+`) found in any `.md` file under `docs/`,
     sorted by id: `id`, `files` (sorted paths), `ruled` (`true` when a row of `docs/runs/decisions-log.md` contains the text
     `<id> ruled`; from 2026-10-16 every ruling row of the log names its id and says `ruled`), `named_in_log` (a row contains the id in any form), and `open_in` (the sorted paths among `files` that are
-    a notes file of a `Draft` spec, a `Proposed` ADR or the `## Open` section of a notes file). A question is *waiting* when
+    a notes file of a `Draft` spec, a `Proposed` ADR, the `## Open` section of a notes file or the `## Open questions` section of a `Draft` spec file). A question is *waiting* when
     `open_in` is non-empty and `ruled` is `false` (SPEC-0011 rule 4); the facts script states the three booleans and no more.
 14. **`pull_requests`.** Read from the GitHub REST API (`gh api --method GET`, paged by hand as `metrics.Gh`), or from the
     recorded files of `--api-dir` (names as in `metrics.ApiDir`). The set is every pull request that is open, plus every

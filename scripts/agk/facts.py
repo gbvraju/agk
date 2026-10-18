@@ -243,12 +243,12 @@ def ruled_in(lines: list[str] | None, question: str) -> bool | str:
     return any(re.search(whole_id(question).pattern + r" ruled", ln) for ln in lines)
 
 
-def open_section_ids(text: str) -> set[str]:
+def open_section_ids(text: str, heading: str = "Open") -> set[str]:
     found: set[str] = set()
     inside = False
     for line in text.splitlines():
         if line.startswith("## "):
-            inside = line.strip() == "## Open"
+            inside = line.strip() == f"## {heading}"
         elif inside:
             found.update(QUESTION.findall(line))
     return found
@@ -284,6 +284,10 @@ def questions_section(root: Path, specs: list[dict], adrs: list[dict]) -> Any:
     open_ids = {
         n: open_section_ids((root / n).read_text(encoding="utf-8", errors="replace")) for n in notes
     }
+    for spec in specs:
+        if spec["status"] == "Draft":
+            text = (root / spec["path"]).read_text(encoding="utf-8", errors="replace")
+            open_ids[spec["path"]] = open_section_ids(text, "Open questions")
     found = []
     for question, files in sorted(question_index(root).items()):
         places = sorted(

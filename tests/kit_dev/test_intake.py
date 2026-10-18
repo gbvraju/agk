@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 
@@ -596,6 +597,7 @@ def test_ac1_check_without_a_base_fails_rather_than_passing(repo):
 
 FACTS = KIT_ROOT / "scripts" / "agk" / "facts.py"
 REPORT = KIT_ROOT / "scripts" / "agk" / "product_report.py"
+SKILL = KIT_ROOT / "skills" / "spec" / "SKILL.md"
 
 
 def facts_of(root, tmp_path) -> dict:
@@ -645,3 +647,88 @@ def test_ac2_the_facts_of_the_default_branch_do_not_contain_the_draft(repo, tmp_
     assert "REQ-004" not in render(tmp_path) and "SPEC-0014" not in render(tmp_path, "--inbox")
     git(repo, "switch", "-q", "intake/req-004-export")  # the control: the branch itself has it
     assert "REQ-004" in [r["id"] for r in facts_of(repo, tmp_path)["requirements"]]
+
+
+# --- the next steps (rule 13) -------------------------------------------------------------------
+
+
+def test_ac1_next_steps_print_the_commit_the_push_and_a_body_that_passes_check_pr_body(repo):
+    """REQ-019 AC1: rule 13."""
+    draft(repo)
+    proc = run(repo, "next-steps", "--base", "main")
+    assert proc.returncode == 0, proc.stdout
+    assert "intake: add REQ-004 Export" in proc.stdout
+    assert "git push -u origin intake/req-004-export" in proc.stdout
+    body = proc.stdout.split("Pull request body:\n\n", 1)[1]
+    assert re.search(r"(?m)^Advances: REQ-004$", body)
+    assert re.search(r"(?m)^Build-state row: 2026-10-18 ", body)
+    for label in ("Decisions taken:", "Questions:", "Verified:"):
+        assert label in body
+    assert "cannot tell" in proc.stdout
+    ok = subprocess.run(
+        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "check_pr_body.py"), "-"],
+        input=body,
+        capture_output=True,
+        text=True,
+    )
+    assert ok.stdout == "ok pr-body\n"
+
+
+def test_ac1_next_steps_refuse_when_the_checks_fail(repo):
+    """REQ-019 AC1: rule 13 (nothing is printed for a draft that fails)."""
+    draft(repo, adr=adr_text(status="Accepted"))
+    proc = run(repo, "next-steps", "--base", "main")
+    assert proc.returncode == 1 and "git push" not in proc.stdout
+
+
+def test_ac2_after_the_merge_the_requirement_is_planned_and_the_spec_and_adr_wait(repo, tmp_path):
+    """REQ-019 AC2: rule 14 (merging approves the requirement; the spec stays Draft)."""
+    commit_draft(repo, spec=spec_text(open_questions="- Q-S0014-1 which format?\n"))
+    git(repo, "switch", "-q", "main")
+    git(repo, "merge", "-q", "--ff-only", "intake/req-004-export")
+    doc = facts_of(repo, tmp_path)
+    req = next(r for r in doc["requirements"] if r["id"] == "REQ-004")
+    assert req["status"] == "planned"
+    spec = next(s for s in doc["specs"] if s["id"] == "SPEC-0014")
+    assert spec["status"] == "Draft"
+    adr = next(a for a in doc["adrs"] if a["path"].startswith("docs/adr/0022"))
+    assert adr["status"] == "Proposed"
+    question = next(q for q in doc["questions"] if q["id"] == "Q-S0014-1")
+    assert question["open_in"] == ["docs/specs/0014-export.md"] and question["ruled"] is False
+    inbox = render(tmp_path, "--inbox")
+    assert "SPEC-0014" in inbox and "ADR-0022" in inbox and "Q-S0014-1" in inbox
+    report = render(tmp_path)
+    delivered = report.split("## Proven")[0]
+    assert "REQ-004" not in delivered
+
+
+# --- the skill (rules 9, 13, 16) ----------------------------------------------------------------
+
+
+def test_ac1_the_skill_names_no_forbidden_verb_and_the_three_files_only():
+    """REQ-019 AC1: rules 4, 13 and 16 (SPEC-0005 rule 10)."""
+    text = SKILL.read_text(encoding="utf-8")
+    for verb in ("git push", "git commit", "gh pr", "gh issue close", "gh issue comment"):
+        assert verb not in text, verb
+    files = set(re.findall(r"`(docs/[a-z]+/[^`]*)`", text.split("## One sentence")[1]))
+    allowed = {
+        "docs/requirements.md",
+        "docs/specs/<spec>-<slug>.md",
+        "docs/specs/TEMPLATE.md",
+    }
+    assert files <= allowed, files - allowed
+    assert "disable-model-invocation: true" in text
+    assert "at most three questions" in text and "Q-S<spec>-<n>" in text
+
+
+def test_ac1_the_skill_calls_use_the_commands_the_script_has():
+    """REQ-019 AC1: rules 2, 8, 11 and 13."""
+    text = SKILL.read_text(encoding="utf-8")
+    calls = re.findall(r'intake\.py" (ids|stub|check|next-steps)', text)
+    assert calls == ["ids", "stub", "check", "next-steps"]
+    assert (
+        subprocess.run(
+            [sys.executable, str(SCRIPT), "bogus"], capture_output=True, text=True
+        ).returncode
+        == 2
+    )
