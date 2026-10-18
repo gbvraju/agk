@@ -33,7 +33,11 @@ MAX_SENTENCE = 300
 MAX_TITLE = 80
 REQ_FILE = "docs/requirements.md"
 NUM_FILE = re.compile(r"^(\d{4})-[a-z0-9][a-z0-9-]*\.md$")
-SENTENCE_END = re.compile(r"[.!?]+(?:\s+\S|\s*$)")
+SENTENCE_END = re.compile(r"[.!?]+\s+\S")
+ABBREVIATION = re.compile(
+    r"\b(?:e\.g|i\.e|etc|vs)\.", re.IGNORECASE
+)  # Q-K4-173: do not end a sentence
+DIGIT_DOT = re.compile(r"(?<=\d)\.(?=\d)")
 
 
 class Refusal(Exception):
@@ -51,7 +55,8 @@ def check_sentence(sentence: str) -> str:
         raise Refusal("rule 1: the sentence is empty")
     if len(text) > MAX_SENTENCE:
         raise Refusal(f"rule 1: the sentence is longer than {MAX_SENTENCE} characters")
-    if "\n" in text or len(SENTENCE_END.findall(text)) > 1 or not slug(text):
+    plain = DIGIT_DOT.sub("", ABBREVIATION.sub(lambda m: m.group(0)[:-1], text))
+    if "\n" in text or SENTENCE_END.search(plain) or not slug(text):
         raise Refusal("rule 1: the text is not one sentence")
     return text
 

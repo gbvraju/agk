@@ -1,6 +1,6 @@
 # ADR-0037: intake, part 1 of 3: `intake.py ids` and `intake.py stub` (SPEC-0012 rules 1, 2 and 8)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-18
 - Deciders: maintainers
 - Related: ADR-0019, ADR-0021, ADR-0036
@@ -49,10 +49,10 @@ do not change, and no skill calls the script yet.
 
 ## Questions
 
-| Q | Question | Reading taken |
+| Q | Question | Ruling |
 | --- | --- | --- |
-| Q-K4-173 | How is "one sentence" tested? Rule 1 does not say. | A sentence end (`.`, `!` or `?`, one or more) followed by whitespace and more text counts as a second sentence, so `e.g. a list` is refused and `3.5` is not. Conservative: a person can reword; a second sentence cannot slip through. |
+| Q-K4-173 ruled | How is "one sentence" tested? Rule 1 does not say. | Ruled by the maintainers (2026-10-18): a fixed list of abbreviations does not end a sentence, case-insensitive: `e.g.`, `i.e.`, `etc.`, `vs.`; neither does a dot between digits (`3.5`). Any other sentence end (`.`, `!` or `?`) followed by more text is a second sentence. The list is `ABBREVIATION` in `scripts/agk/intake.py`. |
 
 ## Residual
 
-- 2026-10-18: the one-sentence test is a pattern on sentence ends; an abbreviation inside a sentence is refused and must be reworded (due 2026-12-31).
+- 2026-10-18: the abbreviation list is fixed at four entries; any other abbreviation inside a sentence is refused and must be reworded (due 2026-12-31).

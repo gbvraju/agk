@@ -117,6 +117,31 @@ def test_ac1_a_bad_sentence_is_refused_with_the_rule_and_nothing_is_written(repo
     assert stub.returncode == 1 and not list((repo / "docs" / "adr").glob("0022*"))
 
 
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Users can export data, e.g. as CSV.",
+        "Users can export data, E.G. as CSV.",
+        "Export a list, i.e. all items, to a file.",
+        "Export lists, files, etc. to a file.",
+        "A list is longer vs. shorter than ten.",
+        "The export takes 3.5 seconds.",
+    ],
+)
+def test_ac1_an_abbreviation_or_a_dot_between_digits_does_not_end_the_sentence(repo, sentence):
+    """REQ-019 AC1: rule 1 (Q-K4-173 ruled: e.g., i.e., etc., vs. and digit.digit)."""
+    assert run(repo, "ids", "--sentence", sentence, "--ref", "main").returncode == 0
+
+
+@pytest.mark.parametrize(
+    "sentence", ["Do X. Do Y.", "Do X! Do Y", "Really? Do Y.", "Use e.g. a. Do Y."]
+)
+def test_ac1_any_other_sentence_end_followed_by_text_is_a_second_sentence(repo, sentence):
+    """REQ-019 AC1: rule 1 (Q-K4-173 ruled)."""
+    proc = run(repo, "ids", "--sentence", sentence, "--ref", "main")
+    assert proc.returncode == 1 and proc.stdout.startswith("refused: rule 1")
+
+
 def test_ac1_a_sentence_of_exactly_300_characters_is_accepted(repo):
     """REQ-019 AC1: rule 1 (the limit)."""
     sentence = ("a" * 299) + "."
