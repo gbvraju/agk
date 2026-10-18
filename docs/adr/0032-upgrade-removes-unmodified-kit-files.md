@@ -1,6 +1,6 @@
 # ADR-0032: upgrade deletes unmodified kit files the new kit no longer ships (ADR-0031 residual), and the end-to-end test
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-18
 - Deciders: maintainers
 - Related: ADR-0020, ADR-0026, ADR-0031
@@ -87,12 +87,12 @@ changed path is a kit path or the old go-style tree) printed `35 paths changed; 
 
 | Q | Question | Reading taken (conservative) |
 | --- | --- | --- |
-| Q-K4-152 | The change touches `upgrade.py`, which is kit-only; does the kit version move? | no: no installed file or hash changes; the marker for the pilot is the `deleted N` in the summary of the kit checkout's upgrade |
-| Q-K4-153 | "A hash of that path in the history": the installed row only, or every release? | every release row that lists the path (a copy the kit ever shipped is unmodified); the candidates stay the installed row's paths |
-| Q-K4-154 | Optional files and adopt-mode project paths are in the rows but are not "no longer shipped". | kept, with a reason; ADR-0020 decision 3 is unchanged |
-| Q-K4-155 | The dry run and the real run print the same item lines (SPEC-0008 rule 14). | the line says `(unmodified, deleted)` in both; the dry run's summary says `would be deleted` |
-| Q-K4-156 | The version-line text of the summary when the version does not change. | `the version line is unchanged` (the old text claimed a set that did not happen) |
-| Q-K4-157 | The end-to-end test needs a pull request record. | it is written into the facts document by the test (a stand-in for the recorded API files); every stage is the real script |
+| Q-K4-152 ruled | The change touches `upgrade.py`, which is kit-only; does the kit version move? | no: no installed file or hash changes; the marker for the pilot is the `deleted N` in the summary of the kit checkout's upgrade |
+| Q-K4-153 ruled | "A hash of that path in the history": the installed row only, or every release? | every release row that lists the path (a copy the kit ever shipped is unmodified); the candidates stay the installed row's paths |
+| Q-K4-154 ruled | Optional files and adopt-mode project paths are in the rows but are not "no longer shipped". | kept, with a reason; ADR-0020 decision 3 is unchanged |
+| Q-K4-155 ruled | The dry run and the real run print the same item lines (SPEC-0008 rule 14). | the line says `(unmodified, deleted)` in both; the dry run's summary says `would be deleted` |
+| Q-K4-156 ruled | The version-line text of the summary when the version does not change. | `the version line is unchanged` (the old text claimed a set that did not happen) |
+| Q-K4-157 ruled | The end-to-end test needs a pull request record. | it is written into the facts document by the test (a stand-in for the recorded API files); every stage is the real script |
 
 ## Residual
 
