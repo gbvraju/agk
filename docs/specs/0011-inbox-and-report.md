@@ -120,7 +120,7 @@ were read on 2026-10-16.
     A week with no pull request is still written (every section `nothing this week`, the footer present). The existing issue body is
     replaced, not appended.
 17. **Installed by default, and nothing else changes.** The workflow and the script are verbatim files of `init` and `adopt`; the
-    notice that init and adopt print about workflows with `issues: write` names three workflows instead of two. `metrics.yml`,
+    notice that init and adopt print about workflows with `issues: write` names three workflows instead of two, and a second line warns that they need Issues enabled on the repository (`agk doctor` checks it, SPEC-0006). `metrics.yml`,
     `drift-audit.yml` and `governance.yml` are unchanged, and so are the metrics and drift scripts (ADR-0021 decision 2). A repository
     that does not want the issue deletes the workflow file; the doctor then reports the missing file as it does for the drift audit.
 

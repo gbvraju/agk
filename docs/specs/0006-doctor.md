@@ -58,12 +58,13 @@ and the JSON keep it.
    | `origin-head` | warn | `refs/remotes/origin/HEAD` does not exist | `git remote set-head origin <default_branch>` (no network; `-a` asks the remote) |
    | `drift-workflow-file` | error | `.github/workflows/drift-audit.yml` is absent, or has no `schedule` with a `cron` | restore the file from the kit |
    | `drift-workflow-state` | error | the `state` of the drift-audit workflow, or of the product-report workflow where its file is installed, is not `active` on GitHub | enable the workflow (GitHub disables scheduled workflows after inactivity `(verify)`) |
+   | `issues-disabled` | warn | the repository setting `has_issues` is false and any of `.github/workflows/metrics.yml`, `drift-audit.yml`, `product-report.yml` exists in ROOT (the workflows that write issues) | enable Issues in the repository settings (General, Features), or delete the workflow files that write issues |
    | `kit-version` | warn | the installed kit's `kit_version` differs from `version` in `agk.toml` | run `/agk:upgrade` (SPEC-0008) |
    | `vendored-missing` | error | a file the installer for `mode` writes verbatim is absent | restore it from the kit |
    | `vendored-differs` | error | a vendored file differs byte for byte from the kit's copy, and the versions match | review `git log -p -- <path>`; restore the kit's copy, or record the deliberate edit in an ADR that names the path class |
    | `default-branch-config` | warn | `default_branch` in `agk.toml` differs from the repository's `default_branch` | set `default_branch` in `agk.toml` |
 
-6. **The reads (four, and a fifth where the product report is installed).** `gh api repos/{o}/{r}` (default branch, `allow_auto_merge`, `delete_branch_on_merge`,
+6. **The reads (four, and a fifth where the product report is installed).** `gh api repos/{o}/{r}` (default branch, `allow_auto_merge`, `delete_branch_on_merge`, `has_issues`,
    `permissions`), `gh api repos/{o}/{r}/rulesets` (the list carries no rules), `gh api repos/{o}/{r}/rulesets/{id}` for
    each ruleset that targets the default branch (rules, `enforcement`, `bypass_actors`, `conditions`), and
    `gh api repos/{o}/{r}/actions/workflows/drift-audit.yml` (`state`); and, only where `.github/workflows/product-report.yml` exists in ROOT, `gh api repos/{o}/{r}/actions/workflows/product-report.yml` (`state`), read by the same check `drift-workflow-state` (a file the repository removed is reported by `vendored-missing`, not read here). `{o}/{r}` comes from `--repo`, else from the URL of
@@ -131,7 +132,8 @@ and the JSON keep it.
     `no-force-push-block`, `stricter-ok` (one approval, a team approver, an extra check: reports none), `merge-commits-allowed`, `wrong-target`,
     `no-dismiss-stale`, `delete-branch-off`, `default-branch-mismatch`, `no-admin-empty-list`, `no-governance-check`, `placeholder-reviewers`,
     `placeholder-codeowners`, `no-origin-head`, `drift-disabled`, `drift-no-schedule`, `version-mismatch`,
-    `vendored-edited`, `vendored-missing`, `auto-merge-off`, `no-gh` (every remote check `cannot-check`),
+    `vendored-edited`, `vendored-missing`, `auto-merge-off`, `issues-disabled`, `issues-disabled-no-workflows` (reports none: nothing writes
+    an issue), `issues-unknown` (`has_issues` absent: `cannot-check`), `no-gh` (every remote check `cannot-check`),
     `no-admin` (403 on the ruleset read: `cannot-check`, not `no-ruleset`). Each case asserts the ids that fail and
     only those. The `approvals-required` and `merge-methods` cases of the Draft became `stricter-ok` and
     `merge-commits-allowed` by the rulings. `no-gh` is tested in live mode with no `gh` on `PATH` (and `gh` stubs for

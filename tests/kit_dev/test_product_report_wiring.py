@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from conftest import KIT_ROOT, clean_env, expected_files, manifest, run_init
+from conftest import KIT_ROOT, clean_env, expected_files, make_repo, manifest, run_init
 
 INSTALLED = {
     ".github/workflows/product-report.yml",
@@ -75,3 +75,23 @@ def test_ac1_run_init_notice_names_the_three_workflows(target):
     """REQ-018 AC1: the notice printed by init."""
     proc = run_init(target)
     assert "drift-audit.yml, metrics.yml and product-report.yml" in proc.stdout.replace("\n", " ")
+
+
+def test_ac1_init_and_adopt_warn_that_the_issue_writing_workflows_need_issues_enabled(
+    target, tmp_path
+):
+    """REQ-002 AC1: SPEC-0006 amendment (the install prints the warning; it reads no setting)."""
+    flat = run_init(target).stdout.replace("\n", " ")
+    assert "warning: those workflows need Issues enabled on the repository" in flat
+    assert "`agk doctor` checks the setting (issues-disabled)" in flat
+    existing = make_repo(tmp_path / "existing", branch="main")
+    out = subprocess.run(
+        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "adopt.py"), str(existing)],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "warning: those workflows need Issues enabled on the repository" in out.stdout.replace(
+        "\n", " "
+    )

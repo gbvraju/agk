@@ -1,0 +1,8 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "issues-disabled"
+  ],
+  "origin_head": true
+}

@@ -165,6 +165,13 @@ ISSUES_NOTICE = (
 )
 
 
+ISSUES_WARNING = (
+    "warning: those workflows need Issues enabled on the repository (Settings, General, "
+    "Features); with Issues disabled they cannot write their issues and fail. "
+    "`agk doctor` checks the setting (issues-disabled)."
+)
+
+
 def plugin_settings() -> str:
     """The print-only settings entries for the plugin, at this kit's version."""
     manifest = json.loads((KIT_ROOT / MANIFEST).read_text(encoding="utf-8"))
@@ -181,6 +188,7 @@ def print_branch_rules(branch: str, tool: str = "init") -> None:
     print(plugin_settings())
     print()
     print(ISSUES_NOTICE)
+    print(ISSUES_WARNING)
 
 
 def main(argv: list[str] | None = None) -> int:
