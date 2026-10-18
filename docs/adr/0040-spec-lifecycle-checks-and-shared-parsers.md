@@ -1,6 +1,6 @@
 # ADR-0040: spec lifecycle checks (SPEC-0013 rules 23 to 26) and the shared parsers, kit 0.20.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-18
 - Deciders: maintainers
 - Related: ADR-0021, ADR-0037, ADR-0039
