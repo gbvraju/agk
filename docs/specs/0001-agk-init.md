@@ -97,6 +97,7 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     mypy settings that exclude `scripts/agk`, `tests/kit` and `.claude/hooks`. It is printed only, nothing is written,
     and a test keeps the printed block equal to the template and to the README's "Existing scanners" section
     (ADR-0010).
+    After the ruleset text it prints one more line: `or run /agk:ruleset to apply them (phase 1 now, phase 2 after the first governance run)`.
     Init does not configure GitHub.
 
 ### Neutrality

@@ -15,8 +15,8 @@ from conftest import KIT_ROOT, clean_env, git, make_repo, manifest, run_init, sn
 
 PLUGIN = KIT_ROOT / ".claude-plugin"
 SKILLS = KIT_ROOT / "skills"
-COMMANDS = ["adopt", "brief", "doctor", "init", "issue", "review", "spec", "upgrade"]
-USER_ONLY = ["adopt", "brief", "init", "issue", "spec", "upgrade"]
+COMMANDS = ["adopt", "brief", "doctor", "init", "issue", "review", "ruleset", "spec", "upgrade"]
+USER_ONLY = ["adopt", "brief", "init", "issue", "ruleset", "spec", "upgrade"]
 FORBIDDEN_VERBS = ["git push", "git commit", "gh pr", "gh issue close", "gh issue comment"]
 SCRIPT_CALL = re.compile(r'^\s*python3 "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/agk/(\w+)\.py"(.*)$', re.M)
 
@@ -102,6 +102,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "brief": {"new_spec"},
         "review": {"review_context", "check_review_report"},
         "issue": set(),
+        "ruleset": {"ruleset"},
     }
     for name, scripts in expected.items():
         assert {script for script, _ in calls(name)} == scripts, name
@@ -123,6 +124,7 @@ def test_ac2_no_skill_runs_a_forbidden_verb_and_only_issue_creates_an_issue():
         for verb in FORBIDDEN_VERBS:
             assert verb not in text, (name, verb)
         assert ("gh issue create" in text) == (name == "issue"), name
+        assert ("gh api --method POST|PUT|PATCH" in text) == (name == "ruleset"), name
 
 
 def test_ac2_doctor_and_review_skills_write_nothing_and_run_no_gh_or_git():
@@ -353,3 +355,13 @@ def test_ac2_readme_states_the_install_and_the_four_trust_caveats():
         "protected",
     ):
         assert phrase in section, phrase
+
+
+def test_ac2_ruleset_skill_shows_the_plan_asks_and_never_tightens_on_its_own():
+    """REQ-020 AC1: SPEC-0013 rules 19 and 20 (the skill text)."""
+    text = skill("ruleset")
+    assert [s for s, _ in calls("ruleset")] == ["ruleset"]
+    assert calls("ruleset")[0][1][0] == "plan"
+    assert "Ask the person" in text and "Never pass `--tighten` on your own" in text
+    assert "add-only" in text and "none is stored or asked for" in text
+    assert "--payload-dir" in text
