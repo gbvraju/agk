@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -86,3 +88,71 @@ def make_repo(root: Path, branch: str = "main") -> Path:
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", "initial")
     return root
+
+
+# --- One installed target shared by the tests that run the kit suite in a target ---------------
+#
+# Running `make test` or `make -f agk.mk agk-test` in an installed repository runs the kit
+# suite (about a minute). test_init.py used to do that six times, each in a fresh install of its
+# own. Now the kit is installed once per session (`shared_install`, never run in), a test that
+# needs a target takes a copy of it, and the two commands whose own result is asserted are each run
+# once, in a copy: `make test` (the alias) and `make -f agk.mk agk-test` (the direct form). A test
+# that is about the project's tests runs `make -o agk-test test`: the same `test` target with the
+# phony prerequisite `agk-test` treated as up to date, so the kit suite is not run again.
+
+
+@dataclass
+class Run:
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+@pytest.fixture(scope="session")
+def shared_install(tmp_path_factory) -> Path:
+    root = tmp_path_factory.mktemp("shared") / "My Project"
+    root.mkdir()
+    git(root, "init", "-q", "-b", "main")
+    git(root, "config", "user.email", "t@example.invalid")
+    git(root, "config", "user.name", "t")
+    git(root, "config", "commit.gpgsign", "false")
+    (root / "README.md").write_text("# hello\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "initial")
+    proc = run_init(root)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return root
+
+
+def copy_of(shared: Path, dest: Path) -> Path:
+    """A copy of the shared install, git history included, to run in or to change."""
+    target = dest / shared.name
+    shutil.copytree(shared, target, symlinks=True)
+    return target
+
+
+@pytest.fixture
+def shared_copy(shared_install: Path, tmp_path: Path) -> Path:
+    return copy_of(shared_install, tmp_path)
+
+
+def run_make(root: Path, *args: str) -> Run:
+    proc = subprocess.run(
+        ["make", *args], cwd=root, capture_output=True, text=True, env=clean_env()
+    )
+    return Run(proc.returncode, proc.stdout, proc.stderr)
+
+
+@dataclass
+class KitSuite:
+    alias: Run  # `make test` in a copy of the shared install (no project tests of its own)
+    direct: Run  # `make -f agk.mk agk-test` in another copy
+
+
+@pytest.fixture(scope="session")
+def kit_suite(shared_install: Path, tmp_path_factory) -> KitSuite:
+    alias = run_make(copy_of(shared_install, tmp_path_factory.mktemp("alias")), "test")
+    direct = run_make(
+        copy_of(shared_install, tmp_path_factory.mktemp("direct")), "-f", "agk.mk", "agk-test"
+    )
+    return KitSuite(alias, direct)
