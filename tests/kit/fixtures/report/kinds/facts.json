@@ -131,7 +131,7 @@
         {
           "at": "2026-10-07T12:00:00Z",
           "kind": "cleared",
-          "sha": "05abcde"
+          "sha": "05ddddd"
         }
       ]
     },
@@ -164,7 +164,7 @@
         {
           "at": "2026-10-09T09:00:00Z",
           "kind": "cleared",
-          "sha": "06abcde"
+          "sha": "06ddddd"
         }
       ]
     },
@@ -187,7 +187,7 @@
         {
           "at": "2026-10-07T12:00:00Z",
           "kind": "cleared",
-          "sha": "07abcde"
+          "sha": "07ddddd"
         }
       ]
     },
