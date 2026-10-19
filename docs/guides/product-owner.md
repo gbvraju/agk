@@ -60,6 +60,10 @@ The Needs you section groups what waits for a person by kind, each group headed 
 | `Overdue since <date>: <text>` | a residual (a known open item with a due date) is past its date | Do it, or move the date and record why in the same pull request. |
 | `REQ-NNN "<title>" is planned and no spec names it` | a requirement exists and nobody has started a spec | Ask for a Draft spec: `/agk:spec "<one sentence>"`, or ask the architect session. |
 
+**If you do not use git.** A change of a `Status:` line is one line in one file, and you can make it in the browser. Open the file on
+github.com (the link at the end of the report line takes you to it), tap the pencil, change the one line, choose "Create a new
+branch and start a pull request", and open the pull request. When `governance` is green, merge it.
+
 AGK only lists these. It never decides one of them for you, and nothing it does approves a spec, accepts an ADR or merges.
 
 ## What `unknown` means
