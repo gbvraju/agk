@@ -1,6 +1,6 @@
 # ADR-0043: `/agk:start` and its checks (SPEC-0013 rules 1 to 5), kit 0.23.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-19
 - Deciders: maintainers
 - Related: ADR-0001, ADR-0021, ADR-0042
@@ -43,11 +43,11 @@ installed in a target: `playbook.py` is kit-only and the skill ships in the plug
 
 ## Questions
 
-| Q | Question | Reading taken |
+| Q | Question | Reading taken, and the ruling (maintainers, 2026-10-19: Q-K4-185 to 187 ruled as read) |
 | --- | --- | --- |
-| Q-K4-185 | "The existing-codebase path" (the brief's phrase) is not a rule of SPEC-0013. | `/agk:start` after `/agk:adopt`: the same skill and checks, proven by a test in an adopted target (Decision 4). Nothing else is built. |
-| Q-K4-186 | The start pull request needs `Advances: REQ-nnn` (`check_pr_body`), and a start has no requirement of its own. | `REQ-001` (protected paths change only with an ADR): the vision is under `constitution/`, which the charter's ADR names. `check_specs` rule a exempts it (no spec names it and ADR-0001 does). |
-| Q-K4-187 | The charter's `Requirements:` field. | `REQ-001`, for the same reason. |
+| Q-K4-185 ruled | "The existing-codebase path" (the brief's phrase) is not a rule of SPEC-0013. | `/agk:start` after `/agk:adopt`: the same skill and checks, proven by a test in an adopted target (Decision 4). Nothing else is built. Ruled as read; the baseline-requirements guide for existing codebases is a launch-docs item, not G4. |
+| Q-K4-186 ruled | The start pull request needs `Advances: REQ-nnn` (`check_pr_body`), and a start has no requirement of its own. | `REQ-001` (protected paths change only with an ADR): the vision is under `constitution/`, which the charter's ADR names. `check_specs` rule a exempts it (no spec names it and ADR-0001 does). Ruled as read. |
+| Q-K4-187 ruled | The charter's `Requirements:` field. | `REQ-001`, for the same reason. Ruled as read. |
 
 ## Residual
 
