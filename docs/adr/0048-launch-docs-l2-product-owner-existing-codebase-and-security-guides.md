@@ -1,6 +1,6 @@
 # ADR-0048: launch docs L2: the product-owner guide, the existing-codebase guide and the security page
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-19
 - Deciders: maintainers
 - Related: ADR-0047, ADR-0025, ADR-0043
