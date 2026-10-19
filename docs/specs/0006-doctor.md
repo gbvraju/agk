@@ -50,7 +50,7 @@ and the JSON keep it.
    | `ruleset-linear-history` | error | no `required_linear_history` rule | require linear history |
    | `ruleset-force-push` | error | no `non_fast_forward` rule | block force pushes |
    | `ruleset-pull-request` | error | no `pull_request` rule, or stale approvals are not dismissed on push, or merge commits (`merge`) are an allowed merge method | require a pull request, dismiss stale approvals on push, and do not allow merge commits (ADR-0001 decision 3 uses squash only) |
-   | `required-check-governance` | error | no `required_status_checks` rule with the context `governance` | require the status check `governance` |
+   | `required-check-governance` | error | no `required_status_checks` rule with the context `governance` | require the status check `governance`; if the ruleset was applied in phase 1 and `governance` has not yet run on the default branch, run `/agk:ruleset` after its first run |
    | `repo-auto-merge` | warn | repository setting `allow_auto_merge` is false | allow auto-merge |
    | `repo-delete-branch` | warn | repository setting `delete_branch_on_merge` is false | auto-delete head branches |
    | `placeholder-team-reviewers` | error | `config/reviewers.yaml` contains `@REPLACE-ME` | replace the placeholder with a real team or user, then `python3 scripts/agk/reviewers.py --codeowners --write` |

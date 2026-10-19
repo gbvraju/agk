@@ -22,6 +22,9 @@ from reviewers import parse, render_codeowners
 KIT_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = "kit/manifest.json"
 BRANCH_RULES = "kit/templates/branch-rules.txt"
+RULESET_LINE = (
+    "or run `/agk:ruleset` to apply them (phase 1 now, phase 2 after the first `governance` run)"
+)
 SCANNER_EXCLUDES = "kit/templates/scanner-excludes.txt"
 PLUGIN_SETTINGS = "kit/templates/plugin-settings.txt"
 PLACEHOLDER = "@REPLACE-ME"
@@ -188,6 +191,7 @@ def plugin_settings() -> str:
 def print_branch_rules(branch: str, tool: str = "init") -> None:
     print(f"Apply by hand on GitHub to the default branch `{branch}` ({tool} configures nothing):")
     print((KIT_ROOT / BRANCH_RULES).read_text(encoding="utf-8").rstrip())
+    print(RULESET_LINE)
     print()
     print((KIT_ROOT / SCANNER_EXCLUDES).read_text(encoding="utf-8").rstrip())
     print()

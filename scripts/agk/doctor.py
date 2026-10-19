@@ -93,7 +93,9 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "error",
         "the status check `governance` is required",
         "ruleset: the required status check `governance` is missing",
-        "require the status check `governance`",
+        "require the status check `governance`; if the ruleset was applied in phase 1 and "
+        "`governance` has not yet run on the default branch, run `/agk:ruleset` after its first "
+        "run",
     ),
     "repo-auto-merge": (
         "warn",

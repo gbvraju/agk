@@ -61,14 +61,15 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    | `/agk:spec` | `new_spec.py spec` (a Draft spec), `new_spec.py requirement` (a requirement proposal with its ADR draft), or, for one plain-language sentence, `intake.py` (SPEC-0012): a requirement, a Draft spec and an ADR stub on a new branch | new files | none (`--from-issue N`: the command reads the issue with `gh issue view`, read-only, and passes the text to the script with `--issue N --issue-text FILE`; the script never reads an issue) |
    | `/agk:issue` | the command renders an issue from a template and runs `gh issue create` | one GitHub issue | write, after asking |
    | `/agk:brief` | `new_spec.py brief`: a brief from `docs/briefs/TEMPLATE.md` | one file | none |
+   | `/agk:ruleset` | `ruleset.py plan` (SPEC-0013 rules 19 to 21), then the person's `gh` applies the plan | one branch ruleset and two repository settings, after asking | read-only `gh api` for the plan; write, after asking |
    | `/agk:review` | `review_context.py`, the `reviewer` subagent, `check_review_report.py` (SPEC-0003) | local files, never committed | none |
 
    `/agk:review` stays advisory: its output is never an approval and human review stays required (K2 ruling).
-9. **User-invoked.** The commands that write (init, adopt, upgrade, spec, issue, brief) are not invoked by the model on
+9. **User-invoked.** The commands that write (init, adopt, upgrade, spec, issue, brief, ruleset) are not invoked by the model on
    its own: each skill sets the frontmatter that turns off model invocation `(verify: disable-model-invocation)`.
-10. **One writer outside the tree.** `/agk:issue` is the only command that writes outside the working tree, and it
+10. **Two writers outside the tree.** `/agk:issue` and `/agk:ruleset` are the only commands that write outside the working tree, and each
     asks before it does. A test reads every skill and fails on `git push`, `git commit`, `gh pr`, `gh issue close`,
-    `gh issue comment` and on `gh issue create` in any skill but `issue`.
+    `gh issue comment`, on `gh issue create` in any skill but `issue` and on `gh api --method POST|PUT|PATCH` in any skill but `ruleset`.
 11. **Scripts are stdlib only, no network** (as SPEC-0001 rule 3), except where the table of rule 8 says otherwise; the
     network use of `/agk:doctor` and the issue reads are done by the command with the user's own `gh`, never by a
     script that holds a credential.
