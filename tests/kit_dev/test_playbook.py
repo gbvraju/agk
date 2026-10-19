@@ -6,6 +6,7 @@ Rules 6 to 17 and 27. The guard's table of commands and paths is in
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -317,3 +318,330 @@ def test_ac1_the_architect_skill_is_a_reader_and_says_the_guard_is_not_enforced_
     body = (KIT_ROOT / "skills" / "architect" / "SKILL.md").read_text(encoding="utf-8")
     assert "claude --agent architect" in body and "are **not** enforced" in body
     assert "disable-model-invocation" not in body
+
+
+# --- /agk:start (rules 2 to 5) ----------------------------------------------------------------
+
+PRINCIPLES = "# Principles\n\nOne.\n"
+VISION_TEMPLATE = "# Vision\n\nTODO(maintainers): replace this paragraph.\n"
+ADR1 = "# ADR-0001: adopts agk\n\n- Status: Accepted\n- Date: 2026-01-01\n- Requirements: REQ-001\n"
+GOOD_VISION = """# Vision
+
+## What this is for
+
+A tool that keeps a reading list.
+
+## Who it serves
+
+Readers who forget what they meant to read.
+
+## How success is measured
+
+A reader finds a saved item in under 10 seconds.
+
+## Out of scope
+
+Syncing between devices.
+
+## Project rules
+
+- Prefer plain files over a database. <!-- project-specific -->
+"""
+GOOD_CHARTER = """# ADR-0002: the project charter
+
+- Status: Proposed
+- Date: 2026-10-19
+- Deciders: maintainers
+- Related: ADR-0001
+- Requirements: REQ-001
+
+Protected classes: `constitution/`
+
+## Context
+
+The statement, restated as data.
+
+## Decision
+
+1. **Milestones**
+   - M1: a saved list exists. exit: 3 items can be saved and read back.
+   - M2: export. exit: every saved item is in the exported file.
+2. **Non-goals**
+   - Syncing between devices.
+3. **Done means**
+   - The milestones' exit statements hold and a person merged the work.
+
+## Consequences
+
+The ruleset recorded in ADR-0001 stays as it is.
+
+## Residual
+
+None.
+"""
+
+
+@pytest.fixture
+def started(tmp_path):
+    root = make_repo(tmp_path / "proj")
+    files = {
+        "agk.toml": 'default_branch = "main"\n',
+        "constitution/principles.md": PRINCIPLES,
+        "constitution/vision.md": VISION_TEMPLATE,
+        "docs/adr/0001-adopt-agk.md": ADR1,
+        "docs/requirements.md": "### REQ-001 — T\n\n- Status: planned\n",
+    }
+    for rel, body in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(body, encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+    git(root, "switch", "-q", "-c", "start/a-reading-list")
+    return root
+
+
+def good_start(root, vision=GOOD_VISION, charter=GOOD_CHARTER):
+    (root / "constitution" / "vision.md").write_text(vision, encoding="utf-8")
+    (root / "docs" / "adr" / "0002-project-charter.md").write_text(charter, encoding="utf-8")
+
+
+def check_start(root):
+    return run("check-start", "--base", "main", "--root", str(root))
+
+
+def test_ac1_start_ids_reads_the_next_adr_and_names_the_branch(started):
+    """REQ-020 AC1: rules 2 and 4 (the number is read from the ref, never guessed)."""
+    proc = run(
+        "start-ids",
+        "--statement",
+        "A reading list for me.",
+        "--ref",
+        "main",
+        "--root",
+        str(started),
+    )
+    assert proc.returncode == 0, proc.stdout
+    assert json.loads(proc.stdout) == {
+        "adr": "0002",
+        "slug": "a-reading-list-for-me",
+        "branch": "start/a-reading-list-for-me",
+    }
+
+
+def test_ac1_start_refuses_without_agk_toml_and_installs_nothing(started):
+    """REQ-020 AC1: rule 2 (it does not call init or adopt)."""
+    (started / "agk.toml").unlink()
+    before = sorted(p.name for p in started.rglob("*") if ".git" not in p.parts)
+    proc = run("start-ids", "--statement", "x", "--ref", "main", "--root", str(started))
+    assert proc.returncode == 1 and "/agk:init or /agk:adopt first" in proc.stdout
+    assert sorted(p.name for p in started.rglob("*") if ".git" not in p.parts) == before
+
+
+@pytest.mark.parametrize("statement", ["", "   ", "!!!", "x" * 1501])
+def test_ac1_start_refuses_an_empty_or_long_statement(started, statement):
+    """REQ-020 AC1: rule 3 (at most 1,500 characters)."""
+    proc = run("start-ids", "--statement", statement, "--ref", "main", "--root", str(started))
+    assert proc.returncode == 1 and proc.stdout.startswith("FAIL playbook:")
+
+
+def test_ac1_a_statement_of_1500_characters_in_two_paragraphs_is_accepted(started):
+    """REQ-020 AC1: rule 3 (one or more paragraphs)."""
+    text = ("a" * 700) + "\n\n" + ("b" * 798)
+    assert len(text) == 1500
+    assert (
+        run("start-ids", "--statement", text, "--ref", "main", "--root", str(started)).returncode
+        == 0
+    )
+
+
+def test_ac1_a_good_start_passes_check_start(started):
+    """REQ-020 AC1: rule 5."""
+    good_start(started)
+    proc = check_start(started)
+    assert (proc.returncode, proc.stdout) == (0, "ok playbook-start\n")
+
+
+def failed(root, needle):
+    proc = check_start(root)
+    assert proc.returncode == 1, proc.stdout
+    assert needle in proc.stdout, proc.stdout
+    return proc.stdout
+
+
+def test_ac1_a_third_file_or_a_missing_charter_fails(started):
+    """REQ-020 AC1: rule 5 (the two files are the whole difference)."""
+    good_start(started)
+    (started / "docs" / "extra.md").write_text("x\n", encoding="utf-8")
+    failed(started, "rule 4: the difference")
+    (started / "docs" / "extra.md").unlink()
+    (started / "docs" / "adr" / "0002-project-charter.md").unlink()
+    failed(started, "rule 4: the difference")
+
+
+def test_ac1_the_principles_file_must_be_untouched(started):
+    """REQ-020 AC1: rule 5 (byte-identical to the base)."""
+    good_start(started)
+    (started / "constitution" / "principles.md").write_text(PRINCIPLES + "Two.\n", encoding="utf-8")
+    failed(started, "principles")
+
+
+@pytest.mark.parametrize(
+    ("vision", "needle"),
+    [
+        (GOOD_VISION + "\nTODO(maintainers) later\n", "placeholder"),
+        (GOOD_VISION.replace("## Who it serves", "## Audience"), "four headings"),
+        (
+            GOOD_VISION.replace("## Out of scope\n\nSyncing between devices.\n\n", ""),
+            "four headings",
+        ),
+        (
+            GOOD_VISION.replace("## Who it serves", "@@")
+            .replace("## What this is for", "## Who it serves")
+            .replace("@@", "## What this is for"),
+            "out of order",
+        ),
+        (GOOD_VISION.replace(" <!-- project-specific -->", ""), "project marker"),
+    ],
+)
+def test_ac1_vision_failures_name_the_rule(started, vision, needle):
+    """REQ-020 AC1: rule 5 (placeholder; headings; order; the marker on every project rule)."""
+    good_start(started, vision=vision)
+    failed(started, needle if needle != "out of order" else "four headings")
+
+
+def test_ac1_a_vision_without_project_rules_is_fine(started):
+    """REQ-020 AC1: rule 5 (`## Project rules` is optional)."""
+    good_start(started, vision=GOOD_VISION.split("## Project rules")[0].rstrip() + "\n")
+    assert check_start(started).stdout == "ok playbook-start\n"
+
+
+@pytest.mark.parametrize(
+    ("change", "needle"),
+    [
+        (lambda t: t.replace("- Status: Proposed", "- Status: Accepted"), "not Proposed"),
+        (lambda t: t.replace("`constitution/`", "`docs/`"), "constitution"),
+        (
+            lambda t: t.replace("2. **Non-goals**\n   - Syncing between devices.\n", ""),
+            "numbered items",
+        ),
+        (lambda t: t.replace("3. **Done means**", "3. **Finished**"), "numbered items"),
+        (lambda t: t.replace("exit: every saved item", "every saved item"), "`exit:`"),
+        (
+            lambda t: t.replace(
+                "exit: 3 items can be saved and read back.", "exit: it works well."
+            ),
+            "measurable",
+        ),
+        (lambda t: t.replace("## Residual\n\nNone.\n", ""), "ADR format"),
+    ],
+)
+def test_ac1_charter_failures_name_the_rule(started, change, needle):
+    """REQ-020 AC1: rule 5 (status; class; the three items; exit with a measurable statement)."""
+    good_start(started, charter=change(GOOD_CHARTER))
+    failed(started, needle)
+
+
+def test_ac1_the_charter_number_must_be_the_next_free_one(started):
+    """REQ-020 AC1: rules 4 and 5 (read from the base, not guessed)."""
+    good_start(started, charter=GOOD_CHARTER.replace("ADR-0002", "ADR-0005"))
+    (started / "docs" / "adr" / "0002-project-charter.md").rename(
+        started / "docs" / "adr" / "0005-project-charter.md"
+    )
+    failed(started, "next free ADR number")
+
+
+def test_ac1_messages_name_the_rule_and_never_the_text(started):
+    """REQ-020 AC1: rule 5."""
+    good_start(
+        started, vision=GOOD_VISION.replace("reading list", "SECRET-WORD") + "TODO(maintainers)\n"
+    )
+    assert "SECRET-WORD" not in failed(started, "placeholder")
+
+
+def test_ac1_next_steps_print_the_commands_and_a_body_that_passes_check_pr_body(started):
+    """REQ-020 AC1: rule 3 (the script prints; the skill does not commit)."""
+    good_start(started)
+    proc = run("next-steps", "--base", "main", "--date", "2026-10-19", "--root", str(started))
+    assert proc.returncode == 0, proc.stdout
+    assert "git push -u origin start/a-reading-list" in proc.stdout
+    body = proc.stdout.split("Pull request body:\n\n", 1)[1]
+    ok = subprocess.run(
+        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "check_pr_body.py"), "-"],
+        input=body,
+        capture_output=True,
+        text=True,
+    )
+    assert ok.stdout == "ok pr-body\n"
+
+
+def test_ac1_next_steps_refuse_on_the_default_branch_a_detached_head_or_a_failing_start(started):
+    """REQ-020 AC1: rule 3 (no push of the default branch; nothing printed for a failing start)."""
+    proc = run("next-steps", "--base", "main", "--root", str(started))
+    assert (
+        proc.returncode == 1 and "git push" not in proc.stdout
+    )  # the vision is still the placeholder
+    good_start(started)
+    git(started, "add", "-A")
+    git(started, "commit", "-q", "-m", "start")
+    git(started, "switch", "-q", "main")
+    assert run("next-steps", "--base", "main~1", "--root", str(started)).returncode == 1
+    git(started, "switch", "-q", "--detach", "start/a-reading-list")
+    detached = run("next-steps", "--base", "main", "--root", str(started))
+    assert detached.returncode == 1 and "git push" not in detached.stdout
+
+
+def test_ac1_the_start_skill_is_user_invoked_names_two_files_and_no_forbidden_verb():
+    """REQ-020 AC1: rules 3 and 4 (SPEC-0005 rule 10)."""
+    body = (KIT_ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
+    assert "disable-model-invocation: true" in body
+    for verb in ("git push", "git commit", "gh pr", "gh issue", "gh api"):
+        assert verb not in body, verb
+    assert "Write exactly two files" in body and "constitution/principles.md" in body
+    assert re.findall(r'playbook\.py" (\S+)', body) == ["start-ids", "check-start", "next-steps"]
+    assert "existing codebase" in body and "/agk:adopt" in body
+
+
+@pytest.mark.parametrize("how", ["init", "adopt"])
+def test_ac1_start_works_in_a_new_repository_and_in_an_existing_codebase(tmp_path, how):
+    """REQ-020 AC1: rules 1, 2 and 5 (the installed template is replaced; governance passes)."""
+    root = make_repo(tmp_path / "proj")
+    if how == "init":
+        proc = subprocess.run(
+            [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "init.py"), str(root)],
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+        )
+    else:
+        (root / "app.py").write_text("print('app')\n", encoding="utf-8")
+        git(root, "add", "-A")
+        git(root, "commit", "-q", "-m", "app")
+        proc = subprocess.run(
+            [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "adopt.py"), str(root)],
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+        )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "install the kit")
+    ids = json.loads(
+        run(
+            "start-ids", "--statement", "A reading list.", "--ref", "main", "--root", str(root)
+        ).stdout
+    )
+    git(root, "switch", "-q", "-c", ids["branch"])
+    (root / "constitution" / "vision.md").write_text(GOOD_VISION, encoding="utf-8")
+    charter = GOOD_CHARTER.replace("ADR-0002", f"ADR-{ids['adr']}")
+    (root / "docs" / "adr" / f"{ids['adr']}-project-charter.md").write_text(
+        charter, encoding="utf-8"
+    )
+    assert check_start(root).stdout == "ok playbook-start\n"
+    gov = subprocess.run(
+        ["make", "-f", "agk.mk", "agk-governance"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert gov.returncode == 0, gov.stdout + gov.stderr
