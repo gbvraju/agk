@@ -1,6 +1,6 @@
 # ADR-0049: Add REQ-022: A busy week's report links the full list of merged pull requests
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-19
 - Deciders: maintainers
 - Related: SPEC-0015

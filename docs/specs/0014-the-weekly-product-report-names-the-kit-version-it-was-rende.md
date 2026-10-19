@@ -1,6 +1,6 @@
 # SPEC-0014: The weekly product report footer names the kit version
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-021
 

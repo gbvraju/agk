@@ -1,6 +1,6 @@
 # ADR-0045: Add REQ-021: The weekly product report footer names the kit version
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-19
 - Deciders: maintainers
 - Related: SPEC-0014

@@ -1,6 +1,6 @@
 # SPEC-0015: A busy week's report links the full list of merged pull requests
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-022
 
