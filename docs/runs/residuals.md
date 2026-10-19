@@ -54,6 +54,7 @@ bullet. The K3 target is 2026-11-30 and the K4 target is 2026-12-31 (ADR-0015); 
 - ADR-0047 launch docs L1 2026-10-19 | the fix-list verdicts on PRs 76 to 84 were not posted as comments, so `review_rounds` and the report's fix counts for them are understated; note it in the K4 close record, no back-filling (owner: maintainers) | (due 2026-11-30) | open
 - ADR-0047 launch docs L1 2026-10-19 | SPEC-0012 rule 10's example id `Q-S0014-1` collides with a real spec; use a number no spec has when the spec is next amended (owner: maintainers) | (due 2026-12-31) | open
 - ADR-0047 launch docs L1 2026-10-19 | `playbook.py check-start` names the three items when one has no list under it; its message should name the item that lacks a list (owner: maintainers) | (due 2026-11-15) | open
+- SPEC-0014 Q-S0014-1 ruled 2026-10-20 | K5 candidate (small): a file of release notes by kit version, so a reader of the report's `kit version:` line can look up what that version changed; none exists today and none is built before then (owner: maintainers) | (due 2027-01-31) | open
 
 ## Closed (not findings)
 

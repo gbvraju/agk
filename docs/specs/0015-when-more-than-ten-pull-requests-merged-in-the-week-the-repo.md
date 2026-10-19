@@ -48,5 +48,7 @@ merged shows the short form, and the maintainers read it in that week's report i
 
 ## Open questions
 
-- Q-S0015-1 Does GitHub's pull-request search accept `merged:YYYY-MM-DD..YYYY-MM-DD` for the week's dates, and does it read them in UTC? (verify) The criteria assume it does for both; a person checks one search on a real week
-  before the spec is Approved, and if it does not, the link is a search with `is:merged` and the `created:` range instead, or the metrics issue of the week.
+- Q-S0015-1 Does GitHub's pull-request search accept `merged:YYYY-MM-DD..YYYY-MM-DD` for the week's dates, and does it read them in UTC? The criteria assume it does for both.
+  **Ruled** (maintainers, 2026-10-20): verified on a real search. `https://github.com/gbvraju/agk/pulls?q=is%3Apr+is%3Amerged+merged%3A2026-10-12..2026-10-18` returns merged pull requests with
+  #79 at the top and #80 absent. #79 was merged on 2026-10-19 in India (IST) and on 2026-10-18 in UTC, so the search reads the dates in UTC, the same boundary as the report. Rule 5 stands as written;
+  there is no fallback.
