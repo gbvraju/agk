@@ -1,6 +1,6 @@
 # ADR-0046: the facts test's fixture runs git without background maintenance, kit 0.25.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-19
 - Deciders: maintainers
 - Related: ADR-0045
