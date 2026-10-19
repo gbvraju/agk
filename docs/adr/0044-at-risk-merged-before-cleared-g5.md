@@ -1,6 +1,6 @@
 # ADR-0044: the report's At-risk line for a pull request merged before its head was cleared (SPEC-0013 rule 18), kit 0.24.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-19
 - Deciders: maintainers
 - Related: ADR-0021, ADR-0042
@@ -36,12 +36,13 @@ weekly product report lists such pull requests under "At risk" (amendment 15 ite
 
 ## Questions
 
-| Q | Question | Reading taken |
+| Q | Question | Reading taken, and the ruling (maintainers, 2026-10-19: Q-K4-188 to 190 ruled as read) |
 | --- | --- | --- |
-| Q-K4-188 | A merged pull request whose `head` or `verdicts` are `"unknown"` or absent. | No line: the report does not claim a miss it cannot read; the unknown shows elsewhere (the Cost line prints unknown fix verdicts). |
-| Q-K4-189 | Only `fix` verdicts, or a `cleared` with no sha, on a merged pull request. | The "before its last commit was cleared" text (it has verdicts, none clears the head). |
-| Q-K4-190 | Where among the At-risk lines. | After the drift line, as the amendment lists it fifth. |
+| Q-K4-188 ruled | A merged pull request whose `head` or `verdicts` are `"unknown"` or absent. | No line: the report does not claim a miss it cannot read; the unknown shows elsewhere (the Cost line prints unknown fix verdicts). |
+| Q-K4-189 ruled | Only `fix` verdicts, or a `cleared` with no sha, on a merged pull request. | The "before its last commit was cleared" text (it has verdicts, none clears the head). |
+| Q-K4-190 ruled | Where among the At-risk lines. | After the drift line, as the amendment lists it fifth. |
 
 ## Residual
 
 - 2026-10-19: the report shows the miss after the merge; nothing prevents it (SPEC-0013 rule 18, by design).
+- 2026-10-19: the two readings of "cleared" differ. The report's (v) uses the last `cleared` verdict and says "merged with no verdict"; `metrics` `merged_head_cleared` uses any `cleared` verdict and says `unknown` when there is no verdict. Converge both on one shared predicate (due 2027-01-31).
