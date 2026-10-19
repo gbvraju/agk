@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,10 @@ SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 FIXTURES = Path(__file__).parent / "fixtures" / "facts"
 FACTS = SCRIPTS / "facts.py"
 CASES = sorted(p.name for p in FIXTURES.iterdir() if p.is_dir())
+# `git commit` starts git's automatic maintenance, which holds `.git/objects/maintenance.lock` for a
+# few milliseconds; a test that lists every file, `.git` included, right after a fixture commit can
+# catch it. The fixture's git calls turn that off, so the listing stays strict.
+NO_BACKGROUND_WORK = ["-c", "maintenance.auto=false", "-c", "gc.auto=0"]
 ENV_GIT = {
     "GIT_AUTHOR_NAME": "fixture",
     "GIT_AUTHOR_EMAIL": "fixture@example.invalid",
@@ -41,7 +46,12 @@ SECTIONS = (
 def git(root: Path, *args: str) -> str:
     env = {k: v for k, v in os.environ.items() if k not in DROP} | ENV_GIT
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", *args], cwd=root, capture_output=True, text=True, check=True, env=env
+        ["git", *NO_BACKGROUND_WORK, *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
     )
     return proc.stdout
 
@@ -141,6 +151,33 @@ def test_ac2_a_tracked_change_sets_dirty_and_a_clean_tree_does_not(tmp_path):
     """REQ-018 AC2: rule 3."""
     assert document("ok", tmp_path / "a")["dirty"] is False
     assert document("dirty", tmp_path / "b")["dirty"] is True
+
+
+def test_ac2_a_fixture_commit_starts_no_background_maintenance(tmp_path):
+    """REQ-018 AC2: rule 2 (the strict listing below must not meet git's maintenance lock)."""
+    lock_name = "maintenance.lock"
+    seen = 0
+    for n in range(20):
+        root = tmp_path / f"r{n}"
+        shutil.copytree(tree_of("ok"), root)
+        git(root, "init", "-q", "-b", "main")
+        git(root, "add", "-A")
+        stop = threading.Event()
+        found: list[int] = []
+
+        def poll(lock=root / ".git" / "objects" / lock_name, found=found, stop=stop):
+            while not stop.is_set():
+                if lock.exists():
+                    found.append(1)
+                    return
+
+        watcher = threading.Thread(target=poll)
+        watcher.start()
+        git(root, "commit", "-q", "-m", "fixture")
+        stop.set()
+        watcher.join()
+        seen += bool(found)
+    assert seen == 0, f"git's automatic maintenance ran after {seen} of 20 fixture commits"
 
 
 def test_ac2_it_reads_only_and_leaves_the_work_tree_alone(tmp_path):
