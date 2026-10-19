@@ -222,4 +222,6 @@ report has five headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`.
 
 ## What to do next
 
-Read [the reference](reference.md) for every command. Run `/agk:doctor` for a report of what is misconfigured; it only reads.
+Read [the product-owner guide](product-owner.md) for what the Monday report says, [the security page](security.md) for what AGK
+does with your code and credentials, and [the reference](reference.md) for every command. For a repository that already has code,
+read [the existing-codebase guide](existing-codebase.md) before step 3. Run `/agk:doctor` for a report of what is misconfigured; it only reads.

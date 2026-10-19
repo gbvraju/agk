@@ -214,3 +214,60 @@ def test_ac1_the_stuck_form_asks_the_five_things_and_sets_its_label():
         "What I saw",
         "What I expected",
     ]
+
+
+def test_ac1_the_l2_guides_hold_what_the_launch_brief_asks():
+    """REQ-020 AC1: launch docs L2 rules 1 to 4."""
+    guides = KIT_ROOT / "docs" / "guides"
+    owner = (guides / "product-owner.md").read_text(encoding="utf-8")
+    for needle in ("Monday", "07:13 UTC", "issues/88", "unknown"):
+        assert needle in owner, needle
+    sections = ("Delivered", "Proven", "Needs you", "At risk", "Cost")
+    where = [owner.index(f"| {s} |") for s in sections]
+    assert where == sorted(where)
+    for kind in (
+        "Draft spec",
+        "Proposed ADR",
+        "Question",
+        "has had no verdict",
+        "Overdue",
+        "is planned",
+    ):
+        assert kind in owner, kind
+    assert len(re.findall(r"(?m)^\d\. ", owner)) == 5
+    existing = (guides / "existing-codebase.md").read_text(encoding="utf-8")
+    heads = re.findall(r"(?m)^## Step (\d)\. (.+)$", existing)
+    assert [h[0] for h in heads] == ["1", "2", "3", "4", "5"]
+    needles = {
+        "1": "/agk:adopt",
+        "2": "/agk:spec",
+        "3": "unchanged",
+        "4": "project_tests",
+        "5": "tests first",
+    }
+    for number, needle in needles.items():
+        body = existing.split(f"## Step {number}.", 1)[1].split("\n## ", 1)[0]
+        assert needle in body, (number, needle)
+    assert "skipped" in existing and "REQ-" in existing
+    security = (guides / "security.md").read_text(encoding="utf-8")
+    for needle in (
+        "What AGK stores",
+        "Where your code and prompts go",
+        "Credentials",
+        "What each workflow may write",
+        "The architect guard",
+        "cannot prevent",
+        "secrets.GITHUB_TOKEN",
+    ):
+        assert needle in security, needle
+
+
+def test_ac1_the_security_page_lists_every_workflow_and_its_permissions():
+    """REQ-020 AC1: launch docs L2 rule 3 (each statement points to the file that makes it true)."""
+    security = (KIT_ROOT / "docs" / "guides" / "security.md").read_text(encoding="utf-8")
+    for workflow in sorted((KIT_ROOT / ".github" / "workflows").glob("*.yml")):
+        assert f"`{workflow.name}`" in security, workflow.name
+        text = workflow.read_text(encoding="utf-8")
+        writes = re.search(r"(?m)^  (\w[\w-]*): write$", text)
+        row = next(ln for ln in security.splitlines() if ln.startswith(f"| `{workflow.name}`"))
+        assert ("write" in row) == bool(writes), workflow.name
