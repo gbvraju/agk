@@ -18,6 +18,8 @@ rules in short form:
    setting, never the value.
 9. Unsure of a Claude Code fact: mark it `(verify)` in the file and in the PR body; an unconfirmed fact is a
    question, not a guess.
+10. Check the state of a pull request with `gh api repos/{owner}/{repo}/pulls/{n}` (a GET); the GraphQL form of the
+    command is blocked in cloud sessions.
 
 ## Compaction recovery
 

@@ -1,7 +1,9 @@
 {
-  "kit_version": "0.21.0",
+  "kit_version": "0.22.0",
   "verbatim": [
+    ".claude/agents/architect.md",
     ".claude/agents/drift-auditor.md",
+    ".claude/hooks/architect_guard.py",
     ".claude/hooks/stop_check.py",
     ".claude/settings.json",
     ".github/ISSUE_TEMPLATE/proposal.md",
@@ -567,6 +569,7 @@
     "tests/kit/pytest.ini",
     "tests/kit/test_agk_config.py",
     "tests/kit/test_agk_mk.py",
+    "tests/kit/test_architect_guard.py",
     "tests/kit/test_check_adrs.py",
     "tests/kit/test_check_build_state.py",
     "tests/kit/test_check_kit_tests.py",
