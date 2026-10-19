@@ -15,7 +15,18 @@ from conftest import KIT_ROOT, clean_env, git, make_repo, manifest, run_init, sn
 
 PLUGIN = KIT_ROOT / ".claude-plugin"
 SKILLS = KIT_ROOT / "skills"
-COMMANDS = ["adopt", "brief", "doctor", "init", "issue", "review", "ruleset", "spec", "upgrade"]
+COMMANDS = [
+    "adopt",
+    "architect",
+    "brief",
+    "doctor",
+    "init",
+    "issue",
+    "review",
+    "ruleset",
+    "spec",
+    "upgrade",
+]
 USER_ONLY = ["adopt", "brief", "init", "issue", "ruleset", "spec", "upgrade"]
 FORBIDDEN_VERBS = ["git push", "git commit", "gh pr", "gh issue close", "gh issue comment"]
 SCRIPT_CALL = re.compile(r'^\s*python3 "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/agk/(\w+)\.py"(.*)$', re.M)
@@ -103,6 +114,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "review": {"review_context", "check_review_report"},
         "issue": set(),
         "ruleset": {"ruleset"},
+        "architect": {"playbook"},
     }
     for name, scripts in expected.items():
         assert {script for script, _ in calls(name)} == scripts, name

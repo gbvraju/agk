@@ -108,7 +108,8 @@ facts not reconfirmed are marked `(verify)`. The repository facts quoted here we
     each item; a pull request number is never written in advance (the pilot's first brief said "PR #2" and "0002"; both were taken).
     The architect writes only the items.
 17. **State of a pull request: GET, not GraphQL.** The kit's `CLAUDE.md` (verbatim, class `CLAUDE.md`) gains one line: "Check the state
-    of a pull request with `gh api repos/{owner}/{repo}/pulls/{n}` (a GET); `gh pr view` uses GraphQL, which cloud sessions block."
+    of a pull request with `gh api repos/{owner}/{repo}/pulls/{n}` (a GET); the GraphQL form of the command is blocked in cloud sessions."
+    (Amended: the first wording named `gh pr view` and so failed the test below; `docs/runs/proposed-spec-amendments-24.md`.)
     A test fails if `gh pr view` appears in `CLAUDE.md`, in a template of rule 14, in a skill, in `.claude/agents/` or in a workflow. It
     does not appear in any of them today.
 18. **Merged before cleared: reported, never blocked.** The metrics field `merged_head_cleared` (SPEC-0007 rule 8) already says, for each

@@ -62,6 +62,7 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    | `/agk:issue` | the command renders an issue from a template and runs `gh issue create` | one GitHub issue | write, after asking |
    | `/agk:brief` | `new_spec.py brief`: a brief from `docs/briefs/TEMPLATE.md` | one file | none |
    | `/agk:ruleset` | `ruleset.py plan` (SPEC-0013 rules 19 to 21), then the person's `gh` applies the plan | one branch ruleset and two repository settings, after asking | read-only `gh api` for the plan; write, after asking |
+   | `/agk:architect` | `playbook.py architect` (SPEC-0013 rule 7): prints how to start the architect session and checks the prerequisites | nothing | read-only `gh auth status` |
    | `/agk:review` | `review_context.py`, the `reviewer` subagent, `check_review_report.py` (SPEC-0003) | local files, never committed | none |
 
    `/agk:review` stays advisory: its output is never an approval and human review stays required (K2 ruling).

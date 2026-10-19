@@ -17,6 +17,7 @@ KIT_ONLY = {
     "scripts/agk/new_spec.py",
     "scripts/agk/intake.py",
     "scripts/agk/ruleset.py",
+    "scripts/agk/playbook.py",
 }
 RENDERED = {".github/CODEOWNERS"}
 SINGLES = {
