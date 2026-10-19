@@ -19,6 +19,8 @@ KIT_ONLY = {
     "scripts/agk/ruleset.py",
     "scripts/agk/playbook.py",
 }
+# Files under the law roots that belong to this repository only and are not installed in targets.
+REPO_ONLY = {".github/ISSUE_TEMPLATE/stuck.md"}
 RENDERED = {".github/CODEOWNERS"}
 SINGLES = {
     "CLAUDE.md",
@@ -78,7 +80,11 @@ def test_ac2_law_files_are_all_in_the_manifest_and_kit_only_are_not():
     verbatim = set(m["verbatim"])
     optional = set(m["experimental"])
     assert not optional & verbatim
-    law = {p for p in tracked() if p.startswith(ROOTS) and p not in KIT_ONLY and p not in RENDERED}
+    law = {
+        p
+        for p in tracked()
+        if p.startswith(ROOTS) and p not in KIT_ONLY and p not in RENDERED and p not in REPO_ONLY
+    }
     assert (law - optional) | SINGLES == verbatim
     assert optional <= law
     for rel in verbatim:
@@ -204,7 +210,7 @@ def test_ac2_adr_template_names_the_creation_commit_as_the_one_direct_commit():
 
 def test_ac2_readme_has_an_installing_section():
     """REQ-009 AC2"""
-    text = (KIT_ROOT / "README.md").read_text(encoding="utf-8")
+    text = (KIT_ROOT / "docs" / "guides" / "reference.md").read_text(encoding="utf-8")
     assert "## Installing" in text
     flat = " ".join(text.split())
     assert "one first commit" in flat and "maintainer-approved" in flat
@@ -332,7 +338,7 @@ def test_scanner_excludes_template_covers_each_tool_and_each_kit_path():
 
 def test_readme_existing_scanners_section_quotes_the_template():
     """REQ-010: ADR-0010 decision 3. The README quotes the template line for line."""
-    readme = (KIT_ROOT / "README.md").read_text(encoding="utf-8")
+    readme = (KIT_ROOT / "docs" / "guides" / "reference.md").read_text(encoding="utf-8")
     assert "## Existing scanners" in readme
     section = readme.split("## Existing scanners", 1)[1].split("\n## ", 1)[0]
     template = (KIT_ROOT / "kit" / "templates" / "scanner-excludes.txt").read_text(encoding="utf-8")

@@ -356,7 +356,7 @@ def test_ac2_init_and_adopt_print_the_two_settings_entries_and_write_none(tmp_pa
 
 def test_ac2_readme_states_the_install_and_the_four_trust_caveats():
     """REQ-014 AC2: rules 12 and 15."""
-    readme = (KIT_ROOT / "README.md").read_text(encoding="utf-8")
+    readme = (KIT_ROOT / "docs" / "guides" / "reference.md").read_text(encoding="utf-8")
     section = readme.split("## Plugin", 1)[1].split("\n## ", 1)[0]
     assert "claude plugin marketplace add gbvraju/agk" in section
     assert "claude plugin install agk@agk" in section

@@ -1,173 +1,74 @@
 # agk — Agentic Governance Kit
 
-agk lets a team adopt Claude Code agents without drift. It installs the law (committed settings, hooks, CI
-checks, branch rules) and the method (requirements, specs, ADRs, reviewer groups, briefs, audits) that keep agent
-output consistent from the first feature to the last. See `constitution/vision.md` and
-`constitution/principles.md`.
+AGK is a set of files and checks you install into a GitHub repository that you build with Claude Code.
 
-Status: **K0 — self-governed skeleton** (see `docs/adr/0002-milestones.md`). The kit governs its own build.
+- **Decisions are recorded.** A change to a protected path needs an ADR in the same pull request.
+- **Checks are enforced.** `make governance` and the `governance` workflow fail a pull request that breaks a rule.
+- **Delivery is proven.** The `proof` check reports whether the new tests of a pull request fail without its change.
+- **Drift is measured.** A weekly audit lists what slipped past the rules.
+- **A Monday report.** One GitHub issue a week says what was delivered, what waits for you and what is at risk.
 
-## Run the checks
+## Who it is for, and what it needs
 
-    make governance   # all checks against the base branch (the default branch in agk.toml)
-    make test         # tests of the checks (needs pytest)
-    make lint         # ruff over the kit paths in agk.toml
+It is for one developer, or a small team, who builds with Claude Code and wants the decisions and the proof to live in the
+repository, not in a chat. You need:
 
-The kit's own commands are in `agk.mk` (`make -f agk.mk agk-governance | agk-lint | agk-test`); the `Makefile` is thin
-aliases of them. Kit tests are collected only through `agk.mk` (they need `AGK_KIT_TESTS=1`).
+- [Claude Code](https://claude.com/claude-code), logged in.
+- A GitHub repository that you administer (the ruleset step needs admin), with Issues and Actions turned on.
+- The GitHub CLI (`gh`), logged in with your own account.
+- Python 3.11 or newer, `git` and `make`; `pytest` for `make test`.
 
-Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI the pull-request base SHA is used.
-`python3 scripts/agk/reviewers.py --codeowners` prints the rendered CODEOWNERS; with `--write` it writes the file (in an
-adopted repository only the marked block). `python3 scripts/agk/traceability.py` prints the requirement-to-test matrix to stdout; it is never committed.
+## The 10-minute path
 
-## Installing
+Steps 1 to 4 take about ten minutes (not yet timed by anyone outside the project `(verify)`). The whole path to the first
+governed merge takes longer. Each step has its command and the output to expect in
+[the getting-started guide](docs/guides/getting-started.md).
 
-1. Create the target repository empty (no files).
-2. Make one first commit directly on the default branch (a PR needs a base branch); record it in the target's
-   ADR-0001.
-3. From a checkout of agk, run init as a maintainer-approved step (an agent session blocks running a cloned script
-   until a maintainer authorizes it):
+1. Make an empty repository on GitHub, clone it and make the first commit on `main`.
+2. Install the plugin: `claude plugin marketplace add gbvraju/agk`, then `claude plugin install agk@agk`.
+3. In Claude Code, in the repository: `/agk:init`. Put your GitHub handle in `config/reviewers.yaml`, then commit and push.
+4. `/agk:ruleset` to protect `main`. It picks phase 1, or phase 2 when `governance` has already run on `main`.
+5. `/agk:start "<your problem statement>"`; review the vision and the project charter it drafts, and merge.
+6. `/agk:spec "<one sentence>"`; review the requirement and the Draft spec it drafts, and merge.
+7. Run the architect session (`claude --agent architect`), then an implementation session, then merge the pull request the
+   architect has cleared.
+8. `/agk:ruleset` again, if it picked phase 1, once `governance` has run on `main`.
 
-       python3 scripts/agk/init.py TARGET [--dry-run]
+## What you get each week
 
-   Init never overwrites a differing file (it refuses and lists it) and a second run changes nothing.
-4. Apply the printed ruleset and repository settings by hand on GitHub; init configures nothing there.
-
-See `docs/specs/0001-agk-init.md` and `docs/runs/k1-live-proof.md`.
-
-## Adopting an existing repository
-
-    python3 scripts/agk/adopt.py TARGET [--dry-run]
-
-Run from a checkout of agk as a maintainer-approved step. TARGET is an existing git work tree. Adopt touches no
-product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `tests/kit/`, `.claude/`, `config/`,
-`constitution/`, `docs/`, `.github/workflows/governance.yml`), appends one marked block to `.gitignore` and, when they
-exist, to `CLAUDE.md`, `.github/CODEOWNERS` and `.github/PULL_REQUEST_TEMPLATE.md`, and refuses rather than overwrite.
-The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/specs/0002-agk-adopt.md`.
-
-## Drift audit
-
-    python3 scripts/agk/drift_audit.py [--today YYYY-MM-DD]
-
-A read-only audit of the default branch: protected changes that reached it without an ADR (the last 7 days), done
-requirements without a test marker, stale Draft specs and Proposed ADRs, overdue residuals (`(due YYYY-MM-DD)` on
-a bullet, or a line of `docs/runs/residuals.md`), and reviewers and CODEOWNERS drift. The installed workflow
-`.github/workflows/drift-audit.yml` runs it every Saturday and files at most one issue labelled `agk-drift-audit`;
-a clean run writes nothing. GitHub may disable scheduled workflows after a period of repository inactivity: if
-scheduled runs stop, start the workflow by hand (`workflow_dispatch`). See `docs/specs/0004-drift-audit.md` and
-ADR-0012.
-
-## Per-PR metrics
-
-    python3 scripts/agk/metrics.py [--today YYYY-MM-DD] [--repo OWNER/REPO]
-
-Reads the GitHub REST API (`gh api`, GET only) and local git objects, and prints the report for the ISO week before
-`--today`: one derived record per closed pull request (rejections, blocked weakenings, deviations, cost class, review
-rounds, protected classes, ADRs added, tests before and after, hours open to merge, whether the merged head was
-cleared). Review rounds, rejection and the cleared head come from comments whose first line is `Verdict: cleared <short
-sha>`, `Verdict: fix list` or `Verdict: rejected`. The installed workflow `.github/workflows/metrics.yml` runs every
-Monday and files one issue per week labelled `agk-metrics` (it needs `issues: write`); a week with no closed pull
-request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
-
-## Doctor
-
-    python3 scripts/agk/doctor.py [--kit-root PATH] [--repo OWNER/REPO] [--json] [ROOT]
-
-A read-only report of what is misconfigured: the ruleset on the default branch against ADR-0001 decision 3 (a minimum, so
-stricter is fine), the required status check `governance`, the placeholder team in `config/reviewers.yaml` and CODEOWNERS, a
-missing `refs/remotes/origin/HEAD`, the drift-audit workflow (file, schedule, state), and with `--kit-root` the version and every
-vendored file against the kit's copy. It reads GitHub with `gh api` (GET only) and holds no credential. A check it could not make
-prints `??` with the reason (`gh-unauthenticated`, `no-admin`, `no-kit-root`, ...), never `ok`; exit 0 only when every check is
-ok, 1 for an error finding, 4 for a warning or an unchecked item. See `docs/specs/0006-doctor.md` and ADR-0017.
-
-## Upgrade
-
-    python3 scripts/agk/upgrade.py TARGET [--dry-run]
-
-Run from the kit checkout or the plugin root (not installed into targets). Brings an init or adopt target from the kit
-version in its `agk.toml` to this kit: a file that equals the kit's copy is skipped, a file that is an old released copy is
-replaced, a new file is created; a file the user edited stops the whole run and nothing is written; a file removed from
-the kit is reported, never deleted. `kit/hashes.json` (a committed generated file, regenerated by
-`python3 scripts/agk/kit_hashes.py --write`) says what each file was at each version. User-owned files are never
-rewritten; changed templates and new `agk.toml` keys are printed; only the `version` line of `agk.toml` is set, last. It
-prints the target's protected classes and an ADR skeleton for the upgrade pull request. An install stamped only in
-`pyproject.toml [tool.agk]` (kits 0.1.0 and 0.2.0) is upgraded through that stamp: `agk.toml` is created last and `pyproject.toml` is
-never written. See `docs/specs/0008-upgrade.md` and ADR-0018.
-
-## Experimental: reviewer agent
-
-Experimental, advisory and never a gate: the reviewer is not counted as review and human review stays required. In
-the shadow reviews it caught 0 of 5 human findings, 3 recorded and 2 held-out (`docs/runs/shadow-review-4.md`).
-It is not installed by default: `agk init` and `agk adopt` do not write `.claude/agents/reviewer.md`,
-`scripts/agk/review_context.py`, `scripts/agk/check_review_report.py` or their tests. To opt in, set
-`experimental_reviewer = true` in `agk.toml` and run `agk upgrade` (or `/agk:upgrade`); `agk doctor` then checks those files
-too. This repository keeps its own copies for the experiment.
-
-    python3 scripts/agk/review_context.py [--base REF] --body PR_BODY.md > review-context.md
-    # ask the `reviewer` subagent (.claude/agents/reviewer.md) to review review-context.md, save its answer
-    python3 scripts/agk/check_review_report.py --context review-context.md --report report.md
-
-The reviewer reads one pull request against its stated intent and the repository's Approved text, and returns a
-verdict (`cleared`, `fix list`, `rejected`) with cited findings. It is read-only (`Read`, `Grep`, `Glob`), advises
-and never approves or merges; the context and the report are local files and are never committed. The optional
-`agk.toml` keys `review_diff_cap` (default 4000) and `review_other_cap` (default 1500) set the line caps of the
-context. The context holds the full current text of every changed file and the operating rules of `CLAUDE.md`,
-so a rule next to a change is visible. See `docs/specs/0003-reviewer-agent.md`, ADR-0011 and `docs/runs/shadow-review-template.md`.
-
-## Plugin
-
-The workflow commands are also a Claude Code plugin; this repository is its marketplace. The repository works without it
-(`make governance`, the stop hook, the workflows and the `reviewer` subagent need no plugin).
-
-    claude plugin marketplace add gbvraju/agk
-    claude plugin install agk@agk
-
-| Command | What it runs | Writes |
+| When (UTC) | What | Where |
 | --- | --- | --- |
-| `/agk:init` | `scripts/agk/init.py` | new files in the repository |
-| `/agk:adopt` | `scripts/agk/adopt.py` | owned files and marked blocks |
-| `/agk:doctor` | `scripts/agk/doctor.py --kit-root` the plugin | nothing (a report) |
-| `/agk:upgrade` | `scripts/agk/upgrade.py` | vendored files |
-| `/agk:spec` | `scripts/agk/new_spec.py` | a Draft spec, or a requirement proposal with its ADR draft |
-| `/agk:issue` | the issue templates and your own `gh issue create`, after asking | one GitHub issue |
-| `/agk:brief` | `scripts/agk/new_spec.py` | one brief |
-| `/agk:review` | `review_context.py`, the project's `reviewer` subagent, `check_review_report.py` | local files, never committed |
+| Monday 06:43 | One record per pull request closed in the week before | an issue labelled `agk-metrics` |
+| Monday 07:13 | The product report: delivered, proven, needs you, at risk, cost | an issue labelled `agk-product-report` |
+| Saturday 06:17 | The drift audit, only when it finds something | an issue labelled `agk-drift-audit` |
 
-No command commits, pushes or merges, and none sets a spec `Approved` or an ADR `Accepted`. `/agk:review` is advisory.
-GitHub issues are intake only: decisions, requirements, specs and ADRs live in the repository, and an issue decides
-nothing (`.github/ISSUE_TEMPLATE/`; a pull request may link one with an optional `Issue: #nnn` line).
+Expect the Monday issues hours late: on 2026-10-19 the metrics issues came about 7 hours after their slot and the report about
+7.5 hours; in India that is usually Monday evening. GitHub can also pause scheduled workflows in a repository with no activity. Each
+workflow can also be started by hand from the Actions tab. The schedules are in `.github/workflows/`.
 
-To let a team enable the plugin, `agk init` and `agk adopt` print two entries for `.claude/settings.json`
-(`extraKnownMarketplaces` and `enabledPlugins`); they merge nothing. What to know before you rely on it:
+## Honest limits
 
-- A project-scope plugin loads only after the user accepts the workspace trust dialog for the folder, and each
-  collaborator installs it on their own machine.
-- A cloud session does not add the marketplaces a repository lists under `extraKnownMarketplaces`, so the plugin is
-  absent there; the repository's checks do not depend on it.
-- A plugin runs with the user's privileges. This one ships no hook, server, monitor or `bin/`, and its scripts are the
-  ones in this repository.
-- An agent that edits `.claude/settings.json` could point `extraKnownMarketplaces` at another source; the file is a
-  protected path class and its edit is an `ask` rule in `.claude/settings.json`.
-- Each command may ask for approval once per session. Releases are tags `vX.Y.Z`; a third-party marketplace does not
-  auto-update by default, so an installed version changes only when the user updates.
+- **It checks that the process happened, not that the work is good.** A check can see an ADR, a test, a verdict line. It cannot
+  see whether the decision is wise, the test is meaningful or the code is right. In the shadow reviews the reviewer agent caught
+  0 of 5 human findings (`docs/runs/shadow-review-4.md`); it is experimental and never a gate.
+- **No claim is made that AGK catches defects, saves money or beats another tool.** The comparison with other
+  spec-driven tools is not written yet (ADR-0025, due 2026-12-31).
+- **Claude Code and GitHub only.** The checks and the workflows assume both.
+- **Applying the ruleset from `/agk:ruleset` is not yet proven live.** The plan, which only reads, is. The first write was
+  refused by the proxy of the session that tried it (`docs/runs/ruleset-sandbox-proof.md`). If the apply step fails for you,
+  the plan also prints the exact settings to set by hand.
+- **The architect session is not yet proven live.** Its start flag and its guard hook are marked `(verify)` in
+  `.claude/agents/architect.md`.
+- **Nobody outside the project has used these guides yet.** Where you get stuck, open an issue with the
+  [I got stuck form](.github/ISSUE_TEMPLATE/stuck.md).
 
-See `docs/specs/0005-distribution.md`, ADR-0019 and `docs/runs/spec-0005-verify-facts.md`.
+## The guides
 
-## Existing scanners
+- [Getting started](docs/guides/getting-started.md): a new repository, from nothing to the first governed merge.
+- [Reference](docs/guides/reference.md): every command and file of the kit.
 
-Project-wide scanners (bandit, flake8, pylint, mypy) that read the whole tree also read the kit's code. The kit's
-subprocess calls carry justified `# nosec` comments and its type findings are fixed, so what remains for bandit is
-the bare `assert` of the kit's tests (rule B101). Init and adopt print the exclusions below after a run and write
-none of them (ADR-0010, `docs/runs/scanner-fix.md`):
-
-```
-Scanner exclusions (print only; the kit writes none of this). The kit's code under scripts/agk, tests/kit and
-.claude/hooks is the kit's, not yours. If a scanner you run reads the whole tree, exclude those paths in your own
-configuration:
-  bandit:  bandit -r . -x ./scripts/agk,./tests/kit,./.claude/hooks
-  flake8:  flake8 --extend-exclude scripts/agk,tests/kit,.claude/hooks
-  pylint:  [tool.pylint.main] ignore-paths = ['^scripts/agk/.*$', '^tests/kit/.*$'] and ignore = ['.claude']
-  mypy:    [tool.mypy] exclude = ['^scripts/agk/', '^tests/kit/', '^\.claude/hooks/']
-```
+What the kit was shown to do is recorded in `docs/runs/`: `k1-live-proof.md` (install), `plugin-live-proof.md` (the plugin),
+`doctor-live-proof.md`, `upgrade-live-proof.md`, `drift-audit-live-run-1.md`, `metrics-first-run.md`,
+`product-report-live-1.md` and `intake-proof.md`.
 
 Licence: Apache-2.0.
