@@ -10,8 +10,11 @@ A hook of a project agent runs only in a trusted folder (verify for the `--agent
 Denies `Edit`, `Write`, `MultiEdit` and `NotebookEdit` outside `docs/` and `constitution/vision.md`,
 and `Bash` unless the command is one of: a read-only `git` command; `gh api` with `--method GET` or
 no method (and no field or input flag); `gh api --method POST` to the comments of an issue or pull
-request with `-f` fields only; `date -u`; `make governance`; or a read-only script of
-`scripts/agk/` (READ_ONLY_SCRIPTS). Shell operators, substitutions and redirections are denied.
+request of the repository named by this checkout's origin remote (read from `.git/config`), with
+`-f` fields only; `date -u`; `make governance`; or a read-only script of `scripts/agk/`
+(READ_ONLY_SCRIPTS). Options of an allowed `git` command that run a program, write a file or reach a
+config-driven command are denied (GIT_FORBIDDEN_LONG). Shell operators, substitutions and
+redirections are denied.
 The message names the rule, never the command or the path. Standard library only; no network.
 """
 
@@ -64,9 +67,32 @@ READ_GIT = frozenset(
 BRANCH_READ = frozenset({"--list", "-a", "-r", "-v", "-vv", "--show-current", "--all", "--remotes"})
 WRITE_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 WRITE_ALLOWED_FILE = "constitution/vision.md"
-COMMENT_ENDPOINT = re.compile(r"^/?repos/[^/\s]+/[^/\s]+/issues/\d+/comments$")
+COMMENT_ENDPOINT = re.compile(r"^/?repos/([^/\s]+)/([^/\s]+)/issues/\d+/comments$")
 FIELD_FLAGS = frozenset({"-f", "--raw-field", "-F", "--field", "--input"})
 UNSAFE = re.compile(r"[$`\n\r]")
+# Options of an allowed `git` subcommand that run a program, write a file or reach a config-driven
+# command (a pager, an external diff, a text conversion, a filter, a signature check). Git accepts
+# any unambiguous prefix of a long option, so a long word is denied when it is a prefix of one of
+# these; a short-option cluster is denied when it holds `O` (`-O<pager>` runs the pager).
+GIT_FORBIDDEN_LONG = (
+    "open-files-in-pager",
+    "ext-diff",
+    "textconv",
+    "filters",
+    "output",
+    "exec",
+    "exec-path",
+    "show-signature",
+    "upload-pack",
+    "receive-pack",
+    "config-env",
+    "git-dir",
+    "work-tree",
+    "paginate",
+)
+SHORT_WITH_O = re.compile(r"^-[A-Za-z0-9]*O")
+REMOTE_SECTION = re.compile(r'^\[remote "origin"\]\s*$')
+URL_LINE = re.compile(r"^\s*url\s*=\s*(\S.*?)\s*$")
 PATH_RULE = "architect guard rule 9: writes only under docs/ and constitution/vision.md"
 BASH_RULE = "architect guard rule 9: this command is not on the architect's list"
 
@@ -101,14 +127,66 @@ def tokens_of(command: str) -> list[str] | None:
     return words
 
 
+def git_option_denied(word: str) -> bool:
+    if word.startswith("--"):
+        name = word[2:].split("=", 1)[0]
+        return bool(name) and any(f.startswith(name) for f in GIT_FORBIDDEN_LONG)
+    return bool(SHORT_WITH_O.match(word))
+
+
 def git_allowed(words: list[str]) -> bool:
     if len(words) < 2 or words[1].startswith("-"):
         return False
-    if any(w.startswith(("--output", "--ext-diff", "--exec")) for w in words):
+    if any(git_option_denied(w) for w in words[2:]):
         return False
     if words[1] == "branch":
         return all(w in BRANCH_READ for w in words[2:])
     return words[1] in READ_GIT
+
+
+def origin_repo(root: str) -> str | None:
+    """`owner/repo` of the origin remote, read from the git config; None if unreadable."""
+    git_dir = os.path.join(root, ".git")
+    try:
+        if os.path.isfile(git_dir):
+            with open(git_dir, encoding="utf-8") as fh:
+                first = fh.readline().strip()
+            if not first.startswith("gitdir:"):
+                return None
+            git_dir = os.path.normpath(os.path.join(root, first.split(":", 1)[1].strip()))
+            common = os.path.join(git_dir, "commondir")
+            if os.path.isfile(common):
+                with open(common, encoding="utf-8") as fh:
+                    git_dir = os.path.normpath(os.path.join(git_dir, fh.readline().strip()))
+        with open(os.path.join(git_dir, "config"), encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    urls: list[str] = []
+    inside = False
+    for line in lines:
+        if line.startswith("["):
+            inside = bool(REMOTE_SECTION.match(line.strip()))
+        elif inside:
+            match = URL_LINE.match(line)
+            if match:
+                urls.append(match.group(1))
+    names = set()
+    for url in urls:
+        parts = [p for p in re.split(r"[/:]", url.removesuffix("/").removesuffix(".git")) if p]
+        if len(parts) < 2:
+            return None
+        names.add(f"{parts[-2]}/{parts[-1]}".lower())
+    return names.pop() if len(names) == 1 else None
+
+
+def comment_target_ok(endpoint: str) -> bool:
+    """A comment POST names the repository of this checkout's origin remote, and no other."""
+    match = COMMENT_ENDPOINT.match(endpoint)
+    if not match:
+        return False
+    own = origin_repo(project_root())
+    return own is not None and f"{match.group(1)}/{match.group(2)}".lower() == own
 
 
 def gh_api_allowed(words: list[str]) -> bool:
@@ -142,7 +220,7 @@ def gh_api_allowed(words: list[str]) -> bool:
         return False
     if method == "GET" or (method is None and not flags):
         return not (flags & {"--input"})
-    if method == "POST" and COMMENT_ENDPOINT.match(endpoint):
+    if method == "POST" and comment_target_ok(endpoint):
         return bool(flags) and flags <= {"-f", "--raw-field"}
     return False
 

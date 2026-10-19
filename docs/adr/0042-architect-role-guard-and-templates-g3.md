@@ -11,8 +11,8 @@ Protected classes: `.claude/`, `CLAUDE.md`, `scripts/agk/`, `skills/`, `tests/ki
 ## Context
 
 G3 of the four-part build of SPEC-0013 (ADR-0040, ADR-0041). G4 is `/agk:start` and the existing-codebase path (rules 1 to 5). Rule 18 (the weekly report's
-"At risk" line for a pull request merged before its head was cleared, an amendment of SPEC-0011) and rule 28 (the proof of criterion g) are not in G1 to G4;
-rule 18 is flagged in the pull request body for the maintainers to place.
+"At risk" line for a pull request merged before its head was cleared, an amendment of SPEC-0011) is G5, ruled a small pull request right after G4; rule 28
+(the proof of criterion g) is the maintainers'.
 
 ## Decision
 
@@ -29,11 +29,21 @@ rule 18 is flagged in the pull request body for the maintainers to place.
 2. **The guard** (rule 9): `.claude/hooks/architect_guard.py` (installed, verbatim; standard library only, no network, no subprocess) denies
    `Edit`, `Write`, `MultiEdit` and `NotebookEdit` outside `docs/` and `constitution/vision.md` (the real path decides: `..`, a symlink out and a prefix such as
    `docsx/` are denied), and `Bash` unless the command is a simple command of: a read-only `git` subcommand (`branch` only to list); `gh api` with `--method GET` or
-   no method and no field or input flag, on a `repos/` endpoint; `gh api --method POST` to the comments of an issue or pull request with `-f` fields only;
+   no method and no field or input flag, on a `repos/` endpoint; `gh api --method POST` to the comments of an issue or pull request **of the repository named by this checkout's origin remote** (read from `.git/config` with the
+   standard library, no subprocess; every origin URL must name the same `owner/repo`; if it cannot be read the POST is denied) with `-f` fields only;
    `date -u`; `make governance`; or a read-only script of `scripts/agk/` (a listed set; `proof.py`, which runs a checkout's tests, is not on it). Shell operators,
    redirections, substitutions, `$` and backticks are denied. A denial is JSON on stdout (`permissionDecision: deny`) with a reason that names the rule and
-   never the command or the path. A broken payload is denied. `tests/kit/test_architect_guard.py` (installed) runs a table of 40 allowed and denied paths and
-   about 60 commands.
+   never the command or the path. A broken payload is denied. **Audit of the allowed `git` subcommands** (verdict on the first head: `git grep -O<program>` and
+   `--open-files-in-pager=<program>` ran code): `status`, `diff`, `log`, `show`, `rev-parse`, `ls-files`, `ls-tree`, `blame`, `cat-file`, `merge-base`, `describe`,
+   `shortlog`, `grep`, `rev-list`, `name-rev`, `show-ref`, and `branch` only to list. Options checked and denied: `-O` in any short cluster and `--open-files-in-pager`
+   (`grep` runs the program), `--ext-diff` and `--textconv` (an external diff or a text conversion program), `--filters` (clean and smudge drivers), `--show-signature`
+   (a signature program), `--output` (writes a file), `--exec`, `--exec-path`, `--upload-pack`, `--receive-pack`, `--config-env`, `--git-dir`, `--work-tree`, `--paginate`.
+   Git accepts any unambiguous prefix of a long option, so a word is denied when it is a prefix of one of these (`--open`, `--ext`). Global options before the subcommand
+   (`-c`, `--git-dir`, `-C`) are denied because the second word must be the subcommand. Checked and left: `blame --contents` and `-S`, `ls-files --exclude-from`,
+   `diff --no-index` (they read files), `shortlog` (reads standard input without a revision), `describe --dirty` (runs read-only git). `git status`, `diff` and `log` can
+   reach programs named in the git configuration (`core.fsmonitor`, `diff.external`, a textconv driver); the role cannot write the configuration (it is outside
+   `docs/`), so it cannot introduce one; a configuration that already holds one is the person's. `tests/kit/test_architect_guard.py` (installed) runs a table of 40 allowed and denied paths and
+   about 85 commands, and the origin cases (five URL forms, no origin, two origins, a worktree).
 3. **The skill `/agk:architect`** (rule 7) runs `playbook.py architect`, which prints the start command and checks read-only that `agk.toml` is present, that `gh`
    is logged in and which branch is the default; in a session that cannot be started that way it points to the role file and says the tool list and the guard are not
    enforced there. `SPEC-0005` rule 8 gains its row (`proposed-spec-amendments-24.md` item 2; the `architect` part of item 1 of `-15`).
@@ -58,16 +68,16 @@ rule 18 is flagged in the pull request body for the maintainers to place.
 
 ## Questions
 
-| Q | Question | Reading taken |
+| Q | Question | Reading taken, and the ruling (maintainers, 2026-10-19: Q-K4-181 to 184 ruled as read) |
 | --- | --- | --- |
-| Q-K4-181 | Rule 17 requires a `CLAUDE.md` line that names `gh pr view` and a test that fails when `gh pr view` appears in `CLAUDE.md`. | Keep the test; reword the line so it does not name the command (amendment 24 item 1). |
-| Q-K4-182 | Rule 7 says the skill is "user-invoked"; amendment 15 item 1 says it "reads and writes nothing" and keeps it out of rule 9's list of commands with model invocation off. | A reader like `doctor` and `review`: no `disable-model-invocation`. A person types it either way. |
-| Q-K4-183 | The exact list of what the guard allows for `Bash` (rule 9 names five forms). | The five forms, plus `date -u` (dates come from it, CLAUDE.md rule 6); `git branch` only to list; the read-only script set in the hook; anything with an operator, substitution or `$` is denied. |
-| Q-K4-184 | The brief skeleton keeps `{{n}}` and `{{sha}}` unfilled; rule 16 says no number is written in advance. | Yes: `{{n}}` is the placeholder for the pull request the session opens. |
+| Q-K4-181 ruled | Rule 17 requires a `CLAUDE.md` line that names `gh pr view` and a test that fails when `gh pr view` appears in `CLAUDE.md`. | Keep the test; reword the line so it does not name the command (amendment 24 item 1). |
+| Q-K4-182 ruled | Rule 7 says the skill is "user-invoked"; amendment 15 item 1 says it "reads and writes nothing" and keeps it out of rule 9's list of commands with model invocation off. | A reader like `doctor` and `review`: no `disable-model-invocation`. A person types it either way. |
+| Q-K4-183 ruled | The exact list of what the guard allows for `Bash` (rule 9 names five forms). | The five forms, plus `date -u` (dates come from it, CLAUDE.md rule 6); `git branch` only to list; the read-only script set in the hook; anything with an operator, substitution or `$` is denied. |
+| Q-K4-184 ruled | The brief skeleton keeps `{{n}}` and `{{sha}}` unfilled; rule 16 says no number is written in advance. | Yes: `{{n}}` is the placeholder for the pull request the session opens. |
 
 ## Residual
 
 - 2026-10-19: the guard limits writes by path and `Bash` by command pattern; an allowed `gh api` GET can still read anything the login can (SPEC-0013 residual, due 2027-01-31).
-- 2026-10-19: the `(verify)` items of Decision 1 (trust rule for `--agent`; `Edit` and `Write` payload keys) are confirmed by a live run of `claude --agent architect` in a
-  trusted folder, a maintainers' step with the sessions' help (due 2026-11-30).
-- 2026-10-19: rule 18's "At risk" line (amendments-15 item 3, SPEC-0011) is built by none of G1 to G4 (due 2026-11-30).
+- 2026-10-19: the `(verify)` items of Decision 1 (trust rule for `--agent`; `Edit` and `Write` payload keys) are settled by the first live architect run at criterion g
+  (due 2026-11-20).
+- 2026-10-19: rule 18's "At risk" line (amendments-15 item 3, SPEC-0011) is G5, a small pull request right after G4: `product_report.py` and its goldens (ruled 2026-10-19; due 2026-11-07).
