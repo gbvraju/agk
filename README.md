@@ -65,6 +65,10 @@ workflow can also be started by hand from the Actions tab. The schedules are in 
 ## The guides
 
 - [Getting started](docs/guides/getting-started.md): a new repository, from nothing to the first governed merge.
+- [The product-owner guide](docs/guides/product-owner.md): what arrives each Monday and what to do about it.
+- [Adopting AGK in an existing codebase](docs/guides/existing-codebase.md): install without touching your product, record today's
+  behaviour, then change.
+- [Security](docs/guides/security.md): what AGK stores, where code and credentials go, what each workflow may write.
 - [Reference](docs/guides/reference.md): every command and file of the kit.
 
 What the kit was shown to do is recorded in `docs/runs/`: `k1-live-proof.md` (install), `plugin-live-proof.md` (the plugin),
