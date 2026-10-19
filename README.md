@@ -42,7 +42,8 @@ governed merge takes longer. Each step has its command and the output to expect 
 | Monday 07:13 | The product report: delivered, proven, needs you, at risk, cost | an issue labelled `agk-product-report` |
 | Saturday 06:17 | The drift audit, only when it finds something | an issue labelled `agk-drift-audit` |
 
-GitHub can start a scheduled run hours late, and it can pause scheduled workflows in a repository with no activity. Each
+Expect the Monday issues hours late: on 2026-10-19 the metrics issues came about 7 hours after their slot and the report about
+7.5 hours; in India that is usually Monday evening. GitHub can also pause scheduled workflows in a repository with no activity. Each
 workflow can also be started by hand from the Actions tab. The schedules are in `.github/workflows/`.
 
 ## Honest limits

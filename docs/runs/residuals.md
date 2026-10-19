@@ -53,6 +53,7 @@ bullet. The K3 target is 2026-11-30 and the K4 target is 2026-12-31 (ADR-0015); 
 - docs/runs/product-report-live-1.md 2026-10-17 | the Proven line of the product report shows REQ-001 and REQ-003 as not proven: the proof job of PR #60 ran without pytest (red-on-head, fixed by PR #61 and PR #63); a known false flag for criterion c, resolved when the next change to either requirement reads proven (maintainers' ruling 2026-10-18) (owner: maintainers) | (due 2026-10-31) | open
 - ADR-0047 launch docs L1 2026-10-19 | the fix-list verdicts on PRs 76 to 84 were not posted as comments, so `review_rounds` and the report's fix counts for them are understated; note it in the K4 close record, no back-filling (owner: maintainers) | (due 2026-11-30) | open
 - ADR-0047 launch docs L1 2026-10-19 | SPEC-0012 rule 10's example id `Q-S0014-1` collides with a real spec; use a number no spec has when the spec is next amended (owner: maintainers) | (due 2026-12-31) | open
+- ADR-0047 launch docs L1 2026-10-19 | `playbook.py check-start` names the three items when one has no list under it; its message should name the item that lacks a list (owner: maintainers) | (due 2026-11-15) | open
 
 ## Closed (not findings)
 

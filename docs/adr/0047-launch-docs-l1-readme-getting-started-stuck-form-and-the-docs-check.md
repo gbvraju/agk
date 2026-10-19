@@ -45,17 +45,26 @@ ADR-0025 sets the launch minimum (README, product-owner guide, one-page security
 
 | Q | Question | Reading taken (conservative) |
 | --- | --- | --- |
-| Q-K4-191 | `playbook.py check-start` prints "the Decision lacks the numbered items Milestones, Non-goals, Done means" also when the three items exist but have no list lines under them | not changed here (a docs finding is reported, not fixed in a script); the guide does not depend on it because the session writes the files |
-| Q-K4-192 | Is the "I got stuck" form installed in targets? | no: repository-only, because its reader files it on this repository; exempted by name in `test_kit_manifest.py`; the label `agk-stuck` is for the maintainers to create (GitHub applies a template label only if it exists `(verify)`) |
+| Q-K4-191 | `playbook.py check-start` prints "the Decision lacks the numbered items Milestones, Non-goals, Done means" also when the three items exist but have no list lines under them | ruled (maintainers, 2026-10-19): a residual, not fixed here; the guide does not depend on it because the session writes the files |
+| Q-K4-192 | Is the "I got stuck" form installed in targets? | ruled: the maintainers create the label `agk-stuck`; the form is repository-only, exempted by name in `test_kit_manifest.py`. **Done** (maintainers, 2026-10-19): the label `agk-stuck` exists on the repository, so the template label is applied |
 | Q-K4-193 | No requirement names the launch docs | the pull request advances REQ-020 (the requirement ADR-0025 names) and marks its tests `REQ-020 AC1`; nothing is marked done and no requirement is added |
 | Q-K4-194 | The README sections that tests read (installing, plugin, scanners, experimental reviewer) moved | the tests follow the sections to `docs/guides/reference.md`; no assertion was weakened |
 | Q-K4-195 | "Moved unchanged in substance" versus the command table lacking four commands | the rows are added, because the guide links the reference as the full list and a missing row would be a false statement |
 | Q-K4-196 | The brief names a "10-minute path"; no one has timed it | the section keeps the brief's name and says in its first sentence that the time is not measured `(verify)` |
+
+## Evidence recorded on 2026-10-19
+
+- K3 criterion d (ADR-0015) is met by the scheduled metrics run of 2026-10-19: issue #86, no manual trigger. The first scheduled product report is issue #88.
+- The metrics issues of this repository (#86) and of the fork ran about 7 hours after their slot, the report (#88) about 7.5 hours. The guide and the README say to expect the Monday
+  issues hours late. The fork's scheduled metrics run (run 2, Scheduled) shows that scheduled runs work on a fork once Actions are on; the guide's earlier statement that a fork
+  does not run scheduled workflows was wrong and is corrected.
+- The At risk section of #88 flagged #79, #45 and #50 as merged before their last commit was cleared. That is correct and the rule stands: merge only after the latest head is cleared.
 
 ## Residual
 
 - 2026-10-19: the fix-list verdicts on the pull requests numbered 76 to 84 were not posted as comments (they were given in the conversation), so the metrics field `review_rounds`
   and the report's fix counts for those pull requests are understated. Note it in the K4 close record; the comments are not back-filled. (due 2026-11-30)
 - 2026-10-19: the example id in SPEC-0012 rule 10 (`Q-S0014-1`) collides with a real spec's question. Use a number no spec has when the spec is next amended. (due 2026-12-31)
+- 2026-10-19: `playbook.py check-start` names the three items when one has no list under it; its message should name the item that lacks a list. (due 2026-11-15)
 - 2026-10-19: no one outside the project has followed the guide; the first outside developer's "I got stuck" issues are the findings (about 2026-11-02, then the weekly review). (due 2026-11-20)
 - 2026-10-19: the two steps marked "not yet proven live" (applying the ruleset; the architect session) wait for the maintainers' sandbox proof and the first live architect run. (due 2026-11-20)

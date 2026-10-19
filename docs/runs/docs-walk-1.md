@@ -90,7 +90,7 @@ quotes. Each is fixed in `docs/guides/getting-started.md` before this pull reque
 | 6 | step 2 | the draft said Claude Code asks to trust the folder; no proof shows it for a user-scope plugin | the sentence is removed |
 | 7 | `make test` | `make test` in a new repository runs 825 tests and took 2 minutes 29 seconds | the troubleshooting section says to expect two to three minutes |
 | 8 | step 1 | `git clone` of an empty repository prints a warning | step 1 says the warning is expected |
-| 9 | `playbook.py check-start` | the message `the Decision lacks the numbered items` is also printed when the three items exist but have no list lines under them (the first try above); a reader cannot tell what is missing | not fixed here (a script change): `Q-K4-191` |
+| 9 | `playbook.py check-start` | the message `the Decision lacks the numbered items` is also printed when the three items exist but have no list lines under them (the first try above); a reader cannot tell what is missing | not fixed here (a script change): `Q-K4-191`, ruled a residual (due 2026-11-15) |
 
 ## Not covered
 

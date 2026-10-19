@@ -202,11 +202,12 @@ report has five headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`.
 
 ## When something goes wrong
 
-- **A scheduled run did not happen on Monday.** GitHub can start a scheduled run hours late. The drift audit of the project's
-  own repository ran 4 hours 20 minutes after its slot on 2026-10-17. Wait a few hours, then start the workflow by hand
+- **A scheduled run did not happen on Monday.** Expect the Monday issues hours late; in India, usually Monday evening. On
+  2026-10-19 the metrics issues of the project's repository and of a fork came about 7 hours after their slot, and the report about
+  7.5 hours. The drift audit of the project's own repository ran 4 hours 20 minutes after its slot on 2026-10-17. Wait a few hours, then start the workflow by hand
   from the Actions tab.
-- **A scheduled run never happens, in a fork.** A fork does not run scheduled workflows until you enable them: open the
-  Actions tab of the fork and turn workflows on, then enable each workflow once.
+- **A scheduled run never happens, in a fork.** Scheduled runs worked on a fork once Actions were on (the scheduled metrics run
+  of a fork on 2026-10-19). If no scheduled run ever appears, enable the workflows from the Actions tab of the fork.
 - **A workflow fails when it writes its issue.** Issues must be on for the repository: Settings, General, Features. The
   doctor checks it: run `/agk:doctor` and read the line `issues-disabled`.
 - **`/agk:ruleset` says it cannot apply.** It needs admin on the repository and a logged-in `gh`. Run `gh auth status`. If
