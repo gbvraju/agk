@@ -1,6 +1,6 @@
 # ADR-0042: the architect role, its guard hook, the playbook templates and the state-of-a-pull-request line (SPEC-0013 rules 6 to 17), kit 0.22.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-19
 - Deciders: maintainers
 - Related: ADR-0020, ADR-0021, ADR-0040, ADR-0041
