@@ -789,3 +789,99 @@ def test_a_residual_marked_closed_is_in_neither_the_inbox_nor_at_risk(tmp_path, 
         r["state"] = "closed"
     out = render_doc(doc, tmp_path, capsys=capsys)
     assert "Overdue" not in out and "Residual overdue" not in out
+
+
+# --- At risk: a pull request merged before its head was cleared (SPEC-0011 rule 10 (v)) ---------
+
+
+def merged_pr(doc: dict, number: int, verdicts, head: str | None = "aaaaaaa" + "b" * 33) -> dict:
+    row = next(p for p in doc["pull_requests"] if p["number"] == number)
+    row.update(
+        {"state": "merged", "merged_at": "2026-10-08T10:00:00Z", "verdicts": verdicts, "head": head}
+    )
+    return row
+
+
+def risk_lines(doc: dict, tmp_path, capsys) -> list[str]:
+    return [
+        ln
+        for ln in section(render_doc(doc, tmp_path, capsys=capsys), "## At risk")
+        if "was merged" in ln
+    ]
+
+
+def cleared(sha: str | None, at: str = "2026-10-08T09:00:00Z") -> dict:
+    return {"at": at, "kind": "cleared", "sha": sha}
+
+
+def test_the_last_cleared_verdict_naming_the_merged_head_is_no_risk(tmp_path, capsys):
+    """REQ-020 AC2: SPEC-0011 rule 10 (v) (a short sha, upper case, or the whole head)."""
+    for sha in ("aaaaaaa", "AAAAAAA", "aaaaaaa" + "b" * 33):
+        doc = kinds()
+        merged_pr(doc, 5, [cleared(sha)])
+        assert not [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln], sha
+
+
+def test_a_cleared_verdict_for_an_earlier_commit_is_reported(tmp_path, capsys):
+    """REQ-020 AC2: rule 10 (v) (the last cleared verdict decides, not an earlier one)."""
+    doc = kinds()
+    merged_pr(doc, 5, [cleared("aaaaaaa"), cleared("ccccccc", "2026-10-08T09:30:00Z")])
+    lines = [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln]
+    assert len(lines) == 1
+    assert lines[0].startswith(f"- {PR}5 was merged before its last commit was cleared — ")
+    assert lines[0].endswith("/pull/5")
+    doc = kinds()
+    merged_pr(doc, 5, [cleared("ccccccc"), cleared("aaaaaaa", "2026-10-08T09:30:00Z")])
+    assert not [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln]
+
+
+def test_verdicts_that_never_cleared_the_head_are_reported(tmp_path, capsys):
+    """REQ-020 AC2: rule 10 (v) (only fix verdicts, or a cleared verdict with no sha)."""
+    for verdicts in ([{"at": "2026-10-08T09:00:00Z", "kind": "fix", "sha": None}], [cleared(None)]):
+        doc = kinds()
+        merged_pr(doc, 5, verdicts)
+        lines = [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln]
+        assert len(lines) == 1 and "before its last commit was cleared" in lines[0]
+
+
+def test_a_pull_request_merged_with_no_verdict_is_reported(tmp_path, capsys):
+    """REQ-020 AC2: rule 10 (v)."""
+    doc = kinds()
+    merged_pr(doc, 5, [])
+    lines = [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln]
+    assert len(lines) == 1 and lines[0].startswith(f"- {PR}5 was merged with no verdict — ")
+
+
+def test_only_pull_requests_merged_in_the_week_are_checked(tmp_path, capsys):
+    """REQ-020 AC2: rule 10 (v) (an open, a closed and an earlier merge are not)."""
+    doc = kinds()
+    for number in (5, 6, 7, 8):
+        merged_pr(doc, number, [cleared("ccccccc")])
+    next(p for p in doc["pull_requests"] if p["number"] == 5).update({"state": "closed"})
+    next(p for p in doc["pull_requests"] if p["number"] == 6).update({"state": "open"})
+    next(p for p in doc["pull_requests"] if p["number"] == 7)["merged_at"] = "2026-09-01T10:00:00Z"
+    lines = risk_lines(doc, tmp_path, capsys)
+    assert [ln.split(" ")[2] for ln in lines] == ["#8"]
+
+
+def test_unreadable_verdicts_or_head_are_not_reported_as_a_miss(tmp_path, capsys):
+    """REQ-020 AC2: rule 10 (v) (unknown is not a miss; nothing is invented)."""
+    for verdicts, head in (("unknown", "a" * 40), ([], "unknown"), ([], None), ([cleared("a")], 5)):
+        doc = kinds()
+        merged_pr(doc, 5, verdicts, head)
+        assert not [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln], (verdicts, head)
+
+
+def test_the_merged_before_cleared_lines_come_after_the_drift_line_in_pull_request_order(
+    tmp_path, capsys
+):
+    """REQ-020 AC2: rule 10 (v) is the fifth item, after (iv) the drift counts."""
+    doc = kinds()
+    merged_pr(doc, 6, [])
+    merged_pr(doc, 5, [])
+    lines = section(render_doc(doc, tmp_path, capsys=capsys), "## At risk")
+    drift = next(i for i, ln in enumerate(lines) if "drift audit:" in ln)
+    late = [i for i, ln in enumerate(lines) if "was merged" in ln]
+    # #5 and #6 above, and #8 whose recorded clearance names another commit
+    assert late == [drift + 1, drift + 2, drift + 3]
+    assert [lines[i].split(" ")[2] for i in late] == ["#5", "#6", "#8"]

@@ -425,6 +425,24 @@ def verdict_count(p: dict, kind: str) -> int | None:
     return sum(1 for v in verdicts if v.get("kind") == kind) if is_list(verdicts) else None
 
 
+def cleared_line(p: dict) -> str | None:
+    """The At-risk text for a merged pull request whose head was not cleared, or None.
+
+    The last `cleared` verdict must name the merged head (a prefix of it); with no verdict at all
+    the text says so. Verdicts or a head the facts could not read say nothing (unknown is no miss).
+    """
+    verdicts, head = p.get("verdicts"), p.get("head")
+    if not is_list(verdicts) or not isinstance(head, str) or head == UNKNOWN or not head:
+        return None
+    if not verdicts:
+        return f"PR #{p['number']} was merged with no verdict"
+    cleared = [v for v in verdicts if v.get("kind") == "cleared"]
+    sha = cleared[-1].get("sha") if cleared else None
+    if isinstance(sha, str) and sha and head.lower().startswith(sha.lower()):
+        return None
+    return f"PR #{p['number']} was merged before its last commit was cleared"
+
+
 def drift_line(doc: dict, links: Links) -> str:
     drift = doc["drift"]
     if not isinstance(drift, dict):
@@ -476,6 +494,11 @@ def at_risk(doc: dict, links: Links, today: date, start: date, end: date) -> lis
     else:
         lines.append(unknown_line("pull requests", f"{links.repo}/pulls"))
     lines.append(drift_line(doc, links))
+    if is_list(doc["pull_requests"]):
+        for p in merged_in_week(doc, start, end):
+            text = cleared_line(p)
+            if text:
+                lines.append(bullet(text, links.pull(p["number"])))
     return lines
 
 

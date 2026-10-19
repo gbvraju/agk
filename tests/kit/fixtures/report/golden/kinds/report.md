@@ -56,6 +56,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 - <pr>6 "Change number 6" was sent back 2 times — https://github.com/demo-org/demo-repo/pull/6
 - <pr>12 "Change number 12" was sent back 1 time — https://github.com/demo-org/demo-repo/pull/12
 - drift audit: 4 findings (D1 0, D2 0, D3 2, D4 1, D5 0, D6 0, D7 1) — https://github.com/demo-org/demo-repo/issues/4
+- <pr>8 was merged before its last commit was cleared — https://github.com/demo-org/demo-repo/pull/8
 
 ## Cost
 

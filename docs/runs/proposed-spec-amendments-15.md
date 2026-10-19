@@ -5,7 +5,7 @@ maintainers apply it, SPEC-0013 (Draft) is ahead of the Approved text of the rul
 `docs/specs/0006-doctor.md`, `docs/specs/0009-facts.md`, `docs/specs/0011-inbox-and-report.md`, `docs/specs/0001-agk-init.md`,
 `docs/specs/0002-agk-adopt.md`.
 
-**Item 1 applied by ADR-0041 (`/agk:ruleset`), ADR-0042 (`/agk:architect`) and ADR-0043 (`/agk:start`; the rule 19 count of eleven skills now holds); items 4 and 5 applied by ADR-0041** (2026-10-18). **Item 2 applied by ADR-0040** (2026-10-18; SPEC-0009 rules 16 and 17 in `docs/specs/0009-facts.md`). The other items are applied by the later
+**Item 3 applied by ADR-0044 (SPEC-0011 rule 10 (v)).** **Item 1 applied by ADR-0041 (`/agk:ruleset`), ADR-0042 (`/agk:architect`) and ADR-0043 (`/agk:start`; the rule 19 count of eleven skills now holds); items 4 and 5 applied by ADR-0041** (2026-10-18). **Item 2 applied by ADR-0040** (2026-10-18; SPEC-0009 rules 16 and 17 in `docs/specs/0009-facts.md`). The other items are applied by the later
 implementation pull requests of SPEC-0013.
 
 ## SPEC-0005 (`docs/specs/0005-distribution.md`)

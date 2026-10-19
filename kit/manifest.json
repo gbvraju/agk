@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.23.0",
+  "kit_version": "0.24.0",
   "verbatim": [
     ".claude/agents/architect.md",
     ".claude/agents/drift-auditor.md",
