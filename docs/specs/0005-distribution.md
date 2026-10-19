@@ -63,10 +63,11 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    | `/agk:brief` | `new_spec.py brief`: a brief from `docs/briefs/TEMPLATE.md` | one file | none |
    | `/agk:ruleset` | `ruleset.py plan` (SPEC-0013 rules 19 to 21), then the person's `gh` applies the plan | one branch ruleset and two repository settings, after asking | read-only `gh api` for the plan; write, after asking |
    | `/agk:architect` | `playbook.py architect` (SPEC-0013 rule 7): prints how to start the architect session and checks the prerequisites | nothing | read-only `gh auth status` |
+   | `/agk:start` | `playbook.py start-ids`, `check-start`, `next-steps` (SPEC-0013 rules 2 to 5): a vision and a project charter, two files on a branch | two files | none |
    | `/agk:review` | `review_context.py`, the `reviewer` subagent, `check_review_report.py` (SPEC-0003) | local files, never committed | none |
 
    `/agk:review` stays advisory: its output is never an approval and human review stays required (K2 ruling).
-9. **User-invoked.** The commands that write (init, adopt, upgrade, spec, issue, brief, ruleset) are not invoked by the model on
+9. **User-invoked.** The commands that write (init, adopt, upgrade, spec, issue, brief, ruleset, start) are not invoked by the model on
    its own: each skill sets the frontmatter that turns off model invocation `(verify: disable-model-invocation)`.
 10. **Two writers outside the tree.** `/agk:issue` and `/agk:ruleset` are the only commands that write outside the working tree, and each
     asks before it does. A test reads every skill and fails on `git push`, `git commit`, `gh pr`, `gh issue close`,

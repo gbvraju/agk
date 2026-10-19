@@ -25,9 +25,10 @@ COMMANDS = [
     "review",
     "ruleset",
     "spec",
+    "start",
     "upgrade",
 ]
-USER_ONLY = ["adopt", "brief", "init", "issue", "ruleset", "spec", "upgrade"]
+USER_ONLY = ["adopt", "brief", "init", "issue", "ruleset", "spec", "start", "upgrade"]
 FORBIDDEN_VERBS = ["git push", "git commit", "gh pr", "gh issue close", "gh issue comment"]
 SCRIPT_CALL = re.compile(r'^\s*python3 "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/agk/(\w+)\.py"(.*)$', re.M)
 
@@ -115,6 +116,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "issue": set(),
         "ruleset": {"ruleset"},
         "architect": {"playbook"},
+        "start": {"playbook"},
     }
     for name, scripts in expected.items():
         assert {script for script, _ in calls(name)} == scripts, name
