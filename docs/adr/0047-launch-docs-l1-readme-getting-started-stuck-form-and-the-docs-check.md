@@ -1,6 +1,6 @@
 # ADR-0047: launch docs L1: the README, the getting-started guide, the "I got stuck" form and the docs check
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-19
 - Deciders: maintainers
 - Related: ADR-0025, ADR-0021, ADR-0046
