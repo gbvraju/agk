@@ -169,7 +169,7 @@ def test_ac3_review_skill_says_experimental_and_stops_when_the_agent_is_absent()
 
 def test_ac3_readme_has_the_experimental_heading_the_result_and_the_link():
     """REQ-013 AC3: ADR-0020 decision 6."""
-    readme = (KIT_ROOT / "README.md").read_text(encoding="utf-8")
+    readme = (KIT_ROOT / "docs" / "guides" / "reference.md").read_text(encoding="utf-8")
     assert "## Experimental: reviewer agent" in readme
     assert "\n## Reviewer agent" not in readme
     section = readme.split("## Experimental: reviewer agent", 1)[1].split("\n## ", 1)[0]
