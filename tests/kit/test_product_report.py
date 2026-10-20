@@ -136,7 +136,9 @@ def test_every_line_in_a_section_links_to_evidence(capsys):
             if line.startswith("###"):
                 continue
             assert line.startswith("- "), line
-            assert " — " + base in line, line
+            # a line of one pull request ends with its link; a grouped line (SPEC-0016) holds one
+            # link for each number
+            assert " — " + base in line or (line.startswith("- PRs ") and "](" + base in line), line
 
 
 def test_the_drift_line_without_an_open_issue_is_the_one_line_without_a_link(capsys):
@@ -823,15 +825,21 @@ def test_the_last_cleared_verdict_naming_the_merged_head_is_no_risk(tmp_path, ca
         assert not [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln], sha
 
 
+def lone(doc: dict) -> dict:
+    """The facts without #8, the one pull request of `kinds` merged before it was cleared."""
+    doc["pull_requests"] = [p for p in doc["pull_requests"] if p["number"] != 8]
+    return doc
+
+
 def test_a_cleared_verdict_for_an_earlier_commit_is_reported(tmp_path, capsys):
     """REQ-020 AC2: rule 10 (v) (the last cleared verdict decides, not an earlier one)."""
-    doc = kinds()
+    doc = lone(kinds())
     merged_pr(doc, 5, [cleared("aaaaaaa"), cleared("ccccccc", "2026-10-08T09:30:00Z")])
     lines = [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln]
     assert len(lines) == 1
     assert lines[0].startswith(f"- {PR}5 was merged before its last commit was cleared — ")
     assert lines[0].endswith("/pull/5")
-    doc = kinds()
+    doc = lone(kinds())
     merged_pr(doc, 5, [cleared("ccccccc"), cleared("aaaaaaa", "2026-10-08T09:30:00Z")])
     assert not [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln]
 
@@ -839,7 +847,7 @@ def test_a_cleared_verdict_for_an_earlier_commit_is_reported(tmp_path, capsys):
 def test_verdicts_that_never_cleared_the_head_are_reported(tmp_path, capsys):
     """REQ-020 AC2: rule 10 (v) (only fix verdicts, or a cleared verdict with no sha)."""
     for verdicts in ([{"at": "2026-10-08T09:00:00Z", "kind": "fix", "sha": None}], [cleared(None)]):
-        doc = kinds()
+        doc = lone(kinds())
         merged_pr(doc, 5, verdicts)
         lines = [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln]
         assert len(lines) == 1 and "before its last commit was cleared" in lines[0]
@@ -847,7 +855,7 @@ def test_verdicts_that_never_cleared_the_head_are_reported(tmp_path, capsys):
 
 def test_a_pull_request_merged_with_no_verdict_is_reported(tmp_path, capsys):
     """REQ-020 AC2: rule 10 (v)."""
-    doc = kinds()
+    doc = lone(kinds())
     merged_pr(doc, 5, [])
     lines = [ln for ln in risk_lines(doc, tmp_path, capsys) if "#5 " in ln]
     assert len(lines) == 1 and lines[0].startswith(f"- {PR}5 was merged with no verdict — ")
@@ -882,10 +890,11 @@ def test_the_merged_before_cleared_lines_come_after_the_drift_line_in_pull_reque
     merged_pr(doc, 5, [])
     lines = section(render_doc(doc, tmp_path, capsys=capsys), "## At risk")
     drift = next(i for i, ln in enumerate(lines) if "drift audit:" in ln)
-    late = [i for i, ln in enumerate(lines) if "was merged" in ln]
-    # #5 and #6 above, and #8 whose recorded clearance names another commit
-    assert late == [drift + 1, drift + 2, drift + 3]
-    assert [lines[i].split(" ")[2] for i in late] == ["#5", "#6", "#8"]
+    late = [i for i, ln in enumerate(lines) if "merged" in ln]
+    # #5 and #6 above are one line (SPEC-0016), then #8 whose clearance names another commit
+    assert late == [drift + 1, drift + 2]
+    assert lines[late[0]].startswith("- PRs [#5](") and "[#6](" in lines[late[0]]
+    assert lines[late[1]].startswith(f"- {PR}8 was merged before")
 
 
 def footer_of(text: str) -> list[str]:
@@ -1062,7 +1071,7 @@ def test_ac5_needs_you_at_risk_proven_and_the_footer_are_not_changed(tmp_path, c
         == (long.splitlines()[long.splitlines().index("---") :])
     )
     at_risk = "\n".join(section(short, "## At risk"))
-    assert f'{PR}26 "Change number 26" was sent back 2 times' in at_risk
+    assert "[#26](" in at_risk and "(2 times)" in at_risk  # SPEC-0016: named, in a grouped line
     assert f"{PR}27 was merged with no verdict" in at_risk
 
 

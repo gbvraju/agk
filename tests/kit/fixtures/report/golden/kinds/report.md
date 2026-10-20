@@ -51,10 +51,8 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 - Residual overdue since 2026-09-01 (43 days): 2026-08-01: an old item — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/adr/0001-accepted.md
 - Residual overdue since 2026-10-13 (1 day): an item with a very long description that goes on and on an item with a very long description that goes on and on an ite — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/runs/residuals.md
-- <pr>9 "Change number 9" has been open for 13 days — https://github.com/demo-org/demo-repo/pull/9
-- <pr>13 "Change number 13" has been open for 12 days — https://github.com/demo-org/demo-repo/pull/13
-- <pr>6 "Change number 6" was sent back 2 times — https://github.com/demo-org/demo-repo/pull/6
-- <pr>12 "Change number 12" was sent back 1 time — https://github.com/demo-org/demo-repo/pull/12
+- PRs [#9](https://github.com/demo-org/demo-repo/pull/9) (13 days) and [#13](https://github.com/demo-org/demo-repo/pull/13) (12 days) have been open
+- PRs [#6](https://github.com/demo-org/demo-repo/pull/6) (2 times) and [#12](https://github.com/demo-org/demo-repo/pull/12) (1 time) were sent back
 - drift audit: 4 findings (D1 0, D2 0, D3 2, D4 1, D5 0, D6 0, D7 1) — https://github.com/demo-org/demo-repo/issues/4
 - <pr>8 was merged before its last commit was cleared — https://github.com/demo-org/demo-repo/pull/8
 
