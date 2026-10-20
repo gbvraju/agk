@@ -139,7 +139,7 @@ def test_ac2_the_document_has_the_fixed_keys_sorted_and_one_trailing_newline(tmp
     out = run_facts(root, "ok", tmp_path).stdout
     doc = json.loads(out)
     assert list(doc) == sorted(doc)
-    assert set(doc) == {"schema", "commit", "dirty", "today", "repo", *SECTIONS}
+    assert set(doc) == {"schema", "commit", "dirty", "kit_version", "today", "repo", *SECTIONS}
     assert doc["schema"] == 1
     assert doc["commit"] == git(root, "rev-parse", "HEAD").strip()
     assert out.endswith("}\n") and not out.endswith("\n\n")
@@ -206,7 +206,7 @@ def test_ac2_the_baseline_of_the_ok_case_has_no_unknown(tmp_path):
     [
         ("docs/runs/residuals.md", {"residuals"}),
         ("docs/runs/decisions-log.md", {"questions", "specs"}),
-        ("agk.toml", {"config", "markers", "drift"}),
+        ("agk.toml", {"config", "markers", "drift", "kit_version"}),
         ("docs/requirements.md", {"requirements"}),
     ],
 )
@@ -704,7 +704,8 @@ def kit_version_of(dest: Path, files: dict[str, str | None]):
     return json.loads(proc.stdout).get("kit_version", "<absent>")
 
 
-AGK_TOML = Path(FIXTURES / "ok" / "tree" / "agk.toml").read_text(encoding="utf-8")
+STAMPED = Path(FIXTURES / "ok" / "tree" / "agk.toml").read_text(encoding="utf-8")
+AGK_TOML = "".join(ln for ln in STAMPED.splitlines(True) if not ln.startswith("version"))
 
 
 def test_ac1_the_facts_carry_the_installed_kit_version(tmp_path):
@@ -715,7 +716,7 @@ def test_ac1_the_facts_carry_the_installed_kit_version(tmp_path):
 @pytest.mark.parametrize(
     "files",
     [
-        pytest.param({}, id="agk-toml-without-version"),
+        pytest.param({"agk.toml": AGK_TOML}, id="agk-toml-without-version"),
         pytest.param({"agk.toml": AGK_TOML + "version = 3\n"}, id="version-not-a-string"),
         pytest.param({"agk.toml": "version = [\n"}, id="unreadable-toml"),
         pytest.param({"agk.toml": None}, id="no-config-at-all"),
@@ -724,9 +725,13 @@ def test_ac1_the_facts_carry_the_installed_kit_version(tmp_path):
             id="legacy-without-version",
         ),
         pytest.param(
-            {"pyproject.toml": '[tool.agk]\nversion = "0.2.0"\n'}, id="no-fallback-to-legacy"
+            {"agk.toml": AGK_TOML, "pyproject.toml": '[tool.agk]\nversion = "0.2.0"\n'},
+            id="no-fallback-to-legacy",
         ),
-        pytest.param({"kit/manifest.json": '{"kit_version": "9.9.9"}\n'}, id="never-the-manifest"),
+        pytest.param(
+            {"agk.toml": AGK_TOML, "kit/manifest.json": '{"kit_version": "9.9.9"}\n'},
+            id="never-the-manifest",
+        ),
     ],
 )
 def test_ac2_an_unreadable_version_is_unknown_and_never_guessed(tmp_path, files):

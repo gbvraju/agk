@@ -30,7 +30,7 @@
       "title": "Proposed"
     }
   ],
-  "commit": "ef034592bfb70ae28e72baae0b2cd3d4ded8c89d",
+  "commit": "5492b2a6df4ee856ea112439df4c537e3eafb3e8",
   "config": {
     "default_branch": "main",
     "inbox_hours": 48,
@@ -63,7 +63,7 @@
       "title": "agk metrics 2026-W41"
     }
   ],
-  "kit_version": "unknown",
+  "kit_version": "1.0.0",
   "markers": [
     {
       "ac": "AC1",
