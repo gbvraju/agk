@@ -1,6 +1,6 @@
 # ADR-0052: lean install: the kit's own tests are not installed in a project, kit 0.28.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-20
 - Deciders: maintainers
 - Related: ADR-0014, ADR-0032, ADR-0047, ADR-0048
