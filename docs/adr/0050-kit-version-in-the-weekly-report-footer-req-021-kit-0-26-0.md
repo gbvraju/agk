@@ -6,7 +6,7 @@
 - Related: ADR-0045, ADR-0049, ADR-0036
 - Requirements: REQ-021
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `.claude-plugin/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `.claude-plugin/`, `agk.toml`
 
 ## Context
 
@@ -26,6 +26,9 @@ file now). This ADR builds it, tests first: the tests for AC1 to AC3 were writte
    `"kit_version": "unknown"` (no fixture tree has a version) and the fourteen report goldens gain the line `kit version: unknown`; the inbox goldens are byte-identical. All were regenerated and the diffs read.
 5. **Kit 0.26.0**: manifest (the new installed test file), hashes, plugin version.
 6. **Amendment 25** (`docs/runs/proposed-spec-amendments-25.md`) is applied to SPEC-0014 rule 5.
+7. **This repository records its version** (Q-K4-201, ruled by the maintainers 2026-10-20): `agk.toml` gains `version = "0.26.0"`, the `kit_version` of `kit/manifest.json`, and a kit-only test
+   (`tests/kit_dev/test_kit_manifest.py`) fails when the two differ. It was written first and failed before the line was added. **Every kit bump updates both `kit/manifest.json` and `agk.toml`
+   (and `.claude-plugin/plugin.json`) from now on.** The report of this repository then prints `kit version: 0.26.0`.
 
 ## Consequences
 
@@ -36,10 +39,16 @@ file now). This ADR builds it, tests first: the tests for AC1 to AC3 were writte
 
 | Q | Question | Reading taken (conservative) |
 | --- | --- | --- |
-| Q-K4-201 | This repository's own `agk.toml` has no `version` (it is the kit's source, not an install), so its report will print `kit version: unknown`, and the brief's validation (the footer names the kit version, run on this repository) will show `unknown` | not changed here: `agk.toml` is a protected file and a version in it would need its own ADR and a rule to keep it equal to the manifest; the maintainers rule whether this repository records one |
-| Q-K4-202 | SPEC-0014 rule 5 says the inbox output "has no footer"; it has a short one (`facts:` and the dirty notice) | the line is in the report's footer only, the inbox output is unchanged; the wording is amended by `proposed-spec-amendments-25.md` |
-| Q-K4-203 | The existing test `test_the_footer_names_the_commit_and_the_two_issues` asserts the end of the report | it gains the new line between `facts:` and `metrics:`, which rule 4 requires; no assertion is weakened |
-| Q-K4-204 | A `kit_version` in the facts that is not a string, or is empty | the footer prints `unknown`; nothing is converted or guessed |
+| Q-K4-201 | This repository's own `agk.toml` has no `version` (it is the kit's source, not an install), so its report would print `kit version: unknown`, and the brief's validation (the footer names the kit version, run on this repository) would show `unknown` | ruled (maintainers, 2026-10-20): this repository records its version; decision 7 |
+| Q-K4-202 | SPEC-0014 rule 5 says the inbox output "has no footer"; it has a short one (`facts:` and the dirty notice) | the line is in the report's footer only, the inbox output is unchanged; the wording is amended by `proposed-spec-amendments-25.md` Ruled as read (maintainers, 2026-10-20). |
+| Q-K4-203 | The existing test `test_the_footer_names_the_commit_and_the_two_issues` asserts the end of the report | it gains the new line between `facts:` and `metrics:`, which rule 4 requires; no assertion is weakened Ruled as read (maintainers, 2026-10-20). |
+| Q-K4-204 | A `kit_version` in the facts that is not a string, or is empty | the footer prints `unknown`; nothing is converted or guessed Ruled as read (maintainers, 2026-10-20). |
+
+## Deviation
+
+- 2026-10-20: commit `311a081` of this branch was committed and pushed after a `make test` that exited 2 (7 failed, 1451 passed, 3 skipped: two tests of `test_facts.py` and the five nested runs of the
+  installed tests in the init and adopt targets), because only subsets of the tests had been run. The next commit fixed it. The standing rule, restated by the maintainers on 2026-10-20: **the full
+  `make test` passes before every push, no exceptions; subsets are not enough.**
 
 ## Residual
 

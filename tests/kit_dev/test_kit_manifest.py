@@ -344,3 +344,12 @@ def test_readme_existing_scanners_section_quotes_the_template():
     template = (KIT_ROOT / "kit" / "templates" / "scanner-excludes.txt").read_text(encoding="utf-8")
     for line in template.rstrip().splitlines():
         assert line in section, line
+
+
+def test_ac1_this_repository_records_the_kit_version_it_ships():
+    """REQ-021 AC1: ADR-0050 (Q-K4-201). agk.toml and kit/manifest.json name one version.
+
+    Every kit bump updates both, so this repository's own report names its version.
+    """
+    toml = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))
+    assert toml.get("version") == manifest()["kit_version"]
