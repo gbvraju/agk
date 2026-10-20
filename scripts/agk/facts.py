@@ -35,6 +35,7 @@ from common import (
     log_lines,
     open_section_ids,
     parse_acceptance,
+    parse_estimate,
     parse_requirements,
     ruled_in,
     run,
@@ -431,7 +432,9 @@ def pull_record(src: Any, item: dict) -> dict:
     head = (item.get("head") or {}).get("sha") or ""
     files = get_list(src, f"files-{number}", f"repos/{{repo}}/pulls/{number}/files")
     comments = get_list(src, f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
+    commits = get_list(src, f"commits-{number}", f"repos/{{repo}}/pulls/{number}/commits")
     merged = bool(item.get("merged_at"))
+    size, expected = parse_estimate(item["body"]) if "body" in item else (UNKNOWN, UNKNOWN)
     proof = proof_of(src, head) if head else (UNKNOWN, UNKNOWN)
     return {
         "number": number,
@@ -447,6 +450,9 @@ def pull_record(src: Any, item: dict) -> dict:
         "proof_reason": proof[1],
         "verdicts": verdicts_of(comments),
         "behaviour": behaviour_of(item["body"]) if "body" in item else UNKNOWN,
+        "estimated_size": size,
+        "estimated_hours": expected,
+        "actual_hours": metrics.actual_hours(commits, item.get("merged_at")) if merged else None,
     }
 
 

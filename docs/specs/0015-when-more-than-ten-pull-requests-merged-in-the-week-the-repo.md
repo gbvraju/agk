@@ -18,7 +18,7 @@ requests were merged besides the link.
    exactly ten (unchanged) and at eleven (collapsed).
 3. **Delivered in a busy week.** Every requirement whose `status` is `done` is still listed, in the same order and with the same lines as today. The lines `PR #N "<title>" was merged on <day>` are not
    printed. In their place there is one line after the requirements: `<N> pull requests were merged this week` (`N` the number of pull requests merged in the week), ending with the week link of rule 5.
-4. **Cost in a busy week.** No line is printed for a single pull request. The totals line `This week: ...` is printed with its text exactly as today and ends with the week link of rule 5 instead of the
+4. **Cost in a busy week.** No line is printed for a single pull request. The totals line `This week: ...` is printed with its text exactly as today (with the ending of SPEC-0018 rule 6) and ends with the week link of rule 5 instead of the
    link to all merged pull requests. It is the only line of the section.
 5. **The week link.** `<repo URL>/pulls?q=is%3Apr+is%3Amerged+merged%3A<start>..<end>`, where `<repo URL>` is `https://github.com/` plus `repo` of the facts and `<start>` and `<end>` are the Monday
    and the Sunday of the report's week in UTC, `YYYY-MM-DD`, the dates of the opening line. It is built from `repo` and those two dates only (Q-S0015-1).

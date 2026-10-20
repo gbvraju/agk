@@ -89,10 +89,10 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     `title`, `files` (sorted paths), `proof` (`proven`, `not-proven`, `skipped` or `unknown`: the outcome of the workflow run named
     `proof` for the head SHA, read from the step conclusions of its job as SPEC-0010 rule 17 defines; `"unknown"` when there is no such
     run or the API could not be read), `proof_reason` (the word in parentheses in the name of the succeeded `not-proven` or `unknown` step; `null` for `proven` and `skipped`; `"unknown"` when the outcome is `"unknown"` because it could not be read, or the step name carries no reason), `verdicts` (the list `[{"kind": "cleared"|"fix"|"rejected", "sha", "at"}]` in time order,
-    from the first line of each comment by the rule `metrics.VERDICT`/`metrics.verdicts`), and `behaviour` (`"unchanged"` when a
+    from the first line of each comment by the rule `metrics.VERDICT`/`metrics.verdicts`), `estimated_size`, `estimated_hours` (the `Size:` and `Expected:` lines of the body, SPEC-0018 rule 2; `"unknown"` when either is missing or malformed), `actual_hours` (for a merged pull request the hours from the earliest commit author date to `merged_at`, one decimal, `"unknown"` when unreadable; `null` otherwise; SPEC-0018 rule 3), and `behaviour` (`"unchanged"` when a
     line of the body, outside fenced code, is exactly `Behaviour: unchanged`; `null` when the body has no `Behaviour:` line;
     `"unknown"` when the body could not be read). With no GitHub source (offline, no `gh`, unauthenticated) the section is
-    `"unknown"`. The body is read for the `Behaviour:` line and for nothing else (ADR-0021 criterion e).
+    `"unknown"`. The body is read for the `Behaviour:`, `Size:` and `Expected:` lines and for nothing else (ADR-0021 criterion e).
 15. **`issues` and `drift`.** *`issues`:* the open and closed issues labelled `agk-metrics`, `agk-drift-audit` or `agk-product-report`, as
     `{"number", "title", "label", "state"}` sorted by number; nothing from their bodies. `"unknown"` without a GitHub source. *`drift`:*
     the findings of the drift audit (SPEC-0004) at the same commit and `today`, counted and not described:

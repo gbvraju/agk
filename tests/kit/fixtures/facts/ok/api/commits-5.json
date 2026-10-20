@@ -1,0 +1,18 @@
+[
+  {
+    "sha": "05cccccccccccccccccccccccccccccccccccccc",
+    "commit": {
+      "author": {
+        "date": "2026-10-07T09:00:00Z"
+      }
+    }
+  },
+  {
+    "sha": "06cccccccccccccccccccccccccccccccccccccc",
+    "commit": {
+      "author": {
+        "date": "2026-10-07T15:30:00Z"
+      }
+    }
+  }
+]

@@ -12,7 +12,7 @@
       "ref": "main"
     },
     "title": "Change number 5",
-    "body": "Advances: REQ-001\n",
+    "body": "Advances: REQ-001\nSize: M\nExpected: 20-30 hours\n",
     "updated_at": "2026-10-08T09:00:00Z"
   }
 ]

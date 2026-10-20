@@ -46,6 +46,8 @@ the implementation's ADR amends REQ-012 (rule 19). GitHub response shapes marked
      `pulls/N/files` matches (substring match, as `check_protected_changes`). Empty when none.
    - `adrs_added`: the count of added files matching `docs/adr/NNNN-*.md`.
    - `size`: `additions`, `deletions`, `changed_files` from `pulls/N`.
+   - `actual_hours`: for a merged pull request, `merged_at` minus the earliest author date among the commits of `pulls/N/commits`, in hours, one decimal, round half up; `none` for a closed pull request; `unknown` when a commit date is missing or unreadable (SPEC-0018 rule 3).
+   - `estimated_size`, `estimated_hours`: read from the pull request body of `pulls/N`: the lines `Size: S|M|L` and `Expected: <low>-<high> hours`; both `unknown` when either line is missing, repeated or malformed (SPEC-0018 rules 2 and 3).
    - `tests_before`, `tests_after`: for a merged pull request, the number of lines matching `^\s*def test_` in the files
      under the `test_dirs` of `agk.toml` (default `["tests"]`) at `merge_commit_sha^` and at `merge_commit_sha`
      (a squash merge has one parent). It is a static count: parametrized cases are not expanded and the tests are not

@@ -80,10 +80,13 @@
   ],
   "pull_requests": [
     {
+      "actual_hours": "24.0",
       "base": "main",
       "behaviour": null,
       "closed_at": "2026-10-08T09:00:00Z",
       "created_at": "2026-10-05T09:00:00Z",
+      "estimated_hours": "20-30",
+      "estimated_size": "M",
       "files": [
         "scripts/agk/tool.py"
       ],
@@ -103,10 +106,13 @@
       ]
     },
     {
+      "actual_hours": null,
       "base": "main",
       "behaviour": "unchanged",
       "closed_at": null,
       "created_at": "2026-10-05T09:00:00Z",
+      "estimated_hours": "1-2",
+      "estimated_size": "S",
       "files": [
         "docs/a.md",
         "docs/b.md"
