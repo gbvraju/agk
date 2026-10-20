@@ -1,6 +1,6 @@
 # ADR-0057: At risk shows one line per kind of pull request risk (REQ-023, SPEC-0016), kit 0.29.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-20
 - Deciders: maintainers
 - Related: ADR-0053, ADR-0054, ADR-0051
