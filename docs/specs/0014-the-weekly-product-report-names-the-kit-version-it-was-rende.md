@@ -1,6 +1,6 @@
 # SPEC-0014: The weekly product report footer names the kit version
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-021
 
@@ -45,10 +45,12 @@ shows the line, and the maintainers read it in that week's report issue.
 
 ## Residual
 
-- 2026-10-19: the number is the only identification; the release notes a reader would look it up in do not exist as one file today (due 2026-12-31).
+- 2026-10-19: the number is the only identification; the release notes a reader would look it up in do not exist as one file today (due 2027-01-31; ruled on Q-S0014-1: a file of release notes by version is a K5 candidate).
 
 ## Open questions
 
 - Q-S0014-1 Where does a reader look up what a kit version changed? There is no single file of release notes by version today (the history is the merged pull
   requests and the ADRs). The criteria assume the number alone is enough for this requirement and build no release notes; a person decides whether a file of release
   notes is wanted, and if so it is a requirement of its own.
+  **Ruled** (maintainers, 2026-10-20): no release-notes file now. The footer prints the version number only. A file of release notes by version is a K5 candidate, recorded as a
+  residual (due 2027-01-31). Nothing in the criteria or rules changes.
