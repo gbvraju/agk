@@ -163,6 +163,21 @@
                   "structured",
                   "unstructured"
                 ]
+              },
+              "done_on": {
+                "description": "When the status is done: the UTC date of the commit that last set it to done, or \"unknown\"; null when the status is not done. Optional: a document made before it exists has none (SPEC-0017).",
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                  },
+                  {
+                    "const": "unknown"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "additionalProperties": false

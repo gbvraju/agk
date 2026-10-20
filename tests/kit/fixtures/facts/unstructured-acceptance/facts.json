@@ -85,6 +85,7 @@
     {
       "criteria": [],
       "criteria_form": "unstructured",
+      "done_on": null,
       "id": "REQ-001",
       "line": 3,
       "status": "planned",
@@ -93,6 +94,7 @@
     {
       "criteria": [],
       "criteria_form": "unstructured",
+      "done_on": "2026-10-01",
       "id": "REQ-002",
       "line": 8,
       "status": "done",
@@ -106,6 +108,7 @@
         }
       ],
       "criteria_form": "structured",
+      "done_on": null,
       "id": "REQ-003",
       "line": 12,
       "status": "unknown",

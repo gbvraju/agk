@@ -94,6 +94,7 @@
         }
       ],
       "criteria_form": "structured",
+      "done_on": "2026-10-01",
       "id": "REQ-001",
       "line": 3,
       "status": "done",
@@ -107,6 +108,7 @@
         }
       ],
       "criteria_form": "structured",
+      "done_on": null,
       "id": "REQ-002",
       "line": 8,
       "status": "planned",
@@ -120,6 +122,7 @@
         }
       ],
       "criteria_form": "structured",
+      "done_on": null,
       "id": "REQ-003",
       "line": 13,
       "status": "planned",

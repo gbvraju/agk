@@ -129,10 +129,44 @@ def config_section(cfg: dict | None) -> Any:
 # --- requirements and markers -----------------------------------------------------------------
 
 
+def done_dates(root: Path) -> dict[str, str] | None:
+    """The UTC date of the commit that last set each requirement's `Status:` to `done` (SPEC-0017).
+
+    Read from the first-parent history of the checked-out branch, oldest first: a requirement is
+    dated by the latest commit at which it is `done` and was not `done` in the commit before. A
+    shallow history gives None: nothing is guessed from a cut-off past.
+    """
+    if git(root, "rev-parse", "--is-shallow-repository", check=False).strip() != "false":
+        return None
+    log = git(
+        root,
+        "log",
+        "--first-parent",
+        "--reverse",
+        "--format=%H %cI",
+        "--",
+        REQUIREMENTS,
+        check=False,
+    )
+    dates: dict[str, str] = {}
+    before: dict[str, str | None] = {}
+    for line in log.splitlines():
+        sha, _, stamp = line.partition(" ")
+        text = git(root, "show", f"{sha}:{REQUIREMENTS}", check=False)
+        now = {r["id"]: r["status"] for r in parse_requirements(text)}
+        for req_id, status in now.items():
+            if status == "done" and before.get(req_id) != "done":
+                moment = datetime.fromisoformat(stamp)
+                dates[req_id] = moment.astimezone(UTC).date().isoformat()
+        before = now
+    return dates
+
+
 def requirements_section(root: Path) -> Any:
     text = drift_audit.read(root, REQUIREMENTS)
     if text is None:
         return UNKNOWN
+    dates = done_dates(root)
     found = []
     for req in parse_requirements(text):
         pairs = parse_acceptance(req["acceptance"] or "")
@@ -147,6 +181,7 @@ def requirements_section(root: Path) -> Any:
                 "title": req["title"] or UNKNOWN,
                 "status": status,
                 "line": req["line"],
+                "done_on": (dates or {}).get(req["id"], UNKNOWN) if status == "done" else None,
                 "criteria": criteria,
                 "criteria_form": "structured" if pairs else "unstructured",
             }

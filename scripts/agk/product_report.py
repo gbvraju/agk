@@ -328,7 +328,12 @@ def delivered(doc: dict, links: Links, start: date, end: date) -> list[str]:
     if is_list(doc["requirements"]):
         for r in sorted(doc["requirements"], key=lambda r: r["id"]):
             if r.get("status") == "done":
+                became = day_of(r.get("done_on"))  # SPEC-0017: the week it became done
+                if became is not None and not start <= became < end:
+                    continue
                 text = f'{r["id"]} "{r["title"]}" is done: {criteria_text(r)}'
+                if became is None:
+                    text += " (week it became done: unknown)"
                 lines.append(bullet(text, links.file("docs/requirements.md", r.get("line"))))
     else:
         lines.append(unknown_line("requirements", links.file("docs/requirements.md")))

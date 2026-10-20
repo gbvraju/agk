@@ -85,6 +85,7 @@
     {
       "criteria": "unknown",
       "criteria_form": "structured",
+      "done_on": null,
       "id": "REQ-001",
       "line": 3,
       "status": "planned",
