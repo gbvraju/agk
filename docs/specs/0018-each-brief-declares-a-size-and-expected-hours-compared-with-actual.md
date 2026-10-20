@@ -60,4 +60,6 @@ lines show its `estimated_hours` and `actual_hours` and the Cost ending, and the
 ## Open questions
 
 - Q-S0018-1 What is the exact grammar of `Expected:`? The criteria assume `<low>-<high> hours`, two non-negative numbers with an optional decimal point, `low` not above `high`, a plain hyphen, and the word `hours`.
+  **Ruled** (maintainers, 2026-10-20): as read. `Expected:` is `<low>-<high> hours`, two non-negative numbers (a decimal point allowed), `low` not above `high`, a plain hyphen; anything else is malformed and reads `unknown`.
 - Q-S0018-2 Which commit is "the pull request's first commit"? The criteria assume the earliest author date among all commits of the pull request, not the first in list order.
+  **Ruled** (maintainers, 2026-10-20): as read. "First commit" is the earliest author date among the pull request's commits; the rebase caveat stays a residual (above).
