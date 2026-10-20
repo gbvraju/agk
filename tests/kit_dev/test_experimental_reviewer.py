@@ -19,11 +19,8 @@ EXPERIMENTAL = [
     ".claude/agents/reviewer.md",
     "scripts/agk/check_review_report.py",
     "scripts/agk/review_context.py",
-    "tests/kit/review_fixtures.py",
-    "tests/kit/test_review_context.py",
-    "tests/kit/test_review_report.py",
-    "tests/kit/test_reviewer_definition.py",
 ]
+# the reviewer's tests (tests/kit/test_review_*.py) stay in the kit repository (ADR-0052)
 
 
 def upgrade(root):
@@ -49,7 +46,7 @@ def opt_in(root):
         fh.write("experimental_reviewer = true\n")
 
 
-def test_ac3_manifest_lists_the_seven_experimental_paths_outside_the_verbatim_set():
+def test_ac3_manifest_lists_the_three_experimental_paths_outside_the_verbatim_set():
     """REQ-013 AC3: ADR-0020 decision 2."""
     m = manifest()
     assert m["experimental"] == EXPERIMENTAL
@@ -87,7 +84,7 @@ def test_ac3_adopt_writes_none_of_them_by_default(tmp_path):
         assert not (repo / rel).exists(), rel
 
 
-def test_ac3_installers_plan_the_seven_files_when_agk_toml_sets_the_key(tmp_path):
+def test_ac3_installers_plan_the_three_files_when_agk_toml_sets_the_key(tmp_path):
     """REQ-013 AC3: ADR-0020 decision 3 (the key is read from the target's agk.toml)."""
     repo = make_repo(tmp_path / "proj")
     (repo / "agk.toml").write_text("experimental_reviewer = true\n", encoding="utf-8")
@@ -147,7 +144,7 @@ def test_ac3_upgrade_reports_but_never_deletes_files_when_the_key_is_off(tmp_pat
         assert (repo / rel).exists()
 
 
-def test_ac3_doctor_checks_the_seven_files_only_when_the_key_is_set():
+def test_ac3_doctor_checks_the_three_files_only_when_the_key_is_set():
     """REQ-013 AC3: ADR-0020 decision 3."""
     m = manifest()
     off, _ = doctor.installed_files(m, "init")

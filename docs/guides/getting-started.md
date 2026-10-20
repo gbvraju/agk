@@ -45,6 +45,13 @@ Git warns `You appear to have cloned an empty repository`; that is expected. Aft
 You should see `Successfully added marketplace: agk` and then `Successfully installed plugin: agk@agk`. This was run in
 `docs/runs/plugin-live-proof.md` (step 2). Start Claude Code in the repository folder with `claude`.
 
+The plugin installs from `main`, so it changes when the kit does. A team pins a release instead: it commits, in
+`.claude/settings.json`, an `extraKnownMarketplaces` entry for `agk` (a `github` source with `ref` set to the release
+tag, for example `v0.28.0` once the maintainers have published that release) and `"agk@agk": true` under
+`enabledPlugins` (SPEC-0005 rule 14; whether `ref` is read there is marked `(verify)` in what `/agk:init` prints).
+`/agk:init` in step 3 prints the two entries and merges nothing. `.claude/` is a protected class, so the change needs
+an ADR.
+
 ## Step 3. Install the kit with `/agk:init`
 
 In Claude Code type:
@@ -52,7 +59,7 @@ In Claude Code type:
     /agk:init
 
 It first runs a preview and shows it to you. You should see a list of `create ...` lines and the line
-`dry run: NNN files would be created; nothing was written` (about 600 files; the number changes with the kit version).
+`dry run: 53 files would be created; nothing was written` (53 files, 225 KB at kit 0.28.0; the number changes with the kit version). The kit's own tests are not installed: they run in the kit's own CI, not in your repository.
 Say yes. It then installs the files and prints `installed NNN files`. Nothing is committed. After the list it prints:
 
 - a notice that `config/reviewers.yaml` maps `maintainers` to the placeholder `@REPLACE-ME`,
@@ -214,7 +221,7 @@ report has five headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`.
   you are not an admin, ask the owner. It prints the exact settings to apply by hand.
 - **`proof` reads `not-proven`.** The reason is in the step name, `outcome: not-proven (reason)`, for example `red-on-head` (the
   tests fail on the head commit). Read the reason first; it names what to fix.
-- **`make test` takes minutes.** The first run in a new repository runs the tests of the checks; expect two to three minutes.
+- **`make test` prints that the kit's own tests are not installed.** That is expected: they are not part of your repository. In a new repository `make test` takes well under a second (0.05 s measured) and runs your own tests, if you have any.
 - **`make governance` fails.** Read the first line that does not start with `ok`. It names the rule, a setting or a path class.
 - **`/agk:doctor` says `placeholder-team-reviewers` or `placeholder-team-codeowners`.** Step 4 was not finished: put your
   handle in `config/reviewers.yaml` and run `python3 scripts/agk/reviewers.py --codeowners --write`. `make governance` does not

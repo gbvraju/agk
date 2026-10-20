@@ -123,7 +123,7 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
     `removed-in-kit`, `template-changed`), sorted by path, writes nothing, and exits with the code the real run would;
     the real run prints the same lines before it writes (the summary line says how many files would change and how many would be deleted). Under `nothing to do` no file is touched (hashes and
     modification times are equal).
-15. **Order and atomicity.** All decisions are made before the first write. Writes are in sorted path order, then the deletions of rule 7 in sorted path order (and the directories they emptied, never the target root), each file
+15. **Order and atomicity.** All decisions are made before the first write. Writes are in sorted path order, then the deletions of rule 7 in sorted path order (and the directories they emptied, never the target root or a directory directly under it: amendment 26), each file
     through a temporary file `.<name>.agk-upgrade` in its directory and a rename (a created or replaced file has the default mode of
     a new file); an I/O error stops the run (exit 3) and reports the files
     already written; the `agk.toml` version line (rule 11) is the last write and is skipped in that case.
@@ -131,7 +131,7 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
 ### The pull request in the target
 
 16. **Protected classes.** The files an upgrade writes lie in classes the target's `config/protected-paths.txt`
-    protects (`scripts/agk/`, `tests/kit/`, `.claude/`, `.github/`, `agk.mk`, `Makefile`), so the target's
+    protects (`scripts/agk/`, `.claude/`, `.github/`, `agk.mk`, `Makefile`), so the target's
     `check_protected_changes` requires an ADR in the same pull request that names each changed class. After the lines
     of rule 14 the script prints, from the target's own list, the `Protected classes:` line for the paths it would write
     and an ADR skeleton (title, `Status: Proposed`, empty Context and Decision) to stdout. It writes no ADR: the number,

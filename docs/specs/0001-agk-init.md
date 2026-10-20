@@ -34,7 +34,7 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
    `.github/PULL_REQUEST_TEMPLATE.md`, `CLAUDE.md`, `Makefile` (thin aliases of `agk.mk`), `agk.mk`, `.gitignore`,
    `constitution/principles.md`, `docs/adr/TEMPLATE.md`, `docs/specs/TEMPLATE.md`, `docs/briefs/TEMPLATE.md`, every
    check and helper in `scripts/agk/` except `init.py` (`common.py`, `check_*.py`, `config.py`, `reviewers.py`,
-   `traceability.py`), and `tests/kit/` (rule 18, including `tests/kit/pytest.ini`). Kit-only files are never installed: `scripts/agk/init.py`, `kit/`, `tests/kit_dev/`.
+   `traceability.py`). The kit's own tests, `tests/kit/`, are not installed (rule 18). Kit-only files are never installed: `scripts/agk/init.py`, `kit/`, `tests/kit/`, `tests/kit_dev/`.
 8. **Template set** (project-specific): `constitution/vision.md`, `docs/requirements.md`,
    `docs/adr/0001-adopt-agk.md`, `config/reviewers.yaml`, `config/protected-paths.txt` (rule 21),
    `config/neutrality.txt`, `docs/build-state.md`, `docs/runs/decisions-log.md`, `docs/runs/residuals.md` (created only when absent; an existing file of any content
@@ -79,11 +79,14 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     A partial install (some files present and equal, others missing) completes, since equal files are unchanged.
 17. **Dry run.** `--dry-run` prints the plan, one line per file marked `create`, `unchanged` or `conflict`, writes
     nothing, and exits with the code the real run would (0 or 1).
-18. **Tests directories.** `tests/kit/` (tests of the checks) is installed so the target can test its own checks and
-    `make test` is green. The kit-only tests, `tests/kit_dev/test_init.py` and `tests/kit_dev/test_kit_manifest.py`,
-    are not installed. `make test` runs `agk-test` (the kit tests, with `tests/kit_dev` when it exists) and then
-    `agk-project-test`, which runs the `project_tests` command of `agk.toml` (for an init repository `python3 -m
-    pytest tests -q --ignore=tests/kit_dev`, treating pytest exit 5, nothing collected, as success). `testpaths` in
+18. **Tests directories (lean install, amendment 26).** The kit's own tests, `tests/kit/` (tests, fixtures and
+    `pytest.ini`), are **not** installed: they test the kit, not the project, and run in the kit repository's CI. The
+    integrity of the installed checks is the doctor's comparison against `kit/hashes.json` and the protected class
+    `scripts/agk/`. The kit-only tests, `tests/kit_dev/`, are not installed either. `make test` runs `agk-test` and
+    then `agk-project-test`. `agk-test` runs the kit tests when `tests/kit/pytest.ini` exists (the kit repository) and
+    otherwise prints a notice and succeeds. `agk-project-test` runs the `project_tests` command of `agk.toml` (for
+    an init repository `[ -d tests ] || exit 0; python3 -m pytest tests -q --ignore=tests/kit_dev`, treating pytest
+    exit 5, nothing collected, as success). `testpaths` in
     `[tool.pytest.ini_options]` is `["tests"]` in the kit's and the installed `pyproject.toml`. A test added under
     `tests/` in a target is collected and run by `make test` and by the CI step `agk-project-test`; a failing one
     makes both fail.
@@ -94,7 +97,7 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     text comes from `kit/templates/branch-rules.txt`; a test keeps it equal to the kit's ADR-0001 decision 3 except
     that the phrase `The ruleset main` reads `The ruleset for the default branch` (ADR-0009). After the ruleset text
     init prints the scanner-exclusion block of `kit/templates/scanner-excludes.txt`: the bandit, flake8, pylint and
-    mypy settings that exclude `scripts/agk`, `tests/kit` and `.claude/hooks`. It is printed only, nothing is written,
+    mypy settings that exclude `scripts/agk` and `.claude/hooks`. It is printed only, nothing is written,
     and a test keeps the printed block equal to the template and to the README's "Existing scanners" section
     (ADR-0010).
     After the ruleset text it prints one more line: `or run /agk:ruleset to apply them (phase 1 now, phase 2 after the first governance run)`.
@@ -111,18 +114,18 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
 ### Protected paths
 
 21. **Installed protected list.** The installed `config/protected-paths.txt` is `constitution/`, `config/`, `.claude/`,
-    `.github/`, `docs/requirements.md`, `CLAUDE.md`, and also `scripts/agk/`, `tests/kit/`, `Makefile`,
+    `.github/`, `docs/requirements.md`, `CLAUDE.md`, and also `scripts/agk/`, `Makefile`,
     `pyproject.toml`, `agk.mk`, `agk.toml`, so a target cannot change its checks, their tests or its build files without an ADR that names
     the class. The installed `reviewers.yaml` `protected` class lists the same entries (`reviewers.py --check` equality).
     The kit adopts the same entries via ADR-0004 in PR #6; the kit's own list is those entries plus the kit-only
-    `kit/` and `tests/kit_dev/`. The installed list is rendered from `kit/templates/protected-paths.txt`; a test
+    `tests/kit/`, `kit/` and `tests/kit_dev/`. The installed list is rendered from `kit/templates/protected-paths.txt`; a test
     asserts the kit's list equals the template plus `kit/` and `tests/kit_dev/`.
 
 ### Markers
 
 22. **Undefined ids never fail.** A test marker `REQ-nnn` for an id that `docs/requirements.md` does not define is
-    ignored by every check and by the traceability matrix; it never causes a failure. (The installed `tests/kit/`
-    carries markers for kit-defined ids a project may not define.) A test in `tests/kit/test_check_requirements.py`
+    ignored by every check and by the traceability matrix; it never causes a failure. (The kit's own tests,
+    which are not installed, carry markers for kit-defined ids a project may not define.) A test in `tests/kit/test_check_requirements.py`
     covers it.
 
 ### Proof

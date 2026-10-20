@@ -65,8 +65,9 @@ def snapshot_of(manifest: dict, read: Any) -> Snapshot:
         data = read(path)
         if data is not None:
             snap["verbatim"][path] = hashlib.sha256(data).hexdigest()
+    block_sources = adopt.get("block_sources") or {}
     for path in sorted(set(adopt.get("blocks") or {}) - rendered):
-        data = read(path)
+        data = read(block_sources.get(path, path))
         if data is not None:
             snap["blocks"][path] = hashlib.sha256(normalized(data)).hexdigest()
     for path in sorted(sources):
@@ -121,6 +122,7 @@ def snapshot_commit(root: Path, blobs: Blobs, commit: str) -> tuple[str, Snapsho
     wanted |= set(manifest.get("templates", {}).values())
     wanted |= set((manifest.get("adopt") or {}).get("templates", {}).values())
     wanted |= set((manifest.get("adopt") or {}).get("blocks", {}))
+    wanted |= set(((manifest.get("adopt") or {}).get("block_sources") or {}).values())
     blobs.fetch([tree[p] for p in wanted if p in tree])
 
     def read(path: str) -> bytes | None:

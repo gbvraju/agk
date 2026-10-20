@@ -696,7 +696,8 @@ def test_ac1_a_real_old_install_upgrades_with_no_conflict(tmp_path, version, mod
         assert (target / rel).read_bytes() == (KIT_ROOT / rel).read_bytes(), rel
     for rel, style in blocks.items():
         _, begin, end, lines = upgrade.locate((target / rel).read_text(encoding="utf-8"), style)
-        body = (KIT_ROOT / rel).read_text(encoding="utf-8").rstrip("\n") + "\n"
+        source = common.block_source(manifest, rel)
+        body = (KIT_ROOT / source).read_text(encoding="utf-8").rstrip("\n") + "\n"
         text = (target / rel).read_text(encoding="utf-8")
         assert "".join(lines[begin + 1 : end]) == body or text == body, rel
     assert f'version = "{manifest["kit_version"]}"' in (target / "agk.toml").read_text()
@@ -972,3 +973,45 @@ def test_ac3_the_stamp_and_the_facts_version_are_the_same_value(tmp_path, files)
     for rel, text in files.items():
         (tmp_path / rel).write_text(text, encoding="utf-8")
     assert upgrade.read_stamp(tmp_path)[0] == common.installed_version(tmp_path)
+
+
+def kit_test_files(target: Path) -> list[str]:
+    root = target / "tests" / "kit"
+    return sorted(p.relative_to(target).as_posix() for p in root.rglob("*") if p.is_file())
+
+
+def test_ac1_upgrade_from_0_27_0_removes_the_unmodified_kit_tests_and_keeps_a_modified_one(
+    tmp_path,
+):
+    """REQ-009 AC2: lean install (ADR-0052): the kit tests are no longer installed (E1)."""
+    target = old_install(tmp_path, "0.27.0", "init")
+    assert len(kit_test_files(target)) > 500
+    kept = target / "tests" / "kit" / "test_facts.py"
+    kept.write_text(kept.read_text(encoding="utf-8") + "# edited here\n", encoding="utf-8")
+    product = target / "README.md"
+    before = product.read_bytes()
+    proc = upgrade_cli(target)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = proc.stdout.splitlines()
+    assert "removed-in-kit tests/kit/test_facts.py (modified, kept)" in lines
+    deleted = [ln for ln in lines if ln.endswith("(unmodified, deleted)")]
+    assert len(deleted) > 500 and all(ln.startswith("removed-in-kit tests/kit/") for ln in deleted)
+    assert kit_test_files(target) == ["tests/kit/test_facts.py"]
+    assert product.read_bytes() == before
+    assert (target / ".gitattributes").read_text(encoding="utf-8").splitlines()[-1] == (
+        "scripts/agk/** linguist-generated=true"
+    )
+
+
+def test_ac1_upgrade_adds_the_gitattributes_block_to_an_adopted_file_it_has_never_marked(tmp_path):
+    """REQ-010 AC1: lean install: a project's own .gitattributes gains one marked block."""
+    target = old_install(tmp_path, "0.27.0", "adopt")
+    own = "*.png binary\n"
+    (target / ".gitattributes").write_text(own, encoding="utf-8")
+    proc = upgrade_cli(target)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert not [ln for ln in proc.stdout.splitlines() if ln.startswith("conflict ")]
+    text = (target / ".gitattributes").read_text(encoding="utf-8")
+    assert text.startswith(own) and "# >>> agk" in text and "# <<< agk" in text
+    assert "scripts/agk/** linguist-generated=true" in text
+    assert upgrade_cli(target).stdout.splitlines()[-1] == "nothing to do"

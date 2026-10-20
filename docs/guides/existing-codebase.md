@@ -21,8 +21,9 @@ In Claude Code, on a new branch:
     /agk:adopt
 
 It shows a preview first: a list of `create ...` lines and `dry run: NNN files would change; nothing was written`. Say yes. It
-creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `tests/kit/`, `.claude/`, `config/`, `constitution/`, `docs/` and
-the governance workflow), appends one marked block to `.gitignore` and, when they exist, to `CLAUDE.md`, `.github/CODEOWNERS` and
+creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `.claude/`, `config/`, `constitution/`, `docs/` and
+the governance workflow; about 50 files, 225 KB; the kit's own tests are not installed), appends one marked block to `.gitignore`,
+`.gitattributes` and, when they exist, to `CLAUDE.md`, `.github/CODEOWNERS` and
 `.github/PULL_REQUEST_TEMPLATE.md`, and refuses rather than overwrite. Your `Makefile`, `pyproject.toml`, tests and product files
 are not touched: after the run no product file shows as modified. Nothing is committed.
 

@@ -8,7 +8,8 @@ import tomllib
 
 from conftest import KIT_ROOT, manifest
 
-ROOTS = (".claude/", ".github/", "scripts/agk/", "tests/kit/")
+# tests/kit/ is not a law root: the kit's own tests are not installed in targets (ADR-0052).
+ROOTS = (".claude/", ".github/", "scripts/agk/")
 KIT_ONLY = {
     "scripts/agk/init.py",
     "scripts/agk/adopt.py",
@@ -59,7 +60,16 @@ def lines(rel: str) -> list[str]:
 def test_ac2_manifest_shape_and_version():
     """REQ-009 AC2: rule 6."""
     m = manifest()
-    assert set(m) == {"kit_version", "verbatim", "experimental", "templates", "rendered", "adopt"}
+    assert set(m) == {
+        "kit_version",
+        "kit_tests",
+        "verbatim",
+        "experimental",
+        "templates",
+        "rendered",
+        "adopt",
+    }
+    assert m["kit_tests"] == "tests/kit" and (KIT_ROOT / m["kit_tests"]).is_dir()
     assert re.fullmatch(r"\d+\.\d+\.\d+", m["kit_version"])
     assert sorted(m["verbatim"]) == m["verbatim"]
     assert not set(m["verbatim"]) & set(m["templates"])
@@ -126,13 +136,13 @@ def test_ac2_kit_protected_list_is_template_plus_kit_only_entries():
         "docs/requirements.md",
         "CLAUDE.md",
         "scripts/agk/",
-        "tests/kit/",
         "Makefile",
         "pyproject.toml",
         "agk.mk",
         "agk.toml",
     ]
     assert lines("config/protected-paths.txt") == template + [
+        "tests/kit/",
         "kit/",
         "tests/kit_dev/",
         ".claude-plugin/",
@@ -193,7 +203,7 @@ def test_ac2_kit_version_is_at_least_0_4_1_and_check_specs_is_wired():
     m = manifest()
     assert tuple(int(x) for x in m["kit_version"].split(".")) >= (0, 4, 1)
     assert "scripts/agk/check_specs.py" in m["verbatim"]
-    assert "tests/kit/test_check_specs.py" in m["verbatim"]
+    assert (KIT_ROOT / "tests/kit/test_check_specs.py").is_file()
     agk_mk = (KIT_ROOT / "agk.mk").read_text(encoding="utf-8")
     assert "scripts/agk/check_specs.py" in agk_mk
 
@@ -219,8 +229,10 @@ def test_ac2_readme_has_an_installing_section():
 def test_ac1_shared_layout_files_are_in_the_manifest_and_the_repository():
     """REQ-010 AC1: SPEC-0002 rules 5 and 10."""
     m = manifest()
-    for rel in ("agk.mk", "scripts/agk/config.py", "tests/kit/pytest.ini", "tests/kit/conftest.py"):
+    for rel in ("agk.mk", "scripts/agk/config.py"):
         assert rel in m["verbatim"], rel
+    for rel in ("tests/kit/pytest.ini", "tests/kit/conftest.py"):
+        assert (KIT_ROOT / rel).is_file() and rel not in m["verbatim"], rel
     assert "agk.toml" in m["templates"]
     toml = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))
     assert toml["default_branch"] == "main"
@@ -261,10 +273,12 @@ def test_ac1_templates_carry_project_tests_and_no_pyproject_stamp():
 def test_ac1_adopt_section_shape_and_paths():
     """REQ-010 AC1: SPEC-0002 rules 4 and 11."""
     a = manifest()["adopt"]
-    assert set(a) == {"skip", "blocks", "templates"}
+    assert set(a) == {"skip", "blocks", "block_sources", "templates"}
     assert a["skip"] == ["Makefile"]
+    assert a["block_sources"] == {".gitattributes": "kit/templates/gitattributes"}
     assert a["blocks"] == {
         ".gitignore": "hash",
+        ".gitattributes": "hash",
         "CLAUDE.md": "html",
         ".github/PULL_REQUEST_TEMPLATE.md": "html",
         ".github/CODEOWNERS": "hash",
@@ -272,7 +286,11 @@ def test_ac1_adopt_section_shape_and_paths():
     for src in a["templates"].values():
         assert (KIT_ROOT / src).is_file(), src
     assert "Makefile" not in a["templates"] and "pyproject.toml" not in a["templates"]
-    assert set(a["blocks"]) - {".github/CODEOWNERS"} <= set(manifest()["verbatim"])
+    sources = {rel: a["block_sources"].get(rel, rel) for rel in a["blocks"]}
+    assert {src for rel, src in sources.items() if rel != ".github/CODEOWNERS"} <= (
+        set(manifest()["verbatim"]) | set(a["block_sources"].values())
+    )
+    assert ".gitattributes" not in manifest()["verbatim"], "this repository must not carry it"
 
 
 def test_ac1_adopt_templates_are_neutral_and_use_allowed_variables():
@@ -297,7 +315,6 @@ def test_ac1_adopt_protected_template_and_reviewers_are_equal_and_exclude_projec
         "docs/requirements.md",
         "CLAUDE.md",
         "scripts/agk/",
-        "tests/kit/",
         "agk.mk",
         "agk.toml",
     ]
@@ -329,9 +346,9 @@ def test_scanner_excludes_template_covers_each_tool_and_each_kit_path():
     text = (KIT_ROOT / "kit" / "templates" / "scanner-excludes.txt").read_text(encoding="utf-8")
     for tool in ("bandit", "flake8", "pylint", "mypy"):
         line = next(ln for ln in text.splitlines() if ln.strip().startswith(f"{tool}:"))
-        for path in ("scripts/agk", "tests/kit"):
-            assert path in line, (tool, path)
-        assert ".claude" in line, tool
+        assert "scripts/agk" in line and ".claude" in line, tool
+        assert "tests/kit" not in line, tool
+    assert "tests/kit" not in text
     installed = set(manifest()["verbatim"]) | set(manifest()["templates"].values())
     assert "kit/templates/scanner-excludes.txt" not in installed
 
@@ -353,3 +370,16 @@ def test_ac1_this_repository_records_the_kit_version_it_ships():
     """
     toml = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))
     assert toml.get("version") == manifest()["kit_version"]
+
+
+def test_ac2_the_kit_tests_are_not_installed_and_gitattributes_marks_the_scripts():
+    """REQ-009 AC2: lean install (ADR-0052): nothing under tests/ is installed."""
+    m = manifest()
+    listed = [*m["verbatim"], *m["experimental"], *m["templates"], *m["adopt"]["templates"]]
+    assert not [p for p in listed if p.startswith("tests/")]
+    assert (KIT_ROOT / "tests" / "kit").is_dir() and tracked()
+    text = (KIT_ROOT / m["templates"][".gitattributes"]).read_text(encoding="utf-8")
+    assert [ln for ln in text.splitlines() if not ln.startswith("#")] == [
+        "scripts/agk/** linguist-generated=true"
+    ]
+    assert not (KIT_ROOT / ".gitattributes").exists()

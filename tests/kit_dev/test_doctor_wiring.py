@@ -6,7 +6,7 @@ import json
 import subprocess
 import sys
 
-from conftest import KIT_ROOT, clean_env, expected_files, manifest
+from conftest import KIT_ROOT, assert_lean, clean_env, kit_fixture_files, manifest
 
 INSTALLED = {"scripts/agk/doctor.py", "tests/kit/test_doctor.py"}
 OK_API = KIT_ROOT / "tests" / "kit" / "fixtures" / "doctor" / "ok" / "api"
@@ -31,15 +31,9 @@ def doctor(root, *extra):
 
 def test_ac1_doctor_files_and_fixtures_are_installed_by_init_and_adopt():
     """REQ-002 AC1: SPEC-0006 rule 19."""
-    assert INSTALLED <= set(manifest()["verbatim"])
-    assert INSTALLED <= expected_files()
-    fixtures = {p for p in manifest()["verbatim"] if p.startswith("tests/kit/fixtures/doctor/")}
-    on_disk = {
-        p.relative_to(KIT_ROOT).as_posix()
-        for p in (KIT_ROOT / "tests/kit/fixtures/doctor").rglob("*")
-        if p.is_file()
-    }
-    assert on_disk == fixtures and len(fixtures) > 50
+    assert_lean(INSTALLED)
+    fixtures = kit_fixture_files("tests/kit/fixtures/doctor")
+    assert len(fixtures) > 50 and not fixtures & set(manifest()["verbatim"])
 
 
 def test_ac1_kit_version_is_at_least_0_8_0():

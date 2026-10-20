@@ -77,6 +77,24 @@ def expected_files() -> set[str]:
     return set(m["verbatim"]) | set(m["templates"]) | set(m["rendered"])
 
 
+def assert_lean(listed: set[str]) -> None:
+    """The listed files that are not tests of the kit are installed; the tests stay in the kit.
+
+    Lean install (ADR-0052): nothing under `tests/kit/` is in the manifest, so no target has it.
+    """
+    m = manifest()
+    installed = {p for p in listed if not p.startswith("tests/kit/")}
+    assert installed <= set(m["verbatim"]) and installed <= expected_files()
+    for rel in listed - installed:
+        assert (KIT_ROOT / rel).is_file(), rel
+        assert rel not in m["verbatim"] and rel not in expected_files(), rel
+
+
+def kit_fixture_files(rel: str) -> set[str]:
+    """The files of one fixture folder of the kit repository (they are not installed)."""
+    return {p.relative_to(KIT_ROOT).as_posix() for p in (KIT_ROOT / rel).rglob("*") if p.is_file()}
+
+
 def make_repo(root: Path, branch: str = "main") -> Path:
     """A git repository with one commit (a README) on the given branch."""
     root.mkdir(parents=True, exist_ok=True)

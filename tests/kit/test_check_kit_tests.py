@@ -1,4 +1,4 @@
-"""Tests of scripts/agk/check_kit_tests.py: every installed check ships with an installed test."""
+"""Tests of scripts/agk/check_kit_tests.py: each installed check has a test in the kit repo."""
 
 from __future__ import annotations
 
@@ -9,14 +9,17 @@ TEST = "tests/kit/test_check_new.py"
 
 
 def manifest(*verbatim: str) -> str:
-    return json.dumps({"kit_version": "0.0.0", "verbatim": sorted(verbatim)}) + "\n"
+    data = {"kit_version": "0.0.0", "kit_tests": "tests/kit", "verbatim": sorted(verbatim)}
+    return json.dumps(data) + "\n"
 
 
-def kit(repo, test_text: str | None, listed: bool = True, location: str = TEST) -> None:
-    """A kit repository: one installed check, and (maybe) one test file for it."""
-    listing = [CHECK, "tests/kit/test_other.py"] + ([location] if listed and test_text else [])
+def kit(repo, test_text: str | None, location: str = TEST) -> None:
+    """A kit repository: one installed check, and (maybe) one test file for it.
+
+    The tests are not installed (lean install): the manifest lists the check and no test file.
+    """
     files = {
-        "kit/manifest.json": manifest(*listing),
+        "kit/manifest.json": manifest(CHECK),
         CHECK: "NAME = 'new'\n",
         "scripts/agk/reviewers.py": "x = 1\n",
         "tests/kit/test_other.py": "def test_x():\n    assert True\n",
@@ -26,25 +29,20 @@ def kit(repo, test_text: str | None, listed: bool = True, location: str = TEST) 
     repo.commit(files)
 
 
-def test_ac1_installed_check_without_installed_tests_fails(repo):
-    """REQ-009 AC2: a check whose tests sit outside the installed set (the reviewer case)."""
-    kit(
-        repo,
-        '"""t"""\nrepo.run("check_new.py")\n',
-        listed=False,
-        location="tests/kit_dev/test_new.py",
-    )
+def test_ac1_installed_check_without_a_test_under_tests_kit_fails(repo):
+    """REQ-009 AC2: a check whose tests sit outside tests/kit/ (the reviewer case)."""
+    kit(repo, '"""t"""\nrepo.run("check_new.py")\n', location="tests/kit_dev/test_new.py")
     proc = repo.run("check_kit_tests.py")
     assert proc.returncode == 1
     assert "FAIL kit-tests" in proc.stdout and CHECK in proc.stdout
-    assert "tests/kit/" in proc.stdout
+    assert "kit_tests" in proc.stdout
 
 
-def test_ac1_test_file_present_but_not_in_the_manifest_set_fails(repo):
-    """REQ-009 AC2: the test must be in the same verbatim set, not merely on disk."""
-    kit(repo, 'repo.run("check_new.py")\n', listed=False)
-    proc = repo.run("check_kit_tests.py")
-    assert proc.returncode == 1 and CHECK in proc.stdout
+def test_ac1_a_test_file_need_not_be_listed_in_the_manifest(repo):
+    """REQ-009 AC2: lean install (ADR-0052): the test is on disk under tests/kit/, not installed."""
+    kit(repo, 'repo.run("check_new.py")\n')
+    assert "tests/kit/test_new" not in (repo.root / "kit" / "manifest.json").read_text()
+    assert repo.run("check_kit_tests.py").returncode == 0
 
 
 def test_ac1_no_test_file_at_all_fails(repo):

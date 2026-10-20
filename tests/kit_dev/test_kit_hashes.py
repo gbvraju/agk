@@ -219,3 +219,25 @@ def test_ac1_usage_errors_exit_2(args):
         cwd=KIT_ROOT,
     )
     assert proc.returncode == 2
+
+
+def test_ac1_a_block_is_hashed_from_its_block_source(tmp_path):
+    """REQ-014 AC5: lean install (ADR-0052): adopt.block_sources names a block's source file."""
+    import hashlib
+
+    manifest = {
+        "kit_version": "1.0.0",
+        "verbatim": [],
+        "templates": {},
+        "adopt": {
+            "skip": [],
+            "blocks": {".gitattributes": "hash"},
+            "block_sources": {".gitattributes": "kit/templates/gitattributes"},
+            "templates": {},
+        },
+    }
+    files = {"kit/templates/gitattributes": b"scripts/agk/** linguist-generated=true\n\n"}
+    snap = kit_hashes.snapshot_of(manifest, files.get)
+    want = hashlib.sha256(b"scripts/agk/** linguist-generated=true\n").hexdigest()
+    assert snap["blocks"] == {".gitattributes": want}
+    assert ".gitattributes" not in files  # the repository itself carries no such file

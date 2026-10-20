@@ -9,6 +9,5 @@ config/
 docs/requirements.md
 CLAUDE.md
 scripts/agk/
-tests/kit/
 agk.mk
 agk.toml

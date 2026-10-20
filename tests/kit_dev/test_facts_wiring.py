@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 
-from conftest import KIT_ROOT, clean_env, expected_files, manifest
+from conftest import KIT_ROOT, assert_lean, clean_env, kit_fixture_files, manifest
 from jsonschema_lite import KEYWORDS, errors
 
 SCHEMA = KIT_ROOT / "kit" / "facts-schema.json"
@@ -38,10 +38,9 @@ def keywords_used(node) -> set[str]:
 def test_ac2_the_files_are_in_the_manifest_and_the_schema_is_kit_only():
     """REQ-018 AC2: rules 19 and 21."""
     m = manifest()
-    assert INSTALLED <= set(m["verbatim"]) and INSTALLED <= expected_files()
-    fixtures = {p for p in m["verbatim"] if p.startswith("tests/kit/fixtures/facts/")}
-    on_disk = {p.relative_to(KIT_ROOT).as_posix() for p in FIXTURES.rglob("*") if p.is_file()}
-    assert on_disk == fixtures and len(fixtures) > 100
+    assert_lean(INSTALLED)
+    fixtures = kit_fixture_files("tests/kit/fixtures/facts")
+    assert len(fixtures) > 100 and not fixtures & set(m["verbatim"])
     assert "kit/facts-schema.json" not in m["verbatim"] and SCHEMA.is_file()
     assert "tests/kit_dev/test_facts_wiring.py" not in m["verbatim"]
 

@@ -157,8 +157,7 @@ def requirements_section(root: Path) -> Any:
 def markers_section(root: Path, cfg: dict | None) -> Any:
     if cfg is None:
         return UNKNOWN
-    exclude = ["tests/kit"] if cfg["mode"] == "adopt" else []
-    return find_ac_markers(root, cfg["test_dirs"], cfg["test_patterns"], exclude)
+    return find_ac_markers(root, cfg["test_dirs"], cfg["test_patterns"], [])
 
 
 # --- specs, ADRs ------------------------------------------------------------------------------

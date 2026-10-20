@@ -37,8 +37,9 @@ See `docs/specs/0001-agk-init.md` and `docs/runs/k1-live-proof.md`.
     python3 scripts/agk/adopt.py TARGET [--dry-run]
 
 Run from a checkout of agk as a maintainer-approved step. TARGET is an existing git work tree. Adopt touches no
-product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `tests/kit/`, `.claude/`, `config/`,
-`constitution/`, `docs/`, `.github/workflows/governance.yml`), appends one marked block to `.gitignore` and, when they
+product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `.claude/`, `config/`,
+`constitution/`, `docs/`, `.github/workflows/governance.yml`), appends one marked block to `.gitignore` and `.gitattributes`
+(`scripts/agk/** linguist-generated=true`, so GitHub collapses the kit's scripts in diffs) and, when they
 exist, to `CLAUDE.md`, `.github/CODEOWNERS` and `.github/PULL_REQUEST_TEMPLATE.md`, and refuses rather than overwrite.
 The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/specs/0002-agk-adopt.md`.
 
@@ -89,7 +90,9 @@ the kit is reported, never deleted. `kit/hashes.json` (a committed generated fil
 rewritten; changed templates and new `agk.toml` keys are printed; only the `version` line of `agk.toml` is set, last. It
 prints the target's protected classes and an ADR skeleton for the upgrade pull request. An install stamped only in
 `pyproject.toml [tool.agk]` (kits 0.1.0 and 0.2.0) is upgraded through that stamp: `agk.toml` is created last and `pyproject.toml` is
-never written. See `docs/specs/0008-upgrade.md` and ADR-0018.
+never written. From kit 0.28.0 the kit's own tests are not installed in a project: an upgrade from an earlier kit deletes the
+unmodified files of `tests/kit/` and keeps one you edited, reporting it as `removed-in-kit (modified, kept)`; that file tests the kit
+and cannot run without the kit's fixtures, so delete it in your own change. See `docs/specs/0008-upgrade.md` and ADR-0018.
 
 ## Experimental: reviewer agent
 
@@ -161,13 +164,13 @@ the bare `assert` of the kit's tests (rule B101). Init and adopt print the exclu
 none of them (ADR-0010, `docs/runs/scanner-fix.md`):
 
 ```
-Scanner exclusions (print only; the kit writes none of this). The kit's code under scripts/agk, tests/kit and
+Scanner exclusions (print only; the kit writes none of this). The kit's code under scripts/agk and
 .claude/hooks is the kit's, not yours. If a scanner you run reads the whole tree, exclude those paths in your own
 configuration:
-  bandit:  bandit -r . -x ./scripts/agk,./tests/kit,./.claude/hooks
-  flake8:  flake8 --extend-exclude scripts/agk,tests/kit,.claude/hooks
-  pylint:  [tool.pylint.main] ignore-paths = ['^scripts/agk/.*$', '^tests/kit/.*$'] and ignore = ['.claude']
-  mypy:    [tool.mypy] exclude = ['^scripts/agk/', '^tests/kit/', '^\.claude/hooks/']
+  bandit:  bandit -r . -x ./scripts/agk,./.claude/hooks
+  flake8:  flake8 --extend-exclude scripts/agk,.claude/hooks
+  pylint:  [tool.pylint.main] ignore-paths = ['^scripts/agk/.*$'] and ignore = ['.claude']
+  mypy:    [tool.mypy] exclude = ['^scripts/agk/', '^\.claude/hooks/']
 ```
 
 Licence: Apache-2.0.

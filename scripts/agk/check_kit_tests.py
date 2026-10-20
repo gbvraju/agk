@@ -1,7 +1,8 @@
-"""Fail when an installed check ships without an installed test.
+"""Fail when an installed check has no test in the kit repository.
 
 Every `scripts/agk/check_*.py` in the verbatim set of `kit/manifest.json` needs at least one test
-file under `tests/kit/` in the same set that imports it or runs it (names its file in a string). A
+file in the folder the manifest names as `kit_tests` that imports it or runs it (names its file in
+a string). The tests are not installed in projects (lean install): they run in the kit's own CI. A
 mention in a docstring or a comment does not count. A repository without `kit/manifest.json` (an
 installed one) has nothing to check.
 """
@@ -18,7 +19,7 @@ from common import CheckError, repo_root, run
 NAME = "kit-tests"
 MANIFEST = "kit/manifest.json"
 CHECK_PATH = re.compile(r"scripts/agk/(check_[^/]+)\.py")
-TEST_PATH = re.compile(r"tests/kit/test_[^/]+\.py")
+TESTS_KEY = "kit_tests"
 
 
 def references(source: str, stem: str) -> bool:
@@ -69,13 +70,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ok {NAME} (no {MANIFEST} here; nothing to check)")
         return 0
     try:
-        verbatim = json.loads(path.read_text(encoding="utf-8"))["verbatim"]
+        data = json.loads(path.read_text(encoding="utf-8"))
+        verbatim, folder = data["verbatim"], data[TESTS_KEY]
         if not isinstance(verbatim, list) or not all(isinstance(p, str) for p in verbatim):
             raise ValueError
+        if not isinstance(folder, str) or not folder:
+            raise ValueError
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        raise CheckError(f"{MANIFEST} cannot be read or has no verbatim list") from exc
+        raise CheckError(
+            f"{MANIFEST} cannot be read or has no verbatim list or no {TESTS_KEY} folder"
+        ) from exc
     checks = sorted((p, m.group(1)) for p in verbatim if (m := CHECK_PATH.fullmatch(p)))
-    tests = sorted(p for p in verbatim if TEST_PATH.fullmatch(p))
+    tests = sorted(p.relative_to(root).as_posix() for p in (root / folder).glob("test_*.py"))
     sources = {}
     for rel in tests:
         try:
@@ -86,8 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     for check, stem in checks:
         if not any(references(text, stem) for text in sources.values()):
             problems.append(
-                f"{check} has no test file under tests/kit/ in the verbatim set of {MANIFEST} "
-                "that imports or runs it"
+                f"{check} has no test file in the {TESTS_KEY} folder that imports or runs it"
             )
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")

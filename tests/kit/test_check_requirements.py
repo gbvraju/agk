@@ -168,15 +168,15 @@ def test_ac1_default_pattern_ignores_underscore_test_files(repo):
     assert check(repo).returncode == 1
 
 
-def test_ac1_adopt_mode_excludes_tests_kit_unless_listed(repo):
-    """REQ-010 AC1: rule 9."""
+def test_ac1_adopt_mode_searches_the_listed_directories_and_no_other_exclusion(repo):
+    """REQ-010 AC1: rule 9 (lean install, ADR-0052: none is left out)."""
     files = {
         "docs/requirements.md": reqs(("REQ-001", "done")),
         "tests/kit/test_k.py": "# REQ-001\n",
         "agk.toml": 'mode = "adopt"\ntest_dirs = ["tests"]\n',
     }
     repo.commit(files)
-    assert check(repo).returncode == 1
+    assert check(repo).returncode == 0
     repo.commit({"agk.toml": 'mode = "adopt"\ntest_dirs = ["tests/kit"]\n'})
     assert check(repo).returncode == 0
     repo.commit({"agk.toml": 'mode = "init"\ntest_dirs = ["tests"]\n'})

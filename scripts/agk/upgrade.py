@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
-from common import experimental_enabled, installed_version, matches, read_list
+from common import block_source, experimental_enabled, installed_version, matches, read_list
 from init import (
     CREATE_ONLY,
     DATE_RE,
@@ -218,6 +218,14 @@ def block_file(
     if state == "none":
         # adopt writes a whole file, without markers, when the file did not exist
         if rel in ABSENT_AS_BLOCK:
+            if not old:  # a block no release has shipped yet: add it, as adopt does
+                sep = "" if text == "" or text.endswith("\n") else "\n"
+                return Item(
+                    rel,
+                    "replace",
+                    " (agk block added)",
+                    content=(text + sep + block_of(style, body)).encode("utf-8"),
+                )
             return Item(rel, "conflict", f" (path class {cls}: marked block, no agk markers)")
         if text == whole:
             return Item(rel, "unchanged")
@@ -362,7 +370,7 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
             old = set()  # opting in creates the file; it was never installed, so it is not deleted
         plan.items.append(whole_file(target, rel, new, old, entries))
     for rel, style in blocks.items():
-        body = (kit_root / rel).read_text(encoding="utf-8")
+        body = (kit_root / block_source(manifest, rel)).read_text(encoding="utf-8")
         old = set(row["blocks"].get(rel, []))
         plan.items.append(block_file(target, rel, style, body, old, entries))
     current = set(manifest["verbatim"]) | (optional if enabled else set())
@@ -473,11 +481,15 @@ def write_atomic(path: Path, data: bytes) -> None:
 
 
 def remove_file(target: Path, rel: str) -> None:
-    """Delete one file, then the directories that deletion emptied (never the target itself)."""
+    """Delete one file, then the directories that deletion emptied.
+
+    Never the target itself and never a directory directly under it: a project whose only
+    `tests/` content was the kit's own tests keeps its `tests/` for its own tests to come.
+    """
     path = target / rel
     path.unlink()
     parent = path.parent
-    while parent != target and target in parent.parents:
+    while parent.parent != target and target in parent.parents:
         try:
             parent.rmdir()
         except OSError:

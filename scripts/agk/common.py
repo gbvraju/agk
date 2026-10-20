@@ -31,6 +31,15 @@ class CheckError(Exception):
 EXPERIMENTAL_KEY = "experimental_reviewer"
 
 
+def block_source(manifest: dict, rel: str) -> str:
+    """The kit file whose text is the marked block of `rel` in an adopt install.
+
+    Normally the kit's own file of the same path; `adopt.block_sources` names another file for a
+    block the kit repository must not carry itself (`.gitattributes`).
+    """
+    return ((manifest.get("adopt") or {}).get("block_sources") or {}).get(rel, rel)
+
+
 def experimental_enabled(target: Path) -> bool:
     """True only when TARGET's agk.toml sets `experimental_reviewer = true` (a boolean)."""
     try:
@@ -299,7 +308,7 @@ def next_free_ids(root: Path, ref: str) -> dict[str, str]:
 DEFAULT_CONFIG = {
     "default_branch": "main",
     "test_dirs": ["tests"],
-    "lint_paths": ["scripts/agk", "tests/kit", ".claude/hooks"],
+    "lint_paths": ["scripts/agk", ".claude/hooks"],
     "project_tests": "",
     "test_patterns": ["test_*.py"],
     "mode": "",
@@ -427,20 +436,15 @@ def find_ac_markers(
 
 
 def markers_for(root: Path, cli_dirs: Sequence[str] | None = None) -> dict[str, list[str]]:
-    """Markers from the configured directories and patterns (agk.toml).
-
-    In adopt mode tests/kit is left out of the search unless a listed directory is inside it.
-    """
+    """Markers from the configured directories and patterns (agk.toml)."""
     cfg = load_config(root)
-    exclude = ["tests/kit"] if cfg["mode"] == "adopt" else []
-    return find_markers(root, test_dirs(root, cli_dirs), cfg["test_patterns"], exclude)
+    return find_markers(root, test_dirs(root, cli_dirs), cfg["test_patterns"], [])
 
 
 def ac_markers_for(root: Path, cli_dirs: Sequence[str] | None = None) -> list[dict]:
     """The `REQ-nnn ACn` markers from the configured directories and patterns (as markers_for)."""
     cfg = load_config(root)
-    exclude = ["tests/kit"] if cfg["mode"] == "adopt" else []
-    return find_ac_markers(root, test_dirs(root, cli_dirs), cfg["test_patterns"], exclude)
+    return find_ac_markers(root, test_dirs(root, cli_dirs), cfg["test_patterns"], [])
 
 
 def ac_coverage_mode(root: Path) -> str:

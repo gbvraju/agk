@@ -60,6 +60,15 @@ The permissions are the ones in each file; a workflow can do nothing its token d
 To forbid issue writing, delete the three workflow files that need `issues: write` (`init.py` and `adopt.py` print this notice). Issues
 must be on for those workflows to work, which `agk doctor` checks.
 
+## Integrity of the installed checks
+
+The checks are files in your repository: `scripts/agk/` is a protected class, so a change to one needs an ADR in the same
+pull request that names it (`config/protected-paths.txt`). `agk doctor --kit-root` compares every installed file with the
+kit's copy and reports a file that differs (`scripts/agk/doctor.py`), and `agk upgrade` uses `kit/hashes.json`, which holds
+the SHA-256 of every file of every release, to tell a file you edited from one that is only old. Since kit 0.28.0 the
+kit's own tests are not installed (a project cannot re-run them); they run in the kit's CI, and the comparison above is
+what tells you your copy is the kit's.
+
 ## The architect guard, and what it cannot prevent
 
 The architect role (`.claude/agents/architect.md`) is a Claude Code session with a short tool list and a hook
