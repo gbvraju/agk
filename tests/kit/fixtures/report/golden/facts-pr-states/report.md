@@ -24,13 +24,10 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 ## At risk
 
-- <pr>18 "Change number 18" has been open for 9 days — https://github.com/demo-org/demo-repo/pull/18
-- <pr>19 "Change number 19" has been open for 9 days — https://github.com/demo-org/demo-repo/pull/19
+- PRs [#18](https://github.com/demo-org/demo-repo/pull/18) (9 days) and [#19](https://github.com/demo-org/demo-repo/pull/19) (9 days) have been open
 - <pr>12 "Change number 12" was sent back 1 time — https://github.com/demo-org/demo-repo/pull/12
 - drift audit: 0 findings (D1 0, D2 0, D3 0, D4 0, D5 0, D6 0, D7 0); no open drift issue
-- <pr>13 was merged with no verdict — https://github.com/demo-org/demo-repo/pull/13
-- <pr>14 was merged with no verdict — https://github.com/demo-org/demo-repo/pull/14
-- <pr>15 was merged with no verdict — https://github.com/demo-org/demo-repo/pull/15
+- PRs [#13](https://github.com/demo-org/demo-repo/pull/13), [#14](https://github.com/demo-org/demo-repo/pull/14) and [#15](https://github.com/demo-org/demo-repo/pull/15) were merged with no verdict
 
 ## Cost
 

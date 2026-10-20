@@ -479,6 +479,44 @@ def drift_line(doc: dict, links: Links) -> str:
     return bullet(text + ("; no open drift issue" if is_list(issues) else "; issues unknown"), None)
 
 
+def pull_list(entries: list[tuple[int, str | None]], links: Links) -> str:
+    """`[#12](url) (41 days), [#15](url) and [#20](url)`: ascending, each number its own link."""
+    parts = [
+        f"[#{number}]({links.pull(number)})" + (f" ({value})" if value else "")
+        for number, value in sorted(entries)
+    ]
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def by_kind(
+    items: list[tuple[str, int, str | None, str]], phrases: dict, links: Links
+) -> list[str]:
+    """One line for a kind with two or more pull requests, at the place of its lowest number.
+
+    `items` are (kind, number, value, today's line) in today's order. A kind with one pull
+    request keeps today's line; `phrases` holds the plural ending of each kind (SPEC-0016).
+    """
+    members: dict[str, list[tuple[int, str | None]]] = {}
+    for kind, number, value, _ in items:
+        members.setdefault(kind, []).append((number, value))
+    lines = []
+    for kind, number, _, line in items:
+        group = members[kind]
+        if len(group) == 1:
+            lines.append(line)
+        elif number == min(n for n, _ in group):
+            lines.append(bullet(f"PRs {pull_list(group, links)} {phrases[kind]}", None))
+    return lines
+
+
+GROUPED = {
+    "open": "have been open",
+    "sent back": "were sent back",
+    "no verdict": "were merged with no verdict",
+    "not cleared": "were merged before their last commit was cleared",
+}
+
+
 def at_risk(doc: dict, links: Links, today: date, start: date, end: date) -> list[str]:
     lines: list[str] = []
     if is_list(doc["residuals"]):
@@ -490,27 +528,36 @@ def at_risk(doc: dict, links: Links, today: date, start: date, end: date) -> lis
     else:
         lines.append(unknown_line("residuals", links.file("docs/runs/residuals.md")))
     if is_list(doc["pull_requests"]):
+        old: list[tuple[str, int, str | None, str]] = []
         for p in sorted(doc["pull_requests"], key=lambda p: p["number"]):
             days = age_days(p, today)
             if p.get("state") == "open" and days is not None and days > OLD_PULL_REQUEST_DAYS:
                 span = plural(days, "day", "days")
                 text = f'PR #{p["number"]} "{p["title"]}" has been open for {span}'
-                lines.append(bullet(text, links.pull(p["number"])))
+                old.append(("open", p["number"], span, bullet(text, links.pull(p["number"]))))
+        lines += by_kind(old, GROUPED, links)
+        back: list[tuple[str, int, str | None, str]] = []
         for p in sorted(doc["pull_requests"], key=lambda p: p["number"]):
             ended = in_week(p.get("closed_at"), start, end)
             fixes, rejected = verdict_count(p, "fix"), verdict_count(p, "rejected")
             if ended and fixes is not None and (fixes >= 2 or rejected):
                 times = plural(fixes + rejected, "time", "times")
                 text = f'PR #{p["number"]} "{p["title"]}" was sent back {times}'
-                lines.append(bullet(text, links.pull(p["number"])))
+                back.append(
+                    ("sent back", p["number"], times, bullet(text, links.pull(p["number"])))
+                )
+        lines += by_kind(back, GROUPED, links)
     else:
         lines.append(unknown_line("pull requests", f"{links.repo}/pulls"))
     lines.append(drift_line(doc, links))
     if is_list(doc["pull_requests"]):
+        late: list[tuple[str, int, str | None, str]] = []
         for p in merged_in_week(doc, start, end):
             text = cleared_line(p)
             if text:
-                lines.append(bullet(text, links.pull(p["number"])))
+                kind = "no verdict" if text.endswith("no verdict") else "not cleared"
+                late.append((kind, p["number"], None, bullet(text, links.pull(p["number"]))))
+        lines += by_kind(late, GROUPED, links)
     return lines
 
 

@@ -1,6 +1,6 @@
 {
   "name": "agk",
-  "version": "0.28.0",
+  "version": "0.29.0",
   "description": "Agentic Governance Kit: workflow commands for repositories governed by agk (init, adopt, doctor, upgrade, spec, issue, brief, review).",
   "author": {
     "name": "agk maintainers"

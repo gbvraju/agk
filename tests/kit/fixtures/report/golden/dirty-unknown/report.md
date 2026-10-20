@@ -41,15 +41,10 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 ## At risk
 
 - unknown: residuals could not be read — https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/runs/residuals.md
-- <pr>9 "Change number 9" has been open for 13 days — https://github.com/demo-org/demo-repo/pull/9
-- <pr>13 "Change number 13" has been open for 12 days — https://github.com/demo-org/demo-repo/pull/13
-- <pr>6 "Change number 6" was sent back 2 times — https://github.com/demo-org/demo-repo/pull/6
-- <pr>12 "Change number 12" was sent back 1 time — https://github.com/demo-org/demo-repo/pull/12
+- PRs [#9](https://github.com/demo-org/demo-repo/pull/9) (13 days) and [#13](https://github.com/demo-org/demo-repo/pull/13) (12 days) have been open
+- PRs [#6](https://github.com/demo-org/demo-repo/pull/6) (2 times) and [#12](https://github.com/demo-org/demo-repo/pull/12) (1 time) were sent back
 - drift audit: unknown (D1 0, D2 0, D3 0, D4 0, D5 0, D6 unknown, D7 0) — https://github.com/demo-org/demo-repo/issues/4
-- <pr>5 was merged before its last commit was cleared — https://github.com/demo-org/demo-repo/pull/5
-- <pr>6 was merged before its last commit was cleared — https://github.com/demo-org/demo-repo/pull/6
-- <pr>7 was merged before its last commit was cleared — https://github.com/demo-org/demo-repo/pull/7
-- <pr>8 was merged before its last commit was cleared — https://github.com/demo-org/demo-repo/pull/8
+- PRs [#5](https://github.com/demo-org/demo-repo/pull/5), [#6](https://github.com/demo-org/demo-repo/pull/6), [#7](https://github.com/demo-org/demo-repo/pull/7) and [#8](https://github.com/demo-org/demo-repo/pull/8) were merged before their last commit was cleared
 
 ## Cost
 
