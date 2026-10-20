@@ -60,7 +60,16 @@ def lines(rel: str) -> list[str]:
 def test_ac2_manifest_shape_and_version():
     """REQ-009 AC2: rule 6."""
     m = manifest()
-    assert set(m) == {"kit_version", "verbatim", "experimental", "templates", "rendered", "adopt"}
+    assert set(m) == {
+        "kit_version",
+        "kit_tests",
+        "verbatim",
+        "experimental",
+        "templates",
+        "rendered",
+        "adopt",
+    }
+    assert m["kit_tests"] == "tests/kit" and (KIT_ROOT / m["kit_tests"]).is_dir()
     assert re.fullmatch(r"\d+\.\d+\.\d+", m["kit_version"])
     assert sorted(m["verbatim"]) == m["verbatim"]
     assert not set(m["verbatim"]) & set(m["templates"])
@@ -127,13 +136,13 @@ def test_ac2_kit_protected_list_is_template_plus_kit_only_entries():
         "docs/requirements.md",
         "CLAUDE.md",
         "scripts/agk/",
-        "tests/kit/",
         "Makefile",
         "pyproject.toml",
         "agk.mk",
         "agk.toml",
     ]
     assert lines("config/protected-paths.txt") == template + [
+        "tests/kit/",
         "kit/",
         "tests/kit_dev/",
         ".claude-plugin/",
@@ -306,7 +315,6 @@ def test_ac1_adopt_protected_template_and_reviewers_are_equal_and_exclude_projec
         "docs/requirements.md",
         "CLAUDE.md",
         "scripts/agk/",
-        "tests/kit/",
         "agk.mk",
         "agk.toml",
     ]
@@ -338,9 +346,9 @@ def test_scanner_excludes_template_covers_each_tool_and_each_kit_path():
     text = (KIT_ROOT / "kit" / "templates" / "scanner-excludes.txt").read_text(encoding="utf-8")
     for tool in ("bandit", "flake8", "pylint", "mypy"):
         line = next(ln for ln in text.splitlines() if ln.strip().startswith(f"{tool}:"))
-        for path in ("scripts/agk", "tests/kit"):
-            assert path in line, (tool, path)
-        assert ".claude" in line, tool
+        assert "scripts/agk" in line and ".claude" in line, tool
+        assert "tests/kit" not in line, tool
+    assert "tests/kit" not in text
     installed = set(manifest()["verbatim"]) | set(manifest()["templates"].values())
     assert "kit/templates/scanner-excludes.txt" not in installed
 

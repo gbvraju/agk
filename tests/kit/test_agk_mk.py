@@ -175,7 +175,9 @@ def project(tmp_path: Path, with_tests: bool, lint_paths: str) -> Path:
     shutil.copy(ROOT / "scripts" / "agk" / "common.py", root / "scripts" / "agk" / "common.py")
     (root / "agk.toml").write_text(f"lint_paths = {lint_paths}\n", encoding="utf-8")
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)  # nosec B603 B607 - fixed list
-    if with_tests:
+    if with_tests:  # the kit repository: kit/agk-kit.mk defines agk-test
+        (root / "kit").mkdir()
+        shutil.copy(ROOT / "kit" / "agk-kit.mk", root / "kit" / "agk-kit.mk")
         (root / "tests" / "kit").mkdir(parents=True)
         (root / "tests" / "kit" / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
     return root

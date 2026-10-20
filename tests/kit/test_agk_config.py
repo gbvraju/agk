@@ -9,7 +9,7 @@ import common
 DEFAULTS = {
     "default_branch": "main",
     "test_dirs": ["tests"],
-    "lint_paths": ["scripts/agk", "tests/kit", ".claude/hooks"],
+    "lint_paths": ["scripts/agk", ".claude/hooks"],
     "project_tests": "",
     "test_patterns": ["test_*.py"],
     "mode": "",

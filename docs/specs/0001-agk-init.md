@@ -97,7 +97,7 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     text comes from `kit/templates/branch-rules.txt`; a test keeps it equal to the kit's ADR-0001 decision 3 except
     that the phrase `The ruleset main` reads `The ruleset for the default branch` (ADR-0009). After the ruleset text
     init prints the scanner-exclusion block of `kit/templates/scanner-excludes.txt`: the bandit, flake8, pylint and
-    mypy settings that exclude `scripts/agk`, `tests/kit` and `.claude/hooks`. It is printed only, nothing is written,
+    mypy settings that exclude `scripts/agk` and `.claude/hooks`. It is printed only, nothing is written,
     and a test keeps the printed block equal to the template and to the README's "Existing scanners" section
     (ADR-0010).
     After the ruleset text it prints one more line: `or run /agk:ruleset to apply them (phase 1 now, phase 2 after the first governance run)`.
@@ -114,11 +114,11 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
 ### Protected paths
 
 21. **Installed protected list.** The installed `config/protected-paths.txt` is `constitution/`, `config/`, `.claude/`,
-    `.github/`, `docs/requirements.md`, `CLAUDE.md`, and also `scripts/agk/`, `tests/kit/`, `Makefile`,
+    `.github/`, `docs/requirements.md`, `CLAUDE.md`, and also `scripts/agk/`, `Makefile`,
     `pyproject.toml`, `agk.mk`, `agk.toml`, so a target cannot change its checks, their tests or its build files without an ADR that names
     the class. The installed `reviewers.yaml` `protected` class lists the same entries (`reviewers.py --check` equality).
     The kit adopts the same entries via ADR-0004 in PR #6; the kit's own list is those entries plus the kit-only
-    `kit/` and `tests/kit_dev/`. The installed list is rendered from `kit/templates/protected-paths.txt`; a test
+    `tests/kit/`, `kit/` and `tests/kit_dev/`. The installed list is rendered from `kit/templates/protected-paths.txt`; a test
     asserts the kit's list equals the template plus `kit/` and `tests/kit_dev/`.
 
 ### Markers

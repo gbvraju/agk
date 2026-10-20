@@ -25,7 +25,6 @@ ADOPTED_PROTECTED = [
     "docs/requirements.md",
     "CLAUDE.md",
     "scripts/agk/",
-    "tests/kit/",
     "agk.mk",
     "agk.toml",
 ]
@@ -694,3 +693,19 @@ def test_ac1_the_adopted_target_has_no_kit_tests_and_the_doctor_compares_the_blo
     changed = doctor_checks(adopted)
     assert changed["vendored-differs"]["status"] == "fail"
     assert ".gitattributes" in changed["vendored-differs"]["message"]
+
+
+def test_ac1_an_adopted_tree_and_its_printed_text_do_not_mention_the_kit_tests(tmp_path):
+    """REQ-010 AC1: lean install (ADR-0052), Q-K4-207: no `tests/kit` in what adopt writes."""
+    root = make_existing(tmp_path / "p")
+    proc = adopt(root)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    found = [
+        p.relative_to(root).as_posix()
+        for p in sorted(root.rglob("*"))
+        if p.is_file()
+        and ".git" not in p.relative_to(root).parts
+        and b"tests/kit" in p.read_bytes()
+    ]
+    assert found == []
+    assert "tests/kit" not in proc.stdout

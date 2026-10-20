@@ -6,7 +6,7 @@
 - Related: ADR-0014, ADR-0032, ADR-0047, ADR-0048
 - Requirements: REQ-009, REQ-010, REQ-014
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `.claude-plugin/`, `agk.toml`, `agk.mk`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `.claude-plugin/`, `agk.toml`, `agk.mk`, `config/`, `CLAUDE.md`, `.claude/`
 
 ## Context
 
@@ -32,14 +32,14 @@ Adopt on a small project: 51 files, 224,799 bytes. `python3 -m pytest -q` in tha
 
 1. **Install less.** `kit/manifest.json` no longer lists any `tests/kit/` path (verbatim or experimental); `init`, `adopt` and `upgrade` therefore install none. The kit repository keeps `tests/kit/` and runs it as today. What
    each thing does in a target now:
-   - `agk.mk` `agk-test`: runs the suite when `tests/kit/pytest.ini` exists (the kit repository) and otherwise prints `agk: the kit's own tests are not installed in this repository; they run in the kit repository` and
-     succeeds. The file, not the folder, decides, because an upgrade keeps an edited kit test (decision 3).
+   - `agk.mk` `agk-test`: includes `kit/agk-kit.mk` when that file exists (the kit repository, which defines the target there and runs the suite) and otherwise prints `agk: the kit's own tests are not installed in this
+     repository; they run in the kit repository` and succeeds. The file, not a `tests/kit` folder, decides, so an edited kit test that an upgrade keeps (decision 3) does not make a suite, and `agk.mk` itself names no path.
    - `agk.mk` `agk-lint`: lints the `lint_paths` that exist; a path that is absent is skipped (an older `agk.toml` still lists `tests/kit`).
    - `project_tests` default of `kit/templates/agk.toml` (init): `[ -d tests ] || exit 0; python3 -m pytest tests -q --ignore=tests/kit_dev; ...`; a fresh project has no `tests/` and pytest would exit 4. The default
      `lint_paths` of both templates drops `tests/kit`. `agk.adopt.toml`'s `project_tests` stays empty.
    - The `governance` workflow's "Tests of the checks" step: unchanged; it runs `make -f agk.mk agk-test`, which in a target prints the notice, and runs the suite in the kit repository.
-   - `check_kit_tests.py`: still installed and a no-op in a target (no `kit/manifest.json`); in the kit repository it now looks for each installed check's test under `tests/kit/` on disk and no longer requires the
-     test to be in the manifest (its own tests are updated; the case "on disk but not listed" now passes).
+   - `check_kit_tests.py`: still installed and a no-op in a target (no `kit/manifest.json`); in the kit repository it now looks for each installed check's test in the folder the manifest names as `kit_tests`
+     (`tests/kit`) on disk and no longer requires the test to be in the manifest (its own tests are updated; the case "on disk but not listed" now passes). The folder is a manifest key so that the installed script carries no path.
    - The doctor's comparison with the kit's copy: unchanged code; it covers what the manifest lists, so the kit's tests are no longer compared. For an adopt install it compares the `.gitattributes` block.
    - The metrics' test counts (`tests_before`, `tests_after`) and the facts' markers: in a target they count only the project's tests; they used to include the kit's.
    - `kit_hashes.py`: the 0.28.0 row has no `tests/kit/` entry; the 0.27.0 row still has them (so `upgrade` can recognise them).
@@ -57,6 +57,14 @@ Adopt on a small project: 51 files, 224,799 bytes. `python3 -m pytest -q` in tha
 6. **Kit 0.28.0**: manifest, plugin version, this repository's `agk.toml` `version` (ADR-0050 decision 7) and `kit/hashes.json`.
 7. **Docs.** `getting-started.md` step 3 gives the measured file count (53 files, 225 KB) and says the kit's own tests are not installed; step 2 says how to pin a release with the release tag (`ref`) in
    `.claude/settings.json` (SPEC-0005 rule 14); the troubleshooting line about a slow first `make test` is replaced by the new measurement (0.05 s). The security, reference and existing-codebase guides follow.
+
+5a. **A fresh install does not mention `tests/kit/`** (ruling on Q-K4-207, 2026-10-20). Changed for new installs, by file: `kit/templates/protected-paths.txt` and `protected-paths.adopt.txt`, `reviewers.yaml` and
+   `reviewers.adopt.yaml` (so the rendered `CODEOWNERS` too), `adr-0001.md` and `adr-0001-adopt.md`, `scanner-excludes.txt` (the printed text), `agk.toml` (the `project_tests` no longer ignores `tests/kit_dev`); the
+   verbatim `CLAUDE.md` (rule 4 names no path), `.claude/settings.json` (the allow `Bash(python3 -m pytest tests/kit*)` and the asks `Edit(/tests/kit/**)` and `Edit(/tests/kit_dev/**)` are removed), `agk.mk` (above);
+   and the installed scripts `common.py` (the default `lint_paths`; the adopt-mode marker exclusion is gone, nothing is installed to exclude), `facts.py` (the same exclusion), `doctor.py` (`KIT_ONLY`) and
+   `check_kit_tests.py` (above). This repository keeps `tests/kit/` in its own `config/protected-paths.txt` and `config/reviewers.yaml` as a kit-only entry (the kit list is the installed list plus `tests/kit/`, `kit/`
+   and `tests/kit_dev/`) and gets `kit/agk-kit.mk`. Existing installs get the verbatim files through an upgrade; a project's own files (`config/`, `agk.toml`, its ADR-0001) are never rewritten. Confirmed with a fresh
+   `init` (53 files) and a fresh `adopt` (51 files): `grep -rn "tests/kit"` over the installed tree and over the printed output finds nothing, and two tests keep it so.
 
 ## Validation (also in the pull request body)
 
@@ -79,13 +87,14 @@ Adopt on a small project: 51 files, 224,799 bytes. `python3 -m pytest -q` in tha
 
 | Q | Question | Reading taken (conservative) |
 | --- | --- | --- |
-| Q-K4-207 | Words that still name `tests/kit/` in installed or printed text: the protected-path and reviewers templates, the printed scanner exclusions, `CLAUDE.md` rule 4 and `.claude/settings.json` patterns | left as they are: a protected path that does not exist is harmless, the printed text is print-only, and each change would alter a pinned template or an installed protected file; the maintainers rule whether to remove them |
-| Q-K4-208 | An edited `tests/kit/` file that the upgrade keeps makes the project's own `pytest tests` fail to collect | as the brief says (kept and reported); the report line names the file and the reference guide says to delete it; nothing is deleted without the project's word |
-| Q-K4-209 | The brief says the doctor's "hash comparison against `kit/hashes.json`"; the doctor compares bytes with the kit's copy (`--kit-root`), and `upgrade` uses `hashes.json` | stated as it is in the security guide and in decision 2; no code change |
-| Q-K4-210 | An upgraded project's `agk.toml` still lists `tests/kit` in `lint_paths` and its `project_tests` has no guard for a missing `tests/` | `agk-lint` skips missing paths and `upgrade` keeps `tests/` (decision 3), so both still work; `agk.toml` is the project's and is not rewritten |
+| Q-K4-207 | Words that still name `tests/kit/` in installed or printed text | ruled (maintainers, 2026-10-20): a fresh install must not mention it; done in decision 5a |
+| Q-K4-208 (ruled as read) | An edited `tests/kit/` file that the upgrade keeps makes the project's own `pytest tests` fail to collect | as the brief says (kept and reported); the report line names the file and the reference guide says to delete it; nothing is deleted without the project's word |
+| Q-K4-209 (ruled as read) | The brief says the doctor's "hash comparison against `kit/hashes.json`"; the doctor compares bytes with the kit's copy (`--kit-root`), and `upgrade` uses `hashes.json` | stated as it is in the security guide and in decision 2; no code change |
+| Q-K4-210 (ruled as read) | An upgraded project's `agk.toml` still lists `tests/kit` in `lint_paths` and its `project_tests` has no guard for a missing `tests/` | `agk-lint` skips missing paths and `upgrade` keeps `tests/` (decision 3), so both still work; `agk.toml` is the project's and is not rewritten |
+| Q-K4-211 | `.claude/settings.json` is verbatim and shared: removing its three `tests/kit` patterns also removes them from this repository (the `ask` before editing `tests/kit` and `tests/kit_dev`, the allow to run pytest there) | removed, as ruled; the governance check still requires an ADR for those paths (protected classes) and CODEOWNERS still lists them; the maintainers rule whether this repository wants them back in an uncommitted local settings file |
 
 ## Residual
 
 - 2026-10-20: the pilot repository is upgraded to 0.28.0 after its week W44 is scored (2026-11-02). (due 2026-11-30)
-- 2026-10-20: Q-K4-199 (the slow first test run in an adopted copy): the cause is consistent with the 559 installed kit test files under `tests/` (the same run takes 0.34 s without them) but was not isolated;
-  the maintainers close the residual of ADR-0048 on their reading. (due 2026-11-30)
+- Closed on 2026-10-20 by the maintainers: Q-K4-199 (the slow first test run in an adopted copy) is explained by the measurement: `python3 -m pytest -q` takes 0.34 s without the installed kit tests (118.23 s and 11.33 s
+  with them). The residual of ADR-0048 is closed.

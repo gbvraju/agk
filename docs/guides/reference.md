@@ -164,13 +164,13 @@ the bare `assert` of the kit's tests (rule B101). Init and adopt print the exclu
 none of them (ADR-0010, `docs/runs/scanner-fix.md`):
 
 ```
-Scanner exclusions (print only; the kit writes none of this). The kit's code under scripts/agk, tests/kit and
+Scanner exclusions (print only; the kit writes none of this). The kit's code under scripts/agk and
 .claude/hooks is the kit's, not yours. If a scanner you run reads the whole tree, exclude those paths in your own
 configuration:
-  bandit:  bandit -r . -x ./scripts/agk,./tests/kit,./.claude/hooks
-  flake8:  flake8 --extend-exclude scripts/agk,tests/kit,.claude/hooks
-  pylint:  [tool.pylint.main] ignore-paths = ['^scripts/agk/.*$', '^tests/kit/.*$'] and ignore = ['.claude']
-  mypy:    [tool.mypy] exclude = ['^scripts/agk/', '^tests/kit/', '^\.claude/hooks/']
+  bandit:  bandit -r . -x ./scripts/agk,./.claude/hooks
+  flake8:  flake8 --extend-exclude scripts/agk,.claude/hooks
+  pylint:  [tool.pylint.main] ignore-paths = ['^scripts/agk/.*$'] and ignore = ['.claude']
+  mypy:    [tool.mypy] exclude = ['^scripts/agk/', '^\.claude/hooks/']
 ```
 
 Licence: Apache-2.0.

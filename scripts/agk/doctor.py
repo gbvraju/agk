@@ -25,7 +25,7 @@ DRIFT_NAME = "drift-audit.yml"
 REPORT_WORKFLOW = ".github/workflows/product-report.yml"
 REPORT_NAME = "product-report.yml"
 ISSUE_WRITERS = ("metrics.yml", "drift-audit.yml", "product-report.yml")  # `issues: write`
-KIT_ONLY = ("kit/", "tests/kit_dev/")
+KIT_ONLY = ("kit/",)
 KIT_ONLY_FILES = ("scripts/agk/init.py", "scripts/agk/adopt.py")
 MARKERS = {
     "hash": ("# >>> agk", "# <<< agk"),

@@ -105,10 +105,10 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
 
 12. **Per-mode protected list.** Each mode renders `config/protected-paths.txt` and the `protected` class of
     `config/reviewers.yaml` from its own template. Adopted repositories protect `constitution/`, `config/`, `.claude/`,
-    `.github/` (all of it), `docs/requirements.md`, `CLAUDE.md`, `scripts/agk/`, `tests/kit/`, `agk.mk` and `agk.toml`,
+    `.github/` (all of it), `docs/requirements.md`, `CLAUDE.md`, `scripts/agk/`, `agk.mk` and `agk.toml`,
     and never the project's `Makefile` or `pyproject.toml`. Init repositories keep their current list (`Makefile` and
     `pyproject.toml` included) and add `agk.mk` and `agk.toml`. The agk repository's own list is the init list plus
-    `kit/` and `tests/kit_dev/`. `reviewers.py --check` keeps each rendered pair equal. Tests render both modes and
+    `tests/kit/`, `kit/` and `tests/kit_dev/`. `reviewers.py --check` keeps each rendered pair equal. Tests render both modes and
     compare with the expected lists, and assert the adopted list contains neither `Makefile` nor `pyproject.toml`.
 
 13. **ADR-0001 for an adopted repository.** `docs/adr/0001-adopt-agk.md` is rendered from an adopt template. It

@@ -155,8 +155,8 @@ def test_ac1_shortfalls_and_strays_are_computed_once_in_common():
         assert "parse_acceptance" not in source and "find_ac_markers" not in source
 
 
-def test_ac1_d7_leaves_out_the_kit_tests_in_an_adopted_repository_only(repo):
-    """REQ-015 AC1: rule 4 (the search of `adopt` mode leaves out `tests/kit`, and so does D7)."""
+def test_ac1_d7_treats_tests_kit_like_any_other_test_folder_in_both_modes(repo):
+    """REQ-015 AC1: rule 4 (lean install, ADR-0052: none is left out)."""
     requirements = "# Requirements\n\n" + requirement("@001", "planned").replace("@", "REQ-")
     files = {
         "docs/requirements.md": requirements,
@@ -172,6 +172,7 @@ def test_ac1_d7_leaves_out_the_kit_tests_in_an_adopted_repository_only(repo):
         != []
     )
     repo.commit({"agk.toml": base + 'mode = "adopt"\n'})
-    adopted = repo.run("drift_audit.py", "--today", "2026-10-15").stdout
-    assert "- D7 " not in adopted
-    assert check(repo).returncode == 0
+    adopted = [ln for ln in repo.run("drift_audit.py", "--today", "2026-10-15").stdout.splitlines()]
+    assert [ln for ln in adopted if ln.startswith("- D7 ")] == [
+        ln for ln in init if ln.startswith("- D7 ")
+    ]

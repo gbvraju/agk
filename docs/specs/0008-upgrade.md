@@ -131,7 +131,7 @@ history used here were read on 2026-10-15 (`docs/runs/spec-0008-notes.md`).
 ### The pull request in the target
 
 16. **Protected classes.** The files an upgrade writes lie in classes the target's `config/protected-paths.txt`
-    protects (`scripts/agk/`, `tests/kit/`, `.claude/`, `.github/`, `agk.mk`, `Makefile`), so the target's
+    protects (`scripts/agk/`, `.claude/`, `.github/`, `agk.mk`, `Makefile`), so the target's
     `check_protected_changes` requires an ADR in the same pull request that names each changed class. After the lines
     of rule 14 the script prints, from the target's own list, the `Protected classes:` line for the paths it would write
     and an ADR skeleton (title, `Status: Proposed`, empty Context and Decision) to stdout. It writes no ADR: the number,

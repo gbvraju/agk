@@ -32,7 +32,6 @@ INSTALLED_PROTECTED = [
     "docs/requirements.md",
     "CLAUDE.md",
     "scripts/agk/",
-    "tests/kit/",
     "Makefile",
     "pyproject.toml",
     "agk.mk",
@@ -354,11 +353,11 @@ def test_ac2_failing_project_test_makes_make_test_fail(shared_copy):
 def test_ac2_make_test_is_the_kit_suite_then_the_project_tests(shared_copy):
     """REQ-009 AC2: rule 18. `make test` runs agk-test, then agk-project-test, and nothing else."""
     plan = make(shared_copy, "-n", "test").stdout
-    suite = plan.index("pytest -c tests/kit/pytest.ini")
+    suite = plan.index("kit's own tests are not installed")  # the notice of agk-test in a project
     project = plan.index("scripts/agk/config.py project_tests")
     assert suite < project
     skipped = make(shared_copy, "-n", "-o", "agk-test", "test").stdout
-    assert "pytest -c tests/kit/pytest.ini" not in skipped
+    assert "kit's own tests are not installed" not in skipped
     assert "scripts/agk/config.py project_tests" in skipped
 
 
@@ -618,3 +617,18 @@ def test_ac1_an_existing_gitattributes_is_left_alone_by_init(target):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert (target / ".gitattributes").read_text(encoding="utf-8") == "*.png binary\n"
     assert run_init(target).returncode == 0
+
+
+def test_ac1_a_fresh_install_and_its_printed_text_do_not_mention_the_kit_tests(target):
+    """REQ-009 AC2: lean install (ADR-0052), Q-K4-207: no `tests/kit` anywhere in a new install."""
+    proc = run_init(target)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    found = [
+        p.relative_to(target).as_posix()
+        for p in sorted(target.rglob("*"))
+        if p.is_file()
+        and ".git" not in p.relative_to(target).parts
+        and b"tests/kit" in p.read_bytes()
+    ]
+    assert found == []
+    assert "tests/kit" not in proc.stdout

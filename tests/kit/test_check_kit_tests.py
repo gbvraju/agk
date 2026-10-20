@@ -9,7 +9,8 @@ TEST = "tests/kit/test_check_new.py"
 
 
 def manifest(*verbatim: str) -> str:
-    return json.dumps({"kit_version": "0.0.0", "verbatim": sorted(verbatim)}) + "\n"
+    data = {"kit_version": "0.0.0", "kit_tests": "tests/kit", "verbatim": sorted(verbatim)}
+    return json.dumps(data) + "\n"
 
 
 def kit(repo, test_text: str | None, location: str = TEST) -> None:
@@ -34,7 +35,7 @@ def test_ac1_installed_check_without_a_test_under_tests_kit_fails(repo):
     proc = repo.run("check_kit_tests.py")
     assert proc.returncode == 1
     assert "FAIL kit-tests" in proc.stdout and CHECK in proc.stdout
-    assert "tests/kit/" in proc.stdout
+    assert "kit_tests" in proc.stdout
 
 
 def test_ac1_a_test_file_need_not_be_listed_in_the_manifest(repo):
