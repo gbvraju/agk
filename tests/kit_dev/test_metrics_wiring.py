@@ -5,7 +5,14 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from conftest import KIT_ROOT, clean_env, expected_files, manifest, run_init
+from conftest import (
+    KIT_ROOT,
+    assert_lean,
+    clean_env,
+    kit_fixture_files,
+    manifest,
+    run_init,
+)
 
 INSTALLED = {
     ".github/workflows/metrics.yml",
@@ -17,16 +24,9 @@ INSTALLED = {
 
 def test_ac1_metrics_files_and_fixtures_are_installed_by_init_and_adopt():
     """REQ-012 AC1: SPEC-0007 rule 19."""
-    assert INSTALLED <= set(manifest()["verbatim"])
-    assert INSTALLED <= expected_files()
-    fixtures = [p for p in manifest()["verbatim"] if p.startswith("tests/kit/fixtures/metrics/")]
-    assert len(fixtures) > 100
-    on_disk = {
-        p.relative_to(KIT_ROOT).as_posix()
-        for p in (KIT_ROOT / "tests/kit/fixtures/metrics").rglob("*")
-        if p.is_file()
-    }
-    assert on_disk == set(fixtures)
+    assert_lean(INSTALLED)
+    fixtures = kit_fixture_files("tests/kit/fixtures/metrics")
+    assert len(fixtures) > 100 and not fixtures & set(manifest()["verbatim"])
 
 
 def test_ac1_kit_version_is_at_least_0_7_0():

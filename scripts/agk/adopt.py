@@ -18,7 +18,7 @@ import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from common import detect_default_branch, experimental_enabled, matches, read_list
+from common import block_source, detect_default_branch, experimental_enabled, matches, read_list
 from init import (
     CREATE_ONLY,
     DATE_RE,
@@ -52,7 +52,7 @@ MARKERS = {
     "hash": ("# >>> agk", "# <<< agk"),
     "html": ("<!-- >>> agk -->", "<!-- <<< agk -->"),
 }
-ABSENT_AS_BLOCK = {".gitignore"}
+ABSENT_AS_BLOCK = {".gitignore", ".gitattributes"}
 
 
 def toml_list(items: list[str]) -> str:
@@ -194,7 +194,8 @@ def build_plan(target: Path, today: str):
     for rel, content in sorted(created.items()):
         plan.append(classify_created(target, rel, content, entries))
     for rel, style in sorted(spec["blocks"].items()):
-        body = codeowners if rel == ".github/CODEOWNERS" else (KIT_ROOT / rel).read_text("utf-8")
+        source = block_source(manifest, rel)
+        body = codeowners if rel == ".github/CODEOWNERS" else (KIT_ROOT / source).read_text("utf-8")
         plan.append(classify_block(target, rel, style, body, entries))
     return sorted(plan), entries, branch
 

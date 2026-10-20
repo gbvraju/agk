@@ -5,7 +5,7 @@ installed = "{{date}}"
 default_branch = "{{default_branch}}"
 test_dirs = {{test_dirs}}
 test_patterns = {{test_patterns}}
-lint_paths = ["scripts/agk", "tests/kit", ".claude/hooks"]
+lint_paths = ["scripts/agk", ".claude/hooks"]
 # The project runs its own tests in its own CI; agk-project-test only prints a notice.
 project_tests = ""
 # Every criterion ACn of a done requirement needs a REQ-nnn ACn test marker: warn prints, block fails.

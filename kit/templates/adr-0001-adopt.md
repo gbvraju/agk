@@ -21,9 +21,9 @@ changing them now needs an ADR that names the class:
 ## Decision
 
 1. Install agk {{kit_version}} on {{date}} without changing any product file. New files: `agk.mk`, `agk.toml`,
-   `scripts/agk/` (checks), `tests/kit/` (tests of the checks), `.claude/` (settings, hook, agent),
+   `scripts/agk/` (checks), `.claude/` (settings, hook, agent),
    `.github/workflows/governance.yml`, `config/`, `constitution/`, and `docs/` (requirements, ADRs, specs, briefs,
-   runs, build-state). One marked agk block is appended to an existing `.gitignore`, `CLAUDE.md`,
+   runs, build-state). One marked agk block is appended to an existing `.gitignore`, `.gitattributes`, `CLAUDE.md`,
    `.github/CODEOWNERS` and `.github/PULL_REQUEST_TEMPLATE.md`; absent ones are created. The project's `Makefile`,
    `pyproject.toml`, tests and build configuration are not touched.
 2. Protected paths are listed in `config/protected-paths.txt`: `constitution/`, `config/`, `.claude/`, `.github/`,

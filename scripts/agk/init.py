@@ -136,7 +136,7 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
 
 
 # Created when absent, left as it is when it exists (never compared, so never a conflict).
-CREATE_ONLY = ("docs/runs/residuals.md",)
+CREATE_ONLY = ("docs/runs/residuals.md", ".gitattributes")
 
 
 def passes_symlink(target: Path, rel: str) -> bool:

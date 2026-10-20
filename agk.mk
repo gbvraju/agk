@@ -17,10 +17,14 @@ agk-governance:
 	$(PY) scripts/agk/reviewers.py --check-codeowners
 
 agk-lint:
-	ruff check $(AGK_RUFF_FLAGS) $(shell $(PY) scripts/agk/config.py lint_paths)
+	ruff check $(AGK_RUFF_FLAGS) $(wildcard $(shell $(PY) scripts/agk/config.py lint_paths))
 
+# The kit's own tests are not installed in a project (lean install); they run in the kit repository.
+# A file of them that an upgrade kept because it was edited does not make a suite: pytest.ini decides.
 agk-test:
-	AGK_KIT_TESTS=1 $(PY) -m pytest -c tests/kit/pytest.ini tests/kit $(wildcard tests/kit_dev) -q
+	@if [ -f tests/kit/pytest.ini ]; then \
+	AGK_KIT_TESTS=1 $(PY) -m pytest -c tests/kit/pytest.ini tests/kit $(wildcard tests/kit_dev) -q; \
+	else echo "agk: the kit's own tests are not installed in this repository; they run in the kit repository"; fi
 
 # The project's own tests, from agk.toml `project_tests` (a shell command); empty means none to run here.
 agk-project-test:

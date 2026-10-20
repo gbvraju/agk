@@ -118,7 +118,7 @@ and the JSON keep it.
 
 ### Tests and proof
 
-14. **Tests, no network.** `tests/kit/test_doctor.py` (installed with the kit, as the script is): `gh` is never
+14. **Tests, no network.** `tests/kit/test_doctor.py` (in the kit repository; not installed, amendment 26): `gh` is never
     called; a test that puts a `gh` executable on `PATH` fails if it is run (it records any call). The tests of
     `tests/kit/` build a mini kit, because the kit's `init.py` is not installed in targets; the comparison against this
     repository's own checkout is `tests/kit_dev/test_doctor_wiring.py`.

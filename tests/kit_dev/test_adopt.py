@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -311,7 +312,7 @@ def test_ac1_agk_toml_is_stamped_for_adopt(adopted):
     assert cfg["test_dirs"] == ["pkg/tests"]
     assert cfg["test_patterns"] == ["*_test.py"]
     assert cfg["project_tests"] == ""
-    assert cfg["lint_paths"] == ["scripts/agk", "tests/kit", ".claude/hooks"]
+    assert cfg["lint_paths"] == ["scripts/agk", ".claude/hooks"]
 
 
 def test_ac1_default_branch_from_head_when_there_is_no_origin(tmp_path):
@@ -385,7 +386,7 @@ def test_ac1_marker_in_a_project_unittest_file_is_found(adopted):
 
 
 def test_ac1_kit_tests_markers_are_not_project_markers_in_adopt_mode(adopted):
-    """REQ-010 AC1: rule 9. tests/kit is excluded from the marker search unless listed."""
+    """REQ-010 AC1: rule 9. tests/kit is excluded from the marker search; none is installed."""
     (adopted / "agk.toml").write_text(
         (adopted / "agk.toml").read_text().replace('["pkg/tests"]', '["tests"]'), encoding="utf-8"
     )
@@ -397,7 +398,7 @@ def test_ac1_kit_tests_markers_are_not_project_markers_in_adopt_mode(adopted):
         capture_output=True,
         text=True,
     )
-    assert out.returncode == 1  # REQ-001 markers exist only in tests/kit, which is excluded
+    assert out.returncode == 1  # no kit tests are installed, so no REQ-001 marker exists
 
 
 # --- Governance green, bare pytest (rule 18) ----------------------------------------------------
@@ -642,3 +643,54 @@ def test_ac1_adopt_leaves_an_existing_residuals_register_alone(existing):
     again = adopt(existing)
     assert again.returncode == 0
     assert path.read_text(encoding="utf-8") == own
+
+
+GITATTRIBUTES_LINE = "scripts/agk/** linguist-generated=true"
+
+
+def test_ac1_gitattributes_absent_gets_the_block_only(tmp_path):
+    """REQ-010 AC1: lean install (ADR-0052), rule 4: marks the kit's scripts as generated."""
+    root = make_existing(tmp_path / "p", **{".gitattributes": None})
+    assert adopt(root).returncode == 0
+    text = (root / ".gitattributes").read_text()
+    assert text.startswith("# >>> agk\n") and text.rstrip().endswith("# <<< agk")
+    assert GITATTRIBUTES_LINE in text.splitlines()
+    assert not (KIT_ROOT / ".gitattributes").exists()
+
+
+def test_ac1_an_existing_gitattributes_keeps_its_bytes_and_gains_one_block(tmp_path):
+    """REQ-010 AC1: lean install (ADR-0052), rule 4; a second run changes nothing."""
+    own = "*.png binary\n"
+    root = make_existing(tmp_path / "p", **{".gitattributes": own})
+    assert adopt(root).returncode == 0
+    text = (root / ".gitattributes").read_text()
+    assert text.startswith(own + "# >>> agk\n") and text.count("# >>> agk") == 1
+    before = (root / ".gitattributes").read_bytes()
+    again = adopt(root)
+    assert again.returncode == 0 and (root / ".gitattributes").read_bytes() == before
+
+
+def doctor_checks(root: Path) -> dict:
+    api = KIT_ROOT / "tests" / "kit" / "fixtures" / "doctor" / "ok" / "api"
+    proc = subprocess.run(
+        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "doctor.py")]
+        + ["--kit-root", str(KIT_ROOT), "--api-dir", str(api)]
+        + ["--repo", "example-owner/example-repo", "--json", str(root)],
+        capture_output=True,
+        text=True,
+    )
+    return {c["id"]: c for c in json.loads(proc.stdout)["checks"]}
+
+
+def test_ac1_the_adopted_target_has_no_kit_tests_and_the_doctor_compares_the_block(adopted):
+    """REQ-010 AC1: lean install (ADR-0052)."""
+    assert not (adopted / "tests" / "kit").exists()
+    assert "# >>> agk" in (adopted / ".gitattributes").read_text()
+    report = doctor_checks(adopted)
+    assert report["vendored-missing"]["status"] == "ok", report["vendored-missing"]["message"]
+    assert report["vendored-differs"]["status"] == "ok", report["vendored-differs"]["message"]
+    path = adopted / ".gitattributes"
+    path.write_text(path.read_text().replace(GITATTRIBUTES_LINE, "scripts/agk/** other=true"))
+    changed = doctor_checks(adopted)
+    assert changed["vendored-differs"]["status"] == "fail"
+    assert ".gitattributes" in changed["vendored-differs"]["message"]

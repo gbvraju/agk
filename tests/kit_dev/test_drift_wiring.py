@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from conftest import KIT_ROOT, clean_env, expected_files, manifest
+from conftest import KIT_ROOT, assert_lean, clean_env, manifest
 
 INSTALLED = {
     ".github/workflows/drift-audit.yml",
@@ -18,8 +18,7 @@ INSTALLED = {
 
 def test_ac1_drift_audit_files_are_installed_by_init_and_adopt():
     """REQ-011 AC1: rule 16."""
-    assert INSTALLED <= set(manifest()["verbatim"])
-    assert INSTALLED <= expected_files()
+    assert_lean(INSTALLED)
 
 
 def test_ac1_kit_version_is_at_least_0_6_0():

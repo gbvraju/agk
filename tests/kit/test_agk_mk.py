@@ -164,3 +164,71 @@ def test_ac1_project_test_target_prints_a_notice_when_empty(tmp_path):
     proc = run_target(proj, "agk-project-test")
     assert proc.returncode == 0
     assert "no project_tests configured" in proc.stdout
+
+
+def project(tmp_path: Path, with_tests: bool, lint_paths: str) -> Path:
+    """A project with agk.mk, a scripts/agk, an agk.toml and, maybe, the kit's tests folder."""
+    root = tmp_path / ("with" if with_tests else "without")
+    (root / "scripts" / "agk").mkdir(parents=True)
+    shutil.copy(ROOT / "agk.mk", root / "agk.mk")
+    shutil.copy(ROOT / "scripts" / "agk" / "config.py", root / "scripts" / "agk" / "config.py")
+    shutil.copy(ROOT / "scripts" / "agk" / "common.py", root / "scripts" / "agk" / "common.py")
+    (root / "agk.toml").write_text(f"lint_paths = {lint_paths}\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)  # nosec B603 B607 - fixed list
+    if with_tests:
+        (root / "tests" / "kit").mkdir(parents=True)
+        (root / "tests" / "kit" / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+    return root
+
+
+def test_ac1_agk_test_without_the_kit_tests_says_so_and_succeeds(tmp_path):
+    """REQ-009 AC2: lean install (ADR-0052): a project has no tests/kit/, agk-test is a notice."""
+    root = project(tmp_path, with_tests=False, lint_paths='["scripts/agk"]')
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["make", "-f", "agk.mk", "agk-test"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        env=env_without_flag(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "not installed in this repository" in proc.stdout and "-m pytest" not in proc.stdout
+
+
+def test_ac1_agk_test_with_the_kit_tests_runs_them(tmp_path):
+    """REQ-009 AC2: the kit repository keeps running its tests through the same target."""
+    root = project(tmp_path, with_tests=True, lint_paths='["scripts/agk"]')
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["make", "-f", "agk.mk", "-n", "agk-test"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        env=env_without_flag(),
+    )
+    assert "AGK_KIT_TESTS=1" in proc.stdout and "-c tests/kit/pytest.ini" in proc.stdout
+
+
+def test_ac1_agk_lint_skips_a_lint_path_that_is_not_there(tmp_path):
+    """REQ-009 AC2: an older agk.toml still lists tests/kit; lint must not fail on its absence."""
+    root = project(tmp_path, with_tests=False, lint_paths='["scripts/agk", "tests/kit"]')
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["make", "-f", "agk.mk", "-n", "agk-lint"], cwd=root, capture_output=True, text=True
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "scripts/agk" in proc.stdout and "tests/kit" not in proc.stdout
+
+
+def test_ac1_agk_test_with_only_a_kept_leftover_of_the_kit_tests_is_still_a_notice(tmp_path):
+    """REQ-009 AC2: an upgrade keeps an edited tests/kit file; that is not a suite to run."""
+    root = project(tmp_path, with_tests=False, lint_paths='["scripts/agk"]')
+    (root / "tests" / "kit").mkdir(parents=True)
+    (root / "tests" / "kit" / "test_facts.py").write_text("# edited here\n", encoding="utf-8")
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["make", "-f", "agk.mk", "agk-test"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        env=env_without_flag(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "not installed in this repository" in proc.stdout and "Traceback" not in proc.stderr

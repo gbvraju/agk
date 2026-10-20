@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from conftest import KIT_ROOT, clean_env, expected_files, manifest
+from conftest import KIT_ROOT, assert_lean, clean_env, manifest
 
 CHECK = KIT_ROOT / "scripts" / "agk" / "check_kit_tests.py"
 INSTALLED = {"scripts/agk/check_kit_tests.py", "tests/kit/test_check_kit_tests.py"}
@@ -26,8 +26,7 @@ def test_ac1_the_check_passes_on_the_kit_itself():
 
 def test_ac1_the_check_and_its_test_are_installed():
     """REQ-009 AC2: the check ships with its own installed test."""
-    assert INSTALLED <= set(manifest()["verbatim"])
-    assert INSTALLED <= expected_files()
+    assert_lean(INSTALLED)
 
 
 def test_ac1_agk_governance_runs_the_check():

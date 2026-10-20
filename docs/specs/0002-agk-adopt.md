@@ -28,13 +28,13 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
 4. **Three sets.** A *product file* is every file of TARGET that is not adopt-owned. Adopt-owned files are of two
    kinds:
    - **Created** (only when absent; a differing existing file is a conflict): `agk.mk`, `agk.toml`,
-     `.github/workflows/governance.yml`, `scripts/agk/*` (checks and helpers), `tests/kit/*`, `.claude/settings.json`,
+     `.github/workflows/governance.yml`, `scripts/agk/*` (checks and helpers), `.claude/settings.json`,
      `.claude/hooks/stop_check.py`, `.claude/agents/drift-auditor.md`, `config/*`, `constitution/*`, `docs/requirements.md`,
      `docs/adr/*`, `docs/specs/TEMPLATE.md`, `docs/briefs/TEMPLATE.md`, `docs/build-state.md`, `docs/runs/decisions-log.md`, `docs/runs/residuals.md` (an existing file of any content is left as it is, never a conflict).
-   - **Block-appended** (adopt may add one marked block, nothing else): `.gitignore`
-     (`# >>> agk` … `# <<< agk`), and, when they already exist, `CLAUDE.md`, `.github/CODEOWNERS`,
+   - **Block-appended** (adopt may add one marked block, nothing else): `.gitignore` and `.gitattributes`
+     (`# >>> agk` … `# <<< agk`; the `.gitattributes` block is `scripts/agk/** linguist-generated=true`, amendment 26), and, when they already exist, `CLAUDE.md`, `.github/CODEOWNERS`,
      `.github/PULL_REQUEST_TEMPLATE.md` (`<!-- >>> agk -->` … `<!-- <<< agk -->`). When absent, they are created
-     whole; an absent `.gitignore` is created containing the marked block only. An appended block keeps the existing
+     whole; an absent `.gitignore` or `.gitattributes` is created containing the marked block only. An appended block keeps the existing
      bytes as a prefix, and a file without a final newline gets one newline before the block.
    Adopt **never writes** any other file: in particular `Makefile`, `pyproject.toml`, `setup.*`, `tox.ini`,
    `requirements*`, every other `.github/` file, `README*`, `LICENSE*`, sources and the project's tests.
@@ -53,10 +53,11 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    0.3.0 (adopt: ADR-0008, kit version 0.4.0). Adopt templates may also use `{{test_dirs}}`, `{{test_patterns}}` and
    `{{existing_protected}}`. The agk repository adopts `agk.mk` and `agk.toml` itself (its `Makefile` becomes thin aliases), because the
    workflow is verbatim and calls `make -f agk.mk`; ADR-0007 covers it.
-6. **No project config is reshaped.** Kit tests run with their own `tests/kit/pytest.ini`, selected by `-c`, so the
-   project's `[tool.pytest.ini_options]`, `pytest.ini`, `tox.ini` and `conftest.py` are neither read nor changed.
-   `tests/kit/conftest.py` puts `scripts/agk` on `sys.path`. Kit tests are collected only when run through `agk.mk`
-   (an environment flag set there); a project's own `pytest .` ignores them (Q-K2-2).
+6. **No project config is reshaped.** The kit's own tests are not installed (lean install, amendment 26): they
+   run in the kit repository with their own `tests/kit/pytest.ini`, selected by `-c`, so a project's
+   `[tool.pytest.ini_options]`, `pytest.ini`, `tox.ini` and `conftest.py` are neither read nor changed. In an adopted
+   repository `agk-test` prints a notice and succeeds; the kit repository collects its tests only through `agk.mk`
+   (an environment flag set there).
 
 ### Default branch
 
@@ -86,7 +87,7 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
    or comment), so unittest-style projects work. Kit tests live in `tests/kit/`, which is excluded from the project's
    marker search in adopt mode unless a listed directory is inside it.
 10. **Lint scope.** `agk-lint` runs `ruff check --isolated` with the kit's rule set and line length given as flags, over
-    `lint_paths` (default `scripts/agk tests/kit .claude/hooks`). It never reads project lint config and never
+    `lint_paths` (default `scripts/agk .claude/hooks`; a path that does not exist is skipped). It never reads project lint config and never
     covers product paths; product lint stays the project's own.
 
 ### Existing files that adopt meets
@@ -96,7 +97,7 @@ target facts used here is in `docs/runs/k2-target-survey.md`.
     | --- | --- |
     | `Makefile`, `pyproject.toml`, `tox.ini`, `requirements*` | nothing |
     | `.github/workflows/*` (other than `governance.yml`), `FUNDING.yml` | nothing; they become protected by class `.github/` (Q-K2-3) |
-    | `.gitignore` | append one marked block with the kit's entries; a second block or a changed block refuses |
+    | `.gitignore`, `.gitattributes` | append one marked block with the kit's entries; a second block or a changed block refuses |
     | `CLAUDE.md`, `.github/CODEOWNERS`, `.github/PULL_REQUEST_TEMPLATE.md` | append one marked block (Q-K2-5); `reviewers.py --check-codeowners` compares only the marked block of a CODEOWNERS that has one, and a broken or duplicated block fails |
     | `.claude/settings.json` | refuse (no JSON merge in K2) (Q-K2-4) |
     | `.claude/*` other, `config/*`, `docs/*` colliding with a created path, `scripts/agk/*` | refuse when the path exists and differs |

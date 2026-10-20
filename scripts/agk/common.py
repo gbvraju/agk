@@ -31,6 +31,15 @@ class CheckError(Exception):
 EXPERIMENTAL_KEY = "experimental_reviewer"
 
 
+def block_source(manifest: dict, rel: str) -> str:
+    """The kit file whose text is the marked block of `rel` in an adopt install.
+
+    Normally the kit's own file of the same path; `adopt.block_sources` names another file for a
+    block the kit repository must not carry itself (`.gitattributes`).
+    """
+    return ((manifest.get("adopt") or {}).get("block_sources") or {}).get(rel, rel)
+
+
 def experimental_enabled(target: Path) -> bool:
     """True only when TARGET's agk.toml sets `experimental_reviewer = true` (a boolean)."""
     try:

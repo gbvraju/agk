@@ -31,7 +31,7 @@ MARKERS = {
     "hash": ("# >>> agk", "# <<< agk"),
     "html": ("<!-- >>> agk -->", "<!-- <<< agk -->"),
 }
-ABSENT_AS_BLOCK = {".gitignore"}
+ABSENT_AS_BLOCK = {".gitignore", ".gitattributes"}
 LIST_LIMIT = 10
 
 # id -> (severity, text when ok, text when it fails, printed fix); the order is the report order.
@@ -520,7 +520,11 @@ def installed_files(
 
 
 def compare_tree(
-    root: Path, kit: Path, files: list[str], blocks: dict[str, str]
+    root: Path,
+    kit: Path,
+    files: list[str],
+    blocks: dict[str, str],
+    sources: dict[str, str] | None = None,
 ) -> tuple[list[str], list[str]]:
     missing: list[str] = []
     differs: list[str] = []
@@ -535,7 +539,8 @@ def compare_tree(
         if not target.is_file():
             missing.append(rel)
             continue
-        whole = (kit / rel).read_text(encoding="utf-8").rstrip("\n") + "\n"
+        source = (sources or {}).get(rel, rel)
+        whole = (kit / source).read_text(encoding="utf-8").rstrip("\n") + "\n"
         text = target.read_text(encoding="utf-8")
         state, inner = find_block(text, style)
         if state == "ok":
@@ -566,7 +571,8 @@ def kit_results(root: Path, kit_root: Path | None, config: dict) -> tuple[dict[s
         return out, kit_version
     files, blocks = installed_files(manifest, mode, config.get("experimental_reviewer") is True)
     try:
-        missing, differs = compare_tree(root, kit_root, files, blocks)
+        sources = (manifest.get("adopt") or {}).get("block_sources") or {}
+        missing, differs = compare_tree(root, kit_root, files, blocks, sources)
     except (OSError, UnicodeDecodeError):
         return {n: Result("cannot-check", "bad-response") for n in names}, kit_version
     return {

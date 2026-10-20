@@ -152,6 +152,20 @@ def python_repo(installed: Path, passes_on_base: bool) -> tuple[str, str, list[s
     return base, commit(installed, "feature"), ["feature.py", "tests/test_feature.py"]
 
 
+def test_ac1_the_lean_install_has_no_kit_tests_and_marks_the_scripts(installed: Path):
+    """REQ-009 AC2: lean install (ADR-0052), Python layout: nothing under tests/kit is installed."""
+    assert not (installed / "tests" / "kit").exists()
+    assert (
+        not [p for p in (installed / "tests").rglob("*")]
+        if (installed / "tests").exists()
+        else True
+    )
+    attrs = (installed / ".gitattributes").read_text(encoding="utf-8")
+    assert "scripts/agk/** linguist-generated=true" in attrs.splitlines()
+    proc = make(installed, "-f", "agk.mk", "agk-test")
+    assert proc.returncode == 0 and "not installed in this repository" in proc.stdout
+
+
 @pytest.fixture
 def stage(installed: Path) -> Path:
     git(installed, "add", "-A")
@@ -186,7 +200,8 @@ def test_ac1_a_test_that_passes_without_the_change_is_not_proven_in_the_report(s
 
 @pytest.mark.skipif(shutil.which("go") is None, reason="go is not installed")
 def test_ac1_the_same_flow_in_a_go_layout_with_the_fixtures_under_testdata(stage):
-    """REQ-016 AC1: a Go project; `go test ./...` ignores the kit fixtures under testdata."""
+    """REQ-016 AC1: a Go project; the lean install adds no kit fixtures for `go test` to meet."""
+    assert not (stage / "tests" / "kit").exists()
     (stage / "docs" / "requirements.md").write_text(REQUIREMENTS, encoding="utf-8")
     (stage / "go.mod").write_text("module demo\n\ngo 1.21\n", encoding="utf-8")
     (stage / "pkg").mkdir()

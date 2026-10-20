@@ -1,0 +1,2 @@
+# agk: the kit's own scripts; GitHub collapses them in pull-request diffs and leaves them out of language statistics.
+scripts/agk/** linguist-generated=true

@@ -330,6 +330,7 @@ def test_ac2_project_tests_are_collected_and_run_by_make_test(shared_copy):
     `kit_suite` runs once; `test_ac2_make_test_is_the_kit_suite_then_the_project_tests` pins that
     the prerequisite is the only difference.
     """
+    (shared_copy / "tests").mkdir(exist_ok=True)
     (shared_copy / "tests" / "test_sample.py").write_text(
         "def test_sample_runs():\n    assert 1 + 1 == 2\n", encoding="utf-8"
     )
@@ -341,6 +342,7 @@ def test_ac2_project_tests_are_collected_and_run_by_make_test(shared_copy):
 
 def test_ac2_failing_project_test_makes_make_test_fail(shared_copy):
     """REQ-009 AC2: rule 18 (`make -o agk-test test`, as in the test above)."""
+    (shared_copy / "tests").mkdir(exist_ok=True)
     (shared_copy / "tests" / "test_sample.py").write_text(
         "def test_sample_fails():\n    assert False\n", encoding="utf-8"
     )
@@ -383,7 +385,7 @@ def test_ac1_installs_agk_mk_and_agk_toml_with_the_stamp(installed):
     assert cfg["installed"] == datetime.now(UTC).date().isoformat()
     assert cfg["default_branch"] == "main"
     assert cfg["test_dirs"] == ["tests"]
-    assert cfg["lint_paths"] == ["scripts/agk", "tests/kit", ".claude/hooks"]
+    assert cfg["lint_paths"] == ["scripts/agk", ".claude/hooks"]
 
 
 def test_ac1_makefile_is_thin_aliases_of_agk_mk(installed):
@@ -414,6 +416,7 @@ def test_ac1_both_forms_are_green_in_the_target(shared_copy, kit_suite: KitSuite
 
 def test_ac1_bare_pytest_in_the_target_collects_no_kit_test(installed):
     """REQ-010 AC1: rule 6."""
+    (installed / "tests").mkdir(exist_ok=True)
     (installed / "tests" / "test_sample.py").write_text("def test_sample():\n    assert True\n")
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only", "-q", "."],
@@ -507,12 +510,14 @@ def test_ac1_ci_steps_include_the_project_tests_and_pass_when_they_pass(
     assert all(s.startswith("python scripts/agk/") for s in steps[:9])
     assert [s.split()[-1] for s in steps[9:]] == ["agk-lint", "agk-test", "agk-project-test"]
     assert KIT_SUITE_STEP in steps
+    (shared_copy / "tests").mkdir(exist_ok=True)
     (shared_copy / "tests" / "test_p.py").write_text("def test_p():\n    assert True\n")
     assert run_ci(shared_copy, kit_suite.direct) == [0] * 12
 
 
 def test_ac1_failing_project_test_makes_the_ci_steps_fail(shared_copy, kit_suite: KitSuite):
     """REQ-010 AC1: rule 5. The regression guard: CI runs the project's own tests."""
+    (shared_copy / "tests").mkdir(exist_ok=True)
     (shared_copy / "tests" / "test_p.py").write_text("def test_p():\n    assert False\n")
     codes = run_ci(shared_copy, kit_suite.direct)
     assert codes[-1] != 0
@@ -596,3 +601,20 @@ def test_ac1_a_symlinked_residuals_register_is_still_refused(target, tmp_path):
     (target / REGISTER).symlink_to(tmp_path / "elsewhere.md")
     proc = run_init(target)
     assert proc.returncode == 1 and "symlink" in proc.stdout
+
+
+def test_ac1_init_installs_no_kit_tests_and_a_gitattributes_that_marks_the_scripts(installed):
+    """REQ-009 AC1: lean install (ADR-0052): the kit's own tests are not installed."""
+    assert not (installed / "tests" / "kit").exists()
+    assert not (installed / "tests").exists()
+    template = (KIT_ROOT / manifest()["templates"][".gitattributes"]).read_bytes()
+    assert (installed / ".gitattributes").read_bytes() == template
+
+
+def test_ac1_an_existing_gitattributes_is_left_alone_by_init(target):
+    """REQ-009 AC1: `.gitattributes` is create-only, like the residuals register."""
+    (target / ".gitattributes").write_text("*.png binary\n", encoding="utf-8")
+    proc = run_init(target)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (target / ".gitattributes").read_text(encoding="utf-8") == "*.png binary\n"
+    assert run_init(target).returncode == 0
