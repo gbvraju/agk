@@ -61,6 +61,7 @@ bullet. The K3 target is 2026-11-30 and the K4 target is 2026-12-31 (ADR-0015); 
 - docs/runs/short-report-live-1.md 2026-10-20 | At risk lists one line per pull request even when 33 share one kind ("merged with no verdict", mostly pre-verdict history); proposed sentence for the next intake, after the first outside developer's run: "At risk shows one line per kind with the pull request numbers, so every pull request is still named." (owner: maintainers) | (due 2026-11-30) | in progress, ADR-0053
 - docs/runs/short-report-live-1.md 2026-10-20 | Delivered lists every requirement that is done, ever (REQ-021 and REQ-022, done on 2026-10-20, appear in the W42 report); proposed sentence for the next intake, after the first outside developer's run: "Delivered lists the requirements that became done in the week, from the facts' history of status changes." (owner: maintainers) | (due 2026-11-30) | in progress, ADR-0053
 - ADR-0057 2026-10-20 | `at_risk` tells "merged with no verdict" from "merged before its last commit was cleared" by the ending of the text `cleared_line` returns; a kind returned by `cleared_line` would be sturdier (owner: maintainers) | (due 2026-12-31) | open
+- ADR-0059 2026-10-20 | `facts.py` now fetches `pulls/{n}/commits` for every pull request in the window (one more GET per pull request); measure the run time and the API calls on the first scheduled report (owner: maintainers) | (due 2026-12-31) | open
 
 ## Closed (not findings)
 

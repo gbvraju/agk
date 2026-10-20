@@ -1,6 +1,6 @@
 # ADR-0059: each brief declares a size and expected hours, compared with the actual (REQ-025, SPEC-0018), kit 0.31.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-20
 - Deciders: maintainers
 - Related: ADR-0053, ADR-0056, ADR-0057, ADR-0058
