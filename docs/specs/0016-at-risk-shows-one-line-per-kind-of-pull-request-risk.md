@@ -1,6 +1,6 @@
 # SPEC-0016: At risk shows one line per kind of pull request risk
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-023
 

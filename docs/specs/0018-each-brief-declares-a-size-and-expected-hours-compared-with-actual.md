@@ -1,6 +1,6 @@
 # SPEC-0018: Each brief declares a size and expected hours, compared with the actual hours
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-025
 

@@ -1,6 +1,6 @@
 # ADR-0056: Add REQ-025: Each brief declares a size and expected hours, compared with actual
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-20
 - Deciders: maintainers
 - Related: SPEC-0018

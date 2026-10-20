@@ -1,6 +1,6 @@
 # SPEC-0017: Delivered lists only the requirements that became done in the week
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-024
 
