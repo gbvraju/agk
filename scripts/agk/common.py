@@ -40,6 +40,24 @@ def experimental_enabled(target: Path) -> bool:
     return data.get(EXPERIMENTAL_KEY) is True
 
 
+def installed_version(root: Path) -> str | None:
+    """The kit version a repository records: the `version` of agk.toml or, when agk.toml is absent,
+    the `version` of the legacy `[tool.agk]` table of pyproject.toml (kits 0.1.0 and 0.2.0).
+
+    None when a file is missing or unreadable, the key is missing or its value is not a string.
+    There is no fallback to another file, to the kit's manifest or to a constant (SPEC-0014)."""
+    agk_toml = root / "agk.toml"
+    try:
+        if agk_toml.exists():
+            value = tomllib.loads(agk_toml.read_text(encoding="utf-8")).get("version")
+        else:
+            table = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+            value = table.get("tool", {}).get("agk", {}).get("version")
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, AttributeError):
+        return None
+    return value if isinstance(value, str) else None
+
+
 def git(root: Path, *args: str, check: bool = True) -> str:
     proc = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)  # nosec B603 B607 - fixed argument list, no shell
     if check and proc.returncode != 0:

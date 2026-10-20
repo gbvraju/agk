@@ -33,7 +33,7 @@ The last line of the Cost section is the week's total, for example `This week: 7
 verdicts in total: 32; declared "Behaviour: unchanged": 4`. A fix verdict is a reviewer's `Verdict: fix list` on a pull request: work
 sent back. The hours are from opening to merge and include waiting.
 
-The footer names the commit the report was computed from (`facts: <commit>`), the week's metrics issue (`metrics: #86 "agk metrics
+The footer names the commit the report was computed from (`facts: <commit>`), the kit version that produced it (`kit version: <version>`, or `unknown`), the week's metrics issue (`metrics: #86 "agk metrics
 2026-W42"`) and the drift audit. The same facts at the same commit give the same report.
 
 ## Five questions you should be able to answer from it

@@ -106,7 +106,7 @@ Only the Status line may change without an ADR. `done` requires at least one tes
 ### REQ-021 — The weekly product report footer names the kit version
 
 - Acceptance: AC1 Given a repository whose agk.toml names the installed kit version, when the weekly product report is rendered from its facts, then the footer has a line `kit version: <that version>` directly after the `facts:` line; AC2 Given a repository where neither agk.toml nor the legacy pyproject.toml stamp gives a readable version, when the report is rendered, then the footer says `kit version: unknown` and does not guess a version; AC3 Given a repository stamped only in the legacy `[tool.agk]` table of pyproject.toml, when the facts are read, then the version is the one that the upgrade command reads, from one shared reader
-- Status: planned
+- Status: done
 
 ### REQ-022 — A busy week's report links the full list of merged pull requests
 

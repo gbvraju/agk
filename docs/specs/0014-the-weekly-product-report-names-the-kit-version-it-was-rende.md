@@ -24,7 +24,7 @@ Negative cases: none beyond AC2, because the only way for the line to be wrong i
 4. **The footer line.** The weekly report prints `kit version: <value>` as the line directly after the `facts:` line of the footer, where `<value>` is the facts'
    `kit_version`, or `unknown` when the facts carry none (a document made before this rule). The line has no link: its evidence is the facts commit named above it.
 5. **The renderer stays pure.** `product_report.py` reads the facts file and no other file, and its imports are unchanged (SPEC-0011 rule 13). The inbox output has no
-   footer and does not change.
+   `kit version:` line and does not change.
 
 ## Tests
 

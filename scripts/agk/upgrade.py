@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
-from common import experimental_enabled, matches, read_list
+from common import experimental_enabled, installed_version, matches, read_list
 from init import (
     CREATE_ONLY,
     DATE_RE,
@@ -117,20 +117,21 @@ def legacy_stamp(target: Path) -> dict | None:
 def read_stamp(target: Path) -> tuple[str, str, dict | None]:
     """(version, mode, legacy stamp). Without agk.toml a `[tool.agk]` version means mode init."""
     path = target / "agk.toml"
+    version = installed_version(target)
     if not path.is_file():
         stamp = legacy_stamp(target)
-        if stamp is None:
+        if version is None or stamp is None:
             raise Refusal(
                 "agk.toml is missing and pyproject.toml has no [tool.agk] version "
                 "(path class agk.toml)"
             )
-        return stamp["version"], "init", stamp
+        return version, "init", stamp
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         raise Refusal("agk.toml is not readable TOML (path class agk.toml)") from None
-    version, mode = data.get("version"), data.get("mode")
-    if not isinstance(version, str):
+    mode = data.get("mode")
+    if version is None:
         raise Refusal("agk.toml has no version (path class agk.toml)")
     if mode not in ("init", "adopt"):
         raise Refusal("mode in agk.toml is not init or adopt (path class agk.toml)")

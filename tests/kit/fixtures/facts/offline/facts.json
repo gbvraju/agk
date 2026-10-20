@@ -44,6 +44,7 @@
     "total": "unknown"
   },
   "issues": "unknown",
+  "kit_version": "unknown",
   "markers": [
     {
       "ac": "AC1",

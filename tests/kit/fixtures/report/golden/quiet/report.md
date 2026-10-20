@@ -23,5 +23,6 @@ nothing this week
 
 ---
 facts: c0ffee0000000000000000000000000000000000
+kit version: unknown
 metrics: none found
 drift audit: none found

@@ -68,5 +68,6 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 ---
 facts: c0ffee0000000000000000000000000000000000
+kit version: unknown
 metrics: #3 "agk metrics 2026-W41"
 drift audit: #4 "agk drift audit 2026-10-10"
