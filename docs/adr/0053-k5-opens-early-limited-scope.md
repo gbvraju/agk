@@ -1,6 +1,6 @@
 # ADR-0053: K5 opens early with a limited scope: three items before the friends launch
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-20
 - Deciders: maintainers
 - Amends: ADR-0025
@@ -57,3 +57,6 @@ The two findings were seen on a real report, which is the evidence the register 
 
 - 2026-10-20: the K5-opening ADR proper (every other candidate) is written after criterion a and the first outside
   developer's run (due 2026-11-30).
+- 2026-10-20: the `pr-body` check should accept `Advances: none` when the pull request changes only `docs/`; the form
+  requirement `REQ-020` was used twice (Q-K4-206, Q-K4-212) for planning changes that advance nothing; not built under this
+  ADR (due 2026-12-31).
