@@ -1,6 +1,6 @@
 # agk configuration for this repository. Read by the checks before pyproject.toml [tool.agk].
 # The kit version this repository ships: equal to kit_version in kit/manifest.json (a test checks it); every kit bump updates both.
-version = "0.26.0"
+version = "0.27.0"
 default_branch = "main"
 test_dirs = ["tests"]
 lint_paths = ["scripts/agk", "tests", ".claude/hooks"]

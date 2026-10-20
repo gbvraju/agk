@@ -930,3 +930,157 @@ def test_ac2_the_inbox_output_has_no_footer_and_does_not_change(tmp_path, capsys
     doc["kit_version"] = "1.2.3"
     versioned = render_doc(doc, tmp_path, "--inbox", "--today", "2026-10-17", capsys=capsys)
     assert plain == versioned and "kit version" not in plain
+
+
+# --- a busy week: REQ-022 (SPEC-0015) ------------------------------------------------------------
+
+BUSY = REPORT / "busy" / "facts.json"
+WEEK41_LINK = "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged+merged%3A2026-10-05..2026-10-11"
+
+
+def busy_doc() -> dict:
+    return json.loads(BUSY.read_text(encoding="utf-8"))
+
+
+def merged_in_week41(doc: dict) -> list[dict]:
+    return [
+        p
+        for p in doc["pull_requests"]
+        if p["state"] == "merged" and "2026-10-05" <= p["merged_at"][:10] <= "2026-10-11"
+    ]
+
+
+def keep_merged(doc: dict, count: int) -> dict:
+    """The doc with exactly `count` pull requests merged in week 41 (the highest numbers go)."""
+    doc = copy.deepcopy(doc)
+    drop = {p["number"] for p in sorted(merged_in_week41(doc), key=lambda p: -p["number"])[count:]}
+    doc["pull_requests"] = [p for p in doc["pull_requests"] if p["number"] not in drop]
+    assert len(merged_in_week41(doc)) == count
+    return doc
+
+
+def test_ac1_the_threshold_is_one_named_constant():
+    """REQ-022 AC1: SPEC-0015 rule 1 (ten, not a setting)."""
+    import product_report
+
+    assert product_report.BUSY_WEEK == 10
+    assert len(merged_in_week41(busy_doc())) == 12
+
+
+def test_ac1_delivered_keeps_the_requirements_and_shows_one_line_with_the_link(tmp_path, capsys):
+    """REQ-022 AC1: SPEC-0015 rule 3."""
+    out = render_doc(busy_doc(), tmp_path, capsys=capsys)
+    delivered = section(out, "## Delivered")
+    requirements = [ln for ln in delivered if ln.startswith("- REQ-")]
+    done = [r["id"] for r in busy_doc()["requirements"] if r["status"] == "done"]
+    assert [ln.split()[1] for ln in requirements] == sorted(done)
+    assert not [ln for ln in delivered if PR in ln], "no line for a single pull request"
+    assert delivered[-1] == f"- 12 pull requests were merged this week \u2014 {WEEK41_LINK}"
+    assert len(delivered) == len(requirements) + 1
+
+
+def test_ac2_cost_is_the_totals_line_alone_ending_with_the_week_link(tmp_path, capsys):
+    """REQ-022 AC2: SPEC-0015 rule 4."""
+    doc = busy_doc()
+    out = render_doc(doc, tmp_path, capsys=capsys)
+    cost = section(out, "## Cost")
+    merged = merged_in_week41(doc)
+    hours = sum(
+        (_parse(p["merged_at"]) - _parse(p["created_at"])).total_seconds() / 3600 for p in merged
+    )
+    fixes = sum(1 for p in merged for v in p["verdicts"] if v["kind"] == "fix")
+    declared = sum(1 for p in merged if p["behaviour"] == "unchanged")
+    text = (
+        f"- This week: 12 pull requests merged; hours in total: {hours:.1f}; "
+        f'fix verdicts in total: {fixes}; declared "Behaviour: unchanged": {declared}'
+    )
+    assert cost == [f"{text} \u2014 {WEEK41_LINK}"]
+    assert "hours from opening to merge" not in out
+
+
+def _parse(stamp: str):
+    from datetime import datetime
+
+    return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+
+
+@pytest.mark.parametrize(
+    ("week", "shift", "dates"),
+    [("2026-W41", 0, "2026-10-05..2026-10-11"), ("2026-W42", 7, "2026-10-12..2026-10-18")],
+)
+def test_ac3_the_link_is_built_from_the_repo_and_the_weeks_utc_dates(
+    tmp_path, capsys, week, shift, dates
+):
+    """REQ-022 AC3: SPEC-0015 rule 5 (the dates of the opening line; nothing but the facts)."""
+    from datetime import timedelta
+
+    doc = busy_doc()
+    for p in doc["pull_requests"]:
+        for key in ("created_at", "merged_at", "closed_at"):
+            if p[key]:
+                shifted = _parse(p[key]) + timedelta(days=shift)
+                p[key] = shifted.strftime("%Y-%m-%dT%H:%M:%SZ")
+    out = render_doc(doc, tmp_path, "--week", week, capsys=capsys)
+    link = f"https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged+merged%3A{dates}"
+    opening = out.splitlines()[1]
+    assert f"Monday {dates[:10]} to Sunday {dates[12:]}" in opening
+    assert section(out, "## Delivered")[-1].endswith(f"\u2014 {link}")
+    assert section(out, "## Cost")[-1].endswith(f"\u2014 {link}")
+
+
+@pytest.mark.parametrize("count", [1, 4, 9, 10])
+def test_ac4_ten_or_fewer_pull_requests_keep_one_line_each(tmp_path, capsys, count):
+    """REQ-022 AC4: SPEC-0015 rule 2 (a quiet week is unchanged, at the boundary and below)."""
+    out = render_doc(keep_merged(busy_doc(), count), tmp_path, capsys=capsys)
+    delivered, cost = section(out, "## Delivered"), section(out, "## Cost")
+    assert len([ln for ln in delivered if "was merged on" in ln]) == count
+    assert len([ln for ln in cost if "hours from opening to merge" in ln]) == count
+    assert not [ln for ln in delivered if "were merged this week" in ln]
+    assert WEEK41_LINK not in out
+
+
+def test_ac4_eleven_pull_requests_are_a_busy_week(tmp_path, capsys):
+    """REQ-022 AC4: SPEC-0015 rules 1 and 2 (more than ten collapses; ten does not)."""
+    out = render_doc(keep_merged(busy_doc(), 11), tmp_path, capsys=capsys)
+    assert section(out, "## Delivered")[-1].startswith("- 11 pull requests were merged this week")
+    assert len(section(out, "## Cost")) == 1
+
+
+def test_ac5_needs_you_at_risk_proven_and_the_footer_are_not_changed(tmp_path, capsys, monkeypatch):
+    """REQ-022 AC5: SPEC-0015 rule 6 (every pull request they named is still named)."""
+    import product_report
+
+    doc = busy_doc()
+    short = render_doc(doc, tmp_path, capsys=capsys)
+    monkeypatch.setattr(product_report, "BUSY_WEEK", 10**6)
+    long = render_doc(doc, tmp_path, capsys=capsys)
+    assert short != long
+    for heading in ("## Proven", "## Needs you", "## At risk"):
+        assert section(short, heading) == section(long, heading), heading
+    assert (
+        short.splitlines()[short.splitlines().index("---") :]
+        == (long.splitlines()[long.splitlines().index("---") :])
+    )
+    at_risk = "\n".join(section(short, "## At risk"))
+    assert f'{PR}26 "Change number 26" was sent back 2 times' in at_risk
+    assert f"{PR}27 was merged with no verdict" in at_risk
+
+
+def test_ac5_the_inbox_output_of_a_busy_week_is_not_changed(tmp_path, capsys, monkeypatch):
+    """REQ-022 AC5: SPEC-0015 rule 6."""
+    import product_report
+
+    doc = busy_doc()
+    short = render_doc(doc, tmp_path, "--inbox", capsys=capsys)
+    monkeypatch.setattr(product_report, "BUSY_WEEK", 10**6)
+    assert short == render_doc(doc, tmp_path, "--inbox", capsys=capsys)
+
+
+def test_ac4_unknown_pull_requests_are_not_a_count(tmp_path, capsys):
+    """REQ-022 AC4: SPEC-0015 rule 8 (today's unknown line, no collapse)."""
+    doc = busy_doc()
+    doc["pull_requests"] = "unknown"
+    out = render_doc(doc, tmp_path, capsys=capsys)
+    assert "were merged this week" not in out
+    assert "unknown: pull requests could not be read" in "\n".join(section(out, "## Delivered"))
+    assert "unknown: pull requests could not be read" in "\n".join(section(out, "## Cost"))
