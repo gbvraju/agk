@@ -3,11 +3,11 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 ## Delivered
 
-- REQ-001 "Alpha thing" is done: 2 acceptance criteria (AC1, AC2) — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/requirements.md#L3
-- REQ-002 "Beta thing" is done: 2 acceptance criteria (AC1, AC2) — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/requirements.md#L8
-- REQ-005 "Epsilon thing" is done: no acceptance criteria listed — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/requirements.md#L23
-- REQ-006 "Zeta thing" is done: its acceptance criteria are unknown — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/requirements.md#L28
-- REQ-009 "Iota thing" is done: 1 acceptance criterion (AC1) — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/requirements.md#L43
+- REQ-001 "Alpha thing" is done: 2 acceptance criteria (AC1, AC2) (week it became done: unknown) — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/requirements.md#L3
+- REQ-002 "Beta thing" is done: 2 acceptance criteria (AC1, AC2) (week it became done: unknown) — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/requirements.md#L8
+- REQ-005 "Epsilon thing" is done: no acceptance criteria listed (week it became done: unknown) — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/requirements.md#L23
+- REQ-006 "Zeta thing" is done: its acceptance criteria are unknown (week it became done: unknown) — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/requirements.md#L28
+- REQ-009 "Iota thing" is done: 1 acceptance criterion (AC1) (week it became done: unknown) — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/requirements.md#L43
 - 12 pull requests were merged this week — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged+merged%3A2026-10-05..2026-10-11
 
 ## Proven

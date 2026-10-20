@@ -3,7 +3,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 ## Delivered
 
-- REQ-001 "First thing" is done: 2 acceptance criteria (AC1, AC2) — https://github.com/demo-org/demo-repo/blob/5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe/docs/requirements.md#L3
+nothing this week
 
 ## Proven
 

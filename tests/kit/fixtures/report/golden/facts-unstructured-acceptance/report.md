@@ -3,7 +3,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 ## Delivered
 
-- REQ-002 "No line" is done: no acceptance criteria listed — https://github.com/demo-org/demo-repo/blob/795c2cadf3416b3898223fc5b3f55bef19a64e96/docs/requirements.md#L8
+nothing this week
 
 ## Proven
 

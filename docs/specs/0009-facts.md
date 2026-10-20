@@ -49,7 +49,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
    (`true` when the `project_tests` key is non-empty; the command itself is not copied). No other key is copied. `inbox_hours` is a
    key of `common.DEFAULT_CONFIG` (value 48), so that `load_config` returns it (rule 17 (d)).
 8. **`requirements`.** One object per `### REQ-nnn` section of `docs/requirements.md`, sorted by id: `id`, `title` (the text
-   after the em dash), `status` (`planned`, `in-progress` or `done`, else `"unknown"`), `line`, and `criteria`: an array of
+   after the em dash), `status` (`planned`, `in-progress` or `done`, else `"unknown"`), `line`, `done_on` (when the status is `done`, the UTC date `YYYY-MM-DD` of the commit on the first-parent history that last set it to `done`, else `"unknown"`; `null` when the status is not `done`; SPEC-0017 rule 1), and `criteria`: an array of
    `{"id": "AC1", "text": "..."}` in file order. **Acceptance grammar.** The `- Acceptance:` line is split at each
    occurrence of `AC<digits>` that starts the line text or follows `; `, and a criterion's text runs to the next such
    marker; trailing `;` and spaces are removed. A requirement with no `- Acceptance:` line, or whose line has no `ACn`

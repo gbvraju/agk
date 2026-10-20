@@ -31,6 +31,8 @@ These lines come from the report of week 2026-W42 of this project's own reposito
 
 In a busy week, when more than ten pull requests merged, Delivered lists the done requirements and then one line with the number of merged pull requests and one link to the full list, and Cost shows only the week's total, ending with the same link. A quiet week lists each pull request.
 
+Delivered lists only the requirements that became done during the week of the report, dated by the commit that set their `Status:` to `done`. A requirement that is done but whose week cannot be read is still listed, with `(week it became done: unknown)` after its line; a week in which nothing became done lists no requirement.
+
 In At risk, when two or more pull requests share one kind of risk (open too long, sent back, merged with no verdict, merged before its last commit was cleared), the kind is one line with every number, each a link, for example `PRs #12 (41 days), #15 (30 days) have been open`. One pull request keeps its own line with its title.
 
 The last line of the Cost section is the week's total, for example `This week: 74 pull requests merged; hours in total: 130.0; fix

@@ -206,7 +206,7 @@ def test_ac8_the_other_sections_and_the_footer_equal_the_golden_of_before(tmp_pa
     golden = (REPORT / "golden" / "kinds" / "report.md").read_text(encoding="utf-8")
     golden = golden.replace("<pr>", PR)
     out = render_doc(kinds(), tmp_path, capsys)
-    for heading in ("## Delivered", "## Proven", "## Needs you", "## Cost"):
+    for heading in ("## Proven", "## Needs you", "## Cost"):  # Delivered is REQ-024's
         assert section(out, heading) == section(golden, heading), heading
     assert (
         out.splitlines()[out.splitlines().index("---") :]
