@@ -29,6 +29,8 @@ These lines come from the report of week 2026-W42 of this project's own reposito
 | At risk | What is overdue, drifting or being reworked? | `PR #45 was merged before its last commit was cleared` |
 | Cost | How much rework and waiting did this week take? | `PR #79 "feat(k4): G1, check_specs lifecycle rules a and b and the shared parsers, kit 0.20.0 (ADR-0040)": 0.8 hours from opening to merge, 0 fix verdicts` |
 
+In a busy week, when more than ten pull requests merged, Delivered lists the done requirements and then one line with the number of merged pull requests and one link to the full list, and Cost shows only the week's total, ending with the same link. A quiet week lists each pull request.
+
 The last line of the Cost section is the week's total, for example `This week: 74 pull requests merged; hours in total: 130.0; fix
 verdicts in total: 32; declared "Behaviour: unchanged": 4`. A fix verdict is a reviewer's `Verdict: fix list` on a pull request: work
 sent back. The hours are from opening to merge and include waiting.

@@ -37,6 +37,8 @@ REQUIRED = (
     "config requirements markers specs adrs residuals questions pull_requests issues drift"
 ).split()
 SECTIONS = ("Delivered", "Proven", "Needs you", "At risk", "Cost")
+# A week is busy when more than this many pull requests merged in it (SPEC-0015 rule 1).
+BUSY_WEEK = 10
 NOTHING = "nothing this week"
 
 
@@ -145,6 +147,11 @@ class Links:
 
     def tree(self, path: str) -> str:
         return f"{self.repo}/tree/{self.commit}/{path}"
+
+    def merged_in(self, start: date, end: date) -> str:
+        """A search of the merged pull requests of the week, `end` being the day after the last."""
+        days = f"{start.isoformat()}..{(end - timedelta(days=1)).isoformat()}"
+        return f"{self.repo}/pulls?q=is%3Apr+is%3Amerged+merged%3A{days}"
 
 
 def bullet(text: str, link: str | None) -> str:
@@ -326,7 +333,12 @@ def delivered(doc: dict, links: Links, start: date, end: date) -> list[str]:
     else:
         lines.append(unknown_line("requirements", links.file("docs/requirements.md")))
     if is_list(doc["pull_requests"]):
-        for p in merged_in_week(doc, start, end):
+        merged = merged_in_week(doc, start, end)
+        if len(merged) > BUSY_WEEK:
+            text = f"{len(merged)} pull requests were merged this week"
+            lines.append(bullet(text, links.merged_in(start, end)))
+            return lines
+        for p in merged:
             day = day_of(p["merged_at"]).isoformat()
             text = f'PR #{p["number"]} "{p["title"]}" was merged on {day}'
             lines.append(bullet(text, links.pull(p["number"])))
@@ -508,6 +520,7 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[str]:
     merged = merged_in_week(doc, start, end)
     if not merged:
         return []
+    busy = len(merged) > BUSY_WEEK
     lines: list[str] = []
     hours: list[Decimal | None] = []
     fixes: list[int | None] = []
@@ -515,6 +528,8 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[str]:
         h, f = hours_between(p.get("created_at"), p.get("merged_at")), verdict_count(p, "fix")
         hours.append(h)
         fixes.append(f)
+        if busy:
+            continue
         shown_h = "unknown hours" if h is None else f"{h} hours"
         shown_f = "unknown fix verdicts" if f is None else plural(f, "fix verdict", "fix verdicts")
         text = f'PR #{p["number"]} "{p["title"]}": {shown_h} from opening to merge, {shown_f}'
@@ -527,7 +542,10 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[str]:
         f"hours in total: {total_h}; fix verdicts in total: {total_f}; "
         f'declared "Behaviour: unchanged": {declared}'
     )
-    lines.append(bullet(totals, f"{links.repo}/pulls?q=is%3Apr+is%3Amerged"))
+    total_link = (
+        links.merged_in(start, end) if busy else f"{links.repo}/pulls?q=is%3Apr+is%3Amerged"
+    )
+    lines.append(bullet(totals, total_link))
     return lines
 
 
