@@ -1,6 +1,6 @@
 # ADR-0051: a busy week's report links the full list of merged pull requests (REQ-022, SPEC-0015), kit 0.27.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-20
 - Deciders: maintainers
 - Related: ADR-0049, ADR-0050, ADR-0029
