@@ -1,6 +1,6 @@
 # ADR-0058: Delivered lists only the requirements that became done in the week (REQ-024, SPEC-0017), kit 0.30.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-20
 - Deciders: maintainers
 - Related: ADR-0053, ADR-0055, ADR-0057, ADR-0036
