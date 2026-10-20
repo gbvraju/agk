@@ -16,6 +16,7 @@ import pytest
 from conftest import KIT_ROOT, clean_env, make_repo, snapshot
 
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+import common  # noqa: E402
 import kit_hashes  # noqa: E402
 import upgrade  # noqa: E402
 
@@ -949,3 +950,25 @@ def test_ac1_an_adopt_target_gets_the_absent_register_too(tmp_path, kit, capsys)
     code, out = run(capsys, target)
     assert code == 0 and f"create {REGISTER} (absent)" in out
     assert (target / REGISTER).read_text(encoding="utf-8") == REGISTER_TEXT
+
+
+def test_ac3_read_stamp_takes_the_version_from_the_shared_reader(tmp_path, monkeypatch):
+    """REQ-021 AC3: SPEC-0014 rule 2 (one reader of the installed version)."""
+    (tmp_path / "agk.toml").write_text('mode = "init"\nversion = "0.0.1"\n', encoding="utf-8")
+    assert upgrade.read_stamp(tmp_path) == ("0.0.1", "init", None)
+    monkeypatch.setattr(upgrade, "installed_version", lambda root: "7.7.7")
+    assert upgrade.read_stamp(tmp_path) == ("7.7.7", "init", None)
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"agk.toml": 'mode = "adopt"\nversion = "0.9.0"\n'},
+        {"pyproject.toml": '[tool.agk]\nversion = "0.2.0"\n'},
+    ],
+)
+def test_ac3_the_stamp_and_the_facts_version_are_the_same_value(tmp_path, files):
+    """REQ-021 AC3: SPEC-0014 rule 2 (`upgrade.py` and the facts read one version)."""
+    for rel, text in files.items():
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    assert upgrade.read_stamp(tmp_path)[0] == common.installed_version(tmp_path)

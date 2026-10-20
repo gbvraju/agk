@@ -680,3 +680,64 @@ def test_ac2_a_residual_bullet_named_by_a_closed_row_is_marked_closed(tmp_path):
     items = [r for r in json.loads(proc.stdout)["residuals"] if "a delivered item" in r["text"]]
     states = sorted((r["source"], r["state"]) for r in items)
     assert ("docs/adr/0001-demo.md", "closed") in states
+
+
+def repo_with(dest: Path, files: dict[str, str | None]) -> Path:
+    """The `ok` tree with the given files written (None removes one), committed once."""
+    root = dest / "work"
+    shutil.copytree(tree_of("ok"), root)
+    for rel, text in files.items():
+        if text is None:
+            (root / rel).unlink()
+        else:
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(text, encoding="utf-8")
+    git(root, "init", "-q", "-b", "main")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "fixture")
+    return root
+
+
+def kit_version_of(dest: Path, files: dict[str, str | None]):
+    proc = run_facts(repo_with(dest, files), "ok", dest)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return json.loads(proc.stdout).get("kit_version", "<absent>")
+
+
+AGK_TOML = Path(FIXTURES / "ok" / "tree" / "agk.toml").read_text(encoding="utf-8")
+
+
+def test_ac1_the_facts_carry_the_installed_kit_version(tmp_path):
+    """REQ-021 AC1: SPEC-0014 rule 1."""
+    assert kit_version_of(tmp_path, {"agk.toml": AGK_TOML + 'version = "1.2.3"\n'}) == "1.2.3"
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        pytest.param({}, id="agk-toml-without-version"),
+        pytest.param({"agk.toml": AGK_TOML + "version = 3\n"}, id="version-not-a-string"),
+        pytest.param({"agk.toml": "version = [\n"}, id="unreadable-toml"),
+        pytest.param({"agk.toml": None}, id="no-config-at-all"),
+        pytest.param(
+            {"agk.toml": None, "pyproject.toml": "[tool.agk]\nmode = 'init'\n"},
+            id="legacy-without-version",
+        ),
+        pytest.param(
+            {"pyproject.toml": '[tool.agk]\nversion = "0.2.0"\n'}, id="no-fallback-to-legacy"
+        ),
+        pytest.param({"kit/manifest.json": '{"kit_version": "9.9.9"}\n'}, id="never-the-manifest"),
+    ],
+)
+def test_ac2_an_unreadable_version_is_unknown_and_never_guessed(tmp_path, files):
+    """REQ-021 AC2: SPEC-0014 rules 1 and 3."""
+    assert kit_version_of(tmp_path, files) == "unknown"
+
+
+def test_ac3_a_legacy_stamp_gives_its_version_through_the_shared_reader(tmp_path):
+    """REQ-021 AC3: SPEC-0014 rule 2 (one reader: facts.py calls common.installed_version)."""
+    files = {"agk.toml": None, "pyproject.toml": '[tool.agk]\nversion = "0.2.0"\n'}
+    assert kit_version_of(tmp_path, files) == "0.2.0"
+    source = FACTS.read_text(encoding="utf-8")
+    assert "installed_version(" in source and "tomllib.loads" in source
+    assert source.count('"version"') == 0, "facts.py must not read the version itself"

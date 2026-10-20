@@ -556,6 +556,9 @@ def newest(issues: list, label: str, ends: str = "", open_only: bool = False) ->
 
 def footer(doc: dict, label: str) -> list[str]:
     lines = footer_head(doc)
+    version = doc.get("kit_version")
+    shown = version if isinstance(version, str) and version else "unknown"
+    lines.insert(2, f"kit version: {shown}")
     issues = doc["issues"]
     for name, issue in (
         ("metrics", newest(issues, "agk-metrics", label) if is_list(issues) else None),

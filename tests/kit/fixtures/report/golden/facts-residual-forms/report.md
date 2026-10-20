@@ -29,5 +29,6 @@ nothing this week
 
 ---
 facts: e87a39cc6a7cd802bf2f5f468eaa886a7632172b
+kit version: unknown
 metrics: none found
 drift audit: none found

@@ -26,6 +26,7 @@ nothing this week
 
 ---
 facts: 5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe
+kit version: unknown
 the working tree was modified (dirty: true)
 metrics: none found
 drift audit: none found

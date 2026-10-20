@@ -182,6 +182,7 @@ def test_the_footer_names_the_commit_and_the_two_issues(capsys):
     _, out, _ = render(REPORT / "kinds" / "facts.json", capsys=capsys)
     assert out.endswith(
         "facts: c0ffee0000000000000000000000000000000000\n"
+        "kit version: unknown\n"
         'metrics: #3 "agk metrics 2026-W41"\n'
         'drift audit: #4 "agk drift audit 2026-10-10"\n'
     )
@@ -885,3 +886,47 @@ def test_the_merged_before_cleared_lines_come_after_the_drift_line_in_pull_reque
     # #5 and #6 above, and #8 whose recorded clearance names another commit
     assert late == [drift + 1, drift + 2, drift + 3]
     assert [lines[i].split(" ")[2] for i in late] == ["#5", "#6", "#8"]
+
+
+def footer_of(text: str) -> list[str]:
+    lines = text.splitlines()
+    return lines[lines.index("---") :]
+
+
+def test_ac1_the_footer_names_the_kit_version_directly_after_the_facts_line(tmp_path, capsys):
+    """REQ-021 AC1: SPEC-0014 rule 4."""
+    doc = kinds()
+    doc["kit_version"] = "1.2.3"
+    footer = footer_of(render_doc(doc, tmp_path, capsys=capsys))
+    assert footer[1] == f"facts: {doc['commit']}"
+    assert footer[2] == "kit version: 1.2.3"
+    assert "http" not in footer[2], "the line has no link: its evidence is the facts commit"
+
+
+def test_ac1_the_kit_version_line_comes_before_the_dirty_notice(tmp_path, capsys):
+    """REQ-021 AC1: SPEC-0014 rule 4 (directly after `facts:`, whatever follows)."""
+    doc = json.loads((REPORT / "dirty-unknown" / "facts.json").read_text(encoding="utf-8"))
+    doc["kit_version"] = "1.2.3"
+    footer = footer_of(render_doc(doc, tmp_path, capsys=capsys))
+    assert footer[1].startswith("facts: ") and footer[2] == "kit version: 1.2.3"
+    assert footer[3].startswith("the working tree was modified")
+
+
+@pytest.mark.parametrize("value", ["absent", "unknown", 3, None, ["1.2.3"], ""])
+def test_ac2_a_missing_or_unusable_kit_version_prints_unknown(tmp_path, capsys, value):
+    """REQ-021 AC2: SPEC-0014 rule 4 (a document made before this rule; never a guess)."""
+    doc = kinds()
+    doc.pop("kit_version", None)
+    if value != "absent":
+        doc["kit_version"] = value
+    footer = footer_of(render_doc(doc, tmp_path, capsys=capsys))
+    assert footer[2] == "kit version: unknown"
+
+
+def test_ac2_the_inbox_output_has_no_footer_and_does_not_change(tmp_path, capsys):
+    """REQ-021 AC2: SPEC-0014 rule 5."""
+    doc = kinds()
+    plain = render_doc(doc, tmp_path, "--inbox", "--today", "2026-10-17", capsys=capsys)
+    doc["kit_version"] = "1.2.3"
+    versioned = render_doc(doc, tmp_path, "--inbox", "--today", "2026-10-17", capsys=capsys)
+    assert plain == versioned and "kit version" not in plain

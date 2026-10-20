@@ -38,6 +38,10 @@
         }
       ]
     },
+    "kit_version": {
+      "type": "string",
+      "description": "The installed kit version (agk.toml, or the legacy [tool.agk] table), or \"unknown\" when it cannot be read as a string. Optional: a document made before it exists has none."
+    },
     "today": {
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
