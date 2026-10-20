@@ -1,6 +1,6 @@
 # ADR-0050: the weekly report footer names the kit version (REQ-021, SPEC-0014), kit 0.26.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-20
 - Deciders: maintainers
 - Related: ADR-0045, ADR-0049, ADR-0036
@@ -52,4 +52,6 @@ file now). This ADR builds it, tests first: the tests for AC1 to AC3 were writte
 
 ## Residual
 
-none
+- 2026-10-20: `Behaviour: unchanged` in a pull request body is self-declared and nothing checks that it is true; it makes the `proof` check read `skipped`, so a false declaration hides the red-then-green proof. The
+  weekly report counts the pull requests that declared it, so overuse is visible, but a single false declaration is not caught. Propose a deterministic check, for example refusing the declaration
+  when the pull request changes a non-test file under `scripts/`. (due 2026-12-31)
