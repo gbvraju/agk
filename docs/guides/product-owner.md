@@ -39,6 +39,8 @@ The last line of the Cost section is the week's total, for example `This week: 7
 verdicts in total: 32; declared "Behaviour: unchanged": 4`. A fix verdict is a reviewer's `Verdict: fix list` on a pull request: work
 sent back. The hours are from opening to merge and include waiting.
 
+The totals line also ends with `estimate: N of M within range`. Each brief item declares `Size: S|M|L` and `Expected: <low>-<high> hours`, and the pull request that carries the item repeats those two lines in its body. M is the number of the week's merged pull requests that declared an estimate, and N is how many of those took a lead time (from the pull request's earliest commit to the merge) between the two numbers, ends included. A pull request without the lines is in neither number. The kit estimates nothing and adds no buffer: a firm's buffer stays its own. A week in which no pull request declared an estimate ends with `estimate: none declared this week`.
+
 The footer names the commit the report was computed from (`facts: <commit>`), the kit version that produced it (`kit version: <version>`, or `unknown`), the week's metrics issue (`metrics: #86 "agk metrics
 2026-W42"`) and the drift audit. The same facts at the same commit give the same report.
 

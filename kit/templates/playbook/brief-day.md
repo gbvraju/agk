@@ -19,7 +19,9 @@ Next free numbers, read from `origin/{{default_branch}}` when this skeleton was 
 - Advances: (a requirement id)
 - Do: (what to build)
 - Done means: (what the reviewer will check)
+- Size: S|M|L
+- Expected: <low>-<high> hours
 
 ## Report format
 
-For each item: the pull request URL, the head commit, the changed lines, the verbatim test counts, and every question raised.
+For each item: the pull request URL, the head commit, the changed lines, the verbatim test counts, and every question raised. The pull request body also carries `Brief: <path>#<item>` and the item's `Size:` and `Expected:` lines, copied unchanged.

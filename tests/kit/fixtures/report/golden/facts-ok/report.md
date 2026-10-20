@@ -32,7 +32,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 ## Cost
 
 - <pr>5 "Change number 5": 72.0 hours from opening to merge, 0 fix verdicts — https://github.com/demo-org/demo-repo/pull/5
-- This week: 1 pull request merged; hours in total: 72.0; fix verdicts in total: 0; declared "Behaviour: unchanged": 0 — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
+- This week: 1 pull request merged; hours in total: 72.0; fix verdicts in total: 0; declared "Behaviour: unchanged": 0; estimate: 1 of 1 within range — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
 
 ---
 facts: 5492b2a6df4ee856ea112439df4c537e3eafb3e8

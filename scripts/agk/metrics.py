@@ -19,7 +19,17 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any
 
-from common import CheckError, git, matches, read_list, repo_root, run, show, test_dirs
+from common import (
+    CheckError,
+    git,
+    matches,
+    parse_estimate,
+    read_list,
+    repo_root,
+    run,
+    show,
+    test_dirs,
+)
 
 NAME = "metrics"
 USAGE = (
@@ -46,7 +56,8 @@ ADR_FILE = re.compile(r"docs/adr/\d{4}-[^/]+\.md")
 AMENDMENT_FILE = re.compile(r"docs/runs/proposed-spec-amendments-[^/]+\.md")
 TEST_PATTERN = r"^[[:space:]]*(async[[:space:]]+)?def test_"
 COLUMNS = (
-    "number state source opened_at closed_at hours_open_to_merge rejected rejected_verdicts "
+    "number state source opened_at closed_at hours_open_to_merge actual_hours estimated_size "
+    "estimated_hours rejected rejected_verdicts "
     "review_rounds merged_head_cleared blocked_weakenings governance_failures deviations "
     "cost_class protected_classes adrs_added additions deletions changed_files tests_before "
     "tests_after"
@@ -200,6 +211,22 @@ def hours_between(opened: str | None, closed: str | None) -> str:
     return str(value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
 
 
+def actual_hours(commits: Any, merged_at: str | None) -> str:
+    """Hours from the earliest author date among the commits to the merge (SPEC-0018 rule 3)."""
+    if not isinstance(commits, list) or not commits:
+        return UNKNOWN
+    dates = []
+    for commit in commits:
+        author = (
+            ((commit.get("commit") or {}).get("author") or {}) if isinstance(commit, dict) else {}
+        )
+        when = stamp(author.get("date"))
+        if when is None:
+            return UNKNOWN
+        dates.append((when, author["date"]))
+    return hours_between(min(dates)[1], merged_at)
+
+
 def governance(ctx: Context, shas: list[str] | None) -> tuple[str, str]:
     """(blocked_weakenings, governance_failures) over the head commits of the pull request."""
     if shas is None:
@@ -306,6 +333,7 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
         named = any(k == "cleared" and head.startswith(sha) for k, sha in listed)
         cleared = "yes" if named else "no"
 
+    size, expected = parse_estimate(detail.get("body"))
     shas = [c.get("sha") for c in commits] if isinstance(commits, list) else None
     blocked, failures = governance(ctx, shas)
 
@@ -336,6 +364,9 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
         "opened_at": detail.get("created_at") or UNKNOWN,
         "closed_at": detail.get("closed_at") or UNKNOWN,
         "hours_open_to_merge": hours,
+        "actual_hours": actual_hours(commits, detail.get("merged_at")) if merged else NONE,
+        "estimated_size": size,
+        "estimated_hours": expected,
         "rejected": rejected,
         "rejected_verdicts": rejected_verdicts,
         "review_rounds": rounds,

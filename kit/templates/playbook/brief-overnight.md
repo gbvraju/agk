@@ -21,7 +21,9 @@ Never type a number from memory: read it again before you write a file.
 - Advances: (a requirement id)
 - Do: (what to build, in testable terms)
 - Done means: (what the reviewer will check)
+- Size: S|M|L
+- Expected: <low>-<high> hours
 
 ## Report format
 
-For each item: the pull request URL, the head commit, the changed lines (code, tests, fixtures separately), and every question raised.
+For each item: the pull request URL, the head commit, the changed lines (code, tests, fixtures separately), and every question raised. The pull request body also carries `Brief: <path>#<item>` and the item's `Size:` and `Expected:` lines, copied unchanged.

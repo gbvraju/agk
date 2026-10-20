@@ -637,6 +637,42 @@
                     "const": "unknown"
                   }
                 ]
+              },
+              "estimated_size": {
+                "description": "Size: S, M or L from the pull request body, or \"unknown\". Optional: a document made before it exists has none (SPEC-0018).",
+                "enum": [
+                  "S",
+                  "M",
+                  "L",
+                  "unknown"
+                ]
+              },
+              "estimated_hours": {
+                "description": "Expected: the range <low>-<high> from the pull request body, or \"unknown\". Optional (SPEC-0018).",
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]+)?-[0-9]+(\\.[0-9]+)?$"
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "actual_hours": {
+                "description": "Hours from the earliest commit author date to the merge, one decimal; null when not merged; \"unknown\" when unreadable. Optional (SPEC-0018).",
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9]+\\.[0-9]$"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
               }
             },
             "additionalProperties": false

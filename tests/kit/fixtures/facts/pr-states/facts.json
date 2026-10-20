@@ -61,10 +61,13 @@
   ],
   "pull_requests": [
     {
+      "actual_hours": "unknown",
       "base": "main",
       "behaviour": null,
       "closed_at": "2026-10-09T10:00:00Z",
       "created_at": "2026-10-05T09:00:00Z",
+      "estimated_hours": "unknown",
+      "estimated_size": "unknown",
       "files": [
         "a/b.txt",
         "z.txt"
@@ -90,10 +93,13 @@
       ]
     },
     {
+      "actual_hours": null,
       "base": "main",
       "behaviour": null,
       "closed_at": "2026-10-08T10:00:00Z",
       "created_at": "2026-10-05T09:00:00Z",
+      "estimated_hours": "unknown",
+      "estimated_size": "unknown",
       "files": [
         "a/b.txt",
         "z.txt"
@@ -114,10 +120,13 @@
       ]
     },
     {
+      "actual_hours": "unknown",
       "base": "main",
       "behaviour": null,
       "closed_at": "2026-10-07T10:00:00Z",
       "created_at": "2026-10-05T09:00:00Z",
+      "estimated_hours": "unknown",
+      "estimated_size": "unknown",
       "files": [
         "a/b.txt",
         "z.txt"
@@ -132,10 +141,13 @@
       "verdicts": []
     },
     {
+      "actual_hours": "unknown",
       "base": "main",
       "behaviour": null,
       "closed_at": "2026-10-06T10:00:00Z",
       "created_at": "2026-10-05T09:00:00Z",
+      "estimated_hours": "unknown",
+      "estimated_size": "unknown",
       "files": [
         "a/b.txt",
         "z.txt"
@@ -150,10 +162,13 @@
       "verdicts": []
     },
     {
+      "actual_hours": "unknown",
       "base": "main",
       "behaviour": "unchanged",
       "closed_at": "2026-10-05T10:00:00Z",
       "created_at": "2026-10-05T09:00:00Z",
+      "estimated_hours": "unknown",
+      "estimated_size": "unknown",
       "files": [
         "a/b.txt",
         "z.txt"
@@ -168,10 +183,13 @@
       "verdicts": []
     },
     {
+      "actual_hours": "unknown",
       "base": "main",
       "behaviour": null,
       "closed_at": "2026-10-04T10:00:00Z",
       "created_at": "2026-10-05T09:00:00Z",
+      "estimated_hours": "unknown",
+      "estimated_size": "unknown",
       "files": [
         "a/b.txt",
         "z.txt"
@@ -186,10 +204,13 @@
       "verdicts": []
     },
     {
+      "actual_hours": null,
       "base": "main",
       "behaviour": "unchanged",
       "closed_at": null,
       "created_at": "2026-10-05T09:00:00Z",
+      "estimated_hours": "unknown",
+      "estimated_size": "unknown",
       "files": [
         "a/b.txt",
         "z.txt"
@@ -204,10 +225,13 @@
       "verdicts": []
     },
     {
+      "actual_hours": null,
       "base": "main",
       "behaviour": null,
       "closed_at": null,
       "created_at": "2026-10-05T09:00:00Z",
+      "estimated_hours": "unknown",
+      "estimated_size": "unknown",
       "files": "unknown",
       "head": "13cccccccccccccccccccccccccccccccccccccc",
       "merged_at": null,

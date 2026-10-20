@@ -566,6 +566,24 @@ def at_risk(doc: dict, links: Links, today: date, start: date, end: date) -> lis
     return lines
 
 
+RANGE = re.compile(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)")
+HOURS = re.compile(r"\d+(?:\.\d+)?")
+
+
+def estimate_ending(merged: list[dict]) -> str:
+    """`N of M within range`: M have a readable estimate and actual, N lie in the range."""
+    counted = within = 0
+    for p in merged:
+        window, actual = p.get("estimated_hours"), p.get("actual_hours")
+        if not (isinstance(window, str) and isinstance(actual, str) and HOURS.fullmatch(actual)):
+            continue
+        match = RANGE.fullmatch(window)
+        if match:
+            counted += 1
+            within += Decimal(match.group(1)) <= Decimal(actual) <= Decimal(match.group(2))
+    return f"{within} of {counted} within range" if counted else "none declared this week"
+
+
 def cost(doc: dict, links: Links, start: date, end: date) -> list[str]:
     if not is_list(doc["pull_requests"]):
         return [unknown_line("pull requests", f"{links.repo}/pulls")]
@@ -592,7 +610,7 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[str]:
     totals = (
         f"This week: {plural(len(merged), 'pull request', 'pull requests')} merged; "
         f"hours in total: {total_h}; fix verdicts in total: {total_f}; "
-        f'declared "Behaviour: unchanged": {declared}'
+        f'declared "Behaviour: unchanged": {declared}; estimate: {estimate_ending(merged)}'
     )
     total_link = (
         links.merged_in(start, end) if busy else f"{links.repo}/pulls?q=is%3Apr+is%3Amerged"

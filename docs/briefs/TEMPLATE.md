@@ -12,6 +12,8 @@ Operating rules that apply to every item (cite constitution/principles.md by num
 - Scope: paths allowed to change
 - Acceptance: observable results
 - Branch: chore/short-name
+- Size: S|M|L
+- Expected: <low>-<high> hours
 
 ## Report format
 
@@ -20,5 +22,6 @@ The PR body for each item contains:
 - Advances: REQ-nnn
 - Build-state row: Date | Change | REQs
 - Decisions taken: one line each, with the brief section it came from
+- Brief: <path>#<item>, with the item's Size: and Expected: lines copied unchanged
 - Questions: the Q list
 - Verified: commands run and their results, verbatim counts

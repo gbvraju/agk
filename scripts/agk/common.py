@@ -503,6 +503,36 @@ def declares_unchanged(body: str) -> bool:
     return BEHAVIOUR_UNCHANGED in behaviour_lines(body)
 
 
+ESTIMATE_LINES = {
+    "Size": re.compile(r"[SML]"),
+    "Expected": re.compile(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?) hours"),
+}
+
+
+def parse_estimate(body: object) -> tuple[str, str]:
+    """(size, hours) from the `Size:` and `Expected:` lines of a pull request body (SPEC-0018).
+
+    `Size: S|M|L` and `Expected: <low>-<high> hours` (two non-negative numbers, `low` not above
+    `high`), each once, with an optional `- ` list marker. A missing, repeated or malformed line
+    makes both `unknown`; nothing is guessed.
+    """
+    unknown = ("unknown", "unknown")
+    if not isinstance(body, str):
+        return unknown
+    body = body.replace("\r\n", "\n")
+    found: dict[str, re.Match[str]] = {}
+    for name, grammar in ESTIMATE_LINES.items():
+        lines = re.findall(rf"^(?:[-*] )?{name}:[ \t]*(.*?)[ \t]*$", body, re.MULTILINE)
+        match = grammar.fullmatch(lines[0]) if len(lines) == 1 else None
+        if match is None:
+            return unknown
+        found[name] = match
+    low, high = found["Expected"].group(1, 2)
+    if float(low) > float(high):
+        return unknown
+    return found["Size"].group(0), f"{low}-{high}"
+
+
 def proof_timeout(root: Path) -> int:
     """`proof_timeout` (seconds) from agk.toml; anything but a positive integer is a refusal."""
     value = load_config(root)["proof_timeout"]
