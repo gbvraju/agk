@@ -17,7 +17,7 @@ makes false or adds. `docs/specs/0005-distribution.md` rule 2 (the repository wo
    An absent block file that no release has shipped (`.gitattributes`) is added to an existing file of the project as one marked block (the action `replace`, detail `agk block added`), as adopt does.
 5. **A fresh install does not mention `tests/kit/` (maintainers' ruling on Q-K4-207, 2026-10-20).** SPEC-0001 rule 21 and SPEC-0002 rule 12: the installed protected list, the `protected` and `kit` classes of the installed
    `reviewers.yaml` and the rendered `CODEOWNERS` no longer name `tests/kit/` (the kit's own list is the installed list plus `tests/kit/`, `kit/` and `tests/kit_dev/`); SPEC-0001 rule 17: the printed scanner exclusions name
-   `scripts/agk` and `.claude/hooks` only; SPEC-0008 rule 16: the classes an upgrade writes no longer include `tests/kit/`. The installed `CLAUDE.md` rule 4, `.claude/settings.json`, `agk.mk`, `agk.toml`, the ADR-0001
-   template and the installed scripts carry no `tests/kit` text either; a test greps the tree of a fresh init and of a fresh adopt for it. Existing installs get the verbatim files through an upgrade; a project's own
+   `scripts/agk` and `.claude/hooks` only; SPEC-0008 rule 16: the classes an upgrade writes no longer include `tests/kit/`. The installed `CLAUDE.md` rule 4, `agk.mk`, `agk.toml`, the ADR-0001
+   template and the installed scripts carry no `tests/kit` text either (`.claude/settings.json` keeps its three guard patterns, Q-K4-211); a test greps the tree of a fresh init and of a fresh adopt for it. Existing installs get the verbatim files through an upgrade; a project's own
    files (`config/`, `agk.toml`, `docs/adr/0001-adopt-agk.md`) are never rewritten.
 

@@ -628,6 +628,8 @@ def test_ac1_a_fresh_install_and_its_printed_text_do_not_mention_the_kit_tests(t
         for p in sorted(target.rglob("*"))
         if p.is_file()
         and ".git" not in p.relative_to(target).parts
+        and p.relative_to(target).as_posix()
+        != ".claude/settings.json"  # guard patterns, not text (Q-K4-211)
         and b"tests/kit" in p.read_bytes()
     ]
     assert found == []

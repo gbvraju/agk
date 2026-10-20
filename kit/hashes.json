@@ -13517,7 +13517,7 @@
     ".claude/agents/reviewer.md": ["49e339413571c3557e3ce5fbcaf10dc591aef050d6470402db9772e2dfb39f21"],
     ".claude/hooks/architect_guard.py": ["89ad16ea0cba09b6254cdc55988af0e1f3fa3b0ba2114c975083a6a9a42c6021"],
     ".claude/hooks/stop_check.py": ["30a2b9ec9a98f8f003bf1ceb1b422642015ad62fbce96ae13c4770f1180400a1"],
-    ".claude/settings.json": ["941a068ca7dcecc879f8e063dc7ad5da3d7b9e35510e79e6168c8f14b6a653f6"],
+    ".claude/settings.json": ["b84a225e39447c9145539ff7b5eb4e8f3fb8a6a5931d95ac6f1e8fa32d493799"],
     ".github/ISSUE_TEMPLATE/proposal.md": ["977025c5f28045d1273d39031c892f09b22c193a2dbb94f1005920e2c1410c89"],
     ".github/ISSUE_TEMPLATE/question.md": ["2be4f03a55406f3d1071089337b2dda66a656648de84db00b7fffac975f748dc"],
     ".github/ISSUE_TEMPLATE/report.md": ["9668218026fd5b5185ed1ebeb05f990d46cdc73a96ed138223082f9e833cdd9d"],

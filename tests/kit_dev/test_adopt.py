@@ -705,6 +705,8 @@ def test_ac1_an_adopted_tree_and_its_printed_text_do_not_mention_the_kit_tests(t
         for p in sorted(root.rglob("*"))
         if p.is_file()
         and ".git" not in p.relative_to(root).parts
+        and p.relative_to(root).as_posix()
+        != ".claude/settings.json"  # guard patterns, not text (Q-K4-211)
         and b"tests/kit" in p.read_bytes()
     ]
     assert found == []

@@ -88,13 +88,11 @@ def test_ac2_settings_ask_before_editing_every_protected_path():
     ask = perms["ask"]
     assert not [r for r in perms["deny"] if r.startswith(("Edit(", "Write("))]
     assert not [r for r in ask if r.startswith("Write(")]
-    not_in_a_project = ("tests/kit/", "tests/kit_dev/")  # lean install (ADR-0052, Q-K4-211)
     for entry in (ROOT / "config" / "protected-paths.txt").read_text().splitlines():
         if not entry.strip() or entry.startswith("#"):
             continue
         glob = f"/{entry}**" if entry.endswith("/") else f"/{entry}"
-        assert (f"Edit({glob})" in ask) == (entry not in not_in_a_project), entry
-    assert "tests/kit" not in json.dumps(perms)
+        assert f"Edit({glob})" in ask
 
 
 def test_ac3_stop_hook_is_registered():
