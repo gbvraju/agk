@@ -1,6 +1,6 @@
 # SPEC-0017: Delivered lists only the requirements that became done in the week
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-024
 
@@ -55,4 +55,6 @@ merged lists REQ-021 and REQ-022 for week W42 only, and the maintainers read it 
 
 - Q-S0017-1 When `facts.py` runs in a shallow clone, does it print `unknown` for every `done_on` and say nothing, or does it also write a warning to its error output? The criteria assume the first; the workflow
   guard of rule 6 is what prevents a shallow run.
+  **Ruled** (maintainers, 2026-10-20): as read. In a shallow history `facts.py` writes `unknown` for every `done_on` and nothing more; the workflow guard of rule 6 prevents it in CI.
 - Q-S0017-2 Is a requirement that was added directly as `done`, in the commit that created its section, counted as becoming done in that commit? The criteria assume it is.
+  **Ruled** (maintainers, 2026-10-20): as read. A requirement added directly as `done` became done in the commit that created its section.

@@ -1,6 +1,6 @@
 # ADR-0054: Add REQ-023: At risk shows one line per kind of risk
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-20
 - Deciders: maintainers
 - Related: SPEC-0016

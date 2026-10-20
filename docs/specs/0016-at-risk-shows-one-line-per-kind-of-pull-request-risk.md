@@ -1,6 +1,6 @@
 # SPEC-0016: At risk shows one line per kind of pull request risk
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-023
 
@@ -53,3 +53,4 @@ for a week with several pull requests of one kind, and the maintainers read it i
 
 - Q-S0016-1 What is the exact wording of a grouped line, and does a line made of several links satisfy "each number its own link" in the issue as GitHub renders it? The criteria assume the wordings of rule 4,
   inline markdown links `[#12](url)`, and no trailing link; the maintainers rule the wording before the spec is Approved.
+  **Ruled** (maintainers, 2026-10-20): as read. Inline `[#12](url)` is "each number its own link"; the grouped wordings of rule 4 stand.

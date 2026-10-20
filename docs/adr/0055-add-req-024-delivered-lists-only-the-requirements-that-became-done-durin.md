@@ -1,6 +1,6 @@
 # ADR-0055: Add REQ-024: Delivered lists only what became done in the week
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-20
 - Deciders: maintainers
 - Related: SPEC-0017
