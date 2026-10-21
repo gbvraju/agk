@@ -51,7 +51,11 @@ WEAKENING_SET = frozenset(
     }
 )
 UNSPLIT_STEP = "Governance checks"
-VERDICT = re.compile(r"Verdict: (?:cleared ([0-9a-f]{4,40})|(fix list)|(rejected))")
+VERDICT = re.compile(
+    r"Verdict: (?:(cleared) ([0-9a-f]{4,40})|(fix list|rejected)(?: ([0-9a-f]{4,40}))?)"
+)
+# the kind of the two forms whose sha is optional (SPEC-0007 rule 4)
+FIXED = {"fix list": "fix", "rejected": "rejected"}
 ADR_FILE = re.compile(r"docs/adr/\d{4}-[^/]+\.md")
 AMENDMENT_FILE = re.compile(r"docs/runs/proposed-spec-amendments-[^/]+\.md")
 TEST_PATTERN = r"^[[:space:]]*(async[[:space:]]+)?def test_"
@@ -188,8 +192,8 @@ def verdicts(comments: list[dict] | None) -> list[tuple[str, str]] | None:
         lines = (c.get("body") or "").splitlines()
         match = VERDICT.fullmatch(lines[0].strip()) if lines else None
         if match:
-            kind = "cleared" if match.group(1) else "fix" if match.group(2) else "rejected"
-            found.append((kind, match.group(1) or ""))
+            kind = "cleared" if match.group(1) else FIXED[match.group(3)]
+            found.append((kind, match.group(2) or match.group(4) or ""))
     return found
 
 
