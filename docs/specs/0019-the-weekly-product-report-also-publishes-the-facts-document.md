@@ -1,6 +1,6 @@
 # SPEC-0019: The weekly report publishes the facts it was rendered from
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-026
 
@@ -62,5 +62,7 @@ download it and compare it with the report of that week.
 
 - Q-S0019-1 What does the upload action do when the same run (a re-run attempt) uploads an artifact of a name that already exists? The criteria assume that setting the action's overwrite option replaces it
   and that nothing else is deleted. This is a behaviour of the upload action and is marked (verify) until the pinned version is read.
+  **Ruled** (maintainers, 2026-10-21): as read. The upload step sets the action's overwrite option, so a re-run attempt of the same run replaces the artifact of that name; the workflow deletes nothing. A new run has its own artifact, and "the latest run" is chosen by the reader by run time. The overwrite behaviour is checked at the build against the README of the pinned version, which is quoted in the build's pull request.
 - Q-S0019-2 Which version of the upload action is pinned, and how does the week label reach its step? The criteria assume a current major version of the upload action pinned by a full commit SHA that a person
   looks up when the build is made (no network in a check), and a step output written by the report step. The SHA is (verify).
+  **Ruled** (maintainers, 2026-10-21): as read. The current major release of `actions/upload-artifact`, pinned by its full commit SHA with the tag in a comment, looked up at the build (`git ls-remote` on github.com/actions/upload-artifact is allowed) and shown in the build's pull request. The week label is a step output of the report step.
