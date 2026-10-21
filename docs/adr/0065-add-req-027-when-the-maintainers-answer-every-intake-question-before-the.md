@@ -1,6 +1,6 @@
 # ADR-0065: Add REQ-027: An intake pull request may carry its own approval
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-21
 - Deciders: maintainers
 - Related: SPEC-0020

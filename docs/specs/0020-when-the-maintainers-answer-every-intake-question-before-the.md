@@ -1,6 +1,6 @@
 # SPEC-0020: An intake pull request may carry its own approval
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-027
 
