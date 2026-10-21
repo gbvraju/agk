@@ -25,13 +25,14 @@ commit approves; the answers live in that paragraph and the pull request body, w
    `docs/requirements.md` is not among the files, so the requirement stays `planned` (SPEC-0012 rule 14: the merge makes it `planned`; `done` is the build's).
 5. **No open question.** The spec at `HEAD` has no `Q-` id of any family and its `## Open questions` section is `none`. A spec with an open `Q-S` id cannot be set `Approved` (SPEC-0013 rule 24), so a question
    raised after the files were written goes the old way: the intake pull request is merged as a draft and a rulings pull request approves it.
-6. **The answers are written down.** The spec's opening paragraph (the text before the first `## ` heading) contains the sentence `The maintainers answered N question` followed by `s` or not, `N` being 1, 2 or
-   3, then ` before it was written`. The skill writes it from the answers the person gave in the session. A spec without it is refused.
+6. **The answers are written down.** The spec's opening paragraph (the text before the first `## ` heading) contains either the sentence `The maintainers answered N question` followed by `s` or not, `N` being
+   1, 2 or 3, then ` before it was written`, or, when no question was asked, the sentence `The maintainers answered no questions before it was written; the sentence settled every point.` The check accepts
+   both forms (Q-K4-217, ruled). The skill writes it from the answers the person gave in the session. A spec without either form, or with another number, is refused.
 7. **The word is not checked.** That the maintainers gave the word is not something a check can see: the session makes the approving commit only on their written word, as a verdict item or an instruction in the
    session, and the pull request body quotes it (CLAUDE.md rule 1). The check makes the commit safe to merge, not authorised.
 8. **The skill and the printed steps.** `skills/spec/SKILL.md` says: when every question is answered before the files are written, write the answers in the spec's opening paragraph and no `Q-S` id; when a
    question is raised after the files exist, leave it as a `Q-S` id. The skill never makes the approving commit (SPEC-0005 rules 8 and 10). `intake.py next-steps` prints one more line, after the pull request
-   body, that names the final-commit mode and the two status lines, as text and not as a command to run on its own.
+   body, that names the final-commit mode and the two status lines, as text and not as a command to run on its own. The ADR stub's Decision text (SPEC-0012 rule 8) is reworded so it is true on both paths: the spec "stays `Draft` until it is approved, by a later pull request or by this intake's own final commit" (Q-K4-218, ruled).
 9. **How it changes.** SPEC-0012 is Approved. The build changes it by `docs/runs/proposed-spec-amendments-N.md`, applied by its ADR (rule 11 C6 gains the final-commit mode, rule 14 says what the merge approves
    in that path). `intake.py` and its tests are kit-only (SPEC-0012 rule 18). `skills/spec/SKILL.md` changes the plugin, so the build is a kit change: a bump, the hashes, the plugin and `agk.toml` versions, and an
    ADR that names the protected classes it touches.
@@ -42,11 +43,11 @@ commit approves; the answers live in that paragraph and the pull request body, w
 
 - Rules 1 and 4: a good draft with an approving commit that changes the two status lines passes `check --final`; REQ-027 AC1.
 - Rule 4: a final commit that changes a third line, a third file, either status to another value (`Draft` to `Accepted`, `Proposed` to `Approved`) or `docs/requirements.md` is refused; REQ-027 AC2.
-- Rules 5 and 6: a spec with a `Q-S` id, with an `## Open questions` section that is not `none`, or without the paragraph of rule 6 (also `N` of 0, 4 or text) is refused; REQ-027 AC3.
+- Rules 5 and 6: a spec with a `Q-S` id, with an `## Open questions` section that is not `none`, or without the paragraph of rule 6 (also `N` of 4, a non-number, or another wording) is refused; the zero form of rule 6 and `N` of 1 to 3 pass; REQ-027 AC3.
 - Rules 1 and 10: `check` without `--final` on the good draft prints what it printed before, and refuses a spec `Approved` and an ADR `Accepted`; REQ-027 AC4.
 - Rules 2 and 3: a pull request whose first commit already carries the approved statuses, whose only commit is the approving one, or whose `HEAD~1` fails a check of C1 to C9, is refused; REQ-027 AC5.
 - Rules 1, 4 and 7: the mode runs with the network and the model unreachable, the requirement is `planned` at `HEAD`, and a test that the mode reads no file other than the three, `agk.toml` and git; REQ-027 AC6.
-- Rule 8: a test reads `skills/spec/SKILL.md` and `intake.py next-steps` for the lines of rule 8 and for no forbidden verb (SPEC-0005 rule 10); REQ-027 AC1.
+- Rule 8: a test reads `skills/spec/SKILL.md` and `intake.py next-steps` for the lines of rule 8 and for no forbidden verb (SPEC-0005 rule 10), and that the stub's Decision text holds the reworded sentence of rule 8 and the stub still passes `check_adrs`; REQ-027 AC1.
 
 ## Proof
 
@@ -56,10 +57,12 @@ merged in one pull request, with the number of the maintainers' round trips it t
 
 ## Residual
 
-- 2026-10-21: the ADR stub's Decision text (SPEC-0012 rule 8) says the spec "stays `Draft` until its open questions are ruled and a later change sets it `Approved`"; after an approving final commit that sentence is stale for the ADR it sits in. The stub is fixed text and is not changed here (due 2026-12-31).
 - 2026-10-21: a check cannot see the maintainers' word (rule 7); a session that makes the approving commit without it is caught only by the review of the pull request (due 2026-12-31).
 - 2026-10-21: L3 generalises the status-lines check into governance and the metrics; until then the final-commit mode is the only place that knows the two lines (due 2026-12-31).
 
 ## Open questions
 
-none
+- Q-K4-217 May `N` be 0 for a sentence that needed no question? The criteria assumed no, 1 to 3 only.
+  **Ruled** (maintainers, 2026-10-21): not as read. `N` may be 0, 1, 2 or 3. With 0 the opening paragraph says "The maintainers answered no questions before it was written; the sentence settled every point." The check accepts both forms. A clear sentence should not be pushed onto the slower path.
+- Q-K4-218 The ADR stub's Decision text says the spec stays `Draft` until a later change approves it; after an approving final commit that is stale. The criteria assumed a residual.
+  **Ruled** (maintainers, 2026-10-21): fixed in the build, not a residual. The stub's Decision text is reworded so it is true on both paths ("stays Draft until it is approved, by a later pull request or by this intake's own final commit"); rule 8 gains that line.
