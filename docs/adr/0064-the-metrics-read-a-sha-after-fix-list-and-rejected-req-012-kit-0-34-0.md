@@ -1,6 +1,6 @@
 # ADR-0064: the metrics read a sha after `Verdict: fix list` and `Verdict: rejected` (REQ-012, SPEC-0007), kit 0.34.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-21
 - Deciders: maintainers
 - Related: ADR-0053, ADR-0060, ADR-0063
