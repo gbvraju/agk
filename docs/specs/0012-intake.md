@@ -54,7 +54,7 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
    --sentence "<sentence>"` writes the ADR file from a fixed text: `Status: Proposed`; the date from `date -u`; `Requirements: REQ-021`;
    a `Protected classes:` line that names `docs/requirements.md`; Context (the sentence, quoted as data, and the date); Decision (REQ-021 is
    added as `planned`, SPEC-<spec> is added as `Draft`, and merging this pull request approves them as proposals, not as a finished
-   spec); Consequences; Residual. It passes `check_adrs` and satisfies `check_protected_changes` for the change to
+   spec; it "stays `Draft` until it is approved, by a later pull request or by this intake's own final commit", SPEC-0020 rule 8); Consequences; Residual. It passes `check_adrs` and satisfies `check_protected_changes` for the change to
    `docs/requirements.md`. The model never edits it.
 9. **What the model writes, and nowhere else in K4.** The model writes only: the requirement title, the `- Acceptance:` line, and the
    spec's title, rules, test lines, proof lines, residual bullets and open questions. Everything else in the three files is produced or
@@ -83,6 +83,8 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
     | C8 | the spec has `## Proof`, `## Residual` and `## Open questions`; every residual bullet has a due date; every `Q-` id in the spec is `Q-S<spec>-<n>` |
     | C9 | the ADR's `Protected classes:` line names `docs/requirements.md` |
 
+    `check --final` (SPEC-0020) checks the approving last commit of an intake pull request instead; without `--final` C6 is as above.
+
     After `check`, the skill runs `make governance` (all checks of the repository). Both must pass; on a failure the skill shows the
     message and may correct the file, at most three rounds, and then stops and reports.
 12. **What the checks cannot check.** That the criteria are the right ones; that they say what the person meant; that the negative
@@ -91,7 +93,7 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
 13. **The skill stops before the commit.** The skill does not commit, push or open a pull request (SPEC-0005 rules 8 and 10). Its last
     step runs `python3 ".../intake.py" next-steps`, which prints the commit message, the push command and a pull request body
     (`Advances: REQ-021`, a dated `Build-state row:` line, `Decisions taken:`, `Questions:`, `Verified:` with the output of rule 11) for
-    the person or their session to use. The commands are printed by the script, so no skill text names a forbidden verb (SPEC-0005 rule
+    the person or their session to use, and a closing paragraph that names the final-commit mode and its two status lines (SPEC-0020 rule 8). The commands are printed by the script, so no skill text names a forbidden verb (SPEC-0005 rule
     10). The session runs those commands under its own `CLAUDE.md`; a skill never commits, pushes or opens a pull request (ruling on
     Q-K4-61: SPEC-0005 rule 8 is a safety boundary, and the session already does the git steps, so there is no saving).
 
@@ -104,7 +106,8 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
     (SPEC-0011 rule 9). After the merge the requirement is `planned`, the spec is `Draft` and the ADR is `Proposed`: the inbox then lists
     the spec and the ADR as waiting for approval (SPEC-0011 rule 3). **Merging an intake pull request approves the requirement** (it enters
     `docs/requirements.md` as `planned`); the spec stays `Draft` until its `Q-S` questions are ruled and it is set `Approved` by its own later
-    change (SPEC-0013 rule 24). A reader of "a person approves it by merging" (ADR-0021 decision 2) must see this: what the merge approves is the
+    change (SPEC-0013 rule 24), except that when the maintainers answered every question before the files were written the pull request's own final
+    commit may set the spec `Approved` and the ADR `Accepted` on their word (SPEC-0020). A reader of "a person approves it by merging" (ADR-0021 decision 2) must see this: what the merge approves is the
     requirement, not the spec.
 15. **Entry points in K4.** A Claude Code session with the plugin installed (terminal, desktop app or IDE). A cloud session does not carry
     the plugin (SPEC-0005 rule 15). **The issue form is the product owner's phone path:** the product owner files a proposal issue
@@ -141,6 +144,7 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
 ## Tests
 
 - Rules 1 to 13, 16: `tests/kit_dev/test_intake.py`, marker `REQ-019 AC1`.
+- `check --final` and the closing paragraph of `next-steps` (SPEC-0020): `tests/kit_dev/test_intake_final.py`, markers `REQ-027 AC1` to `REQ-027 AC6`.
 - Rule 14 (a draft is not a fact), rule 12: the same file and SPEC-0009's fixtures, marker `REQ-019 AC2`.
 - Rule 17: records in `docs/runs/`, checked by the maintainers, not by a test (markers `REQ-019 AC1` and `REQ-019 AC2`).
 

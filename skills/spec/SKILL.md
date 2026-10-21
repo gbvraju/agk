@@ -47,7 +47,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" ids --sentence "SENTENCE"
 4. If the sentence has more than one reasonable reading, ask the person at most three questions, in one message, before
    writing anything. Never guess an answer: each point still open is written under `## Open questions` of the spec as
    `Q-S<spec>-<n>` (for example `Q-S0014-1`), with the question and the reading the criteria assume. Never ask more than
-   three questions in total.
+   three questions in total. When the person answers every question before the files are written, write the answers in
+   the spec's opening paragraph (the text before its first `##` heading) as `The maintainers answered N questions before
+   it was written: ...` (N is 1, 2 or 3; `question` for 1), or, when no question was needed, `The maintainers answered no
+   questions before it was written; the sentence settled every point.`, and write no `Q-S` id. A question raised after
+   the files exist stays a `Q-S` id and goes the old way.
 5. Render the ADR stub with the script. Never write or edit it yourself:
 
 ```
@@ -74,7 +78,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" check
    then run `make governance`. Both must pass.
 8. Last, print the next steps, and tell the person what the checks cannot check: that the criteria are the right ones, that
    they say what the person meant, that the negative case is the important one, and that the spec's rules can be built.
-   That is the person's review and merge. Merging approves the requirement as `planned`; the spec stays `Draft`.
+   That is the person's review and merge. Merging approves the requirement as `planned`; the spec stays `Draft`,
+   unless the maintainers answered every question first and give their word for the final commit of the same pull
+   request, which changes exactly the spec's `- Status: Draft` to `- Status: Approved` and the ADR's
+   `- Status: Proposed` to `- Status: Accepted`; `intake.py check --final` checks that commit.
+   The skill never makes the approving commit: the session makes it on the maintainers' word.
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" next-steps
