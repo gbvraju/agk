@@ -24,12 +24,12 @@ the implementation's ADR amends REQ-012 (rule 19). GitHub response shapes marked
 3. **`hours_open_to_merge`** (supporting). `merged_at` minus `created_at` in hours, one decimal, round half up; empty
    for a closed pull request. Source: `pulls/N`.
 4. **Verdict comments, and `rejected`** (core, "rejections"). Every reviewer verdict starts with one line, exactly one
-   of `Verdict: cleared <short sha>`, `Verdict: fix list` or `Verdict: rejected`, and the implementation session posts
+   of `Verdict: cleared <short sha>`, `Verdict: fix list` or `Verdict: rejected`, the last two each optionally followed by one space and a sha of 4 to 40 lower-case hexadecimal characters (recorded when present; nothing else may follow on the line, and no other form, such as `Verdict on #n`, is read), and the implementation session posts
    that line verbatim as a pull request comment before it works on the verdict. A *verdict comment* is a comment
    (`issues/N/comments`, any author) whose first line is one of the three forms. `rejected` is `yes` when the pull
    request is `closed` without merge or has any `Verdict: rejected` comment, otherwise `no`; `rejected_verdicts` is the
    number of those comments. Source: `pulls/N`, `issues/N/comments`.
-5. **`review_rounds`** (supporting). The number of `Verdict: fix list` comments. `unknown` when the pull request has
+5. **`review_rounds`** (supporting). The number of `Verdict: fix list` comments, with or without a sha. `unknown` when the pull request has
    no verdict comment at all. The `CHANGES_REQUESTED` review state and any reading of commits after comments are not
    used.
 6. **`blocked_weakenings`** (core). The number of head commits of the pull request on which the check run named

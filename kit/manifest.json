@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.33.0",
+  "kit_version": "0.34.0",
   "kit_tests": "tests/kit",
   "verbatim": [
     ".claude/agents/architect.md",
