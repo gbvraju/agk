@@ -49,8 +49,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" ids --sentence "SENTENCE"
    `Q-S<spec>-<n>` (for example `Q-S0014-1`), with the question and the reading the criteria assume. Never ask more than
    three questions in total. When the person answers every question before the files are written, write the answers in
    the spec's opening paragraph (the text before its first `##` heading) as `The maintainers answered N questions before
-   it was written: ...` (N is 1, 2 or 3; `question` for 1), or, when no question was needed, `The maintainers answered no
-   questions before it was written; the sentence settled every point.`, and write no `Q-S` id. A question raised after
+   it was written: ...` (N as a digit (1, 2 or 3), `3 questions`, not `three questions`, which the check refuses;
+   `question` for 1), or, when no question was needed, `The maintainers answered no questions before it was
+   written; the sentence settled every point.`, and write no `Q-S` id. A question raised after
    the files exist stays a `Q-S` id and goes the old way.
 5. Render the ADR stub with the script. Never write or edit it yourself:
 

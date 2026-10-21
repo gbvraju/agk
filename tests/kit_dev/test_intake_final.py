@@ -325,6 +325,7 @@ def test_ac1_the_skill_says_when_the_answers_go_in_the_paragraph_and_never_commi
     assert "opening paragraph" in text and "check --final" in text
     assert "The maintainers answered" in text and "no `Q-S` id" in text
     assert "never makes the approving commit" in text
+    assert "N as a digit (1, 2 or 3)" in text and "`3 questions`, not `three questions`" in text
     for verb in ("git push", "git commit", "gh pr"):
         assert verb not in text, verb
 

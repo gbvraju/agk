@@ -45,4 +45,4 @@ word, sets the spec `Approved` and the ADR `Accepted`. SPEC-0020 (Approved with 
 ## Residual
 
 - 2026-10-21: the check cannot see that the maintainers gave the word (SPEC-0020 rule 7); the pull request body quotes it and the review of the pull request is the control (due 2026-12-31).
-- 2026-10-21: the paragraph of rule 6 accepts digits only (`2 questions`), while the K5 intakes wrote the number in words (`three questions`); a spec written in words is refused with the rule named (due 2026-12-31).
+- 2026-10-21: the paragraph of rule 6 accepts digits only (`2 questions`), while the K5 intakes wrote the number in words (`three questions`); the skill tells the session to use a digit, and a spec written in words is refused with the rule named (due 2026-12-31).
