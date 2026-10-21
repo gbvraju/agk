@@ -1,6 +1,6 @@
 # ADR-0066: an intake pull request may carry its own approval (REQ-027, SPEC-0020), kit 0.35.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-21
 - Deciders: maintainers
 - Related: ADR-0065, ADR-0064
