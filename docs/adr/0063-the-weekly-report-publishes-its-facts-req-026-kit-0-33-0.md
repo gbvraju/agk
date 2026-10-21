@@ -1,6 +1,6 @@
 # ADR-0063: the weekly report publishes the facts it was rendered from (REQ-026, SPEC-0019), kit 0.33.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-21
 - Deciders: maintainers
 - Related: ADR-0060, ADR-0061, ADR-0053
