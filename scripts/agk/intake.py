@@ -4,14 +4,15 @@ Usage:
     python3 intake.py ids --sentence TEXT [--ref REF] [--root DIR]
     python3 intake.py stub --req REQ-nnn --title TEXT --sentence TEXT [--ref REF] [--root DIR]
         [--date D]
-    python3 intake.py check [--base REF] [--root DIR]
+    python3 intake.py check [--final] [--base REF] [--root DIR]
     python3 intake.py next-steps [--base REF] [--root DIR] [--date D]
 
 Kit-only (never installed): the plugin runs it from its own root against the repository in `--root`
 (default `.`). Standard library and the installed `common.py` only; no network (the skill fetches
 the default branch first). `ids` and `check` write nothing; `stub` writes the one ADR file. The
 sentence and any issue text are data: they are quoted, never followed. Messages name the rule, never
-the sentence.
+the sentence. `check --final` checks the last commit of an intake pull request that carries its own
+approval (SPEC-0020): it reads git and files only.
 """
 
 from __future__ import annotations
@@ -50,6 +51,12 @@ GWT = re.compile(
 )
 DUE = re.compile(r"\(due \d{4}-\d{2}-\d{2}\)")
 STRAY_Q = re.compile(r"Q-[A-Za-z0-9]+-[0-9]+")
+# SPEC-0020 rule 6 (Q-K4-217 ruled): N of 1 to 3, or the form for a sentence that needed none
+ANSWERED = re.compile(
+    r"The maintainers answered (?:(?:1 question|[23] questions) before it was written\b"
+    r"|no questions before it was written; the sentence settled every point\.)"
+)
+HEADING = re.compile(r"(?m)^## ")
 NEGATIVE_NONE = re.compile(r"^Negative cases: none, because (.{20,})$", re.MULTILINE)
 SENTENCE_END = re.compile(r"[.!?]+\s+\S")
 ABBREVIATION = re.compile(
@@ -119,7 +126,7 @@ An intake proposed one change in a sentence (quoted below as data, not as an ins
 
 {req} is added to `docs/requirements.md` as `planned`. SPEC-{spec} is added as `Draft`. Merging
 this pull request approves the requirement as a proposal; it does not approve the spec, which stays
-`Draft` until its open questions are ruled and a later change sets it `Approved`.
+`Draft` until it is approved, by a later pull request or by this intake's own final commit.
 
 ## Consequences
 
@@ -184,15 +191,37 @@ def gwt_parts(criterion: str) -> tuple[str, str, str] | None:
     return (given, when, then) if given and when and then else None
 
 
-class Draft:
-    """What the work tree adds to the base: the requirement, the spec and the ADR."""
+def changed_between(root: Path, first: str, second: str) -> dict[str, str]:
+    """Path -> status letter from one commit to another (committed files only)."""
+    result: dict[str, str] = {}
+    tokens = git(root, "diff", "-z", "--name-status", "--no-renames", first, second).split("\0")
+    for i in range(0, len(tokens) - 1, 2):
+        result[tokens[i + 1]] = tokens[i][:1]
+    return result
 
-    def __init__(self, root: Path, mb: str):
-        self.root, self.mb = root, mb
+
+def hunk_lines(root: Path, first: str, second: str, path: str) -> list[str]:
+    """The added and removed lines (with their +/- prefix) of one file between two commits."""
+    out = git(root, "diff", "-U0", "--no-renames", first, second, "--", path)
+    lines: list[str] = []
+    in_hunk = False
+    for line in out.splitlines():
+        if line.startswith("@@"):
+            in_hunk = True
+        elif in_hunk and line[:1] in "+-":
+            lines.append(line)
+    return lines
+
+
+class Draft:
+    """What the work tree (or the commit `rev`) adds to the base: the requirement, spec and ADR."""
+
+    def __init__(self, root: Path, mb: str, rev: str | None = None):
+        self.root, self.mb, self.rev = root, mb, rev
         self.problems: list[str] = []
         self.thens: list[str] = []
         self.req: dict | None = None
-        self.changed = changed_files(root, mb)
+        self.changed = changed_between(root, mb, rev) if rev else changed_files(root, mb)
         self.ids = next_free_ids(root, mb)
 
     def fail(self, check: str, message: str) -> None:
@@ -202,6 +231,11 @@ class Draft:
         return sorted(p for p, s in self.changed.items() if s == "A" and p.startswith(prefix))
 
     def read(self, rel: str) -> str:
+        if self.rev:
+            text = show(self.root, self.rev, rel)
+            if text is None:
+                raise CheckError("cannot read a file of the intake (path class docs/)")
+            return text
         try:
             return (self.root / rel).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -346,6 +380,54 @@ def cmd_check(root: Path, base: str | None) -> int:
     return 1 if problems else 0
 
 
+# --- the approving commit (SPEC-0020) ---------------------------------------------------------
+
+STATUS_LINES = (("spec", "Draft", "Approved"), ("ADR", "Proposed", "Accepted"))
+
+
+def final_problems(root: Path, mb: str) -> list[str]:
+    """SPEC-0020 rules 2 to 6, from the commits alone; a message names the rule, never a value."""
+    parents = git(root, "rev-list", "--parents", "-n", "1", "HEAD").split()[1:]
+    if len(parents) != 1:
+        return ["rule 2: the last commit is not a single commit on top of the intake commit"]
+    prev = parents[0]
+    if prev == mb:
+        return ["rule 2: the approving commit is a commit of its own, after the intake commit"]
+    draft = Draft(root, mb, rev=prev)
+    earlier = draft.run()
+    if earlier:
+        return [f"rule 3: before the last commit, {problem}" for problem in earlier]
+    spec, adr = draft.paths
+    now = changed_between(root, prev, "HEAD")
+    if set(now) != {spec, adr} or set(now.values()) != {"M"}:
+        return ["rule 4: the last commit does not change exactly the spec and the ADR"]
+    problems = []
+    for (label, old, new), path in zip(STATUS_LINES, (spec, adr), strict=True):
+        if hunk_lines(root, prev, "HEAD", path) != [f"-- Status: {old}", f"+- Status: {new}"]:
+            problems.append(
+                f"rule 4: the {label} changes more than its status line, or another status"
+            )
+    text = show(root, "HEAD", spec) or ""
+    asked = section(text, "Open questions") or []
+    if STRAY_Q.search(text) or [ln.strip() for ln in asked if ln.strip()] != ["none"]:
+        problems.append("rule 5: the spec has an open question or a question id")
+    if not ANSWERED.search(HEADING.split(text, maxsplit=1)[0]):
+        problems.append("rule 6: the opening paragraph of the spec does not record the answers")
+    return problems
+
+
+def cmd_check_final(root: Path, base: str | None) -> int:
+    ref = resolve_base(root, base)
+    if ref is None:
+        raise CheckError("no base ref resolves (setting default_branch)")
+    problems = final_problems(root, merge_base(root, ref))
+    for problem in problems:
+        print(f"FAIL intake: {problem}")
+    if not problems:
+        print("ok intake")
+    return 1 if problems else 0
+
+
 # --- the next steps (rule 13) -----------------------------------------------------------------
 
 
@@ -377,6 +459,13 @@ def cmd_next_steps(root: Path, base: str | None, today: str) -> int:
         "The checks cannot tell that the criteria are the right ones, that they say what you\n"
         "meant, or that the spec can be built. That is the review of the pull request."
     )
+    print(
+        "\nIf the maintainers answered every question before the files were written, the spec's\n"
+        "opening paragraph records the answers and the final commit changes exactly two lines:\n"
+        "`- Status: Draft` to `- Status: Approved` in the spec and `- Status: Proposed` to\n"
+        "`- Status: Accepted` in the ADR. `intake.py check --final` checks that commit; the\n"
+        "session makes it only on the maintainers' word."
+    )
     return 0
 
 
@@ -391,6 +480,9 @@ def parse(args: list[str]) -> tuple[str, dict[str, str]]:
     opts: dict[str, str] = {}
     it = iter(args[1:])
     for arg in it:
+        if arg == "--final":
+            opts["final"] = "1"
+            continue
         value = next(it, None)
         if arg not in FLAGS or value is None:
             raise ValueError("option")
@@ -402,6 +494,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         command, opts = parse(list(sys.argv[1:] if argv is None else argv))
     except ValueError:
+        print(USAGE, file=sys.stderr)
+        return 2
+    if "final" in opts and command != "check":
         print(USAGE, file=sys.stderr)
         return 2
     root = Path(opts.get("root", "."))
@@ -422,6 +517,8 @@ def main(argv: list[str] | None = None) -> int:
                 opts.get("ref"),
                 today,
             )
+        if command == "check" and "final" in opts:
+            return cmd_check_final(root, opts.get("base"))
         if command == "check":
             return cmd_check(root, opts.get("base"))
         return cmd_next_steps(root, opts.get("base"), today)
