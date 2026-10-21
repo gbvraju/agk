@@ -27,7 +27,8 @@ def top_block(name: str) -> str:
 
 
 def script() -> str:
-    return text().split("run: |", 1)[1]
+    """The report step's shell body: from `run: |` to the next step (a later step has no `run:`)."""
+    return re.split(r"(?m)^      - ", text().split("run: |", 1)[1], maxsplit=1)[0]
 
 
 def test_ac1_name_and_triggers_are_only_schedule_and_workflow_dispatch():
@@ -126,7 +127,7 @@ def test_ac1_a_missing_report_writes_nothing_and_fails():
     """REQ-018 AC1: rule 16."""
     run = script()
     assert "nothing written" in run
-    assert run.count("exit 1") == 2
+    assert run.count("exit 1") == 3  # no facts, no report, no action
 
 
 # --- the shell body, run against a stub `gh` and the facts of a fixture -------------------------
@@ -161,6 +162,7 @@ def run_body(tmp_path: Path, issues: list[dict], today: str = "2026-10-14"):
         "INPUT_TODAY": today,
         "GITHUB_REPOSITORY": "demo-org/demo-repo",
         "GH_TOKEN": "unused",
+        "GITHUB_OUTPUT": str(tmp_path / "github-output"),
     }
     bash = shutil.which("bash") or "bash"
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell string
