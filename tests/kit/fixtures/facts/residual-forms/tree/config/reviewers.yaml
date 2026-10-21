@@ -1,4 +1,5 @@
 version: 1
+verdict_authors: [reviewer]
 classes:
   protected: {paths: [.claude/, docs/requirements.md, scripts/agk/], approvers: [maintainers]}
 teams:

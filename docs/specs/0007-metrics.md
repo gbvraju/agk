@@ -26,7 +26,7 @@ the implementation's ADR amends REQ-012 (rule 19). GitHub response shapes marked
 4. **Verdict comments, and `rejected`** (core, "rejections"). Every reviewer verdict starts with one line, exactly one
    of `Verdict: cleared <short sha>`, `Verdict: fix list` or `Verdict: rejected`, the last two each optionally followed by one space and a sha of 4 to 40 lower-case hexadecimal characters (recorded when present; nothing else may follow on the line, and no other form, such as `Verdict on #n`, is read), and the implementation session posts
    that line verbatim as a pull request comment before it works on the verdict. A *verdict comment* is a comment
-   (`issues/N/comments`, any author) whose first line is one of the three forms. `rejected` is `yes` when the pull
+   (`issues/N/comments`) by a listed verdict author (SPEC-0021 rule 5: the `verdict_authors` list of `config/reviewers.yaml`, else the user handle of `maintainers`) whose first line is one of the three forms; a comment by anyone else is not a verdict, and when nobody is listed the fields below are `unknown`. `rejected` is `yes` when the pull
    request is `closed` without merge or has any `Verdict: rejected` comment, otherwise `no`; `rejected_verdicts` is the
    number of those comments. Source: `pulls/N`, `issues/N/comments`.
 5. **`review_rounds`** (supporting). The number of `Verdict: fix list` comments, with or without a sha. `unknown` when the pull request has
@@ -52,7 +52,7 @@ the implementation's ADR amends REQ-012 (rule 19). GitHub response shapes marked
      under the `test_dirs` of `agk.toml` (default `["tests"]`) at `merge_commit_sha^` and at `merge_commit_sha`
      (a squash merge has one parent). It is a static count: parametrized cases are not expanded and the tests are not
      run. Source: local git objects of the default branch; empty for a closed pull request.
-   - `merged_head_cleared`: `yes` when a `Verdict: cleared <sha>` comment names the merged head commit (the sha is a
+   - `merged_head_cleared`: `yes` when a `Verdict: cleared <sha>` comment by a listed author names the merged head commit (the sha is a
      prefix of the head); `no` when the last verdict comment names another commit or is not `cleared`; `unknown` when
      there is no verdict comment.
 9. **`cost_class`** (core): the maintainers' review cost, derived and never typed. `S`: `review_rounds` is 0 and

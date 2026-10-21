@@ -75,7 +75,9 @@ The install was run through Claude Code in `docs/runs/plugin-live-proof.md` (ste
 
     maintainers: {github_team: "@REPLACE-ME"}
 
-and change `@REPLACE-ME` to `@YOUR-NAME`. Then write `.github/CODEOWNERS` from it and run all the checks:
+and change `@REPLACE-ME` to `@YOUR-NAME`. The people whose pull request comments count as verdicts are the same user handle; if you map
+`maintainers` to a team (`@org/team`) instead, add one line `verdict_authors: [name, name]` (the GitHub users, without `@`) to
+`config/reviewers.yaml`, because `reviewers.py --check` fails when nobody is listed. Then write `.github/CODEOWNERS` from it and run all the checks:
 
     python3 scripts/agk/reviewers.py --codeowners --write
     make governance

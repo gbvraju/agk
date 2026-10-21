@@ -10,8 +10,8 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 ## Proven
 
-- REQ-001 is not proven: no merged change was found — https://github.com/demo-org/demo-repo/blob/5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe/docs/requirements.md#L3
-- 1 requirement is planned and not counted here — https://github.com/demo-org/demo-repo/blob/5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe/docs/requirements.md
+- REQ-001 is not proven: no merged change was found — https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md#L3
+- 1 requirement is planned and not counted here — https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md
 
 ## Needs you
 
@@ -19,7 +19,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 - <pr>18 "Change number 18" has had no verdict for 9 days — https://github.com/demo-org/demo-repo/pull/18
 
 ### Planned requirements with no spec (1)
-- REQ-002 "Second thing" is planned and no spec names it — https://github.com/demo-org/demo-repo/blob/5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe/docs/requirements.md#L8
+- REQ-002 "Second thing" is planned and no spec names it — https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md#L8
 
 ## At risk
 
@@ -37,7 +37,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 - This week: 4 pull requests merged; hours in total: 172.0; fix verdicts in total: 1; declared "Behaviour: unchanged": 1; estimate: none declared this week — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
 
 ---
-facts: 5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe
+facts: 9b332027c0f71279f4602fbeba668381aa906cd1
 kit version: unknown
 metrics: none found
 drift audit: none found

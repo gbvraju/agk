@@ -20,6 +20,8 @@ BLOCK_BEGIN = "# >>> agk\n"
 BLOCK_END = "# <<< agk\n"
 HANDLE_RE = re.compile(r"^@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
+USER_RE = re.compile(r"^@?[A-Za-z0-9_.-]+$")
+AUTHORS = "verdict_authors"
 
 
 class ReviewerError(CheckError):
@@ -119,6 +121,42 @@ class Flow:
         return val
 
 
+def top_list(key: str, text: str) -> list:
+    """A top-level flow list (`verdict_authors`); the message names the key, never a value."""
+    try:
+        flow = Flow(text)
+        value = flow.value()
+        flow.ws()
+        if flow.i != len(flow.s) or not isinstance(value, list):
+            raise ReviewerError("trailing text")
+    except (ReviewerError, IndexError):
+        raise ReviewerError(f"{key} is not a valid list") from None
+    return value
+
+
+def authors_of(data: dict) -> list[str]:
+    """The listed verdict authors, lower case without `@` (SPEC-0021 rule 5): the list, else the
+    user handle of the team `maintainers`; a team handle (`@org/slug`) lists nobody."""
+    listed = data.get(AUTHORS)
+    if listed is None:
+        team = (data.get("teams") or {}).get("maintainers")
+        handle = team.get("github_team") if isinstance(team, dict) else None
+        listed = [handle] if isinstance(handle, str) else []
+    if not isinstance(listed, list) or not all(
+        isinstance(a, str) and USER_RE.match(a) for a in listed
+    ):
+        return []
+    return [a.lstrip("@").lower() for a in listed]
+
+
+def verdict_authors(root) -> list[str]:
+    """The listed verdict authors of the repository at `root`; unreadable means nobody."""
+    try:
+        return authors_of(parse((root / CONFIG).read_text(encoding="utf-8")))
+    except (OSError, UnicodeDecodeError, CheckError):
+        return []
+
+
 def parse(text: str) -> dict:
     data: dict = {}
     section: dict | None = None
@@ -134,9 +172,12 @@ def parse(text: str) -> dict:
         rest = rest.strip()
         if indent == 0:
             if rest:
-                if rest[0] in "[{":
+                if rest[0] == "[":
+                    data[key] = top_list(key, rest)
+                elif rest[0] == "{":
                     raise ReviewerError("top-level keys take scalar values")
-                data[key] = rest
+                else:
+                    data[key] = rest
                 section = None
             else:
                 section = data.setdefault(key, {})
@@ -184,6 +225,13 @@ def validate(data: dict, protected_list: str) -> list[str]:
             if a not in teams:
                 problems.append(f"class '{cname}': approvers must name teams defined in 'teams'")
                 break
+    listed = data.get(AUTHORS)
+    if listed is not None and not (
+        isinstance(listed, list) and all(isinstance(a, str) and USER_RE.match(a) for a in listed)
+    ):
+        problems.append(f"{AUTHORS} must be a list of user handles")
+    if not authors_of(data):
+        problems.append(f"no listed verdict author: set {AUTHORS} (SPEC-0021)")
     prot = classes.get("protected")
     if isinstance(prot, dict) and isinstance(prot.get("paths"), list):
         if sorted(prot["paths"]) != sorted(read_list(protected_list)):

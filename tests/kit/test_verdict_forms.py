@@ -133,7 +133,12 @@ def facts_and_report(tmp_path: Path, comments: list[str]) -> tuple[dict, str]:
     api = tmp_path / "api"
     shutil.copytree(FIXTURES / "ok" / "api", api)
     body = [
-        {"id": i + 1, "body": text, "created_at": f"2026-10-06T10:{i:02d}:00Z"}
+        {
+            "id": i + 1,
+            "body": text,
+            "created_at": f"2026-10-06T10:{i:02d}:00Z",
+            "user": {"login": "reviewer"},
+        }
         for i, text in enumerate(comments)
     ]
     (api / "comments-5.json").write_text(json.dumps(body))

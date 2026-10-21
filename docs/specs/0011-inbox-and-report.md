@@ -40,7 +40,7 @@ were read on 2026-10-16.
    path of `open_in`. A question that appears only in the notes of an `Approved` spec, or in an `Accepted` ADR, is history and is not an
    item (SPEC-0009 rule 13). Seven in ten of the 115 `Q-` ids of this repository are not named by a "ruled" row of the decisions log
    (`docs/runs/spec-0009-notes.md`); they are not items, because none is open in a Draft spec's notes or a Proposed ADR.
-5. **A pull request without a verdict.** A `pull_requests[]` object is an item when `state` is `open`, `verdicts` is `[]`, and its age is
+5. **A pull request without a verdict.** A `pull_requests[]` object is an item when `state` is `open`, `verdicts` is `[]` (no comment by a listed verdict author is a verdict, SPEC-0021 rule 5), and its age is
    at least `inbox_hours` (`config.inbox_hours`, default 48; the key is new in `agk.toml`). The age is `(today - date(created_at))` in days
    times 24; so with 48 a pull request opened two calendar days before `today` or earlier is an item, and one opened yesterday is not
    (Q-K4-45). The line prints the whole days. A draft pull request is not distinguished in K4.

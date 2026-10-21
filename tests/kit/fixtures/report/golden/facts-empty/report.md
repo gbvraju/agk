@@ -22,7 +22,7 @@ nothing this week
 nothing this week
 
 ---
-facts: 01016de13684437af5cee2cd7220e369e58afa60
+facts: f3f7230da79e4fa05485154b3d244519894adbe0
 kit version: unknown
 metrics: none found
 drift audit: none found

@@ -7,14 +7,14 @@ nothing this week
 
 ## Proven
 
-- REQ-001 is not proven: no merged change was found — https://github.com/demo-org/demo-repo/blob/5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe/docs/requirements.md#L3
-- 2 requirements are planned and not counted here — https://github.com/demo-org/demo-repo/blob/5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe/docs/requirements.md
+- REQ-001 is not proven: no merged change was found — https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md#L3
+- 2 requirements are planned and not counted here — https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md
 
 ## Needs you
 
 ### Planned requirements with no spec (2)
-- REQ-002 "Second thing" is planned and no spec names it — https://github.com/demo-org/demo-repo/blob/5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe/docs/requirements.md#L8
-- REQ-003 "Added after the commit" is planned and no spec names it — https://github.com/demo-org/demo-repo/blob/5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe/docs/requirements.md#L13
+- REQ-002 "Second thing" is planned and no spec names it — https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md#L8
+- REQ-003 "Added after the commit" is planned and no spec names it — https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md#L13
 
 ## At risk
 
@@ -25,7 +25,7 @@ nothing this week
 nothing this week
 
 ---
-facts: 5e419bc7ad80c78b24d23d56dde6bd7d5a9d55fe
+facts: 9b332027c0f71279f4602fbeba668381aa906cd1
 kit version: unknown
 the working tree was modified (dirty: true)
 metrics: none found

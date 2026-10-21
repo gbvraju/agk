@@ -59,7 +59,9 @@ Open points are raised as `Q-K1-n` in `docs/runs/day-2.md`; a rule that depends 
     `maintainers`, mapped to the placeholder handle `@REPLACE-ME`. `.github/CODEOWNERS` is rendered from it by
     `reviewers.render_codeowners`, so `reviewers.py --check-codeowners` passes immediately. The placeholder does not
     make any check fail (warn only); init prints a notice naming `config/reviewers.yaml` and the placeholder. A
-    check for it is a residual for `agk doctor` (see Residual).
+    check for it is a residual for `agk doctor` (see Residual). The file may also have an optional top-level
+    `verdict_authors: [handle, ...]`, the GitHub users whose comments count as verdicts; without it the user handle
+    of `maintainers` is the only one, and `reviewers.py --check` fails when nobody is listed (SPEC-0021 rules 5 and 6).
 13. **ADR-0001.** `docs/adr/0001-adopt-agk.md` records the install: kit version, date, layout, the protected paths, the
     reviewer model, and the ruleset (rule 19). Its Status is `Proposed`; maintainers flip it to `Accepted` in the live-proof PR (rule 24). Its text contains every entry of the
     installed `config/protected-paths.txt`, so the target's first pull request is covered by an ADR that names every changed class.

@@ -7,8 +7,8 @@ nothing this week
 
 ## Proven
 
-- REQ-002 is not proven: it lists no acceptance criteria; no merged change was found — https://github.com/demo-org/demo-repo/blob/795c2cadf3416b3898223fc5b3f55bef19a64e96/docs/requirements.md#L8
-- 1 requirement is planned and not counted here — https://github.com/demo-org/demo-repo/blob/795c2cadf3416b3898223fc5b3f55bef19a64e96/docs/requirements.md
+- REQ-002 is not proven: it lists no acceptance criteria; no merged change was found — https://github.com/demo-org/demo-repo/blob/d7b2d9f65cba67fa71c3f0c527006b1aba295725/docs/requirements.md#L8
+- 1 requirement is planned and not counted here — https://github.com/demo-org/demo-repo/blob/d7b2d9f65cba67fa71c3f0c527006b1aba295725/docs/requirements.md
 
 ## Needs you
 
@@ -23,7 +23,7 @@ nothing this week
 nothing this week
 
 ---
-facts: 795c2cadf3416b3898223fc5b3f55bef19a64e96
+facts: d7b2d9f65cba67fa71c3f0c527006b1aba295725
 kit version: unknown
 metrics: none found
 drift audit: none found
