@@ -20,7 +20,7 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
    with more than one sentence is refused with the reason, and nothing is written.
 2. **Ids are read, never guessed.** The skill first runs `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" ids`, which prints one
    JSON object `{"req": "REQ-021", "spec": "0014", "adr": "0022", "slug": "..."}` and writes nothing. `req` is the next number after
-   the highest `### REQ-nnn` heading of `docs/requirements.md`; `spec` is the next after the highest `docs/specs/NNNN-*.md`; `adr` the
+   the highest `### REQ-nnn` heading of `docs/requirements.md`, and in a project (`agk.toml` `mode` `init` or `adopt`) not below `REQ-101`, because `REQ-001`..`REQ-099` are the kit's (SPEC-0001 rule 11); `spec` is the next after the highest `docs/specs/NNNN-*.md`; `adr` the
    next after the highest `docs/adr/NNNN-*.md`; all three are read from the tree of `origin/<default branch>` (the skill runs
    `git fetch origin <default branch>` first), not from the working tree. `slug` is made from the sentence by the rule of
    `new_spec.py` (lower case, hyphens, at most 60 characters). The model writes only the ids that this output gives.
@@ -73,7 +73,7 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
 
     | Id | Check |
     | --- | --- |
-    | C1 | the ids are the ones rule 2 prints for the base: the requirement is the next free `REQ`, the spec number and the ADR number are the next free |
+    | C1 | the ids are the ones rule 2 prints for the base: the requirement is the next free `REQ` (in a project not below `REQ-101`), the spec number and the ADR number are the next free |
     | C2 | the difference from the base is exactly the three files of rule 4, and the change to `docs/requirements.md` only adds the section of rule 5 at the end (no existing line is changed or removed) |
     | C3 | the acceptance line parses with `common.parse_acceptance` into 1 to 8 criteria numbered from `AC1` with no repeat, and no criterion contains `; ` |
     | C4 | each criterion has `given`, `when`, `then` in order |

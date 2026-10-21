@@ -291,13 +291,30 @@ def find_questions(root: Path) -> list[dict] | None:
     ]
 
 
+PROJECT_FIRST_REQ = (
+    101  # REQ-001..REQ-099 are the kit's own (SPEC-0001 rule 11); REQ-100 is left free
+)
+
+
+def next_req_number(root: Path, highest: int) -> int:
+    """The next requirement number: highest + 1, and in a project never below REQ-101.
+
+    A project is a repository whose agk.toml `mode` is `init` or `adopt`; the kit's own repository
+    has no `mode` and keeps the highest + 1 (SPEC-0012 rule 2, amendment 29).
+    """
+    number = highest + 1
+    if load_config(root)["mode"] in ("init", "adopt"):
+        number = max(number, PROJECT_FIRST_REQ)
+    return number
+
+
 def next_free_ids(root: Path, ref: str) -> dict[str, str]:
     """The next free requirement, spec and ADR numbers in the tree of REF, never the work tree."""
     text = show(root, ref, "docs/requirements.md")
     if text is None:
         raise CheckError("the base has no requirements file (path class docs/)")
     reqs = [int(r["id"][4:]) for r in parse_requirements(text)]
-    out = {"req": f"REQ-{max(reqs, default=0) + 1:03d}"}
+    out = {"req": f"REQ-{next_req_number(root, max(reqs, default=0)):03d}"}
     for kind, key in (("specs", "spec"), ("adr", "adr")):
         names = git(root, "ls-tree", "--name-only", ref, f"docs/{kind}/").splitlines()
         nums = [int(m.group(1)) for n in names if (m := NUM_FILE.match(Path(n).name))]

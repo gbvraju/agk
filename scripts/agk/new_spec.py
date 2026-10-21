@@ -27,6 +27,10 @@ USAGE = (
 )
 REQ_RE = re.compile(r"^REQ-\d{3}$")
 REQ_HEAD = re.compile(r"(?m)^### REQ-(\d{3})\b")
+# The rule of `common.next_req_number` (SPEC-0012 rule 2), restated because this script is
+# stdlib-only (REQ-014 AC2); a test pins the two equal. A project has `mode = "init"` or `"adopt"`.
+PROJECT_FIRST_REQ = 101
+PROJECT_MODE = re.compile(r'(?m)^mode\s*=\s*"(?:init|adopt)"')
 NUM_FILE = re.compile(r"^(\d{4})-[a-z0-9][a-z0-9-]*\.md$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -95,7 +99,12 @@ def make_requirement(root: Path, title: str, issue: str | None, today: str) -> N
         found = [int(n) for n in REQ_HEAD.findall(req_path.read_text(encoding="utf-8"))]
     except (OSError, UnicodeDecodeError) as exc:
         raise Refusal("cannot read the requirements (path class docs/requirements.md)") from exc
-    req = f"REQ-{max(found, default=0) + 1:03d}"
+    number = max(found, default=0) + 1
+    try:
+        project = bool(PROJECT_MODE.search((root / "agk.toml").read_text(encoding="utf-8")))
+    except (OSError, UnicodeDecodeError):
+        project = False
+    req = f"REQ-{max(number, PROJECT_FIRST_REQ) if project else number:03d}"
     text = read_template(root, "docs/adr/TEMPLATE.md")
     number = next_number(root / "docs" / "adr")
     proposal = (
