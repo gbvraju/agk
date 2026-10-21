@@ -1,6 +1,6 @@
 # ADR-0061: Add REQ-026: The weekly report publishes the facts it was rendered from
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-21
 - Deciders: maintainers
 - Related: SPEC-0019

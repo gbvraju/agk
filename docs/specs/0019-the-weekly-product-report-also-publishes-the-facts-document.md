@@ -1,6 +1,6 @@
 # SPEC-0019: The weekly report publishes the facts it was rendered from
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-026
 
