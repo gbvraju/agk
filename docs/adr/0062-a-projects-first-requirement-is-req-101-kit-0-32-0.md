@@ -26,7 +26,7 @@ portal and the first outside developer. The maintainers decided the defect is fi
 4. **Amendment 29** (`docs/runs/proposed-spec-amendments-29.md`) is applied to SPEC-0012 rule 2 (the wording of `req`) and rule 11 (check C1).
 5. **Tests, first** (`tests/kit_dev/test_project_req_ids.py`, new, kit-only): on an init target and an adopt target, the first id is `REQ-101`, an empty requirements file still gives `REQ-101`,
    `REQ-101` and `REQ-102` give `REQ-103`, `REQ-150` gives `REQ-151`, `new_spec.py requirement` agrees, and check C1 accepts a draft numbered `REQ-101` and refuses one that takes `REQ-004`; the kit's own
-   repository (no `mode`, or `mode = ""`) still gives the highest plus one. They were run on unchanged `main` before any code (10 failed, 3 passed, the 3 being guards).
+   repository (no `mode`, or `mode = ""`) still gives the highest plus one. They were run on unchanged `main` before any code (11 failed, 3 passed, the 3 being guards).
 6. **Kit 0.32.0**: the manifest `kit_version`, the hashes of `common.py` and `new_spec.py`, the plugin version and `version` in this repository's `agk.toml` (ADR-0050 decision 7). No file is added to or
    removed from the manifest.
 7. **Docs**: the existing-codebase guide's example requirement is `REQ-101`, not `REQ-004` (three places in step 3).
