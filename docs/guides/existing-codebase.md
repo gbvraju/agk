@@ -56,15 +56,15 @@ changing it is a later, separate change.
 ## Step 3. Add tests that assert today's behaviour
 
 For each criterion add a test that passes on the unchanged code and assert what it does now. Mark each test with its requirement and
-criterion in its name or docstring, for example `REQ-004 AC1`. Then a person sets the `Status:` of your own requirements to `done` (an agent
+criterion in its name or docstring, for example `REQ-101 AC1`. Then a person sets the `Status:` of your own requirements to `done` (an agent
 never marks anything done). Leave `REQ-001` to `REQ-003` alone: they are the kit's own requirements, installed as `planned`, and
 `make -f agk.mk agk-governance` fails with `done requires a test marker` if you mark them done.
 
 The pull request body for this change says:
 
-    Advances: REQ-004
+    Advances: REQ-101
     Behaviour: unchanged
-    Build-state row: 2026-10-19 REQ-004 baseline tests
+    Build-state row: 2026-10-19 REQ-101 baseline tests
 
 `Behaviour: unchanged` is true here and is the only time it is: nothing the product does has changed. The `proof` check reads
 `skipped`, and the report counts the pull request among those that declared it. Adding the tests while changing no product file is
