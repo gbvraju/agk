@@ -1,6 +1,6 @@
 # ADR-0060: criterion g starts now, read-only; the facts are published
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-21
 - Deciders: maintainers
 - Amends: ADR-0025
