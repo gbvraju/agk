@@ -2,8 +2,9 @@
 # (workflow_dispatch, with an optional `today` date); the report covers the full ISO week before it. GitHub may disable
 # scheduled workflows after a period of repository inactivity (the period is (verify) against current GitHub
 # documentation); then run it by hand. The report is a pure function of the facts document (facts.py), written to the
-# one issue labelled agk-product-report for that week: created, or its body replaced. Its only writes: that issue and
-# the label. It needs `issues: write` with the workflow token; `actions: read` lets the facts read the proof runs.
+# one issue labelled agk-product-report for that week: created, or its body replaced. Its only writes: that issue,
+# the label and, once the issue is written, one workflow artifact (SPEC-0019) holding the facts file the report was
+# rendered from, so a reader with access to the repository can use the same numbers. It needs `issues: write` with the workflow token; `actions: read` lets the facts read the proof runs.
 name: product-report
 
 on:
@@ -31,6 +32,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Write the week's report to one issue
+        id: report
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -40,12 +42,17 @@ jobs:
           facts="$RUNNER_TEMP/facts.json"
           report="$RUNNER_TEMP/report.md"
           python3 scripts/agk/facts.py --today "$today" --repo "$GITHUB_REPOSITORY" > "$facts"
+          if [ ! -s "$facts" ]; then
+            echo "no facts were produced; nothing written"
+            exit 1
+          fi
           python3 scripts/agk/product_report.py --facts "$facts" --today "$today" > "$report"
           week=$(sed -n '1s/^<!-- agk-product-report: \(.*\) -->$/\1/p' "$report")
           if ! printf '%s' "$week" | grep -Eq '^[0-9]{4}-W[0-9]{2}$'; then
             echo "no report was produced; nothing written"
             exit 1
           fi
+          echo "week=$week" >> "$GITHUB_OUTPUT"
           decision=$(python3 scripts/agk/product_report.py --facts "$facts" --today "$today" --print-action)
           action=$(printf '%s\n' "$decision" | sed -n 1p)
           printf '%s\n' "$decision" | sed -n '2,$p'
@@ -64,3 +71,11 @@ jobs:
               exit 1
               ;;
           esac
+      - name: Publish the facts of the report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
+        with:
+          name: agk-facts-${{ steps.report.outputs.week }}
+          path: ${{ runner.temp }}/facts.json
+          retention-days: 90
+          if-no-files-found: error
+          overwrite: true

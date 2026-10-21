@@ -112,7 +112,7 @@ were read on 2026-10-16.
     metrics at 06:43) and `workflow_dispatch` with an optional input `today`. `permissions`: `contents: read`, `pull-requests: read`,
     `checks: read`, `actions: read` (the facts script reads the `proof` runs), `issues: write`. A single job, run only on the default
     branch, SHA-pinned actions as the other workflows, a full checkout. Steps: run `facts.py --today "$today"` into a file in
-    `$RUNNER_TEMP`, run `product_report.py --facts` on it, and create or update the issue (rule 16). GitHub may disable scheduled
+    `$RUNNER_TEMP`, run `product_report.py --facts` on it, and create or update the issue (rule 16); then one more step uploads that same facts file as the workflow artifact `agk-facts-<week>` (SPEC-0019), with no new permission. GitHub may disable scheduled
     workflows after inactivity `(verify)`; the doctor already reports a disabled drift-audit workflow, and at implementation an amendment of SPEC-0006 extends
     `drift-workflow-state` to also cover the product-report workflow, without a new check id (ruling on Q-K4-52).
 16. **One issue per week, updated in place.** The step lists the issues labelled `agk-product-report` through the facts document
