@@ -1,6 +1,6 @@
 # ADR-0062: a project's first requirement is REQ-101 (REQ-019, SPEC-0012), kit 0.32.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-21
 - Deciders: maintainers
 - Related: ADR-0053, ADR-0060
