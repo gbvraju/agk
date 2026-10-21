@@ -1,6 +1,6 @@
 # SPEC-0021: A fix list that names only the final commit clears it in advance
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-028
 

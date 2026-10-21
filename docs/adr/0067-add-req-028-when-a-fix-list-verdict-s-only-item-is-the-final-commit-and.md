@@ -1,6 +1,6 @@
 # ADR-0067: Add REQ-028: A fix list that names only the final commit clears it in advance
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-21
 - Deciders: maintainers
 - Related: SPEC-0021
