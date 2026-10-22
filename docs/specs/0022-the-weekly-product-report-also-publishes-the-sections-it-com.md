@@ -22,7 +22,7 @@ is due 2026-12-31.
    (`--inbox`) and the markdown of every existing golden are byte-identical to before; the inbox is built from the same item builders and is not part of `report.json`.
 3. **The document.** `report.json` has the keys `schema` (the number 1), `week` (`2026-W41`), `opening`, `sections` and `notices`, and no other. `opening` is `{"first", "last", "as_of"}`, three dates
    (`first` the Monday, `last` the Sunday, `as_of` the day the lists are as of). `sections` has the keys `delivered`, `proven`, `needs_you`, `at_risk` and `cost`, each a list in the order the markdown prints, an
-   empty list when the markdown prints `nothing this week`; `needs_you` is a list of groups `{"group", "count", "items"}` in the order of the markdown (`count` a number or `"unknown"`). `notices` is the
+   empty list when the markdown prints `nothing this week`; `needs_you` is a list of groups `{"group", "count", "items"}` in the order of the markdown (`group` one of `spec`, `adr`, `question`, `pull-request`, `residual`, `requirement`; `count` a number or `"unknown"`). `notices` is the
    list of the footer lines in the order printed.
 4. **Items.** Every item is an object with `kind` (a word of the list in rule 5), the fields of that kind and nothing else, and `links`: a list of `{"to", "url"}` objects, `to` being `pull-request`, `file`,
    `directory`, `issue` or `search`, in the order the markdown prints them (empty when the line has none). A date is `YYYY-MM-DD`; a number is a JSON number; a title is the text the report prints and is present
@@ -46,12 +46,12 @@ is due 2026-12-31.
    | at_risk | `residual-overdue` | `due`, `days`, `text` (as printed, shortened) |
    | at_risk | `pull-requests-open-long` | `entries` (a list of `{"number", "days"}`, with `title` when the list has one entry) |
    | at_risk | `pull-requests-sent-back` | `entries` (`{"number", "times"}`, with `title` when one) |
-   | at_risk | `pull-requests-merged-no-verdict` | `entries` (`{"number"}`, with `title` when one) |
-   | at_risk | `pull-requests-merged-not-cleared` | `entries` (`{"number"}`, with `title` when one) |
+   | at_risk | `pull-requests-merged-no-verdict` | `entries` (`{"number"}`; the report prints no title for it) |
+   | at_risk | `pull-requests-merged-not-cleared` | `entries` (`{"number"}`; the report prints no title for it) |
    | at_risk | `drift-audit` | `total` (a number or `"unknown"`), `counts` (an object of the finding kinds to numbers or `"unknown"`), `open_issue` (a number, `"none"` or `"unknown"`) |
    | cost | `pull-request-cost` | `number`, `title`, `hours` (a decimal string or `"unknown"`), `fix_verdicts` (a number or `"unknown"`) |
    | cost | `week-totals` | `merged`, `hours`, `fix_verdicts`, `behaviour_unchanged`, `estimate` (`{"within", "counted"}` or `"none-declared"`), `busy` (a boolean) |
-   | any section, and `needs_you` groups | `unknown` | `what` (the thing that could not be read: `requirements`, `pull requests`, `test markers`, `questions`, `residuals`, `the drift counts`, `the age limit for pull requests`) |
+   | any section, and `needs_you` groups | `unknown` | `what` (the thing that could not be read: `requirements`, `pull requests`, `test markers`, `questions`, `residuals`, `the drift counts`, `the age limit for pull requests (inbox_hours)`) |
    | notices | `facts-commit` | `commit` |
    | notices | `working-tree-modified` | `dirty` (the printed value) |
    | notices | `kit-version` | `version` (a string or `"unknown"`) |
