@@ -39,6 +39,7 @@ NAMES = [
     "live-proof-plan.md",
     "held-out-findings.md",
     "pilot-week-record.md",
+    "shadow-record.md",
 ]
 HEADINGS = {
     "brief-overnight.md": ["## Rules block", "## Items", "## Report format"],
@@ -64,7 +65,7 @@ def text(name: str) -> str:
     return (TEMPLATES / name).read_text(encoding="utf-8")
 
 
-def test_ac1_the_seven_templates_exist_and_only_those(tmp_path):
+def test_ac1_the_eight_templates_exist_and_only_those(tmp_path):
     """REQ-020 AC1: rule 14."""
     assert sorted(p.name for p in TEMPLATES.iterdir()) == sorted(NAMES)
 
