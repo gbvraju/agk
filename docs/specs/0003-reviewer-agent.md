@@ -130,7 +130,7 @@ REQ-013 is not added by this spec: `docs/requirements.md` is protected, so an AD
     reviewer first or posted on the PR, and the human's verdict is recorded afterwards. Each run is recorded in
     `docs/runs/` with the PR, the agent verdict and findings, the human verdict, the agreements, the misses (a
     defect the human found and the agent did not) and the false positives (a finding the human rejected). The record
-    is the evidence for whether the agent may be relied on; the maintainers decide (principle 1).
+    is the evidence for whether the agent may be relied on; the maintainers decide (principle 1). With SPEC-0023 the shadow record of the architect role's review agent is another file, `kit/templates/playbook/shadow-record.md`, counted by `shadow_count.py` (SPEC-0023 rule 8); it is not this record.
 
 ## Tests
 
