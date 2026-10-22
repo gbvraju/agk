@@ -1,6 +1,6 @@
 # SPEC-0022: The weekly report also publishes its sections as data in report.json
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-029
 

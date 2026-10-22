@@ -1,6 +1,6 @@
 # ADR-0069: Add REQ-029: The weekly report also publishes its sections as data in report.json
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-22
 - Deciders: maintainers
 - Related: SPEC-0022
