@@ -57,7 +57,7 @@ were read on 2026-10-16.
 8. **Five sections, in this order, with these headings.** `## Delivered`, `## Proven`, `## Needs you`, `## At risk`, `## Cost`: the
    five questions of ADR-0021, in order. The body has one opening line (the week and the date range), then these five and no other
    `##` heading, then the footer of rule 11. The text is plain language: no abbreviation without its meaning on first use, no field
-   names. A section with no line prints `nothing this week`, and that is the only reason for it.
+   names. A section with no line prints `nothing this week`, and that is the only reason for it. The report is built as a structure of items and rendered from it (SPEC-0022 rules 2 to 5): the opening, Delivered, Proven, Cost and the footer (the notices) are items of the fixed kinds, and Needs you and At risk are lines until the later parts of REQ-029 build them too; the printed text does not change.
 9. **Delivered and Proven.**
    - *Delivered.* One line per requirement whose `status` is `done`: `REQ-001 "<title>" is done: 3 acceptance criteria (AC1, AC2, AC3)`,
      with the link to its section of `docs/requirements.md`; then, one line per pull request with `state` `merged` and `merged_at` in the
@@ -102,7 +102,7 @@ were read on 2026-10-16.
     `sys.stdin`; and it allows exactly one file read, of the path given by `--facts`. (c) A test runs the renderer in an empty
     temporary directory, with an empty environment and with `HOME` unset, and compares the bytes with the golden. (d) A test changes one number in a facts document and shows that the one line that depends on it changes and no
     other (so no number is constant in the renderer). (e) A test shows that every number in a rendered report can be found, or
-    computed by the formulas of rules 5, 9, 10, from the document: it recomputes them with a second, independent function.
+    computed by the formulas of rules 5, 9, 10, from the document: it recomputes them with a second, independent function. (f) A test renders the markdown from the structure alone, also after a trip through JSON, and compares it with what the script prints.
 14. **Determinism.** The same facts document and the same `--today` and `--week` give byte-identical output: items in the orders of
     the tables, no timestamp, no environment text, `\n` line ends, one trailing newline.
 
