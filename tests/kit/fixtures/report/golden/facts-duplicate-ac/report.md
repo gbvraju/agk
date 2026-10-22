@@ -7,7 +7,7 @@ nothing this week
 
 ## Proven
 
-- 1 requirement is planned and not counted here — https://github.com/demo-org/demo-repo/blob/2f2fb508a59d6bf8d6550d6402fd3794ddd7950c/docs/requirements.md
+- 1 requirement is planned and not counted here — https://github.com/demo-org/demo-repo/blob/3ccc40e275145137fa7e2ccd1c9f571a4ac11222/docs/requirements.md
 
 ## Needs you
 
@@ -22,7 +22,7 @@ nothing this week
 nothing this week
 
 ---
-facts: 2f2fb508a59d6bf8d6550d6402fd3794ddd7950c
+facts: 3ccc40e275145137fa7e2ccd1c9f571a4ac11222
 kit version: unknown
 metrics: none found
 drift audit: none found

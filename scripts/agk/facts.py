@@ -376,12 +376,12 @@ def behaviour_of(body: Any) -> str | None:
     return "unchanged" if declares_unchanged(body) else None
 
 
-def verdicts_of(comments: list | None) -> Any:
-    if comments is None:
+def verdicts_of(comments: list | None, authors: list[str] | None = None) -> Any:
+    if comments is None or (authors is not None and not authors):
         return UNKNOWN
     found = []
     for comment in sorted(comments, key=lambda c: (c.get("created_at") or "", c.get("id") or 0)):
-        parsed = metrics.verdicts([comment])
+        parsed = metrics.verdicts([comment], authors)
         if parsed:
             kind, sha = parsed[0]
             found.append({"kind": kind, "sha": sha or None, "at": comment.get("created_at")})
@@ -427,7 +427,7 @@ def proof_of(src: Any, head: str) -> tuple[str, Any]:
     return outcome, reason if REASON.fullmatch(reason) else UNKNOWN
 
 
-def pull_record(src: Any, item: dict) -> dict:
+def pull_record(src: Any, item: dict, authors: list[str] | None = None) -> dict:
     number = item["number"]
     head = (item.get("head") or {}).get("sha") or ""
     files = get_list(src, f"files-{number}", f"repos/{{repo}}/pulls/{number}/files")
@@ -448,7 +448,7 @@ def pull_record(src: Any, item: dict) -> dict:
         "files": UNKNOWN if files is None else sorted(f.get("filename", "") for f in files),
         "proof": proof[0],
         "proof_reason": proof[1],
-        "verdicts": verdicts_of(comments),
+        "verdicts": verdicts_of(comments, authors),
         "behaviour": behaviour_of(item["body"]) if "body" in item else UNKNOWN,
         "estimated_size": size,
         "estimated_hours": expected,
@@ -456,7 +456,7 @@ def pull_record(src: Any, item: dict) -> dict:
     }
 
 
-def pulls_section(src: Any, today: date, weeks: int) -> Any:
+def pulls_section(src: Any, today: date, weeks: int, authors: list[str] | None = None) -> Any:
     start = window_start(today, weeks)
 
     def older(chunk: list[dict]) -> bool:
@@ -476,7 +476,7 @@ def pulls_section(src: Any, today: date, weeks: int) -> Any:
             chosen[p["number"]] = p
     last = metrics.start_of(today + timedelta(days=1))
     kept = [p for p in chosen.values() if (metrics.stamp(p.get("created_at")) or last) < last]
-    return [pull_record(src, p) for p in sorted(kept, key=lambda p: p["number"])]
+    return [pull_record(src, p, authors) for p in sorted(kept, key=lambda p: p["number"])]
 
 
 def issues_section(src: Any) -> Any:
@@ -552,7 +552,7 @@ def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
         "adrs": adrs,
         "residuals": residuals_section(root, specs, adrs),
         "questions": questions_section(root, specs, adrs),
-        "pull_requests": pulls_section(src, today, weeks),
+        "pull_requests": pulls_section(src, today, weeks, metrics.verdict_authors(root)),
         "issues": issues,
         "drift": drift_section(root, today, cfg, issues),
     }

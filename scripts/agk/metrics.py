@@ -30,6 +30,7 @@ from common import (
     show,
     test_dirs,
 )
+from reviewers import verdict_authors
 
 NAME = "metrics"
 USAGE = (
@@ -183,12 +184,28 @@ def choose_action(issues: list[dict], week: str) -> str:
 # --- verdict comments -------------------------------------------------------------------------
 
 
-def verdicts(comments: list[dict] | None) -> list[tuple[str, str]] | None:
-    """(kind, sha) of every verdict comment, in time order; kind is cleared, fix or rejected."""
+def author_of(comment: dict) -> str:
+    user = comment.get("user")
+    login = user.get("login") if isinstance(user, dict) else None
+    return login.lower() if isinstance(login, str) else ""
+
+
+def verdicts(
+    comments: list[dict] | None, authors: list[str] | None = None
+) -> list[tuple[str, str]] | None:
+    """(kind, sha) of every verdict comment, in time order; kind is cleared, fix or rejected.
+
+    With `authors` (SPEC-0021 rule 5), only a comment by a listed author is a verdict; an empty
+    list is `None` (unknown), never an empty result. Without it nothing is filtered."""
     if comments is None:
+        return None
+    allowed = None if authors is None else {a.lstrip("@").lower() for a in authors}
+    if allowed is not None and not allowed:
         return None
     found = []
     for c in sorted(comments, key=lambda c: c.get("created_at") or ""):
+        if allowed is not None and author_of(c) not in allowed:
+            continue
         lines = (c.get("body") or "").splitlines()
         match = VERDICT.fullmatch(lines[0].strip()) if lines else None
         if match:
@@ -205,6 +222,7 @@ class Context:
     src: Any
     root: Path
     dirs: list[str]
+    authors: list[str] | None = None
 
 
 def hours_between(opened: str | None, closed: str | None) -> str:
@@ -317,7 +335,7 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
     comments = ctx.src.get(f"comments-{n}", f"repos/{{repo}}/issues/{n}/comments")
     files = ctx.src.get(f"files-{n}", f"repos/{{repo}}/pulls/{n}/files")
     commits = ctx.src.get(f"commits-{n}", f"repos/{{repo}}/pulls/{n}/commits")
-    listed = verdicts(comments if isinstance(comments, list) else None)
+    listed = verdicts(comments if isinstance(comments, list) else None, ctx.authors)
     head = (detail.get("head") or {}).get("sha") or ""
 
     hours = hours_between(detail.get("created_at"), detail.get("merged_at")) if merged else NONE
@@ -527,7 +545,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     root = repo_root()
     src = ApiDir(Path(options["api"])) if options["api"] else Gh(options["repo"] or origin_repo())
-    ctx = Context(src, root, test_dirs(root))
+    ctx = Context(src, root, test_dirs(root), verdict_authors(root))
     body, incomplete = report(ctx, today, issues)
     sys.stdout.write(body)
     return 1 if incomplete else 0

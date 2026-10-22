@@ -15,7 +15,14 @@ TODAY = "2026-10-14"  # a Wednesday; the window is 2026-10-05 to 2026-10-12 (ISO
 LAST = "<!-- agk-metrics 2026-W41 -->"
 
 
+def authors(repo) -> None:
+    """The listed verdict authors of the recorded pull requests (SPEC-0021 rule 5)."""
+    if not (repo.root / "config" / "reviewers.yaml").exists():
+        repo.write("config/reviewers.yaml", "version: 1\nverdict_authors: [reviewer, r]\n")
+
+
 def metrics(repo, case: str | Path, *extra: str, today: str = TODAY, **env: str):
+    authors(repo)
     api = FIXTURES / case if isinstance(case, str) else case
     return repo.run("metrics.py", "--api-dir", str(api), "--today", today, *extra, **env)
 
@@ -350,6 +357,7 @@ def test_ac1_the_script_writes_nothing_and_never_calls_gh(repo, tmp_path):
     gh = stub / "gh"
     gh.write_text(f"#!/bin/sh\ntouch {marker}\nexit 1\n")
     gh.chmod(0o755)
+    authors(repo)
     before = sorted(p.name for p in repo.root.iterdir())
     proc = metrics(repo, "cost-classes", PATH=f"{stub}{os.pathsep}{os.environ['PATH']}")
     assert proc.returncode == 0

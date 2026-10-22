@@ -37,6 +37,23 @@ def run_init(target: Path, *args: str, **kw):
     )
 
 
+def set_handle(root: Path, handle: str = "@demo-maintainer") -> None:
+    """Step 4 of the getting-started guide: a real handle for `maintainers`, then CODEOWNERS.
+
+    `@REPLACE-ME` is never a listed verdict author (SPEC-0021 rule 5), so `reviewers.py --check`
+    fails until the handle is set."""
+    path = root / "config" / "reviewers.yaml"
+    path.write_text(path.read_text(encoding="utf-8").replace("@REPLACE-ME", handle))
+    proc = subprocess.run(
+        [sys.executable, "scripts/agk/reviewers.py", "--codeowners", "--write"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
 def snapshot(root: Path) -> dict[str, tuple[str, int]]:
     """Relative path -> (sha256, mtime_ns) of every file below root, excluding .git."""
     out = {}
@@ -139,6 +156,7 @@ def shared_install(tmp_path_factory) -> Path:
     git(root, "commit", "-q", "-m", "initial")
     proc = run_init(root)
     assert proc.returncode == 0, proc.stdout + proc.stderr
+    set_handle(root)
     return root
 
 

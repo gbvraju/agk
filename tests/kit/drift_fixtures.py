@@ -18,6 +18,7 @@ TODAY = date(2026, 10, 15)
 
 REVIEWERS = (
     "version: 1\n"
+    "verdict_authors: [reviewer]\n"
     "classes:\n"
     "  protected: {paths: [.claude/, docs/requirements.md, scripts/agk/],"
     " approvers: [maintainers]}\n"

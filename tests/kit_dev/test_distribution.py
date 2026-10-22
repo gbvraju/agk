@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import KIT_ROOT, clean_env, git, make_repo, manifest, run_init, snapshot
+from conftest import KIT_ROOT, clean_env, git, make_repo, manifest, run_init, set_handle, snapshot
 
 PLUGIN = KIT_ROOT / ".claude-plugin"
 SKILLS = KIT_ROOT / "skills"
@@ -283,6 +283,7 @@ def test_ac3_an_install_has_no_plugin_file_and_governance_runs_without_it(tmp_pa
     repo = make_repo(tmp_path / "proj")
     assert run_init(repo).returncode == 0
     assert not (repo / ".claude-plugin").exists() and not (repo / "skills").exists()
+    set_handle(repo)
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "install")
     proc = subprocess.run(

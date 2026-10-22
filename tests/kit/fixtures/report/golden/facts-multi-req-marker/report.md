@@ -7,13 +7,13 @@ nothing this week
 
 ## Proven
 
-- REQ-001 is not proven: no merged change was found — https://github.com/demo-org/demo-repo/blob/ff2ed4c95853b7f28d91c2ae565bc8c689d16beb/docs/requirements.md#L3
-- 1 requirement is planned and not counted here — https://github.com/demo-org/demo-repo/blob/ff2ed4c95853b7f28d91c2ae565bc8c689d16beb/docs/requirements.md
+- REQ-001 is not proven: no merged change was found — https://github.com/demo-org/demo-repo/blob/d61c7d0940d03d9198c46c0aff465da93d2538ef/docs/requirements.md#L3
+- 1 requirement is planned and not counted here — https://github.com/demo-org/demo-repo/blob/d61c7d0940d03d9198c46c0aff465da93d2538ef/docs/requirements.md
 
 ## Needs you
 
 ### Planned requirements with no spec (1)
-- REQ-002 "Second thing" is planned and no spec names it — https://github.com/demo-org/demo-repo/blob/ff2ed4c95853b7f28d91c2ae565bc8c689d16beb/docs/requirements.md#L8
+- REQ-002 "Second thing" is planned and no spec names it — https://github.com/demo-org/demo-repo/blob/d61c7d0940d03d9198c46c0aff465da93d2538ef/docs/requirements.md#L8
 
 ## At risk
 
@@ -24,7 +24,7 @@ nothing this week
 nothing this week
 
 ---
-facts: ff2ed4c95853b7f28d91c2ae565bc8c689d16beb
+facts: d61c7d0940d03d9198c46c0aff465da93d2538ef
 kit version: unknown
 metrics: none found
 drift audit: none found

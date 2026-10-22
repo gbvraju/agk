@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import KIT_ROOT, clean_env, git
+from conftest import KIT_ROOT, clean_env, git, set_handle
 
 TODAY = "2026-10-14"  # a Wednesday; the report covers 2026-10-05 to 2026-10-11 (ISO week 2026-W41)
 MERGED = "2026-10-08T10:00:00Z"
@@ -35,6 +35,13 @@ REQUIREMENTS = """# Requirements
 - Acceptance: AC1 it is built
 - Status: planned
 """
+
+
+@pytest.fixture
+def installed(installed: Path) -> Path:
+    """The install after step 4 of the getting-started guide: a real handle for `maintainers`."""
+    set_handle(installed)
+    return installed
 
 
 def make(root: Path, *args: str) -> subprocess.CompletedProcess:
