@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.40.0",
+  "kit_version": "0.41.0",
   "kit_tests": "tests/kit",
   "verbatim": [
     ".claude/agents/architect-review.md",

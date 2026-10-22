@@ -36,13 +36,14 @@ facts not reconfirmed are marked `(verify)`. The repository facts quoted here we
    has numbered items headed **Milestones** (each with a measurable exit criterion), **Non-goals** and **Done means**, and a `Protected
    classes:` line naming `constitution/`. `constitution/principles.md` is not edited: it is a verbatim file that the doctor compares with
    the kit's copy; project-specific rules go in `## Project rules` of the vision. The ruleset is not rewritten: the ADR-0001 that
-   init or adopt installed already records it, and the charter cites it.
+   init or adopt installed already records it, and the charter cites it. With SPEC-0023 rule 6 the Decision also has the numbered items **Discovery** (one bullet for each of the six topics `users`, `existing`, `runs`, `data`, `scale`, `compliance`, in that order) and, when a topic is answered `not known yet` or the first slice leaves one out, **Slice**; the skill asks about the topics before it writes.
 5. **The checks.** `python3 ".../playbook.py" check-start [--base REF]` fails with a message that names the rule, never the text:
    the two files are the whole difference from the base; the vision has no `TODO(maintainers)` and has the four headings; every line
    under `## Project rules` carries the marker; the ADR passes `check_adrs`, is `Proposed`, has the three headed items, each milestone
    line has the words `exit:` and a measurable statement (a digit, or `all`, `every`, `none`, `zero`), and its number is the next free
    number read from `origin/<default branch>` by `common.next_free_ids` (rule 25); `constitution/principles.md` is byte-identical to the base.
    Then `make governance`. At most three correction rounds. The model writes the vision and the charter; nothing else.
+   With SPEC-0023 rule 7 `check-start` also refuses a charter that lacks the Discovery item, one of the six topics, an answer, or the Slice bullet of a topic answered `not known yet`; it runs on a start only, so a charter written before this change is not checked again.
    What the checks cannot check: that the milestones are the right ones, which is the person's merge.
 
 ### The architect role
