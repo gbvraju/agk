@@ -1,7 +1,8 @@
 {
-  "kit_version": "0.39.0",
+  "kit_version": "0.40.0",
   "kit_tests": "tests/kit",
   "verbatim": [
+    ".claude/agents/architect-review.md",
     ".claude/agents/architect.md",
     ".claude/agents/drift-auditor.md",
     ".claude/hooks/architect_guard.py",
@@ -20,6 +21,7 @@
     "CLAUDE.md",
     "Makefile",
     "agk.mk",
+    "config/review-checklist.md",
     "constitution/principles.md",
     "docs/adr/TEMPLATE.md",
     "docs/briefs/TEMPLATE.md",
