@@ -20,7 +20,7 @@ OLD_PULL_REQUEST_DAYS = 7
 RESIDUAL_CHARACTERS = 120
 USAGE = (
     "usage: product_report.py --facts FILE [--today YYYY-MM-DD] [--week YYYY-Www] "
-    "[--inbox | --print-action]"
+    "[--json FILE | --inbox | --print-action]"
 )
 DATE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
 STAMP = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|\+00:00)$")
@@ -953,6 +953,15 @@ def render_markdown(structure: dict) -> str:
     return "\n".join(out) + "\n"
 
 
+def write_json(structure: dict, path: str) -> None:
+    """`report.json`: the structure, two-space indent, UTF-8, a final newline (SPEC-0022 rule 8)."""
+    text = json.dumps(structure, indent=2, ensure_ascii=False) + "\n"
+    try:
+        Path(path).write_text(text, encoding="utf-8")
+    except OSError as exc:
+        raise Refusal("the report file cannot be written (option: --json)") from exc
+
+
 def render_report(doc: dict, today: date, week: str | None) -> str:
     return render_markdown(build_report(doc, today, week))
 
@@ -999,10 +1008,14 @@ def parse(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--facts", required=True)
     parser.add_argument("--today")
     parser.add_argument("--week")
+    parser.add_argument("--json")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--inbox", action="store_true")
     mode.add_argument("--print-action", action="store_true")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.json is not None and (args.inbox or args.print_action):
+        parser.error("--json takes the report only")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1018,7 +1031,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.print_action:
             sys.stdout.write(print_action(doc, week_window(today, args.week)[2]))
         else:
-            sys.stdout.write(render_report(doc, today, args.week))
+            structure = build_report(doc, today, args.week)
+            if args.json is not None:
+                write_json(structure, args.json)
+            sys.stdout.write(render_markdown(structure))
     except Refusal as exc:
         print(f"FAIL product-report: {exc}")
         return 1

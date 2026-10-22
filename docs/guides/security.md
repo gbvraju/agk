@@ -54,7 +54,7 @@ The permissions are the ones in each file; a workflow can do nothing its token d
 | `governance.yml` | `contents: read` | nothing; it runs the checks and the secret scan |
 | `proof.yml` | `contents: read` | nothing; it runs your tests on the base and on the head (event `pull_request`, never `pull_request_target`) |
 | `metrics.yml` | read of contents, pull requests, checks and actions; `issues: write` | one issue a week with the label `agk-metrics`, and that label |
-| `product-report.yml` | read of contents, pull requests, checks and actions; `issues: write` | one issue a week with the label `agk-product-report`, and that label; then one workflow artifact, `agk-facts-<week>`, the facts file the report was rendered from, kept 90 days and readable by anyone who can read the repository's workflow runs (no anonymous download, no other place) |
+| `product-report.yml` | read of contents, pull requests, checks and actions; `issues: write` | one issue a week with the label `agk-product-report`, and that label; then one workflow artifact, `agk-facts-<week>`, the facts file the report was rendered from and `report.json`, the same report as data, kept 90 days and readable by anyone who can read the repository's workflow runs (no anonymous download, no other place) |
 | `drift-audit.yml` | `contents: read`; `issues: write` | at most one issue labelled `agk-drift-audit`, and that label |
 
 To forbid issue writing, delete the three workflow files that need `issues: write` (`init.py` and `adopt.py` print this notice). Issues

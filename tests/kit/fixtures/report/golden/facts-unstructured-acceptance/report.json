@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "week": "2026-W41",
+  "opening": {
+    "first": "2026-10-05",
+    "last": "2026-10-11",
+    "as_of": "2026-10-14"
+  },
+  "sections": {
+    "delivered": [],
+    "proven": [
+      {
+        "kind": "requirement-not-proven",
+        "id": "REQ-002",
+        "reasons": [
+          {
+            "reason": "no-criteria"
+          },
+          {
+            "reason": "no-merged-change"
+          }
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/d7b2d9f65cba67fa71c3f0c527006b1aba295725/docs/requirements.md#L8"
+          }
+        ]
+      },
+      {
+        "kind": "planned-not-counted",
+        "count": 1,
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/d7b2d9f65cba67fa71c3f0c527006b1aba295725/docs/requirements.md"
+          }
+        ]
+      }
+    ],
+    "needs_you": [],
+    "at_risk": [
+      {
+        "kind": "drift-audit",
+        "total": 4,
+        "counts": {
+          "D1": 0,
+          "D2": 1,
+          "D3": 0,
+          "D4": 0,
+          "D5": 0,
+          "D6": 0,
+          "D7": 3
+        },
+        "open_issue": "none",
+        "links": []
+      }
+    ],
+    "cost": []
+  },
+  "notices": [
+    {
+      "kind": "facts-commit",
+      "commit": "d7b2d9f65cba67fa71c3f0c527006b1aba295725",
+      "links": []
+    },
+    {
+      "kind": "kit-version",
+      "version": "unknown",
+      "links": []
+    },
+    {
+      "kind": "metrics-issue",
+      "state": "none-found",
+      "links": []
+    },
+    {
+      "kind": "drift-audit-issue",
+      "state": "none-found",
+      "links": []
+    }
+  ]
+}

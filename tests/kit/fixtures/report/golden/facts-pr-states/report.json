@@ -1,0 +1,300 @@
+{
+  "schema": 1,
+  "week": "2026-W41",
+  "opening": {
+    "first": "2026-10-05",
+    "last": "2026-10-11",
+    "as_of": "2026-10-14"
+  },
+  "sections": {
+    "delivered": [
+      {
+        "kind": "pull-request-merged",
+        "number": 11,
+        "title": "Change number 11",
+        "merged_on": "2026-10-09",
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/11"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-merged",
+        "number": 13,
+        "title": "Change number 13",
+        "merged_on": "2026-10-07",
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/13"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-merged",
+        "number": 14,
+        "title": "Change number 14",
+        "merged_on": "2026-10-06",
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/14"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-merged",
+        "number": 15,
+        "title": "Change number 15",
+        "merged_on": "2026-10-05",
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/15"
+          }
+        ]
+      }
+    ],
+    "proven": [
+      {
+        "kind": "requirement-not-proven",
+        "id": "REQ-001",
+        "reasons": [
+          {
+            "reason": "no-merged-change"
+          }
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md#L3"
+          }
+        ]
+      },
+      {
+        "kind": "planned-not-counted",
+        "count": 1,
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md"
+          }
+        ]
+      }
+    ],
+    "needs_you": [
+      {
+        "group": "pull-request",
+        "count": 1,
+        "items": [
+          {
+            "kind": "pull-request-no-verdict",
+            "number": 18,
+            "title": "Change number 18",
+            "days": 9,
+            "links": [
+              {
+                "to": "pull-request",
+                "url": "https://github.com/demo-org/demo-repo/pull/18"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "requirement",
+        "count": 1,
+        "items": [
+          {
+            "kind": "unspecced-requirement",
+            "id": "REQ-002",
+            "title": "Second thing",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md#L8"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "at_risk": [
+      {
+        "kind": "pull-requests-open-long",
+        "entries": [
+          {
+            "number": 18,
+            "days": 9
+          },
+          {
+            "number": 19,
+            "days": 9
+          }
+        ],
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/18"
+          },
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/19"
+          }
+        ]
+      },
+      {
+        "kind": "pull-requests-sent-back",
+        "entries": [
+          {
+            "number": 12,
+            "times": 1,
+            "title": "Change number 12"
+          }
+        ],
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/12"
+          }
+        ]
+      },
+      {
+        "kind": "drift-audit",
+        "total": 0,
+        "counts": {
+          "D1": 0,
+          "D2": 0,
+          "D3": 0,
+          "D4": 0,
+          "D5": 0,
+          "D6": 0,
+          "D7": 0
+        },
+        "open_issue": "none",
+        "links": []
+      },
+      {
+        "kind": "pull-requests-merged-no-verdict",
+        "entries": [
+          {
+            "number": 13
+          },
+          {
+            "number": 14
+          },
+          {
+            "number": 15
+          }
+        ],
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/13"
+          },
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/14"
+          },
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/15"
+          }
+        ]
+      }
+    ],
+    "cost": [
+      {
+        "kind": "pull-request-cost",
+        "number": 11,
+        "title": "Change number 11",
+        "hours": "97.0",
+        "fix_verdicts": 1,
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/11"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-cost",
+        "number": 13,
+        "title": "Change number 13",
+        "hours": "49.0",
+        "fix_verdicts": 0,
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/13"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-cost",
+        "number": 14,
+        "title": "Change number 14",
+        "hours": "25.0",
+        "fix_verdicts": 0,
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/14"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-cost",
+        "number": 15,
+        "title": "Change number 15",
+        "hours": "1.0",
+        "fix_verdicts": 0,
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/15"
+          }
+        ]
+      },
+      {
+        "kind": "week-totals",
+        "merged": 4,
+        "hours": "172.0",
+        "fix_verdicts": 1,
+        "behaviour_unchanged": 1,
+        "estimate": "none-declared",
+        "busy": false,
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged"
+          }
+        ]
+      }
+    ]
+  },
+  "notices": [
+    {
+      "kind": "facts-commit",
+      "commit": "9b332027c0f71279f4602fbeba668381aa906cd1",
+      "links": []
+    },
+    {
+      "kind": "kit-version",
+      "version": "unknown",
+      "links": []
+    },
+    {
+      "kind": "metrics-issue",
+      "state": "none-found",
+      "links": []
+    },
+    {
+      "kind": "drift-audit-issue",
+      "state": "none-found",
+      "links": []
+    }
+  ]
+}
