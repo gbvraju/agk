@@ -1,6 +1,6 @@
 # ADR-0075: discovery before design and the slicing rule (REQ-030 part b, SPEC-0023), kit 0.41.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-22
 - Deciders: maintainers
 - Related: ADR-0073, ADR-0074, ADR-0043
