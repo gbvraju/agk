@@ -71,14 +71,14 @@ facts not reconfirmed are marked `(verify)`. The repository facts quoted here we
    the kit lists as read-only; and the project's deny rules (no merge, no force push). A test runs the guard with a table of commands and
    paths. *Only a person can supply:* attention; that every pull request is in fact brought to the architect; that a verdict is right;
    that the Approved text itself is good. Criterion g measures the package, not the person (ADR-0021 consequences). The check of rule 18
-   shows the gaps afterwards; it prevents none.
+   shows the gaps afterwards; it prevents none. With SPEC-0023 a second file, `.claude/agents/architect-review.md` (tools `Read, Grep, Glob, Bash`), runs the same hook as `architect_guard.py --review`, which denies every write, `docs/` included, and judges `Bash` the same way; both files carry the nine steps of the review protocol (SPEC-0023 rule 3).
 10. **The decision records.** The role records a ruling in three places, the same shape for every question: the notes file's `## Rulings`
     table (a row that starts with the id), the decisions-log row (`Q-K4-1 ruled: ...`), and the spec or ADR text that the ruling changes.
     A question that has a row in the notes' `## Questions` table and none in `## Rulings` is open.
 11. **The verdict convention, exactly.** The first line of the comment is `Verdict: cleared <sha>`, `Verdict: fix list` or `Verdict: rejected`,
     with `<sha>` at least 7 hex characters of the pull request's head at review time (the rule of `metrics.VERDICT`). No text follows on
     that line. A later commit needs a new `Verdict: cleared <new sha>` line. The findings, if any, follow the first line after a blank line.
-    A test fills `kit/templates/playbook/verdict.md` and shows that its first line matches `metrics.VERDICT`.
+    A test fills `kit/templates/playbook/verdict.md` and shows that its first line matches `metrics.VERDICT`. The lines after the first line of a verdict (`Read:`, `Rules:`, `Not proven:`, `Lens:`, `Gaps:`, `Checklist:`) are the shape of SPEC-0023 rule 4; the first line is unchanged.
 12. **Not a reviewer agent.** The role posts what a person-supervised session concluded; it does not claim to catch defects. The count
     of findings it misses is not measured by this kit (ADR-0021 decision 6: no model judges code quality); the human findings are recorded
     in `kit/templates/playbook/held-out-findings.md` form before the role sees them, when a measurement is wanted.
@@ -196,7 +196,7 @@ facts not reconfirmed are marked `(verify)`. The repository facts quoted here we
     `skills/architect/SKILL.md`, `skills/ruleset/SKILL.md`. Kit-only: `scripts/agk/playbook.py`, `scripts/agk/ruleset.py`,
     `kit/templates/playbook/`, `kit/templates/ruleset.json`, `tests/kit_dev/`. The classes touched are `.claude/`, `CLAUDE.md`,
     `scripts/agk/`, `skills/`, `tests/kit/`, `tests/kit_dev/` and `kit/`; the implementation pull request carries an ADR that names each.
-    The kit version is bumped. `init` and `adopt` print one line pointing to `/agk:ruleset` (rule 22).
+    The kit version is bumped. `init` and `adopt` print one line pointing to `/agk:ruleset` (rule 22). With SPEC-0023: `.claude/agents/architect-review.md` and `config/review-checklist.md` (verbatim); the class `config/` is touched as well.
 30. **Order.** Built last (ADR-0021 decision 7: intake and playbook by 2026-11-30), after SPEC-0012, whose id allocation it reuses.
 
 ## Tests

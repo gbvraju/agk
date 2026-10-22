@@ -74,7 +74,7 @@ what tells you your copy is the kit's.
 The architect role (`.claude/agents/architect.md`) is a Claude Code session with a short tool list and a hook
 (`.claude/hooks/architect_guard.py`). The hook allows writes only under `docs/` and `constitution/vision.md`, and `Bash` only for
 read-only `git` commands, `gh api` reads, one kind of comment post to the repository of the checkout, `date -u`, `make governance`
-and the read-only scripts of `scripts/agk/`. It denies git options that run a program. It never merges.
+and the read-only scripts of `scripts/agk/`. It denies git options that run a program. It never merges. The review agent (`.claude/agents/architect-review.md`) has no write tool and runs the same hook as `architect_guard.py --review`, which denies every write, `docs/` included; it posts its verdict as a comment. It cannot tell which pull request a comment goes to.
 
 It cannot prevent:
 

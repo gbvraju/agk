@@ -7,6 +7,9 @@ deny, it prints {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissi
 "deny", "permissionDecisionReason": ...}} and exits 0; to allow, it prints nothing and exits 0.
 A hook of a project agent runs only in a trusted folder (verify for the `--agent` main session).
 
+With the argument `--review` (the read-only review agent, SPEC-0023) it denies `Edit`, `Write`,
+`MultiEdit` and `NotebookEdit` everywhere, `docs/` included, and judges `Bash` the same way.
+
 Denies `Edit`, `Write`, `MultiEdit` and `NotebookEdit` outside `docs/` and `constitution/vision.md`,
 and `Bash` unless the command is one of: a read-only `git` command; `gh api` with `--method GET` or
 no method (and no field or input flag); `gh api --method POST` to the comments of an issue or pull
@@ -95,6 +98,7 @@ REMOTE_SECTION = re.compile(r'^\[remote "origin"\]\s*$')
 URL_LINE = re.compile(r"^\s*url\s*=\s*(\S.*?)\s*$")
 PATH_RULE = "architect guard rule 9: writes only under docs/ and constitution/vision.md"
 BASH_RULE = "architect guard rule 9: this command is not on the architect's list"
+REVIEW_RULE = "architect guard rule 9: the review agent writes nothing"
 
 
 def project_root() -> str:
@@ -246,12 +250,14 @@ def bash_allowed(command: object) -> bool:
     return False
 
 
-def decide(payload: dict) -> str | None:
-    """A denial text, or None to allow."""
+def decide(payload: dict, review: bool = False) -> str | None:
+    """A denial text, or None to allow; in review mode no write is ever allowed."""
     tool = payload.get("tool_name")
     data = payload.get("tool_input")
     data = data if isinstance(data, dict) else {}
     if tool in WRITE_TOOLS:
+        if review:
+            return REVIEW_RULE
         target = data.get("file_path", data.get("notebook_path"))
         return None if path_allowed(target, project_root()) else PATH_RULE
     if tool == "Bash":
@@ -264,7 +270,8 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         payload = None
-    reason = decide(payload) if isinstance(payload, dict) else BASH_RULE
+    review = "--review" in sys.argv[1:]
+    reason = decide(payload, review) if isinstance(payload, dict) else BASH_RULE
     if reason:
         print(
             json.dumps(
