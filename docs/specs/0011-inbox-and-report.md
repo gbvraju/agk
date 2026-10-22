@@ -57,7 +57,7 @@ were read on 2026-10-16.
 8. **Five sections, in this order, with these headings.** `## Delivered`, `## Proven`, `## Needs you`, `## At risk`, `## Cost`: the
    five questions of ADR-0021, in order. The body has one opening line (the week and the date range), then these five and no other
    `##` heading, then the footer of rule 11. The text is plain language: no abbreviation without its meaning on first use, no field
-   names. A section with no line prints `nothing this week`, and that is the only reason for it. The report is built as a structure of items and rendered from it (SPEC-0022 rules 2 to 5): the opening, Delivered, Proven, Cost and the footer (the notices) are items of the fixed kinds, and Needs you and At risk are lines until the later parts of REQ-029 build them too; the printed text does not change.
+   names. A section with no line prints `nothing this week`, and that is the only reason for it. The report is built as a structure of items and rendered from it (SPEC-0022 rules 2 to 5): the opening, every section and the footer (the notices) are items of the fixed kinds, Needs you being groups of items, and the inbox prints the same groups; the printed text does not change.
 9. **Delivered and Proven.**
    - *Delivered.* One line per requirement whose `status` is `done`: `REQ-001 "<title>" is done: 3 acceptance criteria (AC1, AC2, AC3)`,
      with the link to its section of `docs/requirements.md`; then, one line per pull request with `state` `merged` and `merged_at` in the

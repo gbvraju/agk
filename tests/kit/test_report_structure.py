@@ -1,9 +1,8 @@
-"""Tests of the report's structure and its renderer (SPEC-0022 rules 2, 4 to 6 and 10, part R1).
+"""Tests of the report structure and its renderer (SPEC-0022 rules 2 to 6 and 10, R1 and R2).
 
-The opening, Delivered, Proven, Cost and the notices are built as items of the fixed kinds, and
-the markdown is rendered from the structure alone. Needs you and At risk are still lines of text
-here (the kind `line`, transitional until part R2). The existing goldens are the proof that the
-printed report did not change. No network, no model.
+The opening, every section and the notices are built as items of the fixed kinds, Needs you as
+groups of items, and the markdown and the inbox are rendered from the items alone. The existing
+goldens are the proof that the printed report and the inbox did not change. No network, no model.
 """
 
 from __future__ import annotations
@@ -14,10 +13,21 @@ import json
 import pytest
 from test_product_report import CASES, FIXTURES
 
-COVERED = ("delivered", "proven", "cost")
-TRANSITIONAL = ("needs_you", "at_risk")
+SECTIONS = ("delivered", "proven", "needs_you", "at_risk", "cost")
 LINK_TARGETS = {"pull-request", "file", "directory", "issue", "search"}
-R1_KINDS = {
+ALL_KINDS = {
+    "draft-spec",
+    "proposed-adr",
+    "question",
+    "pull-request-no-verdict",
+    "overdue-residual",
+    "unspecced-requirement",
+    "residual-overdue",
+    "pull-requests-open-long",
+    "pull-requests-sent-back",
+    "pull-requests-merged-no-verdict",
+    "pull-requests-merged-not-cleared",
+    "drift-audit",
     "requirement-done",
     "pull-request-merged",
     "pull-requests-merged",
@@ -44,8 +54,12 @@ def structure_of(facts_path, week=None):
 
 
 def items_of(structure):
-    for name in COVERED:
-        yield from structure["sections"][name]
+    for name in SECTIONS:
+        if name == "needs_you":
+            for group in structure["sections"][name]:
+                yield from group["items"]
+        else:
+            yield from structure["sections"][name]
     yield from structure["notices"]
 
 
@@ -121,21 +135,57 @@ def test_ac1_every_kind_of_the_covered_sections_is_built_by_some_golden_facts():
     for _, facts in CASES:
         _, _, structure = structure_of(facts)
         seen |= {item["kind"] for item in items_of(structure)}
-    assert seen == R1_KINDS, seen ^ R1_KINDS
+    assert seen == ALL_KINDS, seen ^ ALL_KINDS
 
 
-def test_ac1_the_two_sections_not_yet_structured_are_lines_until_part_r2():
-    """REQ-029 AC1: rule 2 (transitional: only `line` items, only in Needs you and At risk)."""
+def test_ac1_the_kinds_of_the_table_are_all_the_kinds_built_and_the_line_kind_is_gone():
+    """REQ-029 AC1: rule 5 (the table is closed; the transitional kind of part R1 is removed)."""
     import product_report as pr
 
-    for _, facts in CASES:
-        _, _, structure = structure_of(facts)
-        for name in TRANSITIONAL:
-            assert all(
-                i["kind"] == "line" and set(i) == {"kind", "text"}
-                for i in structure["sections"][name]
-            )
-        for name in COVERED:
-            assert all(
-                i["kind"] in pr.ITEM_KINDS and "text" not in i for i in structure["sections"][name]
-            )
+    assert set(pr.ITEM_KINDS) == ALL_KINDS
+    assert "line" not in pr.RENDER and "line" not in pr.ITEM_KINDS
+    assert set(pr.RENDER) == set(pr.ITEM_KINDS)
+
+
+@pytest.mark.parametrize(("name", "facts"), CASES, ids=[name for name, _ in CASES])
+def test_ac1_needs_you_is_a_list_of_groups_with_a_count(name, facts):
+    """REQ-029 AC1: rule 3 (`{"group", "count", "items"}`; `unknown` for an unknown item)."""
+    _, _, structure = structure_of(facts)
+    for group in structure["sections"]["needs_you"]:
+        assert list(group) == ["group", "count", "items"] and group["items"], group
+        assert group["group"] in {
+            "spec",
+            "adr",
+            "question",
+            "pull-request",
+            "residual",
+            "requirement",
+        }
+        unknown = group["items"][0]["kind"] == "unknown"
+        assert group["count"] == ("unknown" if unknown else len(group["items"])), group
+
+
+@pytest.mark.parametrize(("name", "facts"), CASES, ids=[name for name, _ in CASES])
+def test_ac1_a_title_stands_only_in_a_single_entry_of_the_two_kinds_that_print_it(name, facts):
+    """REQ-029 AC1: rule 5 (grouped lines print no titles; merged-without-clearance prints none)."""
+    _, _, structure = structure_of(facts)
+    for entry in items_of(structure):
+        if not entry["kind"].startswith("pull-requests-") or "entries" not in entry:
+            continue
+        titled = entry["kind"] in ("pull-requests-open-long", "pull-requests-sent-back")
+        assert len(entry["links"]) == len(entry["entries"]), entry
+        for each in entry["entries"]:
+            assert ("title" in each) == (titled and len(entry["entries"]) == 1), entry
+
+
+@pytest.mark.parametrize(("name", "facts"), CASES, ids=[name for name, _ in CASES])
+def test_ac2_the_inbox_is_built_from_the_same_groups_as_needs_you(name, facts):
+    """REQ-029 AC2: rule 2 (the inbox prints the groups of the report's Needs you)."""
+    import product_report as pr
+
+    doc, today, structure = structure_of(facts)
+    groups = structure["sections"]["needs_you"]
+    inbox = pr.render_inbox(doc, today)
+    assert (pr.group_lines(groups) or ["nothing waits for you"]) == inbox.splitlines()[
+        2 : 2 + max(1, len(pr.group_lines(groups)))
+    ]

@@ -164,8 +164,7 @@ def unknown_line(what: str, link: str) -> str:
 
 # --- the structure of the report (SPEC-0022 rules 2 to 6) ---------------------------------------
 # An item is `{"kind", <its fields>, "links"}`. The fields of a kind are fixed here; a kind or a
-# field that is not in the table does not exist (a new one is a new schema number). The kind `line`
-# is transitional: Needs you and At risk are still lines of text until part R2.
+# field that is not in the table does not exist (a new one is a new schema number).
 
 REPORT_SCHEMA = 1
 ITEM_KINDS = {
@@ -183,6 +182,18 @@ ITEM_KINDS = {
     "kit-version": ("version",),
     "metrics-issue": ("state",),
     "drift-audit-issue": ("state",),
+    "draft-spec": ("id", "title"),
+    "proposed-adr": ("id", "title"),
+    "question": ("id", "asked_in"),
+    "pull-request-no-verdict": ("number", "title", "days"),
+    "overdue-residual": ("due", "text"),
+    "unspecced-requirement": ("id", "title"),
+    "residual-overdue": ("due", "days", "text"),
+    "pull-requests-open-long": ("entries",),
+    "pull-requests-sent-back": ("entries",),
+    "pull-requests-merged-no-verdict": ("entries",),
+    "pull-requests-merged-not-cleared": ("entries",),
+    "drift-audit": ("total", "counts", "open_issue"),
 }
 OPTIONAL_FIELDS = {"metrics-issue": ("number", "title"), "drift-audit-issue": ("number", "title")}
 SECTION_KEYS = ("delivered", "proven", "needs_you", "at_risk", "cost")
@@ -208,68 +219,72 @@ def age_days(item: dict, today: date) -> int | None:
     return None if opened is None else (today - opened).days
 
 
-def document_link(item: dict, links: Links, directory: str) -> str:
+def document_link(entry: dict, links: Links, directory: str) -> list[dict]:
     """The file at the facts commit when the facts carry its path, else the directory."""
-    path = item.get("path")
-    return links.file(path) if isinstance(path, str) and path else links.tree(directory)
+    path = entry.get("path")
+    if isinstance(path, str) and path:
+        return link("file", links.file(path))
+    return link("directory", links.tree(directory))
 
 
-def spec_items(doc: dict, links: Links) -> list[str]:
+def spec_items(doc: dict, links: Links) -> list[dict]:
     rows = sorted((s for s in doc["specs"] if s.get("status") == "Draft"), key=lambda s: s["id"])
     return [
-        bullet(
-            f'Draft spec {s["id"]} "{s["title"]}" waits for approval',
-            document_link(s, links, "docs/specs"),
-        )
+        item("draft-spec", [document_link(s, links, "docs/specs")], id=s["id"], title=s["title"])
         for s in rows
     ]
 
 
-def adr_items(doc: dict, links: Links) -> list[str]:
+def adr_items(doc: dict, links: Links) -> list[dict]:
     rows = sorted((a for a in doc["adrs"] if a.get("status") == "Proposed"), key=lambda a: a["id"])
     return [
-        bullet(
-            f'Proposed {a["id"]} "{a["title"]}" waits for a decision',
-            document_link(a, links, "docs/adr"),
-        )
+        item("proposed-adr", [document_link(a, links, "docs/adr")], id=a["id"], title=a["title"])
         for a in rows
     ]
 
 
-def question_items(doc: dict, links: Links) -> list[str]:
+def question_items(doc: dict, links: Links) -> list[dict]:
     if not is_list(doc["questions"]):
-        return [unknown_line("questions", links.tree("docs"))]
+        return [unknown_item("questions", "directory", links.tree("docs"))]
     rows = sorted(
         (q for q in doc["questions"] if q.get("open_in") and q.get("ruled") is False),
         key=lambda q: q["id"],
     )
     return [
-        bullet(
-            f"Question {q['id']} is waiting, asked in {q['open_in'][0]}",
-            links.file(q["open_in"][0]),
+        item(
+            "question",
+            [link("file", links.file(q["open_in"][0]))],
+            id=q["id"],
+            asked_in=q["open_in"][0],
         )
         for q in rows
     ]
 
 
-def pull_request_items(doc: dict, links: Links, today: date) -> list[str]:
+def pull_request_items(doc: dict, links: Links, today: date) -> list[dict]:
     pulls, config = doc["pull_requests"], doc["config"]
     if not is_list(pulls):
-        return [unknown_line("pull requests", f"{links.repo}/pulls")]
+        return [unknown_item("pull requests", "search", f"{links.repo}/pulls")]
     hours = config.get("inbox_hours") if isinstance(config, dict) else None
     if isinstance(hours, bool) or not isinstance(hours, int):
-        return [
-            unknown_line("the age limit for pull requests (inbox_hours)", links.file("agk.toml"))
-        ]
+        what = "the age limit for pull requests (inbox_hours)"
+        return [unknown_item(what, "file", links.file("agk.toml"))]
     found = []
     for p in sorted(pulls, key=lambda p: p["number"]):
         days = age_days(p, today)
         if p.get("state") != "open" or p.get("verdicts") != [] or days is None:
             continue
         if days * 24 >= hours:
-            span = plural(days, "day", "days")
-            text = f'PR #{p["number"]} "{p["title"]}" has had no verdict for {span}'
-            found.append(bullet(text, links.pull(p["number"])))
+            where = [link("pull-request", links.pull(p["number"]))]
+            found.append(
+                item(
+                    "pull-request-no-verdict",
+                    where,
+                    number=p["number"],
+                    title=p["title"],
+                    days=days,
+                )
+            )
     return found
 
 
@@ -282,34 +297,42 @@ def overdue(doc: dict, today: date) -> list[tuple[dict, date]]:
     return sorted(rows, key=lambda row: (row[0]["source"], row[1]))
 
 
-def residual_items(doc: dict, links: Links, today: date) -> list[str]:
+def residual_items(doc: dict, links: Links, today: date) -> list[dict]:
     if not is_list(doc["residuals"]):
-        return [unknown_line("residuals", links.file("docs/runs/residuals.md"))]
+        return [unknown_item("residuals", "file", links.file("docs/runs/residuals.md"))]
     return [
-        bullet(f"Overdue since {due.isoformat()}: {short(r['text'])}", links.file(r["source"]))
+        item(
+            "overdue-residual",
+            [link("file", links.file(r["source"]))],
+            due=due.isoformat(),
+            text=short(r["text"]),
+        )
         for r, due in overdue(doc, today)
     ]
 
 
-def requirement_items(doc: dict, links: Links) -> list[str]:
+def requirement_items(doc: dict, links: Links) -> list[dict]:
     if not is_list(doc["requirements"]):
-        return [unknown_line("requirements", links.file("docs/requirements.md"))]
+        return [unknown_item("requirements", "file", links.file("docs/requirements.md"))]
     named = {req for s in doc["specs"] for req in s.get("requirements", [])}
     rows = sorted(
         (r for r in doc["requirements"] if r.get("status") == "planned" and r["id"] not in named),
         key=lambda r: r["id"],
     )
     return [
-        bullet(
-            f'{r["id"]} "{r["title"]}" is planned and no spec names it',
-            links.file("docs/requirements.md", r.get("line")),
+        item(
+            "unspecced-requirement",
+            [link("file", links.file("docs/requirements.md", r.get("line")))],
+            id=r["id"],
+            title=r["title"],
         )
         for r in rows
     ]
 
 
-def inbox(doc: dict, links: Links, today: date) -> list[tuple[str, list[str]]]:
-    """[(heading, lines)] for the kinds that have a line, in the order of the table."""
+def inbox(doc: dict, links: Links, today: date) -> list[dict]:
+    """The groups of what waits for a person, for the kinds that have an item, in the order of
+    the table: `{"group", "count", "items"}` (the count is `unknown` for an unknown item)."""
     by_kind = {
         "spec": spec_items(doc, links),
         "adr": adr_items(doc, links),
@@ -319,19 +342,19 @@ def inbox(doc: dict, links: Links, today: date) -> list[tuple[str, list[str]]]:
         "requirement": requirement_items(doc, links),
     }
     groups = []
-    for kind, title in KINDS:
-        lines = by_kind[kind]
-        if not lines:
-            continue
-        count = "unknown" if lines[0].startswith("- unknown:") else str(len(lines))
-        groups.append((f"### {title} ({count})", lines))
+    for kind, _ in KINDS:
+        entries = by_kind[kind]
+        if entries:
+            count = UNKNOWN if entries[0]["kind"] == "unknown" else len(entries)
+            groups.append({"group": kind, "count": count, "items": entries})
     return groups
 
 
-def group_lines(groups: list[tuple[str, list[str]]]) -> list[str]:
+def group_lines(groups: list[dict]) -> list[str]:
     out: list[str] = []
-    for heading, lines in groups:
-        out += [heading, *lines, ""]
+    for group in groups:
+        heading = f"### {dict(KINDS)[group['group']]} ({group['count']})"
+        out += [heading, *(RENDER[entry["kind"]](entry) for entry in group["items"]), ""]
     return out[:-1] if out else out
 
 
@@ -498,33 +521,28 @@ def verdict_count(p: dict, kind: str) -> int | None:
     return sum(1 for v in verdicts if v.get("kind") == kind) if is_list(verdicts) else None
 
 
-def cleared_line(p: dict) -> str | None:
-    """The At-risk text for a merged pull request whose head was not cleared, or None.
+def cleared_state(p: dict) -> str | None:
+    """`no-verdict` or `not-cleared` for a merged pull request whose head was not cleared, or None.
 
     The last `cleared` verdict must name the merged head (a prefix of it); with no verdict at all
-    the text says so. Verdicts or a head the facts could not read say nothing (unknown is no miss).
+    the state says so. Verdicts or a head the facts could not read say nothing (unknown is no miss).
     """
     verdicts, head = p.get("verdicts"), p.get("head")
     if not is_list(verdicts) or not isinstance(head, str) or head == UNKNOWN or not head:
         return None
     if not verdicts:
-        return f"PR #{p['number']} was merged with no verdict"
+        return "no-verdict"
     cleared = [v for v in verdicts if v.get("kind") == "cleared"]
     sha = cleared[-1].get("sha") if cleared else None
     if isinstance(sha, str) and sha and head.lower().startswith(sha.lower()):
         return None
-    return f"PR #{p['number']} was merged before its last commit was cleared"
+    return "not-cleared"
 
 
-def drift_line(doc: dict, links: Links) -> str:
+def drift_item(doc: dict, links: Links) -> dict:
     drift = doc["drift"]
     if not isinstance(drift, dict):
-        return unknown_line("the drift counts", f"{links.repo}/issues")
-    counts = drift["counts"]
-    parts = ", ".join(f"{kind} {counts[kind]}" for kind in sorted(counts))
-    total = drift["total"]
-    text = f"drift audit: {total if total == UNKNOWN else plural(total, 'finding', 'findings')}"
-    text += f" ({parts})"
+        return unknown_item("the drift counts", "search", f"{links.repo}/issues")
     issues = doc["issues"]
     opened = (
         sorted(
@@ -535,91 +553,95 @@ def drift_line(doc: dict, links: Links) -> str:
         if is_list(issues)
         else []
     )
-    if opened:
-        return bullet(text, links.issue(opened[0]))
-    return bullet(text + ("; no open drift issue" if is_list(issues) else "; issues unknown"), None)
+    return item(
+        "drift-audit",
+        [link("issue", links.issue(opened[0]))] if opened else [],
+        total=drift["total"],
+        counts=dict(sorted(drift["counts"].items())),
+        open_issue=opened[0] if opened else ("none" if is_list(issues) else UNKNOWN),
+    )
 
 
-def pull_list(entries: list[tuple[int, str | None]], links: Links) -> str:
-    """`[#12](url) (41 days), [#15](url) and [#20](url)`: ascending, each number its own link."""
-    parts = [
-        f"[#{number}]({links.pull(number)})" + (f" ({value})" if value else "")
-        for number, value in sorted(entries)
-    ]
-    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+def grouped(rows: list[tuple[str, int, str, dict]], links: Links) -> list[dict]:
+    """One item for a kind with two or more pull requests, at the place of its lowest number.
 
-
-def by_kind(
-    items: list[tuple[str, int, str | None, str]], phrases: dict, links: Links
-) -> list[str]:
-    """One line for a kind with two or more pull requests, at the place of its lowest number.
-
-    `items` are (kind, number, value, today's line) in today's order. A kind with one pull
-    request keeps today's line; `phrases` holds the plural ending of each kind (SPEC-0016).
+    `rows` are (kind, number, title, extra) in today's order. A kind with one pull request keeps
+    one entry and, for the two kinds that print it, its title (SPEC-0016, SPEC-0022 rule 5).
     """
-    members: dict[str, list[tuple[int, str | None]]] = {}
-    for kind, number, value, _ in items:
-        members.setdefault(kind, []).append((number, value))
-    lines = []
-    for kind, number, _, line in items:
+    members: dict[str, list[tuple[int, str, dict]]] = {}
+    for kind, number, title, extra in rows:
+        members.setdefault(kind, []).append((number, title, extra))
+    items = []
+    for kind, number, title, extra in rows:
         group = members[kind]
         if len(group) == 1:
-            lines.append(line)
-        elif number == min(n for n, _ in group):
-            lines.append(bullet(f"PRs {pull_list(group, links)} {phrases[kind]}", None))
-    return lines
+            named = {"title": title} if kind in TITLED else {}
+            entries = [{"number": number, **extra, **named}]
+        elif number == min(n for n, _, _ in group):
+            entries = [{"number": n, **x} for n, _, x in sorted(group, key=lambda g: g[0])]
+        else:
+            continue
+        where = [link("pull-request", links.pull(entry["number"])) for entry in entries]
+        items.append(item(kind, where, entries=entries))
+    return items
 
 
+TITLED = ("pull-requests-open-long", "pull-requests-sent-back")
 GROUPED = {
-    "open": "have been open",
-    "sent back": "were sent back",
-    "no verdict": "were merged with no verdict",
-    "not cleared": "were merged before their last commit was cleared",
+    "pull-requests-open-long": "have been open",
+    "pull-requests-sent-back": "were sent back",
+    "pull-requests-merged-no-verdict": "were merged with no verdict",
+    "pull-requests-merged-not-cleared": "were merged before their last commit was cleared",
 }
 
 
-def at_risk(doc: dict, links: Links, today: date, start: date, end: date) -> list[str]:
-    lines: list[str] = []
+def at_risk(doc: dict, links: Links, today: date, start: date, end: date) -> list[dict]:
+    items: list[dict] = []
     if is_list(doc["residuals"]):
         for r, due in overdue(doc, today):
-            days = (today - due).days
-            span = plural(days, "day", "days")
-            text = f"Residual overdue since {due.isoformat()} ({span}): {short(r['text'])}"
-            lines.append(bullet(text, links.file(r["source"])))
+            items.append(
+                item(
+                    "residual-overdue",
+                    [link("file", links.file(r["source"]))],
+                    due=due.isoformat(),
+                    days=(today - due).days,
+                    text=short(r["text"]),
+                )
+            )
     else:
-        lines.append(unknown_line("residuals", links.file("docs/runs/residuals.md")))
+        items.append(unknown_item("residuals", "file", links.file("docs/runs/residuals.md")))
     if is_list(doc["pull_requests"]):
-        old: list[tuple[str, int, str | None, str]] = []
-        for p in sorted(doc["pull_requests"], key=lambda p: p["number"]):
+        pulls = sorted(doc["pull_requests"], key=lambda p: p["number"])
+        old = []
+        for p in pulls:
             days = age_days(p, today)
             if p.get("state") == "open" and days is not None and days > OLD_PULL_REQUEST_DAYS:
-                span = plural(days, "day", "days")
-                text = f'PR #{p["number"]} "{p["title"]}" has been open for {span}'
-                old.append(("open", p["number"], span, bullet(text, links.pull(p["number"]))))
-        lines += by_kind(old, GROUPED, links)
-        back: list[tuple[str, int, str | None, str]] = []
-        for p in sorted(doc["pull_requests"], key=lambda p: p["number"]):
+                old.append(("pull-requests-open-long", p["number"], p["title"], {"days": days}))
+        items += grouped(old, links)
+        back = []
+        for p in pulls:
             ended = in_week(p.get("closed_at"), start, end)
             fixes, rejected = verdict_count(p, "fix"), verdict_count(p, "rejected")
             if ended and fixes is not None and (fixes >= 2 or rejected):
-                times = plural(fixes + rejected, "time", "times")
-                text = f'PR #{p["number"]} "{p["title"]}" was sent back {times}'
-                back.append(
-                    ("sent back", p["number"], times, bullet(text, links.pull(p["number"])))
+                row = (
+                    "pull-requests-sent-back",
+                    p["number"],
+                    p["title"],
+                    {"times": fixes + rejected},
                 )
-        lines += by_kind(back, GROUPED, links)
+                back.append(row)
+        items += grouped(back, links)
     else:
-        lines.append(unknown_line("pull requests", f"{links.repo}/pulls"))
-    lines.append(drift_line(doc, links))
+        items.append(unknown_item("pull requests", "search", f"{links.repo}/pulls"))
+    items.append(drift_item(doc, links))
     if is_list(doc["pull_requests"]):
-        late: list[tuple[str, int, str | None, str]] = []
+        late = []
         for p in merged_in_week(doc, start, end):
-            text = cleared_line(p)
-            if text:
-                kind = "no verdict" if text.endswith("no verdict") else "not cleared"
-                late.append((kind, p["number"], None, bullet(text, links.pull(p["number"]))))
-        lines += by_kind(late, GROUPED, links)
-    return lines
+            state = cleared_state(p)
+            if state:
+                late.append((f"pull-requests-merged-{state}", p["number"], p["title"], {}))
+        items += grouped(late, links)
+    return items
 
 
 RANGE = re.compile(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)")
@@ -685,14 +707,6 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[dict]:
 # --- the footer and the whole report ------------------------------------------------------------
 
 
-def footer_head(doc: dict) -> list[str]:
-    lines = ["---", f"facts: {doc['commit']}"]
-    if doc.get("dirty") is not False:
-        value = "true" if doc.get("dirty") is True else str(doc.get("dirty"))
-        lines.append(f"the working tree was modified (dirty: {value})")
-    return lines
-
-
 def newest(issues: list, label: str, ends: str = "", open_only: bool = False) -> dict | None:
     """The lowest-numbered issue with the label, a title ending with `ends`, and (if asked) open."""
     rows = [
@@ -705,6 +719,13 @@ def newest(issues: list, label: str, ends: str = "", open_only: bool = False) ->
     return rows[0] if rows else None
 
 
+def dirty_notice(doc: dict) -> list[dict]:
+    if doc.get("dirty") is False:
+        return []
+    value = "true" if doc.get("dirty") is True else str(doc.get("dirty"))
+    return [item("working-tree-modified", [], dirty=value)]
+
+
 def notices(doc: dict, label: str) -> list[dict]:
     """The footer lines, in the order printed: facts, kit version, the dirty tree, the issues."""
     found = [item("facts-commit", [], commit=doc["commit"])]
@@ -714,9 +735,7 @@ def notices(doc: dict, label: str) -> list[dict]:
             "kit-version", [], version=version if isinstance(version, str) and version else UNKNOWN
         )
     )
-    if doc.get("dirty") is not False:
-        value = "true" if doc.get("dirty") is True else str(doc.get("dirty"))
-        found.append(item("working-tree-modified", [], dirty=value))
+    found += dirty_notice(doc)
     issues = doc["issues"]
     for kind, found_issue in (
         ("metrics-issue", newest(issues, "agk-metrics", label) if is_list(issues) else None),
@@ -742,9 +761,6 @@ def build_report(doc: dict, today: date, week: str | None) -> dict:
     links = Links(doc)
     start, end, label = week_window(today, week)
 
-    def lines(texts: list[str]) -> list[dict]:
-        return [{"kind": "line", "text": text} for text in texts]
-
     return {
         "schema": REPORT_SCHEMA,
         "week": label,
@@ -756,8 +772,8 @@ def build_report(doc: dict, today: date, week: str | None) -> dict:
         "sections": {
             "delivered": delivered(doc, links, start, end),
             "proven": proven(doc, links),
-            "needs_you": lines(group_lines(inbox(doc, links, today))),
-            "at_risk": lines(at_risk(doc, links, today, start, end)),
+            "needs_you": inbox(doc, links, today),
+            "at_risk": at_risk(doc, links, today, start, end),
             "cost": cost(doc, links, start, end),
         },
         "notices": notices(doc, label),
@@ -817,8 +833,72 @@ def totals_text(entry: dict) -> str:
     )
 
 
+def pull_requests_text(entry: dict) -> str:
+    """A pull-request item: one line for one pull request, one line with links for several."""
+    kind, entries = entry["kind"], entry["entries"]
+    if len(entries) == 1:
+        one = entries[0]
+        number = one["number"]
+        if kind == "pull-requests-open-long":
+            span = plural(one["days"], "day", "days")
+            text = f'PR #{number} "{one["title"]}" has been open for {span}'
+        elif kind == "pull-requests-sent-back":
+            times = plural(one["times"], "time", "times")
+            text = f'PR #{number} "{one["title"]}" was sent back {times}'
+        elif kind == "pull-requests-merged-no-verdict":
+            text = f"PR #{number} was merged with no verdict"
+        else:
+            text = f"PR #{number} was merged before its last commit was cleared"
+        return bullet_of(entry, text)
+    parts = []
+    for one, where in zip(entries, entry["links"], strict=True):
+        value = ""
+        if kind == "pull-requests-open-long":
+            value = f" ({plural(one['days'], 'day', 'days')})"
+        elif kind == "pull-requests-sent-back":
+            value = f" ({plural(one['times'], 'time', 'times')})"
+        parts.append(f"[#{one['number']}]({where['url']})" + value)
+    joined = ", ".join(parts[:-1]) + " and " + parts[-1]
+    return bullet(f"PRs {joined} {GROUPED[kind]}", None)
+
+
+def drift_text(entry: dict) -> str:
+    total = entry["total"]
+    shown = total if total == UNKNOWN else plural(total, "finding", "findings")
+    counts = entry["counts"]
+    text = f"drift audit: {shown} ({', '.join(f'{k} {counts[k]}' for k in sorted(counts))})"
+    if entry["links"]:
+        return bullet_of(entry, text)
+    return bullet(
+        text + ("; no open drift issue" if entry["open_issue"] == "none" else "; issues unknown"),
+        None,
+    )
+
+
 RENDER = {
-    "line": lambda i: i["text"],
+    "draft-spec": lambda i: bullet_of(i, f'Draft spec {i["id"]} "{i["title"]}" waits for approval'),
+    "proposed-adr": lambda i: bullet_of(
+        i, f'Proposed {i["id"]} "{i["title"]}" waits for a decision'
+    ),
+    "question": lambda i: bullet_of(i, f"Question {i['id']} is waiting, asked in {i['asked_in']}"),
+    "pull-request-no-verdict": lambda i: bullet_of(
+        i,
+        f'PR #{i["number"]} "{i["title"]}" has had no verdict for '
+        f"{plural(i['days'], 'day', 'days')}",
+    ),
+    "overdue-residual": lambda i: bullet_of(i, f"Overdue since {i['due']}: {i['text']}"),
+    "unspecced-requirement": lambda i: bullet_of(
+        i, f'{i["id"]} "{i["title"]}" is planned and no spec names it'
+    ),
+    "residual-overdue": lambda i: bullet_of(
+        i,
+        f"Residual overdue since {i['due']} ({plural(i['days'], 'day', 'days')}): {i['text']}",
+    ),
+    "pull-requests-open-long": pull_requests_text,
+    "pull-requests-sent-back": pull_requests_text,
+    "pull-requests-merged-no-verdict": pull_requests_text,
+    "pull-requests-merged-not-cleared": pull_requests_text,
+    "drift-audit": drift_text,
     "unknown": lambda i: bullet_of(i, f"unknown: {i['what']} could not be read"),
     "requirement-done": lambda i: bullet_of(
         i,
@@ -863,7 +943,11 @@ def render_markdown(structure: dict) -> str:
         "",
     ]
     for key, name in zip(SECTION_KEYS, SECTIONS, strict=True):
-        body = [RENDER[entry["kind"]](entry) for entry in structure["sections"][key]]
+        entries = structure["sections"][key]
+        if key == "needs_you":
+            body = group_lines(entries)
+        else:
+            body = [RENDER[entry["kind"]](entry) for entry in entries]
         out += [f"## {name}", "", *(body or [NOTHING]), ""]
     out += ["---", *(RENDER[entry["kind"]](entry) for entry in structure["notices"])]
     return "\n".join(out) + "\n"
@@ -876,7 +960,9 @@ def render_report(doc: dict, today: date, week: str | None) -> str:
 def render_inbox(doc: dict, today: date) -> str:
     groups = inbox(doc, Links(doc), today)
     lines = group_lines(groups) or ["nothing waits for you"]
-    out = [f"The inbox as of {today.isoformat()}.", "", *lines, "", *footer_head(doc)]
+    notes = [item("facts-commit", [], commit=doc["commit"]), *dirty_notice(doc)]
+    footer = ["---", *(RENDER[note["kind"]](note) for note in notes)]
+    out = [f"The inbox as of {today.isoformat()}.", "", *lines, "", *footer]
     return "\n".join(out) + "\n"
 
 
