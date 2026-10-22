@@ -1,6 +1,6 @@
 # SPEC-0023: The architect reviews by one written protocol and its catch rate is measured
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-030
 

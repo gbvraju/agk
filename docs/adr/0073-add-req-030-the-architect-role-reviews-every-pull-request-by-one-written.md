@@ -1,6 +1,6 @@
 # ADR-0073: Add REQ-030: The architect reviews by one written protocol and its catch rate is measured
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-22
 - Deciders: maintainers
 - Related: SPEC-0023
