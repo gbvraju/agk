@@ -1,6 +1,6 @@
 # ADR-0070: the report is built as a structure and rendered from it (REQ-029 part R1, SPEC-0022), kit 0.37.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-22
 - Deciders: maintainers
 - Related: ADR-0069, ADR-0063
