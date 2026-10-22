@@ -370,6 +370,13 @@ The statement, restated as data.
    - Syncing between devices.
 3. **Done means**
    - The milestones' exit statements hold and a person merged the work.
+4. **Discovery**
+   - users: readers, who pay nothing
+   - existing: one public repository
+   - runs: a laptop, not portable
+   - data: saved items, kept for a year
+   - scale: one reader
+   - compliance: none
 
 ## Consequences
 

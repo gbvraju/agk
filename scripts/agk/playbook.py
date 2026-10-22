@@ -71,6 +71,9 @@ VISION_HEADINGS = (
 MARKER = "<!-- project-specific -->"
 CHARTER_NAME = re.compile(r"^docs/adr/(\d{4})-project-charter\.md$")
 CHARTER_ITEMS = ("Milestones", "Non-goals", "Done means")
+TOPICS = ("users", "existing", "runs", "data", "scale", "compliance")
+NOT_KNOWN = "not known yet"
+BULLET = re.compile(r"^[-*]\s+([A-Za-z]+):\s*(.*)$")
 MEASURABLE = re.compile(r"\d|\b(?:all|every|none|zero)\b", re.IGNORECASE)
 
 
@@ -207,6 +210,37 @@ def charter_problems(root: Path, rel: str, ref_ids: dict[str, str]) -> list[str]
         _, _, after = milestone.partition("exit:")
         if "exit:" not in milestone or not MEASURABLE.search(after):
             out.append("rule 5: a milestone line has no `exit:` with a measurable statement")
+            break
+    return out + discovery_problems(items)
+
+
+def topic_bullets(lines: list[str]) -> list[tuple[str, str]]:
+    """`- <topic>: <text>` bullets as (word, text) pairs, in order."""
+    found = (BULLET.match(line) for line in lines)
+    return [(m.group(1).lower(), m.group(2).strip()) for m in found if m]
+
+
+def discovery_problems(items: dict[str, list[str]]) -> list[str]:
+    """SPEC-0023 rules 6 and 7: six topics in order, an answer each, a slice for the unknown."""
+    if not items.get("Discovery"):
+        return ["rule 7: the Decision lacks the numbered item Discovery"]
+    out: list[str] = []
+    answers = topic_bullets(items["Discovery"])
+    words = [word for word, _ in answers]
+    for topic in TOPICS:
+        if topic not in words:
+            out.append(f"rule 6: the Discovery item lacks the topic {topic}")
+    if not out and words != list(TOPICS):
+        out.append("rule 6: the Discovery topics are not the six topics in their order")
+    slices = dict(topic_bullets(items.get("Slice", [])))
+    for word, text in answers:
+        if word in TOPICS and not text:
+            out.append(f"rule 6: the Discovery topic {word} has no answer")
+        elif text.lower() == NOT_KNOWN and not slices.get(word):
+            out.append(f"rule 7: the topic {word} is not known yet and has no Slice bullet")
+    for word, text in topic_bullets(items.get("Slice", [])):
+        if word not in TOPICS or not text:
+            out.append("rule 6: a Slice bullet names no topic or says nothing")
             break
     return out
 
