@@ -1,6 +1,6 @@
 # ADR-0071: Needs you, the inbox and At risk are built as items (REQ-029 part R2, SPEC-0022), kit 0.38.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-22
 - Deciders: maintainers
 - Related: ADR-0070, ADR-0069
