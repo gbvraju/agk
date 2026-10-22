@@ -1,6 +1,6 @@
 # ADR-0068: only a listed author's comment is a verdict (REQ-028, SPEC-0021), kit 0.36.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-21
 - Deciders: maintainers
 - Related: ADR-0067, ADR-0064
