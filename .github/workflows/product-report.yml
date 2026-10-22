@@ -3,8 +3,8 @@
 # scheduled workflows after a period of repository inactivity (the period is (verify) against current GitHub
 # documentation); then run it by hand. The report is a pure function of the facts document (facts.py), written to the
 # one issue labelled agk-product-report for that week: created, or its body replaced. Its only writes: that issue,
-# the label and, once the issue is written, one workflow artifact (SPEC-0019) holding the facts file the report was
-# rendered from, so a reader with access to the repository can use the same numbers. It needs `issues: write` with the workflow token; `actions: read` lets the facts read the proof runs.
+# the label and, once the issue is written, one workflow artifact (SPEC-0019, SPEC-0022) holding the facts file the report
+# was rendered from and report.json, the same report as data, so a reader with access to the repository can use the same numbers. It needs `issues: write` with the workflow token; `actions: read` lets the facts read the proof runs.
 name: product-report
 
 on:
@@ -41,14 +41,15 @@ jobs:
           today="${INPUT_TODAY:-$(date -u +%F)}"
           facts="$RUNNER_TEMP/facts.json"
           report="$RUNNER_TEMP/report.md"
+          report_json="$RUNNER_TEMP/report.json"
           python3 scripts/agk/facts.py --today "$today" --repo "$GITHUB_REPOSITORY" > "$facts"
           if [ ! -s "$facts" ]; then
             echo "no facts were produced; nothing written"
             exit 1
           fi
-          python3 scripts/agk/product_report.py --facts "$facts" --today "$today" > "$report"
+          python3 scripts/agk/product_report.py --facts "$facts" --today "$today" --json "$report_json" > "$report"
           week=$(sed -n '1s/^<!-- agk-product-report: \(.*\) -->$/\1/p' "$report")
-          if ! printf '%s' "$week" | grep -Eq '^[0-9]{4}-W[0-9]{2}$'; then
+          if ! printf '%s' "$week" | grep -Eq '^[0-9]{4}-W[0-9]{2}$' || [ ! -s "$report_json" ]; then
             echo "no report was produced; nothing written"
             exit 1
           fi
@@ -71,11 +72,13 @@ jobs:
               exit 1
               ;;
           esac
-      - name: Publish the facts of the report
+      - name: Publish the facts and the data of the report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
         with:
           name: agk-facts-${{ steps.report.outputs.week }}
-          path: ${{ runner.temp }}/facts.json
+          path: |
+            ${{ runner.temp }}/facts.json
+            ${{ runner.temp }}/report.json
           retention-days: 90
           if-no-files-found: error
           overwrite: true

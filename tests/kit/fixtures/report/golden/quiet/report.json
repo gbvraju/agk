@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "week": "2026-W41",
+  "opening": {
+    "first": "2026-10-05",
+    "last": "2026-10-11",
+    "as_of": "2026-10-14"
+  },
+  "sections": {
+    "delivered": [],
+    "proven": [
+      {
+        "kind": "planned-not-counted",
+        "count": 1,
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md"
+          }
+        ]
+      }
+    ],
+    "needs_you": [],
+    "at_risk": [
+      {
+        "kind": "drift-audit",
+        "total": 0,
+        "counts": {
+          "D1": 0,
+          "D2": 0,
+          "D3": 0,
+          "D4": 0,
+          "D5": 0,
+          "D6": 0,
+          "D7": 0
+        },
+        "open_issue": "none",
+        "links": []
+      }
+    ],
+    "cost": []
+  },
+  "notices": [
+    {
+      "kind": "facts-commit",
+      "commit": "c0ffee0000000000000000000000000000000000",
+      "links": []
+    },
+    {
+      "kind": "kit-version",
+      "version": "unknown",
+      "links": []
+    },
+    {
+      "kind": "metrics-issue",
+      "state": "none-found",
+      "links": []
+    },
+    {
+      "kind": "drift-audit-issue",
+      "state": "none-found",
+      "links": []
+    }
+  ]
+}

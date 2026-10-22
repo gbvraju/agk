@@ -18,7 +18,7 @@ were read on 2026-10-16.
    Standard library only. Without a mode flag it writes the weekly report (rule 7) to stdout as Markdown; with `--inbox` only the
    inbox (rule 3); with `--print-action` one line, `create` or `update N` (rule 16). `--today` defaults to the `today` of the facts
    document, never to the clock; `--week` defaults to the ISO week before the week of `--today`, as `metrics.window` does. The script
-   is vendored into every target and runs without the plugin (SPEC-0005 rule 2).
+   is vendored into every target and runs without the plugin (SPEC-0005 rule 2). With `--json FILE` it also writes `report.json`, the structure of the report as data (SPEC-0022 rule 1); `--json` is refused with `--inbox` and `--print-action`.
 2. **The only input is the facts document.** The renderer reads the one file named by `--facts` and nothing else: no other file, no
    environment variable, no clock, no `git`, no `gh`, no network (rule 13 tests it). A facts document whose `schema` is not the
    version the renderer knows is a refusal that names the field. Every number and every status the renderer prints is computed from
@@ -102,9 +102,9 @@ were read on 2026-10-16.
     `sys.stdin`; and it allows exactly one file read, of the path given by `--facts`. (c) A test runs the renderer in an empty
     temporary directory, with an empty environment and with `HOME` unset, and compares the bytes with the golden. (d) A test changes one number in a facts document and shows that the one line that depends on it changes and no
     other (so no number is constant in the renderer). (e) A test shows that every number in a rendered report can be found, or
-    computed by the formulas of rules 5, 9, 10, from the document: it recomputes them with a second, independent function. (f) A test renders the markdown from the structure alone, also after a trip through JSON, and compares it with what the script prints.
+    computed by the formulas of rules 5, 9, 10, from the document: it recomputes them with a second, independent function. (f) A test renders the markdown from the structure alone, also after a trip through JSON, and compares it with what the script prints. (g) With `--json` the script writes that one file and nothing else; without it, it writes none (SPEC-0022 rules 1 and 10).
 14. **Determinism.** The same facts document and the same `--today` and `--week` give byte-identical output: items in the orders of
-    the tables, no timestamp, no environment text, `\n` line ends, one trailing newline.
+    the tables, no timestamp, no environment text, `\n` line ends, one trailing newline. The same holds for `report.json` (SPEC-0022 rule 8).
 
 ### Schedule and install
 
@@ -133,7 +133,7 @@ were read on 2026-10-16.
     the independent function of rule 13(e); the hours rounding against `metrics.hours_between` over the same pairs; `--print-action` with
     none, one and two issues; refusals (wrong `schema`, `repo` `unknown`, a missing file). `tests/kit/test_product_report_workflow.py`:
     name, cron, permissions, default-branch guard, pinned actions, no `pull_request_target`. The tests of rule 13. Fixtures
-    `tests/kit/fixtures/report/<case>/` hold `facts.json` and the golden `report.md` and `inbox.md`.
+    `tests/kit/fixtures/report/<case>/` hold `facts.json` and the golden `report.md` and `inbox.md`. The tests of SPEC-0022: `tests/kit/test_report_structure.py`, `tests/kit/test_report_json.py` (installed) and `tests/kit_dev/test_report_wiring.py` (kit-only).
 19. **Proof of criterion a (a maintainers' step with the agent's help, not done in this pull request).** In the pilot repository, which
     exists and runs the kit (adopted on kit 0.11.0): for two consecutive ISO weeks the workflow creates the issue on its Monday schedule. For each week the
     product owner (the maintainer) writes, from the issue alone, an answer to each of the five questions, in a file of the **pilot's own repository**, `docs/runs/product-report-week-N.md`,

@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "week": "2026-W41",
+  "opening": {
+    "first": "2026-10-05",
+    "last": "2026-10-11",
+    "as_of": "2026-10-14"
+  },
+  "sections": {
+    "delivered": [],
+    "proven": [],
+    "needs_you": [],
+    "at_risk": [
+      {
+        "kind": "drift-audit",
+        "total": 0,
+        "counts": {
+          "D1": 0,
+          "D2": 0,
+          "D3": 0,
+          "D4": 0,
+          "D5": 0,
+          "D6": 0,
+          "D7": 0
+        },
+        "open_issue": "none",
+        "links": []
+      }
+    ],
+    "cost": []
+  },
+  "notices": [
+    {
+      "kind": "facts-commit",
+      "commit": "f3f7230da79e4fa05485154b3d244519894adbe0",
+      "links": []
+    },
+    {
+      "kind": "kit-version",
+      "version": "unknown",
+      "links": []
+    },
+    {
+      "kind": "metrics-issue",
+      "state": "none-found",
+      "links": []
+    },
+    {
+      "kind": "drift-audit-issue",
+      "state": "none-found",
+      "links": []
+    }
+  ]
+}

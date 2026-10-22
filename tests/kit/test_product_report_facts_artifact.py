@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess  # nosec B404 - fixed argument lists, and a stub `gh`
+import sys
 from pathlib import Path
 
 from test_product_report_workflow import ALLOWED_GH, FIXTURE, ROOT, body_with_facts, script, text
@@ -23,6 +24,13 @@ def upload_step() -> str:
     found = [s for s in steps if "upload-artifact" in s]
     assert len(found) == 1, "the workflow has exactly one upload step"
     return found[0]
+
+
+def upload_paths(step: str) -> list[str]:
+    """The paths of the upload step: the lines of the `path: |` block (SPEC-0022 rule 9)."""
+    block = re.search(r"(?m)^\s+path:\s*\|\s*\n((?:\s{12,}\S.*\n)+)", step)
+    assert block, "the upload names its paths in a block"
+    return [ln.strip() for ln in block.group(1).splitlines()]
 
 
 def with_value(step: str, key: str) -> str | None:
@@ -46,7 +54,7 @@ def test_ac2_the_artifact_is_the_file_the_report_was_rendered_from():
     assert 'facts="$RUNNER_TEMP/facts.json"' in run
     assert 'scripts/agk/facts.py --today "$today" --repo "$GITHUB_REPOSITORY" > "$facts"' in run
     assert 'scripts/agk/product_report.py --facts "$facts"' in run
-    assert with_value(upload_step(), "path") == "${{ runner.temp }}/facts.json"
+    assert upload_paths(upload_step())[0] == "${{ runner.temp }}/facts.json"
 
 
 def run_body(tmp_path: Path, facts_text: str | None = None):
@@ -96,8 +104,9 @@ def test_ac3_the_upload_step_follows_the_issue_step_and_is_pinned_and_strict():
     assert with_value(step, "retention-days") == "90"
     assert with_value(step, "if-no-files-found") == "error"
     assert with_value(step, "archive") in (None, "true")
-    path = with_value(step, "path") or ""
-    assert path.endswith("/facts.json") and not re.search(r"[*?\[\]]", path)
+    paths = upload_paths(step)
+    assert [p.rsplit("/", 1)[1] for p in paths] == ["facts.json", "report.json"]
+    assert not any(re.search(r"[*?\[\]]", p) for p in paths)
 
 
 def test_ac4_an_empty_facts_file_fails_the_run_before_anything_is_written(tmp_path):
@@ -178,3 +187,90 @@ def test_ac8_the_metrics_workflow_and_the_issue_commands_are_unchanged():
     )
     assert 'gh issue edit "${action#update }" --title "$title" --body-file "$report"' in text()
     assert FIXTURE.is_file()
+
+
+# --- the second file of the artifact (SPEC-0022 rule 9, REQ-029 AC6 and AC7) ----------------------
+
+
+def test_ac6_the_artifact_holds_exactly_the_two_files_and_the_name_does_not_change():
+    """REQ-029 AC6: SPEC-0022 rule 9 (`facts.json` and `report.json`, by path, no pattern)."""
+    step = upload_step()
+    assert with_value(step, "name") == "agk-facts-${{ steps.report.outputs.week }}"
+    assert upload_paths(step) == [
+        "${{ runner.temp }}/facts.json",
+        "${{ runner.temp }}/report.json",
+    ]
+
+
+def test_ac6_the_report_step_writes_the_json_in_the_same_run_as_the_markdown():
+    """REQ-029 AC6: SPEC-0022 rule 9 (one run of product_report.py, before the issue)."""
+    run = script()
+    assert 'report_json="$RUNNER_TEMP/report.json"' in run
+    command = (
+        'scripts/agk/product_report.py --facts "$facts" --today "$today" --json "$report_json"'
+    )
+    assert command in run and run.count("product_report.py") == 2  # the report, and --print-action
+    assert run.index(command) < run.index("gh issue")
+
+
+def test_ac6_the_json_in_the_artifact_is_what_the_script_writes_for_the_same_facts(tmp_path):
+    """REQ-029 AC6: SPEC-0022 rule 9 (run against a stub `gh`: the same bytes, the same render)."""
+    proc, _, _ = run_body(tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    uploaded = (tmp_path / "report.json").read_bytes()
+    direct = tmp_path / "direct.json"
+    subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "agk" / "product_report.py"),
+            "--facts",
+            str(tmp_path / "facts.json"),
+            "--today",
+            "2026-10-14",
+            "--json",
+            str(direct),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    assert uploaded != b"" and uploaded == direct.read_bytes()
+
+
+def test_ac6_a_missing_or_empty_report_json_fails_the_run_before_anything_is_written(tmp_path):
+    """REQ-029 AC6: SPEC-0022 rule 9 (the issue is not written; the message names no value)."""
+    script_file = body_with_facts(tmp_path, [])
+    body = script_file.read_text(encoding="utf-8").replace(
+        '--json "$report_json"', "--json /dev/null"
+    )
+    script_file.write_text(body, encoding="utf-8")
+    (tmp_path / "scripts").symlink_to(ROOT / "scripts")
+    env = {
+        "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}",
+        "RUNNER_TEMP": str(tmp_path),
+        "INPUT_TODAY": "2026-10-14",
+        "GITHUB_REPOSITORY": "demo-org/demo-repo",
+        "GH_TOKEN": "unused",
+        "GITHUB_OUTPUT": str(tmp_path / "github-output"),
+    }
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell string
+        [shutil.which("bash") or "bash", "-eo", "pipefail", str(script_file)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode != 0
+    assert not (tmp_path / "gh-calls").exists()
+    assert "nothing written" in proc.stdout + proc.stderr
+
+
+def test_ac7_nothing_but_the_artifact_publishes_either_file():
+    """REQ-029 AC7: SPEC-0022 rule 9 (permissions, retention, pin and order are unchanged)."""
+    step = upload_step()
+    assert with_value(step, "retention-days") == "90" and with_value(step, "overwrite") == "true"
+    assert with_value(step, "if-no-files-found") == "error"
+    assert text().index("gh issue edit") < text().index("upload-artifact")
+    code = "\n".join(ln for ln in text().splitlines() if not ln.lstrip().startswith("#"))
+    assert code.count("report.json") == 2  # where the report step writes it, the upload path
+    for forbidden in ("gh release", "gh gist", "curl", "wget", "git push", "gh api"):
+        assert forbidden not in code, forbidden

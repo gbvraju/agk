@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "week": "2026-W41",
+  "opening": {
+    "first": "2026-10-05",
+    "last": "2026-10-11",
+    "as_of": "2026-10-14"
+  },
+  "sections": {
+    "delivered": [],
+    "proven": [
+      {
+        "kind": "requirement-not-proven",
+        "id": "REQ-001",
+        "reasons": [
+          {
+            "reason": "no-merged-change"
+          }
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/3e506235cd730519d41f89ad0149c006de32ecba/docs/requirements.md#L3"
+          }
+        ]
+      },
+      {
+        "kind": "planned-not-counted",
+        "count": 1,
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/3e506235cd730519d41f89ad0149c006de32ecba/docs/requirements.md"
+          }
+        ]
+      }
+    ],
+    "needs_you": [
+      {
+        "group": "residual",
+        "count": 1,
+        "items": [
+          {
+            "kind": "overdue-residual",
+            "due": "2026-06-01",
+            "text": "has | a pipe",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/3e506235cd730519d41f89ad0149c006de32ecba/docs/runs/residuals.md"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "requirement",
+        "count": 1,
+        "items": [
+          {
+            "kind": "unspecced-requirement",
+            "id": "REQ-002",
+            "title": "Second thing",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/3e506235cd730519d41f89ad0149c006de32ecba/docs/requirements.md#L8"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "at_risk": [
+      {
+        "kind": "residual-overdue",
+        "due": "2026-06-01",
+        "days": 135,
+        "text": "has | a pipe",
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/3e506235cd730519d41f89ad0149c006de32ecba/docs/runs/residuals.md"
+          }
+        ]
+      },
+      {
+        "kind": "drift-audit",
+        "total": 3,
+        "counts": {
+          "D1": 0,
+          "D2": 0,
+          "D3": 0,
+          "D4": 3,
+          "D5": 0,
+          "D6": 0,
+          "D7": 0
+        },
+        "open_issue": "none",
+        "links": []
+      }
+    ],
+    "cost": []
+  },
+  "notices": [
+    {
+      "kind": "facts-commit",
+      "commit": "3e506235cd730519d41f89ad0149c006de32ecba",
+      "links": []
+    },
+    {
+      "kind": "kit-version",
+      "version": "unknown",
+      "links": []
+    },
+    {
+      "kind": "metrics-issue",
+      "state": "none-found",
+      "links": []
+    },
+    {
+      "kind": "drift-audit-issue",
+      "state": "none-found",
+      "links": []
+    }
+  ]
+}

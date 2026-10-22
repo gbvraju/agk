@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "week": "2026-W41",
+  "opening": {
+    "first": "2026-10-05",
+    "last": "2026-10-11",
+    "as_of": "2026-10-14"
+  },
+  "sections": {
+    "delivered": [],
+    "proven": [
+      {
+        "kind": "requirement-not-proven",
+        "id": "REQ-001",
+        "reasons": [
+          {
+            "reason": "no-merged-change"
+          }
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/d61c7d0940d03d9198c46c0aff465da93d2538ef/docs/requirements.md#L3"
+          }
+        ]
+      },
+      {
+        "kind": "planned-not-counted",
+        "count": 1,
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/d61c7d0940d03d9198c46c0aff465da93d2538ef/docs/requirements.md"
+          }
+        ]
+      }
+    ],
+    "needs_you": [
+      {
+        "group": "requirement",
+        "count": 1,
+        "items": [
+          {
+            "kind": "unspecced-requirement",
+            "id": "REQ-002",
+            "title": "Second thing",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/d61c7d0940d03d9198c46c0aff465da93d2538ef/docs/requirements.md#L8"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "at_risk": [
+      {
+        "kind": "drift-audit",
+        "total": 5,
+        "counts": {
+          "D1": 0,
+          "D2": 0,
+          "D3": 0,
+          "D4": 0,
+          "D5": 0,
+          "D6": 0,
+          "D7": 5
+        },
+        "open_issue": "none",
+        "links": []
+      }
+    ],
+    "cost": []
+  },
+  "notices": [
+    {
+      "kind": "facts-commit",
+      "commit": "d61c7d0940d03d9198c46c0aff465da93d2538ef",
+      "links": []
+    },
+    {
+      "kind": "kit-version",
+      "version": "unknown",
+      "links": []
+    },
+    {
+      "kind": "metrics-issue",
+      "state": "none-found",
+      "links": []
+    },
+    {
+      "kind": "drift-audit-issue",
+      "state": "none-found",
+      "links": []
+    }
+  ]
+}

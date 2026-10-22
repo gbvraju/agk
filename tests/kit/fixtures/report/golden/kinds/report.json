@@ -1,0 +1,606 @@
+{
+  "schema": 1,
+  "week": "2026-W41",
+  "opening": {
+    "first": "2026-10-05",
+    "last": "2026-10-11",
+    "as_of": "2026-10-14"
+  },
+  "sections": {
+    "delivered": [
+      {
+        "kind": "requirement-done",
+        "id": "REQ-001",
+        "title": "Alpha thing",
+        "criteria": [
+          "AC1",
+          "AC2"
+        ],
+        "became_done": "unknown",
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L3"
+          }
+        ]
+      },
+      {
+        "kind": "requirement-done",
+        "id": "REQ-002",
+        "title": "Beta thing",
+        "criteria": [
+          "AC1",
+          "AC2"
+        ],
+        "became_done": "unknown",
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L8"
+          }
+        ]
+      },
+      {
+        "kind": "requirement-done",
+        "id": "REQ-005",
+        "title": "Epsilon thing",
+        "criteria": [],
+        "became_done": "unknown",
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L23"
+          }
+        ]
+      },
+      {
+        "kind": "requirement-done",
+        "id": "REQ-006",
+        "title": "Zeta thing",
+        "criteria": "unknown",
+        "became_done": "unknown",
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L28"
+          }
+        ]
+      },
+      {
+        "kind": "requirement-done",
+        "id": "REQ-009",
+        "title": "Iota thing",
+        "criteria": [
+          "AC1"
+        ],
+        "became_done": "unknown",
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L43"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-merged",
+        "number": 5,
+        "title": "Change number 5",
+        "merged_on": "2026-10-08",
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/5"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-merged",
+        "number": 6,
+        "title": "Change number 6",
+        "merged_on": "2026-10-09",
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/6"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-merged",
+        "number": 7,
+        "title": "Change number 7",
+        "merged_on": "2026-10-10",
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/7"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-merged",
+        "number": 8,
+        "title": "Change number 8",
+        "merged_on": "2026-10-07",
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/8"
+          }
+        ]
+      }
+    ],
+    "proven": [
+      {
+        "kind": "requirement-proven",
+        "id": "REQ-001",
+        "last_change": {
+          "number": 5,
+          "proof": "proven"
+        },
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L3"
+          }
+        ]
+      },
+      {
+        "kind": "requirement-not-proven",
+        "id": "REQ-002",
+        "reasons": [
+          {
+            "reason": "no-test",
+            "ac": "AC2"
+          },
+          {
+            "reason": "not-shown",
+            "number": 6,
+            "proof": "not-proven",
+            "why": "green-on-base"
+          }
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L8"
+          }
+        ]
+      },
+      {
+        "kind": "requirement-not-proven",
+        "id": "REQ-003",
+        "reasons": [
+          {
+            "reason": "unknown-proof",
+            "number": 7,
+            "proof": "unknown",
+            "why": "timeout"
+          }
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L13"
+          }
+        ]
+      },
+      {
+        "kind": "requirement-not-proven",
+        "id": "REQ-004",
+        "reasons": [
+          {
+            "reason": "no-test",
+            "ac": "AC1"
+          },
+          {
+            "reason": "no-merged-change"
+          }
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L18"
+          }
+        ]
+      },
+      {
+        "kind": "requirement-not-proven",
+        "id": "REQ-005",
+        "reasons": [
+          {
+            "reason": "no-criteria"
+          },
+          {
+            "reason": "no-merged-change"
+          }
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L23"
+          }
+        ]
+      },
+      {
+        "kind": "requirement-not-proven",
+        "id": "REQ-006",
+        "reasons": [
+          {
+            "reason": "criteria-unknown"
+          }
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L28"
+          }
+        ]
+      },
+      {
+        "kind": "requirement-proven",
+        "id": "REQ-009",
+        "last_change": {
+          "number": 8,
+          "proof": "skipped"
+        },
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L43"
+          }
+        ]
+      },
+      {
+        "kind": "planned-not-counted",
+        "count": 2,
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md"
+          }
+        ]
+      }
+    ],
+    "needs_you": [
+      {
+        "group": "spec",
+        "count": 1,
+        "items": [
+          {
+            "kind": "draft-spec",
+            "id": "SPEC-0002",
+            "title": "Draft one",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/specs/0002-draft.md"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "adr",
+        "count": 1,
+        "items": [
+          {
+            "kind": "proposed-adr",
+            "id": "ADR-0002",
+            "title": "Proposed one",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/adr/0002-proposed.md"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "question",
+        "count": 2,
+        "items": [
+          {
+            "kind": "question",
+            "id": "Q-X1-1",
+            "asked_in": "docs/runs/spec-0002-notes.md",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/runs/spec-0002-notes.md"
+              }
+            ]
+          },
+          {
+            "kind": "question",
+            "id": "Q-X1-4",
+            "asked_in": "docs/adr/0002-proposed.md",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/adr/0002-proposed.md"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "pull-request",
+        "count": 2,
+        "items": [
+          {
+            "kind": "pull-request-no-verdict",
+            "number": 9,
+            "title": "Change number 9",
+            "days": 13,
+            "links": [
+              {
+                "to": "pull-request",
+                "url": "https://github.com/demo-org/demo-repo/pull/9"
+              }
+            ]
+          },
+          {
+            "kind": "pull-request-no-verdict",
+            "number": 11,
+            "title": "Change number 11",
+            "days": 2,
+            "links": [
+              {
+                "to": "pull-request",
+                "url": "https://github.com/demo-org/demo-repo/pull/11"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "residual",
+        "count": 2,
+        "items": [
+          {
+            "kind": "overdue-residual",
+            "due": "2026-09-01",
+            "text": "2026-08-01: an old item",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/adr/0001-accepted.md"
+              }
+            ]
+          },
+          {
+            "kind": "overdue-residual",
+            "due": "2026-10-13",
+            "text": "an item with a very long description that goes on and on an item with a very long description that goes on and on an ite",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/runs/residuals.md"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "requirement",
+        "count": 1,
+        "items": [
+          {
+            "kind": "unspecced-requirement",
+            "id": "REQ-007",
+            "title": "Eta thing",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md#L33"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "at_risk": [
+      {
+        "kind": "residual-overdue",
+        "due": "2026-09-01",
+        "days": 43,
+        "text": "2026-08-01: an old item",
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/adr/0001-accepted.md"
+          }
+        ]
+      },
+      {
+        "kind": "residual-overdue",
+        "due": "2026-10-13",
+        "days": 1,
+        "text": "an item with a very long description that goes on and on an item with a very long description that goes on and on an ite",
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/runs/residuals.md"
+          }
+        ]
+      },
+      {
+        "kind": "pull-requests-open-long",
+        "entries": [
+          {
+            "number": 9,
+            "days": 13
+          },
+          {
+            "number": 13,
+            "days": 12
+          }
+        ],
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/9"
+          },
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/13"
+          }
+        ]
+      },
+      {
+        "kind": "pull-requests-sent-back",
+        "entries": [
+          {
+            "number": 6,
+            "times": 2
+          },
+          {
+            "number": 12,
+            "times": 1
+          }
+        ],
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/6"
+          },
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/12"
+          }
+        ]
+      },
+      {
+        "kind": "drift-audit",
+        "total": 4,
+        "counts": {
+          "D1": 0,
+          "D2": 0,
+          "D3": 2,
+          "D4": 1,
+          "D5": 0,
+          "D6": 0,
+          "D7": 1
+        },
+        "open_issue": 4,
+        "links": [
+          {
+            "to": "issue",
+            "url": "https://github.com/demo-org/demo-repo/issues/4"
+          }
+        ]
+      },
+      {
+        "kind": "pull-requests-merged-not-cleared",
+        "entries": [
+          {
+            "number": 8
+          }
+        ],
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/8"
+          }
+        ]
+      }
+    ],
+    "cost": [
+      {
+        "kind": "pull-request-cost",
+        "number": 5,
+        "title": "Change number 5",
+        "hours": "48.0",
+        "fix_verdicts": 0,
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/5"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-cost",
+        "number": 6,
+        "title": "Change number 6",
+        "hours": "49.3",
+        "fix_verdicts": 2,
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/6"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-cost",
+        "number": 7,
+        "title": "Change number 7",
+        "hours": "10.0",
+        "fix_verdicts": 0,
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/7"
+          }
+        ]
+      },
+      {
+        "kind": "pull-request-cost",
+        "number": 8,
+        "title": "Change number 8",
+        "hours": "0.0",
+        "fix_verdicts": 0,
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/8"
+          }
+        ]
+      },
+      {
+        "kind": "week-totals",
+        "merged": 4,
+        "hours": "107.3",
+        "fix_verdicts": 2,
+        "behaviour_unchanged": 2,
+        "estimate": "none-declared",
+        "busy": false,
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged"
+          }
+        ]
+      }
+    ]
+  },
+  "notices": [
+    {
+      "kind": "facts-commit",
+      "commit": "c0ffee0000000000000000000000000000000000",
+      "links": []
+    },
+    {
+      "kind": "kit-version",
+      "version": "unknown",
+      "links": []
+    },
+    {
+      "kind": "metrics-issue",
+      "state": "found",
+      "number": 3,
+      "title": "agk metrics 2026-W41",
+      "links": []
+    },
+    {
+      "kind": "drift-audit-issue",
+      "state": "found",
+      "number": 4,
+      "title": "agk drift audit 2026-10-10",
+      "links": []
+    }
+  ]
+}

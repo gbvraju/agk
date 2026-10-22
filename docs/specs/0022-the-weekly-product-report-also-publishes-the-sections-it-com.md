@@ -61,7 +61,7 @@ is due 2026-12-31.
 6. **Unknown stays unknown.** Wherever the facts mark a value `"unknown"`, or a value cannot be read, the field holds the string `"unknown"` and is never a number, a null, a guess or a default; an `unknown`
    item (rule 5) stands where the markdown prints `unknown: <what> could not be read`.
 7. **Versioned, and the list is closed.** `schema` is 1. A kind or a field that is not in rule 5 does not exist in schema 1: adding one, or changing a field, raises the number (and this spec is amended).
-   `kit/report-schema.json` is a hand-written JSON Schema of rules 3 to 5 (installed verbatim, like `kit/facts-schema.json`), and a test validates every golden `report.json` against it and fails on an extra
+   `kit/report-schema.json` is a hand-written JSON Schema of rules 3 to 5 (kit-only, not installed, like `kit/facts-schema.json`; its test is `tests/kit_dev/test_report_wiring.py`), and a test validates every golden `report.json` against it and fails on an extra
    key, an extra kind or a missing field.
 8. **Determinism.** The same facts, `--today` and `--week` give a byte-identical `report.json` (keys in the order of rules 3 to 5, two-space indent, UTF-8, a final newline), and a byte-identical markdown.
 9. **The artifact.** In the `product-report` workflow the report step writes the markdown and `report.json` in one run of `product_report.py` and before the issue is written. The upload step names the two files
