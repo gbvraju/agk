@@ -1,6 +1,6 @@
 # ADR-0072: the report is published as data in report.json (REQ-029 part R3, SPEC-0022), kit 0.39.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-22
 - Deciders: maintainers
 - Related: ADR-0071, ADR-0070, ADR-0069, ADR-0063
