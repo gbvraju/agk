@@ -1,6 +1,6 @@
 # ADR-0074: the review agent, the protocol and the checklist (REQ-030 part a, SPEC-0023), kit 0.40.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-22
 - Deciders: maintainers
 - Related: ADR-0073, ADR-0053
