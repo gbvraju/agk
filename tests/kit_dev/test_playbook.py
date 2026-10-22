@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import KIT_ROOT, clean_env, git, make_repo
+from conftest import KIT_ROOT, clean_env, git, make_repo, set_handle
 
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 import metrics  # noqa: E402
@@ -623,6 +623,7 @@ def test_ac1_start_works_in_a_new_repository_and_in_an_existing_codebase(tmp_pat
             env=clean_env(),
         )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+    set_handle(root)
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", "install the kit")
     ids = json.loads(

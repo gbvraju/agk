@@ -13,7 +13,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from conftest import KIT_ROOT, clean_env, git, make_repo, manifest, run_init, snapshot
+from conftest import KIT_ROOT, clean_env, git, make_repo, manifest, run_init, set_handle, snapshot
 
 ADOPT = KIT_ROOT / "scripts" / "agk" / "adopt.py"
 
@@ -405,6 +405,7 @@ def test_ac1_kit_tests_markers_are_not_project_markers_in_adopt_mode(adopted):
 
 def test_ac1_governance_and_kit_tests_pass_in_the_adopted_target(adopted):
     """REQ-010 AC1: rule 18."""
+    set_handle(adopted)
     for target in ("agk-governance", "agk-test", "agk-project-test"):
         proc = subprocess.run(
             ["make", "-f", "agk.mk", target],

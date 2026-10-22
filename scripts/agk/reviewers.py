@@ -22,6 +22,7 @@ HANDLE_RE = re.compile(r"^@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 USER_RE = re.compile(r"^@?[A-Za-z0-9_.-]+$")
 AUTHORS = "verdict_authors"
+PLACEHOLDER = "replace-me"  # the installed handle `@REPLACE-ME`: a login a stranger could own
 
 
 class ReviewerError(CheckError):
@@ -136,7 +137,8 @@ def top_list(key: str, text: str) -> list:
 
 def authors_of(data: dict) -> list[str]:
     """The listed verdict authors, lower case without `@` (SPEC-0021 rule 5): the list, else the
-    user handle of the team `maintainers`; a team handle (`@org/slug`) lists nobody."""
+    user handle of the team `maintainers`; a team handle (`@org/slug`) lists nobody, and the
+    installed placeholder `@REPLACE-ME` is never listed."""
     listed = data.get(AUTHORS)
     if listed is None:
         team = (data.get("teams") or {}).get("maintainers")
@@ -146,7 +148,8 @@ def authors_of(data: dict) -> list[str]:
         isinstance(a, str) and USER_RE.match(a) for a in listed
     ):
         return []
-    return [a.lstrip("@").lower() for a in listed]
+    names = [a.lstrip("@").lower() for a in listed]
+    return [n for n in names if n != PLACEHOLDER]
 
 
 def verdict_authors(root) -> list[str]:
@@ -225,6 +228,18 @@ def validate(data: dict, protected_list: str) -> list[str]:
             if a not in teams:
                 problems.append(f"class '{cname}': approvers must name teams defined in 'teams'")
                 break
+    prot = classes.get("protected")
+    if isinstance(prot, dict) and isinstance(prot.get("paths"), list):
+        if sorted(prot["paths"]) != sorted(read_list(protected_list)):
+            problems.append(f"class 'protected' differs from {PROTECTED_LIST}")
+    elif "protected" not in classes:
+        problems.append("class 'protected' is required")
+    return problems
+
+
+def author_problems(data: dict) -> list[str]:
+    """SPEC-0021 rule 6: a list that is not user handles, or nobody listed; names the setting."""
+    problems: list[str] = []
     listed = data.get(AUTHORS)
     if listed is not None and not (
         isinstance(listed, list) and all(isinstance(a, str) and USER_RE.match(a) for a in listed)
@@ -232,12 +247,6 @@ def validate(data: dict, protected_list: str) -> list[str]:
         problems.append(f"{AUTHORS} must be a list of user handles")
     if not authors_of(data):
         problems.append(f"no listed verdict author: set {AUTHORS} (SPEC-0021)")
-    prot = classes.get("protected")
-    if isinstance(prot, dict) and isinstance(prot.get("paths"), list):
-        if sorted(prot["paths"]) != sorted(read_list(protected_list)):
-            problems.append(f"class 'protected' differs from {PROTECTED_LIST}")
-    elif "protected" not in classes:
-        problems.append("class 'protected' is required")
     return problems
 
 
@@ -306,6 +315,7 @@ def main(argv: list[str] | None = None) -> int:
         raise CheckError(f"cannot read {CONFIG} or {PROTECTED_LIST}") from exc
     problems = validate(data, protected)
     if argv[0] == "--check":
+        problems += author_problems(data)
         for problem in problems:
             print(f"FAIL {NAME}: {problem}")
         if not problems:

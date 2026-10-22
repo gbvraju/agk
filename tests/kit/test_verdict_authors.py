@@ -246,3 +246,50 @@ def test_ac5_a_top_level_mapping_is_still_refused(repo):
     repo.write("config/reviewers.yaml", "version: 1\nverdict_authors: {a: b}\n")
     repo.write("config/protected-paths.txt", "config/\n")
     assert check(repo).returncode == 1
+
+
+# --- the installed placeholder is never a listed author (Q-K4-221, ruled) ------------------------
+
+
+@pytest.mark.parametrize("handle", ["@REPLACE-ME", "@replace-me", "REPLACE-ME"])
+def test_ac5_the_installed_placeholder_is_never_a_listed_author(repo, handle):
+    """REQ-028 AC5: rule 5 (a stranger could own the login `REPLACE-ME`)."""
+    from reviewers import verdict_authors
+
+    with_config(repo, handle=handle)
+    assert verdict_authors(repo.root) == []
+
+
+def test_ac5_the_placeholder_is_dropped_from_a_list_and_the_others_stay(repo):
+    """REQ-028 AC5: rule 5 (a list that holds only the placeholder lists nobody)."""
+    from reviewers import verdict_authors
+
+    with_config(repo, authors="[replace-me, Alice]")
+    assert verdict_authors(repo.root) == ["alice"]
+    with_config(repo, authors="[REPLACE-ME]")
+    assert verdict_authors(repo.root) == []
+
+
+def test_ac5_a_handle_that_only_contains_the_placeholder_is_a_handle(repo):
+    """REQ-028 AC5: rule 5 (only the exact placeholder is excluded)."""
+    from reviewers import verdict_authors
+
+    with_config(repo, handle="@replace-me-now")
+    assert verdict_authors(repo.root) == ["replace-me-now"]
+
+
+def test_ac5_with_the_placeholder_the_metrics_read_unknown(repo, tmp_path):
+    """REQ-028 AC5: rule 6 (nobody is listed, so unknown and never 0)."""
+    with_config(repo, handle="@REPLACE-ME")
+    row = record(repo, pull_case(tmp_path, [comment(CLEARED, "reviewer")]))
+    assert (row["review_rounds"], row["merged_head_cleared"]) == ("unknown", "unknown")
+
+
+def test_ac5_check_fails_naming_the_setting_while_the_placeholder_stands(repo):
+    """REQ-028 AC5: rule 6 (and passes once the handle is real)."""
+    with_config(repo, handle="@REPLACE-ME")
+    proc = check(repo)
+    assert proc.returncode == 1, proc.stdout
+    assert "verdict_authors" in proc.stdout and "REPLACE-ME" not in proc.stdout
+    with_config(repo, handle="@some-user")
+    assert check(repo).returncode == 0

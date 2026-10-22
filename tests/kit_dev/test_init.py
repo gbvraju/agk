@@ -21,6 +21,7 @@ from conftest import (
     make_repo,
     manifest,
     run_init,
+    set_handle,
     snapshot,
 )
 
@@ -169,6 +170,7 @@ def test_ac2_installed_protected_list_and_reviewers_equal(installed):
         if ln.strip() and not ln.startswith("#")
     ]
     assert listed == INSTALLED_PROTECTED
+    set_handle(installed)
     assert make(installed, "governance").returncode == 0
 
 
@@ -434,6 +436,7 @@ def test_ac1_default_branch_is_detected_and_governance_is_green_on_master(tmp_pa
 
     tgt = make_repo(tmp_path / "proj", "master")
     assert run_init(tgt).returncode == 0
+    set_handle(tgt)
     cfg = tomllib.loads((tgt / "agk.toml").read_text(encoding="utf-8"))
     assert cfg["default_branch"] == "master"
     assert make(tgt, "governance").returncode == 0

@@ -75,7 +75,8 @@ The install was run through Claude Code in `docs/runs/plugin-live-proof.md` (ste
 
     maintainers: {github_team: "@REPLACE-ME"}
 
-and change `@REPLACE-ME` to `@YOUR-NAME`. The people whose pull request comments count as verdicts are the same user handle; if you map
+and change `@REPLACE-ME` to `@YOUR-NAME`. Until you do, `make governance` fails on `reviewers --check`: the people whose pull request
+comments count as verdicts are that user handle, and the placeholder is never one of them. If you map
 `maintainers` to a team (`@org/team`) instead, add one line `verdict_authors: [name, name]` (the GitHub users, without `@`) to
 `config/reviewers.yaml`, because `reviewers.py --check` fails when nobody is listed. Then write `.github/CODEOWNERS` from it and run all the checks:
 
@@ -226,8 +227,8 @@ report has five headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`.
 - **`make test` prints that the kit's own tests are not installed.** That is expected: they are not part of your repository. In a new repository `make test` takes well under a second (0.05 s measured) and runs your own tests, if you have any.
 - **`make governance` fails.** Read the first line that does not start with `ok`. It names the rule, a setting or a path class.
 - **`/agk:doctor` says `placeholder-team-reviewers` or `placeholder-team-codeowners`.** Step 4 was not finished: put your
-  handle in `config/reviewers.yaml` and run `python3 scripts/agk/reviewers.py --codeowners --write`. `make governance` does not
-  fail on the placeholder.
+  handle in `config/reviewers.yaml` and run `python3 scripts/agk/reviewers.py --codeowners --write`. Until then `make governance`
+  fails on `reviewers --check`, naming `verdict_authors`: the placeholder is never a listed verdict author.
 
 ## What to do next
 
