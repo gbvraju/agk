@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -262,6 +262,7 @@
         "kind": "week-totals",
         "merged": 4,
         "hours": "172.0",
+        "hours_unknown": 0,
         "fix_verdicts": 1,
         "behaviour_unchanged": 1,
         "estimate": "none-declared",

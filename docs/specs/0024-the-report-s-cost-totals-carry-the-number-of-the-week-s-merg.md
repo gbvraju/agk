@@ -35,7 +35,6 @@ REQ-031 AC1 to AC3: *a reader can say how many merged changes lack their hours w
 ## Residual
 
 - 2026-10-22: the requirement rows and the per-week values are still not in `report.json` (SPEC-0022 residual); when a later intake adds them, the proven and not-proven items should also carry the requirement's title, so a reader can show the plain sentence instead of the identifier (evidence: a reader could only show REQ-nnn). Generic (owner: maintainers) (due 2026-12-31).
-- 2026-10-22: brownfield adoption path for teams already working with coding agents, a K5 candidate to plan after the current queue: an observe-only adoption mode (the report and the proof run as advisory, failing nothing); an adoption ladder (observe, guard new PRs, govern new work, measure; legacy code untouched); support for several developers with parallel pull requests; hosts beyond GitHub (already a candidate). Evidence so far: one single-maintainer brownfield adoption only. Validate with one real team pilot before any claim (owner: maintainers) (due 2026-12-31).
 
 ## Open questions
 
