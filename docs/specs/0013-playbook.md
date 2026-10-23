@@ -79,7 +79,7 @@ facts not reconfirmed are marked `(verify)`. The repository facts quoted here we
 11. **The verdict convention, exactly.** The first line of the comment is `Verdict: cleared <sha>`, `Verdict: fix list` or `Verdict: rejected`,
     with `<sha>` at least 7 hex characters of the pull request's head at review time (the rule of `metrics.VERDICT`). No text follows on
     that line. A later commit needs a new `Verdict: cleared <new sha>` line. The findings, if any, follow the first line after a blank line.
-    A test fills `kit/templates/playbook/verdict.md` and shows that its first line matches `metrics.VERDICT`. The lines after the first line of a verdict (`Read:`, `Rules:`, `Not proven:`, `Lens:`, `Gaps:`, `Checklist:`) are the shape of SPEC-0023 rule 4; the first line is unchanged.
+    A test fills `kit/templates/playbook/verdict.md` and shows that its first line matches `metrics.VERDICT`. The lines after the first line of a verdict (`Read:`, `Rules:`, `Not proven:`, `Lens:`, `Gaps:`, `Checklist:`) are the shape of SPEC-0023 rule 4; the first line is unchanged. When the final commit is the only item the first line is `Verdict: fix list <reviewed sha>` followed by `Final: <path> <old> -> <new>` lines and no numbered item (SPEC-0021 rule 1).
 12. **Not a reviewer agent.** The role posts what a person-supervised session concluded; it does not claim to catch defects. The count
     of findings it misses is not measured by this kit (ADR-0021 decision 6: no model judges code quality); the human findings are recorded
     in `kit/templates/playbook/held-out-findings.md` form before the role sees them, when a measurement is wanted.

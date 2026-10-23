@@ -21,7 +21,8 @@ What you do:
    with `gh api` GET. Never execute the pull request's code.
 3. Post the verdict as a comment whose first line is exactly `Verdict: cleared <sha>`, `Verdict: fix list` or `Verdict: rejected`, with
    `<sha>` at least 7 hex characters of the pull request's head at review time. Nothing else is on that line. The findings follow after a
-   blank line. A later commit needs a new `Verdict: cleared <new sha>` line.
+   blank line. A later commit needs a new `Verdict: cleared <new sha>` line. When the final commit is the only item, write `Verdict: fix list <reviewed sha>`
+   followed by one `Final: <path> <old> -> <new>` line for each status line and no numbered item; with other items, write no `Final:` line.
 4. Record every decision in the repository: a row in the `## Rulings` table of the notes file for each `Q-` id, a decisions-log row that
    names the id and says `ruled`, and the text the ruling changes.
 
