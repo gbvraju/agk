@@ -20,7 +20,7 @@ is due 2026-12-31.
 2. **The structure comes first.** The script builds one structure from the facts and the day and the week, and renders the markdown from that structure alone; `report.json` is that structure written as JSON. A
    function that takes the structure and nothing else renders the markdown, so a test can render it from the parsed `report.json` and compare it with what the script printed (byte for byte). The inbox output
    (`--inbox`) and the markdown of every existing golden are byte-identical to before; the inbox is built from the same item builders and is not part of `report.json`.
-3. **The document.** `report.json` has the keys `schema` (the number 1), `week` (`2026-W41`), `opening`, `sections` and `notices`, and no other. `opening` is `{"first", "last", "as_of"}`, three dates
+3. **The document.** `report.json` has the keys `schema` (the number 2 since SPEC-0024), `week` (`2026-W41`), `opening`, `sections` and `notices`, and no other. `opening` is `{"first", "last", "as_of"}`, three dates
    (`first` the Monday, `last` the Sunday, `as_of` the day the lists are as of). `sections` has the keys `delivered`, `proven`, `needs_you`, `at_risk` and `cost`, each a list in the order the markdown prints, an
    empty list when the markdown prints `nothing this week`; `needs_you` is a list of groups `{"group", "count", "items"}` in the order of the markdown (`group` one of `spec`, `adr`, `question`, `pull-request`, `residual`, `requirement`; `count` a number or `"unknown"`). `notices` is the
    list of the footer lines in the order printed.
@@ -50,7 +50,7 @@ is due 2026-12-31.
    | at_risk | `pull-requests-merged-not-cleared` | `entries` (`{"number"}`; the report prints no title for it) |
    | at_risk | `drift-audit` | `total` (a number or `"unknown"`), `counts` (an object of the finding kinds to numbers or `"unknown"`), `open_issue` (a number, `"none"` or `"unknown"`) |
    | cost | `pull-request-cost` | `number`, `title`, `hours` (a decimal string or `"unknown"`), `fix_verdicts` (a number or `"unknown"`) |
-   | cost | `week-totals` | `merged`, `hours`, `fix_verdicts`, `behaviour_unchanged`, `estimate` (`{"within", "counted"}` or `"none-declared"`), `busy` (a boolean) |
+   | cost | `week-totals` | `merged`, `hours`, `hours_unknown` (a number, how many of the week's merged pull requests have the hours `unknown`; SPEC-0024), `fix_verdicts`, `behaviour_unchanged`, `estimate` (`{"within", "counted"}` or `"none-declared"`), `busy` (a boolean) |
    | any section, and `needs_you` groups | `unknown` | `what` (the thing that could not be read: `requirements`, `pull requests`, `test markers`, `questions`, `residuals`, `the drift counts`, `the age limit for pull requests (inbox_hours)`) |
    | notices | `facts-commit` | `commit` |
    | notices | `working-tree-modified` | `dirty` (the printed value) |
@@ -60,7 +60,7 @@ is due 2026-12-31.
 
 6. **Unknown stays unknown.** Wherever the facts mark a value `"unknown"`, or a value cannot be read, the field holds the string `"unknown"` and is never a number, a null, a guess or a default; an `unknown`
    item (rule 5) stands where the markdown prints `unknown: <what> could not be read`.
-7. **Versioned, and the list is closed.** `schema` is 1. A kind or a field that is not in rule 5 does not exist in schema 1: adding one, or changing a field, raises the number (and this spec is amended).
+7. **Versioned, and the list is closed.** `schema` is 2 (SPEC-0024 added a field to `week-totals`; it was 1). A kind or a field that is not in rule 5 does not exist in schema 2: adding one, or changing a field, raises the number (and this spec is amended).
    `kit/report-schema.json` is a hand-written JSON Schema of rules 3 to 5 (kit-only, not installed, like `kit/facts-schema.json`; its test is `tests/kit_dev/test_report_wiring.py`), and a test validates every golden `report.json` against it and fails on an extra
    key, an extra kind or a missing field.
 8. **Determinism.** The same facts, `--today` and `--week` give a byte-identical `report.json` (keys in the order of rules 3 to 5, two-space indent, UTF-8, a final newline), and a byte-identical markdown.

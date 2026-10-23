@@ -166,7 +166,7 @@ def unknown_line(what: str, link: str) -> str:
 # An item is `{"kind", <its fields>, "links"}`. The fields of a kind are fixed here; a kind or a
 # field that is not in the table does not exist (a new one is a new schema number).
 
-REPORT_SCHEMA = 1
+REPORT_SCHEMA = 2
 ITEM_KINDS = {
     "requirement-done": ("id", "title", "criteria", "became_done"),
     "pull-request-merged": ("number", "title", "merged_on"),
@@ -175,7 +175,15 @@ ITEM_KINDS = {
     "requirement-not-proven": ("id", "reasons"),
     "planned-not-counted": ("count",),
     "pull-request-cost": ("number", "title", "hours", "fix_verdicts"),
-    "week-totals": ("merged", "hours", "fix_verdicts", "behaviour_unchanged", "estimate", "busy"),
+    "week-totals": (
+        "merged",
+        "hours",
+        "hours_unknown",
+        "fix_verdicts",
+        "behaviour_unchanged",
+        "estimate",
+        "busy",
+    ),
     "unknown": ("what",),
     "facts-commit": ("commit",),
     "working-tree-modified": ("dirty",),
@@ -695,6 +703,7 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[dict]:
             [link("search", searched)],
             merged=len(merged),
             hours=UNKNOWN if None in hours else str(sum(hours, Decimal("0.0"))),
+            hours_unknown=hours.count(None),
             fix_verdicts=UNKNOWN if None in fixes else sum(fixes),
             behaviour_unchanged=sum(1 for p in merged if p.get("behaviour") == "unchanged"),
             estimate=estimate_value(merged),
