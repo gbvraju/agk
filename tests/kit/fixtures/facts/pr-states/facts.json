@@ -73,6 +73,7 @@
         "z.txt"
       ],
       "head": "0bcccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "yes",
       "merged_at": "2026-10-09T10:00:00Z",
       "number": 11,
       "proof": "proven",
@@ -132,6 +133,7 @@
         "z.txt"
       ],
       "head": "0dcccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "unknown",
       "merged_at": "2026-10-07T10:00:00Z",
       "number": 13,
       "proof": "unknown",
@@ -153,6 +155,7 @@
         "z.txt"
       ],
       "head": "0ecccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "unknown",
       "merged_at": "2026-10-06T10:00:00Z",
       "number": 14,
       "proof": "skipped",
@@ -174,6 +177,7 @@
         "z.txt"
       ],
       "head": "0fcccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "unknown",
       "merged_at": "2026-10-05T10:00:00Z",
       "number": 15,
       "proof": "unknown",
@@ -195,6 +199,7 @@
         "z.txt"
       ],
       "head": "10cccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "unknown",
       "merged_at": "2026-10-04T10:00:00Z",
       "number": 16,
       "proof": "unknown",

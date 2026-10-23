@@ -54,7 +54,8 @@ the implementation's ADR amends REQ-012 (rule 19). GitHub response shapes marked
      run. Source: local git objects of the default branch; empty for a closed pull request.
    - `merged_head_cleared`: `yes` when a `Verdict: cleared <sha>` comment by a listed author names the merged head commit (the sha is a
      prefix of the head); `no` when the last verdict comment names another commit or is not `cleared`; `unknown` when
-     there is no verdict comment.
+     there is no verdict comment. Also `yes` when the merged head is the covered commit of the latest verdict by a listed author (SPEC-0021
+     rules 3 and 7, read from the commit record `commit-<sha>`); `unknown` for a change to `docs/requirements.md` or an unreadable record.
 9. **`cost_class`** (core): the maintainers' review cost, derived and never typed. `S`: `review_rounds` is 0 and
    `hours_open_to_merge` is under 24. `M`: `review_rounds` is at most 2 and `hours_open_to_merge` is under 72. `L`:
    anything else, and any pull request closed unmerged. `unknown` when `review_rounds` is `unknown` (a closed

@@ -163,3 +163,9 @@ def test_ac2_kit_version_is_at_least_0_12_0():
     """REQ-018 AC2: rule 21 (an installed script is new: the minor version is bumped)."""
     version = tuple(int(part) for part in manifest()["kit_version"].split("."))
     assert version >= (0, 12, 0)
+
+
+def test_ac7_the_schema_allows_head_cleared_and_keeps_the_number():
+    """REQ-028 AC7: SPEC-0021 rule 7 (an optional enum on the pull request; `schema` stays 1)."""
+    assert schema()["properties"]["schema"] == {"const": 1}
+    assert '"head_cleared": {"enum": ["yes", "no", "unknown"]}' in json.dumps(schema())

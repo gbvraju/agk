@@ -92,7 +92,7 @@ This spec is the first of the five K4 specs of ADR-0021 and serves exit criterio
     from the first line of each comment by a listed verdict author, by the rule `metrics.VERDICT`/`metrics.verdicts`; the string `"unknown"` when nobody is listed, SPEC-0021 rule 6), `estimated_size`, `estimated_hours` (the `Size:` and `Expected:` lines of the body, SPEC-0018 rule 2; `"unknown"` when either is missing or malformed), `actual_hours` (for a merged pull request the hours from the earliest commit author date to `merged_at`, one decimal, `"unknown"` when unreadable; `null` otherwise; SPEC-0018 rule 3), and `behaviour` (`"unchanged"` when a
     line of the body, outside fenced code, is exactly `Behaviour: unchanged`; `null` when the body has no `Behaviour:` line;
     `"unknown"` when the body could not be read). With no GitHub source (offline, no `gh`, unauthenticated) the section is
-    `"unknown"`. The body is read for the `Behaviour:`, `Size:` and `Expected:` lines and for nothing else (ADR-0021 criterion e).
+    `"unknown"`. The body is read for the `Behaviour:`, `Size:` and `Expected:` lines and for nothing else (ADR-0021 criterion e). For a merged pull request the object also has the optional `head_cleared` (`yes`, `no` or `unknown`: the value of `merged_head_cleared`, SPEC-0021 rule 7); `schema` stays 1.
 15. **`issues` and `drift`.** *`issues`:* the open and closed issues labelled `agk-metrics`, `agk-drift-audit` or `agk-product-report`, as
     `{"number", "title", "label", "state"}` sorted by number; nothing from their bodies. `"unknown"` without a GitHub source. *`drift`:*
     the findings of the drift audit (SPEC-0004) at the same commit and `today`, counted and not described:
