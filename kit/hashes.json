@@ -14684,7 +14684,7 @@
     ".github/ISSUE_TEMPLATE/report.md": ["9668218026fd5b5185ed1ebeb05f990d46cdc73a96ed138223082f9e833cdd9d"],
     ".github/PULL_REQUEST_TEMPLATE.md": ["3af1cf1fc81aa65346d3db1f1e45e5741f2151b3145ee7aeeafdbb61ce2435cb"],
     ".github/workflows/drift-audit.yml": ["0189e6f3ad79af74fd6ccd507512e4ab048896f98a9e1b957f12793ea3ebedaf"],
-    ".github/workflows/governance.yml": ["0fc66f94441ad35ba402dc87195c34e549c1c25e10657a68f084dbfbdb3c2582"],
+    ".github/workflows/governance.yml": ["eafb321cc4169d984ceee313c7b600db508058d0544516df06e10c791b9b039b"],
     ".github/workflows/metrics.yml": ["486a290f3f6f3a201a0a1953140080fa47eabe7d23b6d548a48da939839e37a4"],
     ".github/workflows/product-report.yml": ["1ff1eb6086684f2421e8c081be9fd6feba213d78c8cc264ec49f18858ea3da51"],
     ".github/workflows/proof.yml": ["135d86a11158b57a953f24fa19f307d0f42410d38fa6ecb0f7cb406eea2f08ef"],

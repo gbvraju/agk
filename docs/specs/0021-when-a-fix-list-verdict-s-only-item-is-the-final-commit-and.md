@@ -41,7 +41,7 @@ workflow fetches the pull request's comments with a read-only GET using the perm
    request, `head_cleared` (`"yes"`, `"no"` or `"unknown"`, the same value), with `schema` staying 1; a facts document without it is read as before, and the report's At risk line "merged before its last commit was
    cleared" is not printed for a pull request whose `head_cleared` is `yes`.
 8. **The workflow.** `.github/workflows/governance.yml` has a step before the governance step that fetches `repos/<repo>/issues/<n>/comments` with `gh api --method GET` (paged) into a file in the runner's temporary
-   directory, on `pull_request` events only, and passes it with `--comments`. It needs read access to pull request comments: `pull-requests: read` (verify; amendment 41). The workflow writes nothing to the pull request.
+   directory, on `pull_request` events only, and passes it with `--comments`. It needs read access to pull request comments: `issues: read` and `pull-requests: read` (both read-only; amendment 41). The workflow writes nothing to the pull request.
 9. **The verdict form.** `kit/templates/playbook/verdict.md` and `.claude/agents/architect.md` describe the form: `Verdict: fix list <reviewed sha>` followed by the `Final:` lines when the final commit is the only
    item. A verdict that also has other items is written as today, without `Final:` lines.
 10. **One status-line reader.** The comparison of rule 3 is one function in `scripts/agk/common.py`, and the final-commit mode of `intake.py` (SPEC-0020 rule 4) calls it, with no change in what that mode accepts or

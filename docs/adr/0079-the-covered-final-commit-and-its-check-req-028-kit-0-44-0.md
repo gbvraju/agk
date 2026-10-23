@@ -21,7 +21,7 @@ reader. The measured clearance in the facts and the report (rule 7) is L3c. The 
 2. **The check**: `scripts/agk/check_final_clearance.py [--comments FILE] [--head SHA]` (installed verbatim) reads the comments (an array, arrays, pages or one object a line), takes the latest verdict by a listed
    author, and fails with `rule 3` when it is a covered fix list whose reviewed sha is the only parent of the head and the head is not exactly the named status lines (no other file, line, mode or rename). Anything
    else passes unchecked; without `--comments` it prints `skipped (no comments file)`. No network, no model.
-3. **Governance**: the check is the tenth step of `agk-governance` and of the workflow. The workflow gains `pull-requests: read` (verify), one step that fetches the comments with `gh api --paginate --method GET`
+3. **Governance**: the check is the tenth step of `agk-governance` and of the workflow. The workflow gains `issues: read` and `pull-requests: read` (both read-only), one step that fetches the comments with `gh api --paginate --method GET`
    on pull requests, and the check step with `--head` set to the pull request's head. The workflow writes nothing to the pull request. A local `make governance` still prints nine `ok` lines and the `skipped` line.
 4. **The form**: `kit/templates/playbook/verdict.md` and `.claude/agents/architect.md` describe `Verdict: fix list <reviewed sha>` with `Final: <path> <old> -> <new>` lines when the final commit is the only item.
 5. **Amendment 41** (`docs/runs/proposed-spec-amendments-41.md`) is applied to SPEC-0021 rules 4 and 8, SPEC-0012 rule 11 and SPEC-0013 rule 11. The getting-started and existing-codebase guides and the security guide say
@@ -40,8 +40,8 @@ reader. The measured clearance in the facts and the report (rule 7) is L3c. The 
 
 | Id | Question | Reading taken |
 | --- | --- | --- |
-| Q-K4-230 | SPEC-0021 rule 8 asks which permission lists a pull request's comments (`pull-requests: read` or `issues: read`) and to quote the page of GitHub's documentation. | `pull-requests: read` (the comments of a pull request are listed through `repos/<repo>/issues/<n>/comments`, which may need `issues: read` instead). The documentation host is not reachable from the build session, so no page is quoted and the choice is marked `(verify)` in the security guide and the amendment. Proposed for ruling. |
-| Q-K4-231 | SPEC-0021 rule 4 names `[--base REF]`; the head of a pull request in the workflow is a merge commit. | The check takes `--head SHA` (default `HEAD`) and no `--base`: the reviewed sha and the head's only parent are all it compares. Proposed for ruling. |
+| Q-K4-230 | SPEC-0021 rule 8 asks which permission lists a pull request's comments (`pull-requests: read` or `issues: read`) and to quote the page of GitHub's documentation. | Ruled in the verdict on the build: grant both, `issues: read` and `pull-requests: read`; both are read-only, so no page is needed. |
+| Q-K4-231 | SPEC-0021 rule 4 names `[--base REF]`; the head of a pull request in the workflow is a merge commit. | Ruled as built in the verdict on the build: the check takes `--head SHA` (default `HEAD`) and no `--base`: the reviewed sha and the head's only parent are all it compares. |
 
 ## Residual
 

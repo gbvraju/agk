@@ -4,6 +4,6 @@ Date: 2026-10-23 (from `date -u`). Approved specs change only through a proposal
 
 1. **SPEC-0021 rule 4, the option that names the head.** The check takes `--comments FILE` and `--head SHA` (default `HEAD`), not `--base REF`: the workflow checks out a merge commit, so the pull request's head is named
    (Q-K4-231). It prints `ok final-clearance` or `FAIL final-clearance: rule 3 ...`, and `skipped (no comments file)` without the file. It is the tenth step of `make governance` and of the workflow.
-2. **SPEC-0021 rule 8, the permission.** The workflow's `permissions` block gains `pull-requests: read` (Q-K4-230: the page of GitHub that confirms it is not reachable from the build session, so it is marked `(verify)`).
+2. **SPEC-0021 rule 8, the permission.** The workflow's `permissions` block gains `issues: read` and `pull-requests: read` (both read-only; Q-K4-230 ruled in the verdict on the build: grant both).
 3. **SPEC-0012 rule 11, one status-line reader.** The final-commit mode of `intake.py` reads its status lines through `common.final_commit_problems`; what it accepts and prints is unchanged.
 4. **SPEC-0013 rule 11, the verdict convention.** When the final commit is the only item, the first line is `Verdict: fix list <reviewed sha>` followed by `Final: <path> <old> -> <new>` lines and no numbered item (SPEC-0021 rule 1).

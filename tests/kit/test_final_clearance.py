@@ -276,7 +276,9 @@ def test_ac8_the_workflow_only_reads_and_the_script_reaches_no_network_or_model(
     assert re.findall(r"^\s+([a-z-]+): (read|write)$", block, re.M) == [
         ("contents", "read"),
         ("pull-requests", "read"),
+        ("issues", "read"),
     ]
+    assert "write" not in block
     assert "gh api --paginate --method GET" in text
     assert "check_final_clearance.py --comments" in text and "--head" in text
     for write in ("--method POST", "--method PATCH", "--method PUT", "--method DELETE"):
