@@ -1,6 +1,6 @@
 # ADR-0078: the cost totals carry hours_unknown and the report schema is 2 (REQ-031, SPEC-0024), kit 0.43.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-23
 - Deciders: maintainers
 - Related: ADR-0077, ADR-0070, ADR-0072
