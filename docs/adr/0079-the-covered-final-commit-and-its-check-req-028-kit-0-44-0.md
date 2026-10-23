@@ -1,6 +1,6 @@
 # ADR-0079: the covered final commit and its check (REQ-028 part L3b, SPEC-0021), kit 0.44.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-23
 - Deciders: maintainers
 - Related: ADR-0066, ADR-0068, ADR-0078
