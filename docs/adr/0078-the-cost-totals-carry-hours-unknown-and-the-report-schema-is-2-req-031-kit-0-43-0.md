@@ -35,7 +35,7 @@ build is one field, the schema number and the goldens. The tests were written fi
 
 | Id | Question | Reading taken |
 | --- | --- | --- |
-| Q-K4-229 | SPEC-0024 rule 4 says `hours_unknown` is "an integer, at least 0"; the kit's schema validator (SPEC-0009 rule 19) has no `minimum` keyword. How is "at least 0" held? | The schema file says `{"type": "integer"}`, like `merged`, and a test asserts on every golden that the value is between 0 and `merged`; the validator's keyword list is not widened. Proposed for ruling. |
+| Q-K4-229 | SPEC-0024 rule 4 says `hours_unknown` is "an integer, at least 0"; the kit's schema validator (SPEC-0009 rule 19) has no `minimum` keyword. How is "at least 0" held? | The schema file says `{"type": "integer"}`, like `merged`, and a test asserts on every golden that the value is between 0 and `merged`; the validator's keyword list is not widened. Ruled as read in the #129 verdict: the value cannot be negative by construction (a count of unknown hours) and the kit_dev test pins `0 <= hours_unknown <= merged` on every golden. |
 
 ## Residual
 
