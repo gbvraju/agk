@@ -1,6 +1,6 @@
 # SPEC-0024: The report's cost totals count the merged changes whose hours are not known
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-031
 

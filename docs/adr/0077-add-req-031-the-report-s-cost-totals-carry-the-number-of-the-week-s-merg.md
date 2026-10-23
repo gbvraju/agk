@@ -1,6 +1,6 @@
 # ADR-0077: Add REQ-031: The report's cost totals count the merged changes whose hours are not known
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-22
 - Deciders: maintainers
 - Related: SPEC-0024
