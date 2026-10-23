@@ -15,6 +15,7 @@ agk-governance:
 	$(PY) scripts/agk/check_kit_tests.py
 	$(PY) scripts/agk/reviewers.py --check
 	$(PY) scripts/agk/reviewers.py --check-codeowners
+	$(PY) scripts/agk/check_final_clearance.py
 
 agk-lint:
 	ruff check $(AGK_RUFF_FLAGS) $(wildcard $(shell $(PY) scripts/agk/config.py lint_paths))

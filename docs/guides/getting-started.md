@@ -84,7 +84,7 @@ comments count as verdicts are that user handle, and the placeholder is never on
     make governance
 
 You should see `wrote .github/CODEOWNERS` and then nine checks, each starting with `ok`, the last being
-`ok reviewers (.github/CODEOWNERS matches)`. `make governance` can take a few seconds. Commit and push. This is the second
+`ok reviewers (.github/CODEOWNERS matches)`, and a tenth line, `skipped (no comments file)`: that check reads a pull request's comments, which only the workflow has. `make governance` can take a few seconds. Commit and push. This is the second
 and last time you push to `main` directly; the ruleset in step 5 stops it from now on.
 
     git add -A

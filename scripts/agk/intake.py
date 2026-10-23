@@ -28,6 +28,7 @@ from check_specs import status_of as spec_status
 from common import (
     CheckError,
     changed_files,
+    final_commit_problems,
     git,
     load_config,
     merge_base,
@@ -198,19 +199,6 @@ def changed_between(root: Path, first: str, second: str) -> dict[str, str]:
     for i in range(0, len(tokens) - 1, 2):
         result[tokens[i + 1]] = tokens[i][:1]
     return result
-
-
-def hunk_lines(root: Path, first: str, second: str, path: str) -> list[str]:
-    """The added and removed lines (with their +/- prefix) of one file between two commits."""
-    out = git(root, "diff", "-U0", "--no-renames", first, second, "--", path)
-    lines: list[str] = []
-    in_hunk = False
-    for line in out.splitlines():
-        if line.startswith("@@"):
-            in_hunk = True
-        elif in_hunk and line[:1] in "+-":
-            lines.append(line)
-    return lines
 
 
 class Draft:
@@ -398,15 +386,19 @@ def final_problems(root: Path, mb: str) -> list[str]:
     if earlier:
         return [f"rule 3: before the last commit, {problem}" for problem in earlier]
     spec, adr = draft.paths
-    now = changed_between(root, prev, "HEAD")
-    if set(now) != {spec, adr} or set(now.values()) != {"M"}:
+    files_ok, bad = final_commit_problems(
+        root,
+        prev,
+        "HEAD",
+        [(spec, None, STATUS_LINES[0][1], STATUS_LINES[0][2]), (adr, None, *STATUS_LINES[1][1:])],
+    )
+    if not files_ok:
         return ["rule 4: the last commit does not change exactly the spec and the ADR"]
-    problems = []
-    for (label, old, new), path in zip(STATUS_LINES, (spec, adr), strict=True):
-        if hunk_lines(root, prev, "HEAD", path) != [f"-- Status: {old}", f"+- Status: {new}"]:
-            problems.append(
-                f"rule 4: the {label} changes more than its status line, or another status"
-            )
+    problems = [
+        f"rule 4: the {label} changes more than its status line, or another status"
+        for (label, _, _), path in zip(STATUS_LINES, (spec, adr), strict=True)
+        if path in bad
+    ]
     text = show(root, "HEAD", spec) or ""
     asked = section(text, "Open questions") or []
     if STRAY_Q.search(text) or [ln.strip() for ln in asked if ln.strip()] != ["none"]:
