@@ -15,8 +15,9 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 ## Needs you
 
-### Pull requests without a verdict (1)
+### Pull requests without a verdict (unknown)
 - <pr>18 "Change number 18" has had no verdict for 9 days — https://github.com/demo-org/demo-repo/pull/18
+- unknown: the verdicts of 1 open pull request could not be read — https://github.com/demo-org/demo-repo/pull/19
 
 ### Planned requirements with no spec (1)
 - REQ-002 "Second thing" is planned and no spec names it — https://github.com/demo-org/demo-repo/blob/9b332027c0f71279f4602fbeba668381aa906cd1/docs/requirements.md#L8
@@ -25,7 +26,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 - PRs [#18](https://github.com/demo-org/demo-repo/pull/18) (9 days) and [#19](https://github.com/demo-org/demo-repo/pull/19) (9 days) have been open
 - <pr>12 "Change number 12" was sent back 1 time — https://github.com/demo-org/demo-repo/pull/12
-- drift audit: 0 findings (D1 0, D2 0, D3 0, D4 0, D5 0, D6 0, D7 0); no open drift issue
+- unknown: the verdicts of 1 open pull request could not be read — https://github.com/demo-org/demo-repo/pull/19
 - PRs [#13](https://github.com/demo-org/demo-repo/pull/13), [#14](https://github.com/demo-org/demo-repo/pull/14) and [#15](https://github.com/demo-org/demo-repo/pull/15) were merged with no verdict
 
 ## Cost

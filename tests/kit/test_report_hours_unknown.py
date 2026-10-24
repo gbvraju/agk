@@ -1,7 +1,7 @@
 """Tests of the `hours_unknown` field of the cost totals item (SPEC-0024; REQ-031 AC1 to AC5).
 
 The field counts the week's merged pull requests whose hours are `unknown`. It is data only: the
-markdown and the inbox do not print it, and `report.json` carries the schema number 2. No network,
+markdown and the inbox do not print it, and `report.json` carries the schema number 3. No network,
 no model.
 """
 
@@ -96,9 +96,9 @@ def test_ac4_the_markdown_does_not_print_the_field():
     assert "hours_unknown" not in printed and "hours in total: unknown" in printed
 
 
-def test_ac5_the_report_schema_is_2_and_the_facts_schema_stays_1():
+def test_ac5_the_report_schema_is_3_and_the_facts_schema_stays_1():
     """REQ-031 AC5: rule 4 (adding a field raises the number of report.json only)."""
     import product_report as pr
 
-    assert pr.REPORT_SCHEMA == 2 and pr.SCHEMA == 1
-    assert build(load(KINDS))["schema"] == 2
+    assert pr.REPORT_SCHEMA == 3 and pr.SCHEMA == 1
+    assert build(load(KINDS))["schema"] == 3

@@ -144,9 +144,7 @@ def test_every_line_in_a_section_links_to_evidence(capsys):
 def test_the_drift_line_without_an_open_issue_is_the_one_line_without_a_link(capsys):
     """Rule 10: At risk prints the facts' drift counts and links the open drift issue, if any."""
     _, out, _ = render(REPORT / "quiet" / "facts.json", capsys=capsys)
-    assert section(out, "## At risk") == [
-        "- drift audit: 0 findings (D1 0, D2 0, D3 0, D4 0, D5 0, D6 0, D7 0); no open drift issue"
-    ]
+    assert section(out, "## At risk") == ["nothing this week"]  # a total of 0 with no open issue
     _, out, _ = render(REPORT / "kinds" / "facts.json", capsys=capsys)
     line = next(ln for ln in section(out, "## At risk") if ln.startswith("- drift audit"))
     assert line.startswith("- drift audit: 4 findings (D1 0, D2 0, D3 2, D4 1, D5 0, D6 0, D7 1)")

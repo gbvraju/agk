@@ -48,7 +48,7 @@ def test_ac1_the_file_is_utf8_two_space_indent_one_final_newline_in_the_order_of
     raw = out.read_bytes()
     document = json.loads(raw)
     assert raw == (json.dumps(document, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-    assert list(document) == ["schema", "week", "opening", "sections", "notices"]
+    assert list(document) == ["schema", "week", "opening", "sections", "counts", "notices"]
     entries = list(document["notices"])
     for key, section in document["sections"].items():
         entries += [i for g in section for i in g["items"]] if key == "needs_you" else section
@@ -145,4 +145,4 @@ def test_ac8_the_script_runs_json_in_an_empty_environment(tmp_path):
         text=True,
     )
     assert proc.returncode == 0, proc.stderr
-    assert json.loads(out.read_text(encoding="utf-8"))["schema"] == 2
+    assert json.loads(out.read_text(encoding="utf-8"))["schema"] == 3

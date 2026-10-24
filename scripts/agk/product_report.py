@@ -166,7 +166,7 @@ def unknown_line(what: str, link: str) -> str:
 # An item is `{"kind", <its fields>, "links"}`. The fields of a kind are fixed here; a kind or a
 # field that is not in the table does not exist (a new one is a new schema number).
 
-REPORT_SCHEMA = 2
+REPORT_SCHEMA = 3
 ITEM_KINDS = {
     "requirement-done": ("id", "title", "criteria", "became_done"),
     "pull-request-merged": ("number", "title", "merged_on"),
@@ -180,6 +180,7 @@ ITEM_KINDS = {
         "hours",
         "hours_unknown",
         "fix_verdicts",
+        "fix_verdicts_unknown",
         "behaviour_unchanged",
         "estimate",
         "busy",
@@ -197,10 +198,10 @@ ITEM_KINDS = {
     "overdue-residual": ("due", "text"),
     "unspecced-requirement": ("id", "title"),
     "residual-overdue": ("due", "days", "text"),
-    "pull-requests-open-long": ("entries",),
-    "pull-requests-sent-back": ("entries",),
-    "pull-requests-merged-no-verdict": ("entries",),
-    "pull-requests-merged-not-cleared": ("entries",),
+    "pull-requests-open-long": ("entries", "count"),
+    "pull-requests-sent-back": ("entries", "count"),
+    "pull-requests-merged-no-verdict": ("entries", "count"),
+    "pull-requests-merged-not-cleared": ("entries", "count"),
     "drift-audit": ("total", "counts", "open_issue"),
 }
 OPTIONAL_FIELDS = {"metrics-issue": ("number", "title"), "drift-audit-issue": ("number", "title")}
@@ -217,6 +218,18 @@ def item(kind: str, links: list[dict], **fields) -> dict:
 
 def unknown_item(what: str, to: str, url: str) -> dict:
     return item("unknown", [link(to, url)], what=what)
+
+
+def unreadable_pull_requests(pulls: list[dict], links: Links) -> list[dict]:
+    """One `unknown` item naming how many open pull requests have verdicts the facts could not
+    read, with a link to each (SPEC-0026 rule 5); none when every open one is read."""
+    numbers = sorted(
+        p["number"] for p in pulls if p.get("state") == "open" and p.get("verdicts") == UNKNOWN
+    )
+    if not numbers:
+        return []
+    what = "the verdicts of " + plural(len(numbers), "open pull request", "open pull requests")
+    return [item("unknown", [link("pull-request", links.pull(n)) for n in numbers], what=what)]
 
 
 # --- the inbox (rules 3 to 6) -------------------------------------------------------------------
@@ -293,7 +306,7 @@ def pull_request_items(doc: dict, links: Links, today: date) -> list[dict]:
                     days=days,
                 )
             )
-    return found
+    return found + unreadable_pull_requests(pulls, links)
 
 
 def overdue(doc: dict, today: date) -> list[tuple[dict, date]]:
@@ -353,7 +366,7 @@ def inbox(doc: dict, links: Links, today: date) -> list[dict]:
     for kind, _ in KINDS:
         entries = by_kind[kind]
         if entries:
-            count = UNKNOWN if entries[0]["kind"] == "unknown" else len(entries)
+            count = UNKNOWN if any(e["kind"] == "unknown" for e in entries) else len(entries)
             groups.append({"group": kind, "count": count, "items": entries})
     return groups
 
@@ -592,7 +605,7 @@ def grouped(rows: list[tuple[str, int, str, dict]], links: Links) -> list[dict]:
         else:
             continue
         where = [link("pull-request", links.pull(entry["number"])) for entry in entries]
-        items.append(item(kind, where, entries=entries))
+        items.append(item(kind, where, entries=entries, count=len(entries)))
     return items
 
 
@@ -641,9 +654,14 @@ def at_risk(doc: dict, links: Links, today: date, start: date, end: date) -> lis
                 )
                 back.append(row)
         items += grouped(back, links)
+        items += unreadable_pull_requests(pulls, links)
     else:
         items.append(unknown_item("pull requests", "search", f"{links.repo}/pulls"))
-    items.append(drift_item(doc, links))
+    drift = drift_item(doc, links)
+    if not (
+        drift["kind"] == "drift-audit" and drift["total"] == 0 and drift["open_issue"] == "none"
+    ):
+        items.append(drift)
     if is_list(doc["pull_requests"]):
         late = []
         for p in merged_in_week(doc, start, end):
@@ -707,6 +725,7 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[dict]:
             hours=UNKNOWN if None in hours else str(sum(hours, Decimal("0.0"))),
             hours_unknown=hours.count(None),
             fix_verdicts=UNKNOWN if None in fixes else sum(fixes),
+            fix_verdicts_unknown=fixes.count(None),
             behaviour_unchanged=sum(1 for p in merged if p.get("behaviour") == "unchanged"),
             estimate=estimate_value(merged),
             busy=busy,
@@ -767,11 +786,44 @@ def notices(doc: dict, label: str) -> list[dict]:
     return found
 
 
+COUNTED = {
+    "delivered": "requirement-done",
+    "proven": "requirement-proven",
+}
+
+
+def section_counts(sections: dict) -> dict:
+    """The number of the items of each section, counted by meaning (SPEC-0026 rule 1).
+
+    `delivered` and `proven` count the items of one kind, `needs_you` the items of all its groups
+    and `at_risk` all its items, each without its `unknown` items; a section that holds an `unknown`
+    item is `unknown`, never a number."""
+    counts: dict = {}
+    for key in ("delivered", "proven", "needs_you", "at_risk"):
+        entries = sections[key]
+        if key == "needs_you":
+            entries = [i for group in entries for i in group["items"]]
+        if any(i["kind"] == "unknown" for i in entries):
+            counts[key] = UNKNOWN
+        elif key in COUNTED:
+            counts[key] = sum(1 for i in entries if i["kind"] == COUNTED[key])
+        else:
+            counts[key] = len(entries)
+    return counts
+
+
 def build_report(doc: dict, today: date, week: str | None) -> dict:
     """The whole report as data: the opening, the five sections and the notices."""
     links = Links(doc)
     start, end, label = week_window(today, week)
 
+    sections = {
+        "delivered": delivered(doc, links, start, end),
+        "proven": proven(doc, links),
+        "needs_you": inbox(doc, links, today),
+        "at_risk": at_risk(doc, links, today, start, end),
+        "cost": cost(doc, links, start, end),
+    }
     return {
         "schema": REPORT_SCHEMA,
         "week": label,
@@ -780,13 +832,8 @@ def build_report(doc: dict, today: date, week: str | None) -> dict:
             "last": (end - timedelta(days=1)).isoformat(),
             "as_of": today.isoformat(),
         },
-        "sections": {
-            "delivered": delivered(doc, links, start, end),
-            "proven": proven(doc, links),
-            "needs_you": inbox(doc, links, today),
-            "at_risk": at_risk(doc, links, today, start, end),
-            "cost": cost(doc, links, start, end),
-        },
+        "sections": sections,
+        "counts": section_counts(sections),
         "notices": notices(doc, label),
     }
 
@@ -873,6 +920,16 @@ def pull_requests_text(entry: dict) -> str:
     return bullet(f"PRs {joined} {GROUPED[kind]}", None)
 
 
+def unknown_text(entry: dict) -> str:
+    """An unknown item; one that links several pull requests names each (SPEC-0026 rule 5)."""
+    text = f"unknown: {entry['what']} could not be read"
+    where = entry["links"]
+    if len(where) > 1 and all(w["to"] == "pull-request" for w in where):
+        parts = [f"[#{w['url'].rsplit('/', 1)[1]}]({w['url']})" for w in where]
+        return bullet(f"{text}: " + ", ".join(parts), None)
+    return bullet_of(entry, text)
+
+
 def drift_text(entry: dict) -> str:
     total = entry["total"]
     shown = total if total == UNKNOWN else plural(total, "finding", "findings")
@@ -910,7 +967,7 @@ RENDER = {
     "pull-requests-merged-no-verdict": pull_requests_text,
     "pull-requests-merged-not-cleared": pull_requests_text,
     "drift-audit": drift_text,
-    "unknown": lambda i: bullet_of(i, f"unknown: {i['what']} could not be read"),
+    "unknown": unknown_text,
     "requirement-done": lambda i: bullet_of(
         i,
         f'{i["id"]} "{i["title"]}" is done: {criteria_text(i["criteria"])}'
