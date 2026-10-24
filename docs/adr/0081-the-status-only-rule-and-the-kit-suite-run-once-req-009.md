@@ -1,6 +1,6 @@
 # ADR-0081: the status-only rule, and the kit suite run once in this repository
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Amends: ADR-0050
