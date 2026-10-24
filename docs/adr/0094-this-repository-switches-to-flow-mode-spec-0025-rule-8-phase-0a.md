@@ -1,6 +1,6 @@
 # ADR-0094: this repository switches to flow mode (SPEC-0025 rule 8, phase 0a of the conductor plan)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0082, ADR-0086
