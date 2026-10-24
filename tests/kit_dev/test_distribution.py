@@ -27,8 +27,19 @@ COMMANDS = [
     "spec",
     "start",
     "upgrade",
+    "vision",
 ]
-USER_ONLY = ["adopt", "brief", "init", "issue", "ruleset", "spec", "start", "upgrade"]
+USER_ONLY = [
+    "adopt",
+    "brief",
+    "init",
+    "issue",
+    "ruleset",
+    "spec",
+    "start",
+    "upgrade",
+    "vision",
+]
 FORBIDDEN_VERBS = ["git push", "git commit", "gh pr", "gh issue close", "gh issue comment"]
 SCRIPT_CALL = re.compile(r'^\s*python3 "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/agk/(\w+)\.py"(.*)$', re.M)
 

@@ -90,6 +90,12 @@ kit's checks, and an engine never decides, never approves, and never edits a pro
 not found), and names the setting, never the skill's name. A skill that another plugin provides is not read, so such a name is
 reported as unchecked (verify how Claude Code lists plugin skills).
 
+`/agk:vision` is the step an owner takes from a brief idea (SPEC-0029 rule 4). It keeps the idea, in the owner's own words and
+unchanged, as the first section of `constitution/vision.md` (between two markers with its digest, so `engines.py vision-check` and
+`playbook.py check-start` fail an altered idea), asks the ten discovery questions (users and payer, what exists, where it runs, data,
+scale, compliance, devices and widths, accessibility, languages, brand), and the charter records every answer or `not known yet`. The
+engine in `[engines]`, or the kit's template, only drafts; the owner approves the step by merging before the next.
+
 ## Upgrade
 
     python3 scripts/agk/upgrade.py TARGET [--dry-run]
@@ -142,6 +148,7 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:upgrade` | `scripts/agk/upgrade.py` | vendored files |
 | `/agk:ruleset` | `scripts/agk/ruleset.py plan`, then the `gh api` commands it prints, after you say yes | the default branch's ruleset and two repository settings (add-only) |
 | `/agk:start` | `scripts/agk/playbook.py start-ids`, `check-start` | `constitution/vision.md` and a project charter ADR on a new branch |
+| `/agk:vision` | `scripts/agk/playbook.py start-ids`, `scripts/agk/engines.py vision-write`, `questions`, `vision-check`, `playbook.py check-start` | `constitution/vision.md` (the owner's idea unchanged as its first section) and a project charter ADR on a new branch |
 | `/agk:spec` | `scripts/agk/new_spec.py`, `scripts/agk/intake.py` | a Draft spec, or a requirement proposal with its ADR draft, or (from one sentence) a requirement, a Draft spec and an ADR stub |
 | `/agk:architect` | `scripts/agk/playbook.py architect` | nothing (prints how to start `claude --agent architect`) |
 | `/agk:issue` | the issue templates and your own `gh issue create`, after asking | one GitHub issue |
