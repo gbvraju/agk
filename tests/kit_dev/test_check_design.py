@@ -188,6 +188,53 @@ def test_ac6_colour_words_that_are_not_colours_pass(tmp_path):
     assert check(tmp_path).stdout == "ok design\n"
 
 
+SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+    'width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/></svg>'
+)
+
+
+def test_ac6_an_inline_svg_and_its_namespace_declarations_make_no_request(tmp_path):
+    """REQ-036 AC6: SPEC-0029 rule 7 (only `xmlns` values are ignored; an SVG asks for nothing)."""
+    project(tmp_path, html=HTML.replace("<h1>", f"{SVG}<h1>"))
+    assert check(tmp_path).stdout == "ok design\n"
+
+
+def test_ac6_a_namespace_declaration_does_not_hide_a_real_request(tmp_path):
+    """REQ-036 AC6: SPEC-0029 rule 7 (the same page with a remote image still fails)."""
+    remote = '<img src="https://cdn.example.org/a.png">'
+    project(tmp_path, html=HTML.replace("<h1>", f"{SVG}{remote}<h1>"))
+    out = failed(tmp_path, "external")
+    assert "example.org" not in out
+    project(tmp_path, html=HTML.replace("<h1>", '<svg data-x="http://a.example.org/"></svg><h1>'))
+    failed(tmp_path, "external")
+
+
+@pytest.mark.parametrize(
+    "selector", ["#feed", "#add", "a:hover, #feed", "p#bad:hover", ".cafe > #dad"]
+)
+def test_ac6_an_id_selector_made_of_hex_letters_is_not_a_colour(tmp_path, selector):
+    """REQ-036 AC6: SPEC-0029 rule 7 (the colour scan reads declaration values, not selectors)."""
+    css = selector + " { color: var(--muted); }"
+    project(tmp_path, html=HTML.replace("</style>", f"{css}\n</style>"))
+    assert check(tmp_path).stdout == "ok design\n"
+
+
+def test_ac6_a_colour_inside_a_media_block_still_fails(tmp_path):
+    """REQ-036 AC6: SPEC-0029 rule 7 (rules nested in an at-rule are scanned too)."""
+    css = "@media (min-width: 40em) { #feed { color: #ff0000; } }"
+    project(tmp_path, html=HTML.replace("</style>", f"{css}\n</style>"))
+    failed(tmp_path, "colour")
+    css = "#feed { color: var(--fg); }\n"
+    project(
+        tmp_path,
+        html=HTML.replace("</style>", css + "</style>").replace(
+            ">Top<", ' style="color: #123456">Top<'
+        ),
+    )
+    failed(tmp_path, "colour")
+
+
 def test_ac6_a_mockup_with_two_style_blocks_or_two_token_blocks_fails(tmp_path):
     """REQ-036 AC6: SPEC-0029 rule 7 (the tokens are one CSS block)."""
     project(tmp_path, html=HTML.replace("</head>", "<style>p { margin: 0; }</style></head>"))

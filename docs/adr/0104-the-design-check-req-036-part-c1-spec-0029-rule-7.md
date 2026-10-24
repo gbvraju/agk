@@ -28,7 +28,7 @@ takes 0104.
    `at risk design: placeholder brand`. Both come before `ok design`, in that order. The weekly report's At risk section does not read this line yet: see the residual.
 5. **Messages** name the rule (`rule 7`) and a path or a token name, never a colour, an address or a brand value.
 6. **The governance test** (`tests/kit/test_agk_mk.py`): it requires every `scripts/agk/check_*.py` in the `agk-governance` target and already exempts the kit-only `check_release.py`; it now exempts `check_design.py` the same way, with a comment that names this ADR. This is the one place a test
-   is loosened, and it is named here so that the maintainers decide it: the alternative is a governance step, which changes `Makefile`, `agk.mk`, the workflow and the manifest (see the residual).
+   is loosened, and it is named here so that the maintainers decide it: the alternative is a governance step, which changes `Makefile`, `agk.mk`, the workflow and the manifest (see the first residual).
 7. **No governance step, no default engine, no version bump** (flow mode, SPEC-0028): one line under Unreleased in `CHANGELOG.md`; `check_design.py` is a plugin file (listed as kit-only in the manifest test), so no installed file changes.
 
 ## Consequences
@@ -38,5 +38,5 @@ takes 0104.
 
 ## Residual
 
-- 2026-10-24: the check is not a governance step and the weekly report's At risk section does not read `at risk design: placeholder brand`; both need a change of a protected path (`Makefile`, `agk.mk`, the workflow) or of an Approved spec (SPEC-0016 and the facts schema), which the maintainers decide (due 2026-12-31).
+- 2026-10-24: the check is not a governance step, and `check_design.py` is exempt from "every check is in agk-governance" in `tests/kit/test_agk_mk.py` for (c1) only (Q-K4-261, ruled on #174): (c2) adds the governance step, with its own ADR that names the protected classes it touches (`Makefile`, `agk.mk`, the workflow, the manifest), and removes the exemption (due 2026-12-31). Wiring `at risk design: placeholder brand` into the weekly report's At risk section changes SPEC-0016 and the facts schema, which the maintainers decide (due 2026-12-31).
 - 2026-10-24: named colours are tested against a list of common names in colour properties only, and `url()` references to colours in SVG are not read; a mockup is reviewed by eye by its owner (due 2026-12-31).

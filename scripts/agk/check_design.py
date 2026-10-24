@@ -39,6 +39,7 @@ NAMED = frozenset(
     "lime aqua fuchsia olive brown cyan magenta indigo violet beige ivory khaki coral salmon "
     "crimson tomato turquoise lavender tan plum orchid azure".split()
 )
+XMLNS = re.compile(r"\sxmlns(?::[\w-]+)?\s*=\s*(?:\"[^\"]*\"|'[^']*')", re.I)
 SCRIPT_MARKS = (r"<\s*script\b", r"\son[a-z]+\s*=", r"javascript\s*:")
 EXTERNAL_MARKS = (
     r"://",
@@ -117,12 +118,18 @@ def token_problems(where: str, css: str, pairs: list[tuple[str, str]]) -> tuple[
     return out, rest
 
 
-def colour_problems(where: str, css: str) -> list[str]:
-    for prop, value in DECLARATION.findall(css):
-        if COLOUR_LITERAL.search(value):
-            return [f"rule 7: {where}: a colour is written outside the token block"]
-        if COLOUR_PROPERTY.search(prop) and NAMED & set(re.findall(r"[a-z]+", value.lower())):
-            return [f"rule 7: {where}: a colour is written outside the token block"]
+def colour_problems(where: str, css: str, inline: list[str]) -> list[str]:
+    """Colours written in declarations: the bodies between braces and the `style` attributes.
+
+    Selectors are never read, so an id such as `#feed` is not a colour.
+    """
+    for body in [*re.findall(r"\{([^{}]*)\}", css), *inline]:
+        for prop, value in DECLARATION.findall(body):
+            named = COLOUR_PROPERTY.search(prop) and NAMED & set(
+                re.findall(r"[a-z]+", value.lower())
+            )
+            if COLOUR_LITERAL.search(value) or named:
+                return [f"rule 7: {where}: a colour is written outside the token block"]
     return []
 
 
@@ -139,6 +146,7 @@ def mockup_problems(root: Path, folder: Path, pairs: list[tuple[str, str]]) -> l
         return out
     html = page.read_text(encoding="utf-8")
     where = f"{rel}/index.html"
+    html = XMLNS.sub("", html)  # a namespace name is an identifier, not a request
     if any(re.search(mark, html, re.I) for mark in SCRIPT_MARKS):
         out.append(f"rule 7: {where}: the page holds a script or an event handler")
     if any(re.search(mark, html, re.I) for mark in EXTERNAL_MARKS):
@@ -149,8 +157,8 @@ def mockup_problems(root: Path, folder: Path, pairs: list[tuple[str, str]]) -> l
         return out
     problems, rest = token_problems(where, blocks[0], pairs)
     out += problems
-    inline = " ".join(re.findall(r"\sstyle\s*=\s*[\"']([^\"']*)[\"']", html, re.I))
-    out += colour_problems(where, rest + " " + inline)
+    inline = re.findall(r"\sstyle\s*=\s*[\"']([^\"']*)[\"']", html, re.I)
+    out += colour_problems(where, rest, inline)
     return out
 
 
