@@ -96,6 +96,13 @@ unchanged, as the first section of `constitution/vision.md` (between two markers
 scale, compliance, devices and widths, accessibility, languages, brand), and the charter records every answer or `not known yet`. The
 engine in `[engines]`, or the kit's template, only drafts; the owner approves the step by merging before the next.
 
+`/agk:stack` (SPEC-0029 rule 5) writes one Proposed ADR, `docs/adr/<n>-stack-options.md`, that sets out two or three stacks as options,
+each with its trade-offs and the practices it brings. Every practice is marked `check` (it can be verified, and the build that adopts
+the stack adds the governance step: pinned actions, least privilege, security headers, a host-boundary test) or `judgement` (recorded
+only, enforced by review). The architect accepts one option, and the ADR then locks it (`Chosen`); `engines.py stack-check` fails an
+ADR with another number of options, an option without trade-offs or practices, a practice that is not marked, or a lock that does not
+name exactly one option.
+
 ## Upgrade
 
     python3 scripts/agk/upgrade.py TARGET [--dry-run]
@@ -149,6 +156,7 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:ruleset` | `scripts/agk/ruleset.py plan`, then the `gh api` commands it prints, after you say yes | the default branch's ruleset and two repository settings (add-only) |
 | `/agk:start` | `scripts/agk/playbook.py start-ids`, `check-start` | `constitution/vision.md` and a project charter ADR on a new branch |
 | `/agk:vision` | `scripts/agk/playbook.py start-ids`, `scripts/agk/engines.py vision-write`, `questions`, `vision-check`, `playbook.py check-start` | `constitution/vision.md` (the owner's idea unchanged as its first section) and a project charter ADR on a new branch |
+| `/agk:stack` | `scripts/agk/engines.py stack-ids`, `stack-write`, `stack-check` | one Proposed ADR of stack options on a new branch |
 | `/agk:spec` | `scripts/agk/new_spec.py`, `scripts/agk/intake.py` | a Draft spec, or a requirement proposal with its ADR draft, or (from one sentence) a requirement, a Draft spec and an ADR stub |
 | `/agk:architect` | `scripts/agk/playbook.py architect` | nothing (prints how to start `claude --agent architect`) |
 | `/agk:issue` | the issue templates and your own `gh issue create`, after asking | one GitHub issue |
