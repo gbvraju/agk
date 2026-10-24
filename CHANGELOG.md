@@ -4,7 +4,7 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
-- #167 engines: `[engines]` in `agk.toml` and five `doctor` checks that report each engine as present, absent or missing (SPEC-0029 rules 1 to 3, REQ-036)
+- #168 engines: `[engines]` in `agk.toml` and five `doctor` checks that report each engine as present, absent or missing (SPEC-0029 rules 1 to 3, REQ-036)
 
 ## 0.54.0 (2026-10-24)
 
