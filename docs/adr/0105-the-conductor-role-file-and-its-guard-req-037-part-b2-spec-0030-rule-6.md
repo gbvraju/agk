@@ -1,4 +1,4 @@
-# ADR-0104: the conductor role file and its guard hook (REQ-037 part b2, SPEC-0030 rule 6)
+# ADR-0105: the conductor role file and its guard hook (REQ-037 part b2, SPEC-0030 rule 6)
 
 - Status: Proposed
 - Date: 2026-10-24
