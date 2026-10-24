@@ -1,6 +1,6 @@
 # ADR-0104: the design check (REQ-036 part c1, SPEC-0029 rule 7)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0097, ADR-0099, ADR-0101, ADR-0103
