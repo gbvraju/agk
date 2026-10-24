@@ -1,6 +1,6 @@
 # ADR-0109: the late-clearance check, the ready-to-merge group and the guide section on the loop (REQ-037 part c, SPEC-0030 rules 7 to 9)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0105, ADR-0102, ADR-0100, ADR-0098, ADR-0079
