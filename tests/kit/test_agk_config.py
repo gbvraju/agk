@@ -16,6 +16,7 @@ DEFAULTS = {
     "inbox_hours": 48,
     "ac_coverage": "warn",
     "proof_timeout": 900,
+    "pr_mode": "strict",
 }
 
 

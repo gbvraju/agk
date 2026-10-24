@@ -1,6 +1,6 @@
 # agk configuration for this repository. Read by the checks before pyproject.toml [tool.agk].
 # The kit version this repository ships: equal to kit_version in kit/manifest.json (a test checks it); every kit bump updates both.
-version = "0.48.0"
+version = "0.49.0"
 default_branch = "main"
 test_dirs = ["tests"]
 lint_paths = ["scripts/agk", "tests", ".claude/hooks"]
@@ -11,3 +11,5 @@ project_tests = "(python3 -m pytest --version && ruff --version) >/dev/null 2>&1
 # Every criterion ACn of a done requirement needs a REQ-nnn ACn test marker (SPEC-0010).
 ac_coverage = "block"
 experimental_reviewer = true
+# One open pull request per person (strict) or any number with Depends-on (flow); a change of mode needs an ADR in the same pull request.
+pr_mode = "strict"

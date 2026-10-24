@@ -1,0 +1,8 @@
+{
+  "cannot": {},
+  "delete": [],
+  "fail": [
+    "pr-mode"
+  ],
+  "origin_head": true
+}

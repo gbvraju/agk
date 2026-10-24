@@ -16,6 +16,7 @@ agk-governance:
 	$(PY) scripts/agk/check_kit_tests.py
 	$(PY) scripts/agk/reviewers.py --check
 	$(PY) scripts/agk/reviewers.py --check-codeowners
+	$(PY) scripts/agk/check_pr_mode.py
 	$(PY) scripts/agk/check_final_clearance.py
 
 agk-lint:

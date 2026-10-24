@@ -174,6 +174,12 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "default_branch in agk.toml differs from the repository's default branch",
         "set default_branch in agk.toml",
     ),
+    "pr-mode": (
+        "warn",
+        "pr_mode in agk.toml is strict or flow",
+        "pr_mode in agk.toml is neither strict nor flow",
+        "set pr_mode in agk.toml to strict or flow (a change needs an ADR)",
+    ),
 }
 RULESET_IDS = [
     "ruleset-enforcement",
@@ -615,13 +621,17 @@ def run_checks(
     results["placeholder-team-codeowners"] = placeholder_result(root / ".github" / "CODEOWNERS")
     results["origin-head"] = origin_head_result(root)
     results["drift-workflow-file"] = drift_file_result(root)
+    mode = config.get("pr_mode", "strict")
+    results["pr-mode"] = (
+        Result("ok", message=f" (mode: {mode})") if mode in ("strict", "flow") else Result("fail")
+    )
     kit, version = kit_results(root, kit_root, config)
     results.update(kit)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]
         if res.status == "ok":
-            message = ok_text
+            message = ok_text + res.message
         elif res.status == "fail":
             message = fail_text + res.message
         else:
