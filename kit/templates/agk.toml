@@ -13,4 +13,7 @@ ac_coverage = "warn"
 proof_timeout = 900
 # Hours a pull request may wait for a verdict before the decision inbox lists it (the weekly product report).
 inbox_hours = 48
+# How many pull requests a person may have open: "strict" (one at a time, no Depends-on line) or "flow" (any number, Depends-on allowed).
+# Change it only with an ADR in the same pull request (agk.toml is a protected path).
+pr_mode = "strict"
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
@@ -20,6 +21,7 @@ MARKER_RUN = re.compile(r"(REQ-\d{3}(?:[ ,/]+REQ-\d{3})*)(?: AC(\d+)\b)?")
 MARKER_SKIP_PARTS = frozenset({".git", "node_modules", "vendor", "target", "__pycache__", ".venv"})
 ALLOWED_STATUS = ("planned", "in-progress", "done")
 AC_COVERAGE = ("warn", "block")
+PR_MODES = ("strict", "flow")
 BEHAVIOUR_UNCHANGED = "Behaviour: unchanged"
 FENCE = re.compile(r"^\s*(```|~~~)")
 
@@ -391,6 +393,7 @@ DEFAULT_CONFIG = {
     "inbox_hours": 48,
     "ac_coverage": "warn",
     "proof_timeout": 900,
+    "pr_mode": "strict",
 }
 
 
@@ -529,6 +532,40 @@ def ac_coverage_mode(root: Path) -> str:
     if value not in AC_COVERAGE:
         raise CheckError("ac_coverage must be 'warn' or 'block' (setting: ac_coverage in agk.toml)")
     return value
+
+
+def pr_mode(root: Path) -> str:
+    """`strict` or `flow` from agk.toml (SPEC-0025 rule 6); any other value names the setting."""
+    value = load_config(root)["pr_mode"]
+    if value not in PR_MODES:
+        raise CheckError("pr_mode must be 'strict' or 'flow' (setting: pr_mode in agk.toml)")
+    return value
+
+
+def json_records(path: Path, label: str) -> list[dict]:
+    """The objects in a file written by `gh api`: an array, arrays, pages or one object a line."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CheckError(f"the {label} file cannot be read") from exc
+    found: list[dict] = []
+    decoder, at = json.JSONDecoder(), 0
+    try:
+        while at < len(text):
+            if text[at].isspace():
+                at += 1
+                continue
+            value, at = decoder.raw_decode(text, at)
+            pending = [value]
+            while pending:
+                item = pending.pop(0)
+                if isinstance(item, list):
+                    pending = item + pending
+                elif isinstance(item, dict):
+                    found.append(item)
+    except ValueError as exc:
+        raise CheckError(f"the {label} file is not JSON") from exc
+    return found
 
 
 def ac_shortfalls(reqs: list[dict], markers: list[dict]) -> list[tuple[str, str]]:
