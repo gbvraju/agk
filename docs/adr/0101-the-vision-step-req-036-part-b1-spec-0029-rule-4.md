@@ -1,6 +1,6 @@
 # ADR-0101: the vision step (REQ-036 part b1, SPEC-0029 rule 4)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0097, ADR-0099
