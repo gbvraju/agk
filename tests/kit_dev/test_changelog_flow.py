@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from conftest import KIT_ROOT, git
+from conftest import KIT_ROOT, clean_env, git
 from test_kit_hashes import fake_kit, kit_hashes, write_kit
 
 CHANGELOG = "# Changelog\n\n## Unreleased\n\n## 1.0.0 (2026-01-01)\n\n- #1 the start\n"
@@ -138,6 +138,7 @@ def test_ac6_after_two_builds_the_regenerated_table_is_accepted(tmp_path):
         cwd=root,
         capture_output=True,
         text=True,
+        env=clean_env(),  # AGK_BASE (set in CI) names no commit of this temporary repository
     )
     assert done.returncode == 0 and done.stdout == "wrote kit/hashes.json\n", done.stdout
     assert kit_hashes.problems(root, "HEAD") == []

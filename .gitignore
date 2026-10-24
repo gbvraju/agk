@@ -3,3 +3,4 @@ __pycache__/
 .ruff_cache/
 traceability*.md
 traceability*.txt
+*.whl

@@ -15451,7 +15451,7 @@
     ".github/workflows/metrics.yml": ["486a290f3f6f3a201a0a1953140080fa47eabe7d23b6d548a48da939839e37a4"],
     ".github/workflows/product-report.yml": ["1ff1eb6086684f2421e8c081be9fd6feba213d78c8cc264ec49f18858ea3da51"],
     ".github/workflows/proof.yml": ["135d86a11158b57a953f24fa19f307d0f42410d38fa6ecb0f7cb406eea2f08ef"],
-    ".gitignore": ["527633b6137aaeab04d920c1d7a98c429a9cf14b4b988a35a346825dd4cb3f34"],
+    ".gitignore": ["b660acc8af7c84de900b171daa54060b3a38443ae177e830873abb1249cdc2d3"],
     "CLAUDE.md": ["f5d6c27281f165caf5e7871073ffb4a52cafc655ba69269e664f6a22570310bb"],
     "Makefile": ["4276befc702ec87314e48f985f437ef322f3c519489d41c9fb1c4d310923da8e"],
     "agk.mk": ["4a7350a967df24b3aa1c533fdb482a5c5ba6b54b88edbdffd4f8ac2334a00714"],
@@ -15487,7 +15487,7 @@
    "blocks": {
     ".gitattributes": ["2e377f4c642d0533ed1ccafc62afd887afec370ae7802e880ea7a4cfbc32abf6"],
     ".github/PULL_REQUEST_TEMPLATE.md": ["3af1cf1fc81aa65346d3db1f1e45e5741f2151b3145ee7aeeafdbb61ce2435cb"],
-    ".gitignore": ["527633b6137aaeab04d920c1d7a98c429a9cf14b4b988a35a346825dd4cb3f34"],
+    ".gitignore": ["b660acc8af7c84de900b171daa54060b3a38443ae177e830873abb1249cdc2d3"],
     "CLAUDE.md": ["f5d6c27281f165caf5e7871073ffb4a52cafc655ba69269e664f6a22570310bb"]
    },
    "templates": {
