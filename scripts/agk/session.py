@@ -7,7 +7,9 @@
 `watch` polls with `gh api --method GET` and exits 0 with one line: `verdict <kind> <sha> (comment
 <id>)` for a verdict by a listed author that names a prefix of the current head and is newer than
 the newest comment seen at the start, `merged #N` or `closed #N`; with `--timeout` and no event it
-prints `timeout` and exits 3. `--merged N` waits on that pull request alone and ignores comments.
+prints `timeout` and exits 3. `--pr` also ends with `conflict #N` when the pull request
+conflicts with its base (`mergeable_state` dirty), since CI does not start on it.
+`--merged N` waits on that pull request alone and ignores comments.
 `next` prints the first free `agk-brief` issue and takes it with the one comment `taken: <ID>
 <YYYY-MM-DD>`, the only POST of this script; with none left it prints `no brief` and exits 1. This
 is the only script that calls GitHub; no check does. Messages name the rule, never a value.
@@ -137,6 +139,9 @@ def watch(root, args: dict[str, str]) -> int:
             if pr.get("state") == "closed":
                 print(f"closed #{number}")
                 return 0
+            if pr.get("mergeable_state") == "dirty" and not only_merge:
+                print(f"conflict #{number}")
+                return 0
             comments = None if only_merge else pages(f"repos/{repo}/issues/{number}/comments")
             if comments is not None:
                 own = (pr.get("user") or {}).get("login")
@@ -163,7 +168,7 @@ def brief_problems(body: str | None) -> list[str]:
     if len(sentences) != 1:
         problems.append("rule 4: exactly one line Sentence: with the sentence in quotation marks")
     elif not 1 <= len(sentences[0].group(1)) <= 300:
-        problems.append("rule 4: the sentence is not 1 to 300 characters")
+        problems.append("rule 4: the Sentence is not 1 to 300 characters")
     heads = [i for i, x in enumerate(lines) if x.startswith("Answers") and x.rstrip().endswith(":")]
     if len(heads) != 1:
         problems.append("rule 4: exactly one line that starts Answers and ends with a colon")

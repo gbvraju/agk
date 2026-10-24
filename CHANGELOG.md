@@ -4,6 +4,7 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+- #172 `check_brief.py` checks the shape of a brief, and `session.py watch` ends with `conflict #N` when the pull request conflicts with its base (REQ-037 rule 4 and the verdict on #169)
 - #173 stack: `/agk:stack` writes one Proposed ADR of two or three stack options with checked and judged practices, and `engines.py stack-check` checks its shape (SPEC-0029 rule 5, REQ-036)
 - #170 vision: `/agk:vision` keeps the idea unchanged and the charter records ten answers (SPEC-0029 rule 4, REQ-036)
 - #169 session rules and `session.py`: `watch` ends on a verdict, a merge or a close, `next` takes the first free brief (REQ-037 rules 1 to 3 and 5)

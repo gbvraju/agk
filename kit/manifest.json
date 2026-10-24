@@ -28,6 +28,7 @@
     "docs/briefs/TEMPLATE.md",
     "docs/specs/TEMPLATE.md",
     "scripts/agk/check_adrs.py",
+    "scripts/agk/check_brief.py",
     "scripts/agk/check_build_state.py",
     "scripts/agk/check_final_clearance.py",
     "scripts/agk/check_kit_tests.py",
