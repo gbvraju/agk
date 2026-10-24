@@ -39,7 +39,12 @@ MOCKUPS = "docs/design/mockups"
 THEME = "docs/design/theme.md"
 BROWSERS = ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "chrome")
 SHOTS = (("360", 800), ("1280", 800))
-DARK_FLAG = "--blink-settings=preferredColorScheme=1"  # (verify) the flag of the installed browser
+# In Blink 0 is dark and 1 is light (measured on Chromium); both are passed so a shot never
+# depends on the machine's own setting.
+SCHEME = {
+    "dark": "--blink-settings=preferredColorScheme=0",
+    "light": "--blink-settings=preferredColorScheme=1",
+}
 
 
 def template(name: str) -> str:
@@ -116,7 +121,7 @@ def cmd_screenshots(root: Path, opts: dict[str, str]) -> int:
                 "--disable-gpu",
                 f"--screenshot={target}",
                 f"--window-size={width},{height}",
-                *([DARK_FLAG] if mode == "dark" else []),
+                SCHEME[mode],
                 f"file://{folder / 'index.html'}",
             ]
             proc = subprocess.run(  # nosec B603 - a fixed argument list, no shell

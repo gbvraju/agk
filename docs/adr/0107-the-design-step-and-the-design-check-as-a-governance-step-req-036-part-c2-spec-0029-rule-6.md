@@ -22,7 +22,7 @@ verdict on #174 gave (0105 is held by #175 and 0106 is reserved on #171).
    is the clock's (`date -u` semantics, UTC) unless given as a real `YYYY-MM-DD`; the name is a lower-case slug of at most 50 characters; an existing folder is never overwritten and an existing theme is never touched. The README
    holds `Approved: not yet`: the approval line `Approved by <name> on <date>` is the owner's and no script or template writes it. No network, no model.
 2. **The screenshots**: `screenshots --folder FOLDER` takes four pictures (`screenshots/360-light.png`, `360-dark.png`, `1280-light.png`, `1280-dark.png`) with the first headless browser found on PATH (`chromium`, `chromium-browser`,
-   `google-chrome`, `google-chrome-stable`, `chrome`), run with a fixed argument list and no shell; the dark ones add `--blink-settings=preferredColorScheme=1` (verify against the installed browser). With no browser it prints
+   `google-chrome`, `google-chrome-stable`, `chrome`), run with a fixed argument list and no shell; each gets `--blink-settings=preferredColorScheme=0` (dark) or `=1` (light), because in Blink 0 is dark and 1 is light (measured on Chromium by the reviewer on #178), so a shot never depends on the machine's own setting. With no browser it prints
    `design: no headless browser found; screenshots skipped` and succeeds; a folder that is not a mockup folder is refused.
 3. **The templates** (`kit/templates/design-theme.md`, `design-index.html`, `design-readme.md`): the theme holds the Brand section with a source line per value and bracketed placeholders, one token block (light and dark, hex), the
    Contrast pairs, the rules of SPEC-0029 rule 6 (one token block, contrast of 4.5:1, status as word plus colour, native controls, 44 px targets, 360 px to wide, a system font, no script, no external request) and the Evidence
@@ -43,4 +43,4 @@ verdict on #174 gave (0105 is held by #175 and 0106 is reserved on #171).
 ## Residual
 
 - 2026-10-24: wiring `at risk design: placeholder brand` into the weekly report's At risk section changes SPEC-0016 and the facts schema, which the maintainers decide (due 2026-12-31).
-- 2026-10-24: the screenshots depend on a headless browser and on flags that are not confirmed for every browser (verify); a project without one gets the note and no pictures (due 2026-12-31).
+- 2026-10-24: the screenshots depend on a headless browser, and the scheme flags were measured on Chromium only; another browser may read them differently, and the owner looks at the pictures (due 2026-12-31).

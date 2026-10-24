@@ -176,7 +176,7 @@ def fake_browser(directory, name="chromium"):
 
 
 def test_ac5_screenshots_takes_four_with_a_headless_browser(tmp_path):
-    """REQ-036 AC5: SPEC-0029 rule 6 (four screenshots with a headless browser) (verify flags)."""
+    """REQ-036 AC5: SPEC-0029 rule 6 (four screenshots with a headless browser)."""
     write(tmp_path)
     log = fake_browser(tmp_path.parent / (tmp_path.name + "-bin"))
     path = f"{log.parent}{os.pathsep}{os.environ['PATH']}"
@@ -188,7 +188,12 @@ def test_ac5_screenshots_takes_four_with_a_headless_browser(tmp_path):
     assert len(calls) == 4 and all("--headless" in c for c in calls)
     assert sum("--window-size=360," in c for c in calls) == 2
     assert sum("--window-size=1280," in c for c in calls) == 2
+    # in Blink 0 is dark and 1 is light (measured on Chromium); both are passed explicitly
+    assert sum("preferredColorScheme=0" in c for c in calls) == 2
     assert sum("preferredColorScheme=1" in c for c in calls) == 2
+    for c in calls:
+        dark = "-dark.png" in c
+        assert ("preferredColorScheme=0" in c) == dark and ("preferredColorScheme=1" in c) != dark
     assert all(f"file://{mockup(tmp_path)}/index.html" in c for c in calls)
     assert check(tmp_path).returncode == 0  # screenshots are not a page; the check still passes
 
