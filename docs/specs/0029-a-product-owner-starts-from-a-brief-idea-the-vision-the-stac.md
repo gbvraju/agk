@@ -1,6 +1,6 @@
 # SPEC-0029: The vision, the stack and the design each come from a named engine inside AGK's contract, and the owner approves each before the next step
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-036
 

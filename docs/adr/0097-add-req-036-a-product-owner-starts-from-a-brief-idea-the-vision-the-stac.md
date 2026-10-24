@@ -1,6 +1,6 @@
 # ADR-0097: Add REQ-036: Vision, stack and design each come from a named engine, the owner approves each
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: SPEC-0029
