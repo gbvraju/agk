@@ -1,6 +1,6 @@
 # SPEC-0025: A team can run independent pull requests in parallel without colliding
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-032
 
