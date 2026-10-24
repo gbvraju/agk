@@ -1,6 +1,6 @@
 # ADR-0091: the intake names its kit version and the final check accepts review answers (REQ-034, SPEC-0027), kit 0.52.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0089, ADR-0070
