@@ -1,6 +1,6 @@
 # ADR-0084: the append-only logs merge by union; GitHub's check does not honour it, so a local merge resolves it (REQ-032 part b, SPEC-0025 rule 3)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0082
