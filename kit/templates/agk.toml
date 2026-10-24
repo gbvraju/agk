@@ -17,3 +17,11 @@ inbox_hours = 48
 # Change it only with an ADR in the same pull request (agk.toml is a protected path).
 pr_mode = "strict"
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.
+# Engines (optional, off by default): the name of a skill the session can see for each step; absent means the kit's own template is used.
+# An engine only drafts, through the kit's template and checks; it never decides, approves or edits a protected file. Choose once;
+# a change needs an ADR in the same pull request (agk.toml is a protected path). `agk doctor` reports each as present, absent or missing.
+# [engines]
+# vision = "<skill name>"
+# stack = "<skill name>"
+# design = "<skill name>"
+# review = "<skill name>"
