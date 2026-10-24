@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 from typing import Any
 
-from common import CheckError, merge_base, repo_root, resolve_base, run
+from common import CheckError, merge_base, pr_mode, repo_root, resolve_base, run
 
 NAME = "kit-hashes"
 USAGE = "usage: kit_hashes.py [--check | --write]"
@@ -188,6 +189,64 @@ def dump(table: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+CHANGELOG = "CHANGELOG.md"
+UNRELEASED = "## Unreleased"
+CHANGELOG_LINE = re.compile(r"- #\d+ \S.*")
+
+
+def unreleased_lines(text: str) -> list[str]:
+    """The non-empty lines under `## Unreleased`, up to the next `## ` heading (SPEC-0028)."""
+    lines: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            inside = line.strip() == UNRELEASED
+        elif inside and line.strip():
+            lines.append(line.rstrip())
+    return lines
+
+
+def path_class(path: str) -> str:
+    return path.rsplit("/", 1)[0] + "/" if "/" in path else path
+
+
+def flow_problems(root: Path, base: str) -> list[str]:
+    """In flow mode a change to an installed path needs a new Unreleased line (SPEC-0028 rule 2).
+
+    Compared with the base: the installed files whose hashes differ while `kit_version` is the
+    same. A raised version is a release pull request, which `check_release.py` checks."""
+    found = snapshot_commit(root, Blobs(root), base)
+    if found is None:
+        return []
+    old_version, old = found
+    version, now = snapshot_worktree(root)
+    if version != old_version:
+        return []
+    changed = sorted(
+        path for name in MAPS for path, digest in now[name].items() if old[name].get(path) != digest
+    )
+    if not changed:
+        return []
+    before = git_out(root, "show", f"{base}:{CHANGELOG}").decode() if has_file(root, base) else ""
+    file = root / CHANGELOG
+    after = file.read_text(encoding="utf-8") if file.is_file() else ""
+    seen = set(unreleased_lines(before))
+    if any(CHANGELOG_LINE.fullmatch(line) and line not in seen for line in unreleased_lines(after)):
+        return []
+    classes = ", ".join(sorted({path_class(path) for path in changed}))
+    return [
+        f"{classes}: in flow mode a change to an installed path needs a new line under "
+        f"{UNRELEASED} of {CHANGELOG}"
+    ]
+
+
+def has_file(root: Path, base: str) -> bool:
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "cat-file", "-e", f"{base}:{CHANGELOG}"], cwd=root, capture_output=True
+    )
+    return proc.returncode == 0
+
+
 def base_of(root: Path) -> str:
     base = resolve_base(root, None)
     return merge_base(root, base) if base else "HEAD"
@@ -230,6 +289,8 @@ def problems(root: Path, base: str | None = None) -> list[str]:
             ok = listed == regenerated
         if not ok:
             found.append(f"{TABLE}: row {version} names commits that differ from the history")
+    if pr_mode(root) == "flow":
+        return found + flow_problems(root, base)
     for version, row in fresh["releases"].items():
         if version == EXCEPTION:
             continue

@@ -69,7 +69,7 @@ def run_body(tmp_path: Path, facts_text: str | None = None):
         "RUNNER_TEMP": str(tmp_path),
         "INPUT_TODAY": "2026-10-14",
         "GITHUB_REPOSITORY": "demo-org/demo-repo",
-        "GH_TOKEN": "unused",
+        "GH_TOKEN": "unused",  # nosec B105 - a placeholder token for the test environment, not a secret
         "GITHUB_OUTPUT": str(github_output),
     }
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell string
@@ -249,7 +249,7 @@ def test_ac6_a_missing_or_empty_report_json_fails_the_run_before_anything_is_wri
         "RUNNER_TEMP": str(tmp_path),
         "INPUT_TODAY": "2026-10-14",
         "GITHUB_REPOSITORY": "demo-org/demo-repo",
-        "GH_TOKEN": "unused",
+        "GH_TOKEN": "unused",  # nosec B105 - a placeholder token for the test environment, not a secret
         "GITHUB_OUTPUT": str(tmp_path / "github-output"),
     }
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell string

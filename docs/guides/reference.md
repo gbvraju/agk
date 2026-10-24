@@ -156,6 +156,26 @@ To let a team enable the plugin, `agk init` and `agk adopt` print two entries fo
 
 See `docs/specs/0005-distribution.md`, ADR-0019 and `docs/runs/spec-0005-verify-facts.md`.
 
+## Developing the kit
+
+This section is for a developer of the kit repository itself; a project that only installs the kit does not need it.
+In strict mode (the default of `agk.toml`) a kit build pull request bumps the three versions (`agk.toml`,
+`kit/manifest.json` and the plugin) and regenerates `kit/hashes.json`, as before.
+
+In flow mode (`pr_mode = "flow"`, which this repository uses) a kit build pull request does not bump:
+
+1. Leave the three versions as they are and add one line under `## Unreleased` of `CHANGELOG.md`:
+   `- #<n> <one-line change>`, naming the pull request and what it changes. The shape is `kit/templates/changelog.md`.
+2. Refresh the table of hashes with `python3 scripts/agk/kit_hashes.py --write` and commit it. The check of the table
+   accepts a changed installed file without a bump only when `CHANGELOG.md` gained such a line.
+3. If two builds change `kit/hashes.json` at once, merge or rebase the default branch and run the same one command,
+   `python3 scripts/agk/kit_hashes.py --write`, then commit. A collision under `## Unreleased` is resolved by keeping both lines.
+
+One release pull request bumps for all the builds. A session opens it on the maintainers' word; it changes only
+`CHANGELOG.md` (the Unreleased lines move, unchanged and in order, under `## <new version> (<date>)`, and `## Unreleased`
+is left empty), the three versions (raised together to one greater number) and the new row of `kit/hashes.json`.
+`scripts/agk/check_release.py` fails a release pull request that changes any other file; the maintainers merge it and tag it.
+
 ## Existing scanners
 
 Project-wide scanners (bandit, flake8, pylint, mypy) that read the whole tree also read the kit's code. The kit's

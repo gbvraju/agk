@@ -14,6 +14,7 @@ KIT_ONLY = {
     "scripts/agk/init.py",
     "scripts/agk/adopt.py",
     "scripts/agk/kit_hashes.py",
+    "scripts/agk/check_release.py",
     "scripts/agk/upgrade.py",
     "scripts/agk/new_spec.py",
     "scripts/agk/intake.py",
