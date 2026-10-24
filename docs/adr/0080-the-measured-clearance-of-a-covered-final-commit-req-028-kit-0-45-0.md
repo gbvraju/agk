@@ -1,6 +1,6 @@
 # ADR-0080: the measured clearance of a covered final commit (REQ-028 part L3c, SPEC-0021), kit 0.45.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-23
 - Deciders: maintainers
 - Related: ADR-0067, ADR-0068, ADR-0079
