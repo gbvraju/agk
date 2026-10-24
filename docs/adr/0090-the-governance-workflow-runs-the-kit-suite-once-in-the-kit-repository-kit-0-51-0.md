@@ -1,6 +1,6 @@
 # ADR-0090: the governance workflow runs the kit suite once in the kit repository (issue #147), kit 0.51.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0081, ADR-0050
