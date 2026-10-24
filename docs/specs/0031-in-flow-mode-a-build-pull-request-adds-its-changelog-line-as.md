@@ -10,14 +10,14 @@ The maintainers gave 5 answers before it was written, in the brief of issue #171
 
 ## Rules
 
-1. **The fragment.** In flow mode a build pull request adds one file `changelog.d/<slug>.md`, where `<slug>` is the pull request number or the branch slug (`[a-z0-9-]+`). The file holds exactly one line in the form of SPEC-0028 rule 1, `- #<n> <one-line change>`, and a newline.
-2. **The build.** In flow mode a pull request that changes a file the installer writes adds exactly one fragment and does not edit `CHANGELOG.md`. The flow-mode check (the check of the bump rule of SPEC-0028 rule 2) fails, naming the rule and the path class and never a value, when `CHANGELOG.md` is edited, when no fragment is added, when more than one is added, or when a fragment does not have the form of rule 1. The Unreleased line of SPEC-0028 rule 2 is replaced by the fragment.
-3. **The release script.** A script in `scripts/agk/` (kit-only) run by the release pull request moves every line of every file under `changelog.d/`, in the order of the pull request numbers and unchanged, under the new heading `## <version> (<date>)` of `CHANGELOG.md`, deletes the fragments, and writes no other file. `## Unreleased` stays and is empty.
-4. **The release check.** `check_release.py` (SPEC-0028 rule 5) adds `changelog.d/` to the files a release pull request may change, accepts the deletion of a fragment and nothing else there, and fails, naming the rule and the path class, when a fragment is left, when a fragment line is not under the new heading unchanged and in order, or when a fragment is added or edited.
+1. **The fragment.** In flow mode a build pull request adds one file `changelog.d/<slug>.md`, where `<slug>` is the pull request number or the branch slug (`[a-z0-9-]+`). The file holds exactly one line, `- <one-line change>`, and a newline; it carries no pull request number.
+2. **The build.** In flow mode a pull request that changes a file the installer writes adds exactly one fragment and does not edit `CHANGELOG.md`. A pull request needs a fragment exactly when SPEC-0028 rule 2 requires a changelog line (the trigger of SPEC-0028 rule 2); one that does not meet that trigger may add a fragment and is not failed for it. The flow-mode check (the check of the bump rule of SPEC-0028 rule 2) fails, naming the rule and the path class and never a value, when `CHANGELOG.md` is edited, when no fragment is added, when more than one is added, or when a fragment does not have the form of rule 1. The line under `## Unreleased` that SPEC-0028 rule 2 requires is replaced by the fragment.
+3. **The release script.** A script in `scripts/agk/` (kit-only) run by the release pull request moves the line of every file under `changelog.d/` under the new heading `## <version> (<date>)` of `CHANGELOG.md`, in the order of the pull request numbers, each written as `- #<n> <one-line change>`, deletes the fragments, and writes no other file. The script reads `<n>` from the pull request that added the fragment: the merge or squash commit that added the file (`git log --diff-filter=A`), whose subject carries `(#<n>)`. A fragment whose pull request number cannot be read stops the script. `## Unreleased` stays and is empty.
+4. **The release check.** `check_release.py` (SPEC-0028 rule 5) adds `changelog.d/` to the files a release pull request may change, accepts the deletion of a fragment and nothing else there, and fails, naming the rule and the path class, when a fragment is left, when a fragment line is not under the new heading with its `#<n>` and in order, when the pull request number of a fragment cannot be read, or when a fragment is added or edited.
 5. **Strict mode.** In strict mode nothing changes: no fragment is required and `CHANGELOG.md` is as before.
 6. **`kit/hashes.json`.** Before the build, its ADR records a measurement of whether the release can regenerate `kit/hashes.json` from the files of the release. If it can, a build pull request in flow mode does not edit the file and the check of rule 2 fails one that does; the release regenerates it and `check_release.py` accepts that. If it cannot, the ADR records why and the builds refresh the file as SPEC-0028 rule 2 says.
 7. **How it changes.** SPEC-0028 (rules 2, 4, 5 and 6) is Approved: the build changes it by `docs/runs/proposed-spec-amendments-N.md`, applied by its ADR, which names each protected class it touches. The build is its own pull request from the default branch after this intake, tests first.
-8. **The tests.** Fixtures in `tmp_path`, with git: a build with one fragment and one with none, two, a malformed line, or an edit of `CHANGELOG.md`; strict mode; two builds merged one after the other with no conflict on `CHANGELOG.md`; a release that gathers the fragments in pull request order, one that leaves a fragment, one that changes a line while moving it, and one that touches a sixth file; the regeneration of `kit/hashes.json` if the measurement says it can be. No network and no model.
+8. **The tests.** Fixtures in `tmp_path`, with git: a build with one fragment and one with none, two, a malformed line, or an edit of `CHANGELOG.md`, and a change to a file outside the trigger with and without a fragment; strict mode; two builds merged one after the other with no conflict on `CHANGELOG.md`; a release that gathers the fragments in pull request order, one that leaves a fragment, one that changes a line while moving it, one whose fragment has no readable pull request number, and one that touches a sixth file; the regeneration of `kit/hashes.json` if the measurement says it can be. No network and no model.
 
 ## Tests
 
@@ -25,7 +25,7 @@ The maintainers gave 5 answers before it was written, in the brief of issue #171
 - Rule 2: a build that edits `CHANGELOG.md` fails naming the rule and the path class; REQ-038 AC2.
 - Rule 2: a build with no fragment, more than one, or a malformed line fails; REQ-038 AC3.
 - Rule 3: the release script moves the lines in pull request order, deletes the fragments and writes no other file; REQ-038 AC4.
-- Rule 4: a release that deletes the fragments passes, and a fragment left or a line not moved unchanged fails; REQ-038 AC5.
+- Rule 4: a release that deletes the fragments passes, and a fragment left, a line not moved unchanged or a fragment without a readable pull request number fails; REQ-038 AC5.
 - Rule 5: in strict mode no fragment is required; REQ-038 AC6.
 - Rule 6: the ADR of the build records the measurement and the check follows it; REQ-038 AC7.
 
@@ -39,5 +39,4 @@ REQ-038 AC1 to AC3: *two builds open at once never conflict on `CHANGELOG.md`.* 
 
 ## Open questions
 
-- Q-S0031-1: a build does not know its pull request number before the pull request exists, and the line of rule 1 carries `#<n>`. The criteria assume the fragment is named by the branch slug and its `#<n>` is written by a later commit of the same pull request, and the check accepts the first commit without a number only if the line is `- #0 <change>`.
-- Q-S0031-2: whether a build that changes only a file outside the installed files (for example docs) needs a fragment. The criteria assume it does not, as in SPEC-0028 rule 2.
+none
