@@ -177,7 +177,7 @@ def test_ac3_a_missing_vision_file_is_written(started):
     assert proc.returncode == 0 and vision_text(started).startswith("# Vision\n\n## The idea\n")
 
 
-@pytest.mark.parametrize("command", ["stack-ids", "stack-write", "stack-check", "nothing"])
+@pytest.mark.parametrize("command", ["design-check", "vision", "nothing"])  # none is built
 def test_ac3_a_step_that_does_not_exist_is_a_usage_error_not_a_pass(started, command):
     """REQ-036 AC3: SPEC-0029 rule 4 (an unbuilt command never prints ok)."""
     proc = engines(started, command)
