@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -101,6 +101,12 @@
       }
     ],
     "cost": []
+  },
+  "counts": {
+    "delivered": 0,
+    "proven": 0,
+    "needs_you": 2,
+    "at_risk": 2
   },
   "notices": [
     {

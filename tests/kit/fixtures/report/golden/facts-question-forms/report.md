@@ -27,7 +27,7 @@ nothing this week
 
 ## At risk
 
-- drift audit: 0 findings (D1 0, D2 0, D3 0, D4 0, D5 0, D6 0, D7 0); no open drift issue
+nothing this week
 
 ## Cost
 

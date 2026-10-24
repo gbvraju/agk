@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -280,6 +280,7 @@
             "days": 12
           }
         ],
+        "count": 2,
         "links": [
           {
             "to": "pull-request",
@@ -303,6 +304,7 @@
             "times": 1
           }
         ],
+        "count": 2,
         "links": [
           {
             "to": "pull-request",
@@ -350,6 +352,7 @@
             "number": 8
           }
         ],
+        "count": 4,
         "links": [
           {
             "to": "pull-request",
@@ -429,6 +432,7 @@
         "hours": "107.3",
         "hours_unknown": 0,
         "fix_verdicts": 2,
+        "fix_verdicts_unknown": 0,
         "behaviour_unchanged": 2,
         "estimate": "none-declared",
         "busy": false,
@@ -440,6 +444,12 @@
         ]
       }
     ]
+  },
+  "counts": {
+    "delivered": 5,
+    "proven": "unknown",
+    "needs_you": "unknown",
+    "at_risk": "unknown"
   },
   "notices": [
     {

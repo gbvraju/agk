@@ -27,7 +27,6 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 ## At risk
 
 - <pr>7 "Change number 7" has been open for 9 days — https://github.com/demo-org/demo-repo/pull/7
-- drift audit: 0 findings (D1 0, D2 0, D3 0, D4 0, D5 0, D6 0, D7 0); no open drift issue
 
 ## Cost
 

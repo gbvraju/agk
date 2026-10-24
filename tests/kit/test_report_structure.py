@@ -87,8 +87,8 @@ def test_ac1_the_structure_has_the_document_keys_and_items_of_the_fixed_kinds(na
     import product_report as pr
 
     _, _, structure = structure_of(facts)
-    assert list(structure) == ["schema", "week", "opening", "sections", "notices"]
-    assert structure["schema"] == 2
+    assert list(structure) == ["schema", "week", "opening", "sections", "counts", "notices"]
+    assert structure["schema"] == 3
     assert list(structure["opening"]) == ["first", "last", "as_of"]
     assert list(structure["sections"]) == ["delivered", "proven", "needs_you", "at_risk", "cost"]
     for item in items_of(structure):
@@ -161,7 +161,7 @@ def test_ac1_needs_you_is_a_list_of_groups_with_a_count(name, facts):
             "residual",
             "requirement",
         }
-        unknown = group["items"][0]["kind"] == "unknown"
+        unknown = any(i["kind"] == "unknown" for i in group["items"])
         assert group["count"] == ("unknown" if unknown else len(group["items"])), group
 
 

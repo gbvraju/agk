@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -21,24 +21,14 @@
       }
     ],
     "needs_you": [],
-    "at_risk": [
-      {
-        "kind": "drift-audit",
-        "total": 0,
-        "counts": {
-          "D1": 0,
-          "D2": 0,
-          "D3": 0,
-          "D4": 0,
-          "D5": 0,
-          "D6": 0,
-          "D7": 0
-        },
-        "open_issue": "none",
-        "links": []
-      }
-    ],
+    "at_risk": [],
     "cost": []
+  },
+  "counts": {
+    "delivered": 0,
+    "proven": 0,
+    "needs_you": 0,
+    "at_risk": 0
   },
   "notices": [
     {

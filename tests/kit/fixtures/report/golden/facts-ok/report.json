@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -129,27 +129,13 @@
             "title": "Change number 7"
           }
         ],
+        "count": 1,
         "links": [
           {
             "to": "pull-request",
             "url": "https://github.com/demo-org/demo-repo/pull/7"
           }
         ]
-      },
-      {
-        "kind": "drift-audit",
-        "total": 0,
-        "counts": {
-          "D1": 0,
-          "D2": 0,
-          "D3": 0,
-          "D4": 0,
-          "D5": 0,
-          "D6": 0,
-          "D7": 0
-        },
-        "open_issue": "none",
-        "links": []
       }
     ],
     "cost": [
@@ -172,6 +158,7 @@
         "hours": "72.0",
         "hours_unknown": 0,
         "fix_verdicts": 0,
+        "fix_verdicts_unknown": 0,
         "behaviour_unchanged": 0,
         "estimate": {
           "within": 1,
@@ -186,6 +173,12 @@
         ]
       }
     ]
+  },
+  "counts": {
+    "delivered": 0,
+    "proven": 0,
+    "needs_you": 4,
+    "at_risk": 1
   },
   "notices": [
     {

@@ -86,7 +86,7 @@ def test_ac4_a_broken_document_does_not_validate():
     rules = {
         "an extra top-level key": lambda d: d.update(extra=1),
         "a missing top-level key": lambda d: d.pop("notices"),
-        "another schema number": lambda d: d.update(schema=3),
+        "another schema number": lambda d: d.update(schema=2),
         "an extra section": lambda d: d["sections"].update(trend=[]),
         "an extra opening key": lambda d: d["opening"].update(extra="x"),
         "an unknown kind": lambda d: d["notices"][0].update(kind="made-up"),

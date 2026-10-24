@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -87,7 +87,7 @@
     "needs_you": [
       {
         "group": "pull-request",
-        "count": 1,
+        "count": "unknown",
         "items": [
           {
             "kind": "pull-request-no-verdict",
@@ -98,6 +98,16 @@
               {
                 "to": "pull-request",
                 "url": "https://github.com/demo-org/demo-repo/pull/18"
+              }
+            ]
+          },
+          {
+            "kind": "unknown",
+            "what": "the verdicts of 1 open pull request",
+            "links": [
+              {
+                "to": "pull-request",
+                "url": "https://github.com/demo-org/demo-repo/pull/19"
               }
             ]
           }
@@ -134,6 +144,7 @@
             "days": 9
           }
         ],
+        "count": 2,
         "links": [
           {
             "to": "pull-request",
@@ -154,6 +165,7 @@
             "title": "Change number 12"
           }
         ],
+        "count": 1,
         "links": [
           {
             "to": "pull-request",
@@ -162,19 +174,14 @@
         ]
       },
       {
-        "kind": "drift-audit",
-        "total": 0,
-        "counts": {
-          "D1": 0,
-          "D2": 0,
-          "D3": 0,
-          "D4": 0,
-          "D5": 0,
-          "D6": 0,
-          "D7": 0
-        },
-        "open_issue": "none",
-        "links": []
+        "kind": "unknown",
+        "what": "the verdicts of 1 open pull request",
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/19"
+          }
+        ]
       },
       {
         "kind": "pull-requests-merged-no-verdict",
@@ -189,6 +196,7 @@
             "number": 15
           }
         ],
+        "count": 3,
         "links": [
           {
             "to": "pull-request",
@@ -264,6 +272,7 @@
         "hours": "172.0",
         "hours_unknown": 0,
         "fix_verdicts": 1,
+        "fix_verdicts_unknown": 0,
         "behaviour_unchanged": 1,
         "estimate": "none-declared",
         "busy": false,
@@ -275,6 +284,12 @@
         ]
       }
     ]
+  },
+  "counts": {
+    "delivered": 0,
+    "proven": 0,
+    "needs_you": "unknown",
+    "at_risk": "unknown"
   },
   "notices": [
     {
