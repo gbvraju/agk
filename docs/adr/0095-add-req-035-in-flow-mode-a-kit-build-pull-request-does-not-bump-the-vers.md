@@ -1,6 +1,6 @@
 # ADR-0095: Add REQ-035: Kit builds do not bump the version and one release pull request does
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: SPEC-0028

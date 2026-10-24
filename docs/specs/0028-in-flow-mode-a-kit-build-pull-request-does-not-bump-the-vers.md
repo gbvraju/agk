@@ -1,6 +1,6 @@
 # SPEC-0028: In flow mode a kit build pull request does not bump the version, and one release pull request bumps it for all of them
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-035
 
