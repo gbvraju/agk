@@ -1,4 +1,4 @@
-"""Kit-only tests of `check_design.py` (SPEC-0029 rule 7; REQ-036 AC6 and AC7).
+"""Tests of `check_design.py` (SPEC-0029 rule 7; REQ-036 AC6 and AC7).
 
 The check reads `docs/design/theme.md` and `docs/design/mockups/<date>-<name>/` and fails a mockup
 with a script, an external request, a colour outside the token block or a contrast under 4.5:1. A
@@ -8,12 +8,20 @@ reported as at risk. Both are information, not failures. No network, no model.
 
 from __future__ import annotations
 
+import os
 import re
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+from pathlib import Path
 
 import pytest
-from conftest import KIT_ROOT, clean_env
+
+KIT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def clean_env():
+    return {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")}
+
 
 SCRIPT = KIT_ROOT / "scripts" / "agk" / "check_design.py"
 FOLDER = "2026-10-24-home"
@@ -102,7 +110,7 @@ def project(root, theme=THEME, html=HTML, readme=APPROVED, folder=FOLDER):
 
 
 def check(root):
-    return subprocess.run(
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(SCRIPT), "--root", str(root)],
         capture_output=True,
         text=True,

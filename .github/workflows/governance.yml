@@ -81,6 +81,9 @@ jobs:
       - name: check_kit_tests
         if: ${{ !cancelled() }}
         run: python scripts/agk/check_kit_tests.py
+      - name: check_design
+        if: ${{ !cancelled() }}
+        run: python scripts/agk/check_design.py
       - name: reviewers --check
         if: ${{ !cancelled() }}
         run: python scripts/agk/reviewers.py --check
