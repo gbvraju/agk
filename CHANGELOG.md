@@ -4,6 +4,7 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+- #175 the conductor role: `.claude/agents/conductor.md` with its seven pre-verdict steps and `.claude/hooks/conductor_guard.py`, which allows reads and one comment POST (REQ-037 rule 6)
 - #172 `check_brief.py` checks the shape of a brief, and `session.py watch` ends with `conflict #N` when the pull request conflicts with its base (REQ-037 rule 4 and the verdict on #169)
 - #173 stack: `/agk:stack` writes one Proposed ADR of two or three stack options with checked and judged practices, and `engines.py stack-check` checks its shape (SPEC-0029 rule 5, REQ-036)
 - #170 vision: `/agk:vision` keeps the idea unchanged and the charter records ten answers (SPEC-0029 rule 4, REQ-036)
