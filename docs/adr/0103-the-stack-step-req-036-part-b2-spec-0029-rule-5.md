@@ -37,3 +37,4 @@ pull request branches from the default branch and does not stack on lane A's ope
 
 - 2026-10-24: `stack-check` runs from the skill; it is not a governance step, so a stack ADR edited outside that flow is caught by review (due 2026-12-31).
 - 2026-10-24: whether a practice named `check` has a real governance step is not tested here; the adopting build adds and tests it (due 2026-12-31).
+- 2026-10-24: `stack-write` refuses once any `*-stack-options.md` exists, so a later stack decision that supersedes the first is written by hand, and `stack-check` still checks its shape (due 2026-12-31).
