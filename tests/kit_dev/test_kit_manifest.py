@@ -381,7 +381,31 @@ def test_ac2_the_kit_tests_are_not_installed_and_gitattributes_marks_the_scripts
     assert not [p for p in listed if p.startswith("tests/")]
     assert (KIT_ROOT / "tests" / "kit").is_dir() and tracked()
     text = (KIT_ROOT / m["templates"][".gitattributes"]).read_text(encoding="utf-8")
-    assert [ln for ln in text.splitlines() if not ln.startswith("#")] == [
-        "scripts/agk/** linguist-generated=true"
-    ]
-    assert not (KIT_ROOT / ".gitattributes").exists()
+    assert "scripts/agk/** linguist-generated=true" in text.splitlines()
+    # ADR-0084: this repository marks only the logs, never its own scripts as generated.
+    own = (KIT_ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert "linguist-generated" not in own
+
+
+UNION_LOGS = (
+    "docs/runs/decisions-log.md",
+    "docs/runs/residuals.md",
+    "docs/runs/architect-catches-*.md",
+)
+
+
+def _rules(text: str) -> list[str]:
+    return [ln for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
+
+
+def test_adr0084_the_template_and_this_repository_mark_the_append_only_logs_merge_union():
+    """SPEC-0025 rule 3 (ADR-0084): the append-only logs merge by union."""
+    m = manifest()
+    template = (KIT_ROOT / m["templates"][".gitattributes"]).read_text(encoding="utf-8")
+    own = (KIT_ROOT / ".gitattributes").read_text(encoding="utf-8")
+    for text in (template, own):
+        rules = _rules(text)
+        for log in UNION_LOGS:
+            assert f"{log} merge=union" in rules
+        assert not [r for r in rules if "requirements.md" in r]
+        assert len([r for r in rules if "merge=" in r]) == len(UNION_LOGS)

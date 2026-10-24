@@ -1,2 +1,8 @@
+# agk: the append-only logs merge by union, so two pull requests that each append a row do not collide when git merges locally.
+# GitHub's own conflict check does not honour this: when it reports a conflict only in these files, run `git fetch origin && git merge origin/<default branch>` and push.
+docs/runs/decisions-log.md merge=union
+docs/runs/residuals.md merge=union
+docs/runs/architect-catches-*.md merge=union
+
 # agk: the kit's own scripts; GitHub collapses them in pull-request diffs and leaves them out of language statistics.
 scripts/agk/** linguist-generated=true
