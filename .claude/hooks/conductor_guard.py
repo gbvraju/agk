@@ -15,8 +15,9 @@ run of a pull request in a scratch worktree (SPEC-0030 rule 6, amendment 53):
 `git worktree remove [--force] <scratch>`, and, only with the exact prefix
 `env -i PATH="$PATH" HOME=<scratch>` (the run's own scratch directory, so that neither an
 environment token nor the home directory's stored credentials reach the code),
-`make -C <scratch> test` or `governance` and `python3 -I <scratch>/scripts/agk/<name>.py ...`. A scratch directory is
-`agk-conductor-<name>` directly in the system temp directory and outside the work tree. A POST
+`make -C <scratch> test` or `governance` and `python3 -I <scratch>/scripts/agk/<name>.py ...`.
+A scratch directory is `agk-conductor-<name>` directly in the system temp directory and outside
+the work tree. A POST
 to anything else, a PATCH, a PUT, a DELETE, any other script and any other `make` are denied. The
 judging of `git` and `gh api` is the architect's (`architect_guard.py`), which this file imports.
 The message names the rule, never the command or the path. Standard library only; no network.
