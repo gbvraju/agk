@@ -1,6 +1,6 @@
 # ADR-0093: housekeeping from the W42 report and drift audit #150 (issue #158)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0012, SPEC-0004
