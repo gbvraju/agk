@@ -1,4 +1,4 @@
-# ADR-0084: GitHub's merge check does not honour merge=union (REQ-032 part b, SPEC-0025 rule 3)
+# ADR-0084: the append-only logs merge by union; GitHub's check does not honour it, so a local merge resolves it (REQ-032 part b, SPEC-0025 rule 3)
 
 - Status: Proposed
 - Date: 2026-10-24
@@ -25,23 +25,31 @@ pull request titled "measurement: merge=union (to be closed)", its `mergeable` a
 
 ## Decision
 
-None is taken: SPEC-0025 rule 3 builds neither option until the maintainers rule. This pull request records the measurement and the question. The `.gitattributes` template and every other file are unchanged, and there
-is no kit change.
+The maintainers ruled option 1 (the verdict on #143, Q-K4-239). The conflict is real on GitHub but mechanical: bringing the default branch in locally resolves it with no hand edit, so it costs one command, which a
+session can run unattended. Built:
 
-## Options (for the ruling; neither is built)
+- `kit/templates/gitattributes` and this repository's `.gitattributes` mark `docs/runs/decisions-log.md`, `docs/runs/residuals.md` and `docs/runs/architect-catches-*.md` `merge=union`; `docs/requirements.md` is not marked.
+  The template keeps its `scripts/agk/**` line; this repository's file carries only the three union lines (it does not mark its own scripts as generated). A test in `tests/kit_dev/test_kit_manifest.py` pins the lines in both
+  files and the absence of `docs/requirements.md`; the two older tests that pinned the template to one line and this repository to no `.gitattributes` follow the ruling.
+- `docs/guides/getting-started.md`: one bullet in "When something goes wrong": when GitHub reports a conflict only in those logs, run `git fetch origin && git merge origin/<default branch>` locally; git keeps both rows;
+  push. Any other conflicting file is resolved by hand as before.
+- Kit 0.46.0 to 0.47.0: `kit/manifest.json` `kit_version`, `kit/hashes.json`, `.claude-plugin/plugin.json`, `agk.toml`.
 
-1. **Keep `merge=union` for local rebases only.** The shipped `.gitattributes` gets the lines. Git honours them when a developer rebases or merges the default branch locally (measured above), so the developer
-   resolves the collision on their machine and pushes; GitHub keeps showing `dirty` (and blocks the web merge) until that push, because its check ignores the attribute. Cost: a few lines and a test of the template;
-   the developer's local step is required every time two pull requests append to the same log. A repository that merges through the GitHub button never gets the benefit.
-2. **One file per log entry, with a generated index.** Each decisions-log row, residual line and catch row is its own file (for example one folder per log, one file per entry), and the log a person reads is generated
-   from them. Two pull requests then add different files and never touch the same lines, so GitHub's check is clean. Cost: a migration of the existing logs and a change of every reader of them (`common.py`,
-   `facts.py`, `product_report.py`, `drift_audit.py`, `init.py`, the architect's file and the manifest all name the logs), a generator and its check, and a new rule for how a ruling is recorded.
+Protected path classes changed: `.claude-plugin/`, `agk.toml`, `kit/`, `tests/kit_dev/`.
+
+## Options (as put to the ruling)
+
+1. **Keep `merge=union` for local merges** (ruled, built). Git honours the lines when a developer merges the default branch locally (measured above); GitHub shows `dirty` until that push.
+2. **One file per log entry, with a generated index** (not built). It migrates three logs and every reader of them (`common.py`, `facts.py`, `product_report.py`, `drift_audit.py`, `init.py`, the architect's file and the
+   manifest) to remove one command.
 
 ## Consequences
 
-- Until the ruling, two pull requests that append to the same log still collide on GitHub; `intake.py renumber` (part a) does not help with a log line.
-- Parts (b) and (c) of SPEC-0025 continue independently of this: part (c) does not depend on the logs.
+- Two pull requests that append to the same log show a conflict on GitHub until one runs the local merge; the web merge button stays blocked until then.
+- `intake.py renumber` (part a) does not touch log lines; the local merge does.
+- Part (c) of SPEC-0025 does not depend on the logs.
 
 ## Residual
 
-- 2026-10-24: the two throwaway measurement branches remain on the remote until a maintainer deletes them (due 2026-12-31).
+- 2026-10-24: option 2 is not built; revisit only if the count of such merges says so.
+- 2026-10-24: the two throwaway measurement branches `ccr-7649d887-m9hvn7-mu-a` and `ccr-7649d887-m9hvn7-mu-b` could not be deleted from a session (proxy 403); they are left for the maintainers (due 2026-12-31).

@@ -1,0 +1,4 @@
+# agk: the append-only logs merge by union (ADR-0084). This repository does not mark its own scripts as generated.
+docs/runs/decisions-log.md merge=union
+docs/runs/residuals.md merge=union
+docs/runs/architect-catches-*.md merge=union

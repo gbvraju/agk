@@ -655,7 +655,7 @@ def test_ac1_gitattributes_absent_gets_the_block_only(tmp_path):
     text = (root / ".gitattributes").read_text()
     assert text.startswith("# >>> agk\n") and text.rstrip().endswith("# <<< agk")
     assert GITATTRIBUTES_LINE in text.splitlines()
-    assert not (KIT_ROOT / ".gitattributes").exists()
+    assert "linguist-generated" not in (KIT_ROOT / ".gitattributes").read_text()
 
 
 def test_ac1_an_existing_gitattributes_keeps_its_bytes_and_gains_one_block(tmp_path):
