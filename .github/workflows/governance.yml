@@ -77,7 +77,8 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python scripts/agk/check_final_clearance.py --comments "$RUNNER_TEMP/comments.json" --head "$HEAD_SHA"
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: python scripts/agk/check_final_clearance.py --comments "$RUNNER_TEMP/comments.json" --head "$HEAD_SHA" --author "$PR_AUTHOR"
       - name: PR body shape
         if: github.event_name == 'pull_request'
         env:

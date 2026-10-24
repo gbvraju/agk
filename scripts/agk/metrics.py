@@ -192,6 +192,17 @@ def author_of(comment: dict) -> str:
     return login.lower() if isinstance(login, str) else ""
 
 
+def counted_authors(authors: list[str] | None, own: str | None) -> list[str] | None:
+    """The listed authors whose verdicts count on a pull request by `own` (SPEC-0025 rule 4).
+
+    With two or more distinct listed authors the pull request's own author is dropped; with one
+    nothing changes. Logins are compared without regard to case."""
+    me = (own or "").lstrip("@").lower()
+    if not authors or not me or len({a.lstrip("@").lower() for a in authors}) < 2:
+        return authors
+    return [a for a in authors if a.lstrip("@").lower() != me]
+
+
 def verdicts(
     comments: list[dict] | None, authors: list[str] | None = None
 ) -> list[tuple[str, str]] | None:
@@ -400,7 +411,8 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
     comments = ctx.src.get(f"comments-{n}", f"repos/{{repo}}/issues/{n}/comments")
     files = ctx.src.get(f"files-{n}", f"repos/{{repo}}/pulls/{n}/files")
     commits = ctx.src.get(f"commits-{n}", f"repos/{{repo}}/pulls/{n}/commits")
-    listed = verdicts(comments if isinstance(comments, list) else None, ctx.authors)
+    authors = counted_authors(ctx.authors, author_of(detail))
+    listed = verdicts(comments if isinstance(comments, list) else None, authors)
     head = (detail.get("head") or {}).get("sha") or ""
 
     hours = hours_between(detail.get("created_at"), detail.get("merged_at")) if merged else NONE
@@ -412,7 +424,7 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
         rejected = "yes" if any(k == "rejected" for k, _ in listed) else "no"
     rejected_verdicts = UNKNOWN if listed is None else str(sum(k == "rejected" for k, _ in listed))
     rounds = str(sum(k == "fix" for k, _ in listed)) if listed else UNKNOWN
-    cleared = merged_head_cleared(ctx.src, head, comments, ctx.authors) if merged else NONE
+    cleared = merged_head_cleared(ctx.src, head, comments, authors) if merged else NONE
 
     size, expected = parse_estimate(detail.get("body"))
     shas = [c.get("sha") for c in commits] if isinstance(commits, list) else None
