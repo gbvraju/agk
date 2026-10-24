@@ -239,7 +239,8 @@ def discovery_problems(items: dict[str, list[str]], ten: bool = False) -> list[s
         if topic not in words:
             out.append(f"rule 6: the Discovery item lacks the topic {topic}")
     if not out and words not in (list(wanted), list(ALL_TOPICS)):
-        out.append("rule 6: the Discovery topics are not the six topics in their order")
+        count = "ten" if ten else "six"
+        out.append(f"rule 6: the Discovery topics are not the {count} topics in their order")
     slices = dict(topic_bullets(items.get("Slice", [])))
     for word, text in answers:
         if word in ALL_TOPICS and not text:

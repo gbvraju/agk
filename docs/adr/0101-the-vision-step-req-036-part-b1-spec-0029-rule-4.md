@@ -21,7 +21,7 @@ This pull request branches from the default branch and does not stack on the unm
    script writes the draft through the kit's template and the check refuses what does not fit. The script decides nothing.
 2. **The vision** (rule 4): `vision-write --idea-file F [--draft-file D]` writes `constitution/vision.md` with the owner's idea, byte for byte (surrounding blank lines trimmed), as the first section `## The idea`, between
    `<!-- agk-idea sha256:<digest> -->` and `<!-- /agk-idea -->`; the four sections of `/agk:start` follow, from the draft (which must hold the four headings in order and no placeholder or idea marker) or from
-   `kit/templates/vision-sections.md` with `TODO(owner)` marks. The idea is refused when empty, over 1,500 characters (the limit of `/agk:start`) or when it holds a marker; an existing idea is never overwritten.
+   `kit/templates/vision-sections.md` with `TODO(owner)` marks. The idea is refused when empty, over 1,500 characters (the limit of `/agk:start`) or when it holds a marker; an existing idea is never overwritten, and neither is a vision that holds content: the file must be absent or still hold the installed placeholder (`TODO(maintainers)`, the test `check-start` uses).
    `vision-check` fails, naming the rule and never quoting the idea, a vision whose first section is not the idea between its markers, whose digest differs, that has something before it, or that still holds a `TODO(owner)` mark; a
    vision without the idea section passes as before. `playbook.py check-start` runs the same check.
 3. **The ten questions** (rule 4): `questions` prints the ten discovery topics in order: the six of `/agk:start` and `devices`, `accessibility`, `languages` and `brand`. `playbook.py check-start` still accepts the six alone, and
@@ -37,5 +37,6 @@ This pull request branches from the default branch and does not stack on the unm
 
 ## Residual
 
+- 2026-10-24: a vision whose idea markers are removed passes `vision-check` as a vision without the idea section, and the charter is then checked for six topics only; review catches it, because the diff shows `constitution/vision.md` changing (due 2026-12-31).
 - 2026-10-24: `vision-check` runs from the skill and from `check-start`; it is not a governance step, so a later change of the idea outside that flow is caught by review (due 2026-12-31).
 - 2026-10-24: the digest detects a changed idea, not a rewritten digest; a person who edits both is seen in the diff of the pull request (due 2026-12-31).

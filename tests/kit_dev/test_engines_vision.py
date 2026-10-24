@@ -161,6 +161,31 @@ def test_ac3_a_draft_that_fails_the_template_is_refused(started, change, needle)
     assert vision_text(started) == before
 
 
+def test_ac3_a_vision_that_holds_content_is_never_overwritten(started):
+    """REQ-036 AC3: SPEC-0029 rule 4 (an adopted project's real vision is not replaced)."""
+    good_start(started)
+    before = vision_text(started)
+    proc = vision_write(started, IDEA, "--draft-file", str(draft_file(started)))
+    assert proc.returncode == 1 and "rule 4" in proc.stdout and "placeholder" in proc.stdout
+    assert vision_text(started) == before
+
+
+def test_ac3_a_missing_vision_file_is_written(started):
+    """REQ-036 AC3: SPEC-0029 rule 4 (the file may be absent)."""
+    (started / "constitution" / "vision.md").unlink()
+    proc = vision_write(started, IDEA, "--draft-file", str(draft_file(started)))
+    assert proc.returncode == 0 and vision_text(started).startswith("# Vision\n\n## The idea\n")
+
+
+@pytest.mark.parametrize("command", ["stack-ids", "stack-write", "stack-check", "nothing"])
+def test_ac3_a_step_that_does_not_exist_is_a_usage_error_not_a_pass(started, command):
+    """REQ-036 AC3: SPEC-0029 rule 4 (an unbuilt command never prints ok)."""
+    proc = engines(started, command)
+    assert (
+        proc.returncode == 2 and proc.stdout == "" and proc.stderr.startswith("usage: engines.py")
+    )
+
+
 def test_ac3_an_existing_idea_is_never_overwritten(started):
     """REQ-036 AC3: SPEC-0029 rule 4 (the idea is the owner's, written once)."""
     assert vision_write(started, IDEA, "--draft-file", str(draft_file(started))).returncode == 0
@@ -230,7 +255,7 @@ def test_ac3_a_start_with_the_idea_section_and_a_missing_answer_fails(started, t
     """REQ-036 AC3: SPEC-0029 rule 4 (the four new topics are required once the idea is there)."""
     idea_start(started, topics=[t for t in TEN if t != topic])
     out = failed(started, "rule 6")
-    assert topic in out or "ten" in out
+    assert topic in out
 
 
 def test_ac3_the_six_topics_alone_are_enough_without_the_idea_section(started):
@@ -274,3 +299,12 @@ def test_ac3_the_skill_names_the_engine_the_template_and_the_checks(name):
     for verb in ("git push", "git commit", "gh pr", "gh issue"):
         assert verb not in text
     assert "protected" in text and "template" in text
+
+
+def test_ac3_the_order_message_names_the_count_it_wants(started):
+    """REQ-036 AC3: SPEC-0029 rule 4 (six without the idea section, ten with it)."""
+    swapped = (TEN[1], TEN[0], *TEN[2:])
+    idea_start(started, topics=swapped)
+    assert "the ten topics in their order" in failed(started, "rule 6")
+    good_start(started, charter=charter_of((TEN[1], TEN[0], *TEN[2:6])))
+    assert "the six topics in their order" in failed(started, "rule 6")

@@ -62,6 +62,7 @@ QUESTIONS = (
     ),
 )
 TOPICS = tuple(topic for topic, _ in QUESTIONS)
+INSTALLED_PLACEHOLDER = "TODO(maintainers)"
 PLACEHOLDER = re.compile(r"TODO\(owner\)")
 
 
@@ -128,8 +129,14 @@ def cmd_vision_write(root: Path, opts: dict[str, str]) -> int:
     if CLOSE in idea or OPEN in idea:
         raise CheckError("rule 4: the idea holds a marker of the idea section")
     target = root / VISION
-    if has_idea(target.read_text(encoding="utf-8") if target.is_file() else ""):
+    current = target.read_text(encoding="utf-8") if target.is_file() else ""
+    if has_idea(current):
         raise CheckError("rule 4: the vision already holds an idea; it is never overwritten")
+    if current and INSTALLED_PLACEHOLDER not in current:
+        raise CheckError(
+            "rule 4: the vision is not the installed placeholder; a vision that holds "
+            "content is never overwritten"
+        )
     if "draft-file" in opts:
         draft = read(Path(opts["draft-file"]), "the draft file").strip("\n") + "\n"
         lines = draft.splitlines()
@@ -167,14 +174,7 @@ def cmd_vision_check(root: Path) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    commands = (
-        "questions",
-        "vision-write",
-        "vision-check",
-        "stack-ids",
-        "stack-write",
-        "stack-check",
-    )
+    commands = ("questions", "vision-write", "vision-check")
     if not args or args[0] not in commands:
         print(USAGE, file=sys.stderr)
         return 2
@@ -192,7 +192,10 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_questions()
         if args[0] == "vision-write":
             return cmd_vision_write(root, opts)
-        return cmd_vision_check(root)
+        if args[0] == "vision-check":
+            return cmd_vision_check(root)
+        print(USAGE, file=sys.stderr)
+        return 2
     except CheckError as exc:
         print(f"FAIL engines: {exc}")
         return 1
