@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import KIT_ROOT, clean_env, git, set_handle
+from conftest import KIT_ROOT, clean_env, git, set_handle, without_version_line
 
 TODAY = "2026-10-14"  # a Wednesday; the report covers 2026-10-05 to 2026-10-11 (ISO week 2026-W41)
 MERGED = "2026-10-08T10:00:00Z"
@@ -247,17 +247,19 @@ def test_ac1_the_same_flow_in_a_go_layout_with_the_fixtures_under_testdata(stage
 
 def intake(root: Path, *args: str) -> subprocess.CompletedProcess:
     """The kit-only script, run from the kit against the installed target."""
-    return subprocess.run(
-        [
-            sys.executable,
-            str(KIT_ROOT / "scripts" / "agk" / "intake.py"),
-            *args,
-            "--root",
-            str(root),
-        ],
-        capture_output=True,
-        text=True,
-        env=clean_env(),
+    return without_version_line(
+        subprocess.run(
+            [
+                sys.executable,
+                str(KIT_ROOT / "scripts" / "agk" / "intake.py"),
+                *args,
+                "--root",
+                str(root),
+            ],
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+        )
     )
 
 

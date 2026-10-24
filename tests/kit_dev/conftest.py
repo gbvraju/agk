@@ -27,6 +27,14 @@ def clean_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k not in drop}
 
 
+def without_version_line(proc):
+    """PROC with the first line of its output (`intake: kit <version>`, SPEC-0027) taken off."""
+    first, _, rest = proc.stdout.partition("\n")
+    if first.startswith("intake: kit "):
+        proc.stdout = rest
+    return proc
+
+
 def run_init(target: Path, *args: str, **kw):
     return subprocess.run(
         [sys.executable, str(INIT), str(target), *args],

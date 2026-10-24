@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import KIT_ROOT, clean_env, git, make_repo
+from conftest import KIT_ROOT, clean_env, git, make_repo, without_version_line
 
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 import check_adrs  # noqa: E402
@@ -95,11 +95,13 @@ def repo(tmp_path):
 
 
 def run(repo, *args):
-    return subprocess.run(
-        [sys.executable, str(SCRIPT), *args, "--root", str(repo), "--date", "2026-10-18"],
-        capture_output=True,
-        text=True,
-        env=clean_env(),
+    return without_version_line(
+        subprocess.run(
+            [sys.executable, str(SCRIPT), *args, "--root", str(repo), "--date", "2026-10-18"],
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+        )
     )
 
 
