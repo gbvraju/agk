@@ -4,7 +4,9 @@ In flow mode a pull request that raises `version` in `agk.toml` is a release pul
 change only `CHANGELOG.md`, `agk.toml`, `kit/manifest.json`, `.claude-plugin/plugin.json` and
 `kit/hashes.json`; the three versions are raised together to one greater number; and the lines under
 `## Unreleased` are moved unchanged and in order under `## <new version> (<date>)`, leaving
-`## Unreleased` empty and the older sections as they were. In strict mode, when no version is raised
+`## Unreleased` empty and the older sections as they were. The fragments under `changelog.d/` are
+gathered into those lines in pull request order (SPEC-0031 rules 3 and 4): their deletion is part of
+the release, a fragment left, added or edited fails it. In strict mode, when no version is raised
 and when the base does not have this script yet (the pull request that adds it is the last build
 that bumps itself, SPEC-0028 rule 9) it prints `ok release` and checks nothing. Git and files only:
 no network, no model. Messages name the rule and the path, never a version.
@@ -18,6 +20,7 @@ import sys
 import tomllib
 from pathlib import Path
 
+from changelog_fragments import FRAG_DIR, gathered_lines, tree_fragments
 from common import (
     CheckError,
     changed_files,
@@ -72,8 +75,9 @@ def sections(text: str) -> list[tuple[str, list[str]]]:
     return found
 
 
-def moved_unchanged(old: str, new: str, version: str) -> bool:
-    """Unreleased became empty, its lines are the new version's, the rest is as it was."""
+def moved_unchanged(old: str, new: str, version: str, gathered: list[str] | None = None) -> bool:
+    """Unreleased became empty, its lines (then the gathered fragment lines) are the new version's,
+    the rest is as it was."""
     before, after = sections(old), sections(new)
     if len(before) < 2 or len(after) != len(before) + 1:
         return False
@@ -83,7 +87,7 @@ def moved_unchanged(old: str, new: str, version: str) -> bool:
         and before[1][0] == after[1][0] == "## Unreleased"
         and after[1][1] == []
         and heading is not None
-        and after[2][1] == before[1][1]
+        and after[2][1] == before[1][1] + (gathered or [])
         and after[3:] == before[2:]
     )
 
@@ -102,8 +106,16 @@ def check(root: Path) -> int:
     if new is None or old is None or new == old:
         print(f"ok {NAME}")
         return 0
-    for path in sorted(set(changed_files(root, mb)) - set(ALLOWED)):
+    changes = changed_files(root, mb)
+    fragments = set(tree_fragments(root, mb))
+    for path in sorted(set(changes) - set(ALLOWED)):
+        if path in fragments and changes[path] == "D":
+            continue
+        if path.startswith(FRAG_DIR):
+            raise CheckError(f"rule 4: a release pull request adds or edits a file of {FRAG_DIR}")
         raise CheckError(f"rule 5: a release pull request changes {path}, outside its five files")
+    if any((root / path).exists() for path in fragments):
+        raise CheckError(f"rule 4: a fragment is left under {FRAG_DIR}")
     manifest = json_version((root / "kit/manifest.json").read_text(encoding="utf-8"), "kit_version")
     plugin = json_version(
         (root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"), "version"
@@ -113,7 +125,8 @@ def check(root: Path) -> int:
     if numbers(new) is None or numbers(old) is None or numbers(new) <= numbers(old):
         raise CheckError("rule 5: the three versions do not rise")
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
-    if not moved_unchanged(show(root, mb, "CHANGELOG.md") or "", changelog, new):
+    gathered = gathered_lines(root, mb, "rule 4")[1]
+    if not moved_unchanged(show(root, mb, "CHANGELOG.md") or "", changelog, new, gathered):
         problem = (
             "rule 5: Unreleased is not empty after the move"
             if sections(changelog)[1:2] and sections(changelog)[1][1]
