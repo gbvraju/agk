@@ -373,6 +373,11 @@ def next_free_ids(root: Path, ref: str) -> dict[str, str]:
     """The next free requirement, spec and ADR numbers in the tree of REF, never the work tree."""
     text = show(root, ref, "docs/requirements.md")
     if text is None:
+        if (
+            ref.startswith("origin/")
+            and not git(root, "rev-parse", "--verify", "--quiet", ref, check=False).strip()
+        ):
+            raise CheckError(f"{ref} cannot be read; steps 6 and 7 need the repository's remote")
         raise CheckError("the base has no requirements file (path class docs/)")
     reqs = [int(r["id"][4:]) for r in parse_requirements(text)]
     out = {"req": f"REQ-{next_req_number(root, max(reqs, default=0)):03d}"}
