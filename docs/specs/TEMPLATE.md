@@ -15,6 +15,14 @@ Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group
 
 - Rule 1: test file and marker `REQ-nnn`.
 
+## Proof
+
+REQ-nnn ACn: *what the criterion proves.* Rule 1.
+
+## Residual
+
+- YYYY-MM-DD: what is left open (due YYYY-MM-DD), or `none`.
+
 ## Open questions
 
 none

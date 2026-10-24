@@ -55,8 +55,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" ids --sentence "SENTENCE"
    the spec's opening paragraph (the text before its first `##` heading) as `The maintainers answered N questions before
    it was written: ...` (N as a digit (1, 2 or 3), `3 questions`, not `three questions`, which the check refuses;
    `question` for 1), or, when no question was needed, `The maintainers answered no questions before it was
-   written; the sentence settled every point.`, and write no `Q-S` id. Two other true forms exist: `The maintainers
-   answered N questions at review, before approval` (N from 1 to 3), when the questions were asked and answered while the
+   written; the sentence settled every point.`, only when a person confirmed that the sentence needs none (if there is
+   nobody to ask, stop before writing any file and say so), and write no `Q-S` id. Two other true forms exist: `The
+   maintainers answered N questions at review, before approval` (N from 1 to 3), when the questions were asked and answered while the
    pull request was under review and before the approving commit, and `The maintainers gave N answers before it was
    written` (any N from 1), when the answers were given in a brief or an issue and not as interview questions. Never use
    a form for a question answered after approval. A question raised after

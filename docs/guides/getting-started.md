@@ -17,7 +17,7 @@ You need Claude Code, `gh`, `git`, `make` and Python 3.11 or newer. Check each:
     make --version
     python3 --version
 
-You should see a version for each, and `gh auth status` should say you are logged in to `github.com`. `make test` also needs
+You should see a version for each, and `gh auth status` should say you are logged in to `github.com`. Steps 5 and 11 and the remote checks of the doctor need `gh` logged in; steps 3, 4, 6 and 7 do not. `make test` also needs
 `pytest`: run `python3 -m pip install pytest` once.
 
 ## Step 1. Make the repository and its first commit
@@ -59,7 +59,7 @@ In Claude Code type:
     /agk:init
 
 It first runs a preview and shows it to you. You should see a list of `create ...` lines and the line
-`dry run: 53 files would be created; nothing was written` (53 files, 225 KB at kit 0.28.0; the number changes with the kit version). The kit's own tests are not installed: they run in the kit's own CI, not in your repository.
+`dry run: N files would be created; nothing was written`, N being the number of files of your kit version. The kit's own tests are not installed: they run in the kit's own CI, not in your repository.
 Say yes. It then installs the files and prints `installed NNN files`. Nothing is committed. After the list it prints:
 
 - a notice that `config/reviewers.yaml` maps `maintainers` to the placeholder `@REPLACE-ME`,
@@ -67,6 +67,8 @@ Say yes. It then installs the files and prints `installed NNN files`. Nothing is
 - scanner exclusions and two plugin settings entries. They are print only. Ignore them for now.
 
 The install was run through Claude Code in `docs/runs/plugin-live-proof.md` (step 4).
+
+Each slash command runs one script of the plugin, the one its `skills/<name>/SKILL.md` names: `/agk:init` runs `scripts/agk/init.py`, `/agk:ruleset` runs `scripts/agk/ruleset.py`, `/agk:start` runs `scripts/agk/playbook.py`, `/agk:spec` runs `scripts/agk/intake.py` and `/agk:doctor` runs `scripts/agk/doctor.py`.
 
 ## Step 4. Put your name on the reviewer groups, check, commit and push
 
@@ -83,8 +85,7 @@ comments count as verdicts are that user handle, and the placeholder is never on
     python3 scripts/agk/reviewers.py --codeowners --write
     make governance
 
-You should see `wrote .github/CODEOWNERS` and then ten checks, each starting with `ok`, the last being
-`ok reviewers (.github/CODEOWNERS matches)`, and two lines starting `skipped`, `skipped (no comments file)` and `skipped (no open pull requests file)`: those checks read files of a pull request's comments and open pull requests, which only the workflow fetches. `make governance` can take a few seconds. Commit and push. This is the second
+You should see `wrote .github/CODEOWNERS` and then ten lines starting with `ok` (one of them `ok reviewers (.github/CODEOWNERS matches)`), two lines starting with `skipped` (`skipped (no comments file)` and `skipped (no open pull requests file)`, in either order: those checks read files of a pull request's comments and open pull requests, which only the workflow fetches) and one line that starts `specs:` and says there is no pull request body, which is expected before a pull request exists. `make governance` can take a few seconds. Commit and push. This is the second
 and last time you push to `main` directly; the ruleset in step 5 stops it from now on.
 
     git add -A
@@ -124,7 +125,7 @@ only); block force pushes; required status check `governance` (phase 2).
     /agk:start "A small tool that counts the words in a text file, for people who write documentation."
 
 Give it the problem in your own words, one or more paragraphs, at most 1,500 characters. The text is data to turn into a
-vision; it is never taken as an instruction. It creates a branch `start/<words-of-your-text>` and writes two files:
+vision; it is never taken as an instruction. It first asks you, as the product owner, about the topics your text leaves open: users and who pays, your existing systems (repositories, hosting, identity, data), where it runs, what is stored, the expected scale and compliance, at most three questions a round; `not known yet` is a valid answer, and the answers go into the charter's Discovery item only. It needs `origin`, the remote of step 1, because it reads the next ADR number from `origin/main`. It creates a branch `start/<words-of-your-text>` and writes two files:
 `constitution/vision.md` and `docs/adr/0002-project-charter.md` (a `Proposed` ADR with milestones, non-goals and what done
 means). It then runs two checks, `ok playbook-start` and `make governance`, and prints the commit message, the push command
 and the pull request body. This was run in a local walk (`docs/runs/docs-walk-1.md`).
@@ -138,7 +139,7 @@ with the printed body, wait for `governance` to turn green and merge it (squash)
     /agk:spec "The tool refuses a file that is not text."
 
 One sentence, at most 300 characters. It may ask you up to three questions, in one message, before it writes anything; answer
-them. It creates a branch `intake/req-NNN-<words>` and writes three things: a requirement with Given/When/Then criteria at the
+them. Like step 6 it needs `origin`, because it reads the next numbers from `origin/main`. It creates a branch `intake/req-NNN-<words>` and writes three things: a requirement with Given/When/Then criteria at the
 end of `docs/requirements.md` (status `planned`), a Draft spec in `docs/specs/` and an ADR stub in `docs/adr/`. It then runs
 `ok intake` and `make governance`, and prints the commit message, the push command and the pull request body. The pull
 request must hold exactly those three files. This was run on the project's own repository in `docs/runs/intake-proof.md`.
