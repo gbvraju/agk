@@ -1,6 +1,6 @@
 # ADR-0087: Add REQ-033: The report states how many each section, group and unknown total holds
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: SPEC-0026

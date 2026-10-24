@@ -1,6 +1,6 @@
 # SPEC-0026: Each section of the weekly report, each grouped item in it and each total that can be unknown states how many it holds
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-033
 
