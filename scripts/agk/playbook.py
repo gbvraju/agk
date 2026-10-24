@@ -40,6 +40,8 @@ from common import (
     show,
 )
 from doctor import origin_repo
+from engines import TOPICS as ALL_TOPICS
+from engines import has_idea, vision_problems
 from intake import section, slug
 
 KIT = Path(__file__).resolve().parents[2]
@@ -176,8 +178,9 @@ def start_problems(root: Path, mb: str, ref_ids: dict[str, str]) -> list[str]:
     rules = section(vision, "Project rules") or []
     if any(ln.strip() and MARKER not in ln for ln in rules):
         out.append("rule 5: a line under the project rules does not carry the project marker")
+    out += vision_problems(vision)
     if len(charters) == 1:
-        out += charter_problems(root, charters[0], ref_ids)
+        out += charter_problems(root, charters[0], ref_ids, has_idea(vision))
     return out
 
 
@@ -188,7 +191,7 @@ def _read(root: Path, rel: str) -> str | None:
         return None
 
 
-def charter_problems(root: Path, rel: str, ref_ids: dict[str, str]) -> list[str]:
+def charter_problems(root: Path, rel: str, ref_ids: dict[str, str], ten: bool = False) -> list[str]:
     out: list[str] = []
     text = _read(root, rel) or ""
     name = Path(rel).name
@@ -211,7 +214,7 @@ def charter_problems(root: Path, rel: str, ref_ids: dict[str, str]) -> list[str]
         if "exit:" not in milestone or not MEASURABLE.search(after):
             out.append("rule 5: a milestone line has no `exit:` with a measurable statement")
             break
-    return out + discovery_problems(items)
+    return out + discovery_problems(items, ten)
 
 
 def topic_bullets(lines: list[str]) -> list[tuple[str, str]]:
@@ -220,26 +223,32 @@ def topic_bullets(lines: list[str]) -> list[tuple[str, str]]:
     return [(m.group(1).lower(), m.group(2).strip()) for m in found if m]
 
 
-def discovery_problems(items: dict[str, list[str]]) -> list[str]:
-    """SPEC-0023 rules 6 and 7: six topics in order, an answer each, a slice for the unknown."""
+def discovery_problems(items: dict[str, list[str]], ten: bool = False) -> list[str]:
+    """SPEC-0023 rules 6 and 7: six topics in order, an answer each, a slice for the unknown.
+
+    With `ten` (the vision has the idea section of `/agk:vision`, SPEC-0029 rule 4) the four
+    topics of the vision step follow, and the charter records an answer for each.
+    """
     if not items.get("Discovery"):
         return ["rule 7: the Decision lacks the numbered item Discovery"]
     out: list[str] = []
     answers = topic_bullets(items["Discovery"])
     words = [word for word, _ in answers]
-    for topic in TOPICS:
+    wanted = ALL_TOPICS if ten else TOPICS
+    for topic in wanted:
         if topic not in words:
             out.append(f"rule 6: the Discovery item lacks the topic {topic}")
-    if not out and words != list(TOPICS):
-        out.append("rule 6: the Discovery topics are not the six topics in their order")
+    if not out and words not in (list(wanted), list(ALL_TOPICS)):
+        count = "ten" if ten else "six"
+        out.append(f"rule 6: the Discovery topics are not the {count} topics in their order")
     slices = dict(topic_bullets(items.get("Slice", [])))
     for word, text in answers:
-        if word in TOPICS and not text:
+        if word in ALL_TOPICS and not text:
             out.append(f"rule 6: the Discovery topic {word} has no answer")
         elif text.lower() == NOT_KNOWN and not slices.get(word):
             out.append(f"rule 7: the topic {word} is not known yet and has no Slice bullet")
     for word, text in topic_bullets(items.get("Slice", [])):
-        if word not in TOPICS or not text:
+        if word not in ALL_TOPICS or not text:
             out.append("rule 6: a Slice bullet names no topic or says nothing")
             break
     return out
