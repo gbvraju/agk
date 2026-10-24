@@ -161,7 +161,7 @@ def run_body(tmp_path: Path, issues: list[dict], today: str = "2026-10-14"):
         "RUNNER_TEMP": str(tmp_path),
         "INPUT_TODAY": today,
         "GITHUB_REPOSITORY": "demo-org/demo-repo",
-        "GH_TOKEN": "unused",
+        "GH_TOKEN": "unused",  # nosec B105 - a placeholder token for the test environment, not a secret
         "GITHUB_OUTPUT": str(tmp_path / "github-output"),
     }
     bash = shutil.which("bash") or "bash"
