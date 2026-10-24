@@ -4,8 +4,10 @@
   "verbatim": [
     ".claude/agents/architect-review.md",
     ".claude/agents/architect.md",
+    ".claude/agents/conductor.md",
     ".claude/agents/drift-auditor.md",
     ".claude/hooks/architect_guard.py",
+    ".claude/hooks/conductor_guard.py",
     ".claude/hooks/stop_check.py",
     ".claude/settings.json",
     ".github/ISSUE_TEMPLATE/proposal.md",
