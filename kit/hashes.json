@@ -15437,11 +15437,11 @@
    "verbatim": {
     ".claude/agents/architect-review.md": ["a7a4f619500a33074d45296eef9c15bae21a895ff02bfed803cf7210068f2b34"],
     ".claude/agents/architect.md": ["571f67fe888b9a2e0fa29bee1cc9b76470ef03b03958d7fe0571ec36417f4ea6", "f1cd21a96643d0869123af7eced0190d619ff579aba836fbb5885da976c43190"],
-    ".claude/agents/conductor.md": ["fe1075ec2a5bf3ca1f0a26f7bb8940544981b7d3da1f5e7a4778abd581a87b6e"],
+    ".claude/agents/conductor.md": ["6da91437fba6bceeb950edf33cf049f62eaa828e7008a614c36d84f69055b679"],
     ".claude/agents/drift-auditor.md": ["4701366a94584822dbf2fd13b3baa4475424fed9d5c057b559a1c21b937d732c"],
     ".claude/agents/reviewer.md": ["49e339413571c3557e3ce5fbcaf10dc591aef050d6470402db9772e2dfb39f21"],
     ".claude/hooks/architect_guard.py": ["498be39997bcb0270f4bd3c665af7ed2117db13a561287b21683ca4284054740"],
-    ".claude/hooks/conductor_guard.py": ["7ec112a04e78e32a6b1e491652ca8a063e49f590151bd85c7eb6e32d3a7c9a48"],
+    ".claude/hooks/conductor_guard.py": ["591287e9be884b4eb6c5e732d969aeb05ab7a7add785d191ba469623a134d8a2"],
     ".claude/hooks/stop_check.py": ["30a2b9ec9a98f8f003bf1ceb1b422642015ad62fbce96ae13c4770f1180400a1"],
     ".claude/settings.json": ["b84a225e39447c9145539ff7b5eb4e8f3fb8a6a5931d95ac6f1e8fa32d493799"],
     ".github/ISSUE_TEMPLATE/proposal.md": ["977025c5f28045d1273d39031c892f09b22c193a2dbb94f1005920e2c1410c89"],

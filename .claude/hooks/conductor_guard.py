@@ -13,8 +13,9 @@ of the repository named by this checkout's origin remote (`-f` fields only); `da
 run of a pull request in a scratch worktree (SPEC-0030 rule 6, amendment 53):
 `git worktree add <scratch> <sha>` where the sha is on a branch of origin (a fork head is on none),
 `git worktree remove [--force] <scratch>`, and, only with the exact prefix
-`env -i PATH="$PATH" HOME="$HOME"` so that no token reaches the code, `make -C <scratch> test` or
-`governance` and `python3 -I <scratch>/scripts/agk/<name>.py ...`. A scratch directory is
+`env -i PATH="$PATH" HOME=<scratch>` (the run's own scratch directory, so that neither an
+environment token nor the home directory's stored credentials reach the code),
+`make -C <scratch> test` or `governance` and `python3 -I <scratch>/scripts/agk/<name>.py ...`. A scratch directory is
 `agk-conductor-<name>` directly in the system temp directory and outside the work tree. A POST
 to anything else, a PATCH, a PUT, a DELETE, any other script and any other `make` are denied. The
 judging of `git` and `gh api` is the architect's (`architect_guard.py`), which this file imports.
@@ -32,7 +33,7 @@ import tempfile
 
 from architect_guard import WRITE_TOOLS, gh_api_allowed, git_allowed, project_root, tokens_of
 
-ENV_PREFIX = 'env -i PATH="$PATH" HOME="$HOME" '
+ENV_PREFIX = 'env -i PATH="$PATH" HOME='
 SCRATCH_NAME = re.compile(r"agk-conductor-[A-Za-z0-9._-]+")
 SHA = re.compile(r"[0-9a-f]{7,40}")
 SCRIPT = re.compile(r"(\w+)\.py")
@@ -76,25 +77,25 @@ def on_origin_branch(sha: str) -> bool:
     )
 
 
-def run_allowed(words: list[str]) -> bool:
-    """`make -C <scratch> test|governance` or `python3 -I <scratch>/scripts/agk/<name>.py ...`."""
+def run_allowed(words: list[str], home: str) -> bool:
+    """`make -C <scratch> test|governance` or `python3 -I <scratch>/scripts/agk/<name>.py ...`,
+    where <scratch> is `home`, the HOME of the clean environment."""
     if words[0] == "make":
         return (
             len(words) == 4
             and words[1] == "-C"
             and words[3] in ("test", "governance")
-            and (exact_scratch(words[2]))
+            and words[2] == home
         )
     if words[0] == "python3" and len(words) > 2 and words[1] == "-I":
-        script = words[2]
-        head, name = os.path.split(script)
+        head, name = os.path.split(words[2])
         scripts, agk = os.path.split(head)
         scratch, scripts_dir = os.path.split(scripts)
         return (
             agk == "agk"
             and scripts_dir == "scripts"
             and bool(SCRIPT.fullmatch(name))
-            and exact_scratch(scratch)
+            and scratch == home
         )
     return False
 
@@ -121,7 +122,7 @@ def bash_allowed(command: object) -> bool:
     if not words:
         return False
     if clean:
-        return run_allowed(words)
+        return len(words) > 1 and exact_scratch(words[0]) and run_allowed(words[1:], words[0])
     if words[0] == "git":
         return git_judged(words)
     if words[0] == "gh":

@@ -147,7 +147,10 @@ def test_ac5_other_tools_pass_and_bad_input_is_refused(project):
 
 # --- bounded runs of a pull request in a scratch worktree (verdict on #175) ----------------------
 
-ENV = 'env -i PATH="$PATH" HOME="$HOME" '
+
+def env(home: object) -> str:
+    """The prefix of a bounded run: a clean environment with the run's scratch directory as HOME."""
+    return f'env -i PATH="$PATH" HOME={home} '
 
 
 class Work:
@@ -194,11 +197,12 @@ def work(tmp_path: Path) -> Work:
 def test_ac5_a_run_in_a_scratch_worktree_of_an_origin_head_is_allowed(work):
     """REQ-037 AC5"""
     s = work.scratch
+    E = env(s)
     assert work.bash(f"git worktree add {s} {work.feature}") is None
     assert work.bash(f"git worktree add {s} {work.feature[:9]}") is None
-    assert work.bash(f"{ENV}make -C {s} test") is None
-    assert work.bash(f"{ENV}make -C {s} governance") is None
-    assert work.bash(f"{ENV}python3 -I {s}/scripts/agk/check_adrs.py --base main") is None
+    assert work.bash(f"{E}make -C {s} test") is None
+    assert work.bash(f"{E}make -C {s} governance") is None
+    assert work.bash(f"{E}python3 -I {s}/scripts/agk/check_adrs.py --base main") is None
     assert work.bash(f"git worktree remove {s}") is None
     assert work.bash(f"git worktree remove --force {s}") is None
 
@@ -215,28 +219,37 @@ def test_ac5_a_head_that_is_on_no_origin_branch_is_refused(work):
 def test_ac5_a_run_needs_the_clean_environment_prefix_and_a_scratch_directory(work):
     """REQ-037 AC5"""
     s, root = work.scratch, work.root
+    E = env(s)
     for command in (
         f"make -C {s} test",
         f"env -i make -C {s} test",
         f'env -i PATH="$PATH" make -C {s} test',
         f'env PATH="$PATH" HOME="$HOME" make -C {s} test',
-        f"{ENV}GH_TOKEN=x make -C {s} test",
-        f"{ENV}make -C {s} deploy",
-        f"{ENV}make -C {s} test governance",
-        f"{ENV}make -C {root} test",
-        f"{ENV}make -C . test",
-        f"{ENV}make -C {root / 'agk-conductor-2'} test",
-        f"{ENV}make -C {work.tmp / 'other'} test",
-        f"{ENV}make -C {work.tmp / 'agk-conductor-1' / '..'} test",
-        f"{ENV}make test",
-        f"{ENV}python3 {s}/scripts/agk/check_adrs.py",
-        f"{ENV}python3 -I {s}/scripts/agk/../../x.py",
-        f"{ENV}python3 -I {s}/other/check_adrs.py",
-        f"{ENV}python3 -I scripts/agk/check_adrs.py",
-        f'{ENV}python3 -I -c "print(1)"',
-        f"{ENV}git status",
-        f"{ENV}make -C {s} test; rm x",
-        f"x {ENV}make -C {s} test",
+        f"{E}GH_TOKEN=x make -C {s} test",
+        f"{E}make -C {s} deploy",
+        f"{E}make -C {s} test governance",
+        f"{E}make -C {root} test",
+        f"{E}make -C . test",
+        f"{E}make -C {root / 'agk-conductor-2'} test",
+        f"{E}make -C {work.tmp / 'other'} test",
+        f"{E}make -C {work.tmp / 'agk-conductor-1' / '..'} test",
+        f"{E}make test",
+        f"{E}python3 {s}/scripts/agk/check_adrs.py",
+        f"{E}python3 -I {s}/scripts/agk/../../x.py",
+        f"{E}python3 -I {s}/other/check_adrs.py",
+        f"{E}python3 -I scripts/agk/check_adrs.py",
+        f'{E}python3 -I -c "print(1)"',
+        f"{E}git status",
+        f"{E}make -C {s} test; rm x",
+        f"x {E}make -C {s} test",
+        f'env -i PATH="$PATH" HOME="$HOME" make -C {s} test',
+        f'env -i PATH="$PATH" HOME="$HOME" python3 -I {s}/scripts/agk/check_adrs.py',
+        f"{env(work.tmp / 'agk-conductor-2')}make -C {s} test",
+        f"{env(root)}make -C {s} test",
+        f"{env(work.tmp)}make -C {s} test",
+        f"{env('~')}make -C {s} test",
+        f"{env(s)}{env(s)}make -C {s} test",
+        f'env -i PATH="$PATH" make -C {s} test',
         f"git worktree add {root / 'agk-conductor-3'} {work.feature}",
         f"git worktree add {work.tmp / 'scratch'} {work.feature}",
         f"git worktree remove {work.tmp / 'scratch'}",
@@ -273,5 +286,6 @@ def test_ac5_a_scratch_directory_that_links_into_the_work_tree_is_refused(work):
     """REQ-037 AC5"""
     work.tmp.joinpath("agk-conductor-9").symlink_to(work.root)
     assert work.write("Write", work.tmp / "agk-conductor-9" / "a.txt") is not None
-    run = f"{ENV}make -C {work.tmp / 'agk-conductor-9'} test"
+    link = work.tmp / "agk-conductor-9"
+    run = f"{env(link)}make -C {link} test"
     assert work.bash(run) is not None

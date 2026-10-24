@@ -79,7 +79,9 @@ def test_ac5_the_role_states_the_bounded_run_and_the_trust_rule():
     """REQ-037 AC5 (items 2, 4 and 5 of the verdict on #175)"""
     front, body = split()
     for phrase in (
-        'env -i PATH="$PATH" HOME="$HOME"',
+        'env -i PATH="$PATH" HOME=<scratch>',
+        "can read files by absolute path",
+        "not a sandbox",
         "git worktree add <scratch> <sha>",
         "make -C <scratch> test",
         "python3 -I <scratch>/scripts/agk/<name>.py",
