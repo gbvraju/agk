@@ -104,8 +104,14 @@ def comment(cid: int, login: str, body: str, when: str | None = None) -> dict:
     return {"id": cid, "user": {"login": login}, "body": body, "created_at": when or iso()}
 
 
-def pull(state: str = "open", merged: str | None = None, author: str = "builder") -> dict:
+def pull(
+    state: str = "open",
+    merged: str | None = None,
+    author: str = "builder",
+    mergeable: str = "clean",
+) -> dict:
     return {
+        "mergeable_state": mergeable,
         "state": state,
         "merged_at": merged,
         "user": {"login": author},
@@ -188,6 +194,29 @@ def test_ac2_watch_retries_a_failed_get_on_the_next_poll(proj, stub):
     watching(stub, [("FAIL", "FAIL"), (pull(merged="2026-10-24T10:00:00Z", state="closed"), [])])
     out = session(proj, stub, *WATCH)
     assert out.returncode == 0 and out.stdout.strip() == "merged #7"
+
+
+def test_ac2_watch_ends_with_one_line_when_the_pull_request_has_a_conflict(proj, stub):
+    """REQ-037 AC2 (the verdict on #169: a conflict is seen without a person noticing)"""
+    watching(stub, [(pull(mergeable="dirty"), [])])
+    out = session(proj, stub, *WATCH)
+    assert out.returncode == 0 and out.stdout.strip() == "conflict #7"
+
+
+@pytest.mark.parametrize("mergeable", ["clean", "blocked", "unknown", "behind", "unstable"])
+def test_ac2_watch_goes_on_for_every_other_mergeable_state(proj, stub, mergeable):
+    """REQ-037 AC2"""
+    watching(stub, [(pull(mergeable=mergeable), [])])
+    out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "0")
+    assert out.returncode == 3
+
+
+def test_ac2_watch_merged_ignores_a_conflict(proj, stub):
+    """REQ-037 AC2"""
+    other = f"repos/{REPO}/pulls/12"
+    stub.serve(other, pull(mergeable="dirty"))
+    out = session(proj, stub, "watch", "--merged", "12", "--interval", "0", "--timeout", "0")
+    assert out.returncode == 3
 
 
 def test_ac2_watch_with_a_timeout_and_no_event_exits_3(proj, stub):

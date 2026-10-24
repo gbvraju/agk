@@ -27,7 +27,7 @@ def test_ac1_agk_governance_runs_every_check():
     """REQ-010 AC1: rule 5."""
     out = make_n("agk-governance")
     for script in sorted((ROOT / "scripts" / "agk").glob("check_*.py")):
-        if script.name in ("check_pr_body.py", "check_review_report.py"):
+        if script.name in ("check_pr_body.py", "check_review_report.py", "check_brief.py"):
             continue  # these take a PR body or a report as input; not part of the local target
         if script.name == "check_release.py":
             continue  # kit-only: the workflow step `Release check` runs it where kit/agk-kit.mk is
