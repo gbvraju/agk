@@ -1,6 +1,6 @@
 # ADR-0088: the report states its counts (REQ-033, SPEC-0026), kit 0.50.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0087, ADR-0078
