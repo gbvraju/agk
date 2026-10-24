@@ -4,6 +4,7 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+- #170 vision: `/agk:vision` keeps the idea unchanged and the charter records ten answers (SPEC-0029 rule 4, REQ-036)
 - #169 session rules and `session.py`: `watch` ends on a verdict, a merge or a close, `next` takes the first free brief (REQ-037 rules 1 to 3 and 5)
 - #168 engines: `[engines]` in `agk.toml` and five `doctor` checks that report each engine as present, absent or missing (SPEC-0029 rules 1 to 3, REQ-036)
 
