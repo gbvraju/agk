@@ -30,6 +30,7 @@
     "scripts/agk/check_adrs.py",
     "scripts/agk/check_brief.py",
     "scripts/agk/check_build_state.py",
+    "scripts/agk/check_design.py",
     "scripts/agk/check_final_clearance.py",
     "scripts/agk/check_kit_tests.py",
     "scripts/agk/check_neutrality.py",

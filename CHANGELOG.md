@@ -4,6 +4,7 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+- #178 design: `/agk:design` writes the theme and a mockup folder from templates with four screenshots when a headless browser exists, and `check_design.py` is now a step of `make governance` and the workflow (SPEC-0029 rules 6, 7 and 9, REQ-036)
 - #174 design check: `check_design.py` fails a mockup with a script, an external request, a colour outside the token block or a contrast under 4.5:1, and reads a theme as not approved yet or at risk (SPEC-0029 rule 7, REQ-036)
 - #172 `check_brief.py` checks the shape of a brief, and `session.py watch` ends with `conflict #N` when the pull request conflicts with its base (REQ-037 rule 4 and the verdict on #169)
 - #173 stack: `/agk:stack` writes one Proposed ADR of two or three stack options with checked and judged practices, and `engines.py stack-check` checks its shape (SPEC-0029 rule 5, REQ-036)
