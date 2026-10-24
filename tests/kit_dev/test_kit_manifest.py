@@ -21,6 +21,7 @@ KIT_ONLY = {
     "scripts/agk/ruleset.py",
     "scripts/agk/playbook.py",
     "scripts/agk/engines.py",
+    "scripts/agk/check_design.py",
     "scripts/agk/shadow_count.py",
 }
 # Files under the law roots that belong to this repository only and are not installed in targets.
