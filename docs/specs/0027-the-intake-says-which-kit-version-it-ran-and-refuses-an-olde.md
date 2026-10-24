@@ -1,6 +1,6 @@
 # SPEC-0027: The intake says which kit version it ran and refuses an older one, and a question answered at review has a true form
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-034
 

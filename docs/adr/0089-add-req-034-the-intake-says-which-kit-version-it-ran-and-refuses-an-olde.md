@@ -1,6 +1,6 @@
 # ADR-0089: Add REQ-034: The intake names its kit version and the final check accepts review answers
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: SPEC-0027
