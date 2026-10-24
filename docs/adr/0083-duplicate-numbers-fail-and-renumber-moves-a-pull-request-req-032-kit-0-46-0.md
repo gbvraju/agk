@@ -1,6 +1,6 @@
 # ADR-0083: duplicate numbers fail and renumber moves a pull request's numbers (REQ-032 part a, SPEC-0025), kit 0.46.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0082, ADR-0081
