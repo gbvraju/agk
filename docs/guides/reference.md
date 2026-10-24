@@ -78,6 +78,18 @@ vendored file against the kit's copy. It reads GitHub with `gh api` (GET only) a
 prints `??` with the reason (`gh-unauthenticated`, `no-admin`, `no-kit-root`, ...), never `ok`; exit 0 only when every check is
 ok, 1 for an error finding, 4 for a warning or an unchecked item. See `docs/specs/0006-doctor.md` and ADR-0017.
 
+## Engines
+
+`[engines]` in `agk.toml` names, for each of `vision`, `stack`, `design` and `review`, a skill the session can see. A key that is
+absent means the kit's own template is used; the kit pins no engine (a commented example in the template of `agk.toml` shows the
+shape). The owner chooses once, and a change is a change of `agk.toml`, a protected path, so it needs an ADR in the same pull
+request that names it. An engine only drafts: its output is always written through the kit's template and passed through the
+kit's checks, and an engine never decides, never approves, and never edits a protected file by itself (SPEC-0029 rule 3).
+`agk doctor` reports each engine as `present` (the skill file exists in the project's `.claude/skills/`, in the user's
+`~/.claude/skills/` or in the plugin; only its existence is tested), `absent` (the template is used) or `missing` (named but
+not found), and names the setting, never the skill's name. A skill that another plugin provides is not read, so such a name is
+reported as unchecked (verify how Claude Code lists plugin skills).
+
 ## Upgrade
 
     python3 scripts/agk/upgrade.py TARGET [--dry-run]

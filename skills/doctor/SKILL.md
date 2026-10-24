@@ -6,7 +6,8 @@ argument-hint: "[OWNER/REPO]"
 
 # /agk:doctor
 
-Report the repository's ruleset, required check, placeholder team, drift-audit workflow, kit version and vendored files.
+Report the repository's ruleset, required check, placeholder team, drift-audit workflow, kit version, vendored files and
+`[engines]` (each engine present, absent or missing; an engine only drafts and never decides).
 The script reads GitHub with the user's own `gh` (GET only) and writes nothing. It prints `??` for a check it could not
 make, never `ok`.
 
