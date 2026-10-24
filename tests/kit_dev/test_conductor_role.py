@@ -80,6 +80,7 @@ def test_ac5_the_role_states_the_bounded_run_and_the_trust_rule():
     front, body = split()
     for phrase in (
         'env -i PATH="$PATH" HOME=<scratch>',
+        "AGK_BASE=<sha>",
         "can read files by absolute path",
         "not a sandbox",
         "git worktree add <scratch> <sha>",

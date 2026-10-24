@@ -14,7 +14,8 @@ run of a pull request in a scratch worktree (SPEC-0030 rule 6, amendment 53):
 `git worktree add <scratch> <sha>` where the sha is on a branch of origin (a fork head is on none),
 `git worktree remove [--force] <scratch>`, and, only with the exact prefix
 `env -i PATH="$PATH" HOME=<scratch>` (the run's own scratch directory, so that neither an
-environment token nor the home directory's stored credentials reach the code),
+environment token nor the home directory's stored credentials reach the code) and, optionally, one
+`AGK_BASE=<sha>` right after it, as CI sets it,
 `make -C <scratch> test` or `governance` and `python3 -I <scratch>/scripts/agk/<name>.py ...`.
 A scratch directory is `agk-conductor-<name>` directly in the system temp directory and outside
 the work tree. A POST
@@ -35,6 +36,7 @@ import tempfile
 from architect_guard import WRITE_TOOLS, gh_api_allowed, git_allowed, project_root, tokens_of
 
 ENV_PREFIX = 'env -i PATH="$PATH" HOME='
+BASE_VAR = "AGK_BASE="  # the one variable a run may add, a sha, as CI sets it
 SCRATCH_NAME = re.compile(r"agk-conductor-[A-Za-z0-9._-]+")
 SHA = re.compile(r"[0-9a-f]{7,40}")
 SCRIPT = re.compile(r"(\w+)\.py")
@@ -123,7 +125,12 @@ def bash_allowed(command: object) -> bool:
     if not words:
         return False
     if clean:
-        return len(words) > 1 and exact_scratch(words[0]) and run_allowed(words[1:], words[0])
+        home, rest = words[0], words[1:]
+        if rest and rest[0].startswith(BASE_VAR):  # one optional AGK_BASE=<sha>, nothing else
+            if not SHA.fullmatch(rest[0][len(BASE_VAR) :]):
+                return False
+            rest = rest[1:]
+        return bool(rest) and exact_scratch(home) and run_allowed(rest, home)
     if words[0] == "git":
         return git_judged(words)
     if words[0] == "gh":

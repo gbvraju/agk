@@ -216,6 +216,28 @@ def test_ac5_a_head_that_is_on_no_origin_branch_is_refused(work):
     assert work.bash(f"git worktree add {work.scratch} main") is not None
 
 
+def test_ac5_a_run_may_set_agk_base_to_a_sha_and_no_other_variable(work):
+    """REQ-037 AC5 (the verdict on 482448d: reproduce a step that inherits AGK_BASE)"""
+    s, sha = work.scratch, work.feature
+    for tail in (f"make -C {s} test", f"python3 -I {s}/scripts/agk/check_adrs.py"):
+        assert work.bash(f"{env(s)}AGK_BASE={sha} {tail}") is None, tail
+        assert work.bash(f"{env(s)}AGK_BASE={sha[:7]} {tail}") is None, tail
+    for bad in (
+        f"GH_TOKEN=x make -C {s} test",
+        f"AGK_BASE=main make -C {s} test",
+        f"AGK_BASE= make -C {s} test",
+        f"AGK_BASE={sha}x make -C {s} test",
+        f"AGK_BASE=abc make -C {s} test",
+        f"AGK_BASE={sha} GH_TOKEN=x make -C {s} test",
+        f"AGK_BASE={sha} AGK_BASE={sha} make -C {s} test",
+        f"GH_TOKEN=x AGK_BASE={sha} make -C {s} test",
+        f"AGK_BASE={sha}",
+        f"AGK_BASE={sha} git status",
+    ):
+        found = work.bash(f"{env(s)}{bad}")
+        assert found is not None and MARK in found["permissionDecisionReason"], bad
+
+
 def test_ac5_a_run_needs_the_clean_environment_prefix_and_a_scratch_directory(work):
     """REQ-037 AC5"""
     s, root = work.scratch, work.root
