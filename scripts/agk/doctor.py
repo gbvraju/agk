@@ -32,6 +32,12 @@ MARKERS = {
     "html": ("<!-- >>> agk -->", "<!-- <<< agk -->"),
 }
 ABSENT_AS_BLOCK = {".gitignore", ".gitattributes"}
+ENGINE_KEYS = ("vision", "stack", "design", "review")
+ENGINE_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
+ENGINE_FIX = (
+    "install the skill the setting names, or remove the setting so the kit's own template is used "
+    "(a change to agk.toml needs an ADR in the same pull request)"
+)
 LIST_LIMIT = 10
 
 # id -> (severity, text when ok, text when it fails, printed fix); the order is the report order.
@@ -180,6 +186,37 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "pr_mode in agk.toml is neither strict nor flow",
         "set pr_mode in agk.toml to strict or flow (a change needs an ADR)",
     ),
+    "engines-keys": (
+        "warn",
+        "[engines] in agk.toml has only the keys vision, stack, design and review",
+        "[engines] in agk.toml is not a table of the keys vision, stack, design and review",
+        "keep only those four keys, each the name of a skill (a change to agk.toml needs an ADR "
+        "in the same pull request)",
+    ),
+    "engine-vision": (
+        "warn",
+        "engines.vision is absent or names a skill the session can see",
+        "engines.vision is invalid, or names a skill the session cannot find",
+        ENGINE_FIX,
+    ),
+    "engine-stack": (
+        "warn",
+        "engines.stack is absent or names a skill the session can see",
+        "engines.stack is invalid, or names a skill the session cannot find",
+        ENGINE_FIX,
+    ),
+    "engine-design": (
+        "warn",
+        "engines.design is absent or names a skill the session can see",
+        "engines.design is invalid, or names a skill the session cannot find",
+        ENGINE_FIX,
+    ),
+    "engine-review": (
+        "warn",
+        "engines.review is absent or names a skill the session can see",
+        "engines.review is invalid, or names a skill the session cannot find",
+        ENGINE_FIX,
+    ),
 }
 RULESET_IDS = [
     "ruleset-enforcement",
@@ -200,6 +237,7 @@ HINTS = {
     "version-mismatch": "use a kit of the same version as version in agk.toml, or run /agk:upgrade",
     "offline": "check the network connection",
     "bad-response": "the input could not be read",
+    "plugin-unreadable": "only the project's and this plugin's skills are read; check it by hand",
     "no-ruleset": "no ruleset targets the default branch; fix ruleset-missing or ruleset-target",
 }
 
@@ -588,6 +626,56 @@ def kit_results(root: Path, kit_root: Path | None, config: dict) -> tuple[dict[s
     }, kit_version
 
 
+def seen_by_the_user(root: Path, name: str) -> bool:
+    """A skill of the project or of the user (`~/.claude/skills`): a file-existence check only."""
+    places = [root / ".claude" / "skills"]
+    try:
+        places.append(Path.home() / ".claude" / "skills")
+    except (RuntimeError, KeyError):
+        pass
+    return any((place / name / "SKILL.md").is_file() for place in places)
+
+
+def engine_results(root: Path, kit_root: Path | None, config: dict) -> dict[str, Result]:
+    """`[engines]` (SPEC-0029 rules 1 and 2): present, absent or missing; names the setting only.
+
+    A skill is seen when its `SKILL.md` exists in the project's `.claude/skills/<name>/`, in the
+    user's `~/.claude/skills/<name>/` or in the plugin's `skills/<name>/`; only the existence of
+    the file is tested, nothing is read or printed. Other plugins' skills are not read (verify).
+    """
+    table = config.get("engines", {})
+    out: dict[str, Result] = {}
+    if not isinstance(table, dict):
+        out["engines-keys"] = Result("fail")
+        table = {}
+    else:
+        extra = [k for k in table if k not in ENGINE_KEYS]
+        out["engines-keys"] = Result("fail" if extra else "ok")
+    for key in ENGINE_KEYS:
+        if key not in table:
+            out[f"engine-{key}"] = Result("ok", message=" (absent: the kit's own template is used)")
+            continue
+        name = table[key]
+        plugin, _, local = name.rpartition(":") if isinstance(name, str) else ("", "", "")
+        if not isinstance(name, str) or not ENGINE_NAME.match(local) or plugin not in ("", "agk"):
+            valid = isinstance(name, str) and ENGINE_NAME.match(local) and ":" in name
+            out[f"engine-{key}"] = (
+                Result("cannot-check", "plugin-unreadable")
+                if valid
+                else Result("fail", message=" (invalid)")
+            )
+            continue
+        if not plugin and seen_by_the_user(root, local):
+            out[f"engine-{key}"] = Result("ok", message=" (present)")
+        elif kit_root is None:
+            out[f"engine-{key}"] = Result("cannot-check", "no-kit-root")
+        elif (kit_root / "skills" / local / "SKILL.md").is_file():
+            out[f"engine-{key}"] = Result("ok", message=" (present)")
+        else:
+            out[f"engine-{key}"] = Result("fail", message=" (missing)")
+    return out
+
+
 def listing(paths: list[str]) -> str:
     shown = ", ".join(paths[:LIST_LIMIT])
     more = f" and {len(paths) - LIST_LIMIT} more" if len(paths) > LIST_LIMIT else ""
@@ -627,6 +715,7 @@ def run_checks(
     )
     kit, version = kit_results(root, kit_root, config)
     results.update(kit)
+    results.update(engine_results(root, kit_root, config))
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]
