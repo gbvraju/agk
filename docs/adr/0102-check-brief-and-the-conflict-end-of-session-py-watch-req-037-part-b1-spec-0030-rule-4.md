@@ -1,6 +1,6 @@
 # ADR-0102: `check_brief.py` and the conflict end of `session.py watch` (REQ-037 part b1, SPEC-0030 rule 4)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0100, ADR-0098
