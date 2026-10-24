@@ -6,7 +6,7 @@
 - Related: ADR-0082, ADR-0085
 - Requirements: REQ-032
 
-Protected classes: `.claude-plugin/`, `.github/`, `agk.mk`, `agk.toml`, `kit/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
+Protected classes: `.claude-plugin/`, `.github/`, `agk.mk`, `agk.toml`, `docs/requirements.md`, `kit/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -25,7 +25,8 @@ and each repository chooses `strict` or `flow` for how many pull requests a pers
    runner's temporary directory, and the `check_pr_mode` step. The permissions stay `contents`, `pull-requests` and `issues`, each `read`. A named pull request that cannot be read counts as not merged.
 4. **The doctor** gains the local check `pr-mode` (warn), whose `ok` message states the mode; the getting-started guide describes the mode and the `pr-mode` failure.
 5. Amendment 45 (`docs/runs/proposed-spec-amendments-45.md`) is applied to SPEC-0001, SPEC-0002, SPEC-0006 and SPEC-0007.
-6. **Kit 0.49.0**: the manifest `kit_version` and the new verbatim file, the hashes, the plugin version and `version` in this repository's `agk.toml`.
+6. **REQ-032 is `done`**: parts (a) (#141), (b) (#143), (c) first half (#144) and this second half are built; every criterion AC1 to AC8 has its `REQ-032 ACn` test marker (AC3 on the union test in `tests/kit_dev/test_kit_manifest.py`).
+7. **Kit 0.49.0**: the manifest `kit_version` and the new verbatim file, the hashes, the plugin version and `version` in this repository's `agk.toml`.
 
 ## Consequences
 

@@ -399,7 +399,7 @@ def _rules(text: str) -> list[str]:
 
 
 def test_adr0084_the_template_and_this_repository_mark_the_append_only_logs_merge_union():
-    """SPEC-0025 rule 3 (ADR-0084): the append-only logs merge by union."""
+    """REQ-032 AC3: SPEC-0025 rule 3 (ADR-0084): the append-only logs merge by union."""
     m = manifest()
     template = (KIT_ROOT / m["templates"][".gitattributes"]).read_text(encoding="utf-8")
     own = (KIT_ROOT / ".gitattributes").read_text(encoding="utf-8")
