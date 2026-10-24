@@ -14787,7 +14787,7 @@
     "scripts/agk/doctor.py": ["def3ffe373fa3db46c6ec39b2cff1625d07b2eaa6a38f3ed7ad7aee5892c19b9"],
     "scripts/agk/drift_audit.py": ["44f442953c1f2ac18f3365c52c22b10ecac68dfb572590753c7f7ad316b6b526"],
     "scripts/agk/facts.py": ["43519f8839a43c5fe5f03ea137f26cc0f518fc03a4ba164a072ae37ee9c4a9bc"],
-    "scripts/agk/metrics.py": ["0a68f4c61e1a3b5234bf056160f7ef2b27b42c3e5ac7996bd05125ce09ecbc6d"],
+    "scripts/agk/metrics.py": ["6e90d39016cf709533c74e1119a22dcd36c76cdbab1c74264fc0a86593df5f9f"],
     "scripts/agk/product_report.py": ["58bbd4b99eca17687872ed390462a8f2b7bda97af4ac18ce922f97d15753f208"],
     "scripts/agk/proof.py": ["968ae9f7533364c89c8b2ca56e155cae931228a11f71b20c51cb0fe5a3774c5b"],
     "scripts/agk/review_context.py": ["305acad34f17ac9f3dc52ed53942840ad8a8671dc0d59d3834cb50d259f34c1e"],

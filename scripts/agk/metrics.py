@@ -370,7 +370,7 @@ def covered_head(src: Any, head: str, comments: list[dict], authors: list[str] |
     for f in files:
         if f["filename"] == REQUIREMENTS:
             continue
-        lines = [ln for ln in str(f.get("patch") or "").splitlines() if ln[:1] in "+-"]
+        lines = [ln for ln in str(f.get("patch") or "").splitlines() if ln[:1] in ("+", "-")]
         wanted = [
             e
             for p, _, o, n in edits

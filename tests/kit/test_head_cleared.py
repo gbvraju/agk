@@ -84,6 +84,14 @@ def test_ac2_a_head_that_is_not_exactly_the_covered_commit_is_no(variant):
     assert state == "no"
 
 
+def test_ac1_a_blank_context_line_in_the_patch_still_reads_yes():
+    """REQ-028 AC1: rule 7 (an empty line is not a changed line: `ln[:1]` of "" is "")."""
+    patch = "@@ -3,4 +3,4 @@\n context\n\n-- Status: Proposed\n+- Status: Accepted\n\n more"
+    record = commit(files=[{"filename": ADR, "status": "modified", "patch": patch}])
+    state, _ = head_cleared([comment(fix_list(FINAL))], record)
+    assert state == "yes"
+
+
 def test_ac4_a_covered_fix_list_by_an_unlisted_author_clears_nothing():
     """REQ-028 AC4: rule 5 (a stranger's `Final:` lines are ignored)."""
     state, src = head_cleared([comment(fix_list(FINAL), login="stranger")], commit())
