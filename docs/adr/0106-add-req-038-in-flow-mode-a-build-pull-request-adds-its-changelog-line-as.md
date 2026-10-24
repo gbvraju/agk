@@ -1,6 +1,6 @@
 # ADR-0106: Add REQ-038: A flow-mode build adds its changelog line as a file of its own
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: SPEC-0031

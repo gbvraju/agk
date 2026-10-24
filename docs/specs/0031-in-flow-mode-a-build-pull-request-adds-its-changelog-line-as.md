@@ -1,6 +1,6 @@
 # SPEC-0031: In flow mode a build pull request adds its changelog line as its own file, and the release pull request gathers the files into the changelog
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-038
 
