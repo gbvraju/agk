@@ -1,6 +1,6 @@
 # ADR-0108: changelog fragments and the table of hashes left to the release (REQ-038, SPEC-0031)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0106, ADR-0096
