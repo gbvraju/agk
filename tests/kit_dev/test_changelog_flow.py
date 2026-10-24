@@ -45,40 +45,22 @@ def refresh(root: Path) -> None:
     )
 
 
-def test_ac1_a_flow_change_with_a_changelog_line_and_refreshed_hashes_passes(tmp_path):
-    """REQ-035 AC1: rule 2 (no bump; the row of the current version lists both digests)."""
+def test_ac1_a_flow_change_with_a_fragment_and_no_other_shared_file_passes(tmp_path):
+    """REQ-035 AC1: rule 2 as amended by SPEC-0031 (a fragment replaces the Unreleased line)."""
     root = flow_kit(tmp_path)
     (root / "a.txt").write_text("a changed in flow\n", encoding="utf-8")
-    add_line(root)
-    refresh(root)
+    (root / "changelog.d").mkdir()
+    (root / "changelog.d" / "the-build.md").write_text("- the a.txt change\n", encoding="utf-8")
     assert kit_hashes.problems(root, "HEAD") == []
-    rows = json.loads((root / "kit" / "hashes.json").read_text(encoding="utf-8"))["releases"]
-    assert len(rows["1.0.0"]["verbatim"]["a.txt"]) == 2
-    assert list(rows) == ["1.0.0"]
 
 
-def test_ac2_a_flow_change_without_a_changelog_line_fails_naming_the_rule_and_the_class(tmp_path):
-    """REQ-035 AC2: rule 2 (no silent change)."""
+def test_ac2_a_flow_change_without_a_fragment_fails_naming_the_rule_and_the_class(tmp_path):
+    """REQ-035 AC2: rule 2 as amended by SPEC-0031 (no silent change)."""
     root = flow_kit(tmp_path)
     (root / "a.txt").write_text("a changed silently\n", encoding="utf-8")
-    refresh(root)
     found = kit_hashes.problems(root, "HEAD")
-    assert any("flow mode" in f and "Unreleased" in f and "a.txt" in f for f in found), found
+    assert any("flow mode" in f and "changelog.d/" in f and "a.txt" in f for f in found), found
     assert not any("kit_version bump" in f for f in found)
-
-
-def test_ac2_a_line_that_is_not_new_or_not_a_pull_request_line_does_not_count(tmp_path):
-    """REQ-035 AC2: rule 2 (the line must be new against the base and name a pull request)."""
-    root = flow_kit(tmp_path)
-    text = (root / "CHANGELOG.md").read_text(encoding="utf-8")
-    (root / "CHANGELOG.md").write_text(text.replace("- #1 the start", "- #1 the start, reworded"))
-    (root / "a.txt").write_text("a changed\n", encoding="utf-8")
-    refresh(root)
-    assert any("Unreleased" in f for f in kit_hashes.problems(root, "HEAD"))
-    add_line(root, "a line without a number")
-    assert any("Unreleased" in f for f in kit_hashes.problems(root, "HEAD"))
-    add_line(root, "- #8 now a real line")
-    assert kit_hashes.problems(root, "HEAD") == []
 
 
 def test_ac2_a_change_to_nothing_the_installer_writes_needs_no_line(tmp_path):
@@ -116,20 +98,16 @@ def test_ac1_a_bumping_change_in_flow_mode_is_left_to_the_release_check(tmp_path
     assert kit_hashes.problems(root, "HEAD") == []
 
 
-def test_ac6_after_two_builds_the_regenerated_table_is_accepted(tmp_path):
-    """REQ-035 AC6: rule 6 (a collision in the table is resolved by `kit_hashes.py --write`)."""
+def test_ac6_after_two_builds_the_release_regenerates_the_table(tmp_path):
+    """REQ-035 AC6: rule 6 as amended by SPEC-0031 (builds leave the table; the release writes it)."""
     root = flow_kit(tmp_path)
-    (root / "a.txt").write_text("a by the first build\n", encoding="utf-8")
-    add_line(root, "- #7 the first build")
-    settle(root, "first build")
-    first_table = (root / "kit" / "hashes.json").read_text(encoding="utf-8")
-    (root / "a.txt").write_text("a by the second build\n", encoding="utf-8")
-    add_line(root, "- #8 the second build")
-    (root / "kit" / "hashes.json").write_text(
-        first_table, encoding="utf-8"
-    )  # stale after the merge
-    stale = kit_hashes.problems(root, "HEAD")
-    assert any("row 1.0.0 differs from the history" in f for f in stale), stale
+    for n, word in ((7, "first"), (8, "second")):
+        (root / "a.txt").write_text(f"a by the {word} build\n", encoding="utf-8")
+        (root / "changelog.d").mkdir(exist_ok=True)
+        (root / "changelog.d" / f"{word}.md").write_text(f"- the {word} build\n", encoding="utf-8")
+        git(root, "add", "-A")
+        git(root, "commit", "-q", "-m", f"{word} build (#{n})")
+    assert kit_hashes.problems(root, "HEAD") == []
     import subprocess
     import sys
 
@@ -141,6 +119,5 @@ def test_ac6_after_two_builds_the_regenerated_table_is_accepted(tmp_path):
         env=clean_env(),  # AGK_BASE (set in CI) names no commit of this temporary repository
     )
     assert done.returncode == 0 and done.stdout == "wrote kit/hashes.json\n", done.stdout
-    assert kit_hashes.problems(root, "HEAD") == []
     rows = json.loads((root / "kit" / "hashes.json").read_text(encoding="utf-8"))["releases"]
     assert len(rows["1.0.0"]["verbatim"]["a.txt"]) == 3

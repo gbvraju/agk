@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from changelog_fragments import FRAG_DIR, tree_fragments, well_formed
 from common import CheckError, merge_base, pr_mode, repo_root, resolve_base, run
 
 NAME = "kit-hashes"
@@ -190,31 +191,32 @@ def dump(table: dict) -> str:
 
 
 CHANGELOG = "CHANGELOG.md"
-UNRELEASED = "## Unreleased"
-CHANGELOG_LINE = re.compile(r"- #\d+ \S.*")
-
-
-def unreleased_lines(text: str) -> list[str]:
-    """The non-empty lines under `## Unreleased`, up to the next `## ` heading (SPEC-0028)."""
-    lines: list[str] = []
-    inside = False
-    for line in text.splitlines():
-        if line.startswith("## "):
-            inside = line.strip() == UNRELEASED
-        elif inside and line.strip():
-            lines.append(line.rstrip())
-    return lines
 
 
 def path_class(path: str) -> str:
     return path.rsplit("/", 1)[0] + "/" if "/" in path else path
 
 
-def flow_problems(root: Path, base: str) -> list[str]:
-    """In flow mode a change to an installed path needs a new Unreleased line (SPEC-0028 rule 2).
+def base_text(root: Path, base: str, path: str) -> str | None:
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "show", f"{base}:{path}"], cwd=root, capture_output=True
+    )
+    return proc.stdout.decode("utf-8", "replace") if proc.returncode == 0 else None
 
-    Compared with the base: the installed files whose hashes differ while `kit_version` is the
-    same. A raised version is a release pull request, which `check_release.py` checks."""
+
+def now_text(root: Path, path: str) -> str | None:
+    file = root / path
+    return file.read_text(encoding="utf-8", errors="replace") if file.is_file() else None
+
+
+def flow_problems(root: Path, base: str) -> list[str]:
+    """In flow mode a build adds one changelog fragment (SPEC-0031 rules 1, 2 and 6).
+
+    Compared with the base, for a pull request that leaves `kit_version` as it is: the build does
+    not edit `CHANGELOG.md` or `kit/hashes.json`; the installed files whose hashes differ (the
+    trigger of SPEC-0028 rule 2) need exactly one new fragment, and any new fragment is one line
+    `- <one-line change>`. A raised version is a release pull request, which `check_release.py`
+    checks, and its table is compared in full."""
     found = snapshot_commit(root, Blobs(root), base)
     if found is None:
         return []
@@ -225,19 +227,42 @@ def flow_problems(root: Path, base: str) -> list[str]:
     changed = sorted(
         path for name in MAPS for path, digest in now[name].items() if old[name].get(path) != digest
     )
-    if not changed:
-        return []
-    before = git_out(root, "show", f"{base}:{CHANGELOG}").decode() if has_file(root, base) else ""
-    file = root / CHANGELOG
-    after = file.read_text(encoding="utf-8") if file.is_file() else ""
-    seen = set(unreleased_lines(before))
-    if any(CHANGELOG_LINE.fullmatch(line) and line not in seen for line in unreleased_lines(after)):
-        return []
-    classes = ", ".join(sorted({path_class(path) for path in changed}))
-    return [
-        f"{classes}: in flow mode a change to an installed path needs a new line under "
-        f"{UNRELEASED} of {CHANGELOG}"
-    ]
+    problems: list[str] = []
+    if now_text(root, CHANGELOG) != base_text(root, base, CHANGELOG):
+        problems.append(
+            f"{CHANGELOG}: in flow mode a build does not edit the changelog; "
+            f"it adds one fragment under {FRAG_DIR}"
+        )
+    if now_text(root, TABLE) != base_text(root, base, TABLE):
+        problems.append(
+            f"{TABLE}: in flow mode a build does not edit the table; the release regenerates it"
+        )
+    before = set(tree_fragments(root, base))
+    folder = root / FRAG_DIR
+    here = (
+        sorted(f"{FRAG_DIR}{p.name}" for p in folder.iterdir() if p.is_file())
+        if folder.is_dir()
+        else []
+    )
+    added = [path for path in here if path not in before]
+    if before - set(here) or any(
+        now_text(root, path) != base_text(root, base, path) for path in before & set(here)
+    ):
+        problems.append(f"{FRAG_DIR}: a build does not remove or edit a fragment; the release does")
+    if changed and not added:
+        classes = ", ".join(sorted({path_class(path) for path in changed}))
+        problems.append(
+            f"{classes}: in flow mode a change to an installed path needs one fragment "
+            f"under {FRAG_DIR}"
+        )
+    if len(added) > 1:
+        problems.append(f"{FRAG_DIR}: in flow mode a build adds exactly one fragment")
+    if any(not well_formed(path, now_text(root, path) or "") for path in added):
+        problems.append(
+            f"{FRAG_DIR}: a fragment is one line `- <one-line change>` without a pull request "
+            "number, in a file named <slug>.md of [a-z0-9-]"
+        )
+    return problems
 
 
 def has_file(root: Path, base: str) -> bool:
@@ -264,6 +289,8 @@ def problems(root: Path, base: str | None = None) -> list[str]:
     fresh = build_table(root, base)
     current, _ = snapshot_worktree(root)
     found: list[str] = []
+    old_row = snapshot_commit(root, Blobs(root), base)
+    between = pr_mode(root) == "flow" and old_row is not None and old_row[0] == current
     if committed.get("table") != 1:
         found.append(f"{TABLE}: table version is not 1")
     if current not in committed.get("releases", {}):
@@ -273,6 +300,8 @@ def problems(root: Path, base: str | None = None) -> list[str]:
     ):
         have = committed.get("releases", {}).get(version)
         want = fresh["releases"].get(version)
+        if between and version == current and have is not None:
+            continue  # SPEC-0031 rule 6: the release regenerates the current row
         if have is None or want is None:
             found.append(
                 f"{TABLE}: row {version} {'is missing' if have is None else 'has no source'}"

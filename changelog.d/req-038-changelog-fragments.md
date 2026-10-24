@@ -1,0 +1,1 @@
+- flow mode: a build adds its changelog line as `changelog.d/<slug>.md` and leaves `CHANGELOG.md` and `kit/hashes.json` to the release, which gathers the fragments with `changelog_fragments.py gather` (SPEC-0031, REQ-038)
