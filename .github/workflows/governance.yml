@@ -52,6 +52,9 @@ jobs:
       - name: check_adrs
         if: ${{ !cancelled() }}
         run: python scripts/agk/check_adrs.py
+      - name: check_numbers
+        if: ${{ !cancelled() }}
+        run: python scripts/agk/check_numbers.py
       - name: check_specs
         if: ${{ !cancelled() }}
         run: python scripts/agk/check_specs.py --body "$RUNNER_TEMP/pr-body.md"

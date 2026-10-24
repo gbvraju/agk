@@ -86,7 +86,7 @@ facts quoted here were read on 2026-10-16 (`docs/runs/spec-0012-notes.md`).
     `check --final` (SPEC-0020) checks the approving last commit of an intake pull request instead; without `--final` C6 is as above.
 
     After `check`, the skill runs `make governance` (all checks of the repository). Both must pass; on a failure the skill shows the
-    message and may correct the file, at most three rounds, and then stops and reports. With SPEC-0021 the final-commit mode reads its status lines through `common.final_commit_problems`; what it accepts and prints does not change.
+    message and may correct the file, at most three rounds, and then stops and reports. With SPEC-0021 the final-commit mode reads its status lines through `common.final_commit_problems`; what it accepts and prints does not change. With SPEC-0025 the script also has `renumber <id>`, which moves a pull request's own requirement, spec and ADR to the next free numbers on the default branch.
 12. **What the checks cannot check.** That the criteria are the right ones; that they say what the person meant; that the negative
     case is the important one; that the spec's rules can be built. That is the person's merge, with review. The skill says so in its
     last message.
