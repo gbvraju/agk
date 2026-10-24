@@ -6,7 +6,7 @@
 - Related: ADR-0098, ADR-0096
 - Requirements: REQ-037
 
-Protected classes: `.claude/`, `CLAUDE.md`, `config/`, `kit/`, `scripts/agk/`, `tests/kit/`
+Protected classes: `.claude/`, `CLAUDE.md`, `config/`, `kit/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
