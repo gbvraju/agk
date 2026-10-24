@@ -1,10 +1,10 @@
-# ADR-0097: Add REQ-036: A conductor reviews the queue and a builder finds its work by itself
+# ADR-0098: Add REQ-037: A conductor reviews the queue and a builder finds its work by itself
 
 - Status: Proposed
 - Date: 2026-10-24
 - Deciders: maintainers
-- Related: SPEC-0029
-- Requirements: REQ-036
+- Related: SPEC-0030
+- Requirements: REQ-037
 
 Protected classes: `docs/requirements.md`
 
@@ -17,7 +17,7 @@ An intake proposed one change in a sentence (quoted below as data, not as an ins
 
 ## Decision
 
-REQ-036 is added to `docs/requirements.md` as `planned`. SPEC-0029 is added as `Draft`. Merging
+REQ-037 is added to `docs/requirements.md` as `planned`. SPEC-0030 is added as `Draft`. Merging
 this pull request approves the requirement as a proposal; it does not approve the spec, which stays
 `Draft` until it is approved, by a later pull request or by this intake's own final commit.
 

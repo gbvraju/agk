@@ -1,8 +1,8 @@
-# SPEC-0029: A conductor reviews the queue and a builder session finds its work and its verdicts by itself
+# SPEC-0030: A conductor reviews the queue and a builder session finds its work and its verdicts by itself
 
 - Status: Draft
 - Owner: reviewer group (a team from config/reviewers.yaml)
-- Requirements: REQ-036
+- Requirements: REQ-037
 
 Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
 Written by the intake of one sentence (SPEC-0012): "A conductor role reviews every pull request, posts the verdict and keeps the queue, and a builder session finds its next item and its verdicts by itself, through files and comments that a check can read." It is lane A, the conductor protocol, phase 1 of the conductor plan (issue #163). It is generic and project-agnostic: it holds for every project the kit is installed in and names no project and no reader. Evidence: the working rule of the sessions of this repository lived in messages, a builder waited by a hand-written shell loop, and a clearance that came two or more commits late passed unchecked (the residual of ADR-0079).
@@ -25,18 +25,18 @@ The maintainers gave 7 answers before it was written, in the brief of issue #163
 
 ## Tests
 
-- Rule 1: the rules file holds each rule and both role files point at it; REQ-036 AC1.
-- Rules 2 and 5: `watch` ends on a qualifying verdict, a merge and a close and not on the others; REQ-036 AC2.
-- Rule 3: `next` picks the first free brief, takes it with the one POST, skips the others with reasons, frees a stale take; REQ-036 AC3.
-- Rule 4: `check_brief.py` passes the good shape and fails each bad one without the network; REQ-036 AC4.
-- Rule 6: the conductor file and its guard hook; REQ-036 AC5.
-- Rule 7: the clearance fails two or more commits past the reviewed sha and passes the one commit after it; REQ-036 AC6.
-- Rule 8: the group, the kind, the schema number and the markdown; REQ-036 AC7.
-- Rule 9: the guide section; REQ-036 AC8.
+- Rule 1: the rules file holds each rule and both role files point at it; REQ-037 AC1.
+- Rules 2 and 5: `watch` ends on a qualifying verdict, a merge and a close and not on the others; REQ-037 AC2.
+- Rule 3: `next` picks the first free brief, takes it with the one POST, skips the others with reasons, frees a stale take; REQ-037 AC3.
+- Rule 4: `check_brief.py` passes the good shape and fails each bad one without the network; REQ-037 AC4.
+- Rule 6: the conductor file and its guard hook; REQ-037 AC5.
+- Rule 7: the clearance fails two or more commits past the reviewed sha and passes the one commit after it; REQ-037 AC6.
+- Rule 8: the group, the kind, the schema number and the markdown; REQ-037 AC7.
+- Rule 9: the guide section; REQ-037 AC8.
 
 ## Proof
 
-REQ-036 AC1: *a session reads one rule, not a message.* Rule 1. REQ-036 AC2 and AC3: *a builder finds its verdicts and its next item by itself.* Rules 2, 3 and 5. REQ-036 AC4: *the item has a shape a check can read.* Rule 4. REQ-036 AC5: *the conductor can only read and comment.* Rule 6. REQ-036 AC6: *a late clearance cannot pass.* Rule 7. REQ-036 AC7: *the maintainers see what is ready to merge.* Rule 8. REQ-036 AC8: *the loop is written down.* Rule 9. The first loop run this way, with the number of messages the maintainers still had to write, is recorded by the maintainers.
+REQ-037 AC1: *a session reads one rule, not a message.* Rule 1. REQ-037 AC2 and AC3: *a builder finds its verdicts and its next item by itself.* Rules 2, 3 and 5. REQ-037 AC4: *the item has a shape a check can read.* Rule 4. REQ-037 AC5: *the conductor can only read and comment.* Rule 6. REQ-037 AC6: *a late clearance cannot pass.* Rule 7. REQ-037 AC7: *the maintainers see what is ready to merge.* Rule 8. REQ-037 AC8: *the loop is written down.* Rule 9. The first loop run this way, with the number of messages the maintainers still had to write, is recorded by the maintainers.
 
 ## Residual
 
