@@ -232,7 +232,7 @@ Size: M
 
 3. **Start the conductor.** In another session that built nothing, accept the workspace trust dialog of the folder (the role's guard hook does not run without it) and start `claude --agent conductor`. It reviews every open pull request, runs its pre-verdict steps and posts one `Verdict:` comment on each; it edits no file and never merges.
 
-4. **Let the builder wait.** After every push the builder runs `python3 scripts/agk/session.py watch --pr <number>`. It ends with one line when a verdict by a listed author names the pull request's head, when the pull request is merged or closed, or when it has a conflict with its base. `watch --merged <number>` waits for another pull request's merge, for a `Depends-on`.
+4. **Let the builder wait.** After every push the builder runs `python3 scripts/agk/session.py watch --pr <number>`. It ends with one line when a verdict by a listed author names the pull request's head, when the pull request is merged or closed, or when it has a conflict with its base. `watch --merged <number>` waits for another pull request's merge, for a `Depends-on`. Start `watch` so that its end wakes the session: in Claude Code, as a background task (its end re-invokes the session); in another runtime, the equivalent that wakes the session when the command ends. Never in the foreground, and never detached with `&`: the session then sits idle after its verdict.
 
 5. **Merge from the report.** The weekly report and the inbox list, first under Needs you, the group **Ready to merge**: the open pull requests whose head carries a clearing verdict. Merging is yours; no session merges, tags or enables auto-merge.
 

@@ -28,6 +28,9 @@ def test_ac8_the_section_tells_how_to_start_each_role_and_where_to_merge_from():
         "agk-brief",
         "config/session-rules.md",
         "workspace trust dialog",
+        "as a background task",
+        "wakes the session",
+        "never detached with `&`",
     ):
         assert phrase in body, phrase
 
