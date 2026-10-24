@@ -1,6 +1,6 @@
 # SPEC-0030: A conductor reviews the queue and a builder session finds its work and its verdicts by itself
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-037
 

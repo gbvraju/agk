@@ -1,6 +1,6 @@
 # ADR-0098: Add REQ-037: A conductor reviews the queue and a builder finds its work by itself
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: SPEC-0030
