@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path

@@ -99,7 +99,7 @@ def test_ac1_a_bumping_change_in_flow_mode_is_left_to_the_release_check(tmp_path
 
 
 def test_ac6_after_two_builds_the_release_regenerates_the_table(tmp_path):
-    """REQ-035 AC6: rule 6 as amended by SPEC-0031 (builds leave the table; the release writes it)."""
+    """REQ-035 AC6: rule 6 as amended by SPEC-0031 (the release writes the table)."""
     root = flow_kit(tmp_path)
     for n, word in ((7, "first"), (8, "second")):
         (root / "a.txt").write_text(f"a by the {word} build\n", encoding="utf-8")

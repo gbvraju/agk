@@ -109,7 +109,9 @@ def test_ac3_two_fragments_fail(tmp_path):
 
 def test_ac3_a_fragment_that_is_not_one_line_without_a_number_fails(tmp_path):
     """REQ-038 AC3: rules 1 and 2 (`- <one-line change>`, no pull request number)."""
-    for i, bad in enumerate(("- #7 numbered\n", "- two\n- lines\n", "no dash\n", "- \n", "", "- x")):
+    for i, bad in enumerate(
+        ("- #7 numbered\n", "- two\n- lines\n", "no dash\n", "- \n", "", "- x")
+    ):
         (tmp_path / f"c{i}").mkdir()
         root = flow_kit(tmp_path / f"c{i}")
         (root / "a.txt").write_text("a changed\n", encoding="utf-8")
@@ -185,7 +187,9 @@ def test_ac7_the_table_of_a_release_is_regenerated_and_compared_in_full(tmp_path
 
 # --- the release script and its check (rules 3 and 4) ---------------------------------------------
 
-OLD = "# Changelog\n\n## Unreleased\n\n- #3 an old line\n\n## 1.0.0 (2026-01-01)\n\n- #1 the start\n"
+OLD = (
+    "# Changelog\n\n## Unreleased\n\n- #3 an old line\n\n## 1.0.0 (2026-01-01)\n\n- #1 the start\n"
+)
 
 
 def run(script: Path, root: Path, *args: str, base: str | None = None):
@@ -307,7 +311,10 @@ def test_ac5_a_line_not_moved_unchanged_or_dropped_fails(tmp_path):
     assert check(root).returncode == 1
     put(root, "CHANGELOG.md", text.replace("- #12 the change of 12\n", ""))
     assert check(root).returncode == 1
-    swapped = text.replace("- #9 the change of 9\n- #12 the change of 12\n", "- #12 the change of 12\n- #9 the change of 9\n")
+    swapped = text.replace(
+        "- #9 the change of 9\n- #12 the change of 12\n",
+        "- #12 the change of 12\n- #9 the change of 9\n",
+    )
     put(root, "CHANGELOG.md", swapped)
     assert check(root).returncode == 1
 
@@ -327,7 +334,8 @@ def test_ac5_a_fragment_without_a_readable_number_fails_the_release_check(tmp_pa
     commit_as(root, "a commit without a number")
     git(root, "switch", "-q", "-c", "release")
     (root / "changelog.d" / "odd.md").unlink()
-    put(root, "CHANGELOG.md", OLD.replace("## Unreleased\n", "## Unreleased\n\n## 1.1.0 (2026-10-25)\n"))
+    moved = OLD.replace("## Unreleased\n", "## Unreleased\n\n## 1.1.0 (2026-10-25)\n")
+    put(root, "CHANGELOG.md", moved)
     bump(root)
     proc = check(root)
     assert proc.returncode == 1 and "rule 4" in proc.stdout and FRAG in proc.stdout, proc.stdout
@@ -372,7 +380,8 @@ def test_ac7_the_adr_records_the_measurement_of_the_table():
 
 def test_ac1_the_guide_and_the_template_describe_the_fragment():
     """REQ-038 AC1 and AC4: rules 1 and 3 (the guide section and the template of the shape)."""
-    guide = " ".join(GUIDE.read_text(encoding="utf-8").split("## Developing the kit", 1)[1].split("\n## ", 1)[0].split())
+    section = GUIDE.read_text(encoding="utf-8").split("## Developing the kit", 1)[1]
+    guide = " ".join(section.split("\n## ", 1)[0].split())
     assert "`changelog.d/" in guide and "`- <one-line change>`" in guide
     assert "does not edit `CHANGELOG.md`" in guide and "does not edit `kit/hashes.json`" in guide
     assert "changelog_fragments.py gather" in guide
@@ -385,3 +394,41 @@ def test_ac1_this_repositorys_own_fragments_follow_rule_1():
     for path in sorted((KIT_ROOT / "changelog.d").glob("*.md")):
         assert re.fullmatch(r"[a-z0-9-]+\.md", path.name), path.name
         assert re.fullmatch(r"- (?!#\d+\b)\S[^\n]*\n", path.read_text(encoding="utf-8")), path.name
+
+
+def test_ac4_a_merge_commit_repository_reads_the_number_from_the_merge_subject(tmp_path):
+    """REQ-038 AC4: rule 3 (first-parent history; `Merge pull request #<n>` is read too)."""
+    root = release_repo(tmp_path, numbers=())
+    for n in (21, 20):
+        git(root, "switch", "-q", "-c", f"branch-{n}")
+        put(root, f"{FRAG}build-{n}.md", f"- the change of {n}\n")
+        commit_as(root, "a branch commit without a number")
+        git(root, "switch", "-q", "main")
+        git(
+            root, "merge", "-q", "--no-ff", f"branch-{n}", "-m", f"Merge pull request #{n} from o/b"
+        )
+    assert gather(root).returncode == 0
+    text = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "- #3 an old line\n- #20 the change of 20\n- #21 the change of 21\n" in text
+
+
+def test_ac5_the_release_check_reads_a_merge_commit_number_and_stops_when_neither_form(tmp_path):
+    """REQ-038 AC5: rule 4 (both forms accepted, a branch commit alone is not a number)."""
+    root = release_repo(tmp_path, numbers=())
+    git(root, "switch", "-q", "-c", "branch-30")
+    put(root, f"{FRAG}build-30.md", "- the change of 30\n")
+    commit_as(root, "a branch commit without a number")
+    git(root, "switch", "-q", "main")
+    git(root, "merge", "-q", "--no-ff", "branch-30", "-m", "Merge pull request #30 from o/b")
+    git(root, "switch", "-q", "-c", "release")
+    assert gather(root).returncode == 0
+    bump(root)
+    assert check(root).stdout == "ok release\n"
+    git(root, "switch", "-q", "main")
+    git(root, "switch", "-q", "-c", "branch-31")
+    put(root, f"{FRAG}build-31.md", "- the change of 31\n")
+    commit_as(root, "a branch commit without a number")
+    git(root, "switch", "-q", "main")
+    git(root, "merge", "-q", "--no-ff", "branch-31", "-m", "merged without a number")
+    proc = gather(root)
+    assert proc.returncode == 1 and FRAG in proc.stdout

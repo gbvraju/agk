@@ -7,7 +7,8 @@ In flow mode a build pull request adds one file `changelog.d/<slug>.md` holding 
 
 which moves the line of every committed fragment under a new heading `## V (<date>)` of
 `CHANGELOG.md`, in the order of the pull request numbers, each as `- #<n> <one-line change>`, and
-deletes the fragments. `<n>` is read from the subject (`(#<n>)`) of the commit that added the file.
+deletes the fragments. `<n>` is read on the first-parent history from the commit that added the
+file: a subject ending `(#<n>)` (squash merge) or starting `Merge pull request #<n>` (merge commit).
 The lines already under `## Unreleased` move first, unchanged. A fragment whose number cannot be
 read stops the script before it writes anything. Git and files only: no network, no model.
 """
@@ -28,7 +29,7 @@ CHANGELOG = "CHANGELOG.md"
 UNRELEASED = "## Unreleased"
 SLUG_FILE = re.compile(r"changelog\.d/[a-z0-9-]+\.md")
 LINE = re.compile(r"- (?!#\d+(?:\s|$))\S[^\n]*\n")
-PR_SUBJECT = re.compile(r"\(#(\d+)\)\s*$")
+PR_SUBJECT = re.compile(r"\(#(\d+)\)\s*$|^Merge pull request #(\d+)\b")
 VERSION = re.compile(r"\d+(?:\.\d+)*")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -45,11 +46,25 @@ def tree_fragments(root: Path, rev: str) -> list[str]:
 
 
 def pr_number(root: Path, rev: str, path: str) -> int | None:
-    """The number in `(#<n>)` at the end of the subject of the commit that added `path`."""
-    out = git(root, "log", "--diff-filter=A", "--format=%s", rev, "--", path, check=False)
+    """The pull request number of the commit that added `path` on the first-parent history.
+
+    A squash merge ends its subject with `(#<n>)`; a merge commit starts it with
+    `Merge pull request #<n>`. Anything else is not readable."""
+    out = git(
+        root,
+        "log",
+        "-m",
+        "--first-parent",
+        "--diff-filter=A",
+        "--format=%s",
+        rev,
+        "--",
+        path,
+        check=False,
+    )
     subjects = [line for line in out.splitlines() if line.strip()]
     match = PR_SUBJECT.search(subjects[-1]) if subjects else None
-    return int(match.group(1)) if match else None
+    return int(match.group(1) or match.group(2)) if match else None
 
 
 def gathered_lines(root: Path, rev: str, rule: str) -> tuple[list[str], list[str]]:
