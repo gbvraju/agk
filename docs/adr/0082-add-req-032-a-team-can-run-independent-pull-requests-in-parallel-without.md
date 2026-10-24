@@ -1,6 +1,6 @@
 # ADR-0082: Add REQ-032: Teams phase 1: independent pull requests run in parallel without collisions
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: SPEC-0025
