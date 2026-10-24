@@ -1,0 +1,8 @@
+# Proposed spec amendments 54 (SPEC-0028; REQ-038)
+
+Date: 2026-10-24 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). Applied by ADR-0108. The path: `docs/specs/0028-in-flow-mode-a-kit-build-pull-request-does-not-bump-the-vers.md`. The number 54 is used because amendment 53 is held by open #175.
+
+1. **SPEC-0028 rule 2, the build adds a fragment.** In flow mode the changelog line of a build pull request is the file `changelog.d/<slug>.md` of SPEC-0031 rule 1, not a line under `## Unreleased` of `CHANGELOG.md`, and the build leaves `kit/hashes.json` as it is: `kit_hashes.py` fails a build that edits either file, or that changes a file the installer writes without adding exactly one fragment (SPEC-0031 rules 2 and 6). The row of the current version in the table is not compared between releases.
+2. **SPEC-0028 rule 4, the release gathers the fragments.** The release pull request also deletes the fragments, and `CHANGELOG.md` gains, under the new heading, the lines already under `## Unreleased`, unchanged and in order, then the line of each fragment as `- #<n> <one-line change>` in the order of the pull request numbers (SPEC-0031 rule 3). The release regenerates `kit/hashes.json` with `python3 scripts/agk/kit_hashes.py --write`.
+3. **SPEC-0028 rule 5, the release check.** `check_release.py` also accepts the deletion of a fragment as a release file and fails a fragment left, added or edited, and a fragment whose pull request number cannot be read (SPEC-0031 rule 4).
+4. **SPEC-0028 rule 6, collisions.** A build no longer collides on `CHANGELOG.md` or `kit/hashes.json`; the `kit_hashes.py --write` command belongs to the release.
