@@ -1,6 +1,6 @@
 # ADR-0085: a verdict by the pull request's own author does not count (REQ-032 part c, the author rule, SPEC-0025 rule 4), kit 0.48.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0082, ADR-0083, ADR-0084
