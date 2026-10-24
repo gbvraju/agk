@@ -27,7 +27,6 @@ bullet. The K3 target is 2026-11-30 and the K4 target is 2026-12-31 (ADR-0015); 
 - docs/specs/0003-reviewer-agent.md 2026-10-14 | no inline review comments in K2; one advisory comment at most | (due 2026-11-30) | open
 - docs/specs/0004-drift-audit.md 2026-10-14 | the model summary is not in the first implementation (K3) | (due 2026-11-30) | open
 - docs/specs/0004-drift-audit.md 2026-10-14 | scheduled-workflow behaviour (jitter, the period after which GitHub may disable schedules) is (verify) against current documentation | (due 2026-11-15) | open
-- docs/adr/0012-drift-audit.md 2026-10-15 | workflow token label creation (verify on first live run) | (due 2026-10-22) | open
 - docs/runs/shadow-review-summary.md 2026-10-15 | reviewer effectiveness: 0 of 3 human findings caught in each of shadow reviews 2 and 3; measure again and improve | (due 2026-11-30) | open
 - docs/runs/plugin-live-proof.md 2026-10-16 | a doctor `warn` check for the repository's Pull requests feature turned off (a comment on a pull request was refused with "Pull requests are disabled" while the repository was otherwise healthy) | (due 2026-11-30) | open
 - docs/runs/plugin-live-proof.md 2026-10-16 | a drift-audit check that every tag matches `vX.Y.Z` (lowercase); a tag `V0.10.0` existed beside `v0.10.0` | (due 2026-11-30) | open
@@ -98,3 +97,4 @@ bullet. The K3 target is 2026-11-30 and the K4 target is 2026-12-31 (ADR-0015); 
 | docs/specs/0001-agk-init.md | a target with `pyproject.toml`, `Makefile`, `CLAUDE.md` or `.gitignore` is refused until K2 `agk adopt` | adopt exists (ADR-0008) |
 | docs/runs/product-report-live-1.md | the Proven line prints the proof reason next to not-proven (e.g. red-on-head) | ADR-0036: the proof workflow names carry the reason, the facts carry `proof_reason`, the Proven line prints it |
 | docs/adr/0029-inbox-and-report-renderer.md | the facts carry a path for each spec and ADR so inbox lines link the file | ADR-0036: `path` in the facts; the inbox links the file |
+| docs/adr/0012-drift-audit.md | workflow token label creation (verify on first live run) | the workflow token creates the label: `docs/runs/product-report-live-1.md` records that `agk-product-report` did not exist and the workflow created it (issue #68, 2026-10-17, `github-actions[bot]`), and the drift audit uses the same `gh label create` step (`.github/workflows/drift-audit.yml`) and filed #150 with `agk-drift-audit` on 2026-10-24 |
