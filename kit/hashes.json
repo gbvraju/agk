@@ -15436,7 +15436,7 @@
    "commits": ["0015eda1d6f8572162b2faa1a3ca39c1c121e0e3"],
    "verbatim": {
     ".claude/agents/architect-review.md": ["a7a4f619500a33074d45296eef9c15bae21a895ff02bfed803cf7210068f2b34"],
-    ".claude/agents/architect.md": ["571f67fe888b9a2e0fa29bee1cc9b76470ef03b03958d7fe0571ec36417f4ea6"],
+    ".claude/agents/architect.md": ["571f67fe888b9a2e0fa29bee1cc9b76470ef03b03958d7fe0571ec36417f4ea6", "f1cd21a96643d0869123af7eced0190d619ff579aba836fbb5885da976c43190"],
     ".claude/agents/drift-auditor.md": ["4701366a94584822dbf2fd13b3baa4475424fed9d5c057b559a1c21b937d732c"],
     ".claude/agents/reviewer.md": ["49e339413571c3557e3ce5fbcaf10dc591aef050d6470402db9772e2dfb39f21"],
     ".claude/hooks/architect_guard.py": ["498be39997bcb0270f4bd3c665af7ed2117db13a561287b21683ca4284054740"],
@@ -15452,10 +15452,11 @@
     ".github/workflows/product-report.yml": ["1ff1eb6086684f2421e8c081be9fd6feba213d78c8cc264ec49f18858ea3da51"],
     ".github/workflows/proof.yml": ["135d86a11158b57a953f24fa19f307d0f42410d38fa6ecb0f7cb406eea2f08ef"],
     ".gitignore": ["b660acc8af7c84de900b171daa54060b3a38443ae177e830873abb1249cdc2d3"],
-    "CLAUDE.md": ["f5d6c27281f165caf5e7871073ffb4a52cafc655ba69269e664f6a22570310bb"],
+    "CLAUDE.md": ["f5d6c27281f165caf5e7871073ffb4a52cafc655ba69269e664f6a22570310bb", "27b81a9c087c15bdb5599e7958601f275c652f92e154300da8972b8d6e1327b3"],
     "Makefile": ["4276befc702ec87314e48f985f437ef322f3c519489d41c9fb1c4d310923da8e"],
     "agk.mk": ["4a7350a967df24b3aa1c533fdb482a5c5ba6b54b88edbdffd4f8ac2334a00714"],
     "config/review-checklist.md": ["4c1f08cdb0f597cad2c5d298e409473381f7bf8a5642c5f090744a78ffc8523c"],
+    "config/session-rules.md": ["2ced52fa67ab4e6345c49f8a090f46f80d5e320bbb6344072e76361fd136453a"],
     "constitution/principles.md": ["ce64dd08dc6964095260404cd23d65f05c26776fab9fa7ffacddb852facf7169"],
     "docs/adr/TEMPLATE.md": ["f8dab6f1061dc7a703756431cb5d4ffed9127156281134547aaa7c35f292af94"],
     "docs/briefs/TEMPLATE.md": ["21070cc6e108df72944c39a6b33e42a89a9bd99993ced50ccd2e9f7fd312ab0b"],
@@ -15482,13 +15483,14 @@
     "scripts/agk/proof.py": ["968ae9f7533364c89c8b2ca56e155cae931228a11f71b20c51cb0fe5a3774c5b"],
     "scripts/agk/review_context.py": ["305acad34f17ac9f3dc52ed53942840ad8a8671dc0d59d3834cb50d259f34c1e"],
     "scripts/agk/reviewers.py": ["edc5ca678288e1960ac7c7ce9298365294fe4b3ab4cc1fd1431d1dc7b1300660"],
+    "scripts/agk/session.py": ["3ca1ca6fce243028ee0e9588d93627edf5bf6a4e47897c4c1dab4e5f183a1536"],
     "scripts/agk/traceability.py": ["6147369ab65c05787132467868405d9d2f308eec23ca700236a8f4dec8d4811c"]
    },
    "blocks": {
     ".gitattributes": ["2e377f4c642d0533ed1ccafc62afd887afec370ae7802e880ea7a4cfbc32abf6"],
     ".github/PULL_REQUEST_TEMPLATE.md": ["3af1cf1fc81aa65346d3db1f1e45e5741f2151b3145ee7aeeafdbb61ce2435cb"],
     ".gitignore": ["b660acc8af7c84de900b171daa54060b3a38443ae177e830873abb1249cdc2d3"],
-    "CLAUDE.md": ["f5d6c27281f165caf5e7871073ffb4a52cafc655ba69269e664f6a22570310bb"]
+    "CLAUDE.md": ["f5d6c27281f165caf5e7871073ffb4a52cafc655ba69269e664f6a22570310bb", "27b81a9c087c15bdb5599e7958601f275c652f92e154300da8972b8d6e1327b3"]
    },
    "templates": {
     "kit/templates/adr-0001-adopt.md": ["cca680f312a23ca3594f17ff7a7d38472ad14a144e0f14b3ba64f97d5bc33fa1"],

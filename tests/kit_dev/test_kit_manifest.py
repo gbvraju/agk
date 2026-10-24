@@ -35,6 +35,7 @@ SINGLES = {
     "docs/specs/TEMPLATE.md",
     "docs/briefs/TEMPLATE.md",
     "config/review-checklist.md",
+    "config/session-rules.md",
 }
 FORBIDDEN = [r"gbvraju", r"day-\d", r"\bK[0-4]\b", r"PR #\d+", r"Q-K\d"]
 ALLOWED_VARS = {
