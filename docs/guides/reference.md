@@ -103,6 +103,18 @@ only, enforced by review). The architect accepts one option, and the ADR then lo
 ADR with another number of options, an option without trade-offs or practices, a practice that is not marked, or a lock that does not
 name exactly one option.
 
+## Design check
+
+    python3 scripts/agk/check_design.py [--root DIR]
+
+Kit-only (run from the plugin). It reads `docs/design/theme.md` and the mockup folders `docs/design/mockups/<date>-<name>/` and fails, naming the
+rule and the path and never a value, on: a script or an event handler, an external request or a loaded resource, a colour that is not a token
+(every colour of a mockup is a `var(--token)`), tokens that are not one block with a light and a dark set, a contrast under 4.5:1 (computed from
+the hex tokens in both modes, for the pairs the theme lists under `## Contrast`), a brand value with no `source:`, and an evidence line that
+points to no mockup folder. Two things it prints without failing: `design: the theme is not approved yet` when the evidence folder's `README.md`
+has no line `Approved by <name> on <YYYY-MM-DD>`, and `at risk design: placeholder brand` when a brand value is still a `[bracketed]` placeholder
+(SPEC-0029 rule 7). The files it reads are written by the design step (a later part of the same requirement) or by hand.
+
 ## Upgrade
 
     python3 scripts/agk/upgrade.py TARGET [--dry-run]
