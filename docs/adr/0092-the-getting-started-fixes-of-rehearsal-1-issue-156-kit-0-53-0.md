@@ -1,6 +1,6 @@
 # ADR-0092: the getting-started fixes of rehearsal 1 (issue #156), kit 0.53.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0091
