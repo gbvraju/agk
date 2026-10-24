@@ -168,7 +168,7 @@ def brief_problems(body: str | None) -> list[str]:
     if len(sentences) != 1:
         problems.append("rule 4: exactly one line Sentence: with the sentence in quotation marks")
     elif not 1 <= len(sentences[0].group(1)) <= 300:
-        problems.append("rule 4: the sentence is not 1 to 300 characters")
+        problems.append("rule 4: the Sentence is not 1 to 300 characters")
     heads = [i for i, x in enumerate(lines) if x.startswith("Answers") and x.rstrip().endswith(":")]
     if len(heads) != 1:
         problems.append("rule 4: exactly one line that starts Answers and ends with a colon")
