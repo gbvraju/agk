@@ -433,6 +433,7 @@ def pull_record(src: Any, item: dict, authors: list[str] | None = None) -> dict:
     files = get_list(src, f"files-{number}", f"repos/{{repo}}/pulls/{number}/files")
     comments = get_list(src, f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
     commits = get_list(src, f"commits-{number}", f"repos/{{repo}}/pulls/{number}/commits")
+    authors = metrics.counted_authors(authors, metrics.author_of(item))
     merged = bool(item.get("merged_at"))
     size, expected = parse_estimate(item["body"]) if "body" in item else (UNKNOWN, UNKNOWN)
     proof = proof_of(src, head) if head else (UNKNOWN, UNKNOWN)
