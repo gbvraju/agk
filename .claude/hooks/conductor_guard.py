@@ -6,34 +6,124 @@ guard): the hook receives JSON on stdin with `tool_name` and `tool_input`. To de
 {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
 "permissionDecisionReason": ...}} and exits 0; to allow, it prints nothing and exits 0.
 
-Denies `Edit`, `Write`, `MultiEdit` and `NotebookEdit` everywhere, and `Bash` unless the command is
-a read-only `git` command, `gh api` with `--method GET` or no method, the one `gh api --method POST`
-of a comment on an issue or pull request of the repository named by this checkout's origin remote
-(`-f` fields only), or `date -u`. A POST to anything else, a PATCH, a PUT, a DELETE, a script and
-`make` are denied. The judging of `git` and `gh api` is the architect's (`architect_guard.py`),
-which this file imports. The message names the rule, never the command or the path. Standard
-library only; no network.
+Denies `Edit`, `MultiEdit` and `NotebookEdit` everywhere, `Write` outside a scratch directory, and
+`Bash` unless the command is one of: a read-only `git` command; `git fetch origin`; `gh api` with
+`--method GET` or no method; the one `gh api --method POST` of a comment on an issue or pull request
+of the repository named by this checkout's origin remote (`-f` fields only); `date -u`; or a bounded
+run of a pull request in a scratch worktree (SPEC-0030 rule 6, amendment 53):
+`git worktree add <scratch> <sha>` where the sha is on a branch of origin (a fork head is on none),
+`git worktree remove [--force] <scratch>`, and, only with the exact prefix
+`env -i PATH="$PATH" HOME="$HOME"` so that no token reaches the code, `make -C <scratch> test` or
+`governance` and `python3 -I <scratch>/scripts/agk/<name>.py ...`. A scratch directory is
+`agk-conductor-<name>` directly in the system temp directory and outside the work tree. A POST
+to anything else, a PATCH, a PUT, a DELETE, any other script and any other `make` are denied. The
+judging of `git` and `gh api` is the architect's (`architect_guard.py`), which this file imports.
+The message names the rule, never the command or the path. Standard library only; no network.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import re
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tempfile
 
-from architect_guard import WRITE_TOOLS, gh_api_allowed, git_allowed, tokens_of
+from architect_guard import WRITE_TOOLS, gh_api_allowed, git_allowed, project_root, tokens_of
 
-WRITE_RULE = "conductor guard rule 6: the conductor writes no file"
+ENV_PREFIX = 'env -i PATH="$PATH" HOME="$HOME" '
+SCRATCH_NAME = re.compile(r"agk-conductor-[A-Za-z0-9._-]+")
+SHA = re.compile(r"[0-9a-f]{7,40}")
+SCRIPT = re.compile(r"(\w+)\.py")
+WRITE_RULE = "conductor guard rule 6: the conductor writes only in a scratch directory"
 BASH_RULE = "conductor guard rule 6: this command is not on the conductor's list"
+
+
+def scratch_dir(path: str) -> str | None:
+    """The real path of a scratch directory (or of a path inside one), else None."""
+    if not path or "\0" in path or not os.path.isabs(path):
+        return None
+    real = os.path.realpath(path)
+    temp = os.path.realpath(tempfile.gettempdir())
+    rel = os.path.relpath(real, temp)
+    top = rel.split(os.sep, 1)[0]
+    root = os.path.realpath(project_root())
+    inside = real == root or real.startswith(root + os.sep)
+    if rel.startswith("..") or not SCRATCH_NAME.fullmatch(top) or inside:
+        return None
+    return os.path.join(temp, top)
+
+
+def exact_scratch(path: str) -> bool:
+    """A scratch directory itself, with no `..` or link between it and the temp directory."""
+    found = scratch_dir(path)
+    return found is not None and os.path.normpath(path) == found
+
+
+def on_origin_branch(sha: str) -> bool:
+    """The sha is contained in a remote-tracking branch of origin; a fork's head is in none."""
+    if not SHA.fullmatch(sha):
+        return False
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "-C", project_root(), "branch", "-r", "--contains", sha, "--format=%(refname)"],
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode == 0 and any(
+        line.startswith("refs/remotes/origin/") and not line.endswith("/HEAD")
+        for line in proc.stdout.splitlines()
+    )
+
+
+def run_allowed(words: list[str]) -> bool:
+    """`make -C <scratch> test|governance` or `python3 -I <scratch>/scripts/agk/<name>.py ...`."""
+    if words[0] == "make":
+        return (
+            len(words) == 4
+            and words[1] == "-C"
+            and words[3] in ("test", "governance")
+            and (exact_scratch(words[2]))
+        )
+    if words[0] == "python3" and len(words) > 2 and words[1] == "-I":
+        script = words[2]
+        head, name = os.path.split(script)
+        scripts, agk = os.path.split(head)
+        scratch, scripts_dir = os.path.split(scripts)
+        return (
+            agk == "agk"
+            and scripts_dir == "scripts"
+            and bool(SCRIPT.fullmatch(name))
+            and exact_scratch(scratch)
+        )
+    return False
+
+
+def git_judged(words: list[str]) -> bool:
+    """`git fetch origin`, the scratch worktree commands, or a read-only `git` command."""
+    if words[1:] == ["fetch", "origin"]:
+        return True
+    if len(words) > 2 and words[1] == "worktree":
+        rest = words[2:]
+        if len(rest) == 3 and rest[0] == "add":
+            return exact_scratch(rest[1]) and on_origin_branch(rest[2])
+        if rest[:1] == ["remove"] and len(rest) in (2, 3):
+            return exact_scratch(rest[-1]) and rest[1:-1] in ([], ["--force"])
+        return False
+    return git_allowed(words)
 
 
 def bash_allowed(command: object) -> bool:
     if not isinstance(command, str):
         return False
-    words = tokens_of(command)
+    clean = command.startswith(ENV_PREFIX)
+    words = tokens_of(command[len(ENV_PREFIX) :] if clean else command)
     if not words:
         return False
+    if clean:
+        return run_allowed(words)
     if words[0] == "git":
-        return git_allowed(words)
+        return git_judged(words)
     if words[0] == "gh":
         return len(words) > 2 and words[1] == "api" and gh_api_allowed(words)
     if words[0] == "date":
@@ -47,7 +137,9 @@ def decide(payload: dict) -> str | None:
     data = payload.get("tool_input")
     data = data if isinstance(data, dict) else {}
     if tool in WRITE_TOOLS:
-        return WRITE_RULE
+        target = data.get("file_path")
+        ok = tool == "Write" and isinstance(target, str) and scratch_dir(target) is not None
+        return None if ok else WRITE_RULE
     if tool == "Bash":
         return None if bash_allowed(data.get("command")) else BASH_RULE
     return None
