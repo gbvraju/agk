@@ -11,7 +11,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from conftest import SCRIPTS
 
 STUB = '''#!/usr/bin/env python3
 """A gh stub: serves fixtures/<endpoint>.json (or .N.json for the Nth call), logs every call."""
@@ -39,6 +38,8 @@ for candidate in (name + "." + method + "." + str(n), name + "." + method):
         sys.exit(0)
 sys.exit(1)
 '''
+
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 
 
 def clean_env() -> dict[str, str]:
