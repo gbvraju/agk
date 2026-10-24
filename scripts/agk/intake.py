@@ -6,6 +6,7 @@ Usage:
         [--date D]
     python3 intake.py check [--final] [--base REF] [--root DIR]
     python3 intake.py next-steps [--base REF] [--root DIR] [--date D]
+    python3 intake.py renumber ID [--ref REF] [--root DIR]
 
 Kit-only (never installed): the plugin runs it from its own root against the repository in `--root`
 (default `.`). Standard library and the installed `common.py` only; no network (the skill fetches
@@ -26,6 +27,7 @@ from pathlib import Path
 from check_adrs import status_of as adr_status
 from check_specs import status_of as spec_status
 from common import (
+    NUM_FILE,
     CheckError,
     changed_files,
     final_commit_problems,
@@ -39,7 +41,7 @@ from common import (
     show,
 )
 
-USAGE = "usage: intake.py ids|stub|check|next-steps ... (see the module text)"
+USAGE = "usage: intake.py ids|stub|check|next-steps|renumber ... (see the module text)"
 MAX_SENTENCE = 300
 MAX_TITLE = 80
 MAX_CRITERIA = 8
@@ -368,6 +370,110 @@ def cmd_check(root: Path, base: str | None) -> int:
     return 1 if problems else 0
 
 
+# --- renumbering (SPEC-0025 rule 2) -----------------------------------------------------------
+
+OWN_ID = re.compile(r"REQ-\d{3,}|SPEC-\d{4}|ADR-\d{4}")
+REFERENCE = re.compile(
+    r"\b(?P<req>REQ)-(?P<rn>\d{3,})\b|(?<![A-Za-z0-9])(?P<lreq>req)-(?P<ln>\d{3,})(?![0-9])"
+    r"|\b(?P<spec>SPEC)-(?P<sn>\d{4})\b|\b(?P<adr>ADR)-(?P<an>\d{4})\b"
+    r"|\bQ-S(?P<qn>\d{4})-(?P<qi>\d+)\b"
+    r"|docs/(?P<folder>specs|adr)/(?P<pn>\d{4})-"
+)
+
+
+def own_numbers(root: Path, mb: str) -> dict[str, list[int]]:
+    """The numbers the pull request added: requirements, specs and ADRs, ascending."""
+    before = {r["id"] for r in parse_requirements(show(root, mb, REQ_FILE) or "")}
+    now = parse_requirements((root / REQ_FILE).read_text(encoding="utf-8"))
+    found = {"req": sorted(int(r["id"][4:]) for r in now if r["id"] not in before)}
+    for kind, folder in (("spec", "specs"), ("adr", "adr")):
+        added = [
+            Path(p).name
+            for p, status in changed_files(root, mb).items()
+            if status == "A" and p.startswith(f"docs/{folder}/")
+        ]
+        found[kind] = sorted(int(m.group(1)) for n in added if (m := NUM_FILE.match(n)))
+    return found
+
+
+def number_map(root: Path, ref: str, own: dict[str, list[int]]) -> dict[str, dict[int, int]]:
+    free = next_free_ids(root, ref)
+    first = {"req": int(free["req"][4:]), "spec": int(free["spec"]), "adr": int(free["adr"])}
+    return {k: {n: first[k] + i for i, n in enumerate(own[k])} for k in own}
+
+
+def rewritten(text: str, maps: dict[str, dict[int, int]]) -> str:
+    """TEXT with the moved ids replaced in one pass (so 4 -> 5 and 5 -> 6 cannot chain)."""
+
+    def swap(m: re.Match[str]) -> str:
+        g = m.groupdict()
+        if g["rn"] or g["ln"]:
+            n = int(g["rn"] or g["ln"])
+            new = maps["req"].get(n, n)
+            width = len(g["rn"] or g["ln"])
+            return f"{g['req'] or g['lreq']}-{new:0{width}d}"
+        if g["sn"]:
+            return f"SPEC-{maps['spec'].get(int(g['sn']), int(g['sn'])):04d}"
+        if g["an"]:
+            return f"ADR-{maps['adr'].get(int(g['an']), int(g['an'])):04d}"
+        if g["qn"]:
+            return f"Q-S{maps['spec'].get(int(g['qn']), int(g['qn'])):04d}-{g['qi']}"
+        kind = "spec" if g["folder"] == "specs" else "adr"
+        return f"docs/{g['folder']}/{maps[kind].get(int(g['pn']), int(g['pn'])):04d}-"
+
+    return REFERENCE.sub(swap, text)
+
+
+def added_lines(root: Path, mb: str, rel: str, status: str) -> set[int]:
+    """The 1-based line numbers of the work-tree file that the pull request added."""
+    if status == "A":
+        return set(range(1, len((root / rel).read_text(encoding="utf-8").splitlines()) + 1))
+    found: set[int] = set()
+    for head in re.findall(
+        r"(?m)^@@ -\S+ \+(\d+)(?:,(\d+))? @@", git(root, "diff", "-U0", mb, "--", rel)
+    ):
+        start, count = int(head[0]), int(head[1] or 1)
+        found |= set(range(start, start + count))
+    return found
+
+
+def cmd_renumber(root: Path, ident: str, ref: str | None) -> int:
+    if not OWN_ID.fullmatch(ident):
+        raise Refusal("rule 2: the id is REQ-nnn, SPEC-nnnn or ADR-nnnn")
+    if git(root, "status", "--porcelain").strip():
+        raise Refusal("rule 2: the work tree is not clean (commit or stash first)")
+    ref = default_ref(root, ref)
+    mb = merge_base(root, ref)
+    own = own_numbers(root, mb)
+    kind = {"REQ": "req", "SPE": "spec", "ADR": "adr"}[ident[:3]]
+    if int(ident.split("-")[1]) not in own[kind]:
+        raise Refusal("rule 2: the id is not one of the pull request's own")
+    maps = number_map(root, ref, own)
+    moved = {k: {o: n for o, n in m.items() if o != n} for k, m in maps.items()}
+    if not any(moved.values()):
+        print("nothing to move")
+        return 0
+    for rel, status in sorted(changed_files(root, mb).items()):
+        path = root / rel
+        if status == "D" or not path.is_file():
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        touched = added_lines(root, mb, rel, status)
+        out = [rewritten(ln, maps) if i in touched else ln for i, ln in enumerate(lines, 1)]
+        if out != lines:
+            path.write_text("".join(out), encoding="utf-8")
+    labels = {"req": "REQ-{:03d}", "spec": "SPEC-{:04d}", "adr": "ADR-{:04d}"}
+    for k, m in moved.items():
+        for old, new in m.items():
+            print(f"{labels[k].format(old)} -> {labels[k].format(new)}")
+    for rel, status in sorted(changed_files(root, mb).items()):
+        new_rel = rewritten(rel, maps)
+        if status == "A" and new_rel != rel:
+            git(root, "mv", rel, new_rel)
+            print(f"renamed {rel} -> {new_rel}")
+    return 0
+
+
 # --- the approving commit (SPEC-0020) ---------------------------------------------------------
 
 STATUS_LINES = (("spec", "Draft", "Approved"), ("ADR", "Proposed", "Accepted"))
@@ -467,10 +573,15 @@ FLAGS = ("--sentence", "--ref", "--root", "--req", "--title", "--base", "--date"
 
 
 def parse(args: list[str]) -> tuple[str, dict[str, str]]:
-    if not args or args[0] not in ("ids", "stub", "check", "next-steps"):
+    if not args or args[0] not in ("ids", "stub", "check", "next-steps", "renumber"):
         raise ValueError("command")
     opts: dict[str, str] = {}
-    it = iter(args[1:])
+    rest = args[1:]
+    if args[0] == "renumber":
+        if not rest:
+            raise ValueError("id")
+        opts["id"], rest = rest[0], rest[1:]
+    it = iter(rest)
     for arg in it:
         if arg == "--final":
             opts["final"] = "1"
@@ -509,6 +620,8 @@ def main(argv: list[str] | None = None) -> int:
                 opts.get("ref"),
                 today,
             )
+        if command == "renumber":
+            return cmd_renumber(root, opts["id"], opts.get("ref"))
         if command == "check" and "final" in opts:
             return cmd_check_final(root, opts.get("base"))
         if command == "check":

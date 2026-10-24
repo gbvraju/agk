@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.45.0",
+  "kit_version": "0.46.0",
   "kit_tests": "tests/kit",
   "verbatim": [
     ".claude/agents/architect-review.md",
@@ -31,6 +31,7 @@
     "scripts/agk/check_final_clearance.py",
     "scripts/agk/check_kit_tests.py",
     "scripts/agk/check_neutrality.py",
+    "scripts/agk/check_numbers.py",
     "scripts/agk/check_pr_body.py",
     "scripts/agk/check_protected_changes.py",
     "scripts/agk/check_requirements.py",

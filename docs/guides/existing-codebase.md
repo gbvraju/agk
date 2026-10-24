@@ -30,7 +30,7 @@ are not touched: after the run no product file shows as modified. Nothing is com
 Two things differ from a new repository:
 
 - **`make governance` does not exist.** Your `Makefile` is yours and is not changed, and your `make test` runs your own tests. The
-  kit's checks run as `make -f agk.mk agk-governance`; you should see nine lines starting with `ok` and one `skipped (no comments file)`.
+  kit's checks run as `make -f agk.mk agk-governance`; you should see ten lines starting with `ok` and one `skipped (no comments file)`.
 - **`project_tests` is empty in `agk.toml`.** The `proof` check needs your test command. See step 4.
 
 Put your GitHub handle in `config/reviewers.yaml` in place of `@REPLACE-ME` and run
