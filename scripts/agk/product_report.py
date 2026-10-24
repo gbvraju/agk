@@ -536,6 +536,8 @@ def cleared_state(p: dict) -> str | None:
     the state says so. Verdicts or a head the facts could not read say nothing (unknown is no miss).
     """
     verdicts, head = p.get("verdicts"), p.get("head")
+    if p.get("head_cleared") == "yes":
+        return None
     if not is_list(verdicts) or not isinstance(head, str) or head == UNKNOWN or not head:
         return None
     if not verdicts:

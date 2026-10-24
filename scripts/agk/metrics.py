@@ -20,7 +20,9 @@ from pathlib import Path
 from typing import Any
 
 from common import (
+    REQUIREMENTS,
     CheckError,
+    covered_fix_list,
     git,
     matches,
     parse_estimate,
@@ -329,6 +331,69 @@ def cost_class(merged: bool, rounds: str, hours: str) -> str:
     return "L"
 
 
+def latest_verdict_body(comments: list[dict], authors: list[str] | None) -> str:
+    """The body of the latest verdict comment by a listed author, or an empty string."""
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    found = [
+        c
+        for c in comments
+        if author_of(c) in allowed
+        and isinstance(c.get("body"), str)
+        and VERDICT.fullmatch(c["body"].splitlines()[0].strip() if c["body"] else "")
+    ]
+    found.sort(key=lambda c: str(c.get("created_at") or ""))
+    return found[-1]["body"] if found else ""
+
+
+def covered_head(src: Any, head: str, comments: list[dict], authors: list[str] | None) -> str:
+    """SPEC-0021 rules 3 and 7: `yes` when `head` is the covered commit of the latest verdict.
+
+    Read from the commit record alone (one parent that starts with the reviewed sha, the files and
+    their patches). `unknown` when the record cannot be read, or when the commit changes
+    `docs/requirements.md`: a patch does not show which section a status line is in."""
+    covered = covered_fix_list(latest_verdict_body(comments, authors))
+    if covered is None or not head:
+        return "no"
+    sha, edits = covered
+    record = src.get(f"commit-{head}", "repos/{repo}/commits/" + head)
+    parents = record.get("parents") if isinstance(record, dict) else None
+    files = record.get("files") if isinstance(record, dict) else None
+    if not isinstance(parents, list) or not isinstance(files, list):
+        return UNKNOWN
+    if len(parents) != 1 or not str((parents[0] or {}).get("sha", "")).startswith(sha):
+        return "no"
+    paths = {path for path, *_ in edits}
+    if {f.get("filename") for f in files} != paths or {f.get("status") for f in files} != {
+        "modified"
+    }:
+        return "no"
+    for f in files:
+        if f["filename"] == REQUIREMENTS:
+            continue
+        lines = [ln for ln in str(f.get("patch") or "").splitlines() if ln[:1] in ("+", "-")]
+        wanted = [
+            e
+            for p, _, o, n in edits
+            if p == f["filename"]
+            for e in (f"-- Status: {o}", f"+- Status: {n}")
+        ]
+        if not f.get("patch"):
+            return UNKNOWN
+        if sorted(lines) != sorted(wanted):
+            return "no"
+    return UNKNOWN if REQUIREMENTS in paths else "yes"
+
+
+def merged_head_cleared(src: Any, head: str, comments: Any, authors: list[str] | None) -> str:
+    """`yes`, `no` or `unknown` for a merged pull request (SPEC-0007 rule 8, SPEC-0021 rule 7)."""
+    listed = verdicts(comments if isinstance(comments, list) else None, authors)
+    if not listed:
+        return UNKNOWN
+    if any(k == "cleared" and head.startswith(sha) for k, sha in listed):
+        return "yes"
+    return covered_head(src, head, comments, authors)
+
+
 def build_record(ctx: Context, detail: dict) -> dict[str, str]:
     n = detail["number"]
     merged = bool(detail.get("merged_at"))
@@ -347,13 +412,7 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
         rejected = "yes" if any(k == "rejected" for k, _ in listed) else "no"
     rejected_verdicts = UNKNOWN if listed is None else str(sum(k == "rejected" for k, _ in listed))
     rounds = str(sum(k == "fix" for k, _ in listed)) if listed else UNKNOWN
-    if not merged:
-        cleared = NONE
-    elif not listed:
-        cleared = UNKNOWN
-    else:
-        named = any(k == "cleared" and head.startswith(sha) for k, sha in listed)
-        cleared = "yes" if named else "no"
+    cleared = merged_head_cleared(ctx.src, head, comments, ctx.authors) if merged else NONE
 
     size, expected = parse_estimate(detail.get("body"))
     shas = [c.get("sha") for c in commits] if isinstance(commits, list) else None

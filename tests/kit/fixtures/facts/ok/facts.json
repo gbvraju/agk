@@ -91,6 +91,7 @@
         "scripts/agk/tool.py"
       ],
       "head": "05cccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "yes",
       "merged_at": "2026-10-08T09:00:00Z",
       "number": 5,
       "proof": "proven",

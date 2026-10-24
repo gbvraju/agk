@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from common import CheckError, covered_fix_list, final_commit_problems, git, repo_root, run
-from metrics import VERDICT, author_of
+from metrics import latest_verdict_body
 from reviewers import verdict_authors
 
 NAME = "final-clearance"
@@ -49,22 +49,8 @@ def comments_of(path: Path) -> list[dict]:
     return found
 
 
-def latest_verdict(root: Path, comments: list[dict]) -> str:
-    """The body of the latest verdict comment by a listed author, or an empty string."""
-    listed = set(verdict_authors(root))
-    verdicts = [
-        c
-        for c in comments
-        if author_of(c) in listed
-        and isinstance(c.get("body"), str)
-        and VERDICT.fullmatch(c["body"].splitlines()[0] if c["body"] else "")
-    ]
-    verdicts.sort(key=lambda c: str(c.get("created_at", "")))
-    return verdicts[-1]["body"] if verdicts else ""
-
-
 def check(root: Path, comments: Path, head: str) -> int:
-    covered = covered_fix_list(latest_verdict(root, comments_of(comments)))
+    covered = covered_fix_list(latest_verdict_body(comments_of(comments), verdict_authors(root)))
     if covered is not None:
         sha, edits = covered
         commit = git(root, "rev-parse", head).strip()

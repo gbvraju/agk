@@ -673,6 +673,13 @@
                     "const": "unknown"
                   }
                 ]
+              },
+              "head_cleared": {
+                "enum": [
+                  "yes",
+                  "no",
+                  "unknown"
+                ]
               }
             },
             "additionalProperties": false
