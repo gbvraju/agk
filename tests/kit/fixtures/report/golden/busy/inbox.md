@@ -1,5 +1,8 @@
 The inbox as of 2026-10-14.
 
+### Ready to merge (1)
+- <pr>9 "Change number 9" is ready to merge — https://github.com/demo-org/demo-repo/pull/9
+
 ### Draft specs (1)
 - Draft spec SPEC-0002 "Draft one" waits for approval — https://github.com/demo-org/demo-repo/blob/b05500000000000000000000000000000000beef/docs/specs/0002-draft.md
 

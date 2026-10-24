@@ -119,6 +119,7 @@
         "docs/b.md"
       ],
       "head": "07cccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "no",
       "merged_at": null,
       "number": 7,
       "proof": "skipped",

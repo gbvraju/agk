@@ -221,6 +221,7 @@
       "created_at": "2026-10-01T10:00:00Z",
       "files": [],
       "head": "09dddddddddddddddddddddddddddddddddddddd",
+      "head_cleared": "yes",
       "merged_at": null,
       "number": 9,
       "proof": "unknown",

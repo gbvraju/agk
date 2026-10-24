@@ -1,5 +1,8 @@
 The inbox as of 2026-10-14.
 
+### Ready to merge (unknown)
+- unknown: the clearance of 1 open pull request could not be read — https://github.com/demo-org/demo-repo/pull/19
+
 ### Pull requests without a verdict (unknown)
 - <pr>18 "Change number 18" has had no verdict for 9 days — https://github.com/demo-org/demo-repo/pull/18
 - unknown: the verdicts of 1 open pull request could not be read — https://github.com/demo-org/demo-repo/pull/19

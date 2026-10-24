@@ -457,6 +457,10 @@ def pull_record(src: Any, item: dict, authors: list[str] | None = None) -> dict:
     }
     if merged:
         record["head_cleared"] = metrics.merged_head_cleared(src, head, comments, authors)
+    elif record["state"] == "open":  # SPEC-0030 rule 8: no verdict yet is `no`, not unknown
+        listed = metrics.verdicts(comments if isinstance(comments, list) else None, authors)
+        cleared = metrics.merged_head_cleared(src, head, comments, authors)
+        record["head_cleared"] = UNKNOWN if listed is None else (cleared if listed else "no")
     return record
 
 

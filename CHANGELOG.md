@@ -4,6 +4,7 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+- #184 the loop: a late clearance fails `check_final_clearance`, the report lists open pull requests ready to merge first (`report.json` schema 4), and the guide shows how to run the loop (REQ-037 rules 7 to 9)
 - #175 the conductor role: `.claude/agents/conductor.md` with its seven pre-verdict steps and `.claude/hooks/conductor_guard.py`, which allows reads and one comment POST (REQ-037 rule 6)
 - #174 design check: `check_design.py` fails a mockup with a script, an external request, a colour outside the token block or a contrast under 4.5:1, and reads a theme as not approved yet or at risk (SPEC-0029 rule 7, REQ-036)
 - #172 `check_brief.py` checks the shape of a brief, and `session.py watch` ends with `conflict #N` when the pull request conflicts with its base (REQ-037 rule 4 and the verdict on #169)

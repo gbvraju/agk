@@ -26,6 +26,7 @@ DATE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
 STAMP = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|\+00:00)$")
 WEEK = re.compile(r"^(\d{4})-W(\d{2})$")
 KINDS = (
+    ("ready", "Ready to merge"),
     ("spec", "Draft specs"),
     ("adr", "Proposed ADRs"),
     ("question", "Questions waiting"),
@@ -166,7 +167,7 @@ def unknown_line(what: str, link: str) -> str:
 # An item is `{"kind", <its fields>, "links"}`. The fields of a kind are fixed here; a kind or a
 # field that is not in the table does not exist (a new one is a new schema number).
 
-REPORT_SCHEMA = 3
+REPORT_SCHEMA = 4
 ITEM_KINDS = {
     "requirement-done": ("id", "title", "criteria", "became_done"),
     "pull-request-merged": ("number", "title", "merged_on"),
@@ -194,6 +195,7 @@ ITEM_KINDS = {
     "draft-spec": ("id", "title"),
     "proposed-adr": ("id", "title"),
     "question": ("id", "asked_in"),
+    "pull-request-ready": ("number", "title"),
     "pull-request-no-verdict": ("number", "title", "days"),
     "overdue-residual": ("due", "text"),
     "unspecced-requirement": ("id", "title"),
@@ -332,6 +334,32 @@ def residual_items(doc: dict, links: Links, today: date) -> list[dict]:
     ]
 
 
+def ready_items(doc: dict, links: Links) -> list[dict]:
+    """One item for each open pull request whose head is cleared (SPEC-0030 rule 8); an open one
+    whose clearance cannot be read is not listed and adds one `unknown` item (SPEC-0026 rule 5)."""
+    pulls = doc["pull_requests"]
+    if not is_list(pulls):
+        return []  # the pull-request group already says that the pull requests are unknown
+    opened = sorted((p for p in pulls if p.get("state") == "open"), key=lambda p: p["number"])
+    found = [
+        item(
+            "pull-request-ready",
+            [link("pull-request", links.pull(p["number"]))],
+            number=p["number"],
+            title=p["title"],
+        )
+        for p in opened
+        if p.get("head_cleared") == "yes"
+    ]
+    numbers = [p["number"] for p in opened if p.get("verdicts") == UNKNOWN]
+    if numbers:
+        what = "the clearance of " + plural(len(numbers), "open pull request", "open pull requests")
+        found.append(
+            item("unknown", [link("pull-request", links.pull(n)) for n in numbers], what=what)
+        )
+    return found
+
+
 def requirement_items(doc: dict, links: Links) -> list[dict]:
     if not is_list(doc["requirements"]):
         return [unknown_item("requirements", "file", links.file("docs/requirements.md"))]
@@ -355,6 +383,7 @@ def inbox(doc: dict, links: Links, today: date) -> list[dict]:
     """The groups of what waits for a person, for the kinds that have an item, in the order of
     the table: `{"group", "count", "items"}` (the count is `unknown` for an unknown item)."""
     by_kind = {
+        "ready": ready_items(doc, links),
         "spec": spec_items(doc, links),
         "adr": adr_items(doc, links),
         "question": question_items(doc, links),
@@ -949,6 +978,9 @@ RENDER = {
         i, f'Proposed {i["id"]} "{i["title"]}" waits for a decision'
     ),
     "question": lambda i: bullet_of(i, f"Question {i['id']} is waiting, asked in {i['asked_in']}"),
+    "pull-request-ready": lambda i: bullet_of(
+        i, f'PR #{i["number"]} "{i["title"]}" is ready to merge'
+    ),
     "pull-request-no-verdict": lambda i: bullet_of(
         i,
         f'PR #{i["number"]} "{i["title"]}" has had no verdict for '
