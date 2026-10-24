@@ -1,6 +1,6 @@
 # ADR-0096: kit builds do not bump the version and one release pull request does (REQ-035, SPEC-0028), kit 0.54.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0095, ADR-0094
