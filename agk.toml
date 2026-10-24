@@ -12,4 +12,4 @@ project_tests = "(python3 -m pytest --version && ruff --version) >/dev/null 2>&1
 ac_coverage = "block"
 experimental_reviewer = true
 # One open pull request per person (strict) or any number with Depends-on (flow); a change of mode needs an ADR in the same pull request.
-pr_mode = "strict"
+pr_mode = "flow"
