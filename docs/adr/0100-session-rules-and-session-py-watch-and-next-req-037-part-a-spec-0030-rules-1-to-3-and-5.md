@@ -1,6 +1,6 @@
 # ADR-0100: session rules and `session.py` watch and next (REQ-037 part a, SPEC-0030 rules 1 to 3 and 5)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0098, ADR-0096
