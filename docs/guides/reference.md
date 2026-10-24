@@ -85,9 +85,10 @@ absent means the kit's own template is used; the kit pins no engine (a commented
 shape). The owner chooses once, and a change is a change of `agk.toml`, a protected path, so it needs an ADR in the same pull
 request that names it. An engine only drafts: its output is always written through the kit's template and passed through the
 kit's checks, and an engine never decides, never approves, and never edits a protected file by itself (SPEC-0029 rule 3).
-`agk doctor` reports each engine as `present` (the skill is found in the project's `.claude/skills/` or in the plugin), `absent`
-(the template is used) or `missing` (named but not found), and names the setting, never the skill's name. User-level skills and
-other plugins' skills are not read, so such a name is reported as unchecked (verify how Claude Code lists them).
+`agk doctor` reports each engine as `present` (the skill file exists in the project's `.claude/skills/`, in the user's
+`~/.claude/skills/` or in the plugin; only its existence is tested), `absent` (the template is used) or `missing` (named but
+not found), and names the setting, never the skill's name. A skill that another plugin provides is not read, so such a name is
+reported as unchecked (verify how Claude Code lists plugin skills).
 
 ## Upgrade
 

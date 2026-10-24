@@ -16,6 +16,15 @@ KEYS = ("vision", "stack", "design", "review")
 SECRET_NAME = "zq-engine-name"
 
 
+@pytest.fixture(autouse=True)
+def home(tmp_path, monkeypatch):
+    """HOME is a directory of the test, so the user's own skills never reach a result."""
+    path = tmp_path / "home"
+    path.mkdir()
+    monkeypatch.setenv("HOME", str(path))
+    return path
+
+
 def run_engines(
     tmp_path: Path,
     engines: str = "",
@@ -76,6 +85,27 @@ def test_ac1_a_named_skill_of_the_project_or_the_plugin_is_present(tmp_path):
     )
     assert "absent" in report["engine-design"]["message"]
     assert "absent" in report["engine-review"]["message"]
+
+
+def test_ac1_a_user_level_skill_is_present_even_with_no_kit_root(tmp_path, home):
+    """REQ-036 AC1: SPEC-0029 rule 2 (the ruling on Q-K4-257: `~/.claude/skills` is seen)."""
+    skill = home / ".claude" / "skills" / SECRET_NAME / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("zq-file-content\n", encoding="utf-8")
+    for kit in (True, False):
+        proc, _ = run_engines(tmp_path / str(kit), f'[engines]\nstack = "{SECRET_NAME}"\n', kit=kit)
+        check = checks_of(proc.stdout)["engine-stack"]
+        assert check["status"] == "ok" and "present" in check["message"]
+        assert SECRET_NAME not in proc.stdout and "zq-file-content" not in proc.stdout
+
+
+def test_ac1_a_user_level_skill_of_another_name_does_not_make_an_engine_present(tmp_path, home):
+    """REQ-036 AC1: SPEC-0029 rule 2 (the name must match; the home directory is not listed)."""
+    skill = home / ".claude" / "skills" / "other-name" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("x\n", encoding="utf-8")
+    proc, _ = run_engines(tmp_path / "run", f'[engines]\nstack = "{SECRET_NAME}"\n')
+    assert "missing" in checks_of(proc.stdout)["engine-stack"]["message"]
 
 
 @pytest.mark.parametrize("key", KEYS)

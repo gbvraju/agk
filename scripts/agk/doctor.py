@@ -626,11 +626,22 @@ def kit_results(root: Path, kit_root: Path | None, config: dict) -> tuple[dict[s
     }, kit_version
 
 
+def seen_by_the_user(root: Path, name: str) -> bool:
+    """A skill of the project or of the user (`~/.claude/skills`): a file-existence check only."""
+    places = [root / ".claude" / "skills"]
+    try:
+        places.append(Path.home() / ".claude" / "skills")
+    except (RuntimeError, KeyError):
+        pass
+    return any((place / name / "SKILL.md").is_file() for place in places)
+
+
 def engine_results(root: Path, kit_root: Path | None, config: dict) -> dict[str, Result]:
     """`[engines]` (SPEC-0029 rules 1 and 2): present, absent or missing; names the setting only.
 
-    A skill is seen when `.claude/skills/<name>/SKILL.md` of the project or `skills/<name>/SKILL.md`
-    of the plugin exists (user-level skills and other plugins' skills are not read) (verify).
+    A skill is seen when its `SKILL.md` exists in the project's `.claude/skills/<name>/`, in the
+    user's `~/.claude/skills/<name>/` or in the plugin's `skills/<name>/`; only the existence of
+    the file is tested, nothing is read or printed. Other plugins' skills are not read (verify).
     """
     table = config.get("engines", {})
     out: dict[str, Result] = {}
@@ -654,7 +665,7 @@ def engine_results(root: Path, kit_root: Path | None, config: dict) -> dict[str,
                 else Result("fail", message=" (invalid)")
             )
             continue
-        if (root / ".claude" / "skills" / local / "SKILL.md").is_file() and not plugin:
+        if not plugin and seen_by_the_user(root, local):
             out[f"engine-{key}"] = Result("ok", message=" (present)")
         elif kit_root is None:
             out[f"engine-{key}"] = Result("cannot-check", "no-kit-root")

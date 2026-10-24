@@ -15474,7 +15474,7 @@
     "scripts/agk/check_specs.py": ["beda6d41afe1b2ed8cff6d64bcac2d4b0fd77dc8455ab7314eba410d4be721a1"],
     "scripts/agk/common.py": ["e1db9c8fd0f9a54864c9f7fa2c072826abd1df85240cafcdb6be829006fbe9a2"],
     "scripts/agk/config.py": ["4983694f487515a42575cbe93202bb1c34ef0529f64d561c1419fca5885fca27"],
-    "scripts/agk/doctor.py": ["96b289f068e6f08d4c441fee6c9e5c6ea04a669b092f4c5dba1aed2df3830dd1", "22534118bb52b2e3699fc69686ae8a97477654b37628cc2fa1d7e43ddb42c144"],
+    "scripts/agk/doctor.py": ["96b289f068e6f08d4c441fee6c9e5c6ea04a669b092f4c5dba1aed2df3830dd1", "291a76c2356c70e97655c016423b19999158510c6fb85c8b620e7a449f06d6d1"],
     "scripts/agk/drift_audit.py": ["44f442953c1f2ac18f3365c52c22b10ecac68dfb572590753c7f7ad316b6b526"],
     "scripts/agk/facts.py": ["113e64007f0f077eae41cdd67d7ac0f0dd2b0a41c0739d1b714eeb8385c04e35"],
     "scripts/agk/metrics.py": ["1eb16d62a2c37b6d35ad1dc0f2018b085ff24a220ced6ab3ba6ef60a96265908"],

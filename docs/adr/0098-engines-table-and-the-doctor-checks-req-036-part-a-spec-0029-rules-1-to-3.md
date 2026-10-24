@@ -18,7 +18,7 @@ written first (`tests/kit/test_engines.py`; on unchanged `main`: 16 failed, 1 pa
 1. **The table** (rule 1): `[engines]` in `agk.toml`, keys `vision`, `stack`, `design` and `review`, each the name of a skill or absent. No value is pinned: `kit/templates/agk.toml` holds a commented example only, and this
    repository's `agk.toml` is unchanged. The change of the table is the change of `agk.toml`, which is already a protected path, so the existing protected-path check requires an ADR naming it; no new check.
 2. **Doctor** (rule 2): five checks at the end of the report, all `warn`: `engines-keys` (the table has only the four keys) and `engine-vision`, `engine-stack`, `engine-design`, `engine-review`. An engine is `present`
-   (`.claude/skills/<name>/SKILL.md` of the project or `skills/<name>/SKILL.md` of the plugin exists), `absent` (the key is not set; the kit's template is used, and the check is ok) or `missing` (named, not found: a
+   (`.claude/skills/<name>/SKILL.md` of the project, `~/.claude/skills/<name>/SKILL.md` of the user, as ruled on Q-K4-257, or `skills/<name>/SKILL.md` of the plugin exists; only the existence of the file is tested), `absent` (the key is not set; the kit's template is used, and the check is ok) or `missing` (named, not found: a
    failure). A value that is not a name of lower-case letters, digits and hyphens is `invalid`. A name of another plugin (`other:name`), or any name with no `--kit-root`, reads `cannot-check` (`plugin-unreadable`,
    `no-kit-root`), never `ok`. Messages name the setting (`engines.vision`), never the skill's name or the key outside the four. Doctor remains read-only, with no network and no model.
 3. **The engine's place** (rule 3): stated in the new section "Engines" of `docs/guides/reference.md`, in `skills/doctor/SKILL.md` and in the commented example of the template. Nothing enforces it beyond the existing
@@ -35,4 +35,4 @@ written first (`tests/kit/test_engines.py`; on unchanged `main`: 16 failed, 1 pa
 
 ## Residual
 
-- 2026-10-24: user-level skills and other plugins' skills are not read, so a user-level engine reads `missing` and another plugin's reads unchecked; how Claude Code lists them is not confirmed (verify) (due 2026-12-31).
+- 2026-10-24: another plugin's skills are not read, so such an engine reads unchecked; how Claude Code lists plugin skills is not confirmed (verify) (due 2026-12-31).
