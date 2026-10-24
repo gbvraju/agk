@@ -178,7 +178,7 @@ def test_ac2_a_mode_change_with_the_status_fails(repo, tmp_path):
 
 
 def test_ac3_nothing_is_checked_without_a_covered_fix_list_or_for_other_shapes(repo, tmp_path):
-    """REQ-028 AC3: rule 4 (the head is the reviewed sha; two commits after; numbered; stale)."""
+    """REQ-028 AC3: rule 4 (the head is the reviewed sha; numbered; an unknown sha)."""
     reviewed = scenario(repo)
     final = f"Final: {ADR} Proposed -> Accepted"
     ok = "ok final-clearance\n"
@@ -186,11 +186,12 @@ def test_ac3_nothing_is_checked_without_a_covered_fix_list_or_for_other_shapes(r
     assert check(repo, covered).stdout == ok  # the head is the reviewed sha
     repo.commit({"a.txt": "1\n"}, "one")
     repo.commit({"b.txt": "2\n"}, "two")
-    assert check(repo, covered).stdout == ok  # two commits after: not the covered shape
+    late = check(repo, covered)  # two commits after: the clearance is late (SPEC-0030 rule 7)
+    assert late.returncode == 1 and "rule 7" in late.stdout
     numbered = comments_file(tmp_path, fix_list(reviewed, final, extra="1. an item"))
     assert check(repo, numbered).stdout == ok
-    stale = comments_file(tmp_path, fix_list(repo.git("rev-parse", "HEAD~2").strip(), final))
-    assert check(repo, stale).stdout == ok  # the sha is not the parent of the head
+    stale = comments_file(tmp_path, fix_list("0" * 40, final))
+    assert check(repo, stale).stdout == ok  # the sha is not in the history of the head
 
 
 def test_ac3_a_later_verdict_replaces_the_covered_fix_list(repo, tmp_path):

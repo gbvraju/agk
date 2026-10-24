@@ -1,4 +1,4 @@
-"""Kit-only tests of the schema file for `hours_unknown` and the number 2 (SPEC-0024 rule 4)."""
+"""Kit-only tests of the schema file for `hours_unknown` and the number 4 (SPEC-0024 rule 4)."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def with_totals() -> list[tuple[str, dict]]:
 
 def test_ac5_the_schema_file_fixes_the_number_2():
     """REQ-031 AC5: rule 4."""
-    assert schema()["properties"]["schema"] == {"const": 3}
+    assert schema()["properties"]["schema"] == {"const": 4}
 
 
 def test_ac5_the_totals_item_requires_hours_unknown_as_a_whole_number():
@@ -45,7 +45,7 @@ def test_ac5_every_golden_has_the_number_2_and_the_field_and_validates():
     found = with_totals()
     assert len(found) >= 4
     for name, document in goldens():
-        assert document["schema"] == 3, name
+        assert document["schema"] == 4, name
         assert errors(document, schema()) == [], name
     for _, document in found:
         entry = totals_item(document)

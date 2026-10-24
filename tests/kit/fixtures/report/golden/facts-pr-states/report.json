@@ -1,5 +1,5 @@
 {
-  "schema": 3,
+  "schema": 4,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -85,6 +85,22 @@
       }
     ],
     "needs_you": [
+      {
+        "group": "ready",
+        "count": "unknown",
+        "items": [
+          {
+            "kind": "unknown",
+            "what": "the clearance of 1 open pull request",
+            "links": [
+              {
+                "to": "pull-request",
+                "url": "https://github.com/demo-org/demo-repo/pull/19"
+              }
+            ]
+          }
+        ]
+      },
       {
         "group": "pull-request",
         "count": "unknown",

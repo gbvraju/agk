@@ -156,13 +156,12 @@ def facts_record(comments, record, merged=True):
     return facts.pull_record(Recorded(record), item, ["reviewer"])
 
 
-def test_ac7_the_facts_carry_head_cleared_for_a_merged_pull_request_only():
+def test_ac7_the_facts_carry_head_cleared_for_a_merged_pull_request():
     """REQ-028 AC7: rule 7 (an optional field; the schema number stays 1)."""
     import facts
 
     done = facts_record([comment(fix_list(FINAL))], commit())
     assert done["head_cleared"] == "yes" and facts.SCHEMA == 1
-    assert "head_cleared" not in facts_record([comment(fix_list(FINAL))], commit(), merged=False)
     assert facts_record([], commit())["head_cleared"] == "unknown"
 
 
@@ -182,3 +181,17 @@ def test_ac7_the_at_risk_line_is_not_printed_for_a_cleared_head_and_is_as_before
     assert pr.cleared_state(entry("yes", verdicts=[])) is None
     assert pr.cleared_state(entry(None, verdicts=[])) == "no-verdict"
     assert pr.cleared_state(entry(None, cleared=True)) is None
+
+
+def test_ac7_the_facts_carry_head_cleared_for_an_open_pull_request_too():
+    """REQ-037 AC7: rule 8 (an open pull request as a merged one; a closed one carries none)."""
+    cleared = comment(f"Verdict: cleared {HEAD[:9]}", at=1)
+    assert facts_record([cleared], commit(), merged=False)["head_cleared"] == "yes"
+    assert facts_record([comment(fix_list(FINAL))], commit(), merged=False)["head_cleared"] == "yes"
+    assert facts_record([], commit(), merged=False)["head_cleared"] == "no"  # no verdict yet
+    assert facts_record(None, commit(), merged=False)["head_cleared"] == "unknown"  # unreadable
+    other = comment("Verdict: cleared 1234567", at=1)
+    assert facts_record([other], commit(), merged=False)["head_cleared"] == "no"
+    import facts
+
+    assert facts.SCHEMA == 1

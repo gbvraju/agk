@@ -4,7 +4,9 @@
 
 When the latest verdict by a listed author is a covered fix list (`Verdict: fix list <sha>`, `Final:
 <path> <old> -> <new>` lines, no numbered item) and the head is the one commit after its reviewed
-sha, the commit must change exactly the named status lines. Anything else passes unchecked. Without
+sha, the commit must change exactly the named status lines; a head two or more commits past the
+reviewed sha (counted on the first-parent line) fails (SPEC-0030 rule 7). Anything else passes
+unchecked. Without
 `--comments` it prints `skipped (no comments file)` and passes. With two or more listed
 authors the verdicts of `--author`, the pull request's own author, do not count (SPEC-0025 rule 4).
 Git and the file only: no network, no model. Messages name the rule, never a value.
@@ -50,6 +52,15 @@ def comments_of(path: Path) -> list[dict]:
     return found
 
 
+def commits_past(root: Path, sha: str, head: str) -> int:
+    """How many commits of the first-parent line lie between the reviewed sha and the head; 0
+    when the sha is not in the history of the head (nothing can be said about it)."""
+    reviewed = git(root, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).strip()
+    if not reviewed or git(root, "merge-base", reviewed, head, check=False).strip() != reviewed:
+        return 0
+    return int(git(root, "rev-list", "--count", "--first-parent", f"{reviewed}..{head}").strip())
+
+
 def check(root: Path, comments: Path, head: str, author: str | None = None) -> int:
     authors = counted_authors(verdict_authors(root), author)
     covered = covered_fix_list(latest_verdict_body(comments_of(comments), authors))
@@ -62,6 +73,8 @@ def check(root: Path, comments: Path, head: str, author: str | None = None) -> i
             moded = git(root, "diff", "--summary", parents[0], commit).strip()
             if not files_ok or bad or moded:
                 raise CheckError("rule 3: the commit is not exactly the named status lines")
+        elif commits_past(root, sha, commit) >= 2:
+            raise CheckError("rule 7: the head is two or more commits past the reviewed commit")
     print(f"ok {NAME}")
     return 0
 

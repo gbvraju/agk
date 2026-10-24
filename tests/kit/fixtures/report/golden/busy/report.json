@@ -1,5 +1,5 @@
 {
-  "schema": 3,
+  "schema": 4,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -225,6 +225,23 @@
       }
     ],
     "needs_you": [
+      {
+        "group": "ready",
+        "count": 1,
+        "items": [
+          {
+            "kind": "pull-request-ready",
+            "number": 9,
+            "title": "Change number 9",
+            "links": [
+              {
+                "to": "pull-request",
+                "url": "https://github.com/demo-org/demo-repo/pull/9"
+              }
+            ]
+          }
+        ]
+      },
       {
         "group": "spec",
         "count": 1,
@@ -518,7 +535,7 @@
   "counts": {
     "delivered": 5,
     "proven": 2,
-    "needs_you": 9,
+    "needs_you": 10,
     "at_risk": 7
   },
   "notices": [

@@ -221,6 +221,7 @@
         "z.txt"
       ],
       "head": "12cccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "no",
       "merged_at": null,
       "number": 18,
       "proof": "proven",
@@ -239,6 +240,7 @@
       "estimated_size": "unknown",
       "files": "unknown",
       "head": "13cccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "unknown",
       "merged_at": null,
       "number": 19,
       "proof": "unknown",
