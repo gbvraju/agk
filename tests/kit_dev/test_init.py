@@ -477,8 +477,16 @@ CI_STEP = re.compile(r"^\s*run:\s*((?:make -f agk\.mk|python scripts/agk/)[^\n]*
 
 
 def ci_steps(root: Path) -> list[str]:
+    """The `run:` commands of the workflow that a repository at ROOT runs: a step guarded by the
+    presence of the kit's own suite (`kit/agk-kit.mk`, SPEC-0028) is left out of a project."""
     text = (root / ".github" / "workflows" / "governance.yml").read_text(encoding="utf-8")
-    return CI_STEP.findall(text)
+    kit = (root / "kit" / "agk-kit.mk").is_file()
+    steps: list[str] = []
+    for block in re.split(r"(?m)^      - ", text):
+        if "hashFiles('kit/agk-kit.mk') != ''" in block and not kit:
+            continue
+        steps += CI_STEP.findall(block)
+    return steps
 
 
 KIT_SUITE_STEP = "make -f agk.mk agk-test"

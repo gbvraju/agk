@@ -13,6 +13,7 @@ from conftest import KIT_ROOT, git, manifest
 
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 import kit_hashes  # noqa: E402
+from common import pr_mode  # noqa: E402
 
 TABLE = KIT_ROOT / "kit" / "hashes.json"
 VERSIONS = "0.1.0 0.2.0 0.3.0 0.4.0 0.4.1 0.4.2 0.5.0 0.6.0 0.6.1 0.6.2".split()
@@ -65,10 +66,14 @@ def test_ac1_zero_point_one_zero_has_two_commits_and_both_makefiles():
 
 
 def test_ac1_only_zero_point_one_zero_has_more_than_one_hash_for_a_path():
-    """REQ-014 AC5: rules 2 and 25 (the bump rule's one recorded exception)."""
+    """REQ-014 AC5: rules 2 and 25 (the bump rule's one recorded exception; in flow mode the
+    current version's row may list more, SPEC-0028 rule 2)."""
+    flow = pr_mode(KIT_ROOT) == "flow"
     for version, row in table()["releases"].items():
         if version == kit_hashes.EXCEPTION:
             continue
+        if flow and version == manifest()["kit_version"]:
+            continue  # SPEC-0028: between releases the current row lists each build's digest
         for name in ("verbatim", "blocks", "templates"):
             assert all(len(d) == 1 for d in row[name].values()), (version, name)
 

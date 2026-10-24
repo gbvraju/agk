@@ -1,0 +1,133 @@
+"""The release pull request check (SPEC-0028 rules 4 and 5). Kit-only: never installed.
+
+In flow mode a pull request that raises `version` in `agk.toml` is a release pull request. It may
+change only `CHANGELOG.md`, `agk.toml`, `kit/manifest.json`, `.claude-plugin/plugin.json` and
+`kit/hashes.json`; the three versions are raised together to one greater number; and the lines under
+`## Unreleased` are moved unchanged and in order under `## <new version> (<date>)`, leaving
+`## Unreleased` empty and the older sections as they were. In strict mode, when no version is raised
+and when the base does not have this script yet (the pull request that adds it is the last build
+that bumps itself, SPEC-0028 rule 9) it prints `ok release` and checks nothing. Git and files only:
+no network, no model. Messages name the rule and the path, never a version.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+import tomllib
+from pathlib import Path
+
+from common import (
+    CheckError,
+    changed_files,
+    merge_base,
+    pr_mode,
+    repo_root,
+    resolve_base,
+    run,
+    show,
+)
+
+NAME = "release"
+ALLOWED = (
+    "CHANGELOG.md",
+    "agk.toml",
+    "kit/manifest.json",
+    ".claude-plugin/plugin.json",
+    "kit/hashes.json",
+)
+DOTTED = re.compile(r"\d+(?:\.\d+)*")
+HEADING = "## "
+
+
+def toml_version(text: str | None) -> str | None:
+    try:
+        value = tomllib.loads(text or "").get("version")
+    except tomllib.TOMLDecodeError:
+        return None
+    return value if isinstance(value, str) else None
+
+
+def json_version(text: str | None, key: str) -> str | None:
+    try:
+        value = json.loads(text or "").get(key)
+    except (ValueError, AttributeError):
+        return None
+    return value if isinstance(value, str) else None
+
+
+def numbers(version: str | None) -> tuple[int, ...] | None:
+    return tuple(map(int, version.split("."))) if version and DOTTED.fullmatch(version) else None
+
+
+def sections(text: str) -> list[tuple[str, list[str]]]:
+    """(heading, non-empty lines) of each `## ` section, with the text before the first as ''."""
+    found: list[tuple[str, list[str]]] = [("", [])]
+    for line in text.splitlines():
+        if line.startswith(HEADING):
+            found.append((line.strip(), []))
+        elif line.strip():
+            found[-1][1].append(line.rstrip())
+    return found
+
+
+def moved_unchanged(old: str, new: str, version: str) -> bool:
+    """Unreleased became empty, its lines are the new version's, the rest is as it was."""
+    before, after = sections(old), sections(new)
+    if len(before) < 2 or len(after) != len(before) + 1:
+        return False
+    heading = re.fullmatch(rf"## {re.escape(version)} \(\d{{4}}-\d{{2}}-\d{{2}}\)", after[2][0])
+    return (
+        before[0] == after[0]
+        and before[1][0] == after[1][0] == "## Unreleased"
+        and after[1][1] == []
+        and heading is not None
+        and after[2][1] == before[1][1]
+        and after[3:] == before[2:]
+    )
+
+
+def check(root: Path) -> int:
+    if pr_mode(root) != "flow":
+        print(f"ok {NAME}")
+        return 0
+    base = resolve_base(root, None)
+    mb = merge_base(root, base) if base else "HEAD"
+    if show(root, mb, "scripts/agk/check_release.py") is None:
+        print(f"ok {NAME}")  # the pull request that adds this check is the last build that bumps
+        return 0
+    old = toml_version(show(root, mb, "agk.toml"))
+    new = toml_version((root / "agk.toml").read_text(encoding="utf-8"))
+    if new is None or old is None or new == old:
+        print(f"ok {NAME}")
+        return 0
+    for path in sorted(set(changed_files(root, mb)) - set(ALLOWED)):
+        raise CheckError(f"rule 5: a release pull request changes {path}, outside its five files")
+    manifest = json_version((root / "kit/manifest.json").read_text(encoding="utf-8"), "kit_version")
+    plugin = json_version(
+        (root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"), "version"
+    )
+    if not (new == manifest == plugin):
+        raise CheckError("rule 5: the three versions differ")
+    if numbers(new) is None or numbers(old) is None or numbers(new) <= numbers(old):
+        raise CheckError("rule 5: the three versions do not rise")
+    changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    if not moved_unchanged(show(root, mb, "CHANGELOG.md") or "", changelog, new):
+        problem = (
+            "rule 5: Unreleased is not empty after the move"
+            if sections(changelog)[1:2] and sections(changelog)[1][1]
+            else "rule 5: the lines of Unreleased were not moved unchanged under the new version"
+        )
+        raise CheckError(problem)
+    print(f"ok {NAME}")
+    return 0
+
+
+def main() -> int:
+    root = repo_root()
+    return check(root)
+
+
+if __name__ == "__main__":
+    sys.exit(run(NAME, main))
