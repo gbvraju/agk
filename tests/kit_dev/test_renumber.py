@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import KIT_ROOT, clean_env, git, make_repo
+from conftest import KIT_ROOT, clean_env, git, make_repo, without_version_line
 
 SCRIPT = KIT_ROOT / "scripts" / "agk" / "intake.py"
 LOG = (
@@ -69,21 +69,23 @@ def repo(tmp_path):
 
 
 def renumber(root, ident, *extra):
-    return subprocess.run(
-        [
-            sys.executable,
-            str(SCRIPT),
-            "renumber",
-            ident,
-            "--ref",
-            "main",
-            "--root",
-            str(root),
-            *extra,
-        ],
-        capture_output=True,
-        text=True,
-        env=clean_env(),
+    return without_version_line(
+        subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "renumber",
+                ident,
+                "--ref",
+                "main",
+                "--root",
+                str(root),
+                *extra,
+            ],
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+        )
     )
 
 

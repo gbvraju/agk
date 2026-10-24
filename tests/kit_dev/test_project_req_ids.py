@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import KIT_ROOT, clean_env, git, make_repo, run_init
+from conftest import KIT_ROOT, clean_env, git, make_repo, run_init, without_version_line
 from test_adopt import adopt, make_existing
 from test_intake import ACCEPTANCE, adr_text, requirement, spec_text
 
@@ -32,11 +32,13 @@ def commit_all(root: Path) -> None:
 
 
 def script(root: Path, name: str, *args: str):
-    return subprocess.run(
-        [sys.executable, str(SCRIPTS / name), *args, "--root", str(root)],
-        capture_output=True,
-        text=True,
-        env=clean_env(),
+    return without_version_line(
+        subprocess.run(
+            [sys.executable, str(SCRIPTS / name), *args, "--root", str(root)],
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+        )
     )
 
 

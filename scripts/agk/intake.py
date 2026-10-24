@@ -32,6 +32,7 @@ from common import (
     changed_files,
     final_commit_problems,
     git,
+    installed_version,
     load_config,
     merge_base,
     next_free_ids,
@@ -54,10 +55,14 @@ GWT = re.compile(
 )
 DUE = re.compile(r"\(due \d{4}-\d{2}-\d{2}\)")
 STRAY_Q = re.compile(r"Q-[A-Za-z0-9]+-[0-9]+")
-# SPEC-0020 rule 6 (Q-K4-217 ruled): N of 1 to 3, or the form for a sentence that needed none
+# SPEC-0020 rule 6 (Q-K4-217 ruled) and SPEC-0027 rule 4: (a) N of 1 to 3 before it was written, or
+# the form for a sentence that needed none; (b) N of 1 to 3 at review, before approval; (c) any N
+# answers given in a brief or an issue.
 ANSWERED = re.compile(
-    r"The maintainers answered (?:(?:1 question|[23] questions) before it was written\b"
+    r"The maintainers answered (?:(?:1 question|[23] questions)"
+    r"(?: before it was written| at review, before approval)\b"
     r"|no questions before it was written; the sentence settled every point\.)"
+    r"|The maintainers gave (?:1 answer|(?:[2-9]|[1-9]\d+) answers) before it was written\b"
 )
 HEADING = re.compile(r"(?m)^## ")
 NEGATIVE_NONE = re.compile(r"^Negative cases: none, because (.{20,})$", re.MULTILINE)
@@ -596,6 +601,36 @@ def parse(args: list[str]) -> tuple[str, dict[str, str]]:
     return args[0], opts
 
 
+DOTTED = re.compile(r"\d+(?:\.\d+)*")
+
+
+def script_version() -> str:
+    """The `kit_version` of `kit/manifest.json` above `scripts/` (SPEC-0027 rule 1)."""
+    manifest = Path(__file__).resolve().parents[2] / "kit" / "manifest.json"
+    try:
+        value = json.loads(manifest.read_text(encoding="utf-8")).get("kit_version")
+    except (OSError, ValueError, AttributeError):
+        value = None
+    if not isinstance(value, str) or not value:
+        raise Refusal("rule 1: the kit manifest of the script cannot be read (path class: kit/)")
+    return value
+
+
+def version_note(root: Path, version: str) -> None:
+    """Refuse when the project records a newer kit than the script, note when an older one."""
+    recorded = installed_version(root)
+    ours = tuple(map(int, version.split("."))) if DOTTED.fullmatch(version) else None
+    theirs = (
+        tuple(map(int, recorded.split("."))) if recorded and DOTTED.fullmatch(recorded) else None
+    )
+    if ours is None or theirs is None or ours == theirs:
+        return
+    both = f"script {version}, project {recorded}"
+    if ours < theirs:
+        raise Refusal(f"rule 2: the kit version of the script is older than the project's ({both})")
+    print(f"note: the script is newer than the kit the project records ({both})")
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         command, opts = parse(list(sys.argv[1:] if argv is None else argv))
@@ -608,6 +643,9 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(opts.get("root", "."))
     today = opts.get("date") or datetime.now(UTC).date().isoformat()
     try:
+        version = script_version()
+        print(f"intake: kit {version}")
+        version_note(root, version)
         if not root.is_dir():
             raise Refusal("the repository root is not an existing directory (option --root)")
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", today):
