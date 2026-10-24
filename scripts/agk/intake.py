@@ -383,16 +383,19 @@ REFERENCE = re.compile(
 
 def own_numbers(root: Path, mb: str) -> dict[str, list[int]]:
     """The numbers the pull request added: requirements, specs and ADRs, ascending."""
-    before = {r["id"] for r in parse_requirements(show(root, mb, REQ_FILE) or "")}
+    status = changed_files(root, mb).get(REQ_FILE)
+    added = added_lines(root, mb, REQ_FILE, status) if status else set()
     now = parse_requirements((root / REQ_FILE).read_text(encoding="utf-8"))
-    found = {"req": sorted(int(r["id"][4:]) for r in now if r["id"] not in before)}
+    # by position: a section whose heading line the pull request added (its id may also be the
+    # default branch's, once that branch has been merged in)
+    found = {"req": sorted(int(r["id"][4:]) for r in now if r["line"] in added)}
     for kind, folder in (("spec", "specs"), ("adr", "adr")):
-        added = [
+        names = [
             Path(p).name
-            for p, status in changed_files(root, mb).items()
-            if status == "A" and p.startswith(f"docs/{folder}/")
+            for p, state in changed_files(root, mb).items()
+            if state == "A" and p.startswith(f"docs/{folder}/")
         ]
-        found[kind] = sorted(int(m.group(1)) for n in added if (m := NUM_FILE.match(n)))
+        found[kind] = sorted(int(m.group(1)) for n in names if (m := NUM_FILE.match(n)))
     return found
 
 

@@ -112,6 +112,52 @@ def test_ac2_it_moves_the_requirement_spec_and_adr_to_the_next_free_numbers(repo
     assert "my row about ADR-0023 and REQ-005" in read(repo, "docs/runs/decisions-log.md")
 
 
+def merged_repo(repo):
+    """The feature branch after `git merge main`, the conflict resolved keeping both sections."""
+    merge = subprocess.run(["git", "merge", "main"], cwd=repo, capture_output=True, text=True)
+    assert merge.returncode == 1 and "CONFLICT" in merge.stdout  # both appended to the last line
+    both = (
+        THEIRS["docs/requirements.md"]
+        + OWN["docs/requirements.md"][len(BASE["docs/requirements.md"]) :]
+    )
+    (repo / "docs/requirements.md").write_text(both, encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "merge main")
+    return repo
+
+
+def test_ac2_after_the_default_branch_is_merged_in_the_own_requirement_still_moves(repo):
+    """REQ-032 AC2: rule 2 (found by position: its heading is a line the pull request added)."""
+    merged_repo(repo)
+    text = read(repo, "docs/requirements.md")
+    assert text.count("### REQ-004") == 2
+    proc = renumber(repo, "REQ-004")
+    assert proc.returncode == 0, proc.stdout
+    for moved in ("REQ-004 -> REQ-005", "SPEC-0014 -> SPEC-0015", "ADR-0022 -> ADR-0023"):
+        assert moved in proc.stdout
+    text = read(repo, "docs/requirements.md")
+    assert "### REQ-004 — Theirs" in text and "### REQ-005 — Mine" in text
+    assert "### REQ-004 — Mine" not in text and "### REQ-005 — Theirs" not in text
+    assert (repo / "docs/specs/0015-mine.md").is_file() and (
+        repo / "docs/specs/0014-theirs.md"
+    ).is_file()
+    assert "REQ-005" in read(repo, "docs/adr/0023-add-req-005-mine.md")
+    assert "REQ-004" not in read(repo, "docs/adr/0022-add-req-004-theirs.md").replace(
+        "# ADR-0022: Theirs", ""
+    )
+
+
+def test_ac2_after_the_merge_a_second_run_changes_nothing(repo):
+    """REQ-032 AC2: rule 2 (idempotent also on a merged branch)."""
+    merged_repo(repo)
+    renumber(repo, "REQ-004")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "renumbered")
+    proc = renumber(repo, "REQ-005")
+    assert proc.returncode == 0 and "nothing to move" in proc.stdout
+    assert out(repo, "status", "--porcelain") == ""
+
+
 def test_ac2_nothing_that_is_on_the_default_branch_is_changed(repo):
     """REQ-032 AC2: rule 2 (only the lines the pull request added are rewritten)."""
     renumber(repo, "SPEC-0014")

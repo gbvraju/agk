@@ -225,6 +225,7 @@ report has five headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`.
 - **`proof` reads `not-proven`.** The reason is in the step name, `outcome: not-proven (reason)`, for example `red-on-head` (the
   tests fail on the head commit). Read the reason first; it names what to fix.
 - **`make test` prints that the kit's own tests are not installed.** That is expected: they are not part of your repository. In a new repository `make test` takes well under a second (0.05 s measured) and runs your own tests, if you have any.
+- **`numbers` fails: two requirements, two specs or two ADRs carry the same number.** Run `python3 scripts/agk/intake.py renumber <id>` with the id of your own requirement, spec or ADR, before or after you bring the default branch in; if bringing it in conflicts on the last line of `docs/requirements.md`, keep both sections before you run it.
 - **`make governance` fails.** Read the first line that does not start with `ok`. It names the rule, a setting or a path class.
 - **`/agk:doctor` says `placeholder-team-reviewers` or `placeholder-team-codeowners`.** Step 4 was not finished: put your
   handle in `config/reviewers.yaml` and run `python3 scripts/agk/reviewers.py --codeowners --write`. Until then `make governance`
