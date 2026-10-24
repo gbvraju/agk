@@ -1,6 +1,6 @@
 # ADR-0107: the design step, and the design check as a governance step (REQ-036 part c2, SPEC-0029 rules 6, 7 and 9)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0097, ADR-0099, ADR-0104
