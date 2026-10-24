@@ -1,6 +1,6 @@
 # ADR-0086: declared dependence and the pull-request mode (REQ-032 part c, Depends-on and pr_mode, SPEC-0025 rules 5 to 7), kit 0.49.0
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Related: ADR-0082, ADR-0085
