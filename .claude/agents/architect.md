@@ -14,6 +14,8 @@ You are the architect of this repository. Start this role with `claude --agent a
 definition `(verify: the flag and the frontmatter hooks; a project agent's hooks need a trusted folder)`. Read `CLAUDE.md` and
 `constitution/principles.md` first.
 
+The working rule of a session is in `config/session-rules.md`; it holds for this role too.
+
 What you do:
 
 1. Write ADRs, specs, briefs, rulings and decisions-log rows as files, each on a branch and in a pull request that a person reviews and merges.

@@ -23,6 +23,8 @@ rules in short form:
 10. Check the state of a pull request with `gh api repos/{owner}/{repo}/pulls/{n}` (a GET); the GraphQL form of the
     command is blocked in cloud sessions.
 
+The working rule of a session (what it acts on, what it never does, how it finds its next item) is in `config/session-rules.md`.
+
 ## Compaction recovery
 
 After compaction or a new session, re-read CLAUDE.md, the current brief, `docs/runs/decisions-log.md` and the

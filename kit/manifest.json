@@ -22,6 +22,7 @@
     "Makefile",
     "agk.mk",
     "config/review-checklist.md",
+    "config/session-rules.md",
     "constitution/principles.md",
     "docs/adr/TEMPLATE.md",
     "docs/briefs/TEMPLATE.md",
@@ -46,6 +47,7 @@
     "scripts/agk/product_report.py",
     "scripts/agk/proof.py",
     "scripts/agk/reviewers.py",
+    "scripts/agk/session.py",
     "scripts/agk/traceability.py"
   ],
   "experimental": [
