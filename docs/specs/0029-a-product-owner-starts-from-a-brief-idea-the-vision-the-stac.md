@@ -1,0 +1,46 @@
+# SPEC-0029: The vision, the stack and the design each come from a named engine inside AGK's contract, and the owner approves each before the next step
+
+- Status: Draft
+- Owner: reviewer group (a team from config/reviewers.yaml)
+- Requirements: REQ-036
+
+Status is `Draft` or `Approved`. An Approved spec is owned by its reviewer group; agents propose patches.
+Written by the intake of one sentence (SPEC-0012): "A product owner starts from a brief idea; the vision, the stack and the design each come from a named engine inside AGK's contract, and the owner approves each before the next step." It is lane C, phase 1 of the conductor plan (issue #164), a kit change in flow mode (SPEC-0028) that runs in parallel with lane A. Evidence: the discovery of `/agk:start` and the architect's work start from a person who already knows what to build; an owner with a brief idea has no step that turns it into a vision, a stack and a design, each approved before the next.
+The maintainers gave 5 answers before it was written, in the brief of issue #164 and not as interview questions: (1) `[engines]` in `agk.toml` has `vision`, `stack`, `design` and `review`, each the name of a skill the session can see or absent (the kit's template is then used), chosen once by the owner and changed only with an ADR in the same pull request, `doctor` reports each as present, absent or missing, and an engine's output is always written through the kit's template and the kit's checks and an engine never decides, approves or edits a protected file by itself; (2) `/agk:vision` puts the owner's idea unchanged as the first section of `constitution/vision.md`, drafts the vision and the discovery questions, and the charter records every answer or `not known yet`; (3) `/agk:stack` writes one Proposed ADR with two or three stacks as options, the architect accepts one, and the practices that have a check are added as governance steps by the build that adopts the stack; (4) `/agk:design` writes the theme, the mockup folder and `check_design.py`, as recorded in AGK-CONSULTING-AND-DESIGN.md sections 5, 5a and 5b; (5) no default engine is pinned in this lane. The build is measured first and split into (a) engines and doctor, (b) vision and stack, (c) design.
+
+## Rules
+
+1. **The engines table.** `agk.toml` may have an `[engines]` table with the keys `vision`, `stack`, `design` and `review`. A value is the name of a skill the session can see; a key that is absent means the kit's own template is used. The table is chosen once by the owner. `agk.toml` is protected, so a change to the table needs an ADR in the same pull request that names the path class (principle 1). The kit pins no value: the template of `agk.toml` and this repository's file carry no engine.
+2. **Doctor.** `doctor` reports each of the four engines as `present` (the named skill is found), `absent` (the key is not set) or `missing` (named but not found). A missing engine is a finding that names the setting, never the skill's name or any value (principle 8). Doctor reads the files of the work tree and the plugin's skill list only, with no network and no model.
+3. **The engine's place.** An engine's output is always written through the kit's template and passed through the kit's checks. An engine never decides, never approves, and never edits a protected file by itself; a protected file changes only with its ADR. Nothing an engine writes is a decision until a reviewer writes it as an ADR or a status.
+4. **The vision.** `/agk:vision` writes `constitution/vision.md` with the owner's idea, in the owner's own words and unchanged, as its first section. The engine, or the template when `vision` is absent, drafts the vision and the discovery questions of `/agk:start`: users and payer, what exists, where it runs, data, scale, compliance, devices and widths, accessibility, languages, brand. The owner answers; the charter records every answer, or `not known yet` for a question the owner did not answer; nothing is decided that the owner did not give. A check fails a vision whose first section is not the idea as the owner gave it.
+5. **The stack.** `/agk:stack` writes one Proposed ADR in which the architect's engine (or the template) proposes two or three stacks as options with their trade-offs, each naming the practices it brings. The architect accepts one option; the ADR locks it. The ADR says which practices have a check (pinned actions, least privilege, security headers, a host-boundary test) and which are recorded judgement. Each practice with a check is added as a governance step by the build that adopts the stack, not by this lane.
+6. **The design.** `/agk:design` writes `docs/design/theme.md`: the brand record with a source line per value, the rules (one token block, light and dark, contrast 4.5:1 by a computed test, status as word plus colour, native controls, 44 px targets, 360 px to wide) and the evidence line. It writes the mockup folder `docs/design/mockups/<date>-<name>/` (the date from `date -u`) with `index.html` (one static page, the tokens as one CSS block, system font, no script, no external request, placeholders in brackets), `README.md` with the approval line, and the four screenshots when a headless browser exists. The approval line is the owner's; the session never writes it.
+7. **The design check.** `scripts/agk/check_design.py` reads the files of the work tree only and fails, naming the rule and never a value, on: a script in a mockup or the theme, an external request, a colour outside the token block, a contrast below 4.5:1 (computed from the tokens), a theme whose evidence line points to a folder without an approval line (it then reads `not approved yet`, which is information and not a failure), and a placeholder brand, which is reported in At risk by kind.
+8. **No default engine.** The kit ships templates only (`kit/templates/`): a vision template, a stack ADR template, a theme template and a mockup template. No default engine is pinned in this lane; defaults come later, each read in full by a maintainer before pinning (AGK-CONSULTING-AND-DESIGN.md 5d, a reference that is not in this repository and is read as given in the brief).
+9. **How it changes.** The build is a kit change in flow mode (SPEC-0028): no version bump, a line under Unreleased in `CHANGELOG.md`, hashes refreshed. It touches `agk.toml` (template), `scripts/agk/`, `skills/`, `kit/`, `tests/kit_dev/` and, for the new check, the governance workflow, and each pull request has its ADR naming the protected classes it touches. It is measured first and split at about 600 changed lines of code and tests into (a) engines and doctor (rules 1 to 3), (b) vision and stack (rules 4 and 5), (c) design (rules 6 and 7); rule 8 holds in all three. Each pull request branches from the default branch and declares `Depends-on` only for a real dependence.
+10. **The tests.** Fixtures in `tmp_path`: each engine key present, absent and missing; a change of `[engines]` without an ADR naming `agk.toml`; a vision whose first section is the idea and one whose first section is altered; a stack ADR with one option, two, three and four; a theme and a mockup that pass, and one for each failure of rule 7; a contrast computed on known pairs. No network and no model.
+
+## Tests
+
+- Rules 1 and 2: doctor reports present, absent and missing for each of the four keys, and an absent key means the template; REQ-036 AC1.
+- Rules 1 and 3: a change of `[engines]` without the ADR fails the protected-path check naming the class, and no engine edits a protected file; REQ-036 AC2.
+- Rule 4: the vision keeps the idea unchanged as the first section, and the charter records every answer or `not known yet`; REQ-036 AC3.
+- Rule 5: the stack ADR holds two or three options, each naming practices, with the checked ones told from the judged ones; REQ-036 AC4.
+- Rule 6: the theme and the mockup folder are written from the templates with the approval line left to the owner; REQ-036 AC5.
+- Rule 7: each failure of the design check is refused naming the rule and never the value; REQ-036 AC6.
+- Rule 7: an evidence line pointing to a folder without an approval line reads `not approved yet`, and a placeholder brand is in At risk; REQ-036 AC7.
+- Rule 8: the kit has templates and pins no engine in `agk.toml`, the manifest or the plugin; REQ-036 AC8.
+
+## Proof
+
+REQ-036 AC1 and AC2: *the owner chooses the engines once, the kit reports them, and no engine can decide.* Rules 1 to 3. REQ-036 AC3 and AC4: *the owner's words stay unchanged, and the architect chooses among options.* Rules 4 and 5. REQ-036 AC5 to AC7: *a design is written, checked by computation, and approved by the owner's line.* Rules 6 and 7. REQ-036 AC8: *no engine is pinned unread.* Rule 8. The first run of the three steps on a real brief idea, with an engine and without, is recorded by the maintainers.
+
+## Residual
+
+- 2026-10-24: whether an engine's skill name resolves in a session depends on how Claude Code lists skills for a plugin (verify); doctor reports `missing` only by what the session can see (due 2026-12-31).
+- 2026-10-24: the discovery questions of `/agk:start` and the vision template are the kit's own wording until a default engine is read and pinned (due 2026-12-31).
+
+## Open questions
+
+none
