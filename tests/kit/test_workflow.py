@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
+import tomllib
 from pathlib import Path
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "governance.yml"
@@ -115,6 +117,36 @@ def test_ac2_project_tests_step_follows_the_tests_of_the_checks():
     assert "run: make -f agk.mk agk-project-test" in text
     assert text.index("name: Tests of the checks") < text.index("name: Project tests")
     assert text.index("agk-test") < text.index("agk-project-test")
+
+
+CONDITION = "        if: ${{ hashFiles('kit/agk-kit.mk') == '' }}\n"
+
+
+def test_ac2_project_tests_run_only_where_the_kits_own_suite_is_not_installed():
+    """Issue #147: the kit repository runs its suite once, a project runs both steps as now."""
+    blocks = step_blocks(WORKFLOW.read_text(encoding="utf-8"))
+    project, checks = blocks["Project tests"], blocks["Tests of the checks"]
+    assert project == (
+        "name: Project tests\n" + CONDITION + "        run: make -f agk.mk agk-project-test\n"
+    )
+    assert "if:" not in checks and "run: make -f agk.mk agk-test\n" in checks
+
+
+def test_ac2_the_condition_reads_the_tree_not_the_name_of_the_repository():
+    """Issue #147: the kit repository has `kit/agk-kit.mk` and an installed project has not."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "github.repository" not in text.split("name: Project tests", 1)[1].split("- name:")[0]
+    assert (WORKFLOW.parents[2] / "kit" / "agk-kit.mk").is_file()
+    manifest = json.loads((WORKFLOW.parents[2] / "kit" / "manifest.json").read_text())
+    assert not any(p.startswith("kit/agk-kit") for p in manifest["verbatim"])
+
+
+def test_ac2_the_proof_workflow_still_runs_the_projects_tests():
+    """Issue #147: the proof job is not changed; it runs `proof.py`, which runs `project_tests`."""
+    proof = (WORKFLOW.parent / "proof.yml").read_text(encoding="utf-8")
+    assert "scripts/agk/proof.py" in proof and "hashFiles" not in proof
+    config = tomllib.loads((WORKFLOW.parents[2] / "agk.toml").read_text(encoding="utf-8"))
+    assert "tests/kit_dev" in config["project_tests"]
 
 
 # --- the proof workflow (SPEC-0010 rules 16 and 17) --------------------------------------------
