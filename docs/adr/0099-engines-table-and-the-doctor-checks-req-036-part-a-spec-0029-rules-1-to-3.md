@@ -1,4 +1,4 @@
-# ADR-0098: the engines table and the doctor checks (REQ-036 part a, SPEC-0029 rules 1 to 3)
+# ADR-0099: the engines table and the doctor checks (REQ-036 part a, SPEC-0029 rules 1 to 3)
 
 - Status: Proposed
 - Date: 2026-10-24
