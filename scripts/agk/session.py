@@ -3,6 +3,7 @@
     python3 session.py watch --pr N [--interval S] [--timeout S]
     python3 session.py watch --merged N [--interval S] [--timeout S]
     python3 session.py next --session ID
+    python3 session.py resume --pr N
 
 `watch` polls with `gh api --method GET` and exits 0 with one line: `verdict <kind> <sha> (comment
 <id>)` for a verdict by a listed author that names a prefix of the current head and is newer than
@@ -23,18 +24,20 @@ import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
+import tomllib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from common import CheckError, git, repo_root
+from common import CheckError, covered_fix_list, git, repo_root
 from facts import ORIGIN
-from metrics import author_of, counted_authors
+from metrics import author_of, counted_authors, latest_verdict_body
 from reviewers import verdict_authors
 
 NAME = "session"
 USAGE = (
     "usage: session.py watch (--pr N | --merged N) [--interval S] [--timeout S]\n"
-    "       session.py next --session ID"
+    "       session.py next --session ID\n"
+    "       session.py resume --pr N"
 )
 PAGE = 100
 LABEL = "agk-brief"
@@ -46,6 +49,12 @@ DEPENDS = re.compile(r"Depends-on: #(\d+)")
 SIZE = re.compile(r"Size: [SML]")
 NUMBERED = re.compile(r"(\d+)\.\s+\S")
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
+TAKEOVER = re.compile(r"taken over: (\S+) (\d{4}-\d{2}-\d{2})")
+HEAD_VERDICT = re.compile(r"Verdict: (cleared|fix list|rejected)(?: ([0-9a-f]{7,40}))?")
+BUILDER_LABELS = frozenset({"agk:fix", "agk:conflict", "agk:ci-red"})
+WAITING_LABELS = frozenset({"agk:ready", "agk:approve"})
+STALL_HOURS = 4
+SAFE_REF = re.compile(r"[A-Za-z0-9._/-]+")
 PROGRESS = re.compile(r"Progress: ([0-9a-f]{7,40}) done (\d+)/(\d+); next: (\S.*)")
 
 
@@ -256,6 +265,8 @@ def take(repo: str, number: int, me: str, comments: list) -> str | None:
 
 def next_brief(root, me: str) -> int:
     repo = repo_name(root)
+    if (found := offer_stalled(root, repo, me)) is not None:
+        return found
     issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
     if issues is None:
         raise CheckError("rule 3: the open briefs cannot be read")
@@ -271,6 +282,169 @@ def next_brief(root, me: str) -> int:
         return 0
     print("no brief")
     return 1
+
+
+# --- a stalled pull request (SPEC-0033 rule 5) ------------------------------------------------
+
+
+def stall_hours(root) -> int:
+    """`stall_hours` of the flow table of agk.toml: a whole number of hours, 4 by default."""
+    try:
+        data = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return STALL_HOURS
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise CheckError("rule 5: agk.toml cannot be read") from exc
+    flow = data.get("flow", {})
+    value = flow.get("stall_hours", STALL_HOURS) if isinstance(flow, dict) else STALL_HOURS
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CheckError("rule 5: stall_hours of the flow table must be a whole number, 1 or more")
+    return value
+
+
+def waits_for_a_person(root, pr: dict, comments: list) -> bool:
+    """A verdict by a listed author that clears or covers the head: the work waits for a person."""
+    authors = counted_authors(verdict_authors(root), (pr.get("user") or {}).get("login"))
+    body = latest_verdict_body(comments, authors)
+    if covered_fix_list(body) is not None:
+        return True
+    match = HEAD_VERDICT.fullmatch(body.splitlines()[0].strip()) if body else None
+    head = str((pr.get("head") or {}).get("sha") or "")
+    return bool(
+        match and match.group(1) == "cleared" and match.group(2) and head.startswith(match.group(2))
+    )
+
+
+def last_change(repo: str, pr: dict, comments: list) -> datetime | None:
+    """The latest of the head commit and every comment (created or edited); None if unreadable."""
+    sha = (pr.get("head") or {}).get("sha")
+    commit = gh(f"repos/{repo}/commits/{sha}") if sha else None
+    stamp = ((commit or {}).get("commit") or {}).get("committer", {}).get("date")
+    if not stamp:
+        return None
+    moments = [moment(stamp)]
+    for c in comments:
+        moments += [moment(c.get(k)) for k in ("created_at", "updated_at") if c.get(k)]
+    return max(moments)
+
+
+def takeover_lost(comments: list, since: datetime, me: str) -> str | None:
+    """The session whose `taken over:` comment since `since` is older than this session's."""
+    found = sorted(
+        (moment(c.get("created_at")), c.get("id", 0), m.group(1))
+        for c in comments
+        if isinstance(c.get("body"), str)
+        and (m := TAKEOVER.fullmatch(c["body"].strip()))
+        and moment(c.get("created_at")) >= since
+    )
+    return found[0][2] if found and found[0][2] != me else None
+
+
+def offer_stalled(root, repo: str, me: str) -> int | None:
+    """Offer the first stalled pull request and take it over; None when there is none."""
+    hours = stall_hours(root)
+    prs = pages(f"repos/{repo}/pulls?state=open")
+    if prs is None:
+        print("note: the open pull requests cannot be read", file=sys.stderr)
+        return None
+    for pr in sorted(prs, key=lambda p: p.get("number", 0)):
+        names = {lab.get("name") for lab in pr.get("labels") or []}
+        if names & WAITING_LABELS or not (pr.get("draft") or names & BUILDER_LABELS):
+            continue
+        number = pr["number"]
+        comments = pages(f"repos/{repo}/issues/{number}/comments")
+        changed = last_change(repo, pr, comments) if comments is not None else None
+        if changed is None or datetime.now(UTC) - changed < timedelta(hours=hours):
+            continue
+        if waits_for_a_person(root, pr, comments):
+            continue
+        day = datetime.now(UTC).strftime("%Y-%m-%d")
+        body = f"body=taken over: {me} {day}"
+        if gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is None:
+            print(f"skip #{number}: the takeover cannot be posted")
+            continue
+        lost = takeover_lost(pages(f"repos/{repo}/issues/{number}/comments") or [], changed, me)
+        if lost:
+            print(f"skip #{number}: lost the takeover to {lost}")
+            continue
+        print(f"stalled #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
+        print(f"run: python3 scripts/agk/session.py resume --pr {number}")
+        return 0
+    return None
+
+
+# --- resume (SPEC-0033 rule 4) ----------------------------------------------------------------
+
+
+def brief_of(repo: str, number: int, body: str) -> dict | None:
+    """The first `#n` of the body that is an issue labelled agk-brief."""
+    seen: set[int] = set()
+    for match in re.finditer(r"#(\d+)", body or ""):
+        ref = int(match.group(1))
+        if ref in seen or ref == number:
+            continue
+        seen.add(ref)
+        found = gh(f"repos/{repo}/issues/{ref}")
+        names = {lab.get("name") for lab in (found or {}).get("labels") or []} if found else set()
+        if LABEL in names:
+            return found
+    return None
+
+
+def resume(root, number: int) -> int:
+    repo = repo_name(root)
+    pr = gh(f"repos/{repo}/pulls/{number}")
+    comments = pages(f"repos/{repo}/issues/{number}/comments")
+    if not isinstance(pr, dict) or "head" not in pr or comments is None:
+        raise CheckError("rule 4: the pull request and its comments cannot be read")
+    head, ref = str(pr["head"].get("sha")), str(pr["head"].get("ref"))
+    author = (pr.get("user") or {}).get("login") or ""
+    kind = "draft" if pr.get("draft") else pr.get("state", "open")
+    print(f'pull request #{number} "{pr.get("title")}" ({kind}) head {head} branch {ref}')
+    names = [
+        lab["name"] for lab in pr.get("labels") or [] if str(lab.get("name")).startswith("agk:")
+    ]
+    print("state: " + (", ".join(names) or "none"))
+    brief = brief_of(repo, number, pr.get("body") or "")
+    if brief:
+        print(f'brief #{brief["number"]} "{brief.get("title")}"\n{brief.get("body")}\n')
+    else:
+        print("brief: none (the body of the pull request names no agk-brief issue)")
+    found, problems = progress_of(comments, author)
+    if problems:
+        print(f"progress: unreadable ({problems[0]})")
+    elif found:
+        line = f"{found['head']} done {found['done']}/{found['total']}; next: {found['next']}"
+        print(f"progress: {line}\ncontinue from: {found['next']}")
+    else:
+        print("progress: none")
+    authors = counted_authors(verdict_authors(root), author)
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    listed = sorted(
+        (c for c in comments if author_of(c) in allowed and isinstance(c.get("body"), str)),
+        key=lambda c: (str(c.get("created_at") or ""), c.get("id", 0)),
+    )
+    last = [
+        (c, m)
+        for c in listed
+        if (m := HEAD_VERDICT.fullmatch(c["body"].splitlines()[0].strip() if c["body"] else ""))
+    ]
+    if last:
+        c, m = last[-1]
+        names_head = bool(m.group(2) and head.startswith(m.group(2)))
+        text = m.group(0).removeprefix("Verdict: ")
+        print(
+            f"verdict: {text} (comment {c.get('id')}) "
+            + ("names" if names_head else "does not name")
+            + " the head"
+        )
+    else:
+        print("verdict: none")
+    print("commands:")
+    if SAFE_REF.fullmatch(ref):
+        print(f"  git fetch origin {ref}\n  git checkout -B {ref} {head}")
+    print(f"  python3 scripts/agk/session.py watch --pr {number}")
+    return 0
 
 
 # --- the progress comment (SPEC-0033 rule 3) --------------------------------------------------
@@ -318,11 +492,15 @@ def number_ok(text: str) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if not args or args[0] not in ("watch", "next") or len(args[1:]) % 2:
+    if not args or args[0] not in ("watch", "next", "resume") or len(args[1:]) % 2:
         print(USAGE)
         return 2
     cmd, opts = args[0], dict(zip(args[1::2], args[2::2], strict=False))
-    allowed = {"watch": {"--pr", "--merged", "--interval", "--timeout"}, "next": {"--session"}}
+    allowed = {
+        "watch": {"--pr", "--merged", "--interval", "--timeout"},
+        "next": {"--session"},
+        "resume": {"--pr"},
+    }
     if not set(opts) <= allowed[cmd] or len(opts) != len(args[1::2]):
         print(USAGE)
         return 2
@@ -331,6 +509,8 @@ def main(argv: list[str] | None = None) -> int:
             opts.get("--pr") or opts.get("--merged")
         )
         ok = ok and all(number_ok(opts[k]) for k in ("--interval", "--timeout") if k in opts)
+    elif cmd == "resume":
+        ok = number_of(opts.get("--pr"))
     else:
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", "")))
     if not ok:
@@ -338,7 +518,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         root = repo_root()
-        return watch(root, opts) if cmd == "watch" else next_brief(root, opts["--session"])
+        if cmd == "watch":
+            return watch(root, opts)
+        if cmd == "resume":
+            return resume(root, int(opts["--pr"]))
+        return next_brief(root, opts["--session"])
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}")
         return 2
