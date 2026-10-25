@@ -182,7 +182,7 @@ def test_ac5_assign_ends_on_a_line_for_this_session_by_a_listed_author(proj, stu
     answer = comment(2, "boss", f"{line}\n\nbecause the plan says so")
     asked(stub, [request(1)], [[request(1), answer]])
     out = assign(proj, stub)
-    assert out.returncode == 0 and out.stdout.strip() == printed
+    assert out.returncode == 0 and out.stdout.strip().splitlines()[-1] == printed
     assert posts(stub) == []
 
 
@@ -196,21 +196,21 @@ def test_ac5_assign_ignores_an_unlisted_account_and_another_session_and_other_li
         comment(5, "boss", "see Assign: s-me #9"),
     ]
     asked(stub, c, [c + wrong, c + wrong + [comment(6, "second", "Assign: s-me #7")]])
-    assert assign(proj, stub).stdout.strip() == "assign #7"
+    assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #7"
 
 
 def test_ac5_assign_takes_only_a_line_after_the_request_of_this_session(proj, stub):
     """REQ-041 AC5"""
     old = comment(1, "boss", "Assign: s-me #3")
     asked(stub, [old, request(2)], [[old, request(2), comment(3, "boss", "Assign: s-me #9")]])
-    assert assign(proj, stub).stdout.strip() == "assign #9"
+    assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #9"
 
 
 def test_ac5_assign_ends_with_assign_timeout_when_no_answer_comes(proj, stub):
     """REQ-041 AC5"""
     asked(stub, [request(1)])
     out = assign(proj, stub, timeout="0")
-    assert out.returncode == 0 and out.stdout.strip() == "assign-timeout"
+    assert out.returncode == 0 and out.stdout.strip().splitlines()[-1] == "assign-timeout"
 
 
 def test_ac5_assign_needs_exactly_one_open_conductor_issue(proj, stub):

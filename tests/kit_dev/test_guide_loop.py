@@ -35,6 +35,8 @@ def test_ac8_the_section_tells_how_to_start_each_role_and_where_to_merge_from():
         "Approve: <head> SPEC-<n>",
         "spec_approvers",
         "`Correction:`",
+        "cannot be read",
+        "github-unreachable:",
         "python3 scripts/agk/session.py queue --role",
     ):
         assert phrase in body, phrase

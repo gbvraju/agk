@@ -34,8 +34,14 @@ for candidate in (name + "." + method + "." + str(n), name + "." + method):
         text = open(path).read()
         if text.strip() == "FAIL":
             sys.exit(1)
+        if text.strip() == "RATELIMIT":
+            sys.stderr.write("gh: API rate limit exceeded for user ID 1. (HTTP 403)\\n")
+            sys.exit(1)
         sys.stdout.write(text)
         sys.exit(0)
+error = os.path.join(root, "error.txt")  # what gh says when a call fails and no fixture is given
+if os.path.exists(error):
+    sys.stderr.write(open(error).read())
 sys.exit(1)
 '''
 
@@ -445,6 +451,8 @@ def test_ac3_watch_goes_on_while_the_label_stays_and_ignores_other_labels(proj, 
     """REQ-039 AC3: rule 3 (a person's label is not the router's)."""
     same = pull(labels=("agk:review", "bug"))
     watching(stub, [(same, []), (pull(labels=("agk:review", "wip")), [])])
+    stub.serve(PR, same)  # every later poll reads the same: an unread poll is an error now
+    stub.serve(PR_COMMENTS, [])
     out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "1")
     assert out.returncode == 3 and out.stdout.strip() == "timeout"
 
@@ -602,6 +610,9 @@ def test_ac7_an_unlisted_author_another_comment_or_an_old_correction_does_not_en
         stub,
         [(with_brief(), [], [old]), (with_brief(), [], [old, other, plain])],
     )
+    stub.serve(PR, with_brief())  # every later poll reads the same
+    stub.serve(PR_COMMENTS, [])
+    stub.serve(BRIEF, [old, other, plain])
     out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "1")
     assert out.returncode == 3 and out.stdout.strip() == "timeout"
 

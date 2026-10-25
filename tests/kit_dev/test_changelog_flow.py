@@ -120,7 +120,9 @@ def test_ac6_after_two_builds_the_release_regenerates_the_table(tmp_path):
     )
     assert done.returncode == 0 and done.stdout == "wrote kit/hashes.json\n", done.stdout
     rows = json.loads((root / "kit" / "hashes.json").read_text(encoding="utf-8"))["releases"]
-    assert len(rows["1.0.0"]["verbatim"]["a.txt"]) == 3
+    # ADR-0134: the builds after the release of 1.0.0 do not widen its row; the next release's
+    # row holds them
+    assert len(rows["1.0.0"]["verbatim"]["a.txt"]) == 1
 
 
 def test_adr_0108_in_flow_mode_the_current_row_is_not_compared_while_the_version_is_unchanged(
