@@ -61,7 +61,10 @@ COLORS = {
 DESCRIPTIONS = {"agk-brief": "AGK: a brief a builder session can take"}
 FAILED_RUN = {"failure", "timed_out", "cancelled", "action_required", "startup_failure", "stale"}
 FAILED_STATUS = {"failure", "error"}
-ASKED = re.compile(r"Approval: (SPEC-\d{4}) (\S+) Draft -> Approved, waiting for a person")
+ASKED = re.compile(
+    r"Approval: (SPEC-\d{4}) (\S+) Draft -> Approved, waiting for a person"
+    r"(?:: post \"Approve: (SPEC-\d{4})\")?"
+)
 SPEC_FILE = re.compile(r"docs/specs/(\d{4})-[^/]+\.md")
 
 
@@ -110,7 +113,8 @@ approved_by_a_person = person_approvals
 
 def asked_for(body: str) -> set[str]:
     """The specs the conductor's `Approval:` lines of a verdict ask a person to approve."""
-    return {m.group(1) for m in map(ASKED.fullmatch, (x.strip() for x in body.splitlines())) if m}
+    found = map(ASKED.fullmatch, (x.strip() for x in body.splitlines()))
+    return {m.group(1) for m in found if m and m.group(3) in (None, m.group(1))}
 
 
 def decide(f: dict) -> str:
@@ -135,14 +139,17 @@ def decide(f: dict) -> str:
     listed = verdicts(comments, authors) or []
     kind, sha = listed[-1] if listed else ("", "")
     names_head = bool(sha) and head.startswith(sha)
-    people = approved_by_a_person(comments, f.get("reviews") or [], f.get("approvers") or [])
+    flipped = specs_approved_by(f.get("files") or [])
+    people = approved_by_a_person(
+        comments, f.get("reviews") or [], f.get("approvers") or [], flipped
+    )
     if names_head and asked_for(latest_verdict_body(comments, authors)) - people:
         return "agk:approve"
     if names_head and kind in ("fix", "rejected"):
         return "agk:fix"
     covered = covered_head(Held(f.get("commit") or {}), head, comments, authors) == "yes"
     if (names_head and kind == "cleared") or covered:
-        waiting = specs_approved_by(f.get("files") or []) - people
+        waiting = flipped - people
         return "agk:approve" if waiting else "agk:ready"
     return "agk:review"
 

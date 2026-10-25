@@ -24,6 +24,7 @@ USER_RE = re.compile(r"^@?[A-Za-z0-9_.-]+$")
 AUTHORS = "verdict_authors"
 APPROVERS = "spec_approvers"
 APPROVE = re.compile(r"Approve: ([0-9a-f]{7,40}) (SPEC-\d{4})")
+APPROVE_SHORT = re.compile(r"Approve: (SPEC-\d{4})")  # SPEC-0032 rule 5: pinned by the timeline
 PLACEHOLDER = "replace-me"  # the installed handle `@REPLACE-ME`: a login a stranger could own
 
 
@@ -175,26 +176,90 @@ def spec_approvers(root) -> list[str]:
         return []
 
 
+def login_of(item: dict) -> str:
+    user = item.get("user")
+    login = user.get("login") if isinstance(user, dict) else None
+    return login.lower() if isinstance(login, str) else ""
+
+
+def first_line(item: dict) -> str:
+    lines = str(item.get("body") or "").splitlines()
+    return lines[0].strip() if lines else ""
+
+
+def commit_before_comment(timeline: list[dict], comment_id) -> str | None:
+    """The sha of the last commit that precedes the comment in the order of the timeline, else
+    None. Only the order counts, never a commit date (SPEC-0032 rule 5, build (g))."""
+    last = None
+    for event in timeline:
+        if not isinstance(event, dict):
+            continue
+        if event.get("event") == "committed" and isinstance(event.get("sha"), str):
+            last = event["sha"]
+        elif event.get("event") == "commented" and comment_id is not None:
+            if event.get("id") == comment_id:
+                return last
+    return None
+
+
 def approval_shas(
-    comments: list[dict], reviews: list[dict], approvers: list[str]
+    comments: list[dict],
+    reviews: list[dict],
+    approvers: list[str],
+    timeline: list[dict] | None = None,
+    flipped: tuple[str, ...] | set[str] = (),
 ) -> dict[str, list[str]]:
-    """spec -> the shas of the first lines `Approve: <sha> SPEC-<n>` of the comments and review
-    bodies whose author is a listed approver; any other account, line or form counts for nothing."""
+    """spec -> the shas of the texts that a listed approver approved (SPEC-0032 rule 5).
+
+    A first line `Approve: <sha> SPEC-<n>` of a comment or a review body approves the text at the
+    sha. A first line `Approve: SPEC-<n>` of a comment approves the text of the last commit before
+    the comment in the order of `timeline`; with no such commit it counts for nothing. A review in
+    state `APPROVED` approves, at its own `commit_id`, the spec its first line `Approve: SPEC-<n>`
+    names, else the one spec in `flipped` when there is exactly one. Any other account, line or
+    form counts for nothing."""
     allowed = {a.lstrip("@").lower() for a in approvers}
     found: dict[str, list[str]] = {}
-    for item in [*comments, *reviews]:
-        user = item.get("user")
-        login = user.get("login") if isinstance(user, dict) else None
-        lines = str(item.get("body") or "").splitlines()
-        match = APPROVE.fullmatch(lines[0].strip()) if lines else None
-        if match and isinstance(login, str) and login.lower() in allowed:
-            found.setdefault(match.group(2), []).append(match.group(1))
+
+    def add(spec: str, sha: str | None) -> None:
+        if sha:
+            found.setdefault(spec, []).append(sha)
+
+    for kind, items in (("comment", comments), ("review", reviews)):
+        for item in items:
+            if login_of(item) not in allowed:
+                continue
+            line = first_line(item)
+            long = APPROVE.fullmatch(line)
+            if long:
+                add(long.group(2), long.group(1))
+                continue
+            named = APPROVE_SHORT.fullmatch(line)
+            if kind == "comment":
+                if named:
+                    add(named.group(1), commit_before_comment(timeline or [], item.get("id")))
+            elif item.get("state") == "APPROVED":
+                commit = item.get("commit_id")
+                only = next(iter(flipped)) if len(flipped) == 1 else None
+                spec = named.group(1) if named else only
+                if spec and isinstance(commit, str):
+                    add(spec, commit)
     return found
 
 
-def person_approvals(comments: list[dict], reviews: list[dict], approvers: list[str]) -> set[str]:
+def person_approvals(
+    comments: list[dict],
+    reviews: list[dict],
+    approvers: list[str],
+    flipped: tuple[str, ...] | set[str] = (),
+) -> set[str]:
     """The specs a listed approver approved in a comment or a review (SPEC-0032 rule 5)."""
-    return set(approval_shas(comments, reviews, approvers))
+    allowed = {a.lstrip("@").lower() for a in approvers}
+    found = set(approval_shas(comments, reviews, approvers, [], flipped))
+    for item in comments:  # a short line is pinned later, by the timeline of check_specs
+        named = APPROVE_SHORT.fullmatch(first_line(item))
+        if named and login_of(item) in allowed:
+            found.add(named.group(1))
+    return found
 
 
 def verdict_authors(root) -> list[str]:

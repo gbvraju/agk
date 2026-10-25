@@ -6,11 +6,14 @@ A Draft spec, a new spec and the Draft -> Approved flip pass.
 (2) Rule a (SPEC-0013 rule 23), with `--body FILE|-`: an implementation PR (its diff touches a path
 outside `docs/` and `.github/ISSUE_TEMPLATE/`) must name, on its `Advances:` line, only requirements
 that an Approved spec names; a requirement that no spec names and an ADR names is exempt.
-(3) With `--comments FILE [--reviews FILE]` (saved comments and review bodies of the pull request;
-SPEC-0032 rule 5): a spec whose Approved status line is added or changed in the diff, through a
-`Final:` line or an ordinary commit, needs a first line `Approve: <sha> SPEC-<n>` by an account in
-`spec_approvers`, and the spec file at the head must equal the one at `<sha>` apart from its status
-line. Without `--comments` the approval is not checked (a local run has no comments).
+(3) With `--comments FILE [--reviews FILE] [--timeline FILE]` (saved comments, reviews and timeline
+of the pull request; SPEC-0032 rule 5): a spec whose Approved status line is added or changed in the
+diff, through a `Final:` line or an ordinary commit, needs an approval by an account in
+`spec_approvers`: a first line `Approve: <sha> SPEC-<n>`, a first line `Approve: SPEC-<n>` (the text
+of the last commit before the comment in the order of the timeline, never a commit date), or a
+review in state `APPROVED` (at its own `commit_id`, for the one spec the pull request sets Approved
+or the one its first line names). The spec file at the head must equal the approved text apart from
+its status line. Without `--comments` the approval is not checked (a local run has no comments).
 (4) Rule b (SPEC-0013 rule 24): a spec whose Approved status line is added or changed in the diff
 has no open `Q-` id (a table row or list item in the spec or its notes file that has no row in the
 notes' `## Rulings` section and no `<id> ruled` row in the decisions log).
@@ -170,11 +173,9 @@ def section_lines(text: str, heading: str) -> list[str]:
     return found
 
 
-def approval_failures(
-    root, mb: str, changed: dict[str, str], approvals: dict[str, list[str]] | None = None
-) -> list[str]:
-    failures = []
-    noted = False
+def flipped_specs(root, mb: str, changed: dict[str, str]) -> dict[str, str]:
+    """SPEC-<n> -> path, for each spec whose Approved status line is added or changed."""
+    found = {}
     for path, state in sorted(changed.items()):
         if not SPEC_FILE.match(path) or state not in ("A", "M") or not (root / path).is_file():
             continue
@@ -184,7 +185,16 @@ def approval_failures(
             ln.startswith("+") and STATUS_LINE.match(ln[1:]) for ln in changed_lines(root, mb, path)
         ):
             continue
-        number = f"SPEC-{spec_number(path)}"
+        found[f"SPEC-{spec_number(path)}"] = path
+    return found
+
+
+def approval_failures(
+    root, mb: str, changed: dict[str, str], approvals: dict[str, list[str]] | None = None
+) -> list[str]:
+    failures = []
+    noted = False
+    for number, path in flipped_specs(root, mb, changed).items():
         failures += [f"{number}: {q} has no ruling" for q in open_questions(root, path)]
         if approvals is None:
             if not noted:
@@ -195,6 +205,17 @@ def approval_failures(
         elif not any(unchanged_since(root, sha, path) for sha in approvals[number]):
             failures.append(f"{number}: rule 5: the spec changed after the approved sha")
     return failures
+
+
+def timeline_of(path: str | None) -> list[dict]:
+    """The saved timeline of the pull request; unreadable means empty, so a short line counts for
+    nothing (SPEC-0032 rule 5, build (g))."""
+    if path is None:
+        return []
+    try:
+        return comments_of(Path(path))
+    except CheckError:
+        return []
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -227,10 +248,13 @@ def main(argv: list[str] | None = None) -> int:
     approvals = None
     if comments is not None:
         reviews = file_arg(argv, "--reviews")
+        timeline = file_arg(argv, "--timeline")
         approvals = approval_shas(
             comments_of(Path(comments)),
             comments_of(Path(reviews)) if reviews else [],
             spec_approvers(root),
+            timeline_of(timeline),
+            set(flipped_specs(root, mb, changed)),
         )
     messages += approval_failures(root, mb, changed, approvals)
     if body is None or not body.strip():

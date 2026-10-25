@@ -167,7 +167,7 @@ def test_ac4_an_approve_review_by_a_listed_person_counts_the_same_way(repo, tmp_
     [
         person("stranger"),
         person(body="Approve: 1234567 SPEC-0002"),
-        person(body="Approve: SPEC-0001"),
+        person(body="Approve: SPEC-0002"),
     ],
 )
 def test_ac4_an_approve_line_by_an_unlisted_account_or_for_another_spec_does_not_count(
@@ -178,6 +178,16 @@ def test_ac4_an_approve_line_by_an_unlisted_account_or_for_another_spec_does_not
     approve_spec(repo)
     comments, reviews = files(tmp_path, [verdict(reviewed, FINAL), line])
     assert run_check(repo, comments, reviews).returncode == 1
+
+
+def test_ac4_the_short_line_of_a_listed_person_clears_a_flip_too(repo, tmp_path):
+    """REQ-039 AC4: build (g); the pin is checked by check_specs, which reads the timeline."""
+    reviewed = scenario(repo)
+    approve_spec(repo)
+    short = person(body="Approve: SPEC-0001")
+    comments, reviews = files(tmp_path, [verdict(reviewed, FINAL), short])
+    proc = run_check(repo, comments, reviews)
+    assert (proc.returncode, proc.stdout) == (0, "ok final-clearance\n"), proc.stdout
 
 
 def test_ac4_an_adr_final_line_needs_no_person(repo, tmp_path):

@@ -85,8 +85,9 @@ def check(
     covered = covered_fix_list(latest_verdict_body(items, authors))
     if covered is not None:
         sha, edits = covered
-        waiting = specs_set_approved(edits) - person_approvals(
-            items, comments_of(reviews) if reviews else [], spec_approvers(root)
+        flipped = specs_set_approved(edits)
+        waiting = flipped - person_approvals(
+            items, comments_of(reviews) if reviews else [], spec_approvers(root), flipped
         )
         if waiting:
             raise CheckError(
