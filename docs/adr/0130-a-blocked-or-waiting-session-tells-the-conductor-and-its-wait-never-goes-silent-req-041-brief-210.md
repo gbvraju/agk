@@ -1,6 +1,6 @@
 # ADR-0130: a blocked or waiting session tells the conductor, and its wait never goes silent (REQ-041, brief #210)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0125, ADR-0118
