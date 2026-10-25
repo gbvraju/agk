@@ -224,9 +224,12 @@ Answers (the maintainers'):
 2. The page shows the same message for a known and an unknown address.
 Depends-on: #12
 Size: M
+Advances: REQ-004
+Touches: src/auth/**, docs/guides/auth.md
+Priority: 2
 ```
 
-   `Depends-on` lines are optional, one per issue, and the brief waits until those issues are closed. `Size` is `S`, `M` or `L`.
+   `Depends-on` lines are optional, one per issue, and the brief waits until those issues are closed. `Size` is `S`, `M` or `L`. `Advances` names the requirements the work builds, separated by commas (`Advances: new` for a first brief that asks for a requirement), `Touches` the path globs it changes, separated by commas, and `Priority` is `1`, `2` or `3` (optional; 2 when absent). `check_brief.py FILE --root .` also fails an `Advances` that names a requirement `docs/requirements.md` does not have.
 
 2. **Start a builder session.** In a fresh session run `python3 scripts/agk/session.py next --session <a short name>`. It prints the first free brief and takes it with one comment, `taken: <name> <date>`; it says why it skipped each of the others, and `no brief` when none is left. The session builds, pushes and opens one pull request, and stops.
 

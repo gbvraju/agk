@@ -180,6 +180,12 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "default_branch in agk.toml differs from the repository's default branch",
         "set default_branch in agk.toml",
     ),
+    "brief-label": (
+        "warn",
+        "the repository has the agk-brief label",
+        "the repository has no agk-brief label",
+        "create the label agk-brief (briefs are the issues that carry it)",
+    ),
     "pr-mode": (
         "warn",
         "pr_mode in agk.toml is strict or flow",
@@ -278,8 +284,8 @@ class Reads:
         self.repo = repo
         self.api_dir = api_dir
 
-    def get(self, name: str, path: str) -> tuple[Any, str]:
-        """(data, "") or (None, reason class)."""
+    def get(self, name: str, path: str, not_found: str | None = None) -> tuple[Any, str]:
+        """(data, "") or (None, reason class); a 404 is `not_found` when that is given."""
         if self.api_dir is not None:
             file = self.api_dir / f"{name}.json"
             if not file.is_file():
@@ -289,6 +295,8 @@ class Reads:
             except (OSError, ValueError):
                 raise Refusal("an --api-dir file is not JSON (path class api-dir)", 3) from None
             reason = error_payload(data)
+            if not_found and isinstance(data, dict) and str(data.get("status")) == "404":
+                return None, not_found
             return (None, reason) if reason else (data, "")
         if not self.repo:
             return None, "not-github"
@@ -302,6 +310,8 @@ class Reads:
         except OSError:
             return None, "bad-response"
         if proc.returncode != 0:
+            if not_found and "http 404" in f"{proc.stdout}\n{proc.stderr}".lower():
+                return None, not_found
             return None, classify_failure(proc.stdout, proc.stderr)
         try:
             data = json.loads(proc.stdout)
@@ -484,6 +494,7 @@ def remote_results(
             "repo-auto-merge",
             "repo-delete-branch",
             "default-branch-config",
+            "brief-label",
         ]:
             out[check] = Result("cannot-check", reason or "bad-response")
         return out
@@ -497,6 +508,10 @@ def remote_results(
             out[check] = Result("cannot-check", "no-admin")  # only shown to users with push access
         else:
             out[check] = Result("ok" if repo_data[key] is True else "fail")
+    label, why = reads.get("label-agk-brief", "/labels/agk-brief", not_found="missing")
+    out["brief-label"] = (
+        Result("fail") if why == "missing" else Result("cannot-check", why) if why else Result("ok")
+    )
     out["default-branch-config"] = Result(
         "ok" if repo_data.get("default_branch") == config.get("default_branch", "main") else "fail"
     )
