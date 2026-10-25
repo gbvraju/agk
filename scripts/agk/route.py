@@ -3,6 +3,7 @@
     python3 route.py                         route what the GitHub event of the job names
     python3 route.py --pr N [--dry-run]      route one pull request (a person or a test)
     python3 route.py --all [--dry-run]       route every open pull request
+    python3 route.py --branch [--dry-run]    route the default branch: its red-branch brief
 
 It runs in the workflow `agk-route.yml` on `pull_request`, `issue_comment`, `workflow_run` and
 `push` to the default branch, with the job's `GITHUB_TOKEN`, from a checkout of the default
@@ -12,8 +13,12 @@ the reviews, the changed files) and sets exactly one of the seven labels `agk:ci
 `agk:ci-red`, `agk:conflict`, `agk:review`, `agk:fix`, `agk:approve`, `agk:ready`, removing the
 other six. When more than one state holds, the first of that list in the order conflict,
 ci-running, ci-red, fix, approve, ready, review wins. A label set with the job's token starts no
-workflow, so the router cannot loop. It writes labels and nothing else: no comment, no review,
-no merge, no issue. Messages name the rule, never a value.
+workflow, so the router cannot loop. It writes labels and, for the default branch (SPEC-0032
+rule 7), the one issue `The default branch is red`: on a `push` to the default branch or a
+finished workflow on it, it reads the checks of the branch's head and, when they fail, opens or
+updates that issue as a brief (`Priority: 0`, `Advances: none`) that names the failing check, the
+sha and the run and no cause, and closes it when the branch is green; while checks still run it
+does nothing. No comment, no review, no merge. Messages name the rule, never a value.
 """
 
 from __future__ import annotations
@@ -30,10 +35,10 @@ from common import CheckError, load_config, repo_root
 from metrics import author_of, counted_authors, covered_head, verdicts
 from reviewers import parse as parse_reviewers
 from reviewers import verdict_authors
-from session import gh, pages, repo_name
+from session import RED_TITLE, gh, is_red, pages, repo_name
 
 NAME = "route"
-USAGE = "usage: route.py [--pr N | --all] [--dry-run]"
+USAGE = "usage: route.py [--pr N | --all | --branch] [--dry-run]"
 ROUTER_JOB = "agk-route"
 LABELS = (
     "agk:ci-running",
@@ -52,7 +57,9 @@ COLORS = {
     "agk:fix": "d4c5f9",
     "agk:approve": "5319e7",
     "agk:ready": "0e8a16",
+    "agk-brief": "1d76db",
 }
+DESCRIPTIONS = {"agk-brief": "AGK: a brief a builder session can take"}
 FAILED_RUN = {"failure", "timed_out", "cancelled", "action_required", "startup_failure", "stale"}
 FAILED_STATUS = {"failure", "error"}
 APPROVE = re.compile(r"Approve: ([0-9a-f]{7,40}) (SPEC-\d{4})")
@@ -64,8 +71,8 @@ class ReadOnly(Exception):
     """The job's token cannot write (a fork's pull request gets a read-only token): skip."""
 
 
-def write(endpoint: str, *extra: str, method: str) -> None:
-    """One label write with `gh api`; a 403 is `ReadOnly`, any other failure a CheckError."""
+def write(endpoint: str, *extra: str, method: str, what: str = "rule 2: a label") -> None:
+    """One write with `gh api`; a 403 is `ReadOnly`, any other failure a CheckError."""
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["gh", "api", "--method", method, endpoint, *extra], capture_output=True, text=True
     )
@@ -73,7 +80,7 @@ def write(endpoint: str, *extra: str, method: str) -> None:
         return
     if "403" in proc.stderr:
         raise ReadOnly
-    raise CheckError("rule 2: a label cannot be written")
+    raise CheckError(f"{what} cannot be written")
 
 
 class Held:
@@ -225,7 +232,7 @@ class Labels:
                 "-f",
                 f"color={COLORS[name]}",
                 "-f",
-                "description=AGK: the state of a pull request, set by the router",
+                "description=" + DESCRIPTIONS.get(name, "AGK: the state of a pull request"),
                 method="POST",
             )
             self.known.add(name)
@@ -255,6 +262,90 @@ def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str |
     changed = [name for name in current if name in LABELS] != [wanted]
     print(f"#{n} {wanted}" + (" (changed)" if changed and not dry else ""))
     return wanted
+
+
+# --- the default branch (rule 7) ---------------------------------------------------------------
+
+
+def branch_state(checks: list[dict], statuses: list[dict]) -> str:
+    """`pending`, `red` or `green` for the checks of the default branch's head."""
+    checks = [c for c in checks if c.get("name") != ROUTER_JOB]
+    if not checks and not statuses:
+        return "pending"
+    if any(c.get("status") != "completed" for c in checks) or any(
+        s.get("state") == "pending" for s in statuses
+    ):
+        return "pending"
+    failed = any(c.get("conclusion") in FAILED_RUN for c in checks)
+    return "red" if failed or any(s.get("state") in FAILED_STATUS for s in statuses) else "green"
+
+
+def failing(checks: list[dict], statuses: list[dict], repo: str, sha: str) -> tuple[str, str]:
+    """(name, link) of the first failing check by name, or status."""
+    bad = sorted(
+        (str(c.get("name") or ""), str(c.get("html_url") or c.get("details_url") or ""))
+        for c in checks
+        if c.get("name") != ROUTER_JOB and c.get("conclusion") in FAILED_RUN
+    ) + sorted(
+        (str(s.get("context") or ""), str(s.get("target_url") or ""))
+        for s in statuses
+        if s.get("state") in FAILED_STATUS
+    )
+    name, url = bad[0] if bad else ("", "")
+    return name, url or f"https://github.com/{repo}/commit/{sha}/checks"
+
+
+def one_line(text: str) -> str:
+    return " ".join(str(text).split()) or "unnamed"
+
+
+def red_body(name: str, sha: str, url: str) -> str:
+    """The red-branch brief in the shape of a brief; it names the check, the sha and the run."""
+    return (
+        'Sentence: "The default branch is red: the required checks of its head fail."\n'
+        f"Answers:\n1. Failing check: {one_line(name)}\n2. Head: {one_line(sha)}\n"
+        f"3. Run: {one_line(url)}\n"
+        "Priority: 0\nAdvances: none\nTouches: **\nSize: S\n"
+    )
+
+
+def route_branch(repo: str, default: str, labels: Labels, dry: bool) -> str:
+    """Open, update or close the red-branch brief from the checks of the default branch's head."""
+    tip = gh(f"repos/{repo}/branches/{default}")
+    sha = str(((tip or {}).get("commit") or {}).get("sha") or "") if isinstance(tip, dict) else ""
+    checks = listing(f"repos/{repo}/commits/{sha}/check-runs", "check_runs") if sha else None
+    status = gh(f"repos/{repo}/commits/{sha}/status") if sha else None
+    found = pages(f"repos/{repo}/issues?state=open&labels=agk-brief")
+    if checks is None or found is None:
+        raise CheckError("rule 7: the checks of the default branch cannot be read")
+    statuses = status.get("statuses", []) if isinstance(status, dict) else []
+    state = branch_state(checks, statuses)
+    open_red = sorted((i for i in found if is_red(i)), key=lambda i: i["number"])
+    print(f"default branch {state}")
+    if state == "pending" or dry:
+        return state
+    issues = f"repos/{repo}/issues"
+    if state == "green":
+        for item in open_red:
+            args = ("-f", "state=closed", "-f", "state_reason=completed")
+            write(f"{issues}/{item['number']}", *args, method="PATCH", what="rule 7: the issue")
+        return state
+    name, url = failing(checks, statuses, repo, sha)
+    body = red_body(name, sha, url)
+    if open_red:
+        if str(open_red[0].get("body") or "") != body:
+            write(
+                f"{issues}/{open_red[0]['number']}",
+                "-f",
+                f"body={body}",
+                method="PATCH",
+                what="rule 7: the issue",
+            )
+    else:
+        labels.ensure("agk-brief")
+        args = ("-f", f"title={RED_TITLE}", "-f", f"body={body}", "-f", "labels[]=agk-brief")
+        write(issues, *args, method="POST", what="rule 7: the issue")
+    return state
 
 
 # --- which pull requests an event names (rule 1) ----------------------------------------------
@@ -288,12 +379,21 @@ def targets(name: str, event: dict, repo: str, default: str) -> list[int]:
     return []
 
 
+def on_default_branch(name: str, event: dict, default: str) -> bool:
+    """A push to the default branch, or a finished workflow run on it (rule 7)."""
+    if name == "push":
+        return event.get("ref") == f"refs/heads/{default}"
+    if name == "workflow_run":
+        return (event.get("workflow_run") or {}).get("head_branch") == default
+    return False
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     dry = "--dry-run" in args
     rest = [a for a in args if a != "--dry-run"]
     by_number = len(rest) == 2 and rest[0] == "--pr" and rest[1].isdigit()
-    if rest not in ([], ["--all"]) and not by_number:
+    if rest not in ([], ["--all"], ["--branch"]) and not by_number:
         print(USAGE, file=sys.stderr)
         return 2
     root = repo_root()
@@ -306,23 +406,33 @@ def main(argv: list[str] | None = None) -> int:
     default = (event.get("repository") or {}).get("default_branch") or load_config(root)[
         "default_branch"
     ]
+    name = os.environ.get("GITHUB_EVENT_NAME", "")
     if rest == ["--all"]:
         numbers = open_numbers(repo)
+    elif rest == ["--branch"]:
+        numbers = []
     elif rest:
         numbers = [int(rest[1])]
     else:
         numbers = targets(os.environ.get("GITHUB_EVENT_NAME", ""), event, repo, default)
     labels = Labels(repo)
     failed = False
-    for n in dict.fromkeys(numbers):
-        try:
-            route_one(repo, n, root, labels, dry)
-        except ReadOnly:
-            print("skipped (read-only token)")
-            return 0
-        except CheckError as exc:
-            print(f"FAIL {NAME}: {exc}")
-            failed = True
+    try:
+        for n in dict.fromkeys(numbers):
+            try:
+                route_one(repo, n, root, labels, dry)
+            except CheckError as exc:
+                print(f"FAIL {NAME}: {exc}")
+                failed = True
+        if rest == ["--branch"] or (not rest and on_default_branch(name, event, default)):
+            try:
+                route_branch(repo, default, labels, dry)
+            except CheckError as exc:
+                print(f"FAIL {NAME}: {exc}")
+                failed = True
+    except ReadOnly:
+        print("skipped (read-only token)")
+        return 0
     return 1 if failed else 0
 
 
