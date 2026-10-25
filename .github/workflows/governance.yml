@@ -81,16 +81,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           if [ "$EVENT" = pull_request ]; then
             gh api --paginate --method GET "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" > "$RUNNER_TEMP/comments.json"
             gh api --paginate --method GET "repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews" > "$RUNNER_TEMP/reviews.json"
-            # The order of the timeline pins an `Approve: SPEC-<n>` comment to the commits before it (SPEC-0032 rule 5).
-            gh api --paginate --method GET "repos/${{ github.repository }}/issues/$PR_NUMBER/timeline" > "$RUNNER_TEMP/timeline.json" || echo '[]' > "$RUNNER_TEMP/timeline.json"
+            # The server-side time of each push (a pull_request run) pins an `Approve: SPEC-<n>` comment to the head it saw (SPEC-0032 rule 5).
+            gh api --paginate --method GET "repos/${{ github.repository }}/actions/runs?event=pull_request&branch=$HEAD_REF&per_page=100" > "$RUNNER_TEMP/approval-runs.json" || echo '[]' > "$RUNNER_TEMP/approval-runs.json"
           else
             echo '[]' > "$RUNNER_TEMP/comments.json"
             echo '[]' > "$RUNNER_TEMP/reviews.json"
-            echo '[]' > "$RUNNER_TEMP/timeline.json"
+            echo '[]' > "$RUNNER_TEMP/approval-runs.json"
           fi
       - name: PR states and open pull requests
         env:
@@ -121,7 +122,7 @@ jobs:
       - name: check_specs
         if: ${{ !cancelled() }}
         # On a push there is no base ref and the check is skipped, so the saved comments are the pull request's.
-        run: python scripts/agk/check_specs.py --body "$RUNNER_TEMP/pr-body.md" --comments "$RUNNER_TEMP/comments.json" --reviews "$RUNNER_TEMP/reviews.json" --timeline "$RUNNER_TEMP/timeline.json"
+        run: python scripts/agk/check_specs.py --body "$RUNNER_TEMP/pr-body.md" --comments "$RUNNER_TEMP/comments.json" --reviews "$RUNNER_TEMP/reviews.json" --runs "$RUNNER_TEMP/approval-runs.json"
       - name: check_neutrality
         if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/check_neutrality.py

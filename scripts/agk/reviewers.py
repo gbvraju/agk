@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import sys
+from datetime import datetime
 
 from common import CheckError, load_config, read_list, repo_root, run
 
@@ -24,7 +25,7 @@ USER_RE = re.compile(r"^@?[A-Za-z0-9_.-]+$")
 AUTHORS = "verdict_authors"
 APPROVERS = "spec_approvers"
 APPROVE = re.compile(r"Approve: ([0-9a-f]{7,40}) (SPEC-\d{4})")
-APPROVE_SHORT = re.compile(r"Approve: (SPEC-\d{4})")  # SPEC-0032 rule 5: pinned by the timeline
+APPROVE_SHORT = re.compile(r"Approve: (SPEC-\d{4})")  # SPEC-0032 rule 5: pinned by the runs
 PLACEHOLDER = "replace-me"  # the installed handle `@REPLACE-ME`: a login a stranger could own
 
 
@@ -187,33 +188,44 @@ def first_line(item: dict) -> str:
     return lines[0].strip() if lines else ""
 
 
-def commit_before_comment(timeline: list[dict], comment_id) -> str | None:
-    """The sha of the last commit that precedes the comment in the order of the timeline, else
-    None. Only the order counts, never a commit date (SPEC-0032 rule 5, build (g))."""
-    last = None
-    for event in timeline:
-        if not isinstance(event, dict):
+def moment(value) -> datetime | None:
+    """A GitHub timestamp such as `2026-10-25T12:00:00Z`, else None."""
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def head_before_comment(runs: list[dict], comment: dict) -> str | None:
+    """The `head_sha` of the latest `pull_request` run created before the comment, else None.
+
+    Both times are set by GitHub when the event happens, so unlike a commit date they are not the
+    author's to choose (SPEC-0032 rule 5, build (g); the verdict on 077895f)."""
+    at = moment(comment.get("created_at"))
+    best: tuple[datetime, str] | None = None
+    for item in runs:
+        if not isinstance(item, dict) or item.get("event") != "pull_request":
             continue
-        if event.get("event") == "committed" and isinstance(event.get("sha"), str):
-            last = event["sha"]
-        elif event.get("event") == "commented" and comment_id is not None:
-            if event.get("id") == comment_id:
-                return last
-    return None
+        made, sha = moment(item.get("created_at")), item.get("head_sha")
+        if at and made and made < at and isinstance(sha, str) and sha:
+            if best is None or made > best[0]:
+                best = (made, sha)
+    return best[1] if best else None
 
 
 def approval_shas(
     comments: list[dict],
     reviews: list[dict],
     approvers: list[str],
-    timeline: list[dict] | None = None,
+    runs: list[dict] | None = None,
     flipped: tuple[str, ...] | set[str] = (),
 ) -> dict[str, list[str]]:
     """spec -> the shas of the texts that a listed approver approved (SPEC-0032 rule 5).
 
     A first line `Approve: <sha> SPEC-<n>` of a comment or a review body approves the text at the
-    sha. A first line `Approve: SPEC-<n>` of a comment approves the text of the last commit before
-    the comment in the order of `timeline`; with no such commit it counts for nothing. A review in
+    sha. A first line `Approve: SPEC-<n>` of a comment approves the text at the `head_sha` of the
+    latest `pull_request` run of `runs` created before the comment; with no such run it counts for
+    nothing. A review in
     state `APPROVED` approves, at its own `commit_id`, the spec its first line `Approve: SPEC-<n>`
     names, else the one spec in `flipped` when there is exactly one. Any other account, line or
     form counts for nothing."""
@@ -236,7 +248,7 @@ def approval_shas(
             named = APPROVE_SHORT.fullmatch(line)
             if kind == "comment":
                 if named:
-                    add(named.group(1), commit_before_comment(timeline or [], item.get("id")))
+                    add(named.group(1), head_before_comment(runs or [], item))
             elif item.get("state") == "APPROVED":
                 commit = item.get("commit_id")
                 only = next(iter(flipped)) if len(flipped) == 1 else None
@@ -255,7 +267,7 @@ def person_approvals(
     """The specs a listed approver approved in a comment or a review (SPEC-0032 rule 5)."""
     allowed = {a.lstrip("@").lower() for a in approvers}
     found = set(approval_shas(comments, reviews, approvers, [], flipped))
-    for item in comments:  # a short line is pinned later, by the timeline of check_specs
+    for item in comments:  # a short line is pinned later, by the runs of check_specs
         named = APPROVE_SHORT.fullmatch(first_line(item))
         if named and login_of(item) in allowed:
             found.add(named.group(1))

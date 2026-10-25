@@ -2,9 +2,11 @@
 
 `Approve: SPEC-<n>` by a listed approver approves the spec at the moment of the comment: it counts
 while no commit pushed after that moment changes the spec apart from its status line. The moment
-comes from the pull request's timeline (`check_specs.py --timeline FILE`, the order of the events,
-never a commit date). An approving review counts at its own `commit_id`. The long line is
-unchanged. Fixtures in `tmp_path` with git; no network, no model. REQ-039 AC4.
+comes from the server-side `created_at` of the `pull_request` workflow runs of the pull request
+(`check_specs.py --runs FILE`: the approved text is the spec at the `head_sha` of the latest run
+created before the comment; never a commit date). An approving review counts at its own
+`commit_id`. The long line is unchanged. Fixtures in `tmp_path` with git; no network, no model.
+REQ-039 AC4.
 """
 
 from __future__ import annotations
@@ -27,28 +29,39 @@ def spec(number: str, status: str, rule: str = "A rule.") -> str:
     )
 
 
-def short(who: str = "maintainer", n: str = "0001", cid: int = 7) -> dict:
-    return {"id": cid, "user": {"login": who}, "body": f"Approve: SPEC-{n}\n\nreads well"}
+COMMENTED_AT = "2026-10-25T12:00:00Z"
+BEFORE = "2026-10-25T10:00:00Z"
+AFTER = "2026-10-25T12:30:00Z"
 
 
-def commit_event(sha: str, date: str = "2026-10-25T10:00:00Z") -> dict:
-    return {"event": "committed", "sha": sha, "committer": {"date": date}}
+def short(who: str = "maintainer", n: str = "0001", cid: int = 7, at: str | None = COMMENTED_AT):
+    comment = {"id": cid, "user": {"login": who}, "body": f"Approve: SPEC-{n}\n\nreads well"}
+    if at is not None:
+        comment["created_at"] = at
+    return comment
 
 
-def comment_event(cid: int = 7) -> dict:
-    return {"event": "commented", "id": cid, "created_at": "2026-10-25T12:00:00Z"}
+def run_of(sha: str, at: str, event: str = "pull_request", dated: str = "2000-01-01T00:00:00Z"):
+    """One workflow run as the API lists it; the commit's own date is set by its author."""
+    return {
+        "event": event,
+        "head_sha": sha,
+        "created_at": at,
+        "head_commit": {"timestamp": dated},
+    }
 
 
 def review(state: str, sha: str, who: str = "maintainer", body: str = "") -> dict:
     return {"user": {"login": who}, "state": state, "commit_id": sha, "body": body}
 
 
-def run(repo, comments, timeline=None, reviews=None):
+def run(repo, comments, runs=None, reviews=None):
     repo.write("comments.json", json.dumps(comments))
     args = ["--base", "main", "--comments", "comments.json"]
-    if timeline is not None:
-        repo.write("timeline.json", json.dumps(timeline))
-        args += ["--timeline", "timeline.json"]
+    if runs is not None:
+        page = {"total_count": len(runs), "workflow_runs": runs} if isinstance(runs, list) else runs
+        repo.write("runs.json", json.dumps(page))
+        args += ["--runs", "runs.json"]
     if reviews is not None:
         repo.write("reviews.json", json.dumps(reviews))
         args += ["--reviews", "reviews.json"]
@@ -73,28 +86,40 @@ def ok(proc) -> bool:
 
 
 def test_the_short_line_with_no_later_change_to_the_spec_passes(drafted):
-    """Rule 5 of SPEC-0032, build (g): only the status commit follows the comment."""
+    """Rule 5 of SPEC-0032, build (g): only the status commit is pushed after the comment."""
     repo, reviewed = drafted
     repo.commit({SPEC: spec("0001", "Approved")}, "flip")
-    timeline = [commit_event(reviewed), comment_event(), commit_event(head(repo))]
-    proc = run(repo, [short()], timeline)
+    runs = [run_of(reviewed, BEFORE), run_of(head(repo), AFTER)]
+    proc = run(repo, [short()], runs)
     assert ok(proc), proc.stdout
 
 
-def test_the_short_line_fails_when_a_later_commit_changes_the_spec(drafted):
+def test_the_short_line_fails_when_a_later_push_changes_the_spec(drafted):
     repo, reviewed = drafted
     repo.commit({SPEC: spec("0001", "Draft", "A changed rule.")}, "edit")
     edited = head(repo)
     repo.commit({SPEC: spec("0001", "Approved", "A changed rule.")}, "flip")
-    timeline = [
-        commit_event(reviewed),
-        comment_event(),
-        commit_event(edited),
-        commit_event(head(repo)),
-    ]
-    proc = run(repo, [short()], timeline)
+    runs = [run_of(reviewed, BEFORE), run_of(edited, AFTER), run_of(head(repo), AFTER)]
+    proc = run(repo, [short()], runs)
     assert proc.returncode == 1
     assert "SPEC-0001: rule 5: the spec changed after the approved sha" in proc.stdout
+
+
+def test_a_back_dated_commit_pushed_after_the_comment_does_not_count(drafted):
+    """Verdict on 077895f: the commit's own date is the author's; the run's created_at is GitHub's.
+
+    The edit is dated before the comment (in the run's head commit) but pushed after it."""
+    repo, reviewed = drafted
+    repo.commit({SPEC: spec("0001", "Draft", "Back-dated rule.")}, "edit")
+    edited = head(repo)
+    repo.commit({SPEC: spec("0001", "Approved", "Back-dated rule.")}, "flip")
+    old = "2000-01-01T00:00:00Z"
+    runs = [
+        run_of(reviewed, BEFORE, dated=BEFORE),
+        run_of(edited, AFTER, dated=old),
+        run_of(head(repo), AFTER, dated=old),
+    ]
+    assert run(repo, [short()], runs).returncode == 1
 
 
 def test_a_later_change_to_another_file_does_not_matter(drafted):
@@ -102,85 +127,114 @@ def test_a_later_change_to_another_file_does_not_matter(drafted):
     repo.commit({"docs/other.md": "y\n"}, "elsewhere")
     elsewhere = head(repo)
     repo.commit({SPEC: spec("0001", "Approved")}, "flip")
-    timeline = [
-        commit_event(reviewed),
-        comment_event(),
-        commit_event(elsewhere),
-        commit_event(head(repo)),
-    ]
-    assert ok(run(repo, [short()], timeline))
+    runs = [run_of(reviewed, BEFORE), run_of(elsewhere, AFTER), run_of(head(repo), AFTER)]
+    assert ok(run(repo, [short()], runs))
 
 
-def test_a_commit_before_the_comment_is_part_of_the_approved_text(drafted):
-    """The approved text is the spec at the last commit before the comment, not at the first."""
+def test_the_approved_text_is_the_head_of_the_latest_run_before_the_comment(drafted):
     repo, first = drafted
     repo.commit({SPEC: spec("0001", "Draft", "A reworked rule.")}, "rework")
     reworked = head(repo)
     repo.commit({SPEC: spec("0001", "Approved", "A reworked rule.")}, "flip")
-    timeline = [
-        commit_event(first),
-        commit_event(reworked),
-        comment_event(),
-        commit_event(head(repo)),
+    runs = [
+        run_of(first, "2026-10-25T09:00:00Z"),
+        run_of(reworked, BEFORE),
+        run_of(head(repo), AFTER),
     ]
-    assert ok(run(repo, [short()], timeline))
+    assert ok(run(repo, [short()], runs))
 
 
-def test_commit_dates_are_not_trusted_only_the_order_of_the_timeline(drafted):
-    """A commit pushed after the comment with an old committer date still counts as later."""
+def test_several_runs_of_one_head_and_runs_in_any_order_give_the_same_pin(drafted):
     repo, reviewed = drafted
-    repo.commit({SPEC: spec("0001", "Draft", "A changed rule.")}, "edit")
-    edited = head(repo)
-    repo.commit({SPEC: spec("0001", "Approved", "A changed rule.")}, "flip")
-    timeline = [
-        commit_event(reviewed, "2026-10-25T11:00:00Z"),
-        comment_event(),
-        commit_event(edited, "2000-01-01T00:00:00Z"),
-        commit_event(head(repo), "2000-01-01T00:00:00Z"),
+    repo.commit({SPEC: spec("0001", "Approved")}, "flip")
+    runs = [
+        run_of(head(repo), AFTER),
+        run_of(reviewed, "2026-10-25T10:05:00Z"),
+        run_of(reviewed, "2026-10-25T09:00:00Z"),
+        run_of(reviewed, "2026-10-25T11:59:59Z"),
     ]
-    assert run(repo, [short()], timeline).returncode == 1
+    assert ok(run(repo, [short()], runs))
+
+
+def test_the_pages_of_gh_api_paginate_are_read_one_after_the_other(drafted):
+    repo, reviewed = drafted
+    repo.commit({SPEC: spec("0001", "Approved")}, "flip")
+    first = {"workflow_runs": [run_of(reviewed, BEFORE)]}
+    second = {"workflow_runs": [run_of(head(repo), AFTER)]}
+    repo.write("runs.json", json.dumps(first) + json.dumps(second))
+    args = ["--base", "main", "--comments", "comments.json", "--runs", "runs.json"]
+    repo.write("comments.json", json.dumps([short()]))
+    assert ok(repo.run("check_specs.py", *args))
+
+
+def test_a_run_of_another_event_or_a_run_created_after_the_comment_pins_nothing(drafted):
+    repo, reviewed = drafted
+    repo.commit({SPEC: spec("0001", "Approved")}, "flip")
+    runs = [run_of(reviewed, BEFORE, event="push"), run_of(head(repo), AFTER)]
+    assert run(repo, [short()], runs).returncode == 1
 
 
 @pytest.mark.parametrize(
     "case",
-    ["no timeline file", "comment missing", "comment before every commit", "unreadable timeline"],
+    [
+        "no runs file",
+        "no run before the comment",
+        "comment without a time",
+        "unreadable runs",
+        "a sha that is not in this history",
+    ],
 )
 def test_a_short_line_that_cannot_be_pinned_counts_for_nothing(drafted, case):
     repo, reviewed = drafted
     repo.commit({SPEC: spec("0001", "Approved")}, "flip")
     flip = head(repo)
-    timeline = {
-        "no timeline file": None,
-        "comment missing": [commit_event(reviewed), commit_event(flip)],
-        "comment before every commit": [comment_event(), commit_event(reviewed)],
-        "unreadable timeline": "not a list",
+    comment = short(at=None) if case == "comment without a time" else short()
+    runs = {
+        "no runs file": None,
+        "no run before the comment": [run_of(reviewed, AFTER), run_of(flip, AFTER)],
+        "comment without a time": [run_of(reviewed, BEFORE), run_of(flip, AFTER)],
+        "unreadable runs": "not a list",
+        "a sha that is not in this history": [run_of("0" * 40, BEFORE), run_of(flip, AFTER)],
     }[case]
-    proc = run(repo, [short()], timeline)
+    proc = run(repo, [comment], runs)
     assert proc.returncode == 1
     assert "SPEC-0001: rule 5: no Approve line by an account in spec_approvers" in proc.stdout
+
+
+def test_a_run_of_a_commit_outside_this_history_pins_nothing_even_if_the_text_is_equal(drafted):
+    """A run of another pull request of the same branch name must not approve this one."""
+    repo, reviewed = drafted
+    repo.git("checkout", "-q", "-b", "elsewhere", "main")
+    repo.commit({SPEC: spec("0001", "Draft"), "docs/other.md": "z\n"}, "same spec, other history")
+    stranger = head(repo)
+    repo.git("checkout", "-q", "feature")
+    repo.commit({SPEC: spec("0001", "Approved")}, "flip")
+    runs = [run_of(stranger, BEFORE), run_of(head(repo), AFTER)]
+    assert run(repo, [short()], runs).returncode == 1
 
 
 def test_an_unlisted_account_or_another_spec_or_a_bad_form_counts_for_nothing(drafted):
     repo, reviewed = drafted
     repo.commit({SPEC: spec("0001", "Approved")}, "flip")
-    timeline = [commit_event(reviewed), comment_event(), commit_event(head(repo))]
+    runs = [run_of(reviewed, BEFORE), run_of(head(repo), AFTER)]
+    login = {"login": "maintainer"}
     bad = [
         short(who="intruder"),
         short(n="0002"),
-        {"id": 7, "user": {"login": "maintainer"}, "body": "Looks good\nApprove: SPEC-0001"},
-        {"id": 7, "user": {"login": "maintainer"}, "body": "Approve: SPEC-1"},
-        {"id": 7, "user": {"login": "maintainer"}, "body": "approve: SPEC-0001"},
+        {"id": 7, "user": login, "created_at": COMMENTED_AT, "body": "Looks\nApprove: SPEC-0001"},
+        {"id": 7, "user": login, "created_at": COMMENTED_AT, "body": "Approve: SPEC-1"},
+        {"id": 7, "user": login, "created_at": COMMENTED_AT, "body": "approve: SPEC-0001"},
     ]
     for comment in bad:
-        assert run(repo, [comment], timeline).returncode == 1, comment
+        assert run(repo, [comment], runs).returncode == 1, comment
 
 
-def test_the_long_line_works_as_before_with_a_timeline_present(drafted):
+def test_the_long_line_works_as_before_with_runs_present(drafted):
     repo, reviewed = drafted
     repo.commit({SPEC: spec("0001", "Approved")}, "flip")
     comment = {"id": 8, "user": {"login": "maintainer"}, "body": f"Approve: {reviewed} SPEC-0001"}
-    timeline = [commit_event(reviewed), commit_event(head(repo))]
-    assert ok(run(repo, [comment], timeline))
+    runs = [run_of(reviewed, BEFORE), run_of(head(repo), AFTER)]
+    assert ok(run(repo, [comment], runs))
     assert ok(run(repo, [comment]))
 
 
@@ -260,12 +314,17 @@ def workflow() -> str:
     return (ROOT / ".github" / "workflows" / "governance.yml").read_text(encoding="utf-8")
 
 
-def test_governance_saves_the_timeline_beside_the_comments_and_passes_it():
+def test_governance_saves_the_runs_of_the_pull_request_and_passes_them():
+    """Verdict on 077895f: the pin is the server-side time of a pushed head, not the timeline."""
     text = workflow()
-    assert "issues/$PR_NUMBER/timeline" in text
-    assert '"$RUNNER_TEMP/timeline.json"' in text
-    assert '--timeline "$RUNNER_TEMP/timeline.json"' in text
-    assert "gh api --paginate --method GET" in text.split("issues/$PR_NUMBER/timeline")[0][-80:]
+    assert "timeline" not in text
+    assert "actions/runs?event=pull_request&branch=" in text
+    assert "head.ref" in text
+    assert '"$RUNNER_TEMP/approval-runs.json"' in text
+    assert '--runs "$RUNNER_TEMP/approval-runs.json"' in text
+    assert (
+        "gh api --paginate --method GET" in text.split("actions/runs?event=pull_request")[0][-80:]
+    )
 
 
 def test_the_conductor_role_file_and_the_guide_show_the_short_line():

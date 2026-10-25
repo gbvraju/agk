@@ -6,14 +6,15 @@ A Draft spec, a new spec and the Draft -> Approved flip pass.
 (2) Rule a (SPEC-0013 rule 23), with `--body FILE|-`: an implementation PR (its diff touches a path
 outside `docs/` and `.github/ISSUE_TEMPLATE/`) must name, on its `Advances:` line, only requirements
 that an Approved spec names; a requirement that no spec names and an ADR names is exempt.
-(3) With `--comments FILE [--reviews FILE] [--timeline FILE]` (saved comments, reviews and timeline
-of the pull request; SPEC-0032 rule 5): a spec whose Approved status line is added or changed in the
-diff, through a `Final:` line or an ordinary commit, needs an approval by an account in
-`spec_approvers`: a first line `Approve: <sha> SPEC-<n>`, a first line `Approve: SPEC-<n>` (the text
-of the last commit before the comment in the order of the timeline, never a commit date), or a
-review in state `APPROVED` (at its own `commit_id`, for the one spec the pull request sets Approved
-or the one its first line names). The spec file at the head must equal the approved text apart from
-its status line. Without `--comments` the approval is not checked (a local run has no comments).
+(3) With `--comments FILE [--reviews FILE] [--runs FILE]` (saved comments, reviews and
+`pull_request` workflow runs of the pull request; SPEC-0032 rule 5): a spec whose Approved status
+line is added or changed in the diff, through a `Final:` line or an ordinary commit, needs an
+approval by an account in `spec_approvers`: a first line `Approve: <sha> SPEC-<n>`, a first line
+`Approve: SPEC-<n>` (the text at the `head_sha` of the latest run created before the comment,
+GitHub's time, never a commit date), or a review in state `APPROVED` (at its own `commit_id`, for
+the one spec the pull request sets Approved or the one its first line names). The spec file at the
+head must equal the approved text apart from its status line. Without `--comments` the approval is
+not checked (a local run has no comments).
 (4) Rule b (SPEC-0013 rule 24): a spec whose Approved status line is added or changed in the diff
 has no open `Q-` id (a table row or list item in the spec or its notes file that has no row in the
 notes' `## Rulings` section and no `<id> ruled` row in the decisions log).
@@ -22,6 +23,7 @@ Messages name the spec path, the requirement or the question id, never content.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -207,15 +209,42 @@ def approval_failures(
     return failures
 
 
-def timeline_of(path: str | None) -> list[dict]:
-    """The saved timeline of the pull request; unreadable means empty, so a short line counts for
-    nothing (SPEC-0032 rule 5, build (g))."""
+def runs_of(root, path: str | None) -> list[dict]:
+    """The saved `pull_request` workflow runs of the pull request (`actions/runs`, pages or not),
+    only those whose head is in the history of the head, so that a run of another pull request of
+    the same branch name pins nothing. Unreadable means none: a short line then counts for nothing
+    (SPEC-0032 rule 5, build (g))."""
     if path is None:
         return []
     try:
-        return comments_of(Path(path))
-    except CheckError:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
         return []
+    found: list[dict] = []
+    decoder, at = json.JSONDecoder(), 0
+    try:
+        while at < len(text):
+            if text[at].isspace():
+                at += 1
+                continue
+            value, at = decoder.raw_decode(text, at)
+            pages = value if isinstance(value, list) else [value]
+            for page in pages:
+                items = page.get("workflow_runs") if isinstance(page, dict) else None
+                found += [x for x in items or [] if isinstance(x, dict)]
+                if isinstance(page, dict) and "head_sha" in page:  # one run, not a page of runs
+                    found.append(page)
+    except ValueError:
+        return []
+    return [x for x in found if in_history(root, x.get("head_sha"))]
+
+
+def in_history(root, sha) -> bool:
+    """The commit `sha` is the head or one of its ancestors."""
+    if not isinstance(sha, str) or not sha:
+        return False
+    commit = git(root, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).strip()
+    return bool(commit) and commit == git(root, "merge-base", commit, "HEAD", check=False).strip()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -248,12 +277,12 @@ def main(argv: list[str] | None = None) -> int:
     approvals = None
     if comments is not None:
         reviews = file_arg(argv, "--reviews")
-        timeline = file_arg(argv, "--timeline")
+        runs = file_arg(argv, "--runs")
         approvals = approval_shas(
             comments_of(Path(comments)),
             comments_of(Path(reviews)) if reviews else [],
             spec_approvers(root),
-            timeline_of(timeline),
+            runs_of(root, runs),
             set(flipped_specs(root, mb, changed)),
         )
     messages += approval_failures(root, mb, changed, approvals)
