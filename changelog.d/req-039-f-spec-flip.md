@@ -1,1 +1,0 @@
-- governance: a pull request that sets a spec to Approved, by a `Final:` line or an ordinary commit, needs an `Approve: <sha> SPEC-<n>` line by a listed person for the text of the spec at its head (SPEC-0032 rule 5, REQ-039)

@@ -1,1 +1,0 @@
-- the session rules gain push-check before every push, the shared-mechanical files, mechanical conflicts only, the Question and Report shapes and the hand-off of a finished builder (per-build claims, claim, after, watch --assign, [flow] assign); the conductor reads and answers them; the guide shows the launcher contract with two examples (SPEC-0034 rules 6, 7c and 11, REQ-041)
