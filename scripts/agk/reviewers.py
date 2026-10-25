@@ -22,6 +22,8 @@ HANDLE_RE = re.compile(r"^@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 USER_RE = re.compile(r"^@?[A-Za-z0-9_.-]+$")
 AUTHORS = "verdict_authors"
+APPROVERS = "spec_approvers"
+APPROVE = re.compile(r"Approve: ([0-9a-f]{7,40}) (SPEC-\d{4})")
 PLACEHOLDER = "replace-me"  # the installed handle `@REPLACE-ME`: a login a stranger could own
 
 
@@ -150,6 +152,42 @@ def authors_of(data: dict) -> list[str]:
         return []
     names = [a.lstrip("@").lower() for a in listed]
     return [n for n in names if n != PLACEHOLDER]
+
+
+def approvers_of(data: dict) -> list[str]:
+    """The people who may approve a spec (SPEC-0032 rule 5), lower case without `@`: the list
+    `spec_approvers` of user handles; absent, empty, a team handle or anything else lists nobody,
+    and the installed placeholder `@REPLACE-ME` is never listed."""
+    listed = data.get(APPROVERS)
+    if not isinstance(listed, list) or not all(
+        isinstance(a, str) and USER_RE.match(a) for a in listed
+    ):
+        return []
+    names = [a.lstrip("@").lower() for a in listed]
+    return [n for n in names if n != PLACEHOLDER]
+
+
+def spec_approvers(root) -> list[str]:
+    """The listed spec approvers of the repository at `root`; unreadable means nobody."""
+    try:
+        return approvers_of(parse((root / CONFIG).read_text(encoding="utf-8")))
+    except (OSError, UnicodeDecodeError, CheckError):
+        return []
+
+
+def person_approvals(comments: list[dict], reviews: list[dict], approvers: list[str]) -> set[str]:
+    """The specs named by the first line `Approve: <sha> SPEC-<n>` of a comment or a review body
+    whose author is a listed approver; any other account, line or form counts for nothing."""
+    allowed = {a.lstrip("@").lower() for a in approvers}
+    found = set()
+    for item in [*comments, *reviews]:
+        user = item.get("user")
+        login = user.get("login") if isinstance(user, dict) else None
+        lines = str(item.get("body") or "").splitlines()
+        match = APPROVE.fullmatch(lines[0].strip()) if lines else None
+        if match and isinstance(login, str) and login.lower() in allowed:
+            found.add(match.group(2))
+    return found
 
 
 def verdict_authors(root) -> list[str]:
@@ -298,6 +336,17 @@ def render_codeowners(data: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def approver_problems(data: dict) -> list[str]:
+    """SPEC-0032 rule 5: a `spec_approvers` that is not a list of user handles; absent is allowed
+    (nobody may approve a spec); the message names the setting, never a handle."""
+    listed = data.get(APPROVERS)
+    if listed is not None and not (
+        isinstance(listed, list) and all(isinstance(a, str) and USER_RE.match(a) for a in listed)
+    ):
+        return [f"{APPROVERS} must be a list of user handles"]
+    return []
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     modes = (["--check"], ["--codeowners"], ["--codeowners", "--write"], ["--check-codeowners"])
@@ -315,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
         raise CheckError(f"cannot read {CONFIG} or {PROTECTED_LIST}") from exc
     problems = validate(data, protected)
     if argv[0] == "--check":
-        problems += author_problems(data)
+        problems += author_problems(data) + approver_problems(data)
         for problem in problems:
             print(f"FAIL {NAME}: {problem}")
         if not problems:

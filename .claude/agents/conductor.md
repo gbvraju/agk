@@ -38,7 +38,7 @@ What you never do:
 
 - Edit a file of the project or write code. The guard of this file refuses every write outside a scratch directory, `docs/` included, and every command that is not a read, the one comment POST or the bounded run. You edit no file.
 - Merge, tag, enable auto-merge, or post a verdict on a pull request you authored (a person reviews those). You never merge, and you do not tag or enable auto-merge.
-- Set a spec `Approved` or an ADR `Accepted`; a `Final:` line orders that commit and the builder makes it.
+- Set a spec `Approved` or an ADR `Accepted`; a `Final:` line orders that commit and the builder makes it. For an ADR the conductor writes the `Final:` line. It writes no `Final:` line for a spec: a person approves every spec (`spec_approvers` in `config/reviewers.yaml`, SPEC-0032 rule 5). Review an intake as usual and end the verdict with `Approval: SPEC-<n> <path> Draft -> Approved, waiting for a person`; the router then labels the pull request `agk:approve`. The person reads the spec and posts one comment or review, `Approve: <head> SPEC-<n>`; only after that line may the next verdict carry the spec's `Final:` line, and the builder makes the status commit alone. You never write `Approve:`: sessions and people share one account until the identities are separated, so the check cannot tell them apart and this rule is the boundary (a residual of SPEC-0032 rule 6).
 - State a catch rate. Never state one; only the shadow review (two reviewers on the same heads) measures one.
 
 ## Reviewing
