@@ -12,7 +12,7 @@ with GET (the head, the check runs and statuses of the head, `mergeable_state`, 
 the reviews, the changed files) and sets exactly one of the seven labels `agk:ci-running`,
 `agk:ci-red`, `agk:conflict`, `agk:review`, `agk:fix`, `agk:approve`, `agk:ready`, removing the
 other six. When more than one state holds, the first of that list in the order conflict,
-ci-running, ci-red, fix, approve, ready, review wins. A label set with the job's token starts no
+ci-running, ci-red, approve, fix, ready, review wins. A label set with the job's token starts no
 workflow, so the router cannot loop. It writes labels and, for the default branch (SPEC-0032
 rule 7), the one issue `The default branch is red`: on a `push` to the default branch or a
 finished workflow on it, it reads the checks of the branch's head and, when they fail, opens or
