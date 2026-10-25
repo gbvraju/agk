@@ -97,3 +97,47 @@ def test_ac7_the_conductor_reads_question_and_report_comments_and_answers_each_b
     ):
         assert phrase in text, phrase
     assert "never merge" in text and "edit no file" in text  # the limits are as before
+
+
+def test_ac4_the_rules_say_where_each_comment_lives_and_that_a_builder_never_ends_silently():
+    """REQ-041 AC4: the hand-off design (rule 17)."""
+    text = rules()
+    for phrase in (
+        "Each comment lives in one place",
+        "On the pull request: `Report:`, `Question:` and `Verdict:`",
+        "On the brief: `taken: <id> <date> [build (<x>)]` and `released: <id> [build (<x>)]`",
+        "labelled `agk-conductor`: `Request:` and `Assign:`",
+        "A builder never ends silently",
+        "a `Report:`, a `released:` or a `Request:`",
+    ):
+        assert phrase in text, phrase
+
+
+def test_ac5_the_rules_give_the_hand_off_of_a_finished_builder():
+    """REQ-041 AC5: rule 18."""
+    text = rules()
+    for phrase in (
+        "session.py claim --session ID --brief N --build X",
+        "refuses a build that a live take holds",
+        "session.py after --session ID",
+        '`assign = "next"`',
+        '`assign = "conductor"`',
+        "`Request: <id> finished #<brief>` or `Request: <id> new`",
+        "session.py watch --assign ID",
+        "by a listed verdict author",
+        "`Assign: <id> none` and `assign-timeout` end the session",
+        "starts nothing on its own",
+    ):
+        assert phrase in text, phrase
+
+
+def test_ac5_the_conductor_answers_each_request_with_one_assign_line():
+    """REQ-041 AC5: the role file."""
+    text = " ".join(conductor().split())
+    for phrase in (
+        "labelled `agk-conductor`",
+        "read each `Request:` comment there",
+        "`Assign: <session> #<brief> build (<x>)`",
+        "`Assign: <session> none`",
+    ):
+        assert phrase in text, phrase

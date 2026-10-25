@@ -71,3 +71,17 @@ def test_ac6_the_examples_start_sessions_and_nothing_else():
 def test_ac6_the_item_names_no_project_and_no_person():
     """REQ-041 AC6: generic text."""
     assert "gbvraju" not in contract().lower()
+
+
+def test_ac5_the_item_says_which_assign_value_a_launcher_session_uses():
+    """REQ-041 AC5: a launcher-started session uses `next`; `conductor` asks on the issue."""
+    text = " ".join(contract().split())
+    for phrase in (
+        '`assign = "next"`',
+        "session.py after --session",
+        '`assign = "conductor"`',
+        "`Request:`",
+        "`agk-conductor`",
+        "session.py watch --assign",
+    ):
+        assert phrase in text, phrase

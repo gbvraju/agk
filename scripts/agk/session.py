@@ -43,7 +43,10 @@ from reviewers import verdict_authors
 NAME = "session"
 USAGE = (
     "usage: session.py watch (--pr N | --merged N) [--interval S] [--timeout S]\n"
+    "       session.py watch --assign ID [--interval S] [--timeout S]\n"
     "       session.py next --session ID\n"
+    "       session.py claim --session ID --brief N [--build X]\n"
+    "       session.py after --session ID\n"
     "       session.py queue --role conductor|builder|person [--author LOGIN]\n"
     "       session.py resume --pr N"
 )
@@ -51,7 +54,12 @@ PAGE = 100
 LABEL = "agk-brief"
 LIVE = timedelta(hours=24)
 VERDICT = re.compile(r"Verdict: (cleared|fix list|rejected) ([0-9a-f]{7,40})")
-TAKE = re.compile(r"taken: (\S+) (\d{4}-\d{2}-\d{2})")
+BUILD = r"(?: build \(([A-Za-z0-9._-]+)\))?"
+TAKE = re.compile(rf"taken: (\S+) (\d{{4}}-\d{{2}}-\d{{2}}){BUILD}")
+RELEASE = re.compile(rf"released: (\S+){BUILD}")
+ASSIGN = re.compile(r"Assign: (\S+) (none|#(\d+)(?: build \(([A-Za-z0-9._-]+)\))?)")
+ASSIGN_LABEL = "agk-conductor"
+ASSIGN_MODES = ("conductor", "next")
 SENTENCE = re.compile(r'Sentence: "(.*)"')
 DEPENDS = re.compile(r"Depends-on: #(\d+)")
 SIZE = re.compile(r"Size: [SML]")
@@ -74,6 +82,7 @@ HEAD_VERDICT = re.compile(r"Verdict: (cleared|fix list|rejected)(?: ([0-9a-f]{7,
 BUILDER_LABELS = frozenset({"agk:fix", "agk:conflict", "agk:ci-red"})
 WAITING_LABELS = frozenset({"agk:ready", "agk:approve"})
 STALL_HOURS = 4
+CLAIM_HOURS = 4
 SAFE_REF = re.compile(r"[A-Za-z0-9._/-]+")
 PROGRESS = re.compile(r"Progress: ([0-9a-f]{7,40}) done (\d+)/(\d+); next: (\S.*)")
 
@@ -272,14 +281,20 @@ def depends_on(body: str) -> list[int]:
 # --- next (rule 3) ----------------------------------------------------------------------------
 
 
-def live_takes(comments: list, repo: str, number: int) -> list[tuple[datetime, int, str, str]]:
-    """(when, id, session, login) of every live take, oldest first; the pull requests are read
-    only when a take is older than 24 hours."""
+def live_takes(
+    comments: list, repo: str, number: int
+) -> list[tuple[datetime, int, str, str, str | None]]:
+    """(when, id, session, login, build) of every live take, oldest first; the pull requests are
+    read only when a take is older than 24 hours. A later `released:` of the session frees its take
+    of that build (or of every build when it names none)."""
     now = datetime.now(UTC)
-    found, prs = [], None
+    found, prs, freed = [], None, []
     for comment in comments:
         body = comment.get("body")
-        match = TAKE.fullmatch(body.strip()) if isinstance(body, str) else None
+        text = body.strip() if isinstance(body, str) else ""
+        if (gone := RELEASE.fullmatch(text)) is not None:
+            freed.append((comment.get("id", 0), gone.group(1), gone.group(2)))
+        match = TAKE.fullmatch(text)
         if not match:
             continue
         when, login = moment(comment.get("created_at")), author_of(comment)
@@ -288,8 +303,12 @@ def live_takes(comments: list, repo: str, number: int) -> list[tuple[datetime, i
             prs = mentioning(repo, number) if prs is None else prs
             live = any(author_of(pr) == login and moment(pr.get("created_at")) > when for pr in prs)
         if live:
-            found.append((when, comment.get("id", 0), match.group(1), login))
-    return sorted(found)
+            found.append((when, comment.get("id", 0), match.group(1), login, match.group(3)))
+    return sorted(
+        t
+        for t in found
+        if not any(f[0] > t[1] and f[1] == t[2] and f[2] in (None, t[4]) for f in freed)
+    )
 
 
 def mentioning(repo: str, number: int) -> list:
@@ -319,18 +338,113 @@ def judge(repo: str, brief: dict, me: str) -> tuple[str | None, list]:
     return None, comments
 
 
-def take(repo: str, number: int, me: str, comments: list) -> str | None:
-    """Post the take unless this session already holds one; the reason it was lost, or None."""
-    if not any(t[2] == me for t in live_takes(comments, repo, number)):
+def take(repo: str, number: int, me: str, comments: list, build: str | None = None) -> str | None:
+    """Post the take unless this session already holds one; the reason it was lost, or None.
+    A take of a build conflicts with a take of the same build and with a take of the whole brief."""
+
+    def rivals() -> list:
+        found = live_takes(comments, repo, number)
+        return [t for t in found if build is None or t[4] in (None, build)]
+
+    if not any(t[2] == me and t[4] == build for t in rivals()):
+        if other := [t for t in rivals() if t[2] != me]:
+            return f"taken by {other[0][2]}"
         day = datetime.now(UTC).strftime("%Y-%m-%d")
-        body = f"body=taken: {me} {day}"
+        part = f" build ({build})" if build else ""
+        body = f"body=taken: {me} {day}{part}"
         if gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is None:
             return "the take cannot be posted"
         comments = pages(f"repos/{repo}/issues/{number}/comments") or []
-    oldest = live_takes(comments, repo, number)
+    oldest = rivals()
     if oldest and oldest[0][2] != me:
         return f"lost the take to {oldest[0][2]}"
     return None
+
+
+# --- a build claim, the answer of the conductor and `after` (SPEC-0034 rules 5 and 12) ----------
+
+
+def flow_table(root) -> dict:
+    try:
+        data = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise CheckError("rule 12: agk.toml cannot be read") from exc
+    flow = data.get("flow", {})
+    return flow if isinstance(flow, dict) else {}
+
+
+def assign_mode(root) -> str:
+    """`assign` of the flow table: `conductor` or `next` (the default); another value is refused."""
+    value = flow_table(root).get("assign", "next")
+    if value not in ASSIGN_MODES:
+        raise CheckError("rule 12: assign of the [flow] table must be conductor or next")
+    return value
+
+
+def claim_hours(root) -> int:
+    value = flow_table(root).get("claim_hours", CLAIM_HOURS)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CheckError("rule 12: claim_hours of the flow table must be a whole number, 1 or more")
+    return value
+
+
+def claim(root, me: str, number: int, build: str | None) -> int:
+    repo = repo_name(root)
+    comments = pages(f"repos/{repo}/issues/{number}/comments")
+    if comments is None:
+        raise CheckError("rule 5: the comments of the brief cannot be read")
+    if why := take(repo, number, me, comments, build):
+        print(f"skip #{number}: {why}")
+        return 1
+    print(f"claimed #{number}" + (f" build ({build})" if build else ""))
+    return 0
+
+
+def conductor_issue(repo: str) -> int:
+    found = pages(f"repos/{repo}/issues?state=open&labels={ASSIGN_LABEL}")
+    issues = [
+        i for i in found or [] if "pull_request" not in i and isinstance(i.get("number"), int)
+    ]
+    if len(issues) != 1:
+        raise CheckError(f"rule 12: exactly one open issue labelled {ASSIGN_LABEL} is needed")
+    return issues[0]["number"]
+
+
+def watch_assign(root, me: str, args: dict[str, str]) -> int:
+    """End on the first `Assign: <me> ...` by a listed author after this session's `Request:`."""
+    repo = repo_name(root)
+    path = f"repos/{repo}/issues/{conductor_issue(repo)}/comments"
+    interval = float(args.get("--interval", 60))
+    limit = float(args.get("--timeout", claim_hours(root) * 3600))
+    started = time.monotonic()
+    comments = pages(path) or []
+    asked = [c["id"] for c in comments if str(c.get("body") or "").startswith(f"Request: {me} ")]
+    seen = max(asked, default=newest(comments) or 0)
+    allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None)}
+    while True:
+        for comment in sorted(pages(path) or [], key=lambda c: c.get("id", 0)):
+            body = comment.get("body")
+            first = body.splitlines()[0].strip() if isinstance(body, str) and body.strip() else ""
+            match = ASSIGN.fullmatch(first)
+            if comment.get("id", 0) > seen and match and match.group(1) == me:
+                if author_of(comment) in allowed:
+                    what = match.group(2)
+                    print("assign " + (what if what == "none" else what))
+                    return 0
+        if time.monotonic() - started >= limit:
+            print("assign-timeout")
+            return 0
+        time.sleep(interval)
+
+
+def after(root, me: str) -> int:
+    """Where a builder goes when its work is done, by `[flow] assign` (rule 12)."""
+    if assign_mode(root) == "next":
+        return next_brief(root, me)
+    print(f"ask the conductor on #{conductor_issue(repo_name(root))}")
+    return 0
 
 
 def is_red(item: dict) -> bool:
@@ -604,13 +718,19 @@ def number_ok(text: str) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if not args or args[0] not in ("watch", "next", "queue", "resume") or len(args[1:]) % 2:
+    if (
+        not args
+        or args[0] not in ("watch", "next", "queue", "resume", "claim", "after")
+        or len(args[1:]) % 2
+    ):
         print(USAGE)
         return 2
     cmd, opts = args[0], dict(zip(args[1::2], args[2::2], strict=False))
     allowed = {
-        "watch": {"--pr", "--merged", "--interval", "--timeout"},
+        "watch": {"--pr", "--merged", "--assign", "--interval", "--timeout"},
         "next": {"--session"},
+        "claim": {"--session", "--brief", "--build"},
+        "after": {"--session"},
         "queue": {"--role", "--author"},
         "resume": {"--pr"},
     }
@@ -618,8 +738,11 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE)
         return 2
     if cmd == "watch":
-        ok = ("--pr" in opts) != ("--merged" in opts) and number_of(
-            opts.get("--pr") or opts.get("--merged")
+        modes = [k for k in ("--pr", "--merged", "--assign") if k in opts]
+        ok = len(modes) == 1 and (
+            bool(SESSION_ID.fullmatch(opts["--assign"]))
+            if "--assign" in opts
+            else number_of(opts.get("--pr") or opts.get("--merged"))
         )
         ok = ok and all(number_ok(opts[k]) for k in ("--interval", "--timeout") if k in opts)
     elif cmd == "queue":
@@ -628,6 +751,11 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif cmd == "resume":
         ok = number_of(opts.get("--pr"))
+    elif cmd == "claim":
+        ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and number_of(
+            opts.get("--brief")
+        )
+        ok = ok and bool(SESSION_ID.fullmatch(opts.get("--build", "x")))
     else:
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", "")))
     if not ok:
@@ -638,7 +766,15 @@ def main(argv: list[str] | None = None) -> int:
         if cmd == "queue":
             return queue(root, opts["--role"], opts.get("--author"))
         if cmd == "watch":
-            return watch(root, opts)
+            return (
+                watch_assign(root, opts["--assign"], opts)
+                if "--assign" in opts
+                else watch(root, opts)
+            )
+        if cmd == "claim":
+            return claim(root, opts["--session"], int(opts["--brief"]), opts.get("--build"))
+        if cmd == "after":
+            return after(root, opts["--session"])
         if cmd == "resume":
             return resume(root, int(opts["--pr"]))
         return next_brief(root, opts["--session"])
