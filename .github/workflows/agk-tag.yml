@@ -1,0 +1,48 @@
+# The check of a pushed tag (brief #212, build (b)): the tagged commit must be a release. It runs `scripts/agk/check_tag.py` from a
+# checkout of the tag with the full history; on a failure the job fails and the one issue `The tag <tag> is not a release` is opened
+# or updated as a brief (`Priority: 0`). It deletes no tag, moves none, makes no release and no commit: the only write is that issue.
+# The script is kit-only, so in a project that does not have it the job has nothing to check.
+name: agk-tag
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  agk-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Check the tag
+        id: check
+        continue-on-error: true
+        run: |
+          if [ -f scripts/agk/check_tag.py ]; then
+            python3 scripts/agk/check_tag.py --tag "$GITHUB_REF_NAME" --issue-json "$RUNNER_TEMP/issue.json"
+          else
+            echo "scripts/agk/check_tag.py is not in this repository: nothing to check"
+          fi
+      - name: Open or update the issue
+        if: ${{ steps.check.outcome == 'failure' && hashFiles('scripts/agk/check_tag.py') != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["title"])' "$RUNNER_TEMP/issue.json")"
+          number="$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues?state=open&labels=agk-brief&per_page=100" --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
+          if [ -n "$number" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/$number" --input "$RUNNER_TEMP/issue.json"
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues" --input "$RUNNER_TEMP/issue.json"
+          fi
+      - name: Fail the job
+        if: ${{ steps.check.outcome == 'failure' }}
+        run: exit 1

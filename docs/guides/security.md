@@ -58,6 +58,7 @@ The permissions are the ones in each file; a workflow can do nothing its token d
 | `product-report.yml` | read of contents, pull requests, checks and actions; `issues: write` | one issue a week with the label `agk-product-report`, and that label; then one workflow artifact, `agk-facts-<week>`, the facts file the report was rendered from and `report.json`, the same report as data, kept 90 days and readable by anyone who can read the repository's workflow runs (no anonymous download, no other place) |
 | `drift-audit.yml` | `contents: read`; `issues: write` | at most one issue labelled `agk-drift-audit`, and that label |
 | `agk-route.yml` | `contents: read`; `checks: read`; `statuses: read`; `pull-requests: write`; `issues: write` | one label of seven (`agk:ci-running`, `agk:ci-red`, `agk:conflict`, `agk:review`, `agk:fix`, `agk:approve`, `agk:ready`) on each pull request, and those labels if missing; no comment, no review, no merge; it runs from a checkout of the default branch and never runs code of a pull request |
+| `agk-tag.yml` | `contents: read`; `issues: write` | on the push of a tag `v*`, at most one issue `The tag <tag> is not a release` (label `agk-brief`) when the tagged commit is not a release; it deletes and moves no tag, makes no release and no commit; it does nothing in a repository without `scripts/agk/check_tag.py` |
 
 To forbid issue writing, delete the three workflow files that need `issues: write` (`init.py` and `adopt.py` print this notice). Issues
 must be on for those workflows to work, which `agk doctor` checks.

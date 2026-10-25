@@ -220,7 +220,7 @@ order) under `## <new version> (<date>)` of `CHANGELOG.md` and deletes the fragm
 (together, to one greater number) and regenerates the table with `python3 scripts/agk/kit_hashes.py --write`. The pull
 request changes only `CHANGELOG.md`, the deleted fragments, the three versions and `kit/hashes.json`.
 `scripts/agk/check_release.py` fails a release pull request that changes any other file, leaves a fragment or does not move a
-line unchanged; the maintainers merge it and tag it.
+line unchanged; the maintainers merge it and tag it. Tag only the merge commit of a release pull request. The workflow `agk-tag.yml` runs `scripts/agk/check_tag.py` on every pushed tag `v*`: it fails the job, and opens or updates the issue `The tag <tag> is not a release` (a `Priority: 0` brief), when the tagged commit is not a release (no section of the tag in `CHANGELOG.md`, a fragment left, a file that states another version, or a table that does not match). It deletes and moves no tag and makes no release: the fix is to delete the tag and its release by hand and to tag the merge commit.
 
 ## Existing scanners
 

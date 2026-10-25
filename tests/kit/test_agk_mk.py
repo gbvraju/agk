@@ -31,6 +31,8 @@ def test_ac1_agk_governance_runs_every_check():
             continue  # these take a PR body or a report as input; not part of the local target
         if script.name == "check_release.py":
             continue  # kit-only: the workflow step `Release check` runs it where kit/agk-kit.mk is
+        if script.name == "check_tag.py":
+            continue  # kit-only: the workflow `agk-tag.yml` runs it on a pushed tag
         assert f"scripts/agk/{script.name}" in out, script.name
     assert "reviewers.py --check" in out and "reviewers.py --check-codeowners" in out
 
