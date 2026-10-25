@@ -1,0 +1,1 @@
+- release: a valid release pull request needs no ADR for the protected files it changes, and the hashes table ends the row of a version at its release commit, so an upgrade from 0.54.0 installs the files added since (brief #212)
