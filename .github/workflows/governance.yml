@@ -122,12 +122,17 @@ jobs:
       - name: Release check
         if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') != '' }}
         run: python scripts/agk/check_release.py
+      - name: Open briefs
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method GET "repos/${{ github.repository }}/issues?labels=agk-brief&state=open&per_page=1" > "$RUNNER_TEMP/briefs.json"
       - name: PR body shape
         if: github.event_name == 'pull_request'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
-        run: printf '%s\n' "$PR_BODY" | python scripts/agk/check_pr_body.py --draft "$PR_DRAFT" -
+        run: printf '%s\n' "$PR_BODY" | python scripts/agk/check_pr_body.py --draft "$PR_DRAFT" --issues "$RUNNER_TEMP/briefs.json" -
       - name: Lint
         run: make -f agk.mk agk-lint
       - name: Tests of the checks

@@ -30,7 +30,7 @@ experience of #187 and #196: `Approve:` is read from review bodies as well as co
    person's line exists, and never writes `Approve:`. The role file is the boundary until the identities are separated (SPEC-0032 rule 6).
 5. **The router** (`scripts/agk/route.py`): `agk:approve` is set when the latest verdict by a listed author that names the head has an `Approval:` line whose spec has no approval line of a listed person, and that
    state comes before `agk:fix` (the order is conflict, ci-running, ci-red, approve, fix, ready, review). The reader of `spec_approvers` and of the approval line is the one of `reviewers.py`, not a second copy.
-6. Amendment 59 (`docs/runs/proposed-spec-amendments-59.md`) is applied to SPEC-0021 (the clearance rule), SPEC-0030 rule 6 and SPEC-0032 rule 2. The guide ("Running the loop") says how a person approves. A flow-mode
+6. Amendment 60 (`docs/runs/proposed-spec-amendments-60.md`) is applied to SPEC-0021 (the clearance rule), SPEC-0030 rule 6 and SPEC-0032 rule 2. The guide ("Running the loop") says how a person approves. A flow-mode
    fragment `changelog.d/req-039-c-approvers.md` records the change.
 
 ## Readings taken where the spec leaves a point open
