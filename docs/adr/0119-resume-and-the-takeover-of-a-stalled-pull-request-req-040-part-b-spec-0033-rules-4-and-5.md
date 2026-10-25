@@ -27,4 +27,4 @@ SPEC-0033 (Approved, #189) rules 4 and 5 are build (b) of brief #182. The tests 
 
 ## Residual
 
-None beyond SPEC-0033's.
+- 2026-10-25: whether a session runtime lets one session push to a branch that another session created is not measured here (a cloud session pushes through a proxy that may tie a branch to the session that made it). The first real takeover measures it; if the push is refused, the taking session posts `Question:` with the refusal on the pull request instead of opening a second pull request (due 2026-12-31).
