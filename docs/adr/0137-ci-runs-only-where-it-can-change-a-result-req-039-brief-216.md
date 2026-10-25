@@ -21,12 +21,15 @@ first (`tests/kit/test_status_only.py`, `tests/kit/test_ci_saving.py`; before th
 1. **proof** (`.github/workflows/proof.yml`): `edited` leaves its types (answer 1); `concurrency` with the group `proof-<pull request number>` and `cancel-in-progress: true` (answer 3); permissions are now
    `contents: read` and `checks: read`.
 2. **The status-only final commit** (answer 4, `scripts/agk/status_only.py`, installed): a step reads, with one `gh api GET`, the conclusion of the `proof` check run on the parent of the head; the script prints
-   `skip` only when the head has a single parent, the commit changes only modified files with exactly one removed and one added `- Status:` line each and no mode change, the conclusion was `success`, and the merge base
-   with the default branch (`AGK_BASE`, else the default branch) is the parent's. Otherwise `run (<reason>)`, naming the condition and never a file, line or sha. On `skip` the suite step is skipped and the job reports
+   `skip` only when the head has a single parent, the commit changes only modified files with exactly one removed and one added `- Status:` line each and no mode change, the conclusion was `success`, and the current tip of the default
+   branch (`AGK_BASE`, else the default branch) is already in the parent (the verdict on `460dab3`: the first design compared merge bases, which a head one commit after its parent always shares, even after the default
+   branch had moved). Otherwise `run (<reason>)`, naming the condition and never a file, line or sha. On `skip` the suite step is skipped and the job reports
    the step `outcome: skipped`, so exactly one `outcome:` step still succeeds (`facts.py`). A failed GET leaves the conclusion empty and the suite runs. `governance` always runs in full on such a commit.
 3. **governance** (`.github/workflows/governance.yml`): on `edited` only the steps that read the pull request body run (the base of the merge ref, the body file, the comments, the states of the pull requests,
    `check_specs`, `check_pr_mode`, the open briefs and the body shape); every other step carries the condition `github.event.action != 'edited'`, and the job and its name stay (answer 2). `concurrency` cancels a
-   superseded run of a pull request and never a push to the default branch (answer 3).
+   superseded run of a pull request and never a push to the default branch (answer 3). The run is named `governance edited` or `governance full` (`run-name`); the first step of an edited run reads the latest
+   completed full run of the head with one `GET` of the workflow runs (`actions: read`, added to the permissions) and `scripts/agk/full_run.py` (installed) fails the job unless that run succeeded, or when it is
+   missing or unreadable (the verdict on `460dab3`, item 2: a partial run green on the body steps would otherwise replace a failed full run as the required check).
 4. **The router** (`.github/workflows/agk-route.yml`): the job-level `if` lets an `issue_comment` start a job only when the comment's first line starts with `Verdict:`, `Approve:`, `Approval:` or `Correction:`
    (answer 5); the other triggers are unchanged.
 5. Amendment 73 (`docs/runs/proposed-spec-amendments-73.md`) is applied to SPEC-0010 rules 16 and 17, SPEC-0007 rule 13 and SPEC-0032 rule 1. The security guide lists the new permission. `kit/manifest.json` adds
@@ -36,8 +39,8 @@ first (`tests/kit/test_status_only.py`, `tests/kit/test_ci_saving.py`; before th
 
 Recorded as questions in the pull request, the most conservative reading each: a run of `governance` for an edited description has a concurrency group of its own (`...-edited`), because with the group of the brief a
 description edit would cancel a full run of the same commit and the partial run would be left to report the required check; a status-only commit reports `outcome: skipped` (the outcome of the parent's proof is not
-carried: it would need the steps of the parent's job); "proof passed on the parent" is the latest `proof` check run of the parent with the conclusion `success`; the merge base is compared with the base the workflow
-already sets (`AGK_BASE`, the first parent of the merge ref).
+carried: it would need the steps of the parent's job); "proof passed on the parent" is the latest `proof` check run of the parent with the conclusion `success`; the tip of the default branch is the base the workflow already sets
+(`AGK_BASE`, the first parent of the merge ref).
 
 ## Consequences
 

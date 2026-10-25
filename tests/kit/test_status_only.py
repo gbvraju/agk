@@ -115,17 +115,34 @@ def test_a_merge_commit_runs_in_full(repo, work):
     assert decide(repo).startswith("run (")
 
 
-def test_a_main_that_moved_but_was_not_merged_keeps_the_merge_base(repo, work):
-    """Brief #216 answer 4: the merge base with the default branch is the parent's; skip."""
+def test_a_main_that_moved_past_the_parent_runs_in_full(repo, work):
+    """Brief #216 answer 4 (the verdict on 460dab3): the parent's run tested the parent with main
+    as it was; the new run would test the head with main as it is now, so the suite runs."""
     repo.commit({ADR: adr("Accepted")}, "final")
     repo.git("checkout", "-q", "main")
     repo.commit({"b.txt": "x\n"}, "main moves")
     repo.git("checkout", "-q", "feature")
+    assert decide(repo).startswith("run (")
+
+
+def test_a_main_that_moved_and_was_merged_into_the_parent_is_skipped(repo, work):
+    """Brief #216 answer 4: nothing from main is untested when the tip is in the parent."""
+    repo.git("checkout", "-q", "main")
+    repo.commit({"b.txt": "x\n"}, "main moves")
+    repo.git("checkout", "-q", "feature")
+    repo.git("merge", "-q", "--no-ff", "main", "-m", "merge main")
+    repo.commit({ADR: adr("Accepted")}, "final")
     assert decide(repo) == "skip"
 
 
-def test_a_head_already_in_the_default_branch_changes_the_merge_base_and_runs(repo, work):
-    """Brief #216 answer 4: the merge base of the head is not the parent's; run."""
+def test_a_main_that_did_not_move_and_is_in_the_parent_is_skipped(repo, work):
+    """Brief #216 answer 4: main unchanged and contained in the parent."""
+    repo.commit({ADR: adr("Accepted")}, "final")
+    assert decide(repo, base="main") == "skip"
+
+
+def test_a_head_already_in_the_default_branch_runs_in_full(repo, work):
+    """Brief #216 answer 4: the tip of the default branch is not in the parent; run."""
     repo.commit({ADR: adr("Accepted")}, "final")
     repo.git("branch", "-f", "main", "HEAD")
     assert decide(repo).startswith("run (")

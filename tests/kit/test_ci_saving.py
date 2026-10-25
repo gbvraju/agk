@@ -122,6 +122,7 @@ def test_proof_with_an_unreadable_parent_check_runs_in_full():
 # --- governance on an edited description (answer 2) ----------------------------------------------
 
 BODY_STEPS = {
+    "Latest full run",
     "Base of the merge ref",
     "PR body file",
     "PR comments",

@@ -7,9 +7,9 @@ exits 2). The conditions (brief #216 answer 4): the head is one commit after its
 parent); that commit changes only `- Status:` lines (the shape `check_final_clearance.py`
 recognises: modified files, one removed and one added `- Status:` line in each, no mode change);
 the `proof` check passed on the parent (`--parent-proof success`, the conclusion that the workflow
-read with one GET, because a check never calls the network); and the merge base with the default
-branch is the same as the parent's. A reason names the condition, never a file, a line or a sha.
-Git only: no network, no model.
+read with one GET, because a check never calls the network); and the current tip of the default
+branch (`--base`, else `AGK_BASE`) is already in the parent, so that nothing of it is untested. A
+reason names the condition, never a file, a line or a sha. Git only: no network, no model.
 """
 
 from __future__ import annotations
@@ -72,11 +72,13 @@ def decide(root: Path, head: str, parent_proof: str, base: str | None) -> str:
         return "run (proof did not pass on the parent)"
     ref = base or resolve_base(root, None)
     if ref is None:
-        return "run (no default branch to compare the merge base with)"
-    mine = git(root, "merge-base", commit, ref, check=False).strip()
-    theirs = git(root, "merge-base", parent, ref, check=False).strip()
-    if not mine or mine != theirs:
-        return "run (the merge base with the default branch is not the parent's)"
+        return "run (no default branch to compare the parent with)"
+    # The parent's run tested the parent merged with the default branch as it was. Nothing of the
+    # default branch is untested only when its current tip is already in the parent.
+    tip = git(root, "rev-parse", "--verify", "-q", f"{ref}^{{commit}}", check=False).strip()
+    common = git(root, "merge-base", parent, ref, check=False).strip()
+    if not tip or tip != common:
+        return "run (the default branch has moved past the parent)"
     return "skip"
 
 
