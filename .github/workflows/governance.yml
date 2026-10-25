@@ -87,7 +87,8 @@ jobs:
         run: python scripts/agk/check_numbers.py
       - name: check_specs
         if: ${{ !cancelled() }}
-        run: python scripts/agk/check_specs.py --body "$RUNNER_TEMP/pr-body.md"
+        # On a push there is no base ref and the check is skipped, so the saved comments are the pull request's.
+        run: python scripts/agk/check_specs.py --body "$RUNNER_TEMP/pr-body.md" --comments "$RUNNER_TEMP/comments.json" --reviews "$RUNNER_TEMP/reviews.json"
       - name: check_neutrality
         if: ${{ !cancelled() }}
         run: python scripts/agk/check_neutrality.py
