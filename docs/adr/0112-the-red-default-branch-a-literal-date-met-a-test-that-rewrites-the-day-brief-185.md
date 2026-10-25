@@ -1,6 +1,6 @@
 # ADR-0112: the red default branch, a literal date meeting a test that rewrites the day (brief #185)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0105, ADR-0107
