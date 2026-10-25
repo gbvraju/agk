@@ -1,6 +1,6 @@
 # ADR-0128: the Flow section, the stalled work and the corrections in the report, schema 6 (REQ-041 build (d), SPEC-0033 build (c2), SPEC-0032 build (e2))
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0121, ADR-0117, ADR-0124
