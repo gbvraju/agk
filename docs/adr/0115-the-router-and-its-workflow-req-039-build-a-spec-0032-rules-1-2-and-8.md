@@ -1,6 +1,6 @@
 # ADR-0115: the router and its workflow (REQ-039 build (a), SPEC-0032 rules 1, 2 and 8)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0110, ADR-0106
