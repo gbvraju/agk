@@ -1,6 +1,6 @@
 # ADR-0114: Add REQ-041: Parallel builders get briefs by capacity, overlap, reserved numbers and claims
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: SPEC-0034
