@@ -161,9 +161,10 @@ def test_ac7_a_build_that_edits_the_table_fails_in_flow_mode(tmp_path):
     root = flow_kit(tmp_path)
     (root / "a.txt").write_text("a changed\n", encoding="utf-8")
     fragment(root)
-    (root / "kit" / "hashes.json").write_text(
-        kit_hashes.dump(kit_hashes.build_table(root, "HEAD")), encoding="utf-8"
-    )
+    # a build between two releases changes no row of the table (the row of the current version
+    # stays the release's), so the edit is made by hand: any difference from the base fails
+    table = root / "kit" / "hashes.json"
+    table.write_text(table.read_text(encoding="utf-8") + "\n", encoding="utf-8")
     found = problems(root)
     assert any("kit/hashes.json" in f and "flow mode" in f for f in found), found
 

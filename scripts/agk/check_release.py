@@ -14,6 +14,8 @@ no network, no model. Messages name the rule and the path, never a version.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import re
 import sys
@@ -135,6 +137,24 @@ def check(root: Path) -> int:
         raise CheckError(problem)
     print(f"ok {NAME}")
     return 0
+
+
+def valid_release(root: Path, mb: str) -> bool:
+    """Whether the change set from `mb` is a valid release pull request: flow mode, a raised
+    version, nothing changed outside the release files (a deleted fragment is part of it) and
+    every rule of `check` met. `check_protected_changes.py` asks, so that a release needs no ADR
+    for the protected files it must change (brief #212)."""
+    if pr_mode(root) != "flow" or show(root, mb, "scripts/agk/check_release.py") is None:
+        return False
+    old = toml_version(show(root, mb, "agk.toml"))
+    new = toml_version((root / "agk.toml").read_text(encoding="utf-8"))
+    if old is None or new is None or old == new:
+        return False
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            return check(root) == 0
+    except CheckError:
+        return False
 
 
 def main() -> int:
