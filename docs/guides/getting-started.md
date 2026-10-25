@@ -241,6 +241,32 @@ Priority: 2
 
 6. **When the credits run out.** Sessions stop without warning: the account runs out of credits or tokens, a usage limit is reached, an idle machine is reclaimed, or a person closes the session. Every session stops, and nothing it pushed is lost: a builder commits `checkpoint:` steps to its branch and keeps one `Progress:` comment on its pull request. The GitHub side (the router, the checks and the labels) keeps running and needs no model. Actions minutes on private repositories are a second budget, which the router uses one short job per event. When credits return, start a session with `python3 scripts/agk/session.py next --session <name>`: it offers a pull request that has waited on its builder for `stall_hours` before any new brief, and `python3 scripts/agk/session.py resume --pr <number>` prints where that work stands, so the new session continues from the branch and the progress line instead of starting again. A builder may end a `Report:` line with `Usage: <n> tokens` when its runtime shows the figure, the usage since the previous `Report:` of the same pull request and not a running total (a session that can only read a running total subtracts the total it reported last); the weekly report sums what is reported for each pull request and says `usage not reported` otherwise, never zero.
 
+7. **Start builders by a launcher.** AGK ships no launcher, and no session starts, stops or reviews another; a launcher is what a team writes or configures for its own runtime, and this is the contract it keeps. `python3 scripts/agk/session.py demand` prints one JSON line `{"ready": r, "open": o, "max": m, "start": s}`: `r` is the number of briefs `next` would not skip, `o` the open builder pull requests, `m` the `max_builders` of the `[flow]` table of `agk.toml` (3 by default) and `s = min(ready, max - open)`, 0 when negative. A launcher starts `start` builder sessions and nothing else. Each one runs `python3 scripts/agk/session.py next --session <a short name>`, works on what it hands out, and ends on `no brief` or `full` when there is nothing for it. Two examples follow; both only read `demand`, and starting the sessions is the team's own step.
+
+   A scheduled task of a session runtime (the text of the task):
+
+   ```text
+   Every 30 minutes run `python3 scripts/agk/session.py demand`. If "start" is more than 0,
+   start that many builder sessions, each with this prompt:
+   "Run `python3 scripts/agk/session.py next --session <a short name>`, build what it hands
+   you, and stop on `no brief` or `full`."
+   ```
+
+   A CI schedule (the step that starts the sessions is the team's own script):
+
+   ```yaml
+   on:
+     schedule:
+       - cron: "*/30 * * * *"
+   jobs:
+     demand:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@<the pinned sha of your repository>
+         - run: python3 scripts/agk/session.py demand
+         - run: ./start-builders "$(python3 scripts/agk/session.py demand | python3 -c 'import json,sys; print(json.load(sys.stdin)["start"])')"
+   ```
+
 ## When something goes wrong
 
 - **A scheduled run did not happen on Monday.** Expect the Monday issues hours late; in India, usually Monday evening. On

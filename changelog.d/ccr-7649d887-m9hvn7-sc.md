@@ -1,0 +1,1 @@
+- the session rules gain push-check before every push, the shared-mechanical files, mechanical conflicts only, and the Question and Report shapes; the conductor reads them; the guide shows the launcher contract with two examples (SPEC-0034 rules 6, 7c and 11, REQ-041)
