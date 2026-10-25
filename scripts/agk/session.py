@@ -23,6 +23,9 @@ loop): each event is one wake. `queue` prints `#N <label>` for each open pull re
 label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder: `agk:fix`,
 `agk:conflict`, `agk:ci-red`, of `--author` when given; person: `agk:approve`, `agk:ready`), or
 `empty`, so a session that starts or restarts resumes from GitHub with one GET.
+A wait never goes silent (brief #210): when GitHub cannot be read for 5 polls in a row it prints
+`error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since <id>`
+when it starts.
 `next` prints the first free `agk-brief` issue and takes it with the one comment `taken: <ID>
 <YYYY-MM-DD>`, the only POST of this script; with none left it prints `no brief` and exits 1. This
 is the only script that calls GitHub; no check does. Messages name the rule, never a value.
@@ -201,6 +204,28 @@ def correction_line(
     return None
 
 
+FAILED_POLLS = 5  # polls in a row that cannot read GitHub before a wait ends with an error
+EXIT_UNREADABLE = 4
+
+
+class Reads:
+    """Polls in a row in which GitHub could not be read (brief #210): the fifth ends the wait with
+    `error: <what> cannot be read`, so a wait never goes silent; one failure is retried."""
+
+    def __init__(self) -> None:
+        self.bad = 0
+
+    def good(self) -> None:
+        self.bad = 0
+
+    def failed(self, what: str) -> bool:
+        self.bad += 1
+        if self.bad < FAILED_POLLS:
+            return False
+        print(f"error: {what} cannot be read", flush=True)
+        return True
+
+
 def watch(root, args: dict[str, str]) -> int:
     repo = repo_name(root)
     number = args.get("--pr") or args["--merged"]
@@ -214,16 +239,23 @@ def watch(root, args: dict[str, str]) -> int:
     seen = 0
     label: Any = UNSET
     brief_seen: Any = UNSET
+    reads = Reads()
     if not only_merge:
         while (found := newest(pages(f"repos/{repo}/issues/{number}/comments"))) is None:
+            if reads.failed(f"the comments of #{number}"):
+                return EXIT_UNREADABLE
             if late():
                 print("timeout")
                 return 3
             time.sleep(interval)
+        reads.good()
         seen = found
     while True:
         pr = gh(f"repos/{repo}/pulls/{number}")
-        if isinstance(pr, dict):
+        if not isinstance(pr, dict):
+            if reads.failed(f"pull request #{number}"):
+                return EXIT_UNREADABLE
+        else:
             if pr.get("merged_at"):
                 print(f"merged #{number}")
                 return 0
@@ -234,6 +266,11 @@ def watch(root, args: dict[str, str]) -> int:
                 print(f"conflict #{number}")
                 return 0
             comments = None if only_merge else pages(f"repos/{repo}/issues/{number}/comments")
+            if comments is None and not only_merge:
+                if reads.failed(f"the comments of #{number}"):
+                    return EXIT_UNREADABLE
+            else:
+                reads.good()
             if comments is not None:
                 own = (pr.get("user") or {}).get("login")
                 authors = counted_authors(verdict_authors(root), own)
@@ -683,16 +720,29 @@ def conductor_issue(repo: str) -> int:
 def watch_assign(root, me: str, args: dict[str, str]) -> int:
     """End on the first `Assign: <me> ...` by a listed author after this session's `Request:`."""
     repo = repo_name(root)
-    path = f"repos/{repo}/issues/{conductor_issue(repo)}/comments"
+    issue = conductor_issue(repo)
+    path = f"repos/{repo}/issues/{issue}/comments"
     interval = float(args.get("--interval", 60))
     limit = float(args.get("--timeout", flow_int(root, "claim_hours", CLAIM_HOURS, 1) * 3600))
     started = time.monotonic()
-    comments = pages(path) or []
+    reads = Reads()
+    while (comments := pages(path)) is None:  # an unread baseline would make an old line look new
+        if reads.failed(f"the comments of #{issue}"):
+            return EXIT_UNREADABLE
+        time.sleep(interval)
+    reads.good()
     asked = [c["id"] for c in comments if str(c.get("body") or "").startswith(f"Request: {me} ")]
     seen = max(asked, default=newest(comments) or 0)
     allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None)}
+    print(f"waiting on #{issue} since {seen}", flush=True)
     while True:
-        for comment in sorted(pages(path) or [], key=lambda c: c.get("id", 0)):
+        found = pages(path)
+        if found is None:
+            if reads.failed(f"the comments of #{issue}"):
+                return EXIT_UNREADABLE
+        else:
+            reads.good()
+        for comment in sorted(found or [], key=lambda c: c.get("id", 0)):
             body = comment.get("body")
             first = body.splitlines()[0].strip() if isinstance(body, str) and body.strip() else ""
             match = ASSIGN.fullmatch(first)

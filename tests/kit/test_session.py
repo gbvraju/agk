@@ -445,6 +445,8 @@ def test_ac3_watch_goes_on_while_the_label_stays_and_ignores_other_labels(proj, 
     """REQ-039 AC3: rule 3 (a person's label is not the router's)."""
     same = pull(labels=("agk:review", "bug"))
     watching(stub, [(same, []), (pull(labels=("agk:review", "wip")), [])])
+    stub.serve(PR, same)  # every later poll reads the same: an unread poll is an error now
+    stub.serve(PR_COMMENTS, [])
     out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "1")
     assert out.returncode == 3 and out.stdout.strip() == "timeout"
 
@@ -602,6 +604,9 @@ def test_ac7_an_unlisted_author_another_comment_or_an_old_correction_does_not_en
         stub,
         [(with_brief(), [], [old]), (with_brief(), [], [old, other, plain])],
     )
+    stub.serve(PR, with_brief())  # every later poll reads the same
+    stub.serve(PR_COMMENTS, [])
+    stub.serve(BRIEF, [old, other, plain])
     out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "1")
     assert out.returncode == 3 and out.stdout.strip() == "timeout"
 
