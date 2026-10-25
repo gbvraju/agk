@@ -24,8 +24,11 @@ label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; bu
 `agk:conflict`, `agk:ci-red`, of `--author` when given; person: `agk:approve`, `agk:ready`), or
 `empty`, so a session that starts or restarts resumes from GitHub with one GET.
 A wait never goes silent (brief #210): when GitHub cannot be read for 5 polls in a row it prints
-`error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since <id>`
-when it starts.
+`error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since
+<id>` when it starts. When `gh` says it could not connect, the line is `github-unreachable:
+<what> cannot be read; local head <sha> not pushed; next: push, then post the
+Report:/Question:`; a rate limit is waited out to the reset time that GitHub reports and does
+not end a wait (answer 6).
 `next` prints the first free `agk-brief` issue and takes it with the one comment `taken: <ID>
 <YYYY-MM-DD>`, the only POST of this script; with none left it prints `no brief` and exits 1. This
 is the only script that calls GitHub; no check does. Messages name the rule, never a value.
@@ -114,17 +117,47 @@ SAFE_REF = re.compile(r"[A-Za-z0-9._/-]+")
 PROGRESS = re.compile(r"Progress: ([0-9a-f]{7,40}) done (\d+)/(\d+); next: (\S.*)")
 
 
-def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
-    """One `gh api` call; a failed or unreadable call is None."""
+LAST_ERROR = ""  # what `gh` said about the last failed call (empty after a good one)
+RATE_LIMIT = re.compile(r"rate limit|HTTP 429", re.IGNORECASE)
+RATE_WAITS = 5  # rate limits waited out for one call before it counts as failed
+RESET_SLACK = 1.0  # seconds after the reset time that GitHub reports
+UNREACHABLE = re.compile(
+    r"error connecting|dial tcp|no such host|could not resolve|connection (?:refused|reset)"
+    r"|network is unreachable|i/o timeout|tls handshake|timed out|temporary failure in name",
+    re.IGNORECASE,
+)
+
+
+def rate_reset() -> float | None:
+    """The reset time of the core rate limit that GitHub reports (`GET rate_limit` is free)."""
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["gh", "api", "--method", method, endpoint, *extra], capture_output=True, text=True
+        ["gh", "api", "--method", "GET", "rate_limit"], capture_output=True, text=True
     )
-    if proc.returncode != 0:
-        return None
     try:
-        return json.loads(proc.stdout) if proc.stdout.strip() else {}
-    except ValueError:
+        return float(json.loads(proc.stdout)["resources"]["core"]["reset"])
+    except (ValueError, KeyError, TypeError):
         return None
+
+
+def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
+    """One `gh api` call; a failed or unreadable call is None. A rate limit is not a failure
+    (brief #210 answer 6): the call waits until the reset time that GitHub reports and retries."""
+    global LAST_ERROR
+    for attempt in range(RATE_WAITS + 1):
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["gh", "api", "--method", method, endpoint, *extra], capture_output=True, text=True
+        )
+        LAST_ERROR = proc.stderr if proc.returncode != 0 else ""
+        if proc.returncode == 0:
+            try:
+                return json.loads(proc.stdout) if proc.stdout.strip() else {}
+            except ValueError:
+                return None
+        reset = rate_reset() if RATE_LIMIT.search(proc.stderr) else None
+        if reset is None or attempt == RATE_WAITS:
+            return None
+        time.sleep(max(0.0, reset - time.time()) + RESET_SLACK)
+    return None
 
 
 def pages(endpoint: str) -> list | None:
@@ -208,12 +241,24 @@ FAILED_POLLS = 5  # polls in a row that cannot read GitHub before a wait ends wi
 EXIT_UNREADABLE = 4
 
 
-class Reads:
-    """Polls in a row in which GitHub could not be read (brief #210): the fifth ends the wait with
-    `error: <what> cannot be read`, so a wait never goes silent; one failure is retried."""
+def local_head(root) -> str:
+    """`local head <sha> not pushed` (or `pushed`; `none` without a commit): what is true."""
+    head = git(root, "rev-parse", "--short=7", "HEAD", check=False).strip()
+    if not head:
+        return "local head none"
+    ahead = git(root, "rev-list", "--count", "@{upstream}..HEAD", check=False).strip()
+    return f"local head {head} {'pushed' if ahead == '0' else 'not pushed'}"
 
-    def __init__(self) -> None:
+
+class Reads:
+    """Polls in a row in which GitHub could not be read (brief #210): the fifth ends the wait, so
+    a wait never goes silent; one failure is retried. When `gh` says it could not connect, the one
+    line is `github-unreachable: ...` (answer 6: the only channel left is the session's output);
+    otherwise `error: <what> cannot be read`."""
+
+    def __init__(self, root=None) -> None:
         self.bad = 0
+        self.root = root
 
     def good(self) -> None:
         self.bad = 0
@@ -222,7 +267,14 @@ class Reads:
         self.bad += 1
         if self.bad < FAILED_POLLS:
             return False
-        print(f"error: {what} cannot be read", flush=True)
+        if UNREACHABLE.search(LAST_ERROR):
+            print(
+                f"github-unreachable: {what} cannot be read; {local_head(self.root)}; "
+                "next: push, then post the Report:/Question:",
+                flush=True,
+            )
+        else:
+            print(f"error: {what} cannot be read", flush=True)
         return True
 
 
@@ -239,7 +291,7 @@ def watch(root, args: dict[str, str]) -> int:
     seen = 0
     label: Any = UNSET
     brief_seen: Any = UNSET
-    reads = Reads()
+    reads = Reads(root)
     if not only_merge:
         while (found := newest(pages(f"repos/{repo}/issues/{number}/comments"))) is None:
             if reads.failed(f"the comments of #{number}"):
@@ -725,7 +777,7 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
     interval = float(args.get("--interval", 60))
     limit = float(args.get("--timeout", flow_int(root, "claim_hours", CLAIM_HOURS, 1) * 3600))
     started = time.monotonic()
-    reads = Reads()
+    reads = Reads(root)
     while (comments := pages(path)) is None:  # an unread baseline would make an old line look new
         if reads.failed(f"the comments of #{issue}"):
             return EXIT_UNREADABLE

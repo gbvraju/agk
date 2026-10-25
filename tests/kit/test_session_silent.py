@@ -198,3 +198,124 @@ def test_ac_the_conductor_reads_question_comments_on_briefs_as_on_pull_requests(
     """Brief #210 answer 3: the role file."""
     text = " ".join(CONDUCTOR_ROLE.read_text(encoding="utf-8").split())
     assert "`Question:` comments on briefs as on pull requests" in text
+
+
+# --- when GitHub cannot be reached at all (answer 6) -------------------------------------------
+
+LINE = (
+    r"github-unreachable: {what} cannot be read; local head [0-9a-f]{{7}} not pushed; "
+    r"next: push, then post the Report:/Question:"
+)
+
+
+def unreachable(stub, text: str = "error connecting to api.github.com") -> None:
+    (stub.dir / "error.txt").write_text(text + "\n", encoding="utf-8")
+
+
+def committed(proj) -> None:
+    proj.commit({"a.txt": "x\n"}, "local work")
+
+
+def test_ac6_an_unreachable_github_ends_a_wait_with_the_one_line_of_the_outage(proj, stub):
+    """Brief #210 answer 6: the only channel left is the session's own output."""
+    import re
+
+    committed(proj)
+    unreachable(stub)
+    out = session(proj, stub, *MERGE)
+    assert out.returncode == 4
+    assert re.fullmatch(LINE.format(what="pull request #7") + "\n", out.stdout), out.stdout
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Post https://api.github.com/x: dial tcp: lookup api.github.com: no such host",
+        "Could not resolve host: api.github.com",
+        "dial tcp 140.82.112.5:443: i/o timeout",
+        "connection refused",
+        "net/http: TLS handshake timeout",
+    ],
+)
+def test_ac6_the_messages_of_a_network_failure_are_an_outage(proj, stub, text):
+    """Brief #210 answer 6: what gh says when it cannot connect."""
+    committed(proj)
+    unreachable(stub, text)
+    assert session(proj, stub, *MERGE).stdout.startswith("github-unreachable: ")
+
+
+@pytest.mark.parametrize("text", ["gh: Not Found (HTTP 404)", "gh: Forbidden (HTTP 403)", ""])
+def test_ac6_a_refused_call_or_an_error_response_is_not_an_outage(proj, stub, text):
+    """Brief #210 answer 6: GitHub answered, so the read ends with `error:` as in answer 1."""
+    committed(proj)
+    unreachable(stub, text)
+    out = session(proj, stub, *MERGE)
+    assert out.stdout.strip() == "error: pull request #7 cannot be read"
+
+
+def test_ac6_the_outage_line_of_a_wait_on_the_assignment_names_the_comments_read(proj, stub):
+    """Brief #210 answer 6: --assign ends the same way."""
+    import re
+
+    committed(proj)
+    served(stub, [request(3)])
+    unreachable(stub)
+    out = assign(proj, stub)
+    assert out.returncode == 4
+    assert re.fullmatch(
+        r"waiting on #204 since 3\n" + LINE.format(what="the comments of #204") + "\n", out.stdout
+    ), out.stdout
+
+
+def test_ac6_a_pushed_head_is_said_so_and_no_commit_is_none(proj, stub):
+    """Brief #210 answer 6: the line says only what is true of the local head."""
+    unreachable(stub)
+    assert "local head none" in session(proj, stub, *MERGE).stdout
+    committed(proj)
+    proj.git("update-ref", "refs/remotes/origin/main", "HEAD")
+    proj.git("branch", "--set-upstream-to=origin/main")
+    assert "pushed; next:" in session(proj, stub, *MERGE).stdout
+    assert "not pushed" not in session(proj, stub, *MERGE).stdout
+
+
+def test_ac6_a_rate_limit_is_waited_out_to_the_reset_time_and_does_not_end_the_wait(proj, stub):
+    """Brief #210 answer 6: the reset time is read from GET rate_limit; the wait goes on."""
+    import time
+
+    reset = int(time.time()) + 2
+    stub.serve("rate_limit", {"resources": {"core": {"reset": reset, "remaining": 0}}})
+    stub.serve(PR, "RATELIMIT", nth=1)
+    stub.serve(PR, pull(merged="2026-10-25T10:00:00Z"), nth=2)
+    started = time.time()
+    out = session(proj, stub, *MERGE)
+    assert out.returncode == 0 and out.stdout.strip() == "merged #7", out.stdout
+    assert time.time() >= reset, "the wait ended before the reset time"
+    assert any(call[1] == "rate_limit" for call in stub.calls())
+    assert time.time() - started < 30
+
+
+def test_ac6_a_rate_limit_is_not_counted_as_a_failed_poll(proj, stub):
+    """Brief #210 answer 6: waiting out five limits in a row ends nothing."""
+    import time
+
+    stub.serve("rate_limit", {"resources": {"core": {"reset": int(time.time()), "remaining": 0}}})
+    for n in range(1, 4):
+        stub.serve(PR, "RATELIMIT", nth=n)
+    stub.serve(PR, pull(merged="2026-10-25T10:00:00Z"), nth=4)
+    out = session(proj, stub, *MERGE)
+    assert out.returncode == 0 and out.stdout.strip() == "merged #7"
+
+
+def test_ac6_the_rules_name_the_outage_line_the_restart_order_and_what_is_not_an_outage():
+    """Brief #210 answer 6: the session rules."""
+    text = " ".join(RULES.read_text(encoding="utf-8").split())
+    assert (
+        "github-unreachable: <what failed>; local head <sha> not pushed; next: push, then" in text
+    )
+    assert "post the `Report:`/`Question:`" in text
+    assert "runs `python3 scripts/agk/session.py push-check`" in text
+    assert "pushes its local commits" in text
+    assert "before anything else" in text
+    assert "A refused push or a 403 on one action is not an outage" in text
+    assert "A rate limit is not an outage" in text
+    assert "keeps committing locally" in text

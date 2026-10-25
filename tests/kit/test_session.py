@@ -34,8 +34,14 @@ for candidate in (name + "." + method + "." + str(n), name + "." + method):
         text = open(path).read()
         if text.strip() == "FAIL":
             sys.exit(1)
+        if text.strip() == "RATELIMIT":
+            sys.stderr.write("gh: API rate limit exceeded for user ID 1. (HTTP 403)\\n")
+            sys.exit(1)
         sys.stdout.write(text)
         sys.exit(0)
+error = os.path.join(root, "error.txt")  # what gh says when a call fails and no fixture is given
+if os.path.exists(error):
+    sys.stderr.write(open(error).read())
 sys.exit(1)
 '''
 
