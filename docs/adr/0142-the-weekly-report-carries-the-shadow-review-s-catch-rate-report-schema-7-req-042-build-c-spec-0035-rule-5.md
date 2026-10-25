@@ -1,6 +1,6 @@
 # ADR-0142: The weekly report carries the shadow review's catch rate, report schema 7 (REQ-042, build (c) of SPEC-0035)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0128, ADR-0138
