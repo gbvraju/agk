@@ -6,11 +6,15 @@ A Draft spec, a new spec and the Draft -> Approved flip pass.
 (2) Rule a (SPEC-0013 rule 23), with `--body FILE|-`: an implementation PR (its diff touches a path
 outside `docs/` and `.github/ISSUE_TEMPLATE/`) must name, on its `Advances:` line, only requirements
 that an Approved spec names; a requirement that no spec names and an ADR names is exempt.
-(3) With `--comments FILE [--reviews FILE]` (saved comments and review bodies of the pull request;
-SPEC-0032 rule 5): a spec whose Approved status line is added or changed in the diff, through a
-`Final:` line or an ordinary commit, needs a first line `Approve: <sha> SPEC-<n>` by an account in
-`spec_approvers`, and the spec file at the head must equal the one at `<sha>` apart from its status
-line. Without `--comments` the approval is not checked (a local run has no comments).
+(3) With `--comments FILE [--reviews FILE] [--runs FILE]` (saved comments, reviews and
+`pull_request` workflow runs of the pull request; SPEC-0032 rule 5): a spec whose Approved status
+line is added or changed in the diff, through a `Final:` line or an ordinary commit, needs an
+approval by an account in `spec_approvers`: a first line `Approve: <sha> SPEC-<n>`, a first line
+`Approve: SPEC-<n>` (the text at the `head_sha` of the latest run created before the comment,
+GitHub's time, never a commit date), or a review in state `APPROVED` (at its own `commit_id`, for
+the one spec the pull request sets Approved or the one its first line names). The spec file at the
+head must equal the approved text apart from its status line. Without `--comments` the approval is
+not checked (a local run has no comments).
 (4) Rule b (SPEC-0013 rule 24): a spec whose Approved status line is added or changed in the diff
 has no open `Q-` id (a table row or list item in the spec or its notes file that has no row in the
 notes' `## Rulings` section and no `<id> ruled` row in the decisions log).
@@ -19,6 +23,7 @@ Messages name the spec path, the requirement or the question id, never content.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -170,11 +175,9 @@ def section_lines(text: str, heading: str) -> list[str]:
     return found
 
 
-def approval_failures(
-    root, mb: str, changed: dict[str, str], approvals: dict[str, list[str]] | None = None
-) -> list[str]:
-    failures = []
-    noted = False
+def flipped_specs(root, mb: str, changed: dict[str, str]) -> dict[str, str]:
+    """SPEC-<n> -> path, for each spec whose Approved status line is added or changed."""
+    found = {}
     for path, state in sorted(changed.items()):
         if not SPEC_FILE.match(path) or state not in ("A", "M") or not (root / path).is_file():
             continue
@@ -184,7 +187,16 @@ def approval_failures(
             ln.startswith("+") and STATUS_LINE.match(ln[1:]) for ln in changed_lines(root, mb, path)
         ):
             continue
-        number = f"SPEC-{spec_number(path)}"
+        found[f"SPEC-{spec_number(path)}"] = path
+    return found
+
+
+def approval_failures(
+    root, mb: str, changed: dict[str, str], approvals: dict[str, list[str]] | None = None
+) -> list[str]:
+    failures = []
+    noted = False
+    for number, path in flipped_specs(root, mb, changed).items():
         failures += [f"{number}: {q} has no ruling" for q in open_questions(root, path)]
         if approvals is None:
             if not noted:
@@ -195,6 +207,44 @@ def approval_failures(
         elif not any(unchanged_since(root, sha, path) for sha in approvals[number]):
             failures.append(f"{number}: rule 5: the spec changed after the approved sha")
     return failures
+
+
+def runs_of(root, path: str | None) -> list[dict]:
+    """The saved `pull_request` workflow runs of the pull request (`actions/runs`, pages or not),
+    only those whose head is in the history of the head, so that a run of another pull request of
+    the same branch name pins nothing. Unreadable means none: a short line then counts for nothing
+    (SPEC-0032 rule 5, build (g))."""
+    if path is None:
+        return []
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    found: list[dict] = []
+    decoder, at = json.JSONDecoder(), 0
+    try:
+        while at < len(text):
+            if text[at].isspace():
+                at += 1
+                continue
+            value, at = decoder.raw_decode(text, at)
+            pages = value if isinstance(value, list) else [value]
+            for page in pages:
+                items = page.get("workflow_runs") if isinstance(page, dict) else None
+                found += [x for x in items or [] if isinstance(x, dict)]
+                if isinstance(page, dict) and "head_sha" in page:  # one run, not a page of runs
+                    found.append(page)
+    except ValueError:
+        return []
+    return [x for x in found if in_history(root, x.get("head_sha"))]
+
+
+def in_history(root, sha) -> bool:
+    """The commit `sha` is the head or one of its ancestors."""
+    if not isinstance(sha, str) or not sha:
+        return False
+    commit = git(root, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).strip()
+    return bool(commit) and commit == git(root, "merge-base", commit, "HEAD", check=False).strip()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -227,10 +277,13 @@ def main(argv: list[str] | None = None) -> int:
     approvals = None
     if comments is not None:
         reviews = file_arg(argv, "--reviews")
+        runs = file_arg(argv, "--runs")
         approvals = approval_shas(
             comments_of(Path(comments)),
             comments_of(Path(reviews)) if reviews else [],
             spec_approvers(root),
+            runs_of(root, runs),
+            set(flipped_specs(root, mb, changed)),
         )
     messages += approval_failures(root, mb, changed, approvals)
     if body is None or not body.strip():
