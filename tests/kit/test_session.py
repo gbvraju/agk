@@ -109,6 +109,7 @@ def pull(
     merged: str | None = None,
     author: str = "builder",
     mergeable: str = "clean",
+    labels: tuple[str, ...] = (),
 ) -> dict:
     return {
         "mergeable_state": mergeable,
@@ -116,6 +117,7 @@ def pull(
         "merged_at": merged,
         "user": {"login": author},
         "head": {"sha": SHA},
+        "labels": [{"name": name} for name in labels],
     }
 
 
@@ -413,3 +415,135 @@ def test_rule5_session_posts_in_one_place_and_the_checks_do_not_call_gh():
         path = SCRIPTS / name
         if path.exists() and name != "facts.py":
             assert '"gh"' not in path.read_text(encoding="utf-8")
+
+
+# --- watch on labels and queue (SPEC-0032 rule 3; REQ-039 AC3) ---------------------------------
+
+
+def test_ac3_watch_ends_when_the_label_of_the_pull_request_changes(proj, stub):
+    """REQ-039 AC3: rule 3 (the first read is the baseline; the new label is printed)."""
+    watching(stub, [(pull(labels=("agk:ci-running",)), []), (pull(labels=("agk:review",)), [])])
+    out = session(proj, stub, *WATCH)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.strip() == "label agk:review"
+
+
+def fresh(stub: Stub) -> None:
+    """Forget the calls counted so far, so that the next run reads the first fixture again."""
+    for path in stub.dir.glob("count.*"):
+        path.unlink()
+
+
+def test_ac3_watch_goes_on_while_the_label_stays_and_ignores_other_labels(proj, stub):
+    """REQ-039 AC3: rule 3 (a person's label is not the router's)."""
+    same = pull(labels=("agk:review", "bug"))
+    watching(stub, [(same, []), (pull(labels=("agk:review", "wip")), [])])
+    out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "1")
+    assert out.returncode == 3 and out.stdout.strip() == "timeout"
+
+
+def test_ac3_watch_ends_when_the_first_label_appears_or_when_it_is_removed(proj, stub):
+    """REQ-039 AC3: rule 3 (none to a label, and a label to none)."""
+    watching(stub, [(pull(), []), (pull(labels=("agk:review",)), [])])
+    assert session(proj, stub, *WATCH).stdout.strip() == "label agk:review"
+    fresh(stub)
+    watching(stub, [(pull(labels=("agk:fix",)), []), (pull(), [])])
+    out = session(proj, stub, *WATCH)
+    assert out.stdout.strip() == "label none"
+
+
+def test_ac3_a_merge_a_close_a_conflict_or_a_verdict_comes_before_a_label_change(proj, stub):
+    """REQ-039 AC3: rule 3 (it keeps today's ends and prints one event)."""
+    watching(
+        stub,
+        [(pull(labels=("agk:review",)), []), (pull(merged="2026-10-25T10:00:00Z", labels=()), [])],
+    )
+    assert session(proj, stub, *WATCH).stdout.strip() == "merged #7"
+    fresh(stub)
+    watching(stub, [(pull(labels=("agk:review",)), []), (pull(mergeable="dirty"), [])])
+    assert session(proj, stub, *WATCH).stdout.strip() == "conflict #7"
+    fresh(stub)
+    cleared = comment(9, "boss", f"Verdict: cleared {SHA[:7]}")
+    watching(stub, [(pull(labels=("agk:ci-red",)), []), (pull(labels=("agk:ready",)), [cleared])])
+    assert session(proj, stub, *WATCH).stdout.strip().startswith("verdict cleared")
+
+
+def test_ac3_watch_merged_ignores_labels(proj, stub):
+    """REQ-039 AC3: rule 3 (--merged waits on that pull request alone)."""
+    stub.serve(PR, pull(labels=("agk:ci-running",)), nth=1)
+    stub.serve(PR, pull(labels=("agk:ready",)), nth=2)
+    stub.serve(PR, pull(merged="2026-10-25T10:00:00Z"), nth=3)
+    out = session(proj, stub, "watch", "--merged", "7", "--interval", "0", "--timeout", "5")
+    assert out.stdout.strip() == "merged #7"
+
+
+OPEN = f"repos/{REPO}/pulls"
+
+
+def listed(n: int, label: str | None, author: str = "builder", draft: bool = False) -> dict:
+    return {
+        "number": n,
+        "draft": draft,
+        "user": {"login": author},
+        "head": {"sha": SHA},
+        "labels": [{"name": label}] if label else [],
+    }
+
+
+def test_ac3_queue_lists_for_each_role_the_pull_requests_with_its_labels(proj, stub):
+    """REQ-039 AC3: rule 3 (the three roles; ci-red is the builder's and the conductor's)."""
+    stub.serve(
+        OPEN,
+        [
+            listed(1, "agk:review"),
+            listed(2, "agk:ci-red"),
+            listed(3, "agk:fix"),
+            listed(4, "agk:conflict"),
+            listed(5, "agk:approve"),
+            listed(6, "agk:ready"),
+            listed(7, "agk:ci-running"),
+            listed(8, None),
+        ],
+    )
+    expect = {
+        "conductor": ["#1 agk:review", "#2 agk:ci-red"],
+        "builder": ["#2 agk:ci-red", "#3 agk:fix", "#4 agk:conflict"],
+        "person": ["#5 agk:approve", "#6 agk:ready"],
+    }
+    for role, lines in expect.items():
+        out = session(proj, stub, "queue", "--role", role)
+        assert out.returncode == 0, out.stdout + out.stderr
+        assert out.stdout.splitlines() == lines, role
+
+
+def test_ac3_queue_for_a_builder_can_name_its_own_author(proj, stub):
+    """REQ-039 AC3: rule 3 (the builder of that pull request)."""
+    stub.serve(OPEN, [listed(3, "agk:fix", "alice"), listed(4, "agk:fix", "bob")])
+    out = session(proj, stub, "queue", "--role", "builder", "--author", "Alice")
+    assert out.stdout.splitlines() == ["#3 agk:fix"]
+
+
+def test_ac3_queue_skips_a_draft_for_the_conductor(proj, stub):
+    """REQ-039 AC3: rule 3 and amendment 56 (unfinished work is not listed for review)."""
+    stub.serve(OPEN, [listed(1, "agk:review", draft=True), listed(2, "agk:review")])
+    out = session(proj, stub, "queue", "--role", "conductor")
+    assert out.stdout.splitlines() == ["#2 agk:review"]
+
+
+def test_ac3_queue_with_nothing_for_the_role_says_so_and_a_failed_read_fails(proj, stub):
+    """REQ-039 AC3: rule 3 (empty is not an error; an unreadable list is)."""
+    stub.serve(OPEN, [listed(1, "agk:ready")])
+    out = session(proj, stub, "queue", "--role", "conductor")
+    assert out.returncode == 0 and out.stdout.strip() == "empty"
+    stub.serve(OPEN, "FAIL")
+    out = session(proj, stub, "queue", "--role", "conductor")
+    assert out.returncode == 2 and "FAIL session" in out.stdout and "rule 3" in out.stdout
+
+
+def test_ac3_queue_needs_a_known_role_and_only_gets(proj, stub):
+    """REQ-039 AC3: rule 3 (usage; no write, no value in a message)."""
+    assert session(proj, stub, "queue", "--role", "manager").returncode == 2
+    assert session(proj, stub, "queue").returncode == 2
+    stub.serve(OPEN, [listed(1, "agk:review")])
+    session(proj, stub, "queue", "--role", "conductor")
+    assert stub.calls() and all(call[0] == "GET" for call in stub.calls())
