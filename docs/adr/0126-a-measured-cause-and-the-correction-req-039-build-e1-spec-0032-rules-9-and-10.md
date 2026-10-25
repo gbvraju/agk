@@ -1,6 +1,6 @@
 # ADR-0126: a measured cause and the correction (REQ-039 build (e1), SPEC-0032 rules 9 and 10)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0122, ADR-0118, ADR-0110
