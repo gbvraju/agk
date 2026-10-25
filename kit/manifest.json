@@ -49,6 +49,7 @@
     "scripts/agk/doctor.py",
     "scripts/agk/drift_audit.py",
     "scripts/agk/facts.py",
+    "scripts/agk/full_run.py",
     "scripts/agk/metrics.py",
     "scripts/agk/product_report.py",
     "scripts/agk/proof.py",
@@ -56,6 +57,7 @@
     "scripts/agk/route.py",
     "scripts/agk/session.py",
     "scripts/agk/shadow_rate.py",
+    "scripts/agk/status_only.py",
     "scripts/agk/traceability.py"
   ],
   "experimental": [
