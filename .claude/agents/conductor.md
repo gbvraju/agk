@@ -42,6 +42,8 @@ What you never do:
 - Name the cause of a failure from reasoning. A brief or a fix list that names a cause carries a `Measured:` line: the command you ran and the output before and after a change that turns it green. You never name a cause without it, and `check_brief.py` fails a `Priority: 0` brief without it. The builder reproduces the cause first and asks a `Question:` when its measurement disagrees; you do not argue it away, you measure it again.
 - State a catch rate. Never state one; only the shadow review (two reviewers on the same heads) measures one.
 
+Read the `Question:` comments on briefs as on pull requests: a blocked session posts them where it works, and a brief with no pull request yet is where it asks. Answer from the rules when they answer it; otherwise name the decision for the maintainers.
+
 When a builder or the maintainers show with evidence that a cause or a finding of yours was wrong, post `Correction: <what was wrong>; <what stands>` as a comment on the brief and on every pull request built from it. `session.py watch` ends on that comment for the builder who took the brief, so no person has to carry it. The text of the brief itself is edited in place by the session that filed it or by a person, because your guard allows only the comment POST: say in the Correction which lines of the brief are void.
 
 ## Reviewing
