@@ -46,6 +46,7 @@ DEPENDS = re.compile(r"Depends-on: #(\d+)")
 SIZE = re.compile(r"Size: [SML]")
 NUMBERED = re.compile(r"(\d+)\.\s+\S")
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
+PROGRESS = re.compile(r"Progress: ([0-9a-f]{7,40}) done (\d+)/(\d+); next: (\S.*)")
 
 
 def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
@@ -270,6 +271,35 @@ def next_brief(root, me: str) -> int:
         return 0
     print("no brief")
     return 1
+
+
+# --- the progress comment (SPEC-0033 rule 3) --------------------------------------------------
+
+
+def progress_of(comments: list, login: str) -> tuple[dict | None, list[str]]:
+    """The one `Progress:` comment of a pull request by `login`, and what is wrong with it.
+
+    A comment counts when its first line starts `Progress:`. None with no problem when there is
+    none; more than one, or one that is not `Progress: <head> done <n>/<m>; next: <step>` with
+    1 <= m and n <= m, is a problem that names the rule and never the line."""
+    me = login.lstrip("@").lower()
+    found = [
+        c
+        for c in comments
+        if author_of(c) == me
+        and isinstance(c.get("body"), str)
+        and c["body"].splitlines()[:1]
+        and c["body"].splitlines()[0].startswith("Progress:")
+    ]
+    if not found:
+        return None, []
+    if len(found) > 1:
+        return None, ["rule 3: the pull request holds more than one Progress comment"]
+    match = PROGRESS.fullmatch(found[0]["body"].splitlines()[0].strip())
+    done, total = (int(match.group(2)), int(match.group(3))) if match else (0, 0)
+    if not match or total < 1 or done > total:
+        return None, ["rule 3: the Progress comment is not of the form head, done n/m, next step"]
+    return {"head": match.group(1), "done": done, "total": total, "next": match.group(4)}, []
 
 
 # --- the command line -------------------------------------------------------------------------

@@ -1,6 +1,9 @@
 """PR body must carry `Advances: REQ-nnn` and a dated `Build-state row:` (file or stdin).
 
-An optional `Behaviour:` line must be exactly `Behaviour: unchanged` (SPEC-0010 rule 18)."""
+An optional `Behaviour:` line must be exactly `Behaviour: unchanged` (SPEC-0010 rule 18).
+
+`--draft true` (the workflow passes the draft flag of the pull request) skips the check until
+the pull request is marked ready for review (SPEC-0033 rule 2); any other value checks as before."""
 
 from __future__ import annotations
 
@@ -22,8 +25,16 @@ def field(text: str, label: str) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    draft = args[:1] == ["--draft"] and len(args) >= 2
+    if args[:1] == ["--draft"] and not draft:
+        raise CheckError("usage: check_pr_body.py [--draft VALUE] [FILE|-]")
+    if draft:
+        skip, args = args[1] == "true", args[2:]
+        if skip:
+            print("skipped (draft pull request)")
+            return 0
     if len(args) > 1:
-        raise CheckError("usage: check_pr_body.py [FILE|-]")
+        raise CheckError("usage: check_pr_body.py [--draft VALUE] [FILE|-]")
     try:
         if not args or args[0] == "-":
             text = sys.stdin.read()
