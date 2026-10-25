@@ -214,6 +214,9 @@ endpoint = args[args.index("--method") + 2]
 with open(os.path.join(root, "calls.log"), "a") as log:
     log.write(json.dumps([method, endpoint, args[args.index("--method") + 3:]]) + "\\n")
 if method != "GET":
+    if os.environ.get("GH_STUB_FORBID"):
+        sys.stderr.write("gh: Resource not accessible by integration (HTTP 403)\\n")
+        sys.exit(1)
     print("{}")
     sys.exit(0)
 fixtures = json.load(open(os.path.join(root, "fixtures.json")))
@@ -286,7 +289,9 @@ def proj(tmp_path: Path) -> Path:
     return root
 
 
-def run_router(proj: Path, stub: Stub, tmp: Path, event: str, payload: dict, *args: str):
+def run_router(
+    proj: Path, stub: Stub, tmp: Path, event: str, payload: dict, *args: str, **extra: str
+):
     (stub.dir / "fixtures.json").write_text(json.dumps(stub.fixtures), encoding="utf-8")
     path = tmp / f"event-{event}.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -297,6 +302,7 @@ def run_router(proj: Path, stub: Stub, tmp: Path, event: str, payload: dict, *ar
         GITHUB_EVENT_NAME=event,
         GITHUB_EVENT_PATH=str(path),
         GITHUB_REPOSITORY=REPO,
+        **extra,
     )
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(SCRIPTS / "route.py"), *args],
@@ -489,3 +495,33 @@ def test_ac2_the_router_is_installed_and_names_no_project():
     manifest = json.loads((root / "kit" / "manifest.json").read_text(encoding="utf-8"))
     assert ".github/workflows/agk-route.yml" in manifest["verbatim"]
     assert "scripts/agk/route.py" in manifest["verbatim"]
+
+
+def test_ac2_a_read_only_token_skips_the_label_write_and_exits_zero(proj, stub, tmp_path):
+    """REQ-039 AC2: rule 1 (a fork's pull request gets a read-only token: 403 on every write)."""
+    stub.pull(7)
+    stub.pull(8)
+    stub.open_list([7, 8])
+    event = {"ref": "refs/heads/main", "repository": REPO_INFO}
+    proc = run_router(proj, stub, tmp_path, "push", event, GH_STUB_FORBID="1")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "skipped (read-only token)" in proc.stdout
+    assert "FAIL" not in proc.stdout
+
+
+def test_ac2_any_other_failed_write_still_fails_naming_the_rule(proj, stub, tmp_path):
+    """REQ-039 AC2: rule 1 (only a 403 is a skip)."""
+    stub.pull(7)
+    (stub.bin / "gh").write_text(STUB.replace("(HTTP 403)", "(HTTP 500)"), encoding="utf-8")
+    event = {"pull_request": {"number": 7}, "repository": REPO_INFO}
+    proc = run_router(proj, stub, tmp_path, "pull_request", event, GH_STUB_FORBID="1")
+    assert proc.returncode == 1 and "FAIL route" in proc.stdout and "rule 2" in proc.stdout
+
+
+def test_ac2_the_step_skips_cleanly_when_route_py_is_not_on_the_default_branch():
+    """REQ-039 AC2: rule 1 (the workflow lands before its script in a project that installs it)."""
+    text = workflow()
+    step = text.split("      - name: Route\n", 1)[1]
+    assert "if [ -f scripts/agk/route.py ]; then" in step
+    assert "python3 scripts/agk/route.py" in step.split("then", 1)[1].split("else", 1)[0]
+    assert "nothing to route" in step.split("else", 1)[1]

@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 from urllib.parse import quote
@@ -57,6 +58,22 @@ FAILED_STATUS = {"failure", "error"}
 APPROVE = re.compile(r"Approve: ([0-9a-f]{7,40}) (SPEC-\d{4})")
 SPEC_FILE = re.compile(r"docs/specs/(\d{4})-[^/]+\.md")
 CONFIG = "config/reviewers.yaml"
+
+
+class ReadOnly(Exception):
+    """The job's token cannot write (a fork's pull request gets a read-only token): skip."""
+
+
+def write(endpoint: str, *extra: str, method: str) -> None:
+    """One label write with `gh api`; a 403 is `ReadOnly`, any other failure a CheckError."""
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["gh", "api", "--method", method, endpoint, *extra], capture_output=True, text=True
+    )
+    if proc.returncode == 0 or (method == "DELETE" and "404" in proc.stderr):
+        return
+    if "403" in proc.stderr:
+        raise ReadOnly
+    raise CheckError("rule 2: a label cannot be written")
 
 
 class Held:
@@ -201,7 +218,7 @@ class Labels:
             found = listing(f"repos/{self.repo}/labels")
             self.known = {str(x.get("name")) for x in found or []}
         if name not in self.known:
-            gh(
+            write(
                 f"repos/{self.repo}/labels",
                 "-f",
                 f"name={name}",
@@ -217,12 +234,10 @@ class Labels:
 def apply(repo: str, n: int, current: list[str], wanted: str, labels: Labels) -> None:
     if wanted not in current:
         labels.ensure(wanted)
-        added = gh(f"repos/{repo}/issues/{n}/labels", "-f", f"labels[]={wanted}", method="POST")
-        if added is None:
-            raise CheckError(f"rule 2: the label of pull request #{n} cannot be written")
+        write(f"repos/{repo}/issues/{n}/labels", "-f", f"labels[]={wanted}", method="POST")
     for name in current:
         if name in LABELS and name != wanted:
-            gh(f"repos/{repo}/issues/{n}/labels/{quote(name, safe='')}", method="DELETE")
+            write(f"repos/{repo}/issues/{n}/labels/{quote(name, safe='')}", method="DELETE")
 
 
 def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str | None:
@@ -302,6 +317,9 @@ def main(argv: list[str] | None = None) -> int:
     for n in dict.fromkeys(numbers):
         try:
             route_one(repo, n, root, labels, dry)
+        except ReadOnly:
+            print("skipped (read-only token)")
+            return 0
         except CheckError as exc:
             print(f"FAIL {NAME}: {exc}")
             failed = True

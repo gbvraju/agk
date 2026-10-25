@@ -30,7 +30,10 @@ follow, each with its own ADR. The number ADR-0115 was reserved on #179 by the c
    `agk:ready` while a spec the pull request sets to `Approved` has no `Approve: <sha> SPEC-<n>` first line in a comment or review of an account in `spec_approvers` of `config/reviewers.yaml` (the key is read here and
    defined by build (c); absent, nobody approves and the label stays `agk:approve`); the pull request files must be readable (else the router writes nothing and fails naming the rule), reviews and statuses may be
    unreadable and count as none. A merged or closed pull request keeps its last label.
-4. **Installed**: both files are added to `verbatim` in `kit/manifest.json`; `docs/guides/security.md` lists the workflow and its permissions; the tests of the kit are `tests/kit/test_route.py`. A flow-mode
+4. **Two guards** (the verdict on `fd9bd92`): the step runs `route.py` only when `scripts/agk/route.py` exists in the checkout of the default branch, else it prints that there is nothing to route and succeeds (the
+   workflow reaches a default branch with the pull request that adds the script, and a project may install the workflow first); a `403` on a label write (a fork's pull request has a read-only token) is one line,
+   `skipped (read-only token)`, and exit 0, so a fork's pull request is not labelled (the security guide says so); any other failed write still fails naming rule 2.
+5. **Installed**: both files are added to `verbatim` in `kit/manifest.json`; `docs/guides/security.md` lists the workflow and its permissions; the tests of the kit are `tests/kit/test_route.py`. A flow-mode
    fragment `changelog.d/req-039-a-router.md` records the change.
 
 ## Consequences

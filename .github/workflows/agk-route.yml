@@ -39,4 +39,10 @@ jobs:
       - name: Route
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 scripts/agk/route.py
+        run: |
+          # The script reaches the default branch with the pull request that adds it; until then there is nothing to route.
+          if [ -f scripts/agk/route.py ]; then
+            python3 scripts/agk/route.py
+          else
+            echo "route.py is not on the default branch yet: nothing to route"
+          fi
