@@ -1,6 +1,6 @@
 # ADR-0132: Approving a spec without typing a commit id (REQ-039, build (g) of SPEC-0032)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0122, ADR-0137
