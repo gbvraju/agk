@@ -693,6 +693,140 @@
                     ]
                   }
                 ]
+              },
+              "brief": {
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "const": "unknown"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "flow": {
+                "type": "object",
+                "required": [
+                  "taken_to_pull_request",
+                  "to_first_verdict",
+                  "verdict_to_cleared",
+                  "cleared_to_merge"
+                ],
+                "properties": {
+                  "taken_to_pull_request": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+\\.\\d$"
+                      },
+                      {
+                        "enum": [
+                          "unknown"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "to_first_verdict": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+\\.\\d$"
+                      },
+                      {
+                        "enum": [
+                          "unknown"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "verdict_to_cleared": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+\\.\\d$"
+                      },
+                      {
+                        "enum": [
+                          "unknown"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cleared_to_merge": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+\\.\\d$"
+                      },
+                      {
+                        "enum": [
+                          "unknown"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "conflicts": {
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "renumbers": {
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "corrections": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "stalled": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "const": "unknown"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "additionalProperties": false
@@ -852,6 +986,118 @@
           "const": "unknown"
         }
       ]
+    },
+    "flow": {
+      "type": "object",
+      "required": [
+        "max_builders",
+        "stall_hours",
+        "briefs",
+        "retakes",
+        "corrections"
+      ],
+      "properties": {
+        "max_builders": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "const": "unknown"
+            }
+          ]
+        },
+        "stall_hours": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "const": "unknown"
+            }
+          ]
+        },
+        "briefs": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "number",
+                  "title",
+                  "created_at",
+                  "advances"
+                ],
+                "properties": {
+                  "number": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "advances": {
+                    "oneOf": [
+                      {
+                        "const": "new"
+                      },
+                      {
+                        "const": "unknown"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^REQ-\\d{3}$"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "const": "unknown"
+            }
+          ]
+        },
+        "retakes": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "const": "unknown"
+            }
+          ]
+        },
+        "corrections": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "const": "unknown"
+            }
+          ]
+        }
+      }
     }
   },
   "additionalProperties": false

@@ -175,7 +175,7 @@ def test_ac4_the_schema_number_is_4_and_the_kinds_are_the_same():
     """REQ-033 AC4: rule 7 (the kinds list is unchanged; only fields are added)."""
     import product_report as pr
 
-    assert pr.REPORT_SCHEMA == 5 and build(load(KINDS))["schema"] == 5
+    assert pr.REPORT_SCHEMA == 6 and build(load(KINDS))["schema"] == 6
     assert list(build(load(KINDS))) == [
         "schema",
         "week",
@@ -184,7 +184,7 @@ def test_ac4_the_schema_number_is_4_and_the_kinds_are_the_same():
         "counts",
         "notices",
     ]
-    assert len(pr.ITEM_KINDS) == 27
+    assert len(pr.ITEM_KINDS) == 31
 
 
 # --- open pull requests with unknown verdicts (rule 5) ---------------------------------------

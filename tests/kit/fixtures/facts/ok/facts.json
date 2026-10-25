@@ -55,6 +55,13 @@
     },
     "total": 0
   },
+  "flow": {
+    "briefs": [],
+    "corrections": [],
+    "max_builders": 3,
+    "retakes": [],
+    "stall_hours": 4
+  },
   "issues": [
     {
       "label": "agk-metrics",
@@ -83,19 +90,30 @@
       "actual_hours": "24.0",
       "base": "main",
       "behaviour": null,
+      "brief": null,
       "closed_at": "2026-10-08T09:00:00Z",
+      "conflicts": 0,
+      "corrections": [],
       "created_at": "2026-10-05T09:00:00Z",
       "estimated_hours": "20-30",
       "estimated_size": "M",
       "files": [
         "scripts/agk/tool.py"
       ],
+      "flow": {
+        "cleared_to_merge": "24.0",
+        "taken_to_pull_request": null,
+        "to_first_verdict": "48.0",
+        "verdict_to_cleared": "0.0"
+      },
       "head": "05cccccccccccccccccccccccccccccccccccccc",
       "head_cleared": "yes",
       "merged_at": "2026-10-08T09:00:00Z",
       "number": 5,
       "proof": "proven",
       "proof_reason": null,
+      "renumbers": 0,
+      "stalled": null,
       "state": "merged",
       "title": "Change number 5",
       "usage": "not-reported",
@@ -111,7 +129,10 @@
       "actual_hours": null,
       "base": "main",
       "behaviour": "unchanged",
+      "brief": null,
       "closed_at": null,
+      "conflicts": 0,
+      "corrections": [],
       "created_at": "2026-10-05T09:00:00Z",
       "estimated_hours": "1-2",
       "estimated_size": "S",
@@ -119,12 +140,20 @@
         "docs/a.md",
         "docs/b.md"
       ],
+      "flow": {
+        "cleared_to_merge": null,
+        "taken_to_pull_request": null,
+        "to_first_verdict": null,
+        "verdict_to_cleared": null
+      },
       "head": "07cccccccccccccccccccccccccccccccccccccc",
       "head_cleared": "no",
       "merged_at": null,
       "number": 7,
       "proof": "skipped",
       "proof_reason": null,
+      "renumbers": 0,
+      "stalled": false,
       "state": "open",
       "title": "Change number 7",
       "usage": "not-reported",

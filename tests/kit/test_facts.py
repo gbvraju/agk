@@ -39,7 +39,7 @@ ENV_GIT = {
 DROP = ("GITHUB_BASE_REF", "AGK_BASE", "CI", "AGK_KIT_TESTS", "GITHUB_REPOSITORY")
 SHA11 = "0b" + "c" * 38
 SECTIONS = (
-    "config requirements markers specs adrs residuals questions pull_requests issues drift"
+    "config requirements markers specs adrs residuals questions pull_requests flow issues drift"
 ).split()
 
 
@@ -231,8 +231,13 @@ def test_ac2_without_gh_exactly_the_github_sections_are_unknown(tmp_path):
     assert doc["drift"]["counts"]["D6"] == "unknown" and doc["drift"]["total"] == "unknown"
     assert all(doc["drift"]["counts"][k] != "unknown" for k in ("D1", "D2", "D3", "D4", "D5", "D7"))
     for key in doc:
-        if key not in ("pull_requests", "issues", "drift"):
+        if key not in ("pull_requests", "issues", "drift", "flow"):
             assert doc[key] == baseline[key], key
+    # the flow limits come from agk.toml; what comes from GitHub is unknown (SPEC-0034 rule 10)
+    assert doc["flow"]["briefs"] == "unknown" and doc["flow"]["retakes"] == "unknown"
+    assert {k: doc["flow"][k] for k in ("max_builders", "stall_hours")} == {
+        k: baseline["flow"][k] for k in ("max_builders", "stall_hours")
+    }
 
 
 def test_ac2_a_missing_number_is_never_filled_with_zero(tmp_path):

@@ -55,6 +55,12 @@ ORIGIN = re.compile(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?$")
 SPEC_TITLE = re.compile(r"^# SPEC-\d{4}:\s*(.+?)\s*$")
 SPEC_STATUSES = ("Draft", "Approved")
 LABELS = ("agk-metrics", "agk-drift-audit", "agk-product-report")
+BRIEF_LABEL = "agk-brief"
+BRIEF_LINE = re.compile(r"Brief: #(\d+)")
+TAKE_LINE = re.compile(r"taken: \S+ \d{4}-\d{2}-\d{2}( retakes)?( reserves .*)?")
+ADVANCES = re.compile(r"Advances: (new|REQ-\d{3}(?:, REQ-\d{3})*)")
+WAITING_ON_BUILDER = ("agk:fix", "agk:conflict", "agk:ci-red")
+FLOW_DEFAULTS = {"max_builders": 3, "stall_hours": 4}
 OUTCOMES = ("proven", "not-proven", "skipped", "unknown")
 REASON = re.compile(r"(?!unknown$)[a-z]+(-[a-z]+)*")
 
@@ -427,7 +433,108 @@ def proof_of(src: Any, head: str) -> tuple[str, Any]:
     return outcome, reason if REASON.fullmatch(reason) else UNKNOWN
 
 
-def pull_record(src: Any, item: dict, authors: list[str] | None = None) -> dict:
+def flow_limits(root: Path) -> dict[str, Any]:
+    """`max_builders` and `stall_hours` of the flow table of agk.toml (3 and 4 by default); a
+    value that is not a whole number, 1 or more, is unknown (SPEC-0034 rule 1, SPEC-0033 rule 5)."""
+    try:
+        data = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        data = {}
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return {key: UNKNOWN for key in FLOW_DEFAULTS}
+    table = data.get("flow", {})
+    out: dict[str, Any] = {}
+    for key, default in FLOW_DEFAULTS.items():
+        value = table.get(key, default) if isinstance(table, dict) else default
+        ok = isinstance(value, int) and not isinstance(value, bool) and value >= 1
+        out[key] = value if ok else UNKNOWN
+    return out
+
+
+def brief_of(body: Any) -> Any:
+    """The `n` of the line `Brief: #n` of a pull request body; None without one."""
+    if not isinstance(body, str):
+        return UNKNOWN
+    for line in body.splitlines():
+        if found := BRIEF_LINE.fullmatch(line.rstrip()):
+            return int(found.group(1))
+    return None
+
+
+def taken_at(src: Any, brief: Any, created: Any) -> Any:
+    """When the latest `taken:` comment of the brief before the pull request was posted."""
+    if brief is None:
+        return None
+    if brief == UNKNOWN:
+        return UNKNOWN
+    comments = get_list(src, f"comments-{brief}", f"repos/{{repo}}/issues/{brief}/comments")
+    if comments is None:
+        return UNKNOWN
+    when = [
+        c["created_at"]
+        for c in metrics.first_lines(comments, "taken:") or []
+        if TAKE_LINE.fullmatch(c["body"].splitlines()[0].strip())
+        and (metrics.stamp(c.get("created_at")) or datetime.max.replace(tzinfo=UTC))
+        <= (metrics.stamp(created) or datetime.min.replace(tzinfo=UTC))
+    ]
+    return when[-1] if when else None
+
+
+def gap(opened: Any, closed: Any) -> Any:
+    """Hours between two moments: null when one did not happen, unknown when one cannot be read."""
+    if UNKNOWN in (opened, closed):
+        return UNKNOWN
+    return None if opened is None or closed is None else metrics.hours_between(opened, closed)
+
+
+def flow_hours(created: Any, taken: Any, verdicts: Any, merged: Any) -> dict[str, Any]:
+    """The hours of the four steps of a pull request (SPEC-0034 rule 10)."""
+    if verdicts == UNKNOWN:
+        first = cleared = UNKNOWN
+    else:
+        first = verdicts[0]["at"] if verdicts else None
+        cleared = next((v["at"] for v in verdicts if v["kind"] == "cleared"), None)
+    return {
+        "taken_to_pull_request": gap(taken, created),
+        "to_first_verdict": gap(created, first),
+        "verdict_to_cleared": gap(first, cleared),
+        "cleared_to_merge": gap(cleared, merged),
+    }
+
+
+def stalled_of(item: dict, comments: Any, commits: Any, hours: Any, today: date, cleared: Any):
+    """Whether work that waits on its builder has not changed for `stall_hours` (SPEC-0033 rule 5):
+    a draft or a label agk:fix, agk:conflict or agk:ci-red, and a head that is not cleared. None for
+    a pull request that is not open; unknown when a copy it needs cannot be read."""
+    if item.get("state") != "open":
+        return None
+    names = {lab.get("name") for lab in item.get("labels") or []}
+    if not (item.get("draft") or names & set(WAITING_ON_BUILDER)) or cleared == "yes":
+        return False
+    if hours == UNKNOWN or not isinstance(comments, list) or not isinstance(commits, list):
+        return UNKNOWN
+    moments = [metrics.stamp(item.get("created_at"))]
+    for commit in commits:
+        author = (
+            ((commit.get("commit") or {}).get("author") or {}) if isinstance(commit, dict) else {}
+        )
+        moments.append(metrics.stamp(author.get("date")))
+    for comment in comments:
+        moments += [metrics.stamp(comment.get(k)) for k in ("created_at", "updated_at")]
+    known = [m for m in moments if m is not None]
+    if not known:
+        return UNKNOWN
+    now = metrics.start_of(today + timedelta(days=1))
+    return now - max(known) >= timedelta(hours=hours)
+
+
+def pull_record(
+    src: Any,
+    item: dict,
+    authors: list[str] | None = None,
+    limits: dict | None = None,
+    today: date | None = None,
+) -> dict:
     number = item["number"]
     head = (item.get("head") or {}).get("sha") or ""
     files = get_list(src, f"files-{number}", f"repos/{{repo}}/pulls/{number}/files")
@@ -456,16 +563,46 @@ def pull_record(src: Any, item: dict, authors: list[str] | None = None) -> dict:
         "actual_hours": metrics.actual_hours(commits, item.get("merged_at")) if merged else None,
         "usage": metrics.usage_of(comments, (item.get("user") or {}).get("login") or ""),
     }
+    brief = brief_of(item["body"]) if "body" in item else UNKNOWN
+    record["brief"] = brief
+    record["flow"] = flow_hours(
+        item.get("created_at"),
+        taken_at(src, brief, item.get("created_at")),
+        record["verdicts"],
+        item.get("merged_at"),
+    )
+    if isinstance(comments, list):
+        found = metrics.first_lines(comments, "conflict needs a person:") or []
+        record["conflicts"] = len(found)
+        record["corrections"] = [
+            c["created_at"] for c in metrics.first_lines(comments, "Correction:", authors) or []
+        ]
+    else:
+        record["conflicts"] = UNKNOWN
+        record["corrections"] = UNKNOWN
+    if isinstance(commits, list):
+        subjects = [
+            str((c.get("commit") or {}).get("message") or "").split("\n")[0] for c in commits
+        ]
+        record["renumbers"] = sum(1 for subject in subjects if "renumber" in subject.lower())
+    else:
+        record["renumbers"] = UNKNOWN
     if merged:
         record["head_cleared"] = metrics.merged_head_cleared(src, head, comments, authors)
     elif record["state"] == "open":  # SPEC-0030 rule 8: no verdict yet is `no`, not unknown
         listed = metrics.verdicts(comments if isinstance(comments, list) else None, authors)
         cleared = metrics.merged_head_cleared(src, head, comments, authors)
         record["head_cleared"] = UNKNOWN if listed is None else (cleared if listed else "no")
+    stall = (limits or FLOW_DEFAULTS).get("stall_hours", UNKNOWN)
+    record["stalled"] = stalled_of(
+        item, comments, commits, stall, today or date.today(), record.get("head_cleared")
+    )
     return record
 
 
-def pulls_section(src: Any, today: date, weeks: int, authors: list[str] | None = None) -> Any:
+def pulls_section(
+    src: Any, today: date, weeks: int, authors: list[str] | None = None, limits: dict | None = None
+) -> Any:
     start = window_start(today, weeks)
 
     def older(chunk: list[dict]) -> bool:
@@ -485,7 +622,61 @@ def pulls_section(src: Any, today: date, weeks: int, authors: list[str] | None =
             chosen[p["number"]] = p
     last = metrics.start_of(today + timedelta(days=1))
     kept = [p for p in chosen.values() if (metrics.stamp(p.get("created_at")) or last) < last]
-    return [pull_record(src, p, authors) for p in sorted(kept, key=lambda p: p["number"])]
+    return [
+        pull_record(src, p, authors, limits, today) for p in sorted(kept, key=lambda p: p["number"])
+    ]
+
+
+def flow_section(src: Any, limits: dict, authors: list[str] | None) -> dict[str, Any]:
+    """What the weekly report needs of the flow (SPEC-0034 rule 10): the limits, the open briefs
+    with what they advance, the retakes and the corrections as moments; the report counts them."""
+    listed = get_list(
+        src, "issues-agk-brief", f"repos/{{repo}}/issues?state=all&labels={BRIEF_LABEL}"
+    )
+    section: dict[str, Any] = {
+        **limits,
+        "briefs": UNKNOWN,
+        "retakes": UNKNOWN,
+        "corrections": UNKNOWN,
+    }
+    if listed is None:
+        return section
+    briefs, retakes, corrections = [], [], []
+    for issue in sorted((i for i in listed if "pull_request" not in i), key=lambda i: i["number"]):
+        number = issue["number"]
+        comments = get_list(src, f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
+        if comments is None:
+            return section
+        retakes += [
+            c["created_at"]
+            for c in metrics.first_lines(comments, "taken:") or []
+            if (m := TAKE_LINE.fullmatch(c["body"].splitlines()[0].strip())) and m.group(1)
+        ]
+        corrections += [
+            c["created_at"] for c in metrics.first_lines(comments, "Correction:", authors) or []
+        ]
+        if issue.get("state") == "open":
+            line = next(
+                (x for x in str(issue.get("body") or "").splitlines() if ADVANCES.fullmatch(x)), ""
+            )
+            found = ADVANCES.fullmatch(line)
+            advances = (
+                UNKNOWN
+                if not found
+                else ("new" if found.group(1) == "new" else found.group(1).split(", "))
+            )
+            briefs.append(
+                {
+                    "number": number,
+                    "title": issue.get("title") or "",
+                    "created_at": issue.get("created_at"),
+                    "advances": advances,
+                }
+            )
+    section["briefs"] = briefs
+    section["retakes"] = sorted(retakes)
+    section["corrections"] = corrections
+    return section
 
 
 def issues_section(src: Any) -> Any:
@@ -536,6 +727,15 @@ def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
     cfg = load_cfg(root)
     specs, adrs = spec_records(root), adr_records(root)
     issues = issues_section(src)
+    limits = flow_limits(root)
+    authors = metrics.verdict_authors(root)
+    pulls = pulls_section(src, today, weeks, authors, limits)
+    flow = flow_section(src, limits, authors)
+    if isinstance(pulls, list) and isinstance(flow["corrections"], list):
+        flow["corrections"] = sorted(
+            flow["corrections"]
+            + [t for p in pulls if isinstance(p["corrections"], list) for t in p["corrections"]]
+        )
     return {
         "schema": SCHEMA,
         "commit": git(root, "rev-parse", "HEAD").strip(),
@@ -561,7 +761,8 @@ def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
         "adrs": adrs,
         "residuals": residuals_section(root, specs, adrs),
         "questions": questions_section(root, specs, adrs),
-        "pull_requests": pulls_section(src, today, weeks, metrics.verdict_authors(root)),
+        "pull_requests": pulls,
+        "flow": flow,
         "issues": issues,
         "drift": drift_section(root, today, cfg, issues),
     }

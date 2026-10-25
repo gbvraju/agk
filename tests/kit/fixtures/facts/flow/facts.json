@@ -1,0 +1,445 @@
+{
+  "adrs": [
+    {
+      "amends": [
+        "ADR-0002"
+      ],
+      "date": "2026-09-01",
+      "id": "ADR-0001",
+      "path": "docs/adr/0001-demo.md",
+      "protected_classes": [
+        "scripts/agk/",
+        ".claude/"
+      ],
+      "requirements": [
+        "REQ-001"
+      ],
+      "status": "Accepted",
+      "title": "Demo"
+    },
+    {
+      "amends": [],
+      "date": "2026-10-12",
+      "id": "ADR-0002",
+      "path": "docs/adr/0002-proposed.md",
+      "protected_classes": [],
+      "requirements": [
+        "REQ-002"
+      ],
+      "status": "Proposed",
+      "title": "Proposed"
+    }
+  ],
+  "commit": "e754fbd82c8755ee4dc9a844a2533d718f9f8d34",
+  "config": {
+    "default_branch": "main",
+    "inbox_hours": 48,
+    "project_tests_declared": true,
+    "test_dirs": [
+      "tests"
+    ],
+    "test_patterns": [
+      "probe_*.py"
+    ]
+  },
+  "dirty": false,
+  "drift": {
+    "counts": {
+      "D1": 0,
+      "D2": 0,
+      "D3": 0,
+      "D4": 0,
+      "D5": 0,
+      "D6": 0,
+      "D7": 0
+    },
+    "total": 0
+  },
+  "flow": {
+    "briefs": [
+      {
+        "advances": [
+          "REQ-001"
+        ],
+        "created_at": "2026-10-01T09:00:00Z",
+        "number": 30,
+        "title": "Brief 30"
+      },
+      {
+        "advances": [
+          "REQ-001"
+        ],
+        "created_at": "2026-10-02T09:00:00Z",
+        "number": 31,
+        "title": "Brief 31"
+      },
+      {
+        "advances": [
+          "REQ-001"
+        ],
+        "created_at": "2026-10-03T09:00:00Z",
+        "number": 32,
+        "title": "Brief 32"
+      },
+      {
+        "advances": "new",
+        "created_at": "2026-10-02T09:00:00Z",
+        "number": 33,
+        "title": "Brief 33"
+      },
+      {
+        "advances": "new",
+        "created_at": "2026-10-13T09:00:00Z",
+        "number": 34,
+        "title": "Brief 34"
+      }
+    ],
+    "corrections": [
+      "2026-10-11T11:00:00Z",
+      "2026-10-13T08:00:00Z"
+    ],
+    "max_builders": 2,
+    "retakes": [
+      "2026-10-12T08:00:00Z"
+    ],
+    "stall_hours": 4
+  },
+  "issues": [
+    {
+      "label": "agk-metrics",
+      "number": 3,
+      "state": "closed",
+      "title": "agk metrics 2026-W41"
+    }
+  ],
+  "kit_version": "1.0.0",
+  "markers": [
+    {
+      "ac": "AC1",
+      "file": "tests/probe_demo.py",
+      "line": 1,
+      "req": "REQ-001"
+    },
+    {
+      "ac": "AC2",
+      "file": "tests/probe_demo.py",
+      "line": 1,
+      "req": "REQ-001"
+    }
+  ],
+  "pull_requests": [
+    {
+      "actual_hours": "96.5",
+      "base": "main",
+      "behaviour": null,
+      "brief": 30,
+      "closed_at": "2026-10-13T10:00:00Z",
+      "conflicts": 1,
+      "corrections": [
+        "2026-10-11T11:00:00Z"
+      ],
+      "created_at": "2026-10-09T10:00:00Z",
+      "estimated_hours": "1-2",
+      "estimated_size": "S",
+      "files": [
+        "src/f20.py"
+      ],
+      "flow": {
+        "cleared_to_merge": "24.0",
+        "taken_to_pull_request": "2.0",
+        "to_first_verdict": "24.0",
+        "verdict_to_cleared": "48.0"
+      },
+      "head": "14cccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "yes",
+      "merged_at": "2026-10-13T10:00:00Z",
+      "number": 20,
+      "proof": "unknown",
+      "proof_reason": "unknown",
+      "renumbers": 1,
+      "stalled": null,
+      "state": "merged",
+      "title": "Change number 20",
+      "usage": "not-reported",
+      "verdicts": [
+        {
+          "at": "2026-10-10T10:00:00Z",
+          "kind": "fix",
+          "sha": "14ccccc"
+        },
+        {
+          "at": "2026-10-12T10:00:00Z",
+          "kind": "cleared",
+          "sha": "14ccccc"
+        }
+      ]
+    },
+    {
+      "actual_hours": "43.0",
+      "base": "main",
+      "behaviour": null,
+      "brief": 31,
+      "closed_at": "2026-10-14T06:00:00Z",
+      "conflicts": 0,
+      "corrections": [],
+      "created_at": "2026-10-12T12:00:00Z",
+      "estimated_hours": "1-2",
+      "estimated_size": "S",
+      "files": [
+        "src/f21.py"
+      ],
+      "flow": {
+        "cleared_to_merge": "36.0",
+        "taken_to_pull_request": "4.0",
+        "to_first_verdict": "6.0",
+        "verdict_to_cleared": "0.0"
+      },
+      "head": "15cccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "yes",
+      "merged_at": "2026-10-14T06:00:00Z",
+      "number": 21,
+      "proof": "unknown",
+      "proof_reason": "unknown",
+      "renumbers": 0,
+      "stalled": null,
+      "state": "merged",
+      "title": "Change number 21",
+      "usage": "not-reported",
+      "verdicts": [
+        {
+          "at": "2026-10-12T18:00:00Z",
+          "kind": "cleared",
+          "sha": "15ccccc"
+        }
+      ]
+    },
+    {
+      "actual_hours": null,
+      "base": "main",
+      "behaviour": null,
+      "brief": 32,
+      "closed_at": null,
+      "conflicts": 0,
+      "corrections": [],
+      "created_at": "2026-10-10T09:00:00Z",
+      "estimated_hours": "1-2",
+      "estimated_size": "S",
+      "files": [
+        "src/f22.py"
+      ],
+      "flow": {
+        "cleared_to_merge": null,
+        "taken_to_pull_request": null,
+        "to_first_verdict": null,
+        "verdict_to_cleared": null
+      },
+      "head": "16cccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "no",
+      "merged_at": null,
+      "number": 22,
+      "proof": "unknown",
+      "proof_reason": "unknown",
+      "renumbers": 0,
+      "stalled": true,
+      "state": "open",
+      "title": "Change number 22",
+      "usage": "not-reported",
+      "verdicts": []
+    },
+    {
+      "actual_hours": null,
+      "base": "main",
+      "behaviour": null,
+      "brief": 34,
+      "closed_at": null,
+      "conflicts": 0,
+      "corrections": [],
+      "created_at": "2026-10-10T09:00:00Z",
+      "estimated_hours": "1-2",
+      "estimated_size": "S",
+      "files": [
+        "src/f23.py"
+      ],
+      "flow": {
+        "cleared_to_merge": null,
+        "taken_to_pull_request": null,
+        "to_first_verdict": null,
+        "verdict_to_cleared": null
+      },
+      "head": "17cccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "no",
+      "merged_at": null,
+      "number": 23,
+      "proof": "unknown",
+      "proof_reason": "unknown",
+      "renumbers": 0,
+      "stalled": false,
+      "state": "open",
+      "title": "Change number 23",
+      "usage": "not-reported",
+      "verdicts": []
+    },
+    {
+      "actual_hours": null,
+      "base": "main",
+      "behaviour": null,
+      "brief": null,
+      "closed_at": null,
+      "conflicts": 0,
+      "corrections": [],
+      "created_at": "2026-10-13T09:00:00Z",
+      "estimated_hours": "1-2",
+      "estimated_size": "S",
+      "files": [
+        "src/f24.py"
+      ],
+      "flow": {
+        "cleared_to_merge": null,
+        "taken_to_pull_request": null,
+        "to_first_verdict": null,
+        "verdict_to_cleared": null
+      },
+      "head": "18cccccccccccccccccccccccccccccccccccccc",
+      "head_cleared": "no",
+      "merged_at": null,
+      "number": 24,
+      "proof": "unknown",
+      "proof_reason": "unknown",
+      "renumbers": 0,
+      "stalled": false,
+      "state": "open",
+      "title": "Change number 24",
+      "usage": "not-reported",
+      "verdicts": []
+    }
+  ],
+  "questions": [
+    {
+      "files": [
+        "docs/runs/spec-0002-notes.md"
+      ],
+      "id": "Q-X1-1",
+      "named_in_log": false,
+      "open_in": [
+        "docs/runs/spec-0002-notes.md"
+      ],
+      "ruled": false
+    },
+    {
+      "files": [
+        "docs/runs/decisions-log.md",
+        "docs/runs/spec-0002-notes.md"
+      ],
+      "id": "Q-X1-2",
+      "named_in_log": true,
+      "open_in": [
+        "docs/runs/spec-0002-notes.md"
+      ],
+      "ruled": true
+    },
+    {
+      "files": [
+        "docs/runs/decisions-log.md"
+      ],
+      "id": "Q-X1-3",
+      "named_in_log": true,
+      "open_in": [],
+      "ruled": false
+    }
+  ],
+  "repo": "demo-org/demo-repo",
+  "requirements": [
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "given a, when b, then c"
+        },
+        {
+          "id": "AC2",
+          "text": "given d, when e, then f"
+        }
+      ],
+      "criteria_form": "structured",
+      "done_on": "2026-10-01",
+      "id": "REQ-001",
+      "line": 3,
+      "status": "done",
+      "title": "First thing"
+    },
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "given g, when h, then i"
+        }
+      ],
+      "criteria_form": "structured",
+      "done_on": null,
+      "id": "REQ-002",
+      "line": 8,
+      "status": "planned",
+      "title": "Second thing"
+    }
+  ],
+  "residuals": [
+    {
+      "due": null,
+      "source": "docs/adr/0001-demo.md",
+      "state": "open",
+      "text": "2026-09-01: open item"
+    },
+    {
+      "due": "2027-01-01",
+      "source": "docs/runs/residuals.md",
+      "state": "open",
+      "text": "an open item"
+    },
+    {
+      "due": "2026-12-31",
+      "source": "docs/runs/residuals.md",
+      "state": "open",
+      "text": "another item"
+    },
+    {
+      "due": null,
+      "source": "docs/runs/residuals.md",
+      "state": "closed",
+      "text": "an old item"
+    },
+    {
+      "due": "2027-01-01",
+      "source": "docs/specs/0001-demo.md",
+      "state": "open",
+      "text": "2026-10-01: nothing (due 2027-01-01)"
+    }
+  ],
+  "schema": 1,
+  "specs": [
+    {
+      "id": "SPEC-0001",
+      "notes": null,
+      "open_questions": [],
+      "path": "docs/specs/0001-demo.md",
+      "requirements": [
+        "REQ-001"
+      ],
+      "status": "Approved",
+      "title": "Demo"
+    },
+    {
+      "id": "SPEC-0002",
+      "notes": "docs/runs/spec-0002-notes.md",
+      "open_questions": [
+        "Q-X1-1"
+      ],
+      "path": "docs/specs/0002-draft.md",
+      "requirements": [
+        "REQ-002"
+      ],
+      "status": "Draft",
+      "title": "Draft"
+    }
+  ],
+  "today": "2026-10-14"
+}

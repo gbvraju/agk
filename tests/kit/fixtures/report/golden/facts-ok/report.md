@@ -27,11 +27,16 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 ## At risk
 
 - <pr>7 "Change number 7" has been open for 9 days — https://github.com/demo-org/demo-repo/pull/7
+- REQ-002 has no open brief — https://github.com/demo-org/demo-repo/blob/18d340f6b1398941b84c12b7c83b8e46608f3f9f/docs/requirements.md
 
 ## Cost
 
 - <pr>5 "Change number 5": 72.0 hours from opening to merge, 0 fix verdicts, usage not reported — https://github.com/demo-org/demo-repo/pull/5
-- This week: 1 pull request merged; hours in total: 72.0; fix verdicts in total: 0; declared "Behaviour: unchanged": 0; usage in total: not reported; estimate: 1 of 1 within range — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
+- This week: 1 pull request merged; hours in total: 72.0; fix verdicts in total: 0; corrections: 0; declared "Behaviour: unchanged": 0; usage in total: not reported; estimate: 1 of 1 within range — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
+
+## Flow
+
+- Builders: 0 of 3 pull requests open; median hours: taken to pull request none, pull request to first verdict 48.0, verdict to cleared 0.0, cleared to merge 24.0; conflicts 0, renumbers 0, retakes 0 — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Aopen
 
 ---
 facts: 18d340f6b1398941b84c12b7c83b8e46608f3f9f

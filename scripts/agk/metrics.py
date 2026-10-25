@@ -395,6 +395,21 @@ def covered_head(src: Any, head: str, comments: list[dict], authors: list[str] |
     return UNKNOWN if REQUIREMENTS in paths else "yes"
 
 
+def first_lines(comments: Any, prefix: str, authors: list[str] | None = None) -> list[dict] | None:
+    """The comments whose first line starts with `prefix` (by a listed author when `authors` is
+    given), oldest first; None when the comments cannot be read."""
+    if not isinstance(comments, list):
+        return None
+    allowed = None if authors is None else {a.lstrip("@").lower() for a in authors}
+    found = []
+    for c in sorted(comments, key=lambda c: (c.get("created_at") or "", c.get("id") or 0)):
+        body = c.get("body") if isinstance(c, dict) else None
+        lines = body.splitlines() if isinstance(body, str) else []
+        if lines and lines[0].startswith(prefix) and (allowed is None or author_of(c) in allowed):
+            found.append(c)
+    return found
+
+
 REPORT_USAGE = re.compile(r"Report:.*\bUsage: (\d+) tokens\s*")
 
 
