@@ -6,7 +6,7 @@
 - Related: ADR-0105, ADR-0102, ADR-0100, ADR-0098, ADR-0079
 - Requirements: REQ-037
 
-Protected classes: `kit/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
+Protected classes: `.claude/`, `kit/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -19,6 +19,8 @@ SPEC-0030 (Approved, #167) rules 7, 8 and 9 are the last build (c) of issue #163
 3. **Report** (rule 8): the group `ready` first in Needs you, the kind `pull-request-ready`, schema number 4 in `product_report.py`, `kit/report-schema.json` and every golden; the markdown line `PR #<n> "<title>" is ready to merge`.
 4. **Guide** (rule 9): the section "Running the loop" in `docs/guides/getting-started.md`, with an example brief that the test checks with `check_brief.py`.
 5. Flow mode: no version bump, one line under `## Unreleased` of `CHANGELOG.md`, hashes refreshed. Amendment 55 (`docs/runs/proposed-spec-amendments-55.md`) is applied to SPEC-0021, SPEC-0009, SPEC-0022 and SPEC-0026. `docs/requirements.md` is not changed: REQ-037 stays `planned` until the maintainers set it (the learnings of issue #163 are further parts).
+
+6. The role file `.claude/agents/conductor.md` (ADR-0105) drops the date it carried in a sentence: the init test replaces today's date in every installed `.md` file, so a role file that holds the date of the day it is run on fails `tests/kit_dev/test_init.py::test_ac1_second_run_reads_the_stamped_date` (it failed on main on 2026-10-25). This is why `.claude/` is named above.
 
 ## Consequences
 
