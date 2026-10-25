@@ -1,6 +1,6 @@
 # ADR-0135: `watch --pr` ends at once on a verdict or a correction it would miss (REQ-041, brief #210 build (b))
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0130, ADR-0118, ADR-0126
