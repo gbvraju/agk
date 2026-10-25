@@ -1,6 +1,6 @@
 # ADR-0121: the usage figure of a pull request in the facts and the cost lines (REQ-040 part c1, SPEC-0033 rule 8)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0113, ADR-0116, ADR-0109
