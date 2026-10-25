@@ -1,6 +1,6 @@
 # SPEC-0032: GitHub events set the state of every pull request, a person approves every spec, and a red default branch stops new work
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-039
 
