@@ -273,6 +273,8 @@ def issue(number: int, body: str = GOOD, title: str = "t") -> dict:
 
 def listing(stub: Stub, issues: list[dict]) -> None:
     stub.serve(ISSUES, issues)
+    if not (stub.dir / f"repos__{REPO.replace('/', '__')}__pulls.GET.json").exists():
+        stub.serve(f"repos/{REPO}/pulls", [])  # SPEC-0034: next reads every pull request first
 
 
 def state(stub: Stub, number: int, name: str) -> None:
@@ -296,6 +298,7 @@ def test_ac3_next_takes_the_first_free_brief_with_the_one_post(proj, stub):
     """REQ-037 AC3"""
     listing(stub, [issue(9), issue(5)])
     state(stub, 3, "closed")
+    stub.serve(f"{ISSUES}/9/comments", [])  # every brief is read before one is taken (SPEC-0034)
     stub.serve(f"{ISSUES}/5/comments", [], nth=1)
     stub.serve(f"{ISSUES}/5/comments", [take(1, "s-me", login="me")], nth=2)
     stub.serve(f"{ISSUES}/5/comments", {"id": 1}, method="POST")
@@ -312,7 +315,12 @@ def test_ac3_next_skips_a_bad_shape_an_open_dependence_and_a_live_take_with_reas
     """REQ-037 AC3"""
     listing(
         stub,
-        [issue(4, "no shape here"), issue(5), issue(6, GOOD.replace("#3", "#2")), issue(8, FREE)],
+        [
+            issue(4, "no shape here"),
+            issue(5),
+            issue(6, GOOD.replace("#3", "#2")),
+            issue(8, FREE.replace("docs/**", "src/**")),
+        ],
     )
     state(stub, 3, "open")
     state(stub, 2, "closed")
@@ -335,7 +343,7 @@ def test_ac3_next_does_not_post_when_the_brief_is_already_taken_by_this_session(
     assert out.returncode == 0 and out.stdout.startswith("brief #5") and posts(stub) == []
 
 
-def test_ac3_next_frees_a_take_older_than_24_hours_without_a_pull_request(proj, stub):
+def test_ac3_next_frees_a_take_older_than_claim_hours_without_a_pull_request(proj, stub):
     """REQ-037 AC3"""
     old = iso(-timedelta(hours=30))
     listing(stub, [issue(5, FREE)])
@@ -348,18 +356,14 @@ def test_ac3_next_frees_a_take_older_than_24_hours_without_a_pull_request(proj, 
     assert out.returncode == 0 and out.stdout.startswith("brief #5") and len(posts(stub)) == 1
 
 
-def test_ac3_next_keeps_an_old_take_while_a_later_pull_request_by_the_taker_mentions_it(proj, stub):
-    """REQ-037 AC3"""
+def test_ac3_next_keeps_an_old_take_while_a_builder_pull_request_names_the_brief(proj, stub):
+    """REQ-037 AC3 (SPEC-0034 rule 5: the pull request is found by its line Brief: #n)"""
     old = iso(-timedelta(hours=30))
     listing(stub, [issue(5, FREE)])
-    mine = {
-        "user": {"login": "someone"},
-        "created_at": iso(-timedelta(hours=20)),
-        "body": "Fixes #5",
-    }
-    other = {"user": {"login": "else"}, "created_at": iso(-timedelta(hours=20)), "body": "#5"}
-    before = {"user": {"login": "someone"}, "created_at": iso(-timedelta(hours=40)), "body": "#5"}
-    stub.serve(f"repos/{REPO}/pulls", [other, before, mine])
+    named = {"state": "open", "body": "Brief: #5\n", "number": 9, "created_at": iso()}
+    other = {"state": "open", "body": "Fixes #5", "number": 8, "created_at": iso()}
+    stub.serve(f"repos/{REPO}/pulls", [other, named])
+    stub.serve(f"repos/{REPO}/pulls/9/files", [])
     stub.serve(f"{ISSUES}/5/comments", [take(1, "s-other", old)])
     out = nxt(proj, stub)
     assert out.returncode == 1 and "skip #5: taken by s-other" in out.stdout

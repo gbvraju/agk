@@ -201,6 +201,7 @@ def test_ac5_next_ignores_a_hand_written_red_brief_and_hands_out_the_ordinary_on
     by_hand = {**red(9), "user": {"login": "someone"}}
     listing(stub, [issue(5, FREE), by_hand])
     stub.serve(PRS, [])
+    stub.serve(f"{ISSUES}/9/comments", [])  # every brief is read before one is taken (SPEC-0034)
     stub.serve(f"{ISSUES}/5/comments", [], nth=1)
     stub.serve(f"{ISSUES}/5/comments", [take(1, "s-me", login="me")], nth=2)
     out = nxt(proj, stub)
