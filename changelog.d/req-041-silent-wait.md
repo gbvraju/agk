@@ -1,1 +1,0 @@
-- a wait never goes silent: `session.py watch` (`--pr`, `--merged`, `--assign`) ends with `error: <what> cannot be read` and exit 4 after five unreadable polls in a row, `--assign` prints what it waits for, and the session rules say a blocked session asks with `Question:` on GitHub and pushes only its own branch (SPEC-0034 rules 11 and 12, brief #210)
