@@ -168,8 +168,9 @@ def test_ac2_watch_ignores_unlisted_authors_other_heads_and_other_comments(proj,
 
 
 def test_ac2_watch_does_not_end_on_a_verdict_older_than_the_start(proj, stub):
-    """REQ-037 AC2"""
-    old = comment(2, "boss", f"Verdict: cleared {SHA[:7]}")
+    """REQ-037 AC2: a verdict that names a previous head (brief #210 (b): one for the current
+    head, newer than the last Report:, ends the watch at once)."""
+    old = comment(2, "boss", "Verdict: cleared 0123456")
     watching(stub, [(pull(), [old])], base=[old])
     out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "0")
     assert out.returncode == 3
@@ -606,12 +607,13 @@ def test_ac7_an_unlisted_author_another_comment_or_an_old_correction_does_not_en
     old = comment(3, "boss", "Correction: before the watch started")
     other = comment(40, "stranger", "Correction: not a listed author")
     plain = comment(41, "boss", "Numbers reserved: ADR-0126")
+    reported = [comment(50, "builder", "Report: abc1234 pushed")]  # the floor: after the old one
     brief_polls(
         stub,
-        [(with_brief(), [], [old]), (with_brief(), [], [old, other, plain])],
+        [(with_brief(), reported, [old]), (with_brief(), reported, [old, other, plain])],
     )
     stub.serve(PR, with_brief())  # every later poll reads the same
-    stub.serve(PR_COMMENTS, [])
+    stub.serve(PR_COMMENTS, reported)
     stub.serve(BRIEF, [old, other, plain])
     out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "1")
     assert out.returncode == 3 and out.stdout.strip() == "timeout"

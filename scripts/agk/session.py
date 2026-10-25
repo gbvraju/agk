@@ -61,7 +61,8 @@ from reviewers import verdict_authors
 
 NAME = "session"
 USAGE = (
-    "usage: session.py watch (--pr N | --merged N | --assign ID) [--interval S] [--timeout S]\n"
+    "usage: session.py watch (--pr N [--since ID] | --merged N | --assign ID)\n"
+    "                        [--interval S] [--timeout S]\n"
     "       session.py next --session ID\n"
     "       session.py claim --session ID --brief N [--build X]\n"
     "       session.py after --session ID\n"
@@ -211,6 +212,41 @@ def verdict_line(comments: list, seen: int, head: str, authors: list[str] | None
     return None
 
 
+def report_floor(comments: list, author: str | None) -> int:
+    """The id of the newest comment whose first line starts `Report:` by the pull request's author:
+    what the session had said when it last pushed (0 without one)."""
+    me = (author or "").lstrip("@").lower()
+    found = [
+        c.get("id", 0)
+        for c in comments
+        if isinstance(c.get("body"), str)
+        and c["body"].startswith("Report:")
+        and author_of(c) == me
+        and isinstance(c.get("id"), int)
+    ]
+    return max(found, default=0)
+
+
+def missed_verdict(comments: list, floor: int, head: str, authors: list[str] | None) -> str | None:
+    """The latest verdict by a listed author, when it is newer than `floor` and names `head`: the
+    event a watch started after it would never see (brief #210 (b)). A verdict that names a
+    previous head, or that comes before the floor, is not one."""
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    latest = None
+    for comment in sorted(comments, key=lambda c: c.get("id", 0)):
+        body = comment.get("body")
+        match = (
+            VERDICT.fullmatch(body.splitlines()[0].strip())
+            if isinstance(body, str) and body.strip()
+            else None
+        )
+        if match and author_of(comment) in allowed:
+            latest = (comment.get("id", 0), match)
+    if latest and latest[0] > floor and head.startswith(latest[1].group(2)):
+        return f"verdict {latest[1].group(1)} {latest[1].group(2)} (comment {latest[0]})"
+    return None
+
+
 def label_of(pr: dict) -> str:
     """The router's label of a pull request (SPEC-0032 rule 2), `none` without one."""
     names = sorted(
@@ -292,6 +328,9 @@ def watch(root, args: dict[str, str]) -> int:
     label: Any = UNSET
     brief_seen: Any = UNSET
     reads = Reads(root)
+    since = int(args.get("--since", 0))
+    first = True
+    floor = 0
     if not only_merge:
         while (found := newest(pages(f"repos/{repo}/issues/{number}/comments"))) is None:
             if reads.failed(f"the comments of #{number}"):
@@ -327,6 +366,14 @@ def watch(root, args: dict[str, str]) -> int:
                 own = (pr.get("user") or {}).get("login")
                 authors = counted_authors(verdict_authors(root), own)
                 head = str((pr.get("head") or {}).get("sha") or "")
+                if first:  # what landed after the last Report: and before this watch started
+                    first = False
+                    floor = max(report_floor(comments, own), since)
+                    line = missed_verdict(comments, floor, head, authors)
+                    line = line or correction_line(comments, floor, authors, int(number))
+                    if line:
+                        print(line)
+                        return 0
                 line = verdict_line(comments, seen, head, authors)
                 if line:
                     print(line)
@@ -340,6 +387,10 @@ def watch(root, args: dict[str, str]) -> int:
                     found = pages(f"repos/{repo}/issues/{brief}/comments")
                     if found is not None and brief_seen is UNSET:
                         brief_seen = newest(found)
+                        line = correction_line(found, floor, authors, brief)
+                        if line:
+                            print(line)
+                            return 0
                     elif found is not None:
                         line = correction_line(found, brief_seen, authors, brief)
                         if line:
@@ -1128,7 +1179,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     cmd, opts = args[0], dict(zip(args[1::2], args[2::2], strict=False))
     allowed = {
-        "watch": {"--pr", "--merged", "--assign", "--interval", "--timeout"},
+        "watch": {"--pr", "--merged", "--assign", "--interval", "--timeout", "--since"},
         "next": {"--session"},
         "claim": {"--session", "--brief", "--build"},
         "after": {"--session"},
@@ -1149,6 +1200,7 @@ def main(argv: list[str] | None = None) -> int:
             else number_of(opts.get("--pr") or opts.get("--merged"))
         )
         ok = ok and all(number_ok(opts[k]) for k in ("--interval", "--timeout") if k in opts)
+        ok = ok and ("--since" not in opts or ("--pr" in opts and opts["--since"].isdigit()))
     elif cmd == "queue":
         ok = opts.get("--role") in ROLES and (
             "--author" not in opts or bool(SESSION_ID.fullmatch(opts["--author"].lstrip("@")))
