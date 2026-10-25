@@ -155,6 +155,7 @@
     }
   ],
   "schema": 1,
+  "shadow": "unknown",
   "specs": [
     {
       "id": "SPEC-0001",

@@ -59,7 +59,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 ## Cost
 
-- This week: 12 pull requests merged; hours in total: 124.3; fix verdicts in total: 4; corrections: 0; declared "Behaviour: unchanged": 3; usage in total: unknown; estimate: none declared this week — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged+merged%3A2026-10-05..2026-10-11
+- This week: 12 pull requests merged; hours in total: 124.3; fix verdicts in total: 4; corrections: 0; declared "Behaviour: unchanged": 3; usage in total: unknown; estimate: none declared this week; shadow review: heads reviewed by both 4; right: conductor only 3, shadow only 1, both 2; wrong: conductor 1, shadow 2; unmarked heads 1; catch rate 5/6 (83.3%), all time 7/9 (77.8%) — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged+merged%3A2026-10-05..2026-10-11
 
 ## Flow
 

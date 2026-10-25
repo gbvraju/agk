@@ -260,6 +260,9 @@
     }
   ],
   "schema": 1,
+  "shadow": {
+    "issue": null
+  },
   "specs": [
     {
       "id": "SPEC-0001",

@@ -220,7 +220,7 @@ def test_cost_totals_are_computed_from_the_facts(capsys):
         "- This week: 4 pull requests merged; hours in total: 107.3;"
         " fix verdicts in total: 2; corrections: 0;"
         ' declared "Behaviour: unchanged": 2; usage in total: unknown;'
-        " estimate: none declared this week — "
+        " estimate: none declared this week; shadow review: unknown — "
     )
 
 
@@ -1003,7 +1003,10 @@ def test_ac2_cost_is_the_totals_line_alone_ending_with_the_week_link(tmp_path, c
         f"- This week: 12 pull requests merged; hours in total: {hours:.1f}; "
         f"fix verdicts in total: {fixes}; corrections: 0; "
         f'declared "Behaviour: unchanged": {declared}; '
-        "usage in total: unknown; estimate: none declared this week"
+        "usage in total: unknown; estimate: none declared this week; "
+        "shadow review: heads reviewed by both 4; right: conductor only 3, shadow only 1, both 2; "
+        "wrong: conductor 1, shadow 2; unmarked heads 1; "
+        "catch rate 5/6 (83.3%), all time 7/9 (77.8%)"
     )
     assert cost == [f"{text} \u2014 {WEEK41_LINK}"]
     assert "hours from opening to merge" not in out

@@ -105,12 +105,21 @@ def count(src: ApiDir, issue: int, allowed: set[str]) -> tuple[dict, int, int]:
     shadow_comments = src.get(f"comments-{issue}", "")
     if not isinstance(shadow_comments, list):
         raise CheckError("the comments of the shadow issue are missing in --api-dir (path class)")
-    shadows = shadows_of(shadow_comments, allowed)
     merged = [p for p in pulls if isinstance(p, dict) and p.get("merged_at")]
+    return count_pulls(
+        [(p, src.get(f"comments-{p.get('number')}", "")) for p in merged], shadow_comments, allowed
+    )
+
+
+def count_pulls(
+    merged: list[tuple[dict, Any]], shadow_comments: list, allowed: set[str]
+) -> tuple[dict, int, int]:
+    """The counts from merged pull requests with their comments (a list, or anything else when the
+    copy is unreadable) and the comments of the shadow issue; `facts.py` calls this too."""
+    shadows = shadows_of(shadow_comments, allowed)
     verdicts = {}
     unread = 0
-    for pull in merged:
-        comments = src.get(f"comments-{pull.get('number')}", "")
+    for pull, comments in merged:
         if isinstance(comments, list):
             verdicts[pull["number"]] = (pull, comments, heads_of(comments, allowed))
         else:
@@ -200,6 +209,28 @@ def render(totals: dict, unpaired: int, unread: int) -> str:
         right = data["right, conductor only"] + data["right, both"]
         out.append(f"  catch rate: {rate(right, data['right, shadow only'])}")
     return "\n".join(out)
+
+
+FIELDS = {
+    "heads reviewed by both": "heads",
+    "right, conductor only": "right_conductor_only",
+    "right, shadow only": "right_shadow_only",
+    "right, both": "right_both",
+    "wrong, conductor": "wrong_conductor",
+    "wrong, shadow": "wrong_shadow",
+    "unmarked heads": "unmarked_heads",
+    "unmarked findings": "unmarked_findings",
+}
+
+
+def summary(totals: dict) -> dict[str, Any]:
+    """The counts as JSON fields: `weeks` (ISO week of the merge -> counts) and `total`."""
+    return {
+        "weeks": {
+            w: {FIELDS[k]: v for k, v in totals[w].items()} for w in sorted(totals) if w != "total"
+        },
+        "total": {FIELDS[k]: v for k, v in totals["total"].items()},
+    }
 
 
 def parse(args: list[str]) -> dict[str, str] | None:

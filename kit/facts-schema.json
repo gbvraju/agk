@@ -1085,6 +1085,130 @@
           ]
         }
       }
+    },
+    "shadow": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "issue",
+            "unpaired",
+            "unread",
+            "weeks",
+            "total"
+          ],
+          "properties": {
+            "issue": {
+              "type": "integer"
+            },
+            "unpaired": {
+              "type": "integer"
+            },
+            "unread": {
+              "type": "integer"
+            },
+            "weeks": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "heads",
+                  "right_conductor_only",
+                  "right_shadow_only",
+                  "right_both",
+                  "wrong_conductor",
+                  "wrong_shadow",
+                  "unmarked_heads",
+                  "unmarked_findings"
+                ],
+                "properties": {
+                  "heads": {
+                    "type": "integer"
+                  },
+                  "right_conductor_only": {
+                    "type": "integer"
+                  },
+                  "right_shadow_only": {
+                    "type": "integer"
+                  },
+                  "right_both": {
+                    "type": "integer"
+                  },
+                  "wrong_conductor": {
+                    "type": "integer"
+                  },
+                  "wrong_shadow": {
+                    "type": "integer"
+                  },
+                  "unmarked_heads": {
+                    "type": "integer"
+                  },
+                  "unmarked_findings": {
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "total": {
+              "type": "object",
+              "required": [
+                "heads",
+                "right_conductor_only",
+                "right_shadow_only",
+                "right_both",
+                "wrong_conductor",
+                "wrong_shadow",
+                "unmarked_heads",
+                "unmarked_findings"
+              ],
+              "properties": {
+                "heads": {
+                  "type": "integer"
+                },
+                "right_conductor_only": {
+                  "type": "integer"
+                },
+                "right_shadow_only": {
+                  "type": "integer"
+                },
+                "right_both": {
+                  "type": "integer"
+                },
+                "wrong_conductor": {
+                  "type": "integer"
+                },
+                "wrong_shadow": {
+                  "type": "integer"
+                },
+                "unmarked_heads": {
+                  "type": "integer"
+                },
+                "unmarked_findings": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "issue"
+          ],
+          "properties": {
+            "issue": {
+              "const": null
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "const": "unknown"
+        }
+      ]
     }
   },
   "additionalProperties": false

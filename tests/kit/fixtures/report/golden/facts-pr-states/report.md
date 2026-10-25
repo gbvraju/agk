@@ -39,7 +39,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 - <pr>13 "Change number 13": 49.0 hours from opening to merge, 0 fix verdicts, usage not reported — https://github.com/demo-org/demo-repo/pull/13
 - <pr>14 "Change number 14": 25.0 hours from opening to merge, 0 fix verdicts, usage not reported — https://github.com/demo-org/demo-repo/pull/14
 - <pr>15 "Change number 15": 1.0 hours from opening to merge, 0 fix verdicts, usage not reported — https://github.com/demo-org/demo-repo/pull/15
-- This week: 4 pull requests merged; hours in total: 172.0; fix verdicts in total: 1; corrections: unknown; declared "Behaviour: unchanged": 1; usage in total: not reported; estimate: none declared this week — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
+- This week: 4 pull requests merged; hours in total: 172.0; fix verdicts in total: 1; corrections: unknown; declared "Behaviour: unchanged": 1; usage in total: not reported; estimate: none declared this week; shadow review: unknown — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
 
 ## Flow
 

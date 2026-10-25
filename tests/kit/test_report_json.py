@@ -145,4 +145,4 @@ def test_ac8_the_script_runs_json_in_an_empty_environment(tmp_path):
         text=True,
     )
     assert proc.returncode == 0, proc.stderr
-    assert json.loads(out.read_text(encoding="utf-8"))["schema"] == 6
+    assert json.loads(out.read_text(encoding="utf-8"))["schema"] == 7
