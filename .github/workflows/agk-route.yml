@@ -1,7 +1,8 @@
 # The router (SPEC-0032 rules 1, 2 and 8): one label for the state of every pull request, set from GitHub events, so a session that
 # restarts resumes from GitHub. It runs `scripts/agk/route.py` from a checkout of the default branch and never runs code of a pull
 # request; no agent runs here. The permissions are the five the router needs: it reads the checks and statuses of a head and writes
-# labels. A label set with the job's token starts no workflow, and no trigger below listens to a label change, so it cannot loop.
+# labels, and, for a push to the default branch or a finished workflow on it (SPEC-0032 rule 7), the one issue "The default branch is
+# red". A label set with the job's token starts no workflow, and no trigger below listens to a label change, so it cannot loop.
 name: agk-route
 
 on:

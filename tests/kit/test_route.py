@@ -237,6 +237,14 @@ class Stub:
         gh.write_text(STUB, encoding="utf-8")
         gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
         self.fixtures: dict = {f"repos/{REPO}/labels": []}
+        # a green default branch with no red-branch issue (SPEC-0032 rule 7)
+        self.fixtures[f"repos/{REPO}/branches/main"] = {"commit": {"sha": HEAD}}
+        self.fixtures[f"repos/{REPO}/commits/{HEAD}/check-runs"] = {
+            "total_count": 2,
+            "check_runs": [ok("governance"), ok("proof")],
+        }
+        self.fixtures[f"repos/{REPO}/commits/{HEAD}/status"] = {"statuses": []}
+        self.fixtures[f"repos/{REPO}/issues"] = []
 
     def pull(self, n: int, labels=(), state="open", mergeable="clean", merged=None) -> None:
         self.fixtures[f"repos/{REPO}/pulls/{n}"] = {

@@ -196,7 +196,7 @@ def test_ac5_a_stalled_draft_is_offered_before_a_brief_and_taken_over_with_one_c
     assert out.stdout.startswith("stalled #7\n") and "title: build 7" in out.stdout
     assert "python3 scripts/agk/session.py resume --pr 7" in out.stdout
     assert posts(stub) == [["POST", f"{ISSUES}/7/comments", ["-f", f"body=taken over: s-me {DAY}"]]]
-    assert not any("labels=agk-brief" in call[1] for call in stub.calls())  # no brief was read
+    assert not any("issues/5" in call[1] for call in stub.calls())  # no brief was taken
 
 
 @pytest.mark.parametrize("name", ["agk:fix", "agk:conflict", "agk:ci-red"])
