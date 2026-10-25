@@ -1,6 +1,6 @@
 # ADR-0124: capacity, overlap, numbers, claims, demand and push-check (REQ-041 build (b), SPEC-0034 rules 1, 3 to 6 and 7b)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0120, ADR-0114, ADR-0117
