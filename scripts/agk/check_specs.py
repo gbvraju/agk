@@ -6,7 +6,12 @@ A Draft spec, a new spec and the Draft -> Approved flip pass.
 (2) Rule a (SPEC-0013 rule 23), with `--body FILE|-`: an implementation PR (its diff touches a path
 outside `docs/` and `.github/ISSUE_TEMPLATE/`) must name, on its `Advances:` line, only requirements
 that an Approved spec names; a requirement that no spec names and an ADR names is exempt.
-(3) Rule b (SPEC-0013 rule 24): a spec whose Approved status line is added or changed in the diff
+(3) With `--comments FILE [--reviews FILE]` (saved comments and review bodies of the pull request;
+SPEC-0032 rule 5): a spec whose Approved status line is added or changed in the diff, through a
+`Final:` line or an ordinary commit, needs a first line `Approve: <sha> SPEC-<n>` by an account in
+`spec_approvers`, and the spec file at the head must equal the one at `<sha>` apart from its status
+line. Without `--comments` the approval is not checked (a local run has no comments).
+(4) Rule b (SPEC-0013 rule 24): a spec whose Approved status line is added or changed in the diff
 has no open `Q-` id (a table row or list item in the spec or its notes file that has no row in the
 notes' `## Rulings` section and no `<id> ruled` row in the decisions log).
 Messages name the spec path, the requirement or the question id, never content.
@@ -16,7 +21,9 @@ from __future__ import annotations
 
 import re
 import sys
+from pathlib import Path
 
+from check_final_clearance import comments_of
 from check_pr_body import field
 from common import (
     REQ_ID,
@@ -27,11 +34,13 @@ from common import (
     changed_files,
     changed_lines,
     find_questions,
+    git,
     read_text,
     repo_root,
     run,
     show,
 )
+from reviewers import approval_shas, spec_approvers
 
 NAME = "specs"
 SPEC_PREFIX = "docs/specs/"
@@ -65,6 +74,30 @@ def body_arg(argv: list[str] | None) -> str | None:
             return fh.read()
     except OSError:
         raise CheckError("cannot read the PR body file (option --body)") from None
+
+
+def file_arg(argv: list[str] | None, name: str) -> str | None:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if name not in args:
+        return None
+    i = args.index(name)
+    if i + 1 >= len(args):
+        raise CheckError(f"{name} needs a value")
+    return args[i + 1]
+
+
+def without_status(text: str) -> str:
+    return re.sub(r"(?m)^- Status:.*$", "- Status: -", text, count=1)
+
+
+def unchanged_since(root, sha: str, path: str) -> bool:
+    """The spec at the head equals the spec at `sha` apart from its status line."""
+    full = git(root, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).strip()
+    old = show(root, full, path) if full else None
+    new = read_text(root, path)
+    if old is None or new is None:
+        return False
+    return without_status(old) == without_status(new)
 
 
 def requirements_of(root, folder: str) -> dict[str, tuple[list[str], str | None]]:
@@ -137,8 +170,11 @@ def section_lines(text: str, heading: str) -> list[str]:
     return found
 
 
-def approval_failures(root, mb: str, changed: dict[str, str]) -> list[str]:
+def approval_failures(
+    root, mb: str, changed: dict[str, str], approvals: dict[str, list[str]] | None = None
+) -> list[str]:
     failures = []
+    noted = False
     for path, state in sorted(changed.items()):
         if not SPEC_FILE.match(path) or state not in ("A", "M") or not (root / path).is_file():
             continue
@@ -148,9 +184,16 @@ def approval_failures(root, mb: str, changed: dict[str, str]) -> list[str]:
             ln.startswith("+") and STATUS_LINE.match(ln[1:]) for ln in changed_lines(root, mb, path)
         ):
             continue
-        failures += [
-            f"SPEC-{spec_number(path)}: {q} has no ruling" for q in open_questions(root, path)
-        ]
+        number = f"SPEC-{spec_number(path)}"
+        failures += [f"{number}: {q} has no ruling" for q in open_questions(root, path)]
+        if approvals is None:
+            if not noted:
+                print(f"{NAME}: no comments file; an approval of a spec is not checked")
+                noted = True
+        elif not approvals.get(number):
+            failures.append(f"{number}: rule 5: no Approve line by an account in spec_approvers")
+        elif not any(unchanged_since(root, sha, path) for sha in approvals[number]):
+            failures.append(f"{number}: rule 5: the spec changed after the approved sha")
     return failures
 
 
@@ -180,7 +223,16 @@ def main(argv: list[str] | None = None) -> int:
         f"approved spec '{path}' changed without a proposed-spec-amendments file that names it"
         for path in failures
     ]
-    messages += approval_failures(root, mb, changed)
+    comments = file_arg(argv, "--comments")
+    approvals = None
+    if comments is not None:
+        reviews = file_arg(argv, "--reviews")
+        approvals = approval_shas(
+            comments_of(Path(comments)),
+            comments_of(Path(reviews)) if reviews else [],
+            spec_approvers(root),
+        )
+    messages += approval_failures(root, mb, changed, approvals)
     if body is None or not body.strip():
         print(f"{NAME}: no pull request body; the lifecycle rule for Advances is skipped")
     else:

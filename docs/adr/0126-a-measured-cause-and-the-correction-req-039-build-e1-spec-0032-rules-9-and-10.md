@@ -20,10 +20,10 @@ reserved on #179. The tests were written first (`tests/kit/test_check_brief.py`,
    that turns it green; the check reads that it is not empty and holds the words `before` and `after`, and allows at most one. A hand-written `Priority: 0` brief (now valid beside 1 to 3; `session.py next` orders it before `Priority: 1`, after the router's issue, which alone is handed out and stops other sessions) fails without it, naming rule 9 and
    never the sentence; the brief the router writes for a red default branch (`Advances: none` with `Priority: 0`) needs none because it names no cause. The check cannot tell that the measurement is true: the builder's
    reproduction is the second check.
-2. **The builder** (`config/session-rules.md` rule 13): the first step on a brief or fix item that names a cause is to reproduce it with the command of the `Measured:` line; if its own measurement disagrees it posts
+2. **The builder** (`config/session-rules.md` rule 19): the first step on a brief or fix item that names a cause is to reproduce it with the command of the `Measured:` line; if its own measurement disagrees it posts
    `Question:` with its measurement and builds nothing on that cause.
 3. **The correction** (`session.py watch --pr N`): ends with `correction #<n> (comment <id>): <first line>` on a `Correction:` comment by a listed verdict author, newer than the start, on the pull request or on the brief named
-   by the `Brief: #<n>` line of its body (the brief is read once at the first poll for its baseline). The session rules name the exception to rule 1 and say in rule 14 that work built on a withdrawn cause is reset with one
+   by the `Brief: #<n>` line of its body (the brief is read once at the first poll for its baseline). The session rules name the exception to rule 1 and say in rule 20 that work built on a withdrawn cause is reset with one
    `Report:` and never a force-push. The conductor role file forbids naming a cause without a `Measured:` line and gives the `Correction: <what was wrong>; <what stands>` form for the brief and every pull request built from it.
 4. Amendment 64 (`docs/runs/proposed-spec-amendments-64.md`) is applied to SPEC-0034 rule 2, SPEC-0032 rules 9 and 10 and SPEC-0030 rule 2. The guide ("Running the loop") names the correction end. A flow-mode fragment
    `changelog.d/req-039-e1-measured.md` records the change.

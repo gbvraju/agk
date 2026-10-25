@@ -175,19 +175,26 @@ def spec_approvers(root) -> list[str]:
         return []
 
 
-def person_approvals(comments: list[dict], reviews: list[dict], approvers: list[str]) -> set[str]:
-    """The specs named by the first line `Approve: <sha> SPEC-<n>` of a comment or a review body
-    whose author is a listed approver; any other account, line or form counts for nothing."""
+def approval_shas(
+    comments: list[dict], reviews: list[dict], approvers: list[str]
+) -> dict[str, list[str]]:
+    """spec -> the shas of the first lines `Approve: <sha> SPEC-<n>` of the comments and review
+    bodies whose author is a listed approver; any other account, line or form counts for nothing."""
     allowed = {a.lstrip("@").lower() for a in approvers}
-    found = set()
+    found: dict[str, list[str]] = {}
     for item in [*comments, *reviews]:
         user = item.get("user")
         login = user.get("login") if isinstance(user, dict) else None
         lines = str(item.get("body") or "").splitlines()
         match = APPROVE.fullmatch(lines[0].strip()) if lines else None
         if match and isinstance(login, str) and login.lower() in allowed:
-            found.add(match.group(2))
+            found.setdefault(match.group(2), []).append(match.group(1))
     return found
+
+
+def person_approvals(comments: list[dict], reviews: list[dict], approvers: list[str]) -> set[str]:
+    """The specs a listed approver approved in a comment or a review (SPEC-0032 rule 5)."""
+    return set(approval_shas(comments, reviews, approvers))
 
 
 def verdict_authors(root) -> list[str]:
