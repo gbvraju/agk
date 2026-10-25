@@ -1,6 +1,6 @@
 # SPEC-0035: A shadow reviewer reviews the same heads as the conductor, builders mark every finding at merge, and AGK reports the conductor's catch rate from the marks
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-042
 

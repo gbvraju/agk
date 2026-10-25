@@ -1,6 +1,6 @@
 # ADR-0129: Add REQ-042: A shadow reviewer lets AGK measure the conductor's catch rate
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: SPEC-0035
