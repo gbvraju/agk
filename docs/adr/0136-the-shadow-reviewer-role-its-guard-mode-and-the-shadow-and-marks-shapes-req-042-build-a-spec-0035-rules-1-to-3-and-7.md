@@ -1,6 +1,6 @@
 # ADR-0136: the shadow reviewer role, its guard mode and the Shadow and Marks shapes in the session rules (REQ-042 build a, SPEC-0035 rules 1 to 3 and 7)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0129, ADR-0105, ADR-0125
