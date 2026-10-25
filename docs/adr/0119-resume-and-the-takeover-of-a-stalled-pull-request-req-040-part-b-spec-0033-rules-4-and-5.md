@@ -1,6 +1,6 @@
 # ADR-0119: `session.py resume` and the takeover of a stalled pull request (REQ-040 part b, SPEC-0033 rules 4 and 5)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0116, ADR-0113, ADR-0100
