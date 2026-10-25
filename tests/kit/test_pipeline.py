@@ -126,3 +126,11 @@ def test_the_workflow_uploads_the_document_and_the_router_posts_nothing_new():
     assert re.search(r"actions/upload-artifact@[0-9a-f]{40}", text)
     assert "continue-on-error: true" in text
     assert "contents: read" in text and "contents: write" not in text
+
+
+def test_the_approval_line_with_the_approve_instruction_gives_an_item(proj, stub, tmp_path):
+    line = f'{ASK}: post "Approve: SPEC-0036"'
+    comments = {7: [said(1, "boss", f"Verdict: cleared {HEAD[:7]}\n{line}\n")]}
+    _, out = route(proj, stub, tmp_path, [listed(7, "agk:approve")], comments=comments)
+    (item,) = json.loads(out.read_text())["approve"]
+    assert (item["spec"], item["spec_title"]) == ("SPEC-0036", "A plain title")
