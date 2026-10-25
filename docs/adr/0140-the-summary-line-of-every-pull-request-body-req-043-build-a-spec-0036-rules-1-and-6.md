@@ -1,6 +1,6 @@
 # ADR-0140: the Summary line of every pull request body (REQ-043 build a, SPEC-0036 rules 1 and 6)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0131, ADR-0125, ADR-0138
