@@ -55,6 +55,7 @@
     "scripts/agk/reviewers.py",
     "scripts/agk/route.py",
     "scripts/agk/session.py",
+    "scripts/agk/shadow_rate.py",
     "scripts/agk/traceability.py"
   ],
   "experimental": [

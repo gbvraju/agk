@@ -1,0 +1,1 @@
+- shadow_rate.py prints the conductor's catch rate from the Shadow and Marks comments of the merged pull requests (SPEC-0035 rules 3, 4 and 8, REQ-042 build b)
