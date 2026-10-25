@@ -21,7 +21,7 @@ comment on #179. This is build (b) of rule 13, from the default branch after the
 2. **`queue --role conductor|builder|person [--author LOGIN]`**: one GET of the open pull requests; it prints `#N <label>` for each whose label is the role's (conductor `agk:review`, `agk:ci-red`; builder `agk:fix`,
    `agk:conflict`, `agk:ci-red`; person `agk:approve`, `agk:ready`), or `empty`; the conductor's list skips drafts (amendment 56); `--author` keeps the pull requests by that login. An unreadable list fails naming rule 3
    (exit 2); an unknown role is usage (exit 2). It writes nothing.
-3. **The wake rule**: `config/session-rules.md` rules 9 and 10 say how `watch` is started so its end wakes the session (Claude Code: a Bash command started with `run_in_background`; another runtime: the equivalent;
+3. **The wake rule**: `config/session-rules.md` rules 10 and 11 say how `watch` is started so its end wakes the session (Claude Code: a Bash command started with `run_in_background`; another runtime: the equivalent;
    never in the foreground, never detached with `&` or `nohup`), that each event is one wake, and that a session runs `queue` first when it starts or restarts. `docs/guides/getting-started.md` step 4 of "Running the
    loop" says the same and names the label end and `queue`.
 4. **Readings taken where the spec leaves a point open** (questions in the pull request, the most conservative reading each): "the builder of that pull request" is the pull request's author login, given with `--author`

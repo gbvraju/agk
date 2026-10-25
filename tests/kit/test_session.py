@@ -408,9 +408,11 @@ def test_ac3_next_needs_a_session_id_that_is_a_plain_word(proj, stub):
     assert session(proj, stub, "next", "--session", "a b").returncode == 2
 
 
-def test_rule5_session_posts_in_one_place_and_the_checks_do_not_call_gh():
-    """REQ-037 AC2 and rule 5"""
-    assert (SCRIPTS / "session.py").read_text(encoding="utf-8").count('"POST"') == 1
+def test_rule5_session_posts_only_its_two_take_comments_and_the_checks_do_not_call_gh():
+    """REQ-037 AC2 and rule 5 (the take of SPEC-0030 and the takeover of SPEC-0033 rule 5)"""
+    text = (SCRIPTS / "session.py").read_text(encoding="utf-8")
+    assert text.count('method="POST"') == 2
+    assert text.count('f"body=taken: ') == 1 and text.count('f"body=taken over: ') == 1
     for name in ("check_final_clearance.py", "check_brief.py", "facts.py"):
         path = SCRIPTS / name
         if path.exists() and name != "facts.py":
