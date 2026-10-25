@@ -58,6 +58,8 @@ SIZE = re.compile(r"Size: [SML]")
 NUMBERED = re.compile(r"(\d+)\.\s+\S")
 ADVANCES = re.compile(r"Advances: (new|REQ-\d{3}(?:, REQ-\d{3})*)")
 PRIORITY = re.compile(r"Priority: [123]")
+RED_TITLE = "The default branch is red"
+ROUTER_PAIR = ("Advances: none", "Priority: 0")  # written only by the router (SPEC-0032 rule 7)
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
 STATE_PREFIX = "agk:"
 UNSET = object()
@@ -233,7 +235,9 @@ def line_problems(lines: list[str]) -> list[str]:
     """SPEC-0034 rule 2: the Advances, Touches and Priority lines (never the sentence)."""
     problems: list[str] = []
     advances = [x.rstrip() for x in lines if x.startswith("Advances")]
-    if len(advances) != 1 or not ADVANCES.fullmatch(advances[0]):
+    priority = [x.rstrip() for x in lines if x.startswith("Priority")]
+    pair = advances == [ROUTER_PAIR[0]] and priority == [ROUTER_PAIR[1]]
+    if not pair and (len(advances) != 1 or not ADVANCES.fullmatch(advances[0])):
         problems.append(
             "rule 2: exactly one line Advances: REQ-n (comma-separated) or Advances: new"
         )
@@ -245,8 +249,7 @@ def line_problems(lines: list[str]) -> list[str]:
         or not all(g.strip() for g in globs)
     ):
         problems.append("rule 2: exactly one line Touches: with path globs separated by commas")
-    priority = [x.rstrip() for x in lines if x.startswith("Priority")]
-    if len(priority) > 1 or any(not PRIORITY.fullmatch(x) for x in priority):
+    if not pair and (len(priority) > 1 or any(not PRIORITY.fullmatch(x) for x in priority)):
         problems.append("rule 2: at most one line Priority: 1, Priority: 2 or Priority: 3")
     return problems
 
@@ -329,14 +332,25 @@ def take(repo: str, number: int, me: str, comments: list) -> str | None:
     return None
 
 
+def is_red(item: dict) -> bool:
+    """The brief the router writes while the default branch is red (SPEC-0032 rule 7)."""
+    lines = (x.rstrip() for x in str(item.get("body") or "").splitlines())
+    return "pull_request" not in item and item.get("title") == RED_TITLE and ROUTER_PAIR[1] in lines
+
+
 def next_brief(root, me: str) -> int:
     repo = repo_name(root)
-    if (found := offer_stalled(root, repo, me)) is not None:
-        return found
     issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
+    red = [i for i in issues or [] if is_red(i)]
+    if not red and (found := offer_stalled(root, repo, me)) is not None:
+        return found
     if issues is None:
         raise CheckError("rule 3: the open briefs cannot be read")
-    for brief in sorted((i for i in issues if "pull_request" not in i), key=lambda i: i["number"]):
+    # While the default branch is red only its brief is handed out (SPEC-0032 rule 7).
+    handed = sorted(
+        red or (i for i in issues if "pull_request" not in i), key=lambda i: i["number"]
+    )
+    for brief in handed:
         why, comments = judge(repo, brief, me)
         why = why or take(repo, brief["number"], me, comments)
         if why:
@@ -346,7 +360,7 @@ def next_brief(root, me: str) -> int:
         print(f"address: {brief.get('html_url')}\n")
         print(brief["body"])
         return 0
-    print("no brief")
+    print("default branch red" if red else "no brief")
     return 1
 
 
