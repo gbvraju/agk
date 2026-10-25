@@ -1,6 +1,6 @@
 # ADR-0125: the session rules for parallel builders and the launcher contract in the guide (REQ-041 build c, SPEC-0034 rules 6, 7c and 11)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0124, ADR-0120, ADR-0100
