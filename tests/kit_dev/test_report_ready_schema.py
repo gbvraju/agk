@@ -22,7 +22,7 @@ def ready_schema() -> dict:
 def test_ac7_the_schema_file_requires_the_number_4_and_allows_the_group():
     """REQ-037 AC7"""
     document = schema()
-    assert document["properties"]["schema"] == {"const": 4}
+    assert document["properties"]["schema"] == {"const": 5}
     assert "ready" in json.dumps(document["properties"]["sections"]["properties"]["needs_you"])
     node = ready_schema()
     assert node["required"] == ["kind", "number", "title", "links"]
@@ -32,7 +32,7 @@ def test_ac7_the_schema_file_requires_the_number_4_and_allows_the_group():
 def test_ac7_every_golden_has_the_number_4_and_validates():
     """REQ-037 AC7"""
     for name, document in goldens():
-        assert document["schema"] == 4, name
+        assert document["schema"] == 5, name
         assert errors(document, schema()) == [], name
 
 
@@ -52,3 +52,21 @@ def test_ac7_a_ready_item_validates_and_a_malformed_one_does_not():
         bad = copy.deepcopy(good)
         bad["sections"]["needs_you"][0]["items"] = [bad_item]
         assert errors(bad, schema()) != [], bad_item
+
+
+def test_ac8_the_schema_file_requires_the_number_5_and_the_usage_fields():
+    """REQ-040 AC8"""
+    document = schema()
+    assert document["properties"]["schema"] == {"const": 5}
+    cost = [
+        s
+        for s in kind_schemas(document)
+        if s["properties"]["kind"] == {"const": "pull-request-cost"}
+    ]
+    totals = [
+        s for s in kind_schemas(document) if s["properties"]["kind"] == {"const": "week-totals"}
+    ]
+    assert len(cost) == 1 and len(totals) == 1
+    assert "usage" in cost[0]["required"] and cost[0]["properties"]["usage"]["oneOf"]
+    assert "usage" in totals[0]["required"] and "usage_reported" in totals[0]["required"]
+    assert totals[0]["properties"]["usage_reported"] == {"type": "integer"}

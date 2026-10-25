@@ -395,6 +395,26 @@ def covered_head(src: Any, head: str, comments: list[dict], authors: list[str] |
     return UNKNOWN if REQUIREMENTS in paths else "yes"
 
 
+REPORT_USAGE = re.compile(r"Report:.*\bUsage: (\d+) tokens\s*")
+
+
+def usage_of(comments: Any, login: str) -> int | str:
+    """The sum of the `Usage: <n> tokens` figures that end the first line of the author's `Report:`
+    comments (SPEC-0033 rule 8); `not-reported` when there is none, `unknown` when the comments
+    cannot be read. Never zero for a missing figure."""
+    if not isinstance(comments, list):
+        return UNKNOWN
+    me = (login or "").lower()
+    found = []
+    for c in comments:
+        body = c.get("body") if isinstance(c, dict) else None
+        first = body.splitlines()[0] if isinstance(body, str) and body.strip() else ""
+        match = REPORT_USAGE.fullmatch(first.strip())
+        if match and author_of(c) == me:
+            found.append(int(match.group(1)))
+    return sum(found) if found else "not-reported"
+
+
 def merged_head_cleared(src: Any, head: str, comments: Any, authors: list[str] | None) -> str:
     """`yes`, `no` or `unknown` for a merged pull request (SPEC-0007 rule 8, SPEC-0021 rule 7)."""
     listed = verdicts(comments if isinstance(comments, list) else None, authors)

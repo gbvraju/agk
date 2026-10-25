@@ -1,5 +1,5 @@
 {
-  "schema": 4,
+  "schema": 5,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -145,6 +145,7 @@
         "title": "Change number 5",
         "hours": "72.0",
         "fix_verdicts": 0,
+        "usage": "not-reported",
         "links": [
           {
             "to": "pull-request",
@@ -165,6 +166,8 @@
           "counted": 1
         },
         "busy": false,
+        "usage": "not-reported",
+        "usage_reported": 0,
         "links": [
           {
             "to": "search",

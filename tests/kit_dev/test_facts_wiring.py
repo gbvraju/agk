@@ -169,3 +169,11 @@ def test_ac7_the_schema_allows_head_cleared_and_keeps_the_number():
     """REQ-028 AC7: SPEC-0021 rule 7 (an optional enum on the pull request; `schema` stays 1)."""
     assert schema()["properties"]["schema"] == {"const": 1}
     assert '"head_cleared": {"enum": ["yes", "no", "unknown"]}' in json.dumps(schema())
+
+
+def test_ac8_the_facts_schema_allows_usage_and_keeps_the_number():
+    """REQ-040 AC8: an optional whole number, `not-reported` or `unknown`."""
+    assert schema()["properties"]["schema"] == {"const": 1}
+    assert '"usage": {"oneOf": [{"type": "integer"}, {"enum": ["not-reported", "unknown"]}]}' in (
+        json.dumps(schema())
+    )

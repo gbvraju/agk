@@ -218,7 +218,8 @@ def test_cost_totals_are_computed_from_the_facts(capsys):
     assert f"{pr(6)}: 49.3 hours from opening to merge, 2 fix verdicts" in cost[1]
     assert cost[-1].startswith(
         "- This week: 4 pull requests merged; hours in total: 107.3; fix verdicts in total: 2;"
-        ' declared "Behaviour: unchanged": 2; estimate: none declared this week — '
+        ' declared "Behaviour: unchanged": 2; usage in total: unknown;'
+        " estimate: none declared this week — "
     )
 
 
@@ -1000,7 +1001,7 @@ def test_ac2_cost_is_the_totals_line_alone_ending_with_the_week_link(tmp_path, c
     text = (
         f"- This week: 12 pull requests merged; hours in total: {hours:.1f}; "
         f'fix verdicts in total: {fixes}; declared "Behaviour: unchanged": {declared}; '
-        "estimate: none declared this week"
+        "usage in total: unknown; estimate: none declared this week"
     )
     assert cost == [f"{text} \u2014 {WEEK41_LINK}"]
     assert "hours from opening to merge" not in out

@@ -80,6 +80,7 @@
       "proof_reason": null,
       "state": "merged",
       "title": "Change number 11",
+      "usage": "not-reported",
       "verdicts": [
         {
           "at": "2026-10-06T12:00:00Z",
@@ -112,6 +113,7 @@
       "proof_reason": "red-on-head",
       "state": "closed",
       "title": "Change number 12",
+      "usage": "not-reported",
       "verdicts": [
         {
           "at": "2026-10-08T09:00:00Z",
@@ -140,6 +142,7 @@
       "proof_reason": "unknown",
       "state": "merged",
       "title": "Change number 13",
+      "usage": "not-reported",
       "verdicts": []
     },
     {
@@ -162,6 +165,7 @@
       "proof_reason": null,
       "state": "merged",
       "title": "Change number 14",
+      "usage": "not-reported",
       "verdicts": []
     },
     {
@@ -184,6 +188,7 @@
       "proof_reason": "timeout",
       "state": "merged",
       "title": "Change number 15",
+      "usage": "not-reported",
       "verdicts": []
     },
     {
@@ -206,6 +211,7 @@
       "proof_reason": "unknown",
       "state": "merged",
       "title": "Change number 16",
+      "usage": "not-reported",
       "verdicts": []
     },
     {
@@ -228,6 +234,7 @@
       "proof_reason": null,
       "state": "open",
       "title": "Change number 18",
+      "usage": "not-reported",
       "verdicts": []
     },
     {
@@ -247,6 +254,7 @@
       "proof_reason": "unknown",
       "state": "open",
       "title": "Change number 19",
+      "usage": "unknown",
       "verdicts": "unknown"
     }
   ],

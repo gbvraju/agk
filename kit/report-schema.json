@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "agk report document, schema 4",
+  "title": "agk report document, schema 5",
   "description": "Hand-written; changed by hand with scripts/agk/product_report.py (SPEC-0022 rule 7). One line per kind: the fields of ITEM_KINDS.",
   "type": "object",
   "required": ["schema", "week", "opening", "sections", "counts", "notices"],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": 4},
+    "schema": {"const": 5},
     "week": {"type": "string", "pattern": "^\\d{4}-W\\d{2}$"},
     "opening": {"type": "object", "required": ["first", "last", "as_of"], "additionalProperties": false, "properties": {"first": {"type":"string","pattern":"^\\d{4}-\\d{2}-\\d{2}$"}, "last": {"type":"string","pattern":"^\\d{4}-\\d{2}-\\d{2}$"}, "as_of": {"type":"string","pattern":"^\\d{4}-\\d{2}-\\d{2}$"}}},
     "sections": {
@@ -46,8 +46,8 @@
           {"type":"object","required":["kind","what","links"],"additionalProperties":false,"properties":{"kind":{"const":"unknown"},"what":{"type":"string"},"links":{"type":"array","items":{"type":"object","required":["to","url"],"additionalProperties":false,"properties":{"to":{"enum":["pull-request","file","directory","issue","search"]},"url":{"type":"string","pattern":"^https://"}}}}}}
         ]}},
         "cost": {"type": "array", "items": {"oneOf": [
-          {"type":"object","required":["kind","number","title","hours","fix_verdicts","links"],"additionalProperties":false,"properties":{"kind":{"const":"pull-request-cost"},"number":{"type":"integer"},"title":{"type":"string"},"hours":{"type":"string","pattern":"^(-?\\d+\\.\\d|unknown)$"},"fix_verdicts":{"oneOf":[{"type":"integer"},{"const":"unknown"}]},"links":{"type":"array","items":{"type":"object","required":["to","url"],"additionalProperties":false,"properties":{"to":{"enum":["pull-request","file","directory","issue","search"]},"url":{"type":"string","pattern":"^https://"}}}}}},
-          {"type":"object","required":["kind","merged","hours","hours_unknown","fix_verdicts","fix_verdicts_unknown","behaviour_unchanged","estimate","busy","links"],"additionalProperties":false,"properties":{"kind":{"const":"week-totals"},"merged":{"type":"integer"},"hours":{"type":"string","pattern":"^(-?\\d+\\.\\d|unknown)$"},"hours_unknown":{"type":"integer"},"fix_verdicts":{"oneOf":[{"type":"integer"},{"const":"unknown"}]},"fix_verdicts_unknown":{"type":"integer"},"behaviour_unchanged":{"type":"integer"},"estimate":{"oneOf":[{"type":"object","required":["within","counted"],"additionalProperties":false,"properties":{"within":{"type":"integer"},"counted":{"type":"integer"}}},{"const":"none-declared"}]},"busy":{"type":"boolean"},"links":{"type":"array","items":{"type":"object","required":["to","url"],"additionalProperties":false,"properties":{"to":{"enum":["pull-request","file","directory","issue","search"]},"url":{"type":"string","pattern":"^https://"}}}}}},
+          {"type":"object","required":["kind","number","title","hours","fix_verdicts","usage","links"],"additionalProperties":false,"properties":{"kind":{"const":"pull-request-cost"},"number":{"type":"integer"},"title":{"type":"string"},"hours":{"type":"string","pattern":"^(-?\\d+\\.\\d|unknown)$"},"fix_verdicts":{"oneOf":[{"type":"integer"},{"const":"unknown"}]},"usage":{"oneOf":[{"type":"integer"},{"enum":["not-reported","unknown"]}]},"links":{"type":"array","items":{"type":"object","required":["to","url"],"additionalProperties":false,"properties":{"to":{"enum":["pull-request","file","directory","issue","search"]},"url":{"type":"string","pattern":"^https://"}}}}}},
+          {"type":"object","required":["kind","merged","hours","hours_unknown","fix_verdicts","fix_verdicts_unknown","behaviour_unchanged","estimate","busy","usage","usage_reported","links"],"additionalProperties":false,"properties":{"kind":{"const":"week-totals"},"merged":{"type":"integer"},"hours":{"type":"string","pattern":"^(-?\\d+\\.\\d|unknown)$"},"hours_unknown":{"type":"integer"},"fix_verdicts":{"oneOf":[{"type":"integer"},{"const":"unknown"}]},"fix_verdicts_unknown":{"type":"integer"},"behaviour_unchanged":{"type":"integer"},"estimate":{"oneOf":[{"type":"object","required":["within","counted"],"additionalProperties":false,"properties":{"within":{"type":"integer"},"counted":{"type":"integer"}}},{"const":"none-declared"}]},"busy":{"type":"boolean"},"usage":{"oneOf":[{"type":"integer"},{"enum":["not-reported","unknown"]}]},"usage_reported":{"type":"integer"},"links":{"type":"array","items":{"type":"object","required":["to","url"],"additionalProperties":false,"properties":{"to":{"enum":["pull-request","file","directory","issue","search"]},"url":{"type":"string","pattern":"^https://"}}}}}},
           {"type":"object","required":["kind","what","links"],"additionalProperties":false,"properties":{"kind":{"const":"unknown"},"what":{"type":"string"},"links":{"type":"array","items":{"type":"object","required":["to","url"],"additionalProperties":false,"properties":{"to":{"enum":["pull-request","file","directory","issue","search"]},"url":{"type":"string","pattern":"^https://"}}}}}}
         ]}}
       }

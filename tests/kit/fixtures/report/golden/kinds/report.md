@@ -58,11 +58,11 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 
 ## Cost
 
-- <pr>5 "Change number 5": 48.0 hours from opening to merge, 0 fix verdicts — https://github.com/demo-org/demo-repo/pull/5
-- <pr>6 "Change number 6": 49.3 hours from opening to merge, 2 fix verdicts — https://github.com/demo-org/demo-repo/pull/6
-- <pr>7 "Change number 7": 10.0 hours from opening to merge, 0 fix verdicts — https://github.com/demo-org/demo-repo/pull/7
-- <pr>8 "Change number 8": 0.0 hours from opening to merge, 0 fix verdicts — https://github.com/demo-org/demo-repo/pull/8
-- This week: 4 pull requests merged; hours in total: 107.3; fix verdicts in total: 2; declared "Behaviour: unchanged": 2; estimate: none declared this week — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
+- <pr>5 "Change number 5": 48.0 hours from opening to merge, 0 fix verdicts, usage unknown — https://github.com/demo-org/demo-repo/pull/5
+- <pr>6 "Change number 6": 49.3 hours from opening to merge, 2 fix verdicts, usage unknown — https://github.com/demo-org/demo-repo/pull/6
+- <pr>7 "Change number 7": 10.0 hours from opening to merge, 0 fix verdicts, usage unknown — https://github.com/demo-org/demo-repo/pull/7
+- <pr>8 "Change number 8": 0.0 hours from opening to merge, 0 fix verdicts, usage unknown — https://github.com/demo-org/demo-repo/pull/8
+- This week: 4 pull requests merged; hours in total: 107.3; fix verdicts in total: 2; declared "Behaviour: unchanged": 2; usage in total: unknown; estimate: none declared this week — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
 
 ---
 facts: c0ffee0000000000000000000000000000000000

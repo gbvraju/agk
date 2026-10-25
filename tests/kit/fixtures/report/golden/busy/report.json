@@ -1,5 +1,5 @@
 {
-  "schema": 4,
+  "schema": 5,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -523,6 +523,8 @@
         "behaviour_unchanged": 3,
         "estimate": "none-declared",
         "busy": true,
+        "usage": "unknown",
+        "usage_reported": 0,
         "links": [
           {
             "to": "search",

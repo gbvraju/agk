@@ -89,7 +89,7 @@ def test_ac1_the_structure_has_the_document_keys_and_items_of_the_fixed_kinds(na
 
     _, _, structure = structure_of(facts)
     assert list(structure) == ["schema", "week", "opening", "sections", "counts", "notices"]
-    assert structure["schema"] == 4
+    assert structure["schema"] == 5
     assert list(structure["opening"]) == ["first", "last", "as_of"]
     assert list(structure["sections"]) == ["delivered", "proven", "needs_you", "at_risk", "cost"]
     for item in items_of(structure):
