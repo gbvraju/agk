@@ -59,6 +59,7 @@ NUMBERED = re.compile(r"(\d+)\.\s+\S")
 ADVANCES = re.compile(r"Advances: (new|REQ-\d{3}(?:, REQ-\d{3})*)")
 PRIORITY = re.compile(r"Priority: [123]")
 RED_TITLE = "The default branch is red"
+ROUTER_LOGIN = "github-actions[bot]"  # the author of an issue opened with the job's token
 ROUTER_PAIR = ("Advances: none", "Priority: 0")  # written only by the router (SPEC-0032 rule 7)
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
 STATE_PREFIX = "agk:"
@@ -333,9 +334,17 @@ def take(repo: str, number: int, me: str, comments: list) -> str | None:
 
 
 def is_red(item: dict) -> bool:
-    """The brief the router writes while the default branch is red (SPEC-0032 rule 7)."""
+    """The brief the router writes while the default branch is red (SPEC-0032 rule 7): the title,
+    the `Priority: 0` line and the router's token as the author, so that nobody can stop all other
+    work by writing an issue of the same shape by hand."""
     lines = (x.rstrip() for x in str(item.get("body") or "").splitlines())
-    return "pull_request" not in item and item.get("title") == RED_TITLE and ROUTER_PAIR[1] in lines
+    author = (item.get("user") or {}).get("login")
+    return (
+        "pull_request" not in item
+        and item.get("title") == RED_TITLE
+        and author == ROUTER_LOGIN
+        and ROUTER_PAIR[1] in lines
+    )
 
 
 def next_brief(root, me: str) -> int:

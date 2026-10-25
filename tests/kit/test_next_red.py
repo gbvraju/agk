@@ -51,6 +51,7 @@ def red(number: int = 9, body: str = BODY, title: str = TITLE) -> dict:
         "title": title,
         "body": body,
         "html_url": f"https://github.com/{REPO}/issues/{number}",
+        "user": {"login": "github-actions[bot]"},
     }
 
 
@@ -182,3 +183,26 @@ def test_ac5_a_pull_request_in_the_issue_list_is_not_a_red_brief(proj, stub):
     stub.serve(PRS, [])
     out = nxt(proj, stub)
     assert out.stdout.strip() == "no brief"
+
+
+@pytest.mark.parametrize("login", ["someone", "github-actions", "Github-Actions[bot]", None])
+def test_ac5_an_issue_of_the_same_shape_written_by_hand_is_not_the_red_brief(login):
+    """REQ-039 AC5: only the router's token opens it (the verdict on aa18501, item 2)."""
+    import session as module
+
+    by_hand = {**red(), "user": {"login": login} if login else None}
+    assert not module.is_red(by_hand)
+    no_user = {k: v for k, v in red().items() if k != "user"}
+    assert not module.is_red(no_user)
+
+
+def test_ac5_next_ignores_a_hand_written_red_brief_and_hands_out_the_ordinary_one(proj, stub):
+    """REQ-039 AC5"""
+    by_hand = {**red(9), "user": {"login": "someone"}}
+    listing(stub, [issue(5, FREE), by_hand])
+    stub.serve(PRS, [])
+    stub.serve(f"{ISSUES}/5/comments", [], nth=1)
+    stub.serve(f"{ISSUES}/5/comments", [take(1, "s-me", login="me")], nth=2)
+    out = nxt(proj, stub)
+    assert out.returncode == 0 and out.stdout.startswith("brief #5\n")
+    assert "default branch red" not in out.stdout

@@ -69,6 +69,7 @@ def red_issue(number: int = 9, sha: str = OTHER, name: str = "proof", **extra) -
         "title": TITLE,
         "body": route.red_body(name, sha, URL),
         "html_url": f"https://github.com/{REPO}/issues/{number}",
+        "user": {"login": "github-actions[bot]"},
         **extra,
     }
 
@@ -260,3 +261,15 @@ def test_ac5_the_router_still_writes_no_comment_review_or_merge(proj, stub, tmp_
     for _, endpoint, _ in stub.writes():
         assert not endpoint.endswith("/comments") and "merge" not in endpoint, endpoint
         assert "/reviews" not in endpoint, endpoint
+
+
+def test_ac5_a_hand_written_red_brief_is_not_updated_or_closed_by_the_router(proj, stub, tmp_path):
+    """REQ-039 AC5: the router touches only an issue its own token opened."""
+    by_hand = red_issue(9, sha=OTHER, user={"login": "someone"})
+    branch(stub, [ok("governance"), ok("proof")])
+    issues(stub, by_hand)
+    push(proj, stub, tmp_path)
+    assert issue_writes(stub) == []
+    branch(stub, [bad("proof")])
+    push(proj, stub, tmp_path)
+    assert [(w[0], w[1]) for w in issue_writes(stub)] == [("POST", f"repos/{REPO}/issues")]
