@@ -1,6 +1,6 @@
 # ADR-0110: Add REQ-039: GitHub events label each PR, people approve specs, a red branch stops new work
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: SPEC-0032
