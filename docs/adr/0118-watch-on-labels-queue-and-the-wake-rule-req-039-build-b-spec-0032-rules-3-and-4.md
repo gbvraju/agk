@@ -1,6 +1,6 @@
 # ADR-0118: watch on labels, queue and the wake rule (REQ-039 build (b), SPEC-0032 rules 3 and 4)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0115, ADR-0110
