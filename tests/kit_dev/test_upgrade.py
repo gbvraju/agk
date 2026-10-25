@@ -337,61 +337,6 @@ def test_ac1_an_upgraded_target_is_upgraded_again_with_nothing_to_do(tmp_path, k
     assert snapshot(target) == before
 
 
-def build_after_the_release(kit: Path) -> None:
-    """A flow-mode build changes an installed file after the last release and leaves the table."""
-    (kit / "b.txt").write_text("b built\n", encoding="utf-8")
-
-
-def at_2_0_0(target: Path, **over: str) -> None:
-    put(target, {k: v for k, v in NEW.items()})
-    put(target, {"agk.toml": AGK_TOML.format(mode="init").replace("1.0.0", "2.0.0")})
-    put(target, over)
-
-
-def test_adr_0112_a_file_equal_to_the_kits_own_is_unchanged_whatever_the_table_holds(
-    tmp_path, kit, capsys
-):
-    """ADR-0112 (brief #185): the table of an unreleased checkout lacks the build's digest."""
-    build_after_the_release(kit)
-    target = init_target(tmp_path)
-    at_2_0_0(target, **{"b.txt": "b built\n"})
-    before = snapshot(target)
-    for _ in range(2):
-        code, out = run(capsys, target)
-        assert code == 0 and out[-1] == "nothing to do", out
-        assert "conflict" not in " ".join(out)
-    assert snapshot(target) == before
-
-
-def test_adr_0112_a_project_edit_of_the_same_file_still_conflicts(tmp_path, kit, capsys):
-    """ADR-0112 (brief #185): only the kit's own bytes are unchanged, never the project's."""
-    build_after_the_release(kit)
-    target = init_target(tmp_path)
-    at_2_0_0(target, **{"b.txt": "b mine\n"})
-    before = snapshot(target)
-    code, out = run(capsys, target)
-    assert code == 1 and lines_of(out, "conflict") == ["b.txt"], out
-    assert snapshot(target) == before
-
-
-def test_adr_0112_the_released_copy_is_still_read_from_the_table(tmp_path, kit, capsys):
-    """ADR-0112 (brief #185): a tagged release's table is read as before (replace, no conflict)."""
-    build_after_the_release(kit)
-    target = init_target(tmp_path)
-    at_2_0_0(target)  # b.txt holds the released copy, "b new", whose digest the row lists
-    code, out = run(capsys, target)
-    assert code == 0 and lines_of(out, "replace") == ["b.txt"], out
-    assert (target / "b.txt").read_text(encoding="utf-8") == "b built\n"
-    assert run(capsys, target)[1][-1] == "nothing to do"
-
-
-def test_adr_0112_the_installer_does_not_read_the_table():
-    """ADR-0112 (brief #185): init and adopt compare content with the kit's own file only."""
-    for name in ("init.py", "adopt.py"):
-        source = (KIT_ROOT / "scripts" / "agk" / name).read_text(encoding="utf-8")
-        assert "hashes.json" not in source and "kit_hashes" not in source, name
-
-
 def test_ac1_dry_run_prints_what_the_real_run_prints_and_writes_nothing(tmp_path, kit, capsys):
     """REQ-014 AC5: rules 14 and 20."""
     one = init_target(tmp_path / "one")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PreToolUse guard of the architect role (SPEC-0013 rule 9).
 
-Contract (verify; read from the Claude Code documentation on 2026-10-19): the hook receives JSON on
+Contract (verify; read from the Claude Code documentation): the hook receives JSON on
 stdin with `tool_name` and `tool_input` (`file_path` for Edit and Write, `command` for Bash). To
 deny, it prints {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision":
 "deny", "permissionDecisionReason": ...}} and exits 0; to allow, it prints nothing and exits 0.
