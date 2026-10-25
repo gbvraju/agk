@@ -1,6 +1,6 @@
 # ADR-0113: Add REQ-040: A stopped session loses nothing and the next one resumes with one command
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: SPEC-0033
