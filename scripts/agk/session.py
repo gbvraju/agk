@@ -333,10 +333,18 @@ def all_takes(comments: list) -> list[tuple]:
 def live_takes(comments: list, number: int, prs: list, hours: int) -> list[tuple]:
     """(when, id, session, login, reserves) of every live take, oldest first.
 
-    A take is live until a `released:` comment of its session, and for `hours` hours or while any
-    pull request has the line `Brief: #<number>` (SPEC-0034 rule 5)."""
-    named = any(brief_number(pr) == number for pr in prs)
+    A take is live until a `released:` comment of its session, and for `hours` hours or while an
+    open pull request has the line `Brief: #<number>` (or a merged one for `hours` hours after its
+    merge, the next build of the brief; SPEC-0034 rule 5)."""
     now = datetime.now(UTC)
+    named = any(
+        brief_number(pr) == number
+        and (
+            pr.get("state") == "open"
+            or (pr.get("merged_at") and now - moment(pr["merged_at"]) < timedelta(hours=hours))
+        )
+        for pr in prs
+    )
     return [
         t[:5]
         for t in all_takes(comments)
@@ -410,7 +418,7 @@ def survey(root, repo: str, me: str) -> Survey:
         raise CheckError("rule 3: the open briefs cannot be read")
     builders = [p for p in prs if p.get("state") == "open" and brief_number(p) is not None]
     found = Survey(repo, me, limit, hours, prs, builders)
-    named = {brief_number(p) for p in prs}
+    named = {brief_number(p) for p in prs if p.get("state") == "open"}
     for brief in sorted((i for i in issues if "pull_request" not in i), key=lambda i: i["number"]):
         why, comments = judge(repo, brief, me, prs, hours)
         found.comments[brief["number"]] = comments

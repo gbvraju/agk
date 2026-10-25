@@ -42,6 +42,10 @@ def pr(number: int, brief_no: int | None = None, state: str = "open") -> dict:
     }  # fmt: skip
 
 
+def merged(number: int, brief_no: int, ago: timedelta) -> dict:
+    return {**pr(number, brief_no, state="closed"), "merged_at": iso(-ago)}
+
+
 def files(stub: Stub, number: int, *names: str) -> None:
     stub.serve(f"{PULLS}/{number}/files", [{"filename": n, "status": "added"} for n in names])
 
@@ -249,6 +253,22 @@ def test_rule5_a_young_take_and_a_take_with_a_builder_pull_request_stay_live(pro
     out = nxt(proj, stub)
     assert "skip #5: taken by s-other" in out.stdout and "skip #6: taken by s-third" in out.stdout
     assert out.returncode == 1 and posts(stub) == []
+
+
+def test_rule5_merged_pull_requests_keep_a_take_live_only_for_claim_hours_after_the_merge(
+    proj, stub
+):
+    """REQ-041 AC5: a brief spans several builds; an old merged pull request holds nothing."""
+    base(proj)
+    old = comment(1, "x", f"taken: s-other {DAY}", iso(-timedelta(hours=30)))
+    listing(stub, [issue(5, brief()), issue(6, brief("lib/"))])
+    stub.serve(PULLS, [merged(20, 5, timedelta(hours=29)), merged(21, 6, timedelta(hours=1))])
+    stub.serve(f"{ISSUES}/6/comments", [old])
+    reads(stub, 5, [old])
+    out = nxt(proj, stub)
+    assert "skip #6: taken by s-other" in out.stdout.splitlines()
+    assert "brief #5" in out.stdout.splitlines()
+    assert posts(stub)[0][2][1] == f"body=taken: s-me {DAY} retakes reserves ADR-0004"
 
 
 def test_rule5_claim_hours_sets_the_expiry(proj, stub):
