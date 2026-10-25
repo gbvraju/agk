@@ -1,6 +1,6 @@
 # SPEC-0034: Parallel builder sessions get briefs by capacity, overlap, reserved numbers and claims, and every pull request traces to a brief and a requirement
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-041
 
