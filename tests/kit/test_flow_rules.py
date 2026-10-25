@@ -60,6 +60,7 @@ def test_ac7_a_session_resolves_only_a_mechanical_conflict_and_otherwise_stops_w
         "an appended line in a shared-mechanical file",
         "a file that a kit script regenerates",
         "a number moved by `intake.py renumber`",
+        "a session rule number moved to the next free one",
         "`conflict needs a person: <files>`",
         "and pushes nothing",
     ):

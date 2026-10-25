@@ -65,9 +65,15 @@ def nxt(proj, stub, who: str = "s-me"):
     return session(proj, stub, "next", "--session", who)
 
 
-def base(proj, adrs: int = 3, specs: int = 0, reqs: tuple[str, ...] = ("REQ-001",)) -> None:
+def base(
+    proj, adrs: int = 3, specs: int = 0, reqs: tuple[str, ...] = ("REQ-001",), rules: int = 0
+) -> None:
     """The default branch: requirements, ADRs and specs as files, and its ref origin/main."""
     out = {"docs/requirements.md": "".join(f"### {r} t\n\n- Status: planned\n\n" for r in reqs)}
+    if rules:
+        out["config/session-rules.md"] = "# Rules\n\n" + "".join(
+            f"{n}. A rule.\n" for n in range(1, rules + 1)
+        )
     out |= {f"docs/adr/{n:04d}-a.md": "x\n" for n in range(1, adrs + 1)}
     out |= {f"docs/specs/{n:04d}-a.md": "x\n" for n in range(1, specs + 1)}
     proj.commit(out)
@@ -219,7 +225,7 @@ def test_rule3_a_measured_priority_0_brief_goes_before_priority_1(proj, stub):
 
 def test_rule4_ids_count_the_default_branch_open_pull_requests_and_reservations(proj, stub):
     """REQ-041 AC4"""
-    base(proj, adrs=3, specs=1)
+    base(proj, adrs=3, specs=1, rules=3)
     listing(stub, [issue(5, brief())])
     stub.serve(PULLS, [pr(20, 1), pr(21)])
     stub.serve(
@@ -228,14 +234,60 @@ def test_rule4_ids_count_the_default_branch_open_pull_requests_and_reservations(
             {"filename": "docs/adr/0006-x.md", "status": "added"},
             {"filename": "docs/adr/0002-a.md", "status": "modified"},
             {"filename": "docs/requirements.md", "status": "modified", "patch": "+### REQ-004 t"},
+            {
+                "filename": "config/session-rules.md",
+                "status": "modified",
+                "patch": "+4. New.\n+5. N",
+            },
         ],
     )
     reserved = comment(1, "x", f"taken: s-other {DAY} reserves ADR-0009, SPEC-0007")
     stub.serve(f"{ISSUES}/5/comments", [reserved])
     out = session(proj, stub, "ids")
     assert out.returncode == 0, out.stdout
-    assert json.loads(out.stdout) == {"req": "REQ-005", "spec": "0008", "adr": "0010"}
+    assert json.loads(out.stdout) == {"req": "REQ-005", "spec": "0008", "adr": "0010", "rule": 6}
     assert out.stdout.count("\n") == 1 and posts(stub) == []
+
+
+def test_rule4_ids_count_the_session_rules_of_the_default_branch_and_of_open_pull_requests(
+    proj, stub
+):
+    """Brief #176 (e) 3: two parallel builds that each add a rule must not both take the next."""
+    base(proj, rules=24)
+    listing(stub, [])
+    stub.serve(PULLS, [pr(20, 1), pr(21, 2)])
+    patch = "@@ -1,0 +2,1 @@\n+25. A rule that build 20 adds.\n context\n+26. Another."
+    stub.serve(
+        f"{PULLS}/20/files",
+        [{"filename": "config/session-rules.md", "status": "modified", "patch": patch}],
+    )
+    stub.serve(f"{PULLS}/21/files", [{"filename": "docs/x.md", "status": "added"}])
+    out = session(proj, stub, "ids")
+    assert json.loads(out.stdout)["rule"] == 27
+
+
+def test_rule4_ids_with_exclude_pr_leave_that_pull_request_out_of_the_count(proj, stub):
+    """Brief #176 (e) 1: the intake's own open pull request must not make its numbers taken."""
+    base(proj, adrs=3, rules=3)
+    listing(stub, [])
+    stub.serve(PULLS, [pr(20, 1), pr(21, 2)])
+    own = [{"filename": "docs/adr/0004-x.md", "status": "added"}]
+    own.append({"filename": "config/session-rules.md", "status": "modified", "patch": "+4. Own."})
+    stub.serve(f"{PULLS}/20/files", own)
+    stub.serve(f"{PULLS}/21/files", [{"filename": "docs/adr/0005-y.md", "status": "added"}])
+    both = json.loads(session(proj, stub, "ids").stdout)
+    assert (both["adr"], both["rule"]) == ("0006", 5)
+    without = json.loads(session(proj, stub, "ids", "--exclude-pr", "20").stdout)
+    assert (without["adr"], without["rule"]) == ("0006", 4)
+    assert session(proj, stub, "ids", "--exclude-pr", "x").returncode == 2
+
+
+def test_rule4_ids_without_a_rules_file_start_the_rules_at_1(proj, stub):
+    """Brief #176 (e) 3: a repository with no rules file has no rule yet."""
+    base(proj)
+    listing(stub, [])
+    stub.serve(PULLS, [])
+    assert json.loads(session(proj, stub, "ids").stdout)["rule"] == 1
 
 
 @pytest.mark.parametrize(

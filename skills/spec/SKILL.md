@@ -85,7 +85,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" stub --req REQ-nnn --title
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" check
 ```
 
-   then run `make governance`. Both must pass.
+   then run `make governance`. Both must pass. A session that works beside other builders (SPEC-0034) first runs
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/session.py" ids --exclude-pr <its own pull request, if it has one> > <scratch>/ids.json`
+   and adds `--ids <scratch>/ids.json` to the check, so that the numbers skip those that other open pull requests hold.
 8. Last, print the next steps, and tell the person what the checks cannot check: that the criteria are the right ones, that
    they say what the person meant, that the negative case is the important one, and that the spec's rules can be built.
    That is the person's review and merge. Merging approves the requirement as `planned`; the spec stays `Draft`,

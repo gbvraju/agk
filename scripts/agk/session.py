@@ -5,7 +5,7 @@
     python3 session.py next --session ID
     python3 session.py queue --role conductor|builder|person [--author LOGIN]
     python3 session.py resume --pr N
-    python3 session.py ids
+    python3 session.py ids [--exclude-pr N]
     python3 session.py demand
     python3 session.py push-check
 
@@ -54,7 +54,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from common import CheckError, covered_fix_list, git, load_config, next_free_ids, repo_root
+from common import CheckError, covered_fix_list, git, load_config, next_free_ids, repo_root, show
 from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
 from reviewers import verdict_authors
@@ -68,7 +68,7 @@ USAGE = (
     "       session.py after --session ID\n"
     "       session.py queue --role conductor|builder|person [--author LOGIN]\n"
     "       session.py resume --pr N\n"
-    "       session.py ids\n"
+    "       session.py ids [--exclude-pr N]\n"
     "       session.py demand\n"
     "       session.py push-check"
 )
@@ -84,6 +84,7 @@ TAKE = re.compile(
     rf"taken: (\S+) (\d{{4}}-\d{{2}}-\d{{2}}){BUILD}(?: retakes)?"
     rf"(?: reserves ({NUMBER}(?:, {NUMBER})*))?"
 )
+RULES_FILE = "config/session-rules.md"
 RELEASED = re.compile(rf"released: (\S+){BUILD}")
 ASSIGN = re.compile(r"Assign: (\S+) (none|#(\d+)(?: build \(([A-Za-z0-9._-]+)\))?)")
 ASSIGN_LABEL = "agk-conductor"
@@ -716,17 +717,30 @@ def overlap(root, s: Survey, brief: dict) -> str | None:
     return None
 
 
-def numbers_in_use(root, s: Survey) -> dict[str, int]:
-    """The highest requirement, spec and ADR number taken on the default branch, by the files an
-    open builder pull request adds and by the reservations of live takes (rule 4)."""
-    base = next_free_ids(root, f"origin/{load_config(root)['default_branch']}")
+RULE_LINE = re.compile(r"(?m)^\+?(\d+)\. ")
+
+
+def numbers_in_use(root, s: Survey, exclude: int | None = None) -> dict[str, int]:
+    """The highest requirement, spec, ADR and session-rule number taken on the default branch, by
+    the files an open builder pull request adds (all but `exclude`, the caller's own, whose numbers
+    the caller already holds) and by the reservations of live takes (rule 4)."""
+    ref = f"origin/{load_config(root)['default_branch']}"
+    base = next_free_ids(root, ref)
+    rules = [int(n) for n in RULE_LINE.findall(show(root, ref, RULES_FILE) or "")]
     top = {
         "req": int(base["req"][4:]) - 1,
         "spec": int(base["spec"]) - 1,
         "adr": int(base["adr"]) - 1,
+        "rule": max(rules, default=0),
     }
     for pr in s.builders:
+        if pr.get("number") == exclude:
+            continue
         for entry in pull_files(s, pr):
+            if entry.get("filename") == RULES_FILE:
+                added = [ln for ln in str(entry.get("patch") or "").splitlines() if ln[:1] == "+"]
+                for n in RULE_LINE.findall("\n".join(added)):
+                    top["rule"] = max(top["rule"], int(n))
             found = re.fullmatch(r"docs/(adr|specs)/(\d{4})-[^/]+\.md", str(entry.get("filename")))
             if found and entry.get("status") == "added":
                 key = "adr" if found.group(1) == "adr" else "spec"
@@ -918,14 +932,16 @@ def demand(root) -> int:
     return 0
 
 
-def ids(root) -> int:
-    top = numbers_in_use(root, survey(root, repo_name(root), ""))
+def ids(root, exclude: int | None = None) -> int:
+    """The next free requirement, spec, ADR and session-rule numbers as one JSON line."""
+    top = numbers_in_use(root, survey(root, repo_name(root), ""), exclude)
     print(
         json.dumps(
             {
                 "req": f"REQ-{top['req'] + 1:03d}",
                 "spec": f"{top['spec'] + 1:04d}",
                 "adr": f"{top['adr'] + 1:04d}",
+                "rule": top["rule"] + 1,
             }
         )
     )
@@ -1185,7 +1201,7 @@ def main(argv: list[str] | None = None) -> int:
         "after": {"--session"},
         "queue": {"--role", "--author"},
         "resume": {"--pr"},
-        "ids": set(),
+        "ids": {"--exclude-pr"},
         "demand": set(),
         "push-check": set(),
     }
@@ -1212,7 +1228,9 @@ def main(argv: list[str] | None = None) -> int:
             opts.get("--brief")
         )
         ok = ok and bool(SESSION_ID.fullmatch(opts.get("--build", "x")))
-    elif cmd in ("ids", "demand", "push-check"):
+    elif cmd == "ids":
+        ok = number_of(opts.get("--exclude-pr", "1"))
+    elif cmd in ("demand", "push-check"):
         ok = True
     else:
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", "")))
@@ -1235,8 +1253,10 @@ def main(argv: list[str] | None = None) -> int:
             return after(root, opts["--session"])
         if cmd == "resume":
             return resume(root, int(opts["--pr"]))
-        if cmd in ("ids", "demand", "push-check"):
-            return {"ids": ids, "demand": demand, "push-check": push_check}[cmd](root)
+        if cmd == "ids":
+            return ids(root, int(opts["--exclude-pr"]) if "--exclude-pr" in opts else None)
+        if cmd in ("demand", "push-check"):
+            return {"demand": demand, "push-check": push_check}[cmd](root)
         return next_brief(root, opts["--session"])
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}")
