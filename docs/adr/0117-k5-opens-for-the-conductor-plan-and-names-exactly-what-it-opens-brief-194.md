@@ -1,6 +1,6 @@
 # ADR-0117: K5 opens for the conductor plan, and the record names exactly what it opens (brief #194)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-24
 - Deciders: maintainers
 - Amends: ADR-0053
