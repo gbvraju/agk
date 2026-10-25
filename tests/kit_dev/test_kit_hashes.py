@@ -83,13 +83,34 @@ def test_ac1_every_row_is_regenerated_from_history_and_compared():
     assert kit_hashes.problems(KIT_ROOT) == []
 
 
+def current_row_problems(root: Path, base: str) -> list[str]:
+    """The names of the maps in which the current row differs from the working tree.
+
+    ADR-0108 decision 4: in flow mode, while `kit_version` is as in the base, the release
+    regenerates the row, so a build does not compare it (`kit_hashes.problems` skips it too); a
+    release and strict mode compare it with the tree. The rows of earlier versions are compared
+    by `problems`.
+    """
+    current, snap = kit_hashes.snapshot_worktree(root)
+    old = kit_hashes.snapshot_commit(root, kit_hashes.Blobs(root), base)
+    if pr_mode(root) == "flow" and old is not None and old[0] == current:
+        return []
+    row = json.loads((root / "kit" / "hashes.json").read_text(encoding="utf-8"))["releases"].get(
+        current
+    )
+    if row is None:
+        return ["row"]
+    return [
+        name
+        for name in ("verbatim", "blocks", "templates")
+        if set(row[name]) != set(snap[name])
+        or not all(snap[name][p] in row[name][p] for p in snap[name])
+    ]
+
+
 def test_ac1_the_current_row_equals_the_working_tree():
-    """REQ-014 AC5: rule 2."""
-    version, snap = kit_hashes.snapshot_worktree(KIT_ROOT)
-    row = table()["releases"][version]
-    for name in ("verbatim", "blocks", "templates"):
-        assert set(row[name]) == set(snap[name])
-        assert all(snap[name][p] in row[name][p] for p in snap[name])
+    """REQ-014 AC5: rule 2, as ADR-0108 amends it (a build in flow mode leaves the row)."""
+    assert current_row_problems(KIT_ROOT, kit_hashes.base_of(KIT_ROOT)) == []
 
 
 def test_ac1_ci_checks_out_the_full_history_for_the_kit_dev_tests():

@@ -14,6 +14,7 @@ agk-governance:
 	$(PY) scripts/agk/check_neutrality.py
 	$(PY) scripts/agk/check_build_state.py
 	$(PY) scripts/agk/check_kit_tests.py
+	$(PY) scripts/agk/check_design.py
 	$(PY) scripts/agk/reviewers.py --check
 	$(PY) scripts/agk/reviewers.py --check-codeowners
 	$(PY) scripts/agk/check_pr_mode.py

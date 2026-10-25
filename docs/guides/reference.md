@@ -107,13 +107,13 @@ name exactly one option.
 
     python3 scripts/agk/check_design.py [--root DIR]
 
-Kit-only (run from the plugin). It reads `docs/design/theme.md` and the mockup folders `docs/design/mockups/<date>-<name>/` and fails, naming the
+An installed check, a step of `make governance` and of the governance workflow (SPEC-0029 rules 7 and 9). It reads `docs/design/theme.md` and the mockup folders `docs/design/mockups/<date>-<name>/` and fails, naming the
 rule and the path and never a value, on: a script or an event handler, an external request or a loaded resource, a colour that is not a token
 (every colour of a mockup is a `var(--token)`), tokens that are not one block with a light and a dark set, a contrast under 4.5:1 (computed from
 the hex tokens in both modes, for the pairs the theme lists under `## Contrast`), a brand value with no `source:`, and an evidence line that
 points to no mockup folder. Two things it prints without failing: `design: the theme is not approved yet` when the evidence folder's `README.md`
 has no line `Approved by <name> on <YYYY-MM-DD>`, and `at risk design: placeholder brand` when a brand value is still a `[bracketed]` placeholder
-(SPEC-0029 rule 7). The files it reads are written by the design step (a later part of the same requirement) or by hand.
+(SPEC-0029 rule 7). The files it reads are written by `/agk:design` (the theme from the engine named by `design` in `[engines]` or from the kit's template, a mockup folder with `Approved: not yet` in its `README.md`, and four screenshots, 360 and 1280 px wide, light and dark, when a headless browser is found) or by hand. The approval line is the owner's: the session never writes `Approved by`. With no `docs/design/` it prints `ok design (no design record)`.
 
 ## Upgrade
 
@@ -169,6 +169,7 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:start` | `scripts/agk/playbook.py start-ids`, `check-start` | `constitution/vision.md` and a project charter ADR on a new branch |
 | `/agk:vision` | `scripts/agk/playbook.py start-ids`, `scripts/agk/engines.py vision-write`, `questions`, `vision-check`, `playbook.py check-start` | `constitution/vision.md` (the owner's idea unchanged as its first section) and a project charter ADR on a new branch |
 | `/agk:stack` | `scripts/agk/engines.py stack-ids`, `stack-write`, `stack-check` | one Proposed ADR of stack options on a new branch |
+| `/agk:design` | `scripts/agk/design.py write`, `screenshots`, `scripts/agk/check_design.py` | `docs/design/theme.md` (when absent) and a mockup folder with `index.html` and `README.md` on a new branch |
 | `/agk:spec` | `scripts/agk/new_spec.py`, `scripts/agk/intake.py` | a Draft spec, or a requirement proposal with its ADR draft, or (from one sentence) a requirement, a Draft spec and an ADR stub |
 | `/agk:architect` | `scripts/agk/playbook.py architect` | nothing (prints how to start `claude --agent architect`) |
 | `/agk:issue` | the issue templates and your own `gh issue create`, after asking | one GitHub issue |

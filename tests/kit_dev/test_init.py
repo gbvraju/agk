@@ -522,13 +522,13 @@ def test_ac1_ci_steps_include_the_project_tests_and_pass_when_they_pass(
 ):
     """REQ-010 AC1: rule 5 (project_tests)."""
     steps = ci_steps(shared_copy)
-    assert len(steps) == 15  # twelve checks, one step each (SPEC-0007 rule 13), then three makes
-    assert all(s.startswith("python scripts/agk/") for s in steps[:12])
-    assert [s.split()[-1] for s in steps[12:]] == ["agk-lint", "agk-test", "agk-project-test"]
+    assert len(steps) == 16  # thirteen checks, one step each (SPEC-0007 rule 13), then three makes
+    assert all(s.startswith("python scripts/agk/") for s in steps[:13])
+    assert [s.split()[-1] for s in steps[13:]] == ["agk-lint", "agk-test", "agk-project-test"]
     assert KIT_SUITE_STEP in steps
     (shared_copy / "tests").mkdir(exist_ok=True)
     (shared_copy / "tests" / "test_p.py").write_text("def test_p():\n    assert True\n")
-    assert run_ci(shared_copy, kit_suite.direct) == [0] * 15
+    assert run_ci(shared_copy, kit_suite.direct) == [0] * 16
 
 
 def test_ac1_failing_project_test_makes_the_ci_steps_fail(shared_copy, kit_suite: KitSuite):
@@ -537,7 +537,7 @@ def test_ac1_failing_project_test_makes_the_ci_steps_fail(shared_copy, kit_suite
     (shared_copy / "tests" / "test_p.py").write_text("def test_p():\n    assert False\n")
     codes = run_ci(shared_copy, kit_suite.direct)
     assert codes[-1] != 0
-    assert codes[:-1] == [0] * 14
+    assert codes[:-1] == [0] * 15
 
 
 def test_ac1_agk_toml_of_an_init_repo_has_project_tests_with_exit_5_handling(installed):
