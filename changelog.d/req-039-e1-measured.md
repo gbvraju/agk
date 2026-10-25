@@ -1,1 +1,0 @@
-- a cause is measured and a correction travels the same channel: `check_brief.py` fails a `Priority: 0` brief without a `Measured:` line, `session.py watch` ends on a `Correction:` comment of a listed author on the pull request or on its brief, and the session rules and the conductor role file say how (SPEC-0032 rules 9 and 10, REQ-039)

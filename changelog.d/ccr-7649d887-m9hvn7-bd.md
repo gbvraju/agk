@@ -1,1 +1,0 @@
-- the router opens, updates and closes the one brief `The default branch is red` from the checks of the default branch, and `session.py next` hands out only that brief while it is open (SPEC-0032 rule 7, REQ-039)
