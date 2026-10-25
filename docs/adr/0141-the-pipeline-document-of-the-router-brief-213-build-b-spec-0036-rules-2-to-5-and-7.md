@@ -1,6 +1,6 @@
 # ADR-0141: the pipeline document of the router (brief #213 build (b), SPEC-0036 rules 2 to 5 and 7)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0131, ADR-0137
