@@ -10,14 +10,16 @@ network.
 from __future__ import annotations
 
 import tomllib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from test_session import (
     FREE,
     ISSUES,
+    REPO,
     comment,
+    iso,
     issue,
     listing,
     posts,
@@ -46,6 +48,14 @@ def stub(request):
 @pytest.fixture
 def proj(request):
     return request.getfixturevalue("session_proj")
+
+
+PULLS = f"repos/{REPO}/pulls"
+
+
+@pytest.fixture(autouse=True)
+def no_pulls(stub):
+    stub.serve(PULLS, [])
 
 
 def took(cid: int, who: str, build: str | None = None, login: str = "someone") -> dict:
@@ -109,13 +119,18 @@ def test_ac4_released_frees_a_build_and_names_the_session(proj, stub):
     stub.serve(BRIEF, [took(1, "s-other", "b"), released], nth=1)
     stub.serve(BRIEF, [took(1, "s-other", "b"), released, took(3, "s-me", "b", "me")], nth=2)
     assert claim(proj, stub).returncode == 0
-    stub.serve(BRIEF, [took(1, "s-other", "b"), comment(2, "x", "released: s-other")])
-    assert claim(proj, stub).returncode == 0  # a release without a build frees every build
+    # a release without a build frees every build of the session
+    every = [took(1, "s-other", "b"), comment(2, "someone", "released: s-other")]
+    stub.serve(BRIEF, every, nth=3)
+    stub.serve(BRIEF, [*every, took(4, "s-me", "b", "me")], nth=4)
+    assert claim(proj, stub).returncode == 0
 
 
 def test_ac4_released_of_another_build_frees_nothing(proj, stub):
     """REQ-041 AC4"""
-    stub.serve(BRIEF, [took(1, "s-other", "b"), comment(2, "x", "released: s-other build (a)")])
+    stub.serve(
+        BRIEF, [took(1, "s-other", "b"), comment(2, "someone", "released: s-other build (a)")]
+    )
     assert claim(proj, stub).returncode == 1
 
 
@@ -259,3 +274,42 @@ def test_ac5_this_repository_sets_assign_to_conductor():
     """REQ-041 AC5"""
     data = tomllib.loads((ROOT / "agk.toml").read_text(encoding="utf-8"))
     assert data["flow"]["assign"] == "conductor"
+
+
+def test_ac4_a_release_frees_a_take_only_when_the_same_account_posted_it(proj, stub):
+    """REQ-041 AC4: any account could otherwise free another session's claim by posting its id."""
+    forged = comment(2, "stranger", "released: s-other build (b)")
+    stub.serve(BRIEF, [took(1, "s-other", "b", "other"), forged])
+    out = claim(proj, stub)
+    assert out.returncode == 1 and "taken by s-other" in out.stdout and posts(stub) == []
+
+
+def test_ac4_a_release_by_the_taker_frees_the_build(proj, stub):
+    """REQ-041 AC4"""
+    own = comment(2, "other", "released: s-other build (b)")
+    stub.serve(BRIEF, [took(1, "s-other", "b", "other"), own], nth=1)
+    stub.serve(BRIEF, [took(1, "s-other", "b", "other"), own, took(3, "s-me", "b", "me")], nth=2)
+    assert claim(proj, stub).returncode == 0
+
+
+def test_ac4_a_build_take_stays_live_while_an_open_pull_request_names_the_brief(proj, stub):
+    """REQ-041 AC4: the liveness of build (b) of ADR-0124 applies to a build take."""
+    old = took(1, "s-other", "b", "other") | {"created_at": iso(timedelta(hours=-9))}
+    stub.serve(BRIEF, [old])
+    stub.serve(PULLS, [{"state": "open", "body": "Brief: #5\n", "number": 8}])
+    assert claim(proj, stub).returncode == 1
+    stub.serve(PULLS, [])
+    stub.serve(BRIEF, [old], nth=1)
+    stub.serve(BRIEF, [old, took(3, "s-me", "b", "me")], nth=2)
+    assert claim(proj, stub).returncode == 0
+
+
+def test_ac5_the_flow_settings_name_rule_1_of_spec_0034_and_not_the_value(proj, stub):
+    """REQ-041 AC5"""
+    configure(proj, "both")
+    out = after(proj, stub)
+    assert out.stdout.startswith("FAIL session: rule 1:") and "both" not in out.stdout
+    proj.write("agk.toml", 'default_branch = "main"\n[flow]\nclaim_hours = 0\n')
+    stub.serve(BRIEF, [])
+    out = session(proj, stub, "claim", "--session", "s-me", "--brief", "5")
+    assert "rule 1: claim_hours" in out.stdout

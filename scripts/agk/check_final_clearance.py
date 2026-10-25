@@ -1,6 +1,7 @@
 """A fix list that names only the final commit clears that commit in advance (SPEC-0021).
 
-    python3 check_final_clearance.py [--comments FILE] [--head SHA] [--author LOGIN] [--draft VALUE]
+    python3 check_final_clearance.py [--comments FILE] [--reviews FILE] [--head SHA]
+        [--author LOGIN] [--draft VALUE]
 
 When the latest verdict by a listed author is a covered fix list (`Verdict: fix list <sha>`, `Final:
 <path> <old> -> <new>` lines, no numbered item) and the head is the one commit after its reviewed
@@ -15,17 +16,19 @@ Git and the file only: no network, no model. Messages name the rule, never a val
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
 from common import CheckError, covered_fix_list, final_commit_problems, git, repo_root, run
 from metrics import counted_authors, latest_verdict_body
-from reviewers import verdict_authors
+from reviewers import person_approvals, spec_approvers, verdict_authors
 
 NAME = "final-clearance"
+SPEC_FILE = re.compile(r"docs/specs/(\d{4})-[^/]+\.md")
 USAGE = (
-    "usage: check_final_clearance.py [--comments FILE] [--head SHA] [--author LOGIN] "
-    "[--draft VALUE]"
+    "usage: check_final_clearance.py [--comments FILE] [--reviews FILE] [--head SHA] "
+    "[--author LOGIN] [--draft VALUE]"
 )
 
 
@@ -64,11 +67,31 @@ def commits_past(root: Path, sha: str, head: str) -> int:
     return int(git(root, "rev-list", "--count", "--first-parent", f"{reviewed}..{head}").strip())
 
 
-def check(root: Path, comments: Path, head: str, author: str | None = None) -> int:
+def specs_set_approved(edits: list[tuple[str, str | None, str, str]]) -> set[str]:
+    """The specs a covered fix list sets to `Approved` (SPEC-0032 rule 5)."""
+    found = set()
+    for path, _, _, new in edits:
+        match = SPEC_FILE.fullmatch(path)
+        if match and new == "Approved":
+            found.add(f"SPEC-{match.group(1)}")
+    return found
+
+
+def check(
+    root: Path, comments: Path, head: str, author: str | None = None, reviews: Path | None = None
+) -> int:
     authors = counted_authors(verdict_authors(root), author)
-    covered = covered_fix_list(latest_verdict_body(comments_of(comments), authors))
+    items = comments_of(comments)
+    covered = covered_fix_list(latest_verdict_body(items, authors))
     if covered is not None:
         sha, edits = covered
+        waiting = specs_set_approved(edits) - person_approvals(
+            items, comments_of(reviews) if reviews else [], spec_approvers(root)
+        )
+        if waiting:
+            raise CheckError(
+                "rule 5: a spec set to Approved has no Approve line by an account in spec_approvers"
+            )
         commit = git(root, "rev-parse", head).strip()
         parents = git(root, "rev-list", "--parents", "-n", "1", commit).split()[1:]
         if len(parents) == 1 and parents[0].startswith(sha):
@@ -85,7 +108,8 @@ def check(root: Path, comments: Path, head: str, author: str | None = None) -> i
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     opts = dict(zip(args[::2], args[1::2], strict=False))
-    if len(args) % 2 or not set(opts) <= {"--comments", "--head", "--author", "--draft"}:
+    known = {"--comments", "--reviews", "--head", "--author", "--draft"}
+    if len(args) % 2 or not set(opts) <= known:
         print(USAGE)
         return 2
     if opts.get("--draft") == "true":  # SPEC-0033 rule 2: a draft is ignored until it is ready
@@ -98,7 +122,11 @@ def main(argv: list[str] | None = None) -> int:
     return run(
         NAME,
         lambda: check(
-            root, Path(opts["--comments"]), opts.get("--head", "HEAD"), opts.get("--author")
+            root,
+            Path(opts["--comments"]),
+            opts.get("--head", "HEAD"),
+            opts.get("--author"),
+            Path(opts["--reviews"]) if "--reviews" in opts else None,
         ),
     )
 
