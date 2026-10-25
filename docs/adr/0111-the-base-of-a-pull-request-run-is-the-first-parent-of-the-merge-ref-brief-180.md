@@ -24,7 +24,7 @@ pull request made to an Accepted ADR or an Approved spec, which no merged change
 2. **Tests** (`tests/kit_dev/test_merge_ref_base.py`, kit-only): the four checks above on a real merge commit, each passing with the first parent and failing with the stale sha; the step's own shell text, extracted from both workflows and run in a repository, writes the first parent for a merge commit and nothing for a checkout with one parent; the step comes after the checkout and before the first
    check of each workflow, for pull requests only.
 3. **The guide**: `docs/guides/getting-started.md` troubleshooting names the symptom (a check fails on files the pull request did not change) and the fix.
-4. **Flow mode** (SPEC-0031): installed files change (`governance.yml` and `proof.yml` are written by the installer), so the fragment is `changelog.d/187.md`; the table is not edited.
+4. **Flow mode** (SPEC-0031): installed files change (`governance.yml` and `proof.yml` are written by the installer), so the fragment is `changelog.d/188.md`; the table is not edited.
 
 ## Consequences
 
