@@ -31,6 +31,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 - <pr>12 "Change number 12" was sent back 1 time — https://github.com/demo-org/demo-repo/pull/12
 - unknown: the verdicts of 1 open pull request could not be read — https://github.com/demo-org/demo-repo/pull/19
 - PRs [#13](https://github.com/demo-org/demo-repo/pull/13), [#14](https://github.com/demo-org/demo-repo/pull/14) and [#15](https://github.com/demo-org/demo-repo/pull/15) were merged with no verdict
+- unknown: open briefs could not be read — https://github.com/demo-org/demo-repo/issues?q=label%3Aagk-brief
 
 ## Cost
 
@@ -38,7 +39,11 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 - <pr>13 "Change number 13": 49.0 hours from opening to merge, 0 fix verdicts, usage not reported — https://github.com/demo-org/demo-repo/pull/13
 - <pr>14 "Change number 14": 25.0 hours from opening to merge, 0 fix verdicts, usage not reported — https://github.com/demo-org/demo-repo/pull/14
 - <pr>15 "Change number 15": 1.0 hours from opening to merge, 0 fix verdicts, usage not reported — https://github.com/demo-org/demo-repo/pull/15
-- This week: 4 pull requests merged; hours in total: 172.0; fix verdicts in total: 1; declared "Behaviour: unchanged": 1; usage in total: not reported; estimate: none declared this week — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
+- This week: 4 pull requests merged; hours in total: 172.0; fix verdicts in total: 1; corrections: unknown; declared "Behaviour: unchanged": 1; usage in total: not reported; estimate: none declared this week — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged
+
+## Flow
+
+- Builders: unknown of 3 pull requests open; median hours: taken to pull request none, pull request to first verdict 27.0, verdict to cleared 48.0, cleared to merge 22.0; conflicts 0, renumbers unknown, retakes unknown — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Aopen
 
 ---
 facts: 9b332027c0f71279f4602fbeba668381aa906cd1

@@ -1,5 +1,5 @@
 {
-  "schema": 5,
+  "schema": 6,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -97,6 +97,18 @@
       {
         "kind": "unknown",
         "what": "pull requests",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/pulls"
+          }
+        ]
+      }
+    ],
+    "flow": [
+      {
+        "kind": "unknown",
+        "what": "the flow",
         "links": [
           {
             "to": "search",

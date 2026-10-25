@@ -1,5 +1,5 @@
 {
-  "schema": 5,
+  "schema": 6,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -579,10 +579,31 @@
         "busy": false,
         "usage": "unknown",
         "usage_reported": 0,
+        "corrections": 0,
         "links": [
           {
             "to": "search",
             "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged"
+          }
+        ]
+      }
+    ],
+    "flow": [
+      {
+        "kind": "flow-figures",
+        "open_builders": "unknown",
+        "max_builders": 3,
+        "taken_to_pull_request": "unknown",
+        "to_first_verdict": "unknown",
+        "verdict_to_cleared": "unknown",
+        "cleared_to_merge": "unknown",
+        "conflicts": "unknown",
+        "renumbers": "unknown",
+        "retakes": 0,
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Aopen"
           }
         ]
       }

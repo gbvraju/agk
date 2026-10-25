@@ -5,7 +5,10 @@
 The body has one line `Sentence:` with the sentence in quotation marks (1 to 300 characters), one
 line that starts `Answers` and ends with a colon followed by numbered items without a gap, zero or
 more lines `Depends-on: #n`, one line `Size: S`, `Size: M` or `Size: L`, and (SPEC-0034 rule 2) one
-line `Advances:` (REQ ids or `new`), one line `Touches:` (globs) and at most one `Priority:`. The
+line `Advances:` (REQ ids or `new`), one line `Touches:` (globs) and at most one `Priority:`
+(0 to 3; SPEC-0032 rule 9: a `Priority: 0` brief needs one line `Measured:` with the command and the
+output before and after a change that turns it green, except the red-branch brief of the
+router). The
 shape is the function `brief_problems` of `session.py`, which `session.py next` applies to the body
 it reads. With `--root DIR` an `Advances:` that names a requirement that is not a `### REQ-n`
 section of `DIR/docs/requirements.md` also fails.

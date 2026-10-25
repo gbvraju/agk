@@ -21,6 +21,10 @@ nothing this week
 
 nothing this week
 
+## Flow
+
+- Builders: 0 of 3 pull requests open; median hours: taken to pull request none, pull request to first verdict none, verdict to cleared none, cleared to merge none; conflicts 0, renumbers 0, retakes 0 — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Aopen
+
 ---
 facts: c0ffee0000000000000000000000000000000000
 kit version: unknown

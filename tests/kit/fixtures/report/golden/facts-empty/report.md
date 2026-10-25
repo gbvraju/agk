@@ -15,11 +15,15 @@ nothing this week
 
 ## At risk
 
-nothing this week
+- unknown: open briefs could not be read — https://github.com/demo-org/demo-repo/issues?q=label%3Aagk-brief
 
 ## Cost
 
 nothing this week
+
+## Flow
+
+- Builders: 0 of 3 pull requests open; median hours: taken to pull request none, pull request to first verdict none, verdict to cleared none, cleared to merge none; conflicts 0, renumbers 0, retakes unknown — https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Aopen
 
 ---
 facts: f3f7230da79e4fa05485154b3d244519894adbe0

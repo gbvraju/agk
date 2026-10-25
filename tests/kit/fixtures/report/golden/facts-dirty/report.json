@@ -1,5 +1,5 @@
 {
-  "schema": 5,
+  "schema": 6,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -65,14 +65,45 @@
         ]
       }
     ],
-    "at_risk": [],
-    "cost": []
+    "at_risk": [
+      {
+        "kind": "unknown",
+        "what": "open briefs",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/issues?q=label%3Aagk-brief"
+          }
+        ]
+      }
+    ],
+    "cost": [],
+    "flow": [
+      {
+        "kind": "flow-figures",
+        "open_builders": 0,
+        "max_builders": 3,
+        "taken_to_pull_request": "none",
+        "to_first_verdict": "none",
+        "verdict_to_cleared": "none",
+        "cleared_to_merge": "none",
+        "conflicts": 0,
+        "renumbers": 0,
+        "retakes": "unknown",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Aopen"
+          }
+        ]
+      }
+    ]
   },
   "counts": {
     "delivered": 0,
     "proven": 0,
     "needs_you": 2,
-    "at_risk": 0
+    "at_risk": "unknown"
   },
   "notices": [
     {
