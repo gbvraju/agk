@@ -5,6 +5,9 @@
     python3 session.py next --session ID
     python3 session.py queue --role conductor|builder|person [--author LOGIN]
     python3 session.py resume --pr N
+    python3 session.py ids
+    python3 session.py demand
+    python3 session.py push-check
 
 `watch` polls with `gh api --method GET` and exits 0 with one line: `verdict <kind> <sha> (comment
 <id>)` for a verdict by a listed author that names a prefix of the current head and is newer than
@@ -21,6 +24,13 @@ session that starts or restarts resumes from GitHub with one GET.
 `next` prints the first free `agk-brief` issue and takes it with the one comment `taken: <ID>
 <YYYY-MM-DD>`, the only POST of this script; with none left it prints `no brief` and exits 1. This
 is the only script that calls GitHub; no check does. Messages name the rule, never a value.
+SPEC-0034: `next` takes nothing and prints `full <open>/<max>` when `max_builders` builder pull
+requests are open (rule 1), skips a brief whose `Touches:` overlaps an open builder pull request or
+a taken brief and orders the rest by `Priority:` (rule 3), writes the numbers it reserves into its
+take (`reserves ADR-0124`, rule 4) and frees a take after `claim_hours` or a `released:` comment
+(rule 5). `ids` prints the next free numbers as one JSON line (rule 4), `demand` how many sessions
+a launcher may start (rule 6) and `push-check` the files in which the head conflicts with the
+default branch (rule 7b, exit 1).
 """
 
 from __future__ import annotations
@@ -32,10 +42,11 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
 import tomllib
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from common import CheckError, covered_fix_list, git, repo_root
+from common import CheckError, covered_fix_list, git, load_config, next_free_ids, repo_root
 from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
 from reviewers import verdict_authors
@@ -45,19 +56,30 @@ USAGE = (
     "usage: session.py watch (--pr N | --merged N) [--interval S] [--timeout S]\n"
     "       session.py next --session ID\n"
     "       session.py queue --role conductor|builder|person [--author LOGIN]\n"
-    "       session.py resume --pr N"
+    "       session.py resume --pr N\n"
+    "       session.py ids\n"
+    "       session.py demand\n"
+    "       session.py push-check"
 )
+COMMANDS = ("watch", "next", "queue", "resume", "ids", "demand", "push-check")
 PAGE = 100
 LABEL = "agk-brief"
-LIVE = timedelta(hours=24)
+MAX_BUILDERS = 3
+CLAIM_HOURS = 4
 VERDICT = re.compile(r"Verdict: (cleared|fix list|rejected) ([0-9a-f]{7,40})")
-TAKE = re.compile(r"taken: (\S+) (\d{4}-\d{2}-\d{2})")
+NUMBER = r"(?:REQ-\d{3}|SPEC-\d{4}|ADR-\d{4})"
+TAKE = re.compile(
+    rf"taken: (\S+) (\d{{4}}-\d{{2}}-\d{{2}})(?: retakes)?(?: reserves ({NUMBER}(?:, {NUMBER})*))?"
+)
+RELEASED = re.compile(r"released: (\S+)")
+BRIEF_LINE = re.compile(r"Brief: #(\d+)")
+TOUCHES = re.compile(r"Touches: (.+)")
 SENTENCE = re.compile(r'Sentence: "(.*)"')
 DEPENDS = re.compile(r"Depends-on: #(\d+)")
 SIZE = re.compile(r"Size: [SML]")
 NUMBERED = re.compile(r"(\d+)\.\s+\S")
 ADVANCES = re.compile(r"Advances: (new|REQ-\d{3}(?:, REQ-\d{3})*)")
-PRIORITY = re.compile(r"Priority: [123]")
+PRIORITY = re.compile(r"Priority: ([123])")
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
 STATE_PREFIX = "agk:"
 UNSET = object()
@@ -265,37 +287,84 @@ def depends_on(body: str) -> list[int]:
     return [int(m.group(1)) for m in found if m]
 
 
-# --- next (rule 3) ----------------------------------------------------------------------------
+# --- the flow table (SPEC-0034 rules 1 and 5) ------------------------------------------------
 
 
-def live_takes(comments: list, repo: str, number: int) -> list[tuple[datetime, int, str, str]]:
-    """(when, id, session, login) of every live take, oldest first; the pull requests are read
-    only when a take is older than 24 hours."""
+def flow_int(root, key: str, default: int, rule: int) -> int:
+    """A whole number, 1 or more, of the `[flow]` table of agk.toml; names the setting only."""
+    try:
+        data = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return default
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise CheckError(f"rule {rule}: agk.toml cannot be read") from exc
+    table = data.get("flow", {})
+    value = table.get(key, default) if isinstance(table, dict) else default
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CheckError(f"rule {rule}: {key} of the flow table must be a whole number, 1 or more")
+    return value
+
+
+# --- the claims (SPEC-0034 rule 5) ------------------------------------------------------------
+
+
+def brief_number(pr: dict) -> int | None:
+    """The `n` of the line `Brief: #n` of a pull request body (a builder one), else None."""
+    for line in str(pr.get("body") or "").splitlines():
+        if found := BRIEF_LINE.fullmatch(line.rstrip()):
+            return int(found.group(1))
+    return None
+
+
+def all_takes(comments: list) -> list[tuple]:
+    """(when, id, session, login, reserves, released) of every take comment, oldest first."""
+    takes, releases = [], []
+    for c in comments:
+        text = c["body"].strip() if isinstance(c.get("body"), str) else ""
+        when, cid = moment(c.get("created_at")), c.get("id", 0)
+        if found := TAKE.fullmatch(text):
+            reserves = tuple(found.group(3).split(", ")) if found.group(3) else ()
+            takes.append((when, cid, found.group(1), author_of(c), reserves))
+        elif found := RELEASED.fullmatch(text):
+            releases.append((when, cid, found.group(1)))
+    return sorted((*t, any(s == t[2] and (w, i) > t[:2] for w, i, s in releases)) for t in takes)
+
+
+def live_takes(comments: list, number: int, prs: list, hours: int) -> list[tuple]:
+    """(when, id, session, login, reserves) of every live take, oldest first.
+
+    A take is live until a `released:` comment of its session, and for `hours` hours or while any
+    pull request has the line `Brief: #<number>` (SPEC-0034 rule 5)."""
+    named = any(brief_number(pr) == number for pr in prs)
     now = datetime.now(UTC)
-    found, prs = [], None
-    for comment in comments:
-        body = comment.get("body")
-        match = TAKE.fullmatch(body.strip()) if isinstance(body, str) else None
-        if not match:
-            continue
-        when, login = moment(comment.get("created_at")), author_of(comment)
-        live = now - when < LIVE
-        if not live:
-            prs = mentioning(repo, number) if prs is None else prs
-            live = any(author_of(pr) == login and moment(pr.get("created_at")) > when for pr in prs)
-        if live:
-            found.append((when, comment.get("id", 0), match.group(1), login))
-    return sorted(found)
+    return [
+        t[:5]
+        for t in all_takes(comments)
+        if not t[5] and (named or now - t[0] < timedelta(hours=hours))
+    ]
 
 
-def mentioning(repo: str, number: int) -> list:
-    """The pull requests that mention the issue as `#n` (none when they cannot be read)."""
-    pattern = re.compile(rf"#{number}(?!\d)")
-    prs = pages(f"repos/{repo}/pulls?state=all") or []
-    return [p for p in prs if pattern.search(f"{p.get('title') or ''} {p.get('body') or ''}")]
+# --- next (SPEC-0030 rule 3; SPEC-0034 rules 1, 3 and 4) -------------------------------------
 
 
-def judge(repo: str, brief: dict, me: str) -> tuple[str | None, list]:
+@dataclass
+class Survey:
+    repo: str
+    me: str
+    max_builders: int
+    hours: int
+    prs: list  # every pull request, any state
+    builders: list  # the open ones with a line `Brief: #n`
+    comments: dict = field(default_factory=dict)  # brief number -> its comments
+    skipped: list = field(default_factory=list)  # (brief number, why)
+    held: list = field(
+        default_factory=list
+    )  # (brief number, globs) of taken briefs, no pull request
+    free: list = field(default_factory=list)  # the briefs left, in the order of rule 3
+    files: dict = field(default_factory=dict)  # pull request number -> its changed files
+
+
+def judge(repo: str, brief: dict, me: str, prs: list, hours: int) -> tuple[str | None, list]:
     """Why the brief is not for this session (or None when it is free), and its comments."""
     problems = brief_problems(brief.get("body"))
     if problems:
@@ -309,21 +378,166 @@ def judge(repo: str, brief: dict, me: str) -> tuple[str | None, list]:
     comments = pages(f"repos/{repo}/issues/{brief['number']}/comments")
     if comments is None:
         return "its comments cannot be read", []
-    takes = live_takes(comments, repo, brief["number"])
+    takes = live_takes(comments, brief["number"], prs, hours)
     if takes and not any(t[2] == me for t in takes):
         return f"taken by {takes[0][2]}", comments
     return None, comments
 
 
-def take(repo: str, number: int, me: str, comments: list) -> str | None:
+def touches_of(body: str) -> list[str]:
+    for line in body.splitlines():
+        if found := TOUCHES.fullmatch(line.rstrip()):
+            return [g.strip() for g in found.group(1).split(",")]
+    return []
+
+
+def priority_of(body: str) -> int:
+    for line in body.splitlines():
+        if found := PRIORITY.fullmatch(line.rstrip()):
+            return int(found.group(1))
+    return 2
+
+
+def survey(root, repo: str, me: str) -> Survey:
+    """Everything `next`, `demand` and `ids` read: the pull requests, the briefs and their takes."""
+    limit = flow_int(root, "max_builders", MAX_BUILDERS, 1)
+    hours = flow_int(root, "claim_hours", CLAIM_HOURS, 5)
+    prs = pages(f"repos/{repo}/pulls?state=all")
+    if prs is None:
+        raise CheckError("rule 1: the pull requests cannot be read")
+    issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
+    if issues is None:
+        raise CheckError("rule 3: the open briefs cannot be read")
+    builders = [p for p in prs if p.get("state") == "open" and brief_number(p) is not None]
+    found = Survey(repo, me, limit, hours, prs, builders)
+    named = {brief_number(p) for p in prs}
+    for brief in sorted((i for i in issues if "pull_request" not in i), key=lambda i: i["number"]):
+        why, comments = judge(repo, brief, me, prs, hours)
+        found.comments[brief["number"]] = comments
+        if why is None:
+            found.free.append(brief)
+            continue
+        found.skipped.append((brief["number"], why))
+        if why.startswith("taken by") and brief["number"] not in named:
+            found.held.append((brief["number"], touches_of(brief["body"])))
+    found.free.sort(key=lambda b: (priority_of(b["body"]), b["number"]))
+    return found
+
+
+def glob_regex(glob: str) -> re.Pattern:
+    """A path glob: `*` and `?` stay in one directory, `**` crosses them, `dir/` is `dir/**`."""
+    glob = glob + "**" if glob.endswith("/") else glob
+    out, i = "", 0
+    while i < len(glob):
+        if glob.startswith("**/", i):
+            out, i = out + "(?:.*/)?", i + 3
+        elif glob.startswith("**", i):
+            out, i = out + ".*", i + 2
+        else:
+            out += {"*": "[^/]*", "?": "[^/]"}.get(glob[i]) or re.escape(glob[i])
+            i += 1
+    return re.compile(out)
+
+
+def literal(glob: str) -> str:
+    return re.split(r"[*?]", glob, maxsplit=1)[0]
+
+
+def shared_patterns(root) -> list[str]:
+    """Shared-mechanical paths (SPEC-0034 rule 7a): changelog.d/ and the `merge=union` files."""
+    found = ["changelog.d/**"]
+    try:
+        text = (root / ".gitattributes").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return found
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) > 1 and "merge=union" in parts[1:]:
+            found.append(parts[0])
+    return found
+
+
+def pull_files(s: Survey, pr: dict) -> list:
+    if pr["number"] not in s.files:
+        listed = pages(f"repos/{s.repo}/pulls/{pr['number']}/files")
+        if listed is None:
+            raise CheckError("rule 3: the files of an open pull request cannot be read")
+        s.files[pr["number"]] = listed
+    return s.files[pr["number"]]
+
+
+def overlap(root, s: Survey, brief: dict) -> str | None:
+    """Why the `Touches:` of the brief overlap open work (rule 3), or None."""
+    shared = [glob_regex(p) for p in shared_patterns(root)]
+    mine = [
+        g for g in touches_of(brief["body"]) if not any(r.fullmatch(literal(g)) for r in shared)
+    ]
+    for number, theirs in s.held:
+        if any(literal(a).startswith(literal(b)) or literal(b).startswith(literal(a))
+               for a in mine for b in theirs):  # fmt: skip
+            return f"overlaps the taken brief #{number}"
+    for pr in s.builders:
+        paths = [str(f.get("filename")) for f in pull_files(s, pr)]
+        paths = [p for p in paths if not any(r.fullmatch(p) for r in shared)]
+        if any(glob_regex(g).fullmatch(p) for g in mine for p in paths):
+            return f"overlaps open pull request #{pr['number']}"
+    return None
+
+
+def numbers_in_use(root, s: Survey) -> dict[str, int]:
+    """The highest requirement, spec and ADR number taken on the default branch, by the files an
+    open builder pull request adds and by the reservations of live takes (rule 4)."""
+    base = next_free_ids(root, f"origin/{load_config(root)['default_branch']}")
+    top = {
+        "req": int(base["req"][4:]) - 1,
+        "spec": int(base["spec"]) - 1,
+        "adr": int(base["adr"]) - 1,
+    }
+    for pr in s.builders:
+        for entry in pull_files(s, pr):
+            found = re.fullmatch(r"docs/(adr|specs)/(\d{4})-[^/]+\.md", str(entry.get("filename")))
+            if found and entry.get("status") == "added":
+                key = "adr" if found.group(1) == "adr" else "spec"
+                top[key] = max(top[key], int(found.group(2)))
+            if entry.get("filename") == "docs/requirements.md":
+                for n in re.findall(r"(?m)^\+### REQ-(\d{3})\b", entry.get("patch") or ""):
+                    top["req"] = max(top["req"], int(n))
+    kinds = {"REQ": "req", "SPEC": "spec", "ADR": "adr"}
+    for number, comments in s.comments.items():
+        for live in live_takes(comments, number, s.prs, s.hours):
+            for reserved in live[4]:
+                kind, _, digits = reserved.partition("-")
+                top[kinds[kind]] = max(top[kinds[kind]], int(digits))
+    return top
+
+
+def reservation(root, s: Survey, brief: dict) -> list[str]:
+    """The numbers a brief needs: REQ, SPEC and ADR for `Advances: new`, else an ADR."""
+    try:
+        top = numbers_in_use(root, s)
+    except CheckError:
+        print("note: the numbers cannot be counted, none is reserved (rule 4)", file=sys.stderr)
+        return []
+    ids = [f"ADR-{top['adr'] + 1:04d}"]
+    if "Advances: new" in [x.rstrip() for x in brief["body"].splitlines()]:
+        ids = [f"REQ-{top['req'] + 1:03d}", f"SPEC-{top['spec'] + 1:04d}", *ids]
+    return ids
+
+
+def take(s: Survey, brief: dict, reserve) -> str | None:
     """Post the take unless this session already holds one; the reason it was lost, or None."""
-    if not any(t[2] == me for t in live_takes(comments, repo, number)):
+    number, me, comments = brief["number"], s.me, s.comments[brief["number"]]
+    if not any(t[2] == me for t in live_takes(comments, number, s.prs, s.hours)):
         day = datetime.now(UTC).strftime("%Y-%m-%d")
         body = f"body=taken: {me} {day}"
-        if gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is None:
+        if any(not t[5] for t in all_takes(comments)):
+            body += " retakes"
+        if numbers := reserve():
+            body += " reserves " + ", ".join(numbers)
+        if gh(f"repos/{s.repo}/issues/{number}/comments", "-f", body, method="POST") is None:
             return "the take cannot be posted"
-        comments = pages(f"repos/{repo}/issues/{number}/comments") or []
-    oldest = live_takes(comments, repo, number)
+        comments = pages(f"repos/{s.repo}/issues/{number}/comments") or []
+    oldest = live_takes(comments, number, s.prs, s.hours)
     if oldest and oldest[0][2] != me:
         return f"lost the take to {oldest[0][2]}"
     return None
@@ -333,12 +547,14 @@ def next_brief(root, me: str) -> int:
     repo = repo_name(root)
     if (found := offer_stalled(root, repo, me)) is not None:
         return found
-    issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
-    if issues is None:
-        raise CheckError("rule 3: the open briefs cannot be read")
-    for brief in sorted((i for i in issues if "pull_request" not in i), key=lambda i: i["number"]):
-        why, comments = judge(repo, brief, me)
-        why = why or take(repo, brief["number"], me, comments)
+    s = survey(root, repo, me)
+    if len(s.builders) >= s.max_builders:
+        print(f"full {len(s.builders)}/{s.max_builders}")
+        return 1
+    for number, why in s.skipped:
+        print(f"skip #{number}: {why}")
+    for brief in s.free:
+        why = overlap(root, s, brief) or take(s, brief, lambda b=brief: reservation(root, s, b))
         if why:
             print(f"skip #{brief['number']}: {why}")
             continue
@@ -347,6 +563,51 @@ def next_brief(root, me: str) -> int:
         print(brief["body"])
         return 0
     print("no brief")
+    return 1
+
+
+def demand(root) -> int:
+    """How many sessions a launcher may start (rule 6): min(ready, max - open), 0 when negative."""
+    s = survey(root, repo_name(root), "")
+    ready = sum(1 for brief in s.free if overlap(root, s, brief) is None)
+    start = max(0, min(ready, s.max_builders - len(s.builders)))
+    figures = {"ready": ready, "open": len(s.builders), "max": s.max_builders, "start": start}
+    print(json.dumps(figures))
+    return 0
+
+
+def ids(root) -> int:
+    top = numbers_in_use(root, survey(root, repo_name(root), ""))
+    print(
+        json.dumps(
+            {
+                "req": f"REQ-{top['req'] + 1:03d}",
+                "spec": f"{top['spec'] + 1:04d}",
+                "adr": f"{top['adr'] + 1:04d}",
+            }
+        )
+    )
+    return 0
+
+
+def push_check(root) -> int:
+    """Try the merge of the head with the default branch (rule 7b); exit 1 naming the files."""
+    ref = f"origin/{load_config(root)['default_branch']}"
+    fetched = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "fetch", "-q", "origin", ref.split("/", 1)[1]], cwd=root, capture_output=True
+    )
+    tried = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "merge-tree", "--write-tree", "--name-only", "HEAD", ref],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    if fetched.returncode != 0 or tried.returncode not in (0, 1):
+        raise CheckError("rule 7: the merge with the default branch cannot be tried")
+    if tried.returncode == 0:
+        return 0
+    names = (tried.stdout.split("\n\n")[0].splitlines())[1:]
+    print("conflict: " + ", ".join(names))
     return 1
 
 
@@ -378,17 +639,7 @@ def queue(root, role: str, author: str | None) -> int:
 
 def stall_hours(root) -> int:
     """`stall_hours` of the flow table of agk.toml: a whole number of hours, 4 by default."""
-    try:
-        data = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return STALL_HOURS
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        raise CheckError("rule 5: agk.toml cannot be read") from exc
-    flow = data.get("flow", {})
-    value = flow.get("stall_hours", STALL_HOURS) if isinstance(flow, dict) else STALL_HOURS
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise CheckError("rule 5: stall_hours of the flow table must be a whole number, 1 or more")
-    return value
+    return flow_int(root, "stall_hours", STALL_HOURS, 5)
 
 
 def waits_for_a_person(root, pr: dict, comments: list) -> bool:
@@ -581,7 +832,7 @@ def number_ok(text: str) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if not args or args[0] not in ("watch", "next", "queue", "resume") or len(args[1:]) % 2:
+    if not args or args[0] not in COMMANDS or len(args[1:]) % 2:
         print(USAGE)
         return 2
     cmd, opts = args[0], dict(zip(args[1::2], args[2::2], strict=False))
@@ -590,6 +841,9 @@ def main(argv: list[str] | None = None) -> int:
         "next": {"--session"},
         "queue": {"--role", "--author"},
         "resume": {"--pr"},
+        "ids": set(),
+        "demand": set(),
+        "push-check": set(),
     }
     if not set(opts) <= allowed[cmd] or len(opts) != len(args[1::2]):
         print(USAGE)
@@ -605,6 +859,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif cmd == "resume":
         ok = number_of(opts.get("--pr"))
+    elif cmd in ("ids", "demand", "push-check"):
+        ok = True
     else:
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", "")))
     if not ok:
@@ -618,6 +874,8 @@ def main(argv: list[str] | None = None) -> int:
             return watch(root, opts)
         if cmd == "resume":
             return resume(root, int(opts["--pr"]))
+        if cmd in ("ids", "demand", "push-check"):
+            return {"ids": ids, "demand": demand, "push-check": push_check}[cmd](root)
         return next_brief(root, opts["--session"])
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}")
