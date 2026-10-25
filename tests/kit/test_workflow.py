@@ -97,10 +97,16 @@ def test_ac2_the_job_is_still_named_governance():
     assert re.search(r"^name: governance$", text, flags=re.M)
 
 
-def test_ac2_pull_request_base_reaches_the_checks_through_the_job_environment():
-    """REQ-012 AC1: AGK_BASE is set for every step, so each check sees the base."""
+def test_ac2_pull_request_base_reaches_the_checks_through_the_step_that_sets_it():
+    """REQ-012 AC1: AGK_BASE is set for every later step, so each check sees the base (ADR-0111).
+
+    One step sets it (the first parent of the merge ref, else the event's base sha); the job's
+    `env:` does not, so only one place decides.
+    """
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert "    env:\n      AGK_BASE: ${{ github.event.pull_request.base.sha }}" in text
+    assert "      AGK_BASE:" not in text
+    assert text.count('echo "AGK_BASE=$base" >> "$GITHUB_ENV"') == 1
+    assert "EVENT_BASE: ${{ github.event.pull_request.base.sha }}" in text
 
 
 def test_ac2_workflow_calls_the_agk_mk_form_for_lint_and_tests():

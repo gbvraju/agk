@@ -6,7 +6,7 @@
 - Related: ADR-0108, ADR-0112
 - Requirements: REQ-009
 
-Protected classes: `.github/`, `tests/kit_dev/`
+Protected classes: `.github/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -19,8 +19,10 @@ pull request made to an Accepted ADR or an Approved spec, which no merged change
 
 ## Decision
 
-1. **One step**, `Base of the merge ref`, in `.github/workflows/governance.yml` and in `.github/workflows/proof.yml` (the two workflows that set `AGK_BASE`), right after the checkout and before any step that reads the base: for a `pull_request` run, when `HEAD` is a merge commit
-   (`git rev-list --parents -n 1 HEAD` lists three words), it appends `AGK_BASE=$(git rev-parse HEAD^1)` to `$GITHUB_ENV`. Nothing is written when the checkout is not a merge commit, so the job's `AGK_BASE` (the event's base sha) stands; a `push` run has no step and no base sha, as before.
+1. **One step**, `Base of the merge ref`, in `.github/workflows/governance.yml` and in `.github/workflows/proof.yml` (the two workflows that set `AGK_BASE`), right after the checkout and before any step that reads the base, and **the only place that sets `AGK_BASE`**: the job-level
+   `env: AGK_BASE` is removed. The first version of this decision kept the job-level value and let the step override it through `$GITHUB_ENV`; the review of 4f06311 pointed out that whether a `$GITHUB_ENV` value overrides a job-level `env:` value is the whole fix and was proved neither by the tests
+   (they cannot run Actions) nor by this pull request's own run (its base was not stale), so the question is removed instead of answered. For a `pull_request` run the step reads the event's base sha from a step `env` (`EVENT_BASE`); when `HEAD` is a merge commit (`git rev-list --parents -n 1 HEAD`
+   lists three words) it takes `git rev-parse HEAD^1`, else `EVENT_BASE`, and appends `AGK_BASE=<that>` to `$GITHUB_ENV` unless it is empty. A `push` run has no step and no `AGK_BASE`, as before (the job-level value was the empty event sha there).
 2. **Tests** (`tests/kit_dev/test_merge_ref_base.py`, kit-only): the four checks above on a real merge commit, each passing with the first parent and failing with the stale sha; the step's own shell text, extracted from both workflows and run in a repository, writes the first parent for a merge commit and nothing for a checkout with one parent; the step comes after the checkout and before the first
    check of each workflow, for pull requests only.
 3. **The guide**: `docs/guides/getting-started.md` troubleshooting names the symptom (a check fails on files the pull request did not change) and the fix.

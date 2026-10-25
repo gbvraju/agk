@@ -169,7 +169,7 @@ def step_text(workflow: str) -> str:
     return re.split(r"\n      - (?:name|uses):", block, maxsplit=1)[0]
 
 
-def run_step(workflow: str, root: Path, tmp_path: Path) -> str:
+def run_step(workflow: str, root: Path, tmp_path: Path, event_base: str = "") -> str:
     """Run the `run:` of the step in ROOT, with GITHUB_ENV a file, and return what it wrote."""
     block = step_text(workflow)
     script = block.split("run: |\n", 1)[1]
@@ -179,7 +179,7 @@ def run_step(workflow: str, root: Path, tmp_path: Path) -> str:
     subprocess.run(
         ["bash", "-ec", script],
         cwd=root,
-        env={**clean_env(), "GITHUB_ENV": str(env_file)},
+        env={**clean_env(), "GITHUB_ENV": str(env_file), "EVENT_BASE": event_base},
         check=True,
         capture_output=True,
     )
@@ -190,16 +190,26 @@ def run_step(workflow: str, root: Path, tmp_path: Path) -> str:
 def test_ac1_the_step_sets_agk_base_to_the_first_parent_of_a_merge_commit(
     workflow, docs_repo, tmp_path
 ):
-    """Brief #180 answer 1: one step, into $GITHUB_ENV, for a checkout that is a merge commit."""
-    _, first = merge_ref(docs_repo, this_pull_request, other_pull_request_merged)
-    assert run_step(workflow, docs_repo, tmp_path) == f"AGK_BASE={first}\n"
+    """Brief #180 answer 1: the first parent wins over the event's older base sha."""
+    stale, first = merge_ref(docs_repo, this_pull_request, other_pull_request_merged)
+    assert run_step(workflow, docs_repo, tmp_path, event_base=stale) == f"AGK_BASE={first}\n"
 
 
 @pytest.mark.parametrize("workflow", ["governance.yml", "proof.yml"])
-def test_ac1_a_checkout_that_is_not_a_merge_commit_keeps_the_events_base(
+def test_ac1_a_checkout_that_is_not_a_merge_commit_gets_the_events_base(
     workflow, docs_repo, tmp_path
 ):
-    """Brief #180 answer 1: nothing is written, so the job's `AGK_BASE` (the event's) stands."""
+    """Brief #180 answer 1: one parent, so the event's base sha is what the step sets."""
+    base = rev(docs_repo, "main")
+    git(docs_repo, "switch", "-q", "-c", "head-only")
+    put(docs_repo, "README.md", "one parent\n")
+    commit(docs_repo, "a head")
+    assert run_step(workflow, docs_repo, tmp_path, event_base=base) == f"AGK_BASE={base}\n"
+
+
+@pytest.mark.parametrize("workflow", ["governance.yml", "proof.yml"])
+def test_ac1_with_no_merge_commit_and_no_event_base_nothing_is_set(workflow, docs_repo, tmp_path):
+    """Brief #180 answer 1: nothing at all, so the checks fall back to the default branch."""
     git(docs_repo, "switch", "-q", "-c", "head-only")
     put(docs_repo, "README.md", "one parent\n")
     commit(docs_repo, "a head")
@@ -207,13 +217,17 @@ def test_ac1_a_checkout_that_is_not_a_merge_commit_keeps_the_events_base(
 
 
 @pytest.mark.parametrize("workflow", ["governance.yml", "proof.yml"])
-def test_ac1_the_step_runs_for_pull_requests_only_and_before_the_first_check(workflow):
-    """Brief #180 answer 1: after the checkout, before any step that reads the base."""
+def test_ac1_the_step_is_the_only_place_that_sets_agk_base_and_comes_before_the_first_check(
+    workflow,
+):
+    """Brief #180 answer 1: no job-level `AGK_BASE` (the precedence question is removed)."""
     text = (WORKFLOWS / workflow).read_text(encoding="utf-8")
-    assert "AGK_BASE: ${{ github.event.pull_request.base.sha }}" in text  # the default stands
+    assert not re.search(r"(?m)^\s*AGK_BASE:", text), "no env: entry sets AGK_BASE"
+    assert text.count("AGK_BASE=") == 1 and text.count('>> "$GITHUB_ENV"') == 1
     block = step_text(workflow)
     assert "if: ${{ github.event_name == 'pull_request' }}" in block
-    assert 'echo "AGK_BASE=$(git rev-parse HEAD^1)" >> "$GITHUB_ENV"' in block
+    assert "EVENT_BASE: ${{ github.event.pull_request.base.sha }}" in block
+    assert "git rev-parse HEAD^1" in block
     assert text.index("actions/checkout@") < text.index(f"- name: {STEP}")
     steps = re.findall(r"(?m)^      - (?:name|uses): (.+)$", text)
     first_use = next(i for i, s in enumerate(steps) if s.startswith(("check_", "Red-then-green")))
