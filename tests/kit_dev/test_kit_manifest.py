@@ -15,6 +15,7 @@ KIT_ONLY = {
     "scripts/agk/adopt.py",
     "scripts/agk/kit_hashes.py",
     "scripts/agk/check_release.py",
+    "scripts/agk/check_tag.py",
     "scripts/agk/changelog_fragments.py",
     "scripts/agk/upgrade.py",
     "scripts/agk/new_spec.py",
@@ -26,7 +27,7 @@ KIT_ONLY = {
     "scripts/agk/shadow_count.py",
 }
 # Files under the law roots that belong to this repository only and are not installed in targets.
-REPO_ONLY = {".github/ISSUE_TEMPLATE/stuck.md"}
+REPO_ONLY = {".github/ISSUE_TEMPLATE/stuck.md", ".github/workflows/agk-tag.yml"}
 RENDERED = {".github/CODEOWNERS"}
 SINGLES = {
     "CLAUDE.md",
