@@ -1,1 +1,1 @@
-- every pull request body that is not a draft needs one Summary line of 1 to 120 characters, and the conductor and the session rules say so (SPEC-0036 rules 1 and 6, REQ-043 build a)
+- every pull request body that is not a draft needs one Summary line of 1 to 120 characters, the pull request template asks for it, and a project that upgrades must add the line to its pull request bodies (an open pull request needs only a description edit), and the conductor and the session rules say so (SPEC-0036 rules 1 and 6, REQ-043 build a)

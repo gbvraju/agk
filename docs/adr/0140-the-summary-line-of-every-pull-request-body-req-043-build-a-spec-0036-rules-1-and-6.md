@@ -6,7 +6,7 @@
 - Related: ADR-0131, ADR-0125, ADR-0138
 - Requirements: REQ-043
 
-Protected classes: `.claude/`, `config/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
+Protected classes: `.claude/`, `.github/`, `config/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -18,11 +18,12 @@ SPEC-0036 (Approved, ADR-0131) rule 9 makes build (a) the `Summary:` line and it
 2. **The conductor** (`.claude/agents/conductor.md`): no clearing verdict while the `Summary:` line is missing or written for developers (a file, a function, a sha, a rule number or the name of a check in place of what changes for a person); it asks for a fix list that rewrites it. The wording is the conductor's judgment, as ruled (Q-S0036-2).
 3. **The session rules** (`config/session-rules.md`): rule 27 says every non-draft body has the line, what it says and how long it is. The number follows rule 26 of main; `session.py ids` prints no rule number (Q-K4-313).
 4. **The printed bodies** (`intake.py next-steps`, `playbook.py next-steps`) gain a fixed `Summary:` sentence, because each prints a body that must pass `check_pr_body.py` (Q-K4-315).
-5. **Not in this build**: the pull request template (`.github/PULL_REQUEST_TEMPLATE.md`) is not changed (Q-K4-316); `pipeline.json`, its schema and the artifact step are build (b).
+5. **The template** (`.github/PULL_REQUEST_TEMPLATE.md`, installed verbatim): a line `Summary:` left empty, so that the unchanged template fails the check, with an HTML comment under it that asks for one plain sentence of at most 120 characters (Q-K4-316, the verdict on 5699f52 item 1). The maintainer merges the pull request, because it changes `.github/`. **Not in this build**: `pipeline.json`, its schema and the artifact step are build (b).
 6. Flow mode: no version bump, the fragment `changelog.d/ccr-7649d887-m9hvn7-sh.md`, `CHANGELOG.md` and `kit/hashes.json` as on main. Amendment 76 (`docs/runs/proposed-spec-amendments-76.md`) is for SPEC-0012, SPEC-0030 and SPEC-0036.
 
 ## Consequences
 
+- A project that upgrades must add a `Summary:` line to its pull request bodies; an open pull request needs only a description edit, which runs the body steps alone (the fragment says so).
 - Every open pull request body that is not a draft must gain a `Summary:` line before its governance check passes; the existing tests' fixture bodies gained one.
 - A summary is judged by length by the script and by wording by the conductor; the first does not make the second true (a residual of SPEC-0036).
 

@@ -117,3 +117,16 @@ def test_ac1_the_session_rules_say_every_body_carries_a_summary_line():
         "what the change does for a person, not how",
     ):
         assert phrase in text, phrase
+
+
+def test_ac1_the_template_asks_for_a_summary_and_unchanged_it_does_not_pass():
+    """REQ-043 AC1: Q-K4-316, the verdict on 5699f52."""
+    template = (ROOT / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
+    assert (
+        "\nSummary:\n<!--" in template and "what the change does for a person, not how" in template
+    )
+    assert template.index("Advances:") < template.index("Summary:") < template.index("Build-state")
+    out = check(template)
+    assert out.returncode == 1 and "SPEC-0036 rule 1" in out.stdout
+    filled = template.replace("\nSummary:\n", f"\nSummary: {SENTENCE}\n")
+    assert "SPEC-0036 rule 1" not in check(filled).stdout
