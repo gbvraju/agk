@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PreToolUse guard of the conductor role (SPEC-0030 rule 6).
 
-Contract (verify; read from the Claude Code documentation on 2026-10-19, as for the architect's
+Contract (verify; read from the Claude Code documentation, as for the architect's
 guard): the hook receives JSON on stdin with `tool_name` and `tool_input`. To deny, it prints
 {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
 "permissionDecisionReason": ...}} and exits 0; to allow, it prints nothing and exits 0.
