@@ -1,5 +1,5 @@
 {
-  "schema": 5,
+  "schema": 6,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -227,6 +227,16 @@
             "url": "https://github.com/demo-org/demo-repo/pull/15"
           }
         ]
+      },
+      {
+        "kind": "unknown",
+        "what": "open briefs",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/issues?q=label%3Aagk-brief"
+          }
+        ]
       }
     ],
     "cost": [
@@ -298,10 +308,31 @@
         "busy": false,
         "usage": "not-reported",
         "usage_reported": 0,
+        "corrections": "unknown",
         "links": [
           {
             "to": "search",
             "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged"
+          }
+        ]
+      }
+    ],
+    "flow": [
+      {
+        "kind": "flow-figures",
+        "open_builders": "unknown",
+        "max_builders": 3,
+        "taken_to_pull_request": "none",
+        "to_first_verdict": "27.0",
+        "verdict_to_cleared": "48.0",
+        "cleared_to_merge": "22.0",
+        "conflicts": 0,
+        "renumbers": "unknown",
+        "retakes": "unknown",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Aopen"
           }
         ]
       }

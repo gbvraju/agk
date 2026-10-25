@@ -1,0 +1,223 @@
+{
+  "schema": 6,
+  "week": "2026-W41",
+  "opening": {
+    "first": "2026-10-05",
+    "last": "2026-10-11",
+    "as_of": "2026-10-14"
+  },
+  "sections": {
+    "delivered": [],
+    "proven": [
+      {
+        "kind": "requirement-not-proven",
+        "id": "REQ-001",
+        "reasons": [
+          {
+            "reason": "no-merged-change"
+          }
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/e754fbd82c8755ee4dc9a844a2533d718f9f8d34/docs/requirements.md#L3"
+          }
+        ]
+      },
+      {
+        "kind": "planned-not-counted",
+        "count": 1,
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/e754fbd82c8755ee4dc9a844a2533d718f9f8d34/docs/requirements.md"
+          }
+        ]
+      }
+    ],
+    "needs_you": [
+      {
+        "group": "spec",
+        "count": 1,
+        "items": [
+          {
+            "kind": "draft-spec",
+            "id": "SPEC-0002",
+            "title": "Draft",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/e754fbd82c8755ee4dc9a844a2533d718f9f8d34/docs/specs/0002-draft.md"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "adr",
+        "count": 1,
+        "items": [
+          {
+            "kind": "proposed-adr",
+            "id": "ADR-0002",
+            "title": "Proposed",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/e754fbd82c8755ee4dc9a844a2533d718f9f8d34/docs/adr/0002-proposed.md"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "question",
+        "count": 1,
+        "items": [
+          {
+            "kind": "question",
+            "id": "Q-X1-1",
+            "asked_in": "docs/runs/spec-0002-notes.md",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/e754fbd82c8755ee4dc9a844a2533d718f9f8d34/docs/runs/spec-0002-notes.md"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "pull-request",
+        "count": 2,
+        "items": [
+          {
+            "kind": "pull-request-no-verdict",
+            "number": 22,
+            "title": "Change number 22",
+            "days": 4,
+            "links": [
+              {
+                "to": "pull-request",
+                "url": "https://github.com/demo-org/demo-repo/pull/22"
+              }
+            ]
+          },
+          {
+            "kind": "pull-request-no-verdict",
+            "number": 23,
+            "title": "Change number 23",
+            "days": 4,
+            "links": [
+              {
+                "to": "pull-request",
+                "url": "https://github.com/demo-org/demo-repo/pull/23"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "at_risk": [
+      {
+        "kind": "pull-requests-stalled",
+        "entries": [
+          {
+            "number": 22,
+            "title": "Change number 22"
+          }
+        ],
+        "count": 1,
+        "links": [
+          {
+            "to": "pull-request",
+            "url": "https://github.com/demo-org/demo-repo/pull/22"
+          }
+        ]
+      },
+      {
+        "kind": "briefs-idle",
+        "entries": [
+          {
+            "number": 33,
+            "title": "Brief 33",
+            "days": 12
+          }
+        ],
+        "count": 1,
+        "links": [
+          {
+            "to": "issue",
+            "url": "https://github.com/demo-org/demo-repo/issues/33"
+          }
+        ]
+      },
+      {
+        "kind": "requirements-without-brief",
+        "entries": [
+          {
+            "id": "REQ-002"
+          }
+        ],
+        "count": 1,
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/e754fbd82c8755ee4dc9a844a2533d718f9f8d34/docs/requirements.md"
+          }
+        ]
+      }
+    ],
+    "cost": [],
+    "flow": [
+      {
+        "kind": "flow-figures",
+        "open_builders": 2,
+        "max_builders": 2,
+        "taken_to_pull_request": "none",
+        "to_first_verdict": "none",
+        "verdict_to_cleared": "none",
+        "cleared_to_merge": "none",
+        "conflicts": 0,
+        "renumbers": 0,
+        "retakes": 0,
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Aopen"
+          }
+        ]
+      }
+    ]
+  },
+  "counts": {
+    "delivered": 0,
+    "proven": 0,
+    "needs_you": 5,
+    "at_risk": 3
+  },
+  "notices": [
+    {
+      "kind": "facts-commit",
+      "commit": "e754fbd82c8755ee4dc9a844a2533d718f9f8d34",
+      "links": []
+    },
+    {
+      "kind": "kit-version",
+      "version": "1.0.0",
+      "links": []
+    },
+    {
+      "kind": "metrics-issue",
+      "state": "found",
+      "number": 3,
+      "title": "agk metrics 2026-W41",
+      "links": []
+    },
+    {
+      "kind": "drift-audit-issue",
+      "state": "none-found",
+      "links": []
+    }
+  ]
+}

@@ -13,9 +13,13 @@ import json
 import pytest
 from test_product_report import CASES, FIXTURES
 
-SECTIONS = ("delivered", "proven", "needs_you", "at_risk", "cost")
+SECTIONS = ("delivered", "proven", "needs_you", "at_risk", "cost", "flow")
 LINK_TARGETS = {"pull-request", "file", "directory", "issue", "search"}
 ALL_KINDS = {
+    "flow-figures",
+    "briefs-idle",
+    "requirements-without-brief",
+    "pull-requests-stalled",
     "draft-spec",
     "proposed-adr",
     "question",
@@ -89,9 +93,9 @@ def test_ac1_the_structure_has_the_document_keys_and_items_of_the_fixed_kinds(na
 
     _, _, structure = structure_of(facts)
     assert list(structure) == ["schema", "week", "opening", "sections", "counts", "notices"]
-    assert structure["schema"] == 5
+    assert structure["schema"] == 6
     assert list(structure["opening"]) == ["first", "last", "as_of"]
-    assert list(structure["sections"]) == ["delivered", "proven", "needs_you", "at_risk", "cost"]
+    assert list(structure["sections"]) == list(SECTIONS)
     for item in items_of(structure):
         assert item["kind"] in pr.ITEM_KINDS, item
         required = {"kind", "links", *pr.ITEM_KINDS[item["kind"]]}
@@ -170,11 +174,13 @@ def test_ac1_needs_you_is_a_list_of_groups_with_a_count(name, facts):
 @pytest.mark.parametrize(("name", "facts"), CASES, ids=[name for name, _ in CASES])
 def test_ac1_a_title_stands_only_in_a_single_entry_of_the_two_kinds_that_print_it(name, facts):
     """REQ-029 AC1: rule 5 (grouped lines print no titles; merged-without-clearance prints none)."""
+    import product_report as pr
+
     _, _, structure = structure_of(facts)
     for entry in items_of(structure):
         if not entry["kind"].startswith("pull-requests-") or "entries" not in entry:
             continue
-        titled = entry["kind"] in ("pull-requests-open-long", "pull-requests-sent-back")
+        titled = entry["kind"] in pr.TITLED
         assert len(entry["links"]) == len(entry["entries"]), entry
         for each in entry["entries"]:
             assert ("title" in each) == (titled and len(entry["entries"]) == 1), entry

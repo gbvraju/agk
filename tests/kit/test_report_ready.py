@@ -110,8 +110,8 @@ def test_ac7_the_report_schema_is_4_and_the_facts_schema_stays_1():
     """REQ-037 AC7"""
     import product_report as pr
 
-    assert pr.REPORT_SCHEMA == 5 and pr.SCHEMA == 1
-    assert build(load(KINDS))["schema"] == 5
+    assert pr.REPORT_SCHEMA == 6 and pr.SCHEMA == 1
+    assert build(load(KINDS))["schema"] == 6
     assert "pull-request-ready" in pr.ITEM_KINDS
     assert pr.ITEM_KINDS["pull-request-ready"] == ("number", "title")
 

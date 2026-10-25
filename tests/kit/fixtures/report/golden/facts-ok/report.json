@@ -1,5 +1,5 @@
 {
-  "schema": 5,
+  "schema": 6,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -136,6 +136,21 @@
             "url": "https://github.com/demo-org/demo-repo/pull/7"
           }
         ]
+      },
+      {
+        "kind": "requirements-without-brief",
+        "entries": [
+          {
+            "id": "REQ-002"
+          }
+        ],
+        "count": 1,
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/18d340f6b1398941b84c12b7c83b8e46608f3f9f/docs/requirements.md"
+          }
+        ]
       }
     ],
     "cost": [
@@ -168,10 +183,31 @@
         "busy": false,
         "usage": "not-reported",
         "usage_reported": 0,
+        "corrections": 0,
         "links": [
           {
             "to": "search",
             "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Amerged"
+          }
+        ]
+      }
+    ],
+    "flow": [
+      {
+        "kind": "flow-figures",
+        "open_builders": 0,
+        "max_builders": 3,
+        "taken_to_pull_request": "none",
+        "to_first_verdict": "48.0",
+        "verdict_to_cleared": "0.0",
+        "cleared_to_merge": "24.0",
+        "conflicts": 0,
+        "renumbers": 0,
+        "retakes": 0,
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Aopen"
           }
         ]
       }
@@ -181,7 +217,7 @@
     "delivered": 0,
     "proven": 0,
     "needs_you": 4,
-    "at_risk": 1
+    "at_risk": 2
   },
   "notices": [
     {

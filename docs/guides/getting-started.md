@@ -208,7 +208,7 @@ On Monday the two weekly workflows write one issue each: `agk metrics <year>-W<w
 runs. A pull request merged this week is therefore in next Monday's report.
 
 To see one now, start the workflow by hand: Actions, `product-report`, Run workflow. The `today` box is optional. The
-report has five headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`. A value the report cannot find prints
+report has six headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`, `Flow`. A value the report cannot find prints
 `unknown`; it never guesses.
 
 ## Running the loop

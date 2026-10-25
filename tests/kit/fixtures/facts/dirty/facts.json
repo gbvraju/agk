@@ -43,6 +43,13 @@
     },
     "total": 0
   },
+  "flow": {
+    "briefs": "unknown",
+    "corrections": "unknown",
+    "max_builders": 3,
+    "retakes": "unknown",
+    "stall_hours": 4
+  },
   "issues": [],
   "kit_version": "unknown",
   "markers": [

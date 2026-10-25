@@ -27,7 +27,7 @@ GOLDEN = REPORT / "golden"
 SOURCE = Path(__file__).resolve().parents[2] / "scripts" / "agk" / "product_report.py"
 PR = "PR " + "#"
 MASK = "<pr>"  # goldens hold the mask: installed files carry no pull request number
-HEADINGS = ["## Delivered", "## Proven", "## Needs you", "## At risk", "## Cost"]
+HEADINGS = ["## Delivered", "## Proven", "## Needs you", "## At risk", "## Cost", "## Flow"]
 CASES = sorted(
     [("facts-" + p.name, p / "facts.json") for p in FACTS.iterdir()]
     + [(p.name, p / "facts.json") for p in REPORT.iterdir() if p.name != "golden"]
@@ -217,7 +217,8 @@ def test_cost_totals_are_computed_from_the_facts(capsys):
     cost = section(out, "## Cost")
     assert f"{pr(6)}: 49.3 hours from opening to merge, 2 fix verdicts" in cost[1]
     assert cost[-1].startswith(
-        "- This week: 4 pull requests merged; hours in total: 107.3; fix verdicts in total: 2;"
+        "- This week: 4 pull requests merged; hours in total: 107.3;"
+        " fix verdicts in total: 2; corrections: 0;"
         ' declared "Behaviour: unchanged": 2; usage in total: unknown;'
         " estimate: none declared this week — "
     )
@@ -1000,7 +1001,8 @@ def test_ac2_cost_is_the_totals_line_alone_ending_with_the_week_link(tmp_path, c
     declared = sum(1 for p in merged if p["behaviour"] == "unchanged")
     text = (
         f"- This week: 12 pull requests merged; hours in total: {hours:.1f}; "
-        f'fix verdicts in total: {fixes}; declared "Behaviour: unchanged": {declared}; '
+        f"fix verdicts in total: {fixes}; corrections: 0; "
+        f'declared "Behaviour: unchanged": {declared}; '
         "usage in total: unknown; estimate: none declared this week"
     )
     assert cost == [f"{text} \u2014 {WEEK41_LINK}"]

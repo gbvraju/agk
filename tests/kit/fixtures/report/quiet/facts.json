@@ -25,6 +25,22 @@
     },
     "total": 0
   },
+  "flow": {
+    "briefs": [
+      {
+        "advances": [
+          "REQ-001"
+        ],
+        "created_at": "2026-10-14T09:00:00Z",
+        "number": 1,
+        "title": "The open work"
+      }
+    ],
+    "corrections": [],
+    "max_builders": 3,
+    "retakes": [],
+    "stall_hours": 4
+  },
   "issues": [
     {
       "label": "agk-drift-audit",
