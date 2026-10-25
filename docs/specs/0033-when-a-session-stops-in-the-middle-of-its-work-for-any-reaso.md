@@ -1,6 +1,6 @@
 # SPEC-0033: A stopped session loses nothing and the next one resumes with one command
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-040
 
