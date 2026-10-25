@@ -1,0 +1,1 @@
+- `session.py watch --pr` ends at once on a verdict that names the current head, or on a `Correction:`, posted after the session's last `Report:` and before the watch started; `--since <comment id>` marks what the session has already acted on (SPEC-0030 rule 2, brief #210 build (b))
