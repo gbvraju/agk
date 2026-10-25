@@ -229,6 +229,12 @@ report has five headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`.
 - **`numbers` fails: two requirements, two specs or two ADRs carry the same number.** Run `python3 scripts/agk/intake.py renumber <id>` with the id of your own requirement, spec or ADR, before or after you bring the default branch in; if bringing it in conflicts on the last line of `docs/requirements.md`, keep both sections before you run it.
 - **GitHub says the pull request has a conflict, only in `docs/runs/decisions-log.md`, `docs/runs/residuals.md` or `docs/runs/architect-catches-*.md`.** GitHub's check does not honour `merge=union`; run `git fetch origin && git merge origin/<default branch>` locally, git resolves it by keeping both rows, then push. Any other conflicting file is resolved by hand as before.
 - **`pr-mode` fails.** In the default mode, `strict`, a person has one open pull request at a time (the older one wins) and a `Depends-on: #n` line in a body fails. Merge or close the older pull request, or remove the line. A repository that wants several open pull requests, with `Depends-on: #n` lines that fail until the named pull request is merged, sets `pr_mode = "flow"` in `agk.toml`; that file is protected, so the change comes with an ADR in the same pull request. New projects start `strict` and switch once the team knows the method.
+- **A check fails on files the pull request did not change.** In CI the checks compare the change with the base that GitHub merged it
+  with. The event's base sha can be older than the branch GitHub merged into, when other pull requests merged after yours was
+  opened; the diff then holds their files. The step `Base of the merge ref` is the one place that sets `AGK_BASE` for a
+  `pull_request` run: the first parent of the checked-out merge commit (`git rev-parse HEAD^1`), or the event's base sha when the
+  checkout is not a merge commit. To reproduce a run locally, check out the merge ref and run
+  `AGK_BASE=$(git rev-parse HEAD^1) make governance`; a stale `AGK_BASE` shows the symptom.
 - **`make governance` fails.** Read the first line that does not start with `ok`. It names the rule, a setting or a path class.
 - **`/agk:doctor` says `placeholder-team-reviewers` or `placeholder-team-codeowners`.** Step 4 was not finished: put your
   handle in `config/reviewers.yaml` and run `python3 scripts/agk/reviewers.py --codeowners --write`. Until then `make governance`
