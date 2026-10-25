@@ -196,14 +196,32 @@ def test_ac5_an_issue_of_the_same_shape_written_by_hand_is_not_the_red_brief(log
     assert not module.is_red(no_user)
 
 
-def test_ac5_next_ignores_a_hand_written_red_brief_and_hands_out_the_ordinary_one(proj, stub):
-    """REQ-039 AC5"""
+def test_ac5_a_hand_written_red_shaped_brief_is_an_ordinary_priority_0_brief_not_an_exclusive_one(
+    proj, stub
+):
+    """REQ-039 AC5: a priority-0 brief goes first among the free ones (the verdict on 01fc97c),
+    but only the router's issue is handed out alone, and nobody is told `default branch red`."""
     by_hand = {**red(9), "user": {"login": "someone"}}
     listing(stub, [issue(5, FREE), by_hand])
     stub.serve(PRS, [])
-    stub.serve(f"{ISSUES}/9/comments", [])  # every brief is read before one is taken (SPEC-0034)
+    stub.serve(f"{ISSUES}/5/comments", [])
+    stub.serve(f"{ISSUES}/9/comments", [], nth=1)
+    stub.serve(f"{ISSUES}/9/comments", [take(1, "s-me", login="me")], nth=2)
+    out = nxt(proj, stub)
+    assert out.returncode == 0 and out.stdout.startswith("brief #9\n")
+    assert "default branch red" not in out.stdout
+
+
+def test_ac5_a_hand_written_red_shaped_brief_that_is_taken_does_not_stop_the_others(proj, stub):
+    """REQ-039 AC5: it stops no other session; the ordinary brief is handed out (its `Touches:`
+    is narrowed here, because a taken brief that touches everything overlaps every other)."""
+    body = BODY.replace("Touches: **", "Touches: elsewhere/**")
+    by_hand = {**red(9, body=body), "user": {"login": "someone"}}
+    listing(stub, [issue(5, FREE), by_hand])
+    stub.serve(PRS, [])
+    stub.serve(f"{ISSUES}/9/comments", [take(1, "s-other", login="other")])
     stub.serve(f"{ISSUES}/5/comments", [], nth=1)
     stub.serve(f"{ISSUES}/5/comments", [take(1, "s-me", login="me")], nth=2)
     out = nxt(proj, stub)
-    assert out.returncode == 0 and out.stdout.startswith("brief #5\n")
+    assert out.returncode == 0 and "brief #5" in out.stdout.splitlines()
     assert "default branch red" not in out.stdout

@@ -199,6 +199,21 @@ def test_rule3_the_order_is_priority_then_the_oldest_issue_and_a_default_of_2(pr
     assert out.returncode == 0 and "brief #7" in out.stdout.splitlines()
 
 
+def test_rule3_a_measured_priority_0_brief_goes_before_priority_1(proj, stub):
+    """REQ-039 AC6: SPEC-0032 rule 9 (a brief that names a measured cause is the most urgent)."""
+    measured = brief("d6/").replace(
+        "Advances", "Priority: 0\nMeasured: x.py -> before: FAIL, after: ok\nAdvances", 1
+    )
+    bodies = {5: brief("d5/", 1), 6: measured, 7: brief("d7/", 2)}
+    listing(stub, [issue(n, body) for n, body in bodies.items()])
+    stub.serve(PULLS, [])
+    for n in bodies:
+        stub.serve(f"{ISSUES}/{n}/comments", [], nth=1)
+    reads(stub, 6, [])
+    out = nxt(proj, stub)
+    assert out.returncode == 0 and "brief #6" in out.stdout.splitlines()
+
+
 # --- rule 4: the numbers (REQ-041 AC4) -------------------------------------------------------
 
 

@@ -17,7 +17,7 @@ reserved on #179. The tests were written first (`tests/kit/test_check_brief.py`,
 ## Decision
 
 1. **`Measured:`** (`scripts/agk/session.py` `brief_problems`, so `check_brief.py` and `session.py next` apply it): a line `Measured: <command> ... before ... after ...` holds the command run and the output before and after a change
-   that turns it green; the check reads that it is not empty and holds the words `before` and `after`, and allows at most one. A hand-written `Priority: 0` brief (now valid beside 1 to 3, ordered like a brief without a priority: only the router's brief goes first) fails without it, naming rule 9 and
+   that turns it green; the check reads that it is not empty and holds the words `before` and `after`, and allows at most one. A hand-written `Priority: 0` brief (now valid beside 1 to 3; `session.py next` orders it before `Priority: 1`, after the router's issue, which alone is handed out and stops other sessions) fails without it, naming rule 9 and
    never the sentence; the brief the router writes for a red default branch (`Advances: none` with `Priority: 0`) needs none because it names no cause. The check cannot tell that the measurement is true: the builder's
    reproduction is the second check.
 2. **The builder** (`config/session-rules.md` rule 13): the first step on a brief or fix item that names a cause is to reproduce it with the command of the `Measured:` line; if its own measurement disagrees it posts

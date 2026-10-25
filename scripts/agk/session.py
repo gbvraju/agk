@@ -81,8 +81,7 @@ DEPENDS = re.compile(r"Depends-on: #(\d+)")
 SIZE = re.compile(r"Size: [SML]")
 NUMBERED = re.compile(r"(\d+)\.\s+\S")
 ADVANCES = re.compile(r"Advances: (new|REQ-\d{3}(?:, REQ-\d{3})*)")
-PRIORITY = re.compile(r"Priority: ([123])")
-PRIORITY_LINE = re.compile(r"Priority: [0123]")  # 0 is valid in a brief only with `Measured:`
+PRIORITY = re.compile(r"Priority: ([0123])")  # 0 is valid in a brief only with `Measured:`
 MEASURED = re.compile(r"Measured: (?=.*\bbefore\b)(?=.*\bafter\b)\S.*")
 CORRECTION = re.compile(r"Correction:.*")
 RED_TITLE = "The default branch is red"
@@ -308,7 +307,7 @@ def line_problems(lines: list[str]) -> list[str]:
         or not all(g.strip() for g in globs)
     ):
         problems.append("rule 2: exactly one line Touches: with path globs separated by commas")
-    if not pair and (len(priority) > 1 or any(not PRIORITY_LINE.fullmatch(x) for x in priority)):
+    if not pair and (len(priority) > 1 or any(not PRIORITY.fullmatch(x) for x in priority)):
         problems.append("rule 2: at most one line Priority: 0, 1, 2 or 3")
     return problems + measured_problems(lines, pair, priority)
 
