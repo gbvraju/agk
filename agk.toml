@@ -13,3 +13,6 @@ ac_coverage = "block"
 experimental_reviewer = true
 # One open pull request per person (strict) or any number with Depends-on (flow); a change of mode needs an ADR in the same pull request.
 pr_mode = "flow"
+# Who hands a finished builder its next work: "conductor" (the session asks on the agk-conductor issue and waits for an Assign: line) or "next" (session.py next, for setups with no conductor); a change needs an ADR.
+[flow]
+assign = "conductor"
