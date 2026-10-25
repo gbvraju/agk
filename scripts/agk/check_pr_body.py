@@ -22,7 +22,7 @@ NAME = "pr-body"
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 USAGE = "usage: check_pr_body.py [--draft VALUE] [--issues FILE] [FILE|-]"
 LINK = re.compile(r"#\d+")
-DONE = re.compile(r"\bdone\b", re.IGNORECASE)
+DONE = re.compile(r"\bREQ-\d{3}\s+done\b", re.IGNORECASE)
 
 
 def field(text: str, label: str) -> str | None:

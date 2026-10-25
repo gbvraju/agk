@@ -104,3 +104,22 @@ def test_rule9_setting_done_needs_closes_whatever_the_copy(repo):
 def test_rule9_a_closes_line_that_is_not_closes_n_fails(repo):
     """REQ-041 AC3"""
     assert traced(repo, DONE + "Brief: #12\nCloses 12\n").returncode == 1
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "2026-10-25 I did not edit `docs/build-state.md` and mark nothing done",
+        "2026-10-25 REQ-041 planned, nothing is done yet",
+        "2026-10-25 REQ-041 in progress; REQ-040 is not done",
+    ],
+)
+def test_rule9_the_word_done_without_a_requirement_set_to_it_passes(repo, row):
+    """REQ-041 AC3: the row is read for a requirement id followed by `done`."""
+    assert traced(repo, f"Advances: REQ-041\nBuild-state row: {row}\n", None).returncode == 0
+
+
+def test_rule9_a_requirement_followed_by_done_needs_closes_wherever_it_stands(repo):
+    """REQ-041 AC3"""
+    row = "2026-10-25 REQ-040 planned; REQ-041 done"
+    assert traced(repo, f"Advances: REQ-041\nBuild-state row: {row}\n", None).returncode == 1

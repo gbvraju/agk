@@ -297,3 +297,14 @@ def test_ac1_check_specs_reads_the_pull_request_body_from_a_file_written_first()
     assert "github.event.pull_request.body" in blocks["PR body file"]
     assert 'check_specs.py --body "$RUNNER_TEMP/pr-body.md"' in blocks["check_specs"]
     assert "if: ${{ !cancelled() }}" in blocks["check_specs"]
+
+
+def test_rule9_the_pr_body_step_is_given_a_saved_copy_of_the_briefs():
+    """REQ-041 AC3 (SPEC-0034 rule 9): one read of the open briefs, passed with --issues."""
+    blocks = step_blocks(WORKFLOW.read_text(encoding="utf-8"))
+    save = blocks["Open briefs"]
+    assert "gh api --method GET" in save and "labels=agk-brief&state=open" in save
+    assert "github.event_name == 'pull_request'" in save
+    assert '--issues "$RUNNER_TEMP/briefs.json"' in blocks["PR body shape"]
+    names = list(blocks)
+    assert names.index("Open briefs") < names.index("PR body shape")
