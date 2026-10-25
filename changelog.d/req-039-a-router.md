@@ -1,1 +1,0 @@
-- router: `agk-route.yml` and `route.py` set one `agk:` label on every pull request from GitHub events (state, review, fix, approve, ready), and write nothing else (SPEC-0032 rules 1, 2 and 8, REQ-039)
