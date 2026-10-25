@@ -91,6 +91,10 @@ def test_ac1_the_rules_file_states_the_checkpoint_rule():
         "opens the pull request as a draft",
         "never carries a `Final:` status line",
         "ready for review only when",
+        "gh api repos/{owner}/{repo}/pulls -f draft=true",
+        "`gh pr ready <n>` where GraphQL is available",
+        "otherwise with the route that the runtime documents",
+        "which some runtimes refuse",
     ):
         assert phrase in text, phrase
 
