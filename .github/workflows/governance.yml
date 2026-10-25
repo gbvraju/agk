@@ -59,8 +59,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The required check reads the latest governance run of the head: a partial run must not turn a failed full run green.
-          gh api --method GET "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.event.pull_request.head.sha }}&event=pull_request&status=completed&per_page=100" > "$RUNNER_TEMP/runs.json" || : > "$RUNNER_TEMP/runs.json"
-          python scripts/agk/full_run.py --runs "$RUNNER_TEMP/runs.json" --head "${{ github.event.pull_request.head.sha }}"
+          # A full run still queued or in progress is waited for: the same GET every 30 seconds, at most 20 minutes.
+          for attempt in $(seq 0 40); do
+            gh api --method GET "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.event.pull_request.head.sha }}&event=pull_request&per_page=100" > "$RUNNER_TEMP/runs.json" || : > "$RUNNER_TEMP/runs.json"
+            code=0
+            python scripts/agk/full_run.py --runs "$RUNNER_TEMP/runs.json" --head "${{ github.event.pull_request.head.sha }}" || code=$?
+            [ "$code" -ne 3 ] && exit "$code"
+            [ "$attempt" -lt 40 ] && sleep 30
+          done
+          echo "rule 2: the full governance run of the head did not finish in 20 minutes"
+          exit 1
       - name: Install tooling
         if: ${{ github.event.action != 'edited' }}
         run: python -m pip install pytest ruff

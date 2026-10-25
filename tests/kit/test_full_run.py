@@ -90,14 +90,33 @@ def test_a_partial_run_never_stands_for_a_full_one(tmp_path):
     assert check(tmp_path, runs).returncode == 1
 
 
-def test_a_full_run_still_running_or_on_another_head_does_not_count(tmp_path):
-    """Verdict on 460dab3, item 2: only a completed run of this head."""
-    running = run_of(FULL, None, "2026-10-25T11:00:00Z", status="in_progress")
-    assert check(tmp_path, [running]).returncode == 1
+def test_a_full_run_on_another_head_does_not_count(tmp_path):
+    """Verdict on 460dab3, item 2: only a run of this head."""
     other = run_of(FULL, "success", "2026-10-25T11:00:00Z", head=OTHER)
     assert check(tmp_path, [other]).returncode == 1
+
+
+@pytest.mark.parametrize("status", ["queued", "in_progress", "waiting", "pending", "requested"])
+def test_a_latest_full_run_that_is_not_completed_is_a_wait_not_a_failure(tmp_path, status):
+    """Verdict on 5aaaf17: the description is often edited while CI runs; the partial run waits."""
+    running = run_of(FULL, None, "2026-10-25T11:00:00Z", status=status)
     older_green = run_of(FULL, "success", "2026-10-25T10:00:00Z")
-    assert check(tmp_path, [older_green, running]).returncode == 0
+    out = check(tmp_path, [older_green, running])
+    assert out.returncode == 3, out.stdout
+    assert out.stdout.startswith("waiting") and HEAD not in out.stdout
+
+
+def test_a_running_full_run_older_than_a_completed_one_does_not_make_it_wait(tmp_path):
+    """Verdict on 5aaaf17: the latest full run decides, as before."""
+    stale = run_of(FULL, None, "2026-10-25T09:00:00Z", status="in_progress")
+    done = run_of(FULL, "success", "2026-10-25T10:00:00Z")
+    assert check(tmp_path, [stale, done]).returncode == 0
+
+
+def test_a_running_partial_run_is_not_a_wait(tmp_path):
+    """Verdict on 5aaaf17: only a full run is waited for (the partial run is this very job)."""
+    mine = run_of(PARTIAL, None, "2026-10-25T11:00:00Z", status="in_progress")
+    assert check(tmp_path, [mine]).returncode == 1
 
 
 @pytest.mark.parametrize("text", ["", "not json", "[]", '{"workflow_runs": 3}', "{}"])
@@ -163,3 +182,93 @@ def test_the_script_is_installed_and_reads_a_file_only():
     assert "scripts/agk/full_run.py" in manifest["verbatim"]
     source = SCRIPT.read_text(encoding="utf-8")
     assert "subprocess" not in source and "urllib" not in source and "socket" not in source
+
+
+# --- the wait of the step, run for real with a `gh` that answers in turn ------------------------
+
+STEP = "      - name: Latest full run\n"
+
+
+def step_script() -> str:
+    block = text().split(STEP, 1)[1].split("\n      - ", 1)[0]
+    body = block.split("run: |\n", 1)[1]
+    script = "\n".join(line[10:] for line in body.splitlines())
+    return (
+        script.replace("${{ github.repository }}", "acme/widgets")
+        .replace("${{ github.event.pull_request.head.sha }}", HEAD)
+        .replace("$RUNNER_TEMP", "$TMP")
+    )
+
+
+def run_step(tmp_path: Path, answers: list, fail_gh: bool = False):
+    """Run the step's shell with a gh that serves `answers` one per call (the last one repeats),
+    a `sleep` that only counts, and `python` as this interpreter, run from the repository root."""
+    import os
+    import stat
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for i, answer in enumerate(answers):
+        (tmp_path / f"answer-{i}.json").write_text(json.dumps({"workflow_runs": answer}))
+    gh = bin_dir / "gh"
+    gh.write_text(
+        "#!/bin/sh\n"
+        f'n=$(cat "{tmp_path}/calls" 2>/dev/null || echo 0)\n'
+        f'echo $((n + 1)) > "{tmp_path}/calls"\n'
+        + ("exit 1\n" if fail_gh else "")
+        + f'i=$n; [ "$i" -ge {len(answers) - 1} ] && i={len(answers) - 1}\n'
+        f'cat "{tmp_path}/answer-$i.json"\n'
+    )
+    sleep = bin_dir / "sleep"
+    sleep.write_text(f'#!/bin/sh\necho x >> "{tmp_path}/sleeps"\n')
+    (bin_dir / "python").symlink_to(sys.executable)
+    for tool in (gh, sleep):
+        tool.chmod(tool.stat().st_mode | stat.S_IXUSR)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "TMP": str(tmp_path)}
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, a stubbed gh
+        ["bash", "-c", step_script()], cwd=ROOT, env=env, capture_output=True, text=True
+    )
+    calls = int((tmp_path / "calls").read_text()) if (tmp_path / "calls").exists() else 0
+    sleeps = (tmp_path / "sleeps").read_text().count("x") if (tmp_path / "sleeps").exists() else 0
+    return proc, calls, sleeps
+
+
+GREEN = [run_of(FULL, "success", "2026-10-25T10:00:00Z")]
+RUNNING = [run_of(FULL, None, "2026-10-25T10:00:00Z", status="in_progress")]
+RED = [run_of(FULL, "failure", "2026-10-25T10:00:00Z")]
+
+
+def test_the_step_passes_at_once_after_a_green_full_run(tmp_path):
+    """Verdict on 5aaaf17: no wait when the full run is done and green."""
+    proc, calls, sleeps = run_step(tmp_path, [GREEN])
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (calls, sleeps) == (1, 0)
+
+
+def test_the_step_waits_for_a_running_full_run_and_then_decides(tmp_path):
+    """Verdict on 5aaaf17: an in-progress response, then a completed one on the next call."""
+    proc, calls, sleeps = run_step(tmp_path, [RUNNING, GREEN])
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (calls, sleeps) == (2, 1)
+    (tmp_path / "again").mkdir()
+    proc, calls, sleeps = run_step(tmp_path / "again", [RUNNING, RUNNING, RED])
+    assert proc.returncode == 1 and (calls, sleeps) == (3, 2)
+
+
+def test_the_step_waits_at_most_twenty_minutes_and_then_fails(tmp_path):
+    """Verdict on 5aaaf17: every 30 seconds, 40 waits, then a failure."""
+    proc, calls, sleeps = run_step(tmp_path, [RUNNING])
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert sleeps == 40 and calls == 41
+    assert "sleep 30" in step_script()
+
+
+def test_the_step_fails_at_once_when_the_runs_cannot_be_read(tmp_path):
+    """Verdict on 460dab3: unreadable fails; nothing is waited for."""
+    proc, calls, sleeps = run_step(tmp_path, [GREEN], fail_gh=True)
+    assert proc.returncode == 1 and (calls, sleeps) == (1, 0)
+
+
+def test_the_get_no_longer_filters_on_completed_runs():
+    """Verdict on 5aaaf17: a running run must be visible to be waited for."""
+    assert "status=completed" not in step_script()

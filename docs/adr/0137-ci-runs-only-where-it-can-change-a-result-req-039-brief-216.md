@@ -28,8 +28,9 @@ first (`tests/kit/test_status_only.py`, `tests/kit/test_ci_saving.py`; before th
 3. **governance** (`.github/workflows/governance.yml`): on `edited` only the steps that read the pull request body run (the base of the merge ref, the body file, the comments, the states of the pull requests,
    `check_specs`, `check_pr_mode`, the open briefs and the body shape); every other step carries the condition `github.event.action != 'edited'`, and the job and its name stay (answer 2). `concurrency` cancels a
    superseded run of a pull request and never a push to the default branch (answer 3). The run is named `governance edited` or `governance full` (`run-name`); the first step of an edited run reads the latest
-   completed full run of the head with one `GET` of the workflow runs (`actions: read`, added to the permissions) and `scripts/agk/full_run.py` (installed) fails the job unless that run succeeded, or when it is
-   missing or unreadable (the verdict on `460dab3`, item 2: a partial run green on the body steps would otherwise replace a failed full run as the required check).
+   full run of the head with one `GET` of the workflow runs (`actions: read`, added to the permissions) and `scripts/agk/full_run.py` (installed) fails the job unless that run succeeded, or when it is
+   missing or unreadable (the verdict on `460dab3`, item 2: a partial run green on the body steps would otherwise replace a failed full run as the required check). When the latest full run is still `queued` or
+   `in_progress`, the script exits 3 and the step polls the same GET every 30 seconds for at most 20 minutes, then decides; a timeout fails (the verdict on `5aaaf17`, item 1).
 4. **The router** (`.github/workflows/agk-route.yml`): the job-level `if` lets an `issue_comment` start a job only when the comment's first line starts with `Verdict:`, `Approve:`, `Approval:` or `Correction:`
    (answer 5); the other triggers are unchanged.
 5. Amendment 73 (`docs/runs/proposed-spec-amendments-73.md`) is applied to SPEC-0010 rules 16 and 17, SPEC-0007 rule 13 and SPEC-0032 rule 1. The security guide lists the new permission. `kit/manifest.json` adds
