@@ -237,15 +237,59 @@ def test_ac1_second_run_changes_nothing(installed):
     assert snapshot(installed) == before
 
 
-def test_ac1_second_run_reads_the_stamped_date(installed):
-    """REQ-009 AC1: rule 14. An install made on another date is still unchanged."""
-    old = "2020-01-02"
+def restamp(root: Path, old: str, today: str, stamped: set[str]) -> list[str]:
+    """Rewrite TODAY to OLD in the stamped files (the rendered templates) and in no other file.
+
+    A vendored file may quote any date in its own text (`conductor.md` quotes one), so rewriting
+    every file that holds today's date made this test depend on the day it ran (ADR-0112).
+    """
+    changed = []
+    for rel in sorted(stamped):
+        path = root / rel
+        if (
+            path.is_file()
+            and path.suffix in {".md", ".toml"}
+            and today.encode() in path.read_bytes()
+        ):
+            path.write_bytes(path.read_bytes().replace(today.encode(), old.encode()))
+            changed.append(rel)
+    return changed
+
+
+def test_ac1_restamp_rewrites_the_stamped_files_and_no_vendored_file(tmp_path):
+    """REQ-009 AC1: rule 14 (ADR-0112: a vendored file may quote today's date in its own text)."""
     today = datetime.now(UTC).date().isoformat()
-    for path in installed.rglob("*"):
-        if path.is_file() and ".git" not in path.relative_to(installed).parts:
-            data = path.read_bytes()
-            if today.encode() in data and path.suffix in {".md", ".toml"}:
-                path.write_bytes(data.replace(today.encode(), old.encode()))
+    (tmp_path / "agk.toml").write_text(f'installed = "{today}"\n', encoding="utf-8")
+    (tmp_path / "agents").mkdir()
+    vendored = tmp_path / "agents" / "role.md"
+    vendored.write_text(f"read by the maintainers on {today}\n", encoding="utf-8")
+    changed = restamp(tmp_path, "2020-01-02", today, {"agk.toml"})
+    assert changed == ["agk.toml"]
+    assert (tmp_path / "agk.toml").read_text(encoding="utf-8") == 'installed = "2020-01-02"\n'
+    assert today in vendored.read_text(encoding="utf-8")
+
+
+def test_ac1_the_stamped_files_are_the_rendered_templates_and_hold_the_date(installed):
+    """REQ-009 AC1: rule 14 (restamp may rewrite only the destinations of the templates)."""
+    today = datetime.now(UTC).date().isoformat()
+    stamped = set(manifest()["templates"])
+    holding = {
+        p.relative_to(installed).as_posix()
+        for p in installed.rglob("*")
+        if p.is_file()
+        and ".git" not in p.relative_to(installed).parts
+        and p.suffix in {".md", ".toml"}
+        and today.encode() in p.read_bytes()
+    }
+    assert {"agk.toml", "docs/adr/0001-adopt-agk.md"} <= holding
+    assert holding - stamped <= set(manifest()["verbatim"])
+
+
+def test_ac1_second_run_reads_the_stamped_date(installed):
+    """REQ-009 AC1: rule 14. An install made on another date is still unchanged (any day)."""
+    today = datetime.now(UTC).date().isoformat()
+    changed = restamp(installed, "2020-01-02", today, set(manifest()["templates"]))
+    assert "agk.toml" in changed
     proc = run_init(installed)
     assert proc.returncode == 0, proc.stdout
     assert "nothing to do" in proc.stdout
