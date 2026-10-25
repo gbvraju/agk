@@ -1,6 +1,6 @@
 # ADR-0116: checkpoints, draft pull requests and the progress line (REQ-040 part a, SPEC-0033 rules 1 to 3)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0113, ADR-0100, ADR-0109
