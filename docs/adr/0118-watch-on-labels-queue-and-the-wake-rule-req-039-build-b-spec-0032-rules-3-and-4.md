@@ -39,3 +39,4 @@ comment on #179. This is build (b) of rule 13, from the default branch after the
 
 - 2026-10-25: the label end sees only the label at the polls; two changes between two polls read as the last (due 2026-12-31).
 - 2026-10-25: `--author` cannot tell a session from a person while they share one account (lane F) (due 2026-12-31).
+- 2026-10-25: `queue --role builder --author LOGIN` tells builders apart by the pull request's author, and until the identities are separated (lane F, ADR-0117) every session posts from one account, so a builder's queue lists every builder's work; the session takes the pull request whose branch is its own (due 2026-12-31).
