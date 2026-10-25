@@ -1,6 +1,6 @@
 # ADR-0122: spec approvers, the clearance rule and the Approval line (REQ-039 build (c), SPEC-0032 rules 2, 5 and 6)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0115, ADR-0118, ADR-0110
