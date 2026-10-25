@@ -18,8 +18,10 @@ MARK = "conductor guard rule 6"
 POST = "gh api --method POST repos/o/r/issues/9/comments"
 
 
-def run_hook(payload: object, project: Path, *args: str):
+def run_hook(payload: object, project: Path, *args: str, tmpdir: Path | None = None):
     env = {"PATH": "/usr/bin:/bin", "CLAUDE_PROJECT_DIR": str(project)}
+    if tmpdir is not None:
+        env["TMPDIR"] = str(tmpdir)
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(HOOK), *args],
         input=payload if isinstance(payload, str) else json.dumps(payload),
@@ -113,3 +115,98 @@ def test_ac2_an_unknown_argument_fails_closed(project):
     for args in (("--shadows",), ("--shadow", "x")):
         found = denial(run_hook(bash("git status"), project, *args).stdout)
         assert found is not None and MARK in found["permissionDecisionReason"]
+
+
+# --- a multi-line Shadow comment from a file in the scratch directory (verdict on #218) -----------
+
+
+@pytest.fixture
+def tmp(tmp_path_factory) -> Path:
+    """The system temp directory of the hook: outside the project, with one scratch directory."""
+    root = tmp_path_factory.mktemp("systmp")
+    (root / "agk-conductor-1").mkdir()
+    return root
+
+
+def shadow_file(tmp: Path, text: str, name: str = "agk-conductor-1/c.md") -> Path:
+    path = tmp / name
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def file_post(path: object, flag: str = "-F", endpoint: str = "repos/o/r/issues/9/comments") -> str:
+    return f"gh api --method POST {endpoint} {flag} body=@{path}"
+
+
+GOOD = "Shadow: #7 abc1234 fix list\n\nS1. `a.py` line 3: the check is missing.\n"
+
+
+def verdict_of(project: Path, tmp: Path, command: str) -> dict | None:
+    return denial(run_hook(bash(command), project, "--shadow", tmpdir=tmp).stdout)
+
+
+def test_ac2_a_file_in_the_scratch_directory_with_a_shadow_first_line_is_allowed(project, tmp):
+    """REQ-042 AC2: the findings go as a multi-line body read from the scratch file."""
+    path = shadow_file(tmp, GOOD)
+    assert verdict_of(project, tmp, file_post(path)) is None
+    assert verdict_of(project, tmp, file_post(path, "--field")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Verdict: cleared abc1234\n\nS1. x\n",
+        "Marks:\nC1234567-1 right\n",
+        "\nShadow: #7 abc1234 cleared\n",
+        "S1. no first line\n",
+        "Shadow: #x abc1234 cleared\n",
+        "",
+    ],
+)
+def test_ac2_a_file_whose_first_line_is_not_a_shadow_comment_is_denied(project, tmp, text):
+    """REQ-042 AC2"""
+    path = shadow_file(tmp, text)
+    found = verdict_of(project, tmp, file_post(path))
+    assert found is not None and MARK in found["permissionDecisionReason"]
+    assert str(path) not in found["permissionDecisionReason"]
+
+
+def test_ac2_a_file_outside_the_scratch_directory_is_denied(project, tmp, tmp_path):
+    """REQ-042 AC2"""
+    for path in (
+        shadow_file(tmp, GOOD, "notes.md"),
+        shadow_file(tmp, GOOD, "other-dir/c.md"),
+        project / "docs" / "c.md",
+        tmp / "agk-conductor-1" / ".." / "c.md",
+        "/dev/stdin",
+        "-",
+        "relative.md",
+    ):
+        if isinstance(path, Path) and path.parent == project / "docs":
+            path.write_text(GOOD, encoding="utf-8")
+        assert verdict_of(project, tmp, file_post(path)) is not None, path
+
+
+def test_ac2_a_missing_file_a_link_out_of_the_scratch_directory_and_a_second_field_are_denied(
+    project, tmp
+):
+    """REQ-042 AC2"""
+    outside = shadow_file(tmp, GOOD, "notes.md")
+    link = tmp / "agk-conductor-1" / "link.md"
+    link.symlink_to(outside)
+    assert verdict_of(project, tmp, file_post(tmp / "agk-conductor-1" / "none.md")) is not None
+    assert verdict_of(project, tmp, file_post(link)) is not None
+    path = shadow_file(tmp, GOOD)
+    assert verdict_of(project, tmp, file_post(path) + " -f x=y") is not None
+    assert verdict_of(project, tmp, file_post(path) + f" -F body=@{path}") is not None
+    assert verdict_of(project, tmp, file_post(path, endpoint="repos/o/r/pulls/7/comments"))
+    assert verdict_of(project, tmp, file_post(path, endpoint="repos/x/y/issues/9/comments"))
+    assert verdict_of(project, tmp, file_post(path) + " --input /tmp/x") is not None
+
+
+def test_ac2_the_conductors_own_mode_still_refuses_a_file_body(project, tmp):
+    """REQ-042 AC2: the conductor's guard is unchanged here (a later item)."""
+    path = shadow_file(tmp, GOOD)
+    found = denial(run_hook(bash(file_post(path)), project, tmpdir=tmp).stdout)
+    assert found is not None

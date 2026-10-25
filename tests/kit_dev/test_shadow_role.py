@@ -76,3 +76,14 @@ def test_ac2_the_role_names_no_catch_rate_and_no_project():
 def test_ac2_the_shadow_role_is_installed_verbatim():
     """REQ-042 AC2"""
     assert ".claude/agents/shadow.md" in manifest()["verbatim"]
+
+
+def test_ac2_the_role_posts_its_findings_from_a_file_in_the_scratch_directory():
+    """REQ-042 AC2: the multi-line comment goes through the guard (the verdict on #218)."""
+    _, body = split()
+    for phrase in (
+        "`Write` into a file inside a scratch directory",
+        "-F body=@<that file>",
+        "needs its first line to be the `Shadow:` line",
+    ):
+        assert phrase in body, phrase

@@ -22,11 +22,13 @@ the work tree. A POST
 to anything else, a PATCH, a PUT, a DELETE, any other script and any other `make` are denied. The
 judging of `git` and `gh api` is the architect's (`architect_guard.py`), which this file imports.
 With the one argument `--shadow` (the shadow reviewer of SPEC-0035, `.claude/agents/shadow.md`) the
-comment `POST` is allowed only with exactly one `-f` field, `body=Shadow: #<pr> <sha> cleared|fix
-list|rejected` followed by anything, and the issue endpoint of the checkout's origin repository: a
-verdict or a `Marks:` comment is denied. The hook cannot tell the `agk-shadow` issue from another
-issue without a network call, so that choice is the role file's (a residual of SPEC-0035). Any other
-argument denies everything.
+comment `POST` is allowed only on the issue-comment endpoint of the checkout's origin repository
+and with exactly one field: `-f body=Shadow: #<pr> <sha> cleared|fix list|rejected` followed by
+anything, or `-F body=@<file>` where the file is a regular file inside a scratch directory and its
+first line has that shape, so that the findings of several lines can be posted: a verdict, a
+`Marks:` comment, a file elsewhere or a second field is denied. The hook cannot tell the
+`agk-shadow` issue from another issue without a network call, so that choice is the role file's
+(a residual of SPEC-0035). Any other argument denies everything.
 The message names the rule, never the command or the path. Standard library only; no network.
 """
 
@@ -39,7 +41,14 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
 
-from architect_guard import WRITE_TOOLS, gh_api_allowed, git_allowed, project_root, tokens_of
+from architect_guard import (
+    WRITE_TOOLS,
+    comment_target_ok,
+    gh_api_allowed,
+    git_allowed,
+    project_root,
+    tokens_of,
+)
 
 ENV_PREFIX = 'env -i PATH="$PATH" HOME='
 BASE_VAR = "AGK_BASE="  # the one variable a run may add, a sha, as CI sets it
@@ -53,6 +62,7 @@ SHADOW_BODY = re.compile(
 )
 POST_METHODS = ("--method", "-X")
 FIELDS = ("-f", "--raw-field")
+FILE_FIELDS = ("-F", "--field")
 
 
 def scratch_dir(path: str) -> str | None:
@@ -128,16 +138,41 @@ def git_judged(words: list[str]) -> bool:
     return git_allowed(words)
 
 
-def shadow_post_ok(words: list[str]) -> bool:
-    """In shadow mode a `POST` carries one field, a `Shadow:` body; any other method passes."""
+def is_post(words: list[str]) -> bool:
     args = words[2:]
     methods = [args[i + 1].upper() for i, a in enumerate(args[:-1]) if a in POST_METHODS] + [
         a.split("=", 1)[1].upper() for a in args if a.startswith("--method=")
     ]
-    if "POST" not in methods:
-        return True
-    fields = [args[i + 1] for i, a in enumerate(args[:-1]) if a in FIELDS]
-    return len(fields) == 1 and SHADOW_BODY.fullmatch(fields[0]) is not None
+    return "POST" in methods
+
+
+def shadow_post_ok(words: list[str]) -> bool:
+    """In shadow mode a `POST` carries one field: a `Shadow:` body given inline with `-f`, or read
+    from a file of a scratch directory with `-F body=@<file>` whose first line is a `Shadow:` line,
+    on the issue-comment endpoint of the origin repository."""
+    args = words[2:]
+    endpoint = [a for a in args if a.startswith(("repos/", "/repos/"))]
+    fields = [(a, args[i + 1]) for i, a in enumerate(args[:-1]) if a in FIELDS + FILE_FIELDS]
+    others = [a for a in args if a.startswith("-") and a not in POST_METHODS + FIELDS + FILE_FIELDS]
+    if len(endpoint) != 1 or not comment_target_ok(endpoint[0]) or len(fields) != 1 or others:
+        return False
+    flag, value = fields[0]
+    if flag in FIELDS:
+        return SHADOW_BODY.fullmatch(value) is not None
+    return value.startswith("body=@") and shadow_file_ok(value[len("body=@") :])
+
+
+def shadow_file_ok(path: str) -> bool:
+    """A regular file inside a scratch directory whose first line is a `Shadow:` line."""
+    real = scratch_dir(path)
+    if real is None or os.path.realpath(path) != os.path.normpath(path) or not os.path.isfile(path):
+        return False
+    try:
+        with open(path, encoding="utf-8") as handle:
+            first = handle.readline(512).rstrip("\n")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return SHADOW_BODY.fullmatch("body=" + first) is not None
 
 
 def bash_allowed(command: object, shadow: bool = False) -> bool:
@@ -157,8 +192,11 @@ def bash_allowed(command: object, shadow: bool = False) -> bool:
     if words[0] == "git":
         return git_judged(words)
     if words[0] == "gh":
-        ok = len(words) > 2 and words[1] == "api" and gh_api_allowed(words)
-        return ok and (not shadow or shadow_post_ok(words))
+        if len(words) < 3 or words[1] != "api":
+            return False
+        if shadow and is_post(words):
+            return shadow_post_ok(words)
+        return gh_api_allowed(words)
     if words[0] == "date":
         return all(w == "-u" or w.startswith("+") for w in words[1:])
     return False
