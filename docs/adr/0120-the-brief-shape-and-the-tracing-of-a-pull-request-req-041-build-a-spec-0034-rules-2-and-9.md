@@ -1,6 +1,6 @@
 # ADR-0120: the brief shape and the tracing of a pull request (REQ-041 build (a), SPEC-0034 rules 2 and 9)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0114, ADR-0117
