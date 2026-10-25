@@ -3,10 +3,16 @@
 An optional `Behaviour:` line must be exactly `Behaviour: unchanged` (SPEC-0010 rule 18).
 
 `--draft true` (the workflow passes the draft flag of the pull request) skips the check until
-the pull request is marked ready for review (SPEC-0033 rule 2); any other value checks as before."""
+the pull request is marked ready for review (SPEC-0033 rule 2); any other value checks as before.
+
+SPEC-0034 rule 9: `--issues FILE` is a saved copy of the repository's issues (a JSON list, as
+`gh api repos/OWNER/REPO/issues` returns it); when it holds an issue labelled `agk-brief` (a pull
+request does not count) the body needs `Brief: #n`. A body whose `Build-state row:` sets a
+requirement to `done` needs `Closes #n`. Messages name the rule, never a value. Files only."""
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 
@@ -14,6 +20,9 @@ from common import BEHAVIOUR_UNCHANGED, REQ_ID, CheckError, behaviour_lines, run
 
 NAME = "pr-body"
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+USAGE = "usage: check_pr_body.py [--draft VALUE] [--issues FILE] [FILE|-]"
+LINK = re.compile(r"#\d+")
+DONE = re.compile(r"\bdone\b", re.IGNORECASE)
 
 
 def field(text: str, label: str) -> str | None:
@@ -23,18 +32,33 @@ def field(text: str, label: str) -> str | None:
     return None
 
 
+def has_brief(path: str) -> bool:
+    """Whether the saved copy lists an `agk-brief` issue; an unreadable copy lists none."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            issues = json.load(fh)
+    except (OSError, ValueError):
+        return False
+    return isinstance(issues, list) and any(
+        isinstance(i, dict)
+        and "pull_request" not in i
+        and any(isinstance(x, dict) and x.get("name") == "agk-brief" for x in i.get("labels") or [])
+        for i in issues
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    draft = args[:1] == ["--draft"] and len(args) >= 2
-    if args[:1] == ["--draft"] and not draft:
-        raise CheckError("usage: check_pr_body.py [--draft VALUE] [FILE|-]")
-    if draft:
-        skip, args = args[1] == "true", args[2:]
-        if skip:
-            print("skipped (draft pull request)")
-            return 0
+    options: dict[str, str] = {}
+    while args[:1] in (["--draft"], ["--issues"]):
+        if len(args) < 2:
+            raise CheckError(USAGE)
+        options[args[0]], args = args[1], args[2:]
+    if options.get("--draft") == "true":
+        print("skipped (draft pull request)")
+        return 0
     if len(args) > 1:
-        raise CheckError("usage: check_pr_body.py [--draft VALUE] [FILE|-]")
+        raise CheckError(USAGE)
     try:
         if not args or args[0] == "-":
             text = sys.stdin.read()
@@ -50,6 +74,14 @@ def main(argv: list[str] | None = None) -> int:
     row = field(text, "Build-state row:")
     if not row or not DATE.search(row):
         problems.append("'Build-state row:' line with a YYYY-MM-DD date is required")
+    if "--issues" in options and has_brief(options["--issues"]):
+        brief = field(text, "Brief:")
+        if brief is None or not re.fullmatch(LINK, brief):
+            problems.append("rule 9: 'Brief: #n' line is required (the repository has a brief)")
+    if row and DONE.search(row):
+        closes = field(text, "Closes")
+        if closes is None or not re.fullmatch(LINK, closes):
+            problems.append("rule 9: 'Closes #n' line is required (a requirement is set to done)")
     if any(line != BEHAVIOUR_UNCHANGED for line in behaviour_lines(text)):
         problems.append("'Behaviour:' must be 'unchanged'")
     for problem in problems:

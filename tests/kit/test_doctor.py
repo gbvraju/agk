@@ -25,6 +25,7 @@ REMOTE = {
     "drift-workflow-state",
     "issues-disabled",
     "default-branch-config",
+    "brief-label",
 }
 LOCAL = set(IDS) - REMOTE
 
@@ -119,7 +120,7 @@ def test_ac1_the_ok_case_reports_none_and_exits_0(tmp_path):
     assert proc.returncode == 0, proc.stdout
     assert "FAIL" not in proc.stdout and "??" not in proc.stdout
     assert proc.stdout.splitlines()[0] == "agk doctor 9.9.9"
-    assert proc.stdout.splitlines()[-1] == "summary: 27 ok, 0 fail, 0 cannot-check"
+    assert proc.stdout.splitlines()[-1] == "summary: 28 ok, 0 fail, 0 cannot-check"
 
 
 def test_ac1_stricter_than_the_minimum_is_ok(tmp_path):
@@ -181,7 +182,7 @@ def test_ac1_text_report_shape(tmp_path):
     assert lines[i + 1] == "  fix: run /agk:upgrade (SPEC-0008)"
     j = lines.index(next(ln for ln in lines if ln.startswith("?? vendored-missing error ")))
     assert lines[j + 1].startswith("  to check: ")
-    assert lines[-1] == "summary: 24 ok, 1 fail, 2 cannot-check"
+    assert lines[-1] == "summary: 25 ok, 1 fail, 2 cannot-check"
 
 
 def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
@@ -189,7 +190,7 @@ def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
     proc, _, _ = run_case("vendored-edited", tmp_path, "--json")
     data = json.loads(proc.stdout)
     assert list(data) == sorted(data) == ["checks", "doctor", "summary"]
-    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 26}
+    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 27}
     for check in data["checks"]:
         assert list(check) == sorted(check)
         assert (check["status"] == "cannot-check") == ("reason" in check)
@@ -374,7 +375,7 @@ def test_ac1_gh_403_and_offline_are_classified(tmp_path):
     assert {checks_of(proc.stdout)[c]["reason"] for c in REMOTE} == {"bad-response"}
 
 
-def test_ac1_live_mode_makes_only_get_reads_on_the_four_paths(tmp_path):
+def test_ac1_live_mode_makes_only_get_reads_on_the_five_paths(tmp_path):
     """REQ-002 AC1: rules 2 and 6 (the endpoints are exactly those of the rule)."""
     api = FIXTURES / "ok" / "api"
     body = (
@@ -382,6 +383,7 @@ def test_ac1_live_mode_makes_only_get_reads_on_the_four_paths(tmp_path):
         f"  *rulesets/1) /bin/cat '{api}/ruleset-1.json';;\n"
         f"  *rulesets) /bin/cat '{api}/rulesets.json';;\n"
         f"  *workflows/drift-audit.yml) /bin/cat '{api}/workflow-drift-audit.json';;\n"
+        f"  *labels/agk-brief) /bin/cat '{api}/label-agk-brief.json';;\n"
         f"  *) /bin/cat '{api}/repo.json';;\n"
         "esac"
     )
@@ -395,11 +397,12 @@ def test_ac1_live_mode_makes_only_get_reads_on_the_four_paths(tmp_path):
             f"{base}/rulesets",
             f"{base}/rulesets/1",
             f"{base}/actions/workflows/drift-audit.yml",
+            f"{base}/labels/agk-brief",
         ]
     )
 
 
-def test_ac1_an_installed_report_workflow_adds_the_fifth_read_to_the_one_check(tmp_path):
+def test_ac1_an_installed_report_workflow_adds_the_sixth_read_to_the_one_check(tmp_path):
     """REQ-002 AC1: the state of the product-report workflow is read only where the file exists."""
     api = FIXTURES / "report-installed" / "api"
     ok = FIXTURES / "ok" / "api"
@@ -411,6 +414,7 @@ def test_ac1_an_installed_report_workflow_adds_the_fifth_read_to_the_one_check(t
         f"  *rulesets) /bin/cat '{ok}/rulesets.json';;\n"
         f"  *workflows/drift-audit.yml) /bin/cat '{ok}/workflow-drift-audit.json';;\n"
         f"  *workflows/product-report.yml) /bin/cat '{api}/workflow-product-report.json';;\n"
+        f"  *labels/agk-brief) /bin/cat '{ok}/label-agk-brief.json';;\n"
         f"  *) /bin/cat '{ok}/repo.json';;\n"
         "esac"
     )
@@ -423,7 +427,7 @@ def test_ac1_an_installed_report_workflow_adds_the_fifth_read_to_the_one_check(t
     calls = log.read_text(encoding="utf-8").splitlines()
     base = "api --method GET repos/example-owner/example-repo"
     assert f"{base}/actions/workflows/product-report.yml" in calls
-    assert len(calls) == 5
+    assert len(calls) == 6
     assert checks_of(proc.stdout)["drift-workflow-state"]["status"] == "ok"
 
 
@@ -514,7 +518,7 @@ def test_ac1_default_root_is_the_current_directory(tmp_path):
 
 def test_ac1_every_id_has_a_severity_and_a_printed_fix():
     """REQ-002 AC1: rule 5."""
-    assert len(IDS) == 27
+    assert len(IDS) == 28
     for severity, ok_text, fail_text, fix in CHECKS.values():
         assert severity in ("error", "warn") and ok_text and fail_text and fix
     assert CHECKS["ruleset-missing"][3].endswith("use a ruleset (ADR-0001 decision 3)")
@@ -627,3 +631,32 @@ def test_ac7_the_doctor_reports_the_mode_and_refuses_an_unknown_one_without_the_
     bad = checks_of(proc.stdout)["pr-mode"]
     assert bad["status"] == "fail" and "pr_mode" in bad["message"]
     assert "sideways" not in proc.stdout
+
+
+# --- brief-label (SPEC-0034 rule 9): the agk-brief label exists --------------------------------
+
+
+def test_rule9_a_missing_agk_brief_label_is_a_warn_finding_by_a_get(tmp_path):
+    """REQ-041 AC3: the label is read like the other settings; the finding names the label."""
+    proc, log, _ = run_case("brief-label-missing", tmp_path, "--json")
+    check = checks_of(proc.stdout)["brief-label"]
+    assert check["status"] == "fail" and check["severity"] == "warn"
+    assert "agk-brief" in check["message"] and "agk-brief" in check["fix"]
+    assert proc.returncode == 4 and not log.exists()
+
+
+def test_rule9_the_label_present_is_ok_and_read_with_get_only(tmp_path):
+    """REQ-041 AC3: without --api-dir the read is `gh api --method GET`."""
+    dirs = prepare("ok", tmp_path)
+    stub = tmp_path / "bin"
+    log = stub_gh(stub, f'cat "{dirs["api"]}/label-agk-brief.json"')
+    proc = doctor(
+        "--repo", "example-owner/example-repo", "--kit-root", str(dirs["kit"]), "--json",
+        str(dirs["root"]), path=f"{stub}{os.pathsep}{os.environ['PATH']}",
+    )  # fmt: skip
+    assert checks_of(proc.stdout)["brief-label"]["status"] == "ok"
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert any(
+        c == "api --method GET repos/example-owner/example-repo/labels/agk-brief" for c in calls
+    )
+    assert all("--method GET" in c for c in calls)

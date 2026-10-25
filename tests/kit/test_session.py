@@ -259,6 +259,7 @@ GOOD = (
     'Sentence: "A thing works."\n'
     "Answers (the maintainers'):\n1. one\n2. two\n"
     "Depends-on: #3\nSize: M\n"
+    "Advances: REQ-001\nTouches: docs/**\n"
 )
 
 
