@@ -1,0 +1,1 @@
+- session: `next` takes no brief at `max_builders` open builder pull requests (`full n/m`), skips a brief whose `Touches:` overlap open work, orders by `Priority:`, reserves numbers in its take and frees a take after `claim_hours` or `released:`; new `ids`, `demand` and `push-check` (SPEC-0034 rules 1, 3 to 6 and 7b, REQ-041)

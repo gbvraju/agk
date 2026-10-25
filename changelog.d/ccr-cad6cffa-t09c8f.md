@@ -1,0 +1,1 @@
+- design: `/agk:design` writes the theme and a mockup folder from templates with four screenshots when a headless browser exists, and `check_design.py` is now a step of `make governance` and the workflow (SPEC-0029 rules 6, 7 and 9, REQ-036)

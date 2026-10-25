@@ -1,0 +1,1 @@
+- report: schema 6 adds the Flow section (open builders against max_builders, the median hours of each step, conflicts, renumbers, retakes), the At risk lines for stalled pull requests, idle briefs and requirements without a brief, and the conductor's corrections beside its verdicts (SPEC-0034 rule 10, SPEC-0033 rule 5, SPEC-0032 rule 11)
