@@ -148,12 +148,17 @@ def build_table(root: Path, base: str) -> dict:
     """The table from history up to `base`, plus the working tree as the current version."""
     snaps: dict[str, list[Snapshot]] = {}
     commits: dict[str, list[str]] = {}
+    flow = pr_mode(root) == "flow"
     for commit, version, snap in history(root, base):
+        if flow and version != EXCEPTION and version in snaps:
+            continue  # a build after the release of this version belongs to the next version
         if snap not in snaps.setdefault(version, []):
             snaps[version].append(snap)
             commits.setdefault(version, []).append(commit)
     current, here = snapshot_worktree(root)
-    if here not in snaps.setdefault(current, []):
+    if flow and current != EXCEPTION and current in snaps:
+        pass  # between two releases the row of the current version stays the release's
+    elif here not in snaps.setdefault(current, []):
         snaps[current].append(here)
     releases = {}
     for version in sorted(snaps, key=version_key):

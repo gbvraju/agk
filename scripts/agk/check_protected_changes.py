@@ -47,6 +47,17 @@ def covering_adrs(root, mb, changed: dict[str, str], classes: list[str]) -> list
     return found
 
 
+def release_pull_request(root, mb) -> bool:
+    """A valid release pull request of SPEC-0028 needs no ADR: it changes only the release files,
+    and the release check passes. That check is kit-only, so a project, which does not have it,
+    has no exemption."""
+    try:
+        import check_release  # noqa: PLC0415 - kit-only, absent from an installed copy
+    except ImportError:
+        return False
+    return check_release.valid_release(root, mb)
+
+
 def main(argv: list[str] | None = None) -> int:
     root = repo_root()
     mb = base_context(root, NAME, base_arg(argv))
@@ -76,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if not classes:
         print(f"ok {NAME}")
+        return 0
+    if release_pull_request(root, mb):
+        print(f"ok {NAME} (a release pull request)")
         return 0
     if covering_adrs(root, mb, changed, classes):
         print(f"ok {NAME} (protected change covered by an ADR)")

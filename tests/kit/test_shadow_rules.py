@@ -18,7 +18,7 @@ def rules() -> str:
 def test_ac8_the_rules_number_without_a_gap_after_the_shadow_rules():
     """REQ-042 AC8"""
     numbers = [int(line.split(".")[0]) for line in rules().splitlines() if line[:1].isdigit()]
-    assert numbers == list(range(1, len(numbers) + 1)) and len(numbers) >= 25
+    assert numbers == list(range(1, len(numbers) + 1)) and len(numbers) >= 26
 
 
 def test_ac8_the_rules_give_the_shadow_shape_and_where_it_lives():
