@@ -104,3 +104,12 @@ def test_ac5_the_conductor_files_are_installed_verbatim():
     assert ".claude/agents/conductor.md" in listed and ".claude/hooks/conductor_guard.py" in listed
     hashes = (KIT_ROOT / "kit" / "hashes.json").read_text(encoding="utf-8")
     assert ".claude/agents/conductor.md" in json.dumps(json.loads(hashes))
+
+
+def test_ac6_ac7_the_role_forbids_a_cause_without_a_measured_line_and_states_the_correction():
+    """REQ-039 AC6 and AC7: rules 9 and 10 (the conductor's side of the second check)."""
+    _, body = split()
+    text = " ".join(body.split())
+    assert "`Measured:`" in text and "never name a cause" in text
+    assert "`Correction: <what was wrong>; <what stands>`" in text
+    assert "edited in place" in text and "allows only the comment POST" in text

@@ -66,3 +66,14 @@ def test_ac8_the_rules_say_how_watch_is_started_so_that_its_end_wakes_the_sessio
     assert "exits" in text and "each event is one wake" in text
     assert "session.py queue" in text and "first" in text
     assert "equivalent" in text
+
+
+def test_ac6_ac7_the_rules_say_reproduce_first_and_what_a_correction_asks():
+    """REQ-039 AC6 and AC7: rules 9 and 10 (a measured cause; the correction travels on)."""
+    text = " ".join(read(RULES).split())
+    assert "to reproduce that cause" in text and "`Measured:`" in text
+    assert "`Question:`" in text and "builds nothing" in text
+    assert "`Correction:`" in text
+    assert "never force-pushes" in text
+    assert "one `Report:`" in text
+    assert "listed verdict author" in text and "`Correction:` comment" in text

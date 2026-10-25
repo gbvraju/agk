@@ -14,13 +14,15 @@
 the newest comment seen at the start, `merged #N` or `closed #N`; with `--timeout` and no event it
 prints `timeout` and exits 3. `--pr` also ends with `conflict #N` when the pull request
 conflicts with its base (`mergeable_state` dirty), since CI does not start on it.
-`--merged N` waits on that pull request alone and ignores comments. `--pr` also ends with `label
-<name>` (or `label none`) when the `agk:` label that the router sets (SPEC-0032) changes from
-the one it read at its first poll; it prints its event and exits (no loop): each event is one
-wake. `queue` prints `#N <label>` for each open pull request whose router label belongs to the
-role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder: `agk:fix`, `agk:conflict`,
-`agk:ci-red`, of `--author` when given; person: `agk:approve`, `agk:ready`), or `empty`, so a
-session that starts or restarts resumes from GitHub with one GET.
+`--merged N` waits on that pull request alone and ignores comments. `--pr` also ends with
+`correction #n (comment id): <first line>` on a `Correction:` comment by a listed author, newer
+than the start, on the pull request or on the brief named by its `Brief: #n` line (SPEC-0032 rule
+10), and with `label <name>` (or `label none`) when the `agk:` label that the router sets
+(SPEC-0032) changes from the one it read at its first poll; it prints its event and exits (no
+loop): each event is one wake. `queue` prints `#N <label>` for each open pull request whose router
+label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder: `agk:fix`,
+`agk:conflict`, `agk:ci-red`, of `--author` when given; person: `agk:approve`, `agk:ready`), or
+`empty`, so a session that starts or restarts resumes from GitHub with one GET.
 `next` prints the first free `agk-brief` issue and takes it with the one comment `taken: <ID>
 <YYYY-MM-DD>`, the only POST of this script; with none left it prints `no brief` and exits 1. This
 is the only script that calls GitHub; no check does. Messages name the rule, never a value.
@@ -80,6 +82,9 @@ SIZE = re.compile(r"Size: [SML]")
 NUMBERED = re.compile(r"(\d+)\.\s+\S")
 ADVANCES = re.compile(r"Advances: (new|REQ-\d{3}(?:, REQ-\d{3})*)")
 PRIORITY = re.compile(r"Priority: ([123])")
+PRIORITY_LINE = re.compile(r"Priority: [0123]")  # 0 is valid in a brief only with `Measured:`
+MEASURED = re.compile(r"Measured: (?=.*\bbefore\b)(?=.*\bafter\b)\S.*")
+CORRECTION = re.compile(r"Correction:.*")
 RED_TITLE = "The default branch is red"
 ROUTER_LOGIN = "github-actions[bot]"  # the author of an issue opened with the job's token
 ROUTER_PAIR = ("Advances: none", "Priority: 0")  # written only by the router (SPEC-0032 rule 7)
@@ -174,6 +179,22 @@ def label_of(pr: dict) -> str:
     return ",".join(names) or "none"
 
 
+def correction_line(
+    comments: list, seen: int, authors: list[str] | None, number: int
+) -> str | None:
+    """`correction #n (comment id): <first line>` for the first `Correction:` comment by a listed
+    author newer than `seen` (SPEC-0032 rule 10); the first line is cut at 200 characters."""
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    for comment in sorted(comments, key=lambda c: c.get("id", 0)):
+        body = comment.get("body")
+        if not isinstance(body, str) or comment.get("id", 0) <= seen or not body.strip():
+            continue
+        first = body.splitlines()[0].strip()
+        if CORRECTION.fullmatch(first) and author_of(comment) in allowed:
+            return f"correction #{number} (comment {comment['id']}): {first[:200]}"
+    return None
+
+
 def watch(root, args: dict[str, str]) -> int:
     repo = repo_name(root)
     number = args.get("--pr") or args["--merged"]
@@ -186,6 +207,7 @@ def watch(root, args: dict[str, str]) -> int:
 
     seen = 0
     label: Any = UNSET
+    brief_seen: Any = UNSET
     if not only_merge:
         while (found := newest(pages(f"repos/{repo}/issues/{number}/comments"))) is None:
             if late():
@@ -214,6 +236,20 @@ def watch(root, args: dict[str, str]) -> int:
                 if line:
                     print(line)
                     return 0
+                line = correction_line(comments, seen, authors, int(number))
+                if line:
+                    print(line)
+                    return 0
+                brief = brief_number(pr)
+                if brief is not None:
+                    found = pages(f"repos/{repo}/issues/{brief}/comments")
+                    if found is not None and brief_seen is UNSET:
+                        brief_seen = newest(found)
+                    elif found is not None:
+                        line = correction_line(found, brief_seen, authors, brief)
+                        if line:
+                            print(line)
+                            return 0
             if not only_merge:
                 now = label_of(pr)
                 if label is UNSET:
@@ -272,8 +308,26 @@ def line_problems(lines: list[str]) -> list[str]:
         or not all(g.strip() for g in globs)
     ):
         problems.append("rule 2: exactly one line Touches: with path globs separated by commas")
-    if not pair and (len(priority) > 1 or any(not PRIORITY.fullmatch(x) for x in priority)):
-        problems.append("rule 2: at most one line Priority: 1, Priority: 2 or Priority: 3")
+    if not pair and (len(priority) > 1 or any(not PRIORITY_LINE.fullmatch(x) for x in priority)):
+        problems.append("rule 2: at most one line Priority: 0, 1, 2 or 3")
+    return problems + measured_problems(lines, pair, priority)
+
+
+def measured_problems(lines: list[str], pair: bool, priority: list[str]) -> list[str]:
+    """SPEC-0032 rule 9: a cause is measured, not reasoned. A `Measured:` line holds the command run
+    and the output before and after a change that turns it green; a `Priority: 0` brief needs
+    exactly one, except the brief the router writes for a red default branch (it names no cause)."""
+    measured = [x.rstrip() for x in lines if x.startswith("Measured")]
+    problems: list[str] = []
+    if len(measured) > 1 or any(not MEASURED.fullmatch(x) for x in measured):
+        problems.append(
+            "rule 9: at most one line Measured: with the command and the output before and after"
+        )
+    elif not measured and not pair and priority == ["Priority: 0"]:
+        problems.append(
+            "rule 9: a Priority: 0 brief needs one line Measured: with the command and the output"
+            " before and after a change that turns it green"
+        )
     return problems
 
 

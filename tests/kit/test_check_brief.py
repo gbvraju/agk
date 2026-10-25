@@ -162,3 +162,60 @@ def test_rule2_root_without_a_requirements_file_fails_and_a_bad_call_is_usage(tm
     assert out.returncode == 1 and out.stdout.startswith("FAIL brief: ")
     assert check(tmp_path, GOOD, "--root").returncode == 2
     assert check(tmp_path, GOOD, "--other", "x").stdout.startswith("usage: ")
+
+
+# --- a measured cause (SPEC-0032 rule 9; REQ-039 AC6) -------------------------------------------
+
+MEASURED = (
+    "Measured: python3 scripts/agk/check_x.py -> before: FAIL x; after the change: ok x"
+    " (the output before and after)\n"
+)
+ZERO = GOOD.replace("Priority: 1\n", "Priority: 0\n")
+
+
+def test_ac6_a_priority_0_brief_with_a_measured_line_passes(tmp_path):
+    """REQ-039 AC6: rule 9 (the command and the output before and after)."""
+    assert check(tmp_path, ZERO + MEASURED).stdout.strip() == "ok brief"
+
+
+def test_ac6_a_priority_0_brief_without_a_measured_line_fails_naming_the_rule(tmp_path):
+    """REQ-039 AC6: rule 9 (a cause is measured, not reasoned); the sentence is not repeated."""
+    out = check(tmp_path, ZERO)
+    assert out.returncode == 1
+    assert out.stdout.startswith("FAIL brief: rule 9: ") and "Measured" in out.stdout
+    assert "A team can run a thing" not in out.stdout
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Measured:\n",
+        "Measured: python3 x.py\n",
+        "Measured: before: FAIL only\n",
+        "Measured: after: ok only\n",
+        "measured: before: x after: y\n",
+    ],
+)
+def test_ac6_a_measured_line_without_both_outputs_does_not_count(tmp_path, line):
+    """REQ-039 AC6: rule 9 (the line holds the output before and after a change)."""
+    assert check(tmp_path, ZERO + line).returncode == 1
+
+
+def test_ac6_two_measured_lines_fail(tmp_path):
+    """REQ-039 AC6: rule 9 (exactly one)."""
+    assert check(tmp_path, ZERO + MEASURED + MEASURED).returncode == 1
+
+
+def test_ac6_a_priority_1_to_3_brief_needs_no_measured_line_and_may_carry_one(tmp_path):
+    """REQ-039 AC6: rule 9 (only Priority: 0 requires it)."""
+    assert check(tmp_path, GOOD).stdout.strip() == "ok brief"
+    assert check(tmp_path, GOOD + MEASURED).stdout.strip() == "ok brief"
+
+
+def test_ac6_the_brief_the_router_writes_for_a_red_branch_needs_none(tmp_path):
+    """REQ-039 AC6: rule 9 (the router names no cause, so it measures none)."""
+    body = (
+        'Sentence: "The default branch is red."\nAnswers:\n1. the failing check\nSize: S\n'
+        "Advances: none\nTouches: docs/**\nPriority: 0\n"
+    )
+    assert check(tmp_path, body).stdout.strip() == "ok brief"
