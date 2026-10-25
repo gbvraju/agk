@@ -1,6 +1,6 @@
 # ADR-0111: the base of a pull request run is the first parent of the merge ref (brief #180)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0108, ADR-0112
