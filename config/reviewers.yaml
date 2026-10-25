@@ -6,3 +6,4 @@ classes:
   docs:          {paths: [docs/, README.md], approvers: [maintainers]}
 teams:
   maintainers: {github_team: "@gbvraju"}   # a user handle until an organisation team exists
+spec_approvers: [gbvraju]   # the people who approve a spec; never a session or conductor account (SPEC-0032)
