@@ -92,6 +92,12 @@
         "created_at": "2026-10-13T09:00:00Z",
         "number": 34,
         "title": "Brief 34"
+      },
+      {
+        "advances": [],
+        "created_at": "2026-10-13T09:00:00Z",
+        "number": 36,
+        "title": "The default branch is red"
       }
     ],
     "corrections": [
@@ -135,9 +141,6 @@
       "brief": 30,
       "closed_at": "2026-10-13T10:00:00Z",
       "conflicts": 1,
-      "corrections": [
-        "2026-10-11T11:00:00Z"
-      ],
       "created_at": "2026-10-09T10:00:00Z",
       "estimated_hours": "1-2",
       "estimated_size": "S",
@@ -181,7 +184,6 @@
       "brief": 31,
       "closed_at": "2026-10-14T06:00:00Z",
       "conflicts": 0,
-      "corrections": [],
       "created_at": "2026-10-12T12:00:00Z",
       "estimated_hours": "1-2",
       "estimated_size": "S",
@@ -220,7 +222,6 @@
       "brief": 32,
       "closed_at": null,
       "conflicts": 0,
-      "corrections": [],
       "created_at": "2026-10-10T09:00:00Z",
       "estimated_hours": "1-2",
       "estimated_size": "S",
@@ -253,7 +254,6 @@
       "brief": 34,
       "closed_at": null,
       "conflicts": 0,
-      "corrections": [],
       "created_at": "2026-10-10T09:00:00Z",
       "estimated_hours": "1-2",
       "estimated_size": "S",
@@ -286,7 +286,6 @@
       "brief": null,
       "closed_at": null,
       "conflicts": 0,
-      "corrections": [],
       "created_at": "2026-10-13T09:00:00Z",
       "estimated_hours": "1-2",
       "estimated_size": "S",

@@ -35,6 +35,13 @@ def test_ac8_a_pull_request_carries_its_brief_and_the_hours_between_its_steps(tm
     }
 
 
+def test_ac8_a_take_with_a_build_part_is_read_and_so_is_a_retake_with_one(tmp_path):
+    """REQ-041 AC8: since SPEC-0034 build (c) a take says `build (<x>)` before `retakes`."""
+    doc = document("flow", tmp_path)
+    assert pulls(doc)[20]["flow"]["taken_to_pull_request"] == "2.0"  # taken: .. build (d)
+    assert doc["flow"]["retakes"] == ["2026-10-12T08:00:00Z"]  # taken: .. build (a) retakes ..
+
+
 def test_ac8_a_step_that_did_not_happen_is_null(tmp_path):
     """REQ-041 AC8: rule 10 (never 0 for what is not known)."""
     doc = document("flow", tmp_path)
@@ -52,8 +59,10 @@ def test_ac8_conflicts_renumbers_and_corrections_are_counted_from_comments_and_c
     doc = document("flow", tmp_path)
     first = pulls(doc)[20]
     assert (first["conflicts"], first["renumbers"]) == (1, 1)
-    assert first["corrections"] == ["2026-10-11T11:00:00Z"]
+    assert "corrections" not in first  # a correction is counted once, in the flow section
     assert (pulls(doc)[21]["conflicts"], pulls(doc)[21]["renumbers"]) == (0, 0)
+    # the same line by the same author on the brief and on its pull request is one correction, at
+    # its earliest moment
     assert doc["flow"]["corrections"] == ["2026-10-11T11:00:00Z", "2026-10-13T08:00:00Z"]
 
 
@@ -67,6 +76,7 @@ def test_ac8_retakes_and_the_open_briefs_are_listed_with_what_they_advance(tmp_p
         (32, ["REQ-001"]),
         (33, "new"),
         (34, "new"),
+        (36, []),  # the router's red-branch brief, `Advances: none`, advances no requirement
     ]
     assert flow["briefs"][3]["created_at"] == "2026-10-02T09:00:00Z"
     assert (flow["max_builders"], flow["stall_hours"]) == (2, 4)

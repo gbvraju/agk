@@ -57,8 +57,10 @@ SPEC_STATUSES = ("Draft", "Approved")
 LABELS = ("agk-metrics", "agk-drift-audit", "agk-product-report")
 BRIEF_LABEL = "agk-brief"
 BRIEF_LINE = re.compile(r"Brief: #(\d+)")
-TAKE_LINE = re.compile(r"taken: \S+ \d{4}-\d{2}-\d{2}( retakes)?( reserves .*)?")
-ADVANCES = re.compile(r"Advances: (new|REQ-\d{3}(?:, REQ-\d{3})*)")
+TAKE_LINE = re.compile(
+    r"taken: \S+ \d{4}-\d{2}-\d{2}(?: build \([A-Za-z0-9._-]+\))?( retakes)?( reserves .*)?"
+)
+ADVANCES = re.compile(r"Advances: (new|none|REQ-\d{3}(?:, REQ-\d{3})*)")
 WAITING_ON_BUILDER = ("agk:fix", "agk:conflict", "agk:ci-red")
 FLOW_DEFAULTS = {"max_builders": 3, "stall_hours": 4}
 OUTCOMES = ("proven", "not-proven", "skipped", "unknown")
@@ -534,6 +536,7 @@ def pull_record(
     authors: list[str] | None = None,
     limits: dict | None = None,
     today: date | None = None,
+    seen: list | None = None,
 ) -> dict:
     number = item["number"]
     head = (item.get("head") or {}).get("sha") or ""
@@ -574,12 +577,10 @@ def pull_record(
     if isinstance(comments, list):
         found = metrics.first_lines(comments, "conflict needs a person:") or []
         record["conflicts"] = len(found)
-        record["corrections"] = [
-            c["created_at"] for c in metrics.first_lines(comments, "Correction:", authors) or []
-        ]
     else:
         record["conflicts"] = UNKNOWN
-        record["corrections"] = UNKNOWN
+    if seen is not None:
+        seen += corrections_of(comments, authors)
     if isinstance(commits, list):
         subjects = [
             str((c.get("commit") or {}).get("message") or "").split("\n")[0] for c in commits
@@ -601,7 +602,12 @@ def pull_record(
 
 
 def pulls_section(
-    src: Any, today: date, weeks: int, authors: list[str] | None = None, limits: dict | None = None
+    src: Any,
+    today: date,
+    weeks: int,
+    authors: list[str] | None = None,
+    limits: dict | None = None,
+    seen: list | None = None,
 ) -> Any:
     start = window_start(today, weeks)
 
@@ -623,11 +629,37 @@ def pulls_section(
     last = metrics.start_of(today + timedelta(days=1))
     kept = [p for p in chosen.values() if (metrics.stamp(p.get("created_at")) or last) < last]
     return [
-        pull_record(src, p, authors, limits, today) for p in sorted(kept, key=lambda p: p["number"])
+        pull_record(src, p, authors, limits, today, seen)
+        for p in sorted(kept, key=lambda p: p["number"])
     ]
 
 
-def flow_section(src: Any, limits: dict, authors: list[str] | None) -> dict[str, Any]:
+def corrections_of(comments: Any, authors: list[str] | None) -> list[tuple]:
+    """(author, first line, moment) of the `Correction:` comments of listed authors; a single
+    `(None, None, None)` when the comments cannot be read."""
+    found = metrics.first_lines(comments, "Correction:", authors)
+    if found is None:
+        return [(None, None, None)]
+    return [
+        (metrics.author_of(c), c["body"].splitlines()[0].strip(), c["created_at"]) for c in found
+    ]
+
+
+def distinct_moments(seen: list[tuple]) -> Any:
+    """One moment for each distinct (author, first line), the earliest: the conductor posts one
+    correction on the brief and on each pull request built from it (SPEC-0032 rule 11)."""
+    if any(author is None for author, _, _ in seen):
+        return UNKNOWN
+    earliest: dict[tuple, str] = {}
+    for author, text, at in seen:
+        if (author, text) not in earliest or at < earliest[(author, text)]:
+            earliest[(author, text)] = at
+    return sorted(earliest.values())
+
+
+def flow_section(
+    src: Any, limits: dict, authors: list[str] | None, seen: list | None = None
+) -> dict[str, Any]:
     """What the weekly report needs of the flow (SPEC-0034 rule 10): the limits, the open briefs
     with what they advance, the retakes and the corrections as moments; the report counts them."""
     listed = get_list(
@@ -641,7 +673,8 @@ def flow_section(src: Any, limits: dict, authors: list[str] | None) -> dict[str,
     }
     if listed is None:
         return section
-    briefs, retakes, corrections = [], [], []
+    briefs, retakes = [], []
+    seen = [] if seen is None else seen
     for issue in sorted((i for i in listed if "pull_request" not in i), key=lambda i: i["number"]):
         number = issue["number"]
         comments = get_list(src, f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
@@ -652,9 +685,7 @@ def flow_section(src: Any, limits: dict, authors: list[str] | None) -> dict[str,
             for c in metrics.first_lines(comments, "taken:") or []
             if (m := TAKE_LINE.fullmatch(c["body"].splitlines()[0].strip())) and m.group(1)
         ]
-        corrections += [
-            c["created_at"] for c in metrics.first_lines(comments, "Correction:", authors) or []
-        ]
+        seen += corrections_of(comments, authors)
         if issue.get("state") == "open":
             line = next(
                 (x for x in str(issue.get("body") or "").splitlines() if ADVANCES.fullmatch(x)), ""
@@ -663,7 +694,11 @@ def flow_section(src: Any, limits: dict, authors: list[str] | None) -> dict[str,
             advances = (
                 UNKNOWN
                 if not found
-                else ("new" if found.group(1) == "new" else found.group(1).split(", "))
+                else (
+                    found.group(1)
+                    if found.group(1) == "new"
+                    else ([] if found.group(1) == "none" else found.group(1).split(", "))
+                )
             )
             briefs.append(
                 {
@@ -675,7 +710,7 @@ def flow_section(src: Any, limits: dict, authors: list[str] | None) -> dict[str,
             )
     section["briefs"] = briefs
     section["retakes"] = sorted(retakes)
-    section["corrections"] = corrections
+    section["corrections"] = distinct_moments(seen)
     return section
 
 
@@ -729,13 +764,9 @@ def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
     issues = issues_section(src)
     limits = flow_limits(root)
     authors = metrics.verdict_authors(root)
-    pulls = pulls_section(src, today, weeks, authors, limits)
-    flow = flow_section(src, limits, authors)
-    if isinstance(pulls, list) and isinstance(flow["corrections"], list):
-        flow["corrections"] = sorted(
-            flow["corrections"]
-            + [t for p in pulls if isinstance(p["corrections"], list) for t in p["corrections"]]
-        )
+    seen: list[tuple] = []
+    pulls = pulls_section(src, today, weeks, authors, limits, seen)
+    flow = flow_section(src, limits, authors, seen)
     return {
         "schema": SCHEMA,
         "commit": git(root, "rev-parse", "HEAD").strip(),

@@ -106,6 +106,8 @@ def test_ac8_a_requirement_that_no_open_brief_advances_is_an_at_risk_line():
     """REQ-041 AC8: rule 10 (the requirements with no open brief; done ones are not listed)."""
     (found,) = kinds(report(), "at_risk", "requirements-without-brief")
     assert found["entries"] == [{"id": "REQ-002"}] and found["count"] == 1
+    assert [b["advances"] for b in doc()["flow"]["briefs"]][-1] == []  # the red-branch brief
+    assert not [i for i in report()["sections"]["at_risk"] if i["kind"] == "unknown"]
     d = doc()
     d["flow"]["briefs"][0]["advances"] = ["REQ-001", "REQ-002"]
     assert kinds(report(d), "at_risk", "requirements-without-brief") == []

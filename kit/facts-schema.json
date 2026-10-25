@@ -802,19 +802,6 @@
                   }
                 ]
               },
-              "corrections": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "const": "unknown"
-                  }
-                ]
-              },
               "stalled": {
                 "oneOf": [
                   {
