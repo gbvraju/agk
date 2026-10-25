@@ -14,6 +14,7 @@
     ".github/ISSUE_TEMPLATE/question.md",
     ".github/ISSUE_TEMPLATE/report.md",
     ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/workflows/agk-route.yml",
     ".github/workflows/drift-audit.yml",
     ".github/workflows/governance.yml",
     ".github/workflows/metrics.yml",
@@ -51,6 +52,7 @@
     "scripts/agk/product_report.py",
     "scripts/agk/proof.py",
     "scripts/agk/reviewers.py",
+    "scripts/agk/route.py",
     "scripts/agk/session.py",
     "scripts/agk/traceability.py"
   ],

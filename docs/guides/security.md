@@ -9,7 +9,7 @@ Nothing outside your repository.
 
 - **In the repository:** the files `/agk:init` or `/agk:adopt` install (list them with `init.py --dry-run`; see
   [the reference](reference.md)). AGK has no server, no database and no account.
-- **On GitHub:** issues. Three workflows write issues with the label shown: `agk-metrics` (`.github/workflows/metrics.yml`),
+- **On GitHub:** issues and labels. Three workflows write issues with the label shown: `agk-metrics` (`.github/workflows/metrics.yml`),
   `agk-product-report` (`.github/workflows/product-report.yml`) and `agk-drift-audit` (`.github/workflows/drift-audit.yml`). Each
   creates its own label if it is missing.
 - **On your machine:** the plugin, in Claude Code's plugin folder. `/agk:review` writes local files that are never committed
@@ -25,8 +25,9 @@ AGK sends nothing anywhere itself.
 - AGK's scripts import no network library. This is tested for three of them: the architect guard
   (`tests/kit/test_architect_guard.py`), the drift audit (`tests/kit/test_drift_audit.py`) and the report renderer
   (`tests/kit/test_product_report.py`, which also checks that no socket is opened). The scripts that read GitHub
-  (`scripts/agk/doctor.py`, `metrics.py`, `facts.py`, `ruleset.py`) do it only by running your `gh` with `api --method GET`. No
-  script of AGK writes to GitHub. Two skills can, after they show you what they will do and you say yes: `/agk:ruleset` runs the
+  (`scripts/agk/doctor.py`, `metrics.py`, `facts.py`, `ruleset.py`) do it only by running your `gh` with `api --method GET`. Two
+  scripts write to GitHub, each in one narrow way: `session.py next` posts the one `taken:` comment, and `route.py` (run by
+  `.github/workflows/agk-route.yml` with the job's token) sets the `agk:` labels on pull requests (a fork's pull request gets a read-only token, so it is not labelled). Two skills can, after they show you what they will do and you say yes: `/agk:ruleset` runs the
   `gh api` commands that `scripts/agk/ruleset.py` printed, and `/agk:issue` runs `gh issue create`.
 - The GitHub-hosted runner that runs the workflows is GitHub's. The workflows run your repository's checks and, in `proof` and
   `governance`, **your own tests** (`project_tests` in `agk.toml`) on a pull request's code.
@@ -56,6 +57,7 @@ The permissions are the ones in each file; a workflow can do nothing its token d
 | `metrics.yml` | read of contents, pull requests, checks and actions; `issues: write` | one issue a week with the label `agk-metrics`, and that label |
 | `product-report.yml` | read of contents, pull requests, checks and actions; `issues: write` | one issue a week with the label `agk-product-report`, and that label; then one workflow artifact, `agk-facts-<week>`, the facts file the report was rendered from and `report.json`, the same report as data, kept 90 days and readable by anyone who can read the repository's workflow runs (no anonymous download, no other place) |
 | `drift-audit.yml` | `contents: read`; `issues: write` | at most one issue labelled `agk-drift-audit`, and that label |
+| `agk-route.yml` | `contents: read`; `checks: read`; `statuses: read`; `pull-requests: write`; `issues: write` | one label of seven (`agk:ci-running`, `agk:ci-red`, `agk:conflict`, `agk:review`, `agk:fix`, `agk:approve`, `agk:ready`) on each pull request, and those labels if missing; no comment, no review, no merge; it runs from a checkout of the default branch and never runs code of a pull request |
 
 To forbid issue writing, delete the three workflow files that need `issues: write` (`init.py` and `adopt.py` print this notice). Issues
 must be on for those workflows to work, which `agk doctor` checks.

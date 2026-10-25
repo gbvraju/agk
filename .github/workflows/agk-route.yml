@@ -1,0 +1,48 @@
+# The router (SPEC-0032 rules 1, 2 and 8): one label for the state of every pull request, set from GitHub events, so a session that
+# restarts resumes from GitHub. It runs `scripts/agk/route.py` from a checkout of the default branch and never runs code of a pull
+# request; no agent runs here. The permissions are the five the router needs: it reads the checks and statuses of a head and writes
+# labels. A label set with the job's token starts no workflow, and no trigger below listens to a label change, so it cannot loop.
+name: agk-route
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  issue_comment:
+    types: [created]
+  workflow_run:
+    workflows: [governance, proof]
+    types: [completed]
+  push:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: read
+  statuses: read
+
+concurrency:
+  group: agk-route
+  cancel-in-progress: false
+
+jobs:
+  agk-route:
+    if: ${{ github.event_name != 'push' || github.ref_name == github.event.repository.default_branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Route
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The script reaches the default branch with the pull request that adds it; until then there is nothing to route.
+          if [ -f scripts/agk/route.py ]; then
+            python3 scripts/agk/route.py
+          else
+            echo "route.py is not on the default branch yet: nothing to route"
+          fi
