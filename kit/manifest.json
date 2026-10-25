@@ -1,11 +1,12 @@
 {
-  "kit_version": "0.54.0",
+  "kit_version": "0.55.0",
   "kit_tests": "tests/kit",
   "verbatim": [
     ".claude/agents/architect-review.md",
     ".claude/agents/architect.md",
     ".claude/agents/conductor.md",
     ".claude/agents/drift-auditor.md",
+    ".claude/agents/shadow.md",
     ".claude/hooks/architect_guard.py",
     ".claude/hooks/conductor_guard.py",
     ".claude/hooks/stop_check.py",
@@ -55,6 +56,7 @@
     "scripts/agk/reviewers.py",
     "scripts/agk/route.py",
     "scripts/agk/session.py",
+    "scripts/agk/shadow_rate.py",
     "scripts/agk/status_only.py",
     "scripts/agk/traceability.py"
   ],
