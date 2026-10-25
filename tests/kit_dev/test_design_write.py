@@ -236,7 +236,7 @@ def test_ac6_check_design_is_a_step_of_make_governance_and_of_the_workflow():
     assert "\t$(PY) scripts/agk/check_design.py\n" in recipe + "\n"
     workflow = (KIT_ROOT / ".github" / "workflows" / "governance.yml").read_text(encoding="utf-8")
     block = workflow.split("      - name: check_design\n", 1)[1].split("      - name:", 1)[0]
-    assert "if: ${{ !cancelled() }}" in block
+    assert "if: ${{ !cancelled() && github.event.action != 'edited' }}" in block  # brief #216
     assert "run: python scripts/agk/check_design.py\n" in block
     exempt = (KIT_ROOT / "tests" / "kit" / "test_agk_mk.py").read_text(encoding="utf-8")
     assert "check_design.py" not in exempt

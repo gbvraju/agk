@@ -3,6 +3,7 @@
 # request; no agent runs here. The permissions are the five the router needs: it reads the checks and statuses of a head and writes
 # labels, and, for a push to the default branch or a finished workflow on it (SPEC-0032 rule 7), the one issue "The default branch is
 # red". A label set with the job's token starts no workflow, and no trigger below listens to a label change, so it cannot loop.
+# A comment starts a job only when its first line can change a state: `Verdict:`, `Approve:`, `Approval:` or `Correction:` (brief #216).
 name: agk-route
 
 on:
@@ -28,7 +29,7 @@ concurrency:
 
 jobs:
   agk-route:
-    if: ${{ github.event_name != 'push' || github.ref_name == github.event.repository.default_branch }}
+    if: ${{ (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) && (github.event_name != 'issue_comment' || startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || startsWith(github.event.comment.body, 'Approval:') || startsWith(github.event.comment.body, 'Correction:')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0

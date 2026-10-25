@@ -53,7 +53,7 @@ The permissions are the ones in each file; a workflow can do nothing its token d
 | Workflow | Token permissions | What it may write |
 | --- | --- | --- |
 | `governance.yml` | `contents: read`; `issues: read` and `pull-requests: read` | nothing; it runs the checks and the secret scan, and reads the comments of the pull request with one `gh api` GET |
-| `proof.yml` | `contents: read` | nothing; it runs your tests on the base and on the head (event `pull_request`, never `pull_request_target`) |
+| `proof.yml` | `contents: read`; `checks: read` | nothing; it runs your tests on the base and on the head (event `pull_request`, never `pull_request_target`); with one read of the checks of the parent commit it skips the suite for a commit that changes only `- Status:` lines |
 | `metrics.yml` | read of contents, pull requests, checks and actions; `issues: write` | one issue a week with the label `agk-metrics`, and that label |
 | `product-report.yml` | read of contents, pull requests, checks and actions; `issues: write` | one issue a week with the label `agk-product-report`, and that label; then one workflow artifact, `agk-facts-<week>`, the facts file the report was rendered from and `report.json`, the same report as data, kept 90 days and readable by anyone who can read the repository's workflow runs (no anonymous download, no other place) |
 | `drift-audit.yml` | `contents: read`; `issues: write` | at most one issue labelled `agk-drift-audit`, and that label |

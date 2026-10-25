@@ -1,0 +1,1 @@
+- CI runs only where it can change a result: `proof` skips an edited description and a status-only final commit (`status_only.py`), `governance` runs only the body steps on an edited description, both cancel a superseded run, and the router starts a job only for a comment that can change a state (brief #216)

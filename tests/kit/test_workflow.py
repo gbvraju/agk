@@ -85,7 +85,11 @@ def test_ac2_every_check_step_runs_unless_cancelled():
     checks = {n: b for n, b in step_blocks(text).items() if n.startswith(("check_", "reviewers"))}
     assert len(checks) == 13
     for name, block in checks.items():
-        assert "        if: ${{ !cancelled() }}\n" in block, name
+        # brief #216: on an edited description only the steps that read the body run
+        assert re.search(
+            r"        if: \$\{\{ !cancelled\(\)( && github\.event\.action != 'edited')? \}\}\n",
+            block,
+        ), name
     # the job is not marked to continue on error, so one failing step fails the job
     assert "continue-on-error" not in text
 
@@ -133,9 +137,15 @@ def test_ac2_project_tests_run_only_where_the_kits_own_suite_is_not_installed():
     blocks = step_blocks(WORKFLOW.read_text(encoding="utf-8"))
     project, checks = blocks["Project tests"], blocks["Tests of the checks"]
     assert project == (
-        "name: Project tests\n" + CONDITION + "        run: make -f agk.mk agk-project-test\n"
+        "name: Project tests\n"
+        + "        if: ${{ hashFiles('kit/agk-kit.mk') == ''"
+        + " && github.event.action != 'edited' }}\n"
+        + "        run: make -f agk.mk agk-project-test\n"
     )
-    assert "if:" not in checks and "run: make -f agk.mk agk-test\n" in checks
+    assert (
+        "run: make -f agk.mk agk-test\n" in checks
+    )  # brief #216: only the edited-description condition
+    assert checks.count("if:") == 1 and "github.event.action != 'edited'" in checks
 
 
 def test_ac2_the_condition_reads_the_tree_not_the_name_of_the_repository():
@@ -182,9 +192,8 @@ def test_ac1_proof_runs_on_pull_request_events_with_read_only_contents_and_no_se
         "opened",
         "synchronize",
         "reopened",
-        "edited",
-    }
-    assert re.search(r"^permissions:\n  contents: read\n", text, flags=re.M)
+    }  # brief #216: an edited description cannot change a test
+    assert re.search(r"^permissions:\n  contents: read\n  checks: read\n", text, flags=re.M)
     assert text.count("permissions:") == 1
     assert "pull_request_target" not in text.replace("never pull_request_target", "")
     assert "secrets." not in text and "GITHUB_TOKEN" not in text
@@ -214,7 +223,7 @@ def test_ac1_proof_has_one_run_step_and_four_outcome_steps_guarded_by_its_output
     }
     for word in OUTCOMES:
         block = steps[expected[word]]
-        assert f"if: ${{{{ steps.proof.outputs.outcome == '{word}' }}}}" in block
+        assert f"steps.proof.outputs.outcome == '{word}'" in block.split("run:", 1)[0]
     assert [n for n in steps if n.startswith("outcome: ")] == [expected[w] for w in OUTCOMES]
     assert "continue-on-error" not in PROOF.read_text(encoding="utf-8")
 

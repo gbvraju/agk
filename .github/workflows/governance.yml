@@ -13,6 +13,14 @@ permissions:
   pull-requests: read
   issues: read
 
+# CI runs only where it can change a result (brief #216): a superseded run of a pull request is cancelled, a push to the default branch
+# never is, and a run for an edited description has a group of its own so that it cannot cancel the full run of the same commit. On an
+# edited description only the steps that read the pull request body run (those without the condition `github.event.action != 'edited'`);
+# the job and its name stay, so the required check still reports.
+concurrency:
+  group: governance-${{ github.event.pull_request.number || github.sha }}-${{ github.event.action == 'edited' && 'edited' || 'code' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   governance:
     if: ${{ github.event_name == 'pull_request' || github.ref_name == github.event.repository.default_branch }}
@@ -41,6 +49,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install tooling
+        if: ${{ github.event.action != 'edited' }}
         run: python -m pip install pytest ruff
       - name: PR body file
         env:
@@ -74,38 +83,38 @@ jobs:
             gh api --paginate --method GET "repos/${{ github.repository }}/pulls?state=open&per_page=100" --jq ".[] | select(.user.login == \"$PR_AUTHOR\") | {number: .number}" > "$RUNNER_TEMP/open-prs.json"
           fi
       - name: check_protected_changes
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/check_protected_changes.py
       - name: check_requirements
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/check_requirements.py
       - name: check_adrs
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/check_adrs.py
       - name: check_numbers
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/check_numbers.py
       - name: check_specs
         if: ${{ !cancelled() }}
         # On a push there is no base ref and the check is skipped, so the saved comments are the pull request's.
         run: python scripts/agk/check_specs.py --body "$RUNNER_TEMP/pr-body.md" --comments "$RUNNER_TEMP/comments.json" --reviews "$RUNNER_TEMP/reviews.json"
       - name: check_neutrality
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/check_neutrality.py
       - name: check_build_state
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/check_build_state.py
       - name: check_kit_tests
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/check_kit_tests.py
       - name: check_design
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/check_design.py
       - name: reviewers --check
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/reviewers.py --check
       - name: reviewers --check-codeowners
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         run: python scripts/agk/reviewers.py --check-codeowners
       - name: check_pr_mode
         if: ${{ !cancelled() }}
@@ -113,7 +122,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: python scripts/agk/check_pr_mode.py --body "$RUNNER_TEMP/pr-body.md" --states "$RUNNER_TEMP/states.json" --open "$RUNNER_TEMP/open-prs.json" --number "$PR_NUMBER"
       - name: check_final_clearance
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -121,7 +130,7 @@ jobs:
         run: python scripts/agk/check_final_clearance.py --comments "$RUNNER_TEMP/comments.json" --reviews "$RUNNER_TEMP/reviews.json" --head "$HEAD_SHA" --author "$PR_AUTHOR" --draft "$PR_DRAFT"
       # The release pull request check is a kit script (SPEC-0028): it runs where the kit's own suite is installed.
       - name: Release check
-        if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') != '' }}
+        if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') != '' && github.event.action != 'edited' }}
         run: python scripts/agk/check_release.py
       - name: Open briefs
         if: github.event_name == 'pull_request'
@@ -135,15 +144,18 @@ jobs:
           PR_DRAFT: ${{ github.event.pull_request.draft }}
         run: printf '%s\n' "$PR_BODY" | python scripts/agk/check_pr_body.py --draft "$PR_DRAFT" --issues "$RUNNER_TEMP/briefs.json" -
       - name: Lint
+        if: ${{ github.event.action != 'edited' }}
         run: make -f agk.mk agk-lint
       - name: Tests of the checks
+        if: ${{ github.event.action != 'edited' }}
         run: make -f agk.mk agk-test
       # The kit repository runs its own suite as "Tests of the checks" and its `project_tests` is that same suite
       # (the proof job runs it); there the step is skipped. In a project kit/agk-kit.mk is absent and the step runs.
       - name: Project tests
-        if: ${{ hashFiles('kit/agk-kit.mk') == '' }}
+        if: ${{ hashFiles('kit/agk-kit.mk') == '' && github.event.action != 'edited' }}
         run: make -f agk.mk agk-project-test
       - name: Secret scan
+        if: ${{ github.event.action != 'edited' }}
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7   # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
