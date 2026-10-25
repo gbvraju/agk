@@ -59,3 +59,19 @@ def test_ac8_the_section_names_no_project_and_no_person():
     """REQ-037 AC8: generic text"""
     body = section().lower()
     assert "gbvraju" not in body and "agk-brief" in body
+
+
+def test_ac7_the_section_states_what_happens_when_the_credits_run_out():
+    """REQ-040 AC7 (rule 7 of SPEC-0033: the guide's statements)"""
+    body = section()
+    for phrase in (
+        "Every session stops",
+        "keeps running",
+        "needs no model",
+        "second budget",
+        "Actions minutes on private repositories",
+        "session.py resume",
+        "since the previous `Report:` of the same pull request and not a running total",
+        "subtracts the total it reported last",
+    ):
+        assert phrase in body, phrase

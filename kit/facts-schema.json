@@ -680,6 +680,19 @@
                   "no",
                   "unknown"
                 ]
+              },
+              "usage": {
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "enum": [
+                      "not-reported",
+                      "unknown"
+                    ]
+                  }
+                ]
               }
             },
             "additionalProperties": false

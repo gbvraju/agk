@@ -236,6 +236,8 @@ Size: M
 
 5. **Merge from the report.** The weekly report and the inbox list, first under Needs you, the group **Ready to merge**: the open pull requests whose head carries a clearing verdict. Merging is yours; no session merges, tags or enables auto-merge.
 
+6. **When the credits run out.** Sessions stop without warning: the account runs out of credits or tokens, a usage limit is reached, an idle machine is reclaimed, or a person closes the session. Every session stops, and nothing it pushed is lost: a builder commits `checkpoint:` steps to its branch and keeps one `Progress:` comment on its pull request. The GitHub side (the router, the checks and the labels) keeps running and needs no model. Actions minutes on private repositories are a second budget, which the router uses one short job per event. When credits return, start a session with `python3 scripts/agk/session.py next --session <name>`: it offers a pull request that has waited on its builder for `stall_hours` before any new brief, and `python3 scripts/agk/session.py resume --pr <number>` prints where that work stands, so the new session continues from the branch and the progress line instead of starting again. A builder may end a `Report:` line with `Usage: <n> tokens` when its runtime shows the figure, the usage since the previous `Report:` of the same pull request and not a running total (a session that can only read a running total subtracts the total it reported last); the weekly report sums what is reported for each pull request and says `usage not reported` otherwise, never zero.
+
 ## When something goes wrong
 
 - **A scheduled run did not happen on Monday.** Expect the Monday issues hours late; in India, usually Monday evening. On

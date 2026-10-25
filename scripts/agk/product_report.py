@@ -167,7 +167,7 @@ def unknown_line(what: str, link: str) -> str:
 # An item is `{"kind", <its fields>, "links"}`. The fields of a kind are fixed here; a kind or a
 # field that is not in the table does not exist (a new one is a new schema number).
 
-REPORT_SCHEMA = 4
+REPORT_SCHEMA = 5
 ITEM_KINDS = {
     "requirement-done": ("id", "title", "criteria", "became_done"),
     "pull-request-merged": ("number", "title", "merged_on"),
@@ -175,7 +175,7 @@ ITEM_KINDS = {
     "requirement-proven": ("id", "last_change"),
     "requirement-not-proven": ("id", "reasons"),
     "planned-not-counted": ("count",),
-    "pull-request-cost": ("number", "title", "hours", "fix_verdicts"),
+    "pull-request-cost": ("number", "title", "hours", "fix_verdicts", "usage"),
     "week-totals": (
         "merged",
         "hours",
@@ -185,6 +185,8 @@ ITEM_KINDS = {
         "behaviour_unchanged",
         "estimate",
         "busy",
+        "usage",
+        "usage_reported",
     ),
     "unknown": ("what",),
     "facts-commit": ("commit",),
@@ -719,6 +721,17 @@ def estimate_value(merged: list[dict]):
     return {"within": within, "counted": counted} if counted else "none-declared"
 
 
+def usage_of(p: dict) -> int | str:
+    """The usage figure of a pull request: a whole number of tokens, `not-reported`, or `unknown`
+    (facts without the field cannot say that nothing was reported)."""
+    value = p.get("usage", UNKNOWN)
+    if isinstance(value, bool) or not (
+        isinstance(value, int) or value in ("not-reported", UNKNOWN)
+    ):
+        return UNKNOWN
+    return value
+
+
 def cost(doc: dict, links: Links, start: date, end: date) -> list[dict]:
     if not is_list(doc["pull_requests"]):
         return [unknown_item("pull requests", "search", f"{links.repo}/pulls")]
@@ -729,6 +742,7 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[dict]:
     items: list[dict] = []
     hours: list[Decimal | None] = []
     fixes: list[int | None] = []
+    usages = [usage_of(p) for p in merged]
     for p in merged:
         h, f = hours_between(p.get("created_at"), p.get("merged_at")), verdict_count(p, "fix")
         hours.append(h)
@@ -743,8 +757,10 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[dict]:
                 title=p["title"],
                 hours=UNKNOWN if h is None else str(h),
                 fix_verdicts=UNKNOWN if f is None else f,
+                usage=usage_of(p),
             )
         )
+    reported = [u for u in usages if isinstance(u, int)]
     searched = links.merged_in(start, end) if busy else f"{links.repo}/pulls?q=is%3Apr+is%3Amerged"
     items.append(
         item(
@@ -758,6 +774,8 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[dict]:
             behaviour_unchanged=sum(1 for p in merged if p.get("behaviour") == "unchanged"),
             estimate=estimate_value(merged),
             busy=busy,
+            usage=UNKNOWN if UNKNOWN in usages else (sum(reported) if reported else "not-reported"),
+            usage_reported=len(reported),
         )
     )
     return items
@@ -908,15 +926,30 @@ def cost_text(entry: dict) -> str:
     shown = (
         "unknown fix verdicts" if fixes == UNKNOWN else plural(fixes, "fix verdict", "fix verdicts")
     )
-    return f'PR #{entry["number"]} "{entry["title"]}": {hours} from opening to merge, {shown}'
+    return (
+        f'PR #{entry["number"]} "{entry["title"]}": {hours} from opening to merge, {shown}, '
+        f"{usage_text(entry['usage'])}"
+    )
+
+
+def usage_text(value) -> str:
+    if value == UNKNOWN:
+        return "usage unknown"
+    return "usage not reported" if value == "not-reported" else f"usage {value} tokens"
 
 
 def totals_text(entry: dict) -> str:
+    total = entry["usage"]
+    if total in ("not-reported", UNKNOWN):
+        shown = "not reported" if total == "not-reported" else UNKNOWN
+    else:
+        count = entry["usage_reported"]
+        shown = f"{total} tokens ({count} of {entry['merged']} pull requests reported)"
     return (
         f"This week: {plural(entry['merged'], 'pull request', 'pull requests')} merged; "
         f"hours in total: {entry['hours']}; fix verdicts in total: {entry['fix_verdicts']}; "
         f'declared "Behaviour: unchanged": {entry["behaviour_unchanged"]}; '
-        f"estimate: {estimate_text(entry['estimate'])}"
+        f"usage in total: {shown}; estimate: {estimate_text(entry['estimate'])}"
     )
 
 

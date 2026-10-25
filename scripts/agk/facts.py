@@ -454,6 +454,7 @@ def pull_record(src: Any, item: dict, authors: list[str] | None = None) -> dict:
         "estimated_size": size,
         "estimated_hours": expected,
         "actual_hours": metrics.actual_hours(commits, item.get("merged_at")) if merged else None,
+        "usage": metrics.usage_of(comments, (item.get("user") or {}).get("login") or ""),
     }
     if merged:
         record["head_cleared"] = metrics.merged_head_cleared(src, head, comments, authors)

@@ -98,6 +98,7 @@
       "proof_reason": null,
       "state": "merged",
       "title": "Change number 5",
+      "usage": "not-reported",
       "verdicts": [
         {
           "at": "2026-10-07T09:00:00Z",
@@ -126,6 +127,7 @@
       "proof_reason": null,
       "state": "open",
       "title": "Change number 7",
+      "usage": "not-reported",
       "verdicts": []
     }
   ],

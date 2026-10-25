@@ -1,5 +1,5 @@
 {
-  "schema": 4,
+  "schema": 5,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -380,6 +380,7 @@
         "title": "Change number 5",
         "hours": "48.0",
         "fix_verdicts": 0,
+        "usage": "unknown",
         "links": [
           {
             "to": "pull-request",
@@ -393,6 +394,7 @@
         "title": "Change number 6",
         "hours": "49.3",
         "fix_verdicts": 2,
+        "usage": "unknown",
         "links": [
           {
             "to": "pull-request",
@@ -406,6 +408,7 @@
         "title": "Change number 7",
         "hours": "10.0",
         "fix_verdicts": 0,
+        "usage": "unknown",
         "links": [
           {
             "to": "pull-request",
@@ -419,6 +422,7 @@
         "title": "Change number 8",
         "hours": "0.0",
         "fix_verdicts": 0,
+        "usage": "unknown",
         "links": [
           {
             "to": "pull-request",
@@ -436,6 +440,8 @@
         "behaviour_unchanged": 2,
         "estimate": "none-declared",
         "busy": false,
+        "usage": "unknown",
+        "usage_reported": 0,
         "links": [
           {
             "to": "search",
