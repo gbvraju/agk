@@ -586,6 +586,7 @@ def run_ci(root: Path, kit_suite: Run) -> list[int]:
     runner_temp.mkdir(exist_ok=True)
     (runner_temp / "pr-body.md").write_text("\n", encoding="utf-8")
     (runner_temp / "comments.json").write_text("[]\n", encoding="utf-8")  # the "PR comments" step
+    (runner_temp / "reviews.json").write_text("[]\n", encoding="utf-8")  # same step: the reviews
     (runner_temp / "states.json").write_text("", encoding="utf-8")  # the fetch step's files
     (runner_temp / "open-prs.json").write_text("[]\n", encoding="utf-8")
     env = {**clean_env(), "RUNNER_TEMP": str(runner_temp)}

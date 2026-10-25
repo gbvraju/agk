@@ -27,9 +27,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 from common import CheckError, load_config, repo_root
-from metrics import author_of, counted_authors, covered_head, verdicts
-from reviewers import parse as parse_reviewers
-from reviewers import verdict_authors
+from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
+from reviewers import person_approvals, spec_approvers, verdict_authors
 from session import gh, pages, repo_name
 
 NAME = "route"
@@ -55,9 +54,8 @@ COLORS = {
 }
 FAILED_RUN = {"failure", "timed_out", "cancelled", "action_required", "startup_failure", "stale"}
 FAILED_STATUS = {"failure", "error"}
-APPROVE = re.compile(r"Approve: ([0-9a-f]{7,40}) (SPEC-\d{4})")
+ASKED = re.compile(r"Approval: (SPEC-\d{4}) (\S+) Draft -> Approved, waiting for a person")
 SPEC_FILE = re.compile(r"docs/specs/(\d{4})-[^/]+\.md")
-CONFIG = "config/reviewers.yaml"
 
 
 class ReadOnly(Exception):
@@ -86,16 +84,6 @@ class Held:
         return self.commit
 
 
-def spec_approvers(root: Path) -> list[str]:
-    """The people who may approve a spec (`spec_approvers` of the reviewers file), else none."""
-    try:
-        data = parse_reviewers((root / CONFIG).read_text(encoding="utf-8"))
-    except Exception:  # nosec B110 - unreadable or invalid means nobody may approve
-        return []
-    listed = data.get("spec_approvers") if isinstance(data, dict) else None
-    return [str(a).lstrip("@").lower() for a in listed] if isinstance(listed, list) else []
-
-
 # --- the decision (rule 2) --------------------------------------------------------------------
 
 
@@ -110,18 +98,12 @@ def specs_approved_by(files: list[dict]) -> set[str]:
     return found
 
 
-def approved_by_a_person(
-    comments: list[dict], reviews: list[dict], approvers: list[str]
-) -> set[str]:
-    """The specs named by the `Approve: <sha> SPEC-<n>` line of an approver's comment or review."""
-    allowed = {a.lstrip("@").lower() for a in approvers}
-    found = set()
-    for item in [*comments, *reviews]:
-        lines = str(item.get("body") or "").splitlines()
-        match = APPROVE.fullmatch(lines[0].strip()) if lines else None
-        if match and author_of(item) in allowed:
-            found.add(match.group(2))
-    return found
+approved_by_a_person = person_approvals
+
+
+def asked_for(body: str) -> set[str]:
+    """The specs the conductor's `Approval:` lines of a verdict ask a person to approve."""
+    return {m.group(1) for m in map(ASKED.fullmatch, (x.strip() for x in body.splitlines())) if m}
 
 
 def decide(f: dict) -> str:
@@ -146,13 +128,14 @@ def decide(f: dict) -> str:
     listed = verdicts(comments, authors) or []
     kind, sha = listed[-1] if listed else ("", "")
     names_head = bool(sha) and head.startswith(sha)
+    people = approved_by_a_person(comments, f.get("reviews") or [], f.get("approvers") or [])
+    if names_head and asked_for(latest_verdict_body(comments, authors)) - people:
+        return "agk:approve"
     if names_head and kind in ("fix", "rejected"):
         return "agk:fix"
     covered = covered_head(Held(f.get("commit") or {}), head, comments, authors) == "yes"
     if (names_head and kind == "cleared") or covered:
-        waiting = specs_approved_by(f.get("files") or []) - approved_by_a_person(
-            comments, f.get("reviews") or [], f.get("approvers") or []
-        )
+        waiting = specs_approved_by(f.get("files") or []) - people
         return "agk:approve" if waiting else "agk:ready"
     return "agk:review"
 
