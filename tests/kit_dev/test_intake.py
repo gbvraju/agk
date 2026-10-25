@@ -751,3 +751,87 @@ def test_ac1_the_skill_calls_use_the_commands_the_script_has():
         ).returncode
         == 2
     )
+
+
+# --- build (e) of SPEC-0034: the numbers of a session and the decisions log ---------------------
+
+
+def session_ids(tmp_path, **ids):
+    """The file `session.py ids` printed: the next free numbers counted with open pull requests."""
+    path = tmp_path / "ids.json"
+    path.write_text(json.dumps({"req": "REQ-004", "spec": "0014", "adr": "0022", "rule": 5} | ids))
+    return path
+
+
+def test_ac1_c1_with_session_ids_a_number_held_by_an_open_pull_request_fails(repo, tmp_path):
+    """Brief #176 (e) 1: the base says 0014 and 0022, an open pull request holds them."""
+    draft(repo)
+    held = session_ids(tmp_path, req="REQ-005", spec="0015", adr="0023")
+    proc = check_with(repo, held)
+    assert proc.returncode == 1 and "C1 " in proc.stdout, proc.stdout
+
+
+def test_ac1_c1_with_session_ids_the_numbers_after_those_of_open_pull_requests_pass(repo, tmp_path):
+    """Brief #176 (e) 1: the intake that took the numbers `session.py ids` printed passes."""
+    write(repo, "docs/requirements.md", requirement().replace("REQ-004", "REQ-005"), "a")
+    write(repo, "docs/specs/0015-export.md", spec_text().replace("REQ-004", "REQ-005"))
+    write(repo, "docs/adr/0023-add-req-005-export.md", adr_text())
+    held = session_ids(tmp_path, req="REQ-005", spec="0015", adr="0023")
+    proc = check_with(repo, held)
+    assert (proc.returncode, proc.stdout) == (0, "ok intake\n"), proc.stdout
+
+
+def test_ac1_c1_without_session_ids_the_numbers_of_the_default_branch_are_used(repo):
+    """Brief #176 (e) 1: offline the check is as it was."""
+    draft(repo)
+    assert check(repo).stdout == "ok intake\n"
+
+
+@pytest.mark.parametrize("text", ["not json", "[]", '{"req": "REQ-4"}', '{"req": "REQ-004"}'])
+def test_ac1_c1_an_ids_file_that_session_py_did_not_print_is_refused(repo, tmp_path, text):
+    """Brief #176 (e) 1: the message names the option, never the file's content."""
+    draft(repo)
+    path = tmp_path / "ids.json"
+    path.write_text(text)
+    proc = check_with(repo, path)
+    assert proc.returncode == 1 and "--ids" in proc.stdout and text not in proc.stdout
+
+
+def check_with(repo, ids):
+    return run(repo, "check", "--base", "main", "--ids", str(ids))
+
+
+LOG = "docs/runs/decisions-log.md"
+
+
+def test_ac1_c2_rows_added_to_the_decisions_log_are_allowed(repo):
+    """Brief #176 (e) 2: the rulings of the intake's questions are recorded before it flips."""
+    draft(repo)
+    write(repo, LOG, "| 2026-10-25 | Q-S0014-1 ruled: yes |\n", "a")
+    proc = check(repo)
+    assert (proc.returncode, proc.stdout) == (0, "ok intake\n"), proc.stdout
+
+
+@pytest.mark.parametrize("how", ["changed", "removed"])
+def test_ac1_c2_a_changed_or_removed_row_of_the_decisions_log_fails(repo, how):
+    """Brief #176 (e) 2: added rows only."""
+    path = repo / LOG
+    path.write_text(path.read_text(encoding="utf-8") + "| 2026-10-01 | old row |\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "a row")
+    git(repo, "branch", "-f", "main", "HEAD")
+    draft(repo)
+    text = path.read_text(encoding="utf-8")
+    path.write_text(
+        text.replace("old row", "new row")
+        if how == "changed"
+        else text.replace("| 2026-10-01 | old row |\n", "")
+    )
+    failed(repo, "C2")
+
+
+def test_ac1_c2_other_files_under_docs_runs_still_fail(repo):
+    """Brief #176 (e) 2: only the decisions log is allowed beside the three files."""
+    draft(repo)
+    write(repo, "docs/runs/residuals.md", "more\n", "a")
+    failed(repo, "C2")

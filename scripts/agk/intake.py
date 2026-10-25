@@ -4,7 +4,7 @@ Usage:
     python3 intake.py ids --sentence TEXT [--ref REF] [--root DIR]
     python3 intake.py stub --req REQ-nnn --title TEXT --sentence TEXT [--ref REF] [--root DIR]
         [--date D]
-    python3 intake.py check [--final] [--base REF] [--root DIR]
+    python3 intake.py check [--final] [--base REF] [--ids FILE] [--root DIR]
     python3 intake.py next-steps [--base REF] [--root DIR] [--date D]
     python3 intake.py renumber ID [--ref REF] [--root DIR]
 
@@ -47,6 +47,8 @@ MAX_SENTENCE = 300
 MAX_TITLE = 80
 MAX_CRITERIA = 8
 REQ_FILE = "docs/requirements.md"
+LOG_FILE = "docs/runs/decisions-log.md"
+IDS_KEYS = {"req": r"REQ-\d{3,}", "spec": r"\d{4}", "adr": r"\d{4}"}
 NEGATIVE = re.compile(
     r"\b(?:not|no|never|refuses|rejects|fails|cannot|without|error)\b", re.IGNORECASE
 )
@@ -211,13 +213,15 @@ def changed_between(root: Path, first: str, second: str) -> dict[str, str]:
 class Draft:
     """What the work tree (or the commit `rev`) adds to the base: the requirement, spec and ADR."""
 
-    def __init__(self, root: Path, mb: str, rev: str | None = None):
+    def __init__(
+        self, root: Path, mb: str, rev: str | None = None, ids: dict[str, str] | None = None
+    ):
         self.root, self.mb, self.rev = root, mb, rev
         self.problems: list[str] = []
         self.thens: list[str] = []
         self.req: dict | None = None
         self.changed = changed_between(root, mb, rev) if rev else changed_files(root, mb)
-        self.ids = next_free_ids(root, mb)
+        self.ids = ids or next_free_ids(root, mb)
 
     def fail(self, check: str, message: str) -> None:
         self.problems.append(f"{check} {message}")
@@ -239,7 +243,8 @@ class Draft:
     def files(self) -> tuple[str | None, str | None]:
         spec, adr = self.added("docs/specs/"), self.added("docs/adr/")
         expect = {REQ_FILE} | set(spec[:1]) | set(adr[:1])
-        if set(self.changed) != expect or len(spec) != 1 or len(adr) != 1:
+        changed = {p for p in self.changed if p != LOG_FILE or not self.rows_only(LOG_FILE)}
+        if changed != expect or len(spec) != 1 or len(adr) != 1:
             self.fail(
                 "C2", "the difference is not the requirements file, one new spec and one new ADR"
             )
@@ -252,6 +257,25 @@ class Draft:
             if path and not Path(path[0]).name.startswith(f"{number}-"):
                 self.fail("C1", f"the {label} number is not the next free one")
         return (spec[0] if len(spec) == 1 else None, adr[0] if len(adr) == 1 else None)
+
+    def rows_only(self, rel: str) -> bool:
+        """The file only gains lines: the rulings of the questions are recorded in the decisions
+        log before the spec flips (SPEC-0034 build (e)); a changed or removed row is not allowed."""
+        args = [
+            "diff",
+            "-U0",
+            "--no-renames",
+            self.mb,
+            *([self.rev] if self.rev else []),
+            "--",
+            rel,
+        ]
+        body = [
+            ln
+            for ln in git(self.root, *args).splitlines()
+            if ln[:1] in "+-" and not ln.startswith(("+++", "---"))
+        ]
+        return bool(body) and all(ln.startswith("+") for ln in body)
 
     def names(self, spec: list[str], adr: list[str]) -> None:
         """Rule 4: the file names, directly in their folders; the message names no part of one."""
@@ -359,15 +383,31 @@ class Draft:
         return self.problems
 
 
-def draft_of(root: Path, base: str | None) -> Draft:
+def session_ids(path: str | None) -> dict[str, str] | None:
+    """The numbers a session printed with `session.py ids` (a file; no network here), or None."""
+    if path is None:
+        return None
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = None
+    if not isinstance(data, dict) or not all(
+        isinstance(data.get(key), str) and re.fullmatch(shape, data[key])
+        for key, shape in IDS_KEYS.items()
+    ):
+        raise CheckError("the numbers file is not the output of session.py ids (option --ids)")
+    return {key: data[key] for key in IDS_KEYS}
+
+
+def draft_of(root: Path, base: str | None, ids: dict[str, str] | None = None) -> Draft:
     ref = resolve_base(root, base)
     if ref is None:
         raise CheckError("no base ref resolves (setting default_branch)")
-    return Draft(root, merge_base(root, ref))
+    return Draft(root, merge_base(root, ref), ids=ids)
 
 
-def cmd_check(root: Path, base: str | None) -> int:
-    problems = draft_of(root, base).run()
+def cmd_check(root: Path, base: str | None, ids: dict[str, str] | None = None) -> int:
+    problems = draft_of(root, base, ids).run()
     for problem in problems:
         print(f"FAIL intake: {problem}")
     if not problems:
@@ -487,7 +527,7 @@ def cmd_renumber(root: Path, ident: str, ref: str | None) -> int:
 STATUS_LINES = (("spec", "Draft", "Approved"), ("ADR", "Proposed", "Accepted"))
 
 
-def final_problems(root: Path, mb: str) -> list[str]:
+def final_problems(root: Path, mb: str, ids: dict[str, str] | None = None) -> list[str]:
     """SPEC-0020 rules 2 to 6, from the commits alone; a message names the rule, never a value."""
     parents = git(root, "rev-list", "--parents", "-n", "1", "HEAD").split()[1:]
     if len(parents) != 1:
@@ -495,7 +535,7 @@ def final_problems(root: Path, mb: str) -> list[str]:
     prev = parents[0]
     if prev == mb:
         return ["rule 2: the approving commit is a commit of its own, after the intake commit"]
-    draft = Draft(root, mb, rev=prev)
+    draft = Draft(root, mb, rev=prev, ids=ids)
     earlier = draft.run()
     if earlier:
         return [f"rule 3: before the last commit, {problem}" for problem in earlier]
@@ -522,11 +562,11 @@ def final_problems(root: Path, mb: str) -> list[str]:
     return problems
 
 
-def cmd_check_final(root: Path, base: str | None) -> int:
+def cmd_check_final(root: Path, base: str | None, ids: dict[str, str] | None = None) -> int:
     ref = resolve_base(root, base)
     if ref is None:
         raise CheckError("no base ref resolves (setting default_branch)")
-    problems = final_problems(root, merge_base(root, ref))
+    problems = final_problems(root, merge_base(root, ref), ids)
     for problem in problems:
         print(f"FAIL intake: {problem}")
     if not problems:
@@ -577,7 +617,7 @@ def cmd_next_steps(root: Path, base: str | None, today: str) -> int:
 
 # --- entry ------------------------------------------------------------------------------------
 
-FLAGS = ("--sentence", "--ref", "--root", "--req", "--title", "--base", "--date")
+FLAGS = ("--sentence", "--ref", "--root", "--req", "--title", "--base", "--date", "--ids")
 
 
 def parse(args: list[str]) -> tuple[str, dict[str, str]]:
@@ -637,7 +677,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError:
         print(USAGE, file=sys.stderr)
         return 2
-    if "final" in opts and command != "check":
+    if ("final" in opts or "ids" in opts) and command != "check":
         print(USAGE, file=sys.stderr)
         return 2
     root = Path(opts.get("root", "."))
@@ -664,9 +704,9 @@ def main(argv: list[str] | None = None) -> int:
         if command == "renumber":
             return cmd_renumber(root, opts["id"], opts.get("ref"))
         if command == "check" and "final" in opts:
-            return cmd_check_final(root, opts.get("base"))
+            return cmd_check_final(root, opts.get("base"), session_ids(opts.get("ids")))
         if command == "check":
-            return cmd_check(root, opts.get("base"))
+            return cmd_check(root, opts.get("base"), session_ids(opts.get("ids")))
         return cmd_next_steps(root, opts.get("base"), today)
     except Refusal as exc:
         print(f"refused: {exc}")
