@@ -69,5 +69,7 @@ def test_ac7_the_section_states_what_happens_when_the_credits_run_out():
         "second budget",
         "Actions minutes on private repositories",
         "session.py resume",
+        "since the previous `Report:` of the same pull request and not a running total",
+        "subtracts the total it reported last",
     ):
         assert phrase in body, phrase

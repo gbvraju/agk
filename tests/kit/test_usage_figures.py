@@ -204,3 +204,20 @@ def test_ac8_a_busy_week_sums_every_merged_pull_request_and_lists_none():
     entry = totals(structure)
     assert entry["busy"] is True and not cost_items(structure)
     assert entry["usage"] == 100 * entry["merged"] and entry["usage_reported"] == entry["merged"]
+
+
+def test_ac8_the_rules_file_and_the_amendment_say_the_figure_is_since_the_previous_report():
+    """REQ-040 AC8 (the verdict on the first head: a running total would be summed twice)"""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    rules = (root / "config" / "session-rules.md").read_text(encoding="utf-8")
+    for phrase in (
+        "Usage: <n> tokens",
+        "since the previous `Report:` of the same pull request",
+        "never a running total",
+        "subtracts the total it reported last",
+    ):
+        assert phrase in rules, phrase
+    amendment = (root / "docs" / "runs" / "proposed-spec-amendments-58.md").read_text("utf-8")
+    assert "since the previous `Report:` of the same pull request" in amendment
