@@ -1,6 +1,6 @@
 # ADR-0123: the red default branch brief, opened by the router and handed out alone by `next` (REQ-039 build d, SPEC-0032 rule 7)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0115, ADR-0118, ADR-0120
