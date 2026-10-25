@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[Page title]</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #555555;
+  --accent: #1a56db;
+  --accent-fg: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101418;
+    --fg: #f2f2f2;
+    --muted: #b0b0b0;
+    --accent: #8ab4ff;
+    --accent-fg: #101418;
+  }
+}
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); margin: 0; padding: 16px; }
+main { max-width: 40rem; margin: 0 auto; }
+.note { color: var(--muted); }
+button, a.button { min-height: 44px; min-width: 44px; padding: 0 16px; background: var(--accent); color: var(--accent-fg); border: 1px solid var(--accent); }
+.status { border: 1px solid var(--muted); padding: 4px 8px; }
+</style>
+</head>
+<body>
+<main>
+<h1>[Product name]</h1>
+<p class="note">[One sentence about what this product is for.]</p>
+<p><span class="status">Saved</span> [A status is a word as well as a colour.]</p>
+<button type="button">[Primary action]</button>
+</main>
+</body>
+</html>

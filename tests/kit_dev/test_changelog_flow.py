@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 from conftest import KIT_ROOT, clean_env, git
-from test_kit_hashes import fake_kit, kit_hashes, write_kit
+from test_kit_hashes import current_row_problems, fake_kit, kit_hashes, write_kit
 
 CHANGELOG = "# Changelog\n\n## Unreleased\n\n## 1.0.0 (2026-01-01)\n\n- #1 the start\n"
 
@@ -121,3 +121,30 @@ def test_ac6_after_two_builds_the_release_regenerates_the_table(tmp_path):
     assert done.returncode == 0 and done.stdout == "wrote kit/hashes.json\n", done.stdout
     rows = json.loads((root / "kit" / "hashes.json").read_text(encoding="utf-8"))["releases"]
     assert len(rows["1.0.0"]["verbatim"]["a.txt"]) == 3
+
+
+def test_adr_0108_in_flow_mode_the_current_row_is_not_compared_while_the_version_is_unchanged(
+    tmp_path,
+):
+    """REQ-038: ADR-0108 decision 4 (the release regenerates the row; a build leaves it)."""
+    root = flow_kit(tmp_path)
+    (root / "a.txt").write_text("a changed in a build\n", encoding="utf-8")
+    assert current_row_problems(root, "HEAD") == []
+
+
+def test_adr_0108_in_strict_mode_the_current_row_is_compared_as_before(tmp_path):
+    """REQ-038: ADR-0108 decision 4 (strict mode refreshes the table in each build)."""
+    root = flow_kit(tmp_path, mode="strict")
+    (root / "a.txt").write_text("a changed in strict\n", encoding="utf-8")
+    assert current_row_problems(root, "HEAD") != []
+    refresh(root)
+    assert current_row_problems(root, "HEAD") == []
+
+
+def test_adr_0108_a_release_compares_the_current_row_with_the_tree(tmp_path):
+    """REQ-038: ADR-0108 decision 4 (a raised version is a release; its row must be regenerated)."""
+    root = flow_kit(tmp_path)
+    write_kit(root, "1.1.0", "a changed and bumped\n")
+    assert current_row_problems(root, "HEAD") != []
+    refresh(root)
+    assert current_row_problems(root, "HEAD") == []
