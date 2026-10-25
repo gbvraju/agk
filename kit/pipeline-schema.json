@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agk pipeline document, schema 1",
+  "description": "What waits for a person, in plain words (SPEC-0036 rule 2). No sha and no verdict text. A summary, title or count that cannot be read is the word unknown.",
+  "type": "object",
+  "required": ["schema", "as_of", "ready", "approve", "counts"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": 1},
+    "as_of": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "ready": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["number", "summary", "url"],
+        "additionalProperties": false,
+        "properties": {
+          "number": {"type": "integer"},
+          "summary": {"type": "string", "pattern": "^.+$"},
+          "url": {"type": "string", "pattern": "^https://.+$"}
+        }
+      }
+    },
+    "approve": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["number", "spec", "spec_title", "url"],
+        "additionalProperties": false,
+        "properties": {
+          "number": {"type": "integer"},
+          "spec": {"type": "string", "pattern": "^(SPEC-[0-9]{4}|unknown)$"},
+          "spec_title": {"type": "string", "pattern": "^.+$"},
+          "url": {"type": "string", "pattern": "^https://.+$"}
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": ["review", "fix", "ci-red", "conflict", "approve", "ready"],
+      "additionalProperties": false,
+      "properties": {
+        "review": {"oneOf": [{"type": "integer"}, {"const": "unknown"}]},
+        "fix": {"oneOf": [{"type": "integer"}, {"const": "unknown"}]},
+        "ci-red": {"oneOf": [{"type": "integer"}, {"const": "unknown"}]},
+        "conflict": {"oneOf": [{"type": "integer"}, {"const": "unknown"}]},
+        "approve": {"oneOf": [{"type": "integer"}, {"const": "unknown"}]},
+        "ready": {"oneOf": [{"type": "integer"}, {"const": "unknown"}]}
+      }
+    }
+  }
+}

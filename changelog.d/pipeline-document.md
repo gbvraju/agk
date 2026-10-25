@@ -1,0 +1,1 @@
+- router: `route.py` writes `pipeline.json` after every routing run (what waits for a person: ready, approve, counts), `kit/pipeline-schema.json` defines schema 1, and `agk-route.yml` uploads it as the artifact `agk-pipeline` for 7 days (SPEC-0036 rules 2 to 5 and 7, brief #213 build (b))
