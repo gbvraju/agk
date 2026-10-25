@@ -6,6 +6,7 @@ import ast
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -237,18 +238,104 @@ def test_ac1_second_run_changes_nothing(installed):
     assert snapshot(installed) == before
 
 
+sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+import init as init_module  # noqa: E402
+
+OLD_DATE = "2020-01-02"
+STAMPED = {"agk.toml", "constitution/vision.md", "docs/adr/0001-adopt-agk.md"}
+
+
+def install_made_on(root: Path, date: str) -> list[str]:
+    """Rewrite the stamped files of ROOT as an install made on DATE would have written them.
+
+    The installer stamps its date through the `{{date}}` of the rendered templates, so the files are
+    rendered again with another date (in a fresh directory of the same name, which has no stamp to
+    read) and only the files that differ are written. No other file is touched, whatever it says
+    (ADR-0112, brief #185).
+    """
+    fresh = root.parent / "fresh-stamp" / root.name
+    fresh.mkdir(parents=True)
+    items, _, _ = init_module.build_items(fresh, date)
+    changed = []
+    for rel, content in items:
+        if rel in set(manifest()["templates"]) and (root / rel).read_bytes() != content:
+            (root / rel).write_bytes(content)
+            changed.append(rel)
+    return sorted(changed)
+
+
+def copy_of_the_kit(dest: Path) -> Path:
+    """The files init needs, copied, so a test can change a kit document, not the kit."""
+    shutil.copytree(
+        KIT_ROOT / "scripts" / "agk",
+        dest / "scripts" / "agk",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    shutil.copytree(KIT_ROOT / "kit", dest / "kit")
+    for rel in manifest()["verbatim"]:
+        if not (dest / rel).exists():
+            (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(KIT_ROOT / rel, dest / rel)
+    return dest
+
+
+def run_copy_init(kit: Path, target: Path):
+    return subprocess.run(
+        [sys.executable, str(kit / "scripts" / "agk" / "init.py"), str(target)],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+
+
 def test_ac1_second_run_reads_the_stamped_date(installed):
-    """REQ-009 AC1: rule 14. An install made on another date is still unchanged."""
-    old = "2020-01-02"
-    today = datetime.now(UTC).date().isoformat()
-    for path in installed.rglob("*"):
-        if path.is_file() and ".git" not in path.relative_to(installed).parts:
-            data = path.read_bytes()
-            if today.encode() in data and path.suffix in {".md", ".toml"}:
-                path.write_bytes(data.replace(today.encode(), old.encode()))
+    """REQ-009 AC1: rule 14. An install made on another date is still unchanged (any day)."""
+    changed = install_made_on(installed, OLD_DATE)
+    assert set(changed) == STAMPED, changed
     proc = run_init(installed)
     assert proc.returncode == 0, proc.stdout
     assert "nothing to do" in proc.stdout
+
+
+def test_ac1_a_kit_document_that_quotes_todays_date_does_not_break_a_second_install(tmp_path):
+    """REQ-009 AC1: rule 14 (brief #185: a role file quoted the day and the suite went red)."""
+    today = datetime.now(UTC).date().isoformat()
+    kit = copy_of_the_kit(tmp_path / "kit")
+    document = kit / ".claude" / "agents" / "architect.md"
+    document.write_text(
+        document.read_text(encoding="utf-8") + f"\nRead on {today}.\n", encoding="utf-8"
+    )
+    target = make_repo(tmp_path / "proj")
+    assert run_copy_init(kit, target).returncode == 0
+    assert today in (target / ".claude" / "agents" / "architect.md").read_text(encoding="utf-8")
+    assert set(install_made_on(target, OLD_DATE)) == STAMPED
+    proc = run_copy_init(kit, target)
+    assert proc.returncode == 0 and "nothing to do" in proc.stdout, proc.stdout
+
+
+def test_ac1_rewriting_every_occurrence_of_the_date_is_what_made_the_suite_depend_on_the_day(
+    tmp_path,
+):
+    """REQ-009 AC1: control of the test above (rewriting every occurrence reports a conflict)."""
+    today = datetime.now(UTC).date().isoformat()
+    kit = copy_of_the_kit(tmp_path / "kit")
+    document = kit / ".claude" / "agents" / "architect.md"
+    document.write_text(
+        document.read_text(encoding="utf-8") + f"\nRead on {today}.\n", encoding="utf-8"
+    )
+    target = make_repo(tmp_path / "proj")
+    assert run_copy_init(kit, target).returncode == 0
+    for path in target.rglob("*"):
+        if (
+            path.is_file()
+            and ".git" not in path.relative_to(target).parts
+            and path.suffix in {".md", ".toml"}
+        ):
+            data = path.read_bytes()
+            if today.encode() in data:
+                path.write_bytes(data.replace(today.encode(), OLD_DATE.encode()))
+    proc = run_copy_init(kit, target)
+    assert proc.returncode == 1 and "conflict .claude/agents/architect.md" in proc.stdout
 
 
 def test_ac1_conflict_refuses_lists_files_and_writes_nothing(target):

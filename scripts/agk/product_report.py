@@ -1125,7 +1125,7 @@ def main(argv: list[str] | None = None) -> int:
         stamp = doc["today"] if args.today is None else args.today
         today = day_of(stamp) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", stamp) else None
         if today is None:
-            raise Refusal("--today must look like 2026-10-14 (option: --today)")
+            raise Refusal("--today must look like YYYY-MM-DD (option: --today)")
         if args.inbox:
             sys.stdout.write(render_inbox(doc, today))
         elif args.print_action:
