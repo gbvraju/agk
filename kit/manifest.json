@@ -15,7 +15,6 @@
     ".github/ISSUE_TEMPLATE/report.md",
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/workflows/agk-route.yml",
-    ".github/workflows/agk-tag.yml",
     ".github/workflows/drift-audit.yml",
     ".github/workflows/governance.yml",
     ".github/workflows/metrics.yml",

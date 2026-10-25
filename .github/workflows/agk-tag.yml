@@ -1,7 +1,7 @@
 # The check of a pushed tag (brief #212, build (b)): the tagged commit must be a release. It runs `scripts/agk/check_tag.py` from a
 # checkout of the tag with the full history; on a failure the job fails and the one issue `The tag <tag> is not a release` is opened
-# or updated as a brief (`Priority: 0`). It deletes no tag, moves none, makes no release and no commit: the only write is that issue.
-# The script is kit-only, so in a project that does not have it the job has nothing to check.
+# or updated as a plain issue labelled `agk-release` for a person (only a person can fix a tag). It deletes no tag, moves none, makes no release and no commit: the only write is that issue.
+# The script is kit-only, so this workflow is not installed in a project: it is this repository's.
 name: agk-tag
 
 on:
@@ -36,8 +36,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # The label is created when it is missing.
+          gh api --method GET "repos/$GITHUB_REPOSITORY/labels/agk-release" > /dev/null 2>&1 \
+            || gh api --method POST "repos/$GITHUB_REPOSITORY/labels" -f name=agk-release -f color=b60205 -f description="a tag that is not a release"
           title="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["title"])' "$RUNNER_TEMP/issue.json")"
-          number="$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues?state=open&labels=agk-brief&per_page=100" --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
+          number="$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues?state=open&labels=agk-release&per_page=100" --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
           if [ -n "$number" ]; then
             gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/$number" --input "$RUNNER_TEMP/issue.json"
           else

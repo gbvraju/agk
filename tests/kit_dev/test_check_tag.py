@@ -17,7 +17,6 @@ from pathlib import Path
 
 import kit_hashes
 import pytest
-import session
 from conftest import KIT_ROOT, clean_env, git
 from test_kit_hashes import fake_kit, write_kit
 
@@ -85,22 +84,25 @@ def test_ac1_each_failure_names_the_check_that_failed(tmp_path, kwargs, tag, nee
     assert needle in proc.stdout, proc.stdout
 
 
-def test_ac2_the_issue_is_one_brief_that_names_the_commit_the_check_and_the_fix(tmp_path):
-    """Brief #212 (b) 2: title, label, Priority: 0, a Measured: line, no deletion by the check."""
+def test_ac2_the_issue_is_a_plain_issue_with_the_check_the_commit_and_the_fix(tmp_path):
+    """Brief #212 (b) 2, as the verdict on 566a203 ruled: only a person can fix a tag, so the issue
+    is not a brief (no `agk-brief`, no `Priority:`, `Advances:` or `Touches:`)."""
     root = release(tmp_path, fragment=True)
     out = tmp_path / "issue.json"
     assert check(root, out=out).returncode == 1
     issue = json.loads(out.read_text(encoding="utf-8"))
     assert issue["title"] == "The tag v1.1.0 is not a release"
-    assert issue["labels"] == ["agk-brief"]
+    assert issue["labels"] == ["agk-release"]
     body = issue["body"]
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True
     ).stdout.strip()
-    assert commit in body and "Priority: 0" in body and "Advances: none" in body
-    assert "Measured: " in body and "a fragment is left under changelog.d/" in body
+    assert commit in body and "a fragment is left under changelog.d/" in body
+    assert "FAIL tag: " in body and "check_tag.py --tag v1.1.0" in body
     assert "delete the tag and its release" in body and "merge commit of the release" in body
-    assert session.brief_problems(body) == [], session.brief_problems(body)
+    for line in ("Priority:", "Advances:", "Touches:", "Sentence:", "Measured:"):
+        assert line not in body, line
+    assert "agk-brief" not in json.dumps(issue)
 
 
 def test_ac2_a_passing_tag_writes_no_issue_file(tmp_path):
@@ -124,4 +126,14 @@ def test_ac1_the_workflow_runs_on_a_pushed_tag_and_writes_only_the_one_issue():
     assert "scripts/agk/check_tag.py" in text and "fetch-depth: 0" in text
     for word in ("git tag", "git push", "gh release", "git commit", "--method DELETE", "-X DELETE"):
         assert word not in text, word
-    assert "The tag" in text and "agk-brief" in text
+    assert "The tag" in text and "agk-release" in text and "agk-brief" not in text
+    assert (
+        "issues: write" in text and "--method POST" in text
+    )  # the issue, and the label if missing
+
+
+def test_ac1_the_workflow_is_not_installed_because_its_script_is_kit_only():
+    """Brief #212 (b), the verdict on 566a203: a project would get a workflow that cannot act."""
+    manifest = json.loads((KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    assert ".github/workflows/agk-tag.yml" not in manifest["verbatim"]
+    assert WORKFLOW.is_file()

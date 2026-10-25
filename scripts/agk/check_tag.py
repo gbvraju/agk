@@ -8,8 +8,9 @@ version; that `CHANGELOG.md` has a section `## <version> (` ; that no fragment i
 `changelog.d/`; and that `kit/hashes.json` matches the kit files (`kit_hashes.problems`, against
 the first parent, so the row of the new version is compared). It prints `ok tag`, or `FAIL tag:`
 and the first check that failed and exits 1. With `--issue-json` and a failure it writes the one
-issue `The tag <tag> is not a release` as JSON (title, label `agk-brief`, body: a brief with
-`Priority: 0`, a `Measured:` line, the commit and the fix). It deletes and moves no tag, makes no
+issue `The tag <tag> is not a release` as JSON (title, label `agk-release`, body: the commit, the
+failing check with its output and the fix; a plain issue, not a brief, because only a person can
+fix a tag). It deletes and moves no tag, makes no
 release and no commit, and reads git and files only: no network, no model.
 """
 
@@ -28,7 +29,7 @@ from common import CheckError, git, repo_root, run
 NAME = "tag"
 USAGE = "usage: check_tag.py --tag vN.N.N [--issue-json FILE]"
 TAG = re.compile(r"v(\d+\.\d+\.\d+)")
-LABEL = "agk-brief"
+LABEL = "agk-release"
 FIX = (
     "delete the tag and its release, and tag the merge commit of the release pull request "
     "(this check deletes nothing and never moves a tag)"
@@ -74,16 +75,15 @@ def failure(root: Path, tag: str) -> str | None:
 
 
 def issue(tag: str, commit: str, message: str) -> dict:
-    """The one issue, as a brief (SPEC-0030 rule 4) with `Priority: 0` and a `Measured:` line."""
-    output = f"FAIL {NAME}: {message}"
+    """The one issue, a plain issue for a person: only a person can fix a tag, so it is not a
+    brief and carries no priority. It says which check failed, with its output, and the fix."""
     command = f"python3 scripts/agk/check_tag.py --tag {tag}"
     body = (
-        f'Sentence: "The tag {tag} is not a release: {message}."\n'
-        f"Answers:\n1. Commit: {commit}\n2. Failing check: {message}\n3. Fix: {FIX}\n"
-        f"Measured: {command} before: {output}; after: not measured, the fix is to delete the tag "
-        "and tag the merge commit of the release pull request\n"
-        "Priority: 0\nAdvances: none\nTouches: CHANGELOG.md, changelog.d/*.md, kit/hashes.json\n"
-        "Size: S\n"
+        f"The tag {tag} is not a release.\n\n"
+        f"- Commit: {commit}\n"
+        f"- Failing check: {message}\n"
+        f"- Output of `{command}`: FAIL {NAME}: {message}\n"
+        f"- Fix: {FIX}\n"
     )
     return {"title": f"The tag {tag} is not a release", "labels": [LABEL], "body": body}
 
