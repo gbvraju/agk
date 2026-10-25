@@ -171,11 +171,11 @@ def test_ac3_a_busy_week_counts_every_merged_pull_request():
 # --- the schema number (rule 7) --------------------------------------------------------------
 
 
-def test_ac4_the_schema_number_is_3_and_the_kinds_are_the_same():
+def test_ac4_the_schema_number_is_4_and_the_kinds_are_the_same():
     """REQ-033 AC4: rule 7 (the kinds list is unchanged; only fields are added)."""
     import product_report as pr
 
-    assert pr.REPORT_SCHEMA == 3 and build(load(KINDS))["schema"] == 3
+    assert pr.REPORT_SCHEMA == 4 and build(load(KINDS))["schema"] == 4
     assert list(build(load(KINDS))) == [
         "schema",
         "week",
@@ -184,7 +184,7 @@ def test_ac4_the_schema_number_is_3_and_the_kinds_are_the_same():
         "counts",
         "notices",
     ]
-    assert len(pr.ITEM_KINDS) == 26
+    assert len(pr.ITEM_KINDS) == 27
 
 
 # --- open pull requests with unknown verdicts (rule 5) ---------------------------------------

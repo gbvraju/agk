@@ -1,0 +1,1 @@
+- a late clearance fails `check_final_clearance`, the report lists open pull requests ready to merge first (`report.json` schema 4), and the guide shows how to run the loop (REQ-037 rules 7 to 9)

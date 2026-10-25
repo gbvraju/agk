@@ -211,6 +211,31 @@ To see one now, start the workflow by hand: Actions, `product-report`, Run workf
 report has five headings: `Delivered`, `Proven`, `Needs you`, `At risk`, `Cost`. A value the report cannot find prints
 `unknown`; it never guesses.
 
+## Running the loop
+
+Once the first spec is built by hand you can let sessions find their own work. Three roles take part: a builder session, the conductor and you. The working rule of a session is in `config/session-rules.md`; read it once.
+
+1. **File the work as a brief.** A brief is an issue labelled `agk-brief`. Create the label once (the maintainer does; `session.py next` finds nothing without it), then write the issue in this shape and check a saved copy before filing it with `python3 scripts/agk/check_brief.py FILE`, which prints `ok brief`:
+
+```text
+Sentence: "A visitor can reset a password from the sign-in page."
+Answers (the maintainers'):
+1. The reset link expires after one hour.
+2. The page shows the same message for a known and an unknown address.
+Depends-on: #12
+Size: M
+```
+
+   `Depends-on` lines are optional, one per issue, and the brief waits until those issues are closed. `Size` is `S`, `M` or `L`.
+
+2. **Start a builder session.** In a fresh session run `python3 scripts/agk/session.py next --session <a short name>`. It prints the first free brief and takes it with one comment, `taken: <name> <date>`; it says why it skipped each of the others, and `no brief` when none is left. The session builds, pushes and opens one pull request, and stops.
+
+3. **Start the conductor.** In another session that built nothing, accept the workspace trust dialog of the folder (the role's guard hook does not run without it) and start `claude --agent conductor`. It reviews every open pull request, runs its pre-verdict steps and posts one `Verdict:` comment on each; it edits no file and never merges.
+
+4. **Let the builder wait.** After every push the builder runs `python3 scripts/agk/session.py watch --pr <number>`. It ends with one line when a verdict by a listed author names the pull request's head, when the pull request is merged or closed, or when it has a conflict with its base. `watch --merged <number>` waits for another pull request's merge, for a `Depends-on`. Start `watch` so that its end wakes the session: in Claude Code, as a background task (its end re-invokes the session); in another runtime, the equivalent that wakes the session when the command ends. Never in the foreground, and never detached with `&`: the session then sits idle after its verdict.
+
+5. **Merge from the report.** The weekly report and the inbox list, first under Needs you, the group **Ready to merge**: the open pull requests whose head carries a clearing verdict. Merging is yours; no session merges, tags or enables auto-merge.
+
 ## When something goes wrong
 
 - **A scheduled run did not happen on Monday.** Expect the Monday issues hours late; in India, usually Monday evening. On
