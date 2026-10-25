@@ -1,6 +1,6 @@
 # ADR-0133: a check on every pushed tag (brief #212 build (b), SPEC-0028 rules 4 and 5)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0096, ADR-0108, ADR-0134
