@@ -1,6 +1,6 @@
 # SPEC-0036: The router publishes what waits for a person as a small pipeline document in plain words, and every builder pull request says in one sentence what it does for a person
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-043
 

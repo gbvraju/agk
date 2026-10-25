@@ -1,6 +1,6 @@
 # ADR-0131: Add REQ-043: The project publishes what waits for a person in plain words
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: SPEC-0036
