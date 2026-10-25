@@ -1,6 +1,6 @@
 """A fix list that names only the final commit clears that commit in advance (SPEC-0021).
 
-    python3 check_final_clearance.py [--comments FILE] [--head SHA] [--author LOGIN]
+    python3 check_final_clearance.py [--comments FILE] [--head SHA] [--author LOGIN] [--draft VALUE]
 
 When the latest verdict by a listed author is a covered fix list (`Verdict: fix list <sha>`, `Final:
 <path> <old> -> <new>` lines, no numbered item) and the head is the one commit after its reviewed
@@ -23,7 +23,10 @@ from metrics import counted_authors, latest_verdict_body
 from reviewers import verdict_authors
 
 NAME = "final-clearance"
-USAGE = "usage: check_final_clearance.py [--comments FILE] [--head SHA] [--author LOGIN]"
+USAGE = (
+    "usage: check_final_clearance.py [--comments FILE] [--head SHA] [--author LOGIN] "
+    "[--draft VALUE]"
+)
 
 
 def comments_of(path: Path) -> list[dict]:
@@ -82,9 +85,12 @@ def check(root: Path, comments: Path, head: str, author: str | None = None) -> i
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     opts = dict(zip(args[::2], args[1::2], strict=False))
-    if len(args) % 2 or not set(opts) <= {"--comments", "--head", "--author"}:
+    if len(args) % 2 or not set(opts) <= {"--comments", "--head", "--author", "--draft"}:
         print(USAGE)
         return 2
+    if opts.get("--draft") == "true":  # SPEC-0033 rule 2: a draft is ignored until it is ready
+        print("skipped (draft pull request)")
+        return 0
     if "--comments" not in opts:
         print("skipped (no comments file)")
         return 0
