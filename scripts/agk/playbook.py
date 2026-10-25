@@ -292,6 +292,9 @@ def cmd_next_steps(root: Path, opts: dict[str, str]) -> int:
     print("Pull request body:\n")
     print("Advances: REQ-001")
     print(f"Build-state row: {today} REQ-001 vision and project charter proposed, start only")
+    print(
+        "Summary: Sets out the project's vision and charter, to be reviewed before any work starts."
+    )
     print("Decisions taken: none; the problem statement became a vision and a Proposed charter")
     print("Questions: none")
     print("Verified: `python3 scripts/agk/playbook.py check-start` printed `ok playbook-start`\n")

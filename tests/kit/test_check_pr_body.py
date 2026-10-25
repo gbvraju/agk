@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-GOOD = "Advances: REQ-001, REQ-002\n\nBuild-state row: 2026-10-14 | skeleton | REQ-001\n"
+GOOD = (
+    "Advances: REQ-001, REQ-002\n\nBuild-state row: 2026-10-14 | skeleton | REQ-001\n"
+    "Summary: A change that a person can read.\n"
+)
 
 
 def test_ac2_good_body_from_stdin_passes(repo):
@@ -56,7 +59,7 @@ OTHER_ISSUES = (
     '[{"number": 3, "labels": [{"name": "bug"}]},'
     ' {"number": 4, "labels": [{"name": "agk-brief"}], "pull_request": {}}]'
 )
-DONE = "Advances: REQ-041\nBuild-state row: 2026-10-25 REQ-041 done\n"
+DONE = "Advances: REQ-041\nBuild-state row: 2026-10-25 REQ-041 done\nSummary: A change.\n"
 
 
 def traced(repo, body: str, issues: str | None = BRIEF_ISSUES):
@@ -116,7 +119,12 @@ def test_rule9_a_closes_line_that_is_not_closes_n_fails(repo):
 )
 def test_rule9_the_word_done_without_a_requirement_set_to_it_passes(repo, row):
     """REQ-041 AC3: the row is read for a requirement id followed by `done`."""
-    assert traced(repo, f"Advances: REQ-041\nBuild-state row: {row}\n", None).returncode == 0
+    assert (
+        traced(
+            repo, f"Advances: REQ-041\nBuild-state row: {row}\nSummary: A change.\n", None
+        ).returncode
+        == 0
+    )
 
 
 def test_rule9_a_requirement_followed_by_done_needs_closes_wherever_it_stands(repo):

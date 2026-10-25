@@ -338,7 +338,8 @@ def test_ac4_pull_request_template_has_an_optional_issue_line_that_no_check_requ
     body = tmp_path / "body.md"
     for extra in ("", "Issue: #12\n"):
         body.write_text(
-            f"Advances: REQ-001\n{extra}Build-state row: 2026-10-16 | x | REQ-001\n",
+            f"Advances: REQ-001\n{extra}Build-state row: 2026-10-16 | x | REQ-001\n"
+            "Summary: A change.\n",
             encoding="utf-8",
         )
         proc = run_call("check_pr_body", [str(body)], KIT_ROOT)

@@ -18,7 +18,7 @@ from test_final_clearance import check, comments_file, fix_list, scenario
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "agk"))
 BAD_BODY = "no fields here\n"
-GOOD_BODY = "Advances: REQ-001\nBuild-state row: 2026-10-25 | x | REQ-001\n"
+GOOD_BODY = "Advances: REQ-001\nBuild-state row: 2026-10-25 | x | REQ-001\nSummary: A change.\n"
 SKIPPED = "skipped (draft pull request)\n"
 
 
