@@ -54,3 +54,15 @@ def test_ac1_nothing_in_the_operating_rules_contradicts_the_rules_file():
     claude = read(ROOT / "CLAUDE.md").lower()
     assert "never merge" in claude and "never poll ci" in claude
     assert "never merges" in read(RULES).lower()
+
+
+def test_ac8_the_rules_say_how_watch_is_started_so_that_its_end_wakes_the_session():
+    """REQ-039 AC8: rule 4 (the Claude Code form; never in the foreground, never detached)."""
+    text = " ".join(read(RULES).split())
+    assert "run_in_background" in text
+    assert "re-invokes the session" in text
+    assert "never in the foreground" in text
+    assert "`&`" in text and "`nohup`" in text
+    assert "exits" in text and "each event is one wake" in text
+    assert "session.py queue" in text and "first" in text
+    assert "equivalent" in text

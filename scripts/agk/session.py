@@ -3,6 +3,7 @@
     python3 session.py watch --pr N [--interval S] [--timeout S]
     python3 session.py watch --merged N [--interval S] [--timeout S]
     python3 session.py next --session ID
+    python3 session.py queue --role conductor|builder|person [--author LOGIN]
     python3 session.py resume --pr N
 
 `watch` polls with `gh api --method GET` and exits 0 with one line: `verdict <kind> <sha> (comment
@@ -10,7 +11,13 @@
 the newest comment seen at the start, `merged #N` or `closed #N`; with `--timeout` and no event it
 prints `timeout` and exits 3. `--pr` also ends with `conflict #N` when the pull request
 conflicts with its base (`mergeable_state` dirty), since CI does not start on it.
-`--merged N` waits on that pull request alone and ignores comments.
+`--merged N` waits on that pull request alone and ignores comments. `--pr` also ends with `label
+<name>` (or `label none`) when the `agk:` label that the router sets (SPEC-0032) changes from
+the one it read at its first poll; it prints its event and exits (no loop): each event is one
+wake. `queue` prints `#N <label>` for each open pull request whose router label belongs to the
+role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder: `agk:fix`, `agk:conflict`,
+`agk:ci-red`, of `--author` when given; person: `agk:approve`, `agk:ready`), or `empty`, so a
+session that starts or restarts resumes from GitHub with one GET.
 `next` prints the first free `agk-brief` issue and takes it with the one comment `taken: <ID>
 <YYYY-MM-DD>`, the only POST of this script; with none left it prints `no brief` and exits 1. This
 is the only script that calls GitHub; no check does. Messages name the rule, never a value.
@@ -37,6 +44,7 @@ NAME = "session"
 USAGE = (
     "usage: session.py watch (--pr N | --merged N) [--interval S] [--timeout S]\n"
     "       session.py next --session ID\n"
+    "       session.py queue --role conductor|builder|person [--author LOGIN]\n"
     "       session.py resume --pr N"
 )
 PAGE = 100
@@ -49,6 +57,13 @@ DEPENDS = re.compile(r"Depends-on: #(\d+)")
 SIZE = re.compile(r"Size: [SML]")
 NUMBERED = re.compile(r"(\d+)\.\s+\S")
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
+STATE_PREFIX = "agk:"
+UNSET = object()
+ROLES = {
+    "conductor": ("agk:review", "agk:ci-red"),
+    "builder": ("agk:fix", "agk:conflict", "agk:ci-red"),
+    "person": ("agk:approve", "agk:ready"),
+}
 TAKEOVER = re.compile(r"taken over: (\S+) (\d{4}-\d{2}-\d{2})")
 HEAD_VERDICT = re.compile(r"Verdict: (cleared|fix list|rejected)(?: ([0-9a-f]{7,40}))?")
 BUILDER_LABELS = frozenset({"agk:fix", "agk:conflict", "agk:ci-red"})
@@ -122,6 +137,16 @@ def verdict_line(comments: list, seen: int, head: str, authors: list[str] | None
     return None
 
 
+def label_of(pr: dict) -> str:
+    """The router's label of a pull request (SPEC-0032 rule 2), `none` without one."""
+    names = sorted(
+        str(x.get("name"))
+        for x in pr.get("labels") or []
+        if isinstance(x, dict) and str(x.get("name")).startswith(STATE_PREFIX)
+    )
+    return ",".join(names) or "none"
+
+
 def watch(root, args: dict[str, str]) -> int:
     repo = repo_name(root)
     number = args.get("--pr") or args["--merged"]
@@ -133,6 +158,7 @@ def watch(root, args: dict[str, str]) -> int:
         return limit is not None and time.monotonic() - started >= float(limit)
 
     seen = 0
+    label: Any = UNSET
     if not only_merge:
         while (found := newest(pages(f"repos/{repo}/issues/{number}/comments"))) is None:
             if late():
@@ -160,6 +186,13 @@ def watch(root, args: dict[str, str]) -> int:
                 line = verdict_line(comments, seen, head, authors)
                 if line:
                     print(line)
+                    return 0
+            if not only_merge:
+                now = label_of(pr)
+                if label is UNSET:
+                    label = now
+                elif now != label:
+                    print(f"label {now}")
                     return 0
         if late():
             print("timeout")
@@ -282,6 +315,29 @@ def next_brief(root, me: str) -> int:
         return 0
     print("no brief")
     return 1
+
+
+# --- queue (SPEC-0032 rule 3) -----------------------------------------------------------------
+
+
+def queue(root, role: str, author: str | None) -> int:
+    repo = repo_name(root)
+    found = pages(f"repos/{repo}/pulls?state=open")
+    if found is None:
+        raise CheckError("rule 3: the open pull requests cannot be read")
+    me = (author or "").lstrip("@").lower()
+    lines = []
+    for pr in sorted(
+        (p for p in found if isinstance(p.get("number"), int)), key=lambda p: p["number"]
+    ):
+        label = label_of(pr)
+        if label not in ROLES[role] or (role == "conductor" and pr.get("draft")):
+            continue
+        if me and author_of(pr) != me:
+            continue
+        lines.append(f"#{pr['number']} {label}")
+    print("\n".join(lines) if lines else "empty")
+    return 0
 
 
 # --- a stalled pull request (SPEC-0033 rule 5) ------------------------------------------------
@@ -492,13 +548,14 @@ def number_ok(text: str) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if not args or args[0] not in ("watch", "next", "resume") or len(args[1:]) % 2:
+    if not args or args[0] not in ("watch", "next", "queue", "resume") or len(args[1:]) % 2:
         print(USAGE)
         return 2
     cmd, opts = args[0], dict(zip(args[1::2], args[2::2], strict=False))
     allowed = {
         "watch": {"--pr", "--merged", "--interval", "--timeout"},
         "next": {"--session"},
+        "queue": {"--role", "--author"},
         "resume": {"--pr"},
     }
     if not set(opts) <= allowed[cmd] or len(opts) != len(args[1::2]):
@@ -509,6 +566,10 @@ def main(argv: list[str] | None = None) -> int:
             opts.get("--pr") or opts.get("--merged")
         )
         ok = ok and all(number_ok(opts[k]) for k in ("--interval", "--timeout") if k in opts)
+    elif cmd == "queue":
+        ok = opts.get("--role") in ROLES and (
+            "--author" not in opts or bool(SESSION_ID.fullmatch(opts["--author"].lstrip("@")))
+        )
     elif cmd == "resume":
         ok = number_of(opts.get("--pr"))
     else:
@@ -518,6 +579,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         root = repo_root()
+        if cmd == "queue":
+            return queue(root, opts["--role"], opts.get("--author"))
         if cmd == "watch":
             return watch(root, opts)
         if cmd == "resume":

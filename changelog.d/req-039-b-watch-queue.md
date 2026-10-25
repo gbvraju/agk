@@ -1,0 +1,1 @@
+- session: `watch --pr` ends on a change of the router's `agk:` label, `queue --role` lists a role's pull requests so a restarted session resumes from GitHub, and the session rules say how `watch` is started so its end wakes the session (SPEC-0032 rules 3 and 4, REQ-039)
