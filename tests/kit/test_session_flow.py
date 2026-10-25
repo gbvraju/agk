@@ -123,6 +123,19 @@ def test_rule1_an_invalid_value_is_refused_naming_the_setting_and_not_the_value(
     assert "8888" not in out.stdout + out.stderr and posts(stub) == []
 
 
+def test_rule1_the_red_branch_brief_goes_before_the_capacity_and_reads_no_pull_request(proj, stub):
+    """REQ-041 AC1 with SPEC-0032 rule 7: both sides of the merge with the router's brief."""
+    router = {**issue(9, "Priority: 0\nAdvances: none\nTouches: **\nSize: S\n")}
+    router |= {"title": "The default branch is red", "user": {"login": "github-actions[bot]"}}
+    router["body"] = FREE.replace("Advances: REQ-001", "Advances: none") + "Priority: 0\n"
+    listing(stub, [issue(5, brief()), router])
+    stub.serve(PULLS, [pr(10, 1), pr(11, 2), pr(12, 3)])
+    reads(stub, 9, [])
+    out = nxt(proj, stub)
+    assert out.returncode == 0 and out.stdout.startswith("brief #9\n")
+    assert not any(call[1].startswith(PULLS) for call in stub.calls())
+
+
 def test_rule1_unreadable_pull_requests_stop_next_and_demand(proj, stub):
     """REQ-041 AC1"""
     listing(stub, [issue(5, brief())])

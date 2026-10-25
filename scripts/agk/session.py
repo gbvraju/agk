@@ -416,12 +416,15 @@ def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
     While the default branch is red only its brief is left (SPEC-0032 rule 7)."""
     limit = flow_int(root, "max_builders", MAX_BUILDERS, 1)
     hours = flow_int(root, "claim_hours", CLAIM_HOURS, 5)
-    prs = pages(f"repos/{repo}/pulls?state=all")
-    if prs is None:
-        raise CheckError("rule 1: the pull requests cannot be read")
     issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}") if issues is None else issues
     if issues is None:
         raise CheckError("rule 3: the open briefs cannot be read")
+    red = {i["number"] for i in issues if is_red(i)}
+    issues = [i for i in issues if i["number"] in red] if red else issues
+    # The red-branch brief goes before the capacity and the overlap, and no pull request is read.
+    prs = [] if red else pages(f"repos/{repo}/pulls?state=all")
+    if prs is None:
+        raise CheckError("rule 1: the pull requests cannot be read")
     builders = [p for p in prs if p.get("state") == "open" and brief_number(p) is not None]
     found = Survey(repo, me, limit, hours, prs, builders)
     named = {brief_number(p) for p in prs if p.get("state") == "open"}
@@ -434,10 +437,6 @@ def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
         found.skipped.append((brief["number"], why))
         if why.startswith("taken by") and brief["number"] not in named:
             found.held.append((brief["number"], touches_of(brief["body"])))
-    red = {i["number"] for i in issues if is_red(i)}
-    if red:
-        found.free = [b for b in found.free if b["number"] in red]
-        found.skipped = [x for x in found.skipped if x[0] in red]
     found.free.sort(key=lambda b: (priority_of(b["body"]), b["number"]))
     return found
 
