@@ -554,3 +554,69 @@ def test_ac3_queue_needs_a_known_role_and_only_gets(proj, stub):
     stub.serve(OPEN, [listed(1, "agk:review")])
     session(proj, stub, "queue", "--role", "conductor")
     assert stub.calls() and all(call[0] == "GET" for call in stub.calls())
+
+
+# --- a correction ends the wait (SPEC-0032 rule 10; REQ-039 AC7) --------------------------------
+
+BRIEF = f"repos/{REPO}/issues/5/comments"
+
+
+def with_brief(**kw) -> dict:
+    return {**pull(**kw), "body": "Advances: REQ-039\n\nBrief: #5\n\nDecisions taken: none\n"}
+
+
+def brief_polls(stub: Stub, polls: list[tuple[dict, list, list]], base: list | None = None):
+    """Each poll: the pull request, its comments, the comments of brief #5 (the first: the base)."""
+    stub.serve(PR_COMMENTS, base or [], nth=1)
+    for i, (p, c, b) in enumerate(polls, start=1):
+        stub.serve(PR, p, nth=i)
+        stub.serve(PR_COMMENTS, c, nth=i + 1)
+        stub.serve(BRIEF, b, nth=i)
+
+
+def test_ac7_watch_ends_on_a_correction_by_a_listed_author_on_the_brief_the_session_took(
+    proj, stub
+):
+    """REQ-039 AC7: rule 10 (the builder wakes on the correction with no person carrying it)."""
+    said = comment(40, "boss", "Correction: the cause was a stale cache; the check stands")
+    brief_polls(stub, [(with_brief(), [], []), (with_brief(), [], [said])])
+    out = session(proj, stub, *WATCH)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.strip().startswith("correction #5 (comment 40): Correction: the cause")
+
+
+def test_ac7_watch_ends_on_a_correction_on_the_pull_request_itself(proj, stub):
+    """REQ-039 AC7: rule 10 (the conductor posts it on the brief and on the pull request)."""
+    said = comment(41, "boss", "Correction: the head was wrong; the order stands")
+    brief_polls(stub, [(with_brief(), [], []), (with_brief(), [said], [])])
+    out = session(proj, stub, *WATCH)
+    assert out.stdout.strip().startswith("correction #7 (comment 41): Correction: the head")
+
+
+def test_ac7_an_unlisted_author_another_comment_or_an_old_correction_does_not_end_it(proj, stub):
+    """REQ-039 AC7: rule 10 (only a listed author, only a Correction, only a new one)."""
+    old = comment(3, "boss", "Correction: before the watch started")
+    other = comment(40, "stranger", "Correction: not a listed author")
+    plain = comment(41, "boss", "Numbers reserved: ADR-0126")
+    brief_polls(
+        stub,
+        [(with_brief(), [], [old]), (with_brief(), [], [old, other, plain])],
+    )
+    out = session(proj, stub, "watch", "--pr", "7", "--interval", "0", "--timeout", "1")
+    assert out.returncode == 3 and out.stdout.strip() == "timeout"
+
+
+def test_ac7_without_a_brief_line_the_brief_is_not_read(proj, stub):
+    """REQ-039 AC7: rule 10 (the brief is the one in the pull request's `Brief: #n` line)."""
+    watching(stub, [(pull(), []), (pull(labels=("agk:review",)), [])])
+    out = session(proj, stub, *WATCH)
+    assert out.stdout.strip() == "label agk:review"
+    assert not any("issues/5/comments" in call[1] for call in stub.calls())
+
+
+def test_ac7_watching_a_correction_only_gets(proj, stub):
+    """REQ-039 AC7: rule 10 (no write)."""
+    said = comment(40, "boss", "Correction: a thing")
+    brief_polls(stub, [(with_brief(), [], []), (with_brief(), [], [said])])
+    session(proj, stub, *WATCH)
+    assert stub.calls() and all(call[0] == "GET" for call in stub.calls())
