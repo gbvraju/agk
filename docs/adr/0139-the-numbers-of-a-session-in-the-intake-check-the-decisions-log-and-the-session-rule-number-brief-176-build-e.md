@@ -6,7 +6,7 @@
 - Related: ADR-0124, ADR-0114
 - Requirements: REQ-041
 
-Protected classes: `config/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
+Protected classes: `config/`, `scripts/agk/`, `skills/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -22,11 +22,13 @@ were written first; on the unchanged scripts 12 of the new cases failed.
 2. **`session.py ids`** also prints `rule`, the next free session-rule number: the highest numbered line of `config/session-rules.md` on the default branch and of the lines that open builder pull requests add to it, plus one.
    `ids --exclude-pr N` leaves the open pull request N out of the count, because the pull request of an intake holds its own numbers: the session runs `session.py ids --exclude-pr <its own> > FILE` and passes `--ids FILE`.
 3. **C2 and the decisions log.** `docs/runs/decisions-log.md` may change in an intake when the change only adds lines. A changed or removed row, or any other file, still fails C2.
-4. **Session rule 15** gains "a session rule number moved to the next free one (`session.py ids` prints it)" among the mechanical conflicts a session resolves itself, merging and never rebasing.
-5. Amendment 75 (`docs/runs/proposed-spec-amendments-75.md`) is applied to SPEC-0034 rules 4 and 7c and SPEC-0012 rule 11. Flow mode: fragment `changelog.d/intake-session-numbers.md`; no version bump.
-6. **Readings taken where the build comment leaves a point open** (questions in the pull request, the most conservative reading each): "when it runs in a session" is an explicit option, `--ids`, not a guess from the environment; the
+4. **The spec skill** (`skills/spec/SKILL.md`, step 7) says it where a session reads it: before `intake.py check`, a session beside other builders runs `session.py ids --exclude-pr <its own pull request> > <scratch>/ids.json` and
+   passes `--ids <scratch>/ids.json`.
+5. **Session rule 15** gains "a session rule number moved to the next free one (`session.py ids` prints it)" among the mechanical conflicts a session resolves itself, merging and never rebasing.
+6. Amendment 75 (`docs/runs/proposed-spec-amendments-75.md`) is applied to SPEC-0034 rules 4 and 7c and SPEC-0012 rule 11. Flow mode: fragment `changelog.d/intake-session-numbers.md`; no version bump.
+7. **Readings taken where the build comment leaves a point open** (questions in the pull request, the most conservative reading each): "when it runs in a session" is an explicit option, `--ids`, not a guess from the environment; the
    own pull request and the reservations are read as the caller's own, so only the pull request is excludable by number; the conductor still reserves rule numbers in the `Assign:` comment, since a rule number has no take to
-   carry a reservation; the text of the skills that call `intake.py check` is not changed here.
+   carry a reservation; the spec skill's intake step (step 7) tells a session to run `session.py ids --exclude-pr <its own> > <scratch>/ids.json` and to pass `--ids` (the verdict on the first head asked for it in this build).
 
 ## Consequences
 
@@ -35,5 +37,4 @@ were written first; on the unchanged scripts 12 of the new cases failed.
 
 ## Residual
 
-- 2026-10-25: nothing makes a session pass `--ids`; the skill text and the rules file say nothing of it yet, so an intake checked without it keeps the default-branch numbers (due 2026-12-31).
 - 2026-10-25: a reservation by the session's own take is counted in the numbers it prints, since only a pull request can be excluded (due 2026-12-31).
