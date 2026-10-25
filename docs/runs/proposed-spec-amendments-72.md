@@ -1,0 +1,6 @@
+# Proposed spec amendments 72 (SPEC-0030; REQ-042)
+
+Date: 2026-10-25 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). Applied by ADR-0136. The path: `docs/specs/0030-a-conductor-role-reviews-every-pull-request-posts-the-verdic.md`.
+
+1. **SPEC-0030 rule 1, the session rules.** `config/session-rules.md` also holds, as SPEC-0035 rules 1, 3 and 7 say: the `Shadow:` shape, which only the shadow reviewer posts, on the one open issue labelled `agk-shadow`, and the blindness of the shadow (rule 25); and the `Marks:` shape on the pull request after it merges, who writes it, and that a reviewer never marks its own findings (rule 26).
+2. **SPEC-0030 rule 6, the guard.** `.claude/hooks/conductor_guard.py` has a shadow mode, the argument `--shadow` of the hook command in `.claude/agents/shadow.md`: the one comment `POST` is allowed only on the issue-comment endpoint with exactly one field, `-f body=Shadow: #<pr> <sha> cleared|fix list|rejected ...` or `-F body=@<file>` for a file inside a scratch directory whose first line has that shape, every other write is denied as for the conductor, and any other argument denies everything. The shadow role file is a second role file; the conductor's is unchanged.

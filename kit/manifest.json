@@ -6,6 +6,7 @@
     ".claude/agents/architect.md",
     ".claude/agents/conductor.md",
     ".claude/agents/drift-auditor.md",
+    ".claude/agents/shadow.md",
     ".claude/hooks/architect_guard.py",
     ".claude/hooks/conductor_guard.py",
     ".claude/hooks/stop_check.py",
