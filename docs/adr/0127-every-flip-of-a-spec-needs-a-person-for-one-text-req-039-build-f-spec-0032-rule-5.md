@@ -1,6 +1,6 @@
 # ADR-0127: every flip of a spec needs a person, for one text (REQ-039 build (f), SPEC-0032 rule 5)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0122, ADR-0110
