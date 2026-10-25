@@ -1,6 +1,6 @@
 # ADR-0134: a release needs no ADR and a row of the table ends at its release (REQ-035, REQ-038, brief #212 build (a0))
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Amends: ADR-0108
