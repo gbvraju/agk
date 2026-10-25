@@ -21,6 +21,12 @@ A scratch directory is `agk-conductor-<name>` directly in the system temp direct
 the work tree. A POST
 to anything else, a PATCH, a PUT, a DELETE, any other script and any other `make` are denied. The
 judging of `git` and `gh api` is the architect's (`architect_guard.py`), which this file imports.
+With the one argument `--shadow` (the shadow reviewer of SPEC-0035, `.claude/agents/shadow.md`) the
+comment `POST` is allowed only with exactly one `-f` field, `body=Shadow: #<pr> <sha> cleared|fix
+list|rejected` followed by anything, and the issue endpoint of the checkout's origin repository: a
+verdict or a `Marks:` comment is denied. The hook cannot tell the `agk-shadow` issue from another
+issue without a network call, so that choice is the role file's (a residual of SPEC-0035). Any other
+argument denies everything.
 The message names the rule, never the command or the path. Standard library only; no network.
 """
 
@@ -42,6 +48,11 @@ SHA = re.compile(r"[0-9a-f]{7,40}")
 SCRIPT = re.compile(r"(\w+)\.py")
 WRITE_RULE = "conductor guard rule 6: the conductor writes only in a scratch directory"
 BASH_RULE = "conductor guard rule 6: this command is not on the conductor's list"
+SHADOW_BODY = re.compile(
+    r"body=Shadow: #\d+ [0-9a-f]{7,40} (?:cleared|fix list|rejected)(?:\s.*)?", re.S
+)
+POST_METHODS = ("--method", "-X")
+FIELDS = ("-f", "--raw-field")
 
 
 def scratch_dir(path: str) -> str | None:
@@ -117,7 +128,19 @@ def git_judged(words: list[str]) -> bool:
     return git_allowed(words)
 
 
-def bash_allowed(command: object) -> bool:
+def shadow_post_ok(words: list[str]) -> bool:
+    """In shadow mode a `POST` carries one field, a `Shadow:` body; any other method passes."""
+    args = words[2:]
+    methods = [args[i + 1].upper() for i, a in enumerate(args[:-1]) if a in POST_METHODS] + [
+        a.split("=", 1)[1].upper() for a in args if a.startswith("--method=")
+    ]
+    if "POST" not in methods:
+        return True
+    fields = [args[i + 1] for i, a in enumerate(args[:-1]) if a in FIELDS]
+    return len(fields) == 1 and SHADOW_BODY.fullmatch(fields[0]) is not None
+
+
+def bash_allowed(command: object, shadow: bool = False) -> bool:
     if not isinstance(command, str):
         return False
     clean = command.startswith(ENV_PREFIX)
@@ -134,13 +157,14 @@ def bash_allowed(command: object) -> bool:
     if words[0] == "git":
         return git_judged(words)
     if words[0] == "gh":
-        return len(words) > 2 and words[1] == "api" and gh_api_allowed(words)
+        ok = len(words) > 2 and words[1] == "api" and gh_api_allowed(words)
+        return ok and (not shadow or shadow_post_ok(words))
     if words[0] == "date":
         return all(w == "-u" or w.startswith("+") for w in words[1:])
     return False
 
 
-def decide(payload: dict) -> str | None:
+def decide(payload: dict, shadow: bool = False) -> str | None:
     """A denial text, or None to allow."""
     tool = payload.get("tool_name")
     data = payload.get("tool_input")
@@ -150,7 +174,7 @@ def decide(payload: dict) -> str | None:
         ok = tool == "Write" and isinstance(target, str) and scratch_dir(target) is not None
         return None if ok else WRITE_RULE
     if tool == "Bash":
-        return None if bash_allowed(data.get("command")) else BASH_RULE
+        return None if bash_allowed(data.get("command"), shadow) else BASH_RULE
     return None
 
 
@@ -159,7 +183,12 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         payload = None
-    reason = decide(payload) if isinstance(payload, dict) else BASH_RULE
+    arguments = sys.argv[1:]
+    if arguments not in ([], ["--shadow"]):  # an unknown argument fails closed
+        reason = BASH_RULE
+    else:
+        shadow = arguments == ["--shadow"]
+        reason = decide(payload, shadow) if isinstance(payload, dict) else BASH_RULE
     if reason:
         print(
             json.dumps(
