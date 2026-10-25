@@ -1,6 +1,6 @@
 # ADR-0138: the catch-rate script shadow_rate.py (REQ-042 build b, SPEC-0035 rules 3, 4 and 8)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0129, ADR-0136, ADR-0076
