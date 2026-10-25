@@ -1,6 +1,6 @@
 # ADR-0139: the numbers of a session in the intake check, the decisions log and the session-rule number (brief #176 build (e), SPEC-0034 rule 4)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-25
 - Deciders: maintainers
 - Related: ADR-0124, ADR-0114
