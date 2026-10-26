@@ -129,6 +129,7 @@ def test_ac5_a_failing_commit_status_counts_and_the_routers_own_check_does_not(
     branch(stub, [ok("governance"), own])
     push(proj, stub, tmp_path)
     assert issue_writes(stub) == []
+    (proj / "agk.toml").write_text('required_checks = ["governance", "ci/other"]\n')
     branch(stub, [ok("governance")], statuses=[{"context": "ci/other", "state": "failure"}])
     push(proj, stub, tmp_path)
     body = next(a for a in issue_writes(stub)[0][2] if a.startswith("body="))

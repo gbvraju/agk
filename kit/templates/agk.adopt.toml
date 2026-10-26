@@ -17,4 +17,6 @@ inbox_hours = 48
 # How many pull requests a person may have open: "strict" (one at a time, no Depends-on line) or "flow" (any number, Depends-on allowed).
 # Change it only with an ADR in the same pull request (agk.toml is a protected path).
 pr_mode = "strict"
+# The checks the router judges a pull request (and the default branch) by: the latest run of each listed check, and the latest status of each listed context. A check that is not listed (a preview build of a hosting service, say) never labels a pull request red; a listed check that has not reported keeps it running. A change needs an ADR.
+required_checks = ["proof", "governance"]
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.

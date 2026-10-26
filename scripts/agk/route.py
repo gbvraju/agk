@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
-from common import CheckError, load_config, repo_root
+from common import CheckError, load_config, repo_root, required_checks
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
 from reviewers import person_approvals, spec_approvers, verdict_authors
 from session import RED_TITLE, gh, is_red, pages, repo_name
@@ -156,13 +156,35 @@ def latest_statuses(statuses: list[dict]) -> list[dict]:
     return list(newest.values())
 
 
+def judged(
+    checks: list[dict], statuses: list[dict], required: list[str] | None, wait: bool = True
+) -> tuple[list[dict], list[dict], bool]:
+    """(the latest runs, the latest statuses, whether a required name has not reported).
+
+    With `required` (the `required_checks` of agk.toml) only a run named in it and a status whose
+    context is named in it are judged; a check that is not listed never decides a label. Without
+    it every run and status counts. The router's own job is never judged. With `wait` false (the
+    default branch, where a workflow such as `proof` may never run) a listed name that has not
+    reported is not waited for: the head waits only for the names that have a run or a status."""
+    runs = [c for c in latest_runs(checks) if c.get("name") != ROUTER_JOB]
+    latest = latest_statuses(statuses)
+    if required is None:
+        return runs, latest, False
+    names = {x for x in required if x != ROUTER_JOB}
+    runs = [c for c in runs if c.get("name") in names]
+    latest = [s for s in latest if s.get("context") in names]
+    seen = {c.get("name") for c in runs} | {s.get("context") for s in latest}
+    return runs, latest, wait and bool(names - seen)
+
+
 def decide(f: dict) -> str:
     """The one label of a pull request from its facts; the first state that holds, in order."""
     if f.get("mergeable_state") == "dirty":
         return "agk:conflict"
-    checks = [c for c in latest_runs(f.get("checks") or []) if c.get("name") != ROUTER_JOB]
-    statuses = latest_statuses(f.get("statuses") or [])
-    if not checks and not statuses:
+    checks, statuses, missing = judged(
+        f.get("checks") or [], f.get("statuses") or [], f.get("required")
+    )
+    if missing or (not checks and not statuses):
         return "agk:ci-running"
     if any(c.get("status") != "completed" for c in checks) or any(
         s.get("state") == "pending" for s in statuses
@@ -236,6 +258,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "reviews": reviews or [],
         "authors": verdict_authors(root),
         "approvers": spec_approvers(root),
+        "required": required_checks(root),
         "author": (pr.get("user") or {}).get("login"),
         "files": files,
         "commit": commit if isinstance(commit, dict) else {},
@@ -296,11 +319,15 @@ def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str |
 # --- the default branch (rule 7) ---------------------------------------------------------------
 
 
-def branch_state(checks: list[dict], statuses: list[dict]) -> str:
-    """`pending`, `red` or `green` for the checks of the default branch's head."""
-    checks = [c for c in latest_runs(checks) if c.get("name") != ROUTER_JOB]
-    statuses = latest_statuses(statuses)
-    if not checks and not statuses:
+def branch_state(
+    checks: list[dict], statuses: list[dict], required: list[str] | None = None
+) -> str:
+    """`pending`, `red` or `green` for the checks of the default branch's head, judged by the
+    required checks of the project that have a run or a status on that head (brief 231): a listed
+    check that never runs on the default branch is not waited for, and a head none of them has
+    reported is `pending`."""
+    checks, statuses, missing = judged(checks, statuses, required, wait=False)
+    if missing or (not checks and not statuses):
         return "pending"
     if any(c.get("status") != "completed" for c in checks) or any(
         s.get("state") == "pending" for s in statuses
@@ -310,15 +337,22 @@ def branch_state(checks: list[dict], statuses: list[dict]) -> str:
     return "red" if failed or any(s.get("state") in FAILED_STATUS for s in statuses) else "green"
 
 
-def failing(checks: list[dict], statuses: list[dict], repo: str, sha: str) -> tuple[str, str]:
-    """(name, link) of the first failing check by name, or status."""
+def failing(
+    checks: list[dict],
+    statuses: list[dict],
+    repo: str,
+    sha: str,
+    required: list[str] | None = None,
+) -> tuple[str, str]:
+    """(name, link) of the first failing check by name, or status, among the judged ones."""
+    runs, latest, _ = judged(checks, statuses, required, wait=False)
     bad = sorted(
         (str(c.get("name") or ""), str(c.get("html_url") or c.get("details_url") or ""))
-        for c in latest_runs(checks)
-        if c.get("name") != ROUTER_JOB and c.get("conclusion") in FAILED_RUN
+        for c in runs
+        if c.get("conclusion") in FAILED_RUN
     ) + sorted(
         (str(s.get("context") or ""), str(s.get("target_url") or ""))
-        for s in latest_statuses(statuses)
+        for s in latest
         if s.get("state") in FAILED_STATUS
     )
     name, url = bad[0] if bad else ("", "")
@@ -339,7 +373,9 @@ def red_body(name: str, sha: str, url: str) -> str:
     )
 
 
-def route_branch(repo: str, default: str, labels: Labels, dry: bool) -> str:
+def route_branch(
+    repo: str, default: str, labels: Labels, dry: bool, required: list[str] | None = None
+) -> str:
     """Open, update or close the red-branch brief from the checks of the default branch's head."""
     tip = gh(f"repos/{repo}/branches/{default}")
     sha = str(((tip or {}).get("commit") or {}).get("sha") or "") if isinstance(tip, dict) else ""
@@ -349,7 +385,7 @@ def route_branch(repo: str, default: str, labels: Labels, dry: bool) -> str:
     if checks is None or found is None:
         raise CheckError("rule 7: the checks of the default branch cannot be read")
     statuses = status.get("statuses", []) if isinstance(status, dict) else []
-    state = branch_state(checks, statuses)
+    state = branch_state(checks, statuses, required)
     open_red = sorted((i for i in found if is_red(i)), key=lambda i: i["number"])
     print(f"default branch {state}")
     if state == "pending" or dry:
@@ -360,7 +396,7 @@ def route_branch(repo: str, default: str, labels: Labels, dry: bool) -> str:
             args = ("-f", "state=closed", "-f", "state_reason=completed")
             write(f"{issues}/{item['number']}", *args, method="PATCH", what="rule 7: the issue")
         return state
-    name, url = failing(checks, statuses, repo, sha)
+    name, url = failing(checks, statuses, repo, sha, required)
     body = red_body(name, sha, url)
     if open_red:
         if str(open_red[0].get("body") or "") != body:
@@ -529,6 +565,11 @@ def main(argv: list[str] | None = None) -> int:
         numbers = [int(rest[1])]
     else:
         numbers = targets(os.environ.get("GITHUB_EVENT_NAME", ""), event, repo, default)
+    try:
+        required = required_checks(root)
+    except CheckError as exc:
+        print(f"FAIL {NAME}: {exc}")
+        return 1
     labels = Labels(repo)
     failed = False
     try:
@@ -540,7 +581,7 @@ def main(argv: list[str] | None = None) -> int:
                 failed = True
         if rest == ["--branch"] or (not rest and on_default_branch(name, event, default)):
             try:
-                route_branch(repo, default, labels, dry)
+                route_branch(repo, default, labels, dry, required)
             except CheckError as exc:
                 print(f"FAIL {NAME}: {exc}")
                 failed = True

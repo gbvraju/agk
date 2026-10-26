@@ -399,6 +399,7 @@ DEFAULT_CONFIG = {
     "ac_coverage": "warn",
     "proof_timeout": 900,
     "pr_mode": "strict",
+    "required_checks": ["proof", "governance"],
 }
 
 
@@ -545,6 +546,20 @@ def pr_mode(root: Path) -> str:
     if value not in PR_MODES:
         raise CheckError("pr_mode must be 'strict' or 'flow' (setting: pr_mode in agk.toml)")
     return value
+
+
+def required_checks(root: Path) -> list[str]:
+    """The checks the router judges (brief 231): names from agk.toml; refusals name the setting."""
+    value = load_config(root)["required_checks"]
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(x, str) and x.strip() for x in value)
+    ):
+        raise CheckError(
+            "required_checks must be a list of check names (setting: required_checks in agk.toml)"
+        )
+    return [x.strip() for x in value]
 
 
 def json_records(path: Path, label: str) -> list[dict]:
