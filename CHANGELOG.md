@@ -12,6 +12,7 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 - #253 plan: `session.py plan` and `/agk:launch` name the next free build of a brief with a `Builds:` line (not merged, no live take, no open pull request; a build waits for the one before it unless marked `independent:`), `launch.py` prompts `session.py claim --build <x>`, and a brief without builds is planned as before (SPEC-0034 rules 15 and 16, brief #251)
 - #255 session: `watch --assign` also takes the newest `Assign:` for the session posted between its previous `Request:` and its current one and not yet taken, so the conductor may assign before the `Request:` and never posts a line twice (brief #252)
 - #256 reviewers: the installed `config/reviewers.yaml` (init and adopt) lists `spec_approvers` with the placeholder next to `maintainers`, `reviewers.py --check` fails while it lists only the placeholder (naming the setting), the doctor's placeholder finding names both settings and step 4 of both guides says to replace both, so a person's first `Approve: SPEC-<n>` counts (SPEC-0032 rule 5, brief #254)
+- #260 governance: the step `Secret scan` runs the pinned gitleaks 8.30.1 binary for linux x64, its SHA-256 verified in the workflow, over the commits of the change, instead of `gitleaks/gitleaks-action`, so the scan needs no licence key and no secret on an organisation repository (brief #258, ADR-0158)
 
 ## 0.56.0 (2026-10-26)
 
