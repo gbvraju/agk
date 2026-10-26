@@ -9,7 +9,8 @@ guard): the hook receives JSON on stdin with `tool_name` and `tool_input`. To de
 Denies `Edit`, `MultiEdit` and `NotebookEdit` everywhere, `Write` outside a scratch directory, and
 `Bash` unless the command is one of: a read-only `git` command; `git fetch origin`; `gh api` with
 `--method GET` or no method; the one `gh api --method POST` of a comment on an issue or pull request
-of the repository named by this checkout's origin remote (`-f` fields only); `date -u`; or a bounded
+of the repository named by this checkout's origin remote (`-f` fields only, or one `-F body=@<file>`
+where the file is a regular file of a scratch directory); `date -u`; or a bounded
 run of a pull request in a scratch worktree (SPEC-0030 rule 6, amendment 53):
 `git worktree add <scratch> <sha>` where the sha is on a branch of origin (a fork head is on none),
 `git worktree remove [--force] <scratch>`, and, only with the exact prefix
@@ -21,14 +22,16 @@ A scratch directory is `agk-conductor-<name>` directly in the system temp direct
 the work tree. A POST
 to anything else, a PATCH, a PUT, a DELETE, any other script and any other `make` are denied. The
 judging of `git` and `gh api` is the architect's (`architect_guard.py`), which this file imports.
-With the one argument `--shadow` (the shadow reviewer of SPEC-0035, `.claude/agents/shadow.md`) the
-comment `POST` is allowed only on the issue-comment endpoint of the checkout's origin repository
-and with exactly one field: `-f body=Shadow: #<pr> <sha> cleared|fix list|rejected` followed by
-anything, or `-F body=@<file>` where the file is a regular file inside a scratch directory and its
-first line has that shape, so that the findings of several lines can be posted: a verdict, a
-`Marks:` comment, a file elsewhere or a second field is denied. The hook cannot tell the
-`agk-shadow` issue from another issue without a network call, so that choice is the role file's
-(a residual of SPEC-0035). Any other argument denies everything.
+A comment whose body starts with `Verdict:` is read with `common.verdict_problem` (the reading the
+router applies, brief 238) and denied, with that message, when the router could not read a `Final:`
+line of it. With the one argument `--shadow` (the shadow reviewer of SPEC-0035,
+`.claude/agents/shadow.md`) the comment `POST` is allowed only on the issue-comment endpoint of the
+checkout's origin repository and with exactly one field: `-f body=Shadow: #<pr> <sha> cleared|fix
+list|rejected` followed by anything, or `-F body=@<file>` where the file is a regular file inside a
+scratch directory and its first line has that shape, so that the findings of several lines can be
+posted: a verdict, a `Marks:` comment, a file elsewhere or a second field is denied. The hook
+cannot tell the `agk-shadow` issue from another issue without a network call, so that choice is the
+role file's (a residual of SPEC-0035). Any other argument denies everything.
 The message names the rule, never the command or the path. Standard library only; no network.
 """
 
@@ -49,6 +52,17 @@ from architect_guard import (
     project_root,
     tokens_of,
 )
+
+SCRIPTS = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts", "agk"
+)
+try:  # the one reading of a verdict, shared with the router (brief 238)
+    sys.path.insert(0, SCRIPTS)
+    import common
+
+    READ_VERDICT = common.verdict_problem
+except ImportError:  # a checkout without the scripts: the hook cannot judge a verdict
+    READ_VERDICT = None
 
 ENV_PREFIX = 'env -i PATH="$PATH" HOME='
 BASE_VAR = "AGK_BASE="  # the one variable a run may add, a sha, as CI sets it
@@ -162,6 +176,56 @@ def shadow_post_ok(words: list[str]) -> bool:
     return value.startswith("body=@") and shadow_file_ok(value[len("body=@") :])
 
 
+def scratch_text(path: str) -> str | None:
+    """The text of a regular file inside a scratch directory (no link out of it), else None."""
+    if scratch_dir(path) is None or os.path.realpath(path) != os.path.normpath(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read(65536) if os.path.isfile(path) else None
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def comment_body(words: list[str]) -> str | None:
+    """The body of a comment `POST` (`-f body=...` or `-F body=@<scratch file>`), else None."""
+    args = words[2:]
+    if not is_post(words) or sum(1 for a in args if a.startswith(("repos/", "/repos/"))) != 1:
+        return None
+    for i, flag in enumerate(args[:-1]):
+        value = args[i + 1]
+        if flag in FIELDS and value.startswith("body="):
+            return value[len("body=") :]
+        if flag in FILE_FIELDS and value.startswith("body=@"):
+            return scratch_text(value[len("body=@") :])
+    return None
+
+
+def verdict_denial(command: object) -> str | None:
+    """The reason to deny a comment whose body is a `Verdict:` with a problem, else None."""
+    words = tokens_of(command) if isinstance(command, str) else None
+    if not words or words[:2] != ["gh", "api"]:
+        return None
+    body = comment_body(words)
+    problem = READ_VERDICT(body) if body is not None and READ_VERDICT else None
+    return f"conductor guard rule 6: {problem}" if problem else None
+
+
+def conductor_file_post_ok(words: list[str]) -> bool:
+    """The conductor's comment `POST` of a body from a scratch file: one field, the origin's
+    issue-comment endpoint."""
+    args = words[2:]
+    endpoint = [a for a in args if a.startswith(("repos/", "/repos/"))]
+    fields = [(a, args[i + 1]) for i, a in enumerate(args[:-1]) if a in FIELDS + FILE_FIELDS]
+    others = [a for a in args if a.startswith("-") and a not in POST_METHODS + FIELDS + FILE_FIELDS]
+    if len(endpoint) != 1 or not comment_target_ok(endpoint[0]) or len(fields) != 1 or others:
+        return False
+    flag, value = fields[0]
+    return (
+        flag in FILE_FIELDS and value.startswith("body=@") and scratch_text(value[6:]) is not None
+    )
+
+
 def shadow_file_ok(path: str) -> bool:
     """A regular file inside a scratch directory whose first line is a `Shadow:` line."""
     real = scratch_dir(path)
@@ -196,6 +260,8 @@ def bash_allowed(command: object, shadow: bool = False) -> bool:
             return False
         if shadow and is_post(words):
             return shadow_post_ok(words)
+        if is_post(words) and any(a in FILE_FIELDS for a in words[2:]):
+            return conductor_file_post_ok(words)
         return gh_api_allowed(words)
     if words[0] == "date":
         return all(w == "-u" or w.startswith("+") for w in words[1:])
@@ -212,6 +278,8 @@ def decide(payload: dict, shadow: bool = False) -> str | None:
         ok = tool == "Write" and isinstance(target, str) and scratch_dir(target) is not None
         return None if ok else WRITE_RULE
     if tool == "Bash":
+        if not shadow and (message := verdict_denial(data.get("command"))):
+            return message
         return None if bash_allowed(data.get("command"), shadow) else BASH_RULE
     return None
 
