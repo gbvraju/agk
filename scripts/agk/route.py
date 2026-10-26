@@ -7,18 +7,19 @@
 
 It runs in the workflow `agk-route.yml` on `pull_request`, `issue_comment`, `workflow_run` and
 `push` to the default branch, with the job's `GITHUB_TOKEN`, from a checkout of the default
-branch: it runs no code of a pull request. For each pull request to route it reads the facts
-with GET (the head, the check runs and statuses of the head, `mergeable_state`, the comments,
-the reviews, the changed files) and sets exactly one of the seven labels `agk:ci-running`,
-`agk:ci-red`, `agk:conflict`, `agk:review`, `agk:fix`, `agk:approve`, `agk:ready`, removing the
-other six. When more than one state holds, the first of that list in the order conflict,
-ci-running, ci-red, approve, fix, ready, review wins. A label set with the job's token starts no
-workflow, so the router cannot loop. It writes labels and, for the default branch (SPEC-0032
-rule 7), the one issue `The default branch is red`: on a `push` to the default branch or a
-finished workflow on it, it reads the checks of the branch's head and, when they fail, opens or
-updates that issue as a brief (`Priority: 0`, `Advances: none`) that names the failing check, the
-sha and the run and no cause, and closes it when the branch is green; while checks still run it
-does nothing. No comment, no review, no merge. Messages name the rule, never a value.
+branch: it runs no code of a pull request. For each pull request to route it reads the facts with
+GET (the head, the latest run of each check and the latest status of each context of the head,
+`mergeable_state`, the comments, the reviews, the changed files) and sets exactly one of the seven
+labels `agk:ci-running`, `agk:ci-red`, `agk:conflict`, `agk:review`, `agk:fix`, `agk:approve`,
+`agk:ready`, removing the other six. When more than one state holds, the first of that list in the
+order conflict, ci-running, ci-red, approve, fix, ready, review wins. A label set with the job's
+token starts no workflow, so the router cannot loop. It writes labels and, for the default branch
+(SPEC-0032 rule 7), the one issue `The default branch is red`: on a `push` to the default branch
+or a finished workflow on it, it reads the checks of the branch's head and, when they fail, opens
+or updates that issue as a brief (`Priority: 0`, `Advances: none`) that names the failing check,
+the sha and the run and no cause, and closes it when the branch is green; while checks still run
+it does nothing.
+No comment, no review, no merge. Messages name the rule, never a value.
 """
 
 from __future__ import annotations
@@ -117,12 +118,38 @@ def asked_for(body: str) -> set[str]:
     return {m.group(1) for m in found if m and m.group(3) in (None, m.group(1))}
 
 
+def latest_runs(checks: list[dict]) -> list[dict]:
+    """The latest run of each check name: the highest `id`, the later `started_at` on a tie.
+
+    An older run of a name (a cancelled one, one a newer run replaced) is ignored, as GitHub's
+    required checks ignore it; a latest run that failed or was cancelled still counts."""
+    newest: dict[str, dict] = {}
+    for run in checks:
+        key = str(run.get("name") or "")
+        rank = (run.get("id") or 0, str(run.get("started_at") or ""))
+        held = newest.get(key)
+        if held is None or rank > (held.get("id") or 0, str(held.get("started_at") or "")):
+            newest[key] = run
+    return list(newest.values())
+
+
+def latest_statuses(statuses: list[dict]) -> list[dict]:
+    """The latest status of each context (the highest `id`), as GitHub reads them."""
+    newest: dict[str, dict] = {}
+    for item in statuses:
+        key = str(item.get("context") or "")
+        held = newest.get(key)
+        if held is None or (item.get("id") or 0) > (held.get("id") or 0):
+            newest[key] = item
+    return list(newest.values())
+
+
 def decide(f: dict) -> str:
     """The one label of a pull request from its facts; the first state that holds, in order."""
     if f.get("mergeable_state") == "dirty":
         return "agk:conflict"
-    checks = [c for c in f.get("checks") or [] if c.get("name") != ROUTER_JOB]
-    statuses = f.get("statuses") or []
+    checks = [c for c in latest_runs(f.get("checks") or []) if c.get("name") != ROUTER_JOB]
+    statuses = latest_statuses(f.get("statuses") or [])
     if not checks and not statuses:
         return "agk:ci-running"
     if any(c.get("status") != "completed" for c in checks) or any(
@@ -259,7 +286,8 @@ def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str |
 
 def branch_state(checks: list[dict], statuses: list[dict]) -> str:
     """`pending`, `red` or `green` for the checks of the default branch's head."""
-    checks = [c for c in checks if c.get("name") != ROUTER_JOB]
+    checks = [c for c in latest_runs(checks) if c.get("name") != ROUTER_JOB]
+    statuses = latest_statuses(statuses)
     if not checks and not statuses:
         return "pending"
     if any(c.get("status") != "completed" for c in checks) or any(
@@ -274,11 +302,11 @@ def failing(checks: list[dict], statuses: list[dict], repo: str, sha: str) -> tu
     """(name, link) of the first failing check by name, or status."""
     bad = sorted(
         (str(c.get("name") or ""), str(c.get("html_url") or c.get("details_url") or ""))
-        for c in checks
+        for c in latest_runs(checks)
         if c.get("name") != ROUTER_JOB and c.get("conclusion") in FAILED_RUN
     ) + sorted(
         (str(s.get("context") or ""), str(s.get("target_url") or ""))
-        for s in statuses
+        for s in latest_statuses(statuses)
         if s.get("state") in FAILED_STATUS
     )
     name, url = bad[0] if bad else ("", "")
