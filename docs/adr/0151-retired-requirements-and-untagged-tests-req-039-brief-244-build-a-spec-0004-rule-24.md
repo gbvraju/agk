@@ -1,6 +1,6 @@
 # ADR-0151: retired requirements and untagged tests (REQ-039, brief 244 build (a), SPEC-0004 rule 24)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0025, ADR-0150
