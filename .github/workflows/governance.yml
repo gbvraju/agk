@@ -60,10 +60,17 @@ jobs:
         run: |
           # The required check reads the latest governance run of the head: a partial run must not turn a failed full run green.
           # A full run still queued or in progress is waited for: the same GET every 30 seconds, at most 20 minutes.
+          # A red full run passes only when every failed step of it reads the body (brief #216, build b): one more GET of its jobs.
           for attempt in $(seq 0 40); do
             gh api --method GET "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.event.pull_request.head.sha }}&event=pull_request&per_page=100" > "$RUNNER_TEMP/runs.json" || : > "$RUNNER_TEMP/runs.json"
             code=0
-            python scripts/agk/full_run.py --runs "$RUNNER_TEMP/runs.json" --head "${{ github.event.pull_request.head.sha }}" || code=$?
+            out="$(python scripts/agk/full_run.py --runs "$RUNNER_TEMP/runs.json" --head "${{ github.event.pull_request.head.sha }}")" || code=$?
+            echo "$out"
+            if [ "$code" -eq 4 ]; then
+              gh api --method GET "repos/${{ github.repository }}/actions/runs/${out#jobs }/jobs?per_page=100" > "$RUNNER_TEMP/jobs.json" || : > "$RUNNER_TEMP/jobs.json"
+              code=0
+              python scripts/agk/full_run.py --runs "$RUNNER_TEMP/runs.json" --head "${{ github.event.pull_request.head.sha }}" --jobs "$RUNNER_TEMP/jobs.json" || code=$?
+            fi
             [ "$code" -ne 3 ] && exit "$code"
             [ "$attempt" -lt 40 ] && sleep 30
           done

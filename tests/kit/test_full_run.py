@@ -163,7 +163,7 @@ def test_an_edited_run_starts_by_reading_the_latest_full_run_with_one_get():
     assert names.index("Latest full run") < names.index("PR body file")
     block = body.split("      - name: Latest full run\n", 1)[1].split("\n      - ", 1)[0]
     assert "github.event.action == 'edited'" in block
-    assert block.count("gh api --method GET") == 1
+    assert block.count("gh api --method GET") == 2  # the runs, and the jobs of a red run (build b)
     assert "actions/runs" in block and "head_sha=${{ github.event.pull_request.head.sha }}" in block
     assert "scripts/agk/full_run.py" in block
 
