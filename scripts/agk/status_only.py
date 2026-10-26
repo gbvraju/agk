@@ -1,6 +1,7 @@
 """Is the head a status-only final commit, so that proof may report success without the suite?
 
-    python3 status_only.py --head SHA [--parent-proof CONCLUSION] [--base REF] [ROOT]
+    python3 status_only.py --head SHA [--parent-proof CONCLUSION | --parent-governance CONCLUSION]
+        [--base REF] [ROOT]
 
 Prints `skip` when all of these hold, else `run (<reason>)`; it always exits 0 (a usage error
 exits 2). The conditions (brief #216 answer 4): the head is one commit after its parent (a single
@@ -8,8 +9,10 @@ parent); that commit changes only `- Status:` lines (the shape `check_final_clea
 recognises: modified files, one removed and one added `- Status:` line in each, no mode change);
 the `proof` check passed on the parent (`--parent-proof success`, the conclusion that the workflow
 read with one GET, because a check never calls the network); and the current tip of the default
-branch (`--base`, else `AGK_BASE`) is already in the parent, so that nothing of it is untested. A
-reason names the condition, never a file, a line or a sha. Git only: no network, no model.
+branch (`--base`, else `AGK_BASE`) is already in the parent, so that nothing of it is untested. The
+same decision serves `governance` (brief #234): `--parent-governance` gives the conclusion of the
+full run of governance on the parent, in place of proof's, and only the reason changes. A reason
+names the condition, never a file, a line or a sha. Git only: no network, no model.
 """
 
 from __future__ import annotations
@@ -20,7 +23,10 @@ from pathlib import Path
 
 from common import git, repo_root, resolve_base
 
-USAGE = "usage: status_only.py --head SHA [--parent-proof CONCLUSION] [--base REF]"
+USAGE = (
+    "usage: status_only.py --head SHA [--parent-proof CONCLUSION | --parent-governance CONCLUSION]"
+    " [--base REF]"
+)
 STATUS = re.compile(r"[-+]- Status: \S.*")
 
 
@@ -58,7 +64,7 @@ def only_status_lines(root: Path, parent: str, head: str) -> bool:
     return True
 
 
-def decide(root: Path, head: str, parent_proof: str, base: str | None) -> str:
+def decide(root: Path, head: str, parent_proof: str, base: str | None, check: str = "proof") -> str:
     commit = git(root, "rev-parse", "--verify", "-q", f"{head}^{{commit}}", check=False).strip()
     if not commit:
         return "run (the head is not a commit)"
@@ -69,7 +75,8 @@ def decide(root: Path, head: str, parent_proof: str, base: str | None) -> str:
     if not only_status_lines(root, parent, commit):
         return "run (the commit changes more than status lines)"
     if parent_proof != "success":
-        return "run (proof did not pass on the parent)"
+        what = "proof" if check == "proof" else f"{check} in full"
+        return f"run ({what} did not pass on the parent)"
     ref = base or resolve_base(root, None)
     if ref is None:
         return "run (no default branch to compare the parent with)"
@@ -86,11 +93,17 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     root_arg = args.pop() if len(args) % 2 else None
     opts = dict(zip(args[::2], args[1::2], strict=False))
-    if "--head" not in opts or not set(opts) <= {"--head", "--parent-proof", "--base"}:
+    allowed = {"--head", "--parent-proof", "--parent-governance", "--base"}
+    if "--head" not in opts or not set(opts) <= allowed:
         print(USAGE, file=sys.stderr)
         return 2
+    if "--parent-proof" in opts and "--parent-governance" in opts:
+        print(USAGE, file=sys.stderr)
+        return 2
+    check = "governance" if "--parent-governance" in opts else "proof"
+    parent = opts.get("--parent-proof", opts.get("--parent-governance", ""))
     root = Path(root_arg) if root_arg else repo_root()
-    print(decide(root, opts["--head"], opts.get("--parent-proof", ""), opts.get("--base")))
+    print(decide(root, opts["--head"], parent, opts.get("--base"), check))
     return 0
 
 

@@ -1,0 +1,1 @@
+- governance skips its lint, tests and installs on a status-only final commit whose base has not moved, by the same decision as proof (brief 216 build c)
