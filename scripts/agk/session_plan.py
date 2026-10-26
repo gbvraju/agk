@@ -71,6 +71,27 @@ def clash(a: list[str], b: list[str]) -> str | None:
     return None
 
 
+def file_conflict(item: dict, mine: list[str], shared: list) -> str | None:
+    """Why a changed file of a running pull request blocks a brief, else None.
+
+    A modified, renamed or removed file blocks when a glob of the brief matches it (a renamed file
+    also by its old name). A file the pull request only *adds* blocks only on an exact path: every
+    build adds an ADR, a changelog fragment and tests, and a new file cannot conflict with a brief
+    that does not name it."""
+    names = [str(item.get("filename"))]
+    if item.get("status") == "renamed" and item.get("previous_filename"):
+        names.append(str(item["previous_filename"]))
+    for path in names:
+        if any(r.fullmatch(path) for r in shared):
+            continue
+        if item.get("status") == "added":
+            if path in mine:
+                return f"it adds {path}"
+        elif any(glob_regex(g).fullmatch(path) for g in mine):
+            return f"it changes {path}"
+    return None
+
+
 def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
     """What running work the brief waits for: a taken brief or an open builder pull request."""
     mine = unshared(touches_of(brief["body"]), shared)
@@ -79,15 +100,9 @@ def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
             return {"brief": brief["number"], "waits_for": number, "why": f"both touch {found}"}
     for pr in s.builders:
         for item in pull_files(s, pr):
-            path = str(item.get("filename"))
-            if any(r.fullmatch(path) for r in shared):
-                continue
-            if any(glob_regex(g).fullmatch(path) for g in mine):
-                return {
-                    "brief": brief["number"],
-                    "pull_request": pr["number"],
-                    "why": f"it changes {path}",
-                }
+            found = file_conflict(item, mine, shared)
+            if found:
+                return {"brief": brief["number"], "pull_request": pr["number"], "why": found}
     return None
 
 
