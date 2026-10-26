@@ -87,7 +87,8 @@ def test_ac2_every_check_step_runs_unless_cancelled():
     for name, block in checks.items():
         # brief #216: on an edited description only the steps that read the body run
         assert re.search(
-            r"        if: \$\{\{ !cancelled\(\)( && github\.event\.action != 'edited')? \}\}\n",
+            r"        if: \$\{\{ !cancelled\(\)( && github\.event\.action != 'edited')?"
+            r"( && steps\.status\.outputs\.skip != 'true')? \}\}\n",
             block,
         ), name
     # the job is not marked to continue on error, so one failing step fails the job
@@ -139,12 +140,12 @@ def test_ac2_project_tests_run_only_where_the_kits_own_suite_is_not_installed():
     assert project == (
         "name: Project tests\n"
         + "        if: ${{ hashFiles('kit/agk-kit.mk') == ''"
-        + " && github.event.action != 'edited' }}\n"
+        + " && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}\n"
         + "        run: make -f agk.mk agk-project-test\n"
     )
     assert (
         "run: make -f agk.mk agk-test\n" in checks
-    )  # brief #216: only the edited-description condition
+    )  # brief #216: the edited-description condition; brief #234: and the status-only skip
     assert checks.count("if:") == 1 and "github.event.action != 'edited'" in checks
 
 
