@@ -233,3 +233,12 @@ def test_the_workflow_still_has_two_gets_at_most_in_the_step_and_stays_read_only
     assert block.count("gh api --method GET") == 2 and "actions/runs/" in block
     perms = text().split("\npermissions:\n", 1)[1].split("\n\n", 1)[0]
     assert "write" not in perms and GOVERNANCE.exists()
+
+
+def test_the_step_fails_on_the_measured_run_whose_later_steps_never_ran(tmp_path):
+    """Brief #261 Measured (REQ-039): the step itself, with the jobs of the measured full run."""
+    from test_full_run import HIDDEN, jobs_with
+
+    proc, calls = run_step(tmp_path, [full("failure")], jobs_with(skipped=HIDDEN))
+    assert proc.returncode == 1 and len(calls) == 2
+    assert "the last full run did not reach Lint, Tests of the checks" in proc.stdout

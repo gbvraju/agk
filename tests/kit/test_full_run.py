@@ -272,3 +272,164 @@ def test_the_step_fails_at_once_when_the_runs_cannot_be_read(tmp_path):
 def test_the_get_no_longer_filters_on_completed_runs():
     """Verdict on 5aaaf17: a running run must be visible to be waited for."""
     assert "status=completed" not in step_script()
+
+
+# --- steps the last full run never reached (brief #261) -----------------------------------------
+
+RUN_ID = 2611
+# Every step of the `governance` job of a full pull_request run, in the order the jobs GET lists.
+FULL_STEPS = (
+    "Set up job",
+    "Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "Base of the merge ref",
+    "Run actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+    "Status-only final commit",
+    "Latest full run",
+    "Install tooling",
+    "PR body file",
+    "PR comments",
+    "PR states and open pull requests",
+    "check_protected_changes",
+    "check_requirements",
+    "check_adrs",
+    "check_numbers",
+    "check_specs",
+    "check_neutrality",
+    "check_build_state",
+    "check_kit_tests",
+    "check_design",
+    "reviewers --check",
+    "reviewers --check-codeowners",
+    "check_pr_mode",
+    "check_final_clearance",
+    "Release check",
+    "Open briefs",
+    "PR body shape",
+    "Lint",
+    "Tests of the checks",
+    "Project tests",
+    "Secret scan",
+    "Post Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "Complete job",
+)
+HIDDEN = ("Lint", "Tests of the checks", "Project tests", "Secret scan")
+
+
+def jobs_with(failed=("PR body shape",), skipped=(), project=True) -> dict:
+    """The jobs of a full run: `failed` failed, `skipped` skipped, every other step passed. A full
+    run always skips `Latest full run` (edited only), and a project `Release check` (the kit's own
+    repository has `kit/agk-kit.mk`) while the kit's repository skips `Project tests`."""
+    own = {"Latest full run", "Release check" if project else "Project tests"}
+    steps = []
+    for number, name in enumerate(FULL_STEPS, start=1):
+        conclusion = (
+            "failure"
+            if name in failed
+            else "skipped"
+            if name in skipped or name in own
+            else "success"
+        )
+        steps.append(
+            {"name": name, "status": "completed", "conclusion": conclusion, "number": number}
+        )
+    return {"total_count": 1, "jobs": [{"name": "governance", "steps": steps}]}
+
+
+def check_jobs(tmp_path: Path, jobs: dict):
+    red = {**run_of(FULL, "failure", "2026-10-26T10:00:00Z"), "id": RUN_ID}
+    (tmp_path / "jobs.json").write_text(json.dumps(jobs))
+    return check(tmp_path, [red], "--jobs", str(tmp_path / "jobs.json"))
+
+
+def test_the_measured_run_a_body_failure_with_the_later_steps_skipped_is_not_cured(tmp_path):
+    """Brief #261 Measured (REQ-039): `PR body shape` failed; Lint, the tests and the secret scan
+    were skipped. An edited description must leave governance red."""
+    out = check_jobs(tmp_path, jobs_with(skipped=HIDDEN))
+    assert out.returncode == 1, out.stdout
+    assert out.stdout == (
+        "FAIL full-run: rule 2: the last full run did not reach Lint, Tests of the checks, "
+        "Project tests, Secret scan; push a commit or re-run it\n"
+    )
+
+
+@pytest.mark.parametrize("project", [True, False])
+@pytest.mark.parametrize(
+    "failed", [("PR body shape",), ("check_specs",), ("check_pr_mode", "PR body shape")]
+)
+def test_a_body_failure_where_every_other_step_ran_and_passed_is_cured(tmp_path, failed, project):
+    """Brief #261 answer 4 (REQ-039): as today, in a project and in the kit's own repository."""
+    out = check_jobs(tmp_path, jobs_with(failed=failed, project=project))
+    assert (out.returncode, out.stdout) == (
+        0,
+        "ok full-run (the failed steps read the body only)\n",
+    )
+
+
+@pytest.mark.parametrize(
+    "skipped",
+    [
+        ("Lint",),
+        ("Secret scan",),
+        ("Project tests",),
+        ("Open briefs",),
+        ("PR comments",),
+        ("check_adrs",),
+        ("Install tooling", "check_kit_tests", "Lint", "Tests of the checks", "Project tests"),
+    ],
+)
+def test_any_other_skipped_step_in_a_run_with_a_failure_is_not_cured(tmp_path, skipped):
+    """Brief #261 answer 1 (REQ-039): GitHub shows a step skipped by its own `if:` and one skipped
+    because an earlier step failed alike, so only the steps whose own condition skips them on a
+    full run (`OWN_CONDITION`) may be skipped; a status-only skip is refused too (re-run it)."""
+    out = check_jobs(tmp_path, jobs_with(skipped=skipped))
+    assert out.returncode == 1
+    assert out.stdout == (
+        f"FAIL full-run: rule 2: the last full run did not reach {', '.join(skipped)}; "
+        "push a commit or re-run it\n"
+    )
+
+
+def test_a_skipped_body_step_is_repeated_by_the_edited_run_and_does_not_block(tmp_path):
+    """Brief #261 answer 1 (REQ-039): the partial run repeats a skipped body step."""
+    out = check_jobs(tmp_path, jobs_with(failed=("check_specs",), skipped=("PR body shape",)))
+    assert out.returncode == 0, out.stdout
+
+
+def test_a_failure_of_another_step_still_gives_the_rule_and_names_no_step(tmp_path):
+    """Brief #216 build b, unchanged: a lint failure is not a body failure."""
+    out = check_jobs(tmp_path, jobs_with(failed=("PR body shape", "Lint"), skipped=HIDDEN[1:]))
+    assert out.stdout == (
+        "FAIL full-run: rule 2: the latest full governance run of the head did not succeed\n"
+    )
+
+
+def test_the_message_names_steps_and_never_a_value(tmp_path):
+    """CLAUDE.md rule 6 (REQ-039): the step names of the workflow, never the head or the run id."""
+    out = check_jobs(tmp_path, jobs_with(skipped=HIDDEN))
+    assert HEAD not in out.stdout and str(RUN_ID) not in out.stdout
+
+
+def test_the_steps_a_full_run_skips_by_their_own_condition_are_pinned_to_the_workflow():
+    """Brief #261 answer 1 (REQ-039): each step of `OWN_CONDITION` is skipped on a full run only by
+    its own condition (on an edit only, or by the tree of the repository, `kit/agk-kit.mk`), never
+    by an earlier failure: it comes before any check or carries `!cancelled()`. `Project tests`
+    is skipped by the tree in the kit's own repository, where `Release check` runs, only."""
+    sys.path.insert(0, str(ROOT / "scripts" / "agk"))
+    import full_run
+
+    body = text().split("    steps:\n", 1)[1]
+    blocks = {
+        m.group(1): m.group(2)
+        for m in re.finditer(r"(?ms)^      - name: (.+?)\n(.*?)(?=^      - |\Z)", body)
+    }
+    assert set(full_run.OWN_CONDITION) == {"Latest full run", "Release check"}
+    assert full_run.KIT_ONLY == ("Project tests", "Release check")
+    for name in (*full_run.OWN_CONDITION, full_run.KIT_ONLY[0]):
+        cond = blocks[name].split("\n", 1)[0]
+        assert cond.startswith("        if: "), name
+        assert "github.event.action == 'edited'" in cond or "hashFiles('kit/agk-kit.mk')" in cond
+        assert "!cancelled()" in cond or name == "Latest full run", name
+    assert "hashFiles('kit/agk-kit.mk') == ''" in blocks["Project tests"].split("\n", 1)[0]
+    assert "hashFiles('kit/agk-kit.mk') != ''" in blocks["Release check"].split("\n", 1)[0]
+    names = list(blocks)
+    assert names.index("Latest full run") < names.index("PR body file")

@@ -139,7 +139,7 @@ def test_ac2_project_tests_run_only_where_the_kits_own_suite_is_not_installed():
     project, checks = blocks["Project tests"], blocks["Tests of the checks"]
     assert project == (
         "name: Project tests\n"
-        + "        if: ${{ hashFiles('kit/agk-kit.mk') == ''"
+        + "        if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') == ''"
         + " && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}\n"
         + "        run: make -f agk.mk agk-project-test\n"
     )
@@ -359,4 +359,27 @@ def test_the_secret_scan_keeps_its_name_its_place_and_its_condition():
     blocks = step_blocks(WORKFLOW.read_text(encoding="utf-8"))
     names = list(blocks)
     assert names[-1] == "Secret scan" and names[-2] == "Project tests"
-    assert "        if: ${{ github.event.action != 'edited' }}\n" in blocks["Secret scan"]
+    # brief #261: `!cancelled()`, so that a failed body step no longer hides the scan
+    assert (
+        "        if: ${{ !cancelled() && github.event.action != 'edited' }}\n"
+        in blocks["Secret scan"]
+    )
+
+
+# --- a body failure hides no later step (brief #261, ADR-0159) ----------------------------------
+
+
+def test_every_step_after_the_first_body_step_runs_unless_cancelled():
+    """Brief #261 answer 3 (REQ-039): a failed body step no longer skips Lint, the tests or the
+    secret scan, so a full run reports every check in one pass and an edit can cure only a run
+    whose other steps ran. The steps keep their order: the secret scan stays last."""
+    blocks = step_blocks(WORKFLOW.read_text(encoding="utf-8"))
+    names = list(blocks)
+    after = names[names.index("PR body file") + 1 :]
+    assert {"Lint", "Tests of the checks", "Project tests", "Secret scan", "Open briefs"} <= set(
+        after
+    )
+    for name in after:
+        head = blocks[name].split("\n        run:", 1)[0]
+        assert re.search(r"(?m)^        if: \$\{\{ !cancelled\(\)", head), name
+    assert names[-1] == "Secret scan"
