@@ -1,6 +1,6 @@
 # ADR-0157: `watch --assign` takes an `Assign:` posted just before the `Request:` (REQ-041, brief 252)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0125, ADR-0130
