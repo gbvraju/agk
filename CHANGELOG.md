@@ -4,6 +4,10 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.57.1 (2026-10-26)
+
+- #262 governance: an edited description no longer cures a red full run that skipped a step it does not repeat (lint, tests, the secret scan): the edited run fails with "the last full run did not reach <steps>; push a commit or re-run it"; and every step after `PR body file` now runs unless the run is cancelled, so a failed description hides no later check (brief #261, ADR-0159)
+
 ## 0.57.0 (2026-10-26)
 
 - #248 requirements: `retired` joins the requirement statuses and its `REQ-nnn` markers fail `check_requirements` (naming the requirement and the files); the weekly drift audit lists the test files that carry no marker as D8 (never blocking), and `traceability.py` ends with the retired requirements and the untagged test files (SPEC-0004 rule 24, SPEC-0010 rule 26, brief #244 build a)
