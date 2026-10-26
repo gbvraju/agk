@@ -149,3 +149,13 @@ def test_the_workflow_gains_no_permission():
         "checks": "read",
         "statuses": "read",
     }
+
+
+def test_a_final_line_beside_numbered_items_gets_a_correction_too(proj, stub, tmp_path):
+    """Verdict on 90e5749: the silent case; the router replies to it."""
+    final = "Final: docs/adr/0001-x.md Proposed -> Accepted"
+    body = f"Verdict: fix list {HEAD[:7]}\n\n1. Fix x.\n\n{final}\n"
+    route(proj, stub, tmp_path, [said(11, "boss", body)])
+    posted = replies(stub)
+    assert len(posted) == 1
+    assert "read only in a fix list with no numbered items" in posted[0][2][1]

@@ -187,6 +187,10 @@ NOT_FIX_LIST = (
     "SPEC-0021 rule 1: a Final: line is read only under 'Verdict: fix list <sha>'; "
     "write that first line, or leave the Final: line out"
 )
+FINAL_WITH_ITEMS = (
+    "SPEC-0021 rule 1: a Final: line is read only in a fix list with no numbered items; "
+    "post the Final: line in its own verdict once the items are met"
+)
 FINAL_SHAPE = (
     "SPEC-0021 rule 2: a Final: line reads 'Final: <path> <old> -> <new>', "
     "with the old and the new status as one word each"
@@ -202,9 +206,10 @@ def verdict_problem(body: str) -> str | None:
 
     The reading `covered_fix_list` applies, as a message that names the rule and shows the shape
     and never the body: a `Final:` line under a verdict that is not `fix list`, a `Final:` line that
-    does not match `Final: <path> [REQ-n] <old> -> <new>`, and a line for `docs/requirements.md`
-    without its requirement id or the reverse. A comment that is no verdict and a verdict with no
-    `Final:` line have no problem."""
+    does not match `Final: <path> [REQ-n] <old> -> <new>`, a line for `docs/requirements.md`
+    without its requirement id or the reverse, and a `Final:` line in a fix list that also has
+    numbered items (`covered_fix_list` reads no such list; the verdict on 90e5749). A comment
+    that is no verdict and a verdict with no `Final:` line have no problem."""
     lines = body.splitlines()
     if not lines or not lines[0].startswith("Verdict:"):
         return None
@@ -213,6 +218,8 @@ def verdict_problem(body: str) -> str | None:
         return None
     if FIX_LIST.fullmatch(lines[0]) is None:
         return NOT_FIX_LIST
+    if any(re.match(r"\s*\d+\.", line) for line in lines):  # `covered_fix_list` reads no such list
+        return FINAL_WITH_ITEMS
     for line in finals:
         match = FINAL_LINE.fullmatch(line)
         if match is None:

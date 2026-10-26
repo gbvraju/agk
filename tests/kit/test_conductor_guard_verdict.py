@@ -28,6 +28,9 @@ CLEARED = f"Verdict: cleared {SHA}\n\nAll fine.\n"
 BAD = f"Verdict: cleared {SHA}\nFinal: flip ADR-0146 to Accepted in one commit.\n"
 SHAPE = f"Verdict: fix list {SHA}\nFinal: flip the ADR\n"
 REQ = f"Verdict: fix list {SHA}\nFinal: docs/requirements.md planned -> done\n"
+NUMBERED_BODY = (
+    f"Verdict: fix list {SHA}\n\n1. Fix x.\n\nFinal: docs/adr/0001-x.md Proposed -> Accepted\n"
+)
 
 
 def run_hook(command: str, project: Path, tmpdir: Path, *args: str):
@@ -88,6 +91,7 @@ def test_a_well_formed_verdict_from_a_scratch_file_is_allowed(project, tmp):
         (BAD, common.NOT_FIX_LIST),
         (SHAPE, common.FINAL_SHAPE),
         (REQ, common.FINAL_REQUIREMENT),
+        (NUMBERED_BODY, common.FINAL_WITH_ITEMS),
     ],
 )
 def test_a_malformed_verdict_from_a_scratch_file_is_denied_with_the_same_message(
@@ -109,6 +113,7 @@ def test_the_message_is_the_one_the_router_replies_with():
     assert common.verdict_problem(BAD) == common.NOT_FIX_LIST
     assert common.verdict_problem(SHAPE) == common.FINAL_SHAPE
     assert common.verdict_problem(REQ) == common.FINAL_REQUIREMENT
+    assert common.verdict_problem(NUMBERED_BODY) == common.FINAL_WITH_ITEMS
 
 
 def test_a_one_line_verdict_in_a_field_is_allowed_and_a_multi_line_one_is_refused(project, tmp):

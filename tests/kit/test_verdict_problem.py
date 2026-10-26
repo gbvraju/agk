@@ -30,6 +30,10 @@ SHAPE = (
     "SPEC-0021 rule 2: a Final: line reads 'Final: <path> <old> -> <new>', "
     "with the old and the new status as one word each"
 )
+NUMBERED = (
+    "SPEC-0021 rule 1: a Final: line is read only in a fix list with no numbered items; "
+    "post the Final: line in its own verdict once the items are met"
+)
 REQ = (
     "SPEC-0021 rule 2: a Final: line for docs/requirements.md reads "
     "'Final: docs/requirements.md REQ-nnn <old> -> <new>', and no other path names a requirement"
@@ -101,11 +105,27 @@ def test_the_first_offending_line_decides_and_a_good_line_beside_it_does_not_hid
     )  # not a verdict first line
 
 
-def test_a_numbered_fix_list_with_a_good_final_line_is_not_a_problem():
-    """Brief 238: an ordinary item list followed by a Final: line is the usual fix list."""
+def test_a_final_line_in_a_fix_list_with_numbered_items_is_a_problem():
+    """Verdict on 90e5749: `covered_fix_list` ignores such a Final: line without a word."""
     items = "1. Fix the thing.\n\nThen push alone:\n"
     body = f"Verdict: fix list {SHA}\n\n{items}Final: {ADR} Proposed -> Accepted\n"
-    assert common.verdict_problem(body) is None
+    assert common.verdict_problem(body) == NUMBERED
+    assert common.covered_fix_list(body) is None
+    one_line = "Verdict: fix list abc1234\n1. fix x\nFinal: docs/adr/x.md Proposed -> Accepted\n"
+    assert common.verdict_problem(one_line) == NUMBERED
+    indented = f"Verdict: fix list {SHA}\n  2. an item\nFinal: {ADR} Proposed -> Accepted\n"
+    assert common.verdict_problem(indented) == NUMBERED
+
+
+def test_numbered_items_without_a_final_line_are_still_no_problem():
+    """Verdict on 90e5749: only a Final: line beside the items is the silent case."""
+    assert common.verdict_problem(f"Verdict: fix list {SHA}\n\n1. Fix x.\n2. Fix y.\n") is None
+
+
+def test_the_not_fix_list_problem_comes_before_the_numbered_one():
+    """A cleared verdict with items and a Final: line is first of all not a fix list."""
+    body = f"Verdict: cleared {SHA}\n1. x\nFinal: {ADR} Proposed -> Accepted\n"
+    assert common.verdict_problem(body) == NOT_FIX
 
 
 def test_covered_fix_list_and_the_problem_agree_on_what_is_covered():
