@@ -100,5 +100,5 @@ def test_ac5_the_report_schema_is_4_and_the_facts_schema_stays_1():
     """REQ-031 AC5: rule 4 (adding a field raises the number of report.json only)."""
     import product_report as pr
 
-    assert pr.REPORT_SCHEMA == 6 and pr.SCHEMA == 1
-    assert build(load(KINDS))["schema"] == 6
+    assert pr.REPORT_SCHEMA == 7 and pr.SCHEMA == 1
+    assert build(load(KINDS))["schema"] == 7

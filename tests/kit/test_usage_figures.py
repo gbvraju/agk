@@ -123,9 +123,9 @@ def test_ac8_the_report_schema_is_6_and_the_fields_are_in_the_tables():
     """REQ-040 AC8"""
     import product_report as pr
 
-    assert pr.REPORT_SCHEMA == 6 and build(load())["schema"] == 6
+    assert pr.REPORT_SCHEMA == 7 and build(load())["schema"] == 7
     assert pr.ITEM_KINDS["pull-request-cost"][-1] == "usage"
-    assert pr.ITEM_KINDS["week-totals"][-3:-1] == ("usage", "usage_reported")
+    assert pr.ITEM_KINDS["week-totals"][-4:-2] == ("usage", "usage_reported")
 
 
 def test_ac8_each_cost_item_carries_the_figure_or_not_reported_never_zero():

@@ -1,0 +1,1 @@
+- the weekly report gains the shadow review's catch rate and counts next to the conductor's verdicts, report schema 7: the item `week-totals` carries `shadow` (the counts of the week and in total with the rate, `not-running`, or `unknown`); `facts.json` carries the optional section `shadow` (REQ-042 build (c), SPEC-0035 rule 5)

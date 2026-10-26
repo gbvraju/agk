@@ -61,7 +61,7 @@ def totals(doc: dict, tmp_path: Path, capsys) -> str:
     line = next(
         ln for ln in section(render_doc(doc, tmp_path, capsys), "## Cost") if "This week:" in ln
     )
-    return line.split(" — ")[0]
+    return line.split(" — ")[0].removesuffix("; shadow review: unknown")
 
 
 def test_ac5_the_totals_line_counts_the_pull_requests_within_range(tmp_path, capsys):
@@ -96,12 +96,14 @@ def test_ac5_only_the_pull_requests_merged_in_the_week_are_counted(tmp_path, cap
 def test_ac5_the_ending_is_on_the_same_line_before_the_link_in_a_busy_week(tmp_path, capsys):
     """REQ-025 AC5: SPEC-0018 rule 6 (SPEC-0015: the totals line is the section's only line)."""
     doc = facts("busy")
+    doc.pop("shadow")
     merged = [p["number"] for p in doc["pull_requests"] if p["state"] == "merged"]
     lines = section(
         render_doc(declared(doc, {merged[0]: ("1-9", "5.0")}), tmp_path, capsys), "## Cost"
     )
     assert len(lines) == 1
     text, _, link = lines[0].partition(" — ")
+    text = text.removesuffix("; shadow review: unknown")  # the facts say nothing of the shadow
     assert text.endswith("; estimate: 1 of 1 within range") and "merged%3A" in link
 
 

@@ -748,6 +748,33 @@
     }
   ],
   "schema": 1,
+  "shadow": {
+    "issue": 40,
+    "total": {
+      "heads": 5,
+      "right_both": 3,
+      "right_conductor_only": 4,
+      "right_shadow_only": 2,
+      "unmarked_findings": 1,
+      "unmarked_heads": 2,
+      "wrong_conductor": 2,
+      "wrong_shadow": 3
+    },
+    "unpaired": 1,
+    "unread": 0,
+    "weeks": {
+      "2026-W41": {
+        "heads": 4,
+        "right_both": 2,
+        "right_conductor_only": 3,
+        "right_shadow_only": 1,
+        "unmarked_findings": 0,
+        "unmarked_heads": 1,
+        "wrong_conductor": 1,
+        "wrong_shadow": 2
+      }
+    }
+  },
   "specs": [
     {
       "id": "SPEC-0001",

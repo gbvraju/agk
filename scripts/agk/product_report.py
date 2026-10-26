@@ -167,7 +167,17 @@ def unknown_line(what: str, link: str) -> str:
 # An item is `{"kind", <its fields>, "links"}`. The fields of a kind are fixed here; a kind or a
 # field that is not in the table does not exist (a new one is a new schema number).
 
-REPORT_SCHEMA = 6
+REPORT_SCHEMA = 7
+SHADOW_COUNTS = (
+    "heads",
+    "right_conductor_only",
+    "right_shadow_only",
+    "right_both",
+    "wrong_conductor",
+    "wrong_shadow",
+    "unmarked_heads",
+    "unmarked_findings",
+)
 ITEM_KINDS = {
     "requirement-done": ("id", "title", "criteria", "became_done"),
     "pull-request-merged": ("number", "title", "merged_on"),
@@ -188,6 +198,7 @@ ITEM_KINDS = {
         "usage",
         "usage_reported",
         "corrections",
+        "shadow",
     ),
     "flow-figures": (
         "open_builders",
@@ -846,9 +857,48 @@ def cost(doc: dict, links: Links, start: date, end: date) -> list[dict]:
             usage=UNKNOWN if UNKNOWN in usages else (sum(reported) if reported else "not-reported"),
             usage_reported=len(reported),
             corrections=moments_in_week(doc.get("flow"), "corrections", start, end),
+            shadow=shadow_of(doc.get("shadow"), start),
         )
     )
     return items
+
+
+def catch_rate(counts: dict) -> str:
+    """The conductor's catch rate (SPEC-0035 rule 4): the right conductor findings over those plus
+    the right shadow-only findings; `none` without a right finding, never 0."""
+    right = counts["right_conductor_only"] + counts["right_both"]
+    total = right + counts["right_shadow_only"]
+    return "none" if total == 0 else f"{right}/{total} ({100 * right / total:.1f}%)"
+
+
+def shadow_counts(value: object) -> dict | None:
+    """The eight counts of a week or of the total with their catch rate, or None when unreadable."""
+    if not isinstance(value, dict):
+        return None
+    if any(type(value.get(key)) is not int or value[key] < 0 for key in SHADOW_COUNTS):
+        return None
+    counts = {key: value[key] for key in SHADOW_COUNTS}
+    return {**counts, "catch_rate": catch_rate(counts)}
+
+
+def shadow_of(value: object, start: date) -> object:
+    """The shadow review of the week of `start` and in total (SPEC-0035 rule 5): the counts and the
+    catch rate, `not-running` without an open `agk-shadow` issue, `unknown` when unreadable."""
+    if not isinstance(value, dict):
+        return UNKNOWN
+    if "issue" in value and value["issue"] is None:
+        return "not-running"
+    year, number, _ = start.isocalendar()
+    weeks = value.get("weeks")
+    if not isinstance(weeks, dict):
+        return UNKNOWN
+    empty = dict.fromkeys(SHADOW_COUNTS, 0)
+    week = shadow_counts(weeks.get(f"{year}-W{number:02d}", empty))
+    total = shadow_counts(value.get("total"))
+    unpaired, unread = value.get("unpaired"), value.get("unread")
+    if week is None or total is None or type(unpaired) is not int or type(unread) is not int:
+        return UNKNOWN
+    return {"week": week, "total": total, "unpaired": unpaired, "unread": unread}
 
 
 def moments_in_week(flow: object, key: str, start: date, end: date) -> int | str:
@@ -1076,7 +1126,25 @@ def totals_text(entry: dict) -> str:
         f"hours in total: {entry['hours']}; fix verdicts in total: {entry['fix_verdicts']}; "
         f"corrections: {entry['corrections']}; "
         f'declared "Behaviour: unchanged": {entry["behaviour_unchanged"]}; '
-        f"usage in total: {shown}; estimate: {estimate_text(entry['estimate'])}"
+        f"usage in total: {shown}; estimate: {estimate_text(entry['estimate'])}; "
+        f"{shadow_text(entry['shadow'])}"
+    )
+
+
+def shadow_text(value) -> str:
+    """The catch-rate line of the shadow review, beside the conductor's verdicts."""
+    if value == UNKNOWN:
+        return f"shadow review: {UNKNOWN}"
+    if value == "not-running":
+        return "shadow review: not running"
+    week, total = value["week"], value["total"]
+    return (
+        f"shadow review: heads reviewed by both {week['heads']}; "
+        f"right: conductor only {week['right_conductor_only']}, "
+        f"shadow only {week['right_shadow_only']}, both {week['right_both']}; "
+        f"wrong: conductor {week['wrong_conductor']}, shadow {week['wrong_shadow']}; "
+        f"unmarked heads {week['unmarked_heads']}; "
+        f"catch rate {week['catch_rate']}, all time {total['catch_rate']}"
     )
 
 

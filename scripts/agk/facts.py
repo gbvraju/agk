@@ -23,6 +23,7 @@ import check_adrs
 import check_specs
 import drift_audit
 import metrics
+import shadow_rate
 from common import (
     REQ_ID,
     CheckError,
@@ -56,6 +57,7 @@ SPEC_TITLE = re.compile(r"^# SPEC-\d{4}:\s*(.+?)\s*$")
 SPEC_STATUSES = ("Draft", "Approved")
 LABELS = ("agk-metrics", "agk-drift-audit", "agk-product-report")
 BRIEF_LABEL = "agk-brief"
+SHADOW_LABEL = "agk-shadow"
 BRIEF_LINE = re.compile(r"Brief: #(\d+)")
 TAKE_LINE = re.compile(
     r"taken: \S+ \d{4}-\d{2}-\d{2}(?: build \([A-Za-z0-9._-]+\))?( retakes)?( reserves .*)?"
@@ -537,6 +539,7 @@ def pull_record(
     limits: dict | None = None,
     today: date | None = None,
     seen: list | None = None,
+    keep: dict | None = None,
 ) -> dict:
     number = item["number"]
     head = (item.get("head") or {}).get("sha") or ""
@@ -545,6 +548,8 @@ def pull_record(
     commits = get_list(src, f"commits-{number}", f"repos/{{repo}}/pulls/{number}/commits")
     authors = metrics.counted_authors(authors, metrics.author_of(item))
     merged = bool(item.get("merged_at"))
+    if keep is not None and merged:  # one fetch of the comments serves the flow and the shadow
+        keep[number] = (item, comments)
     size, expected = parse_estimate(item["body"]) if "body" in item else (UNKNOWN, UNKNOWN)
     proof = proof_of(src, head) if head else (UNKNOWN, UNKNOWN)
     record = {
@@ -608,6 +613,7 @@ def pulls_section(
     authors: list[str] | None = None,
     limits: dict | None = None,
     seen: list | None = None,
+    keep: dict | None = None,
 ) -> Any:
     start = window_start(today, weeks)
 
@@ -629,7 +635,7 @@ def pulls_section(
     last = metrics.start_of(today + timedelta(days=1))
     kept = [p for p in chosen.values() if (metrics.stamp(p.get("created_at")) or last) < last]
     return [
-        pull_record(src, p, authors, limits, today, seen)
+        pull_record(src, p, authors, limits, today, seen, keep)
         for p in sorted(kept, key=lambda p: p["number"])
     ]
 
@@ -714,6 +720,36 @@ def flow_section(
     return section
 
 
+def shadow_section(src: Any, kept: dict, authors: list[str] | None) -> Any:
+    """What the weekly report needs of the shadow review (SPEC-0035 rule 5): the counts of
+    `shadow_rate.py` for the merged pull requests of the window, per ISO week of the merge and in
+    total, from the comments of the one open issue labelled `agk-shadow`. No open issue is a review
+    that is not running (`{"issue": null}`); what cannot be read, two open issues and a refused
+    mark are `unknown`, never zero."""
+    listed = get_list(
+        src, f"issues-{SHADOW_LABEL}", f"repos/{{repo}}/issues?state=open&labels={SHADOW_LABEL}"
+    )
+    if listed is None:
+        return UNKNOWN
+    opened = [i for i in listed if "pull_request" not in i and i.get("state") == "open"]
+    if not opened:
+        return {"issue": None}
+    if len(opened) > 1:
+        return UNKNOWN
+    number = opened[0]["number"]
+    comments = get_list(src, f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    if comments is None or not allowed:
+        return UNKNOWN
+    try:
+        totals, unpaired, unread = shadow_rate.count_pulls(
+            [kept[n] for n in sorted(kept)], comments, allowed
+        )
+    except CheckError:
+        return UNKNOWN
+    return {"issue": number, "unpaired": unpaired, "unread": unread, **shadow_rate.summary(totals)}
+
+
 def issues_section(src: Any) -> Any:
     found = []
     for label in LABELS:
@@ -765,7 +801,8 @@ def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
     limits = flow_limits(root)
     authors = metrics.verdict_authors(root)
     seen: list[tuple] = []
-    pulls = pulls_section(src, today, weeks, authors, limits, seen)
+    kept: dict = {}
+    pulls = pulls_section(src, today, weeks, authors, limits, seen, kept)
     flow = flow_section(src, limits, authors, seen)
     return {
         "schema": SCHEMA,
@@ -794,6 +831,7 @@ def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
         "questions": questions_section(root, specs, adrs),
         "pull_requests": pulls,
         "flow": flow,
+        "shadow": UNKNOWN if pulls == UNKNOWN else shadow_section(src, kept, authors),
         "issues": issues,
         "drift": drift_section(root, today, cfg, issues),
     }

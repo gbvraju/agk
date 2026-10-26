@@ -1,5 +1,5 @@
 {
-  "schema": 6,
+  "schema": 7,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -526,6 +526,32 @@
         "usage": "unknown",
         "usage_reported": 0,
         "corrections": 0,
+        "shadow": {
+          "week": {
+            "heads": 4,
+            "right_conductor_only": 3,
+            "right_shadow_only": 1,
+            "right_both": 2,
+            "wrong_conductor": 1,
+            "wrong_shadow": 2,
+            "unmarked_heads": 1,
+            "unmarked_findings": 0,
+            "catch_rate": "5/6 (83.3%)"
+          },
+          "total": {
+            "heads": 5,
+            "right_conductor_only": 4,
+            "right_shadow_only": 2,
+            "right_both": 3,
+            "wrong_conductor": 2,
+            "wrong_shadow": 3,
+            "unmarked_heads": 2,
+            "unmarked_findings": 1,
+            "catch_rate": "7/9 (77.8%)"
+          },
+          "unpaired": 1,
+          "unread": 0
+        },
         "links": [
           {
             "to": "search",
