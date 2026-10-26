@@ -125,3 +125,44 @@ def test_ac3_the_router_job_is_still_left_out():
     checks = [run("agk-route", 30, "failure"), run("proof", 31)]
     assert route.decide(facts(checks)) != "agk:ci-red"
     assert route.branch_state(checks, []) == "green"
+
+
+def test_ac3_a_skipped_run_of_a_higher_id_never_hides_a_failing_run_of_the_same_name():
+    """REQ-039 AC3: the verdict on 4c69972; push workflows start skipped jobs of the same names."""
+    checks = [run("governance", 10, "failure"), run("governance", 11, "skipped"), run("proof", 12)]
+    assert route.decide(facts(checks)) == "agk:ci-red"
+    assert route.branch_state(checks, []) == "red"
+    name, _ = route.failing(checks, [], "o/r", HEAD)
+    assert name == "governance"
+
+
+def test_ac3_a_skipped_run_of_a_higher_id_does_not_hide_a_pending_or_a_green_run_either():
+    """REQ-039 AC3"""
+    green = [run("governance", 10), run("governance", 11, "skipped"), run("proof", 12)]
+    assert route.decide(facts(green)) != "agk:ci-red"
+    running = [run("governance", 10, None), run("governance", 11, "skipped"), run("proof", 12)]
+    assert route.decide(facts(running)) == "agk:ci-running"
+    assert route.branch_state(running, []) == "pending"
+
+
+def test_ac3_when_every_run_of_a_name_is_skipped_the_latest_skipped_one_stands():
+    """REQ-039 AC3: skipped is neither red nor pending."""
+    checks = [run("governance", 10, "skipped"), run("governance", 11, "skipped"), run("proof", 12)]
+    assert route.decide(facts(checks)) != "agk:ci-red"
+    assert [c["id"] for c in route.latest_runs(checks) if c["name"] == "governance"] == [11]
+
+
+def test_ac3_a_newer_real_run_replaces_an_older_real_run_even_with_a_skipped_one_between():
+    """REQ-039 AC3"""
+    checks = [
+        run("governance", 10, "failure"),
+        run("governance", 11, "skipped"),
+        run("governance", 12),
+    ]
+    assert route.decide(facts(checks)) != "agk:ci-red"
+    checks = [
+        run("governance", 10),
+        run("governance", 11, "skipped"),
+        run("governance", 12, "failure"),
+    ]
+    assert route.decide(facts(checks)) == "agk:ci-red"

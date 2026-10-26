@@ -122,9 +122,16 @@ def latest_runs(checks: list[dict]) -> list[dict]:
     """The latest run of each check name: the highest `id`, the later `started_at` on a tie.
 
     An older run of a name (a cancelled one, one a newer run replaced) is ignored, as GitHub's
-    required checks ignore it; a latest run that failed or was cancelled still counts."""
+    required checks ignore it; a latest run that failed or was cancelled still counts. A skipped
+    run (the `push` workflows start jobs of the same names that `if:` skips) is never the latest
+    while the name has a run that was not skipped; a name with only skipped runs keeps its
+    newest."""
+    ran = {str(r.get("name") or "") for r in checks if r.get("conclusion") != "skipped"}
+    kept = [
+        r for r in checks if r.get("conclusion") != "skipped" or str(r.get("name") or "") not in ran
+    ]
     newest: dict[str, dict] = {}
-    for run in checks:
+    for run in kept:
         key = str(run.get("name") or "")
         rank = (run.get("id") or 0, str(run.get("started_at") or ""))
         held = newest.get(key)

@@ -16,8 +16,9 @@ Brief #229 (priority 1, measured on #226): the head of #226 held a cancelled `pr
 
 1. **The latest run of each check** (`scripts/agk/route.py`, `latest_runs`): before it decides `agk:ci-running`, `agk:ci-red` or green, the router keeps for each check name only the run with the highest `id`, the later `started_at` breaking a tie. This applies to the label of a pull request (`decide`), to the state of the default branch (`branch_state`) and to the name and link of the failing check (`failing`).
 2. **A latest run that is `cancelled` is still red**, and so is a latest `failure`; only an older run of the same name is ignored. An older run that never ended no longer keeps the head `agk:ci-running` once a newer run of its name has ended.
-3. **Commit statuses** keep the latest status of each context (`latest_statuses`, the highest `id`), as GitHub does. The router job `agk-route` is still left out by name.
-4. Flow mode: no version bump, the fragment `changelog.d/ccr-7649d887-m9hvn7-si.md`, `CHANGELOG.md` and `kit/hashes.json` as on main. Amendment 79 (`docs/runs/proposed-spec-amendments-79.md`) is for SPEC-0032 rules 2 and 7.
+3. **A skipped run is never the latest of a name that has a run that was not skipped** (the verdict on 4c69972): every push to a pull request branch also starts the `push` workflows, whose `governance` and `agk-route` jobs are skipped by their `if:` and carry the same names, sometimes with a higher `id` than the real run; a name with only skipped runs keeps its newest, and a skipped run is neither red nor pending.
+4. **Commit statuses** keep the latest status of each context (`latest_statuses`, the highest `id`), as GitHub does. The router job `agk-route` is still left out by name.
+5. Flow mode: no version bump, the fragment `changelog.d/ccr-7649d887-m9hvn7-si.md`, `CHANGELOG.md` and `kit/hashes.json` as on main. Amendment 79 (`docs/runs/proposed-spec-amendments-79.md`) is for SPEC-0032 rules 2 and 7.
 
 ## Consequences
 
