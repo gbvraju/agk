@@ -13,7 +13,7 @@ from test_doctor import checks_of, doctor, prepare, stub_gh
 
 KIT = Path(__file__).resolve().parents[2]
 KEYS = ("vision", "stack", "design", "review")
-SECRET_NAME = "zq-engine-name"  # nosec B105 - a made-up skill name the test proves is never printed
+ENGINE_NAME_SHOWN = "zq-engine-name"
 
 
 @pytest.fixture(autouse=True)
@@ -72,8 +72,8 @@ def test_ac1_without_an_engines_table_every_engine_is_absent_and_the_template_is
 
 def test_ac1_a_named_skill_of_the_project_or_the_plugin_is_present(tmp_path):
     """REQ-036 AC1: SPEC-0029 rule 2 (present: a skill the session can see)."""
-    engines = f'[engines]\nvision = "{SECRET_NAME}"\nstack = "plugin-skill"\n'
-    proc, _ = run_engines(tmp_path, engines, (SECRET_NAME,), ("plugin-skill",))
+    engines = f'[engines]\nvision = "{ENGINE_NAME_SHOWN}"\nstack = "plugin-skill"\n'
+    proc, _ = run_engines(tmp_path, engines, (ENGINE_NAME_SHOWN,), ("plugin-skill",))
     report = checks_of(proc.stdout)
     assert proc.returncode == 0, proc.stdout
     assert (
@@ -89,14 +89,16 @@ def test_ac1_a_named_skill_of_the_project_or_the_plugin_is_present(tmp_path):
 
 def test_ac1_a_user_level_skill_is_present_even_with_no_kit_root(tmp_path, home):
     """REQ-036 AC1: SPEC-0029 rule 2 (the ruling on Q-K4-257: `~/.claude/skills` is seen)."""
-    skill = home / ".claude" / "skills" / SECRET_NAME / "SKILL.md"
+    skill = home / ".claude" / "skills" / ENGINE_NAME_SHOWN / "SKILL.md"
     skill.parent.mkdir(parents=True)
     skill.write_text("zq-file-content\n", encoding="utf-8")
     for kit in (True, False):
-        proc, _ = run_engines(tmp_path / str(kit), f'[engines]\nstack = "{SECRET_NAME}"\n', kit=kit)
+        proc, _ = run_engines(
+            tmp_path / str(kit), f'[engines]\nstack = "{ENGINE_NAME_SHOWN}"\n', kit=kit
+        )
         check = checks_of(proc.stdout)["engine-stack"]
         assert check["status"] == "ok" and "present" in check["message"]
-        assert SECRET_NAME not in proc.stdout and "zq-file-content" not in proc.stdout
+        assert ENGINE_NAME_SHOWN not in proc.stdout and "zq-file-content" not in proc.stdout
 
 
 def test_ac1_a_user_level_skill_of_another_name_does_not_make_an_engine_present(tmp_path, home):
@@ -104,24 +106,24 @@ def test_ac1_a_user_level_skill_of_another_name_does_not_make_an_engine_present(
     skill = home / ".claude" / "skills" / "other-name" / "SKILL.md"
     skill.parent.mkdir(parents=True)
     skill.write_text("x\n", encoding="utf-8")
-    proc, _ = run_engines(tmp_path / "run", f'[engines]\nstack = "{SECRET_NAME}"\n')
+    proc, _ = run_engines(tmp_path / "run", f'[engines]\nstack = "{ENGINE_NAME_SHOWN}"\n')
     assert "missing" in checks_of(proc.stdout)["engine-stack"]["message"]
 
 
 @pytest.mark.parametrize("key", KEYS)
 def test_ac1_a_named_skill_that_is_not_found_is_missing_and_the_name_is_not_printed(tmp_path, key):
     """REQ-036 AC1: SPEC-0029 rule 2 (missing names the setting, never the value)."""
-    proc, _ = run_engines(tmp_path, f'[engines]\n{key} = "{SECRET_NAME}"\n')
+    proc, _ = run_engines(tmp_path, f'[engines]\n{key} = "{ENGINE_NAME_SHOWN}"\n')
     check = checks_of(proc.stdout)[f"engine-{key}"]
     assert check["status"] == "fail" and check["severity"] == "warn"
     assert "missing" in check["message"] and f"engines.{key}" in check["message"]
-    assert SECRET_NAME not in proc.stdout
+    assert ENGINE_NAME_SHOWN not in proc.stdout
     assert proc.returncode == 4
 
 
 def test_ac1_doctor_with_no_kit_root_cannot_tell_a_missing_plugin_skill(tmp_path):
     """REQ-036 AC1: SPEC-0029 rule 2 (cannot-check is never ok)."""
-    proc, _ = run_engines(tmp_path, f'[engines]\nvision = "{SECRET_NAME}"\n', kit=False)
+    proc, _ = run_engines(tmp_path, f'[engines]\nvision = "{ENGINE_NAME_SHOWN}"\n', kit=False)
     check = checks_of(proc.stdout)["engine-vision"]
     assert (check["status"], check["reason"]) == ("cannot-check", "no-kit-root")
 
@@ -145,15 +147,15 @@ def test_ac1_an_invalid_engine_value_fails_without_printing_it(tmp_path, value):
 
 def test_ac1_a_key_other_than_the_four_fails_and_the_key_is_not_printed(tmp_path):
     """REQ-036 AC1: SPEC-0029 rule 1 (the keys are vision, stack, design and review)."""
-    proc, _ = run_engines(tmp_path, f'[engines]\n{SECRET_NAME} = "x"\n')
+    proc, _ = run_engines(tmp_path, f'[engines]\n{ENGINE_NAME_SHOWN} = "x"\n')
     check = checks_of(proc.stdout)["engines-keys"]
     assert check["status"] == "fail" and "[engines]" in check["message"]
-    assert SECRET_NAME not in proc.stdout
+    assert ENGINE_NAME_SHOWN not in proc.stdout
 
 
 def test_ac1_the_engines_checks_come_last_and_doctor_writes_nothing(tmp_path):
     """REQ-036 AC1: SPEC-0029 rule 2 (read-only, no network, no model)."""
-    proc, dirs = run_engines(tmp_path, f'[engines]\nvision = "{SECRET_NAME}"\n')
+    proc, dirs = run_engines(tmp_path, f'[engines]\nvision = "{ENGINE_NAME_SHOWN}"\n')
     assert list(checks_of(proc.stdout))[-5:] == [
         "engines-keys",
         "engine-vision",
