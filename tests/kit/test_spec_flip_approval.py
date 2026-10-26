@@ -64,6 +64,7 @@ def test_ac4_a_listed_person_who_approved_the_text_lets_the_flip_pass(drafted):
     """REQ-039 AC4: rule 5, the sha is the reviewed commit and only the status line differs."""
     repo, sha = drafted
     repo.commit({SPEC: spec("Approved")}, "flip")
+    repo.write("agk.toml", "agent_apps = []\n")  # a review counts only with no agent app listed
     for comments, reviews in (([line(sha[:9])], None), ([], [line(sha)])):
         proc = run(repo, comments, reviews)
         assert (proc.returncode, proc.stdout.splitlines()[-1]) == (0, "ok specs"), proc.stdout

@@ -183,6 +183,16 @@ def login_of(item: dict) -> str:
     return login.lower() if isinstance(login, str) else ""
 
 
+def via_agent(item: dict, agent_apps: tuple[str, ...] | list[str]) -> bool:
+    """True when GitHub records that the comment was posted through a listed agent app.
+
+    The field `performed_via_github_app` is set by GitHub when an app posts; an agent that posts
+    through the app can neither remove nor forge it (brief 242)."""
+    app = item.get("performed_via_github_app")
+    slug = app.get("slug") if isinstance(app, dict) else None
+    return isinstance(slug, str) and slug.lower() in {a.lower() for a in agent_apps}
+
+
 def first_line(item: dict) -> str:
     lines = str(item.get("body") or "").splitlines()
     return lines[0].strip() if lines else ""
@@ -219,6 +229,7 @@ def approval_shas(
     approvers: list[str],
     runs: list[dict] | None = None,
     flipped: tuple[str, ...] | set[str] = (),
+    agent_apps: tuple[str, ...] | list[str] = (),
 ) -> dict[str, list[str]]:
     """spec -> the shas of the texts that a listed approver approved (SPEC-0032 rule 5).
 
@@ -228,7 +239,11 @@ def approval_shas(
     nothing. A review in
     state `APPROVED` approves, at its own `commit_id`, the spec its first line `Approve: SPEC-<n>`
     names, else the one spec in `flipped` when there is exactly one. Any other account, line or
-    form counts for nothing."""
+    form counts for nothing.
+
+    Brief 242: a comment posted through an app of `agent_apps` never counts as a person's approval,
+    with one account or several; a review record shows no app, so while `agent_apps` is not empty
+    a review counts for nothing (Q-242-1)."""
     allowed = {a.lstrip("@").lower() for a in approvers}
     found: dict[str, list[str]] = {}
 
@@ -239,6 +254,8 @@ def approval_shas(
     for kind, items in (("comment", comments), ("review", reviews)):
         for item in items:
             if login_of(item) not in allowed:
+                continue
+            if agent_apps and (kind == "review" or via_agent(item, agent_apps)):
                 continue
             line = first_line(item)
             long = APPROVE.fullmatch(line)
@@ -263,13 +280,14 @@ def person_approvals(
     reviews: list[dict],
     approvers: list[str],
     flipped: tuple[str, ...] | set[str] = (),
+    agent_apps: tuple[str, ...] | list[str] = (),
 ) -> set[str]:
     """The specs a listed approver approved in a comment or a review (SPEC-0032 rule 5)."""
     allowed = {a.lstrip("@").lower() for a in approvers}
-    found = set(approval_shas(comments, reviews, approvers, [], flipped))
+    found = set(approval_shas(comments, reviews, approvers, [], flipped, agent_apps))
     for item in comments:  # a short line is pinned later, by the runs of check_specs
         named = APPROVE_SHORT.fullmatch(first_line(item))
-        if named and login_of(item) in allowed:
+        if named and login_of(item) in allowed and not via_agent(item, agent_apps):
             found.add(named.group(1))
     return found
 

@@ -91,6 +91,21 @@ It cannot prevent:
   editing protected paths) bind a Claude Code session that loads that file. They do not bind your own `git` or `gh`, another program,
   or a repository administrator, who can edit the ruleset.
 
+## One account for every role, and what an approval proves
+
+Many people run AGK alone, on one GitHub account that their agent sessions also use. The approver lists name logins, so on one
+account an agent's `Approve:` would look like the person's. GitHub records the difference itself: a comment posted through a
+GitHub App carries `performed_via_github_app`, and an agent that posts through the app can neither remove nor forge it.
+`agent_apps` in `agk.toml` (a list of app slugs, default `["claude"]`; a change needs an ADR) names the apps an agent posts
+through. A comment posted through a listed app never counts as a person's approval, in the router, in `check_specs.py` and in
+`check_final_clearance.py`, whether a project uses one account or a separate account for each role; the router answers it once with
+`Correction needed:`. A review record shows no app, so while `agent_apps` is not empty a review never counts either, and the router
+asks the person once to post `Approve: SPEC-<n>` as a comment from their own account; with `agent_apps = []` reviews count as
+before. The limit, stated plainly: the field exists when an agent posts through an app, as cloud sessions do. A session on a
+person's own machine that uses that person's `gh` login posts with no field and looks like the person. With one account, run agents
+as cloud sessions, or never give them a personal token. The first-line markers (`Verdict:`, `Report:`, `Request:`, `Assign:`) and
+the session names keep roles readable; they are not proof.
+
 ## What is not covered here
 
 Which Claude deployment options suit your organisation, data residency, and the hosting of GitHub itself are outside AGK. Report a gap in

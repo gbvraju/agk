@@ -34,6 +34,7 @@ from common import (
     REQ_ID,
     STATUS_LINE,
     CheckError,
+    agent_apps,
     base_arg,
     base_context,
     changed_files,
@@ -284,6 +285,7 @@ def main(argv: list[str] | None = None) -> int:
             spec_approvers(root),
             runs_of(root, runs),
             set(flipped_specs(root, mb, changed)),
+            agent_apps(root),
         )
     messages += approval_failures(root, mb, changed, approvals)
     if body is None or not body.strip():

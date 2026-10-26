@@ -156,6 +156,7 @@ def test_ac4_an_approve_review_by_a_listed_person_counts_the_same_way(repo, tmp_
     """REQ-039 AC4: rule 5 (a person often approves in a review, not in an issue comment)."""
     reviewed = scenario(repo)
     approve_spec(repo)
+    repo.write("agk.toml", "agent_apps = []\n")  # a review counts only with no agent app listed
     review = {"body": "Approve: 1234567 SPEC-0001", "user": {"login": "maintainer"}}
     comments, reviews = files(tmp_path, [verdict(reviewed, FINAL)], [review])
     proc = run_check(repo, comments, reviews)
@@ -188,6 +189,17 @@ def test_ac4_the_short_line_of_a_listed_person_clears_a_flip_too(repo, tmp_path)
     comments, reviews = files(tmp_path, [verdict(reviewed, FINAL), short])
     proc = run_check(repo, comments, reviews)
     assert (proc.returncode, proc.stdout) == (0, "ok final-clearance\n"), proc.stdout
+
+
+def test_an_approve_line_posted_through_an_agent_app_does_not_clear_a_flip(repo, tmp_path):
+    """Brief 242: the final-clearance check reads the same rule as the router and check_specs."""
+    reviewed = scenario(repo)
+    approve_spec(repo)
+    sent = {**person(), "performed_via_github_app": {"slug": "claude"}}
+    comments, reviews = files(tmp_path, [verdict(reviewed, FINAL), sent])
+    assert run_check(repo, comments, reviews).returncode == 1
+    repo.write("agk.toml", "agent_apps = []\n")
+    assert run_check(repo, comments, reviews).returncode == 0
 
 
 def test_ac4_an_adr_final_line_needs_no_person(repo, tmp_path):

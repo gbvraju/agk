@@ -35,9 +35,19 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
-from common import CheckError, load_config, repo_root, required_checks, verdict_problem
+from common import CheckError, agent_apps, load_config, repo_root, required_checks, verdict_problem
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
-from reviewers import person_approvals, spec_approvers, verdict_authors
+from reviewers import (
+    APPROVE,
+    APPROVE_SHORT,
+    approval_shas,
+    first_line,
+    login_of,
+    person_approvals,
+    spec_approvers,
+    verdict_authors,
+    via_agent,
+)
 from session import RED_TITLE, gh, is_red, pages, repo_name
 
 NAME = "route"
@@ -203,7 +213,11 @@ def decide(f: dict) -> str:
     names_head = bool(sha) and head.startswith(sha)
     flipped = specs_approved_by(f.get("files") or [])
     people = approved_by_a_person(
-        comments, f.get("reviews") or [], f.get("approvers") or [], flipped
+        comments,
+        f.get("reviews") or [],
+        f.get("approvers") or [],
+        flipped,
+        f.get("agent_apps") or (),
     )
     if names_head and asked_for(latest_verdict_body(comments, authors)) - people:
         return "agk:approve"
@@ -260,6 +274,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "authors": verdict_authors(root),
         "approvers": spec_approvers(root),
         "required": required_checks(root),
+        "agent_apps": agent_apps(root),
         "author": (pr.get("user") or {}).get("login"),
         "files": files,
         "commit": commit if isinstance(commit, dict) else {},
@@ -333,6 +348,69 @@ def correct_verdicts(repo: str, n: int, comments: list[dict], authors: list[str]
             )
 
 
+REFUSED = "an approval posted through an agent's app does not count; the person posts it themselves"
+REFUSED_REVIEW = (
+    "a review does not count as an approval while agent apps are listed, because a review cannot "
+    "show which app posted it; the person posts `Approve: SPEC-<n>` as a comment from their own "
+    "account"
+)
+ANSWERED_APPROVAL = re.compile(r"\(approval (comment|review) (\d+)\)")
+
+
+def correct_approvals(
+    repo: str,
+    n: int,
+    comments: list[dict],
+    reviews: list[dict],
+    approvers: list[str] | None,
+    apps: list[str] | None,
+    flipped: set[str] | None = None,
+) -> None:
+    """Tell the person, once for each comment or review, that their approval does not count
+    (brief 242). A comment of a listed approver whose first line is an `Approve:` line and that
+    GitHub records as posted through an app of `agent_apps` gets one reply that begins
+    `Correction needed:` and names the comment. While `agent_apps` is not empty a review never
+    counts, since it cannot show which app posted it (Q-242-1); a review of a listed approver that
+    would have counted gets one reply that asks for the `Approve: SPEC-<n>` comment. A reply already
+    there for that comment or review (found by its marker) means nothing new is posted. No label
+    depends on it."""
+    if not apps:
+        return
+    allowed = {a.lstrip("@").lower() for a in approvers or []}
+    answered = {
+        (m.group(1), m.group(2))
+        for c in comments
+        if str(c.get("body") or "").startswith(CORRECTION)
+        for m in [ANSWERED_APPROVAL.search(str(c.get("body")))]
+        if m
+    }
+    asked: list[tuple[str, dict, str]] = []
+    for c in comments:
+        line = first_line(c)
+        if (
+            (APPROVE.fullmatch(line) or APPROVE_SHORT.fullmatch(line))
+            and login_of(c) in allowed
+            and via_agent(c, apps)
+        ):
+            asked.append(("comment", c, REFUSED))
+    for r in reviews:
+        if login_of(r) in allowed and approval_shas(
+            [], [r], list(allowed), [], flipped or set(), ()
+        ):
+            asked.append(("review", r, REFUSED_REVIEW))
+    for kind, item, message in sorted(asked, key=lambda a: (a[0], a[1].get("id") or 0)):
+        ident = str(item.get("id") or "")
+        if ident and (kind, ident) not in answered:
+            body = f"{CORRECTION} {message} (approval {kind} {ident})"
+            write(
+                f"repos/{repo}/issues/{n}/comments",
+                "-f",
+                f"body={body}",
+                method="POST",
+                what="rule 2: a correction",
+            )
+
+
 def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str | None:
     """Route pull request `n`; its label, or None when it is over; CheckError if unreadable."""
     got = read_facts(repo, n, root)
@@ -346,6 +424,15 @@ def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str |
     if not dry:
         apply(repo, n, current, wanted, labels)
         correct_verdicts(repo, n, facts.get("comments") or [], facts.get("authors"))
+        correct_approvals(
+            repo,
+            n,
+            facts.get("comments") or [],
+            facts.get("reviews") or [],
+            facts.get("approvers"),
+            facts.get("agent_apps"),
+            specs_approved_by(facts.get("files") or []),
+        )
     changed = [name for name in current if name in LABELS] != [wanted]
     print(f"#{n} {wanted}" + (" (changed)" if changed and not dry else ""))
     return wanted
@@ -602,6 +689,7 @@ def main(argv: list[str] | None = None) -> int:
         numbers = targets(os.environ.get("GITHUB_EVENT_NAME", ""), event, repo, default)
     try:
         required = required_checks(root)
+        agent_apps(root)
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}")
         return 1

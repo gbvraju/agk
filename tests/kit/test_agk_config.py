@@ -18,6 +18,7 @@ DEFAULTS = {
     "proof_timeout": 900,
     "pr_mode": "strict",
     "required_checks": ["proof", "governance"],
+    "agent_apps": ["claude"],
 }
 
 
