@@ -25,8 +25,10 @@ label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; bu
 `empty`, so a session that starts or restarts resumes from GitHub with one GET.
 A wait never goes silent (brief #210): when GitHub cannot be read for 5 polls in a row it prints
 `error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since
-<id>` when it starts. When `gh` says it could not connect, the line is `github-unreachable:
-<what> cannot be read; local head <sha> not pushed; next: push, then post the
+<id>` when it starts. `--assign` also takes at once the newest `Assign:` for the session posted
+between its previous `Request:` and its current one, unless the session has a `taken:` on any
+brief after it (brief #252). When `gh` says it could not connect, the line is
+`github-unreachable: <what> cannot be read; local head <sha> not pushed; next: push, then post the
 Report:/Question:`; a rate limit is waited out to the reset time that GitHub reports and does
 not end a wait (answer 6).
 `next` prints the first free `agk-brief` issue and takes it with the one comment `taken: <ID>
@@ -866,8 +868,36 @@ def conductor_issue(repo: str) -> int:
     return issues[0]["number"]
 
 
+def assign_line(comment: dict, me: str, allowed: set[str]) -> re.Match | None:
+    """The `Assign: <me> ...` first line of a comment by a listed author, else None."""
+    body = comment.get("body")
+    first = body.splitlines()[0].strip() if isinstance(body, str) and body.strip() else ""
+    match = ASSIGN.fullmatch(first)
+    if match and match.group(1) == me and author_of(comment) in allowed:
+        return match
+    return None
+
+
+def spent(repo: str, me: str, line: dict) -> bool | None:
+    """Brief #252 answer 2: an early `Assign:` (a brief or `none`) is spent when this session has a
+    `taken:` on any brief after it, since a session takes what it was assigned; a stale `none` of
+    an earlier session of the same name is then never read as an answer. None when unreadable."""
+    since = f"?since={line['created_at']}" if isinstance(line.get("created_at"), str) else ""
+    found = pages(f"repos/{repo}/issues/comments{since}")
+    if found is None:
+        return None
+    for comment in found:
+        body = str(comment.get("body") or "")
+        take_ = TAKE.match(body.splitlines()[0].strip() if body.strip() else "")
+        if take_ and take_.group(1) == me and comment.get("id", 0) > line.get("id", 0):
+            return True
+    return False
+
+
 def watch_assign(root, me: str, args: dict[str, str]) -> int:
-    """End on the first `Assign: <me> ...` by a listed author after this session's `Request:`."""
+    """End on the first `Assign: <me> ...` by a listed author after this session's `Request:`, or on
+    the newest one posted between its previous `Request:` and that one and not yet taken (brief
+    #252: the conductor may assign while the session is finishing, and need not post it twice)."""
     repo = repo_name(root)
     issue = conductor_issue(repo)
     path = f"repos/{repo}/issues/{issue}/comments"
@@ -880,29 +910,47 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
             return EXIT_UNREADABLE
         time.sleep(interval)
     reads.good()
-    asked = [c["id"] for c in comments if str(c.get("body") or "").startswith(f"Request: {me} ")]
+    asked = sorted(
+        c["id"] for c in comments if str(c.get("body") or "").startswith(f"Request: {me} ")
+    )
     seen = max(asked, default=newest(comments) or 0)
     allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None)}
     print(f"waiting on #{issue} since {seen}", flush=True)
+    early = None
+    if asked:  # the newest Assign between the previous Request (if any) and the current one
+        floor = asked[-2] if len(asked) > 1 else 0
+        window = [c for c in comments if floor < c.get("id", 0) < seen]
+        lines = [(c, m) for c in window if (m := assign_line(c, me, allowed))]
+        early = max(lines, key=lambda x: x[0].get("id", 0), default=None)
+    found: list | None = comments
+    take_reads = Reads(root)  # its own count: a readable conductor issue never resets it
     while True:
-        found = pages(path)
         if found is None:
             if reads.failed(f"the comments of #{issue}"):
                 return EXIT_UNREADABLE
         else:
             reads.good()
         for comment in sorted(found or [], key=lambda c: c.get("id", 0)):
-            body = comment.get("body")
-            first = body.splitlines()[0].strip() if isinstance(body, str) and body.strip() else ""
-            match = ASSIGN.fullmatch(first)
-            if comment.get("id", 0) > seen and match and match.group(1) == me:
-                if author_of(comment) in allowed:
-                    print(f"assign {match.group(2)}")
-                    return 0
+            match = assign_line(comment, me, allowed)
+            if comment.get("id", 0) > seen and match:
+                print(f"assign {match.group(2)}")
+                return 0
+        if early is not None:
+            used = spent(repo, me, early[0])
+            if used is None:
+                if take_reads.failed("the comments of the briefs"):
+                    return EXIT_UNREADABLE
+            elif used:
+                take_reads.good()
+                early = None
+            else:
+                print(f"assign {early[1].group(2)}")
+                return 0
         if time.monotonic() - started >= limit:
             print("assign-timeout")
             return 0
         time.sleep(interval)
+        found = pages(path)
 
 
 def is_red(item: dict) -> bool:
