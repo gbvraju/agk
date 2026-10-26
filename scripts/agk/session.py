@@ -70,11 +70,25 @@ USAGE = (
     "       session.py resume --pr N\n"
     "       session.py ids [--exclude-pr N]\n"
     "       session.py demand\n"
+    "       session.py plan [--json]\n"
     "       session.py push-check"
 )
-COMMANDS = ("watch", "next", "claim", "after", "queue", "resume", "ids", "demand", "push-check")
+COMMANDS = (
+    "watch",
+    "next",
+    "claim",
+    "after",
+    "queue",
+    "resume",
+    "ids",
+    "demand",
+    "plan",
+    "push-check",
+)
 PAGE = 100
 LABEL = "agk-brief"
+STALE_LABEL = "agk-stale"
+STALE_LINE = "Status: stale"
 MAX_BUILDERS = 3
 CLAIM_HOURS = 4
 VERDICT = re.compile(r"Verdict: (cleared|fix list|rejected) ([0-9a-f]{7,40})")
@@ -592,8 +606,17 @@ class Survey:
     files: dict = field(default_factory=dict)  # pull request number -> its changed files
 
 
+def is_stale(brief: dict) -> bool:
+    """A brief the conductor marked stale: the line `Status: stale` or the label `agk-stale`."""
+    lines = (x.rstrip() for x in str(brief.get("body") or "").splitlines())
+    labels = {str(x.get("name")) for x in brief.get("labels") or [] if isinstance(x, dict)}
+    return STALE_LABEL in labels or STALE_LINE in lines
+
+
 def judge(repo: str, brief: dict, me: str, prs: list, hours: int) -> tuple[str | None, list]:
     """Why the brief is not for this session (or None when it is free), and its comments."""
+    if is_stale(brief):
+        return "stale", []
     problems = brief_problems(brief.get("body"))
     if problems:
         return problems[0], []
@@ -1190,6 +1213,17 @@ def number_ok(text: str) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+    if args[:1] == ["plan"]:
+        if args[1:] not in ([], ["--json"]):
+            print(USAGE)
+            return 2
+        try:
+            from session_plan import plan  # the plan builds on this module
+
+            return plan(repo_root(), args[1:] == ["--json"])
+        except CheckError as exc:
+            print(f"FAIL {NAME}: {exc}")
+            return 2
     if not args or args[0] not in COMMANDS or len(args[1:]) % 2:
         print(USAGE)
         return 2
@@ -1203,6 +1237,7 @@ def main(argv: list[str] | None = None) -> int:
         "resume": {"--pr"},
         "ids": {"--exclude-pr"},
         "demand": set(),
+        "plan": set(),
         "push-check": set(),
     }
     if not set(opts) <= allowed[cmd] or len(opts) != len(args[1::2]):
