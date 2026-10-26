@@ -63,7 +63,7 @@ def gitleaks() -> str | None:
 
 needs_gitleaks = pytest.mark.skipif(
     gitleaks() is None,
-    reason="no gitleaks binary on PATH or in AGK_GITLEAKS; the governance step itself runs the scan",
+    reason="no gitleaks binary on PATH or in AGK_GITLEAKS; the governance step runs the scan",
 )
 
 
@@ -108,6 +108,16 @@ def scan(tmp_path: Path, repo: Path, **env: str):
 LEAK = f"token = {fake_token()}\n"
 
 
+def found(proc) -> bool:
+    """Exit 1 because of a finding, not because the scan could not run."""
+    log = proc.stdout + proc.stderr
+    return proc.returncode == 1 and "leaks found" in log and "no leaks found" not in log
+
+
+def clean(proc) -> bool:
+    return proc.returncode == 0 and "no leaks found" in proc.stdout + proc.stderr
+
+
 # --- the download and its digest (answer 1) -----------------------------------------------------
 
 
@@ -147,7 +157,7 @@ def test_a_pull_request_with_a_leaked_token_in_its_commits_fails(tmp_path):
     git(repo, "checkout", "-q", "-b", "feature")
     head = commit(repo, "config.env", LEAK)
     proc = scan(tmp_path, repo, EVENT="pull_request", AGK_BASE=base, HEAD_SHA=head)
-    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert found(proc), proc.stdout + proc.stderr
     assert fake_token() not in proc.stdout + proc.stderr  # redacted in the log
 
 
@@ -160,7 +170,7 @@ def test_a_clean_pull_request_passes_with_a_leak_only_before_its_base(tmp_path):
     git(repo, "checkout", "-q", "-b", "feature")
     head = commit(repo, "b.txt", "clean\n")
     proc = scan(tmp_path, repo, EVENT="pull_request", AGK_BASE=base, HEAD_SHA=head)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert clean(proc), proc.stdout + proc.stderr
 
 
 @needs_gitleaks
@@ -169,12 +179,12 @@ def test_a_push_scans_the_pushed_range(tmp_path):
     repo = new_repo(tmp_path / "r")
     commit(repo, "old.env", LEAK)
     before = commit(repo, "old.env", "removed\n")
-    clean = commit(repo, "b.txt", "clean\n")
-    proc = scan(tmp_path, repo, EVENT="push", PUSH_BEFORE=before, HEAD_SHA=clean)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
+    tidy = commit(repo, "b.txt", "clean\n")
+    proc = scan(tmp_path, repo, EVENT="push", PUSH_BEFORE=before, HEAD_SHA=tidy)
+    assert clean(proc), proc.stdout + proc.stderr
     leaked = commit(repo, "c.env", LEAK)
     proc = scan(tmp_path, repo, EVENT="push", PUSH_BEFORE=before, HEAD_SHA=leaked)
-    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert found(proc), proc.stdout + proc.stderr
 
 
 @needs_gitleaks
@@ -185,4 +195,4 @@ def test_the_first_push_of_a_repository_scans_the_whole_history(tmp_path):
     head = commit(repo, "old.env", "removed\n")
     for before in (ZERO, "", "1" * 40):
         proc = scan(tmp_path, repo, EVENT="push", PUSH_BEFORE=before, HEAD_SHA=head)
-        assert proc.returncode == 1, (before, proc.stdout + proc.stderr)
+        assert found(proc), (before, proc.stdout + proc.stderr)
