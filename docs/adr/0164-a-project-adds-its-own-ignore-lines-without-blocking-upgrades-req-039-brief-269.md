@@ -1,6 +1,6 @@
 # ADR-0164: a project adds its own ignore lines without blocking upgrades (REQ-039, brief 269)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0018, ADR-0160
