@@ -215,6 +215,29 @@ jobs:
         run: make -f agk.mk agk-project-test
       - name: Secret scan
         if: ${{ github.event.action != 'edited' }}
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7   # v2.3.9
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # The open-source gitleaks binary, not its action, which needs a licence key on a repository owned by an organisation
+          # (brief #258, ADR-0158); no secret and no permission beyond the job's.
+          # 1. One pinned release of the official binary for linux x64; a digest that differs from the one above fails the step.
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL --retry 3 -o "$RUNNER_TEMP/$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          # 2. The commits of the change: on a pull request the merge base to the head; on a push the pushed range; on the first
+          # push of a repository (or a `before` that is not in the history) the whole history. Any finding fails the step.
+          if [ "$EVENT" = pull_request ] && [ -n "${AGK_BASE:-}" ]; then
+            range="$(git merge-base "$AGK_BASE" "$HEAD_SHA")..$HEAD_SHA"
+          elif [ "$EVENT" = push ] && [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != 0000000000000000000000000000000000000000 ] \
+            && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+            range="$PUSH_BEFORE..$HEAD_SHA"
+          else
+            range="$HEAD_SHA"
+          fi
+          echo "scanning $range"
+          "$RUNNER_TEMP/gitleaks" git --no-banner --redact --exit-code 1 --log-opts="$range" .

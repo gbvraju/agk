@@ -1,0 +1,1 @@
+- governance: the step `Secret scan` runs the pinned gitleaks 8.30.1 binary for linux x64, its SHA-256 verified in the workflow, over the commits of the change, instead of `gitleaks/gitleaks-action`, so the scan needs no licence key and no secret on an organisation repository (brief #258, ADR-0158)

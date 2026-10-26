@@ -40,9 +40,12 @@ AGK asks for none, stores none and prints none.
   (`skills/ruleset/SKILL.md`), and `agk doctor` holds no credential (`docs/guides/reference.md`, the Doctor section).
 - **The workflows** use only the workflow token that GitHub gives each run, `secrets.GITHUB_TOKEN`. No other secret is referenced in
   `.github/workflows/`.
-- **Secrets in the repository.** The `governance` workflow runs a secret scan, `gitleaks/gitleaks-action`
-  (`.github/workflows/governance.yml`). For a repository owned by an organisation the action may need a licence key from its publisher
-  `(verify)`; the open note is in `docs/runs/residuals.md`.
+- **Secrets in the repository.** The step `Secret scan` of the `governance` workflow (`.github/workflows/governance.yml`) downloads
+  one pinned release of the open-source gitleaks command-line tool for linux x64 from the project's GitHub releases, checks its
+  SHA-256 against the digest written in the workflow (a mismatch fails the step) and scans the commits of the change: on a pull
+  request, from the merge base to the head; on a push, the pushed commits; on the first push of a repository, the whole history.
+  Any finding fails the step, and the log hides the value found. It needs no licence key and no secret, on a personal or an
+  organisation repository alike, and no permission beyond the job's read-only token.
 - **Secrets in a session.** Principle 9 says there are none in the repository or in an agent session (`constitution/principles.md`).
   That is a rule the checks and the scan look for. It is not a wall: the architect role can read any file in the folder it is started in.
 
