@@ -304,7 +304,10 @@ class Reads:
         endpoint = f"repos/{self.repo}{path}"
         try:
             proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-                ["gh", "api", "--method", "GET", endpoint], capture_output=True, text=True
+                ["gh", "api", "--method", "GET", endpoint],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
             )
         except FileNotFoundError:
             return None, "gh-missing"
@@ -340,7 +343,7 @@ def classify_failure(stdout: str, stderr: str) -> str:
 def git_read(root: Path, *args: str) -> tuple[int, str]:
     try:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, read-only git, no shell
-            ["git", "-C", str(root), *args], capture_output=True, text=True
+            ["git", "-C", str(root), *args], capture_output=True, text=True, encoding="utf-8"
         )
     except OSError:
         return 127, ""

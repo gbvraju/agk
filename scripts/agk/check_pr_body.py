@@ -83,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         raise CheckError(USAGE)
     try:
         if not args or args[0] == "-":
-            text = sys.stdin.read()
+            text = sys.stdin.buffer.read().decode("utf-8")
         else:
             with open(args[0], encoding="utf-8") as fh:
                 text = fh.read()

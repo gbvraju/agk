@@ -185,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise Refusal("the issue number is not a number (option --issue)")
             try:
                 if opts["issue_text"] == "-":
-                    raw = sys.stdin.read()
+                    raw = sys.stdin.buffer.read().decode("utf-8")
                 else:
                     raw = Path(opts["issue_text"]).read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError) as exc:

@@ -92,7 +92,10 @@ class ReadOnly(Exception):
 def write(endpoint: str, *extra: str, method: str, what: str = "rule 2: a label") -> None:
     """One write with `gh api`; a 403 is `ReadOnly`, any other failure a CheckError."""
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["gh", "api", "--method", method, endpoint, *extra], capture_output=True, text=True
+        ["gh", "api", "--method", method, endpoint, *extra],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     if proc.returncode == 0 or (method == "DELETE" and "404" in proc.stderr):
         return

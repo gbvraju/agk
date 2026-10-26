@@ -125,7 +125,7 @@ def cmd_screenshots(root: Path, opts: dict[str, str]) -> int:
                 f"file://{folder / 'index.html'}",
             ]
             proc = subprocess.run(  # nosec B603 - a fixed argument list, no shell
-                command, capture_output=True, text=True
+                command, capture_output=True, text=True, encoding="utf-8"
             )
             if proc.returncode != 0 or not target.is_file():
                 raise CheckError("rule 6: the headless browser did not make a screenshot")

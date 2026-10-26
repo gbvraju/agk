@@ -109,3 +109,85 @@ def test_a_valid_file_still_renders(tmp_path):
     """Brief #263 item 9: no change for a valid file."""
     out = reviewers(tmp_path, GOOD, "--codeowners")
     assert out.returncode == 0 and "@someone" in out.stdout
+
+
+# --- item 10: every kit script reads and writes text as UTF-8 ------------------------------------
+
+PROCESS = {"run", "check_output", "Popen", "call", "check_call"}
+
+
+def unpinned(path: Path) -> list[str]:
+    """Text I/O in PATH that leaves the encoding to the platform: a `read_text`, `write_text` or
+    text `open` without `encoding`, a subprocess call with `text=True` and no `encoding`, or a
+    read of `sys.stdin` (whose encoding is the console's, not UTF-8)."""
+    import ast
+
+    found = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute | ast.Name):
+            continue
+        name = node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id
+        keys = {k.arg for k in node.keywords}
+        if name in ("read_text", "write_text"):
+            bad = "encoding" not in keys and len(node.args) < (1 if name == "read_text" else 2)
+        elif name == "open":
+            mode = node.args[1].value if len(node.args) > 1 else "r"
+            bad = "encoding" not in keys and "b" not in str(mode)
+        elif name in PROCESS:
+            bad = bool({"text", "universal_newlines"} & keys) and "encoding" not in keys
+        else:
+            value = node.func.value if isinstance(node.func, ast.Attribute) else None
+            bad = isinstance(value, ast.Attribute) and value.attr == "stdin"
+        if bad:
+            found.append(f"{path.name}:{node.lineno} {name}")
+    return found
+
+
+def test_every_kit_script_reads_and_writes_text_as_utf8():
+    """Brief #263 item 10 (REQ-039): whatever the platform default (cp1252 on Windows)."""
+    scripts = sorted((ROOT / "scripts" / "agk").glob("*.py"))
+    hooks = sorted((ROOT / ".claude" / "hooks").glob("*.py"))
+    assert len(scripts) > 30 and hooks
+    assert [hit for path in [*scripts, *hooks] for hit in unpinned(path)] == []
+
+
+PROBE = """
+import sys
+sys.path.insert(0, sys.argv[1])
+from pathlib import Path
+import common
+root = Path(sys.argv[2])
+committed = common.show(root, "HEAD", "docs/requirements.md")
+working = (root / "docs" / "requirements.md").read_text(encoding="utf-8")
+print("same" if committed is not None and working.startswith(committed) else "differs")
+"""
+
+
+def test_git_show_reads_the_committed_copy_as_utf8_under_a_non_utf8_locale(tmp_path):
+    """Brief #263 item 10 (REQ-039): the pilot's `intake.py check` read `git show` in the
+    platform's encoding and the working copy as UTF-8, so a line with an em dash differed and a
+    pure append read as a changed line. Here the locale is ASCII, with UTF-8 mode off."""
+    import os
+
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    (repo / "docs" / "requirements.md").write_text("REQ-001 — a line\n", encoding="utf-8")
+    for args in (
+        ["init", "-q"],
+        ["-c", "user.email=t@example.invalid", "-c", "user.name=t", "add", "-A"],
+        ["-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-qm", "x"],
+    ):
+        git = ["git", *args]
+        subprocess.run(git, cwd=repo, check=True)  # nosec B603 - fixed argument list, no shell
+    with (repo / "docs" / "requirements.md").open("a", encoding="utf-8") as fh:
+        fh.write("REQ-002 — appended\n")
+    env = {**os.environ, "LC_ALL": "C", "PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0"}
+    env.pop("PYTHONIOENCODING", None)
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, "-c", PROBE, str(ROOT / "scripts" / "agk"), str(repo)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=env,
+    )
+    assert proc.stdout.strip() == "same", proc.stdout + proc.stderr

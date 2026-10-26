@@ -39,6 +39,7 @@ def main() -> int:
             cwd=root,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=TIMEOUT_SECONDS,
         )
     except (OSError, subprocess.TimeoutExpired):

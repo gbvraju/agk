@@ -99,7 +99,10 @@ class Gh:
 
     def one(self, endpoint: str) -> Any:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["gh", "api", "--method", "GET", endpoint], capture_output=True, text=True
+            ["gh", "api", "--method", "GET", endpoint],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
         )
         if proc.returncode != 0:
             return None
@@ -316,6 +319,7 @@ def count_tests(ctx: Context, sha: str | None) -> str:
         cwd=ctx.root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     if proc.returncode == 1:
         return "0"

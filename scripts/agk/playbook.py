@@ -88,7 +88,7 @@ def cmd_architect(root: Path) -> int:
     print(f"agk.toml: {'present' if config.is_file() else missing}")
     try:
         gh = subprocess.run(  # nosec B603 B607 - fixed argument list, read-only, no shell
-            ["gh", "auth", "status"], capture_output=True, text=True
+            ["gh", "auth", "status"], capture_output=True, text=True, encoding="utf-8"
         ).returncode
         print(f"gh: {'logged in' if gh == 0 else 'not logged in or not working'}")
     except OSError:

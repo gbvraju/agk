@@ -108,6 +108,7 @@ def on_origin_branch(sha: str) -> bool:
         ["git", "-C", project_root(), "branch", "-r", "--contains", sha, "--format=%(refname)"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     return proc.returncode == 0 and any(
         line.startswith("refs/remotes/origin/") and not line.endswith("/HEAD")

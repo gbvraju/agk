@@ -150,7 +150,10 @@ UNREACHABLE = re.compile(
 def rate_reset() -> float | None:
     """The reset time of the core rate limit that GitHub reports (`GET rate_limit` is free)."""
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["gh", "api", "--method", "GET", "rate_limit"], capture_output=True, text=True
+        ["gh", "api", "--method", "GET", "rate_limit"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     try:
         return float(json.loads(proc.stdout)["resources"]["core"]["reset"])
@@ -164,7 +167,10 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
     global LAST_ERROR
     for attempt in range(RATE_WAITS + 1):
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["gh", "api", "--method", method, endpoint, *extra], capture_output=True, text=True
+            ["gh", "api", "--method", method, endpoint, *extra],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
         )
         LAST_ERROR = proc.stderr if proc.returncode != 0 else ""
         if proc.returncode == 0:
@@ -1039,6 +1045,7 @@ def push_check(root) -> int:
         cwd=root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     if fetched.returncode != 0 or tried.returncode not in (0, 1):
         raise CheckError("rule 7: the merge with the default branch cannot be tried")

@@ -25,9 +25,11 @@ adopted repository only the marked block). `python3 scripts/agk/traceability.py`
 3. From a checkout of agk, run init as a maintainer-approved step (an agent session blocks running a cloned script
    until a maintainer authorizes it):
 
-       python3 scripts/agk/init.py TARGET [--dry-run]
+       python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased]
 
    Init never overwrites a differing file (it refuses and lists it) and a second run changes nothing.
+   Init installs only the files of a release: run it from a release tag (`git checkout v<version>`). Between two
+   releases it refuses, naming the release; `--unreleased` installs the checkout as it is, for the kit's own tests.
 4. Apply the printed ruleset and repository settings by hand on GitHub; init configures nothing there.
 
 See `docs/specs/0001-agk-init.md` and `docs/runs/k1-live-proof.md`.
