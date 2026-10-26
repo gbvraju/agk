@@ -1,1 +1,0 @@
-- router: `required_checks` in `agk.toml` (default `["proof", "governance"]`) names the checks the router judges for a pull request and the default branch; an unlisted failing check never labels a pull request red (SPEC-0032 rules 2 and 7, brief #231)

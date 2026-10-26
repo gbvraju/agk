@@ -1,1 +1,0 @@
-- kit: the root `pyproject.toml` the kit installs now installs as nothing (`[build-system]` and `[tool.setuptools] packages = []`), so a host that runs `pip install .` at the root no longer fails the deploy, and `agk upgrade` appends the two tables to an init install that lacks them (brief #236)

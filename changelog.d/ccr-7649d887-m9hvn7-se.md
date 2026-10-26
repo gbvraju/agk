@@ -1,1 +1,0 @@
-- the shadow reviewer role file (SPEC-0035 rule 1) with a shadow mode of the conductor guard, and the Shadow and Marks shapes in the session rules (REQ-042 build a)
