@@ -18,8 +18,15 @@ cured by editing the body, and the partial run repeats those steps and decides. 
 script exits 4 and prints `jobs <run id>` (digits only), the workflow makes one more `GET` of
 `actions/runs/<id>/jobs` and calls the script again with `--jobs FILE`. The red run then passes
 when it has at least one failed step and every failed step is a body step; any other failed step,
-no failed step (an infrastructure failure) and an unreadable response fail. Messages name the
-rule, never a value or a step.
+no failed step (an infrastructure failure) and an unreadable response fail.
+
+A skipped step hides a check that never ran (brief #261, ADR-0159): GitHub shows a step skipped by
+its own `if:` and one skipped because an earlier step failed alike. So a red run with a skipped
+step that is not a body step (which the partial run repeats) is not cured, unless the step is
+skipped on every full run by its own condition (`OWN_CONDITION`), or it is `Project tests` in the
+kit's own repository (the run's `Release check` ran: `KIT_ONLY`). Then the message names those
+steps: "the last full run did not reach <steps>; push a commit or re-run it". Every other message
+names the rule, never a value or a step.
 File only: no network, no model.
 """
 
@@ -44,6 +51,13 @@ BODY_STEPS = (
     "PR body shape",
 )
 OK_STEP = frozenset({None, "success", "skipped", "neutral"})
+# Skipped on a full run by their own condition only, never by an earlier failure (pinned to the
+# workflow by a test): `Latest full run` runs on an edit only; `Release check` (with `!cancelled()`)
+# runs only where `kit/agk-kit.mk` is.
+OWN_CONDITION = ("Latest full run", "Release check")
+# `Project tests` is skipped by its own condition where `kit/agk-kit.mk` is, which a run shows by
+# its `Release check` having run; anywhere else a skipped `Project tests` never ran.
+KIT_ONLY = ("Project tests", "Release check")
 
 
 def failed_steps(jobs: Path) -> list[tuple[str, str]]:
@@ -63,6 +77,25 @@ def failed_steps(jobs: Path) -> list[tuple[str, str]]:
         for s in job.get("steps") or []
         if isinstance(s, dict) and s.get("conclusion") not in OK_STEP
     ]
+
+
+def not_reached(jobs: Path) -> list[str]:
+    """The skipped steps of a run that the partial run does not repeat and that no own condition
+    of theirs explains, in the order of the run."""
+    listed = json.loads(jobs.read_text(encoding="utf-8"))["jobs"]
+    hidden = []
+    for job in (j for j in listed if isinstance(j, dict)):
+        steps = [s for s in (job.get("steps") or []) if isinstance(s, dict)]
+        conclusion = {str(s.get("name")): s.get("conclusion") for s in steps}
+        kit = conclusion.get(KIT_ONLY[1], "skipped") != "skipped"
+        for s in steps:
+            name = str(s.get("name"))
+            if s.get("conclusion") != "skipped" or name in BODY_STEPS or name in OWN_CONDITION:
+                continue
+            if name == KIT_ONLY[0] and kit:
+                continue
+            hidden.append(name)
+    return hidden
 
 
 def check(runs: Path, head: str, jobs: Path | None = None) -> int:
@@ -94,6 +127,12 @@ def check(runs: Path, head: str, jobs: Path | None = None) -> int:
         curable = latest.get("conclusion") == "failure" and bool(failed)
         if not curable or any(c != "failure" or n not in BODY_STEPS for n, c in failed):
             raise CheckError("rule 2: the latest full governance run of the head did not succeed")
+        hidden = not_reached(jobs) if jobs is not None else []
+        if hidden:
+            raise CheckError(
+                f"rule 2: the last full run did not reach {', '.join(hidden)}; "
+                "push a commit or re-run it"
+            )
         print(f"ok {NAME} (the failed steps read the body only)")
         return 0
     print(f"ok {NAME}")

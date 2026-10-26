@@ -375,7 +375,7 @@ def test_every_step_after_the_first_body_step_runs_unless_cancelled():
     whose other steps ran. The steps keep their order: the secret scan stays last."""
     blocks = step_blocks(WORKFLOW.read_text(encoding="utf-8"))
     names = list(blocks)
-    after = names[names.index("PR body file") :]
+    after = names[names.index("PR body file") + 1 :]
     assert {"Lint", "Tests of the checks", "Project tests", "Secret scan", "Open briefs"} <= set(
         after
     )

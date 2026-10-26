@@ -1,6 +1,7 @@
 # One step per governance check, each named by its check id (SPEC-0007 rule 13); the job name `governance` is the
 # required status check and does not change. Each check step runs unless the run is cancelled, so every failure shows
-# on its own step; the job still fails if any step fails. The same checks run locally as `make -f agk.mk agk-governance`.
+# on its own step; the job still fails if any step fails. From `PR body file` on, every step runs unless the run is
+# cancelled (brief #261): a failed body step hides no lint, test or scan, and an edit cures only a run that reached them. The same checks run locally as `make -f agk.mk agk-governance`.
 name: governance
 
 # A run for an edited description is named `governance edited`, every other one `governance full`: the first step of the partial run reads
@@ -111,6 +112,7 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: printf '%s\n' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
       - name: PR comments
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
@@ -128,6 +130,7 @@ jobs:
             echo '[]' > "$RUNNER_TEMP/approval-runs.json"
           fi
       - name: PR states and open pull requests
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
@@ -192,29 +195,29 @@ jobs:
         if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') != '' && github.event.action != 'edited' }}
         run: python scripts/agk/check_release.py
       - name: Open briefs
-        if: github.event_name == 'pull_request'
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method GET "repos/${{ github.repository }}/issues?labels=agk-brief&state=open&per_page=1" > "$RUNNER_TEMP/briefs.json"
       - name: PR body shape
-        if: github.event_name == 'pull_request'
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
         run: printf '%s\n' "$PR_BODY" | python scripts/agk/check_pr_body.py --draft "$PR_DRAFT" --issues "$RUNNER_TEMP/briefs.json" -
       - name: Lint
-        if: ${{ github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
         run: make -f agk.mk agk-lint
       - name: Tests of the checks
-        if: ${{ github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
         run: make -f agk.mk agk-test
       # The kit repository runs its own suite as "Tests of the checks" and its `project_tests` is that same suite
       # (the proof job runs it); there the step is skipped. In a project kit/agk-kit.mk is absent and the step runs.
       - name: Project tests
-        if: ${{ hashFiles('kit/agk-kit.mk') == '' && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
+        if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') == '' && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
         run: make -f agk.mk agk-project-test
       - name: Secret scan
-        if: ${{ github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
         env:
           GITLEAKS_VERSION: 8.30.1
           GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
