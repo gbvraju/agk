@@ -1,6 +1,6 @@
 # ADR-0159: a description edit never cures a full run whose later steps never ran (REQ-039, brief 261)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0137, ADR-0144, ADR-0158
