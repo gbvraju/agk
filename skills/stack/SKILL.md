@@ -38,6 +38,33 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
 
    then run `make governance`. Both must pass.
 4. Last, say what the check cannot check: that the options are the right ones and that the trade-offs are true. Each practice marked
-   `check` is added as a governance step by the build that adopts the stack, not by this command.
+   `check` is added as a governance step by the build that adopts the stack, not by this command. Then say how an option is
+   accepted, once this Proposed ADR is merged: by one ordinary commit, in its own pull request, that sets `Status: Accepted` and
+   `Chosen: Option <X> — <one-line reason>` together (the line reads `3. **Chosen**: Option <X> — <one-line reason>`), and nothing
+   else. It is not a `Final:` commit: a `Final:` commit may change only status lines, and while the ADR is Proposed the check
+   refuses any `Chosen` but `none yet`, so only the two lines together pass. `stack-check` accepts the pair, and the expected
+   verdict on that pull request is a plain `Verdict: cleared <sha>`. Print both texts below for the person, with the ADR number,
+   the file name and the requirement filled in:
+
+   The prompt for the accepting change:
+
+```
+Accept option <X> of the stack ADR ADR-<n> (docs/adr/<n>-stack-options.md). From a fresh default branch, on a new branch, change
+only two lines of that file in one ordinary commit: "- Status: Proposed" becomes "- Status: Accepted", and "3. **Chosen**: none
+yet" becomes "3. **Chosen**: Option <X> — <one-line reason>". Run engines.py stack-check and make governance; both must pass.
+Open one pull request with the body below. This is not a Final commit, and it changes nothing else.
+```
+
+   The body of its pull request (keep the `Summary:` line at most 120 characters; add `Brief: #<n>` when the repository has an
+   open brief):
+
+```
+Advances: REQ-<n>
+Build-state row: <date -u> REQ-<n> <status> (unchanged), the stack ADR ADR-<n> accepts option <X>
+Summary: The project's stack is chosen: option <X>, <its name>.
+Decisions taken: ADR-<n> Accepted, option <X> chosen by the person who owns the stack (<one-line reason>).
+Questions: none
+Verified: engines.py stack-check: ok engines-stack; make governance: all checks ok
+```
 
 Do not commit or push, and do not open a pull request: the person or their session does.

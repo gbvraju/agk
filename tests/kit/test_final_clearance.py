@@ -164,7 +164,8 @@ STACK = "docs/adr/0002-stack-options.md"
 def stack(status: str, chosen: str) -> str:
     return (
         f"# ADR-0002: stack options\n\n- Status: {status}\n- Date: 2026-10-26\n\n## Decision\n\n"
-        f"1. **Options**\n   - Option A — a. Trade-offs: t. Practices: p.\n3. **Chosen**: {chosen}\n"
+        "1. **Options**\n   - Option A — a. Trade-offs: t. Practices: p.\n"
+        f"3. **Chosen**: {chosen}\n"
     )
 
 

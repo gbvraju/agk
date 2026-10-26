@@ -103,7 +103,9 @@ each with its trade-offs and the practices it brings. Every practice is marked `
 the stack adds the governance step: pinned actions, least privilege, security headers, a host-boundary test) or `judgement` (recorded
 only, enforced by review). The architect accepts one option, and the ADR then locks it (`Chosen`); `engines.py stack-check` fails an
 ADR with another number of options, an option without trade-offs or practices, a practice that is not marked, or a lock that does not
-name exactly one option.
+name exactly one option. An option is accepted in one plain step: one ordinary commit, in its own pull request, sets `Status: Accepted`
+and `Chosen: Option <X> — <one-line reason>` together; `stack-check` accepts the pair and the verdict is a plain `cleared`. It is not a
+`Final:` commit, which may change only status lines; `check_final_clearance.py` says so when one changes `Chosen`.
 
 ## Design check
 
