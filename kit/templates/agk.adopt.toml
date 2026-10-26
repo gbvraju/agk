@@ -19,4 +19,6 @@ inbox_hours = 48
 pr_mode = "strict"
 # The checks the router judges a pull request (and the default branch) by: the latest run of each listed check, and the latest status of each listed context. A check that is not listed (a preview build of a hosting service, say) never labels a pull request red; a listed check that has not reported keeps it running. A change needs an ADR.
 required_checks = ["proof", "governance"]
+# The GitHub Apps an agent posts through (slugs). A comment GitHub records as posted through one of them never counts as a person's approval, and while the list is not empty a review never counts either (a review shows no app); a project that wants reviews to count sets an empty list. A change needs an ADR.
+agent_apps = ["claude"]
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.

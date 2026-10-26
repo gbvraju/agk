@@ -240,12 +240,18 @@ def test_the_long_line_works_as_before_with_runs_present(drafted):
 
 def test_an_approving_review_on_the_one_spec_counts_at_its_own_commit(drafted):
     repo, reviewed = drafted
+    repo.write(
+        "agk.toml", "agent_apps = []\n"
+    )  # a review counts only with no agent app listed (brief 242)
     repo.commit({SPEC: spec("0001", "Approved")}, "flip")
     assert ok(run(repo, [], reviews=[review("APPROVED", reviewed)]))
 
 
 def test_an_approving_review_fails_when_the_spec_changed_after_its_commit(drafted):
     repo, reviewed = drafted
+    repo.write(
+        "agk.toml", "agent_apps = []\n"
+    )  # a review counts only with no agent app listed (brief 242)
     repo.commit({SPEC: spec("0001", "Draft", "A changed rule.")}, "edit")
     repo.commit({SPEC: spec("0001", "Approved", "A changed rule.")}, "flip")
     proc = run(repo, [], reviews=[review("APPROVED", reviewed)])
@@ -278,6 +284,9 @@ def test_an_approving_review_with_two_specs_and_no_line_fails(drafted):
 
 def test_an_approving_review_with_two_specs_approves_the_one_its_body_names(drafted):
     repo, reviewed = drafted
+    repo.write(
+        "agk.toml", "agent_apps = []\n"
+    )  # a review counts only with no agent app listed (brief 242)
     repo.commit({SPEC2: spec("0002", "Draft")}, "second draft")
     repo.commit({SPEC: spec("0001", "Approved"), SPEC2: spec("0002", "Approved")}, "flip both")
     body = "Approve: SPEC-0001\n\nreads well"

@@ -446,6 +446,7 @@ DEFAULT_CONFIG = {
     "proof_timeout": 900,
     "pr_mode": "strict",
     "required_checks": ["proof", "governance"],
+    "agent_apps": ["claude"],
 }
 
 
@@ -606,6 +607,15 @@ def required_checks(root: Path) -> list[str]:
             "required_checks must be a list of check names (setting: required_checks in agk.toml)"
         )
     return [x.strip() for x in value]
+
+
+def agent_apps(root: Path) -> list[str]:
+    """The slugs of the GitHub Apps an agent posts through (brief 242): a list of names from
+    agk.toml, empty allowed; an invalid value is refused naming the setting."""
+    value = load_config(root)["agent_apps"]
+    if not isinstance(value, list) or not all(isinstance(x, str) and x.strip() for x in value):
+        raise CheckError("agent_apps must be a list of app slugs (setting: agent_apps in agk.toml)")
+    return [x.strip().lower() for x in value]
 
 
 def json_records(path: Path, label: str) -> list[dict]:
