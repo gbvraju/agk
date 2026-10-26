@@ -1,1 +1,0 @@
-- approvals: `agent_apps` in `agk.toml` (default `["claude"]`): a comment posted through a listed GitHub App never counts as a person's approval, and while the list is not empty a review does not count either; the router answers each once with `Correction needed:` (SPEC-0032 rule 5, brief #242)

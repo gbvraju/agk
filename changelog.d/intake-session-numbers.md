@@ -1,1 +1,0 @@
-- session: `session.py ids` also prints the next free session-rule number and takes `--exclude-pr N`, `intake.py check` takes `--ids FILE` for the numbers of a session and allows rows added to the decisions log, and rule 15 lists a session rule number moved to the next free one (SPEC-0034 rule 4, brief #176 build (e))

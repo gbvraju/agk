@@ -4,6 +4,26 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.56.0 (2026-10-26)
+
+- #218 the shadow reviewer role file (SPEC-0035 rule 1) with a shadow mode of the conductor guard, and the Shadow and Marks shapes in the session rules (REQ-042 build a)
+- #220 CI runs only where it can change a result: `proof` skips an edited description and a status-only final commit (`status_only.py`), `governance` runs only the body steps on an edited description, both cancel a superseded run, and the router starts a job only for a comment that can change a state (brief #216)
+- #221 release: the workflow `agk-tag.yml` (this repository's own) checks every pushed tag `v*` (changelog section, no fragment left, one version everywhere, the hashes table), fails the job and opens one plain issue `The tag <tag> is not a release` (label `agk-release`) when the commit is not a release; tag only the merge commit of a release pull request (brief #212, SPEC-0028)
+- #222 shadow_rate.py prints the conductor's catch rate from the Shadow and Marks comments of the merged pull requests (SPEC-0035 rules 3, 4 and 8, REQ-042 build b)
+- #224 session: `session.py ids` also prints the next free session-rule number and takes `--exclude-pr N`, `intake.py check` takes `--ids FILE` for the numbers of a session and allows rows added to the decisions log, and rule 15 lists a session rule number moved to the next free one (SPEC-0034 rule 4, brief #176 build (e))
+- #225 a person approves a spec with one short line, `Approve: SPEC-<n>`, with no commit id: the text approved is the spec as of the comment (the server-side time of the pull request's workflow runs gives the push), and the approval stops counting if a later commit changes the spec apart from its status line; an approving GitHub review counts at its own commit; the conductor's `Approval:` line shows the line to paste (REQ-039, build (g) of SPEC-0032, ADR-0132)
+- #226 every pull request body that is not a draft needs one Summary line of 1 to 120 characters, the pull request template asks for it, and a project that upgrades must add the line to its pull request bodies (an open pull request needs only a description edit), and the conductor and the session rules say so (SPEC-0036 rules 1 and 6, REQ-043 build a)
+- #227 router: `route.py` writes `pipeline.json` after every routing run (what waits for a person: ready, approve, counts), `kit/pipeline-schema.json` defines schema 1, and `agk-route.yml` uploads it as the artifact `agk-pipeline` for 7 days (SPEC-0036 rules 2 to 5 and 7, brief #213 build (b))
+- #228 the weekly report gains the shadow review's catch rate and counts next to the conductor's verdicts, report schema 7: the item `week-totals` carries `shadow` (the counts of the week and in total with the rate, `not-running`, or `unknown`); `facts.json` carries the optional section `shadow` (REQ-042 build (c), SPEC-0035 rule 5)
+- #230 the router judges the checks of a head by the latest run of each check name and the latest status of each context, so a cancelled or replaced run never makes a green pull request look red (SPEC-0032 rules 2 and 7, REQ-039, brief 229)
+- #232 an edited pull request description cures a full governance run that failed only in the steps that read the body, without a new push (brief 216 build b)
+- #233 router: `required_checks` in `agk.toml` (default `["proof", "governance"]`) names the checks the router judges for a pull request and the default branch; an unlisted failing check never labels a pull request red (SPEC-0032 rules 2 and 7, brief #231)
+- #235 governance skips its lint, tests and installs on a status-only final commit whose base has not moved, by the same decision as proof (brief 216 build c)
+- #239 the Summary check of a pull request body says whether the line is missing, repeated (how many), empty or too long (how many characters against the limit) (SPEC-0036 rule 1, brief 237)
+- #240 kit: the root `pyproject.toml` the kit installs now installs as nothing (`[build-system]` and `[tool.setuptools] packages = []`), so a host that runs `pip install .` at the root no longer fails the deploy, and `agk upgrade` appends the two tables to an init install that lacks them (brief #236)
+- #241 a verdict whose Final line the router cannot read is answered by one Correction needed reply, and the conductor guard refuses it before it is posted (SPEC-0021 rules 1 and 2, REQ-039, brief 238)
+- #243 approvals: `agent_apps` in `agk.toml` (default `["claude"]`): a comment posted through a listed GitHub App never counts as a person's approval, and while the list is not empty a review does not count either; the router answers each once with `Correction needed:` (SPEC-0032 rule 5, brief #242)
+
 ## 0.55.0 (2026-10-25)
 
 - #175 the conductor role: `.claude/agents/conductor.md` with its seven pre-verdict steps and `.claude/hooks/conductor_guard.py`, which allows reads and one comment POST (REQ-037 rule 6)

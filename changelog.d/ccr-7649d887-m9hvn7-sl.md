@@ -1,1 +1,0 @@
-- the Summary check of a pull request body says whether the line is missing, repeated (how many), empty or too long (how many characters against the limit) (SPEC-0036 rule 1, brief 237)
