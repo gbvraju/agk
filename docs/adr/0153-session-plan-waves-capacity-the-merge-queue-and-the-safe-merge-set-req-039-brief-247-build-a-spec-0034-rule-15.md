@@ -1,6 +1,6 @@
 # ADR-0153: `session.py plan`, waves, capacity, the merge queue and the safe merge set (REQ-039, brief 247 build (a), SPEC-0034 rule 15)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0124, ADR-0150
