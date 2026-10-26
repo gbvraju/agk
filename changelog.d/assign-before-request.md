@@ -1,1 +1,0 @@
-- session: `watch --assign` also takes the newest `Assign:` for the session posted between its previous `Request:` and its current one and not yet taken, so the conductor may assign before the `Request:` and never posts a line twice (brief #252)

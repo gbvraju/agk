@@ -4,6 +4,15 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.57.0 (2026-10-26)
+
+- #248 requirements: `retired` joins the requirement statuses and its `REQ-nnn` markers fail `check_requirements` (naming the requirement and the files); the weekly drift audit lists the test files that carry no marker as D8 (never blocking), and `traceability.py` ends with the retired requirements and the untagged test files (SPEC-0004 rule 24, SPEC-0010 rule 26, brief #244 build a)
+- #249 session: `session.py plan [--json]` prints which builder sessions to start (waves by `Touches:` overlap, capacity with claims that have no pull request, `[flow] reviews_in_flight`, the measured merge-rate backpressure with `[flow] merge_hours`), the safe merge set, ready pull requests far behind (`[flow] stale_commits`) and stale briefs, which `plan` and `next` skip (SPEC-0034 rule 15, brief #247 build a)
+- #250 launch: `/agk:launch` (a skill) runs `session.py plan`, asks the person to confirm and starts one session per planned slot through an adapter (one-time scheduled tasks in Claude's cloud, else one ready-to-paste prompt for each session), `launch.py prompts` prints the prompts or calls the team's own command once for each session; the rule that no session starts another gains the exception of a confirmed plan (SPEC-0034 rules 6 and 16, brief #247 build b)
+- #253 plan: `session.py plan` and `/agk:launch` name the next free build of a brief with a `Builds:` line (not merged, no live take, no open pull request; a build waits for the one before it unless marked `independent:`), `launch.py` prompts `session.py claim --build <x>`, and a brief without builds is planned as before (SPEC-0034 rules 15 and 16, brief #251)
+- #255 session: `watch --assign` also takes the newest `Assign:` for the session posted between its previous `Request:` and its current one and not yet taken, so the conductor may assign before the `Request:` and never posts a line twice (brief #252)
+- #256 reviewers: the installed `config/reviewers.yaml` (init and adopt) lists `spec_approvers` with the placeholder next to `maintainers`, `reviewers.py --check` fails while it lists only the placeholder (naming the setting), the doctor's placeholder finding names both settings and step 4 of both guides says to replace both, so a person's first `Approve: SPEC-<n>` counts (SPEC-0032 rule 5, brief #254)
+
 ## 0.56.0 (2026-10-26)
 
 - #218 the shadow reviewer role file (SPEC-0035 rule 1) with a shadow mode of the conductor guard, and the Shadow and Marks shapes in the session rules (REQ-042 build a)

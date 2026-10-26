@@ -1,1 +1,0 @@
-- plan: `session.py plan` and `/agk:launch` name the next free build of a brief with a `Builds:` line (not merged, no live take, no open pull request; a build waits for the one before it unless marked `independent:`), `launch.py` prompts `session.py claim --build <x>`, and a brief without builds is planned as before (SPEC-0034 rules 15 and 16, brief #251)

@@ -1,1 +1,0 @@
-- requirements: `retired` joins the requirement statuses and its `REQ-nnn` markers fail `check_requirements` (naming the requirement and the files); the weekly drift audit lists the test files that carry no marker as D8 (never blocking), and `traceability.py` ends with the retired requirements and the untagged test files (SPEC-0004 rule 24, SPEC-0010 rule 26, brief #244 build a)
