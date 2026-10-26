@@ -44,6 +44,15 @@ KIT_ONLY_FILES = ("scripts/agk/init.py", "scripts/agk/adopt.py")
 LINE_TEMPLATES = ("config/protected-paths.txt", "config/neutrality.txt")
 GENERATOR = "scripts/agk/reviewers.py"
 CODEOWNERS_COMMAND = "python3 scripts/agk/reviewers.py --codeowners --write"
+# Brief 236: the root pyproject.toml installs as nothing, so a host that runs `pip install .` at the
+# root succeeds. The same two tables are in kit/templates/pyproject.toml (a test compares them).
+INSTALLS_AS_NOTHING = (
+    '[build-system]\nrequires = ["setuptools>=61"]\nbuild-backend = "setuptools.build_meta"\n'
+    "\n[tool.setuptools]\npackages = []\n"
+)
+PYPROJECT_DETAIL = (
+    " (adds [build-system] and [tool.setuptools] packages = []; no other line changes)"
+)
 LEGACY_NOTE = (
     "legacy-stamp pyproject.toml [tool.agk]: obsolete after this upgrade; "
     "remove it in your own change"
@@ -325,6 +334,61 @@ def absent_templates(
     return items
 
 
+def template_project(table: object) -> bool:
+    """True when the `[project]` table is still the one the template rendered: the keys `name`,
+    `version`, `requires-python` and `dependencies` and no others, `version = "0.0.0"` and
+    `dependencies = []`. Any other table may build a real package, which `packages = []` would
+    empty without an error."""
+    return (
+        isinstance(table, dict)
+        and set(table) == {"name", "version", "requires-python", "dependencies"}
+        and table["version"] == "0.0.0"
+        and table["dependencies"] == []
+    )
+
+
+def pyproject_fix(target: Path, mode: str) -> tuple[Item | None, str | None]:
+    """The root pyproject.toml of an init install, made installable as nothing (brief 236).
+
+    After init the file belongs to the project, so it is never rewritten: the two tables are
+    appended when the file has a `[project]` table that is still the template's (`template_project`)
+    and neither a `[build-system]` table nor a `[tool.setuptools]` table, and every existing byte
+    stays; a `[project]` table of the project's own is left alone with a note (it may build a real
+    package). A file with one of the tables is left
+    alone and a note says so when it has only one of them; a file that is not valid TOML, a symlink,
+    the pyproject.toml of an adopted project (the project's own) and the one that still holds the
+    legacy `[tool.agk]` stamp (never written, Q-K3-71; the project removes it in its own change)
+    are left alone."""
+    path = target / "pyproject.toml"
+    if mode != "init" or path.is_symlink() or not path.is_file():
+        return None, None
+    try:
+        raw = path.read_bytes()
+        data = tomllib.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return None, None
+    if "project" not in data or "agk" in (data.get("tool") or {}):
+        return None, None  # no [project]; or the legacy [tool.agk] stamp is still there (Q-K3-71)
+    has_build = "build-system" in data
+    has_setuptools = "setuptools" in (data.get("tool") or {})
+    if has_build and has_setuptools:
+        return None, None
+    if has_build or has_setuptools:
+        have = "[build-system]" if has_build else "[tool.setuptools]"
+        return None, f"pyproject-unchanged pyproject.toml has {have} already; left as it is"
+    if not template_project(data["project"]):
+        return None, (
+            "pyproject-unchanged pyproject.toml the [project] table is the project's own; add "
+            "[build-system] and [tool.setuptools] packages = [] only if it builds no package"
+        )
+    newline = "\r\n" if b"\r\n" in raw else "\n"
+    tables = INSTALLS_AS_NOTHING.replace("\n", newline)
+    gap = b"" if not raw or raw.endswith(newline.encode()) else newline.encode()
+    separator = newline.encode() if raw else b""
+    content = raw + gap + separator + tables.encode("utf-8")
+    return Item("pyproject.toml", "replace", PYPROJECT_DETAIL, content=content), None
+
+
 def template_variables(target: Path, manifest: dict) -> dict[str, str]:
     """The variables of the templates: the stamp's date and default branch, else today and main."""
     data: dict = {}
@@ -387,12 +451,17 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
 
     templates = manifest["templates"] if mode == "init" else manifest["adopt"]["templates"]
     plan.items += absent_templates(target, kit_root, manifest, templates)
+    fix, fix_note = pyproject_fix(target, mode) if legacy is None else (None, None)
+    if fix is not None:
+        plan.items.append(fix)
     plan.items.sort(key=lambda i: i.rel)
     plan.notes = [
         n
         for n in template_notes(target, kit_root, templates, row)
         if not any(n.startswith(f"template-changed {rel} ") for rel in CREATE_ONLY)
     ]
+    if fix_note is not None:
+        plan.notes.append(fix_note)
     if legacy is not None:
         plan.notes = [n for n in plan.notes if not n.startswith("template-changed agk.toml ")]
         plan.notes.insert(0, LEGACY_NOTE)
