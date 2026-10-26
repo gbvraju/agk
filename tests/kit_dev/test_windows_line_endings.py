@@ -42,6 +42,9 @@ def test_a_windows_checkout_of_the_old_copies_upgrades_and_is_not_an_edit(tmp_pa
     assert code == 0, out
     assert not [ln for ln in out if ln.startswith("conflict ")], out
     for rel, text in NEW.items():
+        if OLD.get(rel) == text:  # the same text: reported unchanged, never rewritten
+            assert f"unchanged {rel}" in out
+            continue
         assert (target / rel).read_bytes() == text.encode(), rel  # written with LF
 
 

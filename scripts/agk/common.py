@@ -42,6 +42,14 @@ def block_source(manifest: dict, rel: str) -> str:
     return ((manifest.get("adopt") or {}).get("block_sources") or {}).get(rel, rel)
 
 
+def lf(data: bytes) -> bytes:
+    """DATA with CRLF line ends turned into LF (brief #263 item 7). Git for Windows checks text
+    out with CRLF and the plugin cache on Windows is unpacked with CRLF; the kit's files and its
+    release rows are LF, so every comparison and every write of a kit file goes through this. A
+    file with a NUL byte is binary and is returned as it is."""
+    return data if b"\0" in data else data.replace(b"\r\n", b"\n")
+
+
 def experimental_enabled(target: Path) -> bool:
     """True only when TARGET's agk.toml sets `experimental_reviewer = true` (a boolean)."""
     try:

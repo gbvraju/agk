@@ -579,6 +579,12 @@ def installed_files(
     return sorted(files), {p: s for p, s in sorted(blocks.items()) if p not in rendered}
 
 
+def lf(data: bytes) -> bytes:
+    """CRLF line ends as LF, a file with a NUL byte as it is: the rule of `common.lf` (brief #263
+    item 7), kept here because the doctor imports no other kit script."""
+    return data if b"\0" in data else data.replace(b"\r\n", b"\n")
+
+
 def compare_tree(
     root: Path,
     kit: Path,
@@ -592,7 +598,7 @@ def compare_tree(
         target = root / rel
         if not target.is_file():
             missing.append(rel)
-        elif target.read_bytes() != (kit / rel).read_bytes():
+        elif lf(target.read_bytes()) != lf((kit / rel).read_bytes()):  # CRLF on Windows
             differs.append(rel)
     for rel, style in blocks.items():
         target = root / rel

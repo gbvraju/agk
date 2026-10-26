@@ -16,7 +16,7 @@ import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from common import detect_default_branch, experimental_enabled, matches, read_list
+from common import detect_default_branch, experimental_enabled, lf, matches, read_list
 from reviewers import parse, render_codeowners
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
@@ -125,7 +125,7 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
     items: dict[str, bytes] = {}
     extra = manifest.get("experimental", []) if experimental_enabled(target) else []
     for rel in [*manifest["verbatim"], *extra]:
-        items[rel] = (KIT_ROOT / rel).read_bytes()
+        items[rel] = kit_bytes(KIT_ROOT / rel)
     for dest, src in manifest["templates"].items():
         text = (KIT_ROOT / src).read_text(encoding="utf-8")
         items[dest] = render(text, variables, src).encode("utf-8")
@@ -133,6 +133,12 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
     items[".github/CODEOWNERS"] = codeowners.encode("utf-8")
     entries = read_list(items["config/protected-paths.txt"].decode("utf-8"))
     return sorted(items.items()), entries, branch
+
+
+def kit_bytes(path: Path) -> bytes:
+    """A kit file as the kit ships it: LF line ends, whatever the plugin cache holds (brief #263
+    item 7; the plugin cache on Windows is unpacked with CRLF)."""
+    return lf(path.read_bytes())
 
 
 # Created when absent, left as it is when it exists (never compared, so never a conflict).
@@ -158,7 +164,7 @@ def classify(target: Path, items: list[tuple[str, bytes]], entries: list[str]):
             plan.append((rel, "conflict", content, f" (path class {cls}: symlink)"))
         elif not path.exists():
             plan.append((rel, "create", content, ""))
-        elif path.is_file() and path.read_bytes() == content:
+        elif path.is_file() and lf(path.read_bytes()) == lf(content):
             plan.append((rel, "unchanged", content, ""))
         elif path.is_file() and rel in CREATE_ONLY:
             plan.append((rel, "unchanged", content, ""))

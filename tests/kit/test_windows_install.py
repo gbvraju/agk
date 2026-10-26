@@ -62,7 +62,7 @@ def test_the_installed_gitattributes_pins_lf_for_every_path_the_kit_installs():
     assert patterns, "no eol=lf line"
     for rel in installed:
         assert any(matched(rel, p) for p in patterns), rel
-    assert "* text eol=lf" not in (ROOT / "kit" / "templates" / "gitattributes").read_text()
+    assert "*" not in patterns  # the project's own files keep the project's settings
 
 
 def reviewers(tmp_path: Path, text: str, *args: str) -> subprocess.CompletedProcess:
