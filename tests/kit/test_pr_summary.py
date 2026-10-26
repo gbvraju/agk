@@ -130,3 +130,69 @@ def test_ac1_the_template_asks_for_a_summary_and_unchanged_it_does_not_pass():
     assert out.returncode == 1 and "SPEC-0036 rule 1" in out.stdout
     filled = template.replace("\nSummary:\n", f"\nSummary: {SENTENCE}\n")
     assert "SPEC-0036 rule 1" not in check(filled).stdout
+
+
+# --- the message says what it found (brief 237) --------------------------------------------------
+
+RULE = "FAIL pr-body: SPEC-0036 rule 1: "
+
+
+def lines_of(out: subprocess.CompletedProcess) -> list[str]:
+    return [x for x in out.stdout.splitlines() if "SPEC-0036" in x]
+
+
+def test_a_missing_summary_says_it_is_missing():
+    """Brief 237 answer 1 and 3: no line."""
+    out = check(BODY)
+    assert lines_of(out) == [RULE + "the 'Summary:' line is missing"]
+
+
+@pytest.mark.parametrize("count", [2, 3, 5])
+def test_a_repeated_summary_says_how_many_lines_there_are(count):
+    """Brief 237 answer 1 and 3: more than one, with the count."""
+    out = check(BODY + f"Summary: {SENTENCE}\n" * count)
+    assert lines_of(out) == [RULE + f"there are {count} 'Summary:' lines; exactly one is required"]
+
+
+@pytest.mark.parametrize("line", ["Summary:", "Summary:   ", "Summary:\t"])
+def test_an_empty_summary_says_it_is_empty(line):
+    """Brief 237 answer 1 and 3: an empty one."""
+    assert lines_of(check(BODY + line + "\n")) == [RULE + "the 'Summary:' line is empty"]
+
+
+@pytest.mark.parametrize("length", [121, 156, 400])
+def test_a_long_summary_says_how_many_characters_it_has_against_the_limit(length):
+    """Brief 237 answer 1 and 3: the text after the label counts, the label does not."""
+    out = check(BODY + "Summary: " + "x" * length + "\n")
+    assert lines_of(out) == [
+        RULE + f"the text after 'Summary:' is {length} characters; at most 120"
+    ]
+
+
+def test_the_limit_counts_the_text_after_the_label_and_not_the_label():
+    """Brief 237 answer 1: the limit and what it counts stay as they are."""
+    assert check(BODY + "Summary: " + "x" * 120 + "\n").returncode == 0
+    assert check(BODY + "Summary:" + "x" * 120 + "\n").returncode == 0
+    assert check(BODY + "Summary:   " + "x" * 120 + "   \n").returncode == 0
+    assert check(BODY + "Summary: " + "x" * 121 + "\n").returncode == 1
+
+
+def test_no_message_carries_a_sha_a_file_or_a_word_of_the_body():
+    """Brief 237 answer 2: only the rule, the case and a count."""
+    secret = "hunter2 a1b2c3d4e5f60718293a4b5c6d7e8f9012345678 docs/adr/0001-x.md " + "y" * 130
+    for body in (
+        BODY + f"Summary: {secret}\n",
+        BODY + f"Summary: {secret}\nSummary: {secret}\n",
+        BODY,
+        BODY + "Summary:\n",
+    ):
+        out = check(body).stdout
+        assert "hunter2" not in out and "a1b2c3d" not in out and "0001" not in out
+        assert "yyy" not in out
+
+
+def test_two_problems_are_both_reported_and_the_summary_one_names_its_case():
+    """Brief 237: the other checks still report beside the summary."""
+    out = check("Summary: " + "z" * 130 + "\n")
+    assert RULE + "the text after 'Summary:' is 130 characters; at most 120" in out.stdout
+    assert "Advances" in out.stdout and "Build-state" in out.stdout
