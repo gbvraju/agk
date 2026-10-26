@@ -1,0 +1,1 @@
+- governance: an edited description no longer cures a red full run that skipped a step it does not repeat (lint, tests, the secret scan): the edited run fails with "the last full run did not reach <steps>; push a commit or re-run it"; and every step after `PR body file` now runs unless the run is cancelled, so a failed description hides no later check (brief #261, ADR-0159)
