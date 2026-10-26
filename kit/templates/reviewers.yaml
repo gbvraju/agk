@@ -6,3 +6,4 @@ classes:
   docs:          {paths: [docs/, README.md], approvers: [maintainers]}
 teams:
   maintainers: {github_team: "@REPLACE-ME"}   # replace with a user handle or @org/team
+spec_approvers: ["@REPLACE-ME"]   # replace with the user handle of the person who approves a spec (SPEC-0032)

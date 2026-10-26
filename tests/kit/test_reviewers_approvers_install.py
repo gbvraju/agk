@@ -167,20 +167,23 @@ def test_ac4_the_doctor_reports_the_placeholder_approver_naming_the_setting(tmp_
     [("config/reviewers.yaml", TEMPLATES[0]), ("config/reviewers.yaml", TEMPLATES[1])],
 )
 def test_ac4_an_upgrade_without_the_line_notes_it_and_writes_nothing(tmp_path, rel, src):
-    """REQ-039 AC4: brief #254 answer 4 (a create-only template: a note, never a write)."""
+    """REQ-039 AC4: brief #254 answer 4 (a template: a note, never a write)."""
     table = json.loads((ROOT / "kit" / "hashes.json").read_text(encoding="utf-8"))
-    last = max(table["releases"], key=lambda v: tuple(int(p) for p in v.split(".")))
-    row = table["releases"][last]
-    old = "\n".join(
-        ln for ln in template(src).replace("@REPLACE-ME", "@ada").splitlines()
-        if not ln.startswith("spec_approvers:")
-    ) + "\n"
+    row = table["releases"]["0.56.0"]  # the last release whose templates had no such line
+    old = (
+        "\n".join(
+            ln
+            for ln in template(src).replace("@REPLACE-ME", "@ada").splitlines()
+            if not ln.startswith("spec_approvers:")
+        )
+        + "\n"
+    )
     target = tmp_path / "target"
     (target / "config").mkdir(parents=True)
     (target / rel).write_text(old, encoding="utf-8")
     notes = upgrade.template_notes(target, ROOT, {rel: src}, row)
     assert f"template-changed {rel} ({src})" in notes
-    assert rel in upgrade.CREATE_ONLY
+    assert rel not in upgrade.CREATE_ONLY  # a template the upgrade prints and never writes
     assert (target / rel).read_text(encoding="utf-8") == old
     assert sorted(p.name for p in (target / "config").iterdir()) == ["reviewers.yaml"]
 
