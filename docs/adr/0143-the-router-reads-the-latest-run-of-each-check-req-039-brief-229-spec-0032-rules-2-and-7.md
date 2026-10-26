@@ -1,6 +1,6 @@
 # ADR-0143: the router reads the latest run of each check (REQ-039, brief 229, SPEC-0032 rules 2 and 7)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0123, ADR-0137
