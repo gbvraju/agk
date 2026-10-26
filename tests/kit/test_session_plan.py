@@ -7,7 +7,7 @@ uses no model and reads only what the session scripts already read."""
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from test_session import ISSUES, REPO, Stub, comment, iso, issue, listing, posts, session
@@ -523,3 +523,58 @@ def test_a_brief_without_a_builds_line_is_planned_as_before(proj, stub):
     (entry,) = data(proj, stub)["start"]
     assert "build" not in entry
     assert plan(proj, stub).stdout.splitlines()[0] == "Start 1: builder-a takes #5."
+
+
+# --- a take whose session has moved on (the verdict on 39b7f9a) -------------------------------
+
+
+def ends(stamp: str, hours: int = 4) -> str:
+    """The `HH:MM UTC` at which a take posted at `stamp` stops being live."""
+    when = datetime.fromisoformat(stamp.replace("Z", "+00:00")) + timedelta(hours=hours)
+    return when.strftime("%H:%M UTC")
+
+
+def test_a_session_that_moved_on_frees_its_finished_brief_for_the_next_build(proj, stub):
+    listing(stub, [issue(5, parts("a/")), issue(6, brief("b/"))])
+    old, recent = iso(-timedelta(hours=3)), iso(-timedelta(hours=1))
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: builder-z {DAY}", old)])
+    stub.serve(f"{ISSUES}/6/comments", [comment(2, "x", f"taken: builder-z {DAY}", recent)])
+    stub.serve(PULLS, [built(100, 5, "a")])
+    got = data(proj, stub)
+    assert [(s["brief"], s["build"]) for s in got["start"]] == [(5, "b")]
+    assert got["capacity"]["running"] == 1  # only the take on #6 is running work
+
+
+def test_a_session_that_has_not_moved_on_still_holds_the_brief_and_the_hour_is_named(proj, stub):
+    listing(stub, [issue(5, parts("a/"))])
+    when = iso(-timedelta(hours=1))
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: builder-z {DAY}", when)])
+    stub.serve(PULLS, [built(100, 5, "a")])
+    got = data(proj, stub)
+    assert got["start"] == []
+    held = f"build (b) is held for builder-z until {ends(when)}"
+    assert got["waits"] == [{"brief": 5, "build": "b", "held_by": "builder-z", "why": held}]
+    assert f"#5 {held}." in plan(proj, stub).stdout.splitlines()
+
+
+def test_a_take_of_the_session_on_another_brief_older_than_this_one_does_not_free_it(proj, stub):
+    listing(stub, [issue(5, parts("a/")), issue(6, brief("b/"))])
+    older, newer = iso(-timedelta(hours=3)), iso(-timedelta(hours=1))
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: builder-z {DAY}", newer)])
+    stub.serve(f"{ISSUES}/6/comments", [comment(2, "x", f"taken: builder-z {DAY}", older)])
+    stub.serve(PULLS, [built(100, 5, "a")])
+    got = data(proj, stub)
+    assert got["start"] == [] and got["waits"][0]["held_by"] == "builder-z"
+
+
+def test_a_taken_brief_says_until_when_and_while_a_pull_request_is_open(proj, stub):
+    listing(stub, [issue(5, brief("a/")), issue(6, brief("b/"))])
+    when = iso(-timedelta(hours=1))
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: builder-z {DAY}", when)])
+    stub.serve(f"{ISSUES}/6/comments", [comment(2, "x", f"taken: builder-y {DAY}", when)])
+    stub.serve(PULLS, [labelled(20, 6, "agk:review")])
+    changed(stub, 20, ("modified", "zz/y.py"))
+    why = {s["brief"]: s["why"] for s in data(proj, stub)["skipped"]}
+    assert why[5] == f"taken by builder-z until {ends(when)}"
+    assert why[6] == "taken by builder-y while its pull request is open"
+    assert f"#5 (taken by builder-z until {ends(when)})" in plan(proj, stub).stdout

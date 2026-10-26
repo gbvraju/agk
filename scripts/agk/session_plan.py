@@ -37,11 +37,14 @@ from datetime import UTC, datetime, timedelta
 from common import matches, read_list
 from session import (
     Survey,
+    all_takes,
+    brief_number,
     flow_int,
     gh,
     glob_regex,
     literal,
     live_takes,
+    moment,
     priority_of,
     pull_files,
     repo_name,
@@ -138,6 +141,35 @@ def names_build(pr: dict, number: int, name: str) -> bool:
     return re.search(rf"build \({re.escape(name)}\)", text, re.IGNORECASE) is not None
 
 
+def moved_on(s: Survey, number: int, take: tuple) -> bool:
+    """True when the session of a take has a later `taken:` on another brief: its work on this
+    brief is finished and the hold has no purpose (the verdict on 39b7f9a)."""
+    return any(
+        t[2] == take[2] and t[0] > take[0]
+        for other, comments in s.comments.items()
+        if other != number
+        for t in all_takes(comments)
+    )
+
+
+def effective_takes(s: Survey, number: int) -> list[tuple]:
+    """The live takes of a brief that are not those of a session that moved on."""
+    live = live_takes(s.comments.get(number, []), number, s.prs, s.hours)
+    return [t for t in live if not moved_on(s, number, t)]
+
+
+def hold_text(s: Survey, number: int, take: tuple) -> str:
+    """How long a take holds a brief: while a pull request of it is open, else until the hour at
+    which `claim_hours` after its latest sign of work (the take, a merge of it) end."""
+    if any(brief_number(p) == number and p.get("state") == "open" for p in s.prs):
+        return "while its pull request is open"
+    merges = [
+        moment(p["merged_at"]) for p in s.prs if brief_number(p) == number and p.get("merged_at")
+    ]
+    end = max([take[0], *merges]) + timedelta(hours=s.hours)
+    return f"until {end:%H:%M} UTC"
+
+
 def next_build(s: Survey, brief: dict) -> tuple[str | None, list[dict], str | None]:
     """(the build to start or None, the waits, why nothing starts) for a brief built in parts.
 
@@ -145,12 +177,17 @@ def next_build(s: Survey, brief: dict) -> tuple[str | None, list[dict], str | No
     it waits for the nearest unmerged build before it unless it is marked independent."""
     number = brief["number"]
     builds = builds_of(brief["body"])
-    takes = live_takes(s.comments.get(number, []), number, s.prs, s.hours)
-    if any(t[5] is None for t in takes):
-        return None, [], None  # the whole brief is taken: the survey already says so
+    takes = effective_takes(s, number)
     merged = {
         n for n, _ in builds if any(p.get("merged_at") and names_build(p, number, n) for p in s.prs)
     }
+    if whole := next((t for t in takes if t[5] is None), None):
+        pending = [n for n, _ in builds if n not in merged]
+        if not pending:
+            return None, [], None
+        text = f"build ({pending[0]}) is held for {whole[2]} {hold_text(s, number, whole)}"
+        wait = {"brief": number, "build": pending[0], "held_by": whole[2], "why": text}
+        return None, [wait], None
     busy = {t[5] for t in takes} | {
         n
         for n, _ in builds
@@ -174,12 +211,38 @@ def next_build(s: Survey, brief: dict) -> tuple[str | None, list[dict], str | No
     return None, [], None
 
 
-def candidates(s: Survey) -> tuple[list[dict], list[dict], list[tuple[int, str]]]:
+def settle_takes(s: Survey) -> tuple[set[int], list[tuple[int, str]]]:
+    """(the briefs built in parts whose takes all belong to sessions that moved on, the skips).
+
+    A skip `taken by X` says until when the take holds the brief. A brief built in parts that is
+    freed is no longer a skip or running work; a brief without builds keeps its take."""
+    freed: set[int] = set()
+    skipped: list[tuple[int, str]] = []
+    for number, why in s.skipped:
+        if not why.startswith("taken by"):
+            skipped.append((number, why))
+            continue
+        takes = live_takes(s.comments.get(number, []), number, s.prs, s.hours)
+        brief = s.briefs.get(number)
+        if brief and builds_of(brief["body"]):
+            takes = [t for t in takes if not moved_on(s, number, t)]
+            if not takes:
+                freed.add(number)
+                continue
+        if takes:
+            why = f"{why} {hold_text(s, number, takes[0])}"
+        skipped.append((number, why))
+    return freed, skipped
+
+
+def candidates(
+    s: Survey, freed: set[int] = frozenset()
+) -> tuple[list[dict], list[dict], list[tuple[int, str]]]:
     """The briefs to plan, each with the build to start (or None); the waits and the skips."""
     found: list[dict] = []
     waits: list[dict] = []
     skips: list[tuple[int, str]] = []
-    taken = {n for n, why in s.skipped if why.startswith("taken by")}
+    taken = {n for n, why in s.skipped if why.startswith("taken by")} | set(freed)
     for brief in sorted(
         [*s.free, *(s.briefs[n] for n in taken if n in s.briefs)],
         key=lambda b: (priority_of(b["body"]), b["number"]),
@@ -301,7 +364,10 @@ def build(root) -> dict:
     s = survey(root, repo, "")
     default = _default_branch(root)
     now = datetime.now(UTC)
-    ready, build_waits, build_skips = candidates(s)
+    freed, skipped = settle_takes(s)
+    s.held = [h for h in s.held if h[0] not in freed]
+    s.skipped = skipped
+    ready, build_waits, build_skips = candidates(s, freed)
     chosen, waits = waves(root, s, ready)
     waits = build_waits + waits
     running = len(s.builders) + len(s.held)
@@ -400,6 +466,9 @@ def words(plan: dict) -> str:
     else:
         lines.append(f"Start 0: {reason(plan)}.")
     for w in plan["waits"]:
+        if "held_by" in w:
+            lines.append(f"#{w['brief']} {w['why']}.")
+            continue
         if "waits_for_build" in w:
             lines.append(
                 f"#{w['brief']} build ({w['build']}) waits for build ({w['waits_for_build']})."
