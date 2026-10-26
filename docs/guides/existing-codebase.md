@@ -33,7 +33,9 @@ Two things differ from a new repository:
   kit's checks run as `make -f agk.mk agk-governance`; you should see ten lines starting with `ok` and one `skipped (no comments file)`.
 - **`project_tests` is empty in `agk.toml`.** The `proof` check needs your test command. See step 4.
 
-Put your GitHub handle in `config/reviewers.yaml` in place of `@REPLACE-ME` and run
+Put your GitHub handle in `config/reviewers.yaml` in place of `@REPLACE-ME` on both lines that hold it,
+`maintainers: {github_team: "@REPLACE-ME"}` and `spec_approvers: ["@REPLACE-ME"]` (the people whose `Approve: SPEC-<n>` counts;
+user handles only, never a team), and run
 `python3 scripts/agk/reviewers.py --codeowners --write`; it prints `wrote agk block of .github/CODEOWNERS`. Open a pull request with
 everything adopt created, wait for `governance`, and merge. Then run `/agk:ruleset` as in step 5 of getting started.
 

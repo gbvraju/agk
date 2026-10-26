@@ -118,8 +118,9 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
     "placeholder-team-reviewers": (
         "error",
         "config/reviewers.yaml has no placeholder team",
-        "config/reviewers.yaml still names the placeholder team",
-        "replace the placeholder with a real team or user, then run "
+        "config/reviewers.yaml still names the placeholder team (maintainers or spec_approvers)",
+        "replace the placeholder with a real team or user in maintainers and with your user "
+        "handle in spec_approvers, then run "
         "`python3 scripts/agk/reviewers.py --codeowners --write`",
     ),
     "placeholder-team-codeowners": (

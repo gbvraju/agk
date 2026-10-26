@@ -439,13 +439,19 @@ def render_codeowners(data: dict) -> str:
 
 
 def approver_problems(data: dict) -> list[str]:
-    """SPEC-0032 rule 5: a `spec_approvers` that is not a list of user handles; absent is allowed
-    (nobody may approve a spec); the message names the setting, never a handle."""
+    """SPEC-0032 rule 5: a `spec_approvers` that is not a list of user handles; absent or empty is
+    allowed (nobody may approve a spec), but a list of nothing but the installed placeholder is the
+    step of the guide not yet done (brief #254); the message names the setting, never a handle."""
     listed = data.get(APPROVERS)
     if listed is not None and not (
         isinstance(listed, list) and all(isinstance(a, str) and USER_RE.match(a) for a in listed)
     ):
         return [f"{APPROVERS} must be a list of user handles"]
+    if listed and not approvers_of(data):
+        return [
+            f"{APPROVERS} lists only the placeholder: "
+            "put the handle of the person who approves specs there (SPEC-0032)"
+        ]
     return []
 
 

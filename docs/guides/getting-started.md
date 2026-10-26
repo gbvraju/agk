@@ -62,7 +62,8 @@ It first runs a preview and shows it to you. You should see a list of `create ..
 `dry run: N files would be created; nothing was written`, N being the number of files of your kit version. The kit's own tests are not installed: they run in the kit's own CI, not in your repository.
 Say yes. It then installs the files and prints `installed NNN files`. Nothing is committed. After the list it prints:
 
-- a notice that `config/reviewers.yaml` maps `maintainers` to the placeholder `@REPLACE-ME`,
+- a notice that `config/reviewers.yaml` maps `maintainers` to the placeholder `@REPLACE-ME` (the file also lists it in
+  `spec_approvers`; step 4 replaces both),
 - the branch rules to apply (step 5 does this for you),
 - scanner exclusions and two plugin settings entries. They are print only. Ignore them for now.
 
@@ -72,12 +73,14 @@ Each slash command runs one script of the plugin, the one its `skills/<name>/SKI
 
 ## Step 4. Put your name on the reviewer groups, check, commit and push
 
-`@REPLACE-ME` stands for the person or team who reviews protected paths. Use your own GitHub handle. Open
-`config/reviewers.yaml`, find the line
+`@REPLACE-ME` stands for the person or team who reviews protected paths, and for the person who approves a spec. Use your own
+GitHub handle in both places. Open `config/reviewers.yaml`, find the two lines
 
     maintainers: {github_team: "@REPLACE-ME"}
+    spec_approvers: ["@REPLACE-ME"]
 
-and change `@REPLACE-ME` to `@YOUR-NAME`. Until you do, `make governance` fails on `reviewers --check`: the people whose pull request
+and change `@REPLACE-ME` to `@YOUR-NAME` on both. `spec_approvers` lists the people whose `Approve: SPEC-<n>` comment counts, so
+your first approval in step 7 counts only once your handle is there; it takes user handles, never a team. Until you do, `make governance` fails on `reviewers --check`: the people whose pull request
 comments count as verdicts are that user handle, and the placeholder is never one of them. If you map
 `maintainers` to a team (`@org/team`) instead, add one line `verdict_authors: [name, name]` (the GitHub users, without `@`) to
 `config/reviewers.yaml`, because `reviewers.py --check` fails when nobody is listed. Then write `.github/CODEOWNERS` from it and run all the checks:
@@ -298,7 +301,8 @@ Priority: 2
 - **`make governance` fails.** Read the first line that does not start with `ok`. It names the rule, a setting or a path class.
 - **`/agk:doctor` says `placeholder-team-reviewers` or `placeholder-team-codeowners`.** Step 4 was not finished: put your
   handle in `config/reviewers.yaml` and run `python3 scripts/agk/reviewers.py --codeowners --write`. Until then `make governance`
-  fails on `reviewers --check`, naming `verdict_authors`: the placeholder is never a listed verdict author.
+  fails on `reviewers --check`, naming `verdict_authors` or `spec_approvers`: the placeholder is never a listed verdict author
+  or spec approver.
 
 ## What to do next
 
