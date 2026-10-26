@@ -198,3 +198,21 @@ def test_ac4_step_4_of_each_guide_says_to_replace_both_placeholders(rel):
     start, end = GUIDES[rel]
     step = text[text.index(start) : text.index(end)]
     assert "maintainers" in step and "spec_approvers" in step and "@REPLACE-ME" in step
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_ac4_the_codeowners_line_is_printed_only_when_the_run_changes_something(dry_run):
+    """REQ-039 AC4: brief #254, ruling on Q-254-3 (never after `nothing to do`)."""
+    run_line = f"run: {upgrade.CODEOWNERS_COMMAND}"
+    note = "template-changed config/reviewers.yaml (kit/templates/reviewers.yaml)"
+    same = upgrade.Plan("0.56.0", "0.56.0", "init", notes=[note])
+    out = upgrade.report(same, dry_run)
+    assert run_line not in out
+    if not dry_run:
+        assert out[-1] == "nothing to do"
+    newer = upgrade.Plan("0.55.0", "0.56.0", "init", notes=[note])
+    assert run_line in upgrade.report(newer, dry_run)
+    generator = upgrade.Plan(
+        "0.56.0", "0.56.0", "init", items=[upgrade.Item(upgrade.GENERATOR, "replace")]
+    )
+    assert run_line in upgrade.report(generator, dry_run)

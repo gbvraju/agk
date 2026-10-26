@@ -26,7 +26,10 @@ tests were written first (`tests/kit/test_reviewers_approvers_install.py`) and f
 3. **The doctor.** `placeholder-team-reviewers` already fails on any `@REPLACE-ME` in the file (SPEC-0006); its failure message and
    fix now name `maintainers` and `spec_approvers`. No new check id.
 4. **An upgrade.** The reviewers file is a template, which an upgrade prints and never writes: a project without the line gets the
-   note `template-changed config/reviewers.yaml (...)` and its file is unchanged. No change to `upgrade.py` (reading Q-254-2).
+   note `template-changed config/reviewers.yaml (...)` and its file is unchanged (reading Q-254-2: no note of its own). By the
+   ruling on Q-254-3, option (b), `upgrade.py` prints `run: python3 scripts/agk/reviewers.py --codeowners --write` only when the
+   run writes, deletes or stamps something or writes the generator, never after `nothing to do`: between this build and the
+   release whose row holds the new template digest, a second upgrade would otherwise end with that line.
 5. **The guides.** Step 4 of the getting-started guide and its counterpart in the existing-codebase guide say to replace both
    placeholders, and that `spec_approvers` takes user handles only. No spec rule changes, so no amendment. Flow mode: fragment
    `changelog.d/spec-approvers-install.md`; no version bump.

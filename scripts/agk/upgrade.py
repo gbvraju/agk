@@ -531,8 +531,9 @@ def report(plan: Plan, dry_run: bool) -> list[str]:
             "## Decision",
         ]
     touched = {i.rel for i in plan.writes}
-    if GENERATOR in touched or any(
-        n.startswith("template-changed config/reviewers.yaml") for n in plan.notes
+    changes = bool(count or stamp or gone)  # never after `nothing to do` (brief #254, Q-254-3)
+    if GENERATOR in touched or (
+        changes and any(n.startswith("template-changed config/reviewers.yaml") for n in plan.notes)
     ):
         lines.append(f"run: {CODEOWNERS_COMMAND}")
     return lines
