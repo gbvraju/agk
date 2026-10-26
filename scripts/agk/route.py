@@ -23,6 +23,8 @@ does nothing. No comment, no review, no merge. Messages name the rule, never a v
 
 from __future__ import annotations
 
+import base64
+import datetime
 import json
 import os
 import re
@@ -65,6 +67,9 @@ ASKED = re.compile(
     r"Approval: (SPEC-\d{4}) (\S+) Draft -> Approved, waiting for a person"
     r"(?:: post \"Approve: (SPEC-\d{4})\")?"
 )
+SUMMARY = re.compile(r"Summary: (\S.{0,118}\S|\S)")
+PIPELINE_COUNTS = ("review", "fix", "ci-red", "conflict", "approve", "ready")
+SPEC_TITLE = re.compile(r"# SPEC-\d{4}: (\S.*)")
 SPEC_FILE = re.compile(r"docs/specs/(\d{4})-[^/]+\.md")
 
 
@@ -378,6 +383,90 @@ def on_default_branch(name: str, event: dict, default: str) -> bool:
     return False
 
 
+# --- the pipeline document (SPEC-0036 rules 2 to 5) --------------------------------------------
+
+
+def summary_of(body: object) -> str:
+    """The sentence of the first `Summary:` line of a pull request body, or `unknown`."""
+    for line in str(body or "").splitlines():
+        found = SUMMARY.fullmatch(line.strip())
+        if found:
+            return found.group(1)
+    return "unknown"
+
+
+def spec_title(repo: str, path: str, head: str) -> str:
+    """The title of the spec file at the head of a pull request, or `unknown`."""
+    if not re.fullmatch(r"docs/specs/\d{4}-[^/]+\.md", path) or not head:
+        return "unknown"
+    record = gh(f"repos/{repo}/contents/{quote(path)}?ref={head}")
+    try:
+        text = base64.b64decode(record["content"]).decode("utf-8")
+    except (KeyError, TypeError, ValueError):
+        return "unknown"
+    found = SPEC_TITLE.match(text.splitlines()[0] if text else "")
+    return found.group(1).strip() if found else "unknown"
+
+
+def approve_items(repo: str, pr: dict, root: Path) -> list[dict]:
+    n = int(pr["number"])
+    url = str(pr.get("html_url") or "")
+    unread = [{"number": n, "spec": "unknown", "spec_title": "unknown", "url": url}]
+    comments = listing(f"repos/{repo}/issues/{n}/comments")
+    if comments is None:
+        return unread
+    body = latest_verdict_body(comments, counted_authors(verdict_authors(root), None))
+    head = str((pr.get("head") or {}).get("sha") or "")
+    found = [ASKED.fullmatch(x.strip()) for x in body.splitlines() if ASKED.fullmatch(x.strip())]
+    return [
+        {
+            "number": n,
+            "spec": m.group(1),
+            "spec_title": spec_title(repo, m.group(2), head),
+            "url": url,
+        }
+        for m in found
+    ] or unread
+
+
+def pipeline_document(repo: str, root: Path) -> dict:
+    """What waits for a person, from a fresh read of the open pull requests."""
+    now = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    found = pages(f"repos/{repo}/pulls?state=open")
+    doc: dict = {"schema": 1, "as_of": now, "ready": [], "approve": []}
+    if found is None:
+        doc["counts"] = {k: "unknown" for k in PIPELINE_COUNTS}
+        return doc
+    held = {k: [] for k in PIPELINE_COUNTS}
+    for pr in found:
+        names = {(x or {}).get("name") for x in pr.get("labels") or []}
+        for k in PIPELINE_COUNTS:
+            if f"agk:{k}" in names and isinstance(pr.get("number"), int):
+                held[k].append(pr)
+    doc["counts"] = {k: len(v) for k, v in held.items()}
+    doc["ready"] = [
+        {
+            "number": p["number"],
+            "summary": summary_of(p.get("body")),
+            "url": str(p.get("html_url") or ""),
+        }
+        for p in held["ready"]
+    ]
+    for pr in held["approve"]:
+        doc["approve"] += approve_items(repo, pr, root)
+    return doc
+
+
+def write_pipeline(repo: str, root: Path) -> None:
+    """Write `pipeline.json` (rule 2); a failure is reported and fails no routing (rule 4)."""
+    target = Path(os.environ.get("AGK_PIPELINE_FILE") or "pipeline.json")
+    try:
+        doc = pipeline_document(repo, root)
+        target.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    except (OSError, CheckError, ValueError, KeyError, TypeError):
+        print("skipped rule 4: the pipeline document was not written")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     dry = "--dry-run" in args
@@ -422,7 +511,9 @@ def main(argv: list[str] | None = None) -> int:
                 failed = True
     except ReadOnly:
         print("skipped (read-only token)")
-        return 0
+        failed = False
+    if not dry:
+        write_pipeline(repo, root)
     return 1 if failed else 0
 
 

@@ -387,7 +387,9 @@ def test_ac1_a_comment_on_a_pull_request_routes_it_and_one_on_an_issue_does_not(
     stub.pull(7)
     on_issue = {"issue": {"number": 7}, "repository": REPO_INFO}
     run_router(proj, stub, tmp_path, "issue_comment", on_issue)
-    assert stub.calls() == []
+    # the only call: the read of the open pull requests for the pipeline document (SPEC-0036)
+    assert [c[1].split("?")[0] for c in stub.calls()] == [f"repos/{REPO}/pulls"]
+    assert stub.writes() == []
     on_pull = {"issue": {"number": 7, "pull_request": {}}, "repository": REPO_INFO}
     run_router(proj, stub, tmp_path, "issue_comment", on_pull)
     assert any(w[0] == "POST" for w in stub.writes())
