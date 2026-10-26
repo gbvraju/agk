@@ -10,6 +10,9 @@ from __future__ import annotations
 import re
 import sys
 from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import CheckError, load_config, read_list, repo_root, run
 

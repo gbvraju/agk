@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
 from common import block_source, experimental_enabled, installed_version, lf, matches, read_list
 from init import (

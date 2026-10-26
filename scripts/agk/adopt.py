@@ -18,6 +18,8 @@ import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from common import (
     block_source,
     detect_default_branch,

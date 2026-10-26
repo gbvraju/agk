@@ -35,6 +35,8 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from common import CheckError, agent_apps, load_config, repo_root, required_checks, verdict_problem
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
 from reviewers import (

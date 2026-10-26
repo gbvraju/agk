@@ -7,6 +7,9 @@ KEY is one of default_branch, test_dirs, lint_paths, project_tests.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import DEFAULT_CONFIG, CheckError, load_config, repo_root, run
 

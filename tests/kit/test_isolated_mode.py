@@ -70,7 +70,7 @@ def test_the_folder_goes_first_on_the_path_before_any_kit_import_and_nothing_els
     for path in importing:
         text = path.read_text(encoding="utf-8")
         assert text.count(LINE) == 1, path.name
-        line = next(i for i, ln in enumerate(text.splitlines(), 1) if ln == LINE)
+        line = next(i for i, ln in enumerate(text.splitlines(), 1) if ln.startswith(LINE))
         assert all(node.lineno > line for node in kit_imports(path)), path.name
     for path in SCRIPTS.glob("*.py"):
         for node in ast.walk(tree(path)):
