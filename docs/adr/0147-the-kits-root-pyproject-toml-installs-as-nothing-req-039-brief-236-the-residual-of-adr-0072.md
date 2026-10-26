@@ -1,6 +1,6 @@
 # ADR-0147: the kit's root pyproject.toml installs as nothing (REQ-039, brief 236, the residual of ADR-0072)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0072, ADR-0031
