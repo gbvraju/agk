@@ -7,11 +7,14 @@ them, once, and every other byte stays). No network: setuptools' own metadata ca
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 import textwrap
+import tomllib
 from pathlib import Path
 
+import pytest
 from conftest import KIT_ROOT
 from test_upgrade import PROTECTED, init_target, kit, run  # noqa: F401
 
@@ -21,6 +24,15 @@ import upgrade  # noqa: E402
 TEMPLATE = (KIT_ROOT / "kit" / "templates" / "pyproject.toml").read_text(encoding="utf-8")
 OLD = TEMPLATE.split("[build-system]")[0] + TEMPLATE.split("packages = []\n\n", 1)[1]
 OLD_FILE = OLD.replace("{{project}}", "demo")
+
+
+# Building needs setuptools in the test interpreter; the tests make no network call, so they cannot
+# fetch it (a CI interpreter of Python 3.12 or later ships without it). The tables themselves are
+# also checked below as data, and those cases always run.
+needs_setuptools = pytest.mark.skipif(
+    importlib.util.find_spec("setuptools") is None,
+    reason="setuptools is not installed in this interpreter (no network in tests)",
+)
 
 
 def builds(root: Path) -> subprocess.CompletedProcess:
@@ -42,6 +54,7 @@ def flat_layout(root: Path) -> None:
 # --- the template (answer 1) ----------------------------------------------------------------
 
 
+@needs_setuptools
 def test_the_old_file_fails_the_way_the_build_log_showed(tmp_path):
     (tmp_path / "pyproject.toml").write_text(OLD_FILE, encoding="utf-8")
     flat_layout(tmp_path)
@@ -49,12 +62,34 @@ def test_the_old_file_fails_the_way_the_build_log_showed(tmp_path):
     assert proc.returncode != 0 and "Multiple top-level packages" in proc.stderr + proc.stdout
 
 
+@needs_setuptools
 def test_a_new_projects_file_builds_and_installs_nothing(tmp_path):
     (tmp_path / "pyproject.toml").write_text(TEMPLATE.replace("{{project}}", "demo"), "utf-8")
     flat_layout(tmp_path)
     proc = builds(tmp_path)
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip().endswith(".dist-info")
+
+
+def test_the_template_names_a_setuptools_build_that_packages_nothing():
+    data = tomllib.loads(TEMPLATE.replace("{{project}}", "demo"))
+    assert data["build-system"] == {
+        "requires": ["setuptools>=61"],
+        "build-backend": "setuptools.build_meta",
+    }
+    assert data["tool"]["setuptools"] == {"packages": []}
+    assert OLD_FILE and "build-system" not in tomllib.loads(OLD_FILE)
+
+
+def test_the_upgraded_file_parses_with_the_two_tables_and_the_projects_own_lines(
+    tmp_path, kit, capsys
+):
+    target = init_target(tmp_path, **{"pyproject.toml": OLD_FILE})
+    run(capsys, target)
+    data = tomllib.loads((target / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["build-system"]["build-backend"] == "setuptools.build_meta"
+    assert data["tool"]["setuptools"] == {"packages": []}
+    assert data["project"]["name"] == "demo" and data["tool"]["ruff"]["line-length"] == 100
 
 
 def test_the_template_keeps_project_pytest_and_ruff_and_carries_the_upgrades_tables():
@@ -68,6 +103,7 @@ def test_the_template_keeps_project_pytest_and_ruff_and_carries_the_upgrades_tab
 # --- the upgrade (answer 2) -----------------------------------------------------------------
 
 
+@needs_setuptools
 def test_upgrade_adds_the_two_tables_to_a_file_without_them_and_keeps_every_other_byte(
     tmp_path, kit, capsys
 ):
