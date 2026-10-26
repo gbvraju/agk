@@ -1,6 +1,6 @@
 # ADR-0155: the session plan names the build of a brief built in parts (REQ-039, brief 251, SPEC-0034 rules 15 and 16)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0153, ADR-0154
