@@ -92,7 +92,11 @@ def read_body(source: str | None) -> str:
     if source is None:
         return ""
     try:
-        return sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
+        return (
+            sys.stdin.buffer.read().decode("utf-8")
+            if source == "-"
+            else Path(source).read_text(encoding="utf-8")
+        )
     except (OSError, UnicodeDecodeError) as exc:
         raise Failure("the pull request body cannot be read (path class: body file)") from exc
 
@@ -145,6 +149,7 @@ def execute(command: str, cwd: Path, timeout: int) -> tuple[int | None, str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        encoding="utf-8",
         errors="replace",
         start_new_session=True,
     )

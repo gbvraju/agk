@@ -37,7 +37,8 @@ def without_version_line(proc):
 
 def run_init(target: Path, *args: str, **kw):
     return subprocess.run(
-        [sys.executable, str(INIT), str(target), *args],
+        # the checkout between releases: its files are not those of the release row (ADR-0160)
+        [sys.executable, str(INIT), str(target), "--unreleased", *args],
         capture_output=True,
         text=True,
         env=clean_env(),

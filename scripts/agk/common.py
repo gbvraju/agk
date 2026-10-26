@@ -42,6 +42,14 @@ def block_source(manifest: dict, rel: str) -> str:
     return ((manifest.get("adopt") or {}).get("block_sources") or {}).get(rel, rel)
 
 
+def lf(data: bytes) -> bytes:
+    """DATA with CRLF line ends turned into LF (brief #263 item 7). Git for Windows checks text
+    out with CRLF and the plugin cache on Windows is unpacked with CRLF; the kit's files and its
+    release rows are LF, so every comparison and every write of a kit file goes through this. A
+    file with a NUL byte is binary and is returned as it is."""
+    return data if b"\0" in data else data.replace(b"\r\n", b"\n")
+
+
 def experimental_enabled(target: Path) -> bool:
     """True only when TARGET's agk.toml sets `experimental_reviewer = true` (a boolean)."""
     try:
@@ -70,14 +78,18 @@ def installed_version(root: Path) -> str | None:
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:
-    proc = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)  # nosec B603 B607 - fixed argument list, no shell
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8"
+    )
     if check and proc.returncode != 0:
         raise CheckError(f"git {args[0]} failed")
     return proc.stdout
 
 
 def repo_root() -> Path:
-    proc = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)  # nosec B603 B607 - fixed argument list, no shell
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, encoding="utf-8"
+    )
     if proc.returncode != 0:
         raise CheckError("not inside a git repository")
     return Path(proc.stdout.strip())
@@ -89,6 +101,7 @@ def _verify(root: Path, ref: str) -> str | None:
         cwd=root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     return proc.stdout.strip() if proc.returncode == 0 else None
 
@@ -157,7 +170,7 @@ def changed_lines(root: Path, mb: str, path: str) -> list[str]:
 
 def show(root: Path, rev: str, path: str) -> str | None:
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", "show", f"{rev}:{path}"], cwd=root, capture_output=True, text=True
+        ["git", "show", f"{rev}:{path}"], cwd=root, capture_output=True, text=True, encoding="utf-8"
     )
     return proc.stdout if proc.returncode == 0 else None
 

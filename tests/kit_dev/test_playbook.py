@@ -615,7 +615,12 @@ def test_ac1_start_works_in_a_new_repository_and_in_an_existing_codebase(tmp_pat
     root = make_repo(tmp_path / "proj")
     if how == "init":
         proc = subprocess.run(
-            [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "init.py"), str(root)],
+            [
+                sys.executable,
+                str(KIT_ROOT / "scripts" / "agk" / "init.py"),
+                str(root),
+                "--unreleased",
+            ],
             capture_output=True,
             text=True,
             env=clean_env(),

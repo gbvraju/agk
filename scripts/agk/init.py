@@ -1,14 +1,20 @@
 """agk init: install the kit into an empty repository (SPEC-0001).
 
-Usage: python3 scripts/agk/init.py TARGET [--dry-run]
+Usage: python3 scripts/agk/init.py TARGET [--dry-run] [--unreleased]
 
 Standard library only. No network, no git or gh calls, no writes outside TARGET. Reads only
 kit/manifest.json (and what it lists) from the kit checkout this script lives in. Refuses
 (exit 1) rather than overwrite; nothing is written when any file conflicts.
+
+Install from a release (brief #263 item 8, ADR-0160): the kit files init would install must be
+those of the release row of `kit_version` in kit/hashes.json (compared ignoring CRLF and LF), or
+init refuses, so unreleased files are never stamped with a release's version. `--unreleased`
+installs the checkout as it is, between releases, for the kit's own tests and development.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -16,11 +22,18 @@ import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from common import detect_default_branch, experimental_enabled, matches, read_list
+from common import detect_default_branch, experimental_enabled, lf, matches, read_list
 from reviewers import parse, render_codeowners
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = "kit/manifest.json"
+TABLE = "kit/hashes.json"
+UNRELEASED = "--unreleased"
+PLUGINS = "the plugin's kit files"
+REF_HINT = (
+    "install the plugin at that release's tag: the `ref` of the agk marketplace entry, "
+    "as printed below"
+)
 BRANCH_RULES = "kit/templates/branch-rules.txt"
 RULESET_LINE = (
     "or run `/agk:ruleset` to apply them (phase 1 now, phase 2 after the first `governance` run)"
@@ -125,7 +138,7 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
     items: dict[str, bytes] = {}
     extra = manifest.get("experimental", []) if experimental_enabled(target) else []
     for rel in [*manifest["verbatim"], *extra]:
-        items[rel] = (KIT_ROOT / rel).read_bytes()
+        items[rel] = kit_bytes(KIT_ROOT / rel)
     for dest, src in manifest["templates"].items():
         text = (KIT_ROOT / src).read_text(encoding="utf-8")
         items[dest] = render(text, variables, src).encode("utf-8")
@@ -133,6 +146,12 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
     items[".github/CODEOWNERS"] = codeowners.encode("utf-8")
     entries = read_list(items["config/protected-paths.txt"].decode("utf-8"))
     return sorted(items.items()), entries, branch
+
+
+def kit_bytes(path: Path) -> bytes:
+    """A kit file as the kit ships it: LF line ends, whatever the plugin cache holds (brief #263
+    item 7; the plugin cache on Windows is unpacked with CRLF)."""
+    return lf(path.read_bytes())
 
 
 # Created when absent, left as it is when it exists (never compared, so never a conflict).
@@ -158,7 +177,7 @@ def classify(target: Path, items: list[tuple[str, bytes]], entries: list[str]):
             plan.append((rel, "conflict", content, f" (path class {cls}: symlink)"))
         elif not path.exists():
             plan.append((rel, "create", content, ""))
-        elif path.is_file() and path.read_bytes() == content:
+        elif path.is_file() and lf(path.read_bytes()) == lf(content):
             plan.append((rel, "unchanged", content, ""))
         elif path.is_file() and rel in CREATE_ONLY:
             plan.append((rel, "unchanged", content, ""))
@@ -201,12 +220,44 @@ def print_branch_rules(branch: str, tool: str = "init") -> None:
     print(ISSUES_WARNING)
 
 
+def release_problem(kit_root: Path) -> str | None:
+    """None when every kit file init installs (and every template it renders) is one the release
+    row of `kit_version` lists, CRLF read as LF; otherwise the refusal, naming the release."""
+    manifest = json.loads((kit_root / MANIFEST).read_text(encoding="utf-8"))
+    version = str(manifest["kit_version"])
+    problem = f"{PLUGINS} are not those of release {version} (path class {TABLE})"
+    try:
+        row = json.loads((kit_root / TABLE).read_text(encoding="utf-8"))["releases"][version]
+    except (OSError, ValueError, KeyError, TypeError):
+        return problem
+    if not isinstance(row, dict):
+        return problem
+
+    adopt = manifest.get("adopt") or {}
+    wanted = {
+        "verbatim": [*manifest["verbatim"], *manifest.get("experimental", [])],
+        "templates": sorted(
+            {*manifest["templates"].values(), *(adopt.get("templates") or {}).values()}
+        ),
+    }  # the paths of kit_hashes.snapshot_of, whose digests are of the bytes as released
+    for name, paths in wanted.items():
+        listed = row.get(name) if isinstance(row.get(name), dict) else {}
+        for rel in paths:
+            path = kit_root / rel
+            if path.is_file():
+                digest = hashlib.sha256(lf(path.read_bytes())).hexdigest()
+                if digest not in (listed.get(rel) or []):
+                    return problem
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     dry_run = "--dry-run" in args
-    rest = [a for a in args if a != "--dry-run"]
+    unreleased = UNRELEASED in args
+    rest = [a for a in args if a not in ("--dry-run", UNRELEASED)]
     if len(rest) != 1 or rest[0].startswith("-"):
-        print("usage: init.py TARGET [--dry-run]", file=sys.stderr)
+        print("usage: init.py TARGET [--dry-run] [--unreleased]", file=sys.stderr)
         return 2
     try:
         problem = check_interpreter(tuple(sys.version_info[:3]))
@@ -220,6 +271,11 @@ def main(argv: list[str] | None = None) -> int:
             raise Refusal("TARGET is the kit checkout or inside it (path class kit/)")
         if install_mode(target) == "adopt":
             raise Refusal("TARGET was installed by adopt (path class agk.toml); init refuses")
+        not_released = release_problem(KIT_ROOT)
+        if not_released and not unreleased:
+            print(f"refused: {not_released}; {REF_HINT}; nothing was written")
+            print(plugin_settings())
+            return 1
         items, entries, branch = build_items(target, datetime.now(UTC).date().isoformat())
         plan = classify(target, items, entries)
     except Refusal as exc:
@@ -229,6 +285,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: cannot read the kit sources ({type(exc).__name__})")
         return 3
 
+    if not_released:
+        print(f"notice: {UNRELEASED}: {not_released.replace(PLUGINS, 'the kit files', 1)}")
     for rel, action, _, detail in plan:
         print(f"{action} {rel}{detail}")
     if any(action == "conflict" for _, action, _, _ in plan):

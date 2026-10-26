@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
-from common import block_source, experimental_enabled, installed_version, matches, read_list
+from common import block_source, experimental_enabled, installed_version, lf, matches, read_list
 from init import (
     CREATE_ONLY,
     DATE_RE,
@@ -198,7 +198,7 @@ def whole_file(target: Path, rel: str, new: bytes, old: set[str], entries: list[
         return Item(rel, "deleted-locally") if old else Item(rel, "create", content=new)
     if not path.is_file():
         return Item(rel, "conflict", f" (path class {cls}: not a file)")
-    data = path.read_bytes()
+    data = lf(path.read_bytes())  # a Windows checkout is CRLF; the release rows are LF
     if data == new:
         return Item(rel, "unchanged")
     if digest(data) in old:
@@ -275,7 +275,7 @@ def removed_item(
     if path.is_symlink() or not path.is_file() or passes_symlink(target, rel):
         return Item(rel, "removed-in-kit", " (not a regular file, kept)")
     try:
-        data = path.read_bytes()
+        data = lf(path.read_bytes())
     except OSError:
         return Item(rel, "removed-in-kit", " (not readable, kept)")
     if digest(data) in seen.get(rel, set()):
@@ -286,7 +286,7 @@ def removed_item(
 def template_notes(target: Path, kit_root: Path, templates: dict[str, str], row: dict) -> list[str]:
     notes = []
     for dest, src in sorted(templates.items()):
-        source = (kit_root / src).read_bytes()
+        source = lf((kit_root / src).read_bytes())
         if digest(source) in row["templates"].get(src, []):
             continue
         notes.append(f"template-changed {dest} ({src})")
@@ -428,7 +428,7 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
     optional = set(manifest.get("experimental", []))
     whole, blocks = installed_set(manifest, mode, enabled)
     for rel in whole:
-        new = (kit_root / rel).read_bytes()
+        new = lf((kit_root / rel).read_bytes())  # a CRLF plugin cache is written as LF
         old = set(row["verbatim"].get(rel, []))
         if rel in optional and not (target / rel).exists():
             old = set()  # opting in creates the file; it was never installed, so it is not deleted

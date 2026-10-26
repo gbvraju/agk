@@ -417,7 +417,7 @@ def main(argv: list[str] | None = None) -> int:
     cli_base, body_arg = parsed
     try:
         if body_arg == "-":
-            body = sys.stdin.read()
+            body = sys.stdin.buffer.read().decode("utf-8")
         else:
             with open(body_arg, encoding="utf-8") as fh:
                 body = fh.read()

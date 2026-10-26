@@ -88,6 +88,7 @@ def dirty_of(root: Path) -> bool | str:
         cwd=root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     if proc.returncode != 0:
         return UNKNOWN

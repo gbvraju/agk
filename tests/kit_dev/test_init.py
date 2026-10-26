@@ -281,7 +281,7 @@ def copy_of_the_kit(dest: Path) -> Path:
 
 def run_copy_init(kit: Path, target: Path):
     return subprocess.run(
-        [sys.executable, str(kit / "scripts" / "agk" / "init.py"), str(target)],
+        [sys.executable, str(kit / "scripts" / "agk" / "init.py"), str(target), "--unreleased"],
         capture_output=True,
         text=True,
         env=clean_env(),

@@ -75,7 +75,7 @@ def body_arg(argv: list[str] | None) -> str | None:
     value = args[i + 1]
     try:
         if value == "-":
-            return sys.stdin.read()
+            return sys.stdin.buffer.read().decode("utf-8")
         with open(value, encoding="utf-8") as fh:
             return fh.read()
     except OSError:

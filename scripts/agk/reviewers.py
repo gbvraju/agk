@@ -335,8 +335,29 @@ def parse(text: str) -> dict:
     return data
 
 
+TOP_KEYS = ("version", "classes", "teams", AUTHORS, APPROVERS)
+
+
+def misplaced(data: dict) -> list[str]:
+    """A top-level key indented under a mapping (brief #263 item 9: the pilot's `spec_approvers`
+    under `teams:`). The parser reads it as a team or a class, whose own checks would then name the
+    wrong cause; this names the key and the reason. Each found key is taken out of its mapping."""
+    problems = []
+    for section in ("classes", "teams"):
+        mapping = data.get(section)
+        if not isinstance(mapping, dict):
+            continue
+        for key in [k for k in mapping if k in TOP_KEYS]:
+            del mapping[key]
+            problems.append(
+                f"{key} is indented under {section}: it is a top-level key, "
+                "so write it at the start of its line"
+            )
+    return problems
+
+
 def validate(data: dict, protected_list: str) -> list[str]:
-    problems: list[str] = []
+    problems: list[str] = misplaced(data)
     if data.get("version") != "1":
         problems.append("version must be 1")
     classes = data.get("classes")
@@ -479,7 +500,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ok {NAME}")
         return 1 if problems else 0
     if problems:
-        raise CheckError(f"{CONFIG} is invalid; run --check")
+        raise CheckError(f"{CONFIG} is invalid: {'; '.join(problems)}")
     rendered = render_codeowners(data)
     if argv[0] == "--codeowners":
         if write:

@@ -18,7 +18,14 @@ import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from common import block_source, detect_default_branch, experimental_enabled, matches, read_list
+from common import (
+    block_source,
+    detect_default_branch,
+    experimental_enabled,
+    lf,
+    matches,
+    read_list,
+)
 from init import (
     CREATE_ONLY,
     DATE_RE,
@@ -28,6 +35,7 @@ from init import (
     Refusal,
     check_interpreter,
     install_mode,
+    kit_bytes,
     passes_symlink,
     path_class,
     print_branch_rules,
@@ -182,7 +190,7 @@ def build_plan(target: Path, today: str):
     }
     created: dict[str, bytes] = {}
     for rel in sorted(verbatim - set(spec["skip"]) - set(spec["blocks"])):
-        created[rel] = (KIT_ROOT / rel).read_bytes()
+        created[rel] = kit_bytes(KIT_ROOT / rel)
     for dest, src in spec["templates"].items():
         created[dest] = render((KIT_ROOT / src).read_text(encoding="utf-8"), variables, src).encode(
             "utf-8"
@@ -207,7 +215,7 @@ def classify_created(target: Path, rel: str, content: bytes, entries: list[str])
         return (rel, "conflict", content, f" (path class {cls}: symlink)")
     if not path.exists():
         return (rel, "create", content, "")
-    if path.is_file() and path.read_bytes() == content:
+    if path.is_file() and lf(path.read_bytes()) == lf(content):
         return (rel, "unchanged", content, "")
     if path.is_file() and rel in CREATE_ONLY:
         return (rel, "unchanged", content, "")

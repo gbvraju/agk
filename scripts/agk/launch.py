@@ -45,7 +45,11 @@ and do what it says. Report on your pull request; ask on it; never merge.
 
 def read_plan(source: str) -> dict:
     try:
-        text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
+        text = (
+            sys.stdin.buffer.read().decode("utf-8")
+            if source == "-"
+            else Path(source).read_text(encoding="utf-8")
+        )
         plan = json.loads(text)
     except (OSError, UnicodeDecodeError, ValueError):
         raise CheckError("the plan cannot be read as JSON (option --plan)") from None
@@ -90,6 +94,7 @@ def start_with(adapter: str, found: list[tuple[str, int, str | None]]) -> int:
                 words,
                 input=prompt_for(session, brief, build),
                 text=True,
+                encoding="utf-8",
                 env=env,
                 capture_output=True,
             )

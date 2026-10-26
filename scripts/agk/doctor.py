@@ -304,7 +304,10 @@ class Reads:
         endpoint = f"repos/{self.repo}{path}"
         try:
             proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-                ["gh", "api", "--method", "GET", endpoint], capture_output=True, text=True
+                ["gh", "api", "--method", "GET", endpoint],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
             )
         except FileNotFoundError:
             return None, "gh-missing"
@@ -340,7 +343,7 @@ def classify_failure(stdout: str, stderr: str) -> str:
 def git_read(root: Path, *args: str) -> tuple[int, str]:
     try:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, read-only git, no shell
-            ["git", "-C", str(root), *args], capture_output=True, text=True
+            ["git", "-C", str(root), *args], capture_output=True, text=True, encoding="utf-8"
         )
     except OSError:
         return 127, ""
@@ -579,6 +582,12 @@ def installed_files(
     return sorted(files), {p: s for p, s in sorted(blocks.items()) if p not in rendered}
 
 
+def lf(data: bytes) -> bytes:
+    """CRLF line ends as LF, a file with a NUL byte as it is: the rule of `common.lf` (brief #263
+    item 7), kept here because the doctor imports no other kit script."""
+    return data if b"\0" in data else data.replace(b"\r\n", b"\n")
+
+
 def compare_tree(
     root: Path,
     kit: Path,
@@ -592,7 +601,7 @@ def compare_tree(
         target = root / rel
         if not target.is_file():
             missing.append(rel)
-        elif target.read_bytes() != (kit / rel).read_bytes():
+        elif lf(target.read_bytes()) != lf((kit / rel).read_bytes()):  # CRLF on Windows
             differs.append(rel)
     for rel, style in blocks.items():
         target = root / rel

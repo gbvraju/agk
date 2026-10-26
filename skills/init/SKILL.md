@@ -22,6 +22,10 @@ overwrite, and writes nothing when any file conflicts.
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/init.py" .
    ```
 
+   If it refuses because the plugin's kit files are not those of a release, show the message and the printed plugin
+   settings entries and stop: the person installs the plugin at that release's tag (the `ref` of the agk marketplace
+   entry), then runs `/agk:init` again.
+
 3. Show the printed branch rules, scanner exclusions and plugin settings entries as they are. Do not apply any of them.
 
 Do not commit, push or merge. Do not set a spec `Approved` or an ADR `Accepted`. Stop after reporting what was created.

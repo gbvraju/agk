@@ -4,5 +4,39 @@ docs/runs/decisions-log.md merge=union
 docs/runs/residuals.md merge=union
 docs/runs/architect-catches-*.md merge=union
 
+# agk: the kit's own files keep LF line ends in every checkout, Windows too (brief #263 item 7), so an untouched copy
+# is never read as edited and an upgrade writes what the release row lists. The project's own files keep its settings.
+scripts/agk/** text eol=lf
+.claude/agents/architect-review.md text eol=lf
+.claude/agents/architect.md text eol=lf
+.claude/agents/conductor.md text eol=lf
+.claude/agents/drift-auditor.md text eol=lf
+.claude/agents/reviewer.md text eol=lf
+.claude/agents/shadow.md text eol=lf
+.claude/hooks/architect_guard.py text eol=lf
+.claude/hooks/conductor_guard.py text eol=lf
+.claude/hooks/stop_check.py text eol=lf
+.claude/settings.json text eol=lf
+.github/ISSUE_TEMPLATE/proposal.md text eol=lf
+.github/ISSUE_TEMPLATE/question.md text eol=lf
+.github/ISSUE_TEMPLATE/report.md text eol=lf
+.github/PULL_REQUEST_TEMPLATE.md text eol=lf
+.github/workflows/agk-route.yml text eol=lf
+.github/workflows/drift-audit.yml text eol=lf
+.github/workflows/governance.yml text eol=lf
+.github/workflows/metrics.yml text eol=lf
+.github/workflows/product-report.yml text eol=lf
+.github/workflows/proof.yml text eol=lf
+.gitignore text eol=lf
+CLAUDE.md text eol=lf
+Makefile text eol=lf
+agk.mk text eol=lf
+config/review-checklist.md text eol=lf
+config/session-rules.md text eol=lf
+constitution/principles.md text eol=lf
+docs/adr/TEMPLATE.md text eol=lf
+docs/briefs/TEMPLATE.md text eol=lf
+docs/specs/TEMPLATE.md text eol=lf
+
 # agk: the kit's own scripts; GitHub collapses them in pull-request diffs and leaves them out of language statistics.
 scripts/agk/** linguist-generated=true
