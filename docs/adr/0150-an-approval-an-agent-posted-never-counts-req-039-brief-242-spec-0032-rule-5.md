@@ -1,6 +1,6 @@
 # ADR-0150: an approval an agent posted never counts (REQ-039, brief 242, SPEC-0032 rule 5)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0132, ADR-0149
