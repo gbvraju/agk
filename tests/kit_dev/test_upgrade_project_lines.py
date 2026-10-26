@@ -1,8 +1,9 @@
 """Brief #269 (REQ-039, ADR-0164): a project's own `.gitignore` lines survive every upgrade.
 
-The kit's `.gitignore` is a marked block; the lines outside it belong to the project. The fixture kit
-mirrors the real one: its `.gitignore` is the block, the block's text is `kit/templates/gitignore`,
-and `extendable` in the manifest names the file. Ignore lines are invented.
+The kit's `.gitignore` is a marked block; the lines outside it belong to the project. The fixture
+kit mirrors the real one: its `.gitignore` is the block, the block's text is
+`kit/templates/gitignore`, and `extendable` in the manifest names the file. Ignore lines are
+invented.
 """
 
 from __future__ import annotations
@@ -14,15 +15,15 @@ import sys
 
 import pytest
 from conftest import KIT_ROOT, snapshot
-from test_upgrade import (  # noqa: F401 - `kit` is the fixture the tests below extend
+from test_upgrade import (
     MARK_CLOSE,
     MARK_OPEN,
     NEW,
     OLD,
     adopt_target,
     init_target,
-    kit,
     lines_of,
+    make_kit,
     put,
     run,
 )
@@ -33,6 +34,14 @@ import upgrade  # noqa: E402
 
 BLOCK_NEW = f"{MARK_OPEN}{NEW['.gitignore']}{MARK_CLOSE}"
 BLOCK_OLD = f"{MARK_OPEN}{OLD['.gitignore']}{MARK_CLOSE}"
+
+
+@pytest.fixture
+def kit(tmp_path, monkeypatch):
+    """The fixture kit of test_upgrade.py, as the upgrade's kit root."""
+    root = make_kit(tmp_path)
+    monkeypatch.setattr(upgrade, "KIT_ROOT", root)
+    return root
 
 
 @pytest.fixture
@@ -206,9 +215,10 @@ def test_a_real_install_of_the_last_release_with_a_project_line_upgrades(tmp_pat
     table = json.loads((KIT_ROOT / "kit" / "hashes.json").read_text(encoding="utf-8"))
     released = max(table["releases"], key=upgrade.version_key)
     body = (KIT_ROOT / "kit/templates/gitignore").read_text(encoding="utf-8")
-    assert hashlib.sha256(body.encode()).hexdigest() in table["releases"][released]["verbatim"][
-        ".gitignore"
-    ], "the template is the released file's text"
+    assert (
+        hashlib.sha256(body.encode()).hexdigest()
+        in table["releases"][released]["verbatim"][".gitignore"]
+    ), "the template is the released file's text"
     target = tmp_path / "t"
     target.mkdir()
     subprocess.run(["git", "init", "-q", str(target)], check=True)

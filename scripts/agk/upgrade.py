@@ -179,11 +179,14 @@ def locate(text: str, style: str) -> tuple[str, int, int, list[str]]:
 def installed_set(
     manifest: dict, mode: str, experimental: bool = False
 ) -> tuple[list[str], dict[str, str]]:
-    """(whole-file paths the installer for `mode` writes, marked blocks of an adopt install)."""
+    """(whole-file paths the installer for `mode` writes, marked blocks: those of an adopt install,
+    and the extendable files of an init install)."""
     listed = [*manifest["verbatim"], *(manifest.get("experimental", []) if experimental else [])]
     verbatim = [p for p in listed if not p.startswith(KIT_ONLY) and p not in KIT_ONLY_FILES]
     if mode == "init":
-        return sorted(verbatim), {}
+        # an extendable file (brief #269) is compared and replaced only inside its block
+        ext = {p: s for p, s in (manifest.get("extendable") or {}).items() if p in verbatim}
+        return sorted(set(verbatim) - set(ext)), dict(sorted(ext.items()))
     spec = manifest["adopt"]
     rendered = set(manifest.get("rendered") or [])
     blocks = {p: s for p, s in spec["blocks"].items() if p not in rendered}
@@ -206,9 +209,41 @@ def whole_file(target: Path, rel: str, new: bytes, old: set[str], entries: list[
     return Item(rel, "conflict", f" (path class {cls}: differs from every released copy)")
 
 
+def kept_detail(count: int) -> str:
+    """The one report of a file's project lines (brief #269 answer 2)."""
+    return f" (project lines kept: {count})" if count else ""
+
+
+def migrate(rel: str, style: str, body: str, text: str, released: set[str], cls: str) -> Item:
+    """An extendable file without markers (brief #269 answer 3).
+
+    When the file begins with the kit's lines of the installed release (a prefix whose digest is in
+    RELEASED) and only the project's lines follow, the block is written around the kit's present
+    lines and the project's lines are kept after it, byte for byte. Anything else is a conflict.
+    """
+    lines = text.splitlines(keepends=True)
+    for count in range(len(lines), 0, -1):
+        head = "".join(lines[:count]).encode("utf-8")
+        if digest(head) in released or digest(head.rstrip(b"\n") + b"\n") in released:
+            rest = lines[count:]
+            more = f"; project lines kept: {len(rest)}" if rest else ""
+            content = (block_of(style, body) + "".join(rest)).encode("utf-8")
+            return Item(rel, "replace", f" (agk block added{more})", content=content)
+    return Item(rel, "conflict", f" (path class {cls}: differs from every released copy)")
+
+
 def block_file(
-    target: Path, rel: str, style: str, body: str, old: set[str], entries: list[str]
+    target: Path,
+    rel: str,
+    style: str,
+    body: str,
+    old: set[str],
+    entries: list[str],
+    released: set[str] | None = None,
 ) -> Item:
+    """A marked block. RELEASED is given for an extendable file (brief #269): the digests of the
+    installed release's kit lines, as a whole file or a block, used to migrate a file without
+    markers; the lines outside its block are the project's and are counted in the report."""
     path = target / rel
     cls = path_class(rel, entries)
     whole = body.rstrip("\n") + "\n"
@@ -225,6 +260,8 @@ def block_file(
     if state == "broken":
         return Item(rel, "conflict", f" (path class {cls}: broken or duplicated agk block)")
     if state == "none":
+        if released:
+            return migrate(rel, style, body, text, released, cls)
         # adopt writes a whole file, without markers, when the file did not exist
         if rel in ABSENT_AS_BLOCK:
             if not old:  # a block no release has shipped yet: add it, as adopt does
@@ -242,11 +279,12 @@ def block_file(
             return Item(rel, "replace", content=whole.encode("utf-8"))
         return Item(rel, "conflict", f" (path class {cls}: marked block, no agk markers)")
     inner = "".join(lines[begin + 1 : end])
+    kept = kept_detail(len(lines) - (end - begin + 1)) if released is not None else ""
     if inner == whole:
-        return Item(rel, "unchanged")
+        return Item(rel, "unchanged", kept)
     if digest(inner.encode("utf-8")) in old:
         fresh = "".join([*lines[: begin + 1], whole, *lines[end:]])
-        return Item(rel, "replace", content=fresh.encode("utf-8"))
+        return Item(rel, "replace", kept, content=fresh.encode("utf-8"))
     return Item(rel, "conflict", f" (path class {cls}: marked block, agk block differs)")
 
 
@@ -433,10 +471,12 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
         if rel in optional and not (target / rel).exists():
             old = set()  # opting in creates the file; it was never installed, so it is not deleted
         plan.items.append(whole_file(target, rel, new, old, entries))
+    extendable = set(manifest.get("extendable") or {})
     for rel, style in blocks.items():
         body = (kit_root / block_source(manifest, rel)).read_text(encoding="utf-8")
         old = set(row["blocks"].get(rel, []))
-        plan.items.append(block_file(target, rel, style, body, old, entries))
+        released = old | set(row["verbatim"].get(rel, [])) if rel in extendable else None
+        plan.items.append(block_file(target, rel, style, body, old, entries, released))
     current = set(manifest["verbatim"]) | (optional if enabled else set())
     seen = history(table)
     kept = (

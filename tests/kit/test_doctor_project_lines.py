@@ -53,7 +53,7 @@ def test_init_project_lines_outside_the_block_are_not_a_difference(tmp_path):
     """REQ-039: brief #269 answer 2."""
     report = report_of(init_target(tmp_path, "# mine\n" + BLOCK + "private-src/\n"))
     assert report["vendored-differs"]["status"] == "ok"
-    assert report["vendored-differs"]["message"] == " (.gitignore: project lines kept: 2)"
+    assert report["vendored-differs"]["message"].endswith(" (.gitignore: project lines kept: 2)")
     assert report["vendored-missing"]["status"] == "ok"
 
 

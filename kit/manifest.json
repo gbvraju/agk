@@ -108,7 +108,11 @@
       "docs/runs/residuals.md": "kit/templates/residuals.md"
     },
     "block_sources": {
-      ".gitattributes": "kit/templates/gitattributes"
+      ".gitattributes": "kit/templates/gitattributes",
+      ".gitignore": "kit/templates/gitignore"
     }
+  },
+  "extendable": {
+    ".gitignore": "hash"
   }
 }

@@ -574,7 +574,9 @@ def installed_files(
     ]
     verbatim = [p for p in listed if not p.startswith(KIT_ONLY) and p not in KIT_ONLY_FILES]
     if mode == "init":
-        return sorted(verbatim), {}
+        # an extendable file (brief #269) is compared only inside its block
+        ext = {p: s for p, s in (manifest.get("extendable") or {}).items() if p in verbatim}
+        return sorted(set(verbatim) - set(ext)), dict(sorted(ext.items()))
     spec = manifest.get("adopt") or {}
     blocks = dict(spec.get("blocks") or {})
     files = set(verbatim) - set(spec.get("skip") or []) - set(blocks)
@@ -594,7 +596,10 @@ def compare_tree(
     files: list[str],
     blocks: dict[str, str],
     sources: dict[str, str] | None = None,
+    kept: dict[str, int] | None = None,
 ) -> tuple[list[str], list[str]]:
+    """(missing, differs). KEPT, when given, collects the number of lines outside the block of each
+    path it names on entry that matches the kit (the project's lines, brief #269)."""
     missing: list[str] = []
     differs: list[str] = []
     for rel in files:
@@ -614,6 +619,8 @@ def compare_tree(
         state, inner = find_block(text, style)
         if state == "ok":
             same = inner == whole
+            if same and kept is not None and rel in kept:
+                kept[rel] = len(text.splitlines()) - len(inner.splitlines()) - 2
         else:
             same = state == "none" and text == whole and rel not in ABSENT_AS_BLOCK
         if not same:
@@ -641,14 +648,23 @@ def kit_results(root: Path, kit_root: Path | None, config: dict) -> tuple[dict[s
     files, blocks = installed_files(manifest, mode, config.get("experimental_reviewer") is True)
     try:
         sources = (manifest.get("adopt") or {}).get("block_sources") or {}
-        missing, differs = compare_tree(root, kit_root, files, blocks, sources)
+        kept = {rel: 0 for rel in manifest.get("extendable") or {}}
+        missing, differs = compare_tree(root, kit_root, files, blocks, sources, kept)
     except (OSError, UnicodeDecodeError):
         return {n: Result("cannot-check", "bad-response") for n in names}, kit_version
     return {
         "kit-version": Result("ok"),
         "vendored-missing": Result("fail", message=listing(missing)) if missing else Result("ok"),
-        "vendored-differs": Result("fail", message=listing(differs)) if differs else Result("ok"),
+        "vendored-differs": Result("fail", message=listing(differs))
+        if differs
+        else Result("ok", message=kept_lines(kept)),
     }, kit_version
+
+
+def kept_lines(kept: dict[str, int]) -> str:
+    """The one report of the project's lines of each extendable file (brief #269 answer 2)."""
+    shown = [f"{rel}: project lines kept: {n}" for rel, n in sorted(kept.items()) if n]
+    return f" ({'; '.join(shown)})" if shown else ""
 
 
 def seen_by_the_user(root: Path, name: str) -> bool:

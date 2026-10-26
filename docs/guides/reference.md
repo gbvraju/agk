@@ -131,7 +131,10 @@ prints the target's protected classes and an ADR skeleton for the upgrade pull r
 `pyproject.toml [tool.agk]` (kits 0.1.0 and 0.2.0) is upgraded through that stamp: `agk.toml` is created last and `pyproject.toml` is
 never written. From kit 0.28.0 the kit's own tests are not installed in a project: an upgrade from an earlier kit deletes the
 unmodified files of `tests/kit/` and keeps one you edited, reporting it as `removed-in-kit (modified, kept)`; that file tests the kit
-and cannot run without the kit's fixtures, so delete it in your own change. See `docs/specs/0008-upgrade.md` and ADR-0018.
+and cannot run without the kit's fixtures, so delete it in your own change. The kit's `.gitignore` lines sit
+between `# >>> agk` and `# <<< agk`: add your own ignore lines outside that block, and the upgrade and the doctor compare and
+replace only the block and report your lines once as `project lines kept: n`; an older `.gitignore` without the markers, the kit's
+lines followed by yours, gets the block on the next upgrade (ADR-0164). See `docs/specs/0008-upgrade.md` and ADR-0018.
 
 ## Experimental: reviewer agent
 
