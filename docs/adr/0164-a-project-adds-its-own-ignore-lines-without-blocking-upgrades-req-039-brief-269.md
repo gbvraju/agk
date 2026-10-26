@@ -38,11 +38,11 @@ plus one invented line, upgraded from an init install).
    the block around the kit's present lines and keeps the following lines after it, byte for byte (`replace .gitignore
    (agk block added; project lines kept: n)`); an untouched file just gets the block. Any other difference is still a
    conflict, named as today (`differs from every released copy`): a changed or removed kit line, and project lines placed
-   before the kit's lines (Q-269-2). Broken or duplicated markers and an edit inside the block stay conflicts.
+   before the kit's lines (Q-269-2, accepted). Broken or duplicated markers and an edit inside the block stay conflicts.
 4. **Other extendable files (answer 4).** None. `.gitignore` is the only installed file the kit expects a project to extend.
    `.gitattributes` and `pyproject.toml` are templates an init install creates once and never compares; `Makefile` and
    `CLAUDE.md` are the kit's own rules and entry points, and the guides ask for no project lines in them (project tests go
-   in `project_tests` of `agk.toml`). A file is added to `extendable` only by a later ADR (Q-269-3).
+   in `project_tests` of `agk.toml`). A file is added to `extendable` only by a later ADR (Q-269-3, accepted).
 5. **Generic (answer 5).** The tests use invented ignore lines and name no project. The upgrade tests are in `tests/kit_dev/`
    (upgrade is kit-only), the doctor's in `tests/kit/`; the brief's `tests/kit/test_upgrade*.py` does not exist. Flow mode:
    fragment `changelog.d/gitignore-project-lines.md`, no version bump and no edit of `kit/hashes.json`, which the release
@@ -53,9 +53,13 @@ plus one invented line, upgraded from an init install).
 - A project adds ignore lines outside the block and upgrades keep them; an existing init install gets the block at its next
   upgrade, with no conflict, whether or not it already added lines after the kit's.
 - The kit repository's own `.gitignore` carries the markers, so its next release row holds the marked file.
-- The markers are the existing `# >>> agk` pair, not the `# agk: begin` / `# agk: end` the brief names (Q-269-1).
+- The markers are the existing `# >>> agk` / `# <<< agk` pair of adopt installs; this ADR supersedes the pair `# agk: begin` /
+  `# agk: end` that the brief names (Q-269-1, accepted in the verdict on ce7e674): one marker style per file, and no adopt
+  install is migrated.
+- Amendment 92 (`docs/runs/proposed-spec-amendments-92.md`) is applied to SPEC-0008 rule 13 (init's extendable `.gitignore`
+  block, the project-line count and the migration of an unmarked file of kit lines plus project lines) and to SPEC-0006 rule 8
+  (the doctor compares init's extendable files inside their markers), as the verdict on ce7e674 asked (Q-269-4).
 
 ## Residual
 
-- 2026-10-26: SPEC-0008 rule 13 names the marked blocks of adopt only; an amendment that adds the extendable files of an init
-  install and the migration of decision 3 is proposed to the spec's owners, not written here (Q-269-4, due 2026-12-31).
+None. The residual of the first head (the spec amendment, Q-269-4) is closed by amendment 92.
