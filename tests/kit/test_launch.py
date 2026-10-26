@@ -196,3 +196,34 @@ def test_the_script_imports_no_network_module_and_holds_no_credential():
     assert names <= set(sys.stdlib_module_names) | {"common"}
     for word in ("token", "secret", "password", "api_key", "crontab"):
         assert word not in text.lower(), word
+
+
+# --- the build of a brief (brief 251) -----------------------------------------------------------
+
+
+def test_the_prompt_claims_the_build_the_plan_names(tmp_path):
+    doc = {"start": [{"session": "builder-a", "brief": 5, "title": "t", "build": "b"}]}
+    out = launch(tmp_path, doc)
+    assert out.returncode == 0, out.stderr
+    claim = "python3 scripts/agk/session.py claim --session builder-a --brief 5 --build b\n"
+    assert claim in out.stdout and "build (b) of brief #5" in out.stdout
+
+
+def test_the_prompt_of_a_brief_without_builds_is_as_before(tmp_path):
+    out = launch(tmp_path, plan(("builder-a", 5, "t")))
+    assert "claim --session builder-a --brief 5\n" in out.stdout
+    assert "--build" not in out.stdout and "build (" not in out.stdout
+
+
+@pytest.mark.parametrize("build", ["", "a b", 5, True, None])
+def test_a_build_that_is_not_a_name_is_refused_naming_the_field(tmp_path, build):
+    doc = {"start": [{"session": "builder-a", "brief": 5, "build": build}]}
+    out = launch(tmp_path, doc)
+    assert out.returncode == 2 and "(field build)" in out.stderr
+
+
+def test_the_adapter_environment_carries_the_build(tmp_path, adapter):
+    doc = {"start": [{"session": "builder-a", "brief": 5, "build": "b"}]}
+    out = run_adapter(tmp_path, adapter, doc)
+    assert out.returncode == 0, out.stderr
+    assert "--build b" in calls(tmp_path)[0]["prompt"]
