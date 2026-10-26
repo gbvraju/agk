@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 
 from check_requirements import dirs_arg
-from common import CheckError, markers_for, parse_requirements, repo_root, run
+from common import CheckError, markers_for, parse_requirements, repo_root, run, untagged_test_files
 
 NAME = "traceability"
 
@@ -23,6 +23,14 @@ def main(argv: list[str] | None = None) -> int:
     for req in reqs:
         files = ", ".join(markers.get(req["id"], [])) or "-"
         print(f"| {req['id']} | {req['status'] or '?'} | {files} |")
+    retired = [r["id"] for r in reqs if r["status"] == "retired"]
+    untagged = untagged_test_files(root, dirs_arg(argv))
+    if retired or untagged:
+        print()
+    if retired:
+        print(f"Retired: {', '.join(retired)}")
+    if untagged:
+        print(f"Untagged test files ({len(untagged)}): {', '.join(untagged)}")
     return 0
 
 

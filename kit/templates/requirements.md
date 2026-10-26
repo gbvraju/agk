@@ -1,6 +1,6 @@
 # Requirements
 
-Each requirement is a `### REQ-nnn` section with a `- Status:` line (planned | in-progress | done).
+Each requirement is a `### REQ-nnn` section with a `- Status:` line (planned | in-progress | done | retired).
 Only the Status line may change without an ADR. `done` requires at least one test marker `REQ-nnn` in a
 `test_*.py` file under `tests/`.
 

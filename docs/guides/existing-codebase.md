@@ -60,6 +60,12 @@ criterion in its name or docstring, for example `REQ-101 AC1`. Then a person set
 never marks anything done). Leave `REQ-001` to `REQ-003` alone: they are the kit's own requirements, installed as `planned`, and
 `make -f agk.mk agk-governance` fails with `done requires a test marker` if you mark them done.
 
+Two more statuses and lists help you keep the tests honest. A requirement for a feature you drop goes to `retired` (a person changes the
+`Status:` line, with an ADR); from then on its `REQ-nnn` markers fail `check_requirements`, naming the requirement and the files, so the same
+pull request removes those tests or retags them to a requirement they still prove. The weekly drift audit also lists, as finding `D8`
+and never blocking, the test files that carry no `REQ-nnn` marker (up to 20 paths and the count), and `traceability.py` ends with the
+retired requirements and the untagged test files. A pull request that removes such a test declares `Behaviour: unchanged` and keeps the proof green.
+
 The pull request body for this change says:
 
     Advances: REQ-101

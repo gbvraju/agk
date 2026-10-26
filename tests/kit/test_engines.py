@@ -13,7 +13,7 @@ from test_doctor import checks_of, doctor, prepare, stub_gh
 
 KIT = Path(__file__).resolve().parents[2]
 KEYS = ("vision", "stack", "design", "review")
-SECRET_NAME = "zq-engine-name"
+SECRET_NAME = "zq-engine-name"  # nosec B105 - a made-up skill name the test proves is never printed
 
 
 @pytest.fixture(autouse=True)

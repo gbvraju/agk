@@ -19,7 +19,7 @@ ACCEPTANCE_LINE = re.compile(r"^- Acceptance:\s*(.*?)\s*$")
 AC_MARKER = re.compile(r"(?:^|(?<=; ))AC(\d+)\b")
 MARKER_RUN = re.compile(r"(REQ-\d{3}(?:[ ,/]+REQ-\d{3})*)(?: AC(\d+)\b)?")
 MARKER_SKIP_PARTS = frozenset({".git", "node_modules", "vendor", "target", "__pycache__", ".venv"})
-ALLOWED_STATUS = ("planned", "in-progress", "done")
+ALLOWED_STATUS = ("planned", "in-progress", "done", "retired")
 AC_COVERAGE = ("warn", "block")
 PR_MODES = ("strict", "flow")
 BEHAVIOUR_UNCHANGED = "Behaviour: unchanged"
@@ -565,6 +565,18 @@ def find_ac_markers(
         {"req": req, "ac": ac, "file": rel, "line": number}
         for rel, number, req, ac in sorted(found, key=lambda m: (m[0], m[1], m[2], m[3] or ""))
     ]
+
+
+def untagged_test_files(root: Path, cli_dirs: Sequence[str] | None = None) -> list[str]:
+    """The test files (the configured directories and patterns) with no `REQ-nnn` token, sorted.
+
+    A file that names any requirement id counts as tagged, even one the requirements file lacks.
+    Brief 244: the weekly audit lists these, `traceability.py` shows them, nothing blocks."""
+    cfg = load_config(root)
+    files = _marker_files(
+        root, test_dirs(root, cli_dirs), cfg["test_patterns"], [], ("__pycache__",)
+    )
+    return sorted({rel for rel, text in files if not REQ_ID.search(text)})
 
 
 def markers_for(root: Path, cli_dirs: Sequence[str] | None = None) -> dict[str, list[str]]:

@@ -952,6 +952,16 @@
                       "const": "unknown"
                     }
                   ]
+                },
+                "D8": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "const": "unknown"
+                    }
+                  ]
                 }
               },
               "additionalProperties": false
