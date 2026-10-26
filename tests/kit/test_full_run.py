@@ -277,7 +277,7 @@ def test_the_get_no_longer_filters_on_completed_runs():
 # --- steps the last full run never reached (brief #261) -----------------------------------------
 
 RUN_ID = 2611
-# Every step of one `governance` job of a full pull_request run, in the order the jobs GET lists them.
+# Every step of the `governance` job of a full pull_request run, in the order the jobs GET lists.
 FULL_STEPS = (
     "Set up job",
     "Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
@@ -342,8 +342,8 @@ def check_jobs(tmp_path: Path, jobs: dict):
 
 
 def test_the_measured_run_a_body_failure_with_the_later_steps_skipped_is_not_cured(tmp_path):
-    """Brief #261 Measured (REQ-039): `PR body shape` failed, Lint, the tests and the secret scan were
-    skipped; an edited description must leave governance red."""
+    """Brief #261 Measured (REQ-039): `PR body shape` failed; Lint, the tests and the secret scan
+    were skipped. An edited description must leave governance red."""
     out = check_jobs(tmp_path, jobs_with(skipped=HIDDEN))
     assert out.returncode == 1, out.stdout
     assert out.stdout == (
@@ -379,8 +379,8 @@ def test_a_body_failure_where_every_other_step_ran_and_passed_is_cured(tmp_path,
 )
 def test_any_other_skipped_step_in_a_run_with_a_failure_is_not_cured(tmp_path, skipped):
     """Brief #261 answer 1 (REQ-039): GitHub shows a step skipped by its own `if:` and one skipped
-    because an earlier step failed alike, so only the steps whose own condition skips them on a full
-    run (`OWN_CONDITION`) may be skipped; the status-only skip is refused too (the person re-runs)."""
+    because an earlier step failed alike, so only the steps whose own condition skips them on a
+    full run (`OWN_CONDITION`) may be skipped; a status-only skip is refused too (re-run it)."""
     out = check_jobs(tmp_path, jobs_with(skipped=skipped))
     assert out.returncode == 1
     assert out.stdout == (
@@ -390,7 +390,7 @@ def test_any_other_skipped_step_in_a_run_with_a_failure_is_not_cured(tmp_path, s
 
 
 def test_a_skipped_body_step_is_repeated_by_the_edited_run_and_does_not_block(tmp_path):
-    """Brief #261 answer 1 (REQ-039): the partial run repeats the body steps, so their skip is cured."""
+    """Brief #261 answer 1 (REQ-039): the partial run repeats a skipped body step."""
     out = check_jobs(tmp_path, jobs_with(failed=("check_specs",), skipped=("PR body shape",)))
     assert out.returncode == 0, out.stdout
 
@@ -412,8 +412,8 @@ def test_the_message_names_steps_and_never_a_value(tmp_path):
 def test_the_steps_a_full_run_skips_by_their_own_condition_are_pinned_to_the_workflow():
     """Brief #261 answer 1 (REQ-039): each step of `OWN_CONDITION` is skipped on a full run only by
     its own condition (on an edit only, or by the tree of the repository, `kit/agk-kit.mk`), never
-    by an earlier failure: it comes before any check or carries `!cancelled()`. `Project tests` is
-    skipped by the tree in the kit's own repository, where `Release check` runs, and nowhere else."""
+    by an earlier failure: it comes before any check or carries `!cancelled()`. `Project tests`
+    is skipped by the tree in the kit's own repository, where `Release check` runs, only."""
     sys.path.insert(0, str(ROOT / "scripts" / "agk"))
     import full_run
 
