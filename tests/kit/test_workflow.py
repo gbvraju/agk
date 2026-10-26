@@ -318,3 +318,45 @@ def test_rule9_the_pr_body_step_is_given_a_saved_copy_of_the_briefs():
     assert '--issues "$RUNNER_TEMP/briefs.json"' in blocks["PR body shape"]
     names = list(blocks)
     assert names.index("Open briefs") < names.index("PR body shape")
+
+
+# --- the secret scan (brief #258, ADR-0158) -----------------------------------------------------
+
+
+def test_the_secret_scan_runs_the_pinned_gitleaks_binary_and_verifies_its_digest():
+    """Brief #258 answers 1 and 3: one pinned version, its SHA-256 written and checked."""
+    block = step_blocks(WORKFLOW.read_text(encoding="utf-8"))["Secret scan"]
+    assert "uses:" not in block
+    assert re.search(r"^          GITLEAKS_VERSION: \d+\.\d+\.\d+$", block, flags=re.M)
+    assert re.search(r"^          GITLEAKS_SHA256: [0-9a-f]{64}$", block, flags=re.M)
+    assert (
+        "https://github.com/gitleaks/gitleaks/releases/download/"
+        "v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+    ) in block
+    assert 'echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check --strict' in block
+    assert block.index("sha256sum --check") < block.index("tar -xzf")
+    assert '"$RUNNER_TEMP/gitleaks" git' in block and "--exit-code 1" in block
+    assert "--redact" in block
+
+
+def test_the_secret_scan_needs_no_licence_key_no_secret_and_no_new_permission():
+    """Brief #258 answers 1 and 3: no action, no licence key, no secret, permissions unchanged."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "gitleaks-action" not in text
+    assert "GITLEAKS_LICENSE" not in text
+    assert "secrets." not in text
+    assert re.search(
+        r"^permissions:\n  contents: read\n  pull-requests: read\n  issues: read\n"
+        r"  actions: read\n\n",
+        text,
+        flags=re.M,
+    )
+    assert text.count("permissions:") == 1
+
+
+def test_the_secret_scan_keeps_its_name_its_place_and_its_condition():
+    """Brief #258 answer 2: the step `Secret scan` is still last, after the project tests."""
+    blocks = step_blocks(WORKFLOW.read_text(encoding="utf-8"))
+    names = list(blocks)
+    assert names[-1] == "Secret scan" and names[-2] == "Project tests"
+    assert "        if: ${{ github.event.action != 'edited' }}\n" in blocks["Secret scan"]
