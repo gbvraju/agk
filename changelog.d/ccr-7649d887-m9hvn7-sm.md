@@ -1,0 +1,1 @@
+- a verdict whose Final line the router cannot read is answered by one Correction needed reply, and the conductor guard refuses it before it is posted (SPEC-0021 rules 1 and 2, REQ-039, brief 238)

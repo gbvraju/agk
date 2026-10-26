@@ -205,8 +205,8 @@ def test_ac2_a_missing_file_a_link_out_of_the_scratch_directory_and_a_second_fie
     assert verdict_of(project, tmp, file_post(path) + " --input /tmp/x") is not None
 
 
-def test_ac2_the_conductors_own_mode_still_refuses_a_file_body(project, tmp):
-    """REQ-042 AC2: the conductor's guard is unchanged here (a later item)."""
+def test_ac2_the_conductors_own_mode_reads_a_file_body_too_since_brief_238(project, tmp):
+    """REQ-042 AC2: the conductor's guard took the file body in brief 238 (the shadow's was first);
+    its content check is the verdict check, which a Shadow comment does not meet."""
     path = shadow_file(tmp, GOOD)
-    found = denial(run_hook(bash(file_post(path)), project, tmpdir=tmp).stdout)
-    assert found is not None
+    assert denial(run_hook(bash(file_post(path)), project, tmpdir=tmp).stdout) is None

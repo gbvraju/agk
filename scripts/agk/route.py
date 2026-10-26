@@ -19,7 +19,8 @@ or a finished workflow on it, it reads the checks of the branch's head and, when
 or updates that issue as a brief (`Priority: 0`, `Advances: none`) that names the failing check,
 the sha and the run and no cause, and closes it when the branch is green; while checks still run
 it does nothing.
-No comment, no review, no merge. Messages name the rule, never a value.
+No review, no merge, and one comment only: the reply `Correction needed:` to a verdict whose
+`Final:` line it cannot read (brief 238). Messages name the rule, never a value.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
-from common import CheckError, load_config, repo_root, required_checks
+from common import CheckError, load_config, repo_root, required_checks, verdict_problem
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
 from reviewers import person_approvals, spec_approvers, verdict_authors
 from session import RED_TITLE, gh, is_red, pages, repo_name
@@ -299,6 +300,39 @@ def apply(repo: str, n: int, current: list[str], wanted: str, labels: Labels) ->
             write(f"repos/{repo}/issues/{n}/labels/{quote(name, safe='')}", method="DELETE")
 
 
+CORRECTION = "Correction needed:"
+ANSWERED = re.compile(r"\(verdict comment (\d+)\)")
+
+
+def correct_verdicts(repo: str, n: int, comments: list[dict], authors: list[str] | None) -> None:
+    """Tell the reviewer, once for each verdict comment, that a `Final:` line cannot be read.
+
+    A `Verdict:` comment of a listed author with a problem (`verdict_problem`, brief 238) gets one
+    reply that begins `Correction needed:`, gives the message and names the comment; a reply already
+    there for that comment (found by its marker) means nothing new is posted. The reply is the last
+    write of a routing, and no label depends on it."""
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    answered = {
+        m.group(1)
+        for c in comments
+        if str(c.get("body") or "").startswith(CORRECTION)
+        for m in [ANSWERED.search(str(c.get("body")))]
+        if m
+    }
+    for c in sorted(comments, key=lambda c: c.get("id") or 0):
+        login = str((c.get("user") or {}).get("login") or "").lower()
+        problem = verdict_problem(str(c.get("body") or "")) if login in allowed else None
+        if problem and str(c.get("id")) not in answered:
+            body = f"{CORRECTION} {problem} (verdict comment {c.get('id')})"
+            write(
+                f"repos/{repo}/issues/{n}/comments",
+                "-f",
+                f"body={body}",
+                method="POST",
+                what="rule 2: a correction",
+            )
+
+
 def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str | None:
     """Route pull request `n`; its label, or None when it is over; CheckError if unreadable."""
     got = read_facts(repo, n, root)
@@ -311,6 +345,7 @@ def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str |
     current = [str(x.get("name")) for x in pr.get("labels") or []]
     if not dry:
         apply(repo, n, current, wanted, labels)
+        correct_verdicts(repo, n, facts.get("comments") or [], facts.get("authors"))
     changed = [name for name in current if name in LABELS] != [wanted]
     print(f"#{n} {wanted}" + (" (changed)" if changed and not dry else ""))
     return wanted
