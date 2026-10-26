@@ -17,6 +17,7 @@ DEFAULTS = {
     "ac_coverage": "warn",
     "proof_timeout": 900,
     "pr_mode": "strict",
+    "required_checks": ["proof", "governance"],
 }
 
 
