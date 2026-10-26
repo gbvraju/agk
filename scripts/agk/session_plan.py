@@ -30,6 +30,7 @@ The plan, in the order it is decided:
 from __future__ import annotations
 
 import json
+import re
 import string
 from datetime import UTC, datetime, timedelta
 
@@ -49,6 +50,9 @@ from session import (
     touches_of,
 )
 
+BUILDS_LINE = re.compile(r"Builds: (.+)")
+BUILD_ITEM = re.compile(r"\(([A-Za-z0-9._-]+)\)\s*(.*)")
+INDEPENDENT = "independent:"
 RULE = 15
 WINDOW_DAYS = 14
 DEFAULTS = {"reviews_in_flight": 3, "merge_hours": 1, "stale_commits": 20}
@@ -96,9 +100,13 @@ def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
     """What running work the brief waits for: a taken brief or an open builder pull request."""
     mine = unshared(touches_of(brief["body"]), shared)
     for number, theirs in s.held:
+        if number == brief["number"]:
+            continue  # another build of the same brief is not a rival
         if found := clash(mine, unshared(theirs, shared)):
             return {"brief": brief["number"], "waits_for": number, "why": f"both touch {found}"}
     for pr in s.builders:
+        if pr_brief(pr) == brief["number"]:
+            continue
         for item in pull_files(s, pr):
             found = file_conflict(item, mine, shared)
             if found:
@@ -106,12 +114,95 @@ def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
     return None
 
 
-def waves(root, s: Survey) -> tuple[list[dict], list[dict]]:
+def builds_of(body: str) -> list[tuple[str, bool]]:
+    """(name, independent) of each build of a brief, from its line `Builds: (a) ...; (b) ...`.
+
+    A build is independent when its text starts with `independent:`; every other build waits for
+    the builds before it. A brief with no such line has no builds."""
+    for line in str(body or "").splitlines():
+        found = BUILDS_LINE.fullmatch(line.rstrip())
+        if not found:
+            continue
+        items = [BUILD_ITEM.fullmatch(x.strip()) for x in found.group(1).split(";")]
+        return [
+            (m.group(1), m.group(2).strip().lower().startswith(INDEPENDENT)) for m in items if m
+        ]
+    return []
+
+
+def names_build(pr: dict, number: int, name: str) -> bool:
+    """A pull request of the brief whose title or body names `build (<name>)`."""
+    if pr_brief(pr) != number:
+        return False
+    text = f"{pr.get('title') or ''}\n{pr.get('body') or ''}"
+    return re.search(rf"build \({re.escape(name)}\)", text, re.IGNORECASE) is not None
+
+
+def next_build(s: Survey, brief: dict) -> tuple[str | None, list[dict], str | None]:
+    """(the build to start or None, the waits, why nothing starts) for a brief built in parts.
+
+    The first build that is not merged and has no live take and no open pull request is named;
+    it waits for the nearest unmerged build before it unless it is marked independent."""
+    number = brief["number"]
+    builds = builds_of(brief["body"])
+    takes = live_takes(s.comments.get(number, []), number, s.prs, s.hours)
+    if any(t[5] is None for t in takes):
+        return None, [], None  # the whole brief is taken: the survey already says so
+    merged = {
+        n for n, _ in builds if any(p.get("merged_at") and names_build(p, number, n) for p in s.prs)
+    }
+    busy = {t[5] for t in takes} | {
+        n
+        for n, _ in builds
+        if any(p.get("state") == "open" and names_build(p, number, n) for p in s.prs)
+    }
+    if all(n in merged for n, _ in builds):
+        return None, [], "every build is merged"
+    for index, (name, independent) in enumerate(builds):
+        if name in merged or name in busy:
+            continue
+        before = [n for n, _ in builds[:index] if n not in merged]
+        if before and not independent:
+            wait = {
+                "brief": number,
+                "build": name,
+                "waits_for_build": before[-1],
+                "why": f"build ({name}) waits for build ({before[-1]})",
+            }
+            return None, [wait], None
+        return name, [], None
+    return None, [], None
+
+
+def candidates(s: Survey) -> tuple[list[dict], list[dict], list[tuple[int, str]]]:
+    """The briefs to plan, each with the build to start (or None); the waits and the skips."""
+    found: list[dict] = []
+    waits: list[dict] = []
+    skips: list[tuple[int, str]] = []
+    taken = {n for n, why in s.skipped if why.startswith("taken by")}
+    for brief in sorted(
+        [*s.free, *(s.briefs[n] for n in taken if n in s.briefs)],
+        key=lambda b: (priority_of(b["body"]), b["number"]),
+    ):
+        if not builds_of(brief["body"]):
+            if brief in s.free:
+                found.append({**brief, "build": None})
+            continue
+        name, more, why = next_build(s, brief)
+        waits += more
+        if why and brief in s.free:
+            skips.append((brief["number"], why))
+        if name:
+            found.append({**brief, "build": name})
+    return found, waits, skips
+
+
+def waves(root, s: Survey, ready: list[dict]) -> tuple[list[dict], list[dict]]:
     """(the briefs that can start together, the briefs that wait and for what)."""
     shared = [glob_regex(p) for p in shared_patterns(root)]
     chosen: list[dict] = []
     waits: list[dict] = []
-    for brief in s.free:
+    for brief in ready:
         if found := running_conflict(root, s, brief, shared):
             waits.append(found)
             continue
@@ -210,7 +301,9 @@ def build(root) -> dict:
     s = survey(root, repo, "")
     default = _default_branch(root)
     now = datetime.now(UTC)
-    chosen, waits = waves(root, s)
+    ready, build_waits, build_skips = candidates(s)
+    chosen, waits = waves(root, s, ready)
+    waits = build_waits + waits
     running = len(s.builders) + len(s.held)
     waiting_review = sum(1 for p in s.builders if "agk:review" in label_names(p))
     slots = max(0, min(s.max_builders - running, reviews - waiting_review))
@@ -242,10 +335,11 @@ def build(root) -> dict:
     return {
         "start": [
             {"session": names[i], "brief": b["number"], "title": b.get("title")}
+            | ({"build": b["build"]} if b.get("build") else {})
             for i, b in enumerate(chosen[:count])
         ],
         "waits": waits,
-        "skipped": [{"brief": n, "why": why} for n, why in s.skipped],
+        "skipped": [{"brief": n, "why": why} for n, why in [*s.skipped, *build_skips]],
         "capacity": {
             "max_builders": s.max_builders,
             "running": running,
@@ -297,11 +391,20 @@ def words(plan: dict) -> str:
     lines: list[str] = []
     started = plan["start"]
     if started:
-        takes = ", ".join(f"{s['session']} takes #{s['brief']}" for s in started)
+        takes = ", ".join(
+            f"{s['session']} takes #{s['brief']}"
+            + (f" build ({s['build']})" if "build" in s else "")
+            for s in started
+        )
         lines.append(f"Start {len(started)}: {takes}.")
     else:
         lines.append(f"Start 0: {reason(plan)}.")
     for w in plan["waits"]:
+        if "waits_for_build" in w:
+            lines.append(
+                f"#{w['brief']} build ({w['build']}) waits for build ({w['waits_for_build']})."
+            )
+            continue
         target = f"#{w['waits_for']}" if "waits_for" in w else f"pull request #{w['pull_request']}"
         lines.append(f"#{w['brief']} waits for {target} ({w['why']}).")
     if plan["skipped"]:

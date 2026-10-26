@@ -6,11 +6,11 @@ Brief 247 build (b); SPEC-0034 rule 16. `FILE` is the plan that `session.py plan
 (`-` reads standard input). The script prints one ready-to-paste prompt for each session to start,
 separated by a line of dashes. With `--adapter COMMAND` it calls that command once for each session
 instead, with the prompt on its standard input and the session and the brief in the environment
-(`AGK_SESSION` and `AGK_BRIEF`); the command is split into words and run without a shell. It
-starts nothing on its own: the person confirms the plan first (the skill asks), it creates no
-recurring task, holds no credential and makes no network call. What an adapter prints is its own
-and is never echoed. The title of a brief is data written in an issue and is never put in a
-prompt: the session reads the brief itself.
+(`AGK_SESSION`, `AGK_BRIEF` and, for a brief built in parts, `AGK_BUILD`); the command is split
+into words and run without a shell. It starts nothing on its own: the person confirms the plan
+first (the skill asks), it creates no recurring task, holds no credential and makes no network
+call. What an adapter prints is its own and is never echoed. The title of a brief is data written
+in an issue and is never put in a prompt: the session reads the brief itself.
 """
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
 PROMPT = """\
 You are session {session}, a builder of this repository. You work through pull requests only.
 Read CLAUDE.md and config/session-rules.md first and follow them in full.
-Your work is brief #{brief}: take it with
-    python3 scripts/agk/session.py claim --session {session} --brief {brief}
+Your work is {work}: take it with
+    python3 scripts/agk/session.py claim --session {session} --brief {brief}{flag}
 If that prints a skip, stop and say why. Otherwise read the brief on GitHub (its issue), build it
 from a fresh origin/<default branch> on its own branch, and open one pull request. When your work
 is done, run
@@ -54,8 +54,8 @@ def read_plan(source: str) -> dict:
     return plan
 
 
-def sessions(plan: dict) -> list[tuple[str, int]]:
-    found: list[tuple[str, int]] = []
+def sessions(plan: dict) -> list[tuple[str, int, str | None]]:
+    found: list[tuple[str, int, str | None]] = []
     for item in plan["start"]:
         name = item.get("session") if isinstance(item, dict) else None
         number = item.get("brief") if isinstance(item, dict) else None
@@ -63,24 +63,35 @@ def sessions(plan: dict) -> list[tuple[str, int]]:
             raise CheckError("a session to start has no valid name (field session)")
         if isinstance(number, bool) or not isinstance(number, int) or number < 1:
             raise CheckError("a session to start has no valid brief number (field brief)")
-        found.append((name, number))
+        build = item.get("build") if "build" in item else None
+        if "build" in item and (not isinstance(build, str) or not SESSION_ID.fullmatch(build)):
+            raise CheckError("a session to start has no valid build name (field build)")
+        found.append((name, number, build))
     return found
 
 
-def prompt_for(session: str, brief: int) -> str:
-    return PROMPT.format(session=session, brief=brief)
+def prompt_for(session: str, brief: int, build: str | None = None) -> str:
+    work = f"build ({build}) of brief #{brief}" if build else f"brief #{brief}"
+    flag = f" --build {build}" if build else ""
+    return PROMPT.format(session=session, brief=brief, work=work, flag=flag)
 
 
-def start_with(adapter: str, found: list[tuple[str, int]]) -> int:
+def start_with(adapter: str, found: list[tuple[str, int, str | None]]) -> int:
     """Call the adapter once for each session; stop at the first one that fails."""
     words = shlex.split(adapter)
     if not words:
         raise CheckError("the adapter is empty (option --adapter)")
-    for session, brief in found:
+    for session, brief, build in found:
         env = {**os.environ, "AGK_SESSION": session, "AGK_BRIEF": str(brief)}
+        if build:
+            env["AGK_BUILD"] = build
         try:
             done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
-                words, input=prompt_for(session, brief), text=True, env=env, capture_output=True
+                words,
+                input=prompt_for(session, brief, build),
+                text=True,
+                env=env,
+                capture_output=True,
             )
         except OSError:
             print(f"FAIL {NAME}: the adapter cannot be run for {session}", file=sys.stderr)
@@ -88,7 +99,7 @@ def start_with(adapter: str, found: list[tuple[str, int]]) -> int:
         if done.returncode != 0:
             print(f"FAIL {NAME}: the adapter failed for {session}", file=sys.stderr)
             return 1
-        print(f"started {session} #{brief}")
+        print(f"started {session} #{brief}" + (f" build ({build})" if build else ""))
     return 0
 
 
@@ -114,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}", file=sys.stderr)
         return 2
-    print((SEPARATOR + "\n").join(prompt_for(s, b) for s, b in found), end="")
+    print((SEPARATOR + "\n").join(prompt_for(s, b, x) for s, b, x in found), end="")
     return 0
 
 

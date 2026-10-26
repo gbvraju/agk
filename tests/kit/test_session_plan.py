@@ -429,3 +429,97 @@ def test_unreadable_pull_requests_stop_the_plan_and_an_invalid_setting_names_its
 def test_the_usage_takes_only_the_json_flag(proj, stub):
     assert plan(proj, stub, "--nope").returncode == 2
     assert plan(proj, stub, "--json", "--json").returncode == 2
+
+
+# --- the builds of a brief (brief 251) ----------------------------------------------------------
+
+BUILDS = "Builds: (a) the first part; (b) the second part\n"
+
+
+def built(number: int, brief_no: int, build: str) -> dict:
+    """A merged pull request that names `build (<x>)` for the brief."""
+    title = f"feat: a part, brief #{brief_no} build ({build})"
+    return {**merged(number, brief_no, timedelta(hours=2)), "title": title}
+
+
+def parts(touches: str = "a/", line: str = BUILDS) -> str:
+    return brief(touches) + line
+
+
+def test_the_next_free_build_is_named_in_the_plan_and_the_words(proj, stub):
+    listing(stub, [issue(5, parts())])
+    free(stub, 5)
+    got = data(proj, stub)
+    assert got["start"] == [{"session": "builder-a", "brief": 5, "title": "t5", "build": "a"}]
+    assert plan(proj, stub).stdout.splitlines()[0] == "Start 1: builder-a takes #5 build (a)."
+
+
+def test_a_merged_build_is_skipped_and_the_next_one_is_named(proj, stub):
+    listing(stub, [issue(5, parts())])
+    stub.serve(PULLS, [built(100, 5, "a")])
+    free(stub, 5)
+    assert [s["build"] for s in data(proj, stub)["start"]] == ["b"]
+
+
+def test_a_build_of_another_brief_does_not_count_as_merged(proj, stub):
+    listing(stub, [issue(5, parts())])
+    stub.serve(PULLS, [built(100, 9, "a")])  # build (a) of brief #9
+    free(stub, 5)
+    assert [s["build"] for s in data(proj, stub)["start"]] == ["a"]
+
+
+def test_an_open_pull_request_that_names_a_build_keeps_it_from_being_named_again(proj, stub):
+    listing(stub, [issue(5, parts())])
+    still_open = {**built(101, 5, "a"), "state": "open", "merged_at": None}
+    stub.serve(PULLS, [still_open])
+    files(stub, 101, "zz/x.py")
+    free(stub, 5)
+    got = data(proj, stub)
+    assert got["start"] == []
+    assert got["waits"] == [
+        {"brief": 5, "build": "b", "waits_for_build": "a", "why": "build (b) waits for build (a)"}
+    ]
+
+
+def test_a_build_waits_for_the_one_before_it_while_that_is_taken(proj, stub):
+    listing(stub, [issue(5, parts())])
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: builder-z {DAY} build (a)")])
+    got = data(proj, stub)
+    assert got["start"] == []
+    assert got["waits"] == [
+        {"brief": 5, "build": "b", "waits_for_build": "a", "why": "build (b) waits for build (a)"}
+    ]
+    out = plan(proj, stub).stdout.splitlines()
+    assert "#5 build (b) waits for build (a)." in out
+
+
+def test_a_build_marked_independent_does_not_wait(proj, stub):
+    line = "Builds: (a) the first part; (b) independent: the second part\n"
+    listing(stub, [issue(5, parts(line=line))])
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: builder-z {DAY} build (a)")])
+    got = data(proj, stub)
+    assert [(s["brief"], s["build"]) for s in got["start"]] == [(5, "b")]
+    assert got["waits"] == []
+
+
+def test_a_take_of_the_whole_brief_leaves_no_build_to_name(proj, stub):
+    listing(stub, [issue(5, parts())])
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: builder-z {DAY}")])
+    got = data(proj, stub)
+    assert got["start"] == [] and got["skipped"][0]["brief"] == 5
+
+
+def test_a_brief_whose_builds_are_all_merged_starts_nothing_and_says_so(proj, stub):
+    listing(stub, [issue(5, parts())])
+    stub.serve(PULLS, [built(100, 5, "a"), built(101, 5, "b")])
+    free(stub, 5)
+    got = data(proj, stub)
+    assert got["start"] == [] and {"brief": 5, "why": "every build is merged"} in got["skipped"]
+
+
+def test_a_brief_without_a_builds_line_is_planned_as_before(proj, stub):
+    listing(stub, [issue(5, brief("a/"))])
+    free(stub, 5)
+    (entry,) = data(proj, stub)["start"]
+    assert "build" not in entry
+    assert plan(proj, stub).stdout.splitlines()[0] == "Start 1: builder-a takes #5."

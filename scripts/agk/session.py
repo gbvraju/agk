@@ -611,6 +611,7 @@ class Survey:
     )  # (brief number, globs) of taken briefs, no pull request
     free: list = field(default_factory=list)  # the briefs left, in the order of rule 3
     files: dict = field(default_factory=dict)  # pull request number -> its changed files
+    briefs: dict = field(default_factory=dict)  # brief number -> its issue
 
 
 def is_stale(brief: dict) -> bool:
@@ -673,6 +674,7 @@ def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
         raise CheckError("rule 1: the pull requests cannot be read")
     builders = [p for p in prs if p.get("state") == "open" and brief_number(p) is not None]
     found = Survey(repo, me, limit, hours, prs, builders)
+    found.briefs = {i["number"]: i for i in issues if "pull_request" not in i}
     named = {brief_number(p) for p in prs if p.get("state") == "open"}
     for brief in sorted((i for i in issues if "pull_request" not in i), key=lambda i: i["number"]):
         why, comments = judge(repo, brief, me, prs, hours)
