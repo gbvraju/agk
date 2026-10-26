@@ -1,6 +1,6 @@
 # ADR-0163: a stack ADR is accepted in one plain step (REQ-036, brief 274)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0080, ADR-0159
