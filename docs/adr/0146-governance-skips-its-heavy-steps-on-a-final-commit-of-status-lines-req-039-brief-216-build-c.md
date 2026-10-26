@@ -1,6 +1,6 @@
 # ADR-0146: governance skips its heavy steps on a status-only final commit (REQ-039, brief #216 build c)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0137, ADR-0144
