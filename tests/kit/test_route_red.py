@@ -52,14 +52,7 @@ def bad(name: str = "proof", url: str = URL) -> dict:
     return {"name": name, "status": "completed", "conclusion": "failure", "html_url": url}
 
 
-def branch(
-    stub: RouteStub, checks: list[dict], statuses=(), sha: str = TIP, fill: bool = True
-) -> None:
-    # a required check that has not reported keeps the branch pending (brief 231): by default the
-    # helper reports the default required checks that a case does not name
-    if fill:
-        named = {c["name"] for c in checks}
-        checks = checks + [ok(n) for n in ("proof", "governance") if n not in named]
+def branch(stub: RouteStub, checks: list[dict], statuses=(), sha: str = TIP) -> None:
     stub.fixtures[f"repos/{REPO}/branches/main"] = {"commit": {"sha": sha}}
     stub.fixtures[f"repos/{REPO}/commits/{sha}/check-runs"] = {
         "total_count": len(checks),
@@ -196,14 +189,14 @@ def test_ac5_a_green_default_branch_with_no_red_brief_writes_nothing(proj, stub,
 def test_ac5_checks_still_running_neither_open_nor_close(proj, stub, tmp_path):
     """REQ-039 AC5: the verdict waits for the checks to finish."""
     running = {"name": "proof", "status": "in_progress", "conclusion": None}
-    branch(stub, [bad("governance"), running], fill=False)
+    branch(stub, [bad("governance"), running])
     push(proj, stub, tmp_path)
     assert issue_writes(stub) == []
-    branch(stub, [running], fill=False)
+    branch(stub, [running])
     issues(stub, red_issue(9))
     push(proj, stub, tmp_path)
     assert issue_writes(stub) == []
-    branch(stub, [], fill=False)
+    branch(stub, [])
     push(proj, stub, tmp_path)
     assert issue_writes(stub) == []
 

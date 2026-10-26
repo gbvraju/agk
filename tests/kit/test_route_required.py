@@ -126,8 +126,22 @@ def test_the_default_branch_ignores_an_unlisted_failing_check():
     checks = [run("proof", 1), run("governance", 2), bad("preview-build")]
     assert route.branch_state(checks, [], REQUIRED) == "green"
     assert route.branch_state([bad("proof"), run("governance", 2)], [], REQUIRED) == "red"
-    assert route.branch_state([run("proof", 1)], [], REQUIRED) == "pending"
+    assert route.branch_state([], [], REQUIRED) == "pending"
     assert route.branch_state(checks, [], [*REQUIRED, "preview-build"]) == "red"
+
+
+def test_the_default_branch_waits_only_for_the_listed_checks_that_ran_there():
+    """`proof` runs on pull requests only: its absence on main is not waited for."""
+    red = [run("governance", 2, "failure")]
+    assert route.branch_state(red, [], REQUIRED) == "red"
+    assert route.branch_state([run("governance", 2)], [], REQUIRED) == "green"
+    assert route.branch_state([], [], REQUIRED) == "pending"
+    assert route.branch_state([bad("preview-build")], [], REQUIRED) == "pending"
+    running = [run("governance", 2, None)]
+    assert route.branch_state(running, [], REQUIRED) == "pending"
+    assert route.branch_state([run("governance", 2), run("proof", 3, None)], [], REQUIRED) == (
+        "pending"
+    )
 
 
 def test_the_red_brief_names_a_listed_check_not_an_unlisted_one():
@@ -174,6 +188,33 @@ def test_a_red_unlisted_check_on_the_default_branch_opens_no_brief(proj, stub, t
     push(proj, stub, tmp_path)
     (opened,) = issue_writes(stub)
     assert "governance" in " ".join(opened[2]) and "preview-build" not in " ".join(opened[2])
+
+
+def test_main_with_governance_red_and_no_proof_run_opens_the_issue_and_green_closes_it(
+    proj, stub, tmp_path
+):
+    from test_route_red import branch, issue_writes, issues, push, red_issue
+
+    branch(stub, [bad("governance")])
+    issues(stub)
+    push(proj, stub, tmp_path)
+    (opened,) = issue_writes(stub)
+    assert opened[0] == "POST" and "governance" in " ".join(opened[2])
+    branch(stub, [ok("governance")])
+    issues(stub, red_issue(9))
+    push(proj, stub, tmp_path)
+    assert [w[2] for w in issue_writes(stub)[1:]] == [
+        ["-f", "state=closed", "-f", "state_reason=completed"]
+    ]
+
+
+def test_main_with_no_listed_check_reported_opens_and_closes_nothing(proj, stub, tmp_path):
+    from test_route_red import branch, issue_writes, issues, push, red_issue
+
+    branch(stub, [bad("preview-build")])
+    issues(stub, red_issue(9))
+    push(proj, stub, tmp_path)
+    assert issue_writes(stub) == []
 
 
 def route_repo() -> str:

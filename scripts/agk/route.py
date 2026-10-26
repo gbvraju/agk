@@ -157,13 +157,15 @@ def latest_statuses(statuses: list[dict]) -> list[dict]:
 
 
 def judged(
-    checks: list[dict], statuses: list[dict], required: list[str] | None
+    checks: list[dict], statuses: list[dict], required: list[str] | None, wait: bool = True
 ) -> tuple[list[dict], list[dict], bool]:
     """(the latest runs, the latest statuses, whether a required name has not reported).
 
     With `required` (the `required_checks` of agk.toml) only a run named in it and a status whose
     context is named in it are judged; a check that is not listed never decides a label. Without
-    it every run and status counts. The router's own job is never judged."""
+    it every run and status counts. The router's own job is never judged. With `wait` false (the
+    default branch, where a workflow such as `proof` may never run) a listed name that has not
+    reported is not waited for: the head waits only for the names that have a run or a status."""
     runs = [c for c in latest_runs(checks) if c.get("name") != ROUTER_JOB]
     latest = latest_statuses(statuses)
     if required is None:
@@ -172,7 +174,7 @@ def judged(
     runs = [c for c in runs if c.get("name") in names]
     latest = [s for s in latest if s.get("context") in names]
     seen = {c.get("name") for c in runs} | {s.get("context") for s in latest}
-    return runs, latest, bool(names - seen)
+    return runs, latest, wait and bool(names - seen)
 
 
 def decide(f: dict) -> str:
@@ -321,8 +323,10 @@ def branch_state(
     checks: list[dict], statuses: list[dict], required: list[str] | None = None
 ) -> str:
     """`pending`, `red` or `green` for the checks of the default branch's head, judged by the
-    required checks of the project (brief 231)."""
-    checks, statuses, missing = judged(checks, statuses, required)
+    required checks of the project that have a run or a status on that head (brief 231): a listed
+    check that never runs on the default branch is not waited for, and a head none of them has
+    reported is `pending`."""
+    checks, statuses, missing = judged(checks, statuses, required, wait=False)
     if missing or (not checks and not statuses):
         return "pending"
     if any(c.get("status") != "completed" for c in checks) or any(
@@ -341,7 +345,7 @@ def failing(
     required: list[str] | None = None,
 ) -> tuple[str, str]:
     """(name, link) of the first failing check by name, or status, among the judged ones."""
-    runs, latest, _ = judged(checks, statuses, required)
+    runs, latest, _ = judged(checks, statuses, required, wait=False)
     bad = sorted(
         (str(c.get("name") or ""), str(c.get("html_url") or c.get("details_url") or ""))
         for c in runs
