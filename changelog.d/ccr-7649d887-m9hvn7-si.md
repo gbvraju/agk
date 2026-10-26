@@ -1,0 +1,1 @@
+- the router judges the checks of a head by the latest run of each check name and the latest status of each context, so a cancelled or replaced run never makes a green pull request look red (SPEC-0032 rules 2 and 7, REQ-039, brief 229)
