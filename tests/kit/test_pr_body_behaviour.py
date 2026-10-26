@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-GOOD = "Advances: REQ-001\n\nBuild-state row: 2026-10-14 | skeleton | REQ-001\n"
+GOOD = (
+    "Advances: REQ-001\n\nBuild-state row: 2026-10-14 | skeleton | REQ-001\n"
+    "Summary: A change that a person can read.\n"
+)
 ROOT = Path(__file__).resolve().parents[2]
 
 

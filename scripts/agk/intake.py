@@ -598,6 +598,7 @@ def cmd_next_steps(root: Path, base: str | None, today: str) -> int:
     print("Pull request body:\n")
     print(advance)
     print(f"Build-state row: {today} {req['id']} proposed (planned), intake only")
+    print("Summary: Proposes a change to the project, to be reviewed before any work starts.")
     print("Decisions taken: none; the sentence became a requirement, a Draft spec and an ADR stub")
     print("Questions: see `## Open questions` of the spec")
     print("Verified: `python3 scripts/agk/intake.py check` printed `ok intake`\n")
