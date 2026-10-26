@@ -434,6 +434,7 @@ def test_the_usage_takes_only_the_json_flag(proj, stub):
 # --- the builds of a brief (brief 251) ----------------------------------------------------------
 
 BUILDS = "Builds: (a) the first part; (b) the second part\n"
+MERGED_ALL = "every build is merged; the conductor closes it"
 
 
 def built(number: int, brief_no: int, build: str) -> dict:
@@ -514,7 +515,7 @@ def test_a_brief_whose_builds_are_all_merged_starts_nothing_and_says_so(proj, st
     stub.serve(PULLS, [built(100, 5, "a"), built(101, 5, "b")])
     free(stub, 5)
     got = data(proj, stub)
-    assert got["start"] == [] and {"brief": 5, "why": "every build is merged"} in got["skipped"]
+    assert got["start"] == [] and {"brief": 5, "why": MERGED_ALL} in got["skipped"]
 
 
 def test_a_brief_without_a_builds_line_is_planned_as_before(proj, stub):
@@ -578,3 +579,84 @@ def test_a_taken_brief_says_until_when_and_while_a_pull_request_is_open(proj, st
     assert why[5] == f"taken by builder-z until {ends(when)}"
     assert why[6] == "taken by builder-y while its pull request is open"
     assert f"#5 (taken by builder-z until {ends(when)})" in plan(proj, stub).stdout
+
+
+# --- the build a pull request delivers is read from its title (the verdict on 6ef8389) ------------
+
+
+def test_a_sentence_in_a_body_that_says_a_build_is_not_done_does_not_mark_it_done(proj, stub):
+    """#248's body says "Build (b) of the brief is not in this pull request."."""
+    listing(stub, [issue(5, parts())])
+    shipped = {
+        **merged(100, 5, timedelta(hours=2)),
+        "title": "feat(k5): retired requirements, brief #5 build (a) (SPEC-0004 rule 24, ADR-0151)",
+        "body": "Brief: #5\n\nBuild (b) of the brief is not in this pull request.\n",
+    }
+    stub.serve(PULLS, [shipped])
+    free(stub, 5)
+    got = data(proj, stub)
+    assert [(s["brief"], s["build"]) for s in got["start"]] == [(5, "b")]
+
+
+def test_a_build_named_only_in_the_body_of_a_pull_request_is_not_taken_as_delivered(proj, stub):
+    listing(stub, [issue(5, parts())])
+    loose = {
+        **merged(100, 5, timedelta(hours=2)),
+        "title": "feat(k5): something else, brief #5",
+        "body": "Brief: #5\nThis is build (a) of it.\n",
+    }
+    stub.serve(PULLS, [loose])
+    free(stub, 5)
+    assert [s["build"] for s in data(proj, stub)["start"]] == ["a"]
+
+
+def test_the_title_of_another_brief_with_the_same_build_does_not_count(proj, stub):
+    listing(stub, [issue(5, parts())])
+    stub.serve(PULLS, [built(100, 50, "a")])  # "brief #50 build (a)" is not brief #5
+    free(stub, 5)
+    assert [s["build"] for s in data(proj, stub)["start"]] == ["a"]
+
+
+# --- a brief never disappears from the plan without a word ---------------------------------------
+
+
+def test_a_moved_on_brief_whose_builds_are_all_merged_is_listed_with_its_reason(proj, stub):
+    listing(stub, [issue(5, parts("a/")), issue(6, brief("b/"))])
+    old, recent = iso(-timedelta(hours=3)), iso(-timedelta(hours=1))
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: builder-z {DAY}", old)])
+    stub.serve(f"{ISSUES}/6/comments", [comment(2, "x", f"taken: builder-z {DAY}", recent)])
+    stub.serve(PULLS, [built(100, 5, "a"), built(101, 5, "b")])
+    got = data(proj, stub)
+    assert {"brief": 5, "why": MERGED_ALL} in got["skipped"]
+    assert f"#5 ({MERGED_ALL})" in plan(proj, stub).stdout
+
+
+def test_a_brief_the_plan_does_not_start_for_want_of_a_slot_is_listed(proj, stub):
+    listing(stub, [issue(n, brief(f"d{n}/")) for n in (5, 6, 7)])
+    free(stub, 5, 6, 7)
+    flow(proj, "max_builders = 2")
+    got = data(proj, stub)
+    assert [s["brief"] for s in got["start"]] == [5, 6]
+    assert {"brief": 7, "why": "no free slot"} in got["skipped"]
+
+
+def test_a_brief_whose_builds_are_all_taken_or_in_progress_is_listed(proj, stub):
+    listing(stub, [issue(5, parts("a/", "Builds: (a) the only part\n"))])
+    still_open = {**built(101, 5, "a"), "state": "open", "merged_at": None}
+    stub.serve(PULLS, [still_open])
+    files(stub, 101, "zz/x.py")
+    free(stub, 5)
+    got = data(proj, stub)
+    assert got["start"] == []
+    named = {x["brief"] for x in got["skipped"]} | {x["brief"] for x in got["waits"]}
+    assert 5 in named
+
+
+def test_every_open_brief_is_in_start_waits_or_skipped(proj, stub):
+    listing(stub, [issue(n, brief(f"d{n}/")) for n in (5, 6, 7, 8)] + [issue(9, parts("e/"))])
+    stub.serve(f"{ISSUES}/8/comments", [comment(1, "x", f"taken: builder-y {DAY}")])
+    free(stub, 5, 6, 7, 9)
+    flow(proj, "max_builders = 2")
+    got = data(proj, stub)
+    seen = {x["brief"] for x in got["start"] + got["waits"] + got["skipped"]}
+    assert seen == {5, 6, 7, 8, 9}

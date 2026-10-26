@@ -56,6 +56,7 @@ from session import (
 BUILDS_LINE = re.compile(r"Builds: (.+)")
 BUILD_ITEM = re.compile(r"\(([A-Za-z0-9._-]+)\)\s*(.*)")
 INDEPENDENT = "independent:"
+MERGED_ALL = "every build is merged; the conductor closes it"
 RULE = 15
 WINDOW_DAYS = 14
 DEFAULTS = {"reviews_in_flight": 3, "merge_hours": 1, "stale_commits": 20}
@@ -134,11 +135,14 @@ def builds_of(body: str) -> list[tuple[str, bool]]:
 
 
 def names_build(pr: dict, number: int, name: str) -> bool:
-    """A pull request of the brief whose title or body names `build (<name>)`."""
-    if pr_brief(pr) != number:
-        return False
-    text = f"{pr.get('title') or ''}\n{pr.get('body') or ''}"
-    return re.search(rf"build \({re.escape(name)}\)", text, re.IGNORECASE) is not None
+    """A pull request whose title says `brief #<n> build (<x>)`, as every builder title does.
+
+    The build a pull request delivers is read from its title only, never from free text: a body
+    that says "build (b) is not in this pull request" must not mark build (b) done."""
+    title = str(pr.get("title") or "")
+    return (
+        re.search(rf"brief #{number} build \({re.escape(name)}\)", title, re.IGNORECASE) is not None
+    )
 
 
 def moved_on(s: Survey, number: int, take: tuple) -> bool:
@@ -194,7 +198,7 @@ def next_build(s: Survey, brief: dict) -> tuple[str | None, list[dict], str | No
         if any(p.get("state") == "open" and names_build(p, number, n) for p in s.prs)
     }
     if all(n in merged for n, _ in builds):
-        return None, [], "every build is merged"
+        return None, [], MERGED_ALL
     for index, (name, independent) in enumerate(builds):
         if name in merged or name in busy:
             continue
@@ -209,6 +213,34 @@ def next_build(s: Survey, brief: dict) -> tuple[str | None, list[dict], str | No
             return None, [wait], None
         return name, [], None
     return None, [], None
+
+
+def unplaced(
+    s: Survey,
+    started: list[dict],
+    left: list[dict],
+    hold: bool,
+    waits: list[dict],
+    skipped: list[tuple[int, str]],
+    build_skips: list[tuple[int, str]],
+) -> list[tuple[int, str]]:
+    """A brief the plan does not start never disappears without a word (the verdict on 6ef8389).
+
+    Briefs that could start but have no slot, or are held by the merge queue, are listed with that;
+    any other open brief that is in neither the start list, the waits nor the skips is listed with
+    the reason that nothing is left to start."""
+    out: list[tuple[int, str]] = []
+    why = "the merge queue is above your merge rate" if hold else "no free slot"
+    seen = {b["number"] for b in started} | {w["brief"] for w in waits}
+    seen |= {n for n, _ in [*skipped, *build_skips]}
+    for brief in left:
+        if brief["number"] not in seen:
+            out.append((brief["number"], why))
+            seen.add(brief["number"])
+    for number in sorted(s.briefs):
+        if number not in seen:
+            out.append((number, "every build is taken or in progress"))
+    return out
 
 
 def settle_takes(s: Survey) -> tuple[set[int], list[tuple[int, str]]]:
@@ -253,7 +285,7 @@ def candidates(
             continue
         name, more, why = next_build(s, brief)
         waits += more
-        if why and brief in s.free:
+        if why and (brief in s.free or brief["number"] in freed):
             skips.append((brief["number"], why))
         if name:
             found.append({**brief, "build": name})
@@ -384,6 +416,7 @@ def build(root) -> dict:
     }
     count = 0 if hold else min(len(chosen), slots)
     names = session_names(busy, count)
+    unplanned = unplaced(s, chosen[:count], chosen[count:], hold, waits, skipped, build_skips)
     behind: list[dict] = []
     unread: list[int] = []
     updating: list[dict] = []
@@ -405,7 +438,7 @@ def build(root) -> dict:
             for i, b in enumerate(chosen[:count])
         ],
         "waits": waits,
-        "skipped": [{"brief": n, "why": why} for n, why in [*s.skipped, *build_skips]],
+        "skipped": [{"brief": n, "why": why} for n, why in [*s.skipped, *build_skips, *unplanned]],
         "capacity": {
             "max_builders": s.max_builders,
             "running": running,
