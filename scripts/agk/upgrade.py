@@ -334,12 +334,27 @@ def absent_templates(
     return items
 
 
+def template_project(table: object) -> bool:
+    """True when the `[project]` table is still the one the template rendered: the keys `name`,
+    `version`, `requires-python` and `dependencies` and no others, `version = "0.0.0"` and
+    `dependencies = []`. Any other table may build a real package, which `packages = []` would
+    empty without an error."""
+    return (
+        isinstance(table, dict)
+        and set(table) == {"name", "version", "requires-python", "dependencies"}
+        and table["version"] == "0.0.0"
+        and table["dependencies"] == []
+    )
+
+
 def pyproject_fix(target: Path, mode: str) -> tuple[Item | None, str | None]:
     """The root pyproject.toml of an init install, made installable as nothing (brief 236).
 
     After init the file belongs to the project, so it is never rewritten: the two tables are
-    appended when the file has a `[project]` table and neither a `[build-system]` table nor a
-    `[tool.setuptools]` table, and every existing byte stays. A file with one of the tables is left
+    appended when the file has a `[project]` table that is still the template's (`template_project`)
+    and neither a `[build-system]` table nor a `[tool.setuptools]` table, and every existing byte
+    stays; a `[project]` table of the project's own is left alone with a note (it may build a real
+    package). A file with one of the tables is left
     alone and a note says so when it has only one of them; a file that is not valid TOML, a symlink,
     the pyproject.toml of an adopted project (the project's own) and the one that still holds the
     legacy `[tool.agk]` stamp (never written, Q-K3-71; the project removes it in its own change)
@@ -361,6 +376,11 @@ def pyproject_fix(target: Path, mode: str) -> tuple[Item | None, str | None]:
     if has_build or has_setuptools:
         have = "[build-system]" if has_build else "[tool.setuptools]"
         return None, f"pyproject-unchanged pyproject.toml has {have} already; left as it is"
+    if not template_project(data["project"]):
+        return None, (
+            "pyproject-unchanged pyproject.toml the [project] table is the project's own; add "
+            "[build-system] and [tool.setuptools] packages = [] only if it builds no package"
+        )
     newline = "\r\n" if b"\r\n" in raw else "\n"
     tables = INSTALLS_AS_NOTHING.replace("\n", newline)
     gap = b"" if not raw or raw.endswith(newline.encode()) else newline.encode()

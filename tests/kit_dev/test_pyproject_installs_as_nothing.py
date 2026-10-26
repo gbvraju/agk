@@ -200,3 +200,35 @@ def test_a_legacy_install_whose_pyproject_holds_the_stamp_is_never_written(tmp_p
     target = legacy_target(tmp_path)
     before = (target / "pyproject.toml").read_bytes()
     assert run(capsys, target)[0] == 0 and (target / "pyproject.toml").read_bytes() == before
+
+
+def test_a_project_table_of_the_projects_own_is_left_byte_for_byte_with_the_note(
+    tmp_path, kit, capsys
+):
+    """A real package built from the root (a src layout, say) must not be emptied."""
+    base = OLD_FILE
+    assert 'version = "0.0.0"' in base and "dependencies = []" in base
+    own = {
+        "version": base.replace('version = "0.0.0"', 'version = "1.2.0"'),
+        "dependencies": base.replace("dependencies = []", 'dependencies = ["requests"]'),
+        "extra key": base.replace("dependencies = []", 'dependencies = []\ndescription = "mine"'),
+        "missing key": base.replace('requires-python = ">=3.11"\n', ""),
+    }
+    for name, text in own.items():
+        target = init_target(tmp_path / name.replace(" ", "-"), **{"pyproject.toml": text})
+        before = (target / "pyproject.toml").read_bytes()
+        code, out = run(capsys, target)
+        assert code == 0 and (target / "pyproject.toml").read_bytes() == before, name
+        note = [ln for ln in out if ln.startswith("pyproject-unchanged pyproject.toml")]
+        assert note and "the project's own" in note[0] and "packages = []" in note[0], name
+        assert not any(ln.startswith("replace pyproject.toml") for ln in out), name
+
+
+def test_the_template_project_table_is_recognised_whatever_its_name_and_python():
+    ok = {"name": "x", "version": "0.0.0", "requires-python": ">=3.12", "dependencies": []}
+    assert upgrade.template_project(ok)
+    assert not upgrade.template_project({**ok, "version": "0.0.1"})
+    assert not upgrade.template_project({**ok, "dependencies": ["a"]})
+    assert not upgrade.template_project({**ok, "readme": "README.md"})
+    assert not upgrade.template_project({k: v for k, v in ok.items() if k != "name"})
+    assert not upgrade.template_project("not a table")
