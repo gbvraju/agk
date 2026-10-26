@@ -1,6 +1,6 @@
 # ADR-0144: a full governance run that failed only on body steps is cured by a body edit (REQ-039, brief #216 build b)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0137, ADR-0143
