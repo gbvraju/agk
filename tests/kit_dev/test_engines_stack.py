@@ -191,6 +191,53 @@ def test_ac4_an_accepted_stack_adr_locks_exactly_one_option(started):
     assert engines(started, "stack-check").returncode == 0
 
 
+def accepted(chosen):
+    return GOOD_STACK.replace("- Status: Proposed", "- Status: Accepted").replace(
+        "3. **Chosen**: none yet", f"3. **Chosen**: {chosen}"
+    )
+
+
+@pytest.mark.parametrize(
+    "chosen",
+    [
+        "Option A — nothing to host suits a laptop app.",
+        "Option B — the owner wants a web page.",
+        "Option B",
+    ],
+)
+def test_ac4_chosen_with_a_one_line_reason_and_accepted_together_pass(started, chosen):
+    """REQ-036 AC4: brief 274 answer 1 (one ordinary commit sets Chosen and Status together)."""
+    stack_root(started, accepted(chosen))
+    proc = engines(started, "stack-check")
+    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n"), proc.stdout
+
+
+@pytest.mark.parametrize(
+    "chosen",
+    [
+        "Option A —",
+        "Option A and B — both.",
+        "Option C — a hosted service.",
+        "Option A — first line.\n   and a second line.",
+    ],
+)
+def test_ac4_an_accepted_lock_that_is_not_one_option_and_one_line_fails(started, chosen):
+    """REQ-036 AC4: brief 274 answer 1 (one option, at most a one-line reason)."""
+    stack_root(started, accepted(chosen))
+    proc = engines(started, "stack-check")
+    assert proc.returncode == 1 and "rule 5" in proc.stdout and "Chosen" in proc.stdout
+    assert "hosted" not in proc.stdout and "second" not in proc.stdout
+
+
+def test_ac4_chosen_while_proposed_is_still_refused_and_names_the_plain_step(started):
+    """REQ-036 AC4: brief 274 answer 4 (Chosen while Proposed is refused; the message says how)."""
+    stack_root(started, GOOD_STACK.replace("none yet", "Option A — nothing to host."))
+    proc = engines(started, "stack-check")
+    assert proc.returncode == 1 and "rule 5" in proc.stdout and "Proposed" in proc.stdout
+    assert "Status: Accepted in the same commit" in proc.stdout
+    assert "nothing to host" not in proc.stdout
+
+
 # --- the skill and the guide -------------------------------------------------------------------
 
 
@@ -203,6 +250,25 @@ def test_ac4_the_skill_names_the_engine_the_template_and_the_check():
     assert "protected" in text and "template" in text and "Accepted" in text
     for verb in ("git push", "git commit", "gh pr", "gh issue"):
         assert verb not in text
+
+
+def test_ac4_the_skill_ends_with_the_plain_accepting_step_its_prompt_and_body():
+    """REQ-036 AC4: brief 274 answer 2 (the last step names the one ordinary commit)."""
+    text = (KIT_ROOT / "skills" / "stack" / "SKILL.md").read_text(encoding="utf-8")
+    last = text[text.index("\n4. ") :]
+    for needle in (
+        "ordinary commit",
+        "`Status: Accepted`",
+        "`Chosen: Option <X> — <one-line reason>`",
+        "not a `Final:`",
+        "Verdict: cleared",
+        "The prompt for the accepting change",
+        "The body of its pull request",
+        "Summary:",
+        "Advances:",
+        "Build-state row:",
+    ):
+        assert needle in last, needle
 
 
 def test_ac4_the_guide_lists_the_command_and_the_two_kinds_of_practice():
