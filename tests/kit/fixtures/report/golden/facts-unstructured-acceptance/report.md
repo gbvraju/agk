@@ -16,7 +16,7 @@ nothing this week
 
 ## At risk
 
-- drift audit: 4 findings (D1 0, D2 1, D3 0, D4 0, D5 0, D6 0, D7 3); no open drift issue
+- drift audit: 4 findings (D1 0, D2 1, D3 0, D4 0, D5 0, D6 0, D7 3, D8 0); no open drift issue
 - unknown: open briefs could not be read — https://github.com/demo-org/demo-repo/issues?q=label%3Aagk-brief
 
 ## Cost

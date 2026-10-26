@@ -20,7 +20,7 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 ## At risk
 
 - unknown: pull requests could not be read — https://github.com/demo-org/demo-repo/pulls
-- drift audit: unknown (D1 0, D2 0, D3 0, D4 0, D5 0, D6 unknown, D7 0); issues unknown
+- drift audit: unknown (D1 0, D2 0, D3 0, D4 0, D5 0, D6 unknown, D7 0, D8 0); issues unknown
 
 ## Cost
 

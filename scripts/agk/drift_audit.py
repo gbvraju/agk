@@ -30,6 +30,7 @@ from common import (
     run,
     show,
     stray_markers,
+    untagged_test_files,
 )
 
 NAME = "drift-audit"
@@ -48,7 +49,7 @@ PROTECTED_LIST = "config/protected-paths.txt"
 REQUIREMENTS = "docs/requirements.md"
 REGISTER = "docs/runs/residuals.md"
 PLACEHOLDER = "@REPLACE-ME"
-CODES = ("D1", "D2", "D3", "D4", "D5", "D6", "D7")
+CODES = ("D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8")
 RULES = {
     "D1": "principle 1",
     "D2": "principle 10",
@@ -57,7 +58,9 @@ RULES = {
     "D5": "SPEC-0004 rule 10",
     "D6": "SPEC-0004 rule 15",
     "D7": "SPEC-0010 rule 4",
+    "D8": "SPEC-0004 rule 24",
 }
+UNTAGGED_LIMIT = 20
 DATE_TEXT = re.compile(r"\d{4}-\d{2}-\d{2}")
 DUE = re.compile(r"\(due (\d{4}-\d{2}-\d{2})\)")
 
@@ -433,6 +436,20 @@ def d7(root: Path) -> list[Finding]:
     return found
 
 
+def d8(root: Path) -> list[Finding]:
+    """One finding that lists the test files with no `REQ-nnn` marker and counts them (brief 244).
+
+    It names paths only, caps the list and never blocks: a test of no requirement is a question for
+    a cleanup pull request, not a failure."""
+    files = untagged_test_files(root)
+    if not files:
+        return []
+    shown = ", ".join(files[:UNTAGGED_LIMIT])
+    more = f" and {len(files) - UNTAGGED_LIMIT} more" if len(files) > UNTAGGED_LIMIT else ""
+    noun = "test file carries" if len(files) == 1 else "test files carry"
+    return [Finding("D8", "tests", f"{len(files)} {noun} no requirement marker: {shown}{more}")]
+
+
 # --- the report -------------------------------------------------------------------------------
 
 
@@ -442,7 +459,7 @@ def audit(
     ref = resolve_ref(root, branch or load_config(root)["default_branch"])
     found = d1(root, ref, today) + d2(root) + d3(root, ref, today)
     documents, undated = d4_documents(root, today)
-    found += documents + d4_register(root, today) + d5(root) + d7(root)
+    found += documents + d4_register(root, today) + d5(root) + d7(root) + d8(root)
     if len(open_issues) > 1:
         ordered = sorted(open_issues)
         subject = ",".join(f"#{n}" for n in ordered)

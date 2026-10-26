@@ -535,7 +535,7 @@ def test_ac2_drift_counts_equal_the_audit_with_and_without_open_audit_issues(tmp
     root = drift_repo(tmp_path)
     found, _ = drift_audit.audit(root, __import__("datetime").date(2026, 10, 15), "main", [])
     expected = {c: sum(1 for f in found if f.code == c) for c in drift_audit.CODES}
-    assert list(expected) == ["D1", "D2", "D3", "D4", "D5", "D6", "D7"]
+    assert list(expected) == ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"]  # D8: brief 244
     assert all(expected[c] >= 1 for c in ("D1", "D2", "D3", "D4", "D5", "D7")), expected
     total = len(found)
     without = drift_counts(root, tmp_path / "a", None)

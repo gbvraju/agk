@@ -1,6 +1,6 @@
 # Requirements
 
-Each requirement is a `### REQ-nnn` section with a `- Status:` line (planned | in-progress | done).
+Each requirement is a `### REQ-nnn` section with a `- Status:` line (planned | in-progress | done | retired).
 Only the Status line may change without an ADR. `done` requires at least one test marker `REQ-nnn` under `tests/`.
 
 ### REQ-001 — Protected paths change only with an ADR in the same PR

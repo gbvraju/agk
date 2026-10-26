@@ -1,5 +1,7 @@
 """Requirements file: unique ids, valid Status, a test marker for every `done` requirement and, per
-the `ac_coverage` setting (`warn` or `block`), for every criterion `ACn` of it (SPEC-0010)."""
+the `ac_coverage` setting (`warn` or `block`), for every criterion `ACn` of it (SPEC-0010). A
+`retired` requirement has no marker left: the check names the requirement and the files
+(brief 244)."""
 
 from __future__ import annotations
 
@@ -57,6 +59,11 @@ def main(argv: list[str] | None = None) -> int:
             problems.append(f"{rid}: Status is not one of {', '.join(ALLOWED_STATUS)}")
         elif req["status"] == "done" and rid not in markers:
             problems.append(f"{rid}: done requires a test marker under the test directories")
+        elif req["status"] == "retired" and rid in markers:
+            # the one block of `retired` (brief 244): the pull request that retires a requirement
+            # removes its tests or retags them; the message names files, never the tests' text
+            files = ", ".join(markers[rid])
+            problems.append(f"{rid}: retired requirement still has a test marker in {files}")
     shortfalls = [text for _, text in ac_shortfalls(reqs, ac_markers_for(root, dirs))]
     problems += shortfalls if mode == "block" else []
     for problem in problems:

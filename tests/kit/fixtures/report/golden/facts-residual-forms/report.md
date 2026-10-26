@@ -21,7 +21,7 @@ nothing this week
 ## At risk
 
 - Residual overdue since 2026-06-01 (135 days): has | a pipe — https://github.com/demo-org/demo-repo/blob/3e506235cd730519d41f89ad0149c006de32ecba/docs/runs/residuals.md
-- drift audit: 3 findings (D1 0, D2 0, D3 0, D4 3, D5 0, D6 0, D7 0); no open drift issue
+- drift audit: 3 findings (D1 0, D2 0, D3 0, D4 3, D5 0, D6 0, D7 0, D8 0); no open drift issue
 - unknown: open briefs could not be read — https://github.com/demo-org/demo-repo/issues?q=label%3Aagk-brief
 
 ## Cost
