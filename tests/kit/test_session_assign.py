@@ -411,9 +411,11 @@ def test_ac5_an_assign_after_the_request_still_wins_over_an_early_one(proj, stub
 
 def test_ac5_an_unreadable_brief_is_waited_on_and_never_guessed(proj, stub):
     """REQ-041 AC5: brief #252 answer 2; the take cannot be checked, so the line is not taken."""
-    asked(stub, [request(1), comment(2, "boss", "Assign: s-me #9"), request(3)])
+    base = [request(1), comment(2, "boss", "Assign: s-me #9"), request(3)]
+    asked(stub, base)
+    stub.serve(COMMENTS, base)  # the conductor issue stays readable; brief #9 does not
     out = assign(proj, stub)
-    assert out.returncode == 4 and "cannot be read" in out.stdout
+    assert out.returncode == 4 and "#9" in out.stdout and "cannot be read" in out.stdout
     assert "assign #9" not in out.stdout
 
 
