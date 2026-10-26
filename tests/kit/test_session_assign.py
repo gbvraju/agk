@@ -199,10 +199,11 @@ def test_ac5_assign_ignores_an_unlisted_account_and_another_session_and_other_li
     assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #7"
 
 
-def test_ac5_assign_takes_only_a_line_after_the_request_of_this_session(proj, stub):
-    """REQ-041 AC5"""
+def test_ac5_assign_takes_only_a_line_after_the_previous_request_of_this_session(proj, stub):
+    """REQ-041 AC5: brief #252 answer 2, an Assign older than the previous Request is spent."""
     old = comment(1, "boss", "Assign: s-me #3")
-    asked(stub, [old, request(2)], [[old, request(2), comment(3, "boss", "Assign: s-me #9")]])
+    base = [old, request(2), request(3)]
+    asked(stub, base, [[*base, comment(4, "boss", "Assign: s-me #9")]])
     assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #9"
 
 
@@ -313,3 +314,112 @@ def test_ac5_the_flow_settings_name_rule_1_of_spec_0034_and_not_the_value(proj, 
     stub.serve(BRIEF, [])
     out = session(proj, stub, "claim", "--session", "s-me", "--brief", "5")
     assert "rule 1: claim_hours" in out.stdout
+
+
+# --- an Assign posted before the Request (brief #252) ---------------------------------------------
+
+
+def brief_comments(stub, number: int, data: list) -> None:
+    stub.serve(f"{ISSUES}/{number}/comments", data)
+
+
+def test_ac5_an_assign_posted_just_before_the_request_is_found_at_once(proj, stub):
+    """REQ-041 AC5: brief #252 answer 1."""
+    early = comment(3, "boss", "Assign: s-me #9 build (b)")
+    asked(stub, [request(1), took(2, "s-me", None, "me"), early, request(4)])
+    brief_comments(stub, 9, [])
+    out = assign(proj, stub)
+    assert out.returncode == 0 and out.stdout.strip().splitlines()[-1] == "assign #9 build (b)"
+    assert posts(stub) == []
+    assert len([c for c in stub.calls() if c[1].startswith(COMMENTS)]) == 1
+
+
+def test_ac5_an_early_assign_counts_without_a_previous_request(proj, stub):
+    """REQ-041 AC5: brief #252 answer 1, a session's first Request."""
+    asked(stub, [comment(1, "boss", "Assign: s-me #9"), request(2)])
+    brief_comments(stub, 9, [])
+    assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #9"
+
+
+def test_ac5_the_newest_early_assign_is_the_one_taken(proj, stub):
+    """REQ-041 AC5: brief #252 answer 1."""
+    lines = [comment(2, "boss", "Assign: s-me #3"), comment(3, "second", "Assign: s-me #9")]
+    asked(stub, [request(1), *lines, request(4)])
+    brief_comments(stub, 9, [])
+    assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #9"
+
+
+def test_ac5_an_early_assign_by_an_unlisted_account_or_for_another_session_is_ignored(proj, stub):
+    """REQ-041 AC5: brief #252 answer 1."""
+    wrong = [comment(2, "stranger", "Assign: s-me #9"), comment(3, "boss", "Assign: s-other #9")]
+    base = [request(1), *wrong, request(4)]
+    asked(stub, base, [[*base, comment(5, "boss", "Assign: s-me #7")]])
+    assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #7"
+
+
+def test_ac5_an_early_assign_already_taken_is_never_taken_twice(proj, stub):
+    """REQ-041 AC5: brief #252 answer 2, a `taken:` of that brief and build after the Assign."""
+    early = comment(2, "boss", "Assign: s-me #9 build (b)")
+    base = [request(1), early, request(4)]
+    asked(stub, base, [[*base, comment(5, "boss", "Assign: s-me #7")]])
+    brief_comments(stub, 9, [took(3, "s-me", "b", "me")])
+    assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #7"
+
+
+def test_ac5_a_take_of_another_build_or_session_or_before_the_assign_does_not_spend_it(proj, stub):
+    """REQ-041 AC5: brief #252 answer 2."""
+    early = comment(5, "boss", "Assign: s-me #9 build (b)")
+    others = [took(2, "s-me", "b", "me"), took(6, "s-me", "a", "me"), took(7, "s-other", "b")]
+    asked(stub, [request(1), early, request(8)])
+    brief_comments(stub, 9, others)
+    assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #9 build (b)"
+
+
+def test_ac5_a_whole_brief_take_spends_a_whole_brief_assign(proj, stub):
+    """REQ-041 AC5: brief #252 answer 2."""
+    base = [request(1), comment(2, "boss", "Assign: s-me #9"), request(4)]
+    asked(stub, base, [[*base, comment(5, "boss", "Assign: s-me none")]])
+    brief_comments(stub, 9, [took(3, "s-me", None, "me")])
+    assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign none"
+
+
+def test_ac5_only_the_newest_early_assign_counts_when_it_is_spent(proj, stub):
+    """REQ-041 AC5: brief #252 answer 1, an older early line is not taken in its place."""
+    lines = [comment(2, "boss", "Assign: s-me #3"), comment(3, "boss", "Assign: s-me #9")]
+    base = [request(1), *lines, request(5)]
+    asked(stub, base, [[*base, comment(6, "boss", "Assign: s-me #7")]])
+    brief_comments(stub, 3, [])
+    brief_comments(stub, 9, [took(4, "s-me", None, "me")])
+    assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #7"
+
+
+def test_ac5_none_posted_early_ends_the_wait(proj, stub):
+    """REQ-041 AC5: brief #252 answer 3."""
+    asked(stub, [request(1), comment(2, "boss", "Assign: s-me none"), request(3)])
+    out = assign(proj, stub)
+    assert out.returncode == 0 and out.stdout.strip().splitlines()[-1] == "assign none"
+    assert not any("/issues/9/" in c[1] for c in stub.calls())
+
+
+def test_ac5_an_assign_after_the_request_still_wins_over_an_early_one(proj, stub):
+    """REQ-041 AC5: brief #252 answer 1, a line posted after the Request answers that Request."""
+    base = [request(1), comment(2, "boss", "Assign: s-me #3"), request(3)]
+    asked(stub, [*base, comment(4, "boss", "Assign: s-me #9")])
+    brief_comments(stub, 3, [])
+    assert assign(proj, stub).stdout.strip().splitlines()[-1] == "assign #9"
+
+
+def test_ac5_an_unreadable_brief_is_waited_on_and_never_guessed(proj, stub):
+    """REQ-041 AC5: brief #252 answer 2; the take cannot be checked, so the line is not taken."""
+    asked(stub, [request(1), comment(2, "boss", "Assign: s-me #9"), request(3)])
+    out = assign(proj, stub)
+    assert out.returncode == 4 and "cannot be read" in out.stdout
+    assert "assign #9" not in out.stdout
+
+
+def test_ac5_the_conductor_role_may_assign_before_the_request():
+    """REQ-041 AC5: brief #252 answer 4."""
+    role = (ROOT / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
+    assert "before the `Request:`" in role and "need not repeat" in role
+    rules = (ROOT / "config" / "session-rules.md").read_text(encoding="utf-8")
+    assert "posted after its previous `Request:`" in rules
