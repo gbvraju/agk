@@ -1,6 +1,6 @@
 # ADR-0148: the Summary check says what it found (REQ-043, brief #237)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0140
