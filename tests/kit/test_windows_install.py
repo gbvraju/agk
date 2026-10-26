@@ -69,7 +69,8 @@ def reviewers(tmp_path: Path, text: str, *args: str) -> subprocess.CompletedProc
     (tmp_path / "config").mkdir(exist_ok=True)
     (tmp_path / "config" / "reviewers.yaml").write_text(text, encoding="utf-8")
     (tmp_path / "config" / "protected-paths.txt").write_text("config/\n", encoding="utf-8")
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # nosec B603 B607
+    git = ["git", "init", "-q", str(tmp_path)]
+    subprocess.run(git, check=True)  # nosec B603 - fixed argument list, no shell
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(REVIEWERS), *args], cwd=tmp_path, capture_output=True, text=True
     )
