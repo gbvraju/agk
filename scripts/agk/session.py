@@ -26,8 +26,8 @@ label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; bu
 A wait never goes silent (brief #210): when GitHub cannot be read for 5 polls in a row it prints
 `error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since
 <id>` when it starts. `--assign` also takes at once the newest `Assign:` for the session posted
-between its previous `Request:` and its current one, unless the session has a `taken:` of that
-brief and build after it (brief #252). When `gh` says it could not connect, the line is
+between its previous `Request:` and its current one, unless the session has a `taken:` on any
+brief after it (brief #252). When `gh` says it could not connect, the line is
 `github-unreachable: <what> cannot be read; local head <sha> not pushed; next: push, then post the
 Report:/Question:`; a rate limit is waited out to the reset time that GitHub reports and does
 not end a wait (answer 6).
@@ -876,20 +876,19 @@ def assign_line(comment: dict, me: str, allowed: set[str]) -> re.Match | None:
     return None
 
 
-def spent(repo: str, me: str, match: re.Match, after_id: int) -> bool | None:
-    """Brief #252 answer 2: an early `Assign:` of a brief is spent when this session has a `taken:`
-    of that brief and build after it; None when the brief cannot be read."""
-    if match.group(2) == "none":
-        return False
-    found = pages(f"repos/{repo}/issues/{match.group(3)}/comments")
+def spent(repo: str, me: str, line: dict) -> bool | None:
+    """Brief #252 answer 2: an early `Assign:` (a brief or `none`) is spent when this session has a
+    `taken:` on any brief after it, since a session takes what it was assigned; a stale `none` of
+    an earlier session of the same name is then never read as an answer. None when unreadable."""
+    since = f"?since={line['created_at']}" if isinstance(line.get("created_at"), str) else ""
+    found = pages(f"repos/{repo}/issues/comments{since}")
     if found is None:
         return None
     for comment in found:
         body = str(comment.get("body") or "")
         take_ = TAKE.match(body.splitlines()[0].strip() if body.strip() else "")
-        if take_ and take_.group(1) == me and take_.group(3) == match.group(4):
-            if comment.get("id", 0) > after_id:
-                return True
+        if take_ and take_.group(1) == me and comment.get("id", 0) > line.get("id", 0):
+            return True
     return False
 
 
@@ -919,10 +918,10 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
     if asked:  # the newest Assign between the previous Request (if any) and the current one
         floor = asked[-2] if len(asked) > 1 else 0
         window = [c for c in comments if floor < c.get("id", 0) < seen]
-        lines = [(c["id"], m) for c in window if (m := assign_line(c, me, allowed))]
-        early = max(lines, key=lambda x: x[0], default=None)
+        lines = [(c, m) for c in window if (m := assign_line(c, me, allowed))]
+        early = max(lines, key=lambda x: x[0].get("id", 0), default=None)
     found: list | None = comments
-    brief_reads = Reads(root)  # its own count: a readable conductor issue never resets it
+    take_reads = Reads(root)  # its own count: a readable conductor issue never resets it
     while True:
         if found is None:
             if reads.failed(f"the comments of #{issue}"):
@@ -935,12 +934,12 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
                 print(f"assign {match.group(2)}")
                 return 0
         if early is not None:
-            used = spent(repo, me, early[1], early[0])
+            used = spent(repo, me, early[0])
             if used is None:
-                if brief_reads.failed(f"the comments of #{early[1].group(3)}"):
+                if take_reads.failed("the comments of the briefs"):
                     return EXIT_UNREADABLE
             elif used:
-                brief_reads.good()
+                take_reads.good()
                 early = None
             else:
                 print(f"assign {early[1].group(2)}")
