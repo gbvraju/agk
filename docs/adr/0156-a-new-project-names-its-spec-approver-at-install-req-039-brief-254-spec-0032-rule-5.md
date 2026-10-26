@@ -1,6 +1,6 @@
 # ADR-0156: a new project names its spec approver at install (REQ-039, brief 254, SPEC-0032 rule 5)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0150
