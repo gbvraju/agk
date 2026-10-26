@@ -1,6 +1,6 @@
 # ADR-0158: the secret scan runs the pinned gitleaks binary, no licence key (REQ-039, brief 258)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0006
