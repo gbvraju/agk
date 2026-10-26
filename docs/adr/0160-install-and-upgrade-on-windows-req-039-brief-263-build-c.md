@@ -1,6 +1,6 @@
 # ADR-0160: install and upgrade on Windows (REQ-039, brief 263 build c)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0108, ADR-0159
