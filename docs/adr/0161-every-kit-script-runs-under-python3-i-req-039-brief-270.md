@@ -1,6 +1,6 @@
 # ADR-0161: every kit script runs under `python3 -I` (REQ-039, brief 270)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0160
