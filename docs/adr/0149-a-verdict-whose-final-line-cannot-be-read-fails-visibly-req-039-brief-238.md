@@ -1,6 +1,6 @@
 # ADR-0149: a verdict whose Final line cannot be read fails visibly (REQ-039, brief #238)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0094, ADR-0105, ADR-0121
