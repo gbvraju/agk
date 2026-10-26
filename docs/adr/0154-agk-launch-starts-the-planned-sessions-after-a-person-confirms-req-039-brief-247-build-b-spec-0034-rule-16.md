@@ -1,6 +1,6 @@
 # ADR-0154: `/agk:launch` starts the planned sessions after a person confirms (REQ-039, brief 247 build (b), SPEC-0034 rule 16)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-26
 - Deciders: maintainers
 - Related: ADR-0124, ADR-0153
