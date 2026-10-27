@@ -5,9 +5,10 @@
 
 When the latest verdict by a listed author is a covered fix list (`Verdict: fix list <sha>`, `Final:
 <path> <old> -> <new>` lines, no numbered item) and the head is the one commit after its reviewed
-sha, the commit must change exactly the named status lines; a head two or more commits past the
-reviewed sha (counted on the first-parent line) fails (SPEC-0030 rule 7). Anything else passes
-unchecked. Without
+sha, the commit must change exactly the named status lines (one that also sets the `Chosen` line
+of a stack ADR fails saying that line is set by an ordinary commit, brief 274); a head two or more
+commits past the reviewed sha (counted on the first-parent line) fails (SPEC-0030 rule 7).
+Anything else passes unchecked. Without
 `--comments` it prints `skipped (no comments file)` and passes. With two or more listed
 authors the verdicts of `--author`, the pull request's own author, do not count (SPEC-0025 rule 4).
 Git and the file only: no network, no model. Messages name the rule, never a value.
@@ -36,6 +37,9 @@ from reviewers import person_approvals, spec_approvers, verdict_authors
 
 NAME = "final-clearance"
 SPEC_FILE = re.compile(r"docs/specs/(\d{4})-[^/]+\.md")
+STACK_ADR = re.compile(r"docs/adr/\d{4}-stack-options\.md")
+CHOSEN_LINE = re.compile(r"\s*\d+\.\s+\*\*Chosen\*\*")
+STACK_CHOSEN = "rule 3: a stack's Chosen line is set by an ordinary commit, not a Final commit"
 USAGE = (
     "usage: check_final_clearance.py [--comments FILE] [--reviews FILE] [--head SHA] "
     "[--author LOGIN] [--draft VALUE]"
@@ -77,6 +81,16 @@ def commits_past(root: Path, sha: str, head: str) -> int:
     return int(git(root, "rev-list", "--count", "--first-parent", f"{reviewed}..{head}").strip())
 
 
+def sets_stack_chosen(root: Path, first: str, second: str) -> bool:
+    """Whether the commit changes the `Chosen` line of a stack ADR (brief 274 answer 3)."""
+    names = git(root, "diff", "-z", "--name-only", "--no-renames", first, second).split("\0")
+    for path in filter(STACK_ADR.fullmatch, names):
+        diff = git(root, "diff", "-U0", "--no-renames", first, second, "--", path)
+        if any(CHOSEN_LINE.match(ln[1:]) for ln in diff.splitlines() if ln[:1] in "+-"):
+            return True
+    return False
+
+
 def specs_set_approved(edits: list[tuple[str, str | None, str, str]]) -> set[str]:
     """The specs a covered fix list sets to `Approved` (SPEC-0032 rule 5)."""
     found = set()
@@ -113,6 +127,8 @@ def check(
             files_ok, bad = final_commit_problems(root, parents[0], commit, edits)
             moded = git(root, "diff", "--summary", parents[0], commit).strip()
             if not files_ok or bad or moded:
+                if sets_stack_chosen(root, parents[0], commit):
+                    raise CheckError(STACK_CHOSEN)
                 raise CheckError("rule 3: the commit is not exactly the named status lines")
         elif commits_past(root, sha, commit) >= 2:
             raise CheckError("rule 7: the head is two or more commits past the reviewed commit")

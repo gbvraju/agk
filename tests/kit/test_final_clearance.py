@@ -158,6 +158,44 @@ def test_ac2_a_commit_that_changes_more_than_the_named_lines_fails(repo, tmp_pat
     assert "Accepted" not in proc.stdout and "Superseded" not in proc.stdout
 
 
+STACK = "docs/adr/0002-stack-options.md"
+
+
+def stack(status: str, chosen: str) -> str:
+    return (
+        f"# ADR-0002: stack options\n\n- Status: {status}\n- Date: 2026-10-26\n\n## Decision\n\n"
+        "1. **Options**\n   - Option A — a. Trade-offs: t. Practices: p.\n"
+        f"3. **Chosen**: {chosen}\n"
+    )
+
+
+def test_ac2_a_final_commit_that_sets_a_stack_chosen_line_names_the_cause(repo, tmp_path):
+    """REQ-028 AC2: brief 274 answer 3 (Chosen is set by an ordinary commit, not a Final one)."""
+    repo.commit({"config/reviewers.yaml": CONFIG, STACK: stack("Proposed", "none yet")}, "reviewed")
+    reviewed = repo.git("rev-parse", "HEAD").strip()
+    repo.commit({STACK: stack("Accepted", "Option A — only one fits.")}, "final")
+    final = f"Final: {STACK} Proposed -> Accepted"
+    proc = check(repo, comments_file(tmp_path, fix_list(reviewed, final)))
+    assert proc.returncode == 1, proc.stdout
+    assert proc.stdout == (
+        "FAIL final-clearance: rule 3: a stack's Chosen line is set by an ordinary commit, "
+        "not a Final commit\n"
+    )
+
+
+def test_ac2_a_final_commit_that_changes_another_line_of_a_stack_adr_keeps_the_rule_3_message(
+    repo, tmp_path
+):
+    """REQ-028 AC2: rule 3 (only a change of the Chosen line gets the new message)."""
+    repo.commit({"config/reviewers.yaml": CONFIG, STACK: stack("Proposed", "none yet")}, "reviewed")
+    reviewed = repo.git("rev-parse", "HEAD").strip()
+    repo.commit({STACK: stack("Accepted", "none yet") + "x\n"}, "final")
+    final = f"Final: {STACK} Proposed -> Accepted"
+    proc = check(repo, comments_file(tmp_path, fix_list(reviewed, final)))
+    assert proc.returncode == 1 and "not exactly the named status lines" in proc.stdout
+    assert "Chosen" not in proc.stdout
+
+
 def test_ac2_a_status_line_of_another_requirement_fails(repo, tmp_path):
     """REQ-028 AC2: rules 2 and 3 (REQ-001 is named, REQ-002 changes)."""
     reviewed = scenario(repo)

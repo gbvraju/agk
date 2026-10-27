@@ -79,6 +79,8 @@ STACK_NAME = re.compile(r"^docs/adr/(\d{4})-stack-options\.md$")
 OPTION = re.compile(r"^\s*-\s+Option ([A-Z]) — (.+)$")
 PRACTICE = re.compile(r"^\s*-\s+(.+?):\s+(check|judgement)(?:\s+\((.*)\))?\s*$")
 STACK_PLACEHOLDER = re.compile(r"TODO\(architect\)")
+# The lock of an Accepted stack ADR: one option, then at most a one-line reason (brief 274).
+CHOSEN = re.compile(r"Option ([A-C])(?: — \S.*)?")
 
 
 def idea_of(text: str) -> tuple[str, str] | None:
@@ -265,15 +267,22 @@ def stack_problems(name: str, text: str) -> list[str]:
     if named - recorded:
         out.append("rule 5: a practice named by an option is not in the Practices item")
     status = re.search(r"(?m)^- Status: (\w+)$", text)
-    chosen = " ".join(ln.strip() for ln in items["Chosen"]).strip()
+    chosen_lines = [ln.strip() for ln in items["Chosen"] if ln.strip()]
+    chosen = " ".join(chosen_lines)
     letters = {m.group(1) for m in options}
     if status and status.group(1) == "Proposed":
         if chosen != "none yet":
-            out.append("rule 5: the ADR is Proposed and Chosen is not `none yet`")
+            out.append(
+                "rule 5: the ADR is Proposed and Chosen is not `none yet`; an option is chosen by "
+                "one ordinary commit that sets Chosen and Status: Accepted in the same commit"
+            )
     elif status and status.group(1) == "Accepted":
-        picked = re.fullmatch(r"Option ([A-C])", chosen)
-        if not picked or picked.group(1) not in letters:
-            out.append("rule 5: the ADR is Accepted and Chosen names no single option")
+        picked = CHOSEN.fullmatch(chosen)
+        if len(chosen_lines) != 1 or not picked or picked.group(1) not in letters:
+            out.append(
+                "rule 5: the ADR is Accepted and Chosen is not one option with at most a "
+                "one-line reason (`Option <X>` or `Option <X> — <reason>`)"
+            )
     return out
 
 
