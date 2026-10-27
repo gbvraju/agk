@@ -10,7 +10,9 @@ of the head (`actions/runs?head_sha=...`, which the workflow makes); a run count
 run name is `governance full` (the `run-name` of the workflow). The check passes when the latest
 full run of this head succeeded. When that run is still queued or in progress it prints `waiting`
 and exits 3, and the workflow polls the same GET again (every 30 seconds, for at most 20 minutes).
-An unreadable response and no full run fail, and the next push re-runs in full.
+An unreadable response and no full run fail, and the next push re-runs in full. A cancelled full
+run is never the latest while another full run of the head is not cancelled, and runs created in
+the same second are ordered by run id (brief #272, ADR-0162).
 
 A red full run fails unless only body steps failed in it: a failure of the steps that read the pull
 request body (`BODY_STEPS`, the steps of the workflow that run on an edit and take the body) is
@@ -100,6 +102,20 @@ def not_reached(jobs: Path) -> list[str]:
     return hidden
 
 
+def newest(run: dict) -> tuple[str, int]:
+    """The order of runs: `created_at`, ties broken by the larger run id (brief #272)."""
+    rid = run.get("id")
+    return str(run.get("created_at") or ""), rid if isinstance(rid, int) else 0
+
+
+def live(full: list[dict]) -> list[dict]:
+    """The full runs that may be the latest: a cancelled run (one the concurrency group replaced)
+    never is while another run of the head is not cancelled; with only cancelled runs, all of them
+    (brief #272)."""
+    kept = [r for r in full if r.get("conclusion") != "cancelled"]
+    return kept or full
+
+
 def check(runs: Path, head: str, jobs: Path | None = None) -> int:
     try:
         data = json.loads(runs.read_text(encoding="utf-8"))
@@ -115,7 +131,7 @@ def check(runs: Path, head: str, jobs: Path | None = None) -> int:
     ]
     if not full:
         raise CheckError("rule 2: the head has no full governance run")
-    latest = max(full, key=lambda r: str(r.get("created_at") or ""))
+    latest = max(live(full), key=newest)
     if latest.get("status") != "completed":
         print(f"waiting {NAME}")
         return WAITING
