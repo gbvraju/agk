@@ -1,6 +1,6 @@
 # ADR-0162: the edited run never takes a cancelled full run for the latest (REQ-039, brief 272)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-27
 - Deciders: maintainers
 - Related: ADR-0137, ADR-0144, ADR-0159
