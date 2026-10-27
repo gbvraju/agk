@@ -76,6 +76,7 @@ def test_ac2_manifest_shape_and_version():
         "templates",
         "rendered",
         "adopt",
+        "extendable",
     }
     assert m["kit_tests"] == "tests/kit" and (KIT_ROOT / m["kit_tests"]).is_dir()
     assert re.fullmatch(r"\d+\.\d+\.\d+", m["kit_version"])
@@ -283,7 +284,10 @@ def test_ac1_adopt_section_shape_and_paths():
     a = manifest()["adopt"]
     assert set(a) == {"skip", "blocks", "block_sources", "templates"}
     assert a["skip"] == ["Makefile"]
-    assert a["block_sources"] == {".gitattributes": "kit/templates/gitattributes"}
+    assert a["block_sources"] == {
+        ".gitattributes": "kit/templates/gitattributes",
+        ".gitignore": "kit/templates/gitignore",
+    }
     assert a["blocks"] == {
         ".gitignore": "hash",
         ".gitattributes": "hash",
