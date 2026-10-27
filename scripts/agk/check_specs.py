@@ -28,6 +28,8 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from check_final_clearance import comments_of
 from check_pr_body import field
 from common import (

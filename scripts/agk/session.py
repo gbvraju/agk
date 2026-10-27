@@ -54,7 +54,10 @@ import time
 import tomllib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import CheckError, covered_fix_list, git, load_config, next_free_ids, repo_root, show
 from facts import ORIGIN

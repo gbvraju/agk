@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from check_requirements import dirs_arg
 from common import CheckError, markers_for, parse_requirements, repo_root, run, untagged_test_files

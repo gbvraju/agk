@@ -6,6 +6,9 @@ Creating the file (absent at the base) is allowed, so the PR that introduces thi
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import base_arg, base_context, changed_files, repo_root, run, show
 

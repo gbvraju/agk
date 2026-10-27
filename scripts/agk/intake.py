@@ -24,6 +24,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from check_adrs import status_of as adr_status
 from check_specs import status_of as spec_status
 from common import (

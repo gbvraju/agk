@@ -22,6 +22,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from changelog_fragments import FRAG_DIR, gathered_lines, tree_fragments
 from common import (
     CheckError,

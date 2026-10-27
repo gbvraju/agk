@@ -1,0 +1,1 @@
+- kit scripts: every script under `scripts/agk/` that imports another kit script puts its own folder first on the import path, by its resolved location, so it runs under `python3 -I` (isolated mode), the only Python form the conductor guard allows (brief #270, ADR-0161)

@@ -22,6 +22,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from common import (
     CheckError,
     declares_unchanged,

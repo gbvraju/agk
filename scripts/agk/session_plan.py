@@ -32,7 +32,11 @@ from __future__ import annotations
 import json
 import re
 import string
+import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import matches, read_list
 from session import (

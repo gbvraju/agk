@@ -28,6 +28,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from check_adrs import validate as validate_adr
 from common import (
     CheckError,

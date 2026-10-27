@@ -24,6 +24,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from common import CheckError, repo_root
 from metrics import ApiDir, author_of
 from reviewers import verdict_authors

@@ -24,6 +24,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
 from changelog_fragments import FRAG_DIR, tree_fragments, well_formed
 from common import CheckError, merge_base, pr_mode, repo_root, resolve_base, run
 
