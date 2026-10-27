@@ -433,3 +433,57 @@ def test_the_steps_a_full_run_skips_by_their_own_condition_are_pinned_to_the_wor
     assert "hashFiles('kit/agk-kit.mk') != ''" in blocks["Release check"].split("\n", 1)[0]
     names = list(blocks)
     assert names.index("Latest full run") < names.index("PR body file")
+
+
+# --- a cancelled full run is never the latest (brief #272) --------------------------------------
+
+SAME = "2026-10-26T20:52:15Z"
+
+
+def full_of(conclusion: str | None, rid: int, created: str = SAME, status: str = "completed"):
+    return {**run_of(FULL, conclusion, created, status=status), "id": rid}
+
+
+@pytest.mark.parametrize("order", ["cancelled first", "success first"])
+def test_the_tie_of_pull_request_271_reads_the_run_that_completed(tmp_path, order):
+    """Brief #272 Measured (REQ-039): two full runs of one second, one cancelled by the
+    concurrency group, one green; in either list order the edited run passes."""
+    cancelled, green = full_of("cancelled", 40399457998), full_of("success", 40399458037)
+    runs = [cancelled, green] if order == "cancelled first" else [green, cancelled]
+    out = check(tmp_path, runs)
+    assert (out.returncode, out.stdout) == (0, "ok full-run\n"), out.stdout
+
+
+def test_a_cancelled_run_is_not_the_latest_even_when_it_is_newer(tmp_path):
+    """Brief #272 answer 1 (REQ-039): a cancelled run never beats one that is not cancelled."""
+    runs = [full_of("success", 1, "2026-10-26T10:00:00Z"), full_of("cancelled", 2, SAME)]
+    assert check(tmp_path, runs).returncode == 0
+
+
+def test_a_tie_of_two_runs_that_are_not_cancelled_goes_to_the_larger_id(tmp_path):
+    """Brief #272 answer 1 (REQ-039): ties broken by the larger run `id`."""
+    for runs in (
+        [full_of("success", 1), full_of("failure", 2)],
+        [full_of("failure", 2), full_of("success", 1)],
+    ):
+        out = check(tmp_path, runs)
+        assert (out.returncode, out.stdout) == (4, "jobs 2\n"), out.stdout
+
+
+def test_cancelled_runs_alone_behave_as_today(tmp_path):
+    """Brief #272 answer 2 (REQ-039): with only cancelled runs, the latest of them is asked for,
+    and its jobs then refuse with rule 2, as today; a running run is still waited for."""
+    out = check(tmp_path, [full_of("cancelled", 1), full_of("cancelled", 2)])
+    assert (out.returncode, out.stdout) == (4, "jobs 2\n"), out.stdout
+    jobs = tmp_path / "jobs.json"
+    jobs.write_text(json.dumps({"jobs": [{"name": "governance", "steps": []}]}))
+    out = check(tmp_path, [full_of("cancelled", 2)], "--jobs", str(jobs))
+    assert out.returncode == 1 and out.stdout.startswith("FAIL full-run: rule 2:"), out.stdout
+    running = full_of(None, 3, "2026-10-26T20:53:00Z", status="in_progress")
+    assert check(tmp_path, [full_of("cancelled", 1), running]).returncode == 3
+
+
+def test_a_newer_failed_run_still_beats_an_older_success(tmp_path):
+    """Brief #272 answer 3 (REQ-039): only cancelled runs are set aside."""
+    runs = [full_of("success", 1, "2026-10-26T10:00:00Z"), full_of("failure", 2, SAME)]
+    assert check(tmp_path, runs).stdout == "jobs 2\n"
