@@ -65,7 +65,9 @@ RUNNING = [
 def facts(stub: Stub, n: int, comments: list, checks: list | None = None, head: str = SHA) -> None:
     stub.serve(f"repos/{REPO}/issues/{n}/comments", comments)
     runs = GREEN if checks is None else checks
-    stub.serve(f"repos/{REPO}/commits/{head}/check-runs", {"total_count": len(runs), "check_runs": runs})
+    stub.serve(
+        f"repos/{REPO}/commits/{head}/check-runs", {"total_count": len(runs), "check_runs": runs}
+    )
     stub.serve(f"repos/{REPO}/commits/{head}/status", {"state": "success", "statuses": []})
 
 
@@ -88,11 +90,20 @@ def test_a_verdict_already_on_the_head_is_never_given_twice_under_a_stale_label(
     stub.serve(OPEN, [listed(7, "agk:review")])
     facts(stub, 7, [note(1, "Report: done", 1), verdict(2)])
     assert queue(proj, stub) == ["empty"]
-    assert queue(proj, stub, "--all") == ["empty", f"#7 {SHORT} skip: verdict on this head (comment 2)"]
+    assert queue(proj, stub, "--all") == [
+        "empty",
+        f"#7 {SHORT} skip: verdict on this head (comment 2)",
+    ]
 
 
 @pytest.mark.parametrize(
-    "first", ["Question: Q-306-9 which file?", "Report: abc1234 pushed", "Correction: void", "Maintainer answer: yes"]
+    "first",
+    [
+        "Question: Q-306-9 which file?",
+        "Report: abc1234 pushed",
+        "Correction: void",
+        "Maintainer answer: yes",
+    ],
 )
 def test_a_newer_question_report_correction_or_maintainer_answer_qualifies_on_the_same_head(
     proj, stub, first
@@ -120,7 +131,9 @@ def test_other_comments_after_the_verdict_do_not_qualify(proj, stub):
 def test_a_head_that_differs_from_the_last_verdicts_qualifies(proj, stub):
     stub.serve(OPEN, [listed(7, "agk:ci-red", head=OTHER)])
     facts(stub, 7, [verdict(2)], head=OTHER)
-    assert queue(proj, stub) == [f"#7 {OTHER[:7]} review: head differs from the last verdict ({SHORT})"]
+    assert queue(proj, stub) == [
+        f"#7 {OTHER[:7]} review: head differs from the last verdict ({SHORT})"
+    ]
 
 
 def test_green_checks_under_a_stale_running_label_qualify_and_running_checks_wait(proj, stub):
