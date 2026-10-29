@@ -762,7 +762,8 @@ def proof_timeout(root: Path) -> int:
 
 # --- proof per test area (brief #305, ADR-0172) ------------------------------------------------
 # An optional `[proof]` table of agk.toml: each key is an area with `dirs`, `patterns`, `command`
-# (a template with `{files}`) and an optional `cwd`, the folder `{files}` are relative to.
+# (a template with `{files}`) and an optional `cwd`, the folder the command runs in and `{files}`
+# are relative to.
 
 AREA_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 AREA_KEYS = {"dirs", "patterns", "command", "cwd"}

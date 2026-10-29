@@ -304,8 +304,11 @@ class Trees:
             raise Failure("a temporary worktree could not be removed (path class: temporary)")
 
 
-def run_pair(trees: list[Path], command: str, limit: int, label: str = ""):
-    """(run 1, run 2, seconds of the timed-out run or None, seconds of both runs)."""
+def run_pair(trees: list[Path], command: str, limit: int, label: str = "", cwd: str = "."):
+    """(run 1, run 2, seconds of the timed-out run or None, seconds of both runs). The command
+    runs in `cwd` of each tree; a folder the base lacks is made empty there."""
+    trees = [tree / cwd for tree in trees]
+    trees[0].mkdir(parents=True, exist_ok=True)
     status1, out1, seconds1 = execute(command, trees[0], limit)
     show(f"run 1{label}: the base with the pull request's tests", out1)
     if status1 is None:
@@ -351,7 +354,7 @@ def run_areas(root: Path, base: str, head: str, areas: list[dict], files: dict[s
             if not paths:
                 continue
             status1, status2, elapsed, seconds = run_pair(
-                trees, area_command(area, paths), limit, f" ({area['name']})"
+                trees, area_command(area, paths), limit, f" ({area['name']})", area["cwd"]
             )
             area["outcome"], area["reason"] = decide(status1, status2)
             area["seconds"], area["elapsed"] = seconds, elapsed
@@ -419,6 +422,13 @@ def prove_areas(root: Path, base: str, head: str, body: str, areas: list[dict]) 
     def result(outcome: str, reason: str | None = None, elapsed: int | None = None) -> Result:
         return Result(outcome, reason, base, head, names, elapsed, areas)
 
+    for area in areas:
+        kind = git(root, "cat-file", "-t", f"{head}:{area['cwd']}", check=False).strip()
+        if area["cwd"] != "." and kind != "tree":
+            raise CheckError(
+                "the cwd of a proof area is not a folder of the head "
+                f"(setting: proof.{area['name']}.cwd)"
+            )
     if declares_unchanged(body):
         return result("skipped")
     if not any(changed[p] != "D" for a in areas for p in a["files"]):

@@ -31,10 +31,12 @@ Brief #305 (priority 1). In the pilot (#289, #287) proof ran the whole backend s
    not run. Each area's outcome is decided as SPEC-0010 rule 12. The whole result is `proven` only when every area that ran is
    proven; otherwise `unknown` (`timeout`) when any area timed out, else `not-proven` (`green-on-base` before `red-on-head`). No
    area with added or modified files is `unknown` (`no-test-files`); `Behaviour: unchanged` is `skipped`, as before.
-3. **Files and the template (answer 3).** The command runs from the worktree root, as `project_tests` does; `{files}` is replaced
-   by the area's files, each relative to the area's `cwd` and quoted with `shlex.quote`, separated by spaces. The brief's
-   example `cd backend && uv run pytest {files}` therefore sets `cwd = "backend"` (Q-305-1). A command without `{files}` is
-   refused: `the command of a proof area has no {files} (setting: proof.<area>.command)`.
+3. **Files and the template (answer 3).** The command runs inside the area's `cwd` of each worktree (the base with the tests
+   placed, and the head; the root when `cwd` is not set), and `{files}` is replaced by the area's files, each relative to `cwd` and
+   quoted with `shlex.quote`, separated by spaces, so the folder is written once: `cwd = "backend", command = "uv run pytest
+   {files}"` (Q-305-1, answered in the verdict on 73a14cf). A `cwd` that is not a folder of the head is refused, naming
+   `proof.<area>.cwd`; a folder the base lacks is made empty in the base worktree, so the base run fails as the base it is. A
+   command without `{files}` is refused: `the command of a proof area has no {files} (setting: proof.<area>.command)`.
 4. **Output (answer 4).** The one line names each area that is not proven, in table order:
    `proof: not-proven (frontend: green-on-base)`, `proof: unknown (frontend: timeout after N s, setting: proof_timeout)`, several
    joined with `; `. The `--json` `reason` stays one word of SPEC-0010 rule 17, so the outcome step names of the `proof` job,
@@ -43,7 +45,8 @@ Brief #305 (priority 1). In the pilot (#289, #287) proof ran the whole backend s
    `test_files` is the union of the areas' files.
 5. **Tests (answer 5).** `tests/kit/test_proof_areas.py`, with plain-shell fake commands: one area; two areas, one red and one
    not; a front-end-only change; a red head; two areas not proven; a timeout in one area; no files; deletions only; no
-   `project_tests`; the declaration; a template without `{files}`; every malformed setting; and the unchanged path without the
+   `project_tests`; the declaration; the command running inside `cwd` on both runs; a `cwd` missing from the head; a
+   template without `{files}`; every malformed setting; and the unchanged path without the
    table. `tests/kit/test_proof.py` and `tests/kit/test_proof_timeout.py` are unchanged and pass.
 6. **Flow mode.** Fragment `changelog.d/proof-areas.md`; no version bump; `kit/hashes.json` not edited (session rule 14).
    `docs/guides/existing-codebase.md` step 4 shows the table. SPEC-0010 is not edited (Q-305-3).
@@ -58,6 +61,10 @@ Brief #305 (priority 1). In the pilot (#289, #287) proof ran the whole backend s
 
 ## Residual
 
-- 2026-10-29: Q-305-1 (the working folder as `cwd`), Q-305-2 (the `--json` reason stays one word) and Q-305-3 (no SPEC-0010
-  amendment) are open on the pull request (due 2026-11-15).
+- 2026-10-29: Q-305-1 answered in the verdict on 73a14cf: the command runs inside `cwd`, and a `cwd` missing from the head is
+  refused (decision 3).
+- 2026-10-29: Q-305-2 answered in the verdict on 73a14cf: the area is named in the line and in `areas`; the `--json` `reason`
+  stays one word and `facts.py` is unchanged (decision 4).
+- 2026-10-29: Q-305-3 answered in the verdict on 73a14cf: no SPEC-0010 edit in this pull request; the reviewers file the
+  amendment separately as proposed spec amendment 95.
 - 2026-10-29: no project's real `[proof]` table was run; the first pilot that opts in reports its proof times (due 2026-12-15).

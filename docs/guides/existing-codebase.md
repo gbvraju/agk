@@ -98,13 +98,13 @@ place in a `[proof]` table instead. Proof then runs each area's own command with
 changes in that area, on the base and on the head:
 
     [proof]
-    backend = { dirs = ["backend/tests"], patterns = ["test_*.py"], cwd = "backend", command = "cd backend && uv run pytest {files}" }
-    frontend = { dirs = ["frontend/src"], patterns = ["*.test.ts"], cwd = "frontend", command = "cd frontend && npx vitest run {files}" }
+    backend = { dirs = ["backend/tests"], patterns = ["test_*.py"], cwd = "backend", command = "uv run pytest {files}" }
+    frontend = { dirs = ["frontend/src"], patterns = ["*.test.ts"], cwd = "frontend", command = "npx vitest run {files}" }
 
-`{files}` is required; proof replaces it with the area's files, relative to the area's `cwd` (the repository root when it is not
-set) and quoted. The command runs from the repository root, so it changes into its folder itself. The result is `proven` only when
-every area with files is red on the base and green on the head; otherwise the line names the area, as in
-`proof: not-proven (frontend: green-on-base)`. Without the table proof uses `project_tests` as above.
+`{files}` is required; proof replaces it with the area's files, relative to the area's `cwd` and quoted, and runs the command
+inside `cwd` (the repository root when it is not set), so the folder is written once. A `cwd` that is not a folder of the pull
+request's head is refused, naming the setting. The result is `proven` only when every area with files is red on the base and green
+on the head; otherwise the line names the area, as in `proof: not-proven (frontend: green-on-base)`. Without the table proof uses `project_tests` as above.
 
 ## Step 5. The first real change, tests first
 

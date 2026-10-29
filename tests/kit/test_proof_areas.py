@@ -42,6 +42,7 @@ def start(repo, extra: str = "", project_tests: str | None = "exit 1", files=Non
         "src/code.txt": "base\n",
         "backend/tests/test_old.py": "# old\n",
         "frontend/tests/old.test.ts": "// old\n",
+        "frontend/package.json": "{}\n",  # the folder stays when its only test is deleted
     }
     repo.commit({**base, **(files or {})}, "base")
     repo.branch("feature")
