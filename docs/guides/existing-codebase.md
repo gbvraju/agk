@@ -93,6 +93,19 @@ macOS, and the line reads `proof: unknown (timeout after N s, setting: proof_tim
 finish. When proof nears its limit on a busy machine, run it alone. Raising `proof_timeout` is a protected change (an ADR, as
 above); a slow suite is better fixed (#289).
 
+When your suite is slow, or your tests live in more than one place (a back end and a front end, say), give proof one area per
+place in a `[proof]` table instead. Proof then runs each area's own command with only the test files the pull request adds or
+changes in that area, on the base and on the head:
+
+    [proof]
+    backend = { dirs = ["backend/tests"], patterns = ["test_*.py"], cwd = "backend", command = "uv run pytest {files}" }
+    frontend = { dirs = ["frontend/src"], patterns = ["*.test.ts"], cwd = "frontend", command = "npx vitest run {files}" }
+
+`{files}` is required; proof replaces it with the area's files, relative to the area's `cwd` and quoted, and runs the command
+inside `cwd` (the repository root when it is not set), so the folder is written once. A `cwd` that is not a folder of the pull
+request's head is refused, naming the setting. The result is `proven` only when every area with files is red on the base and green
+on the head; otherwise the line names the area, as in `proof: not-proven (frontend: green-on-base)`. Without the table proof uses `project_tests` as above.
+
 ## Step 5. The first real change, tests first
 
 Follow steps 7 to 10 of [getting started](getting-started.md): a sentence, a Draft spec, the architect's brief, an Approved spec,

@@ -463,16 +463,21 @@ DEFAULT_CONFIG = {
 }
 
 
-def load_config(root: Path) -> dict:
-    """agk.toml first, then [tool.agk] in pyproject.toml (earlier installs); defaults fill gaps."""
-    cfg = {k: list(v) if isinstance(v, list) else v for k, v in DEFAULT_CONFIG.items()}
-    source: dict = {}
+def config_source(root: Path) -> dict:
+    """The settings as written: agk.toml first, then [tool.agk] in pyproject.toml."""
     agk_toml = root / "agk.toml"
     pyproject = root / "pyproject.toml"
     if agk_toml.is_file():
-        source = tomllib.loads(agk_toml.read_text(encoding="utf-8"))
-    elif pyproject.is_file():
-        source = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("tool", {}).get("agk", {})
+        return tomllib.loads(agk_toml.read_text(encoding="utf-8"))
+    if pyproject.is_file():
+        return tomllib.loads(pyproject.read_text(encoding="utf-8")).get("tool", {}).get("agk", {})
+    return {}
+
+
+def load_config(root: Path) -> dict:
+    """agk.toml first, then [tool.agk] in pyproject.toml (earlier installs); defaults fill gaps."""
+    cfg = {k: list(v) if isinstance(v, list) else v for k, v in DEFAULT_CONFIG.items()}
+    source = config_source(root)
     for key in DEFAULT_CONFIG:
         if key in source:
             cfg[key] = source[key]
@@ -753,6 +758,81 @@ def proof_timeout(root: Path) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise CheckError("proof_timeout must be a positive integer (setting: proof_timeout)")
     return value
+
+
+# --- proof per test area (brief #305, ADR-0172) ------------------------------------------------
+# An optional `[proof]` table of agk.toml: each key is an area with `dirs`, `patterns`, `command`
+# (a template with `{files}`) and an optional `cwd`, the folder the command runs in and `{files}`
+# are relative to.
+
+AREA_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+AREA_KEYS = {"dirs", "patterns", "command", "cwd"}
+
+
+def _texts(value: object) -> bool:
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and all(isinstance(v, str) and v.strip() for v in value)
+    )
+
+
+def proof_areas(root: Path) -> list[dict] | None:
+    """The areas of `[proof]` in table order, or None without the table; a bad one is refused."""
+    table = config_source(root).get("proof")
+    if table is None:
+        return None
+    if not isinstance(table, dict) or not table:
+        raise CheckError("[proof] must be a table of one or more test areas (setting: proof)")
+    areas = []
+    for name, spec in table.items():
+        if not AREA_NAME.fullmatch(name):
+            raise CheckError(
+                "a proof area is named with letters, digits, - and _ only (setting: proof)"
+            )
+        setting = f"proof.{name}"
+        if not isinstance(spec, dict) or set(spec) - AREA_KEYS:
+            raise CheckError(
+                f"a proof area is a table of dirs, patterns, command and cwd (setting: {setting})"
+            )
+        for key, what in (("dirs", "folders"), ("patterns", "file name patterns")):
+            if not _texts(spec.get(key)):
+                raise CheckError(
+                    f"the {key} of a proof area must be a list of {what} (setting: {setting}.{key})"
+                )
+        command = spec.get("command")
+        if not isinstance(command, str) or not command.strip():
+            raise CheckError(
+                f"the command of a proof area must be a text with {{files}} "
+                f"(setting: {setting}.command)"
+            )
+        if "{files}" not in command:
+            raise CheckError(
+                f"the command of a proof area has no {{files}} (setting: {setting}.command)"
+            )
+        cwd = spec.get("cwd", ".")
+        parts = cwd.replace("\\", "/").split("/") if isinstance(cwd, str) else []
+        if (
+            not isinstance(cwd, str)
+            or not cwd.strip()
+            or cwd.startswith(("/", "\\"))
+            or ":" in cwd
+            or ".." in parts
+        ):
+            raise CheckError(
+                f"the cwd of a proof area must be a folder inside the repository "
+                f"(setting: {setting}.cwd)"
+            )
+        areas.append(
+            {
+                "name": name,
+                "dirs": list(spec["dirs"]),
+                "patterns": list(spec["patterns"]),
+                "command": command,
+                "cwd": cwd.strip("/") or ".",
+            }
+        )
+    return areas
 
 
 def run(name: str, fn: Callable[[], int]) -> int:
