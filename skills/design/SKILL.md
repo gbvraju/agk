@@ -44,5 +44,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"
 5. Last, say what the checks cannot check: that the page looks right, that the brand values are the owner's, and that the
    colours suit the product. The approval line is the owner's: the owner replaces `Approved: not yet` in the mockup's
    `README.md` by `Approved by <name> on <YYYY-MM-DD>`. The session must never write that line and never approve a mockup itself.
+6. Print the next steps, with the requirement the design serves. A change of only `docs/design/` carries `Brief: none (design)`,
+   which passes whether or not the repository has an open brief; add `--brief <n>` when the work answers one. The script prints
+   the body as a file path and its text, only after the repository's own `check_pr_body.py` passed it; use the body unchanged.
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" design-next-steps --req REQ-<n>
+```
 
 Do not commit or push, and do not open a pull request: the person or their session does.

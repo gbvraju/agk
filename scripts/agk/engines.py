@@ -7,6 +7,10 @@ Usage:
     python3 engines.py stack-ids [--ref REF] [--root DIR]
     python3 engines.py stack-write [--ref REF] [--date D] [--root DIR]
     python3 engines.py stack-check [--root DIR]
+    python3 engines.py stack-next-steps [--base REF] [--date D] [--brief N|none] [--issues FILE]
+                                        [--root DIR]
+    python3 engines.py design-next-steps --req REQ-nnn [--base REF] [--date D] [--brief N|none]
+                                         [--issues FILE] [--root DIR]
 
 Kit-only (never installed). An engine (a skill named in `[engines]` of `agk.toml`) only drafts
 text; this script writes it through the kit's templates and checks it, and it decides nothing.
@@ -15,7 +19,10 @@ two markers with the SHA-256 of the idea, so `vision-check` can tell an altered 
 sections of `/agk:start` follow, from the draft or from the template with `TODO(owner)` marks.
 `stack-write` writes the skeleton of the stack ADR; `stack-check` checks its shape (two or three
 options, trade-offs, practices told apart as check or judgement, the lock). Messages name the rule
-and never quote the idea or a name. No network and no model.
+and never quote the idea or a name. No network and no model. `stack-next-steps` and
+`design-next-steps` print the commit, the push and a pull request body that passed the
+repository's body check (`pr_body.py`, brief #273): the stack options, or the accepting change,
+and the design theme with its mockup (`Brief: none (design)`).
 """
 
 from __future__ import annotations
@@ -23,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess  # nosec B404 - a fixed argument list, no shell
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,16 +38,37 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from check_adrs import validate as validate_adr
-from common import CheckError, load_config, next_free_ids
+from common import (
+    REQ_ID,
+    CheckError,
+    changed_files,
+    git,
+    load_config,
+    merge_base,
+    next_free_ids,
+    resolve_base,
+)
 from intake import section
+from pr_body import brief_option, prepare, print_body
 
 KIT = Path(__file__).resolve().parents[2]
 TEMPLATES = KIT / "kit" / "templates"
 USAGE = (
     "usage: engines.py questions | vision-write --idea-file F [--draft-file D] | vision-check | "
-    "stack-ids [--ref REF] | stack-write [--ref REF] [--date D] | stack-check  [--root DIR]"
+    "stack-ids [--ref REF] | stack-write [--ref REF] [--date D] | stack-check | "
+    "stack-next-steps | design-next-steps --req REQ-nnn  [--root DIR]"
 )
-FLAGS = ("--root", "--idea-file", "--draft-file", "--ref", "--date")
+FLAGS = (
+    "--root",
+    "--idea-file",
+    "--draft-file",
+    "--ref",
+    "--date",
+    "--base",
+    "--brief",
+    "--issues",
+    "--req",
+)
 VISION = "constitution/vision.md"
 MAX_IDEA = 1500
 OPEN = "<!-- agk-idea sha256:"
@@ -303,6 +332,137 @@ def cmd_stack_check(root: Path) -> int:
     return 1 if problems else 0
 
 
+CHOSEN_LINE = re.compile(r"(?m)^\s*3\.\s+\*\*Chosen\*\*:\s+Option ([A-Z])(?: — (.+))?$")
+STATUS = re.compile(r"(?m)^- Status: (\w+)\s*$")
+DESIGN_CHECK = KIT / "scripts" / "agk" / "check_design.py"
+
+
+def work_branch(root: Path, what: str) -> str:
+    branch = git(root, "branch", "--show-current").strip()
+    if not branch or branch == load_config(root)["default_branch"]:
+        raise CheckError(f"the work is not on a {what} branch (detached or the default branch)")
+    return branch
+
+
+def base_and_changes(root: Path, base: str | None) -> tuple[str | None, dict[str, str] | None]:
+    ref = resolve_base(root, base)
+    if ref is None:
+        return None, None
+    mb = merge_base(root, ref)
+    return mb, changed_files(root, mb)
+
+
+def steps(root: Path, opts: dict[str, str], commit: str, branch: str, fields) -> int:
+    mb, changed = base_and_changes(root, opts.get("base"))
+    brief = brief_option(opts.get("brief"))
+    path, body = prepare(
+        root, fields, brief=brief, issues=opts.get("issues"), changed=changed, base=mb
+    )
+    print(f"Commit message:\n\n{commit}\n")
+    print(f"Push command:\n\ngit push -u origin {branch}\n")
+    print("Open the pull request from that branch into the default branch with this body.\n")
+    print_body(path, body)
+    return 0
+
+
+def cmd_stack_next_steps(root: Path, opts: dict[str, str]) -> int:
+    """Brief #273 answer 2: the body of the options pull request, or of the accepting one."""
+    branch = work_branch(root, "stack")
+    files = sorted(
+        p for p in root.glob("docs/adr/*.md") if STACK_NAME.match(p.relative_to(root).as_posix())
+    )
+    if len(files) != 1:
+        raise CheckError("rule 5: there is not exactly one stack ADR (path class docs/adr/)")
+    text = files[0].read_text(encoding="utf-8")
+    problems = stack_problems(files[0].name, text)
+    if problems:
+        for problem in problems:
+            print(f"FAIL engines: {problem}")
+        print("the stack ADR does not pass `stack-check`; no next steps are printed")
+        return 1
+    line = next((ln for ln in text.splitlines() if ln.startswith("- Requirements:")), "")
+    reqs = ", ".join(dict.fromkeys(REQ_ID.findall(line)))
+    if not reqs:
+        raise CheckError("rule 5: the stack ADR names no requirement on its Requirements line")
+    adr = f"ADR-{files[0].name[:4]}"
+    today = opts.get("date") or datetime.now(UTC).date().isoformat()
+    verified = ("Verified", "`engines.py stack-check` printed `ok engines-stack`")
+    status = STATUS.search(text)
+    chosen = CHOSEN_LINE.search(text)
+    if status and status.group(1) == "Accepted" and chosen:
+        letter, reason = chosen.group(1), (chosen.group(2) or "").strip()
+        option = next(
+            (
+                m.group(2)
+                for m in map(OPTION.match, text.splitlines())
+                if m and m.group(1) == letter
+            ),
+            "",
+        )
+        name = option.split(". Trade-offs:", 1)[0].strip().rstrip(".")
+        why = f" ({reason})" if reason else ""
+        fields = [
+            ("Advances", reqs),
+            (
+                "Build-state row",
+                f"{today} {reqs} unchanged, the stack ADR {adr} accepts option {letter}",
+            ),
+            ("Summary", f"The project's stack is chosen: option {letter}, {name}."),
+            (
+                "Decisions taken",
+                f"{adr} Accepted, option {letter} chosen by the person who owns the stack{why}",
+            ),
+            ("Questions", "none"),
+            verified,
+        ]
+        return steps(root, opts, f"stack: accept option {letter} of {adr}", branch, fields)
+    fields = [
+        ("Advances", reqs),
+        ("Build-state row", f"{today} {reqs} unchanged, the stack options {adr} proposed"),
+        ("Summary", "Sets out the stack options for the project, for the architect to choose one."),
+        ("Decisions taken", f"none; {adr} is Proposed with the options and Chosen is none yet"),
+        ("Questions", "none"),
+        verified,
+    ]
+    return steps(root, opts, f"stack: the options of {adr}", branch, fields)
+
+
+def cmd_design_next_steps(root: Path, opts: dict[str, str]) -> int:
+    """Brief #273 answer 1: the body of a design pull request (`Brief: none (design)`)."""
+    req = opts.get("req", "")
+    if not REQ_ID.fullmatch(req):
+        raise CheckError("the requirement the design serves is not given (option --req)")
+    branch = work_branch(root, "design")
+    proc = subprocess.run(  # nosec B603 - a fixed argument list, no shell
+        [sys.executable, "-I", str(DESIGN_CHECK), "--root", str(root.resolve())],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if proc.returncode != 0:
+        print(proc.stdout, end="")
+        print("the design does not pass `check_design.py`; no next steps are printed")
+        return 1
+    folders = sorted(p.name for p in (root / "docs" / "design" / "mockups").glob("*") if p.is_dir())
+    mockup = folders[-1] if folders else "none"
+    today = opts.get("date") or datetime.now(UTC).date().isoformat()
+    fields = [
+        ("Advances", req),
+        (
+            "Build-state row",
+            f"{today} {req} unchanged, the design theme and the mockup {mockup} proposed",
+        ),
+        (
+            "Summary",
+            "Adds the design theme and a mockup of the first page, for the owner to approve.",
+        ),
+        ("Decisions taken", "none; the owner approves the mockup by its Approved line"),
+        ("Questions", "none"),
+        ("Verified", "`check_design.py` printed `ok design`"),
+    ]
+    return steps(root, opts, f"design: the theme and the mockup {mockup}", branch, fields)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     commands = (
@@ -312,6 +472,8 @@ def main(argv: list[str] | None = None) -> int:
         "stack-ids",
         "stack-write",
         "stack-check",
+        "stack-next-steps",
+        "design-next-steps",
     )
     if not args or args[0] not in commands:
         print(USAGE, file=sys.stderr)
@@ -338,6 +500,10 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_stack_write(root, opts)
         if args[0] == "stack-check":
             return cmd_stack_check(root)
+        if args[0] == "stack-next-steps":
+            return cmd_stack_next_steps(root, opts)
+        if args[0] == "design-next-steps":
+            return cmd_design_next_steps(root, opts)
         print(USAGE, file=sys.stderr)
         return 2
     except CheckError as exc:
