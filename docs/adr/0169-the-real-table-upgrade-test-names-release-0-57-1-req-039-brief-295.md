@@ -1,6 +1,6 @@
 # ADR-0169: the real-table upgrade test names release 0.57.1 (REQ-039, brief 295)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0164, ADR-0108
