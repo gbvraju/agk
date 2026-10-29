@@ -7,18 +7,19 @@ them; it is run in throwaway repositories with a real gitleaks binary, found on 
 AGK_GITLEAKS, and skipped with a reason where there is none (governance installs it only in the
 step itself, after the tests).
 
-The first part also restores a cached copy of the archive (brief #275, ADR-0171): a cached copy is used
-only when it matches the digest, a verified download is left where the cache action saves it, and a
-failed download prints one plain line. Those tests use a stand-in archive with its own digest.
+The first part also restores a cached copy of the archive (brief #275, ADR-0171): a cached copy
+is used only when it matches the digest, a verified download is left where the cache action saves
+it, and a failed download prints one plain line.
+Those tests use a stand-in archive with its own digest.
 
 The fake token is built when the test runs, so this file holds no pattern that the scan would flag.
 """
 
 from __future__ import annotations
 
-import os
 import hashlib
 import io
+import os
 import random
 import shutil
 import string
@@ -134,13 +135,17 @@ CURL_STUB = """#!/bin/sh
 printf 'called\\n' >> "$STUB_CALLS"
 out=""
 for arg in "$@"; do
-  case "$arg" in -*S*) [ "${arg#--}" = "$arg" ] && echo "curl: (22) The requested URL returned error: $STUB_CODE" >&2 ;; esac
+  case "$arg" in
+    --*) ;;
+    -*S*) echo "curl: (22) The requested URL returned error: $STUB_CODE" >&2 ;;
+  esac
 done
 while [ $# -gt 0 ]; do
   if [ "$1" = -o ]; then out="$2"; shift; fi
   shift
 done
-if [ -n "$STUB_ARCHIVE" ]; then cat "$STUB_ARCHIVE" > "$out"; else printf 'upstream timeout' > "$out"; fi
+if [ -n "$STUB_ARCHIVE" ]; then cat "$STUB_ARCHIVE" > "$out"
+else printf 'upstream timeout' > "$out"; fi
 printf '%s' "$STUB_CODE"
 exit "${STUB_EXIT:-0}"
 """
@@ -176,8 +181,14 @@ class Fetch:
         self.literal = env_of(scan_block())
         self.archive_name = f"gitleaks_{self.literal['GITLEAKS_VERSION']}_linux_x64.tar.gz"
 
-    def run(self, *, digest: str | None = None, code: str = "200", exit_code: int = 0,
-            archive: Path | None = None):
+    def run(
+        self,
+        *,
+        digest: str | None = None,
+        code: str = "200",
+        exit_code: int = 0,
+        archive: Path | None = None,
+    ):
         env = {
             **os.environ,
             **self.literal,
@@ -213,7 +224,7 @@ def test_the_step_fails_when_the_downloaded_archive_does_not_match_the_digest(tm
 
 @pytest.mark.parametrize("code,exit_code", [("504", 0), ("404", 0), ("000", 7)])
 def test_a_failed_download_with_no_cached_copy_fails_with_one_plain_line(tmp_path, code, exit_code):
-    """Brief #275 answer 2: one line naming the cause and the fix, no raw curl lines, never a skip."""
+    """Brief #275 answer 2: one line naming the cause and the fix, no raw curl line, no skip."""
     fetch = Fetch(tmp_path)
     proc = fetch.run(code=code, exit_code=exit_code)
     assert proc.returncode != 0
@@ -251,7 +262,7 @@ def test_a_cached_copy_that_does_not_match_is_discarded_and_downloaded_again(tmp
 
 
 def test_a_cached_copy_that_does_not_match_and_a_failed_download_fail(tmp_path):
-    """Brief #275 answers 1 and 2: a bad cached copy is not a fallback; the plain line is printed."""
+    """Brief #275 answers 1 and 2: a bad cached copy is no fallback; the plain line is printed."""
     fetch = Fetch(tmp_path)
     fetch.cache.mkdir()
     (fetch.cache / fetch.archive_name).write_bytes(b"a corrupted copy")

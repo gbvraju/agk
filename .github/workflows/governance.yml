@@ -213,6 +213,14 @@ jobs:
         run: make -f agk.mk agk-test
       # The kit repository runs its own suite as "Tests of the checks" and its `project_tests` is that same suite
       # (the proof job runs it); there the step is skipped. In a project kit/agk-kit.mk is absent and the step runs.
+      - name: Restore the secret scanner
+        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830   # v4.3.0
+        with:
+          # The archive of the step `Secret scan`, keyed on its pinned version and digest (brief #275, ADR-0171). The action
+          # restores it here and saves the directory at the end of a job that succeeded; the scan checks the digest on use.
+          path: ${{ runner.temp }}/gitleaks-cache
+          key: gitleaks-8.30.1-551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
       - name: Project tests
         if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') == '' && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
         run: make -f agk.mk agk-project-test
@@ -228,9 +236,29 @@ jobs:
           # The open-source gitleaks binary, not its action, which needs a licence key on a repository owned by an organisation
           # (brief #258, ADR-0158); no secret and no permission beyond the job's.
           # 1. One pinned release of the official binary for linux x64; a digest that differs from the one above fails the step.
+          # The step `Restore the secret scanner` restores a copy keyed on the version and the digest (brief #275, ADR-0171);
+          # it is used only when it matches the digest, else it is discarded and the archive is downloaded. A download that
+          # fails prints one plain line and fails the step: the scan is never skipped.
           archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -sSfL --retry 3 -o "$RUNNER_TEMP/$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          cache="$RUNNER_TEMP/gitleaks-cache"
+          mkdir -p "$cache"
+          if [ -f "$cache/$archive" ] && echo "$GITLEAKS_SHA256  $cache/$archive" | sha256sum --check --strict --status; then
+            echo "secret scanner: the cached copy of $archive"
+            cp "$cache/$archive" "$RUNNER_TEMP/$archive"
+          else
+            if [ -f "$cache/$archive" ]; then
+              echo "secret scanner: the cached copy does not match the digest; downloading it again"
+              rm -f "$cache/$archive"
+            fi
+            code="$(curl -sL --retry 3 -o "$RUNNER_TEMP/$archive" -w '%{http_code}' "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" 2>/dev/null)" || true
+            if [ "$code" != 200 ]; then
+              echo "could not download the secret scanner from GitHub (HTTP ${code:-000}); re-run the job"
+              exit 1
+            fi
+          fi
           echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          # Only a verified archive is left in the directory that the cache action saves after a job that succeeded.
+          cp -f "$RUNNER_TEMP/$archive" "$cache/$archive"
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
           # 2. The commits of the change: on a pull request the merge base to the head; on a push the pushed range; on the first
           # push of a repository (or a `before` that is not in the history) the whole history. Any finding fails the step.

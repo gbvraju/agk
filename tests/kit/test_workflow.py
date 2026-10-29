@@ -377,8 +377,9 @@ def test_the_secret_scanner_is_restored_from_a_cache_keyed_on_its_version_and_di
     assert "Restore the secret scanner" in names
     assert names.index("Restore the secret scanner") < names.index("Project tests")
     cache = blocks["Restore the secret scanner"]
-    assert re.search(r"^        uses: actions/cache@[0-9a-f]{40}\s+# v\d+(\.\d+){1,2}$", cache, re.M)
-    assert "\n        if: ${{ github.event.action != 'edited' }}\n" in cache
+    pin = r"^        uses: actions/cache@[0-9a-f]{40}\s+# v\d+(\.\d+){1,2}$"
+    assert re.search(pin, cache, re.M)
+    assert "\n        if: ${{ !cancelled() && github.event.action != 'edited' }}\n" in cache
     scan = blocks["Secret scan"]
     version = re.search(r"^          GITLEAKS_VERSION: (\S+)$", scan, re.M).group(1)
     digest = re.search(r"^          GITLEAKS_SHA256: (\S+)$", scan, re.M).group(1)
@@ -386,7 +387,8 @@ def test_the_secret_scanner_is_restored_from_a_cache_keyed_on_its_version_and_di
     assert "\n          path: ${{ runner.temp }}/gitleaks-cache\n" in cache
     assert 'cache="$RUNNER_TEMP/gitleaks-cache"' in scan
     # the scan copies the archive into the cached directory only after the digest check
-    assert scan.index('sha256sum --check --strict\n') < scan.index('cp -f "$RUNNER_TEMP/$archive" "$cache/$archive"')
+    keep = 'cp -f "$RUNNER_TEMP/$archive" "$cache/$archive"'
+    assert scan.index("sha256sum --check --strict\n") < scan.index(keep)
     assert text.count("actions/cache") == 1 and "save-always" not in text
 
 

@@ -1,0 +1,1 @@
+- the secret scan restores the pinned gitleaks archive from the Actions cache, keyed on its version and digest and checked on every use, and a failed download prints one plain line, `could not download the secret scanner from GitHub (HTTP <code>); re-run the job`, and fails, never skips (brief #275, ADR-0171)
