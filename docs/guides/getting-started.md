@@ -98,7 +98,9 @@ and last time you push to `main` directly; the ruleset in step 5 stops it from n
 Open the Actions tab of the repository. A `governance` run starts for that push and should end green
 (`docs/runs/plugin-live-proof.md`, step 5b). The file `docs/adr/0001-adopt-agk.md` is `Proposed`. You are its maintainer: read
 it, then set its `Status:` line to `Accepted` in a pull request of its own after step 6 (not in the pull request of step 6, which
-must hold only its two files). The drift audit lists a Proposed ADR that is more than 14 days old.
+must hold only its two files). The drift audit lists a Proposed ADR that is more than 14 days old. It can also list code that nothing
+uses and show how much of the code the tests run, once you set `unused_code` and `coverage` in `agk.toml` (both empty by default;
+`docs/guides/existing-codebase.md`, step 3, gives examples).
 
 ## Step 5. Protect `main` with `/agk:ruleset` **(not yet proven live)**
 

@@ -3,6 +3,11 @@
 Standard library only; no network, no `gh`, no model, no writes. It reads git history and repository
 files and prints one report on stdout. `--print-action` and `--print-title` give the issue
 action and title from the same inputs, so the decision stays in this tested script.
+
+The one process it starts beyond `git`: when a project sets `unused_code` or `coverage` in
+`agk.toml`, the report run runs that command of the project's own, through `proof.execute`, and
+adds one finding D9 for it (SPEC-0004 rule 25, brief 244 build b). `--previous FILE` is the body of
+the open audit issue, from which the coverage change is computed.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import proof
 import reviewers
 from common import (
     CheckError,
@@ -27,6 +33,7 @@ from common import (
     markers_for,
     matches,
     parse_requirements,
+    proof_timeout,
     read_list,
     repo_root,
     run,
@@ -38,7 +45,7 @@ from common import (
 NAME = "drift-audit"
 USAGE = (
     "usage: drift_audit.py [--today YYYY-MM-DD] [--branch NAME] [--open-issues 'N N'] "
-    "[--print-action | --print-title]"
+    "[--previous FILE] [--print-action | --print-title]"
 )
 WINDOW_DAYS = 7
 STALE_DAYS = 14
@@ -52,6 +59,9 @@ REQUIREMENTS = "docs/requirements.md"
 REGISTER = "docs/runs/residuals.md"
 PLACEHOLDER = "@REPLACE-ME"
 CODES = ("D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8")
+# D9 comes only from the project's own commands, which only the report run starts: the facts, which
+# count CODES from `audit`, never run them, so D9 is a code of the report alone.
+COMMAND_CODES = ("D9",)
 RULES = {
     "D1": "principle 1",
     "D2": "principle 10",
@@ -61,8 +71,14 @@ RULES = {
     "D6": "SPEC-0004 rule 15",
     "D7": "SPEC-0010 rule 4",
     "D8": "SPEC-0004 rule 24",
+    "D9": "SPEC-0004 rule 25",
 }
 UNTAGGED_LIMIT = 20
+UNUSED_LIMIT = 20
+COMMAND_SETTINGS = ("coverage", "unused_code")  # the subjects of D9, in report order
+PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*%?")
+PREVIOUS_COVERAGE = re.compile(r"^- D9 coverage \| [^|]+ \| covered (\d+(?:\.\d+)?)%", re.M)
+UNREADABLE = "unknown: the command failed or printed nothing readable"
 DATE_TEXT = re.compile(r"\d{4}-\d{2}-\d{2}")
 DUE = re.compile(r"\(due (\d{4}-\d{2}-\d{2})\)")
 
@@ -452,6 +468,79 @@ def d8(root: Path) -> list[Finding]:
     return [Finding("D8", "tests", f"{len(files)} {noun} no requirement marker: {shown}{more}")]
 
 
+# --- D9: the project's own unused-code and coverage commands ----------------------------------
+
+
+def command_settings(root: Path) -> dict[str, str]:
+    """The set commands among `unused_code` and `coverage`, by setting; empty or absent is unset."""
+    cfg = load_config(root)
+    found = {}
+    for key in COMMAND_SETTINGS:
+        value = cfg.get(key)
+        command = value.strip() if isinstance(value, str) else ""
+        if command:
+            found[key] = command
+    return found
+
+
+def number(value: float) -> str:
+    return f"{round(value, 2):g}"
+
+
+def unused_sentence(status: int | None, out: str, limit: int) -> str:
+    """The tool's lines, capped, with their count; any exit status, since the usual tools exit
+    non-zero when they find something. No line, or a timeout, reads `unknown`, never zero."""
+    if status is None:
+        return f"unknown: the command did not finish within proof_timeout ({limit} s)"
+    lines = [line.strip() for line in out.splitlines() if line.strip()]
+    if not lines:
+        return UNREADABLE
+    shown = "; ".join(lines[:UNUSED_LIMIT])
+    more = f" and {len(lines) - UNUSED_LIMIT} more" if len(lines) > UNUSED_LIMIT else ""
+    noun = "unused-code finding" if len(lines) == 1 else "unused-code findings"
+    return f"{len(lines)} {noun}: {shown}{more}"
+
+
+def coverage_value(status: int | None, out: str) -> float | None:
+    """The percentage on the last line (0 to 100, `%` allowed) of a command that exited 0."""
+    if status != 0:
+        return None
+    lines = [line.strip() for line in out.splitlines() if line.strip()]
+    match = PERCENT.fullmatch(lines[-1]) if lines else None
+    value = float(match.group(1)) if match else None
+    return value if value is not None and value <= 100 else None
+
+
+def previous_coverage(previous: str | None) -> float | None:
+    match = PREVIOUS_COVERAGE.search(previous or "")
+    return float(match.group(1)) if match else None
+
+
+def coverage_sentence(status: int | None, out: str, previous: str | None, limit: int) -> str:
+    if status is None:
+        return f"unknown: the command did not finish within proof_timeout ({limit} s)"
+    value = coverage_value(status, out)
+    if value is None:
+        return UNREADABLE
+    before = previous_coverage(previous)
+    change = "unknown" if before is None else f"{round(value - before, 2):+g}"
+    return f"covered {number(value)}%, change since the previous audit: {change}"
+
+
+def d9(root: Path, previous: str | None, execute=proof.execute) -> list[Finding]:
+    """One finding per set command. They never block; the command itself is never shown."""
+    limit = proof_timeout(root)
+    found = []
+    for key, command in command_settings(root).items():
+        status, out, _ = execute(command, root, limit, merge_stderr=False)
+        if key == "coverage":
+            sentence = coverage_sentence(status, out, previous, limit)
+        else:
+            sentence = unused_sentence(status, out, limit)
+        found.append(Finding("D9", key, sentence))
+    return found
+
+
 # --- the report -------------------------------------------------------------------------------
 
 
@@ -473,7 +562,9 @@ def audit(
 
 def render(today: date, found: list[Finding], undated: int) -> str:
     since = today - timedelta(days=WINDOW_DAYS)
-    counts = " ".join(f"{c}={sum(1 for f in found if f.code == c)}" for c in CODES)
+    counts = " ".join(
+        f"{c}={sum(1 for f in found if f.code == c)}" for c in CODES + COMMAND_CODES
+    )
     lines = [
         f"agk drift audit {today} (window {since} to {today}): findings={len(found)} {counts}",
         "",
@@ -484,12 +575,22 @@ def render(today: date, found: list[Finding], undated: int) -> str:
     return "\n".join([*lines, "", NOTICE, MARKER]) + "\n"
 
 
+def read_previous(path: str | None) -> str | None:
+    """The previous report, or None when there is none to read (the change then reads unknown)."""
+    if not path:
+        return None
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 def parse_args(args: list[str]) -> dict | None:
-    options: dict = {"today": None, "branch": None, "open": [], "mode": "report"}
+    options: dict = {"today": None, "branch": None, "open": [], "mode": "report", "previous": None}
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in ("--today", "--branch", "--open-issues") and i + 1 < len(args):
+        if arg in ("--today", "--branch", "--open-issues", "--previous") and i + 1 < len(args):
             value = args[i + 1]
             if arg == "--today":
                 if parse_date(value) is None:
@@ -497,6 +598,8 @@ def parse_args(args: list[str]) -> dict | None:
                 options["today"] = date.fromisoformat(value)
             elif arg == "--branch":
                 options["branch"] = value
+            elif arg == "--previous":
+                options["previous"] = value
             else:
                 tokens = value.replace(",", " ").split()
                 if not all(t.isdigit() for t in tokens):
@@ -520,10 +623,13 @@ def main(argv: list[str] | None = None) -> int:
     if options["mode"] == "title":
         print(f"agk drift audit {today}")
         return 0
-    found, undated = audit(repo_root(), today, options["branch"], options["open"])
+    root = repo_root()
+    found, undated = audit(root, today, options["branch"], options["open"])
     if options["mode"] == "action":
-        print(choose_action(options["open"], bool(found)))
+        # a set command always gives the report one D9 finding, so the action needs no run of it
+        print(choose_action(options["open"], bool(found) or bool(command_settings(root))))
     else:
+        found += d9(root, read_previous(options["previous"]))
         sys.stdout.write(render(today, found, undated))
     return 0
 

@@ -68,6 +68,25 @@ pull request removes those tests or retags them to a requirement they still prov
 and never blocking, the test files that carry no `REQ-nnn` marker (up to 20 paths and the count), and `traceability.py` ends with the
 retired requirements and the untagged test files. A pull request that removes such a test declares `Behaviour: unchanged` and keeps the proof green.
 
+Two more lists are yours to switch on. `agk.toml` has two settings, empty by default, each a shell command like `project_tests`:
+`unused_code` prints one finding per line, and `coverage` prints the covered percentage as a number on its last line. The kit ships no
+tool and installs none; the command installs what it needs or the tool is already on the runner. For example, in Python:
+
+    unused_code = "python3 -m pip install -q vulture && vulture . --min-confidence 80"
+    coverage = "python3 -m pip install -q pytest coverage && coverage run -m pytest -q >/dev/null; coverage report --format=total"
+
+and in TypeScript:
+
+    unused_code = "npx knip"
+    coverage = "npx vitest run --coverage --coverage.reporter=json-summary >/dev/null && node -p \"require('./coverage/coverage-summary.json').total.lines.pct\""
+
+When one is set, the weekly drift audit runs it and adds one finding `D9`, never blocking: the unused-code lines (up to 20 and the
+count), and the coverage number with its change since the previous audit. Only the standard output is read, within `proof_timeout`.
+A command that fails, runs too long or prints nothing readable reads `unknown`, never zero; an unused-code command that prints no line
+reads `unknown` too, because its output cannot tell a run that found nothing from one that never ran. A coverage command must exit 0. The report never shows the command. Each setting is a change of
+`agk.toml`, so it comes with an ADR. A cleanup pull request that removes unused code declares `Behaviour: unchanged`, keeps the proof
+green, and its reviewer checks that nothing still used was removed.
+
 The pull request body for this change says:
 
     Advances: REQ-101

@@ -28,9 +28,11 @@ jobs:
         run: |
           today=$(date -u +%F)
           open=$(gh issue list --label agk-drift-audit --state open --json number --jq '.[].number' | tr '\n' ' ')
+          # The body of the lowest-numbered open audit issue: the previous report, for the coverage change (SPEC-0004 rule 25).
+          gh issue list --label agk-drift-audit --state open --json number,body --jq 'sort_by(.number) | .[0].body // ""' > "$RUNNER_TEMP/previous.md"
           title=$(python3 scripts/agk/drift_audit.py --today "$today" --print-title)
           action=$(python3 scripts/agk/drift_audit.py --today "$today" --open-issues "$open" --print-action)
-          python3 scripts/agk/drift_audit.py --today "$today" --open-issues "$open" > "$RUNNER_TEMP/report.md"
+          python3 scripts/agk/drift_audit.py --today "$today" --open-issues "$open" --previous "$RUNNER_TEMP/previous.md" > "$RUNNER_TEMP/report.md"
           head -n 1 "$RUNNER_TEMP/report.md"
           case "$action" in
             create)
