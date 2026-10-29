@@ -1,1 +1,0 @@
-- proof ends a timed-out test run with every process it started on Windows too (`taskkill /T /F`, no `os.killpg`), and its line reads `proof: unknown (timeout after N s, setting: proof_timeout)`; the `--json` reason stays `timeout` (brief #290, ADR-0167)
