@@ -30,7 +30,9 @@ and why, one line `#N <head7> review: <reason>; ...` each, or `empty`: a pull re
 created or edited after the last verdict; one whose head differs from the last verdict's (or with
 none yet); one whose checks are green under a stale `agk:ci-running` label. Never twice on one head:
 a verdict that names the head, with no such comment after it, skips the pull request whatever its
-label; a draft and checks still running skip it too. `--all` adds a line `#N <head7> skip: <why>`
+label; a draft and checks still running (whatever the label) skip it too. Required checks that
+have not reported skip it under `agk:ci-running` and add the reason `checks not reported` under
+any other label. `--all` adds a line `#N <head7> skip: <why>`
 for each other open pull request; `--fingerprint` prints only `fingerprint <sha256>` of the heads,
 labels, draft flags, comment times and check states, which changes only when the queue does, so a
 loop wakes the conductor only then.
@@ -1148,8 +1150,10 @@ def since_verdict(comments: list, mark: dict) -> list[str]:
 
 
 def check_state(repo: str, root, head: str) -> tuple[str, list]:
-    """(`green`, `red` or `running`, the facts of the checks) of a head, as the router judges it:
-    the latest run of each check and status of each context named in `required_checks`."""
+    """(`green`, `red`, `running` or `missing`, the facts of the checks) of a head, as the router
+    judges it: the latest run of each check and status of each context named in `required_checks`.
+    `running` is a required run queued or in progress or a required status pending; `missing` is a
+    required check that has not reported at all (a project whose workflows are off)."""
     from route import FAILED_RUN, FAILED_STATUS, judged, listing  # route imports this module
 
     checks = listing(f"repos/{repo}/commits/{head}/check-runs", "check_runs")
@@ -1168,7 +1172,9 @@ def check_state(repo: str, root, head: str) -> tuple[str, list]:
     done = all(r.get("status") == "completed" for r in runs) and all(
         s.get("state") != "pending" for s in statuses
     )
-    return ("green" if done and not missing and (runs or statuses) else "running"), seen
+    if not done:
+        return "running", seen
+    return ("missing" if missing or not (runs or statuses) else "green"), seen
 
 
 def review_line(repo: str, root, pr: dict, authors: list[str]) -> tuple[str, list, list]:
@@ -1183,7 +1189,7 @@ def review_line(repo: str, root, pr: dict, authors: list[str]) -> tuple[str, lis
     state, seen = check_state(repo, root, head)
     facts = [[c.get("id"), stamp(c)] for c in sorted(comments, key=lambda c: c.get("id") or 0)]
     facts = [facts, seen]
-    if label == RUNNING_LABEL and state == "running":
+    if state == "running" or (label == RUNNING_LABEL and state == "missing"):
         return "skip", ["checks running"], facts
     mark = last_verdict(comments, counted_authors(authors, (pr.get("user") or {}).get("login")))
     match = HEAD_VERDICT.fullmatch(mark["body"].splitlines()[0].strip()) if mark else None
@@ -1199,6 +1205,8 @@ def review_line(repo: str, root, pr: dict, authors: list[str]) -> tuple[str, lis
         reasons.append(f"head differs from the last verdict ({sha[:7] or 'no sha'})")
     if label == RUNNING_LABEL and state == "green":
         reasons.append("checks green under a stale agk:ci-running")
+    if state == "missing":
+        reasons.append("checks not reported")
     return "review", reasons, facts
 
 

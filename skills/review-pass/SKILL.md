@@ -24,7 +24,10 @@ And never:
 
 - **at most one verdict per head**: a verdict by a listed author that names the head, with none of those comments after it, means
   the pull request is skipped, whatever its label says;
-- a draft, or a pull request whose checks are still running, is skipped; the loop wakes again when that changes.
+- a draft, or a pull request whose checks are still running (a required run queued or in progress, or a required status
+  pending), is skipped whatever its label; the loop wakes again when that changes. Required checks that have not reported at
+  all skip it under `agk:ci-running`; under any other label it is reviewed with the reason `checks not reported` (a project
+  whose workflows are off), and the verdict clears nothing while CI is missing.
 
 `python3 scripts/agk/session.py review-queue` applies exactly these rules, read-only, and prints one line per pull request that
 qualifies, `#<n> <head7> review: <why>`, or `empty`; with `--all` it also prints `#<n> <head7> skip: <why>` for the others.

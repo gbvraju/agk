@@ -24,8 +24,11 @@ decision belongs to a person; wake on edited comments. The tests of `review-queu
    (`updated_at`) when it was edited. The last verdict is the latest one by a counted author (`verdict_authors`, without the pull
    request's own author when two or more are listed, as the router counts them). A verdict that names the head, with no trigger
    comment after it, skips the pull request whatever its label, so a stale `agk:review` never gets a second verdict. A draft is
-   skipped without reading its comments; a pull request labelled `agk:ci-running` whose required checks still run, or have not
-   reported, is skipped. Check states are the router's reading (`route.judged` over `required_checks`). `--all` adds a line
+   skipped without reading its comments. The checks of the head are `green`, `red`, `running` (a required run queued or in
+   progress, or a required status pending) or `missing` (a required check that has not reported at all). `running` skips the
+   pull request whatever its label, because the label lags behind a push until the router wakes (verdict on 6c436b0, item 1);
+   `missing` skips it under `agk:ci-running` and otherwise adds the reason `checks not reported`, so that a project whose
+   workflows are off still reaches the conductor. Check states are the router's reading (`route.judged` over `required_checks`). `--all` adds a line
    `#<n> <head7> skip: <why>` for every other open pull request. An unreadable list, comment page or check list fails (exit 2);
    it never reads as `empty`. No listed verdict author fails naming the setting.
 2. **`--fingerprint`** prints `fingerprint <sha256>` of each open pull request's number, head, `agk:` labels, draft flag, comment
@@ -42,15 +45,17 @@ decision belongs to a person; wake on edited comments. The tests of `review-queu
    directory), wakes on a changed fingerprint, starts `claude -p --agent conductor` only when `review-queue --all` is not
    `empty`, and reads the fingerprint again after the pass. Before it, the guard check: the guard script must deny a push, and a
    headless conductor must report the same push refused; otherwise the loop is not started.
-5. **Reading Q-306-1 (taken, the conservative one).** The conductor's guard allows no script outside the bounded run, so a
+5. **Q-306-1, answered (verdict on 6c436b0): the guard stays unchanged here; allowing the command is a later brief that touches
+   the guard and its tests.** The conductor's guard allows no script outside the bounded run, so a
    conductor session cannot run `review-queue` itself. The guard is not widened here (its file is not in the brief's `Touches:`):
    the loop runs `review-queue` outside the session and hands its output to the pass; by hand, the person runs it, or the
    conductor reads the same facts with `gh api` GET. Whether the guard should allow this one read-only command is a later decision.
-6. **Reading Q-306-2 (taken).** A trigger comment after a verdict on the same head qualifies once: the conductor answers a
+6. **Q-306-2, answered (verdict on 6c436b0): yes, one verdict per head and per trigger comment.** A trigger comment after a verdict on the same head qualifies once: the conductor answers a
    `Question:` only by a verdict that names the head, and that verdict is then the newest, so the comment no longer counts. "At most
    one verdict per head" is read as one verdict per head and per trigger.
-7. **Reading Q-306-3 (taken, the conservative one).** Checks still running skip a pull request even with a newer trigger comment;
-   the comment still counts when the checks end and the label changes, which wakes the loop.
+7. **Q-306-3, answered (verdict on 6c436b0): agreed, with the change of decision 1.** Checks still running skip a pull request
+   whatever its label, even with a newer trigger comment; the comment still counts when the checks end, which changes the
+   fingerprint and wakes the loop.
 8. **Tests.** `tests/kit/test_session_review.py` (fixtures for each rule, a verdict already on the head, an edited comment, a
    draft, unread pages, the fingerprint). The skill, guide, reference and role-file tests are in
    `tests/kit_dev/test_review_pass_skill.py`, outside the brief's `Touches:`, because `skills/` is not vendored into a project.
@@ -67,5 +72,6 @@ decision belongs to a person; wake on edited comments. The tests of `review-queu
   the only boundary until a maintainer sets up a comment-only identity for the conductor (due 2026-12-15).
 - 2026-10-29: two conductors that check the head at the same moment can still both post; the re-read before posting narrows the
   window, it does not close it (a residual of SPEC-0030) (due 2026-12-15).
-- 2026-10-29: whether a `-p` session runs the frontmatter hooks is not confirmed by the builder `(verify)`; the guard check of the
-  guide is how a person finds out on their machine (due 2026-12-15).
+- 2026-10-29: Q-306-4, whether a `-p` session runs the frontmatter hooks and whether `/agk:review-pass` in a `-p` prompt invokes
+  the skill, is not confirmed by the builder `(verify)`; the guard check of the guide is how a person finds out on their machine
+  (due 2026-12-15).
