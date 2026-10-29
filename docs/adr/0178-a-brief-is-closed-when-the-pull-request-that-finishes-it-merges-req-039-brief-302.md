@@ -53,8 +53,8 @@ tests were written first (checkpoint c24a654) and were red on the unchanged tree
 ## Spec amendments
 
 Amendment 96 (`docs/runs/proposed-spec-amendments-96.md`) changes SPEC-0032 rules 1 and 8 (the `closed` type and the brief the
-router closes) and SPEC-0006 rules 5 and 6 (the `brief-finished` check and its two reads). The number waits for the
-conductor's word (Q-302-2).
+router closes) and SPEC-0006 rules 5 and 6 (the `brief-finished` check and its two reads). The number was
+confirmed in the verdict on 08b173a (Q-302-2).
 
 ## Consequences
 
@@ -64,7 +64,9 @@ conductor's word (Q-302-2).
 
 ## Residual
 
-- 2026-10-29: Q-302-1 (keep `Closes #<brief>` beside `Finishes:`), Q-302-2 (the amendment number) and Q-302-3 (built on the
-  unmerged head of #310, against principle 3, as the field note and this session's prompt ask) are open.
+- 2026-10-29: Q-302-1 to Q-302-4 were answered in the verdict on 08b173a. Q-302-1: keep both lines; `Closes #n` is GitHub's own
+  close and works when the router does not run, and `Finishes: #n` gives the router's completed close with the merge-commit
+  comment and lets the doctor reason about briefs. Q-302-2: amendment 96 is confirmed (95 is held for the SPEC-0010 amendment of
+  #305). Q-302-3: the stacking on #310 is accepted, as the brief's field note asked; this pull request merges after #310.
+  Q-302-4: `.claude/agents/conductor.md` stays as it is (outside `Touches:`, and `Closes #<brief>` stays required).
 - The doctor reads only the latest 100 pull requests, so an older finished brief is not listed.
-- `.claude/agents/conductor.md` still names only `Closes #<brief>` for rule 28. It is not in the brief's Touches.

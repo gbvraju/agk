@@ -2,8 +2,8 @@
 
 Date: 2026-10-29 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). It is applied by
 ADR-0178, and it changes `docs/specs/0032-github-events-label-each-pr-people-approve-specs-a-red-branch-stops-work.md` and
-`docs/specs/0006-doctor.md`. The number 96 is the builder's guess at the next free number and waits for the conductor's word
-(Q-302-2); amendment 95 was given to brief #305.
+`docs/specs/0006-doctor.md`. The conductor confirmed the number 96 in the verdict on 08b173a (Q-302-2);
+amendment 95 is held for brief #305.
 
 1. **SPEC-0032 rule 1.** The `pull_request` types become `opened, synchronize, reopened, edited, closed`, and the rule gains:
    "On `closed` the job runs only when the pull request merged. When it merged, `route.py` reads the pull request again with
