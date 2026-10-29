@@ -45,7 +45,10 @@ AGK asks for none, stores none and prints none.
   SHA-256 against the digest written in the workflow (a mismatch fails the step) and scans the commits of the change: on a pull
   request, from the merge base to the head; on a push, the pushed commits; on the first push of a repository, the whole history.
   Any finding fails the step, and the log hides the value found. It needs no licence key and no secret, on a personal or an
-  organisation repository alike, and no permission beyond the job's read-only token.
+  organisation repository alike, and no permission beyond the job's read-only token. The archive is kept in the Actions cache,
+  keyed on its version and digest, and checked against the digest on every use, so a GitHub download outage does not stop the
+  scan once one run has succeeded; with no cached copy, a failed download fails the step with one line, `could not download the
+  secret scanner from GitHub (HTTP <code>); re-run the job`.
 - **Secrets in a session.** Principle 9 says there are none in the repository or in an agent session (`constitution/principles.md`).
   That is a rule the checks and the scan look for. It is not a wall: the architect role can read any file in the folder it is started in.
 
