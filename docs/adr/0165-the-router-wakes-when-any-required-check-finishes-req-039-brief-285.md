@@ -1,6 +1,6 @@
 # ADR-0165: the router wakes when any required check finishes (REQ-039, brief 285)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0137, ADR-0164
