@@ -223,3 +223,22 @@ def test_the_refusal_names_the_rule_and_never_the_body_or_the_path(project, tmp)
     path = brief_file(tmp, BRIEF.replace("Size: M\n", ""))
     reason = denial(run_hook(create(path), project, tmp))["permissionDecisionReason"]
     assert str(path) not in reason and "conductor session files" not in reason
+
+
+def flat(rel: str) -> str:
+    return " ".join((ROOT / rel).read_text(encoding="utf-8").split())
+
+
+def test_the_role_file_says_how_to_file_a_brief_in_dependency_order():
+    """REQ-039: brief #276 answer 2."""
+    text = flat(".claude/agents/conductor.md")
+    assert "labels[]=agk-brief" in text and "-F body=@" in text
+    assert "check_brief.py" in text and "dependency order" in text
+    assert "stop" in text and "number differs" in text
+    assert "label is created by a person" in text
+
+
+def test_the_session_rules_say_the_last_pull_request_of_a_brief_closes_it():
+    """REQ-039: brief #276 answer 3."""
+    text = flat("config/session-rules.md")
+    assert "last pull request of a brief" in text and "`Closes #<brief>`" in text
