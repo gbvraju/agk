@@ -1,6 +1,6 @@
 # ADR-0173: the conductor's review pass is a kit command that is safe to run again and again (REQ-039, brief 306)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0105, ADR-0170
