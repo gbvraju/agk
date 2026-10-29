@@ -1,6 +1,6 @@
 # ADR-0172: proof runs only the pull request's own tests, per test area (REQ-016, brief 305)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0167
