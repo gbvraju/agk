@@ -1,4 +1,4 @@
-"""proof.py ends a timed-out test run, with its whole process tree, on every OS (brief #290, ADR-0167).
+"""proof.py ends a timed-out run and its whole process tree on every OS (brief #290, ADR-0167).
 
 The Windows branch is tested with a fake process and a fake `taskkill`, so these tests run on any
 OS; the POSIX branch is tested with a fake and, where `os.killpg` exists, with a real process tree.
@@ -14,7 +14,6 @@ from pathlib import Path
 
 import proof
 import pytest
-
 from test_proof import line, start
 
 
@@ -136,7 +135,9 @@ def test_ac1_a_windows_timeout_is_none_with_the_elapsed_time(no_killpg, tmp_path
         started.append(kwargs)
         return proc
 
-    status, out, seconds = proof.execute("sleep 20", tmp_path, 1, windows=True, popen=popen, run=run)
+    status, out, seconds = proof.execute(
+        "sleep 20", tmp_path, 1, windows=True, popen=popen, run=run
+    )
     assert (status, out) == (None, "")
     assert seconds >= 0
     assert started[0]["creationflags"] == 0x00000200 and "start_new_session" not in started[0]
