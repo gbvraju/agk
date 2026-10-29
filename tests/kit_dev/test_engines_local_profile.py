@@ -371,7 +371,7 @@ def test_ac4_a_double_quote_in_the_services_fails_naming_the_setting(started):
     assert proc.returncode == 1 and "rule 5" in proc.stdout and "External services" in proc.stdout
     assert "double quote" in proc.stdout and "sign-in" not in proc.stdout
     offer = steps(started, "--brief", "none")
-    assert "/agk:spec" not in offer.stdout
+    assert offer.returncode == 1 and '/agk:spec "' not in offer.stdout
 
 
 @pytest.mark.parametrize("day", ["2026-99-99", "2026-02-30", "2026-13-01"])

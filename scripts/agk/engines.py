@@ -36,7 +36,7 @@ import json
 import re
 import subprocess  # nosec B404 - a fixed argument list, no shell
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -53,7 +53,7 @@ from common import (
     parse_requirements,
     resolve_base,
 )
-from intake import MAX_SENTENCE, Refusal, check_sentence, section
+from intake import Refusal, check_sentence, section
 from pr_body import brief_option, prepare, print_body
 
 KIT = Path(__file__).resolve().parents[2]
@@ -343,6 +343,11 @@ def services_problems(letter: str, body: str) -> list[str]:
         ]
     if not services:
         return [f"rule 5: option {letter} has an External services segment that lists none"]
+    if '"' in services:
+        return [
+            f"rule 5: option {letter} has a double quote in External services, which would break "
+            "the quoted /agk:spec sentence of the local-profile offer"
+        ]
     return []
 
 
@@ -367,9 +372,22 @@ def decline_problems(text: str) -> list[str]:
         if DECLINE_MARK not in line:
             continue
         m = DECLINED.match(line)
-        if not m or len(m.group(1).strip()) < MIN_REASON:
+        if not m or len(m.group(1).strip()) < MIN_REASON or not real_date(m.group(2)):
             out.append(f"rule 5: the local profile decline in the Residual is not `{DECLINE_FORM}`")
     return out
+
+
+def real_date(text: str) -> bool:
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+def declined(line: str) -> bool:
+    m = DECLINED.match(line)
+    return bool(m and len(m.group(1).strip()) >= MIN_REASON and real_date(m.group(2)))
 
 
 def accepted_stack(root: Path) -> tuple[str, str, str] | None:
@@ -391,7 +409,7 @@ def accepted_stack(root: Path) -> tuple[str, str, str] | None:
 
 def local_profile_decided(root: Path, text: str) -> bool:
     """Brief 267 answer 2: declined in the stack ADR's Residual, or a requirement names it."""
-    if any(DECLINED.match(line) for line in residual_lines(text)):
+    if any(declined(line) for line in residual_lines(text)):
         return True
     path = root / "docs" / "requirements.md"
     try:
@@ -434,10 +452,10 @@ def local_profile_offer(root: Path) -> list[str]:
     ]
     try:
         check_sentence(sentence)
-    except Refusal:
+    except Refusal as exc:
         lines += [
-            f"The sentence is over {MAX_SENTENCE} characters, which /agk:spec refuses; shorten the",
-            "list of services in the brackets before running it.",
+            f"/agk:spec refuses this sentence ({exc}); shorten or reword the list of",
+            "services in the brackets before running it.",
             "",
         ]
     lines += [
