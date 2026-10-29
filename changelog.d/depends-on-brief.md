@@ -1,1 +1,0 @@
-- a pull request's `Depends-on: #n` passes `check_pr_mode` rule 5 when #n is a merged pull request or a brief issue closed as completed; an open issue, an issue closed as not planned or for another reason, and an unmerged pull request each fail with their own message, and the governance workflow reads each named number from the issues endpoint (brief #282, ADR-0166)
