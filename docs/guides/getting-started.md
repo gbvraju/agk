@@ -240,6 +240,63 @@ Priority: 2
    To decide how many sessions to start, run `python3 scripts/agk/session.py plan` (add `--json` for the same plan as data). It reads GitHub and posts nothing, and prints in plain words, for example `Start 2: builder-a takes #250, builder-b takes #252. #251 waits for #250 (both touch scripts/agk/route.py). 3 pull requests wait for your merge: #240, #241 (safe to merge together), #243 after #240 (both change docs/x.md).` It never starts two briefs whose `Touches` overlap in the same wave, counts a claim that has no pull request yet as a running builder, and starts the smallest of the ready briefs, `max_builders` less the running ones and `reviews_in_flight` (3 by default) less the pull requests waiting for a verdict. While the pull requests labelled `agk:ready` exceed `merge_hours` (1 by default) times your merge rate of the last 14 days, it starts none and says so (it never stops a running session; with no merge in that time the rate is unknown and the limit does not apply). It lists the ready pull requests that share no changed file as one set you can merge together, marks those that change a protected path, and lists a ready pull request more than `stale_commits` (20 by default) behind the default branch for its builder to update, not for you to merge. A brief with the line `Status: stale` or the label `agk-stale` is skipped by `plan` and `next`. The three settings are whole numbers in the `[flow]` table of `agk.toml`.
 3. **Start the conductor.** In another session that built nothing, accept the workspace trust dialog of the folder (the role's guard hook does not run without it) and start `claude --agent conductor`. It reviews every open pull request, runs its pre-verdict steps and posts one `Verdict:` comment on each; it edits no file and never merges.
 
+   **A review pass, again and again.** One pass over the queue is `/agk:review-pass` in the conductor session. It reviews exactly the pull requests that `python3 scripts/agk/session.py review-queue` lists, read-only, with the reason for each: labelled `agk:review`; a `Question:`, `Report:`, `Correction:` or `Maintainer answer:` comment created or edited after the last verdict; a head that differs from the last verdict's; green checks under a stale `agk:ci-running` label. It never gives two verdicts on one head, skips drafts and pull requests whose checks still run (whatever the label), names `checks not reported` when the required checks never reported, and ends with one line per pull request (`#<n> <head7> <action>`) and a `NEEDS-YOU: #<n> <what>` line for each decision that is yours. Running it twice on an unchanged queue posts nothing the second time.
+
+   To run passes without prompting, run a loop on your own machine that wakes the conductor only when the queue changes. `python3 scripts/agk/session.py review-queue --fingerprint` prints one line, `fingerprint <sha256>` of the heads, labels, draft flags, comment times (edits included) and check states of the open pull requests; the loop compares it with the last one, runs `review-queue --all` when it changed, and starts a headless conductor only when that is not `empty`. The loop runs from a clean worktree of the default branch, outside the work tree and outside the system temp directory, so that the conductor's role file and guard are the default branch's, never a pull request's.
+
+   **First, the guard check.** A project agent's hooks are skipped until the folder's workspace trust dialog is accepted, and a `-p` session may not count as trusted `(verify)`. Before you start a loop, check both halves of the guard in the worktree:
+
+   ```text
+   echo '{"tool_name":"Bash","tool_input":{"command":"git push origin HEAD"}}' | python3 .claude/hooks/conductor_guard.py
+   claude -p --agent conductor "Run exactly this command and report its result: git push --dry-run origin HEAD"
+   ```
+
+   The first must print a `deny` decision naming `conductor guard rule 6`; the second must report that command refused by the guard. If either does not, the guard does not run headless on this machine: do not start the loop.
+
+   Linux and macOS (bash):
+
+   ```bash
+   wt="$HOME/agk-review-loop"   # a clean worktree of the default branch, never in the temp directory
+   [ -d "$wt" ] || git worktree add --detach "$wt" origin/main
+   cd "$wt" || exit 1
+   last=""
+   while true; do
+     git fetch -q origin && git checkout -q --detach origin/main
+     fp=$(python3 scripts/agk/session.py review-queue --fingerprint) || { sleep 300; continue; }
+     if [ "$fp" != "$last" ]; then
+       queue=$(python3 scripts/agk/session.py review-queue --all)
+       if [ "$(printf '%s\n' "$queue" | head -n 1)" != "empty" ]; then
+         claude -p --agent conductor "/agk:review-pass
+   $queue"
+       fi
+       last=$(python3 scripts/agk/session.py review-queue --fingerprint)
+     fi
+     sleep 120
+   done
+   ```
+
+   Windows (PowerShell; `python` where `python3` is not on the path `(verify)`):
+
+   ```powershell
+   $wt = Join-Path $HOME 'agk-review-loop'   # a clean worktree of the default branch, never in the temp directory
+   if (-not (Test-Path $wt)) { git worktree add --detach $wt origin/main }
+   Set-Location $wt
+   $last = ''
+   while ($true) {
+     git fetch -q origin; git checkout -q --detach origin/main
+     $fp = python3 scripts/agk/session.py review-queue --fingerprint
+     if ($LASTEXITCODE -ne 0) { Start-Sleep -Seconds 300; continue }
+     if ($fp -ne $last) {
+       $queue = (python3 scripts/agk/session.py review-queue --all) -join "`n"
+       if (($queue -split "`n")[0] -ne 'empty') { claude -p --agent conductor "/agk:review-pass`n$queue" }
+       $last = python3 scripts/agk/session.py review-queue --fingerprint
+     }
+     Start-Sleep -Seconds 120
+   }
+   ```
+
+   The fingerprint is read again after a pass, so the pass's own verdicts do not wake it; the router's new label then wakes it once, and `review-queue` finds nothing to do, so no conductor starts. In a conductor session on Windows the verdict file's path is written with forward slashes (`C:/Users/<user>/AppData/Local/Temp/agk-conductor-<n>/verdict.md`) and the comment `POST` carries no `--jq` or other flag; the skill says so. What the loop cannot do: it runs with your own GitHub identity, which can merge and push, so the guard and the role file are the only boundary while no one watches. That stays a residual until a comment-only identity (read pull requests and checks, write comments, nothing else) is set up by a maintainer for the conductor.
+
 4. **Let the builder wait.** After every push the builder runs `python3 scripts/agk/session.py watch --pr <number>`. It ends with one line when a verdict by a listed author names the pull request's head, when the pull request is merged or closed, when it has a conflict with its base, when a listed author posts a `Correction:` comment on the pull request or on the brief it took (`correction #<n> (comment <id>): ...`: the conductor was wrong about a cause, and the builder wakes on the correction with no person carrying it), or when the router's `agk:` label on the pull request changes (`label <name>`, for example `label agk:review` once the checks are green; the router sets one label per pull request from GitHub events). A watch that starts after a verdict for the current head, or after a `Correction:`, which landed since your last `Report:`, ends at once with that line; restart it with `--since <comment id>` (the id the line printed) when you have acted on it and only wait for CI or the merge. A wait that cannot read GitHub for five polls in a row ends with `error: <what> cannot be read` (exit 4) instead of waiting silently, or with `github-unreachable: <what> cannot be read; local head <sha> not pushed; next: push, then post the Report:/Question:` when `gh` could not connect (the session's own output is then the only channel left). `watch --merged <number>` waits for another pull request's merge, for a `Depends-on`. Start `watch` so that its end wakes the session: in Claude Code, as a background task (its end re-invokes the session); in another runtime, the equivalent that wakes the session when the command ends. Never in the foreground, and never detached with `&`: the session then sits idle after its verdict. A session that restarts after its machine was reclaimed runs `python3 scripts/agk/session.py queue --role conductor|builder|person` first: it lists the open pull requests whose label is that role's (`empty` when none), and the session carries on from there.
 
 5. **Merge from the report.** The weekly report and the inbox list, first under Needs you, the group **Ready to merge**: the open pull requests whose head carries a clearing verdict. Merging is yours; no session merges, tags or enables auto-merge. A person approves every spec: for an intake the conductor ends its verdict with `Approval: SPEC-<n> <path> Draft -> Approved, waiting for a person: post "Approve: SPEC-<n>"` (the router labels the pull request `agk:approve`), and you post one comment whose first line is `Approve: SPEC-<n>`: no commit id to type, the text you approve is the spec as of your comment, and the approval stops counting if a later commit changes the spec apart from its status line. The long line `Approve: <head> SPEC-<n>` still works. A comment that an agent posted through its GitHub App never counts as your approval (`agent_apps` in `agk.toml`, default `["claude"]`), and while that list is not empty an approving GitHub review does not count either, because a review cannot show which app posted it: post the comment yourself, from your own account (the router tells you once). A project that sets `agent_apps = []` counts an approving review (at its own commit) when the pull request sets one spec `Approved`; `docs/guides/security.md` says what this proves and what it cannot. Only an account listed in `spec_approvers` of `config/reviewers.yaml` (user handles, never a session or conductor account) counts, and `check_final_clearance.py` fails a spec set `Approved` without that line.

@@ -4,6 +4,7 @@
     python3 session.py watch --merged N [--interval S] [--timeout S]
     python3 session.py next --session ID
     python3 session.py queue --role conductor|builder|person [--author LOGIN]
+    python3 session.py review-queue [--all | --fingerprint]
     python3 session.py resume --pr N
     python3 session.py ids [--exclude-pr N]
     python3 session.py demand
@@ -23,6 +24,18 @@ loop): each event is one wake. `queue` prints `#N <label>` for each open pull re
 label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder: `agk:fix`,
 `agk:conflict`, `agk:ci-red`, of `--author` when given; person: `agk:approve`, `agk:ready`), or
 `empty`, so a session that starts or restarts resumes from GitHub with one GET.
+`review-queue` (brief 306) prints, read-only, the open pull requests that need a conductor's verdict
+and why, one line `#N <head7> review: <reason>; ...` each, or `empty`: a pull request labelled
+`agk:review`; one with a `Question:`, `Report:`, `Correction:` or `Maintainer answer:` comment
+created or edited after the last verdict; one whose head differs from the last verdict's (or with
+none yet); one whose checks are green under a stale `agk:ci-running` label. Never twice on one head:
+a verdict that names the head, with no such comment after it, skips the pull request whatever its
+label; a draft and checks still running (whatever the label) skip it too. Required checks that
+have not reported skip it under `agk:ci-running` and add the reason `checks not reported` under
+any other label. `--all` adds a line `#N <head7> skip: <why>`
+for each other open pull request; `--fingerprint` prints only `fingerprint <sha256>` of the heads,
+labels, draft flags, comment times and check states, which changes only when the queue does, so a
+loop wakes the conductor only then.
 A wait never goes silent (brief #210): when GitHub cannot be read for 5 polls in a row it prints
 `error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since
 <id>` when it starts. `--assign` also takes at once the newest `Assign:` for the session posted
@@ -45,6 +58,7 @@ default branch (rule 7b, exit 1).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -59,7 +73,16 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, covered_fix_list, git, load_config, next_free_ids, repo_root, show
+from common import (
+    CheckError,
+    covered_fix_list,
+    git,
+    load_config,
+    next_free_ids,
+    repo_root,
+    required_checks,
+    show,
+)
 from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
 from reviewers import verdict_authors
@@ -72,6 +95,7 @@ USAGE = (
     "       session.py claim --session ID --brief N [--build X]\n"
     "       session.py after --session ID\n"
     "       session.py queue --role conductor|builder|person [--author LOGIN]\n"
+    "       session.py review-queue [--all | --fingerprint]\n"
     "       session.py resume --pr N\n"
     "       session.py ids [--exclude-pr N]\n"
     "       session.py demand\n"
@@ -84,6 +108,7 @@ COMMANDS = (
     "claim",
     "after",
     "queue",
+    "review-queue",
     "resume",
     "ids",
     "demand",
@@ -1082,6 +1107,140 @@ def queue(root, role: str, author: str | None) -> int:
     return 0
 
 
+# --- review-queue (brief 306) -----------------------------------------------------------------
+
+TRIGGERS = ("Question:", "Report:", "Correction:", "Maintainer answer:")
+RUNNING_LABEL = "agk:ci-running"
+
+
+def stamp(comment: dict) -> str:
+    """When a comment last changed: its edit time, else its creation time (ISO, sortable)."""
+    return str(comment.get("updated_at") or comment.get("created_at") or "")
+
+
+def last_verdict(comments: list, authors: list[str] | None) -> dict | None:
+    """The latest verdict comment by a counted author, by creation time then id."""
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    found = [
+        c
+        for c in comments
+        if author_of(c) in allowed
+        and isinstance(c.get("body"), str)
+        and c["body"].strip()
+        and HEAD_VERDICT.fullmatch(c["body"].splitlines()[0].strip())
+    ]
+    found.sort(key=lambda c: (str(c.get("created_at") or ""), c.get("id") or 0))
+    return found[-1] if found else None
+
+
+def since_verdict(comments: list, mark: dict) -> list[str]:
+    """`<Kind>: comment <id> since the last verdict` for each trigger comment created or edited
+    after the verdict `mark`."""
+    floor = (str(mark.get("created_at") or ""), mark.get("id") or 0)
+    out = []
+    for c in sorted(comments, key=lambda c: c.get("id") or 0):
+        body = c.get("body")
+        if not isinstance(body, str) or not body.strip() or c is mark:
+            continue
+        first = body.splitlines()[0].strip()
+        kind = next((t for t in TRIGGERS if first.startswith(t)), None)
+        if kind and (stamp(c), c.get("id") or 0) > floor:
+            out.append(f"{kind} comment {c.get('id')} since the last verdict")
+    return out
+
+
+def check_state(repo: str, root, head: str) -> tuple[str, list]:
+    """(`green`, `red`, `running` or `missing`, the facts of the checks) of a head, as the router
+    judges it: the latest run of each check and status of each context named in `required_checks`.
+    `running` is a required run queued or in progress or a required status pending; `missing` is a
+    required check that has not reported at all (a project whose workflows are off)."""
+    from route import FAILED_RUN, FAILED_STATUS, judged, listing  # route imports this module
+
+    checks = listing(f"repos/{repo}/commits/{head}/check-runs", "check_runs")
+    status = gh(f"repos/{repo}/commits/{head}/status")
+    if checks is None or not isinstance(status, dict):
+        raise CheckError("rule 3: the checks of an open pull request cannot be read")
+    runs, statuses, missing = judged(checks, status.get("statuses") or [], required_checks(root))
+    seen = sorted(
+        [[str(r.get("name")), str(r.get("status")), str(r.get("conclusion"))] for r in runs]
+        + [[str(s.get("context")), str(s.get("state")), ""] for s in statuses]
+    )
+    if any(r.get("conclusion") in FAILED_RUN for r in runs) or any(
+        s.get("state") in FAILED_STATUS for s in statuses
+    ):
+        return "red", seen
+    done = all(r.get("status") == "completed" for r in runs) and all(
+        s.get("state") != "pending" for s in statuses
+    )
+    if not done:
+        return "running", seen
+    return ("missing" if missing or not (runs or statuses) else "green"), seen
+
+
+def review_line(repo: str, root, pr: dict, authors: list[str]) -> tuple[str, list, list]:
+    """(`review` or `skip`, the reasons, the facts for the fingerprint) of one open pull request."""
+    number, head = pr["number"], str((pr.get("head") or {}).get("sha") or "")
+    label = label_of(pr)
+    if pr.get("draft"):
+        return "skip", ["draft"], []
+    comments = pages(f"repos/{repo}/issues/{number}/comments")
+    if comments is None:
+        raise CheckError("rule 3: the comments of an open pull request cannot be read")
+    state, seen = check_state(repo, root, head)
+    facts = [[c.get("id"), stamp(c)] for c in sorted(comments, key=lambda c: c.get("id") or 0)]
+    facts = [facts, seen]
+    if state == "running" or (label == RUNNING_LABEL and state == "missing"):
+        return "skip", ["checks running"], facts
+    mark = last_verdict(comments, counted_authors(authors, (pr.get("user") or {}).get("login")))
+    match = HEAD_VERDICT.fullmatch(mark["body"].splitlines()[0].strip()) if mark else None
+    sha = (match.group(2) or "") if match else ""
+    asked = since_verdict(comments, mark) if mark else []
+    if sha and head.startswith(sha) and not asked:
+        return "skip", [f"verdict on this head (comment {mark['id']})"], facts
+    reasons = ["labelled agk:review"] if label == "agk:review" else []
+    reasons += asked
+    if not mark:
+        reasons.append("no verdict yet")
+    elif not (sha and head.startswith(sha)):
+        reasons.append(f"head differs from the last verdict ({sha[:7] or 'no sha'})")
+    if label == RUNNING_LABEL and state == "green":
+        reasons.append("checks green under a stale agk:ci-running")
+    if state == "missing":
+        reasons.append("checks not reported")
+    return "review", reasons, facts
+
+
+def review_queue(root, mode: str) -> int:
+    """Print the pull requests that qualify for a conductor's review, and why (read-only)."""
+    repo = repo_name(root)
+    authors = verdict_authors(root)
+    if not authors:
+        raise CheckError(
+            "brief 306: no verdict author is listed"
+            " (setting: verdict_authors in config/reviewers.yaml)"
+        )
+    found = pages(f"repos/{repo}/pulls?state=open")
+    if found is None:
+        raise CheckError("rule 3: the open pull requests cannot be read")
+    review, skip, prints = [], [], []
+    for pr in sorted(
+        (p for p in found if isinstance(p.get("number"), int)), key=lambda p: p["number"]
+    ):
+        head = str((pr.get("head") or {}).get("sha") or "")
+        verb, reasons, facts = review_line(repo, root, pr, authors)
+        line = f"#{pr['number']} {head[:7]} {verb}: {'; '.join(reasons)}"
+        (review if verb == "review" else skip).append(line)
+        prints.append([pr["number"], head, label_of(pr), bool(pr.get("draft")), facts])
+    if mode == "--fingerprint":
+        text = json.dumps(prints, sort_keys=True, separators=(",", ":"))
+        print("fingerprint " + hashlib.sha256(text.encode("utf-8")).hexdigest())
+        return 0
+    print("\n".join(review) if review else "empty")
+    if mode == "--all" and skip:
+        print("\n".join(skip))
+    return 0
+
+
 # --- a stalled pull request (SPEC-0033 rule 5) ------------------------------------------------
 
 
@@ -1288,6 +1447,15 @@ def main(argv: list[str] | None = None) -> int:
             from session_plan import plan  # the plan builds on this module
 
             return plan(repo_root(), args[1:] == ["--json"])
+        except CheckError as exc:
+            print(f"FAIL {NAME}: {exc}")
+            return 2
+    if args[:1] == ["review-queue"]:
+        if args[1:] not in ([], ["--all"], ["--fingerprint"]):
+            print(USAGE)
+            return 2
+        try:
+            return review_queue(repo_root(), args[1] if args[1:] else "")
         except CheckError as exc:
             print(f"FAIL {NAME}: {exc}")
             return 2
