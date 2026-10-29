@@ -131,3 +131,38 @@ def test_rule9_a_requirement_followed_by_done_needs_closes_wherever_it_stands(re
     """REQ-041 AC3"""
     row = "2026-10-25 REQ-040 planned; REQ-041 done"
     assert traced(repo, f"Advances: REQ-041\nBuild-state row: {row}\n", None).returncode == 1
+
+
+# --- the line that finishes a brief (brief #302 answer 2; ADR-0178) ----------------------------
+
+
+def test_finishes_naming_the_brief_of_the_body_passes(repo):
+    """REQ-039: brief #302 answer 2, with or without the saved copy of the issues."""
+    for issues in (None, BRIEF_ISSUES):
+        assert traced(repo, GOOD + "Brief: #12\nFinishes: #12\n", issues).returncode == 0
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        "Brief: #13\nFinishes: #12\n",
+        "Finishes: #12\n",
+        "Brief: none (design)\nFinishes: #12\n",
+        "Brief: #12\nFinishes: 12\n",
+        "Brief: #12\nFinishes: #12 and #13\n",
+        "Brief: #12\nFinishes:\n",
+        "Brief: #12\nFinishes: #12\nFinishes: #12\n",
+    ],
+)
+def test_finishes_is_refused_unless_brief_names_the_same_number(repo, lines):
+    """REQ-039: brief #302 answer 2 (the message names the rule and the line, never a number)."""
+    proc = traced(repo, GOOD + lines, None)
+    assert proc.returncode == 1, proc.stdout
+    assert "Finishes:" in proc.stdout and "brief #302" in proc.stdout
+    assert "#12" not in proc.stdout and "#13" not in proc.stdout
+
+
+def test_finishes_is_skipped_on_a_draft(repo):
+    """REQ-039: brief #302 answer 2 (a draft is not checked, as before)."""
+    proc = repo.run("check_pr_body.py", "--draft", "true", "-", stdin="Finishes: #12\n")
+    assert proc.returncode == 0
