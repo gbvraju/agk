@@ -1,6 +1,6 @@
 # ADR-0175: a conductor session reviews on its own cadence, without a person prompting it (REQ-039, brief 284)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0170, ADR-0173
