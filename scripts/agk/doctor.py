@@ -1,7 +1,8 @@
 """agk doctor (SPEC-0006): report what is misconfigured in a repository that agk governs.
 
 Standard library only. Read-only: it reads local files and runs `git` only to read, and `gh api`
-only with GET on four paths (`gh` holds the credential; this script holds none). It writes nothing.
+only with GET on seven paths, and an eighth where the product report is installed (`gh` holds the
+credential; this script holds none). It writes nothing.
 A check that could not read what it needs is `cannot-check` with a reason class, never `ok`.
 Messages name a setting or a path class, never a value. Output is a text report or, with --json,
 the same findings as one JSON object; the exit code is 0 only when every check is ok.
@@ -9,6 +10,7 @@ the same findings as one JSON object; the exit code is 0 only when every check i
 
 from __future__ import annotations
 
+import datetime
 import json
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
@@ -202,6 +204,14 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "the repository has the agk-brief label",
         "the repository has no agk-brief label",
         "create the label agk-brief (briefs are the issues that carry it)",
+    ),
+    "brief-finished": (
+        "warn",
+        "no open brief has only pull requests that merged more than a day ago",
+        "open briefs whose pull requests all merged more than a day ago",
+        "close each brief listed as completed if its work is done; the last pull request of each "
+        "brief carries `Finishes: #n` beside `Brief: #n`, so that the router closes it when it "
+        "merges (session rule 28)",
     ),
     "pr-mode": (
         "warn",
@@ -538,6 +548,61 @@ def remote_results(
     return out
 
 
+BRIEF_OF = re.compile(r"Brief: #(\d+)")
+FINISHED_AFTER = datetime.timedelta(days=1)
+
+
+def brief_of(body: object) -> int | None:
+    """The `n` of the first line `Brief: #n` of a pull request body, else None."""
+    for line in str(body or "").splitlines():
+        if line.startswith("Brief:"):
+            found = BRIEF_OF.fullmatch(line.strip())
+            return int(found.group(1)) if found else None
+    return None
+
+
+def merged_time(value: object) -> datetime.datetime | None:
+    try:
+        return datetime.datetime.strptime(str(value), "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=datetime.UTC
+        )
+    except ValueError:
+        return None
+
+
+def finished_result(reads: Reads, now: datetime.datetime | None = None) -> Result:
+    """`brief-finished` (brief #302): open briefs whose `Brief:` pull requests all merged more
+    than a day ago. A brief is listed when at least one pull request names it, none of them is
+    open, at least one merged, and the latest merge is older than a day; a pull request closed
+    without a merge is not counted. Only the latest 100 pull requests are read."""
+    briefs, why = reads.get("briefs-open", "/issues?state=open&labels=agk-brief&per_page=100")
+    if not isinstance(briefs, list):
+        return Result("cannot-check", why or "bad-response")
+    pulls, why = reads.get("pulls-all", "/pulls?state=all&per_page=100")
+    if not isinstance(pulls, list):
+        return Result("cannot-check", why or "bad-response")
+    now = now or datetime.datetime.now(datetime.UTC)
+    open_numbers = {
+        b["number"]
+        for b in briefs
+        if isinstance(b, dict) and "pull_request" not in b and isinstance(b.get("number"), int)
+    }
+    held: dict[int, list[dict]] = {}
+    for pr in pulls:
+        number = brief_of(pr.get("body")) if isinstance(pr, dict) else None
+        if number in open_numbers:
+            held.setdefault(number, []).append(pr)
+    listed = []
+    for number in sorted(held):
+        prs = held[number]
+        if any(p.get("state") == "open" for p in prs):
+            continue
+        times = [t for p in prs if (t := merged_time(p.get("merged_at"))) is not None]
+        if times and now - max(times) > FINISHED_AFTER:
+            listed.append(f"#{number}")
+    return Result("fail", message=listing(listed)) if listed else Result("ok")
+
+
 def router_result(root: Path, config: dict) -> Result:
     """`router-wake`: every workflow that holds a required check is in the router's list."""
     path = root / ROUTER_WORKFLOW
@@ -785,14 +850,9 @@ def run_checks(
         raise Refusal("agk.toml is not readable TOML (path class agk.toml)", 3) from None
     results: dict[str, Result] = {}
     writers = [n for n in ISSUE_WRITERS if (root / ".github" / "workflows" / n).is_file()]
-    results.update(
-        remote_results(
-            Reads(repo or origin_repo(root), api_dir),
-            config,
-            (root / REPORT_WORKFLOW).is_file(),
-            writers,
-        )
-    )
+    reads = Reads(repo or origin_repo(root), api_dir)
+    results.update(remote_results(reads, config, (root / REPORT_WORKFLOW).is_file(), writers))
+    results["brief-finished"] = finished_result(reads)
     results["placeholder-team-reviewers"] = placeholder_result(root / "config" / "reviewers.yaml")
     results["placeholder-team-codeowners"] = placeholder_result(root / ".github" / "CODEOWNERS")
     results["origin-head"] = origin_head_result(root)

@@ -38,8 +38,10 @@ Read CLAUDE.md and config/session-rules.md first and follow them in full.
 Your work is {work}: take it with
     python3 scripts/agk/session.py claim --session {session} --brief {brief}{flag}
 If that prints a skip, stop and say why. Otherwise read the brief on GitHub (its issue), build it
-from a fresh origin/<default branch> on its own branch, and open one pull request. When your work
-is done, run
+from a fresh origin/<default branch> on its own branch, and open one pull request. Its body names
+the brief with `Brief: #{brief}`; the pull request that finishes the brief (its only one, or the one
+of its last build) also carries `Finishes: #{brief}`, so the brief closes when it merges. When your
+work is done, run
     python3 scripts/agk/session.py after --session {session}
 and do what it says. Report on your pull request; ask on it; never merge.
 """
