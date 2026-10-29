@@ -2,9 +2,9 @@
 
 `workflow_run` takes workflow names, not patterns, so the `workflows:` list of `workflow_run` in
 `agk-route.yml` must name every workflow that holds a check of `required_checks`. The helpers that
-read and write that list live in `doctor.py` (which imports no other kit script); `upgrade.py` and
-`init.py` use them. The doctor's `router-wake` warning names the setting, never a value. Workflow
-and check names here are invented.
+read and write that list live in `common.py`; `upgrade.py`, `init.py` and `doctor.py` use them.
+The doctor's `router-wake` warning names the setting, never a value. Workflow and check names
+here are invented.
 """
 
 from __future__ import annotations
@@ -19,10 +19,25 @@ from test_doctor import checks_of, doctor, prepare
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "agk"))
 
-import doctor as doc  # noqa: E402
+import common as doc  # noqa: E402
+import doctor as doctor_script  # noqa: E402
 
 ROUTER = ".github/workflows/agk-route.yml"
-KIT_ROUTER = (ROOT / ROUTER).read_text(encoding="utf-8")
+# The shape of the kit's router (the installed file may carry a project's names, so it is not read).
+KIT_ROUTER = (
+    "name: agk-route\n"
+    "on:\n"
+    "  pull_request:\n"
+    "    types: [opened, synchronize, reopened, edited]\n"
+    "  workflow_run:\n"
+    "    # the workflows of required_checks\n"
+    "    workflows: [governance, proof]\n"
+    "    types: [completed]\n"
+    "  push:\n"
+    "jobs:\n"
+    "  agk-route:\n"
+    "    runs-on: ubuntu-latest\n"
+)
 PROJECT_WORKFLOW = (
     "name: project\n"
     "on: [pull_request]\n"
@@ -60,17 +75,9 @@ def tree(tmp_path: Path, workflows: dict[str, str], router: str = KIT_ROUTER) ->
 # --- answer 1: the list, read and written ---
 
 
-def test_the_kit_router_lists_governance_and_proof():
-    """REQ-039: brief #285 answer 1 (the kit's own list is the base every install starts from)."""
+def test_the_list_is_read():
+    """REQ-039: brief #285 answer 1."""
     assert doc.router_names(KIT_ROUTER) == ["governance", "proof"]
-
-
-def test_the_kit_router_wakes_on_every_workflow_of_the_kits_required_checks():
-    """REQ-039: brief #285 answer 1, on the kit repository itself (SPEC-0032 rule 1)."""
-    config = {"required_checks": ["proof", "governance"]}
-    assert doc.router_result(ROOT, config).status == "ok"
-    wanted = doc.router_wanted(ROOT, ["proof", "governance"], ["governance", "proof"])
-    assert wanted == ["governance", "proof"]
 
 
 def test_names_are_written_in_one_flow_list_and_read_back():
@@ -212,6 +219,6 @@ def test_vendored_differs_ignores_the_names_a_project_added(tmp_path):
 @pytest.mark.parametrize("name", ["router-wake"])
 def test_the_new_check_is_after_the_kit_checks(name):
     """REQ-039: brief #285 answer 2 (one new id, a warning, in the report order)."""
-    ids = list(doc.CHECKS)
+    ids = list(doctor_script.CHECKS)
     assert ids.index(name) == ids.index("vendored-differs") + 1
-    assert doc.CHECKS[name][0] == "warn"
+    assert doctor_script.CHECKS[name][0] == "warn"

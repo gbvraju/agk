@@ -16,6 +16,7 @@ from conftest import KIT_ROOT
 from test_upgrade import NEW, OLD, TEMPLATES_NEW, TEMPLATES_OLD, init_target, manifest_of, put, run
 
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+import common  # noqa: E402
 import doctor  # noqa: E402
 import init  # noqa: E402
 import kit_hashes  # noqa: E402
@@ -37,7 +38,7 @@ REQUIRED = 'required_checks = ["proof", "governance", "lint-suite"]\n'
 
 
 def listed(text: str, names: list[str]) -> str:
-    out = doctor.with_router_names(text, names)
+    out = common.with_router_names(text, names)
     assert out is not None
     return out
 
@@ -79,6 +80,20 @@ def line_for(out: list[str], rel: str) -> str:
     return next(ln for ln in out if ln.split(" (")[0].split(" ", 1)[-1] == rel)
 
 
+def test_the_kit_router_lists_governance_and_proof():
+    """REQ-039: brief #285 answer 1 (the kit's own list is the base every install starts from)."""
+    assert common.router_names((KIT_ROOT / ROUTER).read_text(encoding="utf-8")) == [
+        "governance",
+        "proof",
+    ]
+
+
+def test_the_kit_router_wakes_on_every_workflow_of_the_kits_required_checks():
+    """REQ-039: brief #285 answers 1 and 2, on the kit repository itself (SPEC-0032 rule 1)."""
+    config = {"required_checks": common.required_checks(KIT_ROOT)}
+    assert doctor.router_result(KIT_ROOT, config).status == "ok"
+
+
 def test_upgrade_adds_the_workflow_of_a_required_check(tmp_path, kit, capsys):
     """REQ-039: brief #285 answer 1, the case of the pilot (a check that finishes last)."""
     target = target_with(tmp_path)
@@ -93,7 +108,7 @@ def test_upgrade_keeps_names_a_project_added_by_hand(tmp_path, kit, capsys):
     target = target_with(tmp_path, router=listed(ROUTE_OLD, ["governance", "proof", "nightly"]))
     code, out = run(capsys, target)
     assert code == 0, out
-    assert doctor.router_names((target / ROUTER).read_text()) == [
+    assert common.router_names((target / ROUTER).read_text()) == [
         "governance",
         "proof",
         "nightly",
@@ -139,7 +154,7 @@ def test_a_new_required_check_at_the_same_version_is_written(tmp_path, kit, caps
     put(target, {"agk.toml": toml, ".github/workflows/slow.yml": extra})
     code, out = run(capsys, target)
     assert code == 0, out
-    assert doctor.router_names((target / ROUTER).read_text()) == [
+    assert common.router_names((target / ROUTER).read_text()) == [
         "governance",
         "proof",
         "project",
@@ -153,7 +168,8 @@ def test_an_unreadable_required_checks_adds_nothing_and_says_so(tmp_path, kit, c
     code, out = run(capsys, target)
     assert code == 0, out
     assert (target / ROUTER).read_text() == ROUTE_NEW
-    assert "router-workflows required_checks in agk.toml is not a list of names; none added" in out
+    assert upgrade.ROUTER_NOTE in out
+    assert "required_checks" in upgrade.ROUTER_NOTE and '"proof"' not in upgrade.ROUTER_NOTE
 
 
 def test_init_writes_the_list_from_the_targets_workflows(tmp_path, monkeypatch):

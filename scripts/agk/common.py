@@ -780,3 +780,178 @@ def base_arg(argv: Sequence[str] | None) -> str | None:
             raise CheckError("--base needs a value")
         return args[i + 1]
     return None
+
+
+# --- the router's workflow_run list (brief #285, ADR-0165) ------------------------------------
+# `workflow_run` takes workflow names, not patterns, so the router names every workflow that holds
+# a check of `required_checks`. The list is the one line `    workflows: [...]` under
+# `  workflow_run:` of agk-route.yml; upgrade.py and init.py write it, and a project may add names.
+
+ROUTER_WORKFLOW = ".github/workflows/agk-route.yml"
+TRIGGER = re.compile(r"^  workflow_run:[ \t]*(#.*)?$")
+LIST_LINE = re.compile(r"^(    workflows:[ \t]*)\[(.*)\]([ \t]*(#.*)?)$")
+PLAIN = re.compile(r"^[A-Za-z0-9_./()-]+(?: +[A-Za-z0-9_./()-]+)*$")
+
+
+def list_line(lines: list[str]) -> int | None:
+    """The index of the `workflows:` line of `workflow_run`, or None."""
+    for i, line in enumerate(lines):
+        if TRIGGER.match(line):
+            for j in range(i + 1, len(lines)):
+                text = lines[j]
+                if text.strip() == "" or text.lstrip().startswith("#"):
+                    continue
+                if not text.startswith("    "):
+                    return None
+                if LIST_LINE.match(text):
+                    return j
+            return None
+    return None
+
+
+def parse_flow(inner: str) -> list[str] | None:
+    """The names of a one-line YAML flow list's inside; None when it is not one this reads."""
+    names: list[str] = []
+    rest = inner.strip()
+    while rest:
+        if rest[0] in "\"'":
+            quote = rest[0]
+            end = rest.find(quote, 1)
+            if end < 0:
+                return None
+            names.append(rest[1:end])
+            rest = rest[end + 1 :].lstrip()
+        else:
+            cut = rest.find(",")
+            value = (rest if cut < 0 else rest[:cut]).strip()
+            if not value or any(c in value for c in "[]{}\"'#"):
+                return None
+            names.append(value)
+            rest = "" if cut < 0 else rest[cut:]
+        if rest.startswith(","):
+            rest = rest[1:].lstrip()
+            if not rest:
+                return None
+        elif rest:
+            return None
+    return names
+
+
+def flow_list(names: list[str]) -> str:
+    """A one-line YAML flow list; a name YAML would misread is double-quoted."""
+    shown = [n if PLAIN.match(n) else json.dumps(n) for n in names]
+    return f"[{', '.join(shown)}]"
+
+
+def router_names(text: str) -> list[str] | None:
+    """The names of the router's `workflow_run` list, or None when the file has none."""
+    lines = text.splitlines()
+    index = list_line(lines)
+    if index is None:
+        return None
+    match = LIST_LINE.match(lines[index])
+    return parse_flow(match.group(2)) if match else None
+
+
+def with_router_names(text: str, names: list[str]) -> str | None:
+    """TEXT with its `workflow_run` list set to NAMES (only that line changes), or None."""
+    if router_names(text) is None:
+        return None
+    lines = text.splitlines(keepends=True)
+    index = list_line([ln.rstrip("\r\n") for ln in lines])
+    if index is None:
+        return None
+    line = lines[index]
+    body = line.rstrip("\r\n")
+    match = LIST_LINE.match(body)
+    if match is None:
+        return None
+    lines[index] = f"{match.group(1)}{flow_list(names)}{match.group(3)}{line[len(body) :]}"
+    return "".join(lines)
+
+
+def scalar(value: str) -> str:
+    """A YAML scalar of one line: quotes removed, a trailing comment cut."""
+    value = value.strip()
+    if value[:1] in "\"'":
+        end = value.find(value[0], 1)
+        return value[1:end] if end > 0 else value[1:]
+    return re.split(r"\s+#", value, maxsplit=1)[0].strip()
+
+
+def jobs_of(lines: list[str]) -> set[str]:
+    """The check names of a workflow's jobs: each job's `name:`, else its id. A name with an
+    expression (`${{ }}`) is never a fixed check name and is left out."""
+    names: set[str] = set()
+    start = next((i for i, ln in enumerate(lines) if re.match(r"^jobs:\s*(#.*)?$", ln)), None)
+    if start is None:
+        return names
+    job_indent: int | None = None
+    current: str | None = None
+    child_indent: int | None = None
+    named = False
+
+    def close() -> None:
+        if current is not None and not named:
+            names.add(current)
+
+    for line in lines[start + 1 :]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 0:
+            break
+        if job_indent is None:
+            job_indent = indent
+        if indent == job_indent:
+            close()
+            match = re.match(r"^\s*([A-Za-z_][\w-]*):\s*(#.*)?$", line)
+            current, child_indent, named = (match.group(1) if match else None), None, False
+            continue
+        if current is None or indent < job_indent:
+            continue
+        if child_indent is None:
+            child_indent = indent
+        if indent == child_indent:
+            match = re.match(r"^\s*name:\s*(.+)$", line)
+            if match:
+                value = scalar(match.group(1))
+                named = True
+                if value and "${{" not in value:
+                    names.add(value)
+    close()
+    return names
+
+
+def workflow_checks(root: Path) -> dict[str, set[str]]:
+    """Workflow name -> the check names of its jobs, for each file of .github/workflows but the
+    router's own. A workflow without a top-level `name:` is named by its path (verify)."""
+    folder = root / ".github" / "workflows"
+    out: dict[str, set[str]] = {}
+    if not folder.is_dir():
+        return out
+    for path in sorted([*folder.glob("*.yml"), *folder.glob("*.yaml")]):
+        rel = f".github/workflows/{path.name}"
+        if rel == ROUTER_WORKFLOW or not path.is_file():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        name = next(
+            (scalar(m.group(1)) for ln in lines if (m := re.match(r"^name:\s*(.+)$", ln))), ""
+        )
+        out.setdefault(name or rel, set()).update(jobs_of(lines))
+    return out
+
+
+def router_wanted(root: Path, required: list[str], present: list[str]) -> list[str]:
+    """PRESENT (the kit's names first, then any a project added), then each other workflow that
+    holds a check of REQUIRED, sorted."""
+    wanted = set(required)
+    extra = sorted(
+        name
+        for name, checks in workflow_checks(root).items()
+        if checks & wanted and name not in present
+    )
+    return [*dict.fromkeys(present), *extra]

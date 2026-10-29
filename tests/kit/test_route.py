@@ -466,7 +466,9 @@ def test_ac2_the_workflow_is_triggered_by_the_four_events_and_not_by_a_label_cha
     on = text.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
     assert re.search(r"pull_request:\n\s+types: \[opened, synchronize, reopened, edited\]", on)
     assert re.search(r"issue_comment:\n\s+types: \[created\]", on)
-    assert re.search(r"workflow_run:\n\s+workflows: \[[^\]]+\]\n\s+types: \[completed\]", on)
+    assert re.search(
+        r"workflow_run:\n(?:\s+#[^\n]*\n)*\s+workflows: \[[^\]]+\]\n\s+types: \[completed\]", on
+    )
     assert re.search(r"\n  push:", on)
     assert "labeled" not in on and "pull_request_target" not in text
 
