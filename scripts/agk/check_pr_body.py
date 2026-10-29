@@ -7,7 +7,10 @@ the pull request is marked ready for review (SPEC-0033 rule 2); any other value 
 
 SPEC-0034 rule 9: `--issues FILE` is a saved copy of the repository's issues (a JSON list, as
 `gh api repos/OWNER/REPO/issues` returns it); when it holds an issue labelled `agk-brief` (a pull
-request does not count) the body needs `Brief: #n`. A body whose `Build-state row:` sets a
+request does not count) the body needs `Brief: #n`, or `Brief: none (design)` for a change of only
+`docs/design/`, or `Brief: none (spec)` for a change of only `docs/specs/` and `docs/requirements.md`
+(brief #273): the changed files are read with git from the base (`AGK_BASE`, as the other checks)
+to the work tree, and a base that does not resolve fails the form. A body whose `Build-state row:` sets a
 requirement to `done` needs `Closes #n`. SPEC-0036 rule 1: every body that is not a draft has
 exactly one line `Summary: <one sentence>` of 1 to 120 characters, and the message says which case
 found (missing, repeated with the count, empty, or too long with its length; brief #237). Messages
@@ -22,7 +25,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import BEHAVIOUR_UNCHANGED, REQ_ID, CheckError, behaviour_lines, run
+from common import (
+    BEHAVIOUR_UNCHANGED,
+    REQ_ID,
+    CheckError,
+    behaviour_lines,
+    changed_files,
+    merge_base,
+    repo_root,
+    resolve_base,
+    run,
+)
 
 NAME = "pr-body"
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -31,6 +44,14 @@ LINK = re.compile(r"#\d+")
 DONE = re.compile(r"\bREQ-\d{3}\s+done\b", re.IGNORECASE)
 SUMMARY = "Summary:"
 SUMMARY_MAX = 120
+NONE_FORMS = {
+    "none (design)": ("docs/design/",),
+    "none (spec)": ("docs/specs/", "docs/requirements.md"),
+}
+NONE_RULE = (
+    "rule 9: 'Brief: none (design)' is for a change of only docs/design/, and 'Brief: none (spec)' "
+    "for a change of only docs/specs/ and docs/requirements.md (path classes)"
+)
 
 
 def field(text: str, label: str) -> str | None:
@@ -53,6 +74,34 @@ def has_brief(path: str) -> bool:
         and any(isinstance(x, dict) and x.get("name") == "agk-brief" for x in i.get("labels") or [])
         for i in issues
     )
+
+
+def none_form_fits(form: str, changed: dict[str, str]) -> bool:
+    """Whether every changed path is one the none form names, and something changed."""
+    prefixes = NONE_FORMS[form]
+    return bool(changed) and all(
+        any(path == p or (p.endswith("/") and path.startswith(p)) for p in prefixes)
+        for path in changed
+    )
+
+
+def changed_now() -> dict[str, str] | None:
+    """The changed files from the base to the work tree, or None when they cannot be read."""
+    try:
+        root = repo_root()
+        base = resolve_base(root)
+        return None if base is None else changed_files(root, merge_base(root, base))
+    except CheckError:
+        return None
+
+
+def brief_problem(brief: str | None) -> str | None:
+    if brief in NONE_FORMS:
+        changed = changed_now()
+        return None if changed is not None and none_form_fits(brief, changed) else NONE_RULE
+    if brief is None or not re.fullmatch(LINK, brief):
+        return "rule 9: 'Brief: #n' line is required (the repository has a brief)"
+    return None
 
 
 def summary_problem(summaries: list[str]) -> str | None:
@@ -103,9 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     if problem := summary_problem(summaries):
         problems.append(problem)
     if "--issues" in options and has_brief(options["--issues"]):
-        brief = field(text, "Brief:")
-        if brief is None or not re.fullmatch(LINK, brief):
-            problems.append("rule 9: 'Brief: #n' line is required (the repository has a brief)")
+        if problem := brief_problem(field(text, "Brief:")):
+            problems.append(problem)
     if row and DONE.search(row):
         closes = field(text, "Closes")
         if closes is None or not re.fullmatch(LINK, closes):
