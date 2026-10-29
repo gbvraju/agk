@@ -1,6 +1,6 @@
 # ADR-0170: a project's conductor can file the briefs it writes (REQ-039, brief 276)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0105, ADR-0136, ADR-0149
