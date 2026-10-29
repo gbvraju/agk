@@ -45,9 +45,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" check-start
    then run `make governance`. Both must pass.
 6. Last, print the next steps, and say what the checks cannot check: that the milestones are the right ones and that the vision says what
    the person meant. That is the person's review and merge.
+   Add `--brief <n>` when the work answers a brief, or `--brief none` when the person says the repository has no open
+   brief. The script prints the pull request body as a file path and its text, only after the repository's own
+   `check_pr_body.py` passed it, and refuses rather than print a body that fails; use the body unchanged.
 
 ```
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" next-steps
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" next-steps --brief <n|none>
 ```
 
 Do not commit or push, and do not open a pull request: the person or their session runs the commands the script prints.

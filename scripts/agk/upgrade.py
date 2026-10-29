@@ -8,6 +8,12 @@ nothing is written. Files the user owns are never rewritten; only the `version =
 `agk.toml` is set, as the last write.
 
     python3 scripts/agk/upgrade.py TARGET [--dry-run]
+    python3 scripts/agk/upgrade.py TARGET --next-steps [--brief N|none] [--issues FILE] [--date D]
+
+`--next-steps` (brief #273), once the upgrade is written and the person wrote its ADR (titled
+`Upgrade agk from X to Y`, with a `Requirements:` line), prints the commit message and a pull
+request body that passed the target's body check (`pr_body.py`); it writes only that body, in the
+target's git directory.
 """
 
 from __future__ import annotations
@@ -25,7 +31,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
-from common import block_source, experimental_enabled, installed_version, lf, matches, read_list
+from common import (
+    REQ_ID,
+    CheckError,
+    block_source,
+    experimental_enabled,
+    installed_version,
+    lf,
+    matches,
+    read_list,
+)
 from init import (
     CREATE_ONLY,
     DATE_RE,
@@ -39,7 +54,12 @@ from init import (
 )
 from init import KIT_ROOT as KIT_ROOT  # noqa: PLC0414 - tests point it at an older kit fixture
 
-USAGE = "usage: upgrade.py TARGET [--dry-run]"
+USAGE = (
+    "usage: upgrade.py TARGET [--dry-run] | "
+    "TARGET --next-steps [--brief N|none] [--issues FILE] [--date D]"
+)
+NEXT_FLAGS = ("--brief", "--issues", "--date")
+UPGRADE_TITLE = re.compile(r"^# ADR-(\d{4}): Upgrade agk from (\S+) to (\S+)\s*$")
 TABLE = "kit/hashes.json"
 KIT_ONLY = ("kit/", "tests/kit_dev/")
 KIT_ONLY_FILES = ("scripts/agk/init.py", "scripts/agk/adopt.py")
@@ -647,8 +667,86 @@ def apply(target: Path, plan: Plan) -> tuple[bool, list[str]]:
     return True, done
 
 
+def upgrade_adr(target: Path, kit_version: str) -> tuple[str, str, str]:
+    """(ADR-nnnn, the version upgraded from, the requirements) of the upgrade's ADR."""
+    for path in sorted((target / "docs" / "adr").glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        title = UPGRADE_TITLE.match(text.splitlines()[0] if text else "")
+        if not title or title.group(3) != kit_version:
+            continue
+        line = next((ln for ln in text.splitlines() if ln.startswith("- Requirements:")), "")
+        reqs = ", ".join(dict.fromkeys(REQ_ID.findall(line)))
+        if not reqs:
+            raise Refusal("the upgrade ADR names no requirement on its Requirements line")
+        return f"ADR-{title.group(1)}", title.group(2), reqs
+    raise Refusal(
+        "write the upgrade ADR first, titled from the skeleton the upgrade printed "
+        "(path class docs/adr/)"
+    )
+
+
+def next_steps(target: Path, kit_root: Path, opts: dict[str, str]) -> int:
+    """Brief #273 answer 1: the body of the upgrade pull request, checked before it is printed."""
+    from pr_body import brief_option, prepare, print_body  # noqa: PLC0415 - only this command
+
+    plan = build_plan(target, kit_root)
+    if plan.conflicts or plan.writes or plan.deletions or plan.stamp:
+        raise Refusal("the upgrade is not written yet; run it first (path class: the target root)")
+    adr, old, reqs = upgrade_adr(target, plan.kit_version)
+    today = opts.get("date") or datetime.now(UTC).date().isoformat()
+    if not DATE_RE.match(today):
+        raise Refusal("the date is not YYYY-MM-DD (option --date)")
+    new = plan.kit_version
+    fields = [
+        ("Advances", reqs),
+        ("Build-state row", f"{today} {reqs} unchanged, agk upgraded from {old} to {new}"),
+        ("Summary", f"Brings the project's agk kit up to version {new}."),
+        ("Decisions taken", f"{adr} (Proposed) names the protected classes the upgrade changes"),
+        ("Questions", "none"),
+        ("Verified", "`upgrade.py . --dry-run` printed `nothing to do` after the upgrade"),
+    ]
+    try:
+        brief = brief_option(opts.get("brief"))
+        path, body = prepare(
+            target, fields, brief=brief, issues=opts.get("issues"), changed=None, base=None
+        )
+    except CheckError as exc:
+        raise Refusal(str(exc)) from None
+    print(f"Commit message:\n\nupgrade: agk {old} to {new}\n")
+    print("Open the pull request from the upgrade branch into the default branch with this body.\n")
+    print_body(path, body)
+    return 0
+
+
+def parse_next(args: list[str]) -> tuple[str, dict[str, str]] | None:
+    """`TARGET --next-steps [flags]` as (target, options), or None for a usage error."""
+    rest = [a for a in args if a != "--next-steps"]
+    if not rest or rest[0].startswith("-") or len(rest) % 2 != 1:
+        return None
+    opts = dict(zip(rest[1::2], rest[2::2], strict=True))
+    if any(key not in NEXT_FLAGS for key in opts):
+        return None
+    return rest[0], {key[2:]: value for key, value in opts.items()}
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    if "--next-steps" in args:
+        parsed = parse_next(args)
+        if parsed is None or "--dry-run" in args:
+            print(USAGE, file=sys.stderr)
+            return 2
+        try:
+            target = Path(parsed[0])
+            if not (target / ".git").exists():
+                raise Refusal("TARGET is not a git work tree (path class .git/)")
+            return next_steps(target.resolve(), Path(KIT_ROOT), parsed[1])
+        except Refusal as exc:
+            print(f"refused: {exc}")
+            return 1
+        except (OSError, ValueError, KeyError):
+            print("error: cannot read the target or the kit sources (path class: the target root)")
+            return 3
     dry_run = "--dry-run" in args
     rest = [a for a in args if a != "--dry-run"]
     if len(rest) != 1 or rest[0].startswith("-"):

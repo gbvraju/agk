@@ -37,14 +37,14 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
 ```
 
    then run `make governance`. Both must pass.
-4. Last, say what the check cannot check: that the options are the right ones and that the trade-offs are true. Each practice marked
+4. Then say what the check cannot check: that the options are the right ones and that the trade-offs are true. Each practice marked
    `check` is added as a governance step by the build that adopts the stack, not by this command. Then say how an option is
    accepted, once this Proposed ADR is merged: by one ordinary commit, in its own pull request, that sets `Status: Accepted` and
    `Chosen: Option <X> — <one-line reason>` together (the line reads `3. **Chosen**: Option <X> — <one-line reason>`), and nothing
    else. It is not a `Final:` commit: a `Final:` commit may change only status lines, and while the ADR is Proposed the check
    refuses any `Chosen` but `none yet`, so only the two lines together pass. `stack-check` accepts the pair, and the expected
-   verdict on that pull request is a plain `Verdict: cleared <sha>`. Print both texts below for the person, with the ADR number,
-   the file name and the requirement filled in:
+   verdict on that pull request is a plain `Verdict: cleared <sha>`. Print the text below for the person, with the ADR number and
+   the file name filled in:
 
    The prompt for the accepting change:
 
@@ -52,19 +52,20 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
 Accept option <X> of the stack ADR ADR-<n> (docs/adr/<n>-stack-options.md). From a fresh default branch, on a new branch, change
 only two lines of that file in one ordinary commit: "- Status: Proposed" becomes "- Status: Accepted", and "3. **Chosen**: none
 yet" becomes "3. **Chosen**: Option <X> — <one-line reason>". Run engines.py stack-check and make governance; both must pass.
-Open one pull request with the body below. This is not a Final commit, and it changes nothing else.
+Then run engines.py stack-next-steps and open one pull request with the body it prints, unchanged. This is not a Final
+commit, and it changes nothing else.
 ```
 
-   The body of its pull request (keep the `Summary:` line at most 120 characters; add `Brief: #<n>` when the repository has an
-   open brief):
+   The body of its pull request is never written by hand: after the accepting commit, the session runs
+   `stack-next-steps` again on that branch, and it prints the commit, the push and a body whose `Advances:`, `Build-state row:`
+   and `Summary:` lines passed the repository's body check (the Summary cut to 120 characters at a word boundary).
+
+5. Last, print the next steps of this pull request, the Proposed ADR. Add `--brief <n>` when the work answers a brief, or `--brief none`
+   when the person says the repository has no open brief. The script prints the body as a file path and its text, only after the
+   repository's own `check_pr_body.py` passed it, and refuses rather than print a body that fails. Use the body unchanged.
 
 ```
-Advances: REQ-<n>
-Build-state row: <date -u> REQ-<n> <status> (unchanged), the stack ADR ADR-<n> accepts option <X>
-Summary: The project's stack is chosen: option <X>, <its name>.
-Decisions taken: ADR-<n> Accepted, option <X> chosen by the person who owns the stack (<one-line reason>).
-Questions: none
-Verified: engines.py stack-check: ok engines-stack; make governance: all checks ok
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-next-steps --brief <n|none>
 ```
 
 Do not commit or push, and do not open a pull request: the person or their session does.

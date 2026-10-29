@@ -95,9 +95,16 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" check
    request, which changes exactly the spec's `- Status: Draft` to `- Status: Approved` and the ADR's
    `- Status: Proposed` to `- Status: Accepted`; `intake.py check --final` checks that commit.
    The skill never makes the approving commit: the session makes it on the maintainers' word.
+   Add `--brief <n>` when the work answers a brief, or `--brief none` when the person says the repository has no open
+   brief. The script prints the pull request body as a file path and its text, only after the repository's own
+   `check_pr_body.py` passed it, and refuses rather than print a body that fails; use the body unchanged.
 
 ```
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" next-steps
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" next-steps --brief <n|none>
 ```
+
+After the approving commit, run `next-steps` again: it prints the one line the spec approver posts, `Approve: <full head
+ID> SPEC-nnnn`, and where (a comment by the approver's own account, not through an agent app). A red `final-clearance` on
+that head is expected until the line is posted.
 
 Do not commit or push, and do not open a pull request: the person or their session runs the commands the script prints.
