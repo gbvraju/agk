@@ -4,8 +4,8 @@
     python3 check_pr_mode.py --list-depends --body FILE
 
 `agk.toml` `pr_mode` is `strict` (the default) or `flow`. A body line `Depends-on: #n` fails
-while the named pull request is not merged (flow, read from the states file) and always in
-strict mode.
+in flow mode until #n is a merged pull request or an issue (a brief) closed as completed, read
+from the states file, and always in strict mode.
 In strict mode a pull request whose author has an older open pull request fails (the lowest number
 wins; read from the open pull requests file). Without a file the part that needs it prints a
 `skipped` line and passes. Files and git only: no network, no model. Messages name the rule, the
@@ -43,6 +43,32 @@ def depends_on(body: Path | None) -> list[int]:
     return list(dict.fromkeys(found))
 
 
+def unmet(record: dict | None) -> str | None:
+    """Why a named number is not yet in, or None when it is (rule 5, brief #282).
+
+    A merged pull request is in, and so is an issue (a brief) closed as completed. A record is an
+    issue only when it says `pull_request: false`; one that does not say is read as before, a pull
+    request, so the fallback record the workflow writes when a fetch fails is never in.
+    """
+    if record is None:
+        return "is not merged"
+    if record.get("merged") is True:
+        return None
+    kind = record.get("pull_request")
+    if kind is True:
+        return "is a pull request that is not merged"
+    if kind is not False:
+        return "is not merged"
+    if record.get("state") == "open":
+        return "is an open issue"
+    reason = record.get("state_reason")
+    if record.get("state") == "closed" and reason == "completed":
+        return None
+    if reason == "not_planned":
+        return "is an issue closed as not planned"
+    return "is an issue not closed as completed"
+
+
 def number_of(value: str | None) -> int | None:
     return int(value) if value and value.isdigit() else None
 
@@ -55,12 +81,12 @@ def check(root: Path, opts: dict[str, str]) -> int:
     if named and mode == "strict":
         problems.append("rule 6: pr_mode does not allow a Depends-on line")
     elif named and opts.get("--states"):
-        merged = {
-            r.get("number")
+        states = {
+            r["number"]: r
             for r in json_records(Path(opts["--states"]), "states")
-            if r.get("merged") is True
+            if isinstance(r.get("number"), int)
         }
-        problems += [f"rule 5: #{n} is not merged" for n in named if n not in merged]
+        problems += [f"rule 5: #{n} {why}" for n in named if (why := unmet(states.get(n)))]
     elif named:
         skipped.append("no states file")
     own = number_of(opts.get("--number"))

@@ -140,7 +140,8 @@ jobs:
           echo '[]' > "$RUNNER_TEMP/open-prs.json"
           if [ "$EVENT" = pull_request ]; then
             for n in $(python scripts/agk/check_pr_mode.py --list-depends --body "$RUNNER_TEMP/pr-body.md"); do
-              gh api --method GET "repos/${{ github.repository }}/pulls/$n" --jq '{number: .number, merged: .merged}' >> "$RUNNER_TEMP/states.json" || echo "{\"number\": $n, \"merged\": false}" >> "$RUNNER_TEMP/states.json"
+              # The issues endpoint answers for a pull request and for a brief issue alike (brief #282).
+              gh api --method GET "repos/${{ github.repository }}/issues/$n" --jq '{number: .number, pull_request: (.pull_request != null), merged: (.pull_request.merged_at != null), state: .state, state_reason: .state_reason}' >> "$RUNNER_TEMP/states.json" || echo "{\"number\": $n, \"merged\": false}" >> "$RUNNER_TEMP/states.json"
             done
             gh api --paginate --method GET "repos/${{ github.repository }}/pulls?state=open&per_page=100" --jq ".[] | select(.user.login == \"$PR_AUTHOR\") | {number: .number}" > "$RUNNER_TEMP/open-prs.json"
           fi
