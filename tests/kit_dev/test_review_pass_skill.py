@@ -77,5 +77,5 @@ def test_the_guide_documents_a_loop_on_three_systems_that_wakes_only_on_a_change
 def test_the_reference_and_the_role_file_name_the_command():
     assert "| `/agk:review-pass` |" in REFERENCE.read_text(encoding="utf-8")
     role = flat(ROLE)
-    assert "/agk:review-pass" in role and "session.py review-queue" in role
+    assert "`review-pass` command" in role and "session.py review-queue" in role
     assert "never two verdicts on one head" in role
