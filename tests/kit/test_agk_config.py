@@ -11,6 +11,8 @@ DEFAULTS = {
     "test_dirs": ["tests"],
     "lint_paths": ["scripts/agk", ".claude/hooks"],
     "project_tests": "",
+    "unused_code": "",  # brief 244 build b (ADR-0177)
+    "coverage": "",
     "test_patterns": ["test_*.py"],
     "mode": "",
     "inbox_hours": 48,

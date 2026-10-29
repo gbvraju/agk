@@ -562,9 +562,7 @@ def audit(
 
 def render(today: date, found: list[Finding], undated: int) -> str:
     since = today - timedelta(days=WINDOW_DAYS)
-    counts = " ".join(
-        f"{c}={sum(1 for f in found if f.code == c)}" for c in CODES + COMMAND_CODES
-    )
+    counts = " ".join(f"{c}={sum(1 for f in found if f.code == c)}" for c in CODES + COMMAND_CODES)
     lines = [
         f"agk drift audit {today} (window {since} to {today}): findings={len(found)} {counts}",
         "",

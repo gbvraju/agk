@@ -237,7 +237,7 @@ def test_a_set_command_always_gives_the_report_a_finding_so_the_issue_is_written
     assert audit(repo.root, "--print-action", "--open-issues", "7").stdout.strip() == "update 7"
 
 
-# --- the workflow and the guide (answers 5 and 6) ---------------------------------------------------
+# --- the workflow and the guide (answers 5 and 6) -----------------------------------------------
 
 
 def test_the_workflow_hands_the_previous_report_to_the_audit_with_a_read_only_call():

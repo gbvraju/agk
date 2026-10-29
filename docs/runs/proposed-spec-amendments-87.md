@@ -1,0 +1,9 @@
+# Proposed spec amendments 87 (SPEC-0004; REQ-039)
+
+Date: 2026-10-29 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). Applied by ADR-0177. The path: `docs/specs/0004-drift-audit.md`. The number 87 was named by brief #244 for build (b); ADR-0177 was reserved for it by the conductor on #244.
+
+1. **SPEC-0004, new rule 25, D9 the project's own commands.** `agk.toml` has two settings, `unused_code` and `coverage`, empty by default, each a shell command like `project_tests`; the kit ships no tool and installs none. When one is set, the report run of the audit runs it in the checkout within `proof_timeout`, reads its standard output only, and adds one finding D9 whose subject is the setting's name: for `unused_code` the count and the lines, up to 20, then `and N more`; for `coverage` the number on the last line (0 to 100, a command that exits 0) as `covered <p>%` with its change since the previous audit, read from the body of the open audit issue given with `--previous FILE`. A command that runs too long, fails or prints nothing readable reads `unknown`, never zero. D9 never blocks and never shows the command.
+2. **Rule 3 and rule 19.** The script starts no process beyond `git` except the two commands of rule 25, through `proof.execute`, and only in its report run; `--print-action`, `--print-title` and the facts start none. Rule 19's import test allows `proof`.
+3. **Rule 11.** The codes are `D1`..`D9`; the summary line carries `D9=<n>`.
+4. **Rule 15.** With a command of rule 25 set the report always has a finding, so `--print-action` gives `create` or `update N` without running it.
+5. **Rule 21.** The workflow reads the open audit issue's body with `gh issue list --json number,body` (read-only, no new verb) and passes it with `--previous`.
