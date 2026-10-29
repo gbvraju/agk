@@ -25,10 +25,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-write
 ```
 
 2. Fill the skeleton from the vision and the charter, and from nothing the owner did not give. In the Decision: **Options** has two or
-   three bullets `- Option A — <name>. Trade-offs: <text>. Practices: <practice>, <practice>.`; **Practices** has one bullet for every
-   practice any option names, `- <practice>: check (step: <the governance step the adopting build adds>)` when a check can verify it
-   (pinned actions, least privilege, security headers, a host-boundary test), or `- <practice>: judgement` when it is recorded
-   judgement only; **Chosen** stays `none yet`. Never set `Status: Accepted` and never name an option as chosen: that is the
+   three bullets `- Option A — <name>. Trade-offs: <text>. External services: <service>, <service>. Practices: <practice>, <practice>.`,
+   where `External services:` names, once and before `Practices:`, each service outside the product that the option relies on
+   (identity, email, storage, queues or schedulers, payments, and so on), and is left out when the option relies on none;
+   **Practices** has one bullet for every practice any option names, `- <practice>: check (step: <the governance step the adopting
+   build adds>)` when a check can verify it (pinned actions, least privilege, security headers, a host-boundary test), or
+   `- <practice>: judgement` when it is recorded judgement only, and keeps the template's `local profile` bullet; **Chosen** stays
+   `none yet`. Never set `Status: Accepted` and never name an option as chosen: that is the
    architect's, in a later change.
 3. Check, and correct the file on a failure, at most three rounds, then stop and report:
 
@@ -59,6 +62,15 @@ commit, and it changes nothing else.
    The body of its pull request is never written by hand: after the accepting commit, the session runs
    `stack-next-steps` again on that branch, and it prints the commit, the push and a body whose `Advances:`, `Build-state row:`
    and `Summary:` lines passed the repository's body check (the Summary cut to 120 characters at a word boundary).
+
+   On that accepting branch `stack-next-steps` prints one extra step after the body: the default local-profile requirement, a
+   ready-to-run `/agk:spec "<sentence>"` made from `kit/templates/local-profile.md` and filled in with the accepted option's
+   `External services:` (the whole product on one machine with one command, a stand-in for each external service chosen by a
+   setting, invented data seeded on start, a startup guard that refuses it outside the local environment). It is an offer:
+   nothing is written until a person runs it. A spec approver (`spec_approvers` in `config/reviewers.yaml`) accepts it with the
+   `Approve:` line of the intake; or a maintainer declines it with one line in the Residual of the stack ADR,
+   `local profile: declined, <reason of at least 20 characters> (YYYY-MM-DD)`. While neither is done, `stack-check` prints the
+   information line `local profile: not decided`, never a failure. Pass the extra step on to the person unchanged.
 
 5. Last, print the next steps of this pull request, the Proposed ADR. Add `--brief <n>` when the work answers a brief, or `--brief none`
    when the person says the repository has no open brief. The script prints the body as a file path and its text, only after the

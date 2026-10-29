@@ -13,10 +13,11 @@ TODO(architect): what the product needs from a stack, as the owner gave it in th
 ## Decision
 
 1. **Options**
-   - Option A — TODO(architect). Trade-offs: TODO(architect). Practices: TODO(architect).
-   - Option B — TODO(architect). Trade-offs: TODO(architect). Practices: TODO(architect).
+   - Option A — TODO(architect). Trade-offs: TODO(architect). External services: TODO(architect). Practices: TODO(architect).
+   - Option B — TODO(architect). Trade-offs: TODO(architect). External services: TODO(architect). Practices: TODO(architect).
 2. **Practices**
    - TODO(architect): check (step: the governance step the adopting build adds) or judgement
+   - local profile: check (step: a smoke test that starts the local profile and signs in with the stand-in identity)
 3. **Chosen**: none yet
 
 ## Consequences
