@@ -49,7 +49,6 @@ import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
-
 from pathlib import Path
 
 from architect_guard import (
