@@ -64,7 +64,7 @@ def test_a_none_form_passes_for_a_change_of_only_its_paths(based, form, files):
     [
         ("none (design)", {"docs/design/theme.md": "t\n", "scripts/x.py": "x\n"}),
         ("none (design)", {"docs/specs/0002-x.md": "s\n"}),
-        ("none (spec)", {"docs/specs/0002-x.md": "s\n", "docs/adr/0003-x.md": "a\n"}),
+        ("none (spec)", {"docs/specs/0002-x.md": "s\n", "docs/runs/residuals.md": "a\n"}),
         ("none (spec)", {"docs/design/theme.md": "t\n"}),
     ],
 )
@@ -78,7 +78,7 @@ def test_a_none_form_fails_for_any_other_change_naming_the_rule_and_the_path_cla
     assert "FAIL pr-body: rule 9: 'Brief: none" in proc.stdout
     assert "docs/design/" in proc.stdout and "docs/specs/" in proc.stdout
     for name in files:
-        if name.startswith(("scripts/", "docs/adr/")):
+        if name.startswith(("scripts/", "docs/runs/")):
             assert name not in proc.stdout
 
 
@@ -118,3 +118,54 @@ def test_without_a_base_a_none_form_fails_and_never_crashes(based):
     based.commit({"docs/design/theme.md": "t\n"})
     proc = check(based, body("none (design)"), AGK_BASE="no-such-ref")
     assert proc.returncode == 1 and "rule 9" in proc.stdout and "Traceback" not in proc.stderr
+
+
+# --- the verdict on 2c9d862, Q-273-1: the documents a spec or design pull request also carries ----
+
+AMEND = "docs/runs/proposed-spec-amendments-3.md"
+LOG = "docs/runs/decisions-log.md"
+
+
+@pytest.mark.parametrize(
+    ("form", "files"),
+    [
+        (
+            "none (spec)",
+            {"docs/specs/0002-x.md": "s\n", "docs/adr/0003-x.md": "a\n", AMEND: "p\n", LOG: "l\n"},
+        ),
+        ("none (spec)", {"docs/requirements.md": "r\n", "docs/adr/0003-x.md": "a\n"}),
+        ("none (design)", {"docs/design/theme.md": "t\n", "docs/adr/0003-x.md": "a\n", LOG: "l\n"}),
+    ],
+)
+def test_a_none_form_also_takes_an_adr_the_amendments_and_the_decisions_log(based, form, files):
+    """REQ-020: brief #273, Q-273-1 as answered (documents only, never code)."""
+    based.commit(files)
+    proc = check(based, body(form))
+    assert proc.returncode == 0, proc.stdout
+
+
+@pytest.mark.parametrize("form", ["none (spec)", "none (design)"])
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"scripts/x.py": "x\n"},
+        {"frontend/app.js": "x\n"},
+        {"docs/runs/proposed-spec-amendments-3.txt": "p\n"},
+        {"docs/runs/proposed-spec-amendments/3.md": "p\n"},
+        {"docs/runs/residuals.md": "r\n"},
+    ],
+)
+def test_code_or_any_other_path_beside_them_fits_neither_form(based, form, extra):
+    """REQ-020: brief #273, Q-273-1 (the amendments file by its pattern, not a prefix)."""
+    own = {"docs/specs/0002-x.md": "s\n"} if form == "none (spec)" else {"docs/design/a.md": "t\n"}
+    based.commit({**own, "docs/adr/0003-x.md": "a\n", **extra})
+    proc = check(based, body(form))
+    assert proc.returncode == 1 and "rule 9" in proc.stdout
+    assert "proposed-spec-amendments-*.md" in proc.stdout
+
+
+@pytest.mark.parametrize("form", ["none (spec)", "none (design)"])
+def test_the_shared_documents_alone_fit_neither_form(based, form):
+    """REQ-020: brief #273 (a change of only an ADR or the log is not a spec or a design change)."""
+    based.commit({"docs/adr/0003-x.md": "a\n", AMEND: "p\n", LOG: "l\n"})
+    assert check(based, body(form)).returncode == 1

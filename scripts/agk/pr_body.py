@@ -7,9 +7,10 @@ a file in the repository's git directory (never a tracked file) and checked with
 own `scripts/agk/check_pr_body.py` (the kit's when the repository has none), in the repository's
 state as the command was given it: `--brief N` (the brief the work answers), `--brief none` (the
 person says the repository has no open brief) or `--issues FILE` (a saved copy of its open briefs,
-as the governance workflow saves it). A change of only `docs/design/`, or only `docs/specs/` and
-`docs/requirements.md`, carries `Brief: none (design)` or `Brief: none (spec)`, which passes in
-either state. Without any of these the state is not known and the body is checked as if a brief
+as the governance workflow saves it). A change of `docs/design/`, or of `docs/specs/` and
+`docs/requirements.md`, with at most an ADR, the amendments file and the decisions log beside it,
+carries `Brief: none (design)` or `Brief: none (spec)` (`check_pr_body.NONE_FORMS`), which passes
+in either state. Without any of these the state is not known and the body is checked as if a brief
 were open. The `Summary:` line is cut to fit at a word boundary. A body that still fails is never
 printed: the command refuses with the check's own lines, which name the rule and never a value. No
 network.

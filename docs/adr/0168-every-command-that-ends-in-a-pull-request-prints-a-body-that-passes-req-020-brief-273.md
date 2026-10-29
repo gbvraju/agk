@@ -41,8 +41,11 @@ this brief. The tests were written first and were red before the code they test 
    `intake.py next-steps` prints the push, the one line `Approve: <full head ID> SPEC-nnnn`, that the spec approver posts it as a
    comment from their own account and not through an agent app or a session, and that a red `final-clearance` before it is
    expected.
-5. **The none forms** (the field note): `check_pr_body.py` accepts `Brief: none (design)` when every changed file is under
-   `docs/design/`, and `Brief: none (spec)` when every changed file is under `docs/specs/` or is `docs/requirements.md`. The
+5. **The none forms** (the field note, widened by the verdict on Q-273-1): `check_pr_body.py` accepts `Brief: none (design)`
+   when a changed file is under `docs/design/`, and `Brief: none (spec)` when a changed file is under `docs/specs/` or is
+   `docs/requirements.md`, and every other changed file is one of the documents either form may carry beside it: under
+   `docs/adr/`, a `docs/runs/proposed-spec-amendments-*.md` file (by pattern, one folder deep, not by prefix), or
+   `docs/runs/decisions-log.md`. Code is never part of either form, and a change of only those shared documents fits neither. The
    changed files are read with git from the base (`AGK_BASE`, set by the workflow's merge-ref step) to the work tree; an empty
    change, any other path, or a base that does not resolve fails with `rule 9` naming the path classes, never a file.
    `pr_body.py` prints a none form whenever the change fits one, since it passes in either state.
@@ -55,13 +58,12 @@ this brief. The tests were written first and were red before the code they test 
 
 - A person no longer edits a printed body, and a body the repository would refuse is never printed.
 - A command run without the state refuses once and says which option to give; existing callers of `next-steps` add `--brief`.
-- An intake pull request changes an ADR as well as the spec and the requirements, so it is not a `none (spec)` change; it names
-  the brief it answers, or `--brief none` where no brief is open (Q-273-1).
+- An intake pull request (the requirements, a spec, an ADR stub and maybe a decisions-log row) is a `none (spec)` change, so its
+  next steps print that form when no brief is given.
 
 ## Residual
 
-- 2026-10-29: Q-273-1, the field note reads "docs/specs and requirements"; an intake also adds an ADR stub, so under the narrow
-  reading taken here an intake cannot use `Brief: none (spec)`. Whether `docs/adr/` belongs to the spec form is for the
-  maintainers (due 2026-12-15).
+- 2026-10-29: Q-273-1, answered by the conductor's verdict on 2c9d862: both forms also take `docs/adr/`, the amendments file
+  and the decisions log. Reading taken: a change of only those shared documents fits neither form.
 - 2026-10-29: Q-273-2, whether a command may read the open briefs itself with a read-only `gh api` (SPEC-0005 rule 8 gives
   `/agk:start` and `/agk:upgrade` no network) is for the maintainers; until then the state is an option (due 2026-12-15).

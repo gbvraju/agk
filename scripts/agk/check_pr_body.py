@@ -8,9 +8,11 @@ the pull request is marked ready for review (SPEC-0033 rule 2); any other value 
 SPEC-0034 rule 9: `--issues FILE` is a saved copy of the repository's issues (a JSON list, as
 `gh api repos/OWNER/REPO/issues` returns it); when it holds an issue labelled `agk-brief` (a pull
 request does not count) the body needs `Brief: #n`, or `Brief: none (design)` for a change of
-only `docs/design/`, or `Brief: none (spec)` for a change of only `docs/specs/` and
-`docs/requirements.md` (brief #273): the changed files are read with git from the base (`AGK_BASE`,
-as the other checks) to the work tree, and a base that does not resolve fails the form. A body
+`docs/design/`, or `Brief: none (spec)` for a change of `docs/specs/` or `docs/requirements.md`
+(brief #273), each with at most `docs/adr/`, `docs/runs/proposed-spec-amendments-*.md` and
+`docs/runs/decisions-log.md` beside it and no other path: the changed files are read with git
+from the base (`AGK_BASE`, as the other checks) to the work tree, and a base that does not
+resolve fails the form. A body
 whose `Build-state row:` sets a requirement to `done` needs `Closes #n`. SPEC-0036 rule 1: every
 body that is not a draft has exactly one line `Summary: <one sentence>` of 1 to 120 characters, and
 the message says which case found (missing, repeated with the count, empty, or too long with its
@@ -49,9 +51,17 @@ NONE_FORMS = {
     "none (design)": ("docs/design/",),
     "none (spec)": ("docs/specs/", "docs/requirements.md"),
 }
+# Documents either form may also carry (the verdict on Q-273-1); never code.
+NONE_SHARED = (
+    "docs/adr/",
+    "docs/runs/proposed-spec-amendments-*.md",
+    "docs/runs/decisions-log.md",
+)
 NONE_RULE = (
-    "rule 9: 'Brief: none (design)' is for a change of only docs/design/, and 'Brief: none (spec)' "
-    "for a change of only docs/specs/ and docs/requirements.md (path classes)"
+    "rule 9: 'Brief: none (design)' is for a change of docs/design/, and 'Brief: none (spec)' "
+    "for a "
+    "change of docs/specs/ or docs/requirements.md, each with at most docs/adr/, "
+    "docs/runs/proposed-spec-amendments-*.md and docs/runs/decisions-log.md beside (path classes)"
 )
 
 
@@ -77,12 +87,23 @@ def has_brief(path: str) -> bool:
     )
 
 
+def path_in(path: str, entries: tuple[str, ...]) -> bool:
+    """An entry ending `/` is a prefix, one with `*` a pattern within one folder, else a file."""
+    for entry in entries:
+        if entry.endswith("/") and path.startswith(entry):
+            return True
+        if "*" in entry and re.fullmatch("[^/]*".join(map(re.escape, entry.split("*"))), path):
+            return True
+        if path == entry:
+            return True
+    return False
+
+
 def none_form_fits(form: str, changed: dict[str, str]) -> bool:
-    """Whether every changed path is one the none form names, and something changed."""
-    prefixes = NONE_FORMS[form]
-    return bool(changed) and all(
-        any(path == p or (p.endswith("/") and path.startswith(p)) for p in prefixes)
-        for path in changed
+    """Whether a changed path is the form's own, and every other one is a shared document."""
+    own = NONE_FORMS[form]
+    return any(path_in(p, own) for p in changed) and all(
+        path_in(p, own + NONE_SHARED) for p in changed
     )
 
 

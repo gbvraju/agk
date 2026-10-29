@@ -312,3 +312,16 @@ def test_upgrade_prints_the_body_once_the_upgrade_and_its_adr_are_written(
     body = body_of(out)
     assert body.startswith("Brief: #7\nAdvances: REQ-001\n") and "2.0.0" in body
     assert passes(target, body, saved(tmp_path, BRIEFS))
+
+
+def test_an_intake_without_a_brief_carries_the_spec_form_and_passes_with_an_open_brief(
+    intake, tmp_path
+):
+    """REQ-020: brief #273, Q-273-1 as answered (an intake's ADR stub is a shared document)."""
+    draft(intake)
+    issues = saved(tmp_path, BRIEFS)
+    proc = intake_run(intake, "next-steps", "--base", "main", "--issues", issues)
+    assert proc.returncode == 0, proc.stdout
+    body = body_of(proc.stdout)
+    assert body.startswith("Brief: none (spec)\nAdvances: REQ-004\n")
+    assert passes(intake, body, issues)
