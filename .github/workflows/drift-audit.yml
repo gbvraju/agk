@@ -12,14 +12,17 @@ on:
     - cron: "17 6 * * 6"
   workflow_dispatch:
 
+# Each job holds only what it needs: the report job, which runs project code, can write nothing.
 permissions:
   contents: read
-  issues: write
 
 jobs:
   report:
     if: ${{ github.ref_name == github.event.repository.default_branch }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
     outputs:
       title: ${{ steps.audit.outputs.title }}
       action: ${{ steps.audit.outputs.action }}
@@ -56,6 +59,8 @@ jobs:
   file:
     needs: report
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - name: File at most one issue (no checkout, no project command)
         shell: bash

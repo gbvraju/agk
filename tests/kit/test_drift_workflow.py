@@ -34,11 +34,24 @@ def test_ac1_exactly_one_weekly_cron_saturday_0617_utc():
     assert dom == "*" and month == "*" and dow.isdigit() and minute not in ("0", "30")
 
 
-def test_ac3_permissions_are_exactly_contents_read_and_issues_write():
-    """REQ-011 AC3: rules 2 and 21."""
+def job_permissions(name: str) -> list[str]:
+    match = re.search(
+        rf"^  {name}:\s*\n(?:    .*\n)*?    permissions:\s*\n((?:      .*\n)+)", text(), flags=re.M
+    )
+    assert match, name
+    return [ln.strip() for ln in match.group(1).splitlines() if ln.strip()]
+
+
+def test_ac3_permissions_are_contents_read_and_each_job_gets_only_what_it_needs():
+    """REQ-011 AC3: rules 2 and 21, as amendment 87 (ADR-0177, the verdict on c733d86) narrows
+    them: contents read for the workflow; the report job, which runs the project's commands, only
+    reads; the file job alone writes issues."""
     lines = [ln.strip() for ln in top_block("permissions").splitlines() if ln.strip()]
-    assert lines == ["contents: read", "issues: write"]
-    assert text().count("permissions:") == 1  # none per job
+    assert lines == ["contents: read"]
+    assert job_permissions("report") == ["contents: read", "issues: read"]
+    assert job_permissions("file") == ["issues: write"]
+    assert text().count("permissions:") == 3
+    assert text().count("issues: write") == 1
 
 
 def test_ac3_every_action_is_pinned_to_a_full_commit_sha():

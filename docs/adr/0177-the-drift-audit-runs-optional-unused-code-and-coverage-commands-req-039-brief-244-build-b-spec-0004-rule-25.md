@@ -6,7 +6,7 @@
 - Related: ADR-0151, ADR-0172
 - Requirements: REQ-039
 
-Protected classes: `agk.toml`, `.github/`, `kit/`, `scripts/agk/`, `tests/kit/`
+Protected classes: `agk.toml`, `.github/`, `kit/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -40,8 +40,10 @@ ADR-0177 for this build (brief #244, 2026-10-29), and amendment 87 is still free
    with `persist-credentials: false`, reads the open audit issues in a step that runs no project command, and runs
    `drift_audit.py` in a step with no `GH_TOKEN`; it hands the title, the action and the report (base64, one line) on as job
    outputs, not as an upload, which would count against a project's artifact storage. `file` (`needs: report`) checks nothing
-   out, runs no script of the repository, and does the only writes: the label, `gh issue create` or `gh issue edit`. The
-   workflow-level permissions stay `contents: read` and `issues: write`.
+   out, runs no script of the repository, and does the only writes: the label, `gh issue create` or `gh issue edit`. Each job
+   holds only the permissions it needs (the verdict on c733d86): the workflow level `contents: read`; `report`
+   `contents: read` and `issues: read`; `file` `issues: write` alone. No token in the job that runs project code can write.
+   SPEC-0004 rule 2 is narrowed to match (amendment 87).
 5. **Only the report run starts a command.** `--print-action` and `--print-title` start none: a set command always gives the report
    one D9 finding, so the action is `create` or `update N` whenever one is set. `audit()`, which the facts call, starts none, so the
    facts never run a project command; D9 is in `COMMAND_CODES`, not in `CODES`, and the facts' drift counts are unchanged. The
