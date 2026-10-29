@@ -19,6 +19,7 @@ import signal
 import subprocess  # nosec B404 - fixed argument lists, and the project's own test command
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -53,9 +54,13 @@ class Result:
     base: str
     head: str
     test_files: list[str]
+    elapsed: int | None = None  # whole seconds of the run that timed out
 
     def line(self) -> str:
-        suffix = f" ({self.reason})" if self.reason else ""
+        reason = self.reason
+        if reason == "timeout" and self.elapsed is not None:
+            reason = f"timeout after {self.elapsed} s, setting: proof_timeout"
+        suffix = f" ({reason})" if reason else ""
         return f"proof: {self.outcome}{suffix}"
 
     def data(self) -> dict:
@@ -135,17 +140,73 @@ def is_test_file(path: str, dirs: list[str], patterns: list[str]) -> bool:
     return inside and any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
 
 
-def kill_group(proc: subprocess.Popen) -> None:
+WINDOWS = os.name == "nt"
+# CREATE_NEW_PROCESS_GROUP of the Windows API (the subprocess module names it only on Windows).
+NEW_PROCESS_GROUP = 0x00000200
+# Seconds to wait for `taskkill`, and for the killed tree to close its output, before going on.
+KILL_WAIT = 30
+
+
+def popen_options(windows: bool) -> dict:
+    """The run starts its own process group, so that a timeout can end the whole tree."""
+    if windows:
+        return {"creationflags": NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def kill_tree(proc, windows: bool = WINDOWS, run=subprocess.run) -> None:
+    """End the run and every process it started, then read what is left of its output, bounded.
+
+    POSIX: SIGKILL to the process group. Windows (no `os.killpg`, no SIGKILL): `taskkill /T /F`,
+    which ends the process and its descendants; if taskkill fails or is missing, the shell itself.
+    """
+    if windows:
+        try:
+            ended = (
+                run(  # nosec B603 B607 - fixed argument list, no shell
+                    ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                    capture_output=True,
+                    check=False,
+                    timeout=KILL_WAIT,
+                ).returncode
+                == 0
+            )
+        except (OSError, subprocess.SubprocessError):
+            ended = False
+        if not ended:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
     try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        pass
-    proc.communicate()
+        proc.communicate(timeout=KILL_WAIT)
+    except subprocess.TimeoutExpired:
+        pass  # a process outside the tree holds the output open; proof does not wait for it
 
 
-def execute(command: str, cwd: Path, timeout: int) -> tuple[int | None, str]:
-    """(exit status or None on a timeout, output). The shell runs in its own process group."""
-    proc = subprocess.Popen(  # nosec B603 B607 - the project's own test command, run as the caller
+def timeout_note(seconds: int) -> str:
+    return (
+        f"proof: the test run was ended after {seconds} s, the limit set by `proof_timeout` in "
+        "agk.toml; the tests did not fail, they did not finish"
+    )
+
+
+def execute(
+    command: str,
+    cwd: Path,
+    timeout: int,
+    windows: bool = WINDOWS,
+    popen=subprocess.Popen,
+    run=subprocess.run,
+) -> tuple[int | None, str, int]:
+    """(exit status or None on a timeout, output, whole seconds taken). Its own process group."""
+    began = time.monotonic()
+    proc = popen(  # nosec B603 B607 - the project's own test command, run as the caller
         ["sh", "-c", command],
         cwd=cwd,
         stdout=subprocess.PIPE,
@@ -153,14 +214,14 @@ def execute(command: str, cwd: Path, timeout: int) -> tuple[int | None, str]:
         text=True,
         encoding="utf-8",
         errors="replace",
-        start_new_session=True,
+        **popen_options(windows),
     )
     try:
         out, _ = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        kill_group(proc)
-        return None, ""
-    return proc.returncode, out
+        kill_tree(proc, windows, run)
+        return None, "", round(time.monotonic() - began)
+    return proc.returncode, out, round(time.monotonic() - began)
 
 
 def show(label: str, out: str) -> None:
@@ -187,7 +248,8 @@ def place_tests(root: Path, work: Path, files: dict[str, str], head: str) -> Non
 
 
 def two_runs(root: Path, base: str, head: str, files: dict[str, str], command: str, limit: int):
-    """(run 1, run 2): exit statuses, None for a timeout, None for run 2 when it was not made."""
+    """(run 1, run 2, seconds): exit statuses, None for a timeout, None for run 2 when it was not
+    made; seconds is the time of the run that timed out, else None."""
     temp = Path(tempfile.mkdtemp(prefix="agk-proof-"))
     trees = [temp / "base", temp / "head"]
     added: list[Path] = []
@@ -199,13 +261,17 @@ def two_runs(root: Path, base: str, head: str, files: dict[str, str], command: s
                 raise Failure("a worktree cannot be added (path class: temporary)") from exc
             added.append(tree)
         place_tests(root, trees[0], files, head)
-        status1, out1 = execute(command, trees[0], limit)
+        status1, out1, seconds = execute(command, trees[0], limit)
         show("run 1: the base with the pull request's tests", out1)
         if status1 is None:
-            return None, None
-        status2, out2 = execute(command, trees[1], limit)
+            print(timeout_note(seconds), file=sys.stderr)
+            return None, None, seconds
+        status2, out2, seconds = execute(command, trees[1], limit)
         show("run 2: the head", out2)
-        return status1, status2
+        if status2 is None:
+            print(timeout_note(seconds), file=sys.stderr)
+            return status1, None, seconds
+        return status1, status2, None
     finally:
         for tree in added:
             git(root, "worktree", "remove", "--force", str(tree), check=False)
@@ -246,9 +312,9 @@ def prove(root: Path, base: str, head: str, body: str) -> Result:
         return result("skipped")
     if not files or all(s == "D" for s in files.values()):
         return result("unknown", "no-test-files")
-    status1, status2 = two_runs(root, base, head, files, command, limit)
+    status1, status2, seconds = two_runs(root, base, head, files, command, limit)
     outcome, reason = decide(status1, status2)
-    return result(outcome, reason)
+    return Result(outcome, reason, base, head, names, seconds)
 
 
 def main(argv: list[str] | None = None) -> int:

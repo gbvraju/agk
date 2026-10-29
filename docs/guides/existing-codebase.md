@@ -88,7 +88,10 @@ Open `agk.toml` and set `project_tests` to the command that runs your tests, for
 Without the ADR `make -f agk.mk agk-governance` fails with `protected path class 'agk.toml' changed without an ADR that names it`.
 Until `project_tests` is set the `proof` check reads `unknown` with the reason `no-project-tests`. Your test command runs twice in
 the `proof` job, once on the base and once on the head, within `proof_timeout` in `agk.toml` (900 seconds by default); a suite slower
-than that reads `unknown`.
+than that reads `unknown`. A run that times out is ended with every process it started, on Windows as on Linux and
+macOS, and the line reads `proof: unknown (timeout after N s, setting: proof_timeout)`: the tests did not fail, they did not
+finish. When proof nears its limit on a busy machine, run it alone. Raising `proof_timeout` is a protected change (an ADR, as
+above); a slow suite is better fixed (#289).
 
 ## Step 5. The first real change, tests first
 

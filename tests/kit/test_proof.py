@@ -153,7 +153,8 @@ def test_ac1_a_timeout_is_unknown_and_kills_the_run(repo):
     start(repo, "sleep 20", "proof_timeout = 1\n")
     repo.commit({"tests/test_new.py": "# new\n"}, "add a test")
     proc = proof(repo)
-    assert line(proc) == "proof: unknown (timeout)" and proc.returncode == 4
+    assert line(proc) == "proof: unknown (timeout after 1 s, setting: proof_timeout)"
+    assert proc.returncode == 4
 
 
 def test_ac1_an_invalid_timeout_is_a_refusal_naming_the_setting(repo):
