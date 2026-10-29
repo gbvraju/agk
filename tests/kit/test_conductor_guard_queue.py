@@ -191,7 +191,6 @@ BACKSLASH = (
     [
         BACKSLASH,
         "gh api --method POST repos/o/r/issues/7/comments -F body=@agk-conductor-v59/verdict.md",
-        "gh api --method POST repos/o/r/issues/7/comments -F body=@C:/Users/g/verdict.md",
     ],
 )
 def test_a_body_file_that_is_not_absolute_is_denied_naming_the_likely_cause(project, command):

@@ -23,7 +23,8 @@ def test_ac5_the_front_matter_gives_read_tools_and_the_conductor_guard():
     front, _ = split()
     assert re.search(r"(?m)^name: conductor$", front)
     tools = re.search(r"(?m)^tools: (.*)$", front).group(1)
-    assert {t.strip() for t in tools.split(",")} == {"Read", "Grep", "Glob", "Bash", "Write"}
+    expected = {"Read", "Grep", "Glob", "Bash", "Write", "ScheduleWakeup"}  # brief 284
+    assert {t.strip() for t in tools.split(",")} == expected
     assert "PreToolUse:" in front and "conductor_guard.py" in front
     assert "Edit|Write|MultiEdit|NotebookEdit|Bash" in front
     assert "architect_guard" not in front
