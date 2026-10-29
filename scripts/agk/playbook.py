@@ -3,14 +3,16 @@
 Usage:
     python3 playbook.py start-ids --statement TEXT [--ref REF] [--root DIR]
     python3 playbook.py check-start [--base REF] [--root DIR]
-    python3 playbook.py next-steps [--base REF] [--date D] [--root DIR]
+    python3 playbook.py next-steps [--base REF] [--date D] [--brief N|none] [--issues FILE]
+                                   [--root DIR]
     python3 playbook.py architect [--root DIR]
     python3 playbook.py brief --kind overnight|day --branch-prefix PREFIX [--repo O/R]
                               [--ref REF] [--date D] [--root DIR]
 
 Kit-only (never installed). `start-ids`, `check-start` and `next-steps` serve `/agk:start`
 (rules 2 to 5): the next free ADR number and the branch name, the deterministic checks of the two
-files it writes, and the commands for the person. `architect` prints how to start the role and
+files it writes, and the commands for the person, with a pull request body that passed
+the repository's body check (`pr_body.py`, brief #273). `architect` prints how to start the role and
 checks, read-only, that `agk.toml` is present, that `gh` is logged in and which branch is the
 default. `brief` prints a brief skeleton from `kit/templates/playbook/` in which the next
 requirement, ADR and spec numbers are read from `origin/<default branch>`
@@ -45,6 +47,7 @@ from doctor import origin_repo
 from engines import TOPICS as ALL_TOPICS
 from engines import has_idea, vision_problems
 from intake import section, slug
+from pr_body import brief_option, prepare, print_body
 
 KIT = Path(__file__).resolve().parents[2]
 TEMPLATES = KIT / "kit" / "templates" / "playbook"
@@ -62,6 +65,8 @@ FLAGS = (
     "--date",
     "--statement",
     "--base",
+    "--brief",
+    "--issues",
 )
 MAX_STATEMENT = 1500
 VISION = "constitution/vision.md"
@@ -288,18 +293,25 @@ def cmd_next_steps(root: Path, opts: dict[str, str]) -> int:
         print("the start does not pass `check-start`; no next steps are printed")
         return 1
     today = opts.get("date") or datetime.now(UTC).date().isoformat()
+    fields = [
+        ("Advances", "REQ-001"),
+        ("Build-state row", f"{today} REQ-001 vision and project charter proposed, start only"),
+        (
+            "Summary",
+            "Sets out the project's vision and charter, to be reviewed before any work starts.",
+        ),
+        ("Decisions taken", "none; the problem statement became a vision and a Proposed charter"),
+        ("Questions", "none"),
+        ("Verified", "`python3 scripts/agk/playbook.py check-start` printed `ok playbook-start`"),
+    ]
+    brief = brief_option(opts.get("brief"))
+    path, body = prepare(
+        root, fields, brief=brief, issues=opts.get("issues"), changed=None, base=mb
+    )
     print("Commit message:\n\nstart: the vision and the project charter\n")
     print(f"Push command:\n\ngit push -u origin {branch}\n")
     print("Open the pull request from that branch into the default branch with this body.\n")
-    print("Pull request body:\n")
-    print("Advances: REQ-001")
-    print(f"Build-state row: {today} REQ-001 vision and project charter proposed, start only")
-    print(
-        "Summary: Sets out the project's vision and charter, to be reviewed before any work starts."
-    )
-    print("Decisions taken: none; the problem statement became a vision and a Proposed charter")
-    print("Questions: none")
-    print("Verified: `python3 scripts/agk/playbook.py check-start` printed `ok playbook-start`\n")
+    print_body(path, body)
     print(
         "The checks cannot tell that the milestones are the right ones or that the vision says\n"
         "what you meant. That is the review of the pull request; merging approves the charter\n"

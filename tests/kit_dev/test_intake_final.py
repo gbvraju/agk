@@ -333,7 +333,7 @@ def test_ac1_the_skill_says_when_the_answers_go_in_the_paragraph_and_never_commi
 def test_ac1_next_steps_name_the_final_commit_mode_and_the_two_status_lines(repo):
     """REQ-027 AC1: rule 8."""
     intake_commit(repo)
-    proc = run(repo, "next-steps", "--base", "main")
+    proc = run(repo, "next-steps", "--base", "main", "--brief", "none")
     assert proc.returncode == 0, proc.stdout
     assert "check --final" in proc.stdout
     assert "Status: Draft" in proc.stdout and "Status: Approved" in proc.stdout

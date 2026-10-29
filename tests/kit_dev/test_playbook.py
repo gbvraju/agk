@@ -569,7 +569,17 @@ def test_ac1_messages_name_the_rule_and_never_the_text(started):
 def test_ac1_next_steps_print_the_commands_and_a_body_that_passes_check_pr_body(started):
     """REQ-020 AC1: rule 3 (the script prints; the skill does not commit)."""
     good_start(started)
-    proc = run("next-steps", "--base", "main", "--date", "2026-10-19", "--root", str(started))
+    proc = run(
+        "next-steps",
+        "--base",
+        "main",
+        "--date",
+        "2026-10-19",
+        "--brief",
+        "none",
+        "--root",
+        str(started),
+    )
     assert proc.returncode == 0, proc.stdout
     assert "git push -u origin start/a-reading-list" in proc.stdout
     body = proc.stdout.split("Pull request body:\n\n", 1)[1]

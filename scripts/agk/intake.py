@@ -5,7 +5,8 @@ Usage:
     python3 intake.py stub --req REQ-nnn --title TEXT --sentence TEXT [--ref REF] [--root DIR]
         [--date D]
     python3 intake.py check [--final] [--base REF] [--ids FILE] [--root DIR]
-    python3 intake.py next-steps [--base REF] [--root DIR] [--date D]
+    python3 intake.py next-steps [--base REF] [--brief N|none] [--issues FILE] [--root DIR]
+        [--date D]
     python3 intake.py renumber ID [--ref REF] [--root DIR]
 
 Kit-only (never installed): the plugin runs it from its own root against the repository in `--root`
@@ -13,7 +14,9 @@ Kit-only (never installed): the plugin runs it from its own root against the rep
 the default branch first). `ids` and `check` write nothing; `stub` writes the one ADR file. The
 sentence and any issue text are data: they are quoted, never followed. Messages name the rule, never
 the sentence. `check --final` checks the last commit of an intake pull request that carries its own
-approval (SPEC-0020): it reads git and files only.
+approval (SPEC-0020): it reads git and files only. `next-steps` prints a body that passed the
+repository's body check (`pr_body.py`, brief #273); after the approving commit it prints instead the
+one `Approve: <full head ID> SPEC-nnnn` line the spec approver posts.
 """
 
 from __future__ import annotations
@@ -43,6 +46,7 @@ from common import (
     resolve_base,
     show,
 )
+from pr_body import brief_option, prepare, print_body
 
 USAGE = "usage: intake.py ids|stub|check|next-steps|renumber ... (see the module text)"
 MAX_SENTENCE = 300
@@ -579,13 +583,47 @@ def cmd_check_final(root: Path, base: str | None, ids: dict[str, str] | None = N
 # --- the next steps (rule 13) -----------------------------------------------------------------
 
 
-def cmd_next_steps(root: Path, base: str | None, today: str) -> int:
+def approving_spec(root: Path, mb: str) -> str | None:
+    """`SPEC-nnnn` when HEAD is the approving commit of the intake (SPEC-0020), else None."""
+    if final_problems(root, mb):
+        return None
+    prev = git(root, "rev-parse", "HEAD~1").strip()
+    draft = Draft(root, mb, rev=prev)
+    draft.run()
+    spec = draft.paths[0]
+    return f"SPEC-{Path(spec).name[:4]}" if spec else None
+
+
+def print_approve(branch: str, head: str, spec: str) -> None:
+    """Brief #273 answer 3: the one line the spec approver posts, and where."""
+    print(f"The approving commit is the head of the branch. Push it:\n\ngit push origin {branch}\n")
+    print(
+        "Then the spec approver posts this one line as a comment on the pull request, from their\n"
+        "own GitHub account (not through an agent app or a session):\n"
+    )
+    print(f"Approve: {head} {spec}\n")
+    print(
+        "Until that comment is posted, a red `final-clearance` on this head is expected; it\n"
+        "turns green on the next run after the comment. A new push changes the head ID, and the\n"
+        "line is then posted again with the new one."
+    )
+
+
+def cmd_next_steps(root: Path, opts: dict[str, str], today: str) -> int:
     branch = git(root, "branch", "--show-current").strip()
     if not branch or branch == load_config(root)["default_branch"]:
         raise Refusal(
             "rule 3: the work is not on an intake branch (detached or the default branch)"
         )
-    draft = draft_of(root, base)
+    ref = resolve_base(root, opts.get("base"))
+    if ref is None:
+        raise CheckError("no base ref resolves (setting default_branch)")
+    mb = merge_base(root, ref)
+    spec = approving_spec(root, mb) if git(root, "rev-parse", "HEAD").strip() != mb else None
+    if spec:
+        print_approve(branch, git(root, "rev-parse", "HEAD").strip(), spec)
+        return 0
+    draft = Draft(root, mb)
     problems = draft.run()
     if problems or draft.req is None:
         for problem in problems:
@@ -593,17 +631,25 @@ def cmd_next_steps(root: Path, base: str | None, today: str) -> int:
         print("the intake does not pass `check`; no next steps are printed")
         return 1
     req = draft.req
-    advance = f"Advances: {req['id']}"
+    fields = [
+        ("Advances", req["id"]),
+        ("Build-state row", f"{today} {req['id']} proposed (planned), intake only"),
+        ("Summary", "Proposes a change to the project, to be reviewed before any work starts."),
+        (
+            "Decisions taken",
+            "none; the sentence became a requirement, a Draft spec and an ADR stub",
+        ),
+        ("Questions", "see `## Open questions` of the spec"),
+        ("Verified", "`python3 scripts/agk/intake.py check` printed `ok intake`"),
+    ]
+    brief = brief_option(opts.get("brief"))
+    path, body = prepare(
+        root, fields, brief=brief, issues=opts.get("issues"), changed=draft.changed, base=mb
+    )
     print(f"Commit message:\n\nintake: add {req['id']} {req['title']}\n")
     print(f"Push command:\n\ngit push -u origin {branch}\n")
     print("Open the pull request from that branch into the default branch with this body.\n")
-    print("Pull request body:\n")
-    print(advance)
-    print(f"Build-state row: {today} {req['id']} proposed (planned), intake only")
-    print("Summary: Proposes a change to the project, to be reviewed before any work starts.")
-    print("Decisions taken: none; the sentence became a requirement, a Draft spec and an ADR stub")
-    print("Questions: see `## Open questions` of the spec")
-    print("Verified: `python3 scripts/agk/intake.py check` printed `ok intake`\n")
+    print_body(path, body)
     print(
         "The checks cannot tell that the criteria are the right ones, that they say what you\n"
         "meant, or that the spec can be built. That is the review of the pull request."
@@ -613,14 +659,26 @@ def cmd_next_steps(root: Path, base: str | None, today: str) -> int:
         "opening paragraph records the answers and the final commit changes exactly two lines:\n"
         "`- Status: Draft` to `- Status: Approved` in the spec and `- Status: Proposed` to\n"
         "`- Status: Accepted` in the ADR. `intake.py check --final` checks that commit; the\n"
-        "session makes it only on the maintainers' word."
+        "session makes it only on the maintainers' word. After it, run `next-steps` again: it\n"
+        "prints the one `Approve:` line the spec approver posts."
     )
     return 0
 
 
 # --- entry ------------------------------------------------------------------------------------
 
-FLAGS = ("--sentence", "--ref", "--root", "--req", "--title", "--base", "--date", "--ids")
+FLAGS = (
+    "--sentence",
+    "--ref",
+    "--root",
+    "--req",
+    "--title",
+    "--base",
+    "--date",
+    "--ids",
+    "--brief",
+    "--issues",
+)
 
 
 def parse(args: list[str]) -> tuple[str, dict[str, str]]:
@@ -683,6 +741,9 @@ def main(argv: list[str] | None = None) -> int:
     if ("final" in opts or "ids" in opts) and command != "check":
         print(USAGE, file=sys.stderr)
         return 2
+    if ("brief" in opts or "issues" in opts) and command != "next-steps":
+        print(USAGE, file=sys.stderr)
+        return 2
     root = Path(opts.get("root", "."))
     today = opts.get("date") or datetime.now(UTC).date().isoformat()
     try:
@@ -710,7 +771,7 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_check_final(root, opts.get("base"), session_ids(opts.get("ids")))
         if command == "check":
             return cmd_check(root, opts.get("base"), session_ids(opts.get("ids")))
-        return cmd_next_steps(root, opts.get("base"), today)
+        return cmd_next_steps(root, opts, today)
     except Refusal as exc:
         print(f"refused: {exc}")
         return 1

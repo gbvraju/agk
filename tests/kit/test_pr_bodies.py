@@ -18,7 +18,8 @@ BRIEFS = [{"number": 7, "labels": [{"name": "agk-brief"}]}]
 
 def body(brief: str) -> str:
     return (
-        f"Brief: {brief}\nAdvances: REQ-001\nBuild-state row: 2026-10-29 REQ-001 planned (unchanged)\n"
+        f"Brief: {brief}\nAdvances: REQ-001\n"
+        "Build-state row: 2026-10-29 REQ-001 planned (unchanged)\n"
         "Summary: Adds a page design for the owner to look at.\n"
     )
 
@@ -42,7 +43,10 @@ def check(repo, text: str, **env: str):
 @pytest.mark.parametrize(
     ("form", "files"),
     [
-        ("none (design)", {"docs/design/theme.md": "t\n", "docs/design/mockups/a/index.html": "<p>\n"}),
+        (
+            "none (design)",
+            {"docs/design/theme.md": "t\n", "docs/design/mockups/a/index.html": "<p>\n"},
+        ),
         ("none (spec)", {"docs/specs/0002-x.md": "s\n", "docs/requirements.md": "r\n"}),
         ("none (spec)", {"docs/specs/0002-x.md": "s\n"}),
     ],
@@ -64,7 +68,9 @@ def test_a_none_form_passes_for_a_change_of_only_its_paths(based, form, files):
         ("none (spec)", {"docs/design/theme.md": "t\n"}),
     ],
 )
-def test_a_none_form_fails_for_any_other_change_naming_the_rule_and_the_path_classes(based, form, files):
+def test_a_none_form_fails_for_any_other_change_naming_the_rule_and_the_path_classes(
+    based, form, files
+):
     """REQ-020: brief #273 (the none forms are for those paths only; the message names no file)."""
     based.commit(files)
     proc = check(based, body(form))

@@ -53,7 +53,7 @@ def saved(tmp_path, issues) -> str:
 
 
 def body_of(out: str) -> str:
-    return out.split("Pull request body:\n\n", 1)[1].rstrip("\n") + "\n"
+    return out.split("Pull request body:\n\n", 1)[1].split("\n\n", 1)[0] + "\n"
 
 
 def file_of(out: str) -> str:
@@ -89,10 +89,14 @@ def test_a_long_summary_is_cut_at_a_word_boundary_and_a_short_one_is_kept():
 
 
 def start_steps(root, *args):
-    return playbook_run("next-steps", "--base", "main", "--date", "2026-10-29", "--root", str(root), *args)
+    return playbook_run(
+        "next-steps", "--base", "main", "--date", "2026-10-29", "--root", str(root), *args
+    )
 
 
-def test_start_prints_a_brief_line_the_file_and_a_body_that_passes_with_an_open_brief(started, tmp_path):
+def test_start_prints_a_brief_line_the_file_and_a_body_that_passes_with_an_open_brief(
+    started, tmp_path
+):
     """REQ-020: brief #273 answer 1 (the pilot's body without the Brief line)."""
     good_start(started)
     proc = start_steps(started, "--brief", "7")
@@ -163,11 +167,11 @@ def test_intake_prints_a_body_that_passes_with_the_brief_it_answers(intake, tmp_
     body = body_of(proc.stdout)
     assert body.startswith("Brief: #7\nAdvances: REQ-004\n")
     assert passes(intake, body, saved(tmp_path, BRIEFS))
-    assert "Approve:" not in proc.stdout
+    assert not any(line.startswith("Approve: ") for line in proc.stdout.splitlines())
 
 
 def test_after_the_approving_commit_the_next_steps_print_the_exact_approve_line(intake):
-    """REQ-020: brief #273 answer 3 (the full head ID, where to post it, a red check is expected)."""
+    """REQ-020: brief #273 answer 3 (the full head ID, where to post it, a red check expected)."""
     intake_commit(intake)
     approve(intake)
     head = subprocess.run(
@@ -200,7 +204,9 @@ def test_stack_prints_the_body_of_the_options_pull_request(started, tmp_path):
     assert passes(started, body, saved(tmp_path, BRIEFS))
 
 
-def test_stack_prints_the_body_of_the_accepting_pull_request_with_a_summary_that_fits(started, tmp_path):
+def test_stack_prints_the_body_of_the_accepting_pull_request_with_a_summary_that_fits(
+    started, tmp_path
+):
     """REQ-020: brief #273 answers 1 and 2 (the pilot's Summary over 120 characters)."""
     long_name = "a web framework with " + "a very long descriptive name " * 6
     text = (
@@ -246,13 +252,26 @@ def test_design_prints_the_none_form_and_a_body_that_passes_with_an_open_brief(t
     git(root, "commit", "-q", "-m", "base")
     git(root, "switch", "-q", "-c", "design/home")
     written = subprocess.run(
-        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "design.py"), "write", "--name", "home",
-         "--date", "2026-10-29", "--root", str(root)],
-        capture_output=True, text=True, env=clean_env(),
+        [
+            sys.executable,
+            str(KIT_ROOT / "scripts" / "agk" / "design.py"),
+            "write",
+            "--name",
+            "home",
+            "--date",
+            "2026-10-29",
+            "--root",
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
     )
     assert written.returncode == 0, written.stdout
     issues = saved(tmp_path, BRIEFS)
-    proc = engines(root, "design-next-steps", "--base", "main", "--req", "REQ-001", "--issues", issues)
+    proc = engines(
+        root, "design-next-steps", "--base", "main", "--req", "REQ-001", "--issues", issues
+    )
     assert proc.returncode == 0, proc.stdout
     body = body_of(proc.stdout)
     assert body.startswith("Brief: none (design)\nAdvances: REQ-001\n")
@@ -275,7 +294,9 @@ def upgrade_steps(capsys, target, *args):
 
 
 def test_upgrade_prints_the_body_once_the_upgrade_and_its_adr_are_written(
-    tmp_path, upgrade_kit, capsys  # noqa: F811
+    tmp_path,
+    upgrade_kit,  # noqa: F811
+    capsys,
 ):
     """REQ-020: brief #273 answer 1."""
     target = init_target(tmp_path)

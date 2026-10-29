@@ -8,10 +8,11 @@ own `scripts/agk/check_pr_body.py` (the kit's when the repository has none), in 
 state as the command was given it: `--brief N` (the brief the work answers), `--brief none` (the
 person says the repository has no open brief) or `--issues FILE` (a saved copy of its open briefs,
 as the governance workflow saves it). A change of only `docs/design/`, or only `docs/specs/` and
-`docs/requirements.md`, carries `Brief: none (design)` or `Brief: none (spec)`, which passes in either
-state. Without any of these the state is not known and the body is checked as if a brief were open.
-The `Summary:` line is cut to fit at a word boundary. A body that still fails is never printed: the
-command refuses with the check's own lines, which name the rule and never a value. No network.
+`docs/requirements.md`, carries `Brief: none (design)` or `Brief: none (spec)`, which passes in
+either state. Without any of these the state is not known and the body is checked as if a brief
+were open. The `Summary:` line is cut to fit at a word boundary. A body that still fails is never
+printed: the command refuses with the check's own lines, which name the rule and never a value. No
+network.
 """
 
 from __future__ import annotations
@@ -61,7 +62,9 @@ def open_briefs(path: str | None) -> bool | None:
     try:
         json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        raise CheckError("the saved copy of the open briefs cannot be read (option --issues)") from None
+        raise CheckError(
+            "the saved copy of the open briefs cannot be read (option --issues)"
+        ) from None
     return has_brief(path)
 
 
@@ -109,7 +112,7 @@ def check_body(root: Path, path: Path, issues: str | None, base: str | None) -> 
     return proc.returncode == 0, proc.stdout
 
 
-def emit(
+def prepare(
     root: Path,
     fields: list[tuple[str, str]],
     *,
@@ -117,8 +120,9 @@ def emit(
     issues: str | None,
     changed: dict[str, str] | None,
     base: str | None = None,
-) -> None:
-    """Build, write, check and print the body; raise CheckError when it does not pass."""
+) -> tuple[Path, str]:
+    """Build, write and check the body; raise CheckError when it does not pass."""
+    root = root.resolve()
     lines = []
     value = brief_line(brief, issues, changed)
     if value:
@@ -141,6 +145,10 @@ def emit(
             "the pull request body does not pass the repository's body check; no body is "
             "printed:\n" + "\n".join(failures or ["(the check printed no FAIL line)"])
         )
+    return path, text
+
+
+def print_body(path: Path, text: str) -> None:
     print(f"Pull request body file: {path}\n")
     print("Pull request body:\n")
     print(text)

@@ -657,7 +657,7 @@ def test_ac2_the_facts_of_the_default_branch_do_not_contain_the_draft(repo, tmp_
 def test_ac1_next_steps_print_the_commit_the_push_and_a_body_that_passes_check_pr_body(repo):
     """REQ-019 AC1: rule 13."""
     draft(repo)
-    proc = run(repo, "next-steps", "--base", "main")
+    proc = run(repo, "next-steps", "--base", "main", "--brief", "none")
     assert proc.returncode == 0, proc.stdout
     assert "intake: add REQ-004 Export" in proc.stdout
     assert "git push -u origin intake/req-004-export" in proc.stdout
@@ -696,7 +696,7 @@ def test_ac1_next_steps_refuse_on_a_detached_head_or_the_default_branch(repo):
         git(repo, "switch", "-q", "main")
         git(repo, "merge", "-q", "--ff-only", "intake/req-004-export")
     git(repo, "switch", "-q", "intake/req-004-export")
-    proc = run(repo, "next-steps", "--base", "main~1")
+    proc = run(repo, "next-steps", "--base", "main~1", "--brief", "none")
     assert proc.returncode == 0 and "git push -u origin intake/req-004-export" in proc.stdout
 
 

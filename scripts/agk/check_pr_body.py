@@ -7,14 +7,15 @@ the pull request is marked ready for review (SPEC-0033 rule 2); any other value 
 
 SPEC-0034 rule 9: `--issues FILE` is a saved copy of the repository's issues (a JSON list, as
 `gh api repos/OWNER/REPO/issues` returns it); when it holds an issue labelled `agk-brief` (a pull
-request does not count) the body needs `Brief: #n`, or `Brief: none (design)` for a change of only
-`docs/design/`, or `Brief: none (spec)` for a change of only `docs/specs/` and `docs/requirements.md`
-(brief #273): the changed files are read with git from the base (`AGK_BASE`, as the other checks)
-to the work tree, and a base that does not resolve fails the form. A body whose `Build-state row:` sets a
-requirement to `done` needs `Closes #n`. SPEC-0036 rule 1: every body that is not a draft has
-exactly one line `Summary: <one sentence>` of 1 to 120 characters, and the message says which case
-found (missing, repeated with the count, empty, or too long with its length; brief #237). Messages
-name the rule, never a value or a word of the body. Files only."""
+request does not count) the body needs `Brief: #n`, or `Brief: none (design)` for a change of
+only `docs/design/`, or `Brief: none (spec)` for a change of only `docs/specs/` and
+`docs/requirements.md` (brief #273): the changed files are read with git from the base (`AGK_BASE`,
+as the other checks) to the work tree, and a base that does not resolve fails the form. A body
+whose `Build-state row:` sets a requirement to `done` needs `Closes #n`. SPEC-0036 rule 1: every
+body that is not a draft has exactly one line `Summary: <one sentence>` of 1 to 120 characters, and
+the message says which case found (missing, repeated with the count, empty, or too long with its
+length; brief #237). Messages name the rule, never a value or a word of the body. Files and git
+only."""
 
 from __future__ import annotations
 
