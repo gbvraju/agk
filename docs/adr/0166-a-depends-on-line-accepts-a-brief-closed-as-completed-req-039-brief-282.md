@@ -41,9 +41,8 @@ not merged`. The tests were written first (checkpoint 58a6d96), and 9 of them we
 
 ## Spec amendments
 
-SPEC-0025 rule 5 (Approved) says that the check fails "while any named pull request is not merged". This ADR widens it to "a
-named pull request that is not merged, or a named issue that is not closed as completed". The amendment file needs a number
-from the maintainers (Q-282-1); until then this paragraph is the proposed text.
+Amendment 94 (`docs/runs/proposed-spec-amendments-94.md`) changes SPEC-0025 rule 5 (a named issue closed as completed is in, and
+each failing case is named). The number was given in the verdict on 855c1af (Q-282-1).
 
 ## Consequences
 
@@ -54,6 +53,5 @@ from the maintainers (Q-282-1); until then this paragraph is the proposed text.
 
 ## Residual
 
-- 2026-10-29: Q-282-1, the number of the spec amendment for SPEC-0025 rule 5, is asked on the pull request.
-- 2026-10-29: Q-282-2, the getting-started guide's `pr-mode fails` entry still says a `Depends-on` line fails "until the named
-  pull request is merged"; `docs/guides/` is not in the brief's Touches.
+- 2026-10-29: Q-282-1 and Q-282-2 were answered in the verdict on 855c1af. Q-282-1 named amendment 94. Q-282-2: the
+  getting-started guide's `pr-mode fails` entry says the new rule, in this pull request.
