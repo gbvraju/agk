@@ -1,6 +1,6 @@
 # ADR-0166: a Depends-on line accepts a brief closed as completed (REQ-039, brief 282)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0086
