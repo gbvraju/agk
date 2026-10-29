@@ -349,3 +349,35 @@ def test_ac4_the_engines_script_still_runs_without_the_template_in_isolated_mode
         env=clean_env(),
     )
     assert proc.stdout == "ok engines-stack\n" + INFO
+
+
+# --- the fix list of a576d87 ------------------------------------------------------------------
+
+
+def test_ac4_a_sentence_refused_for_another_reason_prints_that_reason(started):
+    """REQ-036 AC4: brief 267 answer 1 (the intake's own refusal is named, not a guessed one)."""
+    option = OPTION_B.replace(" Practices:", " External services: sign-in. Then mail. Practices:")
+    stack_root(started, accepted(option=option))
+    proc = steps(started, "--brief", "none")
+    assert proc.returncode == 0, proc.stdout
+    assert "not one sentence" in proc.stdout and "300 characters" not in proc.stdout
+
+
+def test_ac4_a_double_quote_in_the_services_fails_naming_the_setting(started):
+    """REQ-036 AC4: brief 267 answer 3 (the printed command stays one quoted argument)."""
+    option = OPTION_B.replace(" Practices:", ' External services: a "sign-in" service. Practices:')
+    stack_root(started, accepted(option=option))
+    proc = engines(started, "stack-check")
+    assert proc.returncode == 1 and "rule 5" in proc.stdout and "External services" in proc.stdout
+    assert "double quote" in proc.stdout and "sign-in" not in proc.stdout
+    offer = steps(started, "--brief", "none")
+    assert "/agk:spec" not in offer.stdout
+
+
+@pytest.mark.parametrize("day", ["2026-99-99", "2026-02-30", "2026-13-01"])
+def test_ac4_a_decline_with_a_date_that_does_not_exist_fails(started, day):
+    """REQ-036 AC4: brief 267 answer 2 (the date of a decline is a real date)."""
+    stack_root(started, with_residual(accepted(), f"{DECLINE} ({day})"))
+    proc = engines(started, "stack-check")
+    assert proc.returncode == 1 and "rule 5" in proc.stdout and "local profile" in proc.stdout
+    assert day not in proc.stdout
