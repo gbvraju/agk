@@ -25,8 +25,12 @@ permissions:
   checks: read
   statuses: read
 
+# One group per pull request (brief #309): GitHub keeps one pending run per group and cancels the older pending one, so a single
+# group let another pull request's event cancel a wake. The group is the pull request's number (pull_request, issue_comment), the
+# head of the finished run (workflow_run) or the branch (push); events of one pull request may still replace each other, since the
+# latest run reads the latest state. A run that labels after checks finish also sweeps every pull request left at agk:ci-running.
 concurrency:
-  group: agk-route
+  group: agk-route-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: false
 
 jobs:
