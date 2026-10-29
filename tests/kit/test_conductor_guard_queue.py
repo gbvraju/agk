@@ -226,7 +226,7 @@ def test_the_role_gains_the_self_wake_tool_and_nothing_else():
 
 
 def test_the_role_states_the_cadence_and_when_it_stops():
-    """REQ-039: brief #284 answer 3."""
+    """REQ-039: brief #284 answer 3 (and items 1 and 2 of the verdict on de043e0)."""
     _, body = role_parts()
     for phrase in (
         "every 10 minutes",
@@ -237,5 +237,7 @@ def test_the_role_states_the_cadence_and_when_it_stops():
         "post nothing",
         "empty for two passes in a row",
         "schedule no further wake",
+        "an unchanged fingerprint after an empty pass counts as another empty pass",
+        "/loop review every 5 minutes",
     ):
         assert phrase in body, phrase

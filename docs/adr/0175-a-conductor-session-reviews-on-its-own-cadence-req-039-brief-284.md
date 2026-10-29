@@ -42,7 +42,11 @@ The tests were written first (`tests/kit/test_conductor_guard_queue.py`, 10 fail
 4. **The cadence (answer 3).** The role says: start the session with `/loop` and no interval; every 10 minutes by default (or the
    person's N), read `review-queue --fingerprint`, post nothing when it is unchanged, otherwise run the pass on `review-queue
    --all`; keep the cadence while the queue holds a pull request at `agk:review` or a new head since the last verdict; after two
-   passes in a row with an empty queue, schedule no further wake and end with `queue empty`.
+   passes in a row with an empty queue, schedule no further wake and end with `queue empty`. An unchanged fingerprint after an
+   empty pass counts as another empty pass, so the session stops after two in a row without running `review-queue` again
+   (verdict on de043e0, item 1). A person who wants another interval writes it in the prompt, for example
+   `/loop review every 5 minutes`, because a fixed `/loop 5m` interval needs a recurring-task tool that this role does not
+   have (verdict on de043e0, item 2) `(verify)`.
 5. **The other limits (answer 4)** are unchanged: no merge, no push, no PATCH, PUT or DELETE, no write outside the comment POST
    and the brief creation, and the bounded run as before. The tests repeat those denials next to the new allowed forms.
 6. **The Windows field note on the brief.** A comment `POST` whose `body=@` file is not an absolute path (as a backslash path
@@ -55,6 +59,17 @@ The tests were written first (`tests/kit/test_conductor_guard_queue.py`, 10 fail
 8. **Flow mode.** Fragment `changelog.d/conductor-cadence.md`; no version bump; `kit/hashes.json` is not edited (session rule
    14). `skills/review-pass/SKILL.md` still says that a person pastes the queue's output (its `(verify: Q-306-1 ...)` note); it is
    outside the brief's `Touches:` and is left for the conductor to decide (Q-284-2).
+
+## Log
+
+- 2026-10-29, verdict on de043e0: Q-284-1, the residual stays: the hook input documents `cwd`, so the guard's fallback to its own
+  working directory is a safety net; whether `ScheduleWakeup` is `/loop`'s self-wake tool is confirmed by a person running
+  `/loop` in a conductor session.
+- 2026-10-29, verdict on de043e0: Q-284-2, `skills/review-pass/SKILL.md` is not changed here (outside `Touches:`); pointing its
+  `(verify: Q-306-1 ...)` note at this ADR is a later small change.
+- 2026-10-29, verdict on de043e0: Q-284-3, the refusal message for a `body=@` path that is not absolute stays in this pull
+  request: it allows nothing new, is tested, and is in a file the brief touches.
+- 2026-10-29, verdict on de043e0: items 1 and 2 built (decision 4).
 
 ## Consequences
 
@@ -69,5 +84,7 @@ The tests were written first (`tests/kit/test_conductor_guard_queue.py`, 10 fail
 - 2026-10-29: whether `ScheduleWakeup` is the self-wake tool of `/loop` in every runtime, and whether the hook input carries
   `cwd`, is not confirmed by the builder `(verify)`; a person finds out by running `/loop` in a conductor session (due
   2026-12-15).
+- 2026-10-29: that a person's interval written in the prompt (`/loop review every 5 minutes`) paces a self-paced `/loop` is not
+  tried yet `(verify)`; a person confirms it in a conductor session (due 2026-12-15).
 - 2026-10-29: the identity residual of ADR-0173 stands: the conductor runs with the person's own GitHub identity (due
   2026-12-15).
