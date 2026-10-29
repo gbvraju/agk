@@ -15,9 +15,11 @@ BASE_TOML = 'default_branch = "main"\ntest_dirs = ["tests"]\ntest_patterns = ["t
 
 
 def area(name: str, folder: str, pattern: str, change: str, cwd: str | None = None) -> str:
-    """One area: tests under `<folder>/tests`, red until `<change>` exists at the root."""
+    """One area: tests under `<folder>/tests`, red until `<change>` exists at the root. The
+    command runs inside `cwd` (one level down here), so it reaches the root with `../`."""
     where = f'cwd = "{cwd}", ' if cwd is not None else ""
-    command = f"test -f {change} && cd {cwd or '.'} && ls {{files}}"
+    up = "../" if cwd else ""
+    command = f"test -f {up}{change} && ls {{files}}"
     return (
         f'{name} = {{ dirs = ["{folder}/tests"], patterns = ["{pattern}"], {where}'
         f"command = '{command}' }}\n"
@@ -96,6 +98,36 @@ def test_ac1_without_cwd_the_files_are_relative_to_the_repository_root(repo):
     proc = proof(repo)
     assert proc.stdout.strip() == "proof: proven", proc.stdout + proc.stderr
     assert "frontend/tests/new.test.ts" in proc.stderr
+
+
+def test_ac1_the_command_runs_inside_the_areas_cwd_on_both_runs(repo):
+    """REQ-016 AC1: brief #305 answer 3, Q-305-1 answered (`pwd` is the area's folder)."""
+    extra = (
+        '[proof]\nbackend = { dirs = ["backend/tests"], patterns = ["test_*.py"], '
+        "cwd = \"backend\", command = 'echo AT=$(pwd); test -f ../be.txt && ls {files}' }\n"
+    )
+    start(repo, extra)
+    repo.commit({"be.txt": "x\n", "backend/tests/test_new.py": "# new\n"}, "change")
+    proc = proof(repo)
+    places = [ln.split("AT=", 1)[1] for ln in proc.stderr.splitlines() if ln.startswith("AT=")]
+    assert len(places) == 2, proc.stderr
+    assert all(p.endswith("/backend") for p in places)
+    assert places[0].endswith("base/backend") and places[1].endswith("head/backend")
+
+
+def test_ac1_a_cwd_missing_from_the_head_is_refused_naming_the_setting(repo):
+    """REQ-016 AC1: Q-305-1 answered (the folder must exist in the head tree)."""
+    extra = (
+        '[proof]\nbackend = { dirs = ["backend/tests"], patterns = ["test_*.py"], '
+        "cwd = \"nowhere\", command = 'ls {files}' }\n"
+    )
+    proc = refusal(repo, extra)
+    assert proc.returncode == 2, (proc.stdout, proc.stderr)
+    assert proc.stdout.strip() == (
+        "FAIL proof: the cwd of a proof area is not a folder of the head "
+        "(setting: proof.backend.cwd)"
+    )
+    assert "nowhere" not in proc.stdout + proc.stderr
 
 
 def test_ac1_two_areas_one_red_and_one_not_is_not_proven_and_names_the_area(repo):
