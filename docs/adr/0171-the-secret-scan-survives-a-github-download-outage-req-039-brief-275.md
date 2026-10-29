@@ -1,6 +1,6 @@
 # ADR-0171: the secret scan survives a GitHub download outage and says so in plain words (REQ-039, brief 275)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0158, ADR-0159
