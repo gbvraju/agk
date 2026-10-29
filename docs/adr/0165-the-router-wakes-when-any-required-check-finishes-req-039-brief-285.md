@@ -53,17 +53,11 @@ red on the unchanged tree.
    Flow mode: fragment `changelog.d/router-required-checks.md`, no version bump. `kit/hashes.json` is not edited (session
    rule 14).
 
-## Proposed spec amendments (number to be reserved, Q-285-3)
+## Spec amendments
 
-1. **SPEC-0006 rule 5.** A new row: `router-wake` | warn | a workflow of ROOT that holds a check of `required_checks` is not in
-   the `workflows:` list of `workflow_run` in `.github/workflows/agk-route.yml`, or that list cannot be read (`ok` when the file
-   is absent) | run `/agk:upgrade`, or add the workflow's name to the list (an ADR); until then a verdict comment or an edit of
-   the title or description wakes the router.
-2. **SPEC-0006 rule 8.** "compares, byte for byte" gains: "the router `.github/workflows/agk-route.yml` with its `workflow_run`
-   list read as the kit's (the names are the project's, ADR-0165)".
-3. **SPEC-0008 rule 7.** A new paragraph: "The router `.github/workflows/agk-route.yml` is a whole file whose `workflow_run`
-   list is the project's. T is compared with that list read as N's. The file written is N with the list of ADR-0165 decision 1,
-   and its line ends `(router workflows added: n)` when n is not zero."
+Amendment 93 (`docs/runs/proposed-spec-amendments-93.md`) changes SPEC-0006 rules 5 and 8 (the `router-wake` check, and the
+router compared with its list read as the kit's) and SPEC-0008 rule 7 (the router's list in an upgrade). The number was given
+in the verdict on 9f9f326 (Q-285-3).
 
 ## Consequences
 
@@ -74,7 +68,7 @@ red on the unchanged tree.
 
 ## Residual
 
-- 2026-10-29: Q-285-1, Q-285-2 and Q-285-3 are for the conductor (due 2026-12-31).
+- 2026-10-29: Q-285-1, Q-285-2 and Q-285-3 were accepted in the verdict on 9f9f326. Q-285-3 named amendment 93.
 - A check of a reusable workflow (`caller / callee`) or of a matrix job (`name (a, b)`) is not matched to its workflow. Its name
   is added by hand.
 - `adopt.py` installs the kit's router as it is. The next upgrade of an adopt install writes the list. adopt.py is not in
