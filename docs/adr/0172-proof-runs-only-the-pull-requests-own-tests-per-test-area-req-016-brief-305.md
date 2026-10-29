@@ -12,7 +12,7 @@ Protected classes: `scripts/agk/`, `tests/kit/`
 
 Brief #305 (priority 1). In the pilot (#289, #287) proof ran the whole backend suite twice, about 13 to 25 minutes, close to its
 900 s `proof_timeout`. A change of only front-end tests always read `unknown (no-test-files)`, because proof knows one command
-(`project_tests`) and one set of test folders (`test_dirs`, `test_patterns`). The tests were written first: the 25 new cases of
+(`project_tests`) and one set of test folders (`test_dirs`, `test_patterns`). The tests were written first: 25 of the 26 new cases of
 `tests/kit/test_proof_areas.py` failed on the unchanged `proof.py` and `common.py` (first checkpoint of the pull request).
 
 ## Decision
