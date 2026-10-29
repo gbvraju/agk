@@ -236,3 +236,38 @@ def test_the_fingerprint_changes_with_heads_labels_comment_times_and_checks_only
     facts(stub, 7, [note(1, "Report: x", 1, edited=2)], checks=RUNNING, head=OTHER)
     head = fingerprint(proj, stub)
     assert len({first, label, edited, checks, head}) == 5
+
+
+# --- checks in progress or not reported, whatever the label (verdict item 1) ------------------
+
+
+def test_checks_running_are_skipped_under_any_label(proj, stub):
+    stub.serve(OPEN, [listed(7, "agk:fix", head=OTHER), listed(8, "agk:review")])
+    facts(stub, 7, [verdict(2)], checks=RUNNING, head=OTHER)
+    queued = [{"id": 1, "name": "proof", "status": "queued", "conclusion": None}, GREEN[1]]
+    facts(stub, 8, [], checks=queued)
+    assert queue(proj, stub, "--all") == [
+        "empty",
+        f"#7 {OTHER[:7]} skip: checks running",
+        f"#8 {SHORT} skip: checks running",
+    ]
+
+
+def test_a_pending_required_status_is_running(proj, stub):
+    stub.serve(OPEN, [listed(7, "agk:review")])
+    facts(stub, 7, [], checks=[GREEN[0]])
+    stub.serve(
+        f"repos/{REPO}/commits/{SHA}/status",
+        {"state": "pending", "statuses": [{"id": 1, "context": "governance", "state": "pending"}]},
+    )
+    assert queue(proj, stub, "--all") == ["empty", f"#7 {SHORT} skip: checks running"]
+
+
+def test_checks_not_reported_under_another_label_are_reviewed_and_say_so(proj, stub):
+    stub.serve(OPEN, [listed(7, "agk:review"), listed(8, "agk:fix", head=OTHER)])
+    facts(stub, 7, [], checks=[])
+    facts(stub, 8, [verdict(2)], checks=GREEN[:1], head=OTHER)
+    assert queue(proj, stub) == [
+        f"#7 {SHORT} review: labelled agk:review; no verdict yet; checks not reported",
+        f"#8 {OTHER[:7]} review: head differs from the last verdict ({SHORT}); checks not reported",
+    ]
