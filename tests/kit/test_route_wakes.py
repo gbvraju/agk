@@ -147,18 +147,49 @@ def test_an_unreadable_list_of_open_pull_requests_fails_the_sweep_naming_the_rul
 # --- the workflow (answer 1) ---------------------------------------------------------------------
 
 
-def test_the_concurrency_group_is_per_pull_request_and_never_cancels_a_running_route():
-    text = workflow()
-    block = text.split("\nconcurrency:\n", 1)[1].split("\n\n", 1)[0]
-    group = re.search(r"^  group: (.+)$", block, re.MULTILINE)
-    assert group, block
-    value = group.group(1)
-    assert value != "agk-route" and value.startswith("agk-route-${{ ")
-    order = [
+def group_key() -> str:
+    block = workflow().split("\nconcurrency:\n", 1)[1].split("\n\n", 1)[0]
+    found = re.search(r"^  group: agk-route-\$\{\{ (.+) \}\}$", block, re.MULTILINE)
+    assert found, block
+    assert "  cancel-in-progress: false" in block
+    return found.group(1)
+
+
+def group_of(event: dict, ref: str = "refs/heads/feature") -> str:
+    """The group a GitHub expression `a || b || ...` of `github.*` paths gives for an event: the
+    first path whose value is set and not empty (GitHub's `||`), `[0]` read as the first item."""
+    context = {"github": {"event": event, "ref": ref}}
+    for path in group_key().split(" || "):
+        value = context
+        for part in re.findall(r"[A-Za-z_]+|\[0\]", path):
+            if part == "[0]":
+                value = value[0] if isinstance(value, list) and value else None
+            else:
+                value = value.get(part) if isinstance(value, dict) else None
+        if value not in (None, "", 0, []):
+            return f"agk-route-{value}"
+    return "agk-route-"
+
+
+def test_the_concurrency_group_is_one_per_pull_request_for_all_its_events():
+    """Verdict on 5a9fb92, item 1: the events of one pull request share one group."""
+    assert group_key().split(" || ") == [
         "github.event.pull_request.number",
         "github.event.issue.number",
+        "github.event.workflow_run.pull_requests[0].number",
         "github.event.workflow_run.head_sha",
         "github.ref",
     ]
-    assert [value.index(x) for x in order] == sorted(value.index(x) for x in order), value
-    assert "  cancel-in-progress: false" in block
+    own = {"head_sha": HEAD, "head_branch": "feature", "pull_requests": [{"number": 7}]}
+    assert (
+        group_of({"pull_request": {"number": 7}})
+        == group_of({"issue": {"number": 7, "pull_request": {}}})
+        == group_of({"workflow_run": own})
+        == "agk-route-7"
+    )
+    assert group_of({"pull_request": {"number": 8}}) != group_of({"workflow_run": own})
+    fork = {"head_sha": OTHER, "head_branch": "feature", "pull_requests": []}
+    assert group_of({"workflow_run": fork}) == f"agk-route-{OTHER}"
+    assert (
+        group_of({"ref": "refs/heads/main"}, ref="refs/heads/main") == "agk-route-refs/heads/main"
+    )
