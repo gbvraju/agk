@@ -1,0 +1,7 @@
+name: project
+on: [pull_request]
+jobs:
+  lint-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo lint
