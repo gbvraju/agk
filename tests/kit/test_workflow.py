@@ -366,6 +366,30 @@ def test_the_secret_scan_keeps_its_name_its_place_and_its_condition():
     )
 
 
+def test_the_secret_scanner_is_restored_from_a_cache_keyed_on_its_version_and_digest():
+    """Brief #275 answers 1 and 3 (ADR-0171): one pinned `actions/cache` step before the scan, keyed
+    `gitleaks-<version>-<sha256>` of the scan's own pins, on the directory the scan fills only after
+    the digest check. The action saves that directory after a job that succeeded; the scan keeps its
+    name and its last place."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    blocks = step_blocks(text)
+    names = list(blocks)
+    assert "Restore the secret scanner" in names
+    assert names.index("Restore the secret scanner") < names.index("Project tests")
+    cache = blocks["Restore the secret scanner"]
+    assert re.search(r"^        uses: actions/cache@[0-9a-f]{40}\s+# v\d+(\.\d+){1,2}$", cache, re.M)
+    assert "\n        if: ${{ github.event.action != 'edited' }}\n" in cache
+    scan = blocks["Secret scan"]
+    version = re.search(r"^          GITLEAKS_VERSION: (\S+)$", scan, re.M).group(1)
+    digest = re.search(r"^          GITLEAKS_SHA256: (\S+)$", scan, re.M).group(1)
+    assert f"\n          key: gitleaks-{version}-{digest}\n" in cache
+    assert "\n          path: ${{ runner.temp }}/gitleaks-cache\n" in cache
+    assert 'cache="$RUNNER_TEMP/gitleaks-cache"' in scan
+    # the scan copies the archive into the cached directory only after the digest check
+    assert scan.index('sha256sum --check --strict\n') < scan.index('cp -f "$RUNNER_TEMP/$archive" "$cache/$archive"')
+    assert text.count("actions/cache") == 1 and "save-always" not in text
+
+
 # --- a body failure hides no later step (brief #261, ADR-0159) ----------------------------------
 
 
