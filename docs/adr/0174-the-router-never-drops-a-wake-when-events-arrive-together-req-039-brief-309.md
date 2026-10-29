@@ -1,6 +1,6 @@
 # ADR-0174: the router never drops a wake when events arrive together (REQ-039, brief 309)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0165
