@@ -84,7 +84,7 @@ def test_two_pull_requests_whose_checks_finish_together_both_leave_ci_running(pr
     added = {
         (w[1].split("/")[4], w[2][-1])
         for w in stub.writes()
-        if w[0] == "POST" and w[1].endswith("/labels")
+        if w[0] == "POST" and "/issues/" in w[1] and w[1].endswith("/labels")
     }
     assert added == {("7", "labels[]=agk:review"), ("8", "labels[]=agk:review")}
     removed = {w[1].split("/")[4] for w in stub.writes() if w[0] == "DELETE"}

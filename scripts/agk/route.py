@@ -19,6 +19,10 @@ or a finished workflow on it, it reads the checks of the branch's head and, when
 or updates that issue as a brief (`Priority: 0`, `Advances: none`) that names the failing check,
 the sha and the run and no cause, and closes it when the branch is green; while checks still run
 it does nothing.
+A run woken by a finished workflow (`workflow_run`) also sweeps (brief #309): it re-reads every
+open pull request labelled `agk:ci-running` that the event did not name and relabels each one whose
+required checks have all finished, by the same rules, writing the label only, so a wake lost to
+another event does not leave a green pull request at `agk:ci-running`.
 No review, no merge, and one comment only: the reply `Correction needed:` to a verdict whose
 `Final:` line it cannot read (brief 238). When a pull request merges (`pull_request` closed, the
 job runs only for a merge), the brief its body finishes with `Finishes: #n` beside `Brief: #n` is
@@ -500,6 +504,39 @@ def finish_brief(repo: str, n: int, dry: bool) -> int | None:
     return brief
 
 
+def stale_running(repo: str, done: set[int]) -> list[int]:
+    """The open pull requests labelled `agk:ci-running`, other than DONE (brief #309 answer 2)."""
+    found = pages(f"repos/{repo}/pulls?state=open")
+    if found is None:
+        raise CheckError("rule 1: the open pull requests cannot be read for the sweep")
+    return [
+        int(p["number"])
+        for p in found
+        if isinstance(p.get("number"), int)
+        and p["number"] not in done
+        and "agk:ci-running" in {str(x.get("name")) for x in p.get("labels") or []}
+    ]
+
+
+def sweep_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str | None:
+    """Relabel one pull request left at `agk:ci-running` once its required checks have finished,
+    by the same rules as `route_one`; it writes the label only, and nothing while checks run."""
+    got = read_facts(repo, n, root)
+    if got is None:
+        raise CheckError(f"rule 2: the facts of pull request #{n} cannot be read")
+    pr, facts = got
+    if pr.get("state") != "open" or pr.get("merged_at"):
+        return None
+    wanted = decide(facts)
+    if wanted == "agk:ci-running":
+        return wanted
+    current = [str(x.get("name")) for x in pr.get("labels") or []]
+    if not dry:
+        apply(repo, n, current, wanted, labels)
+    print(f"#{n} {wanted} (swept)")
+    return wanted
+
+
 # --- the default branch (rule 7) ---------------------------------------------------------------
 
 
@@ -771,6 +808,17 @@ def main(argv: list[str] | None = None) -> int:
                 except CheckError as exc:
                     print(f"FAIL {NAME}: {exc}")
                     failed = True
+        if not rest and name == "workflow_run":  # the safety net of a lost wake (brief #309)
+            try:
+                for n in stale_running(repo, set(numbers)):
+                    try:
+                        sweep_one(repo, n, root, labels, dry)
+                    except CheckError as exc:
+                        print(f"FAIL {NAME}: {exc}")
+                        failed = True
+            except CheckError as exc:
+                print(f"FAIL {NAME}: {exc}")
+                failed = True
         if rest == ["--branch"] or (not rest and on_default_branch(name, event, default)):
             try:
                 route_branch(repo, default, labels, dry, required)
