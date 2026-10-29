@@ -82,8 +82,9 @@ and in TypeScript:
 
 When one is set, the weekly drift audit runs it and adds one finding `D9`, never blocking: the unused-code lines (up to 20 and the
 count), and the coverage number with its change since the previous audit. Only the standard output is read, within `proof_timeout`.
-A command that fails, runs too long or prints nothing readable reads `unknown`, never zero; an unused-code command that prints no line
-reads `unknown` too, because its output cannot tell a run that found nothing from one that never ran. A coverage command must exit 0. The report never shows the command. Each setting is a change of
+A command that fails, runs too long or prints nothing readable reads `unknown`, never zero. An unused-code command that exits 0 and
+prints no line reads `0 unused-code findings`, since a tool that finds nothing exits 0; one that prints no line and exits non-zero
+reads `unknown`. A coverage command must exit 0. The command runs in a job that holds no token that can write. The report never shows the command. Each setting is a change of
 `agk.toml`, so it comes with an ADR. A cleanup pull request that removes unused code declares `Behaviour: unchanged`, keeps the proof
 green, and its reviewer checks that nothing still used was removed.
 

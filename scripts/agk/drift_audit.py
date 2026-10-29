@@ -489,12 +489,13 @@ def number(value: float) -> str:
 
 def unused_sentence(status: int | None, out: str, limit: int) -> str:
     """The tool's lines, capped, with their count; any exit status, since the usual tools exit
-    non-zero when they find something. No line, or a timeout, reads `unknown`, never zero."""
+    non-zero when they find something. No line after exit 0 is zero findings (Q-U244-1); no line
+    after any other exit, or a timeout, reads `unknown`, never zero."""
     if status is None:
         return f"unknown: the command did not finish within proof_timeout ({limit} s)"
     lines = [line.strip() for line in out.splitlines() if line.strip()]
     if not lines:
-        return UNREADABLE
+        return "0 unused-code findings (the command exited 0)" if status == 0 else UNREADABLE
     shown = "; ".join(lines[:UNUSED_LIMIT])
     more = f" and {len(lines) - UNUSED_LIMIT} more" if len(lines) > UNUSED_LIMIT else ""
     noun = "unused-code finding" if len(lines) == 1 else "unused-code findings"
@@ -528,10 +529,16 @@ def coverage_sentence(status: int | None, out: str, previous: str | None, limit:
 
 
 def d9(root: Path, previous: str | None, execute=proof.execute) -> list[Finding]:
-    """One finding per set command. They never block; the command itself is never shown."""
+    """One finding per set command. They never block; the command itself is never shown.
+
+    With no command set it reads no other setting, so a project that has not opted in is never
+    failed by one (`proof_timeout`, say)."""
+    commands = command_settings(root)
+    if not commands:
+        return []
     limit = proof_timeout(root)
     found = []
-    for key, command in command_settings(root).items():
+    for key, command in commands.items():
         status, out, _ = execute(command, root, limit, merge_stderr=False)
         if key == "coverage":
             sentence = coverage_sentence(status, out, previous, limit)

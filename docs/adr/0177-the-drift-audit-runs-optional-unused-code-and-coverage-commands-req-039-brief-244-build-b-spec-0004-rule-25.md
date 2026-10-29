@@ -24,27 +24,38 @@ ADR-0177 for this build (brief #244, 2026-10-29), and amendment 87 is still free
    checkout, through `proof.execute` (its own process group, ended on a timeout), within `proof_timeout`, reading the standard
    output alone, and adds one finding D9 whose subject is the setting's name. It never blocks and never shows the command.
    - `unused_code`: `<n> unused-code findings: <line>; <line>` (up to 20 lines, then `and N more`), whatever the exit status,
-     because the usual tools (`vulture`, `knip`) exit non-zero when they find something.
+     because the usual tools (`vulture`, `knip`) exit non-zero when they find something. No line after exit 0 reads
+     `0 unused-code findings (the command exited 0)`: a tool that finds nothing exits 0 (Q-U244-1).
    - `coverage`: `covered <p>%, change since the previous audit: <+d|-d|unknown>`. The last non-empty line must be a number from
      0 to 100 (a `%` sign allowed) and the command must exit 0.
    - A command that runs too long reads `unknown: the command did not finish within proof_timeout (<n> s)`; one that fails or
-     prints nothing readable reads `unknown: the command failed or printed nothing readable`; never zero.
+     prints nothing readable (for `unused_code`, no line after a non-zero exit) reads
+     `unknown: the command failed or printed nothing readable`; never zero.
+   - With neither setting set, `d9` returns before it reads any other setting, so a project that has not opted in is never
+     failed by one (an invalid `proof_timeout`, say).
 3. **The previous audit.** `drift_audit.py --previous FILE` takes the body of the open audit issue, and the coverage change is the
    number now less the `covered <p>%` of that body; with no such body or number the change reads `unknown`. The workflow reads
    the body with the read-only `gh issue list --json number,body` (no new `gh` verb, SPEC-0004 rule 21) into `$RUNNER_TEMP`.
-4. **Only the report run starts a command.** `--print-action` and `--print-title` start none: a set command always gives the report
+4. **No writing token where a project command runs** (the verdict on e67c989). The workflow has two jobs. `report` checks out
+   with `persist-credentials: false`, reads the open audit issues in a step that runs no project command, and runs
+   `drift_audit.py` in a step with no `GH_TOKEN`; it hands the title, the action and the report (base64, one line) on as job
+   outputs, not as an upload, which would count against a project's artifact storage. `file` (`needs: report`) checks nothing
+   out, runs no script of the repository, and does the only writes: the label, `gh issue create` or `gh issue edit`. The
+   workflow-level permissions stay `contents: read` and `issues: write`.
+5. **Only the report run starts a command.** `--print-action` and `--print-title` start none: a set command always gives the report
    one D9 finding, so the action is `create` or `update N` whenever one is set. `audit()`, which the facts call, starts none, so the
    facts never run a project command; D9 is in `COMMAND_CODES`, not in `CODES`, and the facts' drift counts are unchanged. The
    report's summary line carries `D9=<n>` after `D8=<n>`.
-5. **`proof.execute`** gains `merge_stderr` (default `True`, so proof is unchanged); the audit passes `False`. The drift audit itself
+6. **`proof.execute`** gains `merge_stderr` (default `True`, so proof is unchanged); the audit passes `False`. The drift audit itself
    still imports no process module; its import test now allows `proof` beside `common` and `reviewers`.
-6. **The guide** (`docs/guides/existing-codebase.md`, step 3) gives examples for Python (`vulture`, `coverage`) and TypeScript
+7. **The guide** (`docs/guides/existing-codebase.md`, step 3) gives examples for Python (`vulture`, `coverage`) and TypeScript
    (`knip`, `vitest`), says the kit installs none, that a failing or silent command reads `unknown`, and how a cleanup pull request
    reads; `docs/guides/getting-started.md` points to it.
-7. **Readings taken where the brief leaves a point open** (the most conservative each):
+8. **Readings taken where the brief leaves a point open** (the most conservative each):
    - one code, D9, for both commands, with the setting as subject, keeps the codes one digit and sorted;
-   - an unused-code command that prints no line reads `unknown`, as the brief's "prints nothing readable" says, even when it exits
-     0: its output cannot tell a clean run from one that never ran (Q-U244-1 asks whether a clean run should read 0 instead);
+   - Q-U244-1, answered by the conductor in the verdict on e67c989 (#313): an unused-code command that exits 0 and prints no
+     line reads `0 unused-code findings (the command exited 0)`, since a tool that finds nothing exits 0 and `unknown` would
+     hide a successful cleanup; one that prints no line and exits non-zero reads `unknown`;
    - the time limit is `proof_timeout`, since the brief adds only two settings;
    - "since last week" is since the previous audit, the body of the open audit issue, which is last week's on the schedule;
    - answer 7: the weekly report would need more than an optional field: the facts would have to run the project's commands or read

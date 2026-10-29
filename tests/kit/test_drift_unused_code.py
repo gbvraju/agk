@@ -121,13 +121,28 @@ def test_the_error_stream_is_not_read_as_findings(repo):
 
 
 @pytest.mark.parametrize(
-    "command", ["exit 1", "true", "echo only-noise >&2; exit 2", "no-such-tool-anywhere --x"]
+    "command", ["exit 1", "echo only-noise >&2; exit 2", "no-such-tool-anywhere --x"]
 )
-def test_a_failing_or_silent_command_reads_unknown_never_zero(repo, command):
+def test_a_failing_command_that_prints_no_line_reads_unknown_never_zero(repo, command):
     configure(repo, unused_code=command)
     _, sentence = d9(repo.root)["unused_code"]
     assert sentence.startswith("unknown")
     assert not re.search(r"\b0\b", sentence)
+
+
+def test_a_clean_run_that_exits_0_and_prints_nothing_reads_zero(repo):
+    """Q-U244-1, answered by the conductor on #313: a tool that finds nothing exits 0."""
+    configure(repo, unused_code="true")
+    assert d9(repo.root)["unused_code"][1] == "0 unused-code findings (the command exited 0)"
+
+
+def test_a_project_that_has_not_opted_in_is_not_failed_by_another_setting(repo):
+    """Verdict on e67c989, item 1: with no command set, `proof_timeout` is never read."""
+    repo.write("agk.toml", BASE_TOML + "proof_timeout = 0\n")
+    repo.commit(1)
+    proc = audit(repo.root)
+    assert proc.returncode == 0, proc.stdout
+    assert summary_d9(repo.root) == "0"
 
 
 # --- coverage (answers 5, 6 and 8) ---------------------------------------------------------------
@@ -162,6 +177,16 @@ def test_the_change_is_computed_from_the_previous_audit(repo, tmp_path):
     configure(repo, coverage="echo 79.25")
     down = d9(repo.root, "--previous", previous(tmp_path, "80"))["coverage"][1]
     assert down.endswith("change since the previous audit: -0.75")
+
+
+def test_a_real_report_fed_back_as_previous_gives_the_change(repo, tmp_path):
+    """The line the report writes is the line the next audit reads (format kept in step)."""
+    configure(repo, coverage="echo 70")
+    first = tmp_path / "first.md"
+    first.write_text(audit(repo.root).stdout, encoding="utf-8")
+    configure(repo, coverage="echo 72.5")
+    sentence = d9(repo.root, "--previous", str(first))["coverage"][1]
+    assert sentence == "covered 72.5%, change since the previous audit: +2.5"
 
 
 def test_a_previous_audit_without_a_number_leaves_the_change_unknown(repo, tmp_path):

@@ -104,3 +104,33 @@ def test_ac1_header_comment_documents_that_schedules_may_be_disabled():
         head.append(line.lower())
     comment = " ".join(head)
     assert "inactivity" in comment and "workflow_dispatch" in comment and "scheduled" in comment
+
+
+def job_block(name: str) -> str:
+    match = re.search(rf"^  {name}:\s*\n((?:    .*\n|\n)*)", text(), flags=re.M)
+    assert match, name
+    return match.group(1)
+
+
+def test_the_report_runs_where_no_writing_token_is_reachable():
+    """REQ-039: ADR-0177 (verdict on e67c989, item 2). The project's own commands run in the report
+    job, whose checkout keeps no credentials and whose audit step has no GH_TOKEN."""
+    report = job_block("report")
+    assert re.search(r"persist-credentials:\s*false\b", report)
+    steps = re.split(r"\n      - ", report)
+    (audit_step,) = [st for st in steps if "--previous" in st]
+    assert "GH_TOKEN" not in audit_step and "secrets." not in audit_step
+    for step in steps:
+        if "GH_TOKEN" in step:
+            assert "drift_audit.py" not in step and "python" not in step
+
+
+def test_the_issue_writes_run_in_a_job_that_runs_no_project_command():
+    """REQ-039: ADR-0177. The file job checks nothing out and runs no script of the repository."""
+    file_job = job_block("file")
+    assert "needs: report" in file_job
+    assert "actions/checkout" not in file_job and "python" not in file_job
+    assert "gh issue edit" in file_job and "gh issue create" in file_job
+    assert "gh issue edit" not in job_block("report") and "gh issue create" not in job_block(
+        "report"
+    )
