@@ -1,6 +1,6 @@
 # ADR-0176: every project is offered a default local profile once its stack is accepted (REQ-036, brief 267)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0170
