@@ -1,6 +1,6 @@
 # ADR-0167: proof ends the whole test tree on a timeout, on every OS (REQ-016, brief 290)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0021
