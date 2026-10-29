@@ -1,10 +1,12 @@
 """Red-then-green: can the tests a pull request adds fail? (SPEC-0010 rules 7 to 15).
 
 Standard library only, and no language: the test command, directories and patterns come from
-`agk.toml`. It places the pull request's test files on the base commit (a detached git worktree) and
-runs `project_tests` there, expecting it to fail, then runs it on the head (a second detached
-worktree), expecting it to pass. ROOT's work tree is never changed: the script adds two worktrees in
-a temporary directory outside ROOT and removes them at the end, also on a failure.
+`agk.toml`. It places the pull request's test files on the base commit (a detached git worktree)
+and runs `project_tests` there, expecting it to fail, then runs it on the head (a second detached
+worktree), expecting it to pass. With a `[proof]` table, each test area's own command runs instead,
+with only the pull request's test files of that area (brief #305, ADR-0172). ROOT's work tree is
+never changed: the script adds two worktrees in a temporary directory outside ROOT and removes them
+at the end, also on a failure.
 
 Exit: 0 proven or skipped, 1 not-proven, 4 unknown, 2 usage or a refused setting, 3 I/O.
 """
@@ -14,6 +16,8 @@ from __future__ import annotations
 import fnmatch
 import json
 import os
+import posixpath
+import shlex
 import shutil
 import signal
 import subprocess  # nosec B404 - fixed argument lists, and the project's own test command
@@ -30,6 +34,7 @@ from common import (
     declares_unchanged,
     git,
     load_config,
+    proof_areas,
     proof_timeout,
     resolve_base,
 )
@@ -55,22 +60,41 @@ class Result:
     head: str
     test_files: list[str]
     elapsed: int | None = None  # whole seconds of the run that timed out
+    areas: list[dict] | None = None  # with a `[proof]` table: each area's files, outcome, seconds
 
     def line(self) -> str:
-        reason = self.reason
-        if reason == "timeout" and self.elapsed is not None:
-            reason = f"timeout after {self.elapsed} s, setting: proof_timeout"
+        if self.areas is not None and self.outcome in ("not-proven", "unknown"):
+            named = [
+                f"{a['name']}: {reason_text(a['reason'], a['elapsed'])}"
+                for a in self.areas
+                if a["outcome"] not in (None, "proven")
+            ]
+            if named:
+                return f"proof: {self.outcome} ({'; '.join(named)})"
+        reason = reason_text(self.reason, self.elapsed)
         suffix = f" ({reason})" if reason else ""
         return f"proof: {self.outcome}{suffix}"
 
     def data(self) -> dict:
-        return {
+        out = {
             "outcome": self.outcome,
             "reason": self.reason,
             "base": self.base,
             "head": self.head,
             "test_files": self.test_files,
         }
+        if self.areas is not None:
+            out["areas"] = [
+                {k: a[k] for k in ("name", "files", "outcome", "reason", "seconds")}
+                for a in self.areas
+            ]
+        return out
+
+
+def reason_text(reason: str | None, elapsed: int | None) -> str | None:
+    if reason == "timeout" and elapsed is not None:
+        return f"timeout after {elapsed} s, setting: proof_timeout"
+    return reason
 
 
 def parse_args(args: list[str]) -> dict:
@@ -247,38 +271,101 @@ def place_tests(root: Path, work: Path, files: dict[str, str], head: str) -> Non
         target.write_bytes(proc.stdout)
 
 
+class Trees:
+    """Two detached worktrees in a temporary directory outside ROOT: the base with the pull
+    request's tests placed, and the head. Removed at the end, also on a failure."""
+
+    def __init__(self, root: Path, base: str, head: str, files: dict[str, str]) -> None:
+        self.root, self.base, self.head, self.files = root, base, head, files
+        self.temp = Path(tempfile.mkdtemp(prefix="agk-proof-"))
+        self.trees = [self.temp / "base", self.temp / "head"]
+        self.added: list[Path] = []
+
+    def __enter__(self) -> list[Path]:
+        try:
+            for tree, ref in zip(self.trees, (self.base, self.head), strict=True):
+                try:
+                    git(self.root, "worktree", "add", "--detach", "-q", str(tree), ref)
+                except CheckError as exc:
+                    raise Failure("a worktree cannot be added (path class: temporary)") from exc
+                self.added.append(tree)
+            place_tests(self.root, self.trees[0], self.files, self.head)
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+        return self.trees
+
+    def __exit__(self, *exc) -> None:
+        for tree in self.added:
+            git(self.root, "worktree", "remove", "--force", str(tree), check=False)
+        git(self.root, "worktree", "prune", check=False)
+        shutil.rmtree(self.temp, ignore_errors=True)
+        if any(p.exists() for p in self.added):
+            raise Failure("a temporary worktree could not be removed (path class: temporary)")
+
+
+def run_pair(trees: list[Path], command: str, limit: int, label: str = ""):
+    """(run 1, run 2, seconds of the timed-out run or None, seconds of both runs)."""
+    status1, out1, seconds1 = execute(command, trees[0], limit)
+    show(f"run 1{label}: the base with the pull request's tests", out1)
+    if status1 is None:
+        print(timeout_note(seconds1), file=sys.stderr)
+        return None, None, seconds1, seconds1
+    status2, out2, seconds2 = execute(command, trees[1], limit)
+    show(f"run 2{label}: the head", out2)
+    if status2 is None:
+        print(timeout_note(seconds2), file=sys.stderr)
+        return status1, None, seconds2, seconds1 + seconds2
+    return status1, status2, None, seconds1 + seconds2
+
+
 def two_runs(root: Path, base: str, head: str, files: dict[str, str], command: str, limit: int):
     """(run 1, run 2, seconds): exit statuses, None for a timeout, None for run 2 when it was not
     made; seconds is the time of the run that timed out, else None."""
-    temp = Path(tempfile.mkdtemp(prefix="agk-proof-"))
-    trees = [temp / "base", temp / "head"]
-    added: list[Path] = []
-    try:
-        for tree, ref in zip(trees, (base, head), strict=True):
-            try:
-                git(root, "worktree", "add", "--detach", "-q", str(tree), ref)
-            except CheckError as exc:
-                raise Failure("a worktree cannot be added (path class: temporary)") from exc
-            added.append(tree)
-        place_tests(root, trees[0], files, head)
-        status1, out1, seconds = execute(command, trees[0], limit)
-        show("run 1: the base with the pull request's tests", out1)
-        if status1 is None:
-            print(timeout_note(seconds), file=sys.stderr)
-            return None, None, seconds
-        status2, out2, seconds = execute(command, trees[1], limit)
-        show("run 2: the head", out2)
-        if status2 is None:
-            print(timeout_note(seconds), file=sys.stderr)
-            return status1, None, seconds
-        return status1, status2, None
-    finally:
-        for tree in added:
-            git(root, "worktree", "remove", "--force", str(tree), check=False)
-        git(root, "worktree", "prune", check=False)
-        shutil.rmtree(temp, ignore_errors=True)
-        if any(p.exists() for p in added):
-            raise Failure("a temporary worktree could not be removed (path class: temporary)")
+    with Trees(root, base, head, files) as trees:
+        status1, status2, seconds, _ = run_pair(trees, command, limit)
+    return status1, status2, seconds
+
+
+def area_files(area: dict, files: dict[str, str]) -> dict[str, str]:
+    return {p: s for p, s in files.items() if is_test_file(p, area["dirs"], area["patterns"])}
+
+
+def area_command(area: dict, paths: list[str]) -> str:
+    """The template with `{files}`: each path relative to the area's cwd, shell-quoted."""
+    quoted = " ".join(shlex.quote(posixpath.relpath(p, area["cwd"])) for p in paths)
+    return area["command"].replace("{files}", quoted)
+
+
+# The reason of a whole result, in the order of SPEC-0010 rule 12.
+REASON_ORDER = ("timeout", "green-on-base", "red-on-head")
+
+
+def run_areas(root: Path, base: str, head: str, areas: list[dict], files: dict[str, str], limit):
+    """Each area with added or changed tests runs its command, with only those files, on the base
+    (all the areas' tests placed) and on the head."""
+    placed = {p: files[p] for a in areas for p in a["files"]}
+    with Trees(root, base, head, placed) as trees:
+        for area in areas:
+            paths = [p for p in area["files"] if files[p] != "D"]
+            if not paths:
+                continue
+            status1, status2, elapsed, seconds = run_pair(
+                trees, area_command(area, paths), limit, f" ({area['name']})"
+            )
+            area["outcome"], area["reason"] = decide(status1, status2)
+            area["seconds"], area["elapsed"] = seconds, elapsed
+
+
+def combine(areas: list[dict]) -> tuple[str, str | None, int | None]:
+    """Proven only when every area that ran is proven; else unknown before not-proven."""
+    ran = [a for a in areas if a["outcome"] is not None]
+    for reason in REASON_ORDER:
+        hit = next((a for a in ran if a["reason"] == reason), None)
+        if hit is not None:
+            outcome = "unknown" if reason == "timeout" else "not-proven"
+            return outcome, reason, hit["elapsed"]
+    return "proven", None, None
 
 
 def decide(status1: int | None, status2: int | None) -> tuple[str, str | None]:
@@ -294,6 +381,9 @@ def decide(status1: int | None, status2: int | None) -> tuple[str, str | None]:
 
 def prove(root: Path, base: str, head: str, body: str) -> Result:
     cfg = load_config(root)
+    areas = proof_areas(root)
+    if areas is not None:
+        return prove_areas(root, base, head, body, areas)
     command = str(cfg["project_tests"] or "").strip()
     limit = proof_timeout(root)
     files = {
@@ -315,6 +405,26 @@ def prove(root: Path, base: str, head: str, body: str) -> Result:
     status1, status2, seconds = two_runs(root, base, head, files, command, limit)
     outcome, reason = decide(status1, status2)
     return Result(outcome, reason, base, head, names, seconds)
+
+
+def prove_areas(root: Path, base: str, head: str, body: str, areas: list[dict]) -> Result:
+    """With a `[proof]` table: each area's own command with only the pull request's files."""
+    limit = proof_timeout(root)
+    changed = changes(root, base, head)
+    for area in areas:
+        mine = area_files(area, changed)
+        area.update(files=sorted(mine), outcome=None, reason=None, seconds=0, elapsed=None)
+    names = sorted({p for a in areas for p in a["files"]})
+
+    def result(outcome: str, reason: str | None = None, elapsed: int | None = None) -> Result:
+        return Result(outcome, reason, base, head, names, elapsed, areas)
+
+    if declares_unchanged(body):
+        return result("skipped")
+    if not any(changed[p] != "D" for a in areas for p in a["files"]):
+        return result("unknown", "no-test-files")
+    run_areas(root, base, head, areas, changed, limit)
+    return result(*combine(areas))
 
 
 def main(argv: list[str] | None = None) -> int:

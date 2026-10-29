@@ -88,6 +88,16 @@ def test_ac1_the_command_gets_only_the_pull_requests_files_relative_and_quoted(r
     assert "test_old.py" not in proc.stderr and "backend/tests" not in proc.stderr
 
 
+def test_ac1_without_cwd_the_files_are_relative_to_the_repository_root(repo):
+    """REQ-016 AC1: brief #305 answer 3 (the working folder defaults to the root)."""
+    extra = "[proof]\n" + area("frontend", "frontend", "*.test.ts", "fe.txt")
+    start(repo, extra)
+    repo.commit({"fe.txt": "x\n", "frontend/tests/new.test.ts": "// new\n"}, "change")
+    proc = proof(repo)
+    assert proc.stdout.strip() == "proof: proven", proc.stdout + proc.stderr
+    assert "frontend/tests/new.test.ts" in proc.stderr
+
+
 def test_ac1_two_areas_one_red_and_one_not_is_not_proven_and_names_the_area(repo):
     """REQ-016 AC1: brief #305 answer 2 (every area with files must be proven)."""
     start(repo, TWO_AREAS, files={"fe.txt": "already there\n"})
@@ -249,6 +259,10 @@ MALFORMED = {
     '[proof]\nbackend = { dirs = ["b"], patterns = ["t*"], command = "x {files}", other = 1 }\n': (
         "proof.backend"
     ),
+    '[proof]\nbackend = { dirs = ["b"], patterns = ["t*"], command = "y {files}", cwd = ".." }\n': (
+        "proof.backend.cwd"
+    ),
+    '[proof]\n"a b" = { dirs = ["b"], patterns = ["t*"], command = "x {files}" }\n': "proof",
     "[proof]\nbackend = 1\n": "proof.backend",
     "proof = 1\n": "proof",
     "[proof]\n": "proof",
