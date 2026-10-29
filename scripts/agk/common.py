@@ -460,20 +460,24 @@ DEFAULT_CONFIG = {
     "pr_mode": "strict",
     "required_checks": ["proof", "governance"],
     "agent_apps": ["claude"],
-    "proof": None,
 }
+
+
+def config_source(root: Path) -> dict:
+    """The settings as written: agk.toml first, then [tool.agk] in pyproject.toml."""
+    agk_toml = root / "agk.toml"
+    pyproject = root / "pyproject.toml"
+    if agk_toml.is_file():
+        return tomllib.loads(agk_toml.read_text(encoding="utf-8"))
+    if pyproject.is_file():
+        return tomllib.loads(pyproject.read_text(encoding="utf-8")).get("tool", {}).get("agk", {})
+    return {}
 
 
 def load_config(root: Path) -> dict:
     """agk.toml first, then [tool.agk] in pyproject.toml (earlier installs); defaults fill gaps."""
     cfg = {k: list(v) if isinstance(v, list) else v for k, v in DEFAULT_CONFIG.items()}
-    source: dict = {}
-    agk_toml = root / "agk.toml"
-    pyproject = root / "pyproject.toml"
-    if agk_toml.is_file():
-        source = tomllib.loads(agk_toml.read_text(encoding="utf-8"))
-    elif pyproject.is_file():
-        source = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("tool", {}).get("agk", {})
+    source = config_source(root)
     for key in DEFAULT_CONFIG:
         if key in source:
             cfg[key] = source[key]
@@ -774,7 +778,7 @@ def _texts(value: object) -> bool:
 
 def proof_areas(root: Path) -> list[dict] | None:
     """The areas of `[proof]` in table order, or None without the table; a bad one is refused."""
-    table = load_config(root)["proof"]
+    table = config_source(root).get("proof")
     if table is None:
         return None
     if not isinstance(table, dict) or not table:
