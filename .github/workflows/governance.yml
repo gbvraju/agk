@@ -216,11 +216,15 @@ jobs:
       - name: Restore the secret scanner
         if: ${{ !cancelled() && github.event.action != 'edited' }}
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830   # v4.3.0
+        env:
+          # The same pins as the step `Secret scan`; a test keeps the two equal.
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
         with:
           # The archive of the step `Secret scan`, keyed on its pinned version and digest (brief #275, ADR-0171). The action
           # restores it here and saves the directory at the end of a job that succeeded; the scan checks the digest on use.
           path: ${{ runner.temp }}/gitleaks-cache
-          key: gitleaks-8.30.1-551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          key: gitleaks-${{ env.GITLEAKS_VERSION }}-${{ env.GITLEAKS_SHA256 }}
       - name: Project tests
         if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') == '' && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
         run: make -f agk.mk agk-project-test

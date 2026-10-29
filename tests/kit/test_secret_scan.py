@@ -339,3 +339,15 @@ def test_the_first_push_of_a_repository_scans_the_whole_history(tmp_path):
     for before in (ZERO, "", "1" * 40):
         proc = scan(tmp_path, repo, EVENT="push", PUSH_BEFORE=before, HEAD_SHA=head)
         assert found(proc), (before, proc.stdout + proc.stderr)
+
+
+@needs_gitleaks
+def test_the_workflow_itself_holds_nothing_the_scan_flags(tmp_path):
+    """Brief #275: a literal cache key after `key:` was flagged as a generic API key on the first
+    run; the key is built from the pins, so the workflow passes the scan's default rules."""
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [gitleaks(), "dir", "--no-banner", "--redact", "--exit-code", "1", str(WORKFLOW)],
+        capture_output=True,
+        text=True,
+    )
+    assert clean(proc), proc.stdout + proc.stderr

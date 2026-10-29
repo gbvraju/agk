@@ -20,10 +20,12 @@ failed on the unchanged workflow (checkpoint bc3b4d1).
 
 1. **The cached copy.** A step `Restore the secret scanner` runs `actions/cache`, pinned by commit
    (`0057852bfaa89a56745cba8c7296529d2fc39830`, tag v4.3.0, read with `git ls-remote` on 2026-10-29), before `Project tests`, with
-   the scan's condition (`!cancelled()` and not an `edited` run). Its key is `gitleaks-<version>-<sha256>` of the scan's own pins,
-   written out (`gitleaks-8.30.1-551f…70eb`), and its path is `${{ runner.temp }}/gitleaks-cache`. The action restores the
-   directory there and saves it at the end of the job (its `post-if` is `success()`, read in the action's `action.yml` at that
-   commit); a test checks that the key equals the scan's version and digest, so the two change together.
+   the scan's condition (`!cancelled()` and not an `edited` run). Its key is `gitleaks-${{ env.GITLEAKS_VERSION }}-${{
+   env.GITLEAKS_SHA256 }}`, from the step's own `env:`, which repeats the scan's two pins; a test keeps them equal, so they change
+   together. The key is not written out: a literal 64-character value after `key:` is a finding of the scan's default
+   `generic-api-key` rule, which failed the first run of this change (a test now scans the workflow file where a gitleaks binary is
+   present). Its path is `${{ runner.temp }}/gitleaks-cache`. The action restores the directory there and saves it at the end of
+   the job (its `post-if` is `success()`, read in the action's `action.yml` at that commit).
 2. **Checked on every use.** The scan uses the cached archive only when it matches the digest (`sha256sum --check --strict`);
    a cached copy that does not match is deleted and the archive downloaded, so a bad cache entry, whose key cannot be
    overwritten, never blocks every later run. The archive in use, cached or downloaded, is then checked against the digest as

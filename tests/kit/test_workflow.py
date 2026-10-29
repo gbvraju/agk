@@ -383,7 +383,12 @@ def test_the_secret_scanner_is_restored_from_a_cache_keyed_on_its_version_and_di
     scan = blocks["Secret scan"]
     version = re.search(r"^          GITLEAKS_VERSION: (\S+)$", scan, re.M).group(1)
     digest = re.search(r"^          GITLEAKS_SHA256: (\S+)$", scan, re.M).group(1)
-    assert f"\n          key: gitleaks-{version}-{digest}\n" in cache
+    # the key is built from the step's own pins, which equal the scan's; a literal key would be a
+    # high-entropy value after `key:`, which the scan's default rules flag as a leak
+    assert f"\n          GITLEAKS_VERSION: {version}\n" in cache
+    assert f"\n          GITLEAKS_SHA256: {digest}\n" in cache
+    key = "gitleaks-${{ env.GITLEAKS_VERSION }}-${{ env.GITLEAKS_SHA256 }}"
+    assert f"\n          key: {key}\n" in cache
     assert "\n          path: ${{ runner.temp }}/gitleaks-cache\n" in cache
     assert 'cache="$RUNNER_TEMP/gitleaks-cache"' in scan
     # the scan copies the archive into the cached directory only after the digest check
