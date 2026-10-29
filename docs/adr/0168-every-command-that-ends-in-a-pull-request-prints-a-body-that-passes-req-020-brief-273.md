@@ -1,6 +1,6 @@
 # ADR-0168: every command that ends in a pull request prints a body that passes (REQ-020, brief 273)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0039, ADR-0120, ADR-0140, ADR-0163
