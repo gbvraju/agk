@@ -24,7 +24,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import detect_default_branch, experimental_enabled, lf, matches, read_list
+from common import (
+    ROUTER_WORKFLOW,
+    CheckError,
+    detect_default_branch,
+    experimental_enabled,
+    lf,
+    matches,
+    read_list,
+    router_names,
+    router_wanted,
+    with_router_names,
+)
+from common import required_checks as configured_checks
 from reviewers import parse, render_codeowners
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
@@ -144,10 +156,32 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
     for dest, src in manifest["templates"].items():
         text = (KIT_ROOT / src).read_text(encoding="utf-8")
         items[dest] = render(text, variables, src).encode("utf-8")
+    if ROUTER_WORKFLOW in items:
+        items[ROUTER_WORKFLOW] = router_bytes(target, items[ROUTER_WORKFLOW], items["agk.toml"])
     codeowners = render_codeowners(parse(items["config/reviewers.yaml"].decode("utf-8")))
     items[".github/CODEOWNERS"] = codeowners.encode("utf-8")
     entries = read_list(items["config/protected-paths.txt"].decode("utf-8"))
     return sorted(items.items()), entries, branch
+
+
+def router_bytes(target: Path, kit: bytes, rendered_toml: bytes) -> bytes:
+    """The router with its `workflow_run` list written (brief #285): the kit's names, then each
+    workflow of TARGET that holds a check of `required_checks` (from the target's agk.toml when it
+    has one, else from the rendered template). Unchanged when either cannot be read."""
+    try:
+        text = kit.decode("utf-8")
+        if (target / "agk.toml").is_file():
+            required = configured_checks(target)
+        else:
+            value = tomllib.loads(rendered_toml.decode("utf-8")).get("required_checks")
+            required = value if isinstance(value, list) else ["proof", "governance"]
+    except (CheckError, OSError, UnicodeDecodeError, ValueError):
+        return kit
+    base = router_names(text)
+    if base is None:
+        return kit
+    names = router_wanted(target, [str(x) for x in required], base)
+    return (with_router_names(text, names) or text).encode("utf-8")
 
 
 def kit_bytes(path: Path) -> bytes:

@@ -18,6 +18,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
+# The one kit script the doctor imports: the router's list is read as upgrade.py writes it.
+from common import ROUTER_WORKFLOW, router_names, router_wanted, with_router_names  # noqa: E402
+
 USAGE = "usage: doctor.py [--repo OWNER/REPO] [--kit-root PATH] [--api-dir DIR] [--json] [ROOT]"
 PLACEHOLDER = "@REPLACE-ME"
 DRIFT_WORKFLOW = ".github/workflows/drift-audit.yml"
@@ -25,6 +30,7 @@ DRIFT_NAME = "drift-audit.yml"
 REPORT_WORKFLOW = ".github/workflows/product-report.yml"
 REPORT_NAME = "product-report.yml"
 ISSUE_WRITERS = ("metrics.yml", "drift-audit.yml", "product-report.yml")  # `issues: write`
+DEFAULT_REQUIRED = ["proof", "governance"]  # the default of `required_checks` (common.py)
 KIT_ONLY = ("kit/",)
 KIT_ONLY_FILES = ("scripts/agk/init.py", "scripts/agk/adopt.py")
 MARKERS = {
@@ -174,6 +180,16 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "vendored files differ from the kit's copy",
         "review `git log -p -- <path>`; restore the kit's copy, or record the deliberate edit in "
         "an ADR that names the path class",
+    ),
+    "router-wake": (
+        "warn",
+        "the router wakes when each workflow of required_checks finishes",
+        "a workflow that holds a check of required_checks is not in the workflow_run list of "
+        "the router, or the list cannot be read",
+        "run /agk:upgrade (SPEC-0008), which writes the list from required_checks; or add the "
+        "workflow's name to `workflows:` of `workflow_run` in .github/workflows/agk-route.yml "
+        "(a change needs an ADR). Until then a `Verdict:` comment, or an edit of the pull "
+        "request's title or description, wakes the router",
     ),
     "default-branch-config": (
         "warn",
@@ -522,6 +538,24 @@ def remote_results(
     return out
 
 
+def router_result(root: Path, config: dict) -> Result:
+    """`router-wake`: every workflow that holds a required check is in the router's list."""
+    path = root / ROUTER_WORKFLOW
+    if not path.is_file():
+        return Result("ok", message=" (no router installed)")
+    try:
+        names = router_names(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return Result("cannot-check", "bad-response")
+    if names is None:
+        return Result("fail")
+    required = config.get("required_checks", DEFAULT_REQUIRED)
+    if not isinstance(required, list) or not all(isinstance(x, str) for x in required):
+        return Result("cannot-check", "bad-response")
+    missing = router_wanted(root, [x.strip() for x in required], names)[len(names) :]
+    return Result("fail") if missing else Result("ok")
+
+
 def placeholder_result(path: Path) -> Result:
     try:
         text = path.read_text(encoding="utf-8")
@@ -586,8 +620,21 @@ def installed_files(
 
 def lf(data: bytes) -> bytes:
     """CRLF line ends as LF, a file with a NUL byte as it is: the rule of `common.lf` (brief #263
-    item 7), kept here because the doctor imports no other kit script."""
+    item 7), kept here as it was (the doctor imports from `common.py` only the router helpers)."""
     return data if b"\0" in data else data.replace(b"\r\n", b"\n")
+
+
+def same_file(rel: str, data: bytes, kit: bytes) -> bool:
+    """DATA equals the kit's copy; for the router, with its `workflow_run` list read as the kit's
+    (the names are the project's, brief #285)."""
+    if data == kit or rel != ROUTER_WORKFLOW:
+        return data == kit
+    try:
+        names = router_names(kit.decode("utf-8"))
+        text = with_router_names(data.decode("utf-8"), names or [])
+    except UnicodeDecodeError:
+        return False
+    return names is not None and text is not None and text.encode("utf-8") == kit
 
 
 def compare_tree(
@@ -606,7 +653,7 @@ def compare_tree(
         target = root / rel
         if not target.is_file():
             missing.append(rel)
-        elif lf(target.read_bytes()) != lf((kit / rel).read_bytes()):  # CRLF on Windows
+        elif not same_file(rel, lf(target.read_bytes()), lf((kit / rel).read_bytes())):
             differs.append(rel)
     for rel, style in blocks.items():
         target = root / rel
@@ -756,6 +803,7 @@ def run_checks(
     )
     kit, version = kit_results(root, kit_root, config)
     results.update(kit)
+    results["router-wake"] = router_result(root, config)
     results.update(engine_results(root, kit_root, config))
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():

@@ -4,6 +4,14 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.57.2 (2026-10-29)
+
+- #268 install and upgrade on Windows: `upgrade.py`, `init.py`, `adopt.py` and `doctor.py` compare the kit's files ignoring CRLF and LF and write them with LF, and the installed `.gitattributes` pins `text eol=lf` for every path the kit installs; `init.py` refuses when the plugin's kit files are not those of the release row of its version and says where the plugin's `ref` is set (`--unreleased` installs a checkout between releases, for the kit's own tests); an invalid `config/reviewers.yaml` names the key and the reason, as for a top-level key indented under `teams:`; every kit script reads and writes text, `git` and `gh` output and standard input as UTF-8, whatever the platform default (brief #263 build c, ADR-0160)
+- #271 kit scripts: every script under `scripts/agk/` that imports another kit script puts its own folder first on the import path, by its resolved location, so it runs under `python3 -I` (isolated mode), the only Python form the conductor guard allows (brief #270, ADR-0161)
+- #279 a stack ADR is accepted in one plain step: one ordinary commit sets `Status: Accepted` and `Chosen: Option <X> — <one-line reason>` together and `engines.py stack-check` accepts it; `/agk:stack` ends by printing the prompt for that change and its pull request body; `check_final_clearance.py` says a stack's Chosen line is set by an ordinary commit, not a Final commit, when a Final commit changes it (brief #274, ADR-0163)
+- #280 a project's own `.gitignore` lines survive every upgrade: the kit's lines sit in a marked block (`# >>> agk` to `# <<< agk`), `upgrade.py` and `doctor.py` compare and replace only the block and report the lines outside it once as "project lines kept: n", and an upgrade migrates a file that has the installed release's kit lines followed by the project's own lines instead of refusing (brief #269, ADR-0164)
+- #281 governance: the run for an edited description never takes a cancelled full run of the head for the latest while another full run of it was not cancelled, and full runs created in the same second are ordered by run id, so a green head is no longer read as red (brief #272, ADR-0162)
+
 ## 0.57.1 (2026-10-26)
 
 - #262 governance: an edited description no longer cures a red full run that skipped a step it does not repeat (lint, tests, the secret scan): the edited run fails with "the last full run did not reach <steps>; push a commit or re-run it"; and every step after `PR body file` now runs unless the run is cancelled, so a failed description hides no later check (brief #261, ADR-0159)

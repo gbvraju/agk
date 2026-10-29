@@ -1,1 +1,0 @@
-- governance: the run for an edited description never takes a cancelled full run of the head for the latest while another full run of it was not cancelled, and full runs created in the same second are ordered by run id, so a green head is no longer read as red (brief #272, ADR-0162)

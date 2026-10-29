@@ -209,11 +209,17 @@ def test_the_kit_names_gitignore_as_its_only_extendable_file():
         assert (KIT_ROOT / rel).read_text(encoding="utf-8") == adopt.block_of(style, body)
 
 
+# The last release whose `.gitignore` is the bare template; every later release installs the marked
+# block, so the test names this release and never takes the newest row of the table (brief #295).
+BARE_GITIGNORE_RELEASE = "0.57.1"
+
+
 def test_a_real_install_of_the_last_release_with_a_project_line_upgrades(tmp_path):
     """REQ-039: brief #269 answer 3 with the real table: the released bare file plus a line."""
     manifest = real_manifest()
     table = json.loads((KIT_ROOT / "kit" / "hashes.json").read_text(encoding="utf-8"))
-    released = max(table["releases"], key=upgrade.version_key)
+    released = BARE_GITIGNORE_RELEASE
+    assert released in table["releases"], "the release with the bare file is in the table"
     body = (KIT_ROOT / "kit/templates/gitignore").read_text(encoding="utf-8")
     assert (
         hashlib.sha256(body.encode()).hexdigest()

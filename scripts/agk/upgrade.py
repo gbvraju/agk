@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
 from common import (
     REQ_ID,
+    ROUTER_WORKFLOW,
     CheckError,
     block_source,
     experimental_enabled,
@@ -40,6 +41,10 @@ from common import (
     lf,
     matches,
     read_list,
+    required_checks,
+    router_names,
+    router_wanted,
+    with_router_names,
 )
 from init import (
     CREATE_ONLY,
@@ -229,6 +234,64 @@ def whole_file(target: Path, rel: str, new: bytes, old: set[str], entries: list[
     if digest(data) in old:
         return Item(rel, "replace", content=new)
     return Item(rel, "conflict", f" (path class {cls}: differs from every released copy)")
+
+
+ROUTER_NOTE = (
+    "router-workflows none added (setting: required_checks in agk.toml is not a list of names)"
+)
+
+
+def target_required(target: Path) -> list[str] | None:
+    """`required_checks` of the target, or None when the setting is not a list of names."""
+    try:
+        return required_checks(target)
+    except (CheckError, OSError, UnicodeDecodeError, ValueError):
+        return None
+
+
+def router_file(
+    target: Path, new: bytes, old: set[str], entries: list[str], required: list[str] | None
+) -> Item:
+    """The router (brief #285): a whole file whose `workflow_run` list is the project's.
+
+    The target's file is compared, as `whole_file` does, with its list read as the kit's; the
+    file written is the kit's with the list of `router_wanted`: the kit's names, the names the
+    target already lists, then each workflow of the target that holds a check of REQUIRED.
+    """
+    rel = ROUTER_WORKFLOW
+    path = target / rel
+    try:
+        kit_text = new.decode("utf-8")
+    except UnicodeDecodeError:
+        return whole_file(target, rel, new, old, entries)
+    base = router_names(kit_text)
+    if base is None:
+        return whole_file(target, rel, new, old, entries)
+    if not path.is_file() or path.is_symlink():
+        item = whole_file(target, rel, new, old, entries)
+        if item.action == "create":
+            names = router_wanted(target, required or [], base)
+            item.content = (with_router_names(kit_text, names) or kit_text).encode("utf-8")
+        return item
+    data = lf(path.read_bytes())
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return whole_file(target, rel, new, old, entries)
+    present = router_names(text)
+    if present is None:
+        return whole_file(target, rel, new, old, entries)
+    normal = (with_router_names(text, base) or "").encode("utf-8")
+    if normal != new and digest(normal) not in old and digest(data) not in old:
+        cls = path_class(rel, entries)
+        return Item(rel, "conflict", f" (path class {cls}: differs from every released copy)")
+    names = router_wanted(target, required or [], [*base, *(n for n in present if n not in base)])
+    content = (with_router_names(kit_text, names) or kit_text).encode("utf-8")
+    added = len(names) - len(base)
+    detail = f" (router workflows added: {added})" if added else ""
+    if content == data:
+        return Item(rel, "unchanged", detail)
+    return Item(rel, "replace", detail, content=content)
 
 
 def kept_detail(count: int) -> str:
@@ -487,12 +550,16 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
     enabled = experimental_enabled(target)
     optional = set(manifest.get("experimental", []))
     whole, blocks = installed_set(manifest, mode, enabled)
+    required = target_required(target)
     for rel in whole:
         new = lf((kit_root / rel).read_bytes())  # a CRLF plugin cache is written as LF
         old = set(row["verbatim"].get(rel, []))
         if rel in optional and not (target / rel).exists():
             old = set()  # opting in creates the file; it was never installed, so it is not deleted
-        plan.items.append(whole_file(target, rel, new, old, entries))
+        if rel == ROUTER_WORKFLOW:
+            plan.items.append(router_file(target, new, old, entries, required))
+        else:
+            plan.items.append(whole_file(target, rel, new, old, entries))
     extendable = set(manifest.get("extendable") or {})
     for rel, style in blocks.items():
         body = (kit_root / block_source(manifest, rel)).read_text(encoding="utf-8")
@@ -524,6 +591,8 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
     ]
     if fix_note is not None:
         plan.notes.append(fix_note)
+    if required is None and ROUTER_WORKFLOW in whole:
+        plan.notes.append(ROUTER_NOTE)
     if legacy is not None:
         plan.notes = [n for n in plan.notes if not n.startswith("template-changed agk.toml ")]
         plan.notes.insert(0, LEGACY_NOTE)

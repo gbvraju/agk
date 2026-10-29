@@ -12,6 +12,8 @@ on:
   issue_comment:
     types: [created]
   workflow_run:
+    # The workflows that hold the checks of `required_checks` in agk.toml (brief #285): `workflow_run` takes names, not patterns,
+    # so upgrade.py and init.py write this one line from that setting and the project's workflows, and keep names added to it.
     workflows: [governance, proof]
     types: [completed]
   push:
