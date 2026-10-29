@@ -32,6 +32,12 @@ scratch directory and its first line has that shape, so that the findings of sev
 posted: a verdict, a `Marks:` comment, a file elsewhere or a second field is denied. The hook
 cannot tell the `agk-shadow` issue from another issue without a network call, so that choice is the
 role file's (a residual of SPEC-0035). Any other argument denies everything.
+Without `--shadow` the conductor may also file a brief (brief 276, ADR-0170): the one issue creation
+`gh api --method POST repos/<origin>/issues` with exactly three fields, `-f title=<text>`,
+`-f labels[]=agk-brief` and `-F body=@<file>`, where the file is a regular file of a scratch
+directory (no link out of it, at most 65536 characters) that `check_brief.py FILE --root <project>`
+accepts. Any other label or a second one, another field or flag, another repository, an issue
+edit, a label creation and an inline body stay denied; the shadow mode files nothing.
 The message names the rule, never the command or the path. Standard library only; no network.
 """
 
@@ -43,12 +49,14 @@ import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
+from pathlib import Path
 
 from architect_guard import (
     WRITE_TOOLS,
     comment_target_ok,
     gh_api_allowed,
     git_allowed,
+    origin_repo,
     project_root,
     tokens_of,
 )
@@ -63,6 +71,13 @@ try:  # the one reading of a verdict, shared with the router (brief 238)
     READ_VERDICT = common.verdict_problem
 except ImportError:  # a checkout without the scripts: the hook cannot judge a verdict
     READ_VERDICT = None
+try:  # the one reading of a brief, `check_brief.py`'s (brief 276)
+    import check_brief
+
+    BRIEF_PROBLEMS = check_brief.brief_problems
+    ABSENT_REQUIREMENTS = check_brief.absent_requirements
+except ImportError:  # without the check no brief is filed
+    BRIEF_PROBLEMS = ABSENT_REQUIREMENTS = None
 
 ENV_PREFIX = 'env -i PATH="$PATH" HOME='
 BASE_VAR = "AGK_BASE="  # the one variable a run may add, a sha, as CI sets it
@@ -77,6 +92,9 @@ SHADOW_BODY = re.compile(
 POST_METHODS = ("--method", "-X")
 FIELDS = ("-f", "--raw-field")
 FILE_FIELDS = ("-F", "--field")
+ISSUES_ENDPOINT = re.compile(r"^/?repos/([^/\s]+)/([^/\s]+)/issues$")
+BRIEF_LABEL = "labels[]=agk-brief"
+BODY_LIMIT = 65536  # GitHub's limit of an issue body; a longer file is not read in part
 
 
 def scratch_dir(path: str) -> str | None:
@@ -240,6 +258,73 @@ def shadow_file_ok(path: str) -> bool:
     return SHADOW_BODY.fullmatch("body=" + first) is not None
 
 
+def brief_text(path: str) -> str | None:
+    """The whole text of a regular file of a scratch directory (no link out of it), else None."""
+    if scratch_dir(path) is None or os.path.realpath(path) != os.path.normpath(path):
+        return None
+    try:
+        if not os.path.isfile(path):
+            return None
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read(BODY_LIMIT + 1)
+    except (OSError, UnicodeDecodeError):
+        return None
+    return text if len(text) <= BODY_LIMIT else None
+
+
+def brief_checked(text: str) -> bool:
+    """`check_brief.py FILE --root <project>` accepts the text: the shape and the requirements."""
+    if BRIEF_PROBLEMS is None or ABSENT_REQUIREMENTS is None or BRIEF_PROBLEMS(text):
+        return False
+    try:
+        return not ABSENT_REQUIREMENTS(text, Path(project_root()))
+    except check_brief.CheckError:  # an unreadable requirements file files nothing
+        return False
+
+
+def brief_post_ok(words: list[str]) -> bool:
+    """The one issue creation of the conductor (brief 276): `POST repos/<origin>/issues` with
+    exactly one `-f title=<text>`, one `-f labels[]=agk-brief` and one `-F body=@<file>`, the file
+    a regular file of a scratch directory that `check_brief.py` accepts; no other flag or field."""
+    args = words[2:]
+    endpoint: list[str] = []
+    fields: list[tuple[str, str]] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in POST_METHODS + FIELDS + FILE_FIELDS:
+            if i + 1 >= len(args):
+                return False
+            if arg in POST_METHODS:
+                if args[i + 1].upper() != "POST":
+                    return False
+            else:
+                fields.append((arg, args[i + 1]))
+            i += 2
+            continue
+        if arg.startswith("--method="):
+            if arg.split("=", 1)[1].upper() != "POST":
+                return False
+        elif arg.startswith("-"):
+            return False
+        else:
+            endpoint.append(arg)
+        i += 1
+    match = ISSUES_ENDPOINT.match(endpoint[0]) if len(endpoint) == 1 else None
+    own = origin_repo(project_root())
+    if not match or own is None or f"{match.group(1)}/{match.group(2)}".lower() != own:
+        return False
+    if len(fields) != 3:
+        return False
+    titles = [v for f, v in fields if f in FIELDS and v.startswith("title=") and v[6:].strip()]
+    labels = [v for f, v in fields if f in FIELDS and v == BRIEF_LABEL]
+    bodies = [v[6:] for f, v in fields if f in FILE_FIELDS and v.startswith("body=@")]
+    if len(titles) != 1 or len(labels) != 1 or len(bodies) != 1:
+        return False
+    text = brief_text(bodies[0])
+    return text is not None and brief_checked(text)
+
+
 def bash_allowed(command: object, shadow: bool = False) -> bool:
     if not isinstance(command, str):
         return False
@@ -261,6 +346,8 @@ def bash_allowed(command: object, shadow: bool = False) -> bool:
             return False
         if shadow and is_post(words):
             return shadow_post_ok(words)
+        if is_post(words) and brief_post_ok(words):
+            return True
         if is_post(words) and any(a in FILE_FIELDS for a in words[2:]):
             return conductor_file_post_ok(words)
         return gh_api_allowed(words)
