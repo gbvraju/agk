@@ -18,7 +18,8 @@ import upgrade  # noqa: E402
 ROUTER = KIT_ROOT / ".github" / "workflows" / "agk-route.yml"
 GROUP = (
     "  group: agk-route-${{ github.event.pull_request.number || github.event.issue.number"
-    " || github.event.workflow_run.head_sha || github.ref }}"
+    " || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha"
+    " || github.ref }}"
 )
 PROJECT = "name: lint-suite\non: [pull_request]\njobs:\n  lint-suite:\n    runs-on: ubuntu-latest\n"
 REQUIRED = 'required_checks = ["proof", "governance", "lint-suite"]\n'
