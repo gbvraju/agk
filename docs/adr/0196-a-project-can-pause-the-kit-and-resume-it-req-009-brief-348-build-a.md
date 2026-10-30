@@ -1,6 +1,6 @@
 # ADR-0196: a project can pause the kit and resume it (REQ-009, brief 348 build a)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: none
