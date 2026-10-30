@@ -470,6 +470,31 @@ def unplaced(
     return out
 
 
+def holding(s: Survey, number: int, takes: list[tuple]) -> list[tuple]:
+    """The takes that hold a brief by the plan's reading: not those of a session that is gone,
+    and for a brief built in parts not those of a session that moved on. `next` and `claim` read
+    takes the same way (brief #345, ADR-0195)."""
+    takes = [t for t in takes if t[2] not in s.gone]
+    brief = s.briefs.get(number)
+    if brief and builds_of(brief["body"]):
+        takes = [t for t in takes if not moved_on(s, number, t)]
+    return takes
+
+
+def read_gone(root, s: Survey, now: datetime | None = None) -> None:
+    """Set the sessions whose claims are stale, by `claim_stale_hours` (refused by its name)."""
+    hours = flow_int(root, "claim_stale_hours", DEFAULTS["claim_stale_hours"], RULE)
+    s.gone = gone_sessions(s, hours, now or datetime.now(UTC))
+
+
+def wait_text(w: dict) -> str:
+    """Why a brief waits, in the words of the plan and of the skips of `next` (brief #345)."""
+    if "held_by" in w or "waits_for_build" in w:
+        return str(w["why"])
+    target = f"#{w['waits_for']}" if "waits_for" in w else f"pull request #{w['pull_request']}"
+    return f"waits for {target} ({w['why']})"
+
+
 def settle_takes(s: Survey) -> tuple[set[int], list[tuple[int, str]]]:
     """(the briefs built in parts whose takes all belong to sessions that moved on, the skips).
 
@@ -482,11 +507,8 @@ def settle_takes(s: Survey) -> tuple[set[int], list[tuple[int, str]]]:
         if not why.startswith("taken by"):
             skipped.append((number, why))
             continue
-        takes = live_takes(s.comments.get(number, []), number, s.prs, s.hours)
-        takes = [t for t in takes if t[2] not in s.gone]
+        takes = holding(s, number, live_takes(s.comments.get(number, []), number, s.prs, s.hours))
         brief = s.briefs.get(number)
-        if brief and builds_of(brief["body"]):
-            takes = [t for t in takes if not moved_on(s, number, t)]
         if not takes and brief:
             freed.add(number)
             continue
@@ -623,11 +645,10 @@ def build(root) -> dict:
     reviews = flow_int(root, "reviews_in_flight", DEFAULTS["reviews_in_flight"], RULE)
     hours = flow_int(root, "merge_hours", DEFAULTS["merge_hours"], RULE)
     behind_limit = flow_int(root, "stale_commits", DEFAULTS["stale_commits"], RULE)
-    gone_hours = flow_int(root, "claim_stale_hours", DEFAULTS["claim_stale_hours"], RULE)
     s = survey(root, repo, "")
     default = _default_branch(root)
     now = datetime.now(UTC)
-    s.gone = gone_sessions(s, gone_hours, now)
+    read_gone(root, s, now)
     stale = stale_claims(s)
     freed, skipped = settle_takes(s)
     s.held = [h for h in s.held if h[0] not in freed]
@@ -733,16 +754,7 @@ def words(plan: dict) -> str:
     else:
         lines.append(f"Start 0: {reason(plan)}.")
     for w in plan["waits"]:
-        if "held_by" in w:
-            lines.append(f"#{w['brief']} {w['why']}.")
-            continue
-        if "waits_for_build" in w:
-            lines.append(
-                f"#{w['brief']} build ({w['build']}) waits for build ({w['waits_for_build']})."
-            )
-            continue
-        target = f"#{w['waits_for']}" if "waits_for" in w else f"pull request #{w['pull_request']}"
-        lines.append(f"#{w['brief']} waits for {target} ({w['why']}).")
+        lines.append(f"#{w['brief']} {wait_text(w)}.")
     if plan["stale_claims"]:
         lines.append(
             "Stale: " + ", ".join(f"#{c['brief']} ({c['why']})" for c in plan["stale_claims"]) + "."

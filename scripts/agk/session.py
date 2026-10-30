@@ -859,9 +859,12 @@ def reservation(root, s: Survey, brief: dict) -> list[str]:
 def take(s: Survey, brief: dict, reserve, build: str | None = None) -> str | None:
     """Post the take unless this session already holds one; the reason it was lost, or None.
     A take of a build conflicts with a take of the same build and with a take of the whole brief."""
+    from session_plan import holding  # the plan's reading of a take (brief #345, ADR-0195)
+
     number, me, comments = brief["number"], s.me, s.comments[brief["number"]]
 
     def rivals(found: list) -> list:
+        found = holding(s, number, found)
         return [t for t in found if build is None or t[5] in (None, build)]
 
     if not any(t[2] == me and t[5] == build for t in live_takes(comments, number, s.prs, s.hours)):
@@ -895,6 +898,27 @@ def assign_mode(root) -> str:
     return value
 
 
+def stale_view(root, s: Survey, number: int) -> None:
+    """Read the open briefs and their takes, and judge which sessions are gone, as the plan does
+    (brief #345, ADR-0195). A brief or its comments that cannot be read leave nobody gone: an
+    old take then still holds, as before."""
+    from session_plan import read_gone
+
+    issues = pages(f"repos/{s.repo}/issues?state=open&labels={LABEL}")
+    if issues is None:
+        return
+    for item in issues:
+        if "pull_request" in item:
+            continue
+        s.briefs[item["number"]] = item
+        if item["number"] != number:
+            found = pages(f"repos/{s.repo}/issues/{item['number']}/comments")
+            if found is None:
+                return
+            s.comments[item["number"]] = found
+    read_gone(root, s)
+
+
 def claim(root, me: str, number: int, build: str | None) -> int:
     repo = repo_name(root)
     comments = pages(f"repos/{repo}/issues/{number}/comments")
@@ -903,6 +927,8 @@ def claim(root, me: str, number: int, build: str | None) -> int:
         raise CheckError("rule 5: the brief and the pull requests cannot be read")
     hours = flow_int(root, "claim_hours", CLAIM_HOURS, 1)
     s = Survey(repo, me, 0, hours, prs, [], {number: comments})
+    if any(t[2] != me for t in live_takes(comments, number, prs, hours)):
+        stale_view(root, s, number)
     if why := take(s, {"number": number}, list, build):
         print(f"skip #{number}: {why}")
         return 1
@@ -1125,10 +1151,21 @@ def next_brief(root, me: str) -> int:
     if len(s.builders) >= s.max_builders:
         print(f"full {len(s.builders)}/{s.max_builders}")
         return 1
+    # The plan's rules decide (brief #345, ADR-0195): a stale claim holds nothing, overlap is
+    # judged by files, and a skip names the plan's reason.
+    from session_plan import read_gone, running_conflict, settle_takes, wait_text
+
+    read_gone(root, s)
+    freed, s.skipped = settle_takes(s)
+    s.held = [h for h in s.held if h[0] not in freed]
     for number, why in s.skipped:
         print(f"skip #{number}: {why}")
-    for brief in s.free:
-        why = overlap(root, s, brief) or take(s, brief, lambda b=brief: reservation(root, s, b))
+    shared = [glob_regex(p) for p in shared_patterns(root)]
+    ready = [*s.free, *(s.briefs[n] for n in sorted(freed))]
+    for brief in sorted(ready, key=lambda b: (priority_of(b["body"]), b["number"])):
+        found = running_conflict(root, s, brief, shared)
+        why = wait_text(found) if found else None
+        why = why or take(s, brief, lambda b=brief: reservation(root, s, b))
         if why:
             print(f"skip #{brief['number']}: {why}")
             continue

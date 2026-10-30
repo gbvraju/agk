@@ -159,12 +159,14 @@ def test_rule3_an_overlapping_brief_is_skipped_with_its_reason_and_the_next_is_t
     """REQ-041 AC3"""
     listing(stub, [issue(5, brief("scripts/**")), issue(6, brief("docs/**, tests/kit/*.py"))])
     stub.serve(PULLS, [pr(20, 1), pr(21, 2)])
-    files(stub, 20, "scripts/agk/session.py")
+    # a modified file: one the pull request only adds blocks only on its exact path (brief #345)
+    stub.serve(f"{PULLS}/20/files", [{"filename": "scripts/agk/session.py", "status": "modified"}])
     files(stub, 21, "src/other.py")
     stub.serve(f"{ISSUES}/5/comments", [])
     reads(stub, 6, [])
     out = nxt(proj, stub)
-    assert "skip #5: overlaps open pull request #20" in out.stdout.splitlines()
+    why = "skip #5: waits for pull request #20 (it changes scripts/agk/session.py)"
+    assert why in out.stdout.splitlines()
     assert out.stdout.splitlines()[-1].startswith("Sentence") or "brief #6" in out.stdout
     assert [p[1] for p in posts(stub)] == [f"{ISSUES}/6/comments"]
 
@@ -188,8 +190,8 @@ def test_rule3_a_taken_brief_without_a_pull_request_overlaps_by_its_touches(proj
     stub.serve(f"{ISSUES}/6/comments", [])
     reads(stub, 7, [])
     out = nxt(proj, stub)
-    assert "skip #5: taken by s-other" in out.stdout.splitlines()
-    assert "skip #6: overlaps the taken brief #5" in out.stdout.splitlines()
+    assert any(x.startswith("skip #5: taken by s-other until ") for x in out.stdout.splitlines())
+    assert "skip #6: waits for #5 (both touch src/a.py)" in out.stdout.splitlines()
     assert "brief #7" in out.stdout.splitlines()
 
 
@@ -346,7 +348,7 @@ def test_rule5_merged_pull_requests_keep_a_take_live_only_for_claim_hours_after_
     stub.serve(f"{ISSUES}/6/comments", [old])
     reads(stub, 5, [old])
     out = nxt(proj, stub)
-    assert "skip #6: taken by s-other" in out.stdout.splitlines()
+    assert any(x.startswith("skip #6: taken by s-other ") for x in out.stdout.splitlines())
     assert "brief #5" in out.stdout.splitlines()
     assert posts(stub)[0][2][1] == f"body=taken: s-me {DAY} retakes reserves ADR-0004"
 
