@@ -125,6 +125,8 @@ jobs:
             python -m "$tool" --version > /dev/null 2>&1 || { echo "Install tooling: $tool could not be installed"; exit 1; }
           done
       - name: PR body file
+        # Written unless the run is cancelled (brief #349): after a failed `Latest full run` the body steps still read it.
+        if: ${{ !cancelled() }}
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: printf '%s\n' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
