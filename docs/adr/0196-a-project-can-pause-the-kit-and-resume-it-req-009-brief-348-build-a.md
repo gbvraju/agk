@@ -6,7 +6,7 @@
 - Related: none
 - Requirements: REQ-009
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `.github/`, `.claude/`, `config/`, `kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `.github/`, `.claude/`, `config/`, `kit/`
 
 ## Context
 
@@ -44,7 +44,9 @@ workflows by hand.
    lists the setting as a commented optional line.
 7. **Tests first.** `tests/kit/test_pause.py` covers the setting, the doctor's query and report, the router, the two workflows
    (their step order and conditions, and the `Paused` step's script run against a repository whose base is and is not paused),
-   the session rule and the conductor role.
+   the session rule and the conductor role. The existing tests that read a step's exact condition (`test_workflow.py`,
+   `test_ci_saving.py`, `test_full_run_post_steps.py`, `test_pr_mode.py`, `test_design_write.py`) now read it with the paused
+   condition added; nothing else in them changes.
 
 ## Consequences
 
