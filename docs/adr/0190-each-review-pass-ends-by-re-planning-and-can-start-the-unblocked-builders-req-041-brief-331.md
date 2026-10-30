@@ -1,6 +1,6 @@
 # ADR-0190: each review pass ends by re-planning and can start the unblocked builders (REQ-041, brief 331)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0154, ADR-0155, ADR-0175, ADR-0187, ADR-0189, ADR-0195
