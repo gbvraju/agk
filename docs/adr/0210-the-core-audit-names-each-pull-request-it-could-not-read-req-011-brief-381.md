@@ -1,6 +1,6 @@
 # ADR-0210: the core audit names each pull request it could not read (REQ-011, brief 381)
 
-- Status: Accepted
+- Status: Proposed
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0188
