@@ -99,6 +99,43 @@ When GitHub Actions is blocked (minutes exhausted, billing blocked, an outage), 
 disable and re-enable the workflows with `gh workflow`, what a builder runs and pastes as its `Local evidence:` line, what the
 conductor runs instead of reading CI, what is lost, and the one issue that records every merge (session rule 30, ADR-0182).
 
+Several sessions on one machine take turns on heavy steps (governance, the tests, proof) with `python3 scripts/agk/lock.py run
+--name heavy --session <id> -- <command...>`: it waits its turn, printing the holder once a minute (`--timeout S` gives up with
+exit 3), runs the command without a shell and releases the lock when it ends, also on failure or interrupt, with the command's exit
+code. A lock left by a session that died is cleared with a line saying so: when neither its process nor its command runs on this
+machine, or when it is older than `lock_stale_minutes` (120 by default). The lock is a folder in the user's temp folder, or
+`lock_dir` in `agk.toml`. `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` (ADR-0191).
+
+## Actions minutes
+
+    python3 scripts/agk/minutes.py [--json] [--repo OWNER/REPO] [--today YYYY-MM-DD] [--api-dir DIR]
+
+Shows how many GitHub Actions minutes the repository has used this month and warns before they run out. It prints the
+minutes used, the plan's included minutes where the billing API answers, an estimate from the run history, the minutes per
+merged pull request, and a warning past `minutes_warn` percent; a figure it cannot read is `unknown`, never 0. It reads with
+`gh api` (GET only) and writes nothing. See [project-ci.md](project-ci.md#how-many-minutes-are-left) and ADR-0184.
+
+## Test plan
+
+    python3 scripts/agk/test_plan.py [--base REF] [--head REF] [--json] [ROOT]
+
+Shows, before anything runs, which tests proof will run for a change and why. For each `[proof]` area it lists the added or
+changed test files, the command line with `{files}` filled in and its folder, then the areas with nothing to run and the test
+files in no area as "not run by proof"; without the table it prints `project_tests` and the files it selects. It reads git and
+files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
+and ADR-0185.
+
+## Core audit
+
+    python3 scripts/agk/core_audit.py [--since YYYY-MM-DD] [--json] [--write] [--today YYYY-MM-DD] [--repo OWNER/REPO | --api-dir DIR] [--authors LOGIN,LOGIN]
+
+Reports which of the kit's governance checks and rules ever refused something, and which never fired. It lists each check
+with the pull requests whose governance run failed on it, each session and spec rule with the verdicts that cite it, and the
+totals; an unread page is `at least N` or `cannot-check`, never zero. It reads with `gh api` (GET only) and writes only to
+stdout, except `--write`, which writes `docs/runs/core-audit-<date>.md` as evidence, not a decision. It audits the kit itself
+and is not installed in projects. See
+[ADR-0188](../adr/0188-the-kit-reports-which-of-its-checks-and-rules-ever-fired-req-011-brief-328.md).
+
 ## Engines
 
 `[engines]` in `agk.toml` names, for each of `vision`, `stack`, `design` and `review`, a skill the session can see. A key that is

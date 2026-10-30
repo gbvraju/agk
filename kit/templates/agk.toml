@@ -32,6 +32,10 @@ agent_apps = ["claude"]
 review_mode = "team"
 # Optional: the percent of the plan's included Actions minutes past which `python3 scripts/agk/minutes.py` warns (80 if unset).
 # minutes_warn = 80
+# Optional: the folder of the heavy-step lock of `python3 scripts/agk/lock.py` (the user's temp folder if unset), and the minutes after
+# which a lock left by a session counts as stale and is cleared (120 if unset).
+# lock_dir = ""
+# lock_stale_minutes = 120
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.
 # Engines (optional, off by default): the name of a skill the session can see for each step; absent means the kit's own template is used.
 # An engine only drafts, through the kit's template and checks; it never decides, approves or edits a protected file. Choose once;
