@@ -75,7 +75,9 @@ def calls(folder: Path) -> list[str]:
 
 def local_mode(repo, folder: Path, *args: str):
     if not (repo.root / "agk.toml").exists():
-        repo.write("agk.toml", 'default_branch = "main"\nrequired_checks = ["proof", "governance"]\n')
+        repo.write(
+            "agk.toml", 'default_branch = "main"\nrequired_checks = ["proof", "governance"]\n'
+        )
     return repo.run("local_mode.py", *args, "--repo", REPO, "--api-dir", str(folder))
 
 
