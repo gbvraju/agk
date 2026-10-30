@@ -20,6 +20,18 @@ You need Claude Code, `gh`, `git`, `make` and Python 3.11 or newer. Check each:
 You should see a version for each, and `gh auth status` should say you are logged in to `github.com`. Steps 5 and 11 and the remote checks of the doctor need `gh` logged in; steps 3, 4, 6 and 7 do not. `make test` also needs
 `pytest`: run `python3 -m pip install pytest` once.
 
+Check three more things before step 1:
+
+- **The plan, for a private repository.** Rulesets and branch protection (step 5) need a paid plan (GitHub Pro, Team or
+  Enterprise) when the repository is private; on GitHub Free they work only on a public repository. On Free with a private
+  repository, the ruleset command of step 5 and the doctor say `plan-limit`, and nothing protects `main` until you upgrade
+  the plan or make the repository public.
+- **Actions minutes on Free.** The kit's checks run on GitHub Actions. On GitHub Free, Actions minutes on private
+  repositories are limited each month (public repositories are not); when they run out the checks stop starting. See
+  "Actions is blocked or out of minutes" below.
+- **GNU make on Windows.** Windows has no `make`. Install GNU make with `winget install ezwinports.make`, then restart Claude
+  Code (and the terminal it runs in) so that the session sees `make`; `make --version` should then print a version.
+
 ## Step 1. Make the repository and its first commit
 
 On GitHub make a new, empty repository that you own (no README, no licence). Turn on Issues (Settings, General, Features) and
