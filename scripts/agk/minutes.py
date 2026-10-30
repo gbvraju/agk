@@ -41,6 +41,9 @@ PAGE = 100
 RUN_CAP = 1000
 GUIDE = "docs/guides/project-ci.md"
 SELF_HOSTED = "self-hosted"
+# The rates at which a private repository's job uses the included minutes, by the runner's
+# operating system as its labels name it (verify); any other runner counts once.
+MULTIPLIERS = (("windows", 2), ("macos", 10))
 # Job lists read at once: one `gh api` each, so a month of a thousand runs reads in minutes.
 READERS = 8
 
@@ -160,6 +163,15 @@ def month_of(today: date) -> tuple[datetime, datetime]:
     return start, nxt
 
 
+def multiplier(job: dict) -> int:
+    """The rate of a job's runner, read from its labels: Windows 2, macOS 10, otherwise 1."""
+    labels = [str(x).lower() for x in job.get("labels") or []]
+    for prefix, rate in MULTIPLIERS:
+        if any(label.startswith(prefix) for label in labels):
+            return rate
+    return 1
+
+
 def job_minutes(job: dict) -> int | None:
     """The minutes GitHub bills one job: its duration rounded up to a whole minute; a skipped job
     bills none; a job without both times (still running) is None."""
@@ -186,10 +198,11 @@ class Estimate:
     workflows: dict[str, int] = field(default_factory=dict)
 
 
-def estimate(src: Any, start: datetime, end: datetime) -> Estimate:
+def estimate(src: Any, start: datetime, end: datetime, rates: bool = True) -> Estimate:
     """The month's minutes from the run history: each job of a GitHub-hosted runner that started
-    in the month, rounded up per job. A run created the day before the month is read, since its
-    jobs may start in it."""
+    in the month, rounded up per job, then multiplied by its runner's rate when `rates` (a private
+    repository). A run created the day before the month is read, since its jobs may start in it;
+    a re-run of an older run keeps its old creation time and is not read."""
     since = (start - timedelta(days=1)).date().isoformat()
     status, data = src.get("runs", f"/repos/{{repo}}/actions/runs?created=%3E%3D{since}")
     if status != 200 or not isinstance(data, dict):
@@ -227,7 +240,7 @@ def estimate(src: Any, start: datetime, end: datetime) -> Estimate:
             if minutes is None:
                 est.running_jobs += 1
                 continue
-            est.workflows[name] += minutes
+            est.workflows[name] += minutes * (multiplier(job) if rates else 1)
     est.minutes = sum(est.workflows.values())
     return est
 
@@ -274,7 +287,8 @@ def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
         )
     start, end = month_of(today)
     endpoint, used, included, reason = billing(src, repo.get("owner") or {})
-    est = estimate(src, start, end)
+    rates = repo.get("private") is not False
+    est = estimate(src, start, end, rates)
     merged = merged_pulls(src, start, end)
     if used is not None:
         used_entry = {"minutes": used, "source": "billing"}
@@ -310,6 +324,7 @@ def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
             "self_hosted_jobs": est.self_hosted_jobs,
             "running_jobs": est.running_jobs,
             "workflows": est.workflows,
+            "multipliers": rates,
         },
         "merged_pulls": merged,
         "per_merged_pull": per_pull,
@@ -351,6 +366,11 @@ def render(data: dict) -> str:
         )
         ordered = sorted(est["workflows"].items(), key=lambda kv: (-kv[1], kv[0]))
         lines += [f"  {name}: {minutes}" for name, minutes in ordered]
+        if est["multipliers"]:
+            lines.append(
+                "  (runner rates applied: a Windows job counts 2x, a macOS job 10x) (verify)"
+            )
+        lines.append("  (re-runs of runs created before this month are not counted)")
         if not est["complete"]:
             lines.append(
                 "  (a lower bound: the run list was capped, or a run's jobs could not be read)"

@@ -150,8 +150,10 @@ It prints:
   it reads `(verify)`;
 - **estimate from run history**: this repository's jobs that started this month (UTC) on GitHub-hosted runners, each rounded up
   to a whole minute, per workflow. It says `at least` when the run list was capped or a run's jobs could not be read; jobs on a
-  self-hosted runner and jobs still running are listed, not counted. Runner multipliers for other operating systems are not
-  applied `(verify)`;
+  self-hosted runner and jobs still running are listed, not counted. In a private repository a job's minutes are multiplied
+  by its runner's rate, read from its labels, as the included minutes are used: a Windows job counts 2x and a macOS job 10x
+  `(verify)`. A known limit: re-runs of runs created before this month are not counted, since a re-run keeps its run's
+  creation time;
 - **minutes per merged pull request**: the estimate divided by the pull requests merged this month, the figure to compare with
   the defaults above;
 - a **warning** line once the higher of the two figures passes `minutes_warn` percent of the included minutes (`minutes_warn`

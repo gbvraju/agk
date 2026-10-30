@@ -410,3 +410,156 @@ def test_the_script_is_installed_in_a_project():
     """REQ-020: brief #324 answer 1 (a project runs the one command)."""
     data = json.loads((KIT / "kit" / "manifest.json").read_text(encoding="utf-8"))
     assert "scripts/agk/minutes.py" in data["verbatim"]
+
+
+# --- the fix list of 8e06ed5 ----------------------------------------------------------------------
+
+
+def runner_jobs(api: Path) -> None:
+    """Run 102 of the saved case on a Windows and a macOS runner (2 and 1 rounded minutes)."""
+    jobs = json.loads((api / "jobs-102.json").read_text(encoding="utf-8"))
+    jobs["jobs"][0]["labels"] = ["windows-latest"]
+    jobs["jobs"][1]["labels"] = ["macos-14"]
+    save(api, "jobs-102", jobs)
+
+
+def test_a_private_repository_applies_the_runner_rates(repo, tmp_path):
+    """REQ-020: brief #324 answer 1, fix 1 of 8e06ed5 (Linux 1x, Windows 2x, macOS 10x)."""
+    api = case(tmp_path)
+    runner_jobs(api)
+    data = report(repo, api)
+    # governance: 3 (Linux) + 2 x 2 (Windows) + 1 x 10 (macOS)
+    assert data["estimate"]["workflows"]["governance"] == 17
+    assert data["estimate"]["minutes"] == 28 and data["estimate"]["multipliers"] is True
+    out = minutes(repo, api).stdout
+    assert "  (runner rates applied: a Windows job counts 2x, a macOS job 10x) (verify)" in out
+
+
+def test_the_rate_is_read_from_the_runner_labels():
+    """REQ-020: fix 1 of 8e06ed5."""
+    from minutes import multiplier
+
+    assert multiplier({"labels": ["ubuntu-latest"]}) == 1
+    assert multiplier({"labels": ["windows-2022"]}) == 2
+    assert multiplier({"labels": ["macOS-latest"]}) == 10
+    assert multiplier({}) == 1
+
+
+def test_a_public_repository_applies_no_rates(repo, tmp_path):
+    """REQ-020: fix 1 of 8e06ed5 (the rates are for a private repository)."""
+    api = case(tmp_path)
+    runner_jobs(api)
+    save(
+        api,
+        "repo",
+        {
+            "full_name": "example/app",
+            "private": False,
+            "owner": {"login": "example", "type": "Organization"},
+        },
+    )
+    data = report(repo, api)
+    assert data["estimate"]["workflows"]["governance"] == 6
+    assert data["estimate"]["multipliers"] is False
+    assert "runner rates applied" not in minutes(repo, api).stdout
+
+
+def test_the_output_names_the_re_run_limit(repo, tmp_path):
+    """REQ-020: fix 2 of 8e06ed5 (a re-run keeps its run's old creation time)."""
+    out = minutes(repo, case(tmp_path)).stdout
+    assert "  (re-runs of runs created before this month are not counted)" in out
+    guide = (KIT / "docs" / "guides" / "project-ci.md").read_text(encoding="utf-8")
+    assert "re-runs of runs created before this month are not counted" in " ".join(guide.split())
+
+
+class FakeGh:
+    """Gh with its one read replaced: records each endpoint and answers from a function."""
+
+    def __init__(self, answer):
+        from minutes import Gh
+
+        self.gh = Gh("o/r")
+        self.calls: list[str] = []
+
+        def one(endpoint: str):
+            self.calls.append(endpoint)
+            return answer(endpoint)
+
+        self.gh.one = one
+
+
+def test_live_runs_are_paged_with_the_query_and_capped(tmp_path):
+    """REQ-020: fix 3 of 8e06ed5 (the query strings, the run cap and the `at least` mark)."""
+    from datetime import UTC, datetime
+
+    from minutes import estimate
+
+    def answer(endpoint: str):
+        if "/actions/runs?" in endpoint:
+            page = int(endpoint.rsplit("page=", 1)[1])
+            runs = [
+                {"id": page * 1000 + i, "name": "w", "created_at": "2026-10-02T00:00:00Z"}
+                for i in range(100)
+            ]
+            return 200, {"total_count": 2500, "workflow_runs": runs}
+        if "/jobs?" in endpoint:
+            return 200, {
+                "total_count": 1,
+                "jobs": [
+                    {
+                        "started_at": "2026-10-02T00:00:00Z",
+                        "completed_at": "2026-10-02T00:00:30Z",
+                        "conclusion": "success",
+                        "labels": ["ubuntu-latest"],
+                    }
+                ],
+            }
+        return 404, None
+
+    fake = FakeGh(answer)
+    est = estimate(fake.gh, datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 11, 1, tzinfo=UTC))
+    runs = [c for c in fake.calls if "/actions/runs?" in c]
+    assert runs[0] == "/repos/o/r/actions/runs?created=%3E%3D2026-09-30&per_page=100&page=1"
+    assert len(runs) == 10  # 1,000 runs: the cap
+    assert est.runs == 1000 and est.minutes == 1000 and est.complete is False
+    jobs = [c for c in fake.calls if "/jobs?" in c]
+    assert len(jobs) == 1000
+    assert all(c.endswith("/jobs?filter=all&per_page=100&page=1") for c in jobs)
+
+
+def test_live_jobs_and_pulls_are_paged_until_done():
+    """REQ-020: fix 3 of 8e06ed5 (a second page of jobs; pulls stop at the month's start)."""
+    from datetime import UTC, datetime
+
+    from minutes import merged_pulls
+
+    def answer(endpoint: str):
+        if "/jobs?" in endpoint:
+            page = int(endpoint.rsplit("page=", 1)[1])
+            return 200, {"total_count": 150, "jobs": [{}] * (100 if page == 1 else 50)}
+        if "/pulls?" in endpoint:
+            page = int(endpoint.rsplit("page=", 1)[1])
+            day = "2026-10-05" if page == 1 else "2026-09-05"
+            pulls = [{"merged_at": f"{day}T00:00:00Z", "updated_at": f"{day}T00:00:00Z"}] * 100
+            return 200, pulls
+        return 404, None
+
+    fake = FakeGh(answer)
+    status, jobs = fake.gh.get("jobs-7", "/repos/{repo}/actions/runs/7/jobs?filter=all")
+    assert status == 200 and len(jobs["jobs"]) == 150
+    assert fake.calls[-1] == "/repos/o/r/actions/runs/7/jobs?filter=all&per_page=100&page=2"
+    count = merged_pulls(
+        fake.gh, datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 11, 1, tzinfo=UTC)
+    )
+    assert count == 100
+    pulls = [c for c in fake.calls if "/pulls?" in c]
+    assert pulls == [
+        "/repos/o/r/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=1",
+        "/repos/o/r/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=2",
+    ]
+
+
+def test_a_refused_live_read_keeps_its_status():
+    """REQ-020: fix 3 of 8e06ed5 (a refused page is the refusal, not an empty list)."""
+    fake = FakeGh(lambda endpoint: (403, None))
+    assert fake.gh.get("runs", "/repos/{repo}/actions/runs?created=%3E%3D2026-09-30") == (403, None)

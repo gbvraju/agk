@@ -25,7 +25,11 @@ month began (the run list answers the newest 1,000 of them), and could not read 
    `--json` prints the same figures. It is installed in a project (`kit/manifest.json`, verbatim).
 2. **The estimate.** The month is the calendar month of the day in UTC. The runs created from the day before it began are read,
    then each job that started within the month on a GitHub-hosted runner is counted, rounded up to a whole minute; a skipped job
-   counts none. A job whose labels name `self-hosted` and a job still running are listed and not counted. A run list longer than
+   counts none. In a private repository each job's minutes are then multiplied by its runner's rate, read from its labels, as the
+   included minutes are used: a label that starts `windows` counts 2x, one that starts `macos` 10x, any other runner once
+   `(verify)`; the output says the rates are applied. A known limit, said in the output and the guide: a re-run keeps its run's
+   creation time, so re-runs of runs created before this month are not counted. A job whose labels name `self-hosted` and a job
+   still running are listed and not counted. A run list longer than
    it answers, or a run whose jobs cannot be read, makes the estimate (and the figure per pull request) `at least`. The billing
    endpoint follows the owner's type (`/orgs/...` or `/users/.../settings/billing/actions`) `(verify)`. Job lists are read eight
    at a time, so a month of a thousand runs reads in about a minute and a half.
@@ -39,10 +43,17 @@ month began (the run list answers the newest 1,000 of them), and could not read 
 5. **The guide (answer 3).** `docs/guides/project-ci.md` gains `How many minutes are left`, which says how to read each line and
    points to local mode (brief #322) for when the minutes run out. `kit/templates/agk.toml` names the setting in a comment.
 6. **Not built.** `doctor.py` and the Autopilot preflight do not read the minutes here (#287 answer 7 names them; this build
-   must not edit `doctor.py`). `docs/guides/reference.md` is not edited, although the brief's `Touches:` lists it, because an
-   open pull request changes it (Q-324-1). Runner multipliers for other operating systems are not applied (Q-324-2).
+   must not edit `doctor.py`). `docs/guides/reference.md` is not edited, although the brief's `Touches:` lists it (decision 8).
+   `kit/manifest.json` is changed although the brief's `Touches:` does not list it, so that a project has the command.
 7. **Flow mode.** Fragment `changelog.d/actions-minutes.md`; no version bump. `kit/hashes.json` is a release file and is not
    edited (session rule 14).
+
+8. **Reading Q-324-1 (answered by the conductor's verdict on 8e06ed5, 2026-10-30).** The guide section is enough; a pointer in
+   `docs/guides/reference.md` can follow after the open pull request that changes it merges.
+9. **Reading Q-324-2 (answered by the conductor's verdict on 8e06ed5, 2026-10-30).** The runner rates are applied for a private
+   repository, as decision 2 says.
+10. **Reading Q-324-3 (answered by the conductor's verdict on 8e06ed5, 2026-10-30).** The endpoint stays, with `missing` as the
+   fallback; the newer billing platform's usage endpoint is a residual and a later brief.
 
 ## Consequences
 
@@ -53,7 +64,7 @@ month began (the run list answers the newest 1,000 of them), and could not read 
 
 ## Residual
 
-- 2026-10-30: the estimate counts minutes at the base rate; a project on other operating systems' runners uses its included
-  minutes faster than shown (Q-324-2, due 2026-12-15).
-- 2026-10-30: the billing endpoint read is the one of the older billing reports; an account on a newer billing setup may answer
-  `missing` (verify, due 2026-12-15).
+- 2026-10-30: the billing endpoint read is the one of the older billing reports; an account on the newer billing platform may
+  answer `missing`, and reading that platform's usage endpoint waits for a later brief (Q-324-3, due 2026-12-15).
+- 2026-10-30: re-runs of runs created before this month are not counted (decision 2); reading them would need every older run's
+  jobs (due 2026-12-15).
