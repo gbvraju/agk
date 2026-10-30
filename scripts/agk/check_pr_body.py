@@ -16,8 +16,9 @@ resolve fails the form. A body
 whose `Build-state row:` sets a requirement to `done` needs `Closes #n`. SPEC-0036 rule 1: every
 body that is not a draft has exactly one line `Summary: <one sentence>` of 1 to 120 characters, and
 the message says which case found (missing, repeated with the count, empty, or too long with its
-length; brief #237). Messages name the rule, never a value or a word of the body. Files and git
-only."""
+length; brief #237). Brief #302 (ADR-0178): an optional line `Finishes: #n` says the pull request
+is the last of brief #n, and is accepted only once and only beside `Brief: #n` naming the same
+number. Messages name the rule, never a value or a word of the body. Files and git only."""
 
 from __future__ import annotations
 
@@ -34,6 +35,7 @@ from common import (
     CheckError,
     behaviour_lines,
     changed_files,
+    finishes_problem,
     merge_base,
     repo_root,
     resolve_base,
@@ -180,6 +182,8 @@ def main(argv: list[str] | None = None) -> int:
         closes = field(text, "Closes")
         if closes is None or not re.fullmatch(LINK, closes):
             problems.append("rule 9: 'Closes #n' line is required (a requirement is set to done)")
+    if problem := finishes_problem(text):
+        problems.append(problem)
     if any(line != BEHAVIOUR_UNCHANGED for line in behaviour_lines(text)):
         problems.append("'Behaviour:' must be 'unchanged'")
     for problem in problems:

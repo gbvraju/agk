@@ -1,0 +1,9 @@
+[
+  {"number": 10, "state": "closed", "merged_at": "2026-01-02T10:00:00Z", "body": "Brief: #5\nSummary: x"},
+  {"number": 11, "state": "closed", "merged_at": "2026-01-01T10:00:00Z", "body": "Brief: #5\r\nSummary: an earlier build"},
+  {"number": 12, "state": "closed", "merged_at": "2026-01-01T10:00:00Z", "body": "Brief: #6\nSummary: x"},
+  {"number": 13, "state": "open", "merged_at": null, "body": "Brief: #6\nSummary: the next build"},
+  {"number": 14, "state": "closed", "merged_at": null, "body": "Brief: #8\nSummary: abandoned"},
+  {"number": 15, "state": "closed", "merged_at": "2026-01-01T10:00:00Z", "body": "Brief: #9\nSummary: x"},
+  {"number": 16, "state": "closed", "merged_at": "2026-01-01T10:00:00Z", "body": null}
+]

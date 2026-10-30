@@ -722,6 +722,44 @@ def declares_unchanged(body: str) -> bool:
     return BEHAVIOUR_UNCHANGED in behaviour_lines(body)
 
 
+# --- the line that finishes a brief (brief #302, ADR-0178) ------------------------------------
+FINISHES = "Finishes:"
+FINISHES_RULE = "brief #302: "
+BRIEF_NUMBER = re.compile(r"#(\d+)")
+
+
+def finishes_problem(body: str | None) -> str | None:
+    """What is wrong with the `Finishes:` line of a body, or None (also when there is none).
+
+    A body may carry one line `Finishes: #n`, and only beside a line `Brief: #n` that names the
+    same number (the first `Brief:` line, as `check_pr_body.py` reads it). The message names the
+    rule and the line, never a number."""
+    lines = str(body or "").splitlines()
+    values = [x[len(FINISHES) :].strip() for x in lines if x.startswith(FINISHES)]
+    if not values:
+        return None
+    if len(values) > 1:
+        return FINISHES_RULE + f"there are {len(values)} 'Finishes:' lines; at most one is allowed"
+    finished = BRIEF_NUMBER.fullmatch(values[0])
+    if finished is None:
+        return FINISHES_RULE + "the 'Finishes:' line is not 'Finishes: #n'"
+    brief = next((x[len("Brief:") :].strip() for x in lines if x.startswith("Brief:")), None)
+    named = BRIEF_NUMBER.fullmatch(brief or "")
+    if named is None or int(named.group(1)) != int(finished.group(1)):
+        return FINISHES_RULE + "'Finishes: #n' needs a line 'Brief: #n' naming the same brief"
+    return None
+
+
+def finished_brief(body: str | None) -> int | None:
+    """The `n` of a valid line `Finishes: #n` of a body, else None."""
+    if finishes_problem(body) is not None:
+        return None
+    for line in str(body or "").splitlines():
+        if line.startswith(FINISHES):
+            return int(line[len(FINISHES) :].strip()[1:])
+    return None
+
+
 ESTIMATE_LINES = {
     "Size": re.compile(r"[SML]"),
     "Expected": re.compile(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?) hours"),

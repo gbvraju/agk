@@ -24,7 +24,10 @@ open pull request labelled `agk:ci-running` that the event did not name and rela
 required checks have all finished, by the same rules, writing the label only, so a wake lost to
 another event does not leave a green pull request at `agk:ci-running`.
 No review, no merge, and one comment only: the reply `Correction needed:` to a verdict whose
-`Final:` line it cannot read (brief 238). Messages name the rule, never a value.
+`Final:` line it cannot read (brief 238). When a pull request merges (`pull_request` closed, the
+job runs only for a merge), the brief its body finishes with `Finishes: #n` beside `Brief: #n` is
+closed as completed, with one comment that names the merge commit (brief 302, ADR-0178); that is
+the only other issue it closes. Messages name the rule, never a value.
 """
 
 from __future__ import annotations
@@ -41,7 +44,15 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, agent_apps, load_config, repo_root, required_checks, verdict_problem
+from common import (
+    CheckError,
+    agent_apps,
+    finished_brief,
+    load_config,
+    repo_root,
+    required_checks,
+    verdict_problem,
+)
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
 from reviewers import (
     APPROVE,
@@ -447,6 +458,52 @@ def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str |
     return wanted
 
 
+# --- the brief a merged pull request finishes (brief #302, ADR-0178) ---------------------------
+
+FINISHED = "Finished by #{pr} (merge commit {sha})."
+FINISHED_MARK = "Finished by #{pr} (merge commit "
+
+
+def finish_brief(repo: str, n: int, dry: bool) -> int | None:
+    """Close the brief that merged pull request `n` finishes; its number, or None.
+
+    The pull request is read again with GET: only one GitHub reports as merged, whose body has a
+    line `Finishes: #b` beside `Brief: #b` (the same number, `finished_brief`), closes issue #b,
+    and only while #b is an open issue (not a pull request) labelled `agk-brief`. The router posts
+    one comment on it that names the pull request and the merge commit, unless one for this pull
+    request is there already, then closes it as completed. It touches no other issue."""
+    pr = gh(f"repos/{repo}/pulls/{n}")
+    if not isinstance(pr, dict):
+        raise CheckError(f"rule 8: pull request #{n} cannot be read")
+    if not (pr.get("merged") is True or pr.get("merged_at")):
+        return None
+    brief = finished_brief(pr.get("body"))
+    if brief is None:
+        return None
+    issue = gh(f"repos/{repo}/issues/{brief}")
+    if not isinstance(issue, dict):
+        raise CheckError("rule 8: the brief a merged pull request finishes cannot be read")
+    labels = {str((x or {}).get("name")) for x in issue.get("labels") or []}
+    if "pull_request" in issue or issue.get("state") != "open" or "agk-brief" not in labels:
+        return None
+    if dry:
+        print(f"#{brief} would be closed (finished by #{n})")
+        return brief
+    comments = listing(f"repos/{repo}/issues/{brief}/comments")
+    if comments is None:
+        raise CheckError("rule 8: the comments of the brief a pull request finishes cannot be read")
+    mark = FINISHED_MARK.format(pr=n)
+    if not any(str(c.get("body") or "").startswith(mark) for c in comments):
+        sha = str(pr.get("merge_commit_sha") or "unknown")
+        body = FINISHED.format(pr=n, sha=sha)
+        where = f"repos/{repo}/issues/{brief}"
+        write(f"{where}/comments", "-f", f"body={body}", method="POST", what="rule 8: the brief")
+    args = ("-f", "state=closed", "-f", "state_reason=completed")
+    write(f"repos/{repo}/issues/{brief}", *args, method="PATCH", what="rule 8: the brief")
+    print(f"#{brief} closed (finished by #{n})")
+    return brief
+
+
 def stale_running(repo: str, done: set[int]) -> list[int]:
     """The open pull requests labelled `agk:ci-running`, other than DONE (brief #309 answer 2)."""
     found = pages(f"repos/{repo}/pulls?state=open")
@@ -744,6 +801,13 @@ def main(argv: list[str] | None = None) -> int:
             except CheckError as exc:
                 print(f"FAIL {NAME}: {exc}")
                 failed = True
+        if not rest and name == "pull_request" and event.get("action") == "closed":
+            for n in dict.fromkeys(numbers):
+                try:
+                    finish_brief(repo, n, dry)
+                except CheckError as exc:
+                    print(f"FAIL {NAME}: {exc}")
+                    failed = True
         if not rest and name == "workflow_run":  # the safety net of a lost wake (brief #309)
             try:
                 for n in stale_running(repo, set(numbers)):

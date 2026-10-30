@@ -464,7 +464,9 @@ def test_ac2_the_workflow_is_triggered_by_the_four_events_and_not_by_a_label_cha
     """REQ-039 AC2: rule 1 (a label set with GITHUB_TOKEN starts nothing; none is listened to)."""
     text = workflow()
     on = text.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
-    assert re.search(r"pull_request:\n\s+types: \[opened, synchronize, reopened, edited\]", on)
+    assert re.search(
+        r"pull_request:\n\s+types: \[opened, synchronize, reopened, edited, closed\]", on
+    )
     assert re.search(r"issue_comment:\n\s+types: \[created\]", on)
     assert re.search(
         r"workflow_run:\n(?:\s+#[^\n]*\n)*\s+workflows: \[[^\]]+\]\n\s+types: \[completed\]", on
