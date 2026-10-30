@@ -1,6 +1,6 @@
 # ADR-0219: launch prints a one-line resume prompt for each running session (REQ-040, brief 402)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0190
