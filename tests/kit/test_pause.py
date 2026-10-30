@@ -280,13 +280,6 @@ def test_every_step_after_the_paused_step_is_skipped_while_paused(name):
             assert "steps.paused.outputs.paused != 'true'" in cond, label
 
 
-def test_paused_proof_still_reports_one_outcome():
-    """REQ-009: answer 1 (proof reports success: `outcome: skipped` is the one that runs)."""
-    blocks = dict(step_blocks(workflow("proof.yml")))
-    for label in ("outcome: proven", "outcome: not-proven (${{ steps.proof.outputs.reason }})"):
-        assert "steps.paused" not in condition(blocks[label])
-
-
 def paused_step(name: str) -> str:
     block = dict(step_blocks(workflow(name)))["Paused"]
     script = block.split("run: |\n", 1)[1]

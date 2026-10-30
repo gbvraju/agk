@@ -88,4 +88,6 @@ def test_the_body_file_step_runs_unless_the_run_is_cancelled():
     written, so the body steps read the body instead of failing on a missing file."""
     blocks = step_blocks(WORKFLOW.read_text(encoding="utf-8"))
     head = blocks["PR body file"].split("\n        run:", 1)[0]
-    assert re.search(r"(?m)^        if: \$\{\{ !cancelled\(\) \}\}$", head)
+    # brief #348: and not while the kit is paused
+    paused = r" && steps\.paused\.outputs\.paused != 'true'"
+    assert re.search(r"(?m)^        if: \$\{\{ !cancelled\(\)" + paused + r" \}\}$", head)

@@ -7,6 +7,8 @@ credential; this script holds none). It writes nothing.
 A check that could not read what it needs is `cannot-check` with a reason class, never `ok`.
 Messages name a setting or a path class, never a value. Output is a text report or, with --json,
 the same findings as one JSON object; the exit code is 0 only when every check is ok.
+A paused project (`paused = true` in agk.toml, brief #348) is reported as the state `paused` alone,
+exit 0, with no read of GitHub; `--paused [--ref REF]` prints only `agk paused` or `agk not paused`.
 """
 
 from __future__ import annotations

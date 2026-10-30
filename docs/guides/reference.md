@@ -93,6 +93,18 @@ repository (the `repository` of the kit's `.claude-plugin/plugin.json`), naming 
 repository's latest release. A kit newer than the newest release (a checkout between releases) is `ok`; a release it cannot
 read is `??` (`no-release`, `release-unreadable`, `offline`, ...), never `ok`.
 
+## Pausing the kit
+
+    python3 scripts/agk/doctor.py --paused [--ref REF] [ROOT]
+
+To pause the kit, add the top-level line `paused = true` to `agk.toml` (before any `[table]`) in one pull request with an ADR,
+since `agk.toml` is a protected path. Once it is on the default branch, governance and proof report success with the one line
+`agk paused` and skip every other step, the router writes no label, the conductor and builder sessions stop with that line
+(session rule 33), and `agk doctor` reports the state `paused` instead of its checks. On a pull request the workflows read the
+setting at the base, so the pull request that pauses is itself checked in full. Remove the line to resume; nothing is deleted
+while paused. The query form above prints `agk paused` or `agk not paused` (exit 0), reads only `agk.toml` (at `REF` when
+given) and calls no `gh`; a value other than `true` or `false` is refused by the setting's name (brief #348, ADR-0196).
+
 ## Local mode
 
 When GitHub Actions is blocked (minutes exhausted, billing blocked, an outage), follow [local-mode.md](local-mode.md): how to
