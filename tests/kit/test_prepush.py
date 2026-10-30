@@ -295,4 +295,8 @@ def test_the_session_rules_ask_for_prepush_before_each_push():
     rules = (root / "config" / "session-rules.md").read_text(encoding="utf-8")
     lines = [ln for ln in rules.splitlines() if "prepush.py" in ln]
     assert len(lines) == 1
-    assert "before each push" in lines[0] and "milestones" in lines[0]
+    assert "before each push" in lines[0] and "milestones of rule 7" in lines[0]
+    seven = next(ln for ln in rules.splitlines() if ln.startswith("7. "))
+    assert "commits its branch at every step" in seven
+    assert "pushes at milestones (tests red, then green, then ready)" in seven
+    assert "always before it pauses, ends or asks a question" in seven

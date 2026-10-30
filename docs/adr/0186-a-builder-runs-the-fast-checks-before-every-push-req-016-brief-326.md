@@ -29,7 +29,7 @@ checkpoint of the pull request).
      naming the path class.
    - `secret-scan`: `gitleaks git --no-banner --redact --exit-code 1 --log-opts=<merge base>..HEAD .`, the scan of the
      governance workflow over the branch's commits, when `gitleaks` is on `PATH`; otherwise the step says `gitleaks is not
-     installed; secret scan: not run`, as the local-mode guide words it (Q-326-3).
+     installed; secret scan: not run`, as the local-mode guide words it; it does not fail the run, and no tool is downloaded (Q-326-3).
    - `tests`: each run of `test_plan.py --json --base <merge base>` (the plan proof runs, brief #325), its command in its folder
      through proof's own `execute` (no shell of the kit's; the project's command runs under `sh -c` as in proof), ended at
      `proof_timeout`; `tests: nothing to run` when the plan has none; skipped with `--quick`.
@@ -40,13 +40,16 @@ checkpoint of the pull request).
 2. **The hook template (answer 2).** `kit/templates/pre-push` is a POSIX shell hook that runs `prepush.py` from the top of the work
    tree. The kit never installs it: it is not in `kit/manifest.json`, and no script writes `.git/hooks` or `core.hooksPath`. The
    getting-started guide says how a person copies it, and that doing so is their choice.
-3. **The session rule (answer 3).** `config/session-rules.md` gains rule 31: a builder runs `prepush.py` before each push and pushes
-   at milestones (tests red, then green, then ready), not every step (Q-326-2).
+3. **The session rules (answer 3, Q-326-2).** Rule 7, a maintainers' rule, is changed on the conductor's answer to Q-326-2: a
+   builder commits at every step that leaves its tests green or expected-red, and pushes at milestones (tests red, then green,
+   then ready) and always before it pauses, ends or asks a question, so a stopped session still loses nothing (REQ-040). New rule
+   31 says a builder runs `prepush.py` before each push, which falls at the milestones of rule 7, and does not restate them.
 4. **Installed (Q-326-1).** `kit/manifest.json` lists `scripts/agk/prepush.py` with the verbatim scripts, so a project has it.
+   The brief's `Touches:` does not name `kit/manifest.json`; it is the one file outside it.
 5. **Tests (answer 4).** `tests/kit/test_prepush.py`: all steps in order; each step's failure stops the run with its message; no
    body file; a body file that cannot be read; a project without `make lint` and without a Makefile; a missing `agk.mk`; the base
    given to governance; the scan's range; no scanner; the plan's tests and an empty plan; `--quick`; a base that does not resolve;
-   usage; the hook template; the session rule; a test run ended at `proof_timeout`.
+   usage; the hook template; the session rules 7 and 31; a test run ended at `proof_timeout`.
 6. **Flow mode.** Fragment `changelog.d/prepush.md`; no version bump; `kit/hashes.json` not edited (session rule 14).
 
 ## Consequences
@@ -57,6 +60,11 @@ checkpoint of the pull request).
 
 ## Residual
 
-- 2026-10-30: Q-326-1 open: `kit/manifest.json` is outside the brief's `Touches:` and open pull request #332 also changes it.
-- 2026-10-30: Q-326-2 open: rule 7 says a builder pushes at every checkpoint; rule 31 says it pushes at milestones.
-- 2026-10-30: Q-326-3 open: a missing scanner is said and does not fail the run.
+- 2026-10-30: Q-326-1 answered in the verdict on 2512153: yes, `kit/manifest.json` lists `scripts/agk/prepush.py`, named in the
+  body as a change outside `Touches:` (decision 4).
+- 2026-10-30: Q-326-2 answered in the verdict on 2512153: rule 7 is amended in this pull request (commit at every step, push at
+  milestones and before a pause, an end or a question); rule 31 points to it (decision 3).
+- 2026-10-30: Q-326-3 answered in the verdict on 2512153: the reading is accepted; a missing gitleaks prints `secret scan: not
+  run`, does not fail, and the run ends `prepush: passed; not run: secret-scan` (decision 1).
+- 2026-10-30: SPEC-0033 rule 1 still says a builder pushes at every step; an Approved spec is not edited here (principle 6). Its
+  amendment is a question for the conductor (Q-326-4).
