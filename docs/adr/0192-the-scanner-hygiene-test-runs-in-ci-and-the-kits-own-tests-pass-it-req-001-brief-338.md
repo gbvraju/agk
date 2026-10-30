@@ -1,6 +1,6 @@
 # ADR-0192: the scanner hygiene test runs in CI and the kit's own tests pass it (REQ-001, brief 338)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0010
