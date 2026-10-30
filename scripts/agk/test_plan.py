@@ -69,7 +69,15 @@ def data(shown: Plan, base: str, head: str) -> dict:
         "nothing_to_run": shown.idle,
         "not_run_by_proof": shown.outside,
         "deleted": sorted(p for p, s in shown.files.items() if s == "D"),
+        "project_tests": None
+        if shown.table
+        else {"command": shown.command or None, "files": selected(shown)},
     }
+
+
+def selected(shown: Plan) -> list[str]:
+    """The added or changed test files of the plan (deletions left out)."""
+    return sorted(p for p, s in shown.files.items() if s != "D")
 
 
 def why(shown: Plan, name: str) -> str:
@@ -91,10 +99,18 @@ def text(shown: Plan, base: str, head: str) -> list[str]:
         lines.append(f"  command: {run.command}")
         lines.extend(f"  file: {p}" for p in run.files)
     for name in shown.idle:
-        if not shown.table and not shown.command:
+        if shown.table:
+            lines.append(f"{name}: nothing to run (no added or changed test file is selected)")
+            continue
+        # Without a table the command and the selected files are always shown (brief #325 answer 1).
+        files = selected(shown)
+        if not shown.command:
             lines.append(f"{name}: nothing to run (it is not set; setting: project_tests)")
         else:
             lines.append(f"{name}: nothing to run (no added or changed test file is selected)")
+        lines.append("  folder: .")
+        lines.append(f"  command: {shown.command or 'not set (setting: project_tests)'}")
+        lines.extend(f"  file: {p} ({why(shown, name)})" for p in files)
     lines.extend(f"not run by proof (in no [proof] area): {p}" for p in shown.outside)
     lines.extend(
         f"deleted (removed on the base, not run): {p}"

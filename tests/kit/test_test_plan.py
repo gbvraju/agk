@@ -115,6 +115,10 @@ def test_without_a_table_it_prints_project_tests_and_the_selected_files(repo):
         }
     ]
     assert doc["nothing_to_run"] == [] and doc["not_run_by_proof"] == []
+    assert doc["project_tests"] == {
+        "command": "python3 -m pytest -q",
+        "files": ["tests/test_new.py"],
+    }
     out = plan(repo).stdout
     assert "project_tests: runs 1 test file" in out
     assert "  command: python3 -m pytest -q\n" in out
@@ -127,7 +131,34 @@ def test_without_a_table_and_without_project_tests_nothing_runs_and_the_setting_
     repo.commit({"tests/test_new.py": "# new\n"}, "change")
     doc = data(repo)
     assert doc["runs"] == [] and doc["nothing_to_run"] == ["project_tests"]
-    assert "setting: project_tests" in plan(repo).stdout
+    assert doc["project_tests"] == {"command": None, "files": ["tests/test_new.py"]}
+    out = plan(repo).stdout
+    assert "setting: project_tests" in out
+    assert "  command: not set (setting: project_tests)\n" in out
+    assert "  file: tests/test_new.py (selected by test_dirs and test_patterns)\n" in out
+
+
+def test_without_a_table_a_deletion_only_still_shows_the_command(repo):
+    """REQ-016: brief #325 answer 1 (verdict on fc54475, finding 1: the command is always shown
+    without a table, and a deleted file is not a selected one)."""
+    start(repo, project_tests="python3 -m pytest -q", files={"tests/test_gone.py": "# old\n"})
+    repo.commit({"tests/test_gone.py": None}, "delete")
+    doc = data(repo)
+    assert doc["runs"] == [] and doc["nothing_to_run"] == ["project_tests"]
+    assert doc["project_tests"] == {"command": "python3 -m pytest -q", "files": []}
+    assert doc["deleted"] == ["tests/test_gone.py"]
+    out = plan(repo).stdout
+    assert "project_tests: nothing to run" in out
+    assert "  command: python3 -m pytest -q\n" in out
+    assert "  file: " not in out
+    assert "deleted (removed on the base, not run): tests/test_gone.py\n" in out
+
+
+def test_with_a_table_there_is_no_project_tests_entry(repo):
+    """REQ-016: brief #325 answer 1 (with the table, proof does not read `project_tests`)."""
+    start(repo, TWO_AREAS)
+    repo.commit({"backend/tests/test_new.py": "# new\n"}, "change")
+    assert data(repo)["project_tests"] is None
 
 
 def test_a_path_with_a_space_is_quoted_as_proof_quotes_it(repo):

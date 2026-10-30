@@ -31,9 +31,11 @@ waited 13 to 25 minutes to learn which tests ran. The brief names no `Measured:`
    base defaults to the merge base with the default branch, as in proof (`resolve_range`). The text names, for each run, its
    name, the number of files and why they were chosen (the area's `dirs` and `patterns`, or `test_dirs` and `test_patterns`),
    its folder, its command line and its files; then `<area>: nothing to run`; then `not run by proof (in no [proof] area):
-   <file>`; then `deleted (removed on the base, not run): <file>`. Without `project_tests` it says `nothing to run (it is not
-   set; setting: project_tests)`. `--json` holds `base`, `head`, `proof_table`, `runs` (`name`, `files`, `command`, `cwd`),
-   `nothing_to_run`, `not_run_by_proof` and `deleted`. Exit 0 printed, 2 usage or a refused setting (the same message as proof's,
+   <file>`; then `deleted (removed on the base, not run): <file>`. Without a table the `project_tests` command (or `not set
+   (setting: project_tests)`) and the selected test files that are not deleted are always printed, also when nothing runs
+   (finding 1 of the verdict on fc54475). `--json` holds `base`, `head`, `proof_table`, `runs` (`name`, `files`, `command`,
+   `cwd`), `nothing_to_run`, `not_run_by_proof`, `deleted` and `project_tests` (without a table `command`, null when not set,
+   and `files`; with a table null). Exit 0 printed, 2 usage or a refused setting (the same message as proof's,
    named `test-plan`), 3 I/O or a ref that does not resolve (path class `git ref`).
 3. **Installed (Q-325-1).** `kit/manifest.json` lists `scripts/agk/test_plan.py` with the verbatim scripts, so a project has it
    and the guide's command works there; `tests/kit_dev/test_kit_manifest.py` requires every script to be listed or kit-only. The
@@ -45,7 +47,7 @@ waited 13 to 25 minutes to learn which tests ran. The brief names no `Measured:`
    table. A deleted file is listed apart, not as "not run". The plan does not read a pull request body, so `Behaviour: unchanged`
    (which makes proof `skipped`) is not shown; the brief gives the command no body option.
 6. **Tests (answer 4).** `tests/kit/test_test_plan.py`: two areas; an area with nothing to run; a file in no area; a deletion
-   only; no table; no table and no `project_tests`; `{files}` quoting of a path with a space; no `cwd`; the plan equal to proof's
+   only; no table; no table and no `project_tests`; no table and a deletion only; `{files}` quoting of a path with a space; no `cwd`; the plan equal to proof's
    runs with and without a table; one function; read-only; the same `cwd` refusal; `--base` and `--head`; usage and a bad ref.
 7. **Flow mode.** Fragment `changelog.d/test-plan.md`; no version bump; `kit/hashes.json` not edited (session rule 14).
 
@@ -57,5 +59,9 @@ waited 13 to 25 minutes to learn which tests ran. The brief names no `Measured:`
 
 ## Residual
 
-- 2026-10-30: Q-325-1 (`kit/manifest.json` outside `Touches:`), Q-325-2 (`docs/guides/reference.md` left to after #323) and
-  Q-325-3 (the reading of "in no area") wait for the conductor (due 2026-11-13).
+- 2026-10-30: Q-325-1 answered in the verdict on fc54475: `kit/manifest.json` is accepted, listed in the body as a change
+  outside `Touches:` (decision 3).
+- 2026-10-30: Q-325-2 answered in the verdict on fc54475: a `docs/guides/reference.md` line can follow after #323 merges; it is
+  not in this pull request (decision 4).
+- 2026-10-30: Q-325-3 answered in the verdict on fc54475: the reading is sound; it matches proof's own definition of a test file
+  (decision 5).
