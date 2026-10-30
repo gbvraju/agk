@@ -37,11 +37,11 @@ def test_an_unknown_status_still_fails_and_the_message_lists_retired(repo):
 
 
 def test_retiring_with_the_markers_left_fails_naming_the_requirement_and_the_file(repo):
-    secret = "THE-TEXT-OF-THE-TEST-NOT-TO-BE-ECHOED"
+    canary = "THE-TEXT-OF-THE-TEST-NOT-TO-BE-ECHOED"
     repo.commit(
         {
             "docs/requirements.md": reqs(("REQ-001", "retired")),
-            "tests/test_old.py": f"# REQ-001\ndef test_old():\n    assert '{secret}'\n",
+            "tests/test_old.py": f"# REQ-001\ndef test_old():\n    assert '{canary}'\n",
             "tests/test_other.py": "# REQ-001 AC1\n",
         }
     )
@@ -49,7 +49,7 @@ def test_retiring_with_the_markers_left_fails_naming_the_requirement_and_the_fil
     assert proc.returncode == 1
     assert "REQ-001" in proc.stdout and "retired" in proc.stdout
     assert "tests/test_old.py" in proc.stdout and "tests/test_other.py" in proc.stdout
-    assert secret not in proc.stdout
+    assert canary not in proc.stdout
 
 
 def test_retiring_with_the_markers_removed_or_retagged_passes(repo):
