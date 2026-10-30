@@ -1,6 +1,6 @@
 # ADR-0180: a project's CI is fast and cheap by default (REQ-039, brief 283)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0165, ADR-0172, ADR-0176
