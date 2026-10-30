@@ -152,10 +152,13 @@ def test_a_required_check_that_has_not_reported_is_still_running(proj, stub):
     assert queue(proj, stub, "--all") == ["empty", f"#7 {SHORT} skip: checks running"]
 
 
-def test_a_draft_is_not_reviewed_and_its_comments_are_not_read(proj, stub):
+def test_a_draft_is_not_reviewed_and_its_checks_are_not_read(proj, stub):
+    """Brief #350 answer 2: a draft without a new question stays skipped; its comments are read
+    now (a question would list it), its checks never are."""
     stub.serve(OPEN, [listed(7, "agk:review", draft=True)])
+    stub.serve(f"repos/{REPO}/issues/7/comments", [note(1, "Report: abc1234 pushed", 1)])
     assert queue(proj, stub, "--all") == ["empty", f"#7 {SHORT} skip: draft"]
-    assert not any("comments" in call[1] for call in stub.calls())
+    assert not any("commits/" in call[1] for call in stub.calls())
 
 
 def test_only_a_listed_author_gives_a_verdict_and_never_on_their_own_pull_request(proj, stub):
@@ -271,3 +274,84 @@ def test_checks_not_reported_under_another_label_are_reviewed_and_say_so(proj, s
         f"#7 {SHORT} review: labelled agk:review; no verdict yet; checks not reported",
         f"#8 {OTHER[:7]} review: head differs from the last verdict ({SHORT}); checks not reported",
     ]
+
+
+# --- a question on a draft reaches the conductor (brief #350) ---------------------------------
+
+
+def draft_comments(stub: Stub, n: int, comments: list) -> None:
+    stub.serve(f"repos/{REPO}/issues/{n}/comments", comments)
+
+
+def test_a_draft_with_a_question_and_no_verdict_is_listed(proj, stub):
+    """REQ-037: brief #350 answers 1 and 4 (no checks are read: answering needs none)."""
+    stub.serve(OPEN, [listed(7, None, draft=True)])
+    draft_comments(stub, 7, [note(1, "Question: Q-350-9 which file?", 1)])
+    assert queue(proj, stub) == [f"#7 {SHORT} review: question on a draft"]
+    assert not any("commits/" in call[1] for call in stub.calls())
+
+
+def test_a_draft_with_a_question_after_a_verdict_on_its_head_is_listed(proj, stub):
+    """REQ-037: brief #350 answer 1 (the rule against two verdicts on one head does not apply)."""
+    stub.serve(OPEN, [listed(7, "agk:ci-running", draft=True)])
+    draft_comments(stub, 7, [verdict(2), note(3, "Question: Q-350-9 and now?", 20)])
+    assert queue(proj, stub) == [f"#7 {SHORT} review: question on a draft"]
+
+
+def test_a_draft_with_an_edited_question_is_listed(proj, stub):
+    """REQ-037: brief #350 answer 1 (created or edited after the last verdict)."""
+    stub.serve(OPEN, [listed(7, None, draft=True)])
+    draft_comments(stub, 7, [note(1, "Question: Q-1 why?", 1, edited=30), verdict(2)])
+    assert queue(proj, stub) == [f"#7 {SHORT} review: question on a draft"]
+
+
+def test_a_draft_with_an_answered_question_is_skipped(proj, stub):
+    """REQ-037: brief #350 answer 4."""
+    stub.serve(OPEN, [listed(7, None, draft=True)])
+    draft_comments(stub, 7, [note(1, "Question: Q-1 why?", 1), verdict(2)])
+    assert queue(proj, stub, "--all") == ["empty", f"#7 {SHORT} skip: draft"]
+
+
+@pytest.mark.parametrize(
+    "first",
+    [
+        "Report: abc1234 pushed",
+        "Progress: abc1234 done 1/4; next: 2",
+        "Correction: void",
+        "Maintainer answer: yes",
+        "thanks, Question: later",
+    ],
+)
+def test_a_draft_with_only_another_comment_is_skipped(proj, stub, first):
+    """REQ-037: brief #350 answers 2 and 4 (only a `Question:` lists a draft)."""
+    stub.serve(OPEN, [listed(7, "agk:review", draft=True)])
+    draft_comments(stub, 7, [note(1, first, 1)])
+    assert queue(proj, stub, "--all") == ["empty", f"#7 {SHORT} skip: draft"]
+
+
+def test_a_verdict_by_an_unlisted_author_does_not_answer_a_question_on_a_draft(proj, stub):
+    """REQ-037: brief #350 answer 1 (the last verdict is the last one by a listed author)."""
+    stub.serve(OPEN, [listed(7, None, draft=True)])
+    draft_comments(stub, 7, [verdict(2, login="someone"), note(3, "Question: Q-2 ok?", 20)])
+    assert queue(proj, stub) == [f"#7 {SHORT} review: question on a draft"]
+
+
+def test_the_fingerprint_changes_on_a_new_question_on_a_draft(proj, stub):
+    """REQ-037: brief #350 answers 2 and 4 (a new question wakes the loop)."""
+    stub.serve(OPEN, [listed(7, None, draft=True)])
+    draft_comments(stub, 7, [note(1, "Report: x", 1)])
+    first = fingerprint(proj, stub)
+    assert fingerprint(proj, stub) == first
+    draft_comments(stub, 7, [note(1, "Report: x", 1), note(2, "Question: Q-1 why?", 5)])
+    asked = fingerprint(proj, stub)
+    draft_comments(stub, 7, [note(1, "Report: x", 1), note(2, "Question: Q-1 why?", 5, edited=9)])
+    edited = fingerprint(proj, stub)
+    assert len({first, asked, edited}) == 3
+
+
+def test_an_unreadable_draft_comment_list_fails_and_never_reads_as_skipped(proj, stub):
+    """REQ-037: brief #350 (a draft's comments are read now, so a failed read fails loudly)."""
+    stub.serve(OPEN, [listed(7, None, draft=True)])
+    draft_comments(stub, 7, "FAIL")
+    out = session(proj, stub, "review-queue", "--all")
+    assert out.returncode == 2 and "skip: draft" not in out.stdout
