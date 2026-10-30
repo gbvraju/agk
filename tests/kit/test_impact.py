@@ -16,6 +16,7 @@ import json
 
 import impact
 import pytest
+import session
 from common import CheckError
 
 BASE_TOML = 'default_branch = "main"\ntest_dirs = ["tests"]\ntest_patterns = ["test_*.py"]\n'
@@ -117,9 +118,23 @@ def test_only_existing_test_files_are_selected(repo):
     start(repo, table_text())
     repo.commit({"app/billing/pay.py": "# changed\n", "tests/billing/test_pay.py": None}, "change")
     found = result(repo)
-    # conftest.py is under the glob but is not a test file; the deleted test is not selected.
-    assert found.selected == [] and found.full is False and found.unmapped == []
-    assert "regression: nothing selected\n" in plan(repo).stdout
+    # conftest.py is under the glob but is not a test file; the deleted test is not selected, so
+    # the entry guards the change with no test and the file is unmapped (verdict on e258a97, 1).
+    assert found.selected == [] and found.unmapped == ["app/billing/pay.py"]
+    assert found.full is True and found.reason == "profile balanced: 1 unmapped file"
+
+
+@pytest.mark.parametrize("profile", ["fast", "balanced"])
+def test_an_entry_whose_tests_select_no_file_leaves_its_code_unmapped(repo, profile):
+    """REQ-016: brief #373 answer 2 (verdict on e258a97, item 1: never silently fewer tests)."""
+    typo = 'map = [{ code = "app/billing/**", tests = ["tests/biling/**"] }]\n'
+    start(repo, table_text(profile=profile, body=typo))
+    change(repo, "app/billing/pay.py")
+    found = result(repo)
+    assert found.selected == [] and found.unmapped == ["app/billing/pay.py"]
+    assert found.full is (profile == "balanced")
+    out = plan(repo).stdout
+    assert "unmapped (no [testing] map entry covers it): app/billing/pay.py\n" in out
 
 
 def test_an_always_full_path_makes_the_selection_full(repo):
@@ -171,12 +186,51 @@ def test_a_changed_test_file_is_not_unmapped(repo):
 @pytest.mark.parametrize("profile", ["fast", "balanced", "thorough"])
 def test_a_docs_only_change_selects_nothing_under_every_profile(repo, profile):
     """REQ-016: brief #373 answer 2 (only *.md and docs/ files select nothing)."""
-    start(repo, table_text(profile=profile, always_full='["docs/**"]'))
+    start(repo, table_text(profile=profile, always_full='["app/auth/**"]'))
     repo.commit({"docs/guide.md": "# changed\n", "docs/img/a.svg": "<svg/>\n", "README.md": "x\n"})
     found = result(repo)
     assert found.full is False and found.reason is None
     assert found.selected == [] and found.unmapped == []
     assert "regression: nothing selected (only documentation changed)\n" in plan(repo).stdout
+
+
+@pytest.mark.parametrize("profile", ["fast", "balanced", "thorough"])
+def test_always_full_wins_over_a_docs_only_change(repo, profile):
+    """REQ-016: brief #373 answer 2 (Q-373-1, answered on e258a97: the conservative reading)."""
+    start(repo, table_text(profile=profile, always_full='["docs/**"]'))
+    change(repo, "docs/guide.md")
+    found = result(repo)
+    assert found.full is True and found.reason == "always_full docs/** matches docs/guide.md"
+    assert "regression: full (always_full docs/** matches docs/guide.md)\n" in plan(repo).stdout
+
+
+@pytest.mark.parametrize("profile", ["fast", "balanced", "thorough"])
+def test_an_empty_change_is_not_read_as_docs_only(repo, profile):
+    """REQ-016: brief #373 answer 2 (verdict on e258a97, item 3)."""
+    start(repo, table_text(profile=profile))
+    repo.git("commit", "-q", "--allow-empty", "-m", "empty")
+    found = result(repo)
+    assert found.docs_only is False and found.selected == [] and found.unmapped == []
+    assert found.full is (profile == "thorough")
+    assert "only documentation changed" not in plan(repo).stdout
+
+
+def test_a_helper_under_the_test_folder_is_unmapped(repo):
+    """REQ-016: brief #373 answer 2 (verdict on e258a97, item 2; Q-373-4)."""
+    start(repo, table_text())
+    change(repo, "tests/conftest.py")
+    found = result(repo)
+    assert found.unmapped == ["tests/conftest.py"] and found.full is True
+
+
+def test_test_dirs_dot_still_finds_unmapped_files(repo):
+    """REQ-016: brief #373 answer 2 (verdict on e258a97, item 2; Q-373-4)."""
+    toml = 'default_branch = "main"\ntest_dirs = ["."]\ntest_patterns = ["test_*.py"]\n'
+    repo.commit({"agk.toml": toml + table_text(), **BASE_FILES}, "base")
+    repo.branch("feature")
+    change(repo, "app/other.py", "tests/auth/test_login.py")
+    found = result(repo)
+    assert found.unmapped == ["app/other.py"] and found.full is True
 
 
 def test_a_markdown_file_beside_code_is_not_unmapped(repo):
@@ -215,6 +269,15 @@ BAD = [
     ("[testing]\nbudget_seconds = true\n", "setting: testing.budget_seconds"),
     ('[testing]\nbudget_seconds = "300"\n', "setting: testing.budget_seconds"),
     ('[testing]\nprofiles = "fast"\n', "setting: testing"),
+    ('[testing]\nalways_full = ["app\\\\auth\\\\**"]\n', "setting: testing.always_full"),
+    (
+        '[testing]\nmap = [{ code = "app\\\\b/**", tests = ["t/**"] }]\n',
+        "setting: testing.map[1].code",
+    ),
+    (
+        '[testing]\nmap = [{ code = "a/**", tests = ["tests\\\\b\\\\**"] }]\n',
+        "setting: testing.map[1].tests",
+    ),
 ]
 
 
@@ -298,5 +361,6 @@ def test_no_table_prints_full_as_governance_runs_today(repo):
     ],
 )
 def test_globs_keep_star_in_one_folder_and_double_star_across(glob, path, hit):
-    """REQ-016: brief #373 answer 1 (path globs)."""
+    """REQ-016: brief #373 answer 1 (path globs, as the session plan reads them)."""
     assert impact.matches(path, glob) is hit
+    assert (session.glob_regex(glob).fullmatch(path) is not None) is hit

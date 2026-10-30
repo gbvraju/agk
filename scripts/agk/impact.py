@@ -94,11 +94,11 @@ def matches(path: str, glob: str) -> bool:
 
 
 def _glob_ok(value: object) -> bool:
-    """A non-empty path glob inside the repository: not absolute, no drive, no `..` part."""
-    if not isinstance(value, str) or not value.strip():
+    """A non-empty path glob inside the repository: `/` as the separator (no `\\`, which git's
+    paths never hold), not absolute, no drive, no `..` part."""
+    if not isinstance(value, str) or not value.strip() or "\\" in value:
         return False
-    parts = value.replace("\\", "/").split("/")
-    return not value.startswith(("/", "\\")) and ":" not in value and ".." not in parts
+    return not value.startswith("/") and ":" not in value and ".." not in value.split("/")
 
 
 def _globs(value: object, empty_ok: bool) -> bool:
@@ -194,7 +194,8 @@ def impact(root: Path, base: str, head: str) -> Impact:
         return Impact(False, None, True, NO_TABLE)
     profile = table["profile"]
     changed = changed_files(root, base, head)
-    if all(is_doc(p) for p in changed):
+    hit = next(((g, p) for p in changed for g in table["always_full"] if matches(p, g)), None)
+    if changed and not hit and all(is_doc(p) for p in changed):
         return Impact(True, profile, False, None, docs_only=True)
     cfg = load_config(root)
     dirs, patterns = list(cfg["test_dirs"]), list(cfg["test_patterns"])
@@ -202,18 +203,19 @@ def impact(root: Path, base: str, head: str) -> Impact:
     chosen: dict[str, Selected] = {}
     unmapped: list[str] = []
     for path in changed:
-        covering = [e for e in table["map"] if matches(path, e["code"])]
-        if not covering:
-            if not is_doc(path) and not in_test_dirs(path, dirs):
-                unmapped.append(path)
-            continue
-        for entry in covering:
+        guarded = False
+        for entry in (e for e in table["map"] if matches(path, e["code"])):
             for test in tests:
-                if test not in chosen and any(matches(test, g) for g in entry["tests"]):
-                    chosen[test] = Selected(test, path, entry["code"], list(entry["tests"]))
+                if any(matches(test, g) for g in entry["tests"]):
+                    guarded = True
+                    if test not in chosen:
+                        chosen[test] = Selected(test, path, entry["code"], list(entry["tests"]))
+        # A file that no entry covers, or whose entries select no existing test file, is
+        # unmapped; only a real test file (the change's own test) and documentation are not.
+        if not guarded and not is_doc(path) and not is_test_file(path, dirs, patterns):
+            unmapped.append(path)
     selected = [chosen[t] for t in sorted(chosen)]
     reason = None
-    hit = next(((g, p) for p in changed for g in table["always_full"] if matches(p, g)), None)
     if hit:
         reason = f"always_full {hit[0]} matches {hit[1]}"
     elif profile == "thorough":

@@ -22,7 +22,7 @@ checkpoint of the pull request, as `impact.py` did not exist).
 1. **The table (answer 1).** `agk.toml` gains an optional `[testing]` table: `profile` (`fast`, `balanced` the default, or
    `thorough`), `always_full` (path globs), `map` (a list of `{ code = "<glob>", tests = ["<glob>", ...] }`) and
    `budget_seconds` (a whole number above 0, 300 by default, read later by the metrics). Any other key, a bad profile, a
-   glob that is empty, absolute or holds a `..` part, a map entry without both keys or with an empty `tests`, or a budget
+   glob that is empty, absolute, holds a `\` or holds a `..` part, a map entry without both keys or with an empty `tests`, or a budget
    that is not a whole number above 0 is refused, naming the setting (`testing`, `testing.profile`, `testing.always_full`,
    `testing.map`, `testing.map[<n>]`, `testing.map[<n>].code`, `testing.map[<n>].tests`, `testing.budget_seconds`). The
    table is read from `agk.toml` of the root, as `[proof]` is (ADR-0172). `agk.toml` is a protected path, so changing a
@@ -34,8 +34,11 @@ checkpoint of the pull request, as `impact.py` did not exist).
    - `full`, with its reason, when a changed file matches `always_full` (`always_full <glob> matches <file>`), else when
      the profile is `thorough` (`profile thorough`), else under `balanced` when a file is unmapped
      (`profile balanced: <n> unmapped file(s)`);
-   - `unmapped`: the changed files outside `test_dirs`, not `*.md` and not under `docs/`, that no `code` glob matches.
-   A change of only `*.md` files and files under `docs/` selects nothing, under every profile, `always_full` included. A
+   - `unmapped`: the changed files that are not test files (`test_dirs` and `test_patterns`, as above), not `*.md` and
+     not under `docs/`, that no `code` glob matches, or whose matching entries select no test file of the head (a typo
+     in `tests`, a renamed folder). A change is never silently given fewer tests than it needs.
+   A non-empty change of only `*.md` files and files under `docs/` selects nothing, under every profile, unless a changed
+   file matches `always_full`, which then makes the selection full. An empty change is not read as documentation. A
    glob keeps `*` and `?` in one folder, `**` crosses folders and `dir/` is `dir/**`, as in the session plan.
 3. **The plan (answer 3).** `test_plan.py` prints, after its existing lines, a `regression` section: `regression: full
    (<reason>)`, or `regression: <n> test file(s) selected` with one `  file: <test> (<changed> matches code <glob>, tests
@@ -53,13 +56,25 @@ checkpoint of the pull request, as `impact.py` did not exist).
   later briefs run it.
 - A project without the table sees `regression: full (no [testing] table)`, which is what governance runs today.
 - `impact.py` is a library of `test_plan.py`, not a command of its own, so the reference guide is unchanged.
+- The tests step of `prepush.py` runs the test plan, so a malformed `[testing]` table makes that step fail, which refuses
+  the bad setting before a push.
+
+## Log
+
+- 2026-10-30: verdict `fix list` on e258a97. Item 1: a changed file whose covering entries select no test file is
+  unmapped, and a `\` in any glob is refused. Item 2: only a real test file (not any file under `test_dirs`, and not
+  everything with `test_dirs = ["."]`) is left out of `unmapped` (Q-373-4). Item 3: an empty change is not docs-only.
+  Q-373-1 answered: the conservative reading, `always_full` wins over the docs-only rule. Q-373-2 and Q-373-3 accepted
+  as read.
 
 ## Residual
 
-- Q-373-1 (2026-10-30): a docs-only change selects nothing even when a changed file matches `always_full` (the brief says
-  "under every profile"); whether `always_full` should win over the docs-only rule.
-- Q-373-2 (2026-10-30): in a change that also touches code, a `*.md` file or a file under `docs/` is never counted as
+- Q-373-1 (2026-10-30): answered on e258a97 (see the log): `always_full` wins over the docs-only rule.
+- Q-373-2 (2026-10-30, accepted as read on e258a97): in a change that also touches code, a `*.md` file or a file under `docs/` is never counted as
   unmapped, so a changelog fragment alone does not make `balanced` full; the brief states the docs rule only for a change
   of only such files.
-- Q-373-3 (2026-10-30): a `tests` glob selects only test files (`test_dirs` and `test_patterns`), not helper files such as
+- Q-373-3 (2026-10-30, accepted as read on e258a97): a `tests` glob selects only test files (`test_dirs` and `test_patterns`), not helper files such as
   `conftest.py` under the same folder; the brief says "each existing test file".
+- Q-373-4 (2026-10-30): a helper under the test folders (such as `tests/conftest.py`) is unmapped, so it makes
+  `balanced` full; with `test_dirs = ["."]` only real test files are left out of `unmapped`. The conservative reading of
+  the verdict on e258a97, item 2.

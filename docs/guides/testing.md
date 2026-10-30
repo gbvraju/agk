@@ -35,7 +35,7 @@ Every key is optional; an empty `[testing]` table takes the defaults. A bad entr
 (for example `setting: testing.map[2].tests`), never its value.
 
 A glob is a path from the top of the repository. `*` and `?` stay inside one folder, `**` crosses folders, and a glob that ends
-in `/` means everything below that folder. A glob may not start with `/` or hold a `..` part.
+in `/` means everything below that folder. A glob uses `/` between folders, never `\`, and may not start with `/` or hold a `..` part.
 
 ## What a change selects
 
@@ -46,9 +46,11 @@ For a change, the selection is worked out from git and files only, with no netwo
   selected file is shown with the changed file and the entry that chose it.
 - **Full suite.** The selection is the full suite, with its reason, when a changed file matches `always_full`, when the profile
   is `thorough`, or, under `balanced`, when a changed file is unmapped.
-- **Unmapped files.** A changed file outside the test folders that no entry covers is unmapped, and it is always listed.
-- **Documentation.** A change of only `*.md` files and files under `docs/` selects nothing, under every profile. Such a file is
-  never unmapped.
+- **Unmapped files.** A changed file that no entry covers, or whose entries select no existing test file (a typo in `tests`,
+  a renamed folder), is unmapped, and it is always listed. Only the change's own test files and documentation are never
+  unmapped; a helper such as `tests/conftest.py` is. A change is never silently given fewer tests than it needs.
+- **Documentation.** A change of only `*.md` files and files under `docs/` selects nothing, under every profile, unless one of
+  them matches `always_full`. Such a file is never unmapped.
 - **No table.** Without a `[testing]` table the selection is the full suite, which is what governance runs today.
 
 ## The plan
