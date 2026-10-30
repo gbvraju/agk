@@ -129,7 +129,8 @@ def tiny_kit(tmp_path: Path) -> Path:
 def init_target(tmp_path: Path, makefile: bytes) -> Path:
     target = tmp_path / "target"
     target.mkdir()
-    subprocess.run(["git", "init", "-q", str(target)], check=True)  # nosec B603 B607
+    git = ["git", "init", "-q", str(target)]
+    subprocess.run(git, check=True)  # nosec B603 - fixed argument list, no shell
     (target / "agk.toml").write_text('mode = "init"\nversion = "1.0.0"\n', encoding="utf-8")
     (target / "Makefile").write_bytes(makefile)
     (target / PROJECT_MK).write_text(PROJECT_MK_TEXT, encoding="utf-8")
