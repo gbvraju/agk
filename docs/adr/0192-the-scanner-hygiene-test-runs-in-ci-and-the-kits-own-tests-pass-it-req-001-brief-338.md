@@ -36,5 +36,11 @@ instead of passing unseen. A project that installs the kit runs the same step, s
 
 ## Residual
 
-- Q-338-1 (2026-10-30): the brief asks that bandit be "pinned like" pytest and ruff; they carry no version pin, so bandit
-  carries none either. A version pin for all three is a decision for the maintainers.
+- 2026-10-30: pinning the tooling (pytest, ruff and bandit) is a later brief if the maintainers want it (Q-338-1).
+
+## Log
+
+- 2026-10-30, verdict on 9b0419f: Q-338-1 answered, bandit is installed unpinned, on the same terms as pytest and ruff; pinning
+  the tooling is a later brief if wanted.
+- 2026-10-30, verdict on 9b0419f: Q-338-2 answered, `.github/workflows/governance.yml` is changed in this pull request now that
+  #329 has merged (merged into this branch from the default branch, no force-push).

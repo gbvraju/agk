@@ -117,7 +117,13 @@ jobs:
           exit 1
       - name: Install tooling
         if: ${{ github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
-        run: python -m pip install pytest ruff
+        run: |
+          # bandit runs the kit's scanner hygiene test (brief #338, ADR-0192); unpinned, like pytest and ruff. A tool that
+          # cannot be installed fails this step by name: the checks that need it are never skipped.
+          python -m pip install pytest ruff bandit || echo "Install tooling: pip reported an error; checking each tool"
+          for tool in pytest ruff bandit; do
+            python -m "$tool" --version > /dev/null 2>&1 || { echo "Install tooling: $tool could not be installed"; exit 1; }
+          done
       - name: PR body file
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
