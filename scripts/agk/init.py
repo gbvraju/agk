@@ -37,6 +37,7 @@ from common import (
     with_router_names,
 )
 from common import required_checks as configured_checks
+from kit_hashes import normalized
 from reviewers import parse, render_codeowners
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
@@ -257,8 +258,9 @@ def print_branch_rules(branch: str, tool: str = "init") -> None:
 
 
 def release_problem(kit_root: Path) -> str | None:
-    """None when every kit file init installs (and every template it renders) is one the release
-    row of `kit_version` lists, CRLF read as LF; otherwise the refusal, naming the release."""
+    """None when every kit file init or adopt installs (every template it renders, every source of
+    a marked block) is one the release row of `kit_version` lists, CRLF read as LF; otherwise the
+    refusal, naming the release."""
     manifest = json.loads((kit_root / MANIFEST).read_text(encoding="utf-8"))
     version = str(manifest["kit_version"])
     problem = f"{PLUGINS} are not those of release {version} (path class {TABLE})"
@@ -284,6 +286,15 @@ def release_problem(kit_root: Path) -> str | None:
                 digest = hashlib.sha256(lf(path.read_bytes())).hexdigest()
                 if digest not in (listed.get(rel) or []):
                     return problem
+    # the files written as marked blocks, hashed as kit_hashes.snapshot_of does (ADR-0200)
+    blocks = row.get("blocks") if isinstance(row.get("blocks"), dict) else {}
+    sources = adopt.get("block_sources") or {}
+    for rel in sorted(set(adopt.get("blocks") or {}) - set(manifest.get("rendered") or [])):
+        path = kit_root / sources.get(rel, rel)
+        if path.is_file():
+            digest = hashlib.sha256(normalized(lf(path.read_bytes()))).hexdigest()
+            if digest not in (blocks.get(rel) or []):
+                return problem
     return None
 
 

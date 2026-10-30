@@ -42,13 +42,27 @@ at the first checkpoint of the pull request (632d2e2).
    `test_product_report_wiring.py`).
 3. **The skill.** `/agk:adopt` says, as `/agk:init` does, to show the refusal and the settings entries and stop, so that the
    person installs the plugin at that release's tag.
-4. **Not built.** The commit-stamp fallback of item 8 stays ADR-0160's residual, as the conductor answered. The adopt section of
+4. **The check covers the files written as marked blocks (verdict on 7c7e85c, item 1).** `init.release_problem` in
+   `scripts/agk/init.py` compared only the release row's `verbatim` and `templates`. The sources of the marked blocks
+   (`kit/templates/gitignore`, and each `adopt.blocks` path that is not rendered) are listed in the row's `blocks`, so an
+   unreleased `kit/templates/gitignore` was installed under the release's version by adopt and init alike. `release_problem` now
+   also hashes each block source as `kit_hashes.snapshot_of` does (`kit_hashes.normalized`, after CRLF is read as LF) and compares
+   it with `row["blocks"]`. The one function serves both installers, so init gains the same check.
+5. **Not built.** The commit-stamp fallback of item 8 stays ADR-0160's residual, as the conductor answered. The adopt section of
    `docs/guides/reference.md` is not changed here, since two open pull requests change that file (#354, #355); see Residual.
-5. **The spec.** `docs/runs/proposed-spec-amendments-102.md` proposes the text of SPEC-0002 rules 1 and 15 that this changes.
-6. **Tests.** `tests/kit_dev/test_adopt_from_release.py` (8): a kit at its release adopts; a CRLF cache at the release adopts with
+6. **The spec.** `docs/runs/proposed-spec-amendments-102.md` proposes the text of SPEC-0002 rules 1 and 15, and of SPEC-0001's
+   release rule, that this changes.
+7. **Tests.** `tests/kit_dev/test_adopt_from_release.py` (14): a kit at its release adopts; a CRLF cache at the release adopts with
    LF; a kit between releases is refused, dry run or not, with the target byte for byte as it was; no release row is refused; an
    unreleased adopt template is refused; `--unreleased` adopts with a notice; the usage names the option.
-7. **Flow mode.** Fragment `changelog.d/adopt-from-release.md`; no version bump; `kit/hashes.json` is not edited (session rule 14).
+8. **Flow mode.** Fragment `changelog.d/adopt-from-release.md`; no version bump; `kit/hashes.json` is not edited (session rule 14).
+
+## Log
+
+- 2026-10-30, verdict on 7c7e85c (fix list): item 1, the release check missed the block sources; fixed in `release_problem`
+  for init and adopt (decision 4), with tests. Item 2, the formatting-only change to `scripts/agk/minutes.py` (from a `ruff
+  format` run over the whole tree) is left out of this pull request.
+- Q-263-C3: the amendment number 102 is the next free one after 101.
 
 ## Consequences
 
