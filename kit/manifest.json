@@ -62,6 +62,7 @@
     "scripts/agk/session.py",
     "scripts/agk/session_plan.py",
     "scripts/agk/shadow_rate.py",
+    "scripts/agk/stalls.py",
     "scripts/agk/status_only.py",
     "scripts/agk/test_plan.py",
     "scripts/agk/traceability.py"
