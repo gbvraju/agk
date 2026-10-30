@@ -11,6 +11,7 @@ it sits in a later section, and never to an upgrade from that version or newer. 
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import pytest
 from conftest import KIT_ROOT
@@ -155,10 +156,26 @@ def test_the_two_upgrades_through_the_upgrade_listing(tmp_path):
 # --- the fragment for the next release (answer 2) -----------------------------------------------
 
 
+RELEASED_AS = "- #343 "  # the line the release gathers from the fragment of pull request #343
+
+
+def entry_line(root: Path) -> str:
+    """The 0.59.0 entry as a fragment line `- <change>` (brief #362 answer 1): from
+    `changelog.d/opt-in-0-59-0.md` while that file exists, otherwise from the `- #343 ` line that
+    the release moved into `CHANGELOG.md`, its number taken off."""
+    fragment = root / "changelog.d" / FRAGMENT.name
+    if fragment.is_file():
+        lines = fragment.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1, lines  # one fragment of one line (SPEC-0031 rules 1 and 2)
+        return lines[0]
+    changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+    released = [line for line in changelog if line.startswith(RELEASED_AS)]
+    assert len(released) == 1, f"no fragment and {len(released)} lines {RELEASED_AS.strip()}"
+    return "- " + released[0].removeprefix(RELEASED_AS)
+
+
 def fragment_line() -> str:
-    lines = FRAGMENT.read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 1, lines  # one fragment of one line (SPEC-0031 rules 1 and 2)
-    return lines[0]
+    return entry_line(KIT_ROOT)
 
 
 def test_the_fragment_speaks_for_0_59_0_and_names_the_settings_it_shipped():
@@ -189,3 +206,40 @@ def test_the_released_fragment_lists_the_settings_across_0_59_0_only(old, listed
     )
     found = check_release.opt_ins(changelog, old, "0.60.0")
     assert tuple(setting for setting, _ in found) == listed
+
+
+# --- the entry before and after the release moves the fragment (brief #362) ---------------------
+
+LINE = (
+    "- 0.59.0 added proof per test area: details (brief #340, ADR-0193) "
+    "(opt-in: proof, unused_code, coverage)"
+)
+
+
+def kit_copy(root: Path, *, fragment: bool) -> Path:
+    """A kit with the entry as a fragment (before the release) or moved into the changelog."""
+    if fragment:
+        (root / "changelog.d").mkdir(parents=True)
+        (root / "changelog.d" / FRAGMENT.name).write_text(LINE + "\n", encoding="utf-8")
+        released = "- #300 an older change\n"
+    else:
+        root.mkdir(parents=True, exist_ok=True)
+        released = f"- #343 {LINE[2:]}\n- #300 an older change\n"
+    (root / "CHANGELOG.md").write_text(
+        f"# Changelog\n\n## Unreleased\n\n## 0.60.0 (2026-10-30)\n\n{released}", encoding="utf-8"
+    )
+    return root
+
+
+@pytest.mark.parametrize("fragment", [True, False], ids=["fragment", "released"])
+def test_the_entry_is_read_before_and_after_the_release(tmp_path, fragment):
+    """Answers 1 and 2: from the fragment while it exists, else from the `- #343 ` line."""
+    assert entry_line(kit_copy(tmp_path / "kit", fragment=fragment)) == LINE
+
+
+def test_a_kit_with_neither_the_fragment_nor_the_line_fails_plainly(tmp_path):
+    root = tmp_path / "kit"
+    root.mkdir()
+    (root / "CHANGELOG.md").write_text("# Changelog\n\n## Unreleased\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match="#343"):
+        entry_line(root)
