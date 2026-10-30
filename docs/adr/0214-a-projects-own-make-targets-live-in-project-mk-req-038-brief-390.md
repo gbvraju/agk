@@ -1,6 +1,6 @@
 # ADR-0214: a project's own make targets live in project.mk, so an upgrade never refuses over the kit's Makefile (REQ-038, brief 390)
 
-- Status: Accepted
+- Status: Proposed
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0160

@@ -9,8 +9,10 @@
 # is the one GET of this file; if it cannot be read the suite runs in full.
 name: proof
 
-# Fast CI (brief #283): on a draft pull request the suite is skipped and the job reports `outcome: skipped`, and
-# `ready_for_review` runs it in full; a superseded run is cancelled by the concurrency group. A change with no test of its own
+# Fast CI (brief #283): `ready_for_review` runs the suite in full; a superseded run is cancelled by the concurrency group.
+# A draft starts no job (brief #369, ADR-0207): GitHub bills every job as at least one whole minute, and a job that only skips
+# its steps still costs that minute, so the job-level `if:` below skips it; the check reports `skipped`, which the router
+# ignores while the name has another run of the head, and `ready_for_review` and every push to a ready pull request run it. A change with no test of its own
 # (documentation only, say) is reported as skipped by proof.py, never left waiting; per-area runs are the `[proof]` table of
 # agk.toml (brief #305). No install is cached (the project's own command installs what it needs), and nothing is uploaded,
 # so no retention applies.
@@ -28,6 +30,7 @@ concurrency:
 
 jobs:
   proof:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
@@ -79,7 +82,8 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
         run: |
-          # A draft pull request (brief #283): the suite runs in full on `ready_for_review`.
+          # A draft pull request (brief #283): the suite runs in full on `ready_for_review`. The job-level `if:` (brief #369)
+          # already skips a draft; this second guard keeps the step's own outcome right if that condition is ever removed.
           if [ "$PR_DRAFT" = true ]; then
             echo "proof skipped on a draft pull request; it runs in full when it is marked ready for review"
             echo "skip=true" >> "$GITHUB_OUTPUT"

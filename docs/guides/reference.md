@@ -93,6 +93,18 @@ repository (the `repository` of the kit's `.claude-plugin/plugin.json`), naming 
 repository's latest release. A kit newer than the newest release (a checkout between releases) is `ok`; a release it cannot
 read is `??` (`no-release`, `release-unreadable`, `offline`, ...), never `ok`.
 
+## Stalls
+
+    python3 scripts/agk/stalls.py [--json]
+
+Lists every place where the project's pull requests or sessions have stopped, each with its cause and its fix in one line:
+`stall <kind> #<n>: <cause>; fix: <one plain step>`, or `no stall`. The kinds are `stale-label` (green checks, `agk:ci-running`
+still on after 10 minutes), `no-verdict` (`agk:review` for 30 minutes with no verdict naming the head), `stuck-run` (a required
+run queued or in progress for 60 minutes, or cancelled with no newer run), `red-default` (the issue "The default branch is
+red" is open), `idle-capacity` (the plan names sessions to start and no brief was taken for 15 minutes) and `claim-no-pr` (a
+live take with no pull request and no post by its session for 2 hours). `--json` gives the same. It reads with `gh api` (GET
+only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repository cannot be read (ADR-0205).
+
 ## Pausing the kit
 
     python3 scripts/agk/doctor.py --paused [--ref REF] [ROOT]
@@ -106,13 +118,52 @@ push reads the commit pushed. The local targets (`make governance`, `prepush.py`
 is paused no pull request is checked in CI, the one that resumes it included. Remove the line to resume; nothing is deleted while
 paused. Sessions read the setting on the default branch after a fetch, not on their own branch. The query form above prints `agk paused` or `agk not paused` (exit 0), reads
 only `agk.toml` (at `REF` when given) and calls no `gh`; a value other than `true` or `false` is refused by the setting's name
-(brief #348, ADR-0196).
+(brief #348, ADR-0196). `/agk:uninstall --pause` writes that line for you on a new branch `agk-pause` (see below).
+
+## Removing the kit
+
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/uninstall.py" TARGET [--write] [--remove-docs]
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/uninstall.py" TARGET --pause [--write]
+
+`/agk:uninstall` runs `scripts/agk/uninstall.py` from the plugin (or a kit checkout), never the copy in the repository, since
+the removal deletes it. Without `--write` it is a dry run and writes nothing. With `--write` it refuses a work tree with
+changes, makes one new branch (`agk-uninstall`, or `agk-pause` for `--pause`) and writes the change there, uncommitted: you
+review it, commit it, push it and open one pull request, which git can revert.
+
+- **Deleted:** every kit file whose content (CRLF read as LF) equals a copy that some release row of the kit's
+  `kit/hashes.json` lists for its path, whatever release the project was installed at; `agk.toml` when it holds only the kit's
+  settings; `.github/CODEOWNERS` when it is what the kit generates from `config/reviewers.yaml`.
+- **Edited:** a file that holds the project's own lines and an agk block a release shipped (`.gitignore`, `.gitattributes`,
+  `CLAUDE.md`, the pull request template, `CODEOWNERS`) loses the block only; the project's `Makefile` loses the line
+  `include agk.mk` when `agk.mk` goes (targets that call `agk-*` are yours to change).
+- **Listed as `changed`, kept:** a kit file, block or `agk.toml` that the project changed; you decide.
+- **Kept, never deleted or edited:** the project's own work: `docs/requirements.md`, ADRs, specs, briefs, `docs/runs/`,
+  `docs/build-state.md`, `constitution/vision.md`, design documents and the tests (not the kit's own `tests/kit/`, which
+  releases up to 0.27.0 installed), and `pyproject.toml` (a kit 0.1.0 or 0.2.0 install loses only its `[tool.agk]` stamp). `--remove-docs`
+  lists those documents for you to delete by hand.
+- **GitHub, printed only:** the ruleset to delete or relax, by name; the kit's labels; the issues it opened (the red-branch
+  issue and the drift-audit, metrics and product-report issues); the plugin removal command. Each needs a person with admin
+  rights; the tool does none of them.
+
+The output names the protected classes the branch changes and prints an ADR skeleton; write the ADR yourself. After the
+removal merges, `agk doctor` reports `no kit installed` (exit 0) instead of failing: in a git work tree with no `agk.toml`,
+no `[tool.agk]` stamp in `pyproject.toml`, and none of `agk.mk`, `scripts/agk/`, `tests/kit/`, the governance, proof and
+router workflows and the stop hook (brief #348 build (b), ADR-0203).
 
 ## Local mode
 
 When GitHub Actions is blocked (minutes exhausted, billing blocked, an outage), follow [local-mode.md](local-mode.md): how to
 disable and re-enable the workflows with `gh workflow`, what a builder runs and pastes as its `Local evidence:` line, what the
 conductor runs instead of reading CI, what is lost, and the one issue that records every merge (session rule 30, ADR-0182).
+
+A person enters local mode with `python3 scripts/agk/local_mode.py enter` and leaves it with `python3 scripts/agk/local_mode.py
+leave`: each lists the workflows and the one `gh api` call that disables (or enables) each, the kit's and the project's, as a dry
+run that changes nothing; `--write` makes the calls, one line per workflow, and reports a refused call while it makes the rest.
+`--write` is the person's: it is refused inside an agent session and denied in the kit's settings. `leave` takes the start of
+local mode from the day the open record issue names (or `--since YYYY-MM-DD`), enables only the workflows disabled since then,
+and lists the pull requests merged on local evidence since then and the catch-up run of each check of `required_checks` on the
+default branch, or `catch-up: not run yet`; a red catch-up says to file a priority-0 brief (exit 3 on a refused call or a red
+catch-up, 4 when the start, the merges or the catch-up are unknown; ADR-0213).
 
 Several sessions on one machine take turns on heavy steps (governance, the tests, proof) with `python3 scripts/agk/lock.py run
 --name heavy --session <id> -- <command...>`: it waits its turn, printing the holder once a minute (`--timeout S` gives up with
@@ -249,13 +300,14 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:adopt` | `scripts/agk/adopt.py` | owned files and marked blocks |
 | `/agk:doctor` | `scripts/agk/doctor.py --kit-root` the plugin | nothing (a report) |
 | `/agk:upgrade` | `scripts/agk/upgrade.py` | vendored files |
+| `/agk:uninstall` | `scripts/agk/uninstall.py` (a dry run; `--write` after you say yes) | one new branch: the kit's unchanged files deleted and its own lines removed, or `paused = true` with `--pause`; nothing committed |
 | `/agk:ruleset` | `scripts/agk/ruleset.py plan`, then the `gh api` commands it prints, after you say yes | the default branch's ruleset and two repository settings (add-only) |
 | `/agk:start` | `scripts/agk/playbook.py start-ids`, `check-start` | `constitution/vision.md` and a project charter ADR on a new branch |
 | `/agk:vision` | `scripts/agk/playbook.py start-ids`, `scripts/agk/engines.py vision-write`, `questions`, `vision-check`, `playbook.py check-start` | `constitution/vision.md` (the owner's idea unchanged as its first section) and a project charter ADR on a new branch |
 | `/agk:stack` | `scripts/agk/engines.py stack-ids`, `stack-write`, `stack-check` | one Proposed ADR of stack options on a new branch |
 | `/agk:design` | `scripts/agk/design.py write`, `screenshots`, `scripts/agk/check_design.py` | `docs/design/theme.md` (when absent) and a mockup folder with `index.html` and `README.md` on a new branch |
 | `/agk:launch` | `scripts/agk/session.py plan`, `scripts/agk/launch.py prompts` | nothing in the repository (after you say yes, one session per planned slot is started through an adapter, or its prompt is printed) |
-| `/agk:review-pass` | `scripts/agk/session.py review-queue`, the conductor's protocol, `gh api` | one `Verdict:` comment per pull request that needs one (never two on one head), from a conductor session |
+| `/agk:review-pass` | `scripts/agk/session.py review-queue`, the conductor's protocol, `gh api`, then `scripts/agk/session.py plan --json` and `scripts/agk/launch.py prompts` | one `Verdict:` comment per pull request that needs one (never two on one head), from a conductor session; at the end it prints the plan, and starts the planned sessions through the project's adapter only with `[flow] auto_start = true` |
 | `/agk:confirm` | `gh api` (GET), the conductor's protocol | nothing (solo mode: prints the one `Confirmed:` comment for the person to post; a session never posts it) |
 | `/agk:spec` | `scripts/agk/new_spec.py`, `scripts/agk/intake.py` | a Draft spec, or a requirement proposal with its ADR draft, or (from one sentence) a requirement, a Draft spec and an ADR stub |
 | `/agk:architect` | `scripts/agk/playbook.py architect` | nothing (prints how to start `claude --agent architect`) |

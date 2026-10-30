@@ -30,8 +30,17 @@ head (an empty commit is enough) so that its checks show as never reported rathe
 
 A person with admin on the repository does this once, in a terminal on their own machine with a logged-in `gh`.
 
-1. **Disable the workflows**, one command per workflow, so that nothing queues and nothing is billed when Actions returns
-   (`gh workflow disable` takes the file name):
+1. **Disable the workflows**, so that nothing queues and nothing is billed when Actions returns. With the kit, one command
+   lists every active workflow, the kit's and the project's, and the call that disables each; it is a dry run and changes
+   nothing until you add `--write`, which makes the calls and prints one line per workflow (a refused call is reported, with
+   the call to run by hand, and the rest are still made):
+
+       python3 scripts/agk/local_mode.py enter
+       python3 scripts/agk/local_mode.py enter --write
+
+   It needs a token that may change workflows (Actions write is enough), so the person runs it in their own terminal:
+   `--write` refuses to run inside an agent session, and the kit's settings deny it to a session. For a person without the
+   kit, disable each workflow with one command (`gh workflow disable` takes the file name):
 
        gh workflow disable agk-route.yml
        gh workflow disable governance.yml
@@ -128,7 +137,21 @@ Say it plainly to everyone working on the project:
 
 When Actions runs again (minutes renewed, billing fixed, the outage over):
 
-1. **Re-enable the workflows**, one command per workflow, and the project's own the same way:
+1. **Re-enable the workflows.** With the kit, one command takes the start of local mode from the day the record issue names
+   (`Local mode since YYYY-MM-DD`), lists every workflow disabled by hand since then and the call that enables each, the pull
+   requests merged on local evidence since then, and the state of the catch-up run; it is a dry run until you add `--write`,
+   which reads the merges first and then makes the calls:
+
+       python3 scripts/agk/local_mode.py leave
+       python3 scripts/agk/local_mode.py leave --write
+
+   Run `leave` again after the next merge to read the catch-up: one line per check of `required_checks` on the head of the
+   default branch, `catch-up: not run yet` until one runs, then `catch-up: green`, or a red line that says to file a
+   priority-0 brief naming the failing run and the merges. Without an open record issue, give the day local mode began as
+   `--since YYYY-MM-DD`; without either, `leave` enables nothing and says the start is unknown. A workflow disabled before
+   local mode (one a person turned off for good, or one GitHub disabled for inactivity) is named and left as it is. A read
+   that does not answer is printed as `unknown`, never as 0, and the command exits 4. For a person without the kit, enable
+   each workflow with one command, and the project's own the same way:
 
        gh workflow enable agk-route.yml
        gh workflow enable governance.yml

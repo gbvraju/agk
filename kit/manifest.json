@@ -51,6 +51,7 @@
     "scripts/agk/facts.py",
     "scripts/agk/full_run.py",
     "scripts/agk/launch.py",
+    "scripts/agk/local_mode.py",
     "scripts/agk/lock.py",
     "scripts/agk/metrics.py",
     "scripts/agk/minutes.py",
@@ -62,6 +63,7 @@
     "scripts/agk/session.py",
     "scripts/agk/session_plan.py",
     "scripts/agk/shadow_rate.py",
+    "scripts/agk/stalls.py",
     "scripts/agk/status_only.py",
     "scripts/agk/test_plan.py",
     "scripts/agk/traceability.py"

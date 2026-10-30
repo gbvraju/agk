@@ -31,6 +31,7 @@ COMMANDS = [
     "spec",
     "stack",
     "start",
+    "uninstall",
     "upgrade",
     "vision",
 ]
@@ -47,6 +48,7 @@ USER_ONLY = [
     "spec",
     "stack",
     "start",
+    "uninstall",
     "upgrade",
     "vision",
 ]
@@ -131,6 +133,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "adopt": {"adopt"},
         "doctor": {"doctor"},
         "upgrade": {"upgrade"},
+        "uninstall": {"uninstall"},
         "spec": {"new_spec", "intake"},
         "brief": {"new_spec"},
         "review": {"review_context", "check_review_report"},

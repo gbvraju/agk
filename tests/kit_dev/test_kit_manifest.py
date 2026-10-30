@@ -18,6 +18,7 @@ KIT_ONLY = {
     "scripts/agk/check_tag.py",
     "scripts/agk/changelog_fragments.py",
     "scripts/agk/upgrade.py",
+    "scripts/agk/uninstall.py",
     "scripts/agk/new_spec.py",
     "scripts/agk/intake.py",
     "scripts/agk/ruleset.py",

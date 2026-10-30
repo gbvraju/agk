@@ -9,6 +9,9 @@ Messages name a setting or a path class, never a value. Output is a text report 
 the same findings as one JSON object; the exit code is 0 only when every check is ok.
 A paused project (`paused = true` in agk.toml, brief #348) is reported as the state `paused` alone,
 exit 0, with no read of GitHub; `--paused [--ref REF]` prints only `agk paused` or `agk not paused`.
+After a removal (brief #348 build (b), ADR-0203), a git work tree with no agk.toml and none of the
+kit's files left is reported as `no kit installed`, exit 0; anything else without agk.toml is the
+refusal of SPEC-0006 rule 13.
 """
 
 from __future__ import annotations
@@ -46,6 +49,20 @@ RESUME = (
     "the kit is paused (setting: paused in agk.toml): no check blocks, the router writes no label "
     "and no session acts; remove the line `paused = true` (with an ADR in the same pull request) "
     "to resume"
+)
+NO_KIT = "no kit installed"
+NO_KIT_TEXT = "agk.toml and the kit's files are gone; nothing to check"
+# Files any install of the kit holds; one of them left without agk.toml is a broken install.
+KIT_TRACES = (
+    "agk.mk",
+    "scripts/agk",
+    ".github/workflows/governance.yml",
+    ".github/workflows/proof.yml",
+    ".github/workflows/agk-route.yml",
+    ".claude/hooks/stop_check.py",
+    # the kit's own tests folder, which releases up to 0.27.0 installed; written as two parts, since
+    # a new install's text never names that folder (lean install, ADR-0052)
+    str(Path("tests", "kit").as_posix()),
 )
 PLACEHOLDER = "@REPLACE-ME"
 DRIFT_WORKFLOW = ".github/workflows/drift-audit.yml"
@@ -1027,6 +1044,29 @@ def read_config(root: Path) -> dict:
         raise Refusal("agk.toml is not readable TOML (path class agk.toml)", 3) from None
 
 
+def no_kit(root: Path) -> bool:
+    """True after a removal (answer 5): a git work tree with no agk.toml, no `[tool.agk]` stamp in
+    pyproject.toml and none of the kit's files (KIT_TRACES)."""
+    if (root / "agk.toml").exists() or not (root / ".git").exists():
+        return False
+    if any((root / rel).exists() or (root / rel).is_symlink() for rel in KIT_TRACES):
+        return False
+    pyproject = root / "pyproject.toml"
+    try:
+        text = pyproject.read_text(encoding="utf-8") if pyproject.is_file() else ""
+    except (OSError, UnicodeDecodeError):
+        return False
+    return not re.search(r"(?m)^\[tool\.agk\]", text)
+
+
+def render_no_kit(as_json: bool) -> str:
+    if as_json:
+        data = {"doctor": "none", "state": NO_KIT, "message": NO_KIT_TEXT, "checks": []}
+        data["summary"] = {"ok": 0, "fail": 0, "cannot-check": 0}
+        return json.dumps(data, indent=2, sort_keys=True) + "\n"
+    return f"agk doctor none\n{NO_KIT}: {NO_KIT_TEXT}\nsummary: {NO_KIT}\n"
+
+
 def paused_report(root: Path) -> str | None:
     """The kit version when ROOT is paused (brief #348, ADR-0196), else None; reads agk.toml."""
     config = read_config(root)
@@ -1163,6 +1203,9 @@ def main(argv: list[str] | None = None) -> int:
             raise Refusal("ROOT is not a directory (path class: the target root)")
         if options["paused"]:
             return paused_query(root.resolve(), options["ref"])
+        if no_kit(root.resolve()):
+            sys.stdout.write(render_no_kit(options["json"]))
+            return 0
         held = paused_report(root.resolve())
         if held is not None:
             sys.stdout.write(render_paused(held, options["json"]))

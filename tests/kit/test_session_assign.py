@@ -255,6 +255,7 @@ def test_ac5_assign_conductor_names_the_issue_and_starts_nothing(proj, stub):
     """REQ-041 AC5"""
     configure(proj, "conductor")
     stub.serve(CONDUCTOR, [CONDUCTOR_ISSUE])
+    stub.serve(COMMENTS, [])  # an empty inbox (brief #368 answer 2)
     out = after(proj, stub)
     assert out.returncode == 0 and out.stdout.strip() == "ask the conductor on #204"
     assert posts(stub) == [] and not any(
