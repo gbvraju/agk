@@ -1,1 +1,0 @@
-- the kit's security-linter hygiene test runs in CI: governance installs bandit with pytest and ruff and fails naming a tool it could not install, and two kit test variables that bandit read as passwords are renamed (brief #338, ADR-0192 Proposed)
