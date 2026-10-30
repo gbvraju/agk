@@ -66,7 +66,7 @@ def test_an_all_ok_run_writes_the_record_and_the_evidence_line(repo, outside):
         assert isinstance(step["seconds"], float | int) and step["seconds"] >= 0
     lint = next(s for s in data["steps"] if s["name"] == "lint")
     assert lint["argv"] == ["make", "lint"] and lint["cwd"] == "." and lint["exit"] == 0
-    out = "LINT_RAN".encode()
+    out = b"LINT_RAN"
     assert lint["output_sha256"] == hashlib.sha256(out).hexdigest()
     assert lint["output_bytes"] == len(out)
     body = next(s for s in data["steps"] if s["name"] == "pr-body")
