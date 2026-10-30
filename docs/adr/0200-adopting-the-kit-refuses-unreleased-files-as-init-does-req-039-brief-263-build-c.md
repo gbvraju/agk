@@ -1,6 +1,6 @@
 # ADR-0200: adopting the kit refuses unreleased files, as init does (REQ-039, brief 263 build c)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0160, ADR-0194, ADR-0183
