@@ -1,1 +1,0 @@
-- proof can run one command per test area, with only the pull request's own test files of that area: an optional `[proof]` table in `agk.toml` (`dirs`, `patterns`, `command` with `{files}`, optional `cwd`); the line names each area not proven and `--json` lists each area with its files, outcome and seconds; without the table nothing changes (brief #305, ADR-0172)
