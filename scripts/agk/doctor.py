@@ -22,8 +22,15 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-# The one kit script the doctor imports: the router's list is read as upgrade.py writes it.
-from common import ROUTER_WORKFLOW, router_names, router_wanted, with_router_names  # noqa: E402
+# The one kit script the doctor imports: the router's list is read as upgrade.py writes it, and
+# the check names of a workflow's jobs as the router reads them (brief #283).
+from common import (  # noqa: E402
+    ROUTER_WORKFLOW,
+    jobs_of,
+    router_names,
+    router_wanted,
+    with_router_names,
+)
 
 USAGE = "usage: doctor.py [--repo OWNER/REPO] [--kit-root PATH] [--api-dir DIR] [--json] [ROOT]"
 PLACEHOLDER = "@REPLACE-ME"
@@ -192,6 +199,26 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "workflow's name to `workflows:` of `workflow_run` in .github/workflows/agk-route.yml "
         "(a change needs an ADR). Until then a `Verdict:` comment, or an edit of the pull "
         "request's title or description, wakes the router",
+    ),
+    "ci-drafts": (
+        "warn",
+        "no workflow that holds a check of required_checks runs on draft pull requests",
+        "a workflow under .github/workflows/ that holds a check of required_checks runs on draft "
+        "pull requests, or skips drafts but has no ready_for_review",
+        "skip its heavy jobs or steps while `github.event.pull_request.draft` is true and add "
+        "`ready_for_review` to its pull_request types, so the check runs once the draft is ready; "
+        "a workflow that skips drafts without it leaves the draft's green check in place when the "
+        "draft is marked ready with no new commit (docs/guides/project-ci.md of the kit; a change "
+        "to .github/ needs an ADR)",
+    ),
+    "ci-concurrency": (
+        "warn",
+        "every workflow that holds a check of required_checks has a concurrency group",
+        "a workflow under .github/workflows/ that holds a check of required_checks has no "
+        "concurrency group",
+        "add a `concurrency:` group per pull request with `cancel-in-progress: true` for pull "
+        "requests, so a superseded run is cancelled (docs/guides/project-ci.md of the kit; a "
+        "change to .github/ needs an ADR)",
     ),
     "default-branch-config": (
         "warn",
@@ -621,6 +648,50 @@ def router_result(root: Path, config: dict) -> Result:
     return Result("fail") if missing else Result("ok")
 
 
+PR_TRIGGER = re.compile(r"^\s*pull_request\s*:|^on:.*\bpull_request\b(?!_)")
+DRAFT_FLAG = "github.event.pull_request.draft"
+READY = "ready_for_review"
+GROUP = re.compile(r"^\s*concurrency\s*:")
+
+
+def ci_results(root: Path, config: dict) -> dict[str, Result]:
+    """`ci-drafts` and `ci-concurrency` (brief #283 answer 3): each workflow that holds a check of
+    required_checks names the draft flag outside a comment when it runs on pull requests, and then
+    also `ready_for_review` (else the draft's green check stays when it is marked ready), and has a
+    `concurrency:` group, at the top or on a job. Warnings only; text rules; no workflow named."""
+    required = config.get("required_checks", DEFAULT_REQUIRED)
+    if not isinstance(required, list) or not all(isinstance(x, str) for x in required):
+        return {c: Result("cannot-check", "bad-response") for c in ("ci-drafts", "ci-concurrency")}
+    wanted = {x.strip() for x in required}
+    folder = root / ".github" / "workflows"
+    drafts = unready = groups = 0
+    if folder.is_dir():
+        for path in sorted([*folder.glob("*.yml"), *folder.glob("*.yaml")]):
+            if f".github/workflows/{path.name}" == ROUTER_WORKFLOW or not path.is_file():
+                continue
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeDecodeError):
+                bad = Result("cannot-check", "bad-response")
+                return {"ci-drafts": bad, "ci-concurrency": bad}
+            if not jobs_of(lines) & wanted:
+                continue
+            code = [ln for ln in lines if not ln.lstrip().startswith("#")]
+            if any(PR_TRIGGER.search(ln) for ln in code):
+                if not any(DRAFT_FLAG in ln for ln in code):
+                    drafts += 1
+                elif not any(READY in ln for ln in code):
+                    unready += 1
+            if not any(GROUP.match(ln) for ln in code):
+                groups += 1
+    parts = [f"{drafts} runs on drafts"] if drafts else []
+    if unready:
+        parts.append(f"{unready} skips drafts but has no ready_for_review")
+    draft_result = Result("fail", message=f" ({'; '.join(parts)})") if parts else Result("ok")
+    group_result = Result("fail", message=f" ({groups})") if groups else Result("ok")
+    return {"ci-drafts": draft_result, "ci-concurrency": group_result}
+
+
 def placeholder_result(path: Path) -> Result:
     try:
         text = path.read_text(encoding="utf-8")
@@ -864,6 +935,7 @@ def run_checks(
     kit, version = kit_results(root, kit_root, config)
     results.update(kit)
     results["router-wake"] = router_result(root, config)
+    results.update(ci_results(root, config))
     results.update(engine_results(root, kit_root, config))
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():

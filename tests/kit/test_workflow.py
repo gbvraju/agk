@@ -193,7 +193,8 @@ def test_ac1_proof_runs_on_pull_request_events_with_read_only_contents_and_no_se
         "opened",
         "synchronize",
         "reopened",
-    }  # brief #216: an edited description cannot change a test
+        "ready_for_review",
+    }  # brief #216: an edited description cannot change a test; brief #283: a draft made ready
     assert re.search(r"^permissions:\n  contents: read\n  checks: read\n", text, flags=re.M)
     assert text.count("permissions:") == 1
     assert "pull_request_target" not in text.replace("never pull_request_target", "")

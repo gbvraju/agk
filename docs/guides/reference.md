@@ -78,7 +78,9 @@ stricter is fine), the required status check `governance`, the placeholder team 
 missing `refs/remotes/origin/HEAD`, the drift-audit workflow (file, schedule, state), and with `--kit-root` the version and every
 vendored file against the kit's copy. It reads GitHub with `gh api` (GET only) and holds no credential. A check it could not make
 prints `??` with the reason (`gh-unauthenticated`, `no-admin`, `no-kit-root`, ...), never `ok`; exit 0 only when every check is
-ok, 1 for an error finding, 4 for a warning or an unchecked item. See `docs/specs/0006-doctor.md` and ADR-0017.
+ok, 1 for an error finding, 4 for a warning or an unchecked item. See `docs/specs/0006-doctor.md` and ADR-0017. Two warnings
+keep a project's CI fast and cheap: `ci-drafts` (a workflow of `required_checks` runs on draft pull requests) and
+`ci-concurrency` (it has no concurrency group); the five defaults and their snippets are in `docs/guides/project-ci.md`.
 
 ## Engines
 
