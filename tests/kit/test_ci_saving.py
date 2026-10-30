@@ -140,7 +140,7 @@ def test_governance_runs_only_the_steps_that_read_the_body_when_the_description_
     for name, block in steps(workflow("governance.yml")).items():
         head = block.split("\n        run:", 1)[0].split("\n        uses:", 1)[0]
         skipped = "github.event.action != 'edited'" in head
-        if name in BODY_STEPS or name.startswith("uses: actions/"):
+        if name in BODY_STEPS or name.startswith("uses: actions/") or name == "Paused":
             assert not skipped, name
         elif name not in ("Secret scan",):
             assert skipped, name

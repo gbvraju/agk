@@ -58,9 +58,28 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5.6.0
         with:
           python-version: "3.12"
+      - name: Paused
+        id: paused
+        run: |
+          # Brief #348 (ADR-0196): while agk.toml sets `paused = true` the job prints one line and every later step is skipped, so
+          # the required check reports success. A pull request is judged by its base (AGK_BASE), never by its head: the pull
+          # request that adds the line is still checked in full, its ADR included. A push reads the commit pushed. A value that
+          # is not true or false fails this step, with the refusal (it names the setting, never the value).
+          if [ -n "${AGK_BASE:-}" ]; then
+            state="$(python3 scripts/agk/doctor.py --paused --ref "$AGK_BASE")" || { echo "$state"; exit 1; }
+          else
+            state="$(python3 scripts/agk/doctor.py --paused)" || { echo "$state"; exit 1; }
+          fi
+          if [ "$state" = "agk paused" ]; then
+            echo "agk paused"
+            echo "agk paused" >> "$GITHUB_STEP_SUMMARY"
+            echo "paused=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "paused=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Status-only final commit
         id: status
-        if: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' }}
+        if: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -93,7 +112,7 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Latest full run
-        if: ${{ github.event.action == 'edited' }}
+        if: ${{ github.event.action == 'edited' && steps.paused.outputs.paused != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -116,7 +135,7 @@ jobs:
           echo "rule 2: the full governance run of the head did not finish in 20 minutes"
           exit 1
       - name: Install tooling
-        if: ${{ github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
+        if: ${{ github.event.action != 'edited' && steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
         run: |
           # bandit runs the kit's scanner hygiene test (brief #338, ADR-0192); unpinned, like pytest and ruff. A tool that
           # cannot be installed fails this step by name: the checks that need it are never skipped.
@@ -126,12 +145,12 @@ jobs:
           done
       - name: PR body file
         # Written unless the run is cancelled (brief #349): after a failed `Latest full run` the body steps still read it.
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: printf '%s\n' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
       - name: PR comments
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
@@ -149,7 +168,7 @@ jobs:
             echo '[]' > "$RUNNER_TEMP/approval-runs.json"
           fi
       - name: PR states and open pull requests
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
@@ -165,46 +184,46 @@ jobs:
             gh api --paginate --method GET "repos/${{ github.repository }}/pulls?state=open&per_page=100" --jq ".[] | select(.user.login == \"$PR_AUTHOR\") | {number: .number}" > "$RUNNER_TEMP/open-prs.json"
           fi
       - name: check_protected_changes
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_protected_changes.py
       - name: check_requirements
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_requirements.py
       - name: check_adrs
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_adrs.py
       - name: check_numbers
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_numbers.py
       - name: check_specs
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
         # On a push there is no base ref and the check is skipped, so the saved comments are the pull request's.
         run: python scripts/agk/check_specs.py --body "$RUNNER_TEMP/pr-body.md" --comments "$RUNNER_TEMP/comments.json" --reviews "$RUNNER_TEMP/reviews.json" --runs "$RUNNER_TEMP/approval-runs.json"
       - name: check_neutrality
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_neutrality.py
       - name: check_build_state
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_build_state.py
       - name: check_kit_tests
-        if: ${{ !cancelled() && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_kit_tests.py
       - name: check_design
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_design.py
       - name: reviewers --check
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/reviewers.py --check
       - name: reviewers --check-codeowners
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/reviewers.py --check-codeowners
       - name: check_pr_mode
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: python scripts/agk/check_pr_mode.py --body "$RUNNER_TEMP/pr-body.md" --states "$RUNNER_TEMP/states.json" --open "$RUNNER_TEMP/open-prs.json" --number "$PR_NUMBER"
       - name: check_final_clearance
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -212,29 +231,29 @@ jobs:
         run: python scripts/agk/check_final_clearance.py --comments "$RUNNER_TEMP/comments.json" --reviews "$RUNNER_TEMP/reviews.json" --head "$HEAD_SHA" --author "$PR_AUTHOR" --draft "$PR_DRAFT"
       # The release pull request check is a kit script (SPEC-0028): it runs where the kit's own suite is installed.
       - name: Release check
-        if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') != '' && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') != '' && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_release.py
       - name: Open briefs
-        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.paused.outputs.paused != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method GET "repos/${{ github.repository }}/issues?labels=agk-brief&state=open&per_page=100" > "$RUNNER_TEMP/briefs.json"
       - name: PR body shape
-        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.paused.outputs.paused != 'true' }}
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
         run: printf '%s\n' "$PR_BODY" | python scripts/agk/check_pr_body.py --draft "$PR_DRAFT" --issues "$RUNNER_TEMP/briefs.json" -
       - name: Lint
-        if: ${{ !cancelled() && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
         run: make -f agk.mk agk-lint
       - name: Tests of the checks
-        if: ${{ !cancelled() && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
         run: make -f agk.mk agk-test
       # The kit repository runs its own suite as "Tests of the checks" and its `project_tests` is that same suite
       # (the proof job runs it); there the step is skipped. In a project kit/agk-kit.mk is absent and the step runs.
       - name: Restore the secret scanner
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830   # v4.3.0
         env:
           # The same pins as the step `Secret scan`; a test keeps the two equal.
@@ -246,10 +265,10 @@ jobs:
           path: ${{ runner.temp }}/gitleaks-cache
           key: gitleaks-${{ env.GITLEAKS_VERSION }}-${{ env.GITLEAKS_SHA256 }}
       - name: Project tests
-        if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') == '' && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}
+        if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') == '' && github.event.action != 'edited' && steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
         run: make -f agk.mk agk-project-test
       - name: Secret scan
-        if: ${{ !cancelled() && github.event.action != 'edited' }}
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         env:
           GITLEAKS_VERSION: 8.30.1
           GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb

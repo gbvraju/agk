@@ -28,6 +28,8 @@ No review, no merge, and one comment only: the reply `Correction needed:` to a v
 job runs only for a merge), the brief its body finishes with `Finishes: #n` beside `Brief: #n` is
 closed as completed, with one comment that names the merge commit (brief 302, ADR-0178); that is
 the only other issue it closes. Messages name the rule, never a value.
+While the checkout's agk.toml sets `paused = true` (brief #348, ADR-0196) it prints `agk paused`
+and reads and writes nothing, whatever it was asked to route.
 """
 
 from __future__ import annotations
@@ -45,10 +47,12 @@ from urllib.parse import quote
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
+    PAUSED_LINE,
     CheckError,
     agent_apps,
     finished_brief,
     load_config,
+    paused,
     repo_root,
     required_checks,
     verdict_problem,
@@ -777,6 +781,13 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE, file=sys.stderr)
         return 2
     root = repo_root()
+    try:
+        if paused(root):  # brief #348 (ADR-0196): nothing is read and nothing is written
+            print(PAUSED_LINE)
+            return 0
+    except CheckError as exc:
+        print(f"FAIL {NAME}: {exc}")
+        return 1
     repo = os.environ.get("GITHUB_REPOSITORY") or repo_name(root)
     path = os.environ.get("GITHUB_EVENT_PATH")
     try:

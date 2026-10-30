@@ -676,6 +676,34 @@ def minutes_warn(root: Path) -> int:
     return value
 
 
+PAUSED_LINE = "agk paused"
+
+
+def paused(root: Path, ref: str | None = None) -> bool:
+    """True when agk.toml sets the top-level `paused = true` (brief 348, ADR-0196); with REF, as
+    agk.toml stands at that commit. No agk.toml (or none at REF) is not paused; a value that is not
+    a boolean, a file that is not TOML or a REF git cannot read is a refusal naming the setting."""
+    if ref is None:
+        path = root / "agk.toml"
+        try:
+            text = path.read_text(encoding="utf-8") if path.is_file() else None
+        except (OSError, UnicodeDecodeError):
+            raise CheckError("agk.toml cannot be read (path class agk.toml)") from None
+    else:
+        if _verify(root, ref) is None:
+            raise CheckError("the commit to read agk.toml at cannot be read (path class agk.toml)")
+        text = show(root, ref, "agk.toml")
+    if text is None:
+        return False
+    try:
+        value = tomllib.loads(text).get("paused", False)
+    except tomllib.TOMLDecodeError:
+        raise CheckError("agk.toml is not readable TOML (path class agk.toml)") from None
+    if not isinstance(value, bool):
+        raise CheckError("paused must be true or false (setting: paused in agk.toml)")
+    return value
+
+
 def json_records(path: Path, label: str) -> list[dict]:
     """The objects in a file written by `gh api`: an array, arrays, pages or one object a line."""
     try:

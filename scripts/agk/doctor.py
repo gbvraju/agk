@@ -7,6 +7,8 @@ credential; this script holds none). It writes nothing.
 A check that could not read what it needs is `cannot-check` with a reason class, never `ok`.
 Messages name a setting or a path class, never a value. Output is a text report or, with --json,
 the same findings as one JSON object; the exit code is 0 only when every check is ok.
+A paused project (`paused = true` in agk.toml, brief #348) is reported as the state `paused` alone,
+exit 0, with no read of GitHub; `--paused [--ref REF]` prints only `agk paused` or `agk not paused`.
 """
 
 from __future__ import annotations
@@ -26,14 +28,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 # The one kit script the doctor imports: the router's list is read as upgrade.py writes it, and
 # the check names of a workflow's jobs as the router reads them (brief #283).
 from common import (  # noqa: E402
+    PAUSED_LINE,
     ROUTER_WORKFLOW,
+    CheckError,
     jobs_of,
+    paused,
     router_names,
     router_wanted,
     with_router_names,
 )
 
-USAGE = "usage: doctor.py [--repo OWNER/REPO] [--kit-root PATH] [--api-dir DIR] [--json] [ROOT]"
+USAGE = (
+    "usage: doctor.py [--repo OWNER/REPO] [--kit-root PATH] [--api-dir DIR] [--json] [ROOT]\n"
+    "       doctor.py --paused [--ref REF] [ROOT]"
+)
+RESUME = (
+    "the kit is paused (setting: paused in agk.toml): no check blocks, the router writes no label "
+    "and no session acts; remove the line `paused = true` (with an ADR in the same pull request) "
+    "to resume"
+)
 PLACEHOLDER = "@REPLACE-ME"
 DRIFT_WORKFLOW = ".github/workflows/drift-audit.yml"
 DRIFT_NAME = "drift-audit.yml"
@@ -1004,16 +1017,50 @@ def listing(paths: list[str]) -> str:
 # --- the report -------------------------------------------------------------------------------
 
 
-def run_checks(
-    root: Path, repo: str | None, kit_root: Path | None, api_dir: Path | None
-) -> tuple[list[dict], str]:
+def read_config(root: Path) -> dict:
     agk_toml = root / "agk.toml"
     if not agk_toml.is_file():
         raise Refusal("agk.toml missing (path class agk.toml); this is not an agk target")
     try:
-        config = tomllib.loads(agk_toml.read_text(encoding="utf-8"))
+        return tomllib.loads(agk_toml.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         raise Refusal("agk.toml is not readable TOML (path class agk.toml)", 3) from None
+
+
+def paused_report(root: Path) -> str | None:
+    """The kit version when ROOT is paused (brief #348, ADR-0196), else None; reads agk.toml."""
+    config = read_config(root)
+    try:
+        if not paused(root):
+            return None
+    except CheckError as exc:
+        raise Refusal(str(exc)) from None
+    return str(config.get("version") or "unknown")
+
+
+def render_paused(version: str, as_json: bool) -> str:
+    if as_json:
+        data = {"doctor": version, "state": "paused", "message": RESUME, "checks": []}
+        data["summary"] = {"ok": 0, "fail": 0, "cannot-check": 0}
+        return json.dumps(data, indent=2, sort_keys=True) + "\n"
+    return f"agk doctor {version}\npaused {PAUSED_LINE}: {RESUME}\nsummary: paused\n"
+
+
+def paused_query(root: Path, ref: str | None) -> int:
+    """`--paused`: one line, `agk paused` or `agk not paused` (exit 0), or a refusal; no `gh`."""
+    try:
+        state = paused(root, ref)
+    except CheckError as exc:
+        print(f"refused: {exc}")
+        return 1 if "setting: paused" in str(exc) else 3
+    print(PAUSED_LINE if state else "agk not paused")
+    return 0
+
+
+def run_checks(
+    root: Path, repo: str | None, kit_root: Path | None, api_dir: Path | None
+) -> tuple[list[dict], str]:
+    config = read_config(root)
     results: dict[str, Result] = {}
     writers = [n for n in ISSUE_WRITERS if (root / ".github" / "workflows" / n).is_file()]
     reads = Reads(repo or origin_repo(root), api_dir)
@@ -1083,14 +1130,15 @@ def exit_code(report: list[dict]) -> int:
 
 def parse_args(args: list[str]) -> dict | None:
     options: dict = {"repo": None, "kit": None, "api": None, "json": False, "root": None}
+    options.update(paused=False, ref=None)
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg == "--json":
-            options["json"] = True
+        if arg in ("--json", "--paused"):
+            options[arg[2:]] = True
             i += 1
-        elif arg in ("--repo", "--kit-root", "--api-dir") and i + 1 < len(args):
-            key = {"--repo": "repo", "--kit-root": "kit", "--api-dir": "api"}[arg]
+        elif arg in ("--repo", "--kit-root", "--api-dir", "--ref") and i + 1 < len(args):
+            key = {"--repo": "repo", "--kit-root": "kit", "--api-dir": "api", "--ref": "ref"}[arg]
             options[key] = args[i + 1]
             i += 2
         elif not arg.startswith("-") and options["root"] is None:
@@ -1098,6 +1146,9 @@ def parse_args(args: list[str]) -> dict | None:
             i += 1
         else:
             return None
+    others = options["json"] or options["repo"] or options["kit"] or options["api"]
+    if options["ref"] is not None and not options["paused"] or options["paused"] and others:
+        return None
     return options
 
 
@@ -1110,6 +1161,12 @@ def main(argv: list[str] | None = None) -> int:
         root = Path(options["root"] or ".")
         if not root.is_dir():
             raise Refusal("ROOT is not a directory (path class: the target root)")
+        if options["paused"]:
+            return paused_query(root.resolve(), options["ref"])
+        held = paused_report(root.resolve())
+        if held is not None:
+            sys.stdout.write(render_paused(held, options["json"]))
+            return 0
         report, version = run_checks(
             root.resolve(),
             options["repo"],
