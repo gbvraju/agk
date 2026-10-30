@@ -1,11 +1,16 @@
 """agk adopt: install the kit into an existing repository, touching no product file (SPEC-0002).
 
-Usage: python3 scripts/agk/adopt.py TARGET [--dry-run]
+Usage: python3 scripts/agk/adopt.py TARGET [--dry-run] [--unreleased]
 
 Standard library only. No network, no git or gh calls, no writes outside TARGET. Target files are
 data: they are compared byte for byte, scanned for agk's own marked blocks and for the stamp, and
 listed by name; they are never imported, executed or parsed as code. Refuses (exit 1) before any
 write; nothing is written when any file conflicts.
+
+Adopt from a release (brief #263 build (c), ADR-0200): as in init (item 8, ADR-0160), the kit files
+adopt would install must be those of the release row of `kit_version` in kit/hashes.json (compared
+ignoring CRLF and LF), or adopt refuses before any write, so unreleased files are never stamped
+with a release's version. `--unreleased` installs the checkout as it is, for the kit's own tests.
 """
 
 from __future__ import annotations
@@ -34,13 +39,18 @@ from init import (
     KIT_ROOT,
     MANIFEST,
     PLACEHOLDER,
+    PLUGINS,
+    REF_HINT,
+    UNRELEASED,
     Refusal,
     check_interpreter,
     install_mode,
     kit_bytes,
     passes_symlink,
     path_class,
+    plugin_settings,
     print_branch_rules,
+    release_problem,
     render,
     slug,
 )
@@ -254,9 +264,10 @@ def classify_block(target: Path, rel: str, style: str, body: str, entries: list[
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     dry_run = "--dry-run" in args
-    rest = [a for a in args if a != "--dry-run"]
+    unreleased = UNRELEASED in args
+    rest = [a for a in args if a not in ("--dry-run", UNRELEASED)]
     if len(rest) != 1 or rest[0].startswith("-"):
-        print("usage: adopt.py TARGET [--dry-run]", file=sys.stderr)
+        print("usage: adopt.py TARGET [--dry-run] [--unreleased]", file=sys.stderr)
         return 2
     try:
         problem = check_interpreter(tuple(sys.version_info[:3]))
@@ -273,6 +284,11 @@ def main(argv: list[str] | None = None) -> int:
         mode = install_mode(target)
         if mode == "init":
             raise Refusal("TARGET is already installed by init (path class agk.toml)")
+        not_released = release_problem(KIT_ROOT)
+        if not_released and not unreleased:
+            print(f"refused: {not_released}; {REF_HINT}; nothing was written")
+            print(plugin_settings())
+            return 1
         plan, entries, branch = build_plan(target, datetime.now(UTC).date().isoformat())
     except Refusal as exc:
         print(f"refused: {exc}")
@@ -281,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: cannot read the kit sources ({type(exc).__name__})")
         return 3
 
+    if not_released:
+        print(f"notice: {UNRELEASED}: {not_released.replace(PLUGINS, 'the kit files', 1)}")
     for rel, action, _, detail in plan:
         print(f"{action} {rel}{detail}")
     if any(action == "conflict" for _, action, _, _ in plan):

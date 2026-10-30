@@ -74,7 +74,7 @@ def test_ac3_adopt_writes_none_of_them_by_default(tmp_path):
     """REQ-013 AC3: ADR-0020 decision 2."""
     repo = make_repo(tmp_path / "proj")
     proc = subprocess.run(
-        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "adopt.py"), str(repo)],
+        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "adopt.py"), str(repo), "--unreleased"],
         capture_output=True,
         text=True,
         env=clean_env(),

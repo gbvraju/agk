@@ -16,6 +16,10 @@ marked blocks, and refuses before any write when something conflicts.
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/adopt.py" . --dry-run
    ```
 
+   If it refuses because the plugin's kit files are not those of a release, show the message and the printed plugin
+   settings entries and stop: the person installs the plugin at that release's tag (the `ref` of the agk marketplace
+   entry), then runs `/agk:adopt` again.
+
 2. Show the output to the user. Run it again without `--dry-run` only after the user agrees:
 
    ```
