@@ -30,12 +30,14 @@ and why, one line `#N <head7> review: <reason>; ...` each, or `empty`: a pull re
 created or edited after the last verdict; one whose head differs from the last verdict's (or with
 none yet); one whose checks are green under a stale `agk:ci-running` label. Never twice on one head:
 a verdict that names the head, with no such comment after it, skips the pull request whatever its
-label; a draft and checks still running (whatever the label) skip it too. Required checks that
+label; a draft and checks still running (whatever the label) skip it too, except that a draft with a
+`Question:` comment created or edited after the last verdict is listed with the reason `question
+on a draft`, whatever its head, label or checks (brief 350). Required checks that
 have not reported skip it under `agk:ci-running` and add the reason `checks not reported` under
 any other label. `--all` adds a line `#N <head7> skip: <why>`
 for each other open pull request; `--fingerprint` prints only `fingerprint <sha256>` of the heads,
-labels, draft flags, comment times and check states, which changes only when the queue does, so a
-loop wakes the conductor only then.
+labels, draft flags, comment times (a draft's too) and check states, which changes only when the
+queue does, so a loop wakes the conductor only then.
 A wait never goes silent (brief #210): when GitHub cannot be read for 5 polls in a row it prints
 `error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since
 <id>` when it starts. `--assign` also takes at once the newest `Assign:` for the session posted
@@ -1259,6 +1261,20 @@ def since_verdict(comments: list, mark: dict) -> list[str]:
     return out
 
 
+def draft_question(comments: list, mark: dict | None) -> bool:
+    """A `Question:` comment created or edited after the verdict `mark`, or any one when there is
+    no verdict (brief 350)."""
+    floor = (str(mark.get("created_at") or ""), mark.get("id") or 0) if mark else ("", 0)
+    for c in comments:
+        body = c.get("body")
+        if c is mark or not isinstance(body, str) or not body.strip():
+            continue
+        if body.splitlines()[0].strip().startswith("Question:"):
+            if not mark or (stamp(c), c.get("id") or 0) > floor:
+                return True
+    return False
+
+
 def check_state(repo: str, root, head: str) -> tuple[str, list]:
     """(`green`, `red`, `running` or `missing`, the facts of the checks) of a head, as the router
     judges it: the latest run of each check and status of each context named in `required_checks`.
@@ -1291,14 +1307,17 @@ def review_line(repo: str, root, pr: dict, authors: list[str]) -> tuple[str, lis
     """(`review` or `skip`, the reasons, the facts for the fingerprint) of one open pull request."""
     number, head = pr["number"], str((pr.get("head") or {}).get("sha") or "")
     label = label_of(pr)
-    if pr.get("draft"):
-        return "skip", ["draft"], []
     comments = pages(f"repos/{repo}/issues/{number}/comments")
     if comments is None:
         raise CheckError("rule 3: the comments of an open pull request cannot be read")
+    times = [[c.get("id"), stamp(c)] for c in sorted(comments, key=lambda c: c.get("id") or 0)]
+    if pr.get("draft"):  # brief 350: only a new question lists a draft; its checks are not read
+        counted = counted_authors(authors, (pr.get("user") or {}).get("login"))
+        if draft_question(comments, last_verdict(comments, counted)):
+            return "review", ["question on a draft"], [times]
+        return "skip", ["draft"], [times]
     state, seen = check_state(repo, root, head)
-    facts = [[c.get("id"), stamp(c)] for c in sorted(comments, key=lambda c: c.get("id") or 0)]
-    facts = [facts, seen]
+    facts = [times, seen]
     if state == "running" or (label == RUNNING_LABEL and state == "missing"):
         return "skip", ["checks running"], facts
     mark = last_verdict(comments, counted_authors(authors, (pr.get("user") or {}).get("login")))

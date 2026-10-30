@@ -1,0 +1,1 @@
+- a builder's `Question:` on a draft pull request reaches the conductor: `session.py review-queue` lists a draft with a question created or edited after the last verdict, with the reason `question on a draft`, and `/agk:review-pass` answers it without reviewing the draft's code; every other draft stays skipped (brief #350, ADR-0198 Proposed)
