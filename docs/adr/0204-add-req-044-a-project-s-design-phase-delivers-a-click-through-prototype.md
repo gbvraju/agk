@@ -28,14 +28,17 @@ inventory, carrying the theme over. The rulings are rows of `docs/runs/decisions
    stays `Draft` until the person's own `Approve:` line approves it (SPEC-0032 rule 5).
 2. The spec amends REQ-036 AC5 to AC7 by its rules 5 and 12 (the no-script rule allows exactly the
    kit's hashed runtime in a prototype version folder; the design folder becomes
-   `docs/design/prototype/<version>/`; existing mockup folders still read as before). The text of
+   `docs/design/prototype/<version>/` and `/agk:design <name>` writes no new mockup folder; existing
+   mockup folders and old-format themes are still read and checked as before). It amends SPEC-0029
+   rules 6 and 7 only for a theme that has moved to the standard (rule 2). The text of
    REQ-036 is not edited here, because an intake only adds to the requirements file.
 3. The builds of SPEC-0037 rule 14 will change these protected path classes: `kit/` (the standard,
    the patterns, the inventory, prototype and sign-off templates, the runtime, the fixture set,
    `kit/manifest.json` and the `[design]` table of `kit/templates/agk.toml`), `scripts/agk/` (the
-   design scripts and checks, `check_final_clearance.py`, `session.py` and `doctor.py`), `skills/`
+   design scripts and checks, `reviewers.py`, `check_final_clearance.py`, `check_brief.py`,
+   `session.py` and `doctor.py`), `skills/`
    (`skills/design/SKILL.md`), `tests/kit/` and `tests/kit_dev/` (their tests), `config/`
-   (`config/session-rules.md`, where the `Approve: design` line lives) and `.claude/`
+   (`config/session-rules.md`, where the `Approve: inventory` and `Approve: design` lines live) and `.claude/`
    (`.claude/agents/conductor.md`, the verdict that names drift). Each build adds its own ADR naming
    the classes it changes and citing this one, because the protected-path check counts only an ADR
    added or changed in the same pull request (`Q-S0037-9`). No build changes `.github/`,
@@ -45,8 +48,8 @@ inventory, carrying the theme over. The rulings are rows of `docs/runs/decisions
 ## Consequences
 
 The requirement is listed as planned and the spec and this ADR wait for approval in the weekly
-report. Nothing is delivered until the requirement is done. Existing mockup folders and
-`/agk:design <name>` keep working, so no project is broken by the builds.
+report. Nothing is delivered until the requirement is done. Existing mockup folders and themes
+keep reading and passing as before, so no project's check is broken by the builds.
 
 ## Residual
 
