@@ -30,6 +30,7 @@ from session import (
     CLAIM_HOURS,
     all_takes,
     flow_int,
+    gh,
     is_red,
     live_takes,
     moment,
@@ -97,7 +98,7 @@ KINDS = (
         120,
         "a live `taken:` with no pull request of its work and no `taken:`, `Progress:`, "
         "`Report:` or `Request:` by that session for 2 hours",
-        "{session} took it {age} ago and has opened no pull request and posted nothing since",
+        "{session} took it and has opened no pull request and posted nothing for {age}",
         "{session} opens its draft pull request, or posts released: {session} on the brief "
         "to free it",
     ),
@@ -206,6 +207,15 @@ def pull_stalls(repo: str, root: Path, prs: list, now: datetime) -> list[dict]:
             raise CheckError("rule 2 (stale-label, no-verdict): the facts of an open pull request "
                              "cannot be read")  # fmt: skip
         _, facts = got
+        # route.read_facts reads a failed status as no status; a stall list must not (the verdict
+        # on b0b3ef3, item 3), so the status of the head is read again and must be readable.
+        status = gh(f"repos/{repo}/commits/{facts['head']}/status")
+        if not isinstance(status, dict) or not isinstance(status.get("statuses", []), list):
+            raise CheckError(
+                "rule 2 (stale-label, no-verdict): the status of an open pull request "
+                "cannot be read"
+            )
+        facts["statuses"] = status.get("statuses", [])
         out += stuck(n, facts["checks"], facts["required"], now)
         done = green_since(facts)
         if "agk:ci-running" in watched and done is not None:
@@ -256,7 +266,7 @@ def claim_stalls(repo: str, root: Path, comments: dict, prs: list, now: datetime
                         )
                 seen += own_posts(board, name, True)
             if over("claim-no-pr", now - max(seen)):
-                out.append(stall("claim-no-pr", n, session=name, age=age(now - t[0])))
+                out.append(stall("claim-no-pr", n, session=name, age=age(now - max(seen))))
     return out
 
 
@@ -264,6 +274,10 @@ def idle_stalls(root: Path, comments: dict, now: datetime) -> list[dict]:
     from session_plan import build
 
     plan = build(root)
+    # The plan skips a brief it cannot read; a stall list must not read that as no stall (the
+    # verdict on b0b3ef3, items 1 and 2).
+    if any("cannot be read" in str(s.get("why")) for s in plan["skipped"]):
+        raise CheckError("rule 2 (idle-capacity): the plan cannot be read")
     if not plan["start"]:
         return []
     times = [t[0] for c in comments.values() for t in all_takes(c)]

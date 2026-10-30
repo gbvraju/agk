@@ -23,7 +23,10 @@ first checkpoint of the pull request).
    one line per stall, `stall <kind> #<n>: <cause>; fix: <one plain step>`, or `no stall`; `--json` prints
    `{"stalls": [{"kind", "number", "cause", "fix"}]}`, the same stalls. It writes nothing and posts nothing. Exit 0 with no
    stall, 3 with any, 1 when a read fails (`error: rule 2 (<kinds>): <what> cannot be read`, naming the rule and the kinds,
-   never a repository, a number or another value), 2 for a usage error.
+   never a repository, a number or another value), 2 for a usage error. A read that fails is never `no stall` (the verdict on
+   b0b3ef3): the status of a watched pull request's head is read again, since `route.read_facts` reads a failed status as no
+   status (`rule 2 (stale-label, no-verdict)`), and a plan that skips a brief whose dependence or comments it cannot read is
+   refused (`rule 2 (idle-capacity): the plan cannot be read`).
 2. **The kinds (answer 2)** are the rows of the table `KINDS` in the script, each with its name, its limit in minutes, how it
    is detected, its cause line and its fix line, and are printed in that order, then by number:
    - `stale-label`: the required checks of the head are green (route's `judged`: none missing, all finished, none failed or
@@ -41,7 +44,8 @@ first checkpoint of the pull request).
      minutes old (or there is none). One line per session to start, with the `claim` command the plan implies.
    - `claim-no-pr`: a live take (`session.live_takes`, `claim_hours`) of a session that has taken no later brief, with no pull
      request of its work (`session_plan.fits`, any state), and no `taken:` by it or `Progress:`, `Report:` or `Request:` that
-     names it on the open briefs or the `agk-conductor` issue for more than 2 hours.
+     names it on the open briefs or the `agk-conductor` issue for more than 2 hours. The age printed is the time since that
+     last post.
 3. **Reuse (answer 3).** `route.py` (`read_facts`, `decide`, `judged`, `listing`), `session.py` (`pages`, `all_takes`,
    `live_takes`, `is_red`, `flow_int`) and `session_plan.py` (`build`, `fits`, `own_posts`, `conductor_comments`) are imported
    and not changed. `session_plan.build` reads the briefs and pull requests again: the cost of not changing it.
@@ -50,7 +54,9 @@ first checkpoint of the pull request).
    must not report (a red or missing required check, a verdict naming the head, a newer run after a cancelled one, a check
    that is not required, a red-titled issue by a person, a plan that starts nobody, a post by the session, a pull request
    naming the brief, a released take); `no stall`; `--json`; usage; a repository, and a pull request's facts, that cannot be
-   read (exit 1, the rule named, no value); every call a GET.
+   read (exit 1, the rule named, no value); every call a GET. From the verdict on b0b3ef3: a status that cannot be read, a
+   required status context, a dependence the plan cannot read, comments only the plan cannot read (exit 1 each), and the
+   claim-no-pr age from the session's last post.
 5. **Installed.** `kit/manifest.json` lists `scripts/agk/stalls.py` with the verbatim scripts, so a project and its conductor
    have the command; `docs/guides/reference.md` gets a `Stalls` section, which `tests/kit_dev/test_reference_commands.py`
    requires of every installed script. Both are outside the brief's `Touches:`.
