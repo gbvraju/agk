@@ -54,6 +54,9 @@
       "Bash(git push * +*)",
       "Bash(git reset * --hard*)",
       "Bash(gh pr merge:*)",
+      "Bash(python3 scripts/agk/local_mode.py *--write*)",
+      "Bash(python scripts/agk/local_mode.py *--write*)",
+      "Bash(*local_mode.py*--write*)",
       "mcp__github__merge_pull_request",
       "mcp__github__enable_pr_auto_merge"
     ]

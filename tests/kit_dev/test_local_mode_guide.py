@@ -220,3 +220,19 @@ def test_fix_4_the_lock_block_runs_as_one_script():
         ln.startswith("python3 scripts/agk/lock.py run --name heavy") for ln in heavy
     )
     assert any("make governance" in ln for ln in lines)
+
+
+def test_entering_and_leaving_use_the_kit_command_and_keep_the_one_line_form():
+    """Brief #371 answer 3 (ADR-0213): the enter and leave sections run `local_mode.py`, a dry run
+    first and `--write` to make the calls, and keep the one-line `gh` form for a person without
+    the kit."""
+    enter = " ".join(section("Enter local mode").split())
+    leave = " ".join(section("Leave local mode").split())
+    for body, verb, call in ((enter, "enter", "disable"), (leave, "leave", "enable")):
+        assert f"python3 scripts/agk/local_mode.py {verb}" in body, verb
+        assert f"python3 scripts/agk/local_mode.py {verb} --write" in body, verb
+        assert "dry run" in body, verb
+        assert f"gh workflow {call} governance.yml" in body, verb
+        assert "without the kit" in body, verb
+    for phrase in ("merged on local evidence", "catch-up: not run yet", "priority-0 brief"):
+        assert phrase in leave, phrase
