@@ -79,7 +79,7 @@ def settings(project: Path, text: str, default: str | None | bool = True) -> Non
     full = f'default_branch = "main"\n{text}'
     (project / "agk.toml").write_text(full, encoding="utf-8")
     if default is not False:
-        commit_with(project, full if default is True else default)  # type: ignore[arg-type]
+        commit_with(project, full if default is True else (default or None))
 
 
 def on(project: Path, adapter: str = ADAPTER) -> None:
