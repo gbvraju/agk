@@ -118,7 +118,7 @@ def test_live_mode_reads_the_kit_release_with_one_get(tmp_path):
     dirs = prepare("ok", tmp_path)
     stub = tmp_path / "bin"
     release = dirs["api"] / "kit-release.json"
-    log = stub_gh(stub, f'case "$*" in *releases/latest) /bin/cat \'{release}\';; *) exit 1;; esac')
+    log = stub_gh(stub, f"case \"$*\" in *releases/latest) /bin/cat '{release}';; *) exit 1;; esac")
     proc = doctor(
         "--repo", "example-owner/example-repo", "--kit-root", str(dirs["kit"]), "--json",
         str(dirs["root"]), path=f"{stub}{os.pathsep}{os.environ['PATH']}",

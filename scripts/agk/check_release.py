@@ -99,7 +99,8 @@ def moved_unchanged(old: str, new: str, version: str, gathered: list[str] | None
 # The opt-in marker of a changelog entry (brief #320 answer 2): one `(opt-in: <setting>)` at the end
 # of the line, for a feature a project switches on by a setting of `agk.toml`; a dotted setting
 # names a key of a table. The release moves the line unchanged, so the marker stays with it.
-OPT_IN = re.compile(r"(?P<text>.*\S) \(opt-in: (?P<setting>[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)\)")
+SETTING = r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*"
+OPT_IN = re.compile(rf"(?P<text>.*\S) \(opt-in: (?P<setting>{SETTING})\)")
 ENTRY = re.compile(r"- (?:#\d+ )?(?P<rest>.*)")
 SUMMARY_LIMIT = 120
 RELEASED = re.compile(r"## (\d+(?:\.\d+)*) \(\d{4}-\d{2}-\d{2}\)")

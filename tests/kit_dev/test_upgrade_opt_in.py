@@ -154,6 +154,7 @@ def test_the_listing_writes_nothing(tmp_path, kit, capsys):
     run(capsys, one)
     (kit / "CHANGELOG.md").write_text(CHANGELOG, encoding="utf-8")
     run(capsys, two)
+
     def contents(root):
         return {rel: digest for rel, (digest, _) in snapshot(root).items()}
 
