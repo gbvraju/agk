@@ -27,13 +27,16 @@ first checkpoint of the pull request).
    cannot be read, no pull request can be named and the list is `cannot-check`.
 2. **`--only N,N` (answer 2)** reads just the named pull requests, every other rule unchanged (the period of `--since`
    included). The list of pull requests stops at the lowest number named. A named number that is not in that list is a bad
-   call (exit 2, naming the setting `--only`), never a quiet zero. It writes nothing except with `--write`.
+   call (exit 2, naming the setting `--only`), never a quiet zero. A report made with `--only` is not evidence of what never
+   fired (verdict on a29c44d, item 1): its header says `only #12, #40` (and `--json` carries `only`), its never-fired list
+   is `not judged (--only)`, and `--only` with `--write` is refused (exit 2, naming both settings), so no evidence page
+   is ever written from a subset.
 3. **Nothing else changes (answer 3):** the counting rules, `at least N`, `cannot-check`, the never-fired list and the totals.
 
 ## Consequences
 
 - A maintainer re-reads only the named pull requests with `--only` and can turn a `cannot-check` into a real count.
-- A run with `--only` reports on those pull requests alone; its never-fired list covers only them.
+- A run with `--only` reports on those pull requests alone, says so in its header and judges nothing as never fired.
 
 ## Residual
 

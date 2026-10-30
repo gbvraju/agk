@@ -22,11 +22,13 @@ shows one combined step) is never zero: a count that could have grown there is `
 is `cannot-check`, and neither is listed as never fired. Each pull request with a page that could
 not be read is named, with the page (`commits`, `check runs`, `job`, `combined step` or `comments`),
 under `Unread pages:` (brief #381, ADR-0210), and `--only N,N` reads just the named pull requests,
-every other rule unchanged, so a maintainer can re-read those. It reads with `gh api` GET only
-(or saved responses in `--api-dir`, named as in SPEC-0007 rule 20) and the files of the repository,
-and writes only to stdout, except `--write`, which writes `docs/runs/core-audit-<today>.md` (the
-date from `date -u`) and never overwrites one. Exit 1 when the page exists, 2 for a bad call or a
-missing input. Messages name the path class or the setting, never a value.
+every other rule unchanged, so a maintainer can re-read those; such a report names them in its
+header, judges nothing as never fired, and is never written as a page (`--write` is refused).
+It reads with `gh api` GET only (or saved responses in `--api-dir`, named as in SPEC-0007 rule 20)
+and the files of the repository, and writes only to stdout, except `--write`, which writes
+`docs/runs/core-audit-<today>.md` (the date from `date -u`) and never overwrites one. Exit 1 when
+the page exists, 2 for a bad call or a missing input. Messages name the path class or the
+setting, never a value.
 """
 
 from __future__ import annotations
@@ -50,6 +52,7 @@ USAGE = (
     "[--repo OWNER/REPO | --api-dir DIR] [--authors LOGIN,LOGIN] [--only N,N]"
 )
 CANNOT = "cannot-check"
+NOT_JUDGED = "not judged (--only)"  # a subset is no evidence that something never fired
 WORKFLOW = ".github/workflows/governance.yml"
 SESSION_RULES = "config/session-rules.md"
 SPECS = "docs/specs"
@@ -406,6 +409,7 @@ def build(
     }
     return {
         "since": since.isoformat() if since else None,
+        "only": sorted(only) if only else None,
         "pull_requests": {
             "total": got["pulls"] if read_all else CANNOT,
             "unread_checks": got.get("unread_checks", CANNOT),
@@ -416,7 +420,9 @@ def build(
         "other_steps": other,
         "session_rules": session_counts,
         "spec_rules": spec_counts,
-        "never_fired": {
+        "never_fired": NOT_JUDGED
+        if only
+        else {
             "checks": [c for c, v in check_counts.items() if v == 0],
             "session_rules": [r for r, v in session_counts.items() if v == 0],
             "spec_rules": never_spec,
@@ -427,6 +433,9 @@ def build(
 
 def render(data: dict[str, Any], today: str) -> str:
     period = f"since {data['since']}" if data["since"] else "the whole history"
+    if data["only"]:
+        named = ", ".join(f"#{n}" for n in data["only"])
+        period = f"since {data['since']}, only {named}" if data["since"] else f"only {named}"
     prs = data["pull_requests"]
     out = [
         f"agk core audit, {period}, read on {today}",
@@ -454,6 +463,9 @@ def render(data: dict[str, Any], today: str) -> str:
         cited = [f"  {name} rule {n}: {c}" for n, c in counts.items() if c != 0]
         out += cited
     never = data["never_fired"]
+    if not isinstance(never, dict):
+        out += ["", f"Never fired in the period: {never}", ""]
+        return totals_line(out, data)
     out += [
         "",
         "Never fired in the period:",
@@ -466,6 +478,10 @@ def render(data: dict[str, Any], today: str) -> str:
     else:
         out.append("  spec rules: none")
     out.append("")
+    return totals_line(out, data)
+
+
+def totals_line(out: list[str], data: dict[str, Any]) -> str:
     t = data["totals"]
     out.append(
         f"Totals: ADRs {t['adrs']}, specs {t['specs']}, requirements {t['requirements']}, "
@@ -520,6 +536,9 @@ def main(argv: list[str] | None = None) -> int:
     opts = parse(sys.argv[1:] if argv is None else argv)
     if opts is None:
         print(USAGE)
+        return 2
+    if "--only" in opts and opts.get("--write"):
+        print(f"FAIL {NAME}: no page is written from a subset (settings: --only, --write)")
         return 2
     today = opts.get("--today") or datetime.now(UTC).date().isoformat()
     try:
