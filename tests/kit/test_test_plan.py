@@ -1,4 +1,4 @@
-"""The test plan: which tests a change will run in proof, and why (brief #325, ADR-0185). No toolchain.
+"""The test plan: which tests a change will run in proof, and why (brief #325, ADR-0185).
 
 `scripts/agk/test_plan.py` reads git and files only and prints, before anything runs, the plan that
 `proof.py` runs: for each `[proof]` area its added or changed test files, the command line with
@@ -88,7 +88,7 @@ def test_a_test_file_in_no_area_is_listed_as_not_run_by_proof(repo):
 
 def test_a_deletion_only_runs_nothing(repo):
     """REQ-016: brief #325 answer 1 (a deleted test is not run; proof reads no-test-files)."""
-    start(repo, TWO_AREAS)
+    start(repo, TWO_AREAS, files={"backend/pyproject.toml": "\n"})  # the folder stays
     repo.commit({"backend/tests/test_old.py": None}, "delete")
     doc = data(repo)
     assert doc["runs"] == []
