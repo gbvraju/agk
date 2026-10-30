@@ -5,14 +5,17 @@
 
 `run` takes the lock NAME, runs COMMAND without a shell, and releases the lock when the command
 ends, also when it fails or is interrupted; its exit code is the command's (127 when it cannot be
-started, 130 on an interrupt, 143 on a termination). The lock is a folder `agk-lock-NAME` made in
-one atomic rename, holding `owner.json` (session, process id, host, start time, a token), under
-the user's temp folder or `lock_dir` of agk.toml. While another run holds it, `run` waits and
+started, 130 on an interrupt, 143 on a termination, 128 + n when the command is killed by signal
+n). The lock is a folder `agk-lock-NAME` made in one atomic rename, holding `owner.json` (session,
+process id, host, start time, a token, and the command's process id once it starts), under the
+user's temp folder or `lock_dir` of agk.toml. Taking, clearing and releasing are serialised by a
+short mutex beside it (`.agk-lock-NAME.mutex`, made with mkdir), so a lock is removed only after it
+is checked under the mutex. While another run holds it, `run` waits and
 prints one line at once and then one a minute, naming the holder and its age; `--timeout S` gives
 up after S seconds (exit 3). A lock whose process no longer runs on this machine, or that is older
-than `lock_stale_minutes` (agk.toml, 120 by default), is cleared with a line saying so; a lock is
-never removed while its owner may still hold it. `status` prints the holder, or `free`, and changes
-nothing.
+than `lock_stale_minutes` (agk.toml, 120 by default), is cleared with a line saying so; it counts
+as held while either `lock.py` or its command still runs. `status` prints the holder, or `free`,
+and changes nothing.
 
 Standard library only; no network. POSIX and Windows: a process is looked up with signal 0 on
 POSIX and with OpenProcess on Windows, where `os.kill` would end it.
@@ -32,6 +35,7 @@ import sys
 import tempfile
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -49,6 +53,7 @@ POLL = 0.5  # seconds between two tries
 ANNOUNCE = 60  # seconds between two waiting lines
 STILL_ACTIVE = 259  # GetExitCodeProcess: the process has not ended
 QUERY = 0x1000  # PROCESS_QUERY_LIMITED_INFORMATION
+MUTEX_STALE = 10.0  # seconds: a mutex this old was left by a process that died holding it
 
 
 class Usage(Exception):
@@ -194,11 +199,50 @@ def stale_reason(owner: dict | None, held: Path, limit: int) -> str | None:
             return None
         return f"it has no owner file and is older than {limit} min" if minutes > limit else None
     minutes = age_minutes(owner)
-    if owner.get("host") == socket.gethostname() and not pid_alive(int(owner.get("pid") or 0)):
+    if owner.get("host") == socket.gethostname() and not holder_alive(owner):
         return "its process no longer runs"
     if minutes is None or minutes > limit:
         return f"older than {limit} min, setting: lock_stale_minutes"
     return None
+
+
+def holder_alive(owner: dict) -> bool:
+    """The lock is held while `lock.py` or the command it started still runs: a holder killed
+    with SIGKILL leaves its command running, and that command still holds the machine."""
+    pids = [owner.get("pid"), owner.get("child")]
+    return any(pid_alive(int(p)) for p in pids if isinstance(p, int) and p > 0)
+
+
+@contextmanager
+def mutex(held: Path):
+    """A short mutex beside the lock (`.<lock>.mutex`, made with mkdir) that serialises taking,
+    clearing and releasing, so a lock is only removed after it is checked under the mutex. A
+    mutex older than MUTEX_STALE seconds was left by a process that died inside it."""
+    held.parent.mkdir(parents=True, exist_ok=True)
+    gate = held.parent / f".{held.name}.mutex"
+    while True:
+        try:
+            os.mkdir(gate)
+            break
+        except FileExistsError:
+            try:
+                age = time.time() - gate.stat().st_mtime
+            except OSError:
+                continue  # released meanwhile
+            if age > MUTEX_STALE:
+                try:
+                    os.rmdir(gate)
+                except OSError:
+                    pass
+                continue
+            time.sleep(0.02)
+    try:
+        yield
+    finally:
+        try:
+            os.rmdir(gate)
+        except OSError:
+            pass
 
 
 def describe(owner: dict | None) -> str:
@@ -206,45 +250,51 @@ def describe(owner: dict | None) -> str:
         return "held by an unknown owner"
     minutes = age_minutes(owner)
     age = f"for {int(minutes)} min" if minutes is not None else "since an unknown time"
+    child = f", command pid {owner['child']}" if owner.get("child") else ""
     return (
         f"held by {owner.get('session') or 'an unknown session'} "
-        f"(pid {owner.get('pid')}, host {owner.get('host')}) {age}"
+        f"(pid {owner.get('pid')}{child}, host {owner.get('host')}) {age}"
     )
 
 
 def try_take(held: Path, owner: dict) -> bool:
-    """One atomic try: the folder with its owner file is renamed into place, which fails while
-    the lock folder exists (it is never empty, so POSIX cannot replace it)."""
-    held.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{held.name}.", dir=held.parent))
-    try:
-        (staging / "owner.json").write_text(json.dumps(owner), encoding="utf-8")
-        os.rename(staging, held)
-        return True
-    except OSError:
-        return False
-    finally:
-        if staging.exists():
-            shutil.rmtree(staging, ignore_errors=True)
-
-
-def remove_if(held: Path, token: str | None) -> bool:
-    """Move the lock aside, then delete it, only when its token is `token` (None: no owner
-    file). A lock taken by someone else in between is put back."""
-    aside = held.parent / f".{held.name}.gone.{uuid.uuid4().hex}"
-    try:
-        os.rename(held, aside)
-    except OSError:
-        return False
-    moved = read_owner(aside)
-    if (moved or {}).get("token") != token:
+    """One try under the mutex: the folder with its owner file is renamed into place, so a lock
+    folder never exists without its owner file; it fails while the lock folder exists."""
+    with mutex(held):
+        if held.exists():
+            return False
+        staging = Path(tempfile.mkdtemp(prefix=f".{held.name}.", dir=held.parent))
         try:
-            os.rename(aside, held)
+            (staging / "owner.json").write_text(json.dumps(owner), encoding="utf-8")
+            os.rename(staging, held)
+            return True
         except OSError:
-            pass  # the lock was taken again meanwhile; the moved one is left aside, not deleted
-        return False
-    shutil.rmtree(aside, ignore_errors=True)
-    return True
+            return False
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging, ignore_errors=True)
+
+
+def clear_if_same(held: Path, token: str | None) -> bool:
+    """Remove the lock only when, under the mutex, it is still the one whose token is `token`
+    (None: a folder without an owner file). A lock taken again since it was judged is kept."""
+    with mutex(held):
+        if not held.exists() or (read_owner(held) or {}).get("token") != token:
+            return False
+        shutil.rmtree(held, ignore_errors=True)
+        return not held.exists()
+
+
+def record_child(held: Path, token: str, child: int) -> None:
+    """Add the command's process id to this run's owner file, under the mutex."""
+    with mutex(held):
+        owner = read_owner(held)
+        if (owner or {}).get("token") != token:
+            return
+        owner["child"] = child
+        staged = held / "owner.json.new"
+        staged.write_text(json.dumps(owner), encoding="utf-8")
+        os.replace(staged, held / "owner.json")
 
 
 def take(held: Path, name: str, owner: dict, limit: int, timeout: float | None) -> bool:
@@ -259,7 +309,7 @@ def take(held: Path, name: str, owner: dict, limit: int, timeout: float | None) 
         reason = stale_reason(current, held, limit)
         if reason is not None:
             who = (current or {}).get("session") or "an unknown session"
-            if remove_if(held, (current or {}).get("token")):
+            if clear_if_same(held, (current or {}).get("token")):
                 print(f"lock {name}: cleared a stale lock of {who} ({reason})", flush=True)
             continue
         now = time.monotonic()
@@ -276,14 +326,16 @@ def on_signal(signum, _frame) -> None:
     raise Stopped(128 + signum)
 
 
-def run_held(command: list[str]) -> int:
+def run_held(command: list[str], held: Path, token: str) -> int:
     try:
         child = subprocess.Popen(command)  # nosec B603 - the person's own argument list, no shell
     except OSError:
         print("lock: the command cannot be started (it is not found or not runnable)", flush=True)
         return 127
     try:
-        return child.wait()
+        record_child(held, token, child.pid)
+        code = child.wait()
+        return 128 - code if code < 0 else code  # killed by signal n: 128 + n, as a shell says
     except KeyboardInterrupt:
         stop(child)
         return 130
@@ -335,7 +387,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if not take(held, name, owner, limit, options["timeout"]):
             return 3
-        return run_held(options["command"])
+        return run_held(options["command"], held, token)
     except KeyboardInterrupt:
         return 130
     except Stopped as exc:
@@ -344,8 +396,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"lock {name}: the lock folder cannot be written (setting: lock_dir)", flush=True)
         return 3
     finally:
-        if (read_owner(held) or {}).get("token") == token:
-            remove_if(held, token)
+        clear_if_same(held, token)
 
 
 if __name__ == "__main__":

@@ -275,6 +275,113 @@ def test_the_default_folder_is_the_users_temp(repo, monkeypatch, tmp_path):
     assert lock.lock_folder(repo.root, "heavy") == tmp_path / "tmp" / "agk-lock-heavy"
 
 
+def owner_of(token: str) -> dict:
+    return {
+        "session": f"builder-{token}",
+        "pid": os.getpid(),
+        "host": socket.gethostname(),
+        "started": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "token": token,
+    }
+
+
+def test_a_stale_lock_judged_by_two_waiters_is_cleared_once(tmp_path):
+    """REQ-040: verdict on f9f953f, finding 1. Waiters A and B both judge the same stale lock; A
+    clears it and takes the lock; B's clear must then leave A's live lock alone, so a third run
+    C cannot take it and A and C never run together. Driven step by step, in one process."""
+    folder = tmp_path / "locks"
+    held = plant(folder, pid=dead_pid())
+    stale = lock.read_owner(held)["token"]
+    seen_by_a = lock.read_owner(held)["token"]
+    seen_by_b = lock.read_owner(held)["token"]
+    assert seen_by_a == seen_by_b == stale
+    assert lock.clear_if_same(held, seen_by_a) is True  # A clears the stale lock
+    assert lock.try_take(held, owner_of("a")) is True  # and takes it
+    assert lock.clear_if_same(held, seen_by_b) is False  # B's judgement is out of date
+    assert lock.read_owner(held)["token"] == "a"  # A's lock was never moved
+    assert lock.try_take(held, owner_of("c")) is False  # C cannot take it
+    assert lock.clear_if_same(held, "a") is True  # A releases its own
+    assert not held.exists()
+    leftovers = [p.name for p in folder.iterdir()]
+    assert leftovers == []  # no mutex, staging or moved folder is left behind
+
+
+def test_the_mutex_serialises_and_a_dead_mutex_is_cleared(tmp_path, monkeypatch):
+    """REQ-040: verdict on f9f953f, finding 1 (a short mutex beside the lock)."""
+    import threading
+
+    held = tmp_path / "locks" / "agk-lock-heavy"
+    gate = held.parent / f".{held.name}.mutex"
+    held.parent.mkdir(parents=True)
+    gate.mkdir()  # another run is inside the mutex
+    timer = threading.Timer(0.3, gate.rmdir)
+    timer.start()
+    began = time.monotonic()
+    assert lock.try_take(held, owner_of("a")) is True
+    assert time.monotonic() - began >= 0.25  # it waited for the mutex
+    timer.join()
+    assert lock.clear_if_same(held, "a") is True
+    gate.mkdir()  # a mutex left by a run that died inside it
+    old = time.time() - lock.MUTEX_STALE - 5
+    os.utime(gate, (old, old))
+    assert lock.try_take(held, owner_of("b")) is True
+    assert not gate.exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX signals")
+def test_a_command_that_outlives_a_killed_holder_keeps_the_lock(repo, where, tmp_path):
+    """REQ-040: verdict on f9f953f, finding 2. The command's pid is in the owner record, and the
+    lock counts as held while it runs, even after `lock.py` itself was killed."""
+    started = tmp_path / "started"
+    hold = "import pathlib,sys,time; pathlib.Path(sys.argv[1]).touch(); time.sleep(60)"
+    holder = popen(
+        repo,
+        "run",
+        "--name",
+        "heavy",
+        "--session",
+        "builder-one",
+        "--",
+        PY,
+        "-c",
+        hold,
+        str(started),
+    )
+    wait_for(started)
+    owner = where / "agk-lock-heavy" / "owner.json"
+    end = time.monotonic() + 10
+    while "child" not in json.loads(owner.read_text(encoding="utf-8")):
+        assert time.monotonic() < end
+        time.sleep(0.05)
+    child = json.loads(owner.read_text(encoding="utf-8"))["child"]
+    holder.kill()  # SIGKILL: no finally runs, the command carries on
+    holder.wait(timeout=10)
+    try:
+        assert lock.pid_alive(child)
+        second = lock_run(repo, "run", "--name", "heavy", "--timeout", "1", "--", PY, "-c", "pass")
+        assert second.returncode == 3, second.stdout + second.stderr
+        assert "cleared" not in second.stdout
+        assert f"command pid {child}" in lock_run(repo, "status", "--name", "heavy").stdout
+    finally:
+        os.kill(child, signal.SIGKILL)
+    end = time.monotonic() + 10
+    while lock.pid_alive(child):
+        assert time.monotonic() < end
+        time.sleep(0.05)
+    third = lock_run(repo, "run", "--name", "heavy", "--", PY, "-c", "print('RAN')")
+    assert third.returncode == 0, third.stdout + third.stderr
+    assert "cleared a stale lock of builder-one (its process no longer runs)" in third.stdout
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX signals")
+def test_a_command_killed_by_a_signal_exits_128_plus_the_signal(repo, where):
+    """REQ-040: verdict on f9f953f, finding 3 (`kill -9` reads 137, as a shell says)."""
+    kill = "import os,signal; os.kill(os.getpid(), signal.SIGKILL)"
+    proc = lock_run(repo, "run", "--name", "heavy", "--", PY, "-c", kill)
+    assert proc.returncode == 137, proc.stdout + proc.stderr
+    assert not (where / "agk-lock-heavy").exists()
+
+
 def test_usage_errors(repo, where):
     """REQ-040: brief #337 answer 1 (exit 2: no command, a bad name, an unknown option)."""
     assert lock_run(repo, "run", "--name", "heavy").returncode == 2
@@ -318,5 +425,9 @@ def test_the_guide_and_the_session_rules_point_to_lock_py():
     rules = (root / "config" / "session-rules.md").read_text(encoding="utf-8")
     thirty = next(ln for ln in rules.splitlines() if ln.startswith("30. "))
     assert "scripts/agk/lock.py run --name heavy" in thirty
+    steps = [ln.strip() for ln in guide.splitlines() if ln.startswith("    ")]
+    for word in ("make governance", "make test", "scripts/agk/proof.py"):
+        line = next(ln for ln in steps if word in ln)
+        assert line.startswith("python3 scripts/agk/lock.py run --name heavy"), word  # finding 4
     rule = next(ln for ln in rules.splitlines() if ln.startswith("31. "))
     assert "lock.py run --name heavy --session ID -- python3 scripts/agk/prepush.py" in rule

@@ -211,7 +211,11 @@ def test_fix_4_the_lock_block_runs_as_one_script():
     assert "bash -c '" not in body and "trap" not in body and "mkdir" not in body
     assert "run one by one" in body
     lines = [ln.strip() for ln in body.splitlines() if ln.startswith("    ")]
-    heavy = [ln for ln in lines if "make test" in ln or "scripts/agk/proof.py" in ln]
+    heavy = [
+        ln
+        for ln in lines
+        if "make governance" in ln or "make test" in ln or "scripts/agk/proof.py" in ln
+    ]
     assert heavy and all(
         ln.startswith("python3 scripts/agk/lock.py run --name heavy") for ln in heavy
     )

@@ -66,18 +66,18 @@ A person with admin on the repository does this once, in a terminal on their own
 
 A builder runs the governance checks and its own proof on its head, on its own machine, and pastes the result in the pull
 request body. Several sessions on one machine take turns through one lock, so two heavy runs never compete for the same memory
-and disk: each heavy step runs under `python3 scripts/agk/lock.py run --name heavy --session <id> -- <command...>`, which waits
+and disk: each heavy step, governance included, runs under `python3 scripts/agk/lock.py run --name heavy --session <id> -- <command...>`, which waits
 its turn, runs the command without a shell and releases the lock when it ends, also when it fails or is interrupted. Each line
 stands alone, so the lines can be run one by one, as an agent runs them:
 
     base=$(git merge-base HEAD origin/main)
-    AGK_BASE=$base make governance
+    python3 scripts/agk/lock.py run --name heavy --session <id> -- make governance AGK_BASE="$base"
     python3 scripts/agk/lock.py run --name heavy --session <id> -- make test
     python3 scripts/agk/lock.py run --name heavy --session <id> -- python3 scripts/agk/proof.py --base "$base" --head HEAD
     python3 scripts/agk/check_pr_body.py --draft false body.md
 
-In PowerShell write `$base = git merge-base HEAD origin/main`, `$env:AGK_BASE = $base` and `python` where `python3` is not on the
-path; the `lock.py` lines are the same. While another session holds the lock, `lock.py` prints one line at once and then one a
+In PowerShell write `$base = git merge-base HEAD origin/main` and `python` where `python3` is not on the path; the `lock.py`
+lines are the same (`make governance AGK_BASE=$base` gives the base to the checks as an environment variable on every platform). While another session holds the lock, `lock.py` prints one line at once and then one a
 minute, `lock heavy: waiting; held by <session> (pid <n>, host <name>) for <m> min`; `--timeout <seconds>` gives up with exit 3.
 The lock is a folder `agk-lock-heavy` in the user's temp folder (or `lock_dir` in `agk.toml`), outside every repository, so it is
 never committed and is shared by all of the machine's projects. A lock left by a session that died is cleared by the next run,
