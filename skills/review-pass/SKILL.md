@@ -74,12 +74,15 @@ qualifies, `#<n> <head7> review: <why>`, or `empty`; with `--all` it also prints
      printed with `Write` into `plan.json` in your scratch directory and run
      `python3 scripts/agk/launch.py prompts --plan <the scratch file>`. Print its ready-to-paste prompts after the last lines, as
      `/agk:launch` does, for the person to start; nothing starts.
-   - **`auto_start = true` and `launch_adapter` set** and the plan starts sessions: write the plan the same way and run exactly
+   - **`auto_start = true` and `launch_adapter` set**, in your checkout and on the default branch alike (run `git fetch origin`
+     first: the guard reads both, and turning the setting off on the default branch stops the starts), and the plan starts
+     sessions: write the plan the same way and run exactly
      `python3 scripts/agk/launch.py prompts --plan <the scratch file> --adapter <launch_adapter>`, with the adapter as written in
      `agk.toml`, quoted as one word. The guard allows that one command and no other adapter. Add each `started <session>
      #<brief>` line it prints to the last lines.
    The plan decides who starts: never more than the plan's capacity (`launch.py` refuses a plan whose start list is longer than
-   its slots), never for a brief that is taken (the plan leaves those out), and never a session the plan does not name. Each
+   its slots, and with an adapter a plan without its `capacity`, and starts no more than `[flow] max_builders`, printing
+   `not started:` for the rest), never for a brief that is taken (the plan leaves those out), and never a session the plan does not name. Each
    started session takes its brief with its own `session.py claim`; that `taken:` claim, made by the started session itself,
    never by the conductor, is the record of the start, so post no `taken:` and run no `claim`. A refused adapter is reported,
    not retried: quote its `FAIL launch:` and `not started:` lines and add `NEEDS-YOU: the adapter refused <session>`; do not run
