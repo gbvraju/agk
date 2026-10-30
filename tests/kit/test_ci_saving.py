@@ -425,7 +425,11 @@ def test_a_merge_and_a_push_to_the_default_branch_still_start_the_router():
     merged = pr_event("closed", False)
     merged["event"]["pull_request"]["merged"] = True
     assert jobs_started(merged)["agk-route.yml"] == 1
-    push = {"event_name": "push", "ref_name": "main", "event": {"repository": {"default_branch": "main"}}}
+    push = {
+        "event_name": "push",
+        "ref_name": "main",
+        "event": {"repository": {"default_branch": "main"}},
+    }
     assert jobs_started(push)["agk-route.yml"] == 1
     for prefix in PREFIXES:
         assert jobs_started(comment_event(f"{prefix} x"))["agk-route.yml"] == 1, prefix
