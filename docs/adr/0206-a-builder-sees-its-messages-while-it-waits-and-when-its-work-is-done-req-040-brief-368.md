@@ -1,6 +1,6 @@
 # ADR-0206: a builder sees its messages while it waits on its pull request and when its work is done (REQ-040, brief 368)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0187
