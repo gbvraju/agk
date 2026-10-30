@@ -224,10 +224,10 @@ def test_a_command_that_runs_too_long_reads_unknown_naming_the_setting(repo):
 
 
 def test_the_report_never_shows_the_command(repo):
-    secret = "COMMAND-TEXT-NOT-TO-BE-ECHOED"
-    configure(repo, unused_code=f"true {secret}", coverage=f"echo 50 # {secret}")
+    canary = "COMMAND-TEXT-NOT-TO-BE-ECHOED"
+    configure(repo, unused_code=f"true {canary}", coverage=f"echo 50 # {canary}")
     out = audit(repo.root).stdout
-    assert secret not in out
+    assert canary not in out
     assert set(d9(repo.root)) == {"unused_code", "coverage"}
 
 
