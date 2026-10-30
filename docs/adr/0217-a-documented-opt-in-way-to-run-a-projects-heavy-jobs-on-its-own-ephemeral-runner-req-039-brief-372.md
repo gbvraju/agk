@@ -1,6 +1,6 @@
 # ADR-0217: a documented, opt-in way to run a project's heavy jobs on its own ephemeral runner (REQ-039, brief 372)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0180, ADR-0182, ADR-0184
