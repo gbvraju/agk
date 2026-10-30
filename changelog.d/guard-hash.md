@@ -1,1 +1,0 @@
-- security fix: the architect, conductor and shadow guards read a command the way bash runs it, so a `#` inside a word (`allowed-command#;other-command`) can no longer run a command the guard never saw; a command with a `#` outside quotes is denied. Projects should upgrade (brief #351, ADR-0199 Proposed)
