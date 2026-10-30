@@ -35,22 +35,32 @@ tests were written first (`tests/kit/test_launch.py`, the resume section: 20 fai
    the resume prompt on its standard input, `AGK_SESSION`, `AGK_BRIEF` and, for a build, `AGK_BUILD` in its environment,
    split into words and run without a shell, a failure reported once with `not started:` for the rest. `capacity.slots` is
    not required, since the running sessions already hold their slots; `[flow] max_builders` still caps the run (Q-402-3).
-4. **The plan's `running` list (Q-402-1).** `session.py plan --json` prints today only the count `capacity.running`, not the
-   sessions. Producing the list belongs to `scripts/agk/session_plan.py`, outside the brief's `Touches:`; this change reads
-   the list when a plan carries it and leaves the producer to a brief or a correction.
+4. **The plan's `running` list (Q-402-1, the verdict on 7dfdcd8).** `session.py plan --json` (`session_plan.build`) prints
+   the list `running`: one entry per open builder pull request whose brief has a live take (the newest take by the pull
+   request's author, else the newest), with `session`, `brief`, `build` where the take names one, `pull_request` and
+   `author` (the pull request's author); then one entry per live take of a brief with no open pull request, with `session`,
+   `brief`, `build` where named and `author` (the login of the take). A session is listed once. A pull request whose brief
+   has no live take names no session and is left out rather than guessed. No running work is an empty list.
+   `capacity.running` stays as it was. `scripts/agk/session_plan.py` is outside the brief's `Touches:`: the verdict on
+   7dfdcd8 asked for the producer here, since without it `--resume` prints nothing for any plan the kit makes.
 5. **The author (Q-402-2).** An entry without `author` gets `queue --role builder` without `--author`, which lists every
    builder's labels, rather than a placeholder the person would have to fill in.
 6. **Tests (answer 3).** `tests/kit/test_launch.py`: a session with a pull request; one with a take and no pull request; no
    running session (nothing printed, exit 0); the adapter called once per session with no shell; invalid entries; usage.
+   `tests/kit/test_session_plan.py`: a plan with one take and one open pull request lists both; no running work is an
+   empty list; an open pull request without a live take is left out.
 7. **Flow mode.** One fragment `changelog.d/launch-resume.md`; no version bump; `kit/hashes.json` not edited.
 
 ## Consequences
 
 - After a usage limit, an account switch or a closed tab, a person runs one command and pastes one line per builder; the
   session re-derives its state from GitHub alone.
-- Until the plan carries `running`, the command prints nothing for a plan that `session.py plan --json` printed today.
+- A plan that `session.py plan --json` prints carries `running`, so `--resume` reads it directly; an older plan without the
+  list prints nothing.
 - The conductor's guard allows only the exact `prompts --plan <file>` forms, so `--resume` stays a person's command.
 
 ## Residual
 
 - 2026-10-30: Q-402-1 to Q-402-3 asked on the pull request; the readings above are the most conservative ones.
+- 2026-10-30: the verdict on 7dfdcd8 (comment 6533653704): Q-402-1 answered, the producer is added here (decision 4); Q-402-2
+  and Q-402-3 accepted as written (decisions 5 and 3).
