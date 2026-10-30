@@ -149,7 +149,10 @@ def test_without_cwd_the_files_are_relative_to_the_root(repo):
 
 
 def range_of(repo) -> tuple[str, str]:
-    return proof.resolve_range(repo.root, None, "HEAD")
+    """The range the script reads by default (the merge base with main), given explicitly: in
+    CI the environment names a base ref of its own, which a repository in tmp_path lacks."""
+    base = repo.git("merge-base", "main", "HEAD").strip()
+    return proof.resolve_range(repo.root, base, "HEAD")
 
 
 def recorded(repo, monkeypatch) -> list[tuple[str, str]]:
