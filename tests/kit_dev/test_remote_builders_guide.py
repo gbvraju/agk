@@ -81,7 +81,7 @@ def test_the_guide_names_what_a_remote_builder_needs():
     needs = section("What a remote builder needs")
     for phrase in ("checkout of its own", "python3", "`gh`", "builder token", "toolchain"):
         assert phrase in needs, phrase
-    assert "cannot merge" in needs and "settings" in needs
+    assert "settings" in needs  # what the token cannot change; the ruleset guards the branch
 
 
 def test_the_guide_points_to_the_start_and_resume_commands():
@@ -125,3 +125,19 @@ def test_the_guide_names_no_provider():
     lowered = flat().lower()
     for name in VENDORS:
         assert not re.search(rf"\b{name}\b", lowered), name
+
+
+def test_the_guide_says_what_the_token_enforces_and_what_the_ruleset_enforces():
+    """REQ-040: answers 1 and 2, the verdict on 00251ed: a token's permissions are per repository,
+    so the ruleset, not the token, refuses a direct push or an unchecked merge to the default
+    branch; the Workflows permission only when builds change workflow files; names marked."""
+    needs = section("What a remote builder needs")
+    rule = section("Safety rules")
+    for text in (needs, rule):
+        assert "ruleset" in text and "/agk:ruleset" in flat()
+    assert "contents, pull requests and issues" in needs
+    assert "administration, secrets or members" in needs
+    assert "Workflows permission only when" in needs
+    assert "(verify)" in needs
+    assert "cannot ... push to the default branch" not in flat()
+    assert "push to the default branch" not in rule or "ruleset" in rule

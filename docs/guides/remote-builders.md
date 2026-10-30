@@ -15,9 +15,16 @@ This guide names no provider. Any remote development environment that gives you 
 - **A git checkout of its own.** One clone of the repository per builder session, never shared with another session or with
   your own working copy, on a disk that holds the project's heavy checks.
 - **python3**, 3.11 or newer, for the kit's scripts.
-- **`gh` signed in with a builder token**, not with your own account's sign-in. The token can push branches, open pull requests
-  and post comments on the one repository, and nothing more: it cannot merge, cannot approve, cannot change settings, rulesets,
-  secrets or workflows of the repository. Make it for this purpose and give it the shortest lifetime your work allows.
+- **`gh` signed in with a builder token**, not with your own account's sign-in: a token for the one repository, made for this
+  purpose, with the shortest lifetime your work allows. It has write access to contents, pull requests and issues (to push its
+  branch, open its pull request and post its comments), and no administration, secrets or members access, so it cannot change
+  the repository's settings, rulesets, secrets or people. It has the Workflows permission only when builds change workflow
+  files (the kit's own builds do); without it a push that changes a workflow file is refused, even on a branch. The exact
+  permission names are those of a fine-grained personal access token on GitHub (verify).
+- **The ruleset of the default branch (`/agk:ruleset`).** A token's permissions are per repository, not per branch: a token
+  that can push a branch can also push to the default branch and merge a pull request, as far as the token goes. What refuses a
+  direct push to the default branch and a merge without the required checks is the ruleset, so a remote builder is safe only in a
+  repository whose ruleset is applied. The session rules forbid a builder to merge in any case (session rule 2).
 - **The project's toolchain**: whatever `make test` and the project's own tests need (compilers, package managers, the
   project's dependencies), installed in the environment, so that `python3 scripts/agk/prepush.py` runs there as it runs for
   you.
@@ -54,7 +61,8 @@ These stay with you and never move into the remote environment:
 
 - **Review and approval**: the conductor's verdicts and every person's approval (`Approve:`, and in solo mode `Confirmed:`)
   are given from your own account, on your machine or in the browser.
-- **Merge**: a person merges, from their own account; a builder never merges and its token cannot.
+- **Merge**: a person merges, from their own account; a builder never merges (session rule 2), and the ruleset refuses a merge
+  without the required checks.
 - **Secrets**: the project's production secrets, your own GitHub sign-in, and any admin or owner credential.
 - Changes to the repository's settings, rulesets and workflows, which need an admin.
 
@@ -64,8 +72,9 @@ These stay with you and never move into the remote environment:
    service. If the project's tests need a service, they use a stand-in there, as they would in CI.
 2. The remote environment holds **no admin token**: no token that can change the repository's settings, rulesets, secrets or
    members.
-3. A session's token **can only push branches and comment**: push to its own branch, open its pull request, and post its
-   `Report:`, `Question:`, `Progress:` and claim comments. It cannot merge, approve or push to the default branch.
+3. A session's token **can only push branches and comment**, as far as the project allows: its permissions (above) leave out
+   administration, secrets and members, and the ruleset of the default branch, not the token, refuses a direct push to the
+   default branch and a merge without the required checks. Apply the ruleset (`/agk:ruleset`) before a remote builder starts.
 4. The environment is **stopped when idle**: when its session has ended, or has waited a long time with nothing to do, stop it,
    so that no forgotten machine keeps a token alive.
 5. Your own sign-in is **never copied into it**: not your GitHub sign-in, not your session cookies, not your keys. The builder
