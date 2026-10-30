@@ -22,6 +22,7 @@ DEFAULTS = {
     "required_checks": ["proof", "governance"],
     "agent_apps": ["claude"],
     "review_mode": "team",  # brief 277 (ADR-0179)
+    "minutes_warn": 80,  # brief 324 (ADR-0184)
 }
 
 

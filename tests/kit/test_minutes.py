@@ -377,3 +377,36 @@ def test_the_script_uses_get_only_and_the_standard_library():
         assert f'"{verb}"' not in text
     for lib in ("requests", "urllib", "http.client", "httpx"):
         assert f"import {lib}" not in text
+
+
+# --- the guide, the template and the kit ----------------------------------------------------------
+
+KIT = Path(__file__).resolve().parents[2]
+
+
+def test_the_guide_has_a_section_on_reading_the_minutes():
+    """REQ-020: brief #324 answer 3 (a short section, pointing to local mode)."""
+    text = (KIT / "docs" / "guides" / "project-ci.md").read_text(encoding="utf-8")
+    section = text.split("## How many minutes are left", 1)[1].split("\n## ", 1)[0]
+    for needle in (
+        "python3 scripts/agk/minutes.py",
+        "--json",
+        "minutes_warn",
+        "unknown",
+        "at least",
+        "local mode",
+        "#322",
+    ):
+        assert needle in section, needle
+
+
+def test_the_template_names_the_optional_setting():
+    """REQ-020: brief #324 answer 2 (an optional agk.toml setting, off the default's way)."""
+    text = (KIT / "kit" / "templates" / "agk.toml").read_text(encoding="utf-8")
+    assert "# minutes_warn = 80" in text.splitlines()
+
+
+def test_the_script_is_installed_in_a_project():
+    """REQ-020: brief #324 answer 1 (a project runs the one command)."""
+    data = json.loads((KIT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    assert "scripts/agk/minutes.py" in data["verbatim"]

@@ -30,6 +30,8 @@ agent_apps = ["claude"]
 # session, counts as the verdict, its Final lines and the spec approval of the head it names; refused when config/reviewers.yaml lists
 # nobody or more than one person). A change needs an ADR.
 review_mode = "team"
+# Optional: the percent of the plan's included Actions minutes past which `python3 scripts/agk/minutes.py` warns (80 if unset).
+# minutes_warn = 80
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.
 # Engines (optional, off by default): the name of a skill the session can see for each step; absent means the kit's own template is used.
 # An engine only drafts, through the kit's template and checks; it never decides, approves or edits a protected file. Choose once;
