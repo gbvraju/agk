@@ -26,9 +26,10 @@ A skipped step hides a check that never ran (brief #261, ADR-0159): GitHub shows
 its own `if:` and one skipped because an earlier step failed alike. So a red run with a skipped
 step that is not a body step (which the partial run repeats) is not cured, unless the step is
 skipped on every full run by its own condition (`OWN_CONDITION`), or it is `Project tests` in the
-kit's own repository (the run's `Release check` ran: `KIT_ONLY`). Then the message names those
-steps: "the last full run did not reach <steps>; push a commit or re-run it". Every other message
-names the rule, never a value or a step.
+kit's own repository (the run's `Release check` ran: `KIT_ONLY`). A skipped step whose name starts
+with `Post ` is a clean-up step that GitHub skips in any failed job and hides no check (brief #349).
+Otherwise the message names those steps: "the last full run did not reach <steps>; push a commit
+or re-run it". Every other message names the rule, never a value or a step.
 File only: no network, no model.
 """
 
@@ -62,6 +63,10 @@ OWN_CONDITION = ("Latest full run", "Release check")
 # `Project tests` is skipped by its own condition where `kit/agk-kit.mk` is, which a run shows by
 # its `Release check` having run; anywhere else a skipped `Project tests` never ran.
 KIT_ONLY = ("Project tests", "Release check")
+# GitHub skips some post steps in any failed job (the cache action saves only after a job that
+# succeeded; `actions/setup-python` skips its post step): a skipped step whose name starts with
+# `Post ` hides no check (brief #349, ADR-0197).
+POST = "Post "
 
 
 def failed_steps(jobs: Path) -> list[tuple[str, str]]:
@@ -95,6 +100,8 @@ def not_reached(jobs: Path) -> list[str]:
         for s in steps:
             name = str(s.get("name"))
             if s.get("conclusion") != "skipped" or name in BODY_STEPS or name in OWN_CONDITION:
+                continue
+            if name.startswith(POST):
                 continue
             if name == KIT_ONLY[0] and kit:
                 continue
