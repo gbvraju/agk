@@ -43,9 +43,12 @@ OLD = {
     "docs/adr/TEMPLATE.md": "adr template old\n",
     "config/session-rules.md": "rules old\n",
     "gone.txt": "only release 1.0.0 shipped this\n",
+    # releases up to 0.27.0 installed the kit's own tests
+    "tests/kit/test_kit_a.py": "def test_a():\n    pass\n",
+    "tests/kit/test_kit_b.py": "def test_b():\n    pass\n",
 }
 NEW = {
-    **{k: v for k, v in OLD.items() if k != "gone.txt"},
+    **{k: v for k, v in OLD.items() if k != "gone.txt" and not k.startswith("tests/kit/")},
     "scripts/agk/check_x.py": "x new\n",
     "scripts/agk/check_y.py": "y new\n",
     ".github/workflows/governance.yml": "gov new\n",
@@ -645,3 +648,153 @@ def test_the_skill_previews_each_form_before_it_writes():
     assert "disable-model-invocation: true" in text
     for verb in ("git push", "git commit", "gh pr", "gh api"):
         assert verb not in text
+
+
+# --- the verdict on 4e12391 ----------------------------------------------------------------------
+
+
+def test_kit_tests_an_older_release_installed_are_kit_paths(tmp_path, kit, capsys):
+    """REQ-009: answers 2 and 6 (`tests/kit/` of an older release: deleted by digest, a changed one
+    listed; the project's own tests kept), finding 1 of the verdict on 4e12391."""
+    target = init_target(
+        tmp_path, files=OLD, version="1.0.0", **{"tests/kit/test_kit_b.py": "my change\n"}
+    )
+    code, out = run(capsys, target, "--write")
+    assert code == 0, out
+    assert "tests/kit/test_kit_a.py" in paths_of(out, "delete")
+    assert paths_of(out, "changed") == ["tests/kit/test_kit_b.py"]
+    assert not (target / "tests" / "kit" / "test_kit_a.py").exists()
+    assert (target / "tests" / "kit" / "test_kit_b.py").read_text() == "my change\n"
+    assert (target / "tests" / "test_app.py").read_text() == PROJECT["tests/test_app.py"]
+
+
+LEGACY = (
+    '[project]\nname = "proj"\n\n[tool.agk]\nversion = "1.0.0"\ninstalled = "2020-01-02"\n'
+    'default_branch = "main"\n\n[tool.ruff]\nline-length = 100\n'
+)
+
+
+def legacy_target(tmp_path: Path) -> Path:
+    root = new_repo(tmp_path)
+    put(root, {**OLD, "pyproject.toml": LEGACY, **PROJECT})
+    commit(root)
+    return root
+
+
+def test_a_legacy_install_is_removed_and_its_stamp_leaves_pyproject(tmp_path, kit, capsys):
+    """REQ-009: answers 2 and 6 (kits 0.1.0 and 0.2.0 stamped `[tool.agk]` in pyproject.toml),
+    finding 2 of the verdict on 4e12391."""
+    target = legacy_target(tmp_path)
+    code, out = run(capsys, target, "--write")
+    assert code == 0, out
+    assert "gone.txt" in paths_of(out, "delete")
+    assert "pyproject.toml" in paths_of(out, "edit")
+    left = (target / "pyproject.toml").read_text()
+    assert "[tool.agk]" not in left and "[tool.ruff]" in left and 'name = "proj"' in left
+    data = tomllib.loads(left)
+    assert "agk" not in data["tool"] and data["tool"]["ruff"] == {"line-length": 100}
+    for rel in OLD:
+        assert not (target / rel).exists(), rel
+
+
+def test_a_legacy_install_cannot_be_paused_and_says_so(tmp_path, kit, capsys):
+    """REQ-009: answer 1 (a legacy install predates the setting: upgrade first), finding 2."""
+    target = legacy_target(tmp_path)
+    before = snapshot(target)
+    code, out = run(capsys, target, "--pause", "--write")
+    assert code == 1
+    assert out[0].startswith("refused: legacy install") and "upgrade" in out[0]
+    assert snapshot(target) == before and branch(target) == "main"
+
+
+def test_an_edit_never_writes_through_a_symlink_at_a_temporary_name(tmp_path, kit, capsys):
+    """REQ-009: answer 2 (the branch's edits stay in the work tree), finding 3 of the verdict on
+    4e12391: a symlink planted at the old temporary name is not followed."""
+    target = adopt_target(tmp_path)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside\n")
+    for name in ("CLAUDE.md", ".gitignore", "Makefile"):
+        (target / f".{name}.agk-uninstall").symlink_to(outside)
+    git(target, "add", "-A")
+    git(target, "commit", "-q", "-m", "planted")
+    code, out = run(capsys, target, "--write")
+    assert code == 0, out
+    assert outside.read_text() == "outside\n"
+    assert (target / "CLAUDE.md").read_text() == "# my rules\nmore\n"
+    assert not (target / "CLAUDE.md").is_symlink()
+
+
+def test_an_edited_crlf_file_stays_crlf(tmp_path, kit, capsys):
+    """REQ-009: answer 2 (the project's lines are kept as they were, line ends included)."""
+    crlf = "# my rules\r\n<!-- >>> agk -->\r\n# rules new\r\n<!-- <<< agk -->\r\nmore\r\n"
+    make = "include agk.mk\r\n\r\nbuild:\r\n\tcc main.c\r\n"
+    target = adopt_target(tmp_path)
+    (target / "CLAUDE.md").write_bytes(crlf.encode())
+    (target / "Makefile").write_bytes(make.encode())
+    commit(target)
+    code, out = run(capsys, target, "--write")
+    assert code == 0, out
+    assert (target / "CLAUDE.md").read_bytes() == b"# my rules\r\nmore\r\n"
+    assert (target / "Makefile").read_bytes() == b"\r\nbuild:\r\n\tcc main.c\r\n"
+
+
+# --- the real history: an install of each of several real releases is removed cleanly -----------
+
+
+def real_install(tmp_path: Path, version: str, mode: str) -> Path | None:
+    import io  # noqa: PLC0415
+    import tarfile  # noqa: PLC0415
+
+    rows = uninstall.load_table(KIT_ROOT)["releases"]
+    data = subprocess.run(
+        ["git", "archive", "--format=tar", rows[version]["commits"][0]],
+        cwd=KIT_ROOT,
+        capture_output=True,
+        check=True,
+    ).stdout
+    old = tmp_path / "old_kit"
+    old.mkdir()
+    with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+        tar.extractall(old, filter="data")
+    script = old / "scripts" / "agk" / f"{mode}.py"
+    if not script.is_file():
+        return None
+    target = new_repo(tmp_path)
+    put(target, {"README.md": "# hello\n", "src/app.py": "print(1)\n"})
+    proc = subprocess.run(
+        [sys.executable, str(script), str(target)], capture_output=True, text=True
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    commit(target)
+    return target
+
+
+@pytest.mark.parametrize(
+    ("version", "mode"),
+    [
+        ("0.2.0", "init"),
+        ("0.20.0", "init"),
+        ("0.20.0", "adopt"),
+        ("0.40.0", "adopt"),
+        ("0.58.0", "init"),
+    ],
+)
+def test_a_real_install_of_an_older_release_is_removed_cleanly(tmp_path, capsys, version, mode):
+    """REQ-009: answers 2, 5 and 6 against the real table: a legacy stamp (0.2.0), the kit's own
+    tests (0.20.0), an adopt install and the newest release; nothing of the kit is left unlisted."""
+    target = real_install(tmp_path, version, mode)
+    if target is None:
+        pytest.skip(f"kit {version} has no {mode}")
+    code, out = run(capsys, target, "--write")
+    assert code == 0, out
+    assert paths_of(out, "changed") == [], out
+    assert not (target / "tests" / "kit").exists()
+    assert (target / "src" / "app.py").is_file() and (target / "README.md").is_file()
+    doctor = subprocess.run(
+        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "doctor.py"), str(target)],
+        capture_output=True,
+        text=True,
+    )
+    assert doctor.returncode == 0 and "summary: no kit installed" in doctor.stdout, (
+        doctor.stdout + "\n".join(out)
+    )

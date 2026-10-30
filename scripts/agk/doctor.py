@@ -60,6 +60,9 @@ KIT_TRACES = (
     ".github/workflows/proof.yml",
     ".github/workflows/agk-route.yml",
     ".claude/hooks/stop_check.py",
+    # the kit's own tests folder, which releases up to 0.27.0 installed; written as two parts, since
+    # a new install's text never names that folder (lean install, ADR-0052)
+    str(Path("tests", "kit").as_posix()),
 )
 PLACEHOLDER = "@REPLACE-ME"
 DRIFT_WORKFLOW = ".github/workflows/drift-audit.yml"

@@ -126,14 +126,17 @@ review it, commit it, push it and open one pull request, which git can revert.
   `include agk.mk` when `agk.mk` goes (targets that call `agk-*` are yours to change).
 - **Listed as `changed`, kept:** a kit file, block or `agk.toml` that the project changed; you decide.
 - **Kept, never deleted or edited:** the project's own work: `docs/requirements.md`, ADRs, specs, briefs, `docs/runs/`,
-  `docs/build-state.md`, `constitution/vision.md`, design documents and the tests, and `pyproject.toml`. `--remove-docs`
+  `docs/build-state.md`, `constitution/vision.md`, design documents and the tests (not the kit's own `tests/kit/`, which
+  releases up to 0.27.0 installed), and `pyproject.toml` (a kit 0.1.0 or 0.2.0 install loses only its `[tool.agk]` stamp). `--remove-docs`
   lists those documents for you to delete by hand.
 - **GitHub, printed only:** the ruleset to delete or relax, by name; the kit's labels; the issues it opened (the red-branch
   issue and the drift-audit, metrics and product-report issues); the plugin removal command. Each needs a person with admin
   rights; the tool does none of them.
 
 The output names the protected classes the branch changes and prints an ADR skeleton; write the ADR yourself. After the
-removal merges, `agk doctor` reports `no kit installed` (exit 0) instead of failing (brief #348 build (b), ADR-0203).
+removal merges, `agk doctor` reports `no kit installed` (exit 0) instead of failing: in a git work tree with no `agk.toml`,
+no `[tool.agk]` stamp in `pyproject.toml`, and none of `agk.mk`, `scripts/agk/`, `tests/kit/`, the governance, proof and
+router workflows and the stop hook (brief #348 build (b), ADR-0203).
 
 ## Local mode
 

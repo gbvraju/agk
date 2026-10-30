@@ -15,9 +15,11 @@ at; a kit file the project changed is listed, never deleted. A marked agk block 
 file that holds the project's own lines too, and only when the block is one a release shipped; the
 line `include agk.mk` leaves the project's Makefile when `agk.mk` goes. `agk.toml` goes when it
 holds only the kit's settings. The project's own work (answer 3: requirements, ADRs, specs, briefs,
-the vision, the design documents, the records under docs/runs/, the tests) is never deleted or
-edited; `--remove-docs` lists it for the person to delete by hand. The GitHub side (answer 4) is
-printed, never done. `--pause` (answer 1) adds the top-level line `paused = true` to agk.toml.
+the vision, the design documents, the records under docs/runs/, the tests other than the kit's own
+tests/kit/) is never deleted or edited; `--remove-docs` lists it for the person to delete by hand.
+A legacy install (kits 0.1.0 and 0.2.0, stamped `[tool.agk]` in pyproject.toml) loses that table.
+The GitHub side (answer 4) is printed, never done. `--pause` (answer 1) adds the top-level line
+`paused = true` to agk.toml.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tempfile
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -102,7 +105,10 @@ def normalized(data: bytes) -> bytes:
 
 
 def own_work(rel: str) -> bool:
-    """The project's own work (answer 3); a kit `TEMPLATE.md` under docs/ is the kit's."""
+    """The project's own work (answer 3); a kit `TEMPLATE.md` under docs/ and the kit's own tests
+    under `tests/kit/` (installed by releases up to 0.27.0) are the kit's."""
+    if rel.startswith("tests/kit/"):
+        return False
     if rel.endswith("/TEMPLATE.md") and rel.startswith(
         ("docs/adr/", "docs/specs/", "docs/briefs/")
     ):
@@ -250,7 +256,15 @@ def agk_toml_item(target: Path, reader: Reader, entries: list[str]) -> Item:
     return Item("agk.toml", "delete", " (the kit's settings only)")
 
 
-def block_item(rel: str, text: str, style: str, reader: Reader, entries: list[str]) -> Item:
+def like(raw: bytes, content: str) -> bytes:
+    """CONTENT (LF) with the line ends of RAW: a CRLF project file stays CRLF."""
+    data = content.encode("utf-8")
+    return data.replace(b"\n", b"\r\n") if b"\r\n" in raw else data
+
+
+def block_item(
+    rel: str, text: str, style: str, reader: Reader, entries: list[str], raw: bytes = b""
+) -> Item:
     state, begin, end, lines = locate(text, style)
     if state == "broken":
         return changed(rel, entries, "broken or duplicated agk block")
@@ -262,7 +276,7 @@ def block_item(rel: str, text: str, style: str, reader: Reader, entries: list[st
     if not "".join(rest).strip():
         return Item(rel, "delete", " (the kit's block only)")
     kept = sum(1 for ln in rest if ln.strip())
-    content = "".join(rest).encode("utf-8")
+    content = like(raw, "".join(rest))
     return Item(rel, "edit", f" (agk block removed; project lines kept: {kept})", content=content)
 
 
@@ -274,13 +288,14 @@ def classify(target: Path, rel: str, reader: Reader, entries: list[str]) -> Item
         return changed(rel, entries, "not a regular file")
     if rel == "agk.toml":
         return agk_toml_item(target, reader, entries)
-    data = lf(path.read_bytes())
+    raw = path.read_bytes()
+    data = lf(raw)
     if reader.is_kit_copy(rel, data):
         return Item(rel, "delete", " (unchanged kit file)")
     style = reader.styles.get(rel)
     if style in MARKERS:
         try:
-            return block_item(rel, data.decode("utf-8"), style, reader, entries)
+            return block_item(rel, data.decode("utf-8"), style, reader, entries, raw)
         except UnicodeDecodeError:
             return changed(rel, entries, "not readable as text")
     return changed(rel, entries, "differs from every released copy")
@@ -297,7 +312,8 @@ def makefile_item(target: Path, plan: Plan) -> None:
     if current is not None and current.action == "delete":
         return
     try:
-        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        raw = path.read_bytes()
+        lines = lf(raw).decode("utf-8").splitlines(keepends=True)
     except (OSError, UnicodeDecodeError):
         return
     rest = [ln for ln in lines if not INCLUDE.match(ln.rstrip("\r\n"))]
@@ -308,7 +324,7 @@ def makefile_item(target: Path, plan: Plan) -> None:
         detail += "; the rest differs from every released copy, kept for you to decide"
         plan.items.remove(current)
     detail += "; targets that call agk-* are yours to change)"
-    plan.items.append(Item("Makefile", "edit", detail, content="".join(rest).encode("utf-8")))
+    plan.items.append(Item("Makefile", "edit", detail, content=like(raw, "".join(rest))))
 
 
 def own_files(target: Path) -> list[str]:
@@ -328,8 +344,57 @@ def own_files(target: Path) -> list[str]:
     return sorted(found)
 
 
+TOOL_AGK = re.compile(r"^\s*\[\s*tool\s*\.\s*agk\s*(\]|\.)")
+TABLE_HEAD = re.compile(r"^\s*\[")
+
+
+def legacy_stamp(target: Path) -> bool:
+    """True for a legacy install (kits 0.1.0 and 0.2.0): no agk.toml, and a `[tool.agk]` table
+    with a version in pyproject.toml, as `upgrade.py` reads it."""
+    path = target / "pyproject.toml"
+    if (target / "agk.toml").exists() or not path.is_file():
+        return False
+    try:
+        table = tomllib.loads(path.read_text(encoding="utf-8")).get("tool", {}).get("agk")
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return False
+    return isinstance(table, dict) and isinstance(table.get("version"), str)
+
+
+def without_stamp(target: Path, entries: list[str]) -> Item:
+    """pyproject.toml without the kit's `[tool.agk]` table (and its sub-tables); every other line
+    stays, checked with tomllib; anything else is listed and kept."""
+    path = target / "pyproject.toml"
+    raw = path.read_bytes()
+    text = lf(raw).decode("utf-8")
+    lines = text.splitlines(keepends=True)
+    kept, inside = [], False
+    for line in lines:
+        if TABLE_HEAD.match(line):
+            inside = bool(TOOL_AGK.match(line))
+        if not inside:
+            kept.append(line)
+    while len(kept) > 1 and not kept[-1].strip() and not kept[-2].strip():
+        kept.pop()
+    new = "".join(kept)
+    try:
+        before, after = tomllib.loads(text), tomllib.loads(new)
+    except tomllib.TOMLDecodeError:
+        return changed("pyproject.toml", entries, "the [tool.agk] stamp cannot be taken out")
+    before.get("tool", {}).pop("agk", None)
+    if not before.get("tool", True):
+        before.pop("tool")
+    if after != before:
+        return changed("pyproject.toml", entries, "the [tool.agk] stamp cannot be taken out")
+    if not new.strip():
+        return Item("pyproject.toml", "delete", " (the kit's [tool.agk] stamp only)")
+    detail = " (the kit's legacy [tool.agk] stamp removed; the rest kept)"
+    return Item("pyproject.toml", "edit", detail, content=like(raw, new))
+
+
 def build_plan(target: Path, kit_root: Path) -> Plan:
-    if not (target / "agk.toml").is_file():
+    legacy = legacy_stamp(target)
+    if not (target / "agk.toml").is_file() and not legacy:
         raise Refusal("agk.toml is missing (path class agk.toml): no kit installed")
     listed = target / "config" / "protected-paths.txt"
     entries = read_list(listed.read_text(encoding="utf-8")) if listed.is_file() else []
@@ -338,7 +403,8 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
     for rel in reader.paths():
         if own_work(rel):
             continue
-        if rel == "pyproject.toml" and (target / rel).is_file():
+        if rel == "pyproject.toml":
+            continue  # after the loop: the stamp of a legacy install, or kept
             plan.items.append(
                 Item(
                     rel,
@@ -351,6 +417,18 @@ def build_plan(target: Path, kit_root: Path) -> Plan:
         item = classify(target, rel, reader, entries)
         if item is not None:
             plan.items.append(item)
+    pyproject = target / "pyproject.toml"
+    if legacy and not passes_symlink(target, "pyproject.toml"):
+        plan.items.append(without_stamp(target, entries))
+    elif pyproject.is_file():
+        plan.items.append(
+            Item(
+                "pyproject.toml",
+                "kept",
+                " (rendered from the kit's template; it may hold the project's "
+                "own settings: edit it by hand)",
+            )
+        )
     makefile_item(target, plan)
     plan.items.sort(key=lambda i: i.rel)
     plan.own = own_files(target)
@@ -497,9 +575,16 @@ def remove(target: Path, rel: str) -> None:
 
 def apply(target: Path, plan: Plan) -> None:
     for item in plan.of("edit"):
-        temp = (target / item.rel).with_name(f".{Path(item.rel).name}.agk-uninstall")
-        temp.write_bytes(item.content or b"")
-        os.replace(temp, target / item.rel)
+        dest = target / item.rel
+        # a new file of a random name, created exclusively: a symlink planted beside is not followed
+        handle, name = tempfile.mkstemp(prefix=f".{dest.name}.", suffix=".agk", dir=dest.parent)
+        try:
+            with os.fdopen(handle, "wb") as out:
+                out.write(item.content or b"")
+            os.replace(name, dest)
+        finally:
+            if os.path.lexists(name):
+                os.unlink(name)
     for item in plan.of("delete"):
         remove(target, item.rel)
 
@@ -529,6 +614,11 @@ def paused_text(text: str) -> str:
 
 def pause(target: Path, write: bool) -> int:
     path = target / "agk.toml"
+    if legacy_stamp(target):
+        raise Refusal(
+            "legacy install (stamp [tool.agk] in pyproject.toml): that kit cannot be paused; "
+            "upgrade first with /agk:upgrade (path class pyproject.toml)"
+        )
     if not path.is_file() or passes_symlink(target, "agk.toml"):
         raise Refusal("agk.toml is missing (path class agk.toml): no kit installed")
     try:

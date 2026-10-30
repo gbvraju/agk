@@ -29,7 +29,11 @@ refusal of `session.py` while paused is build (c), which closes the brief.
 3. **Deleted: kit files that match a released copy (answers 2 and 6).** A path any release row of `kit/hashes.json` lists is
    deleted when its bytes, CRLF read as LF, equal a digest that any row lists for it (verbatim, a template, or a marked block
    written whole), so a project installed at an older release is read by that release's row. `.github/CODEOWNERS` is deleted
-   when it equals what the kit generates from the project's `config/reviewers.yaml`. A deleted script's bytecode in
+   when it equals what the kit generates from the project's `config/reviewers.yaml`. The kit's own tests under `tests/kit/`,
+   which releases up to 0.27.0 installed, are kit paths like any other: deleted by digest, listed when changed. A legacy
+   install (kits 0.1.0 and 0.2.0: no `agk.toml`, a `[tool.agk]` table with a version in `pyproject.toml`, read as
+   `upgrade.py` reads it) is removed the same way, and its `[tool.agk]` table (with any `[tool.agk.*]` table) leaves
+   `pyproject.toml`, checked with `tomllib` to change nothing else; `--pause` refuses it ("legacy install ... upgrade first"). A deleted script's bytecode in
    `__pycache__/` goes with it, and each directory the deletion emptied is removed.
 4. **The kit's own lines only (answer 2).** In a file that also holds the project's lines (`.gitignore`, `.gitattributes`,
    `CLAUDE.md`, the pull request template, `CODEOWNERS`), only an agk block that a release shipped is taken out; a file left with
@@ -42,29 +46,35 @@ refusal of `session.py` while paused is build (c), which closes the brief.
    broken block, a symlink or a non-file is printed as `changed <path> (path class <class>: <why>; kept for you to decide)`;
    the message names the path class, never the content.
 6. **The project's own work is kept (answer 3).** `docs/requirements.md`, `docs/build-state.md`, `constitution/vision.md` and
-   everything under `docs/adr/`, `docs/specs/`, `docs/briefs/`, `docs/runs/`, `docs/design/` and `tests/` are never deleted or
+   everything under `docs/adr/`, `docs/specs/`, `docs/briefs/`, `docs/runs/`, `docs/design/` and `tests/` (but `tests/kit/`,
+   rule 3) are never deleted or
    edited, even where they equal a kit template; the kit's `TEMPLATE.md` files under `docs/adr/`, `docs/specs/` and
-   `docs/briefs/` are the kit's and follow rule 3. `pyproject.toml` is kept and printed as `kept` (Q-348-8). `--remove-docs`
+   `docs/briefs/` are the kit's and follow rule 3. `pyproject.toml` (but a legacy stamp, rule 3) is kept and printed as `kept` (Q-348-8). `--remove-docs`
    prints each of those documents as `remove by hand: <path>`; the tool never deletes them.
 7. **GitHub, printed only (answer 4).** The output ends with the ruleset to delete or relax, by the name in the kit's
    `kit/templates/ruleset.json`; the kit's labels (the router's seven `agk:*` states, `agk-brief`, `agk-conductor`,
    `agk-shadow`, `agk-drift-audit`, `agk-metrics`, `agk-product-report`); the issues it opened (the red-branch issue by its
    title, and the issues labelled `agk-drift-audit`, `agk-metrics` and `agk-product-report`); and the plugin removal commands
    `claude plugin uninstall agk@agk` and `claude plugin marketplace remove agk` (verify) (Q-348-10). The tool does none of them.
-8. **Reviewable (answer 2).** Like the upgrade, the output names the protected classes of every deleted or edited path and
+8. **Edits stay in the work tree (answer 2).** An edited file is written to a new temporary file of a random name in its
+   folder, created exclusively (`tempfile.mkstemp`), then moved over the file, so a symlink planted beside it is never
+   followed; a CRLF project file keeps its CRLF line ends.
+9. **Reviewable (answer 2).** Like the upgrade, the output names the protected classes of every deleted or edited path and
    prints an ADR skeleton; the person writes the ADR. `--pause` adds the top-level line `paused = true` before the first line
    that is neither blank nor a comment (or replaces a top-level `paused = false`), checks with `tomllib` that the result is
    paused, prints the skeleton for `agk.toml` and says nothing is deleted; a paused project has nothing to do; a bad value is
    refused by the setting's name.
-9. **Doctor: no kit installed (answer 5).** A git work tree with no `agk.toml`, no `[tool.agk]` stamp in `pyproject.toml` and
-   none of the kit's files (`agk.mk`, `scripts/agk`, the governance, proof and router workflows, the stop hook) is reported as
-   `no kit installed` (text: `agk doctor none`, one line, `summary: no kit installed`; `--json`: `"state": "no kit installed"`,
+10. **Doctor: no kit installed (answer 5).** A git work tree with no `agk.toml`, no `[tool.agk]` stamp in `pyproject.toml` and
+   none of the seven kit paths it reads (`agk.mk`, `scripts/agk`, `tests/kit`, the governance, proof and router workflows,
+   the stop hook; the tests folder is written in two parts in `doctor.py`, since a new install's text never names it,
+   ADR-0052) is reported as `no kit installed` (text: `agk doctor none`, one line, `summary: no kit installed`; `--json`: `"state": "no kit installed"`,
    no checks), exit 0, with no read of GitHub. Anything else without `agk.toml` keeps the refusal of SPEC-0006 rule 13
    (Q-348-4).
-10. **Tests first (answer 6).** `tests/kit_dev/test_uninstall.py` (a fixture kit with two release rows, and one real install of
+11. **Tests first (answer 6).** `tests/kit_dev/test_uninstall.py` (a fixture kit with two release rows, and one real install of
     this checkout) and `tests/kit/test_doctor_no_kit.py`: pause and resume, removal of unchanged files only, a changed kit file
     listed, the project's documents kept, a dry run that writes nothing, the GitHub list printed with no `gh` call, and a project
-    at an older release. `tests/kit_dev/test_distribution.py` and `test_kit_manifest.py` list the new skill and script.
+    at an older release; and real installs of 0.2.0 (legacy), 0.20.0 (init and adopt, with the kit's tests), 0.40.0 (adopt)
+    and 0.58.0 from the kit's own history, each removed with no `changed` line, then reported `no kit installed`. `tests/kit_dev/test_distribution.py` and `test_kit_manifest.py` list the new skill and script.
 
 ## Consequences
 
@@ -75,9 +85,13 @@ on it: relaxing or deleting the ruleset (printed first in the GitHub list) comes
 ## Residual
 
 - 2026-10-30: Q-348-4: SPEC-0006 rule 13 (Approved) says a missing `agk.toml` is a refusal; answer 5 says the doctor reports
-  "no kit installed" after removal. Reading taken: both hold, by the narrow condition of decision 9; an amendment of rule 13 is
+  "no kit installed" after removal. Reading taken: both hold, by the narrow condition of decision 10; an amendment of rule 13 is
   the reviewers' to propose.
 - 2026-10-30: Q-348-5: "builds the branch" is read as a new branch with the change uncommitted, as the upgrade never commits.
 - 2026-10-30: Q-348-6, Q-348-7, Q-348-8: `agk.toml` whole or kept; `.claude/` entries as whole files; `pyproject.toml` kept.
 - 2026-10-30: Q-348-9: `kit/manifest.json` is unchanged: the script is kit-only, as `upgrade.py` is.
 - 2026-10-30: Q-348-10: the plugin removal commands are marked (verify).
+- 2026-10-30: the verdict on 4e12391, findings 1 to 3: `tests/kit/` of older releases is removed as kit paths and is a doctor
+  trace (decisions 3, 6, 10); a legacy install is removed and its `[tool.agk]` stamp leaves `pyproject.toml`, and `--pause`
+  refuses it (decision 3); an edit is written through an exclusively created temporary file (decision 8). The optional notes
+  are taken: decision 10 names the paths the doctor reads, and a CRLF file stays CRLF (decision 8).

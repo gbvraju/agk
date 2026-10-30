@@ -80,7 +80,10 @@ def test_the_paused_query_reads_not_paused_after_removal(tmp_path, gh_log):
     assert (proc.returncode, proc.stdout) == (0, "agk not paused\n")
 
 
-@pytest.mark.parametrize("left", ["agk.mk", "scripts/agk/common.py", ".github/workflows/proof.yml"])
+@pytest.mark.parametrize(
+    "left",
+    ["agk.mk", "scripts/agk/common.py", ".github/workflows/proof.yml", "tests/kit/test_doctor.py"],
+)
 def test_kit_files_without_agk_toml_stay_a_refusal(tmp_path, gh_log, left):
     """REQ-009: answer 5 (a half-removed kit is not "no kit installed": SPEC-0006 rule 13)."""
     _, path = gh_log
