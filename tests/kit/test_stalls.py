@@ -104,6 +104,7 @@ def open_pr(stub: Stub, n: int, label: str, checks: list[dict], **kw) -> dict:
                "check_runs": checks})  # fmt: skip
     stub.serve(f"{ISSUES}/{n}/comments", kw.get("comments", []))
     stub.serve(f"{PULLS}/{n}/files", [])
+    stub.serve(f"repos/{REPO}/commits/{SHA}/status", {"statuses": kw.get("statuses", [])})
     labelled = kw.get("labelled", timedelta(minutes=120))
     event = {"event": "labeled", "label": {"name": label}, "created_at": iso(-labelled)}
     stub.serve(f"{ISSUES}/{n}/events", [event])
@@ -224,6 +225,25 @@ def test_stale_label_not_while_a_required_check_is_red_or_missing(proj, stub):
     assert kinds(proj, stub) == []
 
 
+def test_stale_label_a_status_that_cannot_be_read_exits_1(proj, stub):
+    """The verdict on b0b3ef3, item 3: a failed status read is never `no stall`."""
+    pulls(stub, open_pr(stub, 20, "agk:ci-running", green()))
+    stub.serve(f"repos/{REPO}/commits/{SHA}/status", "FAIL")
+    out = stalls(proj, stub)
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "rule 2 (stale-label, no-verdict)" in out.stdout and "cannot be read" in out.stdout
+
+
+def test_stale_label_a_required_status_context_counts(proj, stub):
+    proj.write("agk.toml", 'required_checks = ["governance", "proof", "ext"]\n')
+    ext = {"context": "ext", "state": "success", "id": 7, "updated_at": iso(-80 * MIN)}
+    pulls(stub, open_pr(stub, 20, "agk:ci-running", green(), statuses=[ext]))
+    assert kinds(proj, stub) == [("stale-label", 20)]
+    pending = {**ext, "state": "pending"}
+    pulls(stub, open_pr(stub, 20, "agk:ci-running", green(), statuses=[pending]))
+    assert kinds(proj, stub) == []
+
+
 # --- no-verdict ---------------------------------------------------------------------------------
 
 
@@ -331,6 +351,26 @@ def test_idle_capacity_not_when_the_plan_starts_nobody(proj, stub):
     assert kinds(proj, stub) == []
 
 
+def test_idle_capacity_a_dependence_that_cannot_be_read_exits_1(proj, stub):
+    """The verdict on b0b3ef3, item 1: `GOOD` depends on #3, whose read fails."""
+    stub.serve(ISSUES, [issue(5)])
+    stub.serve(f"{ISSUES}/5/comments", [])
+    stub.serve(f"{ISSUES}/3", "FAIL")
+    out = stalls(proj, stub)
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "rule 2 (idle-capacity): the plan cannot be read" in out.stdout
+
+
+def test_idle_capacity_comments_the_plan_cannot_read_exit_1(proj, stub):
+    """The verdict on b0b3ef3, item 2: only the plan's own read of the comments fails."""
+    stub.serve(ISSUES, [issue(5, brief("a/"))])
+    stub.serve(f"{ISSUES}/5/comments", [], nth=1)
+    stub.serve(f"{ISSUES}/5/comments", "FAIL", nth=2)
+    out = stalls(proj, stub)
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "rule 2 (idle-capacity): the plan cannot be read" in out.stdout
+
+
 # --- claim-no-pr --------------------------------------------------------------------------------
 
 
@@ -345,6 +385,16 @@ def test_claim_no_pr_a_live_take_with_no_pull_request_and_no_post_for_2_hours(pr
     assert kinds(proj, stub) == [("claim-no-pr", 6)]
     line = lines(proj, stub)[0]
     assert "builder-x" in line and "released: builder-x" in line
+    assert "posted nothing for 2 hours" in line
+
+
+def test_claim_no_pr_the_age_counts_from_the_sessions_last_post(proj, stub):
+    """The verdict on b0b3ef3 (optional): a post after the take moves the age, not the take."""
+    note = comment(2, "x", "Progress: builder-x done 0/4; next: 1", when=iso(-121 * MIN))
+    taken(stub, 230 * MIN, note)
+    line = lines(proj, stub)[0]
+    assert line.startswith("stall claim-no-pr #6: ") and "posted nothing for 2 hours" in line
+    assert "3 hours" not in line
 
 
 def test_claim_no_pr_just_under_2_hours_is_no_stall(proj, stub):
