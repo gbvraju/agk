@@ -82,6 +82,12 @@ ok, 1 for an error finding, 4 for a warning or an unchecked item. See `docs/spec
 keep a project's CI fast and cheap: `ci-drafts` (a workflow of `required_checks` runs on draft pull requests) and
 `ci-concurrency` (it has no concurrency group); the five defaults and their snippets are in `docs/guides/project-ci.md`.
 
+## Local mode
+
+When GitHub Actions is blocked (minutes exhausted, billing blocked, an outage), follow [local-mode.md](local-mode.md): how to
+disable and re-enable the workflows with `gh workflow`, what a builder runs and pastes as its `Local evidence:` line, what the
+conductor runs instead of reading CI, what is lost, and the one issue that records every merge (session rule 29, ADR-0182).
+
 ## Engines
 
 `[engines]` in `agk.toml` names, for each of `vision`, `stack`, `design` and `review`, a skill the session can see. A key that is

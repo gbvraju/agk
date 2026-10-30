@@ -30,6 +30,8 @@ Before every verdict, in this order:
 6. **Collisions are expected in flow mode.** On a number collision order `intake.py renumber`, never a hand edit; on a conflict in a file that a script regenerates (a table of hashes, a generated index) order the merge of the base branch and the regeneration by that script, never a hand merge; on a conflict in a list of lines that only grows (the changelog's Unreleased section) order that every line is kept.
 7. **A queue item a session cannot see.** When one pull request waits on another's merge, name it as `Depends-on: #n` so that `session.py watch --merged N` wakes the session without a message.
 
+Local mode. When GitHub Actions is blocked, `review-queue` lists pull requests with `checks not reported` and one record issue is open; follow `docs/guides/local-mode.md` (session rule 29): step 1 then reads, instead of the check runs, your own governance run on the head (the bounded run below, `make -C <scratch> governance`) and the builder's `Local evidence:` line for that head, and the verdict names the local evidence it relied on in one line, `Local evidence: <sha> governance ok (conductor's run); ...`. A clearing verdict in local mode without that line clears nothing.
+
 The bounded run. Step 4 of the protocol asks you to run what can be run, and the guard allows exactly this and nothing more:
 
 - Only a head whose repository is the base repository, never a fork: read `head.repo.full_name` and `base.repo.full_name` of the pull request and stop when they differ. The guard also refuses `git worktree add` for a sha that is on no branch of `origin` (run `git fetch origin` first).
