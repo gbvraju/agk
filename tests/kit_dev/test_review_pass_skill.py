@@ -157,7 +157,7 @@ def test_the_role_file_names_the_re_plan_and_the_one_command_it_may_run():
 
 
 def test_the_role_and_the_skill_end_an_empty_pass_the_same_way():
-    """REQ-041: brief #331 answer 1 (the verdict on 2d53a5d, item 3: `queue empty`, then the plan)."""
+    """REQ-041: brief #331 answer 1 (the verdict on 2d53a5d, item 3: an empty pass re-plans)."""
     phrase = "`queue empty` followed by its `Start` and `waits for` lines"
     assert phrase in flat(SKILL)
     role = flat(ROLE)
