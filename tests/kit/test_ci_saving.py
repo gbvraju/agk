@@ -223,3 +223,244 @@ def test_the_router_keeps_its_triggers_and_permissions():
     """Brief #216: only the job's `if` changes."""
     assert re.search(r"issue_comment:\n    types: \[created\]", workflow("agk-route.yml"))
     assert "permissions:\n  contents: read\n  pull-requests: write" in workflow("agk-route.yml")
+
+
+# --- a draft's push starts two jobs, not five (brief #369, ADR-0207) -----------------------------
+#
+# GitHub bills every job as at least one whole minute. The jobs an event starts are read from the
+# workflow files: the `on:` triggers, each job's `if:` (evaluated by hand on a saved event), and the
+# router's `workflow_run` wake for each finished governance or proof run (a run whose every job was
+# skipped concludes `skipped`).
+
+KIT = ("governance.yml", "proof.yml", "agk-route.yml")
+
+
+class Ctx:
+    """A payload read by attribute, as a GitHub expression reads it; a missing key is empty."""
+
+    def __init__(self, data):
+        self.data = data
+
+    def __getattr__(self, key: str):
+        value = self.data.get(key) if isinstance(self.data, dict) else None
+        return Ctx(value) if isinstance(value, dict) or value is None else value
+
+    def __bool__(self) -> bool:
+        return bool(self.data)
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, Ctx) and self.data == other.data
+
+    def __ne__(self, other) -> bool:
+        return not self == other
+
+    def __hash__(self) -> int:
+        return 0
+
+
+def starts_with(text, prefix) -> bool:
+    return isinstance(text, str) and text.startswith(prefix)
+
+
+def holds(condition: str, github: dict) -> bool:
+    """A job-level `if:` of these workflows, evaluated on one event (a test reading, not GitHub)."""
+    expr = condition.strip().removeprefix("${{").removesuffix("}}").strip()
+    expr = expr.replace("||", " or ").replace("&&", " and ")
+    expr = re.sub(r"!(?!=)", " not ", expr)
+    expr = re.sub(r"\btrue\b", "True", re.sub(r"\bfalse\b", "False", expr))
+    expr = expr.replace("startsWith(", "starts_with(")
+    names = {"github": Ctx(github), "starts_with": starts_with}
+    return bool(eval(expr, {"__builtins__": {}}, names))  # nosec B307 - the kit's own workflow text
+
+
+def triggers(text: str) -> dict[str, dict[str, list[str]]]:
+    """`on:` of a workflow: each event and its `types:` and `workflows:` lists."""
+    block = text.split("\non:\n", 1)[1].split("\n\n", 1)[0]
+    found: dict[str, dict[str, list[str]]] = {}
+    event = ""
+    for line in block.splitlines():
+        top = re.match(r"^  ([a-z_]+):\s*$", line)
+        if top:
+            event = top.group(1)
+            found[event] = {}
+            continue
+        key = re.match(r"^    (types|workflows): \[([^\]]*)\]", line)
+        if key and event:
+            found[event][key.group(1)] = [x.strip() for x in key.group(2).split(",")]
+    return found
+
+
+def job_conditions(text: str) -> list[str]:
+    """The job-level `if:` of each job (always true when a job has none)."""
+    jobs = text.split("\njobs:\n", 1)[1]
+    out = []
+    for block in re.split(r"(?m)^  (?=[a-z][\w-]*:\n)", jobs)[1:]:
+        cond = re.search(r"(?m)^    if: (.+)$", block)
+        out.append(cond.group(1) if cond else "true")
+    return out
+
+
+def started(text: str, github: dict) -> int:
+    on = triggers(text).get(github["event_name"])
+    if on is None:
+        return 0
+    action = github["event"].get("action")
+    if "types" in on and action not in on["types"]:
+        return 0
+    if github["event_name"] == "workflow_run":
+        if github["event"]["workflow_run"]["name"] not in on.get("workflows", []):
+            return 0
+    return sum(holds(c, github) for c in job_conditions(text))
+
+
+def name_of(text: str) -> str:
+    found = re.search(r"(?m)^name: (.+)$", text)
+    assert found
+    return found.group(1).strip()
+
+
+def pr_event(action: str, draft: bool) -> dict:
+    pull = {"number": 7, "draft": draft, "merged": False}
+    return {
+        "event_name": "pull_request",
+        "ref_name": "7/merge",
+        "event": {"action": action, "pull_request": pull, "repository": {"default_branch": "main"}},
+    }
+
+
+def comment_event(body: str) -> dict:
+    issue = {"number": 7, "pull_request": {"url": "x"}}
+    event = {"action": "created", "comment": {"body": body}, "issue": issue}
+    event["repository"] = {"default_branch": "main"}
+    return {"event_name": "issue_comment", "ref_name": "main", "event": event}
+
+
+def jobs_started(github: dict) -> dict[str, int]:
+    """The jobs one event starts, by workflow, the router's wakes counted under `agk-route wake`."""
+    texts = {n: workflow(n) for n in KIT}
+    count = {n: started(texts[n], github) for n in KIT}
+    count["agk-route wake"] = 0
+    for name in ("governance.yml", "proof.yml"):
+        if triggers(texts[name]).get(github["event_name"]) is None:
+            continue
+        on = triggers(texts[name])[github["event_name"]]
+        if "types" in on and github["event"].get("action") not in on["types"]:
+            continue
+        run = {"name": name_of(texts[name]), "conclusion": "success" if count[name] else "skipped"}
+        wake = {
+            "event_name": "workflow_run",
+            "ref_name": "main",
+            "event": {
+                "action": "completed",
+                "workflow_run": {**run, "pull_requests": [{"number": 7}]},
+                "repository": {"default_branch": "main"},
+            },
+        }
+        count["agk-route wake"] += started(texts["agk-route.yml"], wake)
+    return count
+
+
+@pytest.mark.parametrize(
+    ("label", "github", "total"),
+    [
+        ("draft push", pr_event("synchronize", True), 2),
+        ("draft edit", pr_event("edited", True), 2),
+        ("ready push", pr_event("synchronize", False), 5),
+        ("ready edit", pr_event("edited", False), 2),
+        ("ready_for_review", pr_event("ready_for_review", False), 4),
+        ("verdict comment", comment_event("Verdict: cleared abc1234"), 1),
+    ],
+)
+def test_the_jobs_each_event_starts(label, github, total):
+    """REQ-039: brief #369 answer 5 (2, 2, unchanged, 2, unchanged, unchanged)."""
+    assert sum(jobs_started(github).values()) == total, (label, jobs_started(github))
+
+
+def test_a_draft_push_starts_governance_and_its_one_router_wake():
+    """REQ-039: brief #369 answers 1 and 2 (proof and the router's own run do not start)."""
+    count = jobs_started(pr_event("synchronize", True))
+    assert count == {"governance.yml": 1, "proof.yml": 0, "agk-route.yml": 0, "agk-route wake": 1}
+    for action in ("opened", "reopened"):
+        assert jobs_started(pr_event(action, True))["proof.yml"] == 0, action
+        assert jobs_started(pr_event(action, True))["agk-route.yml"] == 0, action
+
+
+def test_a_ready_pull_request_keeps_every_job():
+    """REQ-039: brief #369 answer 3 (a ready push: governance, proof, the router and two wakes)."""
+    count = jobs_started(pr_event("synchronize", False))
+    assert count == {"governance.yml": 1, "proof.yml": 1, "agk-route.yml": 1, "agk-route wake": 2}
+    ready = jobs_started(pr_event("ready_for_review", False))
+    assert ready == {"governance.yml": 1, "proof.yml": 1, "agk-route.yml": 0, "agk-route wake": 2}
+
+
+def test_proof_skips_a_draft_at_job_level():
+    """REQ-039: brief #369 answer 1 (`if:` on the job, so no runner starts for a draft)."""
+    (condition,) = job_conditions(workflow("proof.yml"))
+    assert "github.event.pull_request.draft" in condition
+    assert not holds(condition, pr_event("synchronize", True))
+    assert holds(condition, pr_event("synchronize", False))
+    assert holds(condition, pr_event("ready_for_review", False))
+
+
+def test_the_router_starts_no_job_for_a_skipped_run_or_a_draft_event():
+    """REQ-039: brief #369 answer 2."""
+    condition = router_condition()
+    assert "github.event.workflow_run.conclusion != 'skipped'" in condition
+    assert "github.event.pull_request.draft" in condition
+    assert "edited" not in triggers(workflow("agk-route.yml"))["pull_request"]["types"]
+    for conclusion, runs in (("skipped", False), ("success", True), ("failure", True)):
+        wake = {
+            "event_name": "workflow_run",
+            "ref_name": "main",
+            "event": {
+                "workflow_run": {"name": "proof", "conclusion": conclusion},
+                "repository": {"default_branch": "main"},
+            },
+        }
+        assert holds(condition, wake) is runs, conclusion
+
+
+def test_a_merge_and_a_push_to_the_default_branch_still_start_the_router():
+    """REQ-039: brief #369 answer 3 (merges and default-branch pushes keep their job)."""
+    merged = pr_event("closed", False)
+    merged["event"]["pull_request"]["merged"] = True
+    assert jobs_started(merged)["agk-route.yml"] == 1
+    push = {"event_name": "push", "ref_name": "main", "event": {"repository": {"default_branch": "main"}}}
+    assert jobs_started(push)["agk-route.yml"] == 1
+    for prefix in PREFIXES:
+        assert jobs_started(comment_event(f"{prefix} x"))["agk-route.yml"] == 1, prefix
+
+
+def test_a_skipped_proof_run_never_reports_green_over_a_failed_run_of_the_same_head():
+    """REQ-039: brief #369 answer 5 (route.py ignores a skipped run while the name has another)."""
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts" / "agk"))
+    import route
+
+    failed = {"id": 1, "name": "proof", "status": "completed", "conclusion": "failure"}
+    skipped = {"id": 2, "name": "proof", "status": "completed", "conclusion": "skipped"}
+    green = {"id": 3, "name": "governance", "status": "completed", "conclusion": "success"}
+    assert {r["id"] for r in route.latest_runs([failed, skipped, green])} == {1, 3}
+    facts = {
+        "head": "a" * 40,
+        "mergeable_state": "clean",
+        "checks": [green, skipped, failed],
+        "statuses": [],
+        "comments": [],
+        "reviews": [],
+        "authors": ["boss"],
+        "approvers": ["maintainer"],
+        "author": "builder",
+        "files": [],
+        "commit": {},
+    }
+    assert route.decide(facts) == "agk:ci-red"
+
+
+def test_the_workflows_say_why():
+    """REQ-039: brief #369 answer 4 (the comments name the brief and the billed minute)."""
+    for name in ("proof.yml", "agk-route.yml"):
+        head = workflow(name).split("\njobs:\n", 1)[0]
+        assert "brief #369" in head, name
+        assert "minute" in head, name
