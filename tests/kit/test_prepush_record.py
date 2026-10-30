@@ -28,7 +28,8 @@ EVIDENCE = re.compile(
     re.M,
 )
 SECRET = "s3cr3t-value-that-must-not-leak"
-OUTPUT_MARK = "TEST_OUTPUT_TEXT_MARK"
+OUTPUT_CMD = "echo TEST_OUTPUT_$((40+2))"  # the command differs from its output
+OUTPUT_MARK = "TEST_OUTPUT_42"
 
 
 @pytest.fixture
@@ -107,7 +108,7 @@ def test_a_failed_step_still_writes_the_record_and_exits_1(repo, outside):
     data = load(record)
     assert [s["name"] for s in data["steps"]] == ["pr-body", "lint", "governance"]
     gov = data["steps"][-1]
-    assert gov["outcome"] == "FAIL" and gov["exit"] == 1
+    assert gov["outcome"] == "FAIL" and gov["exit"] == 2  # make's own code for a failed recipe
     assert gov["argv"] == ["make", "-f", "agk.mk", "agk-governance"]
     assert data["result"] == "failed"
     found = EVIDENCE.search(proc.stdout)
@@ -140,7 +141,7 @@ def test_gitleaks_missing_is_recorded_without_a_version(repo, outside):
 
 def test_no_output_text_environment_value_or_outside_path_is_written(repo, outside):
     """REQ-039: brief #374 answers 1 and 5 (no output text and no environment value in the file)."""
-    toml = TOML.replace("echo RAN_PROJECT_TESTS", f"echo {OUTPUT_MARK}; echo $AGK_TEST_SECRET")
+    toml = TOML.replace("echo RAN_PROJECT_TESTS", f"{OUTPUT_CMD}; echo $AGK_TEST_SECRET")
     project(repo, toml=toml)
     body = outside / "body.md"
     body.write_text("Advances: REQ-001\n", encoding="utf-8")  # fails: the body step's own output
@@ -172,7 +173,7 @@ def test_no_output_text_environment_value_or_outside_path_is_written(repo, outsi
     out = f"{OUTPUT_MARK}\n{SECRET}\n".encode()
     assert tests["runs"][0]["output_sha256"] == hashlib.sha256(out).hexdigest()
     text = record.read_text(encoding="utf-8")
-    assert OUTPUT_MARK not in text and SECRET not in text and "AGK_TEST_SECRET" not in text
+    assert OUTPUT_MARK not in text and SECRET not in text
 
 
 def test_without_record_nothing_changes(repo, outside):

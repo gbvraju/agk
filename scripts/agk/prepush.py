@@ -1,6 +1,6 @@
 """The fast checks before a push (brief #326, ADR-0186).
 
-    python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick]
+    python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--record FILE]
 
 Runs, in order, the checks CI would fail a pull request on first, and stops at the first failure
 with that step's own output:
@@ -15,11 +15,22 @@ with that step's own output:
 
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
 one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing,
-downloads nothing and changes no file.
+downloads nothing and changes no file other than the record.
+
+`--record FILE` (brief #374, ADR-0208) also writes one JSON record of the run, `schema: 1`: the
+head and base shas, `started` (UTC), `tree_clean` (a dirty tree is recorded, never hidden), each
+step that ran with its `name`, `outcome`, `argv`, `cwd`, `exit`, `seconds`, `output_sha256` and
+`output_bytes` (the tests step adds each run it made), and the `versions` of python3, git, make
+and gitleaks where found. It holds no output text, no environment value and no path outside the
+repository (one outside is written `<outside>/<name>`, the interpreter `python3`). A failed step
+still writes it. Then it prints one line for the pull request body:
+`Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>`. A record
+file that cannot be written exits 2.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -27,6 +38,7 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -35,7 +47,8 @@ from common import CheckError, git, merge_base, proof_timeout, resolve_base
 from proof import execute, timeout_note
 
 HERE = Path(__file__).resolve().parent
-USAGE = "usage: prepush.py [--body FILE] [--base REF] [--quick]"
+USAGE = "usage: prepush.py [--body FILE] [--base REF] [--quick] [--record FILE]"
+SCHEMA = 1
 
 
 class Usage(Exception):
@@ -43,20 +56,42 @@ class Usage(Exception):
 
 
 class Step:
-    """The outcome of one step: `ok`, `FAIL` or `skipped`, with its note or output."""
+    """The outcome of one step: `ok`, `FAIL` or `skipped`, with its note or output.
 
-    def __init__(self, outcome: str, text: str = "", not_run: bool = False) -> None:
+    `argv`, `cwd`, `exit` and `output` are what the step ran (the record, brief #374); a skipped
+    step ran nothing. `runs` lists the runs of the tests step."""
+
+    def __init__(
+        self,
+        outcome: str,
+        text: str = "",
+        not_run: bool = False,
+        ran: Ran | None = None,
+        runs: list[dict] | None = None,
+    ) -> None:
         self.outcome = outcome
         self.text = text
         self.not_run = not_run  # skipped although it should have run (a missing tool)
+        self.ran = ran
+        self.runs = runs
+
+
+class Ran:
+    """One command a step ran: its argument list, folder, exit code and whole output."""
+
+    def __init__(self, argv: list[str], cwd: Path, code: int | None, output: str) -> None:
+        self.argv = argv
+        self.cwd = cwd
+        self.code = code
+        self.output = output
 
 
 def parse_args(args: list[str]) -> dict:
-    options: dict = {"body": None, "base": None, "quick": False}
+    options: dict = {"body": None, "base": None, "quick": False, "record": None}
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in ("--body", "--base") and i + 1 < len(args):
+        if arg in ("--body", "--base", "--record") and i + 1 < len(args):
             options[arg[2:]] = args[i + 1]
             i += 2
         elif arg == "--quick":
@@ -81,15 +116,21 @@ def run(cmd: list[str], cwd: Path, env: dict | None = None) -> tuple[int, str]:
     return proc.returncode, (proc.stdout + proc.stderr).rstrip("\n")
 
 
-def outcome(code: int, out: str) -> Step:
-    return Step("ok" if code == 0 else "FAIL", out)
+def outcome(code: int, out: str, ran: Ran | None = None) -> Step:
+    return Step("ok" if code == 0 else "FAIL", out, ran=ran)
+
+
+def ran_step(cmd: list[str], cwd: Path, env: dict | None = None) -> Step:
+    """Run `cmd` and keep what ran for the record."""
+    code, out = run(cmd, cwd, env)
+    return outcome(code, out, Ran(cmd, cwd, code, out))
 
 
 def pr_body(root: Path, body: Path | None) -> Step:
     if body is None:
         return Step("skipped", "no body file given (--body FILE)")
     cmd = [sys.executable, str(HERE / "check_pr_body.py"), "--draft", "false", str(body)]
-    return outcome(*run(cmd, root))
+    return ran_step(cmd, root)
 
 
 def has_lint(root: Path) -> bool:
@@ -104,7 +145,7 @@ def lint(root: Path) -> Step:
         return Step("skipped", "make is not installed")
     if not has_lint(root):
         return Step("skipped", "no lint target in the Makefile (target: lint)")
-    return outcome(*run(["make", "lint"], root))
+    return ran_step(["make", "lint"], root)
 
 
 def governance(root: Path, base: str) -> Step:
@@ -113,7 +154,7 @@ def governance(root: Path, base: str) -> Step:
     if shutil.which("make") is None:
         return Step("skipped", "governance: not run (make is not installed)", not_run=True)
     env = {**os.environ, "AGK_BASE": base}
-    return outcome(*run(["make", "-f", "agk.mk", "agk-governance"], root, env))
+    return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
 
 
 def secret_scan(root: Path, mb: str) -> Step:
@@ -122,7 +163,7 @@ def secret_scan(root: Path, mb: str) -> Step:
         return Step("skipped", "gitleaks is not installed; secret scan: not run", not_run=True)
     head = git(root, "rev-parse", "HEAD").strip()
     cmd = [tool, "git", "--no-banner", "--redact", "--exit-code", "1", f"--log-opts={mb}..{head}"]
-    return outcome(*run([*cmd, "."], root))
+    return ran_step([*cmd, "."], root)
 
 
 def tests(root: Path, mb: str, quick: bool) -> Step:
@@ -131,25 +172,119 @@ def tests(root: Path, mb: str, quick: bool) -> Step:
     plan = HERE / "test_plan.py"
     if not plan.is_file():
         return Step("skipped", "test_plan.py is not installed; no tests run")
-    code, out = run([sys.executable, str(plan), "--json", "--base", mb, "--head", "HEAD"], root)
+    cmd = [sys.executable, str(plan), "--json", "--base", mb, "--head", "HEAD"]
+    code, out = run(cmd, root)
+    ran = Ran(cmd, root, code, out)
     if code != 0:
-        return Step("FAIL", out)
+        return Step("FAIL", out, ran=ran)
     runs = json.loads(out)["runs"]
     if not runs:
-        return Step("ok", "tests: nothing to run (the test plan selects no test file)")
+        return Step("ok", "tests: nothing to run (the test plan selects no test file)", ran=ran)
     try:
         limit = proof_timeout(root)
     except CheckError as exc:
-        return Step("FAIL", str(exc))
+        return Step("FAIL", str(exc), ran=ran)
     lines: list[str] = []
+    made: list[dict] = []
     for item in runs:
-        code, out, _ = execute(item["command"], root / item["cwd"], limit)
+        folder = root / item["cwd"]
+        started = time.monotonic()
+        code, out, _ = execute(item["command"], folder, limit)
+        made.append(
+            {
+                "name": item["name"],
+                "command": item["command"],
+                "cwd": item["cwd"],
+                "exit": code,
+                "seconds": round(time.monotonic() - started, 3),
+                **digest(out),
+            }
+        )
+        ran = Ran(cmd, root, code, out)
         lines.append(f"tests: {item['name']} ({len(item['files'])} test files) in {item['cwd']}")
         if code is None:
-            return Step("FAIL", "\n".join([*lines, timeout_note(limit)]))
+            return Step("FAIL", "\n".join([*lines, timeout_note(limit)]), ran=ran, runs=made)
         if code != 0:
-            return Step("FAIL", "\n".join([*lines, out.rstrip("\n")]))
-    return Step("ok", "\n".join(lines))
+            return Step("FAIL", "\n".join([*lines, out.rstrip("\n")]), ran=ran, runs=made)
+    return Step("ok", "\n".join(lines), ran=Ran(cmd, root, 0, ""), runs=made)
+
+
+def digest(output: str) -> dict:
+    data = output.encode("utf-8", errors="replace")
+    return {"output_sha256": hashlib.sha256(data).hexdigest(), "output_bytes": len(data)}
+
+
+def safe_arg(arg: str, root: Path) -> str:
+    """An argument as the record holds it: no path outside the repository (brief #374 answer 1)."""
+    if arg == sys.executable:
+        return "python3"
+    if not os.path.isabs(arg):
+        return arg
+    path = Path(arg)
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix() or "."
+    except ValueError:
+        pass
+    if path.resolve() == (HERE / path.name).resolve():
+        return f"scripts/agk/{path.name}"
+    return f"<outside>/{path.name}"
+
+
+def safe_cwd(cwd: Path, root: Path) -> str:
+    try:
+        return cwd.resolve().relative_to(root.resolve()).as_posix() or "."
+    except ValueError:
+        return "<outside>"
+
+
+def version(cmd: list[str]) -> str | None:
+    """The first line a tool prints for its version, `unknown` when it prints none, or None when
+    it is not installed."""
+    if shutil.which(cmd[0]) is None:
+        return None
+    try:
+        code, out = run(cmd, Path.cwd())
+    except OSError:
+        return None
+    line = out.splitlines()[0].strip() if out else ""
+    return line if code == 0 and line else "unknown"
+
+
+def versions() -> dict:
+    found = {"python3": ".".join(map(str, sys.version_info[:3]))}
+    for name, cmd in (
+        ("git", ["git", "--version"]),
+        ("make", ["make", "--version"]),
+        ("gitleaks", ["gitleaks", "version"]),
+    ):
+        line = version(cmd)
+        if line is not None:
+            found[name] = line
+    return found
+
+
+def step_record(name: str, result: Step, seconds: float, root: Path) -> dict:
+    ran = result.ran
+    entry: dict = {
+        "name": name,
+        "outcome": result.outcome,
+        "not_run": result.not_run,
+        "argv": [safe_arg(a, root) for a in ran.argv] if ran else [],
+        "cwd": safe_cwd(ran.cwd, root) if ran else ".",
+        "exit": ran.code if ran else None,
+        "seconds": round(seconds, 3),
+        **digest(ran.output if ran else ""),
+    }
+    if result.runs is not None:
+        entry["runs"] = result.runs
+    return entry
+
+
+def write_record(path: Path, record: dict) -> str:
+    """Write the record; return the sha256 of the file. OSError when it cannot be written."""
+    data = (json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    path.write_bytes(data)
+    return hashlib.sha256(data).hexdigest()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -175,6 +310,21 @@ def main(argv: list[str] | None = None) -> int:
     except CheckError:
         print("prepush: the base does not resolve (setting: --base, AGK_BASE, default_branch)")
         return 2
+    record_path = Path(options["record"]) if options["record"] else None
+    record: dict | None = None
+    if record_path is not None:
+        if not record_path.parent.is_dir():
+            print("prepush: the record file cannot be written (option: --record)")
+            return 2
+        record = {
+            "schema": SCHEMA,
+            "head": git(root, "rev-parse", "HEAD").strip(),
+            "base": git(root, "rev-parse", f"{base}^{{commit}}").strip(),
+            "started": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "tree_clean": git(root, "status", "--porcelain").strip() == "",
+            "versions": versions(),
+            "steps": [],
+        }
     steps: list[tuple[str, Callable[[], Step]]] = [
         ("pr-body", lambda: pr_body(root, body)),
         ("lint", lambda: lint(root)),
@@ -187,6 +337,8 @@ def main(argv: list[str] | None = None) -> int:
         started = time.monotonic()
         result = step()
         seconds = time.monotonic() - started
+        if record is not None:
+            record["steps"].append(step_record(name, result, seconds, root))
         line = f"prepush: {name} {result.outcome} ({seconds:.1f}s)"
         if result.outcome == "skipped":
             print(f"{line}: {result.text}")
@@ -198,14 +350,33 @@ def main(argv: list[str] | None = None) -> int:
             if result.text:
                 print(result.text)
             print(f"prepush: stopped at {name}; nothing after it ran")
-            return 1
+            return finish(record, record_path, not_run, "failed", 1)
         if result.outcome == "ok" and name == "tests" and result.text:
             print(result.text)
     if not_run:
         print(f"prepush: passed; not run: {', '.join(not_run)}")
     else:
         print("prepush: all steps passed")
-    return 0
+    return finish(record, record_path, not_run, "passed", 0)
+
+
+def finish(
+    record: dict | None, path: Path | None, not_run: list[str], result: str, code: int
+) -> int:
+    """Write the record when one was asked for and print the `Evidence:` line; keep the exit."""
+    if record is None or path is None:
+        return code
+    record["not_run"] = list(not_run)
+    record["result"] = result
+    try:
+        sha = write_record(path, record)
+    except OSError:
+        print("prepush: the record file cannot be written (option: --record)")
+        return 2
+    ok = sum(1 for step in record["steps"] if step["outcome"] == "ok")
+    head = record["head"][:12]
+    print(f"Evidence: prepush schema {SCHEMA}, head {head}, {ok} steps ok, record {sha[:12]}")
+    return code
 
 
 if __name__ == "__main__":
