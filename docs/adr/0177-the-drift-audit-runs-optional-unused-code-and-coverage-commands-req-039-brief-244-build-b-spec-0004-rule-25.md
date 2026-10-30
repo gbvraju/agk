@@ -1,6 +1,6 @@
 # ADR-0177: the drift audit runs optional unused-code and coverage commands (REQ-039, brief 244 build (b), SPEC-0004 rule 25)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0151, ADR-0172
