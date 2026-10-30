@@ -649,6 +649,7 @@ class Survey:
     files: dict = field(default_factory=dict)  # pull request number -> its changed files
     briefs: dict = field(default_factory=dict)  # brief number -> its issue
     gone: dict = field(default_factory=dict)  # session -> hours since its last post (plan only)
+    posts: dict = field(default_factory=dict)  # pull request number -> its comments (plan only)
 
 
 def is_stale(brief: dict) -> bool:

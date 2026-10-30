@@ -12,10 +12,11 @@ The plan, in the order it is decided:
 2. **Waves.** A brief whose `Touches:` overlap running work (a taken brief, an open builder pull
    request's files) waits for it. Of two ready briefs that overlap, the one earlier by priority
    and then number starts; the other waits for it. Shared mechanical files never overlap.
-   Overlap is judged by files (brief #330): entries that name files overlap on a file they both
-   name, a folder entry (`dir/`, `dir/**`) overlaps only another folder entry above or below it,
-   and a pull request's changed file overlaps a brief only when the brief names that file. Each
-   wait names the file (or, for two folders, the narrower folder).
+   Overlap is judged by files (brief #330, ADR-0189): entries that name files overlap on a file
+   they both name; a folder entry (`dir/`, `dir/**`, or a folder of the repository without its
+   slash) covers every file under it unless its brief names files under it, and then counts only
+   for those; two folder entries overlap as before. Each wait names the file (or, for two
+   folders, the narrower folder).
    A claim whose session has posted nothing for `claim_stale_hours` (24 by default) and has no
    open pull request is stale: it holds nothing and is listed as `stale claim by <session>, <age>`.
 3. **Capacity.** The sessions to start are the smallest of the ready, non-overlapping briefs,
@@ -56,6 +57,7 @@ from session import (
     literal,
     live_takes,
     moment,
+    pages,
     plain,
     priority_of,
     pull_files,
@@ -261,17 +263,63 @@ def fits(pr: dict, number: int, take: tuple) -> bool:
     return re.search(pattern, title, re.I) is not None
 
 
+POST_LINE = re.compile(r"(?:Progress|Report|Request):")
+CONDUCTOR_LABEL = "agk-conductor"
+
+
+def names(text: str, name: str) -> bool:
+    """The session name as a whole word: `builder-f` is not `builder-ff`."""
+    return re.search(rf"(?<![A-Za-z0-9._-]){re.escape(name)}(?![A-Za-z0-9._-])", text) is not None
+
+
+def own_posts(comments: list | None, name: str, named_only: bool) -> list[datetime]:
+    """When the session posted a `Progress:`, `Report:` or `Request:` comment among these: one
+    that names it, or on its own pull request any such comment (`named_only` false)."""
+    out = []
+    for c in comments or []:
+        text = plain(c["body"]) if isinstance(c.get("body"), str) else ""
+        first = text.splitlines()[0] if text else ""
+        if POST_LINE.match(first) and (not named_only or names(text, name)):
+            out.append(moment(c.get("created_at")))
+    return out
+
+
+def conductor_comments(repo: str) -> list | None:
+    """The comments of the open issues labelled `agk-conductor` ([] with none, None unread)."""
+    found = pages(f"repos/{repo}/issues?state=open&labels={CONDUCTOR_LABEL}")
+    if found is None:
+        return None
+    out: list = []
+    for i in found:
+        labels = {str(x.get("name")) for x in i.get("labels") or [] if isinstance(x, dict)}
+        if CONDUCTOR_LABEL not in labels or "pull_request" in i:
+            continue
+        comments = pages(f"repos/{repo}/issues/{i['number']}/comments")
+        if comments is None:
+            return None
+        out += comments
+    return out
+
+
 def gone_sessions(s: Survey, hours: int, now: datetime) -> dict[str, int]:
     """The sessions whose claims are stale, with the whole hours since their last post.
 
     A claim is stale when its session has posted nothing for `claim_stale_hours` and has no open
     pull request (brief #330 answer 2). Its posts are its `taken:` and `released:` comments on the
-    open briefs, and the pull requests that may be its work (`fits`), opened or merged."""
+    open briefs, the pull requests that may be its work (`fits`), opened or merged, and its
+    `Progress:`, `Report:` and `Request:` comments (the verdict on 1f1969e, item 3): those that
+    name it on the briefs and on the `agk-conductor` issue, and every such comment on a pull
+    request that may be its work. Those are read only for a session that would otherwise be
+    stale; a read that fails keeps the session fresh."""
     last: dict[str, datetime] = {}
     open_work: set[str] = set()
+    mine: dict[str, set[int]] = {}
 
     def seen(name: str, when: datetime) -> None:
         last[name] = max(when, last.get(name, when))
+
+    def old(name: str) -> bool:
+        return name not in open_work and now - last[name] >= timedelta(hours=hours)
 
     for number, comments in s.comments.items():
         for t in all_takes(comments):
@@ -279,6 +327,7 @@ def gone_sessions(s: Survey, hours: int, now: datetime) -> dict[str, int]:
             for pr in s.prs:
                 if not fits(pr, number, t):
                     continue
+                mine.setdefault(t[2], set()).add(pr["number"])
                 if pr.get("state") == "open":
                     open_work.add(t[2])
                 for key in ("created_at", "merged_at"):
@@ -288,11 +337,31 @@ def gone_sessions(s: Survey, hours: int, now: datetime) -> dict[str, int]:
             text = plain(c["body"]) if isinstance(c.get("body"), str) else ""
             if found := RELEASED.fullmatch(text):
                 seen(found.group(1), moment(c.get("created_at")))
+    for name in [n for n in last if old(n)]:
+        for comments in s.comments.values():
+            for when in own_posts(comments, name, True):
+                seen(name, when)
+    unread: set[str] = set()
+    if any(old(n) for n in last):
+        board = conductor_comments(s.repo)
+        for name in [n for n in last if old(n)]:
+            if board is None:
+                unread.add(name)
+                continue
+            for when in own_posts(board, name, True):
+                seen(name, when)
+            for number in sorted(mine.get(name, ())):
+                if number not in s.posts:
+                    s.posts[number] = pages(f"repos/{s.repo}/issues/{number}/comments")
+                if s.posts[number] is None:
+                    unread.add(name)
+                    break
+                for when in own_posts(s.posts[number], name, False):
+                    seen(name, when)
     out: dict[str, int] = {}
     for name, when in last.items():
-        age = now - when
-        if name not in open_work and age >= timedelta(hours=hours):
-            out[name] = int(age.total_seconds() // 3600)
+        if old(name) and name not in unread:
+            out[name] = int((now - when).total_seconds() // 3600)
     return out
 
 

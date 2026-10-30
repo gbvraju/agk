@@ -189,6 +189,7 @@ def test_a_stale_claim_no_longer_blocks_its_brief_and_is_listed(proj, stub):
         ],
     )
     changed(stub, 21, ("modified", "z/b.py"))
+    stub.serve(f"{ISSUES}/20/comments", [])  # builder-f's merged pull request: no report since
     got = data(proj, stub)
     assert [(s["brief"], s.get("build")) for s in got["start"]] == [(5, "a")]
     (claim,) = got["stale_claims"]
@@ -340,4 +341,11 @@ def test_a_report_on_a_pull_request_of_the_session_keeps_it_fresh(proj, stub):
     changed(stub, 21, ("modified", "z/b.py"))
     report = comment(7, "x", "Report: abc1234 the follow-up is filed", iso(-timedelta(hours=2)))
     stub.serve(f"{ISSUES}/20/comments", [report])
+    assert data(proj, stub)["stale_claims"] == []
+
+
+def test_comments_that_cannot_be_read_keep_the_session_fresh(proj, stub):
+    gone_case(stub)
+    stub.serve(f"{ISSUES}/5/comments", takes())
+    stub.serve(ISSUES, "FAIL", nth=2)  # the conductor issue cannot be listed
     assert data(proj, stub)["stale_claims"] == []
