@@ -40,18 +40,26 @@ draft push. The tests were written first (`tests/kit/test_doctor_ci.py`, 24 fail
    `ready_for_review`.
 4. **The doctor (answer 3).** Two warnings after `router-wake`: `ci-drafts` when a workflow under `.github/workflows/` (the
    router's own excluded) holds a job whose check name is in `required_checks`, runs on `pull_request`, and names
-   `github.event.pull_request.draft` nowhere outside a comment; `ci-concurrency` when such a workflow has no `concurrency:` key,
+   `github.event.pull_request.draft` nowhere outside a comment, and also, as its own case, when it names the flag but has no
+   `ready_for_review` outside a comment (the unsafe one: its check reports green on the draft, and when the draft is marked
+   ready with no new commit nothing runs again, so the pull request could merge unchecked); the message counts the two cases
+   apart (`n runs on drafts`, `n skips drafts but has no ready_for_review`) and the fix says why `ready_for_review` matters.
+   `ci-concurrency` warns when such a workflow has no `concurrency:` key,
    at the top or on a job. Each is a warning (exit 4 at most), its message names the setting and the path class and a count,
    never a workflow or a check, and its fix points to the guide. A workflow that cannot be read makes both `cannot-check`. The
    job names are read by the router's own reading (`common.jobs_of`). The doctor fixture `router-unwoken` gained a draft rule and
    a group, so that it still reports only its own finding, and the counts of the report tests moved by two.
 5. **Generic (answer 4).** No project or product is named in the kit and the tests use invented workflows; the one exception is
-   the build action's environment setting in default 5, which carries its maker's prefix and is marked `(verify)` (Q-283-3).
-6. **Reading Q-283-1 (taken, the conservative one).** The field notes on the brief ask for more than its answers: a setting that
+   default 5 describes the build action's options that upload a build record and write a build summary without naming them,
+   since their names carry a maker's prefix; it keeps the `(verify)` mark (Q-283-3, answered by the conductor's verdict on
+   8579af0, 2026-10-30).
+6. **Reading Q-283-1 (taken, the conservative one; confirmed by the conductor's verdict on 8579af0, 2026-10-30: each is its own
+   brief, filed by the conductor where it holds up; the line-ending rule is part of #263).** The field notes on the brief ask for more than its answers: a setting that
    says whether governance runs the project tests, minutes left and a budget per push, a degraded mode without Actions, image
    size warnings, scanning images from the daemon, a `.gitattributes` line ending rule, and a two-tier local gate. None is built
    here; each waits for its own brief.
-7. **Reading Q-283-2 (taken, the conservative one).** The doctor's draft rule is textual: naming the draft flag outside a comment
+7. **Reading Q-283-2 (taken, the conservative one; accepted by the conductor's verdict on 8579af0, 2026-10-30: a text rule
+   is enough for a warning, recorded as a known limit in the Residual).** The doctor's draft rule is textual: naming the draft flag outside a comment
    counts as handling drafts. A workflow that reads the flag without skipping anything passes; a stricter reading of conditions
    would need a YAML expression reader the kit does not have.
 8. **Flow mode.** Fragment `changelog.d/fast-ci-defaults.md`; no version bump. `kit/hashes.json` is not edited, although the
@@ -70,5 +78,6 @@ draft push. The tests were written first (`tests/kit/test_doctor_ci.py`, 24 fail
 - 2026-10-30: a parent head that was pushed while the pull request was a draft and never marked ready has only a draft run, which
   passed without its suites; the final commit comes after a verdict on a ready pull request, so this is not reached today, but no
   check enforces it (due 2026-12-15).
-- 2026-10-30: the doctor's draft and group rules read the text, not the YAML; an unusual layout can pass or warn wrongly. Both are
-  warnings only (due 2026-12-15).
+- 2026-10-30: known limit (Q-283-2): the doctor's draft, `ready_for_review` and group rules read the text, not the YAML; a
+  workflow that names the flag without skipping anything, or an unusual layout, can pass or warn wrongly. All are warnings
+  only (due 2026-12-15).

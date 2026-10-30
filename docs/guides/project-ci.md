@@ -15,6 +15,8 @@ the workflow; look at the workflows that hold your required checks.
 A builder pushes a checkpoint to a draft pull request at every step; nothing on a draft can merge, so a heavy job there buys
 nothing. Run it on a ready pull request and on pushes to the default branch, and add `ready_for_review` so it runs once the draft
 is marked ready. A skipped job reports `skipped`, which GitHub counts as passing for a required check, and so does the router.
+That is why `ready_for_review` is not optional: without it, a draft marked ready with no new commit keeps the green check of
+its skipped run, and the pull request can merge with the heavy job never run.
 
 ```yaml
 on:
@@ -104,14 +106,8 @@ request's own tests per test area (see the reference guide); use that rather tha
 ## 5. No build-record uploads, and a short artifact retention
 
 A container build action may upload a build record for every run; on a private repository those records fill the Actions storage
-quota. Turn the upload off with the build action's own setting. For the common one that is the environment below `(verify)`:
-
-```yaml
-      - uses: <the container build action>@<pinned sha>
-        env:
-          DOCKER_BUILD_RECORD_UPLOAD: false
-          DOCKER_BUILD_SUMMARY: false
-```
+quota. Turn off the build action's options that upload a build record and write a build summary; turn both off, using the
+names its own documentation gives them `(verify)`.
 
 Upload an artifact only when a person or a later job reads it, and keep it a few days:
 

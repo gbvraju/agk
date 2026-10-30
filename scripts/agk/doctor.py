@@ -204,10 +204,12 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "warn",
         "no workflow that holds a check of required_checks runs on draft pull requests",
         "a workflow under .github/workflows/ that holds a check of required_checks runs on draft "
-        "pull requests",
+        "pull requests, or skips drafts but has no ready_for_review",
         "skip its heavy jobs or steps while `github.event.pull_request.draft` is true and add "
-        "`ready_for_review` to its pull_request types, so the check runs once the draft is ready "
-        "(docs/guides/project-ci.md of the kit; a change to .github/ needs an ADR)",
+        "`ready_for_review` to its pull_request types, so the check runs once the draft is ready; "
+        "a workflow that skips drafts without it leaves the draft's green check in place when the "
+        "draft is marked ready with no new commit (docs/guides/project-ci.md of the kit; a change "
+        "to .github/ needs an ADR)",
     ),
     "ci-concurrency": (
         "warn",
@@ -648,19 +650,21 @@ def router_result(root: Path, config: dict) -> Result:
 
 PR_TRIGGER = re.compile(r"^\s*pull_request\s*:|^on:.*\bpull_request\b(?!_)")
 DRAFT_FLAG = "github.event.pull_request.draft"
+READY = "ready_for_review"
 GROUP = re.compile(r"^\s*concurrency\s*:")
 
 
 def ci_results(root: Path, config: dict) -> dict[str, Result]:
     """`ci-drafts` and `ci-concurrency` (brief #283 answer 3): each workflow that holds a check of
-    required_checks names the draft flag outside a comment when it runs on pull requests, and has a
-    `concurrency:` group, at the top or on a job. Warnings only; no workflow is named."""
+    required_checks names the draft flag outside a comment when it runs on pull requests, and then
+    also `ready_for_review` (else the draft's green check stays when it is marked ready), and has a
+    `concurrency:` group, at the top or on a job. Warnings only; text rules; no workflow named."""
     required = config.get("required_checks", DEFAULT_REQUIRED)
     if not isinstance(required, list) or not all(isinstance(x, str) for x in required):
         return {c: Result("cannot-check", "bad-response") for c in ("ci-drafts", "ci-concurrency")}
     wanted = {x.strip() for x in required}
     folder = root / ".github" / "workflows"
-    drafts = groups = 0
+    drafts = unready = groups = 0
     if folder.is_dir():
         for path in sorted([*folder.glob("*.yml"), *folder.glob("*.yaml")]):
             if f".github/workflows/{path.name}" == ROUTER_WORKFLOW or not path.is_file():
@@ -673,17 +677,19 @@ def ci_results(root: Path, config: dict) -> dict[str, Result]:
             if not jobs_of(lines) & wanted:
                 continue
             code = [ln for ln in lines if not ln.lstrip().startswith("#")]
-            if any(PR_TRIGGER.search(ln) for ln in code) and not any(
-                DRAFT_FLAG in ln for ln in code
-            ):
-                drafts += 1
+            if any(PR_TRIGGER.search(ln) for ln in code):
+                if not any(DRAFT_FLAG in ln for ln in code):
+                    drafts += 1
+                elif not any(READY in ln for ln in code):
+                    unready += 1
             if not any(GROUP.match(ln) for ln in code):
                 groups += 1
-
-    def result(count: int) -> Result:
-        return Result("fail", message=f" ({count})") if count else Result("ok")
-
-    return {"ci-drafts": result(drafts), "ci-concurrency": result(groups)}
+    parts = [f"{drafts} runs on drafts"] if drafts else []
+    if unready:
+        parts.append(f"{unready} skips drafts but has no ready_for_review")
+    draft_result = Result("fail", message=f" ({'; '.join(parts)})") if parts else Result("ok")
+    group_result = Result("fail", message=f" ({groups})") if groups else Result("ok")
+    return {"ci-drafts": draft_result, "ci-concurrency": group_result}
 
 
 def placeholder_result(path: Path) -> Result:

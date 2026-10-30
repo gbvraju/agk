@@ -286,7 +286,7 @@ def test_a_workflow_that_skips_drafts_without_ready_for_review_is_warned_as_its_
     _, report = ci_case(tmp_path / "a", {"slow.yml": text})
     entry = report["ci-drafts"]
     assert entry["status"] == "fail"
-    assert "skips drafts but has no ready_for_review" in entry["message"]
+    assert entry["message"].endswith("(1 skips drafts but has no ready_for_review)")
     assert "slow" not in entry["message"]
     assert "ready_for_review" in entry["fix"]
     bare = text.replace(
@@ -299,8 +299,8 @@ def test_a_workflow_that_skips_drafts_without_ready_for_review_is_warned_as_its_
 def test_a_workflow_that_runs_on_drafts_is_named_as_that_case(tmp_path):
     """REQ-039: brief #283 answer 3 (the two draft cases are told apart in the message)."""
     _, report = ci_case(tmp_path, {"slow.yml": slow(CONCURRENCY)})
-    message = report["ci-drafts"]["message"]
-    assert "runs on drafts" in message and "skips drafts but has no" not in message
+    counts = report["ci-drafts"]["message"].rsplit("(", 1)[1]
+    assert counts == "1 runs on drafts)"
 
 
 def test_the_guide_names_no_build_action_setting_and_says_why_ready_for_review_matters():
