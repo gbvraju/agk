@@ -31,13 +31,17 @@ ready brief waited for a person to notice. The tests were written first.
 4. **On (answer 2).** When `auto_start = true` and `launch_adapter` are both set, and the plan names sessions to start, the pass
    runs `python3 scripts/agk/launch.py prompts --plan <that file> --adapter <launch_adapter>`. The guard allows exactly that: the
    project's own `launch.py` (the regular file of the project directory, never a link or another copy), the plan a regular file
-   of a scratch directory, and the adapter word equal to the configured `launch_adapter`. Any other adapter, an extra word, an
+   of a scratch directory, and the adapter word equal to the configured `launch_adapter`, where both settings say so, with the
+   same adapter, in the conductor's checkout and in `agk.toml` at `origin/<default_branch>` as last fetched (read with git, no
+   network call), so turning `auto_start` off on the default branch stops a conductor whose checkout is older. Any other adapter, an extra word, an
    option in another order, `--plan -`, a pipe or a redirection, and the shadow mode stay denied, and an `agk.toml` that cannot be
    read or holds a setting of the wrong kind allows no adapter. `launch.py` splits the adapter into words and runs it without a
    shell, once per session.
 5. **The bounds (answer 4).** `launch.py` refuses, before it prints or starts anything, a plan whose `start` list is longer
-   than its `capacity.slots`, a `capacity.slots` that is not a whole number of 0 or more, and a plan that names one brief (with
-   its build) or one session twice. The plan never names a taken brief, and each started session takes its brief with its own
+   than its `capacity.slots`, a `capacity.slots` that is not a whole number of 0 or more, with `--adapter` a plan that has no
+   `capacity` at all, and a plan that names one brief (with its build) or one session twice. It starts or prints no more than
+   `[flow] max_builders` (3 by default) of the folder it runs in, and prints `not started: <session> #<brief> (max_builders is
+   <n>)` for each one past it. The plan never names a taken brief, and each started session takes its brief with its own
    `session.py claim`, whose `taken:` comment is the record of the start; the conductor posts no `taken:` and its guard refuses
    `claim` and `next`.
 6. **A refused adapter (answer 5).** `launch.py` stops at the first adapter that fails or cannot be run, prints
@@ -51,6 +55,9 @@ ready brief waited for a person to notice. The tests were written first.
    settings (Q-331-1); the plan reaches `launch.py` as a scratch file the conductor writes, not `--plan -`, because the guard
    refuses a pipe (Q-331-2); the guard also allows the read-only `plan --json` and the printing-only `prompts --plan <file>`,
    which answers 1 and 2 need (Q-331-3). Flow mode: fragment `changelog.d/review-pass-replan.md`; no version bump.
+9. **The spec (Q-331-4).** SPEC-0034 rule 6, as amendment 89 worded it, gains the exception of this ADR by
+   `docs/runs/proposed-spec-amendments-103.md`: with `auto_start = true` on the default branch and in the checkout, the conductor
+   may start the sessions the plan names, within `capacity.slots` and `max_builders`, through the one configured adapter.
 
 ## Consequences
 
@@ -61,11 +68,16 @@ ready brief waited for a person to notice. The tests were written first.
 
 ## Residual
 
-- 2026-10-30: SPEC-0034 rule 6, as amended by proposal 89 (ADR-0154), lets a session start others only when a person runs
-  `/agk:launch` and confirms its plan; with `auto_start` on, the protected setting stands in for that yes. The brief is read as
-  the maintainers' authorisation; whether the spec needs a proposal of its own is Q-331-4 (due 2026-12-31).
+- 2026-10-30: the adapter runs with no time limit, so an adapter that blocks holds the pass (an optional item of the verdict on
+  2d53a5d, not built here; due 2026-12-31).
 - 2026-10-30: the conductor writes the plan file itself, so `launch.py` cannot prove the file is the plan `session.py` printed;
   the bounds of decision 5, the guard's fixed adapter and each session's own `claim` (which refuses a taken brief) hold, and a
   digest of the plan is a later brief (due 2026-12-31).
 
 ## Log
+
+- 2026-10-30: the conductor's verdict on 2d53a5d (#364) answered Q-331-3 (yes: exactly the two read or print forms and the one
+  adapter command, nothing else) and Q-331-4 (yes: the spec needs a proposal; amendment 103, decision 9, which needs a person's
+  `Approve: SPEC-0034`), and asked for a plan without `capacity` to start nothing with an adapter and for the `max_builders` cap
+  (decision 5), for the settings to be read on the default branch too (decision 4), and for the role and the skill to end an
+  empty pass the same way (`queue empty`, then the re-plan's lines).
