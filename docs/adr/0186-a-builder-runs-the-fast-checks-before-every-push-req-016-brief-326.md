@@ -1,6 +1,6 @@
 # ADR-0186: a builder runs the fast checks before every push (REQ-016, brief 326)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0185, ADR-0182, ADR-0158
