@@ -1,6 +1,6 @@
 # ADR-0179: solo mode, one yes per pull request for a project with one person (REQ-039, brief 277)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0173, ADR-0175, ADR-0178, SPEC-0021, SPEC-0025, SPEC-0032
