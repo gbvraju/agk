@@ -463,6 +463,7 @@ DEFAULT_CONFIG = {
     "required_checks": ["proof", "governance"],
     "agent_apps": ["claude"],
     "review_mode": "team",
+    "minutes_warn": 80,
 }
 
 
@@ -662,6 +663,17 @@ def agent_apps(root: Path) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(x, str) and x.strip() for x in value):
         raise CheckError("agent_apps must be a list of app slugs (setting: agent_apps in agk.toml)")
     return [x.strip().lower() for x in value]
+
+
+def minutes_warn(root: Path) -> int:
+    """The percent of a plan's included Actions minutes past which `minutes.py` warns (brief 324,
+    ADR-0184): a whole number from 1 to 100, 80 by default; refusals name the setting."""
+    value = load_config(root)["minutes_warn"]
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 100:
+        raise CheckError(
+            "minutes_warn must be a whole number from 1 to 100 (setting: minutes_warn in agk.toml)"
+        )
+    return value
 
 
 def json_records(path: Path, label: str) -> list[dict]:

@@ -130,3 +130,34 @@ readers of later weeks use it.
 | `ci-concurrency` | a workflow that holds a check of `required_checks` has no `concurrency:` group, at the top or on a job | default 2 |
 
 The router's own workflow is not judged: it labels every pull request, drafts included, and runs no test.
+
+## How many minutes are left
+
+A plan's included Actions minutes are counted per account, each job rounded up to a whole minute, so many short jobs cost more
+than their seconds suggest. One command shows where the month stands; it only reads (`gh api` with GET, `gh` holds the
+credential) and writes nothing:
+
+```sh
+python3 scripts/agk/minutes.py          # or --json for the same figures as JSON
+```
+
+It prints:
+
+- **minutes used this month**: the billing figure of the whole account where the token can read billing, otherwise the
+  estimate below;
+- **included minutes**: the plan's, or `unknown (the token cannot read billing: refused|missing|unreadable)`; reading billing
+  needs a token with the account's billing read permission `(verify)`, and some billing setups no longer answer the endpoint
+  it reads `(verify)`;
+- **estimate from run history**: this repository's jobs that started this month (UTC) on GitHub-hosted runners, each rounded up
+  to a whole minute, per workflow. It says `at least` when the run list was capped or a run's jobs could not be read; jobs on a
+  self-hosted runner and jobs still running are listed, not counted. In a private repository a job's minutes are multiplied
+  by its runner's rate, read from its labels, as the included minutes are used: a Windows job counts 2x and a macOS job 10x
+  `(verify)`. A known limit: re-runs of runs created before this month are not counted, since a re-run keeps its run's
+  creation time;
+- **minutes per merged pull request**: the estimate divided by the pull requests merged this month, the figure to compare with
+  the defaults above;
+- a **warning** line once the higher of the two figures passes `minutes_warn` percent of the included minutes (`minutes_warn`
+  in `agk.toml`, 80 when unset); it then exits 3. With the included minutes unknown it never warns.
+
+When the minutes run out, the checks cannot run on GitHub until the month turns or the plan changes: see local mode
+(brief #322) for how to keep working.
