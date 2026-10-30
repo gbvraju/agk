@@ -179,7 +179,7 @@ def test_ac2_the_billing_rule_is_the_minutes_function(monkeypatch):
 
     monkeypatch.setattr(minutes_mod, "job_minutes", lambda j: 7)
     fields = metrics_mod.ci_fields(Src(), [SHA])
-    assert fields["minutes"] == "14 (proof 7)"
+    assert fields["minutes"] == "14 (proof 14)"
     assert fields["pool_minutes"] == "0"
 
 
