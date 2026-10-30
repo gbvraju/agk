@@ -17,13 +17,11 @@ import sys
 import pytest
 from conftest import KIT_ROOT, clean_env, git, make_repo
 from test_intake import draft
-from test_intake import repo as intake_repo  # noqa: F401 - a fixture, used by name
+from test_intake import repo as intake_repo  # noqa: F401  (the fixture of test_intake)
 from test_intake import run as intake_run
-from test_playbook import (
-    good_start,
-    started,  # noqa: F401 - a fixture, used by name
-)
+from test_playbook import good_start
 from test_playbook import run as playbook_run
+from test_playbook import started as start_repo  # noqa: F401  (the fixture of test_playbook)
 
 sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
 
@@ -51,6 +49,16 @@ def red() -> dict:
 
 def brief() -> dict:
     return {"number": 12, "title": "Brief: t", "labels": [{"name": "agk-brief"}], "body": "x\n"}
+
+
+@pytest.fixture
+def started_repo(request):
+    return request.getfixturevalue("start_repo")
+
+
+@pytest.fixture
+def intake(request):
+    return request.getfixturevalue("intake_repo")
 
 
 def skill(name: str) -> str:
@@ -126,19 +134,21 @@ def test_answer5_a_branch_made_as_the_skills_say_pushes_with_the_printed_command
     assert after[0] == before.strip() and len(after) == 2
 
 
-def test_answer5_start_next_steps_print_push_head(started):  # noqa: F811
+def test_answer5_start_next_steps_print_push_head(started_repo):
     """REQ-039: brief #263 answer 5."""
-    good_start(started)
-    proc = playbook_run("next-steps", "--base", "main", "--brief", "none", "--root", str(started))
+    good_start(started_repo)
+    proc = playbook_run(
+        "next-steps", "--base", "main", "--brief", "none", "--root", str(started_repo)
+    )
     assert proc.returncode == 0, proc.stdout
     assert "git push -u origin HEAD\n" in proc.stdout
     assert "HEAD:main" not in proc.stdout and "origin start/" not in proc.stdout
 
 
-def test_answer5_intake_next_steps_print_push_head(intake_repo):  # noqa: F811
+def test_answer5_intake_next_steps_print_push_head(intake):
     """REQ-039: brief #263 answer 5."""
-    draft(intake_repo)
-    proc = intake_run(intake_repo, "next-steps", "--base", "main", "--brief", "none")
+    draft(intake)
+    proc = intake_run(intake, "next-steps", "--base", "main", "--brief", "none")
     assert proc.returncode == 0, proc.stdout
     assert "git push -u origin HEAD\n" in proc.stdout
     assert "HEAD:main" not in proc.stdout and "origin intake/" not in proc.stdout
@@ -180,12 +190,12 @@ def next_steps(root, env):
 
 @pytest.mark.skipif(os.name == "nt", reason="the fake gh is a shell script")
 def test_answer6_the_charter_and_the_vision_are_shown_before_the_commit_steps(
-    started,
-    tmp_path,  # noqa: F811
+    started_repo,
+    tmp_path,
 ):
     """REQ-039: brief #263 answer 6."""
-    good_start(started)
-    out = next_steps(started, fake_gh(tmp_path, 1)).stdout
+    good_start(started_repo)
+    out = next_steps(started_repo, fake_gh(tmp_path, 1)).stdout
     commit = out.index("Commit message:")
     charter = out.index("docs/adr/0002-project-charter.md")
     assert charter < commit
@@ -196,12 +206,12 @@ def test_answer6_the_charter_and_the_vision_are_shown_before_the_commit_steps(
 
 @pytest.mark.skipif(os.name == "nt", reason="the fake gh is a shell script")
 def test_answer6_with_gh_logged_in_the_pull_request_is_offered_with_the_body_file(
-    started,
-    tmp_path,  # noqa: F811
+    started_repo,
+    tmp_path,
 ):
     """REQ-039: brief #263 answer 6."""
-    good_start(started)
-    proc = next_steps(started, fake_gh(tmp_path, 0))
+    good_start(started_repo)
+    proc = next_steps(started_repo, fake_gh(tmp_path, 0))
     assert proc.returncode == 0, proc.stdout
     path = re.search(r"(?m)^Pull request body file: (.+)$", proc.stdout).group(1)
     offer = [ln for ln in proc.stdout.splitlines() if ln.startswith("gh pr create")]
@@ -212,17 +222,17 @@ def test_answer6_with_gh_logged_in_the_pull_request_is_offered_with_the_body_fil
 
 
 @pytest.mark.skipif(os.name == "nt", reason="the fake gh is a shell script")
-def test_answer6_without_gh_logged_in_no_gh_command_is_offered(started, tmp_path):  # noqa: F811
+def test_answer6_without_gh_logged_in_no_gh_command_is_offered(started_repo, tmp_path):
     """REQ-039: brief #263 answer 6 (`gh` not logged in, or not installed)."""
-    good_start(started)
-    proc = next_steps(started, fake_gh(tmp_path, 1))
+    good_start(started_repo)
+    proc = next_steps(started_repo, fake_gh(tmp_path, 1))
     assert proc.returncode == 0 and "gh pr create" not in proc.stdout
     bare = tmp_path / "bare"
     bare.mkdir()
     (bare / "git").symlink_to(shutil.which("git"))
     env = clean_env()
     env["PATH"] = str(bare)
-    proc = next_steps(started, env)
+    proc = next_steps(started_repo, env)
     assert proc.returncode == 0 and "gh pr create" not in proc.stdout
 
 

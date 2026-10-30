@@ -660,7 +660,7 @@ def test_ac1_next_steps_print_the_commit_the_push_and_a_body_that_passes_check_p
     proc = run(repo, "next-steps", "--base", "main", "--brief", "none")
     assert proc.returncode == 0, proc.stdout
     assert "intake: add REQ-004 Export" in proc.stdout
-    assert "git push -u origin intake/req-004-export" in proc.stdout
+    assert "git push -u origin HEAD" in proc.stdout
     body = proc.stdout.split("Pull request body:\n\n", 1)[1]
     assert re.search(r"(?m)^Advances: REQ-004$", body)
     assert re.search(r"(?m)^Build-state row: 2026-10-18 ", body)
@@ -697,7 +697,7 @@ def test_ac1_next_steps_refuse_on_a_detached_head_or_the_default_branch(repo):
         git(repo, "merge", "-q", "--ff-only", "intake/req-004-export")
     git(repo, "switch", "-q", "intake/req-004-export")
     proc = run(repo, "next-steps", "--base", "main~1", "--brief", "none")
-    assert proc.returncode == 0 and "git push -u origin intake/req-004-export" in proc.stdout
+    assert proc.returncode == 0 and "git push -u origin HEAD" in proc.stdout
 
 
 def test_ac2_after_the_merge_the_requirement_is_planned_and_the_spec_and_adr_wait(repo, tmp_path):
