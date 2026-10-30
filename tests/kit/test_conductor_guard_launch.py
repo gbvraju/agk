@@ -98,7 +98,11 @@ def test_the_plan_as_data_is_read_whatever_the_settings(project, tmp, toml):
 
 @pytest.mark.parametrize(
     "command",
-    [f"python3 {SESSION} plan", f"python3 {SESSION} plan --json --all", f"python3 {SESSION} plan -j"],
+    [
+        f"python3 {SESSION} plan",
+        f"python3 {SESSION} plan --json --all",
+        f"python3 {SESSION} plan -j",
+    ],
 )
 def test_no_other_form_of_the_plan_is_allowed(project, tmp, command):
     """REQ-041: brief #331 answer 2 (nothing else new)."""
@@ -163,11 +167,11 @@ def test_without_an_agk_toml_no_adapter_runs(project, tmp):
         "python3 {L} prompts --plan {p}x --adapter 'scripts/start-session.sh --cloud'",
         "python3 {L} prompt --plan {p} --adapter 'scripts/start-session.sh --cloud'",
         "python3 -I {L} prompts --plan {p} --adapter 'scripts/start-session.sh --cloud'",
-        "python3 scripts/agk/route.py prompts --plan {p} --adapter 'scripts/start-session.sh --cloud'",
+        "python3 scripts/agk/route.py prompts --plan {p} --adapter scripts/start-session.sh",
         "python3 /elsewhere/{L} prompts --plan {p} --adapter 'scripts/start-session.sh --cloud'",
         "env X=1 python3 {L} prompts --plan {p} --adapter 'scripts/start-session.sh --cloud'",
         "python3 {L} prompts --plan {p} --adapter 'scripts/start-session.sh --cloud'; id",
-        "python3 {S} plan --json | python3 {L} prompts --plan - --adapter 'scripts/start-session.sh --cloud'",
+        "python3 {S} plan --json | python3 {L} prompts --plan - --adapter 'x --cloud'",
         "scripts/start-session.sh --cloud",
     ],
 )

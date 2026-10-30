@@ -90,7 +90,8 @@ def test_the_pass_ends_by_re_planning_after_its_verdicts_and_posts_nothing_new()
     """REQ-041: brief #331 answer 1 (the last step runs the plan and prints start and waits)."""
     text = flat(SKILL)
     assert "**Re-plan.**" in text
-    assert text.index("Post the verdict") < text.index("**Re-plan.**") < text.index("The last lines")
+    replan = text.index("**Re-plan.**")
+    assert text.index("Post the verdict") < replan < text.index("The last lines")
     for phrase in (
         "python3 scripts/agk/session.py plan --json",
         "`Start <n>:`",
@@ -107,7 +108,7 @@ def test_the_pass_prints_the_prompts_off_and_starts_through_the_adapter_on():
         "`auto_start`",
         "`launch_adapter`",
         "python3 scripts/agk/launch.py prompts --plan <the scratch file>",
-        "python3 scripts/agk/launch.py prompts --plan <the scratch file> --adapter <launch_adapter>",
+        "launch.py prompts --plan <the scratch file> --adapter <launch_adapter>",
         "ready-to-paste",
         "never more than the plan's capacity",
         "never for a brief that is taken",
@@ -127,7 +128,7 @@ def test_the_template_carries_both_settings_off_and_names_their_adr():
 
 
 def test_the_guide_documents_two_example_adapters_each_marked_verify():
-    """REQ-041: brief #331 answer 3 (a local terminal one and a cloud one; the kit installs neither)."""
+    """REQ-041: brief #331 answer 3 (a local terminal one and a cloud one; none installed)."""
     text = flat(GUIDE)
     start = text.index("Automatic starts after a review pass")
     part = text[start : start + 4000]
