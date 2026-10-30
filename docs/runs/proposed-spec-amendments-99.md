@@ -1,9 +1,9 @@
-# Proposed spec amendments 98 (SPEC-0034, SPEC-0012, SPEC-0013; REQ-039)
+# Proposed spec amendments 99 (SPEC-0034, SPEC-0012, SPEC-0013; REQ-039)
 
 Date: 2026-10-30 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). It is applied by
 ADR-0183 (brief #263 build (b)), which stays `Proposed` for the maintainers' decision, and it changes
 `docs/specs/0034-a-team-sets-how-many-builder-sessions-run-at-once-and-agk-ha.md`, `docs/specs/0012-intake.md` and
-`docs/specs/0013-playbook.md`. The number 98 is asked as Q-263-B1 (95 is held for brief #305).
+`docs/specs/0013-playbook.md`. The number 99 was given by the verdict on 8fecb96 (Q-263-B1); 98 is kept by #323 and 95 is held for brief #305.
 
 1. **SPEC-0034 rule 9, a sentence added after the first `check_pr_body.py` sentence.** "The router's red-branch issue (SPEC-0032
    rule 7: its title, its `Priority: 0` line and the router's token as its author) is not a brief for this rule, so a repository

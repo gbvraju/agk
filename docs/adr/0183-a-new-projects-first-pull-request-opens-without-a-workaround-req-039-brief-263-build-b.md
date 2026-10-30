@@ -47,8 +47,8 @@ The tests were written first: 11 failed and 7 passed at the first checkpoint of 
    template does not replace the body; where `gh` is missing or not logged in it prints none. The start and vision skills tell the
    session to show both texts before the commit steps and to offer that command, which the person runs; the skills still never
    commit, push or open a pull request.
-4. **The specs.** `docs/runs/proposed-spec-amendments-98.md` proposes the text of SPEC-0034 rule 9, SPEC-0012 rule 3 and SPEC-0013
-   rules 3 and 4 that this changes. Its number is asked as Q-263-B1.
+4. **The specs.** `docs/runs/proposed-spec-amendments-99.md` proposes the text of SPEC-0034 rule 9, SPEC-0012 rule 3 and SPEC-0013
+   rules 3 and 4 that this changes. Its number is 99, given by the verdict on 8fecb96 (Q-263-B1; 98 is kept by #323).
 5. **Tests.** `tests/kit/test_pilot_gaps.py` (answer 4, the installed check) and `tests/kit_dev/test_pilot_gaps_first_pr.py`
    (answers 4 to 6: the prepared body, the workflow's page size, the skills, a real clone pushed with the printed command, the
    next steps with a `gh` that is logged in and one that is not). Three existing tests that pinned `git push -u origin <branch>`
