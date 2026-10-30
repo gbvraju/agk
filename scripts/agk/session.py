@@ -62,11 +62,12 @@ open `agk-conductor` issue (one line of at most 300 characters, never starting w
 only) prints the `Tell:` lines for the session by a listed verdict author since its last
 `Request:` or since the inbox last printed one, and keeps that mark in the git directory;
 `watch --assign` prints each new `Tell:` line for the session while it waits.
-Brief #348 build (c) (Q-348-2, ADR-0218): while `agk.toml` of the default branch sets `paused = true`,
-`claim`, `next`, `queue`, `watch` (all three forms) and `after` (which may take a brief) print one
-line that starts `agk paused` and names the setting, read and write nothing on GitHub and exit 5.
-The default branch is the ref `origin/<default_branch>`, which session rule 33's fetch keeps current,
-never the session's own branch; without that ref the checkout's `agk.toml` is read.
+Brief #348 build (c) (Q-348-2, ADR-0218): while `agk.toml` of the default branch sets
+`paused = true`, `claim`, `next`, `queue`, `watch` (all three forms) and `after` (which may take a
+brief) print one line that starts `agk paused` and names the setting, read and write nothing on
+GitHub and exit 5. The default branch is the ref `origin/<default_branch>`, which session rule 33's
+fetch keeps current, never the session's own branch; without that ref the checkout's `agk.toml` is
+read.
 """
 
 from __future__ import annotations
