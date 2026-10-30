@@ -615,7 +615,7 @@ def test_only_refuses_a_number_that_is_no_pull_request(repo, api):
     assert "--only" in proc.stdout
 
 
-def test_only_writes_nothing_without_write(repo, api):
+def test_only_writes_nothing(repo, api):
     history(api)
     assert run(repo, api, "--only", "1").returncode == 0
     assert not (repo / "docs" / "runs").exists()
@@ -626,3 +626,35 @@ def test_a_bad_only_prints_the_usage(repo, api, value):
     proc = run(repo, api, "--only", value)
     assert proc.returncode == 2
     assert proc.stdout.startswith("usage: core_audit.py")
+
+
+def test_only_says_so_in_the_header(repo, api):
+    """Verdict on a29c44d item 1: a report from `--only` names the pull requests it read."""
+    history(api)
+    data = report(repo, api, "--only", "3,1")
+    assert data["only"] == [1, 3]
+    assert report(repo, api)["only"] is None
+    proc = run(repo, api, "--only", "3,1")
+    assert proc.returncode == 0, proc.stdout
+    assert proc.stdout.splitlines()[0] == "agk core audit, only #1, #3, read on 2026-10-30"
+    since = run(repo, api, "--only", "1", "--since", "2026-01-01").stdout.splitlines()[0]
+    assert since == "agk core audit, since 2026-01-01, only #1, read on 2026-10-30"
+
+
+def test_only_judges_nothing_as_never_fired(repo, api):
+    """Verdict on a29c44d item 1: a subset is no evidence that a check or rule never fired."""
+    history(api)
+    data = report(repo, api, "--only", "3")
+    assert data["never_fired"] == "not judged (--only)"
+    out = run(repo, api, "--only", "3").stdout
+    assert "Never fired in the period: not judged (--only)" in out
+    assert "  checks: " not in out
+
+
+def test_only_with_write_is_refused(repo, api):
+    """Verdict on a29c44d item 1: no evidence page is ever written from a subset."""
+    history(api)
+    proc = run(repo, api, "--only", "1", "--write")
+    assert proc.returncode == 2
+    assert "--only" in proc.stdout and "--write" in proc.stdout
+    assert not (repo / "docs" / "runs").exists()
