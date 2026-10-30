@@ -6,7 +6,7 @@
 - Related: ADR-0184
 - Requirements: REQ-020
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `skills/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `skills/`
 
 ## Context
 
@@ -48,8 +48,8 @@ written first, with saved API responses and no network (`tests/kit/test_minutes.
   but only happens when billing cannot answer.
 - The doctor's test fixtures carry a billing answer (`tests/kit/fixtures/doctor/ok/api/billing.json`, nothing used); the
   doctor's counts and its live-read list grow by the one check and the one billing read.
-- `minutes.py` is now imported by an installed script (the doctor); the reference test that recorded it as imported by none now
-  records that it is, and that the reference still names it as a command (`tests/kit_dev/test_reference_commands.py`).
+- `minutes.py` is now imported by an installed script (the doctor); the reference test that recorded it as imported by none
+  already reads only that the reference names it (changed on the default branch by brief #376), so this change leaves it as is.
 
 ## Residual
 
