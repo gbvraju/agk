@@ -103,6 +103,65 @@ def test_the_tests_step_records_each_run_it_made(repo, outside):
     assert run_one["output_sha256"] == want
 
 
+def plan_output(repo) -> bytes:
+    """What `test_plan.py` prints for the branch, as prepush runs it."""
+    mb = repo.git("merge-base", "main", "HEAD").strip()
+    made = subprocess.run(  # nosec B603 - fixed argument list from sys.executable, no shell
+        [sys.executable, str(SCRIPTS / "test_plan.py"), "--json", "--base", mb, "--head", "HEAD"],
+        cwd=repo.root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return (made.stdout + made.stderr).rstrip("\n").encode()
+
+
+def test_the_tests_step_entry_is_the_plan_run_and_each_test_run_is_in_runs(repo, outside):
+    """REQ-039: brief #374 answer 1 (verdict on 1511951, item 1: the step's argv, exit and digest
+    are those of the `test_plan.py` run; a failing test run has its own exit code in `runs`)."""
+    project(repo, toml=TOML.replace("echo RAN_PROJECT_TESTS", "echo RAN_PROJECT_TESTS; exit 3"))
+    record = outside / "record.json"
+    proc = run(repo, "--record", str(record), scan=scanner(outside / "bin", 0))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    tests = next(s for s in load(record)["steps"] if s["name"] == "tests")
+    assert tests["outcome"] == "FAIL"
+    assert tests["argv"][:2] == ["python3", "scripts/agk/test_plan.py"]
+    assert tests["exit"] == 0  # the plan itself ran well; the test run failed
+    out = plan_output(repo)
+    assert tests["output_sha256"] == hashlib.sha256(out).hexdigest()
+    assert tests["output_bytes"] == len(out)
+    assert [r["exit"] for r in tests["runs"]] == [3]
+    want = hashlib.sha256(b"RAN_PROJECT_TESTS\n").hexdigest()
+    assert tests["runs"][0]["output_sha256"] == want
+
+
+def test_a_passing_tests_step_digests_the_plan_output(repo, outside):
+    """REQ-039: brief #374 answer 1 (verdict on 1511951, item 1: never the digest of nothing)."""
+    project(repo)
+    record = outside / "record.json"
+    assert run(repo, "--record", str(record), scan=scanner(outside / "bin", 0)).returncode == 0
+    tests = next(s for s in load(record)["steps"] if s["name"] == "tests")
+    out = plan_output(repo)
+    assert out and tests["output_sha256"] == hashlib.sha256(out).hexdigest()
+
+
+def test_a_run_command_with_an_outside_path_is_scrubbed(repo, outside):
+    """REQ-039: brief #374 answer 1 (verdict on 1511951, item 2: no path outside the repository
+    in `runs[].command`)."""
+    tool = outside / "tools" / "runtests.sh"
+    tool.parent.mkdir()
+    tool.write_text("#!/bin/sh\necho RAN_OUTSIDE\n", encoding="utf-8")
+    project(repo, toml=TOML.replace("echo RAN_PROJECT_TESTS", f"sh {tool} --flag"))
+    record = outside / "record.json"
+    proc = run(repo, "--record", str(record), scan=scanner(outside / "bin", 0))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = record.read_text(encoding="utf-8")
+    assert str(outside) not in text
+    tests = next(s for s in load(record)["steps"] if s["name"] == "tests")
+    assert tests["runs"][0]["command"] == "sh <outside>/runtests.sh --flag"
+    assert tests["runs"][0]["cwd"] == "."
+
+
 def test_a_failed_step_still_writes_the_record_and_exits_1(repo, outside):
     """REQ-039: brief #374 answers 3 and 5 (a failed step)."""
     project(repo, mk=MK_FAIL)
