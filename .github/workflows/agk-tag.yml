@@ -12,6 +12,8 @@ permissions:
   contents: read
   issues: write
 
+# Fast CI (brief #283): a tag push has no draft and no superseded run to cancel, so neither a draft rule nor a concurrency
+# group applies; it installs and caches nothing, checks documentation like code, and uploads nothing, so no retention applies.
 jobs:
   agk-tag:
     runs-on: ubuntu-latest

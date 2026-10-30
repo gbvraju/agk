@@ -23,6 +23,9 @@ permissions:
   actions: read
   issues: write
 
+# Fast CI (brief #283): a weekly schedule has no draft and no superseded run, so neither a draft rule nor a concurrency group
+# applies; it caches nothing (one run a week) and reports documentation changes too. Its upload keeps a retention of 90 days
+# on purpose: it is the report's data for readers of later weeks (SPEC-0019, SPEC-0022), not a build record.
 jobs:
   product-report:
     if: ${{ github.ref_name == github.event.repository.default_branch }}

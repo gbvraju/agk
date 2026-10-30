@@ -9,9 +9,14 @@
 # is the one GET of this file; if it cannot be read the suite runs in full.
 name: proof
 
+# Fast CI (brief #283): on a draft pull request the suite is skipped and the job reports `outcome: skipped`, and
+# `ready_for_review` runs it in full; a superseded run is cancelled by the concurrency group. A change with no test of its own
+# (documentation only, say) is reported as skipped by proof.py, never left waiting; per-area runs are the `[proof]` table of
+# agk.toml (brief #305). No install is cached (the project's own command installs what it needs), and nothing is uploaded,
+# so no retention applies.
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -52,7 +57,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
         run: |
+          # A draft pull request (brief #283): the suite runs in full on `ready_for_review`.
+          if [ "$PR_DRAFT" = true ]; then
+            echo "proof skipped on a draft pull request; it runs in full when it is marked ready for review"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           parent="$(git rev-parse "$HEAD_SHA^" 2>/dev/null || true)"
           conclusion=""
           if [ -n "$parent" ]; then

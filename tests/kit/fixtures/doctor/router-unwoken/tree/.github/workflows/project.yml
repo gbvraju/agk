@@ -1,7 +1,13 @@
 name: project
-on: [pull_request]
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+concurrency:
+  group: project-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 jobs:
   lint-suite:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
       - run: echo lint

@@ -47,8 +47,9 @@ def types_of(text: str) -> set[str]:
 
 
 def test_proof_no_longer_runs_when_the_description_is_edited():
-    """Brief #216 answer 1: a body cannot change a test."""
-    assert types_of(workflow("proof.yml")) == {"opened", "synchronize", "reopened"}
+    """Brief #216 answer 1: a body cannot change a test (brief #283: a draft made ready runs)."""
+    types = {"opened", "synchronize", "reopened", "ready_for_review"}
+    assert types_of(workflow("proof.yml")) == types
 
 
 def test_proof_and_governance_keep_their_job_names():

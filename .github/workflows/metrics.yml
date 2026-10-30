@@ -21,6 +21,8 @@ permissions:
   actions: read
   issues: write
 
+# Fast CI (brief #283): a weekly schedule has no draft and no superseded run, so neither a draft rule nor a concurrency group
+# applies; it caches nothing (one run a week), counts documentation changes too, and uploads nothing, so no retention applies.
 jobs:
   metrics:
     if: ${{ github.ref_name == github.event.repository.default_branch }}

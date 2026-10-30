@@ -28,6 +28,9 @@ permissions:
   checks: read
   statuses: read
 
+# Fast CI (brief #283): the router runs on drafts too, since it labels every pull request and runs no test; it installs and
+# caches nothing and builds nothing, and its one upload (the pipeline document) keeps a retention of 7 days. The concurrency
+# group below is the per-pull-request group of brief #309; a documentation change is labelled like any other.
 # One group per pull request (brief #309): GitHub keeps one pending run per group and cancels the older pending one, so a single
 # group let another pull request's event cancel a wake. The group is the pull request's number for all of its own events
 # (pull_request, issue_comment, and workflow_run through the run's pull request), so two runs of one pull request never write its
