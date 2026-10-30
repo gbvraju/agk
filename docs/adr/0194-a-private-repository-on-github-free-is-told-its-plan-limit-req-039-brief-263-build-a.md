@@ -1,6 +1,6 @@
 # ADR-0194: a private repository on GitHub Free is told its plan limit (REQ-039, brief 263 build a)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0183, ADR-0001
