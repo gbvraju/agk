@@ -4,7 +4,10 @@ Each test runs both rules of a contradiction together, so that a smaller core ca
 quietly: (a) a stack ADR is accepted by one ordinary commit, and both `engines.py stack-check` and
 `check_final_clearance.py` pass it (brief #274, ADR-0163); (b) every kit script that imports another
 starts under `python3 -I`, the only Python form the conductor's guard allows (brief #270,
-ADR-0161). Git and files only: no network, no model.
+ADR-0161). (c), a check that fails once the charter is accepted, has no test: `playbook.py
+check-start` rule 5 refuses a charter that is not Proposed, a decided rule on the default branch
+that `tests/kit_dev/test_playbook.py` asserts; ADR-0211 records it as a residual (Q-383-1).
+Git and files only: no network, no model.
 """
 
 from __future__ import annotations
