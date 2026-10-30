@@ -1,6 +1,6 @@
 # ADR-0218: session commands refuse to act while the default branch is paused (REQ-009, brief 348 build c)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0196, ADR-0203
