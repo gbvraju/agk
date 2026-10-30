@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, load_config, read_list, repo_root, run
+from common import CheckError, load_config, read_list, repo_root, review_mode, run
 
 NAME = "reviewers"
 CONFIG = "config/reviewers.yaml"
@@ -29,6 +29,13 @@ AUTHORS = "verdict_authors"
 APPROVERS = "spec_approvers"
 APPROVE = re.compile(r"Approve: ([0-9a-f]{7,40}) (SPEC-\d{4})")
 APPROVE_SHORT = re.compile(r"Approve: (SPEC-\d{4})")  # SPEC-0032 rule 5: pinned by the runs
+CONFIRMED = re.compile(r"Confirmed: ([0-9a-f]{40})")  # brief 277: the full head ID
+CONFIRMED_VERDICT = re.compile(r"Verdict: (?:cleared|fix list|rejected) ([0-9a-f]{40})")
+CONFIRMED_BY = re.compile(
+    r"confirmed by @?([A-Za-z0-9_.-]+) in a session at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"
+)
+SHOWN = "Shown:"
+SOLO_SETTING = "(setting: review_mode in agk.toml)"
 PLACEHOLDER = "replace-me"  # the installed handle `@REPLACE-ME`: a login a stranger could own
 
 
@@ -295,6 +302,94 @@ def person_approvals(
     return found
 
 
+def confirmed_comments(
+    comments: list[dict],
+    agent_apps: tuple[str, ...] | list[str] = (),
+    person: str | None = None,
+    heads: set[str] | None = None,
+    runs: list[dict] | None = None,
+) -> list[dict]:
+    """The comments with what each solo confirmation stands for added after them (brief 277).
+
+    `person` is the one listed person of solo mode (`solo_person`); without one nothing is a
+    confirmation, so team mode, and solo mode with nobody or more than one person listed, read none.
+    A confirmation is a comment by that person whose lines are `Confirmed: <40-hex sha>`, then
+    `Verdict: cleared|fix list|rejected <the same sha>`, then any lines (`Final:` lines, findings,
+    `Approve: SPEC-nnnn`), then `Shown:` and exactly three lines (the summary the person was shown),
+    and last `confirmed by <login> in a session at <YYYY-MM-DDTHH:MM:SSZ>`, where the login is the
+    comment's author. The sha must be a head the reader names: one of `heads` when given (the
+    router: the head, or the parent of a head that may be its Final commit), and, when `runs` is
+    given, the head GitHub shows for the comment's time, by the rule of a team `Approve: SPEC-nnnn`
+    line (`head_before_comment`). It adds, as the same author at the same time, one comment holding
+    the verdict (its lines up to `Shown:`) and, for each `Approve: SPEC-nnnn` line, one comment
+    `Approve: <sha> SPEC-nnnn`. A comment posted through an app of `agent_apps`, or of any other
+    shape, adds nothing (answers 2, 3 and 7; the verdicts on f58803a and 1ae4fd4). Only the person
+    posts a confirmation; a session never does (session rule 29)."""
+    if not person:
+        return list(comments)
+    found: list[dict] = []
+    for item in comments:
+        found.append(item)
+        if not isinstance(item, dict) or via_agent(item, agent_apps):
+            continue
+        if login_of(item) != person.lstrip("@").lower():
+            continue
+        lines = str(item.get("body") or "").strip().splitlines()
+        if len(lines) < 7:
+            continue
+        sha = CONFIRMED.fullmatch(lines[0].strip())
+        named = CONFIRMED_VERDICT.fullmatch(lines[1].strip())
+        signed = CONFIRMED_BY.fullmatch(lines[-1].strip())
+        if not sha or not named or not signed or named.group(1) != sha.group(1):
+            continue
+        if signed.group(1).lower() != login_of(item) or lines[-5].strip() != SHOWN:
+            continue
+        if any(not x.strip() for x in lines[-4:-1]) or SHOWN in (x.strip() for x in lines[1:-5]):
+            continue
+        if heads is not None and sha.group(1) not in heads:
+            continue
+        if runs is not None and head_before_comment(runs, item) != sha.group(1):
+            continue
+        verdict = lines[1:-5]
+        found.append({**item, "body": "\n".join(verdict).strip() + "\n"})
+        for line in verdict:
+            approve = APPROVE_SHORT.fullmatch(line.strip())
+            if approve:
+                found.append({**item, "body": f"Approve: {sha.group(1)} {approve.group(1)}"})
+    return found
+
+
+def solo_person(root) -> str | None:
+    """The one listed person in solo mode (brief 277), else None: team mode, nobody listed or more
+    than one person in `verdict_authors` and `spec_approvers` together."""
+    if review_mode(root) != "solo":
+        return None
+    try:
+        data = parse((root / CONFIG).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, CheckError):
+        return None
+    people = set(authors_of(data)) | set(approvers_of(data))
+    return people.pop() if len(people) == 1 else None
+
+
+def solo_problems(data: dict, mode: str) -> list[str]:
+    """Solo mode needs exactly one person in `verdict_authors` and `spec_approvers` together
+    (brief 277 answer 1 and its field note); the message names the setting, never a handle."""
+    if mode != "solo":
+        return []
+    people = set(authors_of(data)) | set(approvers_of(data))
+    if not people:
+        return [
+            f"solo mode needs one listed person in {AUTHORS}, and nobody is listed {SOLO_SETTING}"
+        ]
+    if len(people) > 1:
+        return [
+            f"solo mode allows one person in {AUTHORS} and {APPROVERS} together, and more than one "
+            f"is listed: use team mode {SOLO_SETTING}"
+        ]
+    return []
+
+
 def verdict_authors(root) -> list[str]:
     """The listed verdict authors of the repository at `root`; unreadable means nobody."""
     try:
@@ -497,6 +592,10 @@ def main(argv: list[str] | None = None) -> int:
     problems = validate(data, protected)
     if argv[0] == "--check":
         problems += author_problems(data) + approver_problems(data)
+        try:
+            problems += solo_problems(data, review_mode(root))
+        except CheckError as exc:
+            problems.append(str(exc))
         for problem in problems:
             print(f"FAIL {NAME}: {problem}")
         if not problems:

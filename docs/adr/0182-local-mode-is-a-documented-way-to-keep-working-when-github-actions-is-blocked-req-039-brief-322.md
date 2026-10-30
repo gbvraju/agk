@@ -27,7 +27,7 @@ how to come back. The brief names no `Measured:` cause; it asks for a guide and 
    head with the bounded run of its role, the builder's line); what is lost (no router labels, no server-side proof, no
    scheduled runs, every merge the person's call, recorded as `Local merge:` on the record issue); how to leave it (one `gh
    workflow enable <file>` per workflow, one pull request green on GitHub, the record issue closed).
-2. **Session rule 29 and the conductor role (answer 2).** The session rules gain rule 29, and the conductor role one paragraph
+2. **Session rule 30 and the conductor role (answer 2).** The session rules gain rule 30, and the conductor role one paragraph
    after its seven steps: both point to the guide and say that a verdict in local mode names, in one `Local evidence:` line, the
    local evidence it relied on. The conductor's seven steps keep their numbers.
 3. **The reference and getting started (answer 3).** `reference.md` lists the guide in a section of its own;
@@ -52,8 +52,8 @@ how to come back. The brief names no `Measured:` cause; it asks for a guide and 
 
 - A project whose Actions is blocked keeps building with one page to follow, and every merge in that time is on one issue.
 - A verdict in local mode names the evidence it relied on, so a later reader can tell a merge on local evidence from one on CI.
-- Pull request #317 (solo mode) also appends a session rule; whichever merges second takes the next free number (`session.py
-  ids`, session rule 15).
+- Pull request #317 (solo mode) appended session rule 29 and merged first; this rule took the next free number, 30
+  (`session.py ids`, session rule 15).
 
 ## Residual
 

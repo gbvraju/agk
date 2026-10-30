@@ -462,6 +462,7 @@ DEFAULT_CONFIG = {
     "pr_mode": "strict",
     "required_checks": ["proof", "governance"],
     "agent_apps": ["claude"],
+    "review_mode": "team",
 }
 
 
@@ -624,6 +625,19 @@ def pr_mode(root: Path) -> str:
     value = load_config(root)["pr_mode"]
     if value not in PR_MODES:
         raise CheckError("pr_mode must be 'strict' or 'flow' (setting: pr_mode in agk.toml)")
+    return value
+
+
+REVIEW_MODES = ("team", "solo")
+
+
+def review_mode(root: Path) -> str:
+    """`team` (the default) or `solo` from agk.toml (brief 277, ADR-0179): in solo mode one
+    confirmation comment by the one listed person counts as the verdict and the approval; any
+    other value is a refusal that names the setting. Not `mode`, the install stamp (Q-277-1)."""
+    value = load_config(root)["review_mode"]
+    if value not in REVIEW_MODES:
+        raise CheckError("review_mode must be 'team' or 'solo' (setting: review_mode in agk.toml)")
     return value
 
 

@@ -46,6 +46,9 @@ the session's working directory or by its full path, never through a link): exac
 command of the script (`watch`, `next`, `claim`, `after` and the rest), another role, another flag,
 another interpreter or another copy of the script, such as one in a pull request's worktree, stays
 denied, and the shadow mode gets none of them.
+A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
+by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
+29), because GitHub cannot tell a comment the person typed from one a session posted.
 A comment `POST` whose `body=@` file is not an absolute path is refused with a message that names
 the likely cause (a backslash path loses its backslashes in a POSIX shell such as Git Bash), so
 that the conductor writes the forward-slash form; nothing more is allowed by it.
@@ -112,6 +115,10 @@ QUEUE_FORMS = (  # the read-only commands of the conductor's queue (brief 284), 
     ["review-queue", "--all"],
     ["review-queue", "--fingerprint"],
     ["queue", "--role", "conductor"],
+)
+CONFIRMED_RULE = (
+    "conductor guard rule 6: a session never posts a Confirmed: comment; print the text and the "
+    "person posts it (session rule 29)"
 )
 PATH_RULE = (
     "conductor guard rule 6: the comment's body file is not an absolute path of a scratch "
@@ -241,6 +248,15 @@ def comment_body(words: list[str]) -> str | None:
         if flag in FILE_FIELDS and value.startswith("body=@"):
             return scratch_text(value[len("body=@") :])
     return None
+
+
+def confirmed_denial(command: object) -> str | None:
+    """The reason to deny a comment whose first line is `Confirmed:` (brief 277), else None."""
+    words = tokens_of(command) if isinstance(command, str) else None
+    if not words or words[:2] != ["gh", "api"]:
+        return None
+    body = comment_body(words)
+    return CONFIRMED_RULE if body is not None and body.lstrip().startswith("Confirmed:") else None
 
 
 def verdict_denial(command: object) -> str | None:
@@ -419,6 +435,8 @@ def decide(payload: dict, shadow: bool = False) -> str | None:
         ok = tool == "Write" and isinstance(target, str) and scratch_dir(target) is not None
         return None if ok else WRITE_RULE
     if tool == "Bash":
+        if message := confirmed_denial(data.get("command")):
+            return message
         if not shadow and (message := verdict_denial(data.get("command"))):
             return message
         command = data.get("command")

@@ -26,4 +26,9 @@ pr_mode = "strict"
 required_checks = ["proof", "governance"]
 # The GitHub Apps an agent posts through (slugs). A comment GitHub records as posted through one of them never counts as a person's approval, and while the list is not empty a review never counts either (a review shows no app); a project that wants reviews to count sets an empty list. A change needs an ADR.
 agent_apps = ["claude"]
+# Who reviews a pull request: "team" (the default: a verdict by a listed author, and a separate Approve: by a spec approver) or "solo"
+# (one person: one confirmation comment, whose text a session prints and the person posts from the browser or the GitHub app, never a
+# session, counts as the verdict, its Final lines and the spec approval of the head it names; refused when config/reviewers.yaml lists
+# nobody or more than one person). A change needs an ADR.
+review_mode = "team"
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.

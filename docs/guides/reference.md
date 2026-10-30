@@ -86,7 +86,7 @@ keep a project's CI fast and cheap: `ci-drafts` (a workflow of `required_checks`
 
 When GitHub Actions is blocked (minutes exhausted, billing blocked, an outage), follow [local-mode.md](local-mode.md): how to
 disable and re-enable the workflows with `gh workflow`, what a builder runs and pastes as its `Local evidence:` line, what the
-conductor runs instead of reading CI, what is lost, and the one issue that records every merge (session rule 29, ADR-0182).
+conductor runs instead of reading CI, what is lost, and the one issue that records every merge (session rule 30, ADR-0182).
 
 ## Engines
 
@@ -187,6 +187,7 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:design` | `scripts/agk/design.py write`, `screenshots`, `scripts/agk/check_design.py` | `docs/design/theme.md` (when absent) and a mockup folder with `index.html` and `README.md` on a new branch |
 | `/agk:launch` | `scripts/agk/session.py plan`, `scripts/agk/launch.py prompts` | nothing in the repository (after you say yes, one session per planned slot is started through an adapter, or its prompt is printed) |
 | `/agk:review-pass` | `scripts/agk/session.py review-queue`, the conductor's protocol, `gh api` | one `Verdict:` comment per pull request that needs one (never two on one head), from a conductor session |
+| `/agk:confirm` | `gh api` (GET), the conductor's protocol | nothing (solo mode: prints the one `Confirmed:` comment for the person to post; a session never posts it) |
 | `/agk:spec` | `scripts/agk/new_spec.py`, `scripts/agk/intake.py` | a Draft spec, or a requirement proposal with its ADR draft, or (from one sentence) a requirement, a Draft spec and an ADR stub |
 | `/agk:architect` | `scripts/agk/playbook.py architect` | nothing (prints how to start `claude --agent architect`) |
 | `/agk:issue` | the issue templates and your own `gh issue create`, after asking | one GitHub issue |
