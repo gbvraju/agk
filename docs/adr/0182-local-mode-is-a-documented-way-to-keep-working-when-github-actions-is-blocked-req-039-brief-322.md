@@ -1,6 +1,6 @@
 # ADR-0182: local mode is a documented way to keep working when GitHub Actions is blocked (REQ-039, brief 322)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0173, ADR-0180
