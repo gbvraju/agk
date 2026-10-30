@@ -1,0 +1,1 @@
+- a correction of the 0.59.0 note for #313: since 0.59.0 an unused-code command (`unused_code` in `agk.toml`) that exits 0 and prints nothing reads `0 unused-code findings (the command exited 0)`, zero findings, in finding D9 of the drift audit; only a non-zero exit with no lines, or a run longer than `proof_timeout`, reads `unknown` (ADR-0177 decision 7, brief #319)
