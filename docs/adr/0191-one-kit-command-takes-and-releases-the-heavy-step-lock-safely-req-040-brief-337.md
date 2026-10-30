@@ -1,6 +1,6 @@
 # ADR-0191: one kit command takes and releases the heavy-step lock safely (REQ-040, brief 337)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0182, ADR-0186
