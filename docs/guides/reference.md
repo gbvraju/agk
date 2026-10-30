@@ -14,6 +14,13 @@ The kit's own commands are in `agk.mk` (`make -f agk.mk agk-governance | agk-lin
 aliases of them. Kit tests are collected only through `agk.mk` (they need `AGK_KIT_TESTS=1`).
 
 Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI the pull-request base SHA is used.
+
+Before a push, `python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick]` runs the fast checks CI would fail on
+first, in order, and stops at the first failure with its message: the pull request body check (on `FILE`), `make lint` where
+the Makefile has the target, `make -f agk.mk agk-governance` (no network; `not run` without `make`), the secret scan over the branch's commits when
+`gitleaks` is installed (else `secret scan: not run`), and the tests that `test_plan.py` selects (`--quick` skips them). It prints
+`prepush: <step> ok|FAIL|skipped (<s>s)` per step and exits 0 when no step failed, 1 when one did, 2 on a usage error (session
+rule 31, ADR-0186). The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
 `python3 scripts/agk/reviewers.py --codeowners` prints the rendered CODEOWNERS; with `--write` it writes the file (in an
 adopted repository only the marked block). `python3 scripts/agk/traceability.py` prints the requirement-to-test matrix to stdout; it is never committed.
 
@@ -149,10 +156,12 @@ and cannot run without the kit's fixtures, so delete it in your own change. The 
 between `# >>> agk` and `# <<< agk`: add your own ignore lines outside that block, and the upgrade and the doctor compare and
 replace only the block and report your lines once as `project lines kept: n`; an older `.gitignore` without the markers, the kit's
 lines followed by yours, gets the block on the next upgrade (ADR-0164). After a written upgrade it ends with one line
-`opt-in: <setting>: <summary>` for each entry of the kit's `CHANGELOG.md` between your old version and the new one that
-ends with the marker `(opt-in: <setting>)`: a feature that stays off until you set that setting in `agk.toml` (a change
-that needs an ADR). With no such entry it prints nothing more; a dry run lists none, and the listing writes nothing
-(ADR-0181). See `docs/specs/0008-upgrade.md` and ADR-0018.
+`opt-in: <setting>: <summary>` for each setting of each entry of the kit's `CHANGELOG.md` between your old version and
+the new one that ends with the marker `(opt-in: <setting>)` or `(opt-in: <setting>, <setting>)`: a feature that stays off
+until you set that setting in `agk.toml` (a change that needs an ADR). An entry that starts `<version> added ` speaks for
+that earlier release and is listed when your upgrade crosses it, so an upgrade from 0.58.0 or older also lists the opt-in
+settings of 0.59.0 (ADR-0193). With no such entry it prints nothing more; a dry run lists none, and the listing writes
+nothing (ADR-0181). See `docs/specs/0008-upgrade.md` and ADR-0018.
 
 ## Experimental: reviewer agent
 
@@ -235,8 +244,9 @@ In flow mode (`pr_mode = "flow"`, which this repository uses) a kit build pull r
    `CHANGELOG.md`; the shape is `kit/templates/changelog.md`. A fragment is required exactly when a file the installer
    writes changes, and a check fails a build that adds none or more than one. A change that a project switches on by a
    setting ends its line with one marker, `- <one-line change> (opt-in: <setting>)` (a key of `agk.toml`, or `table.key`;
-   for a table, its name); the release keeps it, and `upgrade.py` lists it to each project that upgrades past it. The
-   summary it shows is the change up to its first `: `.
+   for a table, its name; several settings are separated by `, `, each once); the release keeps it, and `upgrade.py` lists
+   it to each project that upgrades past it, one line per setting. The summary it shows is the change up to its first
+   `: `. A line that starts `<version> added ` speaks for that earlier release and is listed to an upgrade that crosses it.
 2. The build does not edit `kit/hashes.json` either: the table is a function of the history and the tree, and the release
    regenerates it, so the check of the table leaves the row of the current version to the release.
 3. A build never collides with another on `CHANGELOG.md` or `kit/hashes.json`, because it does not touch them; each

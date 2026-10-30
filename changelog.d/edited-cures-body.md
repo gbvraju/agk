@@ -1,0 +1,1 @@
+- an edited description cures a full governance run that failed only on the description: `full_run.py` no longer counts the `Post` steps GitHub skips in a failed job as steps the run never reached, and the `PR body file` step runs unless the run is cancelled (brief #349, ADR-0197 Proposed)

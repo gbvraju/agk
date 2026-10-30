@@ -1,6 +1,7 @@
 """Kit source under a project's own scanners: justified suppressions and clean types (ADR-0010).
 
-Pure checks of the source text; bandit and mypy are run only where they are installed.
+Pure checks of the source text; bandit and mypy are run only where they are installed. Governance
+installs bandit with its other tooling, so the bandit test runs in CI (brief #338, ADR-0192).
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+GOVERNANCE = ROOT / ".github" / "workflows" / "governance.yml"
 KIT_SOURCE = ("scripts/agk", ".claude/hooks", "tests/kit")
 SPAWNERS = {"run", "Popen", "call", "check_call", "check_output"}
 # Built from parts so that this file carries no suppression comment of its own.
@@ -121,3 +123,34 @@ def test_mypy_is_clean_on_scripts():
         check=False,
     )
     assert proc.returncode == 0, proc.stdout[-800:]
+
+
+# --- governance installs bandit (brief #338, ADR-0192) --------------------------------------------
+
+
+def governance_step(name: str) -> str:
+    """The text of one step of the governance job, read when a test runs."""
+    body = GOVERNANCE.read_text(encoding="utf-8").split("    steps:\n", 1)[1]
+    parts = re.split(r"(?m)^      - (?=name: |uses: )", body)[1:]
+    found = {m.group(1).strip(): p for p in parts if (m := re.match(r"name: (.+)", p))}
+    assert name in found, f"governance has no step {name!r}"
+    return found[name]
+
+
+def test_governance_installs_bandit_with_its_other_tooling():
+    """REQ-001: brief #338 answer 2. The step that installs pytest and ruff installs bandit too."""
+    run = governance_step("Install tooling").split("run:", 1)[1]
+    install = re.search(r"python -m pip install ([^\n|]+)", run)
+    assert install, "Install tooling has no pip install line"
+    assert {"pytest", "ruff", "bandit"} <= set(install.group(1).split())
+
+
+def test_governance_fails_naming_a_tool_it_could_not_install():
+    """REQ-001: brief #338 answer 2. A missing tool fails the step by name; nothing skips."""
+    run = governance_step("Install tooling").split("run:", 1)[1]
+    loop = re.search(r"for tool in ([^;\n]+);", run)
+    assert loop, "Install tooling does not check each tool after the install"
+    assert {"pytest", "ruff", "bandit"} <= set(loop.group(1).split())
+    assert 'python -m "$tool" --version' in run
+    named = re.search(r'echo "[^"]*\$tool[^"]*"; exit 1', run)
+    assert named, "a missing tool must fail the step by name"

@@ -1,0 +1,16 @@
+{
+  "cannot": {
+    "required-check-governance": "forbidden",
+    "ruleset-bypass": "forbidden",
+    "ruleset-deletion": "forbidden",
+    "ruleset-enforcement": "forbidden",
+    "ruleset-force-push": "forbidden",
+    "ruleset-linear-history": "forbidden",
+    "ruleset-missing": "forbidden",
+    "ruleset-pull-request": "forbidden",
+    "ruleset-target": "forbidden"
+  },
+  "delete": [],
+  "fail": [],
+  "origin_head": true
+}

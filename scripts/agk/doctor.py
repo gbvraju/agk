@@ -300,6 +300,11 @@ HINTS = {
     "gh-missing": "install the GitHub CLI (`gh`)",
     "gh-unauthenticated": "run `gh auth login`",
     "no-admin": "use an account with admin rights on the repository",
+    "plan-limit": "GitHub's plan: rulesets and branch protection on a private repository need a "
+    "paid plan (GitHub Pro, Team or Enterprise); upgrade the plan or make the repository public, "
+    "then check again",
+    "forbidden": "GitHub refused the read although the account is an admin of the repository; read "
+    "GitHub's message with `gh api` on the same path",
     "not-github": "pass --repo OWNER/REPO for a repository on github.com",
     "no-kit-root": "pass --kit-root with the plugin or kit checkout",
     "version-mismatch": "use a kit of the same version as version in agk.toml, or run /agk:upgrade",
@@ -329,7 +334,18 @@ class Refusal(Exception):
 # --- reads ------------------------------------------------------------------------------------
 
 
-def http_reason(status: str) -> str:
+PLAN_LIMIT_WORDS = ("upgrade to github pro", "make this repository public")
+
+
+def plan_limited(text: str) -> bool:
+    """GitHub's answer when a feature needs a paid plan for a private repository (brief #263)."""
+    low = text.lower()
+    return any(words in low for words in PLAN_LIMIT_WORDS)
+
+
+def http_reason(status: str, message: str = "") -> str:
+    if status == "403" and plan_limited(message):
+        return "plan-limit"
     return {"401": "gh-unauthenticated", "403": "no-admin", "404": "no-admin"}.get(
         status, "bad-response"
     )
@@ -338,8 +354,17 @@ def http_reason(status: str) -> str:
 def error_payload(data: Any) -> str | None:
     """The reason class of a GitHub error body ({"message": ..., "status": "403"}), else None."""
     if isinstance(data, dict) and "message" in data and str(data.get("status", "")).isdigit():
-        return http_reason(str(data["status"]))
+        return http_reason(str(data["status"]), str(data.get("message") or ""))
     return None
+
+
+def admin_reason(reason: str, repo_data: Any) -> str:
+    """`no-admin` stays only when the account is not known to be an admin: with
+    `permissions.admin` true the refusal has another cause, `forbidden` (brief #263 answer 1)."""
+    permissions = repo_data.get("permissions") if isinstance(repo_data, dict) else None
+    if reason == "no-admin" and isinstance(permissions, dict) and permissions.get("admin") is True:
+        return "forbidden"
+    return reason
 
 
 class Reads:
@@ -393,6 +418,8 @@ def classify_failure(stdout: str, stderr: str) -> str:
     text = f"{stdout}\n{stderr}".lower()
     if "gh auth login" in text or "not logged in" in text or "http 401" in text:
         return "gh-unauthenticated"
+    if "http 403" in text and plan_limited(text):
+        return "plan-limit"
     if "http 403" in text or "http 404" in text or "admin rights" in text:
         return "no-admin"
     if "could not resolve host" in text or "dial tcp" in text or "timeout" in text:
@@ -459,14 +486,14 @@ def ruleset_results(reads: Reads, repo_data: Any, branch: str) -> dict[str, Resu
     everything = ["ruleset-missing", *RULESET_IDS]
     listing, reason = reads.get("rulesets", "/rulesets")
     if not isinstance(listing, list):
-        cannot_all(reason or "bad-response", everything)
+        cannot_all(admin_reason(reason or "bad-response", repo_data), everything)
         return out
     branch_rulesets = [r for r in listing if isinstance(r, dict) and r.get("target") == "branch"]
     details = []
     for entry in sorted(branch_rulesets, key=lambda r: str(r.get("id"))):
         data, reason = reads.get(f"ruleset-{entry.get('id')}", f"/rulesets/{entry.get('id')}")
         if not isinstance(data, dict):
-            cannot_all(reason or "bad-response", everything)
+            cannot_all(admin_reason(reason or "bad-response", repo_data), everything)
             return out
         details.append(data)
     permissions = repo_data.get("permissions") if isinstance(repo_data, dict) else None

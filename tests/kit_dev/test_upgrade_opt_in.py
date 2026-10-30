@@ -55,19 +55,19 @@ def test_a_marker_gives_the_setting_and_the_one_line_summary():
     found = check_release.opt_in(
         "- #30 proof runs per test area: an optional table (brief #1, ADR-0001) (opt-in: proof)"
     )
-    assert found == ("proof", "proof runs per test area")
+    assert found == (("proof",), "proof runs per test area")
 
 
 def test_a_fragment_line_without_a_number_is_read_the_same_way():
     assert check_release.opt_in("- a toggle for coverage (opt-in: coverage)") == (
-        "coverage",
+        ("coverage",),
         "a toggle for coverage",
     )
 
 
 def test_a_dotted_setting_names_a_key_of_a_table():
     assert check_release.opt_in("- #9 assign by the conductor (opt-in: flow.assign)") == (
-        "flow.assign",
+        ("flow.assign",),
         "assign by the conductor",
     )
 
@@ -89,8 +89,8 @@ def test_a_line_without_exactly_one_marker_at_its_end_offers_nothing(line):
 
 def test_a_long_summary_is_cut_at_a_word_boundary():
     words = " ".join(["word"] * 60)
-    setting, summary = check_release.opt_in(f"- #1 {words} (opt-in: proof)")
-    assert setting == "proof"
+    settings, summary = check_release.opt_in(f"- #1 {words} (opt-in: proof)")
+    assert settings == ("proof",)
     assert len(summary) <= check_release.SUMMARY_LIMIT and summary.endswith("word")
 
 
