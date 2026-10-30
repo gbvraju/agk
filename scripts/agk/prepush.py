@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess  # nosec B404 - fixed argument lists; a configured command runs as the person's own
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
 from collections.abc import Callable
@@ -31,7 +31,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, git, merge_base, resolve_base
+from common import CheckError, git, merge_base, proof_timeout, resolve_base
+from proof import execute, timeout_note
 
 HERE = Path(__file__).resolve().parent
 USAGE = "usage: prepush.py [--body FILE] [--base REF] [--quick]"
@@ -66,14 +67,15 @@ def parse_args(args: list[str]) -> dict:
     return options
 
 
-def run(cmd: list[str] | str, cwd: Path, env: dict | None = None) -> tuple[int, str]:
-    """Run a command, stdout and stderr together; a list runs without a shell."""
-    proc = subprocess.run(  # nosec B602 B603 - the kit's fixed lists, or the project's own command
+def run(cmd: list[str], cwd: Path, env: dict | None = None) -> tuple[int, str]:
+    """Run a fixed argument list, stdout and stderr together, read as UTF-8."""
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         cmd,
         cwd=cwd,
-        shell=isinstance(cmd, str),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         env=env,
     )
     return proc.returncode, (proc.stdout + proc.stderr).rstrip("\n")
@@ -135,12 +137,18 @@ def tests(root: Path, mb: str, quick: bool) -> Step:
     runs = json.loads(out)["runs"]
     if not runs:
         return Step("ok", "tests: nothing to run (the test plan selects no test file)")
+    try:
+        limit = proof_timeout(root)
+    except CheckError as exc:
+        return Step("FAIL", str(exc))
     lines: list[str] = []
     for item in runs:
-        code, out = run(item["command"], root / item["cwd"])
+        code, out, _ = execute(item["command"], root / item["cwd"], limit)
         lines.append(f"tests: {item['name']} ({len(item['files'])} test files) in {item['cwd']}")
+        if code is None:
+            return Step("FAIL", "\n".join([*lines, timeout_note(limit)]))
         if code != 0:
-            return Step("FAIL", "\n".join([*lines, out]))
+            return Step("FAIL", "\n".join([*lines, out.rstrip("\n")]))
     return Step("ok", "\n".join(lines))
 
 
@@ -150,13 +158,11 @@ def main(argv: list[str] | None = None) -> int:
     except Usage as exc:
         print(exc, file=sys.stderr)
         return 2
-    top = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
-    )
-    if top.returncode != 0:
+    code, top = run(["git", "rev-parse", "--show-toplevel"], Path.cwd())
+    if code != 0:
         print("prepush: not inside a git work tree (path class: root)")
         return 2
-    root = Path(top.stdout.strip())
+    root = Path(top.strip())
     body = Path(options["body"]) if options["body"] else None
     if body is not None and not body.is_file():
         print("prepush: the body file cannot be read (option: --body)")

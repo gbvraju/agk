@@ -105,6 +105,16 @@ def test_the_tests_step_runs_what_the_test_plan_selects(repo, tmp_path):
     assert "project_tests" in proc.stdout  # the run that failed is named
 
 
+def test_a_test_run_is_ended_at_the_proof_timeout(repo, tmp_path):
+    """REQ-016: brief #326 answer 1 (the tests step keeps proof's limit, `proof_timeout`)."""
+    toml = TOML.replace("echo RAN_PROJECT_TESTS", "sleep 20") + "proof_timeout = 1\n"
+    project(repo, toml=toml)
+    proc = prepush(repo, scan=scanner(tmp_path / "bin", 0))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert steps(proc.stdout)["tests"] == "FAIL"
+    assert "proof_timeout" in proc.stdout
+
+
 def test_no_changed_test_file_means_no_tests_to_run(repo, tmp_path):
     """REQ-016: brief #326 answer 1 (the plan selects nothing: the step passes, says so)."""
     repo.commit({"agk.toml": TOML, "agk.mk": MK_OK, "Makefile": LINT_OK, "a.txt": "a\n"}, "base")
