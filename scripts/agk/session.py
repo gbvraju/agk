@@ -54,6 +54,12 @@ take (`reserves ADR-0124`, rule 4) and frees a take after `claim_hours` or a `re
 (rule 5). `ids` prints the next free numbers as one JSON line (rule 4), `demand` how many sessions
 a launcher may start (rule 6) and `push-check` the files in which the head conflicts with the
 default branch (rule 7b, exit 1).
+Brief #327: `tell --session ID --text MESSAGE` posts one comment `Tell: <ID> <message>` on the one
+open `agk-conductor` issue (one line of at most 300 characters, never starting with `Approve:`,
+`Confirmed:` or `Verdict:`; a refusal names the rule, never the text); `inbox --session ID` (GET
+only) prints the `Tell:` lines for the session by a listed verdict author since its last
+`Request:` or since the inbox last printed one, and keeps that mark in the git directory;
+`watch --assign` prints each new `Tell:` line for the session while it waits.
 """
 
 from __future__ import annotations
@@ -100,7 +106,9 @@ USAGE = (
     "       session.py ids [--exclude-pr N]\n"
     "       session.py demand\n"
     "       session.py plan [--json]\n"
-    "       session.py push-check"
+    "       session.py push-check\n"
+    "       session.py tell --session ID --text MESSAGE\n"
+    "       session.py inbox --session ID"
 )
 COMMANDS = (
     "watch",
@@ -114,6 +122,8 @@ COMMANDS = (
     "demand",
     "plan",
     "push-check",
+    "tell",
+    "inbox",
 )
 PAGE = 100
 LABEL = "agk-brief"
@@ -133,6 +143,10 @@ RULES_FILE = "config/session-rules.md"
 RELEASED = re.compile(rf"released: (\S+){BUILD}")
 ASSIGN = re.compile(r"Assign: (\S+) (none|#(\d+)(?: build \(([A-Za-z0-9._-]+)\))?)")
 ASSIGN_LABEL = "agk-conductor"
+TELL = re.compile(r"Tell: (\S+) (.+)")
+TELL_LIMIT = 300
+TELL_REFUSED = re.compile(r"\s*(?:Approve|Confirmed|Verdict):", re.IGNORECASE)
+ZERO_WIDTH = re.compile("[\u200b-\u200f\u2060\ufeff]")  # read as nothing before the start check
 ASSIGN_MODES = ("conductor", "next")
 BRIEF_LINE = re.compile(r"Brief: #(\d+)")
 TOUCHES = re.compile(r"Touches: (.+)")
@@ -960,12 +974,18 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
         early = max(lines, key=lambda x: x[0].get("id", 0), default=None)
     found: list | None = comments
     take_reads = Reads(root)  # its own count: a readable conductor issue never resets it
+    told: set[int] = set()  # the `Tell:` lines already printed (brief #327 answer 2)
     while True:
         if found is None:
             if reads.failed(f"the comments of #{issue}"):
                 return EXIT_UNREADABLE
         else:
             reads.good()
+        for comment in sorted(found or [], key=lambda c: c.get("id", 0)):
+            cid = comment.get("id", 0)
+            if cid > seen and cid not in told and (line := tell_line(comment, me, allowed)):
+                told.add(cid)
+                print(line, flush=True)
         for comment in sorted(found or [], key=lambda c: c.get("id", 0)):
             match = assign_line(comment, me, allowed)
             if comment.get("id", 0) > seen and match:
@@ -987,6 +1007,94 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
             return 0
         time.sleep(interval)
         found = pages(path)
+
+
+# --- messages to a session (brief #327) ----------------------------------------------------------
+
+
+def tell_problem(text: str) -> str | None:
+    """Why a message cannot be sent (brief #327 answer 1), naming the rule and never the text: it
+    is one line (no line break that `str.splitlines` knows), and zero-width characters do not hide a
+    refused start (the verdict on 0e12557)."""
+    if not text.strip() or text.splitlines() != [text] or len(text) > TELL_LIMIT:
+        return f"tell: the message is one line of 1 to {TELL_LIMIT} characters"
+    if TELL_REFUSED.match(ZERO_WIDTH.sub("", text)):
+        return "tell: a message never starts with Approve:, Confirmed: or Verdict:"
+    return None
+
+
+def tell(root, me: str, text: str) -> int:
+    """Post one comment `Tell: <session> <message>` on the one open `agk-conductor` issue."""
+    if problem := tell_problem(text):
+        raise CheckError(problem)
+    repo = repo_name(root)
+    issue = conductor_issue(repo)
+    body = f"body=Tell: {me} {text}"
+    if gh(f"repos/{repo}/issues/{issue}/comments", "-f", body, method="POST") is None:
+        raise CheckError(f"tell: the comment on #{issue} could not be posted")
+    print(f"told {me} on #{issue}")
+    return 0
+
+
+def tell_line(comment: dict, me: str, allowed: set[str]) -> str | None:
+    """The `Tell: <me> <message>` first line of a comment by a listed author, else None."""
+    body = comment.get("body")
+    text = plain(body) if isinstance(body, str) else ""
+    first = text.splitlines()[0].strip() if text.strip() else ""
+    match = TELL.fullmatch(first)
+    if match and match.group(1) == me and author_of(comment) in allowed:
+        return first
+    return None
+
+
+def last_request(comments: list, me: str) -> int:
+    """The id of this session's newest `Request:` comment, 0 without one."""
+    return max(
+        (
+            c.get("id", 0)
+            for c in comments
+            if str(c.get("body") or "").startswith(f"Request: {me} ")
+        ),
+        default=0,
+    )
+
+
+def inbox_mark(root, me: str) -> Path:
+    """The file in the git directory that holds the id of the last message the inbox printed
+    (never tracked, never pushed)."""
+    found = git(root, "rev-parse", "--git-dir").strip()
+    base = Path(found) if Path(found).is_absolute() else Path(root) / found
+    return base / "agk" / f"inbox-{me}"
+
+
+def inbox(root, me: str) -> int:
+    """Print the `Tell:` lines for this session posted since its last `Request:` or since the
+    inbox last printed one, oldest first, or `no message` (GET only; brief #327 answer 2)."""
+    repo = repo_name(root)
+    issue = conductor_issue(repo)
+    comments = pages(f"repos/{repo}/issues/{issue}/comments")
+    if comments is None:
+        raise CheckError(f"tell: the comments of #{issue} cannot be read")
+    mark = inbox_mark(root, me)
+    try:
+        read = int(mark.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        read = 0
+    floor = max(read, last_request(comments, me))
+    allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None)}
+    lines = [
+        (c.get("id", 0), line)
+        for c in sorted(comments, key=lambda c: c.get("id", 0))
+        if c.get("id", 0) > floor and (line := tell_line(c, me, allowed))
+    ]
+    for _, line in lines:
+        print(line)
+    if not lines:
+        print("no message")
+        return 0
+    mark.parent.mkdir(parents=True, exist_ok=True)
+    mark.write_text(f"{lines[-1][0]}\n", encoding="utf-8")
+    return 0
 
 
 def is_red(item: dict) -> bool:
@@ -1476,6 +1584,8 @@ def main(argv: list[str] | None = None) -> int:
         "demand": set(),
         "plan": set(),
         "push-check": set(),
+        "tell": {"--session", "--text"},
+        "inbox": {"--session"},
     }
     if not set(opts) <= allowed[cmd] or len(opts) != len(args[1::2]):
         print(USAGE)
@@ -1504,6 +1614,8 @@ def main(argv: list[str] | None = None) -> int:
         ok = number_of(opts.get("--exclude-pr", "1"))
     elif cmd in ("demand", "push-check"):
         ok = True
+    elif cmd == "tell":
+        ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and "--text" in opts
     else:
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", "")))
     if not ok:
@@ -1529,6 +1641,10 @@ def main(argv: list[str] | None = None) -> int:
             return ids(root, int(opts["--exclude-pr"]) if "--exclude-pr" in opts else None)
         if cmd in ("demand", "push-check"):
             return {"demand": demand, "push-check": push_check}[cmd](root)
+        if cmd == "tell":
+            return tell(root, opts["--session"], opts["--text"])
+        if cmd == "inbox":
+            return inbox(root, opts["--session"])
         return next_brief(root, opts["--session"])
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}")
