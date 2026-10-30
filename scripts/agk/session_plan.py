@@ -74,22 +74,57 @@ def unshared(globs: list[str], shared: list) -> list[str]:
     return [g for g in globs if not any(r.fullmatch(literal(g)) for r in shared)]
 
 
+def is_folder(glob: str) -> bool:
+    """A folder entry of `Touches:`: `dir/`, `dir/**` or `**`; any other entry names files."""
+    return glob.endswith("/") or glob == "**" or glob.endswith("/**")
+
+
+def has_wildcard(glob: str) -> bool:
+    return literal(glob) != glob
+
+
+def file_clash(x: str, y: str) -> str | None:
+    """The file that two file entries both name, else None (brief #330 answer 1)."""
+    if x == y:
+        return x
+    if not has_wildcard(x) and glob_regex(y).fullmatch(x):
+        return x
+    if not has_wildcard(y) and glob_regex(x).fullmatch(y):
+        return y
+    if has_wildcard(x) and has_wildcard(y):
+        a, b = literal(x), literal(y)
+        if a.startswith(b) or b.startswith(a):
+            return max((x, y), key=lambda g: len(literal(g)))
+    return None
+
+
 def clash(a: list[str], b: list[str]) -> str | None:
-    """The broader of the first two `Touches:` globs that overlap, else None."""
+    """What two `Touches:` lists both touch, else None (brief #330 answers 1 and 3).
+
+    Two entries that name files overlap on the file they both name. A folder entry overlaps only
+    another folder entry above or below it (the narrower is named); against an entry that names a
+    file under it, it overlaps only when its own brief names that file too, which the first rule
+    finds."""
     for x in a:
         for y in b:
-            if literal(x).startswith(literal(y)) or literal(y).startswith(literal(x)):
-                return min((x, y), key=lambda g: len(literal(g)))
+            if not is_folder(x) and not is_folder(y) and (found := file_clash(x, y)):
+                return found
+    for x in a:
+        for y in b:
+            if is_folder(x) and is_folder(y):
+                if literal(x).startswith(literal(y)) or literal(y).startswith(literal(x)):
+                    return max((x, y), key=lambda g: len(literal(g)))
     return None
 
 
 def file_conflict(item: dict, mine: list[str], shared: list) -> str | None:
     """Why a changed file of a running pull request blocks a brief, else None.
 
-    A modified, renamed or removed file blocks when a glob of the brief matches it (a renamed file
-    also by its old name). A file the pull request only *adds* blocks only on an exact path: every
-    build adds an ADR, a changelog fragment and tests, and a new file cannot conflict with a brief
-    that does not name it."""
+    A modified, renamed or removed file blocks when an entry of the brief that names files matches
+    it (a renamed file also by its old name); a folder entry never does, since a brief whose folder
+    holds the file blocks only when it names that file too (brief #330 answer 1). A file the pull
+    request only *adds* blocks only on an exact path: every build adds an ADR, a changelog fragment
+    and tests, and a new file cannot conflict with a brief that does not name it."""
     names = [str(item.get("filename"))]
     if item.get("status") == "renamed" and item.get("previous_filename"):
         names.append(str(item["previous_filename"]))
@@ -99,7 +134,7 @@ def file_conflict(item: dict, mine: list[str], shared: list) -> str | None:
         if item.get("status") == "added":
             if path in mine:
                 return f"it adds {path}"
-        elif any(glob_regex(g).fullmatch(path) for g in mine):
+        elif any(glob_regex(g).fullmatch(path) for g in mine if not is_folder(g)):
             return f"it changes {path}"
     return None
 
