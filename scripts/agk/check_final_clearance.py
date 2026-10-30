@@ -8,7 +8,9 @@ When the latest verdict by a listed author is a covered fix list (`Verdict: fix 
 sha, the commit must change exactly the named status lines (one that also sets the `Chosen` line
 of a stack ADR fails saying that line is set by an ordinary commit, brief 274); a head two or more
 commits past the reviewed sha (counted on the first-parent line) fails (SPEC-0030 rule 7).
-Anything else passes unchecked. Without
+Anything else passes unchecked. With `review_mode = "solo"` in agk.toml the one listed person's
+confirmation counts as its verdict and its `Approve:` lines (brief 277,
+`reviewers.confirmed_comments`). Without
 `--comments` it prints `skipped (no comments file)` and passes. With two or more listed
 authors the verdicts of `--author`, the pull request's own author, do not count (SPEC-0025 rule 4).
 Git and the file only: no network, no model. Messages name the rule, never a value.
@@ -33,7 +35,13 @@ from common import (
     run,
 )
 from metrics import counted_authors, latest_verdict_body
-from reviewers import person_approvals, spec_approvers, verdict_authors
+from reviewers import (
+    confirmed_comments,
+    person_approvals,
+    solo_person,
+    spec_approvers,
+    verdict_authors,
+)
 
 NAME = "final-clearance"
 SPEC_FILE = re.compile(r"docs/specs/(\d{4})-[^/]+\.md")
@@ -106,6 +114,7 @@ def check(
 ) -> int:
     authors = counted_authors(verdict_authors(root), author)
     items = comments_of(comments)
+    items = confirmed_comments(items, agent_apps(root), solo_person(root))  # brief 277
     covered = covered_fix_list(latest_verdict_body(items, authors))
     if covered is not None:
         sha, edits = covered

@@ -58,9 +58,11 @@ from reviewers import (
     APPROVE,
     APPROVE_SHORT,
     approval_shas,
+    confirmed_comments,
     first_line,
     login_of,
     person_approvals,
+    solo_person,
     spec_approvers,
     verdict_authors,
     via_agent,
@@ -227,6 +229,12 @@ def decide(f: dict) -> str:
         return "agk:ci-red"
     head = str(f.get("head") or "")
     comments = f.get("comments") or []
+    if f.get("solo_person"):  # brief 277: the person's confirmation is the verdict and approval
+        parents = (f.get("commit") or {}).get("parents") or []
+        heads = {head} | ({str(parents[0].get("sha"))} if len(parents) == 1 else set())
+        comments = confirmed_comments(
+            comments, f.get("agent_apps") or (), f["solo_person"], heads=heads
+        )
     authors = counted_authors(f.get("authors"), f.get("author"))
     listed = verdicts(comments, authors) or []
     kind, sha = listed[-1] if listed else ("", "")
@@ -295,6 +303,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "approvers": spec_approvers(root),
         "required": required_checks(root),
         "agent_apps": agent_apps(root),
+        "solo_person": solo_person(root),
         "author": (pr.get("user") or {}).get("login"),
         "files": files,
         "commit": commit if isinstance(commit, dict) else {},
