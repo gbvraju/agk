@@ -1,6 +1,6 @@
 # ADR-0208: a local check run leaves a record of what ran (REQ-039, brief 374)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0186
