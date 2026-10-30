@@ -1,6 +1,6 @@
 # ADR-0188: the kit reports which of its checks and rules ever fired (REQ-011, brief 328)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0177
