@@ -902,6 +902,8 @@ def kit_behind_result(kit_root: Path | None, config: dict, api_dir: Path | None)
     if newest is None:
         return Result("cannot-check", "bad-response")
     mine = version_numbers(installed) or ()
+    width = max(len(mine), len(newest))  # `1.0` and `1.0.0` are the same version
+    mine, newest = mine + (0,) * (width - len(mine)), newest + (0,) * (width - len(newest))
     if mine < newest:
         shown = RELEASE_TAG.fullmatch(str(tag))
         return Result("fail", message=f" (installed {installed}, newest release {shown.group(1)})")

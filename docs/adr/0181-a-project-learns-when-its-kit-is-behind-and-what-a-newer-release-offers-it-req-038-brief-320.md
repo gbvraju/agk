@@ -21,7 +21,7 @@ no `Measured:` line. The tests were written first (`tests/kit/test_doctor_kit_be
 1. **The doctor (answer 1).** A warning `kit-behind`, after `kit-version`. With `--kit-root` it reads the `repository` of the
    kit's `.claude-plugin/plugin.json` (a github.com URL) and makes one GET, `gh api repos/{kit owner}/{kit repo}/releases/latest`;
    with `--api-dir` the recorded file is `kit-release.json`. The tag (`vX.Y.Z` or `X.Y.Z`) and `version` in `agk.toml` are
-   compared as numbers. Older fails, and the message names both versions, as the brief asks: `(installed X, newest release Y)`.
+   compared as numbers, the shorter padded with zeros (`1.0` equals `1.0.0`). Older fails, and the message names both versions, as the brief asks: `(installed X, newest release Y)`.
    Equal is `ok`; newer (a checkout between releases) is `ok` with `(newer than the newest release: a checkout between
    releases)`. A release that cannot be read is `cannot-check`: `no-kit-root` without `--kit-root`; `bad-response` for an
    unreadable plugin file, an unreadable installed version or a tag that is not a version; `not-github` for a repository not
@@ -60,6 +60,19 @@ no `Measured:` line. The tests were written first (`tests/kit/test_doctor_kit_be
 7. **Flow mode.** Fragment `changelog.d/kit-behind-opt-in.md`; no version bump. `kit/hashes.json` is not edited (session rule
    14). The kit's `kit/templates/changelog.md` is not changed (the brief's `Touches:` does not list it); the marker is
    documented in `docs/guides/reference.md`.
+
+## Log
+
+- 2026-10-30, verdict on 90b075b: Q-320-1, amendment 98 is kept (#329 takes 99).
+- 2026-10-30, verdict on 90b075b: Q-320-2, agreed: a malformed marker is not failed for now; a build-time check can come later.
+- 2026-10-30, verdict on 90b075b: Q-320-3, agreed: the summary is the text up to the first `: `, cut at 120 characters.
+- 2026-10-30, verdict on 90b075b: the files under `tests/kit_dev/`, `docs/adr/` and `docs/runs/` are accepted as changes
+  outside `Touches:`.
+- 2026-10-30, verdict on 90b075b: item 1 built (decision 1): versions of different lengths are padded before they are
+  compared, with its test.
+- 2026-10-30, verdict on 90b075b: Q-320-4, decided: one fragment in this pull request with one marked line per opt-in feature
+  that shipped in 0.59.0 (`proof`, `unused_code`, `coverage`, `review_mode`); past sections are not edited. Not built yet: a
+  fragment is one line and a build adds exactly one (SPEC-0031 rules 1 and 2, `kit_hashes.py`), so the form is asked as Q-320-5.
 
 ## Consequences
 
