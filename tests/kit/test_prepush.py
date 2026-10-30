@@ -290,13 +290,16 @@ def test_the_hook_template_calls_prepush_and_installs_nothing():
 
 
 def test_the_session_rules_ask_for_prepush_before_each_push():
-    """REQ-016: brief #326 answer 3 (one session rule: prepush before each push, milestones)."""
+    """REQ-016: brief #326 answer 3 (rule 31: prepush before each push; rule 7 as SPEC-0033
+    rule 1 says, the milestone push only proposed, Q-326-4)."""
     root = Path(__file__).resolve().parents[2]
     rules = (root / "config" / "session-rules.md").read_text(encoding="utf-8")
     lines = [ln for ln in rules.splitlines() if "prepush.py" in ln]
-    assert len(lines) == 1
-    assert "before each push" in lines[0] and "milestones of rule 7" in lines[0]
+    assert len(lines) == 1 and lines[0].startswith("31. ")
+    assert "before each push" in lines[0] and "milestone" not in lines[0]
     seven = next(ln for ln in rules.splitlines() if ln.startswith("7. "))
-    assert "commits its branch at every step" in seven
-    assert "pushes at milestones (tests red, then green, then ready)" in seven
-    assert "always before it pauses, ends or asks a question" in seven
+    assert seven.startswith("7. A builder commits and pushes its branch at every step")
+    proposal = root / "docs" / "runs" / "proposed-spec-amendments-101.md"
+    text = proposal.read_text(encoding="utf-8")
+    assert "SPEC-0033 rule 1" in text and "Session rule 7" in text
+    assert "always before it pauses, ends or asks a question" in text
