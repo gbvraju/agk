@@ -96,6 +96,48 @@ def moved_unchanged(old: str, new: str, version: str, gathered: list[str] | None
     )
 
 
+# The opt-in marker of a changelog entry (brief #320 answer 2): one `(opt-in: <setting>)` at the end
+# of the line, for a feature a project switches on by a setting of `agk.toml`; a dotted setting
+# names a key of a table. The release moves the line unchanged, so the marker stays with it.
+SETTING = r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*"
+OPT_IN = re.compile(rf"(?P<text>.*\S) \(opt-in: (?P<setting>{SETTING})\)")
+ENTRY = re.compile(r"- (?:#\d+ )?(?P<rest>.*)")
+SUMMARY_LIMIT = 120
+RELEASED = re.compile(r"## (\d+(?:\.\d+)*) \(\d{4}-\d{2}-\d{2}\)")
+
+
+def opt_in(line: str) -> tuple[str, str] | None:
+    """(setting, one-line summary) of a changelog line `- [#n ]<change> (opt-in: <setting>)`, else
+    None (no marker, a marker not at the end, or more than one). The summary is the change up to
+    its first `: `, cut to SUMMARY_LIMIT characters at a word boundary."""
+    entry = ENTRY.fullmatch(line.strip())
+    found = OPT_IN.fullmatch(entry.group("rest")) if entry else None
+    if found is None or "(opt-in:" in found.group("text"):
+        return None
+    summary = found.group("text").split(": ", 1)[0].strip()
+    if len(summary) > SUMMARY_LIMIT:
+        summary = summary[: SUMMARY_LIMIT + 1].rsplit(" ", 1)[0].rstrip(" ,;")
+    return found.group("setting"), summary
+
+
+def opt_ins(changelog: str, old: str, new: str) -> list[tuple[str, str]]:
+    """The (setting, summary) of every opt-in entry of the released sections `## V (<date>)` with
+    old < V <= new, newest section first, in the changelog's order. `## Unreleased` is not read."""
+    low, high = numbers(old), numbers(new)
+    if low is None or high is None:
+        return []
+    found: list[tuple[str, str]] = []
+    inside = False
+    for line in changelog.splitlines():
+        if line.startswith(HEADING):
+            heading = RELEASED.fullmatch(line.strip())
+            version = numbers(heading.group(1)) if heading else None
+            inside = version is not None and low < version <= high
+        elif inside and (item := opt_in(line)) is not None:
+            found.append(item)
+    return found
+
+
 def check(root: Path) -> int:
     if pr_mode(root) != "flow":
         print(f"ok {NAME}")

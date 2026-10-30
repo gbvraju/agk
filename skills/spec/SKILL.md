@@ -47,7 +47,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" ids --sentence "SENTENCE"
    ran; the ids follow on the next lines. If the script refuses because its version is older than the one in the project's
    `agk.toml`, stop and say so: the plugin needs the project's kit version or a newer one.
 
-3. Create the branch from the default branch: `git switch -c intake/<req id in lower case>-<slug> origin/<default branch>`.
+3. Create the branch from the default branch, without tracking it:
+   `git switch --no-track -c intake/<req id in lower case>-<slug> origin/<default branch>`. A branch that tracks the default
+   branch makes a plain push refuse and offer a push to the default branch itself; the script prints a push of `HEAD` to
+   its own branch instead.
 4. If the sentence has more than one reasonable reading, ask the person at most three questions, in one message, before
    writing anything. Never guess an answer: each point still open is written under `## Open questions` of the spec as
    `Q-S<spec>-<n>` (for example `Q-S0014-1`), with the question and the reading the criteria assume. Never ask more than

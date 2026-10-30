@@ -647,7 +647,7 @@ def cmd_next_steps(root: Path, opts: dict[str, str], today: str) -> int:
         root, fields, brief=brief, issues=opts.get("issues"), changed=draft.changed, base=mb
     )
     print(f"Commit message:\n\nintake: add {req['id']} {req['title']}\n")
-    print(f"Push command:\n\ngit push -u origin {branch}\n")
+    print("Push command:\n\ngit push -u origin HEAD\n")
     print("Open the pull request from that branch into the default branch with this body.\n")
     print_body(path, body)
     print(

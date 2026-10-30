@@ -4,7 +4,8 @@ Standard library only, and no language: the test command, directories and patter
 `agk.toml`. It places the pull request's test files on the base commit (a detached git worktree)
 and runs `project_tests` there, expecting it to fail, then runs it on the head (a second detached
 worktree), expecting it to pass. With a `[proof]` table, each test area's own command runs instead,
-with only the pull request's test files of that area (brief #305, ADR-0172). ROOT's work tree is
+with only the pull request's test files of that area (brief #305, ADR-0172). What runs is built by
+`plan`, which `test_plan.py` prints before anything runs (brief #325, ADR-0185). ROOT's work tree is
 never changed: the script adds two worktrees in a temporary directory outside ROOT and removes them
 at the end, also on a failure.
 
@@ -348,18 +349,15 @@ def area_command(area: dict, paths: list[str]) -> str:
 REASON_ORDER = ("timeout", "green-on-base", "red-on-head")
 
 
-def run_areas(root: Path, base: str, head: str, areas: list[dict], files: dict[str, str], limit):
-    """Each area with added or changed tests runs its command, with only those files, on the base
-    (all the areas' tests placed) and on the head."""
-    placed = {p: files[p] for a in areas for p in a["files"]}
-    with Trees(root, base, head, placed) as trees:
-        for area in areas:
-            paths = [p for p in area["files"] if files[p] != "D"]
-            if not paths:
-                continue
+def run_areas(root: Path, base: str, head: str, shown: Plan, limit) -> None:
+    """Each run of the plan, on the base (all the areas' tests placed) and on the head."""
+    areas = {a["name"]: a for a in shown.areas or []}
+    with Trees(root, base, head, shown.files) as trees:
+        for run in shown.runs:
             status1, status2, elapsed, seconds = run_pair(
-                trees, area_command(area, paths), limit, f" ({area['name']})", area["cwd"]
+                trees, run.command, limit, f" ({run.name})", run.cwd
             )
+            area = areas[run.name]
             area["outcome"], area["reason"] = decide(status1, status2)
             area["seconds"], area["elapsed"] = seconds, elapsed
 
@@ -386,46 +384,48 @@ def decide(status1: int | None, status2: int | None) -> tuple[str, str | None]:
     return "not-proven", "red-on-head"
 
 
-def prove(root: Path, base: str, head: str, body: str) -> Result:
+@dataclass
+class Run:
+    """One command proof runs: its name (the area, or `project_tests`), the added or changed test
+    files it is given, the command line and the folder it runs in, relative to the worktree."""
+
+    name: str
+    files: list[str]
+    command: str
+    cwd: str
+
+
+@dataclass
+class Plan:
+    """What proof runs for a change (brief #325): built by `plan` alone, which both `prove` and
+    `test_plan.py` call, so the plan shown is the plan run."""
+
+    table: bool  # a `[proof]` table is set
+    files: dict[str, str]  # every test file proof places on the base -> status (deletions too)
+    runs: list[Run]  # in table order; at most one, `project_tests`, without a table
+    idle: list[str]  # the areas (or `project_tests`) with nothing to run
+    outside: list[str]  # added or changed test files (test_dirs, test_patterns) in no area
+    command: str  # `project_tests`, without a table
+    areas: list[dict] | None = None  # the areas of the table, each with its `files`
+
+
+def plan(root: Path, base: str, head: str) -> Plan:
+    """The one plan of proof for the change base..head: git and files only, nothing run. A bad
+    `[proof]` setting, or a `cwd` that is not a folder of the head, is refused (CheckError)."""
     cfg = load_config(root)
     areas = proof_areas(root)
-    if areas is not None:
-        return prove_areas(root, base, head, body, areas)
-    command = str(cfg["project_tests"] or "").strip()
-    limit = proof_timeout(root)
-    files = {
-        p: s
-        for p, s in changes(root, base, head).items()
-        if is_test_file(p, list(cfg["test_dirs"]), list(cfg["test_patterns"]))
-    }
-    names = sorted(files)
-
-    def result(outcome: str, reason: str | None = None) -> Result:
-        return Result(outcome, reason, base, head, names)
-
-    if not command:
-        return result("unknown", "no-project-tests")
-    if declares_unchanged(body):
-        return result("skipped")
-    if not files or all(s == "D" for s in files.values()):
-        return result("unknown", "no-test-files")
-    status1, status2, seconds = two_runs(root, base, head, files, command, limit)
-    outcome, reason = decide(status1, status2)
-    return Result(outcome, reason, base, head, names, seconds)
-
-
-def prove_areas(root: Path, base: str, head: str, body: str, areas: list[dict]) -> Result:
-    """With a `[proof]` table: each area's own command with only the pull request's files."""
-    limit = proof_timeout(root)
     changed = changes(root, base, head)
-    for area in areas:
-        mine = area_files(area, changed)
-        area.update(files=sorted(mine), outcome=None, reason=None, seconds=0, elapsed=None)
-    names = sorted({p for a in areas for p in a["files"]})
-
-    def result(outcome: str, reason: str | None = None, elapsed: int | None = None) -> Result:
-        return Result(outcome, reason, base, head, names, elapsed, areas)
-
+    if areas is None:
+        command = str(cfg["project_tests"] or "").strip()
+        files = {
+            p: s
+            for p, s in changed.items()
+            if is_test_file(p, list(cfg["test_dirs"]), list(cfg["test_patterns"]))
+        }
+        added = sorted(p for p, s in files.items() if s != "D")
+        if command and added:
+            return Plan(False, files, [Run("project_tests", added, command, ".")], [], [], command)
+        return Plan(False, files, [], ["project_tests"], [], command)
     for area in areas:
         kind = git(root, "cat-file", "-t", f"{head}:{area['cwd']}", check=False).strip()
         if area["cwd"] != "." and kind != "tree":
@@ -433,11 +433,64 @@ def prove_areas(root: Path, base: str, head: str, body: str, areas: list[dict]) 
                 "the cwd of a proof area is not a folder of the head "
                 f"(setting: proof.{area['name']}.cwd)"
             )
+    runs: list[Run] = []
+    idle: list[str] = []
+    for area in areas:
+        area["files"] = sorted(area_files(area, changed))
+        added = [p for p in area["files"] if changed[p] != "D"]
+        if added:
+            runs.append(Run(area["name"], added, area_command(area, added), area["cwd"]))
+        else:
+            idle.append(area["name"])
+    placed = {p: changed[p] for a in areas for p in a["files"]}
+    dirs, patterns = list(cfg["test_dirs"]), list(cfg["test_patterns"])
+    outside = sorted(
+        p
+        for p, s in changed.items()
+        if s != "D" and p not in placed and is_test_file(p, dirs, patterns)
+    )
+    return Plan(True, placed, runs, idle, outside, "", areas)
+
+
+def prove(root: Path, base: str, head: str, body: str) -> Result:
+    table = proof_areas(root) is not None
+    limit = proof_timeout(root)
+    shown = plan(root, base, head)
+    if table:
+        return prove_areas(root, base, head, body, shown, limit)
+    names = sorted(shown.files)
+
+    def result(outcome: str, reason: str | None = None) -> Result:
+        return Result(outcome, reason, base, head, names)
+
+    if not shown.command:
+        return result("unknown", "no-project-tests")
     if declares_unchanged(body):
         return result("skipped")
-    if not any(changed[p] != "D" for a in areas for p in a["files"]):
+    if not shown.runs:
         return result("unknown", "no-test-files")
-    run_areas(root, base, head, areas, changed, limit)
+    status1, status2, seconds = two_runs(
+        root, base, head, shown.files, shown.runs[0].command, limit
+    )
+    outcome, reason = decide(status1, status2)
+    return Result(outcome, reason, base, head, names, seconds)
+
+
+def prove_areas(root: Path, base: str, head: str, body: str, shown: Plan, limit: int) -> Result:
+    """With a `[proof]` table: each area's own command with only the pull request's files."""
+    areas = shown.areas or []
+    for area in areas:
+        area.update(outcome=None, reason=None, seconds=0, elapsed=None)
+    names = sorted(shown.files)
+
+    def result(outcome: str, reason: str | None = None, elapsed: int | None = None) -> Result:
+        return Result(outcome, reason, base, head, names, elapsed, areas)
+
+    if declares_unchanged(body):
+        return result("skipped")
+    if not shown.runs:
+        return result("unknown", "no-test-files")
+    run_areas(root, base, head, shown, limit)
     return result(*combine(areas))
 
 

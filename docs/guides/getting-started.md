@@ -337,6 +337,9 @@ Priority: 2
   2026-10-19 the metrics issues of the project's repository and of a fork came about 7 hours after their slot, and the report about
   7.5 hours. The drift audit of the project's own repository ran 4 hours 20 minutes after its slot on 2026-10-17. Wait a few hours, then start the workflow by hand
   from the Actions tab.
+- **Actions is blocked or out of minutes.** The checks of a new head never start, and the Actions tab shows a job refused
+  for billing or no run at all. Follow [local-mode.md](local-mode.md): it says how to disable the workflows, what the builders
+  and the conductor run instead, what is lost, and how to come back when Actions returns.
 - **A scheduled run never happens, in a fork.** Scheduled runs worked on a fork once Actions were on (the scheduled metrics run
   of a fork on 2026-10-19). If no scheduled run ever appears, enable the workflows from the Actions tab of the fork.
 - **A workflow fails when it writes its issue.** Issues must be on for the repository: Settings, General, Features. The

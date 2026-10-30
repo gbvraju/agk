@@ -126,6 +126,13 @@ inside `cwd` (the repository root when it is not set), so the folder is written 
 request's head is refused, naming the setting. The result is `proven` only when every area with files is red on the base and green
 on the head; otherwise the line names the area, as in `proof: not-proven (frontend: green-on-base)`. Without the table proof uses `project_tests` as above.
 
+To see what proof will run before you push, run `python3 scripts/agk/test_plan.py` (or add `--base REF --head REF`, and `--json`
+for a script). It reads git and files only and runs nothing. For each area it prints the added or changed test files, the command
+line with `{files}` filled in and the folder it runs in; then the areas with nothing to run, and each test file that matches no
+area as `not run by proof (in no [proof] area)`, so a missing area shows before CI. Without the table it prints `project_tests`
+and the test files `test_dirs` and `test_patterns` select. Proof builds its runs with the same function, so the plan shown is the
+plan run.
+
 ## Step 5. The first real change, tests first
 
 Follow steps 7 to 10 of [getting started](getting-started.md): a sentence, a Draft spec, the architect's brief, an Approved spec,
