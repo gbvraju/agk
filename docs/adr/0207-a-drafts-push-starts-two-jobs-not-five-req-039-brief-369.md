@@ -1,6 +1,6 @@
 # ADR-0207: a draft's push starts two jobs, not five, and a description edit starts no router run of its own (REQ-039, brief 369)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0165, ADR-0178
