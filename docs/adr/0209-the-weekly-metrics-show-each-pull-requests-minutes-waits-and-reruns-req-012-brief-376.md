@@ -1,6 +1,6 @@
 # ADR-0209: the weekly metrics show each pull request's minutes, waits and re-runs (REQ-012, brief 376)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0184, ADR-0016
