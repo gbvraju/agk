@@ -311,3 +311,56 @@ def test_ac1_reading_any_repository_stays_open(project):
             run_hook({"tool_name": "Bash", "tool_input": {"command": command}}, project).stdout
             == ""
         )
+
+
+# --- a `#` is read the way bash reads it (brief #351, ADR-0199) -----------------------------------
+
+HASH_NO = [
+    "git status#;id",
+    "git status#;touch z",
+    "gh api repos/x/y#;touch z",
+    "git log #;id",
+    "git status # a comment",
+    "git log x#y",
+    "git log x\\#y",
+    "date -u#",
+    "make governance#;id",
+    "gh api --method POST repos/o/r/issues/7/comments -f body=see#12",
+    "gh api --method POST repos/o/r/issues/7/comments -f body=x #;id",
+]
+HASH_OK = [
+    "gh api --method POST repos/o/r/issues/7/comments -f 'body=Verdict: cleared #12'",
+    'gh api --method POST repos/o/r/issues/7/comments -f "body=Verdict: cleared #12"',
+    "gh api --method POST repos/o/r/issues/7/comments -f body='see #12;id'",
+]
+
+
+@pytest.mark.parametrize("command", HASH_NO)
+def test_a_hash_outside_quotes_is_denied(project, command):
+    """REQ-002: brief #351 answers 1 and 3 (bash would run a command the guard never saw)."""
+    proc = run_hook({"tool_name": "Bash", "tool_input": {"command": command}}, project)
+    verdict = denied(proc.stdout)
+    assert verdict and verdict["permissionDecision"] == "deny", command
+    assert RULE9_MARK in verdict["permissionDecisionReason"]
+    assert command not in proc.stdout
+
+
+@pytest.mark.parametrize("command", HASH_OK)
+def test_a_hash_inside_quotes_stays_allowed(project, command):
+    """REQ-002: brief #351 answer 3 (a quoted `#` is one word for bash and for the guard)."""
+    proc = run_hook({"tool_name": "Bash", "tool_input": {"command": command}}, project)
+    assert proc.returncode == 0 and proc.stdout == "", command
+
+
+def test_tokens_of_reads_the_words_bash_passes():
+    """REQ-002: brief #351 Measured line (before: ['git', 'status']; after: None)."""
+    sys.path.insert(0, str(HOOK.parent))
+    try:
+        import architect_guard as guard
+    finally:
+        sys.path.remove(str(HOOK.parent))
+    assert guard.tokens_of("git status#;id") is None
+    assert guard.tokens_of("git status # x") is None
+    assert guard.tokens_of("git log 'a #b'") == ["git", "log", "a #b"]
+    assert guard.tokens_of('git log "a#b"') == ["git", "log", "a#b"]
+    assert guard.tokens_of("git status") == ["git", "status"]
