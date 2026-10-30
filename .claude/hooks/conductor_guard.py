@@ -38,6 +38,17 @@ Without `--shadow` the conductor may also file a brief (brief 276, ADR-0170): th
 directory (no link out of it, at most 65536 characters) that `check_brief.py FILE --root <project>`
 accepts. Any other label or a second one, another field or flag, another repository, an issue
 edit, a label creation and an inline body stay denied; the shadow mode files nothing.
+Without `--shadow` the conductor may also read its queue (brief 284, ADR-0175) with the project's
+own script, the regular file `scripts/agk/session.py` of the project directory (named relative to
+the session's working directory or by its full path, never through a link): exactly
+`python3 scripts/agk/session.py review-queue`, with `--all` or `--fingerprint` or neither, and
+`python3 scripts/agk/session.py queue --role conductor`. Both only read GitHub (GET); every other
+command of the script (`watch`, `next`, `claim`, `after` and the rest), another role, another flag,
+another interpreter or another copy of the script, such as one in a pull request's worktree, stays
+denied, and the shadow mode gets none of them.
+A comment `POST` whose `body=@` file is not an absolute path is refused with a message that names
+the likely cause (a backslash path loses its backslashes in a POSIX shell such as Git Bash), so
+that the conductor writes the forward-slash form; nothing more is allowed by it.
 The message names the rule, never the command or the path. Standard library only; no network.
 """
 
@@ -95,6 +106,18 @@ FILE_FIELDS = ("-F", "--field")
 ISSUES_ENDPOINT = re.compile(r"^/?repos/([^/\s]+)/([^/\s]+)/issues$")
 BRIEF_LABEL = "labels[]=agk-brief"
 BODY_LIMIT = 65536  # GitHub's limit of an issue body; a longer file is not read in part
+SESSION_SCRIPT = os.path.join("scripts", "agk", "session.py")
+QUEUE_FORMS = (  # the read-only commands of the conductor's queue (brief 284), exactly these
+    ["review-queue"],
+    ["review-queue", "--all"],
+    ["review-queue", "--fingerprint"],
+    ["queue", "--role", "conductor"],
+)
+PATH_RULE = (
+    "conductor guard rule 6: the comment's body file is not an absolute path of a scratch "
+    "directory; write the path with forward slashes (a backslash path loses its backslashes in a "
+    "POSIX shell)"
+)
 
 
 def scratch_dir(path: str) -> str | None:
@@ -325,7 +348,35 @@ def brief_post_ok(words: list[str]) -> bool:
     return text is not None and brief_checked(text)
 
 
-def bash_allowed(command: object, shadow: bool = False) -> bool:
+def queue_allowed(words: list[str], cwd: object) -> bool:
+    """`python3 scripts/agk/session.py review-queue [--all | --fingerprint]` or `... queue --role
+    conductor`, where the script is the regular file of the project directory itself (brief 284)."""
+    if len(words) < 2 or words[0] != "python3" or words[2:] not in QUEUE_FORMS:
+        return False
+    path = words[1]
+    if not path or "\0" in path or path.startswith("-"):
+        return False
+    base = cwd if isinstance(cwd, str) and os.path.isabs(cwd) else os.getcwd()
+    full = os.path.join(base, path)
+    own = os.path.join(os.path.realpath(project_root()), SESSION_SCRIPT)
+    return os.path.realpath(full) == own and os.path.isfile(own) and not os.path.islink(full)
+
+
+def body_path_not_absolute(command: object) -> bool:
+    """A comment `POST` whose `body=@` file is not an absolute path (brief 284, field note)."""
+    words = tokens_of(command) if isinstance(command, str) else None
+    if not words or words[:2] != ["gh", "api"] or not is_post(words):
+        return False
+    args = words[2:]
+    return any(
+        flag in FILE_FIELDS
+        and value.startswith("body=@")
+        and not os.path.isabs(value[len("body=@") :])
+        for flag, value in zip(args, args[1:], strict=False)
+    )
+
+
+def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> bool:
     if not isinstance(command, str):
         return False
     clean = command.startswith(ENV_PREFIX)
@@ -353,6 +404,8 @@ def bash_allowed(command: object, shadow: bool = False) -> bool:
         return gh_api_allowed(words)
     if words[0] == "date":
         return all(w == "-u" or w.startswith("+") for w in words[1:])
+    if words[0] == "python3" and not shadow:
+        return queue_allowed(words, cwd)
     return False
 
 
@@ -368,7 +421,10 @@ def decide(payload: dict, shadow: bool = False) -> str | None:
     if tool == "Bash":
         if not shadow and (message := verdict_denial(data.get("command"))):
             return message
-        return None if bash_allowed(data.get("command"), shadow) else BASH_RULE
+        command = data.get("command")
+        if bash_allowed(command, shadow, payload.get("cwd")):
+            return None
+        return PATH_RULE if body_path_not_absolute(command) else BASH_RULE
     return None
 
 
