@@ -112,7 +112,7 @@ def live_doctor(tmp_path, admin: bool = True, message: str = PLAN_MESSAGE):
     shutil.copytree(ok / "tree", root)
     shutil.copytree(ok / "kit", kit)
     bin_dir.mkdir()
-    subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607
+    subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607 - fixed argument list, no shell
     repo = json.loads((ok / "api" / "repo.json").read_text(encoding="utf-8"))
     repo["permissions"]["admin"] = admin
     (tmp_path / "repo.json").write_text(json.dumps(repo), encoding="utf-8")
