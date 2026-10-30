@@ -169,7 +169,10 @@ def test_the_exceptions_are_still_installed_and_still_missing():
 
 
 def test_the_three_commands_are_found_by_the_check():
-    """The check reads the reference: minutes is installed and named there only by this brief."""
+    """The check reads the reference: minutes is installed and named there only by this brief.
+    Since brief #370 the doctor imports it as well (its `actions-minutes` line); it stays a command
+    a person runs, named in the reference."""
     assert "minutes.py" in installed_scripts()
     assert "minutes.py" not in run_by_the_kit()
-    assert not imported("minutes.py", installed_scripts())
+    assert imported("minutes.py", installed_scripts())
+    assert "scripts/agk/minutes.py" in reference()

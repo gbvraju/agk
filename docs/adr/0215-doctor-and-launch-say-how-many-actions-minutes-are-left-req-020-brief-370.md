@@ -6,7 +6,7 @@
 - Related: ADR-0184
 - Requirements: REQ-020
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `skills/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `skills/`
 
 ## Context
 
@@ -46,7 +46,10 @@ written first, with saved API responses and no network (`tests/kit/test_minutes.
 - A person who runs the doctor or launch sees, from half of the plan's minutes on, how close the month is and when CI stops.
 - With billing unreadable, the doctor reads the run history of the month (one read per run), as `minutes.py` does; that is slower
   but only happens when billing cannot answer.
-- The doctor's test fixtures carry a billing answer (`tests/kit/fixtures/doctor/ok/api/billing.json`, nothing used).
+- The doctor's test fixtures carry a billing answer (`tests/kit/fixtures/doctor/ok/api/billing.json`, nothing used); the
+  doctor's counts and its live-read list grow by the one check and the one billing read.
+- `minutes.py` is now imported by an installed script (the doctor); the reference test that recorded it as imported by none now
+  records that it is, and that the reference still names it as a command (`tests/kit_dev/test_reference_commands.py`).
 
 ## Residual
 

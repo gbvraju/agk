@@ -169,7 +169,7 @@ minutes used, the plan's included minutes where the billing API answers, an esti
 merged pull request, and a warning past `minutes_warn` percent; a figure it cannot read is `unknown`, never 0. It reads with
 `gh api` (GET only) and writes nothing. It also gives a level (`ok`, `50%`, `minutes_warn`, `95%`) and the day the included
 minutes run out at this month's rate; `--line` prints only that, the line that `doctor.py` (`actions-minutes`) and
-`/agk:launch` print (ADR-0215). See [project-ci.md](project-ci.md#how-many-minutes-are-left) and ADR-0184.
+the launch skill print (ADR-0215). See [project-ci.md](project-ci.md#how-many-minutes-are-left) and ADR-0184.
 
 ## Test plan
 
