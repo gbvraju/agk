@@ -1,8 +1,9 @@
 """A project's own make targets live in `project.mk` (brief #390, ADR-0214, REQ-038).
 
 Answer 1: the kit's `Makefile` includes `project.mk` after `agk.mk` when it exists, and the kit
-never installs, lists, hashes or writes that file. Answer 2: an upgrade refused over an edited `Makefile`
-says to move the project's own targets to `project.mk`, naming the file and never its content.
+never installs, lists, hashes or writes that file. Answer 2: an upgrade refused over an edited
+`Makefile` says to move the project's own targets to `project.mk`, naming the file and never its
+content.
 Answer 4: a CRLF copy of a released `Makefile` is read as LF and is not refused.
 """
 
