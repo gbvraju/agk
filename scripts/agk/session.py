@@ -146,6 +146,7 @@ ASSIGN_LABEL = "agk-conductor"
 TELL = re.compile(r"Tell: (\S+) (.+)")
 TELL_LIMIT = 300
 TELL_REFUSED = re.compile(r"\s*(?:Approve|Confirmed|Verdict):", re.IGNORECASE)
+ZERO_WIDTH = re.compile("[\u200b-\u200f\u2060\ufeff]")  # read as nothing before the start check
 ASSIGN_MODES = ("conductor", "next")
 BRIEF_LINE = re.compile(r"Brief: #(\d+)")
 TOUCHES = re.compile(r"Touches: (.+)")
@@ -1012,10 +1013,12 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
 
 
 def tell_problem(text: str) -> str | None:
-    """Why a message cannot be sent (brief #327 answer 1), naming the rule and never the text."""
-    if not text.strip() or "\n" in text or "\r" in text or len(text) > TELL_LIMIT:
+    """Why a message cannot be sent (brief #327 answer 1), naming the rule and never the text: it
+    is one line (no line break that `str.splitlines` knows), and zero-width characters do not hide a
+    refused start (the verdict on 0e12557)."""
+    if not text.strip() or text.splitlines() != [text] or len(text) > TELL_LIMIT:
         return f"tell: the message is one line of 1 to {TELL_LIMIT} characters"
-    if TELL_REFUSED.match(text):
+    if TELL_REFUSED.match(ZERO_WIDTH.sub("", text)):
         return "tell: a message never starts with Approve:, Confirmed: or Verdict:"
     return None
 

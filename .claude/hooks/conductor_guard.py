@@ -124,6 +124,7 @@ QUEUE_FORMS = (  # the read-only commands of the conductor's queue (brief 284), 
 SESSION_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")  # a session ID, never an option
 TELL_LIMIT = 300  # the longest message of `session.py tell` (brief 327)
 TELL_REFUSED = re.compile(r"\s*(?:Approve|Confirmed|Verdict):", re.IGNORECASE)
+ZERO_WIDTH = re.compile("[\u200b-\u200f\u2060\ufeff]")  # read as nothing before the start check
 CONFIRMED_RULE = (
     "conductor guard rule 6: a session never posts a Confirmed: comment; print the text and the "
     "person posts it (session rule 29)"
@@ -374,14 +375,15 @@ def brief_post_ok(words: list[str]) -> bool:
 
 def tell_form(args: list[str]) -> bool:
     """Exactly `tell --session <id> --text <message>` with a message that `session.py tell` would
-    send: one line of 1 to 300 characters that does not start with `Approve:`, `Confirmed:` or
-    `Verdict:` (brief 327, ADR-0187)."""
+    send: one line of 1 to 300 characters (no line break that `str.splitlines` knows) that does not
+    start, zero-width characters aside, with `Approve:`, `Confirmed:` or `Verdict:` (brief 327,
+    ADR-0187)."""
     if len(args) != 5 or args[0] != "tell" or args[1] != "--session" or args[3] != "--text":
         return False
     text = args[4]
     if not SESSION_NAME.fullmatch(args[2]) or not text.strip() or len(text) > TELL_LIMIT:
         return False
-    return "\n" not in text and "\r" not in text and not TELL_REFUSED.match(text)
+    return text.splitlines() == [text] and not TELL_REFUSED.match(ZERO_WIDTH.sub("", text))
 
 
 def queue_allowed(words: list[str], cwd: object) -> bool:
