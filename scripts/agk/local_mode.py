@@ -4,26 +4,30 @@ Usage: python3 scripts/agk/local_mode.py enter|leave [--write] [--since YYYY-MM-
                                          [--repo OWNER/REPO] [--api-dir DIR]
 
 Standard library only. `enter` lists every active workflow of the repository, the kit's and the
-project's, with the one `gh api --method PUT .../actions/workflows/<id>/disable` call for each;
-`leave` lists every workflow disabled by hand with its `enable` call, then the pull requests merged
-into the default branch since the oldest of them was disabled (or since `--since`, midnight UTC),
-and the state of the catch-up run: the latest run of each check of `required_checks` on the head of
-the default branch that started after local mode began. It is a dry run by default and changes
-nothing; `--write` makes the calls, one line per workflow, and reports a refused call while it still
-makes the rest. `gh` holds the credential and this script holds none: the person runs `--write` with
-a token that may change workflows, which no session holds (session rule 30).
+project's, with the one `gh api --method PUT .../actions/workflows/<id>/disable` call for each.
+`leave` takes the start of local mode from `--since` (midnight UTC) or from the day of the one open
+record issue (`Local mode since YYYY-MM-DD`), lists every workflow disabled by hand since then with
+its `enable` call (one disabled before it is left as it is), the pull requests merged into the
+default branch since then, and the state of the catch-up run: the latest run of each check of
+`required_checks` on the head of the default branch that started after local mode began. It is a
+dry run by default and changes nothing; `--write` makes the calls, one line per workflow, and
+reports a refused call while it still makes the rest. `gh` holds the credential and this script
+holds none: a person runs `--write` with a token that may change workflows, and `--write` is refused
+inside an agent session (session rule 30).
 
 Recorded responses (`--api-dir`) stand in for `gh`: `<name>.json` answers a read, `<name>.status`
 holds the HTTP status of a refused one; each write is appended to `calls.log` and is refused when
 `put-<id>-<verb>.status` exists.
 
-Exit: 0 done, 3 a call was refused or the catch-up is red, 1 refused (the workflows cannot be read
-or a setting is invalid), 2 usage.
+Exit: 0 done; 3 a call was refused or the catch-up is red; 4 the start, the merges or the catch-up
+is unknown (a read did not answer); 1 refused (the workflows cannot be read, a setting is invalid,
+or `--write` inside an agent session); 2 usage.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -48,6 +52,9 @@ VERBS = {
     "leave": ("disabled_manually", "enable", "enabled"),
 }
 OK_CONCLUSIONS = {"success", "neutral", "skipped"}
+# Set in the shell of an agent session (verify); `--write` is refused while it is set, so a session
+# never disables or enables a workflow (session rule 30).
+SESSION_SETTING = "CLAUDECODE"
 
 
 def reason_of(status: int) -> str:
@@ -134,7 +141,7 @@ class Gh:
             return self.keyed(endpoint, "workflows")
         if name == "check-runs":
             return self.keyed(endpoint, "check_runs")
-        if name == "pulls":
+        if name in ("pulls", "issues"):
             return self.listed(endpoint, until)
         return self.one(endpoint)
 
@@ -226,13 +233,47 @@ def merges(src: Any, branch: str, since: datetime) -> tuple[list[dict] | None, s
     return found, None
 
 
+RECORD_TITLE = "Local mode since"
+
+
+def record_start(src: Any) -> tuple[datetime | None, str]:
+    """The start of local mode from the one open record issue: midnight UTC of the day its title
+    names (`Local mode since YYYY-MM-DD`), else of the day it was opened; the oldest such issue
+    when several are open. Midnight, because the guide disables the workflows before it opens the
+    issue. None and the reason when there is none or the issues cannot be read."""
+    status, issues = src.get("issues", "/repos/{repo}/issues?state=open&sort=created&direction=asc")
+    if status != 200 or not isinstance(issues, list):
+        return None, f"the open issues cannot be read: {reason_of(status)}"
+    found = []
+    for item in issues:
+        title = str(item.get("title") or "") if isinstance(item, dict) else ""
+        if "pull_request" in item or not title.startswith(RECORD_TITLE):
+            continue
+        named = re.match(rf"{RECORD_TITLE} (\d{{4}}-\d{{2}}-\d{{2}})\b", title)
+        day: datetime | None = None
+        if named:
+            try:
+                day = datetime.strptime(named.group(1), "%Y-%m-%d").replace(tzinfo=UTC)
+            except ValueError:
+                day = None
+        if day is None and (opened := stamp(item.get("created_at"))) is not None:
+            day = opened.replace(hour=0, minute=0, second=0, microsecond=0)
+        if day is not None:
+            found.append((day, item.get("number") or 0))
+    if not found:
+        return None, "no open local-mode record issue"
+    day, number = min(found)
+    return day, f"the record issue #{number}"
+
+
 @dataclass
 class CatchUp:
     lines: list[str]
     red: bool
+    unknown: bool = False
 
 
-def catch_up(src: Any, branch: str, since: datetime | None, required: list[str]) -> CatchUp:
+def catch_up(src: Any, branch: str, since: datetime, required: list[str]) -> CatchUp:
     """The latest run of each required check on the head of `branch` since local mode began."""
     from route import latest_runs
 
@@ -240,12 +281,16 @@ def catch_up(src: Any, branch: str, since: datetime | None, required: list[str])
     sha = head.get("sha") if status == 200 and isinstance(head, dict) else None
     if not isinstance(sha, str) or not sha:
         return CatchUp(
-            [f"catch-up: unknown (the default branch cannot be read: {reason_of(status)})"], False
+            [f"catch-up: unknown (the default branch cannot be read: {reason_of(status)})"],
+            False,
+            True,
         )
     status, data = src.get("check-runs", f"/repos/{{repo}}/commits/{sha}/check-runs")
     if status != 200 or not isinstance(data, dict):
         return CatchUp(
-            [f"catch-up: unknown (the check runs cannot be read: {reason_of(status)})"], False
+            [f"catch-up: unknown (the check runs cannot be read: {reason_of(status)})"],
+            False,
+            True,
         )
     runs = [
         r
@@ -253,7 +298,8 @@ def catch_up(src: Any, branch: str, since: datetime | None, required: list[str])
         if isinstance(r, dict)
         and r.get("name") in required
         and r.get("head_sha", sha) == sha
-        and (since is None or ((s := stamp(r.get("started_at"))) is not None and s >= since))
+        and (s := stamp(r.get("started_at"))) is not None
+        and s >= since
     ]
     latest = {str(r.get("name")): r for r in latest_runs(runs)}
     if not latest:
@@ -305,7 +351,10 @@ def act(
         else:
             refused += 1
             shown = f"HTTP {status}" if status else "no answer"
-            lines.append(f"refused {name} (id {wid}): {shown}; a person with admin runs: {line}")
+            lines.append(
+                f"refused {name} (id {wid}): {shown}; a person whose token may change "
+                f"workflows runs: {line}"
+            )
     return lines, refused
 
 
@@ -320,29 +369,46 @@ def main_of(command: str, write: bool, since_arg: datetime | None, repo: str, sr
         f"agk local mode: {command} {repo}"
         + ("" if write else " (dry run: nothing is changed; --write makes the calls)")
     ]
-    label = "active workflows" if command == "enter" else "workflows disabled by hand"
-    out.append(f"{label}: {len(chosen)}")
-    left = []
-    since, since_from = since_arg, "--since"
+    left: list[str] = []
     pulls_lines: list[str] = []
+    since: datetime | None = since_arg
+    unknown = False
     if command == "leave":
+        since_from = "--since"
+        if since is None:
+            since, since_from = record_start(src)
         for wf in every:
             other = str(wf.get("state") or "")
             if other.startswith("disabled") and other != state:
                 left.append(f"left as is: {file_of(wf)} (id {wf.get('id')}, {other})")
         if since is None:
-            stamps = [s for w in chosen if (s := stamp(w.get("updated_at"))) is not None]
-            if stamps:
-                since, since_from = min(stamps), "the oldest workflow disabled by hand"
-        if since is None:
+            unknown = True
+            for wf in chosen:
+                left.append(
+                    f"left as is: {file_of(wf)} (id {wf.get('id')}, the start of local mode "
+                    "is unknown)"
+                )
+            chosen = []
             pulls_lines.append(
-                "merged on local evidence: unknown (no workflow is disabled by hand; give --since "
-                "YYYY-MM-DD, the day local mode began)"
+                f"local mode since: unknown ({since_from}; give --since YYYY-MM-DD, the day "
+                "local mode began)"
             )
+            pulls_lines.append("merged on local evidence: unknown (the start is unknown)")
         else:
+            kept = []
+            for wf in chosen:
+                changed = stamp(wf.get("updated_at"))
+                if changed is not None and changed >= since:
+                    kept.append(wf)
+                else:
+                    left.append(
+                        f"left as is: {file_of(wf)} (id {wf.get('id')}, disabled before local mode)"
+                    )
+            chosen = kept
             pulls_lines.append(f"local mode since: {iso(since)} ({since_from})")
             found, reason = merges(src, branch, since)
             if found is None:
+                unknown = True
                 pulls_lines.append(
                     "merged on local evidence: unknown "
                     f"(the pull requests cannot be read: {reason})"
@@ -355,21 +421,29 @@ def main_of(command: str, write: bool, since_arg: datetime | None, repo: str, sr
                         f"  #{item.get('number')} {iso(stamp(item.get('merged_at')))} {sha} "
                         f"{item.get('title') or ''}".rstrip()
                     )
+    label = "active workflows" if command == "enter" else "workflows disabled for local mode"
+    out.append(f"{label}: {len(chosen)}")
     lines, refused = act(src, repo, chosen, verb, done, write)
     red = False
     if command == "enter":
         out += lines
         if not write and chosen:
-            out.append(f"the person runs these with admin rights; see {GUIDE}")
+            out.append(f"a person whose token may change workflows runs these; see {GUIDE}")
         if write:
             out.append(f"next: open the record issue, as {GUIDE} says")
     else:
         out += lines + left + pulls_lines  # the merges were read before any workflow was enabled
-        result = catch_up(src, branch, since, required)
-        out += result.lines
-        red = result.red
+        if since is None:
+            out.append("catch-up: unknown (the start is unknown)")
+        else:
+            result = catch_up(src, branch, since, required)
+            out += result.lines
+            red = result.red
+            unknown = unknown or result.unknown
     sys.stdout.write("\n".join(out) + "\n")
-    return 3 if refused or red else 0
+    if refused or red:
+        return 3
+    return 4 if unknown else 0
 
 
 def parse_args(args: list[str]) -> dict | None:
@@ -404,6 +478,11 @@ def main(argv: list[str] | None = None) -> int:
     if options is None:
         print(USAGE, file=sys.stderr)
         return 2
+    if options["write"] and os.environ.get(SESSION_SETTING):
+        raise CheckError(
+            "--write is refused inside an agent session; a person runs it in their own terminal "
+            f"(environment setting: {SESSION_SETTING})"
+        )
     name = options["repo"] or origin_repo()
     src: Any = ApiDir(Path(options["api"]), name) if options["api"] else Gh(name)
     return main_of(options["command"], options["write"], options["since"], name, src)

@@ -11,6 +11,17 @@ import pytest
 
 REPO = "octo/project"
 SINCE = "2026-10-28T09:00:00Z"
+START = "2026-10-28T00:00:00Z"  # midnight UTC of the day the record issue names
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
+RECORD = {
+    "number": 77,
+    "title": "Local mode since 2026-10-28",
+    "created_at": "2026-10-28T09:20:00Z",
+}
+OTHER_ISSUES = [
+    {"number": 70, "title": "Local mode since 2026-10-28", "pull_request": {}, "created_at": SINCE},
+    {"number": 71, "title": "an unrelated issue", "created_at": "2026-10-01T00:00:00Z"},
+]
 
 
 def workflow(wid: int, path: str, state: str, updated: str = SINCE) -> dict:
@@ -48,7 +59,9 @@ def check(name: str, conclusion: str | None, sha: str, started: str, rid: int = 
 HEAD = "c" * 40
 
 
-def api(tmp_path: Path, workflows: list[dict], pulls=(), checks=(), head: str = HEAD) -> Path:
+def api(
+    tmp_path: Path, workflows: list[dict], pulls=(), checks=(), head: str = HEAD, issues=None
+) -> Path:
     """A folder of saved responses: one `<name>.json` per read."""
     folder = tmp_path / "api"
     folder.mkdir(exist_ok=True)
@@ -57,6 +70,7 @@ def api(tmp_path: Path, workflows: list[dict], pulls=(), checks=(), head: str = 
         "pulls": list(pulls),
         "commit": {"sha": head},
         "check-runs": {"total_count": len(checks), "check_runs": list(checks)},
+        "issues": [*OTHER_ISSUES, RECORD] if issues is None else list(issues),
     }
     for name, value in data.items():
         (folder / f"{name}.json").write_text(json.dumps(value), encoding="utf-8")
@@ -73,12 +87,15 @@ def calls(folder: Path) -> list[str]:
     return log.read_text(encoding="utf-8").splitlines() if log.is_file() else []
 
 
-def local_mode(repo, folder: Path, *args: str):
+def local_mode(repo, folder: Path, *args: str, session: str = ""):
+    """Run the command as a person would: outside an agent session unless `session` is set."""
     if not (repo.root / "agk.toml").exists():
         repo.write(
             "agk.toml", 'default_branch = "main"\nrequired_checks = ["proof", "governance"]\n'
         )
-    return repo.run("local_mode.py", *args, "--repo", REPO, "--api-dir", str(folder))
+    return repo.run(
+        "local_mode.py", *args, "--repo", REPO, "--api-dir", str(folder), CLAUDECODE=session
+    )
 
 
 ACTIVE = [
@@ -192,7 +209,7 @@ def test_leave_lists_the_merges_since_the_oldest_disabled_workflow_and_no_catch_
     """REQ-039: brief #371 answers 2 and 4 (`leave` with merges and no catch-up)."""
     folder = api(tmp_path, DISABLED, MERGES)
     out = local_mode(repo, folder, "leave").stdout
-    assert f"local mode since: {SINCE} (the oldest workflow disabled by hand)" in out
+    assert f"local mode since: {START} (the record issue #77)" in out
     assert "merged on local evidence: 2" in out
     first = out.index("#41 2026-10-29T10:00:00Z aaaaaaa first local merge")
     second = out.index("#42 2026-10-30T11:00:00Z ccccccc second local merge")
@@ -207,7 +224,7 @@ def test_leave_with_a_green_catch_up_names_each_required_check(repo, tmp_path):
     checks = [
         check("governance", "success", HEAD, "2026-10-30T12:00:00Z", 7),
         check("proof", "success", HEAD, "2026-10-30T12:01:00Z", 8),
-        check("governance", "failure", HEAD, "2026-10-28T08:00:00Z", 3),
+        check("governance", "failure", HEAD, "2026-10-27T20:00:00Z", 3),
     ]
     folder = api(tmp_path, DISABLED, MERGES, checks)
     proc = local_mode(repo, folder, "leave")
@@ -236,7 +253,7 @@ def test_leave_with_a_red_catch_up_says_to_file_a_priority_0_brief(repo, tmp_pat
 def test_a_run_before_local_mode_is_no_catch_up(repo, tmp_path):
     """REQ-039: brief #371 answer 2 (only a run after local mode began counts; a run refused by a
     billing block before the workflows were disabled is not the catch-up)."""
-    checks = [check("governance", "failure", HEAD, "2026-10-28T08:00:00Z", 3)]
+    checks = [check("governance", "failure", HEAD, "2026-10-27T20:00:00Z", 3)]
     folder = api(tmp_path, DISABLED, MERGES, checks)
     proc = local_mode(repo, folder, "leave")
     assert proc.returncode == 0, proc.stdout
@@ -292,12 +309,19 @@ def test_leave_write_reports_a_refused_enable_and_makes_the_rest(repo, tmp_path)
     assert "enabled project-build.yml (id 103)" in proc.stdout
 
 
-def test_leave_after_the_workflows_are_enabled_takes_the_start_from_since(repo, tmp_path):
-    """REQ-039: brief #371 answer 2 (once nothing is disabled, `--since` gives the start)."""
-    enabled = [workflow(101, "agk-route.yml", "active", "2026-10-30T11:30:00Z")]
-    folder = api(tmp_path, enabled, MERGES)
-    out = local_mode(repo, folder, "leave").stdout
-    assert "merged on local evidence: unknown" in out and "--since" in out
+def test_leave_without_a_record_issue_takes_the_start_from_since(repo, tmp_path):
+    """REQ-039: brief #371 answer 2 (with no open record issue, `--since` gives the start; without
+    either the start is unknown, nothing is enabled and the exit is 4: verdict on 7c0028a, items 3
+    and 4)."""
+    folder = api(tmp_path, DISABLED, MERGES, issues=OTHER_ISSUES)
+    proc = local_mode(repo, folder, "leave", "--write")
+    assert proc.returncode == 4, proc.stdout
+    out = proc.stdout
+    assert "local mode since: unknown (no open local-mode record issue; give --since" in out
+    assert "merged on local evidence: unknown" in out
+    assert "catch-up: unknown (the start is unknown)" in out
+    assert "governance.yml (id 102, the start of local mode is unknown)" in out
+    assert calls(folder) == []
     out = local_mode(repo, folder, "leave", "--since", "2026-10-28").stdout
     assert "local mode since: 2026-10-28T00:00:00Z (--since)" in out
     assert "merged on local evidence: 2" in out
@@ -307,7 +331,9 @@ def test_pull_requests_that_cannot_be_read_are_unknown_not_zero(repo, tmp_path):
     """REQ-039: brief #371 answer 2 (an unreadable list is never 0)."""
     folder = api(tmp_path, DISABLED, MERGES)
     refuse(folder, "pulls", 403)
-    out = local_mode(repo, folder, "leave").stdout
+    proc = local_mode(repo, folder, "leave")
+    assert proc.returncode == 4, proc.stdout
+    out = proc.stdout
     assert "merged on local evidence: unknown (the pull requests cannot be read: refused)" in out
 
 
@@ -315,7 +341,9 @@ def test_check_runs_that_cannot_be_read_are_unknown(repo, tmp_path):
     """REQ-039: brief #371 answer 2 (an unreadable catch-up is never green)."""
     folder = api(tmp_path, DISABLED, MERGES)
     refuse(folder, "check-runs", 403)
-    out = local_mode(repo, folder, "leave").stdout
+    proc = local_mode(repo, folder, "leave")
+    assert proc.returncode == 4, proc.stdout
+    out = proc.stdout
     assert "catch-up: unknown (the check runs cannot be read: refused)" in out
 
 
@@ -350,9 +378,86 @@ def test_usage(repo, tmp_path, args):
 
 def test_the_script_makes_no_network_call_of_its_own():
     """REQ-039: brief #371 answer 1 (`gh` holds the credential; the script holds none)."""
-    from conftest import SCRIPTS
-
     text = (SCRIPTS / "local_mode.py").read_text(encoding="utf-8")
     for word in ("urllib", "http.client", "requests", "socket", "token"):
         assert f"import {word}" not in text and f"from {word}" not in text, word
     assert "shell=True" not in text
+
+
+def test_an_unreadable_head_commit_is_unknown_and_exits_4(repo, tmp_path):
+    """REQ-039: verdict on 7c0028a, item 4 (a 404 on the head commit)."""
+    folder = api(tmp_path, DISABLED, MERGES)
+    refuse(folder, "commit", 404)
+    proc = local_mode(repo, folder, "leave")
+    assert proc.returncode == 4, proc.stdout
+    assert "catch-up: unknown (the default branch cannot be read: missing)" in proc.stdout
+
+
+def test_an_unreadable_record_issue_list_is_unknown_and_enables_nothing(repo, tmp_path):
+    """REQ-039: verdict on 7c0028a, items 3 and 4 (the open issues cannot be read: 502)."""
+    folder = api(tmp_path, DISABLED, MERGES)
+    refuse(folder, "issues", 502)
+    proc = local_mode(repo, folder, "leave", "--write")
+    assert proc.returncode == 4, proc.stdout
+    assert "local mode since: unknown (the open issues cannot be read: unreadable" in proc.stdout
+    assert calls(folder) == []
+
+
+def test_a_workflow_disabled_before_local_mode_is_left_as_it_is_and_sets_no_start(repo, tmp_path):
+    """REQ-039: verdict on 7c0028a, item 3 (a workflow a person turned off in 2025 is not enabled,
+    is named, and does not move the start back)."""
+    old = workflow(107, "deploy.yml", "disabled_manually", "2025-01-01T00:00:00Z")
+    folder = api(tmp_path, [*DISABLED, old], MERGES)
+    proc = local_mode(repo, folder, "leave", "--write")
+    assert proc.returncode == 0, proc.stdout
+    out = proc.stdout
+    assert "left as is: deploy.yml (id 107, disabled before local mode)" in out
+    assert f"local mode since: {START} (the record issue #77)" in out
+    assert "2025" not in out.replace("deploy.yml (id 107, disabled before local mode)", "")
+    assert not any("/107/" in line for line in calls(folder)), calls(folder)
+    assert len(calls(folder)) == 3
+    assert "workflows disabled for local mode: 3" in out
+
+
+def test_the_start_is_the_day_of_the_record_issue_when_its_title_names_no_day(repo, tmp_path):
+    """REQ-039: verdict on 7c0028a, item 3 (the opening of the record issue)."""
+    record = {"number": 78, "title": "Local mode since today", "created_at": SINCE}
+    folder = api(tmp_path, DISABLED, MERGES, issues=[record])
+    out = local_mode(repo, folder, "leave").stdout
+    assert f"local mode since: {START} (the record issue #78)" in out
+
+
+@pytest.mark.parametrize("command", ["enter", "leave"])
+def test_write_is_refused_inside_an_agent_session(repo, tmp_path, command):
+    """REQ-039: verdict on 7c0028a, item 1 (`--write` refuses while the session setting is set,
+    naming the setting, never its value, and makes no call)."""
+    folder = api(tmp_path, ACTIVE if command == "enter" else DISABLED, MERGES)
+    proc = local_mode(repo, folder, command, "--write", session="agent-value-xyz")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "--write is refused inside an agent session" in proc.stdout
+    assert "environment setting: CLAUDECODE" in proc.stdout
+    assert "agent-value-xyz" not in proc.stdout + proc.stderr
+    assert calls(folder) == []
+
+
+def test_the_dry_run_still_works_inside_an_agent_session(repo, tmp_path):
+    """REQ-039: verdict on 7c0028a, item 1 (a session may read; only `--write` is refused)."""
+    folder = api(tmp_path, ACTIVE)
+    proc = local_mode(repo, folder, "enter", session="1")
+    assert proc.returncode == 0, proc.stdout
+    assert calls(folder) == []
+
+
+def test_the_settings_deny_write_to_a_session():
+    """REQ-039: verdict on 7c0028a, item 1 (`.claude/settings.json` denies `local_mode.py` with
+    `--write`, in each spelling a session would type)."""
+    settings = json.loads(
+        (SCRIPTS.parents[1] / ".claude" / "settings.json").read_text(encoding="utf-8")
+    )
+    deny = settings["permissions"]["deny"]
+    for entry in (
+        "Bash(python3 scripts/agk/local_mode.py *--write*)",
+        "Bash(python scripts/agk/local_mode.py *--write*)",
+        "Bash(*local_mode.py*--write*)",
+    ):
+        assert entry in deny, entry

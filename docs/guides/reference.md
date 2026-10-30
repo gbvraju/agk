@@ -117,9 +117,11 @@ conductor runs instead of reading CI, what is lost, and the one issue that recor
 A person enters local mode with `python3 scripts/agk/local_mode.py enter` and leaves it with `python3 scripts/agk/local_mode.py
 leave`: each lists the workflows and the one `gh api` call that disables (or enables) each, the kit's and the project's, as a dry
 run that changes nothing; `--write` makes the calls, one line per workflow, and reports a refused call while it makes the rest.
-`leave` also lists the pull requests merged on local evidence since the oldest workflow was disabled (`--since YYYY-MM-DD` once
-they are enabled) and the catch-up run of each check of `required_checks` on the default branch, or `catch-up: not run yet`; a
-red catch-up says to file a priority-0 brief (exit 3 on a refused call or a red catch-up; ADR-0213).
+`--write` is the person's: it is refused inside an agent session and denied in the kit's settings. `leave` takes the start of
+local mode from the day the open record issue names (or `--since YYYY-MM-DD`), enables only the workflows disabled since then,
+and lists the pull requests merged on local evidence since then and the catch-up run of each check of `required_checks` on the
+default branch, or `catch-up: not run yet`; a red catch-up says to file a priority-0 brief (exit 3 on a refused call or a red
+catch-up, 4 when the start, the merges or the catch-up are unknown; ADR-0213).
 
 Several sessions on one machine take turns on heavy steps (governance, the tests, proof) with `python3 scripts/agk/lock.py run
 --name heavy --session <id> -- <command...>`: it waits its turn, printing the holder once a minute (`--timeout S` gives up with
