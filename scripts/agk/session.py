@@ -648,6 +648,7 @@ class Survey:
     free: list = field(default_factory=list)  # the briefs left, in the order of rule 3
     files: dict = field(default_factory=dict)  # pull request number -> its changed files
     briefs: dict = field(default_factory=dict)  # brief number -> its issue
+    gone: dict = field(default_factory=dict)  # session -> hours since its last post (plan only)
 
 
 def is_stale(brief: dict) -> bool:

@@ -1,0 +1,1 @@
+- `session.py plan` judges overlap by files, not folders: briefs that change different files under one folder start together, every wait names the file, and a claim whose session has posted nothing for `[flow] claim_stale_hours` (24 by default) and has no open pull request no longer holds its brief and is listed as a stale claim (brief #330, ADR-0189)

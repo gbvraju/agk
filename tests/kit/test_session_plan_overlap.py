@@ -9,9 +9,24 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from test_session import ISSUES, comment, iso, issue, listing
+import pytest
+from test_session import ISSUES, REPO, Stub, comment, iso, issue, listing
 from test_session_flow import DAY, PULLS, brief, flow, merged
-from test_session_plan import changed, data, free, labelled, plan, proj, stub  # noqa: F401
+from test_session_plan import changed, data, free, labelled, plan
+
+
+@pytest.fixture
+def stub(tmp_path):
+    return Stub(tmp_path)
+
+
+@pytest.fixture
+def proj(repo, stub):
+    repo.git("remote", "add", "origin", f"https://github.com/{REPO}.git")
+    repo.write("config/reviewers.yaml", "version: 1\nverdict_authors: [boss, second]\n")
+    repo.write("config/protected-paths.txt", "config/\nscripts/agk/\n")
+    return repo
+
 
 # --- answer 1: overlap is judged by files ---------------------------------------------------------
 
@@ -104,6 +119,7 @@ THREE = "Builds: (a) the first part; (b) independent: the second; (c) independen
 
 def built(number: int, brief_no: int, name: str, ago: timedelta, state: str = "closed") -> dict:
     found = {**merged(number, brief_no, ago), "title": f"feat: x (brief #{brief_no} build {name})"}
+    found["created_at"] = iso(-ago - timedelta(hours=1))
     if state == "open":
         found.update(state="open", merged_at=None)
     return found
