@@ -1,6 +1,6 @@
 # ADR-0213: one kit command enters and leaves local mode, and lists the merges that need a catch-up run (REQ-039, brief 371)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0182, ADR-0184, ADR-0191
