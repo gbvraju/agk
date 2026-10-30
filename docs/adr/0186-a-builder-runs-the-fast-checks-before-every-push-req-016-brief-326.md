@@ -30,8 +30,9 @@ checkpoint of the pull request).
    - `secret-scan`: `gitleaks git --no-banner --redact --exit-code 1 --log-opts=<merge base>..HEAD .`, the scan of the
      governance workflow over the branch's commits, when `gitleaks` is on `PATH`; otherwise the step says `gitleaks is not
      installed; secret scan: not run`, as the local-mode guide words it (Q-326-3).
-   - `tests`: each run of `test_plan.py --json --base <merge base>` (the plan proof runs, brief #325), its command in its folder;
-     `tests: nothing to run` when the plan has none; skipped with `--quick`.
+   - `tests`: each run of `test_plan.py --json --base <merge base>` (the plan proof runs, brief #325), its command in its folder
+     through proof's own `execute` (no shell of the kit's; the project's command runs under `sh -c` as in proof), ended at
+     `proof_timeout`; `tests: nothing to run` when the plan has none; skipped with `--quick`.
    It prints `prepush: <step> ok|FAIL|skipped (<seconds>s)` per step, and at the end `prepush: all steps passed`, or
    `prepush: passed; not run: <steps>` when a step that should have run could not (the scanner missing). Exit 0 when no step
    failed, 1 when one did, 2 usage, a body file that cannot be read or a base that does not resolve (naming the setting, never the
@@ -45,7 +46,7 @@ checkpoint of the pull request).
 5. **Tests (answer 4).** `tests/kit/test_prepush.py`: all steps in order; each step's failure stops the run with its message; no
    body file; a body file that cannot be read; a project without `make lint` and without a Makefile; a missing `agk.mk`; the base
    given to governance; the scan's range; no scanner; the plan's tests and an empty plan; `--quick`; a base that does not resolve;
-   usage; the hook template; the session rule.
+   usage; the hook template; the session rule; a test run ended at `proof_timeout`.
 6. **Flow mode.** Fragment `changelog.d/prepush.md`; no version bump; `kit/hashes.json` not edited (session rule 14).
 
 ## Consequences
