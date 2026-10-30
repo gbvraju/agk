@@ -5,6 +5,7 @@
   },
   "delete": [],
   "fail": [
+    "kit-behind",
     "kit-version"
   ],
   "origin_head": true

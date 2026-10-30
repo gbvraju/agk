@@ -60,6 +60,8 @@ TEMPLATES_NEW = {
 MARK_OPEN, MARK_CLOSE = "# >>> agk\n", "# <<< agk\n"
 HTML_OPEN, HTML_CLOSE = "<!-- >>> agk -->\n", "<!-- <<< agk -->\n"
 PROTECTED = "config/\n.claude/\nagk.toml\nb.txt\n"
+# The kit's changelog: one release with no opt-in marker, so a run lists nothing extra (brief #320).
+KIT_CHANGELOG = "# Changelog\n\n## Unreleased\n\n## 2.0.0 (2026-10-30)\n\n- #2 the new kit\n"
 AGK_TOML = '# my notes\nmode = "{mode}"\nversion = "1.0.0"\ninstalled = "2020-01-02"\nmine = 1\n'
 
 
@@ -107,6 +109,7 @@ def make_kit(tmp_path: Path) -> Path:
             (root / "kit").mkdir(exist_ok=True)
             (root / "kit" / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     (root / "kit" / "hashes.json").write_text(kit_hashes.dump(table), encoding="utf-8")
+    (root / "CHANGELOG.md").write_text(KIT_CHANGELOG, encoding="utf-8")
     return root
 
 
