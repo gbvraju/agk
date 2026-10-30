@@ -640,7 +640,12 @@ def test_ac1_start_works_in_a_new_repository_and_in_an_existing_codebase(tmp_pat
         git(root, "add", "-A")
         git(root, "commit", "-q", "-m", "app")
         proc = subprocess.run(
-            [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "adopt.py"), str(root)],
+            [
+                sys.executable,
+                str(KIT_ROOT / "scripts" / "agk" / "adopt.py"),
+                str(root),
+                "--unreleased",
+            ],
             capture_output=True,
             text=True,
             env=clean_env(),

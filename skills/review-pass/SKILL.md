@@ -18,13 +18,15 @@ A pull request needs a verdict when one of these holds, and the pass reviews no 
 - it is labelled `agk:review`;
 - a `Question:`, `Report:`, `Correction:` or `Maintainer answer:` comment was created or **edited** after the last verdict;
 - its head differs from the head the last verdict names, or it has no verdict yet;
-- its checks are green while the router's label is still a stale `agk:ci-running`.
+- its checks are green while the router's label is still a stale `agk:ci-running`;
+- it is a draft with a `Question:` comment created or **edited** after the last verdict (reason `question on a draft`):
+  the builder waits on the answer, which needs no checks.
 
 And never:
 
 - **at most one verdict per head**: a verdict by a listed author that names the head, with none of those comments after it, means
   the pull request is skipped, whatever its label says;
-- a draft, or a pull request whose checks are still running (a required run queued or in progress, or a required status
+- any other draft, or a pull request whose checks are still running (a required run queued or in progress, or a required status
   pending), is skipped whatever its label; the loop wakes again when that changes. Required checks that have not reported at
   all skip it under `agk:ci-running`; under any other label it is reviewed with the reason `checks not reported` (a project
   whose workflows are off), and the verdict clears nothing while CI is missing.
@@ -43,7 +45,9 @@ qualifies, `#<n> <head7> review: <why>`, or `empty`; with `--all` it also prints
 2. **Order.** Review the `review` lines in `Depends-on` order: a pull request after the ones it names.
 3. **Review each one** by the conductor's protocol and its pre-verdict steps (`.claude/agents/conductor.md`): CI first,
    mergeable, the reviewed sha is the head, real paths only, a cause only from a run. Answer every `Question:`, `Report:`,
-   `Correction:` and `Maintainer answer:` that the reason names in the verdict itself.
+   `Correction:` and `Maintainer answer:` that the reason names in the verdict itself. For a `question on a draft`, answer
+   the question in a verdict on the draft's head whose numbered items are the answers, and do not review the draft's code:
+   it is not finished, and its checks may still be running.
 4. **Check again just before posting.** Read the pull request (`gh api repos/<owner>/<repo>/pulls/<n>`, a GET) and its newest
    comments. When the head is no longer the head you reviewed, or a verdict by a listed author that names this head was posted
    after the comment that made it qualify (another pass, or another conductor), post nothing and say so in the last lines. This

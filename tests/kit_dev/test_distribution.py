@@ -206,7 +206,7 @@ def snapshot_hashes(root: Path) -> dict[str, str]:
 def run_call(
     script: str, args: list[str], cwd: Path, root: Path = KIT_ROOT
 ) -> subprocess.CompletedProcess:
-    if script == "init":  # the checkout between releases is not a release (ADR-0160)
+    if script in ("init", "adopt"):  # between releases is not a release (ADR-0160, ADR-0200)
         args = [*args, "--unreleased"]
     return subprocess.run(
         [sys.executable, str(root / "scripts" / "agk" / f"{script}.py"), *args],

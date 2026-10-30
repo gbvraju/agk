@@ -44,8 +44,9 @@ UNITTEST = (
 
 
 def adopt(target: Path, *args: str, **kw):
+    """This checkout, between releases: `--unreleased` (brief #263 build (c), ADR-0200)."""
     return subprocess.run(
-        [sys.executable, str(ADOPT), str(target), *args],
+        [sys.executable, str(ADOPT), str(target), "--unreleased", *args],
         capture_output=True,
         text=True,
         env=clean_env(),

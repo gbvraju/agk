@@ -87,7 +87,12 @@ def test_ac1_init_and_adopt_warn_that_the_issue_writing_workflows_need_issues_en
     assert "`agk doctor` checks the setting (issues-disabled)" in flat
     existing = make_repo(tmp_path / "existing", branch="main")
     out = subprocess.run(
-        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "adopt.py"), str(existing)],
+        [
+            sys.executable,
+            str(KIT_ROOT / "scripts" / "agk" / "adopt.py"),
+            str(existing),
+            "--unreleased",
+        ],
         capture_output=True,
         text=True,
         env=clean_env(),
