@@ -290,6 +290,15 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "pr_mode in agk.toml is neither strict nor flow",
         "set pr_mode in agk.toml to strict or flow (a change needs an ADR)",
     ),
+    "actions-minutes": (
+        "warn",
+        "the Actions minutes are under the 50% level, or their level is unknown",
+        "the Actions minutes have passed the 50% level",
+        "the Actions minutes have passed the 50% level (setting: minutes_warn in agk.toml sets the "
+        "middle level); see `python3 scripts/agk/minutes.py` for where they go, the defaults in "
+        "docs/guides/project-ci.md to use fewer, and local mode in docs/guides/local-mode.md for "
+        "when they run out",
+    ),
     "engines-keys": (
         "warn",
         "[engines] in agk.toml has only the keys vision, stack, design and review",
@@ -320,15 +329,6 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "engines.review is absent or names a skill the session can see",
         "engines.review is invalid, or names a skill the session cannot find",
         ENGINE_FIX,
-    ),
-    "actions-minutes": (
-        "warn",
-        "the Actions minutes are under the 50% level, or their level is unknown",
-        "the Actions minutes have passed the 50% level",
-        "the Actions minutes have passed the 50% level (setting: minutes_warn in agk.toml sets the "
-        "middle level); see `python3 scripts/agk/minutes.py` for where they go, the defaults in "
-        "docs/guides/project-ci.md to use fewer, and local mode in docs/guides/local-mode.md for "
-        "when they run out",
     ),
 }
 RULESET_IDS = [

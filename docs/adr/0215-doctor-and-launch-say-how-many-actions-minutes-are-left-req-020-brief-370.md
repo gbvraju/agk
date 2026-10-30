@@ -29,7 +29,7 @@ written first, with saved API responses and no network (`tests/kit/test_minutes.
    `actions minutes: <n> used this month (estimate from run history), included minutes unknown (<reason>); level unknown`; or
    `actions minutes: unknown (the token cannot read billing: <reason>, nor the run history: <reason>)`. It exits 3 past
    `minutes_warn`, as the report does.
-3. **The doctor (answer 2).** `doctor.py` gains `actions-minutes` (severity `warn`, last in the report order) with that line in its
+3. **The doctor (answer 2).** `doctor.py` gains `actions-minutes` (severity `warn`, in the report order after the CI checks and before the engines checks, which stay last) with that line in its
    message: `ok` under `50%` or with the level unknown but an estimate read; `fail` (a warning, exit 4, never 1) from `50%` on;
    `cannot-check` with the new reason `minutes-unknown` when neither billing nor the run history can be read, and with the
    repository's own reason when the repository cannot be read. The doctor imports `minutes.py` (installed beside it) and reads,
