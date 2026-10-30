@@ -317,3 +317,5 @@ def test_the_guide_and_the_session_rules_point_to_lock_py():
     rules = (root / "config" / "session-rules.md").read_text(encoding="utf-8")
     thirty = next(ln for ln in rules.splitlines() if ln.startswith("30. "))
     assert "scripts/agk/lock.py run --name heavy" in thirty
+    rule = next(ln for ln in rules.splitlines() if ln.startswith("31. "))
+    assert "lock.py run --name heavy --session ID -- python3 scripts/agk/prepush.py" in rule

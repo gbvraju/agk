@@ -38,6 +38,8 @@ first checkpoint of the pull request).
    lock from another host (a shared `lock_dir`) clears only by age (Q-337-3c). A folder without an owner file clears only by
    its own age. Clearing uses the same move-aside-and-check as the release, so two waiters cannot both remove a fresh lock. A
    bad `lock_stale_minutes` or `lock_dir` is refused with exit 2, naming the setting.
+   `kit/manifest.json` lists `scripts/agk/lock.py` with the verbatim scripts, so a project has it (Q-337-2); it is outside the
+   brief's `Touches:`.
 4. **`lock.py status --name NAME` and platforms (answer 4).** It prints `lock NAME: free` or the holder line, with `; stale
    (<reason>)` when a run would clear it, and changes nothing (Q-337-3d). A process is looked up with signal 0 on POSIX and
    with `OpenProcess` and `GetExitCodeProcess` (still active: 259) on Windows, where `os.kill` would end the process; the
@@ -46,7 +48,9 @@ first checkpoint of the pull request).
 5. **The guide and the session rules (answer 5).** `docs/guides/local-mode.md` replaces its `bash -c` snippet with lines that
    each stand alone: `make governance`, then `lock.py run --name heavy --session <id> -- make test` and the same for
    `proof.py`, with the PowerShell spellings. `tests/kit_dev/test_local_mode_guide.py` (outside `Touches:`) checks the new
-   lines instead of the snippet. The session rules: see Q-337-1.
+   lines instead of the snippet (Q-337-4). Session rule 30 names `lock.py run --name heavy` as the way to take the heavy-step
+   lock, and rule 31 says a `prepush.py` run with its tests is a heavy step on a shared machine, run under the same lock
+   (Q-337-1).
 6. **Tests (answer 6).** `tests/kit/test_lock.py`: take and release with the owner recorded; a failing command's exit code and
    release; no shell; a command that cannot start; a second process waits for the first, with one waiting line naming the
    holder; `status`; stale by a dead process id; `status` on a stale lock clears nothing; stale by age; `lock_stale_minutes`
@@ -63,7 +67,10 @@ first checkpoint of the pull request).
 
 ## Residual
 
-- 2026-10-30: Q-337-1 open: `config/session-rules.md` is also changed by open pull request #346.
-- 2026-10-30: Q-337-2 open: `kit/manifest.json` is outside `Touches:`.
-- 2026-10-30: Q-337-3 open: the readings (a) to (d) above.
-- 2026-10-30: `tests/kit_dev/test_local_mode_guide.py` is outside `Touches:`; its two lock tests follow the guide (decision 5).
+- 2026-10-30: Q-337-1 answered in the verdict on 3b9c0a8: rules 30 and 31 change here; if #346 merges first, origin/main is
+  merged in and both changes are kept (decision 5).
+- 2026-10-30: Q-337-2 answered in the verdict on 3b9c0a8: yes, `kit/manifest.json` lists `scripts/agk/lock.py`, named in the body
+  as a change outside `Touches:` (decision 3).
+- 2026-10-30: Q-337-3 answered in the verdict on 3b9c0a8: readings (a) to (d) are accepted (decisions 1 to 4).
+- 2026-10-30: Q-337-4 answered in the verdict on 3b9c0a8: yes, `tests/kit_dev/test_local_mode_guide.py` checks the new lock lines,
+  named in the body as a change outside `Touches:` (decision 5).
