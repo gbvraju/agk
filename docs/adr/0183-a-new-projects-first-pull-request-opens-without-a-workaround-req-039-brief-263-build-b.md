@@ -1,6 +1,6 @@
 # ADR-0183: a new project's first pull request opens without a workaround (REQ-039, brief 263 build b)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0131, ADR-0178
