@@ -343,6 +343,19 @@ Priority: 2
          - run: ./start-builders "$(python3 scripts/agk/session.py demand | python3 -c 'import json,sys; print(json.load(sys.stdin)["start"])')"
    ```
 
+## Upgrading the kit
+
+Run `/agk:upgrade` (or `python3 scripts/agk/upgrade.py <your repository>` from the kit) to bring the kit's files to a newer
+release. It replaces each kit file you have not edited and refuses, writing nothing, when one differs from every released copy.
+
+- **Your own make targets go in `project.mk`.** The kit's `Makefile` is a kit file, so an edit to it stops every upgrade. It
+  includes `project.mk` after `agk.mk` when that file exists; the kit never installs, lists or writes `project.mk`, so your
+  targets survive every upgrade. If an upgrade refuses over `Makefile`, move your own targets to `project.mk`, restore the
+  kit's `Makefile`, and run the upgrade again.
+- **Windows.** Fetch the kit from its release tag with git and no line-ending conversion
+  (`git -c core.autocrlf=false clone --branch v<version> <the kit repository URL>`), or use the plugin cache. A copy
+  with CRLF line endings is read as LF by the upgrade, so line endings alone never cause a refusal.
+
 ## When something goes wrong
 
 - **A scheduled run did not happen on Monday.** Expect the Monday issues hours late; in India, usually Monday evening. On

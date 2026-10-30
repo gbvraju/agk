@@ -1,6 +1,7 @@
 PY ?= python3
 
 include agk.mk
+-include project.mk
 
 .PHONY: governance test lint traceability
 
