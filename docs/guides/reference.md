@@ -93,6 +93,18 @@ repository (the `repository` of the kit's `.claude-plugin/plugin.json`), naming 
 repository's latest release. A kit newer than the newest release (a checkout between releases) is `ok`; a release it cannot
 read is `??` (`no-release`, `release-unreadable`, `offline`, ...), never `ok`.
 
+## Stalls
+
+    python3 scripts/agk/stalls.py [--json]
+
+Lists every place where the project's pull requests or sessions have stopped, each with its cause and its fix in one line:
+`stall <kind> #<n>: <cause>; fix: <one plain step>`, or `no stall`. The kinds are `stale-label` (green checks, `agk:ci-running`
+still on after 10 minutes), `no-verdict` (`agk:review` for 30 minutes with no verdict naming the head), `stuck-run` (a required
+run queued or in progress for 60 minutes, or cancelled with no newer run), `red-default` (the issue "The default branch is
+red" is open), `idle-capacity` (the plan names sessions to start and no brief was taken for 15 minutes) and `claim-no-pr` (a
+live take with no pull request and no post by its session for 2 hours). `--json` gives the same. It reads with `gh api` (GET
+only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repository cannot be read (ADR-0205).
+
 ## Pausing the kit
 
     python3 scripts/agk/doctor.py --paused [--ref REF] [ROOT]
