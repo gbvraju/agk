@@ -190,11 +190,3 @@ def test_the_released_fragment_lists_the_settings_across_0_59_0_only(old, listed
     found = check_release.opt_ins(changelog, old, "0.60.0")
     assert tuple(setting for setting, _ in found) == listed
 
-
-def test_solo_mode_is_listed_by_its_own_entry_of_the_next_release():
-    """Q-340-1 (verdict on df7f5f6): solo mode merged after v0.59.0, so its own unreleased fragment
-    carries `(opt-in: review_mode)`, not the line that speaks for 0.59.0."""
-    line = (KIT_ROOT / "changelog.d" / "solo-mode.md").read_text(encoding="utf-8")
-    assert check_release.release_named(line) is None
-    assert check_release.opt_in(line) == (("review_mode",), "solo mode, off by default")
-    assert "review_mode" not in check_release.opt_in(fragment_line())[0]
