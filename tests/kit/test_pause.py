@@ -326,6 +326,12 @@ def test_the_paused_step_fails_on_a_bad_value(name, proj, tmp_path):
     (proj / "agk.toml").write_text(BASE_TOML + 'paused = "yes"\n', encoding="utf-8")
     proc, out, _ = run_step(name, proj, tmp_path, base=None)
     assert proc.returncode != 0 and "paused=true" not in out
+    # the verdict on f66c933, finding 1: the step says why it failed, by the setting's name
+    assert "setting: paused in agk.toml" in proc.stdout and "yes" not in proc.stdout
+    git(proj, "commit", "-q", "-am", "a bad value")
+    proc, out, _ = run_step(name, proj, tmp_path, base=git(proj, "rev-parse", "HEAD").strip())
+    assert proc.returncode != 0 and "paused=true" not in out
+    assert "setting: paused in agk.toml" in proc.stdout
 
 
 # --- the roles (answer 1) -----------------------------------------------------------------------
@@ -336,6 +342,10 @@ def test_the_session_rules_stop_a_paused_builder():
     text = (ROOT / "config" / "session-rules.md").read_text(encoding="utf-8")
     rule = next(line for line in text.splitlines() if "doctor.py --paused" in line)
     assert LINE in rule and "stops" in rule and "posts nothing" in rule
+    # the verdict on f66c933, finding 2: the default branch is read after a fetch, not the
+    # session's own branch, so a pause merged after the branch was made is seen
+    assert "git fetch origin <default branch>" in rule
+    assert "doctor.py --paused --ref origin/<default branch>" in rule
 
 
 def test_the_conductor_role_stops_when_paused():
@@ -345,3 +355,7 @@ def test_the_conductor_role_stops_when_paused():
         pytest.skip("the conductor role is not installed here")
     text = path.read_text(encoding="utf-8")
     assert "paused = true" in text and f"`{LINE}`" in text
+    # the verdict on f66c933, finding 2: read at the default branch after a fetch, by the two
+    # commands its guard allows
+    para = next(line for line in text.splitlines() if line.startswith("Paused ("))
+    assert "`git fetch origin`" in para and "`git show origin/<default branch>:agk.toml`" in para

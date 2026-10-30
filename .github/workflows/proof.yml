@@ -58,11 +58,11 @@ jobs:
           # Brief #348 (ADR-0196): while agk.toml sets `paused = true` the job prints one line and every later step is skipped, so
           # the required check reports success. A pull request is judged by its base (AGK_BASE), never by its head: the pull
           # request that adds the line is still checked in full, its ADR included. A push reads the commit pushed. A value that
-          # is not true or false fails this step.
+          # is not true or false fails this step, with the refusal (it names the setting, never the value).
           if [ -n "${AGK_BASE:-}" ]; then
-            state="$(python3 scripts/agk/doctor.py --paused --ref "$AGK_BASE")"
+            state="$(python3 scripts/agk/doctor.py --paused --ref "$AGK_BASE")" || { echo "$state"; exit 1; }
           else
-            state="$(python3 scripts/agk/doctor.py --paused)"
+            state="$(python3 scripts/agk/doctor.py --paused)" || { echo "$state"; exit 1; }
           fi
           if [ "$state" = "agk paused" ]; then
             echo "agk paused"

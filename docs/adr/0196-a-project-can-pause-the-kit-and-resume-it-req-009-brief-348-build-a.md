@@ -33,13 +33,16 @@ workflows by hand.
    do not change. In proof, `outcome: skipped` also runs while paused, so the job still reports exactly one outcome. On a pull
    request the step reads the setting at the base of the merge ref (`AGK_BASE`), never at the head: the pull request that adds
    `paused = true` is still checked in full, its ADR included, so the line cannot be used to skip the checks of the change that
-   adds it. On a push to the default branch it reads the commit pushed. A value that is not a boolean fails the step and so the job.
+   adds it. On a push to the default branch it reads the commit pushed. A value that is not a boolean fails the step and so the job,
+   and the step prints the refusal, which names the setting and never the value.
    The local targets (`make governance`, `prepush.py`) are unchanged: they run every check whatever the setting.
 4. **The router writes no label (answer 1).** `route.py`, whatever it is asked to route, prints `agk paused`, reads nothing and
    writes nothing (no label, no issue, no comment) while the checkout it runs from (the default branch) is paused.
-5. **The roles stop with the line (answer 1).** A new session rule 33: a session runs `python3 scripts/agk/doctor.py --paused`
-   before anything else and on every wake, and when it prints `agk paused` it stops with that line, posts nothing and starts no
-   watch. The conductor role reads `agk.toml` (with Read, which its guard allows) at its start and on each wake and stops the same
+5. **The roles stop with the line (answer 1).** A new session rule 33: a session runs `git fetch origin <default branch>` and
+   then `python3 scripts/agk/doctor.py --paused --ref origin/<default branch>` before anything else and on every wake, so that it
+   reads the default branch and not its own branch, which may predate a pause; when it prints `agk paused` it stops with that
+   line, posts nothing and starts no watch. The conductor role runs `git fetch origin` and reads `agk.toml` of the default branch
+   with `git show origin/<default branch>:agk.toml` (both allowed by its guard) at its start and on each wake, and stops the same
    way when the file holds the top-level line `paused = true`.
 6. **Resume.** Removing the line resumes everything; nothing is deleted or rewritten while paused. The kit template of `agk.toml`
    lists the setting as a commented optional line.
@@ -65,3 +68,7 @@ state. The command that writes the pause pull request (`/agk:uninstall --pause`)
 - 2026-10-30: Q-348-3 answered in the verdict on 2f2527b: yes, the intended and safe reading; on a pull request the workflows
   read `paused` at the base, so no change can skip its own checks; a push reads the pushed commit; the local targets are
   unchanged, as decision 3 and the guide say.
+- 2026-10-30: the verdict on f66c933, findings 1 and 2: the `Paused` step prints the refusal before it fails, so a bad value no
+  longer fails with an empty step (decision 3); session rule 33 and the conductor read `agk.toml` of the default branch after a
+  fetch, so a session on a branch made before the pause merged still stops (decision 5). The guide adds that while paused no pull
+  request is checked, the one that resumes included.
