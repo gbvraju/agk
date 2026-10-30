@@ -41,3 +41,8 @@ review_mode = "team"
 # stack = "<skill name>"
 # design = "<skill name>"
 # review = "<skill name>"
+# Optional settings of the session plan (session.py plan), off the defaults only when set. claim_stale_hours: the hours after which a
+# claim (a taken: comment) whose session has posted nothing and has no open pull request no longer holds its brief (24 by default);
+# the plan lists it as a stale claim. A change needs an ADR in the same pull request (agk.toml is a protected path).
+# [flow]
+# claim_stale_hours = 24

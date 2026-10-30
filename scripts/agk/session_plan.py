@@ -12,6 +12,13 @@ The plan, in the order it is decided:
 2. **Waves.** A brief whose `Touches:` overlap running work (a taken brief, an open builder pull
    request's files) waits for it. Of two ready briefs that overlap, the one earlier by priority
    and then number starts; the other waits for it. Shared mechanical files never overlap.
+   Overlap is judged by files (brief #330, ADR-0189): entries that name files overlap on a file
+   they both name; a folder entry (`dir/`, `dir/**`, or a folder of the repository without its
+   slash) covers every file under it unless its brief names files under it, and then counts only
+   for those; two folder entries overlap as before. Each wait names the file (or, for two
+   folders, the narrower folder).
+   A claim whose session has posted nothing for `claim_stale_hours` (24 by default) and has no
+   open pull request is stale: it holds nothing and is listed as `stale claim by <session>, <age>`.
 3. **Capacity.** The sessions to start are the smallest of the ready, non-overlapping briefs,
    `max_builders` less the running builders (open builder pull requests and claims with no pull
    request yet) and `reviews_in_flight` less the pull requests waiting for a verdict.
@@ -40,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from common import matches, read_list
 from session import (
+    RELEASED,
     Survey,
     all_takes,
     brief_number,
@@ -49,6 +57,8 @@ from session import (
     literal,
     live_takes,
     moment,
+    pages,
+    plain,
     priority_of,
     pull_files,
     repo_name,
@@ -63,7 +73,12 @@ INDEPENDENT = "independent:"
 MERGED_ALL = "every build is merged; the conductor closes it"
 RULE = 15
 WINDOW_DAYS = 14
-DEFAULTS = {"reviews_in_flight": 3, "merge_hours": 1, "stale_commits": 20}
+DEFAULTS = {
+    "reviews_in_flight": 3,
+    "merge_hours": 1,
+    "stale_commits": 20,
+    "claim_stale_hours": 24,
+}
 
 
 def label_names(pr: dict) -> set[str]:
@@ -74,43 +89,111 @@ def unshared(globs: list[str], shared: list) -> list[str]:
     return [g for g in globs if not any(r.fullmatch(literal(g)) for r in shared)]
 
 
+def is_folder(glob: str) -> bool:
+    """A folder entry of `Touches:`: `dir/`, `dir/**` or `**`; any other entry names files."""
+    return glob.endswith("/") or glob == "**" or glob.endswith("/**")
+
+
+def has_wildcard(glob: str) -> bool:
+    return literal(glob) != glob
+
+
+def file_clash(x: str, y: str) -> str | None:
+    """The file that two file entries both name, else None (brief #330 answer 1)."""
+    if x == y:
+        return x
+    if not has_wildcard(x) and glob_regex(y).fullmatch(x):
+        return x
+    if not has_wildcard(y) and glob_regex(x).fullmatch(y):
+        return y
+    if has_wildcard(x) and has_wildcard(y):
+        a, b = literal(x), literal(y)
+        if a.startswith(b) or b.startswith(a):
+            return max((x, y), key=lambda g: len(literal(g)))
+    return None
+
+
+def under(path: str, folder: str) -> bool:
+    """A path or the fixed part of a glob that lies in a folder entry."""
+    return glob_regex(folder).fullmatch(path) is not None or literal(path).startswith(
+        literal(folder)
+    )
+
+
+def covering(entries: list[str]) -> list[str]:
+    """The folder entries that cover every file under them: those under which the same brief
+    names no file (the verdict on 1f1969e, item 1). A folder under which the brief names files
+    counts only for those files."""
+    files = [g for g in entries if not is_folder(g)]
+    return [f for f in entries if is_folder(f) and not any(under(g, f) for g in files)]
+
+
 def clash(a: list[str], b: list[str]) -> str | None:
-    """The broader of the first two `Touches:` globs that overlap, else None."""
+    """What two `Touches:` lists both touch, else None (brief #330 answers 1 and 3).
+
+    Two entries that name files overlap on the file they both name. A folder entry covers every
+    file under it unless its brief names files under it, so it overlaps an entry of the other
+    brief that names a file under it (that file is named). Two folder entries overlap when one is
+    above or below the other, as before (the narrower is named)."""
     for x in a:
         for y in b:
-            if literal(x).startswith(literal(y)) or literal(y).startswith(literal(x)):
-                return min((x, y), key=lambda g: len(literal(g)))
+            if not is_folder(x) and not is_folder(y) and (found := file_clash(x, y)):
+                return found
+    for folders, files in ((covering(a), b), (covering(b), a)):
+        for f in folders:
+            for y in files:
+                if not is_folder(y) and under(y, f):
+                    return y
+    for x in a:
+        for y in b:
+            if is_folder(x) and is_folder(y):
+                if literal(x).startswith(literal(y)) or literal(y).startswith(literal(x)):
+                    return max((x, y), key=lambda g: len(literal(g)))
     return None
 
 
 def file_conflict(item: dict, mine: list[str], shared: list) -> str | None:
     """Why a changed file of a running pull request blocks a brief, else None.
 
-    A modified, renamed or removed file blocks when a glob of the brief matches it (a renamed file
-    also by its old name). A file the pull request only *adds* blocks only on an exact path: every
-    build adds an ADR, a changelog fragment and tests, and a new file cannot conflict with a brief
-    that does not name it."""
+    A modified, renamed or removed file blocks when an entry of the brief that names files matches
+    it, or a folder entry that covers it (`covering`; a renamed file also by its old name). A
+    file the pull request only *adds* blocks only on an exact path: every build adds an ADR, a
+    changelog fragment and tests, and a new file cannot conflict with a brief that does not name
+    it."""
     names = [str(item.get("filename"))]
     if item.get("status") == "renamed" and item.get("previous_filename"):
         names.append(str(item["previous_filename"]))
+    folders = covering(mine)
     for path in names:
         if any(r.fullmatch(path) for r in shared):
             continue
         if item.get("status") == "added":
             if path in mine:
                 return f"it adds {path}"
-        elif any(glob_regex(g).fullmatch(path) for g in mine):
+        elif any(glob_regex(g).fullmatch(path) for g in mine if not is_folder(g)):
+            return f"it changes {path}"
+        elif any(glob_regex(f).fullmatch(path) for f in folders):
             return f"it changes {path}"
     return None
 
 
+def entries_of(root, globs: list[str]) -> list[str]:
+    """The `Touches:` entries with a folder of the repository written without its slash read as
+    that folder (`docs/guides` is `docs/guides/`; the verdict on 1f1969e, item 2)."""
+    out = []
+    for g in globs:
+        plain_path = not has_wildcard(g) and not g.endswith("/")
+        out.append(g + "/" if plain_path and g and (Path(root) / g).is_dir() else g)
+    return out
+
+
 def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
     """What running work the brief waits for: a taken brief or an open builder pull request."""
-    mine = unshared(touches_of(brief["body"]), shared)
+    mine = unshared(entries_of(root, touches_of(brief["body"])), shared)
     for number, theirs in s.held:
         if number == brief["number"]:
             continue  # another build of the same brief is not a rival
-        if found := clash(mine, unshared(theirs, shared)):
+        if found := clash(mine, unshared(entries_of(root, theirs), shared)):
             return {"brief": brief["number"], "waits_for": number, "why": f"both touch {found}"}
     for pr in s.builders:
         if pr_brief(pr) == brief["number"]:
@@ -160,10 +243,150 @@ def moved_on(s: Survey, number: int, take: tuple) -> bool:
     )
 
 
+def names_any_build(pr: dict, number: int) -> bool:
+    """A title that says `brief #<n> build <x>` or `build (<x>)` for some build."""
+    title = str(pr.get("title") or "")
+    return re.search(rf"brief #{number} build \(?[A-Za-z0-9._-]+\)?", title, re.I) is not None
+
+
+def fits(pr: dict, number: int, take: tuple) -> bool:
+    """A pull request that may be the work of a take: it has `Brief: #<n>`, and the take is of the
+    whole brief, or its title names the take's build, with or without the brackets, or no build.
+    A title that names another build is another session's work (brief #330 answer 2)."""
+    if brief_number(pr) != number:
+        return False
+    build = take[6] if len(take) > 6 else take[5]
+    if build is None or not names_any_build(pr, number):
+        return True
+    title = str(pr.get("title") or "")
+    pattern = rf"brief #{number} build \(?{re.escape(build)}\)?(?![A-Za-z0-9._-])"
+    return re.search(pattern, title, re.I) is not None
+
+
+POST_LINE = re.compile(r"(?:Progress|Report|Request):")
+CONDUCTOR_LABEL = "agk-conductor"
+
+
+def names(text: str, name: str) -> bool:
+    """The session name as a whole word: `builder-f` is not `builder-ff`."""
+    return re.search(rf"(?<![A-Za-z0-9._-]){re.escape(name)}(?![A-Za-z0-9._-])", text) is not None
+
+
+def own_posts(comments: list | None, name: str, named_only: bool) -> list[datetime]:
+    """When the session posted a `Progress:`, `Report:` or `Request:` comment among these: one
+    that names it, or on its own pull request any such comment (`named_only` false)."""
+    out = []
+    for c in comments or []:
+        text = plain(c["body"]) if isinstance(c.get("body"), str) else ""
+        first = text.splitlines()[0] if text else ""
+        if POST_LINE.match(first) and (not named_only or names(text, name)):
+            out.append(moment(c.get("created_at")))
+    return out
+
+
+def conductor_comments(repo: str) -> list | None:
+    """The comments of the open issues labelled `agk-conductor` ([] with none, None unread)."""
+    found = pages(f"repos/{repo}/issues?state=open&labels={CONDUCTOR_LABEL}")
+    if found is None:
+        return None
+    out: list = []
+    for i in found:
+        labels = {str(x.get("name")) for x in i.get("labels") or [] if isinstance(x, dict)}
+        if CONDUCTOR_LABEL not in labels or "pull_request" in i:
+            continue
+        comments = pages(f"repos/{repo}/issues/{i['number']}/comments")
+        if comments is None:
+            return None
+        out += comments
+    return out
+
+
+def gone_sessions(s: Survey, hours: int, now: datetime) -> dict[str, int]:
+    """The sessions whose claims are stale, with the whole hours since their last post.
+
+    A claim is stale when its session has posted nothing for `claim_stale_hours` and has no open
+    pull request (brief #330 answer 2). Its posts are its `taken:` and `released:` comments on the
+    open briefs, the pull requests that may be its work (`fits`), opened or merged, and its
+    `Progress:`, `Report:` and `Request:` comments (the verdict on 1f1969e, item 3): those that
+    name it on the briefs and on the `agk-conductor` issue, and every such comment on a pull
+    request that may be its work. Those are read only for a session that would otherwise be
+    stale; a read that fails keeps the session fresh."""
+    last: dict[str, datetime] = {}
+    open_work: set[str] = set()
+    mine: dict[str, set[int]] = {}
+
+    def seen(name: str, when: datetime) -> None:
+        last[name] = max(when, last.get(name, when))
+
+    def old(name: str) -> bool:
+        return name not in open_work and now - last[name] >= timedelta(hours=hours)
+
+    for number, comments in s.comments.items():
+        for t in all_takes(comments):
+            seen(t[2], t[0])
+            for pr in s.prs:
+                if not fits(pr, number, t):
+                    continue
+                mine.setdefault(t[2], set()).add(pr["number"])
+                if pr.get("state") == "open":
+                    open_work.add(t[2])
+                for key in ("created_at", "merged_at"):
+                    if pr.get(key):
+                        seen(t[2], moment(pr[key]))
+        for c in comments or []:
+            text = plain(c["body"]) if isinstance(c.get("body"), str) else ""
+            if found := RELEASED.fullmatch(text):
+                seen(found.group(1), moment(c.get("created_at")))
+    for name in [n for n in last if old(n)]:
+        for comments in s.comments.values():
+            for when in own_posts(comments, name, True):
+                seen(name, when)
+    unread: set[str] = set()
+    if any(old(n) for n in last):
+        board = conductor_comments(s.repo)
+        for name in [n for n in last if old(n)]:
+            if board is None:
+                unread.add(name)
+                continue
+            for when in own_posts(board, name, True):
+                seen(name, when)
+            for number in sorted(mine.get(name, ())):
+                if number not in s.posts:
+                    s.posts[number] = pages(f"repos/{s.repo}/issues/{number}/comments")
+                if s.posts[number] is None:
+                    unread.add(name)
+                    break
+                for when in own_posts(s.posts[number], name, False):
+                    seen(name, when)
+    out: dict[str, int] = {}
+    for name, when in last.items():
+        if old(name) and name not in unread:
+            out[name] = int((now - when).total_seconds() // 3600)
+    return out
+
+
+def age_text(hours: int) -> str:
+    if hours >= 48:
+        return f"{hours // 24} days"
+    return f"{hours} hour" + ("" if hours == 1 else "s")
+
+
+def stale_claims(s: Survey) -> list[dict]:
+    """Each live take of a session that is gone: `stale claim by <session>, <age>`."""
+    out: list[dict] = []
+    for number in sorted(s.comments):
+        for t in live_takes(s.comments.get(number, []), number, s.prs, s.hours):
+            if t[2] in s.gone:
+                why = f"stale claim by {t[2]}, {age_text(s.gone[t[2]])}"
+                entry = {"brief": number, "session": t[2], "hours": s.gone[t[2]], "why": why}
+                out.append(entry | ({"build": t[5]} if t[5] else {}))
+    return out
+
+
 def effective_takes(s: Survey, number: int) -> list[tuple]:
-    """The live takes of a brief that are not those of a session that moved on."""
+    """The live takes of a brief that are not those of a session that moved on or is gone."""
     live = live_takes(s.comments.get(number, []), number, s.prs, s.hours)
-    return [t for t in live if not moved_on(s, number, t)]
+    return [t for t in live if not moved_on(s, number, t) and t[2] not in s.gone]
 
 
 def hold_text(s: Survey, number: int, take: tuple) -> str:
@@ -250,8 +473,9 @@ def unplaced(
 def settle_takes(s: Survey) -> tuple[set[int], list[tuple[int, str]]]:
     """(the briefs built in parts whose takes all belong to sessions that moved on, the skips).
 
-    A skip `taken by X` says until when the take holds the brief. A brief built in parts that is
-    freed is no longer a skip or running work; a brief without builds keeps its take."""
+    A skip `taken by X` says until when the take holds the brief and names the oldest take that
+    still holds it. A brief built in parts that is freed is no longer a skip or running work; a
+    brief without builds keeps its take unless every take of it is stale (brief #330 answer 2)."""
     freed: set[int] = set()
     skipped: list[tuple[int, str]] = []
     for number, why in s.skipped:
@@ -259,14 +483,15 @@ def settle_takes(s: Survey) -> tuple[set[int], list[tuple[int, str]]]:
             skipped.append((number, why))
             continue
         takes = live_takes(s.comments.get(number, []), number, s.prs, s.hours)
+        takes = [t for t in takes if t[2] not in s.gone]
         brief = s.briefs.get(number)
         if brief and builds_of(brief["body"]):
             takes = [t for t in takes if not moved_on(s, number, t)]
-            if not takes:
-                freed.add(number)
-                continue
+        if not takes and brief:
+            freed.add(number)
+            continue
         if takes:
-            why = f"{why} {hold_text(s, number, takes[0])}"
+            why = f"taken by {takes[0][2]} {hold_text(s, number, takes[0])}"
         skipped.append((number, why))
     return freed, skipped
 
@@ -284,7 +509,7 @@ def candidates(
         key=lambda b: (priority_of(b["body"]), b["number"]),
     ):
         if not builds_of(brief["body"]):
-            if brief in s.free:
+            if brief in s.free or brief["number"] in freed:
                 found.append({**brief, "build": None})
             continue
         name, more, why = next_build(s, brief)
@@ -305,9 +530,10 @@ def waves(root, s: Survey, ready: list[dict]) -> tuple[list[dict], list[dict]]:
         if found := running_conflict(root, s, brief, shared):
             waits.append(found)
             continue
-        mine = unshared(touches_of(brief["body"]), shared)
+        mine = unshared(entries_of(root, touches_of(brief["body"])), shared)
         for other in chosen:
-            if found := clash(mine, unshared(touches_of(other["body"]), shared)):
+            theirs = unshared(entries_of(root, touches_of(other["body"])), shared)
+            if found := clash(mine, theirs):
                 waits.append(
                     {
                         "brief": brief["number"],
@@ -396,10 +622,13 @@ def build(root) -> dict:
     repo = repo_name(root)
     reviews = flow_int(root, "reviews_in_flight", DEFAULTS["reviews_in_flight"], RULE)
     hours = flow_int(root, "merge_hours", DEFAULTS["merge_hours"], RULE)
-    stale = flow_int(root, "stale_commits", DEFAULTS["stale_commits"], RULE)
+    behind_limit = flow_int(root, "stale_commits", DEFAULTS["stale_commits"], RULE)
+    gone_hours = flow_int(root, "claim_stale_hours", DEFAULTS["claim_stale_hours"], RULE)
     s = survey(root, repo, "")
     default = _default_branch(root)
     now = datetime.now(UTC)
+    s.gone = gone_sessions(s, gone_hours, now)
+    stale = stale_claims(s)
     freed, skipped = settle_takes(s)
     s.held = [h for h in s.held if h[0] not in freed]
     s.skipped = skipped
@@ -428,9 +657,9 @@ def build(root) -> dict:
         far = behind_by(repo, default, pr)
         if far is None:
             unread.append(pr["number"])
-        elif far > stale:
+        elif far > behind_limit:
             behind.append({"pr": pr["number"], "behind_by": far})
-        if far is None or far <= stale:
+        if far is None or far <= behind_limit:
             updating.append(pr)
     conflicts = sorted(
         p["number"] for p in s.prs if p.get("state") == "open" and "agk:conflict" in label_names(p)
@@ -443,6 +672,7 @@ def build(root) -> dict:
         ],
         "waits": waits,
         "skipped": [{"brief": n, "why": why} for n, why in [*s.skipped, *build_skips, *unplanned]],
+        "stale_claims": stale,
         "capacity": {
             "max_builders": s.max_builders,
             "running": running,
@@ -463,7 +693,7 @@ def build(root) -> dict:
         "behind_unknown": unread,
         "conflicts": conflicts,
         "default_branch": default,
-        "stale_commits": stale,
+        "stale_commits": behind_limit,
     }
 
 
@@ -513,6 +743,10 @@ def words(plan: dict) -> str:
             continue
         target = f"#{w['waits_for']}" if "waits_for" in w else f"pull request #{w['pull_request']}"
         lines.append(f"#{w['brief']} waits for {target} ({w['why']}).")
+    if plan["stale_claims"]:
+        lines.append(
+            "Stale: " + ", ".join(f"#{c['brief']} ({c['why']})" for c in plan["stale_claims"]) + "."
+        )
     if plan["skipped"]:
         lines.append(
             "Skipped: " + ", ".join(f"#{s['brief']} ({s['why']})" for s in plan["skipped"]) + "."
