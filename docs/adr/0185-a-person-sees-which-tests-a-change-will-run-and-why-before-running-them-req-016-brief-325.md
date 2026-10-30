@@ -1,6 +1,6 @@
 # ADR-0185: a person sees which tests a change will run, and why, before running them (REQ-016, brief 325)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0167, ADR-0172
