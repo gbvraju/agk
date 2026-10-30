@@ -1,0 +1,1 @@
+- `launch.py prompts --resume` prints one line per running builder that resumes it from GitHub alone after a usage limit, an account switch or a closed tab, and `--adapter` restarts each one (brief #402, ADR-0219 Proposed)

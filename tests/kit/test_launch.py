@@ -392,3 +392,24 @@ def test_the_resume_adapter_runs_without_a_shell_and_not_for_nothing(tmp_path, a
     )
     assert out.returncode == 0 and out.stdout == ""
     assert calls(tmp_path) == []
+
+
+def test_the_resume_adapter_is_capped_by_max_builders_and_needs_no_slots(tmp_path, adapter):
+    """REQ-040: brief #402 answer 2 (the adapter as today; `max_builders` still caps a run)."""
+    (tmp_path / "agk.toml").write_text('default_branch = "main"\n[flow]\nmax_builders = 1\n')
+    doc = running({"session": "builder-a", "brief": 5}, {"session": "builder-b", "brief": 7})
+    path = tmp_path / "plan.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    command = f"{sys.executable} {adapter}"
+    out = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPT), "prompts", "--plan", str(path), "--resume"]
+        + ["--adapter", command],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={**os.environ, "ADAPTER_LOG": str(tmp_path / "calls.log")},
+        timeout=60,
+    )
+    assert out.returncode == 0, out.stderr
+    assert [c["session"] for c in calls(tmp_path)] == ["builder-a"]
+    assert "not started: builder-b #7 (max_builders is 1)" in out.stdout
