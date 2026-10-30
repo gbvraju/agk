@@ -31,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from adopt import ABSENT_AS_BLOCK, MARKERS, block_of
+from check_release import opt_ins
 from common import (
     REQ_ID,
     ROUTER_WORKFLOW,
@@ -66,6 +67,7 @@ USAGE = (
 NEXT_FLAGS = ("--brief", "--issues", "--date")
 UPGRADE_TITLE = re.compile(r"^# ADR-(\d{4}): Upgrade agk from (\S+) to (\S+)\s*$")
 TABLE = "kit/hashes.json"
+CHANGELOG = "CHANGELOG.md"  # the kit's own, read for the opt-in features of the newer releases
 KIT_ONLY = ("kit/", "tests/kit_dev/")
 KIT_ONLY_FILES = ("scripts/agk/init.py", "scripts/agk/adopt.py")
 LINE_TEMPLATES = ("config/protected-paths.txt", "config/neutrality.txt")
@@ -736,6 +738,19 @@ def apply(target: Path, plan: Plan) -> tuple[bool, list[str]]:
     return True, done
 
 
+def opt_in_lines(kit_root: Path, old: str, new: str) -> list[str]:
+    """Brief #320 answer 3: after a written upgrade, one line `opt-in: <setting>: <summary>` per
+    entry of the kit's changelog between OLD (excluded) and NEW (included) that carries an opt-in
+    marker; none when there is none. It reads the changelog only and writes nothing."""
+    if old == new:
+        return []
+    try:
+        text = (kit_root / CHANGELOG).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return [f"opt-in: the new features cannot be listed (path class {CHANGELOG})"]
+    return [f"opt-in: {setting}: {summary}" for setting, summary in opt_ins(text, old, new)]
+
+
 def upgrade_adr(target: Path, kit_version: str) -> tuple[str, str, str]:
     """(ADR-nnnn, the version upgraded from, the requirements) of the upgrade's ADR."""
     for path in sorted((target / "docs" / "adr").glob("*.md")):
@@ -852,6 +867,8 @@ def main(argv: list[str] | None = None) -> int:
     if not ok:
         print(f"already written: {', '.join(done) if done else 'none'}")
         return 3
+    for line in opt_in_lines(kit_root, plan.version, plan.kit_version):
+        print(line)
     return 0
 
 

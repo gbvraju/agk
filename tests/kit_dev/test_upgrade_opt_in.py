@@ -154,7 +154,10 @@ def test_the_listing_writes_nothing(tmp_path, kit, capsys):
     run(capsys, one)
     (kit / "CHANGELOG.md").write_text(CHANGELOG, encoding="utf-8")
     run(capsys, two)
-    assert snapshot(one) == snapshot(two)
+    def contents(root):
+        return {rel: digest for rel, (digest, _) in snapshot(root).items()}
+
+    assert contents(one) == contents(two)  # the same files and bytes with or without markers
 
 
 def test_a_dry_run_and_a_refused_or_empty_run_list_nothing(tmp_path, kit, capsys):
