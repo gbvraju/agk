@@ -36,13 +36,24 @@ first checkpoint of the pull request).
 4. **Readings taken where the brief leaves a point open** (questions on the pull request): solo mode (`review_mode`,
    #317) is in the brief's example marker, but it merged after the v0.59.0 tag and is still the unreleased fragment
    `changelog.d/solo-mode.md`; naming it in a line that speaks for 0.59.0 would hide it from an upgrade from 0.59.0. The
-   line names the three settings 0.59.0 shipped, and solo mode is left to its own entry (Q-340-1). The phrase that names
-   the release, `<version> added ` at the start of the change, is the kit's reading; the brief gives no form (Q-340-2).
+   line names the three settings 0.59.0 shipped, and solo mode is listed by its own entry: its unreleased fragment
+   `changelog.d/solo-mode.md` ends with ` (opt-in: review_mode)`, its line otherwise unchanged (Q-340-1). The phrase that
+   names the release, `<version> added ` at the start of the change, is the kit's reading; the brief gives no form
+   (Q-340-2).
+
+## Log
+
+- 2026-10-30, verdict on df7f5f6: Q-340-1 answered: solo mode ships in 0.60.0, so ` (opt-in: review_mode)` is appended
+  to the one line of `changelog.d/solo-mode.md` (the fragment checks accept it; the line keeps the number of #317, read
+  from the commit that added the file), with a test.
+- 2026-10-30, verdict on df7f5f6: Q-340-2 accepted: `<version> added ` at the start of the change names the release an
+  entry speaks for, as built.
 
 ## Consequences
 
 - A project on 0.58.0 or older that upgrades to the next release sees `proof`, `unused_code` and `coverage` listed after
-  its upgrade, each with one summary line; a project on 0.59.0 sees them no more.
+  its upgrade, each with one summary line; a project on 0.59.0 sees them no more. An upgrade to 0.60.0 also lists
+  `review_mode` (solo mode) from its own entry.
 - A later release that needs to list what an older one shipped writes one fragment that starts `<version> added `; no
   released section is edited.
 - A changelog line that happens to start with a version followed by ` added ` is read as speaking for that release; only
@@ -50,4 +61,4 @@ first checkpoint of the pull request).
 
 ## Residual
 
-- Solo mode's own opt-in marker, depending on the answer to Q-340-1 (2026-10-30).
+- None (2026-10-30).
