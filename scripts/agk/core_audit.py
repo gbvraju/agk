@@ -1,7 +1,7 @@
 """Which checks and rules of the kit ever refused something (brief #328, ADR-0188).
 
     python3 core_audit.py [--since YYYY-MM-DD] [--json] [--write] [--today YYYY-MM-DD]
-        [--repo OWNER/REPO | --api-dir DIR] [--authors LOGIN,LOGIN]
+        [--repo OWNER/REPO | --api-dir DIR] [--authors LOGIN,LOGIN] [--only N,N]
 
 A read-only report, evidence for a smaller kit core (brief #278), never a decision. It lists:
 
@@ -19,11 +19,14 @@ A read-only report, evidence for a smaller kit core (brief #278), never a decisi
 The period is every pull request opened on or after `--since` (default: the whole history). A page
 that cannot be read (a pull request's commits, check runs, job or comments; a failed run whose job
 shows one combined step) is never zero: a count that could have grown there is `at least N`, a zero
-is `cannot-check`, and neither is listed as never fired. It reads with `gh api` GET only (or saved
-responses in `--api-dir`, named as in SPEC-0007 rule 20) and the files of the repository, and
-writes only to stdout, except `--write`, which writes `docs/runs/core-audit-<today>.md` (the date
-from `date -u`) and never overwrites one. Exit 1 when the page exists, 2 for a bad call or a missing
-input. Messages name the path class or the setting, never a value.
+is `cannot-check`, and neither is listed as never fired. Each pull request with a page that could
+not be read is named, with the page (`commits`, `check runs`, `job`, `combined step` or `comments`),
+under `Unread pages:` (brief #381, ADR-0210), and `--only N,N` reads just the named pull requests,
+every other rule unchanged, so a maintainer can re-read those. It reads with `gh api` GET only
+(or saved responses in `--api-dir`, named as in SPEC-0007 rule 20) and the files of the repository,
+and writes only to stdout, except `--write`, which writes `docs/runs/core-audit-<today>.md` (the
+date from `date -u`) and never overwrites one. Exit 1 when the page exists, 2 for a bad call or a
+missing input. Messages name the path class or the setting, never a value.
 """
 
 from __future__ import annotations
@@ -44,7 +47,7 @@ from reviewers import verdict_authors
 NAME = "core_audit"
 USAGE = (
     "usage: core_audit.py [--since YYYY-MM-DD] [--json] [--write] [--today YYYY-MM-DD] "
-    "[--repo OWNER/REPO | --api-dir DIR] [--authors LOGIN,LOGIN]"
+    "[--repo OWNER/REPO | --api-dir DIR] [--authors LOGIN,LOGIN] [--only N,N]"
 )
 CANNOT = "cannot-check"
 WORKFLOW = ".github/workflows/governance.yml"
@@ -64,6 +67,11 @@ SESSION_CITE = re.compile(r"\bsession rules? " + RULE_NUMBERS)
 SESSION_LONG = re.compile(r"\brule (\d+[a-z]?) of the session rules\b")
 SPEC_CITE = re.compile(r"\b(SPEC-\d{4}) rules? " + RULE_NUMBERS)
 SPLIT = re.compile(r",? and |, ")
+ONLY = re.compile(r"[1-9]\d*(?:,[1-9]\d*)*")
+# the pages that can be unread, in the order they are listed for one pull request
+COMMITS, CHECK_RUNS, JOB = "commits", "check runs", "job"
+COMBINED, COMMENTS = "combined step", "comments"
+PAGES = (COMMITS, CHECK_RUNS, JOB, COMBINED, COMMENTS)
 PAGE_NOTE = (
     "This page is evidence for #278, not a decision: it lists what the kit's checks and rules "
     "refused in the history read below. It changes no rule and no check; a person files any "
@@ -164,36 +172,39 @@ def totals(root: Path) -> dict[str, int]:
 # --- the history ------------------------------------------------------------------------------
 
 
-def failed_steps(src: Any, pull: dict) -> tuple[set[str], bool]:
+def failed_steps(src: Any, pull: dict) -> tuple[set[str], set[str]]:
     """(the names of the steps that failed in a governance run of any commit of the pull request,
-    whether every page was read in full). A page that cannot be read, a short read (fewer commits
+    the pages that were not read in full). A page that cannot be read, a short read (fewer commits
     than the pull request counts, or `MAX_COMMITS` with no count; fewer check runs than the page's
-    `total_count`), a failure that cannot be attributed to a step and a pull request with no
-    governance run at all leave it incomplete; the failures read so far still count."""
+    `total_count`), a failure that cannot be attributed to a step (`job`, or `combined step` for the
+    one step of the early workflow) and a pull request with no governance run at all (`check runs`)
+    leave a page unread; the failures read so far still count."""
     number = pull["number"]
     commits = src.get(f"commits-{number}", f"repos/{{repo}}/pulls/{number}/commits")
     if not isinstance(commits, list) or not commits:
-        return set(), False
+        return set(), {COMMITS}
+    unread: set[str] = set()
     counted = pull.get("commits")
     if isinstance(counted, int) and not isinstance(counted, bool):
-        complete = len(commits) >= counted
-    else:
-        complete = len(commits) < MAX_COMMITS
+        if len(commits) < counted:
+            unread.add(COMMITS)
+    elif len(commits) >= MAX_COMMITS:
+        unread.add(COMMITS)
     failed: set[str] = set()
     seen = False
     for commit in commits:
         sha = commit.get("sha") if isinstance(commit, dict) else None
         if not isinstance(sha, str):
-            complete = False
+            unread.add(COMMITS)
             continue
         checks = src.get(f"checks-{sha}", f"repos/{{repo}}/commits/{sha}/check-runs?per_page=100")
         runs = checks.get("check_runs") if isinstance(checks, dict) else None
         if not isinstance(runs, list):
-            complete = False
+            unread.add(CHECK_RUNS)
             continue
         total = checks.get("total_count")
         if isinstance(total, int) and total > len(runs):
-            complete = False
+            unread.add(CHECK_RUNS)
         # a commit inside a push has no run of its own; a pull request with none at all is unread
         for run_ in runs:
             if not isinstance(run_, dict) or run_.get("name") != GOVERNANCE:
@@ -202,20 +213,22 @@ def failed_steps(src: Any, pull: dict) -> tuple[set[str], bool]:
             if run_.get("conclusion") != "failure":
                 continue
             bad = job_failures(src, run_.get("id"))
-            if bad is None:
-                complete = False
+            if isinstance(bad, str):
+                unread.add(bad)
                 continue
             failed |= bad
-    return failed, complete and seen
+    if not seen and CHECK_RUNS not in unread:
+        unread.add(CHECK_RUNS)
+    return failed, unread
 
 
-def job_failures(src: Any, job_id: Any) -> set[str] | None:
-    """The failed step names of a failed governance job, or None when they cannot be read or the
-    failure cannot be attributed to a step (one combined step, or no failed step)."""
+def job_failures(src: Any, job_id: Any) -> set[str] | str:
+    """The failed step names of a failed governance job, or the page left unread: `job` when they
+    cannot be read or no step failed, `combined step` for the one step of the early workflow."""
     job = src.get(f"jobs-{job_id}", f"repos/{{repo}}/actions/jobs/{job_id}")
     steps = job.get("steps") if isinstance(job, dict) else None
     if not isinstance(steps, list) or not steps:
-        return None
+        return JOB
     names = {s.get("name") for s in steps if isinstance(s, dict)}
     bad = {
         s["name"]
@@ -224,8 +237,10 @@ def job_failures(src: Any, job_id: Any) -> set[str] | None:
         and s.get("conclusion") == "failure"
         and isinstance(s.get("name"), str)
     }
-    if UNSPLIT_STEP in names or not bad:
-        return None
+    if UNSPLIT_STEP in names:
+        return COMBINED
+    if not bad:
+        return JOB
     return bad
 
 
@@ -273,28 +288,57 @@ def older_than(since: date | None):
     return done
 
 
-def collect(src: Any, since: date | None, allowed: set[str]) -> dict[str, Any]:
+def done_listing(since: date | None, only: set[int] | None):
+    """When the list of pull requests (newest first) can stop: older than the period, or, with
+    `--only`, past the lowest number named."""
+    older = older_than(since)
+
+    def done(chunk: list) -> bool:
+        if older(chunk):
+            return True
+        if not only or not chunk or not isinstance(chunk[-1], dict):
+            return False
+        last = chunk[-1].get("number")
+        return isinstance(last, int) and last < min(only)
+
+    return done
+
+
+def collect(
+    src: Any, since: date | None, allowed: set[str], only: set[int] | None = None
+) -> dict[str, Any]:
     endpoint = "repos/{repo}/pulls?state=all&sort=created&direction=desc"
-    pulls = src.get("pulls", endpoint, older_than(since))
+    pulls = src.get("pulls", endpoint, done_listing(since, only))
     if not isinstance(pulls, list):
         return {"pulls": None}
+    if only:
+        listed = {p.get("number") for p in pulls if isinstance(p, dict)}
+        if not only <= listed:
+            raise CheckError(
+                "a pull request named is not in the list of pull requests (setting: --only)"
+            )
     steps: dict[str, int] = {}
     session: dict[str, int] = {}
     spec: dict[tuple[str, str], int] = {}
     total = unread_checks = unread_verdicts = 0
+    unread: list[tuple[int, str]] = []
     for pull in pulls:
         if not in_period(pull, since):
             continue
-        total += 1
         number = pull["number"]
-        failed, complete = failed_steps(src, pull)
-        if not complete:
+        if only and number not in only:
+            continue
+        total += 1
+        failed, pages = failed_steps(src, pull)
+        if pages:
             unread_checks += 1
+            unread += [(number, p) for p in pages]
         for name in failed:
             steps[name] = steps.get(name, 0) + 1
         comments = src.get(f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
         if not isinstance(comments, list):
             unread_verdicts += 1
+            unread.append((number, COMMENTS))
             continue
         for body in verdict_bodies(comments, allowed):
             cited_session, cited_spec = citations(body)
@@ -306,6 +350,10 @@ def collect(src: Any, since: date | None, allowed: set[str]) -> dict[str, Any]:
         "pulls": total,
         "unread_checks": unread_checks,
         "unread_verdicts": unread_verdicts,
+        "unread": [
+            {"number": n, "page": p}
+            for n, p in sorted(unread, key=lambda u: (u[0], PAGES.index(u[1])))
+        ],
         "steps": steps,
         "session": session,
         "spec": spec,
@@ -323,7 +371,9 @@ def shown(count: int, complete: bool) -> int | str:
     return f"at least {count}" if count else CANNOT
 
 
-def build(root: Path, src: Any, since: date | None, allowed: set[str]) -> dict[str, Any]:
+def build(
+    root: Path, src: Any, since: date | None, allowed: set[str], only: set[int] | None = None
+) -> dict[str, Any]:
     if not (root / WORKFLOW).is_file():
         raise CheckError("the governance workflow is missing (path class .github/)")
     if not (root / SESSION_RULES).is_file():
@@ -331,7 +381,7 @@ def build(root: Path, src: Any, since: date | None, allowed: set[str]) -> dict[s
     checks = workflow_checks(read(root / WORKFLOW))
     rules = session_rules(read(root / SESSION_RULES))
     specs = spec_rules(root)
-    got = collect(src, since, allowed)
+    got = collect(src, since, allowed, only)
     read_all = got["pulls"] is not None
     steps = got.get("steps", {})
     checks_done = read_all and got["unread_checks"] == 0
@@ -360,6 +410,7 @@ def build(root: Path, src: Any, since: date | None, allowed: set[str]) -> dict[s
             "total": got["pulls"] if read_all else CANNOT,
             "unread_checks": got.get("unread_checks", CANNOT),
             "unread_verdicts": got.get("unread_verdicts", CANNOT),
+            "unread": got.get("unread", CANNOT),
         },
         "checks": check_counts,
         "other_steps": other,
@@ -381,6 +432,14 @@ def render(data: dict[str, Any], today: str) -> str:
         f"agk core audit, {period}, read on {today}",
         f"pull requests: {prs['total']} (check runs unreadable: {prs['unread_checks']}, "
         f"comments unreadable: {prs['unread_verdicts']})",
+        "Unread pages:",
+    ]
+    unread = prs["unread"]
+    if isinstance(unread, list):
+        out += [f"  #{u['number']} {u['page']}" for u in unread] or ["  none"]
+    else:
+        out.append(f"  {unread}")
+    out += [
         "",
         "Governance checks (pull requests whose governance run failed on the check):",
     ]
@@ -434,7 +493,7 @@ def day(text: str) -> date | None:
 
 def parse(args: list[str]) -> dict[str, Any] | None:
     flags = {"--json", "--write"}
-    valued = {"--since", "--today", "--repo", "--api-dir", "--authors"}
+    valued = {"--since", "--today", "--repo", "--api-dir", "--authors", "--only"}
     opts: dict[str, Any] = {}
     i = 0
     while i < len(args):
@@ -452,6 +511,8 @@ def parse(args: list[str]) -> dict[str, Any] | None:
     for key in ("--since", "--today"):
         if key in opts and day(opts[key]) is None:
             return None
+    if "--only" in opts and not ONLY.fullmatch(opts["--only"]):
+        return None
     return opts
 
 
@@ -475,7 +536,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             src = Gh(opts.get("--repo") or origin_repo())
         since = day(opts["--since"]) if "--since" in opts else None
-        data = build(root, src, since, allowed)
+        only = {int(n) for n in opts["--only"].split(",")} if "--only" in opts else None
+        data = build(root, src, since, allowed, only)
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}")
         return 2
