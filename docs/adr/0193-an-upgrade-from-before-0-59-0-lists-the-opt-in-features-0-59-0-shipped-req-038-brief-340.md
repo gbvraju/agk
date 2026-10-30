@@ -1,6 +1,6 @@
 # ADR-0193: an upgrade from before 0.59.0 lists the opt-in features 0.59.0 shipped (REQ-038, brief 340)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0172, ADR-0177, ADR-0181
