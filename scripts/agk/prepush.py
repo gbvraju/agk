@@ -107,7 +107,7 @@ def lint(root: Path) -> Step:
 
 def governance(root: Path, base: str) -> Step:
     if not (root / "agk.mk").is_file():
-        return Step("FAIL", "agk.mk is missing; the governance checks cannot run (path class: agk.mk)")
+        return Step("FAIL", "agk.mk is missing; governance cannot run (path class: agk.mk)")
     if shutil.which("make") is None:
         return Step("FAIL", "make is not installed, so the governance checks cannot run")
     env = {**os.environ, "AGK_BASE": base}
@@ -167,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
             raise CheckError("no base ref resolves")
         mb = merge_base(root, base)
     except CheckError:
-        print("prepush: the base does not resolve (option: --base; setting: AGK_BASE, default_branch)")
+        print("prepush: the base does not resolve (setting: --base, AGK_BASE, default_branch)")
         return 2
     steps: list[tuple[str, Callable[[], Step]]] = [
         ("pr-body", lambda: pr_body(root, body)),
