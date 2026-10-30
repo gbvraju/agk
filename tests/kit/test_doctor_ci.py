@@ -311,3 +311,89 @@ def test_the_guide_names_no_build_action_setting_and_says_why_ready_for_review_m
     assert "build record" in five and "build summary" in five and "(verify)" in five
     one = text.split("## 1.", 1)[1].split("\n## ", 1)[0]
     assert "merge" in one and "ready_for_review" in one and "no new commit" in one
+
+
+# --- brief #370: the minutes line in the doctor -----------------------------------------------
+
+
+def minutes_case(tmp_path: Path, billing=None, refused: tuple[str, ...] = ()):
+    dirs = prepare("ok", tmp_path)
+    api = dirs["api"]
+    if billing is not None:
+        (api / "billing.json").write_text(json.dumps(billing), encoding="utf-8")
+    for name in refused:
+        (api / f"{name}.json").unlink(missing_ok=True)
+        (api / f"{name}.status").write_text("403\n", encoding="utf-8")
+    proc = doctor("--api-dir", str(api), "--json", str(dirs["root"]))
+    return proc, checks_of(proc.stdout)["actions-minutes"]
+
+
+def test_the_minutes_line_is_ok_under_half(tmp_path):
+    """REQ-020: brief #370 answer 2 (one check that prints the line)."""
+    proc, entry = minutes_case(tmp_path, {"total_minutes_used": 999, "included_minutes": 2000})
+    assert (entry["status"], entry["severity"]) == ("ok", "warn")
+    assert "actions minutes: 999 of 2000 used (49%), level ok" in entry["message"]
+    assert proc.returncode == 0, proc.stdout
+
+
+@pytest.mark.parametrize(
+    ("used", "level"), [(1000, "50%"), (1600, "80%"), (1900, "95%"), (2500, "95%")]
+)
+def test_the_minutes_line_warns_from_half_and_never_fails(tmp_path, used, level):
+    """REQ-020: brief #370 answers 2 and 4 (a warning from the 50% level on, never a failure)."""
+    proc, entry = minutes_case(tmp_path, {"total_minutes_used": used, "included_minutes": 2000})
+    assert (entry["status"], entry["severity"]) == ("fail", "warn")
+    assert f"level {level}" in entry["message"]
+    assert "local-mode.md" in entry["fix"]
+    assert proc.returncode == 4  # a warning, not an error
+
+
+def test_the_minutes_line_is_unknown_without_billing_and_run_history(tmp_path):
+    """REQ-020: brief #370 answer 2 (`unknown` when the token cannot read billing and no estimate
+    exists: cannot-check, never ok and never a failure)."""
+    proc, entry = minutes_case(tmp_path, refused=("billing", "runs"))
+    assert (entry["status"], entry["reason"]) == ("cannot-check", "minutes-unknown")
+    assert proc.returncode == 4
+    text = doctor_text(tmp_path / "t", refused=("billing", "runs"))
+    assert "?? actions-minutes warn cannot check (minutes-unknown)" in text
+    assert "python3 scripts/agk/minutes.py" in text
+
+
+def test_the_minutes_line_with_an_estimate_only_is_not_unknown(tmp_path):
+    """REQ-020: brief #370 answer 2 (billing refused, the run history read: the estimate)."""
+    api_dir = tmp_path / "e"
+    dirs = prepare("ok", api_dir)
+    month = ROOT / "tests" / "kit" / "fixtures" / "minutes" / "month"
+    for file in month.glob("*.json"):
+        if file.name not in ("repo.json", "billing.json"):
+            (dirs["api"] / file.name).write_text(file.read_text(encoding="utf-8"))
+    (dirs["api"] / "billing.json").unlink(missing_ok=True)
+    (dirs["api"] / "billing.status").write_text("403\n", encoding="utf-8")
+    proc = doctor("--api-dir", str(dirs["api"]), "--json", str(dirs["root"]))
+    entry = checks_of(proc.stdout)["actions-minutes"]
+    assert entry["status"] == "ok"
+    assert "used this month (estimate from run history)" in entry["message"]
+    assert "level unknown" in entry["message"]
+
+
+def doctor_text(tmp_path: Path, refused: tuple[str, ...]) -> str:
+    dirs = prepare("ok", tmp_path)
+    for name in refused:
+        (dirs["api"] / f"{name}.json").unlink(missing_ok=True)
+        (dirs["api"] / f"{name}.status").write_text("403\n", encoding="utf-8")
+    return doctor("--api-dir", str(dirs["api"]), str(dirs["root"])).stdout
+
+
+def test_launch_prints_the_line_before_it_asks_and_recommends_local_mode_at_95():
+    """REQ-020: brief #370 answer 3."""
+    text = (ROOT / "skills" / "launch" / "SKILL.md").read_text(encoding="utf-8")
+    line_at = text.index("python3 scripts/agk/minutes.py --line")
+    assert line_at < text.index("**Confirm.**")
+    assert "95%" in text and "docs/guides/local-mode.md" in text
+
+
+def test_the_guide_names_the_doctor_check_and_the_levels():
+    """REQ-020: brief #370 answers 1 and 2."""
+    text = GUIDE.read_text(encoding="utf-8")
+    for needle in ("actions-minutes", "--line", "50%", "95%", "runs out about", "not this month"):
+        assert needle in text, needle
