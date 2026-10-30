@@ -22,11 +22,14 @@ steps in order. The tests were written first (`tests/kit/test_prepush_record.py`
    that is installed but prints no version line is `unknown`, a missing one is left out), `steps`, `not_run` and `result`
    (`passed` or `failed`). Each step that ran, skipped ones included, has `name`, `outcome`, `not_run`, `argv`, `cwd`,
    `exit` (`null` for a step that ran nothing), `seconds`, `output_sha256` and `output_bytes` (of the step's whole output
-   as UTF-8). The tests step adds `runs`: for each run the test plan selected, its `name`, `command` (the project's own
-   command from `agk.toml`), `cwd`, `exit` (`null` on a timeout), `seconds` and its output digest.
+   as UTF-8). The tests step's own `argv`, `exit` and digest are those of its `test_plan.py` run; it adds `runs`: for each
+   run the test plan selected, its `name`, `command` (the project's own command from `agk.toml`), `cwd`, `exit` (`null` on
+   a timeout), `seconds` and its output digest. A failing test run fails the step and keeps its own exit code in `runs`.
 2. **Nothing that can carry a secret (answer 1).** The record holds no output text and no environment variable. An argument
    that is a path outside the repository is written `<outside>/<file name>`, a kit script `scripts/agk/<name>`, the running
-   interpreter `python3`; a folder is relative to the repository root.
+   interpreter `python3`; a folder is relative to the repository root. The same scrub applies to each absolute path inside a
+   run's shell command (a `/` that starts a word or follows `=`), and a run's folder is written relative to the root. The
+   tool versions are read with the repository root as the folder.
 3. **The evidence line (answer 2).** With `--record`, prepush prints
    `Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <first 12 hex of the file's sha256>` after writing it.
    The file is written as sorted, indented JSON with a final newline, so the digest is of the exact bytes on disk.

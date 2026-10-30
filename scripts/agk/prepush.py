@@ -33,6 +33,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -189,24 +190,23 @@ def tests(root: Path, mb: str, quick: bool) -> Step:
     for item in runs:
         folder = root / item["cwd"]
         started = time.monotonic()
-        code, out, _ = execute(item["command"], folder, limit)
+        code, run_out, _ = execute(item["command"], folder, limit)
         made.append(
             {
                 "name": item["name"],
-                "command": item["command"],
-                "cwd": item["cwd"],
+                "command": safe_command(item["command"], root),
+                "cwd": safe_cwd(folder, root),
                 "exit": code,
                 "seconds": round(time.monotonic() - started, 3),
-                **digest(out),
+                **digest(run_out),
             }
         )
-        ran = Ran(cmd, root, code, out)
         lines.append(f"tests: {item['name']} ({len(item['files'])} test files) in {item['cwd']}")
         if code is None:
             return Step("FAIL", "\n".join([*lines, timeout_note(limit)]), ran=ran, runs=made)
         if code != 0:
-            return Step("FAIL", "\n".join([*lines, out.rstrip("\n")]), ran=ran, runs=made)
-    return Step("ok", "\n".join(lines), ran=Ran(cmd, root, 0, ""), runs=made)
+            return Step("FAIL", "\n".join([*lines, run_out.rstrip("\n")]), ran=ran, runs=made)
+    return Step("ok", "\n".join(lines), ran=ran, runs=made)
 
 
 def digest(output: str) -> dict:
@@ -230,6 +230,17 @@ def safe_arg(arg: str, root: Path) -> str:
     return f"<outside>/{path.name}"
 
 
+# An absolute path inside a shell command: a `/` that starts a word (or follows `=`), up to a
+# character that ends a shell word.
+ABSOLUTE = re.compile(r"(?<![^\s='\"(])/[^\s;|&()<>'\"`$]+")
+
+
+def safe_command(command: str, root: Path) -> str:
+    """A run's shell command as the record holds it: each absolute path scrubbed by `safe_arg`
+    (verdict on 1511951, item 2)."""
+    return ABSOLUTE.sub(lambda m: safe_arg(m.group(0), root), command)
+
+
 def safe_cwd(cwd: Path, root: Path) -> str:
     try:
         return cwd.resolve().relative_to(root.resolve()).as_posix() or "."
@@ -237,27 +248,27 @@ def safe_cwd(cwd: Path, root: Path) -> str:
         return "<outside>"
 
 
-def version(cmd: list[str]) -> str | None:
+def version(cmd: list[str], root: Path) -> str | None:
     """The first line a tool prints for its version, `unknown` when it prints none, or None when
     it is not installed."""
     if shutil.which(cmd[0]) is None:
         return None
     try:
-        code, out = run(cmd, Path.cwd())
+        code, out = run(cmd, root)
     except OSError:
         return None
     line = out.splitlines()[0].strip() if out else ""
     return line if code == 0 and line else "unknown"
 
 
-def versions() -> dict:
+def versions(root: Path) -> dict:
     found = {"python3": ".".join(map(str, sys.version_info[:3]))}
     for name, cmd in (
         ("git", ["git", "--version"]),
         ("make", ["make", "--version"]),
         ("gitleaks", ["gitleaks", "version"]),
     ):
-        line = version(cmd)
+        line = version(cmd, root)
         if line is not None:
             found[name] = line
     return found
@@ -322,7 +333,7 @@ def main(argv: list[str] | None = None) -> int:
             "base": git(root, "rev-parse", f"{base}^{{commit}}").strip(),
             "started": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "tree_clean": git(root, "status", "--porcelain").strip() == "",
-            "versions": versions(),
+            "versions": versions(root),
             "steps": [],
         }
     steps: list[tuple[str, Callable[[], Step]]] = [
