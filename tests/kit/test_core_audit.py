@@ -435,3 +435,34 @@ def test_one_unreadable_check_run_page_among_readable_ones_cannot_be_checked(rep
     (api.path / f"checks-{sha_of(1, 0)}.json").unlink()
     data = report(repo, api)
     assert data["checks"]["check_specs"] == "cannot-check"
+
+
+def test_a_short_read_of_check_runs_counts_what_was_read_as_at_least(repo, api):
+    """Verdict on 9ec1d99 item 1: `total_count` above the runs received is a short read."""
+    api.pull(1, failed=[["check_adrs"]], comments=[])
+    name = f"checks-{sha_of(1, 0)}"
+    page = json.loads((api.path / f"{name}.json").read_text(encoding="utf-8"))
+    page["total_count"] = 101
+    api.save(name, page)
+    data = report(repo, api)
+    assert data["pull_requests"]["unread_checks"] == 1
+    assert data["checks"]["check_adrs"] == "at least 1"
+    assert data["checks"]["check_specs"] == "cannot-check"
+
+
+def test_a_short_read_of_the_commits_of_a_pull_request_is_unread(repo, api):
+    """Verdict on 9ec1d99 item 1: fewer commits than the pull request's `commits` count."""
+    api.pull(1, failed=[["check_adrs"], []], comments=[])
+    api.pulls[-1]["commits"] = 3
+    api.save("pulls", api.pulls)
+    data = report(repo, api)
+    assert data["pull_requests"]["unread_checks"] == 1
+    assert data["checks"]["check_adrs"] == "at least 1"
+
+
+def test_two_hundred_and_fifty_commits_without_a_count_are_a_short_read(repo, api):
+    """GitHub lists at most 250 commits of a pull request; with no count, 250 is a short read."""
+    api.pull(1, failed=[["check_adrs"]] + [[] for _ in range(249)], comments=[])
+    data = report(repo, api)
+    assert data["pull_requests"]["unread_checks"] == 1
+    assert data["checks"]["check_adrs"] == "at least 1"

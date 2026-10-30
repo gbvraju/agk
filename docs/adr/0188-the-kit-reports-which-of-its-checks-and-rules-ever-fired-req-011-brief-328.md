@@ -13,7 +13,7 @@ Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
 Brief #328 (priority 2): brief #278 wants a smaller kit core, but retiring a check without evidence risks losing the one that
 catches a rare, costly mistake. Before any rule is merged or retired, the kit needs a measured list of which checks ever failed
 a pull request, which rules a verdict ever cited, and which never fired. This is a report only: it changes no rule and no check.
-The tests were written first (`tests/kit/test_core_audit.py`, 27 failed at the first checkpoint of the pull request).
+The tests were written first (`tests/kit/test_core_audit.py`, 27 failed at the first checkpoint of the pull request; the three short-read tests failed before their fix).
 
 ## Decision
 
@@ -33,7 +33,10 @@ The tests were written first (`tests/kit/test_core_audit.py`, 27 failed at the f
 4. **What never fired, and the totals.** The checks and rules with zero refusals in the period, and the numbers of ADRs, specs,
    requirements and scripts.
 5. **Never zero when unread (answer 3).** A pull request whose commits, check runs, failed job or comments cannot be read, a
-   pull request with no governance run at all, and a failed run whose job shows one combined step, are counted as unread. With
+   pull request with no governance run at all, a failed run whose job shows one combined step, and a short read are counted as
+   unread; a short read is a check-runs page that holds fewer runs than its `total_count`, or a commit list shorter than the
+   pull request's `commits` count, or of 250 commits (GitHub lists no more) when the list of pull requests carries no count, and
+   the failures it did read still count. With
    any unread pull request a count is `at least N`, a zero is `cannot-check`, and neither is listed as never fired; an
    unreadable list of pull requests makes every count `cannot-check`.
 6. **The page (answer 2).** Only `--write` writes `docs/runs/core-audit-<date>.md`, whose first paragraph says it is evidence
@@ -41,8 +44,15 @@ The tests were written first (`tests/kit/test_core_audit.py`, 27 failed at the f
 7. **Not installed in projects.** The script audits the kit itself: it is listed with the kit-only scripts of
    `tests/kit_dev/test_kit_manifest.py`, not in `kit/manifest.json`, so nothing changes for a project.
 8. **Readings taken where the brief leaves a point open** (questions on the pull request): the period counts pull requests by
-   the date they were opened; the guide line in `docs/guides/reference.md` waits for the answer to Q-328-1, since open pull
-   request #323 changes that file. Flow mode: fragment `changelog.d/core-audit.md`; no version bump.
+   the date they were opened; the guide line in `docs/guides/reference.md` follows after open pull
+   request #323 merges (Q-328-1, answered in the log). Flow mode: fragment `changelog.d/core-audit.md`; no version bump.
+
+## Log
+
+- 2026-10-30, verdict on 9ec1d99: Q-328-1 answered, option (b): the `docs/guides/reference.md` line follows after #323 merges,
+  and the script stays with the kit-only scripts (`KIT_ONLY`), not in `kit/manifest.json`.
+- 2026-10-30, verdict on 9ec1d99, item 1: a short read of check runs (`total_count` above the runs received) or of a pull
+  request's commits (its `commits` count, or GitHub's 250) is treated like an unreadable page (`at least N`), with a test each.
 
 ## Consequences
 

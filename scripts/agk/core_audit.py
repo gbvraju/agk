@@ -55,6 +55,7 @@ REQUIREMENTS = "docs/requirements.md"
 SCRIPTS = "scripts/agk"
 RUNS = "docs/runs"
 GOVERNANCE = "governance"
+MAX_COMMITS = 250  # GitHub lists at most this many commits of a pull request
 CHECK_RUN = re.compile(r"scripts/agk/|agk\.mk|gitleaks")
 NUMBERED = re.compile(r"(\d+[a-z]?)\. \S")
 SPEC_FILE = re.compile(r"(\d{4})-[^/]+\.md")
@@ -163,44 +164,69 @@ def totals(root: Path) -> dict[str, int]:
 # --- the history ------------------------------------------------------------------------------
 
 
-def failed_steps(src: Any, number: int) -> set[str] | None:
-    """The names of the steps that failed in a governance run of any commit of the pull request,
-    or None when a page cannot be read or a failure cannot be attributed to a step."""
+def failed_steps(src: Any, pull: dict) -> tuple[set[str], bool]:
+    """(the names of the steps that failed in a governance run of any commit of the pull request,
+    whether every page was read in full). A page that cannot be read, a short read (fewer commits
+    than the pull request counts, or `MAX_COMMITS` with no count; fewer check runs than the page's
+    `total_count`), a failure that cannot be attributed to a step and a pull request with no
+    governance run at all leave it incomplete; the failures read so far still count."""
+    number = pull["number"]
     commits = src.get(f"commits-{number}", f"repos/{{repo}}/pulls/{number}/commits")
     if not isinstance(commits, list) or not commits:
-        return None
+        return set(), False
+    counted = pull.get("commits")
+    if isinstance(counted, int) and not isinstance(counted, bool):
+        complete = len(commits) >= counted
+    else:
+        complete = len(commits) < MAX_COMMITS
     failed: set[str] = set()
     seen = False
     for commit in commits:
         sha = commit.get("sha") if isinstance(commit, dict) else None
         if not isinstance(sha, str):
-            return None
+            complete = False
+            continue
         checks = src.get(f"checks-{sha}", f"repos/{{repo}}/commits/{sha}/check-runs?per_page=100")
-        if not isinstance(checks, dict) or not isinstance(checks.get("check_runs"), list):
-            return None
+        runs = checks.get("check_runs") if isinstance(checks, dict) else None
+        if not isinstance(runs, list):
+            complete = False
+            continue
+        total = checks.get("total_count")
+        if isinstance(total, int) and total > len(runs):
+            complete = False
         # a commit inside a push has no run of its own; a pull request with none at all is unread
-        for run_ in checks["check_runs"]:
+        for run_ in runs:
             if not isinstance(run_, dict) or run_.get("name") != GOVERNANCE:
                 continue
             seen = True
             if run_.get("conclusion") != "failure":
                 continue
-            job = src.get(f"jobs-{run_.get('id')}", f"repos/{{repo}}/actions/jobs/{run_.get('id')}")
-            steps = job.get("steps") if isinstance(job, dict) else None
-            if not isinstance(steps, list) or not steps:
-                return None
-            names = {s.get("name") for s in steps if isinstance(s, dict)}
-            bad = {
-                s["name"]
-                for s in steps
-                if isinstance(s, dict)
-                and s.get("conclusion") == "failure"
-                and isinstance(s.get("name"), str)
-            }
-            if UNSPLIT_STEP in names or not bad:
-                return None
+            bad = job_failures(src, run_.get("id"))
+            if bad is None:
+                complete = False
+                continue
             failed |= bad
-    return failed if seen else None
+    return failed, complete and seen
+
+
+def job_failures(src: Any, job_id: Any) -> set[str] | None:
+    """The failed step names of a failed governance job, or None when they cannot be read or the
+    failure cannot be attributed to a step (one combined step, or no failed step)."""
+    job = src.get(f"jobs-{job_id}", f"repos/{{repo}}/actions/jobs/{job_id}")
+    steps = job.get("steps") if isinstance(job, dict) else None
+    if not isinstance(steps, list) or not steps:
+        return None
+    names = {s.get("name") for s in steps if isinstance(s, dict)}
+    bad = {
+        s["name"]
+        for s in steps
+        if isinstance(s, dict)
+        and s.get("conclusion") == "failure"
+        and isinstance(s.get("name"), str)
+    }
+    if UNSPLIT_STEP in names or not bad:
+        return None
+    return bad
 
 
 def citations(body: str) -> tuple[set[str], set[tuple[str, str]]]:
@@ -261,10 +287,10 @@ def collect(src: Any, since: date | None, allowed: set[str]) -> dict[str, Any]:
             continue
         total += 1
         number = pull["number"]
-        failed = failed_steps(src, number)
-        if failed is None:
+        failed, complete = failed_steps(src, pull)
+        if not complete:
             unread_checks += 1
-        for name in failed or ():
+        for name in failed:
             steps[name] = steps.get(name, 0) + 1
         comments = src.get(f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
         if not isinstance(comments, list):
