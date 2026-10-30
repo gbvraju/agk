@@ -51,6 +51,14 @@ exactly `python3 scripts/agk/session.py tell --session <id> --text <message>`, t
 that order, a session ID that is not an option, and a message of one line of 1 to 300 characters
 that does not start with `Approve:`, `Confirmed:` or `Verdict:` (the shape `session.py tell`
 itself requires).
+Without `--shadow` the conductor may also re-plan at the end of a review pass (brief #331,
+ADR-0190): exactly `python3 scripts/agk/session.py plan --json` (read-only, as the queue commands),
+and `python3 scripts/agk/launch.py prompts --plan <file>`, the project's own regular `launch.py` and
+the plan a regular file of a scratch directory, which prints the prompts and starts nothing. The
+same command with `--adapter <command>` after it, which starts the planned sessions, is allowed only
+when the `[flow]` table of the project's agk.toml sets `auto_start = true` and `launch_adapter`, and
+the one word after `--adapter` equals `launch_adapter` exactly; an agk.toml that cannot be read, or
+holds either setting of the wrong kind, allows no adapter.
 A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
 by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
 29), because GitHub cannot tell a comment the person typed from one a session posted.
@@ -97,6 +105,12 @@ try:  # the one reading of a brief, `check_brief.py`'s (brief 276)
     ABSENT_REQUIREMENTS = check_brief.absent_requirements
 except ImportError:  # without the check no brief is filed
     BRIEF_PROBLEMS = ABSENT_REQUIREMENTS = None
+try:  # the one reading of `auto_start` and `launch_adapter`, launch.py's (brief #331)
+    import launch
+
+    LAUNCH_SETTINGS = launch.launch_settings
+except ImportError:  # without it no adapter runs
+    LAUNCH_SETTINGS = None
 
 ENV_PREFIX = 'env -i PATH="$PATH" HOME='
 BASE_VAR = "AGK_BASE="  # the one variable a run may add, a sha, as CI sets it
@@ -115,11 +129,13 @@ ISSUES_ENDPOINT = re.compile(r"^/?repos/([^/\s]+)/([^/\s]+)/issues$")
 BRIEF_LABEL = "labels[]=agk-brief"
 BODY_LIMIT = 65536  # GitHub's limit of an issue body; a longer file is not read in part
 SESSION_SCRIPT = os.path.join("scripts", "agk", "session.py")
+LAUNCH_SCRIPT = os.path.join("scripts", "agk", "launch.py")
 QUEUE_FORMS = (  # the read-only commands of the conductor's queue (brief 284), exactly these
     ["review-queue"],
     ["review-queue", "--all"],
     ["review-queue", "--fingerprint"],
     ["queue", "--role", "conductor"],
+    ["plan", "--json"],  # the re-plan at the end of a pass (brief #331)
 )
 SESSION_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")  # a session ID, never an option
 TELL_LIMIT = 300  # the longest message of `session.py tell` (brief 327)
@@ -386,21 +402,51 @@ def tell_form(args: list[str]) -> bool:
     return text.splitlines() == [text] and not TELL_REFUSED.match(ZERO_WIDTH.sub("", text))
 
 
-def queue_allowed(words: list[str], cwd: object) -> bool:
-    """`python3 scripts/agk/session.py review-queue [--all | --fingerprint]` or `... queue --role
-    conductor`, where the script is the regular file of the project directory itself (brief 284),
-    or `... tell --session <id> --text <message>` (brief 327)."""
-    if len(words) < 2 or words[0] != "python3":
-        return False
-    if words[2:] not in QUEUE_FORMS and not tell_form(words[2:]):
-        return False
-    path = words[1]
+def own_script(path: str, cwd: object, script: str) -> bool:
+    """`path` names the regular file `script` of the project directory itself, never a link."""
     if not path or "\0" in path or path.startswith("-"):
         return False
     base = cwd if isinstance(cwd, str) and os.path.isabs(cwd) else os.getcwd()
     full = os.path.join(base, path)
-    own = os.path.join(os.path.realpath(project_root()), SESSION_SCRIPT)
+    own = os.path.join(os.path.realpath(project_root()), script)
     return os.path.realpath(full) == own and os.path.isfile(own) and not os.path.islink(full)
+
+
+def queue_allowed(words: list[str], cwd: object) -> bool:
+    """`python3 scripts/agk/session.py review-queue [--all | --fingerprint]`, `... queue --role
+    conductor` or `... plan --json` (brief #331), where the script is the regular file of the
+    project directory itself (brief 284), or `... tell --session <id> --text <message>` (brief
+    327)."""
+    if len(words) < 2 or words[0] != "python3":
+        return False
+    if words[2:] not in QUEUE_FORMS and not tell_form(words[2:]):
+        return False
+    return own_script(words[1], cwd, SESSION_SCRIPT)
+
+
+def configured_adapter() -> str | None:
+    """`launch_adapter` when the flow table of agk.toml also sets `auto_start = true`, else None;
+    an agk.toml that cannot be read, or a setting of the wrong kind, gives None (brief #331)."""
+    if LAUNCH_SETTINGS is None:
+        return None
+    try:
+        auto, adapter = LAUNCH_SETTINGS(Path(project_root()))
+    except launch.CheckError:
+        return None
+    return adapter if auto is True else None
+
+
+def launch_allowed(words: list[str], cwd: object) -> bool:
+    """`python3 scripts/agk/launch.py prompts --plan <scratch file>`, with `--adapter <command>`
+    after it only when that command is the configured `launch_adapter` (brief #331, ADR-0190)."""
+    if len(words) not in (5, 7) or words[0] != "python3" or words[2:4] != ["prompts", "--plan"]:
+        return False
+    if not own_script(words[1], cwd, LAUNCH_SCRIPT) or scratch_text(words[4]) is None:
+        return False
+    if len(words) == 5:
+        return True
+    adapter = configured_adapter()
+    return words[5] == "--adapter" and adapter is not None and words[6] == adapter
 
 
 def body_path_not_absolute(command: object) -> bool:
@@ -446,7 +492,7 @@ def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> b
     if words[0] == "date":
         return all(w == "-u" or w.startswith("+") for w in words[1:])
     if words[0] == "python3" and not shadow:
-        return queue_allowed(words, cwd)
+        return queue_allowed(words, cwd) or launch_allowed(words, cwd)
     return False
 
 

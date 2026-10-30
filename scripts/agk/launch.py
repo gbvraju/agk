@@ -11,6 +11,13 @@ into words and run without a shell. It starts nothing on its own: the person con
 first (the skill asks), it creates no recurring task, holds no credential and makes no network
 call. What an adapter prints is its own and is never echoed. The title of a brief is data written
 in an issue and is never put in a prompt: the session reads the brief itself.
+
+Brief 331 (ADR-0190): a plan whose `start` list is longer than its `capacity.slots`, or that names
+one brief (with its build) or one session twice, is refused before anything is printed or started;
+a failing adapter is reported once, with a `not started:` line for each session after it, and
+never called again. `launch_settings` reads `auto_start` and `launch_adapter` of the `[flow]` table
+of agk.toml, the two settings by which the conductor's review pass starts the planned sessions
+itself (its guard reads them through this function).
 """
 
 from __future__ import annotations
@@ -21,6 +28,7 @@ import re
 import shlex
 import subprocess  # nosec B404 - fixed argument lists, no shell
 import sys
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -62,6 +70,38 @@ def read_plan(source: str) -> dict:
     return plan
 
 
+def launch_settings(root: Path) -> tuple[bool, str | None]:
+    """(`auto_start`, `launch_adapter`) of the `[flow]` table of agk.toml: off and none when
+    unset; a value of the wrong kind is refused naming the setting, never the value."""
+    try:
+        data = tomllib.loads((Path(root) / "agk.toml").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return False, None
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        raise CheckError("agk.toml cannot be read") from None
+    table = data.get("flow", {})
+    table = table if isinstance(table, dict) else {}
+    auto = table.get("auto_start", False)
+    if not isinstance(auto, bool):
+        raise CheckError("auto_start of the flow table must be true or false")
+    adapter = table.get("launch_adapter")
+    if adapter is not None and (not isinstance(adapter, str) or not adapter.strip()):
+        raise CheckError("launch_adapter of the flow table must be a command (a non-empty string)")
+    return auto, adapter
+
+
+def within_capacity(plan: dict, count: int) -> None:
+    """A plan with a `capacity` starts at most `capacity.slots` sessions (brief 331)."""
+    if "capacity" not in plan:
+        return
+    capacity = plan["capacity"]
+    slots = capacity.get("slots") if isinstance(capacity, dict) else None
+    if isinstance(slots, bool) or not isinstance(slots, int) or slots < 0:
+        raise CheckError("the plan's capacity has no valid slots (field capacity)")
+    if count > slots:
+        raise CheckError("the plan starts more sessions than its slots (field capacity)")
+
+
 def sessions(plan: dict) -> list[tuple[str, int, str | None]]:
     found: list[tuple[str, int, str | None]] = []
     for item in plan["start"]:
@@ -74,7 +114,12 @@ def sessions(plan: dict) -> list[tuple[str, int, str | None]]:
         build = item.get("build") if "build" in item else None
         if "build" in item and (not isinstance(build, str) or not SESSION_ID.fullmatch(build)):
             raise CheckError("a session to start has no valid build name (field build)")
+        if any(name == other for other, _, _ in found):
+            raise CheckError("a session to start is named twice (field session)")
+        if any((number, build) == (n, b) for _, n, b in found):
+            raise CheckError("a brief to start is named twice (field brief)")
         found.append((name, number, build))
+    within_capacity(plan, len(found))
     return found
 
 
@@ -84,12 +129,22 @@ def prompt_for(session: str, brief: int, build: str | None = None) -> str:
     return PROMPT.format(session=session, brief=brief, work=work, flag=flag)
 
 
+def work_text(session: str, brief: int, build: str | None) -> str:
+    return f"{session} #{brief}" + (f" build ({build})" if build else "")
+
+
+def not_started(rest: list[tuple[str, int, str | None]]) -> None:
+    """A refused adapter is reported, never retried: name each session it did not start."""
+    for session, brief, build in rest:
+        print(f"not started: {work_text(session, brief, build)}", file=sys.stderr)
+
+
 def start_with(adapter: str, found: list[tuple[str, int, str | None]]) -> int:
     """Call the adapter once for each session; stop at the first one that fails."""
     words = shlex.split(adapter)
     if not words:
         raise CheckError("the adapter is empty (option --adapter)")
-    for session, brief, build in found:
+    for index, (session, brief, build) in enumerate(found):
         env = {**os.environ, "AGK_SESSION": session, "AGK_BRIEF": str(brief)}
         if build:
             env["AGK_BUILD"] = build
@@ -104,11 +159,13 @@ def start_with(adapter: str, found: list[tuple[str, int, str | None]]) -> int:
             )
         except OSError:
             print(f"FAIL {NAME}: the adapter cannot be run for {session}", file=sys.stderr)
+            not_started(found[index + 1 :])
             return 1
         if done.returncode != 0:
             print(f"FAIL {NAME}: the adapter failed for {session}", file=sys.stderr)
+            not_started(found[index + 1 :])
             return 1
-        print(f"started {session} #{brief}" + (f" build ({build})" if build else ""))
+        print(f"started {work_text(session, brief, build)}")
     return 0
 
 
