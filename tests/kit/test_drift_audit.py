@@ -17,7 +17,7 @@ SCRIPT = ROOT / "scripts" / "agk" / "drift_audit.py"
 TODAY = "2026-10-15"
 SUMMARY = re.compile(
     r"^agk drift audit (\d{4}-\d{2}-\d{2}) \(window (\S+) to (\S+)\): findings=(\d+)"
-    r" D1=(\d+) D2=(\d+) D3=(\d+) D4=(\d+) D5=(\d+) D6=(\d+) D7=(\d+) D8=(\d+)$"
+    r" D1=(\d+) D2=(\d+) D3=(\d+) D4=(\d+) D5=(\d+) D6=(\d+) D7=(\d+) D8=(\d+) D9=(\d+)$"
 )
 FINDING = re.compile(r"^- (D\d) (.+?) \| (.+?) \| (.+)$")
 
@@ -112,7 +112,9 @@ def test_ac1_the_script_has_no_network_or_process_imports():
             names.add(node.module.split(".")[0])
     forbidden = {"subprocess", "socket", "urllib", "http", "ftplib", "smtplib", "requests", "ssl"}
     assert not names & forbidden
-    assert names <= set(sys.stdlib_module_names) | {"common", "reviewers"}
+    # `proof`: the project's own unused-code and coverage commands run through proof.execute
+    # (SPEC-0004 rule 25, ADR-0177); the script itself imports no process module.
+    assert names <= set(sys.stdlib_module_names) | {"common", "reviewers", "proof"}
 
 
 def test_ac1_findings_never_quote_file_content(repo):

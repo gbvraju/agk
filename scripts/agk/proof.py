@@ -227,14 +227,18 @@ def execute(
     windows: bool = WINDOWS,
     popen=subprocess.Popen,
     run=subprocess.run,
+    merge_stderr: bool = True,
 ) -> tuple[int | None, str, int]:
-    """(exit status or None on a timeout, output, whole seconds taken). Its own process group."""
+    """(exit status or None on a timeout, output, whole seconds taken). Its own process group.
+
+    With `merge_stderr` False the output is the standard output alone and the error stream is
+    dropped (the drift audit reads a project command's lines, SPEC-0004 rule 25)."""
     began = time.monotonic()
     proc = popen(  # nosec B603 B607 - the project's own test command, run as the caller
         ["sh", "-c", command],
         cwd=cwd,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stderr=subprocess.STDOUT if merge_stderr else subprocess.DEVNULL,
         text=True,
         encoding="utf-8",
         errors="replace",

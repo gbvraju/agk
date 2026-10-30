@@ -268,6 +268,7 @@ def test_ac1_the_security_page_lists_every_workflow_and_its_permissions():
     for workflow in sorted((KIT_ROOT / ".github" / "workflows").glob("*.yml")):
         assert f"`{workflow.name}`" in security, workflow.name
         text = workflow.read_text(encoding="utf-8")
-        writes = re.search(r"(?m)^  (\w[\w-]*): write$", text)
+        # a write at the workflow level or in one job (drift-audit.yml: one job, ADR-0177)
+        writes = re.search(r"(?m)^ +(\w[\w-]*): write$", text)
         row = next(ln for ln in security.splitlines() if ln.startswith(f"| `{workflow.name}`"))
         assert ("write" in row) == bool(writes), workflow.name

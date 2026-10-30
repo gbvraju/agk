@@ -34,11 +34,24 @@ def test_ac1_exactly_one_weekly_cron_saturday_0617_utc():
     assert dom == "*" and month == "*" and dow.isdigit() and minute not in ("0", "30")
 
 
-def test_ac3_permissions_are_exactly_contents_read_and_issues_write():
-    """REQ-011 AC3: rules 2 and 21."""
+def job_permissions(name: str) -> list[str]:
+    match = re.search(
+        rf"^  {name}:\s*\n(?:    .*\n)*?    permissions:\s*\n((?:      .*\n)+)", text(), flags=re.M
+    )
+    assert match, name
+    return [ln.strip() for ln in match.group(1).splitlines() if ln.strip()]
+
+
+def test_ac3_permissions_are_contents_read_and_each_job_gets_only_what_it_needs():
+    """REQ-011 AC3: rules 2 and 21, as amendment 87 (ADR-0177, the verdict on c733d86) narrows
+    them: contents read for the workflow; the report job, which runs the project's commands, only
+    reads; the file job alone writes issues."""
     lines = [ln.strip() for ln in top_block("permissions").splitlines() if ln.strip()]
-    assert lines == ["contents: read", "issues: write"]
-    assert text().count("permissions:") == 1  # none per job
+    assert lines == ["contents: read"]
+    assert job_permissions("report") == ["contents: read", "issues: read"]
+    assert job_permissions("file") == ["issues: write"]
+    assert text().count("permissions:") == 3
+    assert text().count("issues: write") == 1
 
 
 def test_ac3_every_action_is_pinned_to_a_full_commit_sha():
@@ -104,3 +117,33 @@ def test_ac1_header_comment_documents_that_schedules_may_be_disabled():
         head.append(line.lower())
     comment = " ".join(head)
     assert "inactivity" in comment and "workflow_dispatch" in comment and "scheduled" in comment
+
+
+def job_block(name: str) -> str:
+    match = re.search(rf"^  {name}:\s*\n((?:    .*\n|\n)*)", text(), flags=re.M)
+    assert match, name
+    return match.group(1)
+
+
+def test_the_report_runs_where_no_writing_token_is_reachable():
+    """REQ-039: ADR-0177 (verdict on e67c989, item 2). The project's own commands run in the report
+    job, whose checkout keeps no credentials and whose audit step has no GH_TOKEN."""
+    report = job_block("report")
+    assert re.search(r"persist-credentials:\s*false\b", report)
+    steps = re.split(r"\n      - ", report)
+    (audit_step,) = [st for st in steps if "--previous" in st]
+    assert "GH_TOKEN" not in audit_step and "secrets." not in audit_step
+    for step in steps:
+        if "GH_TOKEN" in step:
+            assert "drift_audit.py" not in step and "python" not in step
+
+
+def test_the_issue_writes_run_in_a_job_that_runs_no_project_command():
+    """REQ-039: ADR-0177. The file job checks nothing out and runs no script of the repository."""
+    file_job = job_block("file")
+    assert "needs: report" in file_job
+    assert "actions/checkout" not in file_job and "python" not in file_job
+    assert "gh issue edit" in file_job and "gh issue create" in file_job
+    assert "gh issue edit" not in job_block("report") and "gh issue create" not in job_block(
+        "report"
+    )
