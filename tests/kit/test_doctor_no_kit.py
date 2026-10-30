@@ -42,7 +42,9 @@ def removed(tmp_path: Path) -> Path:
     """A work tree after the removal: the project's own files only."""
     root = tmp_path / "proj"
     (root / "docs" / "adr").mkdir(parents=True)
-    subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607
+    subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "init", "-q", str(root)], check=True
+    )
     (root / "docs" / "requirements.md").write_text("# Requirements\n", encoding="utf-8")
     (root / "docs" / "adr" / "0001-adopt-agk.md").write_text("# ADR-0001\n", encoding="utf-8")
     return root

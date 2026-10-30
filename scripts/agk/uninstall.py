@@ -456,7 +456,7 @@ def report(plan: Plan, kit_root: Path, write: bool, docs: bool) -> list[str]:
 
 def git(target: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", *args], cwd=target, capture_output=True, text=True
+        ["git", *args], cwd=target, capture_output=True, text=True, encoding="utf-8"
     )
 
 
