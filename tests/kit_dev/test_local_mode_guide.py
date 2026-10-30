@@ -208,6 +208,6 @@ def test_fix_4_the_lock_block_runs_as_one_script():
     """Verdict on 712354d, item 4."""
     body = section("What a builder runs before asking for review")
     assert "bash -c '" in body and "one script" in body
-    script = body.split("bash -c '", 1)[1].split("\n'", 1)[0]
+    script = body.split("bash -c '", 1)[1].split("\n    '\n", 1)[0]
     for phrase in ("mkdir", "trap", "rmdir", "make governance", "proof.py"):
         assert phrase in script, phrase

@@ -17,9 +17,14 @@ Use local mode only when GitHub refuses to start the jobs, never because a check
   have failed or that the spending limit needs to be increased.
 - **An outage.** GitHub's status page reports that Actions is down or degraded for more than an hour.
 
-Signs: the pull request's checks never start (no run appears on the Actions tab for the new head), and the pull request keeps
-whatever `agk:` label it had. A builder says so in one line of its `Report:` ("checks never started: Actions is blocked"), never
-as a red check. If only some jobs are refused, or a job starts and fails, you are not in local mode: read the failing job's log.
+Signs: the checks of a new head never start (no run appears on the Actions tab for it), or every job fails at once with the
+refusal message that recent account payments have failed or that the spending limit needs to be increased, before any step
+runs. A billing block shows as red jobs carrying that message, not as missing checks. A builder says so in one line of its
+`Report:` ("checks refused: Actions is blocked"), never as a red check of its own change. If a job starts, runs its steps and
+fails, you are not in local mode: read the failing job's log.
+
+Heads pushed before the workflows were disabled keep those red refusals. Once the workflows are off, each builder must push a new
+head (an empty commit is enough) so that its checks show as never reported rather than red.
 
 ## Enter local mode
 
@@ -47,7 +52,13 @@ A person with admin on the repository does this once, in a terminal on their own
    `gh api` fills `{owner}/{repo}` from the checkout. Keep exactly one such issue open; the conductor and the builders find it
    by its title.
 
-3. **The merge rule.** The ruleset of the default branch requires the `governance` check, which no longer reports. Merging
+3. **Unfreeze the labels.** The router's `agk:ci-running` label stays on every pull request that had it when Actions stopped,
+   and `review-queue` skips such a pull request as "checks running". Remove it from each open pull request that carries it, one
+   line per pull request:
+
+       gh pr edit <n> --remove-label agk:ci-running
+
+4. **The merge rule.** The ruleset of the default branch requires the `governance` check, which no longer reports. Merging
    while the check is missing is the admin's call, made pull request by pull request on the local evidence below: no session
    ever changes the ruleset, merges or bypasses it.
 
@@ -57,14 +68,20 @@ A builder runs the governance checks and its own proof on its head, on its own m
 request body. Several sessions on one machine take turns through a lock file, so two heavy runs never compete for the same
 memory and disk.
 
+Run the block as one script, in one `bash -c '...'` (or saved as a file and run with `bash`): the `trap` releases the lock
+when that script ends, so lines typed one by one would release it too early, or never.
+
+    bash -c '
+    set -e
     lock="$(git rev-parse --git-common-dir)/agk-heavy.lock"
     until mkdir "$lock" 2>/dev/null; do sleep 30; done      # wait for the lock; mkdir is atomic
-    trap 'rmdir "$lock"' EXIT
+    trap "rmdir \"$lock\"" EXIT
     base=$(git merge-base HEAD origin/main)
     AGK_BASE=$base make governance
     make test
     python3 scripts/agk/proof.py --base "$base" --head HEAD
     python3 scripts/agk/check_pr_body.py --draft false body.md
+    '
 
 The lock is a directory inside the repository's git directory, so it is never committed and needs no ignore line. If a run is
 killed, the lock stays: a person removes it with `rmdir` once no heavy run is going on. `make test` runs the kit's checks and
@@ -83,8 +100,11 @@ ready only when the line names the current head.
 
 Step 1 of the conductor's protocol (CI first) has nothing to read in local mode, so the conductor runs governance itself:
 
-1. Run `python3 scripts/agk/session.py review-queue`. A pull request whose required checks never reported is listed with the
-   reason `checks not reported`; that reason, and an open record issue, is how the conductor knows it is in local mode.
+1. Run `python3 scripts/agk/session.py review-queue --all`. A pull request whose required checks never reported is listed with
+   the reason `checks not reported`; one still labelled `agk:ci-running` shows as a skip line, and the person removes that label
+   (see Enter local mode). That reason, and the one open record issue, is how the conductor knows it is in local mode. The
+   exception to CI first holds only while the one local-mode record issue is open, and only for required checks that never
+   reported on that head: a red check still blocks a clearing verdict.
 2. Re-run governance on the exact head with the bounded run of the conductor role: `git worktree add <scratch> <sha>`, then
    `env -i PATH="$PATH" HOME=<scratch> AGK_BASE=<base sha> make -C <scratch> governance`, then remove the worktree.
 3. Read the builder's `Local evidence:` line. It must name the head the verdict names; a line for an older head is no evidence.

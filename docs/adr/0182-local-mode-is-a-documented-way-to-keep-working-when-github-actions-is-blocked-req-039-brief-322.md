@@ -36,17 +36,28 @@ how to come back. The brief names no `Measured:` cause; it asks for a guide and 
    `gh workflow` subcommand is `disable`, `enable` or `list`, that every installed workflow (read from `kit/manifest.json`) has
    its disable and enable line, that every kit script, make target and `session.py` subcommand the guide calls exists, and that
    the guide names no vendor beyond GitHub from a fixed list.
-5. **Reading Q-322-1 (taken, the conservative one).** The kit has no lock command; the brief asks for "a heavy-step lock file".
+5. **Reading Q-322-1 (taken, the conservative one; confirmed by the conductor's verdict on 712354d, 2026-10-30: a kit lock
+   command that takes, releases and clears a stale lock is its own brief, filed by the conductor).** The kit has no lock command; the brief asks for "a heavy-step lock file".
    The guide uses a lock directory made with `mkdir`, which is atomic on every system the kit supports and lives in the git
    directory, so it needs no ignore line. A kit command that takes and releases the lock, and removes a stale one, would be its
    own brief.
-6. **Reading Q-322-2 (taken, the conservative one).** The ruleset requires the `governance` check, which no longer reports in
+6. **Reading Q-322-2 (taken, the conservative one; confirmed by the conductor's verdict on 712354d, 2026-10-30: the admin
+   merges past the missing check, pull request by pull request, and records each as `Local merge:`).** The ruleset requires the `governance` check, which no longer reports in
    local mode. The guide says that merging while it is missing is the admin's call, pull request by pull request, and gives no
    command that changes or bypasses the ruleset; no session does either.
-7. **Reading Q-322-3 (taken, the conservative one).** The secret scan of the governance workflow is not part of `make governance`
+7. **Reading Q-322-3 (taken, the conservative one; confirmed by the conductor's verdict on 712354d, 2026-10-30: `secret
+   scan: not run` is enough for now, since the catch-up governance run on the default branch runs the scanner).** The secret scan of the governance workflow is not part of `make governance`
    and its scanner is not installed by the kit; the guide asks the builder to run the same scanner when it is installed and to
    write `secret scan: not run` otherwise, never to leave it out silently.
-8. **Flow mode.** Fragment `changelog.d/local-mode.md`; no version bump; `kit/hashes.json` is not edited (session rule 14).
+8. **The fix list of the verdict on 712354d.** (1) The exception to CI first is bounded, in session rule 30 and in the
+   conductor role: local evidence stands in for CI only while the one local-mode record issue is open and only for required
+   checks that never reported on that head; a red check still blocks a clearing verdict. (2) Entering local mode removes a
+   frozen `agk:ci-running` label from each open pull request (`gh pr edit <n> --remove-label agk:ci-running`), since
+   `review-queue` skips such a pull request as "checks running"; the conductor reads `review-queue --all`. (3) A billing block
+   shows as red jobs carrying the refusal message, so that message is named as a sign, and a builder pushes a new head once the
+   workflows are off. (4) The builder's lock block runs as one script (`bash -c '...'`), because its `trap` releases the lock
+   when the script ends.
+9. **Flow mode.** Fragment `changelog.d/local-mode.md`; no version bump; `kit/hashes.json` is not edited (session rule 14).
 
 ## Consequences
 
