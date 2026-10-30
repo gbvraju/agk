@@ -26,7 +26,8 @@ checkpoint of the pull request).
    - `lint`: `make lint`, when the project's Makefile has a `lint` target (`make -n lint` succeeds); skipped otherwise.
    - `governance`: `make -f agk.mk agk-governance` with `AGK_BASE` set to the base: the governance checks that need no network,
      the same list as `make governance` and the governance workflow without its API inputs. A missing `agk.mk` fails the step,
-     naming the path class.
+     naming the path class. Without `make` (Windows by default) the step says `governance: not run (make is not installed)`
+     and does not fail, as a missing scanner, and `lint` says `make is not installed`; CI still runs governance.
    - `secret-scan`: `gitleaks git --no-banner --redact --exit-code 1 --log-opts=<merge base>..HEAD .`, the scan of the
      governance workflow over the branch's commits, when `gitleaks` is on `PATH`; otherwise the step says `gitleaks is not
      installed; secret scan: not run`, as the local-mode guide words it; it does not fail the run, and no tool is downloaded (Q-326-3).
@@ -34,7 +35,7 @@ checkpoint of the pull request).
      through proof's own `execute` (no shell of the kit's; the project's command runs under `sh -c` as in proof), ended at
      `proof_timeout`; `tests: nothing to run` when the plan has none; skipped with `--quick`.
    It prints `prepush: <step> ok|FAIL|skipped (<seconds>s)` per step, and at the end `prepush: all steps passed`, or
-   `prepush: passed; not run: <steps>` when a step that should have run could not (the scanner missing). Exit 0 when no step
+   `prepush: passed; not run: <steps>` when a step that should have run could not (the scanner or `make` missing). Exit 0 when no step
    failed, 1 when one did, 2 usage, a body file that cannot be read or a base that does not resolve (naming the setting, never the
    value).
 2. **The hook template (answer 2).** `kit/templates/pre-push` is a POSIX shell hook that runs `prepush.py` from the top of the work
@@ -50,7 +51,7 @@ checkpoint of the pull request).
 5. **Tests (answer 4).** `tests/kit/test_prepush.py`: all steps in order; each step's failure stops the run with its message; no
    body file; a body file that cannot be read; a project without `make lint` and without a Makefile; a missing `agk.mk`; the base
    given to governance; the scan's range; no scanner; the plan's tests and an empty plan; `--quick`; a base that does not resolve;
-   usage; the hook template; session rule 31 and rule 7 unchanged; a test run ended at `proof_timeout`.
+   usage; the hook template; session rule 31 and rule 7 unchanged; a test run ended at `proof_timeout`; no `make`.
 6. **Flow mode.** Fragment `changelog.d/prepush.md`; no version bump; `kit/hashes.json` not edited (session rule 14).
 
 ## Consequences
@@ -69,3 +70,6 @@ checkpoint of the pull request).
   run`, does not fail, and the run ends `prepush: passed; not run: secret-scan` (decision 1).
 - 2026-10-30: Q-326-4 answered in the verdict on f9ba218: rule 7 stays; pushing at milestones is proposed in
   `docs/runs/proposed-spec-amendments-101.md` for SPEC-0033 rule 1 and session rule 7, and waits for the maintainers.
+- 2026-10-30: finding 1 of the verdict on 80d39ce: without `make` every push was blocked; governance now says `not run (make is
+  not installed)` and the run ends `prepush: passed; not run: governance`, lint says `make is not installed`, and the guide points
+  to installing make on Windows (decision 1).

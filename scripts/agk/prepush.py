@@ -93,8 +93,6 @@ def pr_body(root: Path, body: Path | None) -> Step:
 
 
 def has_lint(root: Path) -> bool:
-    if shutil.which("make") is None:
-        return False
     if not any((root / n).is_file() for n in ("Makefile", "makefile", "GNUmakefile")):
         return False
     code, _ = run(["make", "-n", "lint"], root)
@@ -102,6 +100,8 @@ def has_lint(root: Path) -> bool:
 
 
 def lint(root: Path) -> Step:
+    if shutil.which("make") is None:
+        return Step("skipped", "make is not installed")
     if not has_lint(root):
         return Step("skipped", "no lint target in the Makefile (target: lint)")
     return outcome(*run(["make", "lint"], root))
@@ -111,7 +111,7 @@ def governance(root: Path, base: str) -> Step:
     if not (root / "agk.mk").is_file():
         return Step("FAIL", "agk.mk is missing; governance cannot run (path class: agk.mk)")
     if shutil.which("make") is None:
-        return Step("FAIL", "make is not installed, so the governance checks cannot run")
+        return Step("skipped", "governance: not run (make is not installed)", not_run=True)
     env = {**os.environ, "AGK_BASE": base}
     return outcome(*run(["make", "-f", "agk.mk", "agk-governance"], root, env))
 

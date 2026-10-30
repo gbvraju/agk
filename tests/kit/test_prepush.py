@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import stat
 from pathlib import Path
 
@@ -210,6 +211,31 @@ def test_a_missing_agk_mk_fails_the_governance_step(repo, tmp_path):
     assert proc.returncode == 1
     assert steps(proc.stdout)["governance"] == "FAIL"
     assert "agk.mk" in proc.stdout
+
+
+def without_make(folder: Path) -> str:
+    """A PATH with git and sh but no make (Windows by default), and the stand-in scanner."""
+    folder.mkdir(parents=True, exist_ok=True)
+    for tool in ("git", "sh"):
+        found = shutil.which(tool)
+        assert found
+        (folder / tool).symlink_to(found)
+    return os.pathsep.join([str(folder), str(scanner(folder.parent / "scan", 0))])
+
+
+def test_no_make_is_said_and_does_not_block_the_push(repo, tmp_path):
+    """REQ-016: brief #326 answer 1 (verdict on 80d39ce: without make, governance and lint are
+    not run and said so, as a missing scanner is; CI still runs governance)."""
+    project(repo)
+    proc = repo.run("prepush.py", "--quick", PATH=without_make(tmp_path / "nomake"))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    found = steps(proc.stdout)
+    assert found["lint"] == "skipped" and found["governance"] == "skipped"
+    assert "prepush: lint skipped" in proc.stdout and "make is not installed" in proc.stdout
+    assert "no lint target" not in proc.stdout
+    assert "governance: not run (make is not installed)" in proc.stdout
+    assert "GOVERNANCE_RAN" not in proc.stdout
+    assert "prepush: passed; not run: governance" in proc.stdout
 
 
 def test_a_secret_finding_stops_the_run_with_its_message(repo, tmp_path):

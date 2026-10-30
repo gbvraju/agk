@@ -17,7 +17,7 @@ Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI t
 
 Before a push, `python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick]` runs the fast checks CI would fail on
 first, in order, and stops at the first failure with its message: the pull request body check (on `FILE`), `make lint` where
-the Makefile has the target, `make -f agk.mk agk-governance` (no network), the secret scan over the branch's commits when
+the Makefile has the target, `make -f agk.mk agk-governance` (no network; `not run` without `make`), the secret scan over the branch's commits when
 `gitleaks` is installed (else `secret scan: not run`), and the tests that `test_plan.py` selects (`--quick` skips them). It prints
 `prepush: <step> ok|FAIL|skipped (<s>s)` per step and exits 0 when no step failed, 1 when one did, 2 on a usage error (session
 rule 31, ADR-0186). The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
