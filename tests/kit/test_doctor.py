@@ -28,7 +28,8 @@ REMOTE = {
     "brief-label",
     "brief-finished",
 }
-LOCAL = set(IDS) - REMOTE
+KIT_REMOTE = {"kit-behind"}  # read from the kit's own repository (brief #320), not the target's
+LOCAL = set(IDS) - REMOTE - KIT_REMOTE
 
 
 def overlay(src: Path, dst: Path) -> None:
@@ -121,7 +122,7 @@ def test_ac1_the_ok_case_reports_none_and_exits_0(tmp_path):
     assert proc.returncode == 0, proc.stdout
     assert "FAIL" not in proc.stdout and "??" not in proc.stdout
     assert proc.stdout.splitlines()[0] == "agk doctor 9.9.9"
-    assert proc.stdout.splitlines()[-1] == "summary: 32 ok, 0 fail, 0 cannot-check"
+    assert proc.stdout.splitlines()[-1] == "summary: 33 ok, 0 fail, 0 cannot-check"
 
 
 def test_ac1_stricter_than_the_minimum_is_ok(tmp_path):
@@ -183,7 +184,7 @@ def test_ac1_text_report_shape(tmp_path):
     assert lines[i + 1] == "  fix: run /agk:upgrade (SPEC-0008)"
     j = lines.index(next(ln for ln in lines if ln.startswith("?? vendored-missing error ")))
     assert lines[j + 1].startswith("  to check: ")
-    assert lines[-1] == "summary: 29 ok, 1 fail, 2 cannot-check"
+    assert lines[-1] == "summary: 29 ok, 2 fail, 2 cannot-check"
 
 
 def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
@@ -191,7 +192,7 @@ def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
     proc, _, _ = run_case("vendored-edited", tmp_path, "--json")
     data = json.loads(proc.stdout)
     assert list(data) == sorted(data) == ["checks", "doctor", "summary"]
-    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 31}
+    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 32}
     for check in data["checks"]:
         assert list(check) == sorted(check)
         assert (check["status"] == "cannot-check") == ("reason" in check)
@@ -347,6 +348,10 @@ def test_ac1_no_gh_makes_every_remote_check_cannot_check(tmp_path):
     report = checks_of(proc.stdout)
     for check in REMOTE:
         assert (report[check]["status"], report[check]["reason"]) == ("cannot-check", "gh-missing")
+    assert (report["kit-behind"]["status"], report["kit-behind"]["reason"]) == (
+        "cannot-check",
+        "gh-missing",
+    )
     assert all(report[c]["status"] == "ok" for c in LOCAL)
     assert proc.returncode == 4
 
@@ -381,6 +386,7 @@ def test_ac1_live_mode_makes_only_get_reads_on_the_seven_paths(tmp_path):
     api = FIXTURES / "ok" / "api"
     body = (
         'case "$*" in\n'
+        f"  *releases/latest) /bin/cat '{api}/kit-release.json';;\n"
         f"  *rulesets/1) /bin/cat '{api}/ruleset-1.json';;\n"
         f"  *rulesets) /bin/cat '{api}/rulesets.json';;\n"
         f"  *workflows/drift-audit.yml) /bin/cat '{api}/workflow-drift-audit.json';;\n"
@@ -403,6 +409,7 @@ def test_ac1_live_mode_makes_only_get_reads_on_the_seven_paths(tmp_path):
             f"{base}/labels/agk-brief",
             f"{base}/issues?state=open&labels=agk-brief&per_page=100",
             f"{base}/pulls?state=all&per_page=100",
+            "api --method GET repos/example-owner/example-kit/releases/latest",
         ]
     )
 
@@ -415,6 +422,7 @@ def test_ac1_an_installed_report_workflow_adds_the_eighth_read_to_the_one_check(
     stub = tmp_path / "bin"
     body = (
         'case "$*" in\n'
+        f"  *releases/latest) /bin/cat '{ok}/kit-release.json';;\n"
         f"  *rulesets/1) /bin/cat '{ok}/ruleset-1.json';;\n"
         f"  *rulesets) /bin/cat '{ok}/rulesets.json';;\n"
         f"  *workflows/drift-audit.yml) /bin/cat '{ok}/workflow-drift-audit.json';;\n"
@@ -434,7 +442,7 @@ def test_ac1_an_installed_report_workflow_adds_the_eighth_read_to_the_one_check(
     calls = log.read_text(encoding="utf-8").splitlines()
     base = "api --method GET repos/example-owner/example-repo"
     assert f"{base}/actions/workflows/product-report.yml" in calls
-    assert len(calls) == 8
+    assert len(calls) == 9  # the eighth read, and the kit's release (brief #320)
     assert checks_of(proc.stdout)["drift-workflow-state"]["status"] == "ok"
 
 
@@ -455,7 +463,8 @@ def test_ac1_no_github_origin_is_not_github(tmp_path):
     )  # fmt: skip
     report = checks_of(proc.stdout)
     assert {report[c]["reason"] for c in REMOTE} == {"not-github"}
-    assert not log.exists()
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    assert all("example-kit/releases/latest" in c for c in calls)  # only the kit's own repository
 
 
 # --- refusals, usage, read-only ---------------------------------------------------------------
@@ -525,7 +534,7 @@ def test_ac1_default_root_is_the_current_directory(tmp_path):
 
 def test_ac1_every_id_has_a_severity_and_a_printed_fix():
     """REQ-002 AC1: rule 5."""
-    assert len(IDS) == 32
+    assert len(IDS) == 33
     for severity, ok_text, fail_text, fix in CHECKS.values():
         assert severity in ("error", "warn") and ok_text and fail_text and fix
     assert CHECKS["ruleset-missing"][3].endswith("use a ruleset (ADR-0001 decision 3)")
