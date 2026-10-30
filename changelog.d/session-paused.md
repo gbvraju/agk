@@ -1,0 +1,1 @@
+- `session.py` refuses `claim`, `next`, `queue`, `watch` and `after` while `agk.toml` of the default branch says `paused = true`: one line `agk paused` that names the setting, no call to GitHub, exit 5 (brief #348 build (c), ADR-0218 Proposed)

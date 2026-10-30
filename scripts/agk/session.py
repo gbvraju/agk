@@ -62,6 +62,11 @@ open `agk-conductor` issue (one line of at most 300 characters, never starting w
 only) prints the `Tell:` lines for the session by a listed verdict author since its last
 `Request:` or since the inbox last printed one, and keeps that mark in the git directory;
 `watch --assign` prints each new `Tell:` line for the session while it waits.
+Brief #348 build (c) (Q-348-2, ADR-0218): while `agk.toml` of the default branch sets `paused = true`,
+`claim`, `next`, `queue`, `watch` (all three forms) and `after` (which may take a brief) print one
+line that starts `agk paused` and names the setting, read and write nothing on GitHub and exit 5.
+The default branch is the ref `origin/<default_branch>`, which session rule 33's fetch keeps current,
+never the session's own branch; without that ref the checkout's `agk.toml` is read.
 """
 
 from __future__ import annotations
@@ -82,11 +87,14 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
+    PAUSED_LINE,
     CheckError,
+    _verify,
     covered_fix_list,
     git,
     load_config,
     next_free_ids,
+    paused,
     repo_root,
     required_checks,
     show,
@@ -128,6 +136,12 @@ COMMANDS = (
     "inbox",
 )
 PAGE = 100
+PAUSED_EXIT = 5
+PAUSED_COMMANDS = frozenset({"claim", "next", "queue", "watch", "after"})
+PAUSED_REFUSAL = (
+    f"{PAUSED_LINE} (setting: paused in agk.toml of the default branch): session.py claims, takes,"
+    " lists and waits on nothing; remove the line `paused = true` to resume"
+)
 LABEL = "agk-brief"
 STALE_LABEL = "agk-stale"
 STALE_LINE = "Status: stale"
@@ -1308,6 +1322,16 @@ def push_check(root) -> int:
     return 1
 
 
+# --- paused (brief #348 build (c), ADR-0218) -------------------------------------------------
+
+
+def paused_default(root) -> bool:
+    """True when agk.toml of the default branch sets `paused = true` (Q-348-2): read at
+    `origin/<default_branch>` (rule 33 fetches it), or in the checkout when that ref is absent."""
+    ref = f"origin/{load_config(root)['default_branch']}"
+    return paused(root, ref) if _verify(root, ref) is not None else paused(root)
+
+
 # --- queue (SPEC-0032 rule 3) -----------------------------------------------------------------
 
 
@@ -1766,6 +1790,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         root = repo_root()
+        if cmd in PAUSED_COMMANDS and paused_default(root):
+            print(PAUSED_REFUSAL)
+            return PAUSED_EXIT
         if cmd == "queue":
             return queue(root, opts["--role"], opts.get("--author"))
         if cmd == "watch":

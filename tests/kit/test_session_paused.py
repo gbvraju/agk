@@ -78,7 +78,7 @@ def test_the_branch_that_adds_the_pause_is_not_refused(proj, stub):
     """REQ-009: Q-348-2 (the pull request that pauses still claims, waits and is reviewed)."""
     default_branch(proj, BASE_TOML)
     proj.commit({"agk.toml": PAUSED_TOML}, "pause")
-    stub.serve(f"repos/{REPO}/pulls?state=open", [])
+    stub.serve(f"repos/{REPO}/pulls", [])
     out = session(proj, stub, "queue", "--role", "builder")
     assert out.returncode == 0, out.stdout + out.stderr
     assert out.stdout.strip() == "empty"
@@ -89,7 +89,7 @@ def test_removing_the_line_resumes(proj, stub):
     default_branch(proj, PAUSED_TOML)
     assert session(proj, stub, "queue", "--role", "builder").returncode == REFUSED
     default_branch(proj, BASE_TOML + "paused = false\n")
-    stub.serve(f"repos/{REPO}/pulls?state=open", [])
+    stub.serve(f"repos/{REPO}/pulls", [])
     out = session(proj, stub, "queue", "--role", "builder")
     assert out.returncode == 0, out.stdout + out.stderr
     assert out.stdout.strip() == "empty"

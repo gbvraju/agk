@@ -116,7 +116,8 @@ since `agk.toml` is a protected path. Once it is on the default branch, governan
 setting at the base, so the pull request that pauses is itself checked in full, and no change can skip its own checks; a
 push reads the commit pushed. The local targets (`make governance`, `prepush.py`) are unchanged and run every check. While the kit
 is paused no pull request is checked in CI, the one that resumes it included. Remove the line to resume; nothing is deleted while
-paused. Sessions read the setting on the default branch after a fetch, not on their own branch. The query form above prints `agk paused` or `agk not paused` (exit 0), reads
+paused. Sessions read the setting on the default branch after a fetch, not on their own branch. `session.py` refuses `claim`, `next`, `queue`, `watch` and `after`
+while the default branch is paused, with one line `agk paused` that names the setting, and exits 5 (ADR-0218). The query form above prints `agk paused` or `agk not paused` (exit 0), reads
 only `agk.toml` (at `REF` when given) and calls no `gh`; a value other than `true` or `false` is refused by the setting's name
 (brief #348, ADR-0196). `/agk:uninstall --pause` writes that line for you on a new branch `agk-pause` (see below).
 
