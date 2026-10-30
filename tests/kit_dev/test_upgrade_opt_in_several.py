@@ -189,4 +189,3 @@ def test_the_released_fragment_lists_the_settings_across_0_59_0_only(old, listed
     )
     found = check_release.opt_ins(changelog, old, "0.60.0")
     assert tuple(setting for setting, _ in found) == listed
-
