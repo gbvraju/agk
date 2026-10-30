@@ -42,7 +42,7 @@ BASE_FILES = {
 }
 
 
-def testing(profile: str | None = None, always_full: str | None = None, body: str = MAP) -> str:
+def table_text(profile: str | None = None, always_full: str | None = None, body: str = MAP) -> str:
     text = "[testing]\n"
     if profile is not None:
         text += f'profile = "{profile}"\n'
@@ -79,7 +79,7 @@ def regression(repo) -> dict:
 
 def test_a_mapped_change_selects_the_tests_of_its_entry_with_the_reason(repo):
     """REQ-016: brief #373 answer 2 (the selected test files, each with its file and entry)."""
-    start(repo, testing())
+    start(repo, table_text())
     change(repo, "app/billing/pay.py", "app/shop/cart.py")
     found = result(repo)
     assert found.table is True and found.profile == "balanced"
@@ -114,7 +114,7 @@ def test_a_mapped_change_selects_the_tests_of_its_entry_with_the_reason(repo):
 
 def test_only_existing_test_files_are_selected(repo):
     """REQ-016: brief #373 answer 2 (an existing test file, by test_dirs and test_patterns)."""
-    start(repo, testing())
+    start(repo, table_text())
     repo.commit({"app/billing/pay.py": "# changed\n", "tests/billing/test_pay.py": None}, "change")
     found = result(repo)
     # conftest.py is under the glob but is not a test file; the deleted test is not selected.
@@ -124,7 +124,7 @@ def test_only_existing_test_files_are_selected(repo):
 
 def test_an_always_full_path_makes_the_selection_full(repo):
     """REQ-016: brief #373 answer 2 (always_full)."""
-    start(repo, testing(always_full='["app/auth/**", "migrations/**"]'))
+    start(repo, table_text(always_full='["app/auth/**", "migrations/**"]'))
     change(repo, "app/billing/pay.py", "app/auth/login.py")
     found = result(repo)
     assert found.full is True
@@ -135,7 +135,7 @@ def test_an_always_full_path_makes_the_selection_full(repo):
 
 def test_an_unmapped_file_makes_balanced_full(repo):
     """REQ-016: brief #373 answer 2 (when unsure, run more)."""
-    start(repo, testing(profile="balanced"))
+    start(repo, table_text(profile="balanced"))
     change(repo, "app/billing/pay.py", "app/other.py")
     found = result(repo)
     assert found.unmapped == ["app/other.py"]
@@ -147,7 +147,7 @@ def test_an_unmapped_file_makes_balanced_full(repo):
 
 def test_an_unmapped_file_under_fast_is_only_listed(repo):
     """REQ-016: brief #373 answer 2 (under fast an unmapped file is only listed)."""
-    start(repo, testing(profile="fast"))
+    start(repo, table_text(profile="fast"))
     change(repo, "app/billing/pay.py", "app/other.py")
     found = result(repo)
     assert found.full is False and found.reason is None
@@ -162,7 +162,7 @@ def test_an_unmapped_file_under_fast_is_only_listed(repo):
 
 def test_a_changed_test_file_is_not_unmapped(repo):
     """REQ-016: brief #373 answer 2 (unmapped files are outside the test folders)."""
-    start(repo, testing())
+    start(repo, table_text())
     change(repo, "tests/auth/test_login.py")
     found = result(repo)
     assert found.unmapped == [] and found.full is False and found.selected == []
@@ -171,7 +171,7 @@ def test_a_changed_test_file_is_not_unmapped(repo):
 @pytest.mark.parametrize("profile", ["fast", "balanced", "thorough"])
 def test_a_docs_only_change_selects_nothing_under_every_profile(repo, profile):
     """REQ-016: brief #373 answer 2 (only *.md and docs/ files select nothing)."""
-    start(repo, testing(profile=profile, always_full='["docs/**"]'))
+    start(repo, table_text(profile=profile, always_full='["docs/**"]'))
     repo.commit({"docs/guide.md": "# changed\n", "docs/img/a.svg": "<svg/>\n", "README.md": "x\n"})
     found = result(repo)
     assert found.full is False and found.reason is None
@@ -181,7 +181,7 @@ def test_a_docs_only_change_selects_nothing_under_every_profile(repo, profile):
 
 def test_a_markdown_file_beside_code_is_not_unmapped(repo):
     """REQ-016: brief #373 answer 2 (Q-373-2: a *.md or docs/ file is never unmapped)."""
-    start(repo, testing())
+    start(repo, table_text())
     change(repo, "app/billing/pay.py", "app/billing/NOTES.md", "docs/guide.md")
     found = result(repo)
     assert found.unmapped == [] and found.full is False
@@ -189,7 +189,7 @@ def test_a_markdown_file_beside_code_is_not_unmapped(repo):
 
 def test_thorough_is_always_full(repo):
     """REQ-016: brief #373 answer 2 (the thorough profile)."""
-    start(repo, testing(profile="thorough"))
+    start(repo, table_text(profile="thorough"))
     change(repo, "app/billing/pay.py")
     found = result(repo)
     assert found.full is True and found.reason == "profile thorough"
@@ -199,7 +199,7 @@ def test_thorough_is_always_full(repo):
 BAD = [
     ('testing = "yes"\n', "setting: testing"),
     ('[testing]\nprofile = "quick"\n', "setting: testing.profile"),
-    ("[testing]\nalways_full = \"app/**\"\n", "setting: testing.always_full"),
+    ('[testing]\nalways_full = "app/**"\n', "setting: testing.always_full"),
     ('[testing]\nalways_full = ["", "x/**"]\n', "setting: testing.always_full"),
     ('[testing]\nmap = { code = "a/**", tests = ["t/**"] }\n', "setting: testing.map"),
     ('[testing]\nmap = [{ code = "a/**" }]\n', "setting: testing.map[1].tests"),
@@ -233,7 +233,7 @@ def test_a_bad_table_is_refused_naming_the_setting(repo, table, setting):
 
 def test_a_good_table_reads_its_settings(repo):
     """REQ-016: brief #373 answer 1 (profile, always_full, map, budget_seconds)."""
-    table = testing(profile="fast", always_full='["migrations/**"]') + "budget_seconds = 120\n"
+    table = table_text(profile="fast", always_full='["migrations/**"]') + "budget_seconds = 120\n"
     start(repo, table)
     found = impact.testing_table(repo.root)
     assert found == {
