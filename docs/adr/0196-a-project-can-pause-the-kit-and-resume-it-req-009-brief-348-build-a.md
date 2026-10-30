@@ -41,9 +41,10 @@ workflows by hand.
 5. **The roles stop with the line (answer 1).** A new session rule 33: a session runs `git fetch origin <default branch>` and
    then `python3 scripts/agk/doctor.py --paused --ref origin/<default branch>` before anything else and on every wake, so that it
    reads the default branch and not its own branch, which may predate a pause; when it prints `agk paused` it stops with that
-   line, posts nothing and starts no watch. The conductor role runs `git fetch origin` and reads `agk.toml` of the default branch
-   with `git show origin/<default branch>:agk.toml` (both allowed by its guard) at its start and on each wake, and stops the same
-   way when the file holds the top-level line `paused = true`.
+   line, posts nothing and starts no watch. The conductor role reads `agk.toml` of the default branch with the one GET
+   `gh api -H "Accept: application/vnd.github.raw" repos/{owner}/{repo}/contents/agk.toml` (allowed by its guard, and read on GitHub, so its
+   checkout's age does not matter) at its start and on each wake, and stops the same way when the file holds the top-level line
+   `paused = true`.
 6. **Resume.** Removing the line resumes everything; nothing is deleted or rewritten while paused. The kit template of `agk.toml`
    lists the setting as a commented optional line.
 7. **Tests first.** `tests/kit/test_pause.py` covers the setting, the doctor's query and report, the router, the two workflows
@@ -72,3 +73,6 @@ state. The command that writes the pause pull request (`/agk:uninstall --pause`)
   longer fails with an empty step (decision 3); session rule 33 and the conductor read `agk.toml` of the default branch after a
   fetch, so a session on a branch made before the pause merged still stops (decision 5). The guide adds that while paused no pull
   request is checked, the one that resumes included.
+- 2026-10-30: the verdict on c5fffcf, finding 1: the conductor reads `agk.toml` of the default branch with one `gh api` GET of
+  the contents (raw), which both guards allow, instead of `git fetch origin` and `git show` (decision 5); the test passes the
+  role's command through the guards.

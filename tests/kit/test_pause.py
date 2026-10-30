@@ -358,4 +358,21 @@ def test_the_conductor_role_stops_when_paused():
     # the verdict on f66c933, finding 2: read at the default branch after a fetch, by the two
     # commands its guard allows
     para = next(line for line in text.splitlines() if line.startswith("Paused ("))
-    assert "`git fetch origin`" in para and "`git show origin/<default branch>:agk.toml`" in para
+    # the verdict on c5fffcf: one GET that reads the default branch directly, and that the guards
+    # allow, so the role and the guard cannot drift apart
+    command = (
+        'gh api -H "Accept: application/vnd.github.raw" repos/{owner}/{repo}/contents/agk.toml'
+    )
+    assert f"`{command}`" in para and "git show" not in para
+    hooks = ROOT / ".claude" / "hooks"
+    if not (hooks / "conductor_guard.py").is_file():
+        pytest.skip("the guards are not installed here")
+    sys.path.insert(0, str(hooks))
+    import architect_guard
+    import conductor_guard
+
+    real = command.replace("{owner}/{repo}", REPO)
+    assert conductor_guard.bash_allowed(real) and architect_guard.bash_allowed(real)
+    rules = (ROOT / "config" / "session-rules.md").read_text(encoding="utf-8")
+    rule = next(line for line in rules.splitlines() if "doctor.py --paused" in line)
+    assert f"`{command}`" in rule and "git show" not in rule
