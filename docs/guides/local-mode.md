@@ -30,8 +30,16 @@ head (an empty commit is enough) so that its checks show as never reported rathe
 
 A person with admin on the repository does this once, in a terminal on their own machine with a logged-in `gh`.
 
-1. **Disable the workflows**, one command per workflow, so that nothing queues and nothing is billed when Actions returns
-   (`gh workflow disable` takes the file name):
+1. **Disable the workflows**, so that nothing queues and nothing is billed when Actions returns. With the kit, one command
+   lists every active workflow, the kit's and the project's, and the call that disables each; it is a dry run and changes
+   nothing until you add `--write`, which makes the calls and prints one line per workflow (a refused call is reported, with
+   the call to run by hand, and the rest are still made):
+
+       python3 scripts/agk/local_mode.py enter
+       python3 scripts/agk/local_mode.py enter --write
+
+   It needs a token that may change workflows, which no session holds: the person runs it. For a person without the kit, disable each
+   workflow with one command (`gh workflow disable` takes the file name):
 
        gh workflow disable agk-route.yml
        gh workflow disable governance.yml
@@ -128,7 +136,18 @@ Say it plainly to everyone working on the project:
 
 When Actions runs again (minutes renewed, billing fixed, the outage over):
 
-1. **Re-enable the workflows**, one command per workflow, and the project's own the same way:
+1. **Re-enable the workflows.** With the kit, one command lists every workflow disabled by hand and the call that enables
+   each, the pull requests merged on local evidence since the oldest of them was disabled, and the state of the catch-up run;
+   it is a dry run until you add `--write`, which reads the merges first and then makes the calls:
+
+       python3 scripts/agk/local_mode.py leave
+       python3 scripts/agk/local_mode.py leave --write
+
+   Run `leave` again after the next merge to read the catch-up: one line per check of `required_checks` on the head of the
+   default branch, `catch-up: not run yet` until one runs, then `catch-up: green`, or a red line that says to file a
+   priority-0 brief naming the failing run and the merges. Once the workflows are enabled, `leave` cannot read when local mode
+   began; give it as `--since YYYY-MM-DD` (the date in the record issue's title). A workflow GitHub disabled for inactivity is
+   left as it is. For a person without the kit, enable each workflow with one command, and the project's own the same way:
 
        gh workflow enable agk-route.yml
        gh workflow enable governance.yml
