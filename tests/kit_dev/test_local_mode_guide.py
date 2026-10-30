@@ -85,9 +85,8 @@ def test_entering_disables_each_installed_workflow_with_one_command_and_opens_th
 def test_the_builder_runs_governance_and_its_own_proof_under_the_lock_and_pastes_the_result():
     body = section("What a builder runs before asking for review")
     for phrase in (
-        "agk-heavy.lock",
-        "mkdir",
-        "rmdir",
+        "python3 scripts/agk/lock.py run --name heavy --session <id> --",
+        "agk-lock-heavy",
         "make governance",
         "python3 scripts/agk/proof.py",
         "python3 scripts/agk/check_pr_body.py",
@@ -205,9 +204,19 @@ def test_fix_3_a_billing_refusal_is_a_sign_and_a_new_head_is_pushed_once_disable
 
 
 def test_fix_4_the_lock_block_runs_as_one_script():
-    """Verdict on 712354d, item 4."""
+    """Verdict on 712354d, item 4; brief #337 (ADR-0191): the hand-made lock and its `trap` are
+    replaced by `lock.py`, so each heavy line takes and releases the lock by itself and the lines
+    can be run one by one."""
     body = section("What a builder runs before asking for review")
-    assert "bash -c '" in body and "one script" in body
-    script = body.split("bash -c '", 1)[1].split("\n    '\n", 1)[0]
-    for phrase in ("mkdir", "trap", "rmdir", "make governance", "proof.py"):
-        assert phrase in script, phrase
+    assert "bash -c '" not in body and "trap" not in body and "mkdir" not in body
+    assert "run one by one" in body
+    lines = [ln.strip() for ln in body.splitlines() if ln.startswith("    ")]
+    heavy = [
+        ln
+        for ln in lines
+        if "make governance" in ln or "make test" in ln or "scripts/agk/proof.py" in ln
+    ]
+    assert heavy and all(
+        ln.startswith("python3 scripts/agk/lock.py run --name heavy") for ln in heavy
+    )
+    assert any("make governance" in ln for ln in lines)

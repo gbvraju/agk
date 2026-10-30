@@ -65,29 +65,27 @@ A person with admin on the repository does this once, in a terminal on their own
 ## What a builder runs before asking for review
 
 A builder runs the governance checks and its own proof on its head, on its own machine, and pastes the result in the pull
-request body. Several sessions on one machine take turns through a lock file, so two heavy runs never compete for the same
-memory and disk.
+request body. Several sessions on one machine take turns through one lock, so two heavy runs never compete for the same memory
+and disk: each heavy step, governance included, runs under `python3 scripts/agk/lock.py run --name heavy --session <id> -- <command...>`, which waits
+its turn, runs the command without a shell and releases the lock when it ends, also when it fails or is interrupted. Each line
+stands alone, so the lines can be run one by one, as an agent runs them:
 
-Run the block as one script, in one `bash -c '...'` (or saved as a file and run with `bash`): the `trap` releases the lock
-when that script ends, so lines typed one by one would release it too early, or never.
-
-    bash -c '
-    set -e
-    lock="$(git rev-parse --git-common-dir)/agk-heavy.lock"
-    until mkdir "$lock" 2>/dev/null; do sleep 30; done      # wait for the lock; mkdir is atomic
-    trap "rmdir \"$lock\"" EXIT
     base=$(git merge-base HEAD origin/main)
-    AGK_BASE=$base make governance
-    make test
-    python3 scripts/agk/proof.py --base "$base" --head HEAD
+    python3 scripts/agk/lock.py run --name heavy --session <id> -- make governance AGK_BASE="$base"
+    python3 scripts/agk/lock.py run --name heavy --session <id> -- make test
+    python3 scripts/agk/lock.py run --name heavy --session <id> -- python3 scripts/agk/proof.py --base "$base" --head HEAD
     python3 scripts/agk/check_pr_body.py --draft false body.md
-    '
 
-The lock is a directory inside the repository's git directory, so it is never committed and needs no ignore line. If a run is
-killed, the lock stays: a person removes it with `rmdir` once no heavy run is going on. `make test` runs the kit's checks and
-the project's own tests (`project_tests` in `agk.toml`); `body.md` is a copy of the pull request body. The secret scan of the
-governance workflow is not part of `make governance`: run the same scanner over the branch's commits when it is installed, and
-write `secret scan: not run` when it is not.
+In PowerShell write `$base = git merge-base HEAD origin/main` and `python` where `python3` is not on the path; the `lock.py`
+lines are the same (`make governance AGK_BASE=$base` gives the base to the checks as an environment variable on every platform). While another session holds the lock, `lock.py` prints one line at once and then one a
+minute, `lock heavy: waiting; held by <session> (pid <n>, host <name>) for <m> min`; `--timeout <seconds>` gives up with exit 3.
+The lock is a folder `agk-lock-heavy` in the user's temp folder (or `lock_dir` in `agk.toml`), outside every repository, so it is
+never committed and is shared by all of the machine's projects. A lock left by a session that died is cleared by the next run,
+with a line saying so: when its process no longer runs on this machine, or when it is older than `lock_stale_minutes` (120 by
+default). `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` and changes nothing. `make test` runs the
+kit's checks and the project's own tests (`project_tests` in `agk.toml`); `body.md` is a copy of the pull request body. The
+secret scan of the governance workflow is not part of `make governance`: run the same scanner over the branch's commits when it
+is installed, and write `secret scan: not run` when it is not.
 
 Then add one line to the pull request body, beside `Verified:`, that names the head it ran on:
 
