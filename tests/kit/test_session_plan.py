@@ -661,3 +661,42 @@ def test_every_open_brief_is_in_start_waits_or_skipped(proj, stub):
     got = data(proj, stub)
     seen = {x["brief"] for x in got["start"] + got["waits"] + got["skipped"]}
     assert seen == {5, 6, 7, 8, 9}
+
+
+# --- the running sessions (brief 402, the verdict on 7dfdcd8, Q-402-1) ---------------------------
+
+
+def test_a_plan_with_one_take_and_one_open_pull_request_lists_both_as_running(proj, stub):
+    """REQ-040: brief #402 answer 1 (`running`: the live takes and the open builder pull
+    requests, each with its session, its brief and, where known, its pull request and author)."""
+    listing(stub, [issue(9, brief("zz/")), issue(5, brief("a/")), issue(6, brief("b/"))])
+    old = iso(-timedelta(hours=30))
+    stub.serve(f"{ISSUES}/9/comments", [comment(1, "b", f"taken: builder-a {DAY}", old)])
+    stub.serve(f"{ISSUES}/5/comments", [comment(2, "x", f"taken: builder-b {DAY} build (a)")])
+    stub.serve(PULLS, [labelled(20, 9, "agk:review")])
+    changed(stub, 20, ("modified", "zz/y.py"))
+    free(stub, 6)
+    got = data(proj, stub)
+    assert got["running"] == [
+        {"session": "builder-a", "brief": 9, "pull_request": 20, "author": "b"},
+        {"session": "builder-b", "brief": 5, "build": "a", "author": "x"},
+    ]
+    assert got["capacity"]["running"] == 2  # the count stays as it was
+    read_only(stub)
+
+
+def test_no_running_work_is_an_empty_running_list(proj, stub):
+    """REQ-040: brief #402 answer 1 (no running session: an empty list, never a missing one)."""
+    listing(stub, [issue(5, brief("a/"))])
+    free(stub, 5)
+    assert data(proj, stub)["running"] == []
+
+
+def test_an_open_pull_request_without_a_live_take_is_not_listed(proj, stub):
+    """REQ-040: brief #402 answer 1 (a resume prompt needs the session's name; a pull request
+    whose brief has no live take names none, so it is left out rather than guessed)."""
+    listing(stub, [issue(9, brief("zz/"))])
+    free(stub, 9)
+    stub.serve(PULLS, [labelled(20, 9, "agk:review")])
+    changed(stub, 20, ("modified", "zz/y.py"))
+    assert data(proj, stub)["running"] == []
