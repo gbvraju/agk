@@ -156,6 +156,24 @@ def test_the_two_upgrades_through_the_upgrade_listing(tmp_path):
 # --- the fragment for the next release (answer 2) -----------------------------------------------
 
 
+RELEASED_AS = "- #343 "  # the line the release gathers from the fragment of pull request #343
+
+
+def entry_line(root: Path) -> str:
+    """The 0.59.0 entry as a fragment line `- <change>` (brief #362 answer 1): from
+    `changelog.d/opt-in-0-59-0.md` while that file exists, otherwise from the `- #343 ` line that
+    the release moved into `CHANGELOG.md`, its number taken off."""
+    fragment = root / "changelog.d" / FRAGMENT.name
+    if fragment.is_file():
+        lines = fragment.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1, lines  # one fragment of one line (SPEC-0031 rules 1 and 2)
+        return lines[0]
+    changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+    released = [line for line in changelog if line.startswith(RELEASED_AS)]
+    assert len(released) == 1, f"no fragment and {len(released)} lines {RELEASED_AS.strip()}"
+    return "- " + released[0].removeprefix(RELEASED_AS)
+
+
 def fragment_line() -> str:
     return entry_line(KIT_ROOT)
 
