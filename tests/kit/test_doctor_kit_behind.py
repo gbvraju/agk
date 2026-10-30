@@ -146,3 +146,15 @@ def test_the_text_report_prints_a_hint_for_each_new_reason():
 
     assert "no-release" in HINTS and "release-unreadable" in HINTS
     assert "kit" in HINTS["no-release"] and "kit" in HINTS["release-unreadable"]
+
+
+def test_versions_of_different_lengths_are_padded_before_they_are_compared(tmp_path):
+    """Verdict on 90b075b, item 1: `1.0` against `v1.0.0` is equal, not behind."""
+    check, _ = with_release(tmp_path / "a", {"tag_name": "v1.0.0"}, installed="1.0")
+    assert check["status"] == "ok" and "newer" not in check["message"]
+    check, _ = with_release(tmp_path / "b", {"tag_name": "v1.0"}, installed="1.0.0")
+    assert check["status"] == "ok" and "newer" not in check["message"]
+    check, _ = with_release(tmp_path / "c", {"tag_name": "v1.0.1"}, installed="1.0")
+    assert check["status"] == "fail"
+    check, _ = with_release(tmp_path / "d", {"tag_name": "v1.0"}, installed="1.0.1")
+    assert check["status"] == "ok" and "newer" in check["message"]
