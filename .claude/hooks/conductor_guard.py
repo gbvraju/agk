@@ -56,9 +56,11 @@ ADR-0190): exactly `python3 scripts/agk/session.py plan --json` (read-only, as t
 and `python3 scripts/agk/launch.py prompts --plan <file>`, the project's own regular `launch.py` and
 the plan a regular file of a scratch directory, which prints the prompts and starts nothing. The
 same command with `--adapter <command>` after it, which starts the planned sessions, is allowed only
-when the `[flow]` table of the project's agk.toml sets `auto_start = true` and `launch_adapter`, and
-the one word after `--adapter` equals `launch_adapter` exactly; an agk.toml that cannot be read, or
-holds either setting of the wrong kind, allows no adapter.
+when the `[flow]` table of the project's agk.toml sets `auto_start = true` and `launch_adapter`,
+both in the checkout and at `origin/<default_branch>` as last fetched (no network call), with the
+same adapter, and the one word after `--adapter` equals `launch_adapter` exactly; an agk.toml that
+cannot be read, either setting of the wrong kind or a default branch git cannot read allows no
+adapter.
 A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
 by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
 29), because GitHub cannot tell a comment the person typed from one a session posted.
@@ -425,15 +427,22 @@ def queue_allowed(words: list[str], cwd: object) -> bool:
 
 
 def configured_adapter() -> str | None:
-    """`launch_adapter` when the flow table of agk.toml also sets `auto_start = true`, else None;
-    an agk.toml that cannot be read, or a setting of the wrong kind, gives None (brief #331)."""
+    """`launch_adapter` when the flow table of agk.toml sets it and `auto_start = true` both in the
+    checkout and at `origin/<default_branch>` (as last fetched, with no network call here), with
+    the same adapter, else None: turning the setting off on the default branch stops a conductor
+    whose checkout is older. An agk.toml that cannot be read, a setting of the wrong kind or a
+    default branch git cannot read gives None (brief #331, the verdict on 2d53a5d)."""
     if LAUNCH_SETTINGS is None:
         return None
+    root = Path(project_root())
     try:
-        auto, adapter = LAUNCH_SETTINGS(Path(project_root()))
+        here = LAUNCH_SETTINGS(root)
+        there = LAUNCH_SETTINGS(root, f"origin/{launch.default_branch(root)}")
     except launch.CheckError:
         return None
-    return adapter if auto is True else None
+    if here != there or here[0] is not True:
+        return None
+    return here[1]
 
 
 def launch_allowed(words: list[str], cwd: object) -> bool:

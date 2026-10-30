@@ -15,9 +15,12 @@ in an issue and is never put in a prompt: the session reads the brief itself.
 Brief 331 (ADR-0190): a plan whose `start` list is longer than its `capacity.slots`, or that names
 one brief (with its build) or one session twice, is refused before anything is printed or started;
 a failing adapter is reported once, with a `not started:` line for each session after it, and
-never called again. `launch_settings` reads `auto_start` and `launch_adapter` of the `[flow]` table
-of agk.toml, the two settings by which the conductor's review pass starts the planned sessions
-itself (its guard reads them through this function).
+never called again. With `--adapter` a plan without a valid `capacity.slots` starts nothing, and
+no run starts or prints more than `[flow] max_builders` (3 by default) of the folder it runs in;
+each session past it gets a `not started:` line. `launch_settings` reads `auto_start` and
+`launch_adapter` of the `[flow]` table of agk.toml, in the checkout or at a commit, the two
+settings by which the conductor's review pass starts the planned sessions itself (its guard reads
+them through this function, in the checkout and on the default branch).
 """
 
 from __future__ import annotations
@@ -70,32 +73,94 @@ def read_plan(source: str) -> dict:
     return plan
 
 
-def launch_settings(root: Path) -> tuple[bool, str | None]:
-    """(`auto_start`, `launch_adapter`) of the `[flow]` table of agk.toml: off and none when
-    unset (an empty `launch_adapter` is unset); a value of the wrong kind is refused naming the
-    setting, never the value."""
+BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")  # a branch name git reads as nothing else
+MAX_BUILDERS = 3  # the default of `[flow] max_builders`, as `session.py` reads it
+
+
+def flow_of(text: str | None) -> dict:
+    """The `[flow]` table of an agk.toml text ({} when there is no file or no table)."""
+    if text is None:
+        return {}
     try:
-        data = tomllib.loads((Path(root) / "agk.toml").read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return False, None
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
         raise CheckError("agk.toml cannot be read") from None
     table = data.get("flow", {})
-    table = table if isinstance(table, dict) else {}
+    return table if isinstance(table, dict) else {}
+
+
+def checkout_text(root: Path) -> str | None:
+    try:
+        return (Path(root) / "agk.toml").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError):
+        raise CheckError("agk.toml cannot be read") from None
+
+
+def text_at(root: Path, ref: str) -> str | None:
+    """agk.toml as it stands at REF (None when REF has none); a REF git cannot read is refused."""
+    found = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "rev-parse", "--verify", "-q", f"{ref}^{{commit}}"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if found.returncode != 0:
+        raise CheckError("the default branch cannot be read (setting default_branch)")
+    shown = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "show", f"{found.stdout.strip()}:agk.toml"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    return shown.stdout if shown.returncode == 0 else None
+
+
+def launch_settings(root: Path, ref: str | None = None) -> tuple[bool, str | None]:
+    """(`auto_start`, `launch_adapter`) of the `[flow]` table of agk.toml, in the checkout or, with
+    REF, as it stands at that commit: off and none when unset (an empty `launch_adapter` is unset);
+    a value of the wrong kind is refused naming the setting, never the value."""
+    table = flow_of(checkout_text(root) if ref is None else text_at(root, ref))
     auto = table.get("auto_start", False)
     if not isinstance(auto, bool):
         raise CheckError("auto_start of the flow table must be true or false")
-    adapter = table.get("launch_adapter") or None  # "" is unset, as `unused_code = ""` is off
+    adapter = table.get("launch_adapter")
+    if adapter == "":  # "" is unset, as `unused_code = ""` is off
+        adapter = None
     if adapter is not None and (not isinstance(adapter, str) or not adapter.strip()):
         raise CheckError("launch_adapter of the flow table must be a command (a non-empty string)")
     return auto, adapter
 
 
-def within_capacity(plan: dict, count: int) -> None:
-    """A plan with a `capacity` starts at most `capacity.slots` sessions (brief 331)."""
-    if "capacity" not in plan:
+def default_branch(root: Path) -> str:
+    """`default_branch` of the checkout's agk.toml ("main" when unset), a plain branch name."""
+    text = checkout_text(root)
+    try:
+        name = tomllib.loads(text).get("default_branch", "main") if text is not None else "main"
+    except tomllib.TOMLDecodeError:
+        raise CheckError("agk.toml cannot be read") from None
+    if not isinstance(name, str) or not BRANCH.fullmatch(name) or ".." in name:
+        raise CheckError("default_branch must be a branch name (setting default_branch)")
+    return name
+
+
+def max_builders(root: Path) -> int:
+    """`[flow] max_builders` of the checkout's agk.toml (3 when unset), a whole number 1 or up."""
+    value = flow_of(checkout_text(root)).get("max_builders", MAX_BUILDERS)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CheckError("max_builders of the flow table must be a whole number, 1 or more")
+    return value
+
+
+def within_capacity(plan: dict, count: int, required: bool = False) -> None:
+    """A plan starts at most `capacity.slots` sessions (brief 331); with an adapter
+    (REQUIRED) a plan without a valid `capacity.slots` starts nothing."""
+    if "capacity" not in plan and not required:
         return
-    capacity = plan["capacity"]
+    capacity = plan.get("capacity")
     slots = capacity.get("slots") if isinstance(capacity, dict) else None
     if isinstance(slots, bool) or not isinstance(slots, int) or slots < 0:
         raise CheckError("the plan's capacity has no valid slots (field capacity)")
@@ -120,7 +185,6 @@ def sessions(plan: dict) -> list[tuple[str, int, str | None]]:
         if any((number, build) == (n, b) for _, n, b in found):
             raise CheckError("a brief to start is named twice (field brief)")
         found.append((name, number, build))
-    within_capacity(plan, len(found))
     return found
 
 
@@ -183,17 +247,26 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE, file=sys.stderr)
         return 2
     try:
-        found = sessions(read_plan(opts["--plan"]))
+        plan = read_plan(opts["--plan"])
+        found = sessions(plan)
+        within_capacity(plan, len(found), required="--adapter" in opts)
+        limit = max_builders(Path.cwd())
         if not found:
             print("no session to start")
             return 0
+        found, beyond = found[:limit], found[limit:]
         if "--adapter" in opts:
-            return start_with(opts["--adapter"], found)
+            code = start_with(opts["--adapter"], found)
+        else:
+            print((SEPARATOR + "\n").join(prompt_for(s, b, x) for s, b, x in found), end="")
+            code = 0
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}", file=sys.stderr)
         return 2
-    print((SEPARATOR + "\n").join(prompt_for(s, b, x) for s, b, x in found), end="")
-    return 0
+    if code == 0:
+        for session, brief, build in beyond:
+            print(f"not started: {work_text(session, brief, build)} (max_builders is {limit})")
+    return code
 
 
 if __name__ == "__main__":
