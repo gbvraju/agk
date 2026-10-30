@@ -146,10 +146,11 @@ def test_governance_installs_bandit_with_its_other_tooling():
 
 
 def test_governance_fails_naming_a_tool_it_could_not_install():
-    """REQ-001: brief #338 answer 2. A tool that is missing fails the step by name; nothing skips."""
+    """REQ-001: brief #338 answer 2. A missing tool fails the step by name; nothing skips."""
     run = governance_step("Install tooling").split("run:", 1)[1]
     loop = re.search(r"for tool in ([^;\n]+);", run)
     assert loop, "Install tooling does not check each tool after the install"
     assert {"pytest", "ruff", "bandit"} <= set(loop.group(1).split())
     assert 'python -m "$tool" --version' in run
-    assert re.search(r'echo "[^"]*\$tool[^"]*"; exit 1', run), "a missing tool must fail the step by name"
+    named = re.search(r'echo "[^"]*\$tool[^"]*"; exit 1', run)
+    assert named, "a missing tool must fail the step by name"
