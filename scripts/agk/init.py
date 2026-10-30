@@ -37,7 +37,6 @@ from common import (
     with_router_names,
 )
 from common import required_checks as configured_checks
-from kit_hashes import normalized
 from reviewers import parse, render_codeowners
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
@@ -257,6 +256,12 @@ def print_branch_rules(branch: str, tool: str = "init") -> None:
     print(ISSUES_WARNING)
 
 
+def block_text(data: bytes) -> bytes:
+    """The text of a marked block, as `kit_hashes.normalized` hashes it (init imports no module that
+    runs a process, so it is repeated here; a test keeps the two equal)."""
+    return data.rstrip(b"\n") + b"\n"
+
+
 def release_problem(kit_root: Path) -> str | None:
     """None when every kit file init or adopt installs (every template it renders, every source of
     a marked block) is one the release row of `kit_version` lists, CRLF read as LF; otherwise the
@@ -292,7 +297,7 @@ def release_problem(kit_root: Path) -> str | None:
     for rel in sorted(set(adopt.get("blocks") or {}) - set(manifest.get("rendered") or [])):
         path = kit_root / sources.get(rel, rel)
         if path.is_file():
-            digest = hashlib.sha256(normalized(lf(path.read_bytes()))).hexdigest()
+            digest = hashlib.sha256(block_text(lf(path.read_bytes()))).hexdigest()
             if digest not in (blocks.get(rel) or []):
                 return problem
     return None

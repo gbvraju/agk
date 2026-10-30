@@ -161,3 +161,12 @@ def test_a_block_source_at_the_release_with_crlf_still_installs(tmp_path, instal
     else:
         proc = init(kit, tmp_path / "t", "--dry-run")
     assert proc.returncode == 0, proc.stdout
+
+
+@pytest.mark.parametrize("data", [b"", b"a", b"a\n", b"a\n\n\n", b"\n"])
+def test_init_hashes_a_block_as_kit_hashes_does(data):
+    """REQ-039: brief #263 build (c): `init.block_text` equals `kit_hashes.normalized`, which init
+    cannot import (it imports no module that runs a process)."""
+    import init
+
+    assert init.block_text(data) == kit_hashes.normalized(data)

@@ -46,13 +46,15 @@ at the first checkpoint of the pull request (632d2e2).
    `scripts/agk/init.py` compared only the release row's `verbatim` and `templates`. The sources of the marked blocks
    (`kit/templates/gitignore`, and each `adopt.blocks` path that is not rendered) are listed in the row's `blocks`, so an
    unreleased `kit/templates/gitignore` was installed under the release's version by adopt and init alike. `release_problem` now
-   also hashes each block source as `kit_hashes.snapshot_of` does (`kit_hashes.normalized`, after CRLF is read as LF) and compares
-   it with `row["blocks"]`. The one function serves both installers, so init gains the same check.
+   also hashes each block source as `kit_hashes.snapshot_of` does (the text without trailing newlines, then one newline, after CRLF
+   is read as LF) and compares it with `row["blocks"]`. The one function serves both installers, so init gains the same check.
+   Init imports no module that runs a process (SPEC-0001 rule 3, `test_init.py`), and `kit_hashes` does, so the one-line
+   normalisation is repeated in `init.block_text`, and a test keeps it equal to `kit_hashes.normalized`.
 5. **Not built.** The commit-stamp fallback of item 8 stays ADR-0160's residual, as the conductor answered. The adopt section of
    `docs/guides/reference.md` is not changed here, since two open pull requests change that file (#354, #355); see Residual.
 6. **The spec.** `docs/runs/proposed-spec-amendments-102.md` proposes the text of SPEC-0002 rules 1 and 15, and of SPEC-0001's
    release rule, that this changes.
-7. **Tests.** `tests/kit_dev/test_adopt_from_release.py` (14): a kit at its release adopts; a CRLF cache at the release adopts with
+7. **Tests.** `tests/kit_dev/test_adopt_from_release.py` (19): a kit at its release adopts; a CRLF cache at the release adopts with
    LF; a kit between releases is refused, dry run or not, with the target byte for byte as it was; no release row is refused; an
    unreleased adopt template is refused; `--unreleased` adopts with a notice; the usage names the option.
 8. **Flow mode.** Fragment `changelog.d/adopt-from-release.md`; no version bump; `kit/hashes.json` is not edited (session rule 14).
