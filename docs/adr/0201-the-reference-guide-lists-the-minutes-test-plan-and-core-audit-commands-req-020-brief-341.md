@@ -1,6 +1,6 @@
 # ADR-0201: the reference guide lists the minutes, test plan and core audit commands (REQ-020, brief 341)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0184, ADR-0185, ADR-0188
