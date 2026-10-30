@@ -6,7 +6,7 @@
 - Related: ADR-0184, ADR-0016
 - Requirements: REQ-012
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -42,6 +42,11 @@ pull request).
 5. **One billing rule (answer 3).** `metrics.py` imports `job_minutes` and `SELF_HOSTED` from `minutes.py` at the time of
    use, because `minutes.py` imports `origin_repo` from `metrics.py`; `minutes.py` is not changed. Runner rates
    (`minutes.multiplier`) are not applied: answer 1 names `job_minutes` alone (Q-376-2).
+6. **The reference test (Q-376-3, ruled by the conductor's verdict on db4c2bb).** The import makes the third assertion of
+   `tests/kit_dev/test_reference_commands.py::test_the_three_commands_are_found_by_the_check` (ADR-0201),
+   `assert not imported("minutes.py", installed_scripts())`, false. It is replaced by `assert "minutes.py" in reference()`,
+   which keeps the test's point: `minutes.py` is a command named in the reference, not only a library. Nothing else in
+   that file changes, and the billing rule is not copied into `metrics.py`.
 
 ## Consequences
 
@@ -50,6 +55,11 @@ pull request).
 - Each closed pull request costs one more read per head commit and one per run; a live run of the weekly workflow reads
   more, with the `actions: read` permission it already has.
 - The body of the weekly issue gains four columns and one line, beyond the shape of SPEC-0007 rule 14 (Q-376-1).
+
+## Log
+
+- 2026-10-30: Q-376-3 answered by the conductor (verdict `fix list` on db4c2bb): change the one assertion here and name
+  `tests/kit_dev/` in this ADR (decision 6).
 
 ## Residual
 
