@@ -277,13 +277,55 @@ def test_watch_pr_with_a_session_ends_with_an_error_when_the_conductor_issue_sta
     )
 
 
-def test_watch_pr_with_a_session_needs_one_conductor_issue(proj, stub):
-    """REQ-040: brief #368 answer 1."""
+def test_watch_pr_with_a_session_and_no_conductor_issue_says_so_and_still_waits(proj, stub):
+    """REQ-040: brief #368 answer 1 (the verdict on e90f60b, item 1: a project with
+    `assign = "next"` need not have the issue; the watch still ends on a verdict)."""
+    from test_session import SHA
+
     stub.serve(CONDUCTOR, [])
-    stub.serve(PR, pull())
-    stub.serve(PR_COMMENTS, [])
-    out = session(proj, stub, *WATCH_ME, "--timeout", "0")
-    assert out.returncode == 2 and "agk-conductor" in out.stdout
+    verdict = comment(8, "boss", f"Verdict: cleared {SHA[:7]}")
+    watching(stub, [(pull(), []), (pull(), [verdict])])
+    out = session(proj, stub, *WATCH_ME, "--timeout", "5")
+    assert out.returncode == 0, out.stdout
+    assert out.stdout.splitlines() == [
+        "messages: not read (no open issue labelled agk-conductor)",
+        f"verdict cleared {SHA[:7]} (comment 8)",
+    ]
+    assert not any("issues/204" in c[1] for c in stub.calls())
+
+
+def test_watch_pr_with_a_session_and_two_conductor_issues_says_so_and_still_waits(proj, stub):
+    """REQ-040: brief #368 answer 1 (the verdict on e90f60b, item 1: not exactly one issue)."""
+    stub.serve(CONDUCTOR, [CONDUCTOR_ISSUE, {"number": 205, "title": "another"}])
+    watching(stub, [(pull(), []), (pull("closed"), [])])
+    out = session(proj, stub, *WATCH_ME, "--timeout", "5")
+    assert out.stdout.splitlines() == [
+        "messages: not read (more than one open issue labelled agk-conductor)",
+        "closed #7",
+    ]
+
+
+def test_watch_pr_with_a_session_retries_a_failed_listing_of_the_conductor_issue(proj, stub):
+    """REQ-040: brief #368 answer 1 (the verdict on e90f60b, item 1: one failed read is
+    retried under the count of session rule 21, never read as no issue)."""
+    stub.serve(CONDUCTOR, "FAIL", nth=1)
+    stub.serve(CONDUCTOR, [CONDUCTOR_ISSUE], nth=2)
+    stub.serve(COMMENTS, [], nth=1)
+    stub.serve(COMMENTS, [told(9, "Tell: s-me #52 merged, rebase")])
+    watching(stub, [(pull(), [])] * 3)
+    out = session(proj, stub, *WATCH_ME, "--timeout", "5")
+    assert out.returncode == 0, out.stdout
+    assert out.stdout.splitlines() == ["tell #52 merged, rebase"]
+
+
+def test_watch_pr_with_a_session_ends_with_an_error_after_five_failed_listings(proj, stub):
+    """REQ-040: brief #368 answer 1 (the verdict on e90f60b, item 1: exit 4 after five)."""
+    stub.serve(CONDUCTOR, "FAIL")
+    watching(stub, [(pull(), [])] * 3)
+    out = session(proj, stub, *WATCH_ME, "--timeout", "5")
+    assert out.returncode == 4
+    assert out.stdout.strip() == "error: the open issues labelled agk-conductor cannot be read"
+    assert sum(1 for c in stub.calls() if c[1].startswith(CONDUCTOR + "?")) == 5
 
 
 def test_session_is_taken_by_watch_pr_only(proj, stub):
