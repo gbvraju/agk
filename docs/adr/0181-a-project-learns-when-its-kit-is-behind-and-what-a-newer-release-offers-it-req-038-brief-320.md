@@ -73,6 +73,9 @@ no `Measured:` line. The tests were written first (`tests/kit/test_doctor_kit_be
 - 2026-10-30, verdict on 90b075b: Q-320-4, decided: one fragment in this pull request with one marked line per opt-in feature
   that shipped in 0.59.0 (`proof`, `unused_code`, `coverage`, `review_mode`); past sections are not edited. Not built yet: a
   fragment is one line and a build adds exactly one (SPEC-0031 rules 1 and 2, `kit_hashes.py`), so the form is asked as Q-320-5.
+- 2026-10-30, verdict on 89419e4: Q-320-5, answered (c): item 2 is dropped from this pull request; the flow-mode rules
+  (one fragment of one line per build) stay, and the conductor files a brief that adds the four marked lines in the next
+  release's fragments, one per build.
 
 ## Consequences
 
@@ -83,4 +86,4 @@ no `Measured:` line. The tests were written first (`tests/kit/test_doctor_kit_be
 ## Residual
 
 - 2026-10-30: the releases up to 0.59.0 carry no opt-in marker (Q-320-4), so their off-by-default features are not offered by
-  an upgrade (due 2026-12-15).
+  an upgrade until the conductor's brief adds their marked fragments (Q-320-5; due 2026-12-15).
