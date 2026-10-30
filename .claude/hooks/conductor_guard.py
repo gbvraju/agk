@@ -43,9 +43,14 @@ own script, the regular file `scripts/agk/session.py` of the project directory (
 the session's working directory or by its full path, never through a link): exactly
 `python3 scripts/agk/session.py review-queue`, with `--all` or `--fingerprint` or neither, and
 `python3 scripts/agk/session.py queue --role conductor`. Both only read GitHub (GET); every other
-command of the script (`watch`, `next`, `claim`, `after` and the rest), another role, another flag,
-another interpreter or another copy of the script, such as one in a pull request's worktree, stays
-denied, and the shadow mode gets none of them.
+command of the script (`watch`, `next`, `claim`, `after`, `inbox` and the rest), another role,
+another flag, another interpreter or another copy of the script, such as one in a pull request's
+worktree, stays denied, and the shadow mode gets none of them.
+Without `--shadow` the conductor may also send a session one message (brief 327, ADR-0187):
+exactly `python3 scripts/agk/session.py tell --session <id> --text <message>`, the two options in
+that order, a session ID that is not an option, and a message of one line of 1 to 300 characters
+that does not start with `Approve:`, `Confirmed:` or `Verdict:` (the shape `session.py tell`
+itself requires).
 A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
 by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
 29), because GitHub cannot tell a comment the person typed from one a session posted.
@@ -116,6 +121,10 @@ QUEUE_FORMS = (  # the read-only commands of the conductor's queue (brief 284), 
     ["review-queue", "--fingerprint"],
     ["queue", "--role", "conductor"],
 )
+SESSION_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")  # a session ID, never an option
+TELL_LIMIT = 300  # the longest message of `session.py tell` (brief 327)
+TELL_REFUSED = re.compile(r"\s*(?:Approve|Confirmed|Verdict):", re.IGNORECASE)
+ZERO_WIDTH = re.compile("[\u200b-\u200f\u2060\ufeff]")  # read as nothing before the start check
 CONFIRMED_RULE = (
     "conductor guard rule 6: a session never posts a Confirmed: comment; print the text and the "
     "person posts it (session rule 29)"
@@ -364,10 +373,26 @@ def brief_post_ok(words: list[str]) -> bool:
     return text is not None and brief_checked(text)
 
 
+def tell_form(args: list[str]) -> bool:
+    """Exactly `tell --session <id> --text <message>` with a message that `session.py tell` would
+    send: one line of 1 to 300 characters (no line break that `str.splitlines` knows) that does not
+    start, zero-width characters aside, with `Approve:`, `Confirmed:` or `Verdict:` (brief 327,
+    ADR-0187)."""
+    if len(args) != 5 or args[0] != "tell" or args[1] != "--session" or args[3] != "--text":
+        return False
+    text = args[4]
+    if not SESSION_NAME.fullmatch(args[2]) or not text.strip() or len(text) > TELL_LIMIT:
+        return False
+    return text.splitlines() == [text] and not TELL_REFUSED.match(ZERO_WIDTH.sub("", text))
+
+
 def queue_allowed(words: list[str], cwd: object) -> bool:
     """`python3 scripts/agk/session.py review-queue [--all | --fingerprint]` or `... queue --role
-    conductor`, where the script is the regular file of the project directory itself (brief 284)."""
-    if len(words) < 2 or words[0] != "python3" or words[2:] not in QUEUE_FORMS:
+    conductor`, where the script is the regular file of the project directory itself (brief 284),
+    or `... tell --session <id> --text <message>` (brief 327)."""
+    if len(words) < 2 or words[0] != "python3":
+        return False
+    if words[2:] not in QUEUE_FORMS and not tell_form(words[2:]):
         return False
     path = words[1]
     if not path or "\0" in path or path.startswith("-"):
