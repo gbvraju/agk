@@ -1,6 +1,6 @@
 # ADR-0199: the session guards read a `#` the way bash reads it (REQ-002, brief 351)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: none
