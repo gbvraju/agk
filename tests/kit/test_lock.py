@@ -19,6 +19,7 @@ import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -62,7 +63,7 @@ def plant(folder: Path, *, pid: int, host: str | None = None, minutes: float = 0
         "pid": pid,
         "host": host or socket.gethostname(),
         "started": started.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "token": "planted",
+        "token": uuid.uuid4().hex,  # another run's own random token
     }
     (held / "owner.json").write_text(json.dumps(owner), encoding="utf-8")
     return held
