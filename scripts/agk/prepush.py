@@ -190,21 +190,21 @@ def tests(root: Path, mb: str, quick: bool) -> Step:
     for item in runs:
         folder = root / item["cwd"]
         started = time.monotonic()
-        code, run_out, _ = execute(item["command"], folder, limit)
+        run_code, run_out, _ = execute(item["command"], folder, limit)
         made.append(
             {
                 "name": item["name"],
                 "command": safe_command(item["command"], root),
                 "cwd": safe_cwd(folder, root),
-                "exit": code,
+                "exit": run_code,
                 "seconds": round(time.monotonic() - started, 3),
                 **digest(run_out),
             }
         )
         lines.append(f"tests: {item['name']} ({len(item['files'])} test files) in {item['cwd']}")
-        if code is None:
+        if run_code is None:
             return Step("FAIL", "\n".join([*lines, timeout_note(limit)]), ran=ran, runs=made)
-        if code != 0:
+        if run_code != 0:
             return Step("FAIL", "\n".join([*lines, run_out.rstrip("\n")]), ran=ran, runs=made)
     return Step("ok", "\n".join(lines), ran=ran, runs=made)
 
