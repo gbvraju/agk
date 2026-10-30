@@ -1,6 +1,6 @@
 # ADR-0187: sessions pass messages through GitHub, so a person never copies text between tabs (REQ-040, brief 327)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0125, ADR-0175
