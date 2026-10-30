@@ -311,3 +311,76 @@ def test_ac5_a_scratch_directory_that_links_into_the_work_tree_is_refused(work):
     link = work.tmp / "agk-conductor-9"
     run = f"{env(link)}make -C {link} test"
     assert work.bash(run) is not None
+
+
+# --- a `#` is read the way bash reads it (brief #351, ADR-0199) -----------------------------------
+
+SESSION_SCRIPT = "scripts/agk/session.py"
+HASH_NO = [
+    "git status#;id",
+    "git diff origin/main...HEAD#;id",
+    "gh api repos/x/y#;touch z",
+    "gh api --method GET repos/o/r/pulls/7 #;id",
+    f"python3 {SESSION_SCRIPT} queue --role conductor#;id",
+    f"python3 {SESSION_SCRIPT} review-queue --all#;id",
+    "date -u#;id",
+    "gh api --method POST repos/o/r/issues/7/comments -f body=hello#;id",
+    "gh api --method POST repos/o/r/issues/7/comments -f body=see #12",
+]
+HASH_OK = [
+    "gh api --method POST repos/o/r/issues/7/comments -f 'body=see #12;id'",
+    'gh api --method POST repos/o/r/issues/7/comments -f "body=see #12"',
+]
+
+
+@pytest.fixture
+def with_script(project: Path) -> Path:
+    (project / "scripts" / "agk").mkdir(parents=True)
+    (project / SESSION_SCRIPT).write_text("print('x')\n", encoding="utf-8")
+    return project
+
+
+def test_the_session_forms_are_allowed_without_a_hash(with_script):
+    """REQ-002: brief #351 answer 3 (every form allowed today stays allowed)."""
+    for command in (
+        f"python3 {SESSION_SCRIPT} queue --role conductor",
+        f"python3 {SESSION_SCRIPT} review-queue --all",
+    ):
+        assert denial(run_hook(bash_of(command, with_script), with_script).stdout) is None
+
+
+def bash_of(command: str, cwd: Path | None = None) -> dict:
+    payload: dict = {"tool_name": "Bash", "tool_input": {"command": command}}
+    if cwd is not None:
+        payload["cwd"] = str(cwd)
+    return payload
+
+
+@pytest.mark.parametrize("command", HASH_NO)
+def test_a_hash_outside_quotes_is_refused_in_every_allowed_form(with_script, command):
+    """REQ-002: brief #351 answers 1, 2 and 3 (git reads, gh api, session.py, the comment)."""
+    found = denial(run_hook(bash_of(command, with_script), with_script).stdout)
+    assert found is not None and MARK in found["permissionDecisionReason"], command
+    assert command not in found["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize("command", HASH_OK)
+def test_a_hash_inside_quotes_in_a_comment_body_stays_allowed(with_script, command):
+    """REQ-002: brief #351 answer 3."""
+    assert denial(run_hook(bash_of(command, with_script), with_script).stdout) is None, command
+
+
+def test_a_hash_in_a_bounded_run_is_refused(work):
+    """REQ-002: brief #351 answer 2 (the bounded run)."""
+    s = work.scratch
+    E = env(s)
+    assert work.bash(f"{E}make -C {s} test") is None
+    for command in (
+        f"{E}make -C {s} test#;id",
+        f"{E}make -C {s} test #;id",
+        f"{E}python3 -I {s}/scripts/agk/check_adrs.py --base main#;id",
+        f"git worktree add {s} {work.feature}#;id",
+        f"git worktree remove {s}#;id",
+    ):
+        found = work.bash(command)
+        assert found is not None and MARK in found["permissionDecisionReason"], command
