@@ -343,6 +343,37 @@ Priority: 2
          - run: ./start-builders "$(python3 scripts/agk/session.py demand | python3 -c 'import json,sys; print(json.load(sys.stdin)["start"])')"
    ```
 
+8. **Automatic starts after a review pass.** Each `/agk:review-pass` ends by re-planning (brief 331, ADR-0190): the conductor runs `python3 scripts/agk/session.py plan --json` and prints its `Start` and `waits for` lines in the pass's last lines, so a brief that a merge unblocked is named at once. By default it starts nothing and prints the ready-to-paste prompts of the sessions to start, as `/agk:launch` does. To let the pass start them itself, set both settings in the `[flow]` table of `agk.toml`, a protected change with an ADR in the same pull request:
+
+   ```toml
+   [flow]
+   auto_start = true
+   launch_adapter = "scripts/start-session-cloud.sh"
+   ```
+
+   The pass then runs `python3 scripts/agk/launch.py prompts --plan <the plan> --adapter <launch_adapter>`, the one new command the conductor's guard allows, and only with the adapter exactly as written there and only while the default branch (as the conductor last fetched it) says the same: turning `auto_start` off on the default branch stops the starts even for a conductor whose checkout is older. `launch.py` splits the command into words and runs it without a shell, from the folder the conductor runs in, once for each session the plan names, with the prompt on its standard input and `AGK_SESSION`, `AGK_BRIEF` and, for a brief built in parts, `AGK_BUILD` in its environment; it starts nothing for a plan without its capacity, never more than the plan's capacity or `max_builders`, and each started session claims its own brief. A failing adapter is reported in the pass's last lines and not retried. The adapter is a short script the project owns, and runs with the environment of the conductor's session; it holds no credential of its own. The kit installs neither of the two examples below; adapt each to your setup and try it once by hand (`echo hello | AGK_SESSION=builder-x scripts/start-session-local.sh`) before you turn `auto_start` on.
+
+   A local terminal adapter, a new terminal tab running `claude` with the prompt `(verify: the terminal's command and its options are your desktop's; this one is GNOME Terminal)`:
+
+   ```bash
+   #!/usr/bin/env bash
+   # scripts/start-session-local.sh: one new terminal tab per session, running claude with the prompt.
+   set -euo pipefail
+   prompt="$(cat)"
+   gnome-terminal --tab --title "$AGK_SESSION" -- claude "$prompt"
+   ```
+
+   A cloud adapter, a one-time cloud session with the prompt `(verify: the command that starts a cloud session from a terminal, and its flag, are the runtime's and may change)`:
+
+   ```bash
+   #!/usr/bin/env bash
+   # scripts/start-session-cloud.sh: one one-time cloud session per session, with the prompt as its message.
+   set -euo pipefail
+   prompt="$(cat)"
+   claude --remote "$prompt"
+   ```
+
+
 ## When something goes wrong
 
 - **A scheduled run did not happen on Monday.** Expect the Monday issues hours late; in India, usually Monday evening. On

@@ -41,7 +41,8 @@ qualifies, `#<n> <head7> review: <why>`, or `empty`; with `--all` it also prints
    output, because the conductor's guard runs no script outside the bounded run `(verify: Q-306-1 asks whether the guard should
    allow this one read-only command)`. Without the output, read the same facts with `gh api` GET (the open pull requests, the
    comments of each, the check runs of each head) and apply the rules above yourself. When the queue is `empty` and has no skip
-   lines, post nothing and end with the one line `queue empty`.
+   lines, post nothing, run the re-plan of step 7 and end with the line `queue empty` followed by its `Start` and `waits for`
+   lines: a merge that empties the queue is when briefs unblock.
 2. **Order.** Review the `review` lines in `Depends-on` order: a pull request after the ones it names.
 3. **Review each one** by the conductor's protocol and its pre-verdict steps (`.claude/agents/conductor.md`): CI first,
    mergeable, the reviewed sha is the head, real paths only, a cause only from a run. Answer every `Question:`, `Report:`,
@@ -63,9 +64,33 @@ qualifies, `#<n> <head7> review: <why>`, or `empty`; with `--all` it also prints
 6. **A decision that belongs to a person.** When a pull request waits for something only a person gives (an `Approve:` of a
    spec, an ADR's decision, a question the rules do not answer, a merge), say it in one line
    `NEEDS-YOU: #<n> <what the person decides>`. Never write `Approve:` yourself and never merge.
-7. **The last lines.** End the pass with one line per pull request of the queue, review and skip lines alike:
+7. **Re-plan.** After the verdicts, and also after a pass that posted nothing, run
+   `python3 scripts/agk/session.py plan --json` (brief 331, ADR-0190). It reads GitHub and posts nothing; the pass posts
+   nothing new either. From its output write, for the last lines, one line `Start <n>: <session> takes #<brief>, ...` (with
+   `build (<x>)` after a brief built in parts), or `Start 0: <why>`, and one line `#<brief> waits for <what> (<why>)` for each
+   of its waits, in the plan's own words. Then read the `[flow]` table of `agk.toml` for the two settings `auto_start` and
+   `launch_adapter`:
+   - **`auto_start` off** (the default, or `launch_adapter` unset) and the plan starts sessions: write the plan exactly as
+     printed with `Write` into `plan.json` in your scratch directory and run
+     `python3 scripts/agk/launch.py prompts --plan <the scratch file>`. Print its ready-to-paste prompts after the last lines, as
+     `/agk:launch` does, for the person to start; nothing starts.
+   - **`auto_start = true` and `launch_adapter` set**, in your checkout and on the default branch alike (run `git fetch origin`
+     first: the guard reads both, and turning the setting off on the default branch stops the starts), and the plan starts
+     sessions: write the plan the same way and run exactly
+     `python3 scripts/agk/launch.py prompts --plan <the scratch file> --adapter <launch_adapter>`, with the adapter as written in
+     `agk.toml`, quoted as one word. The guard allows that one command and no other adapter. Add each `started <session>
+     #<brief>` line it prints to the last lines.
+   The plan decides who starts: never more than the plan's capacity (`launch.py` refuses a plan whose start list is longer than
+   its slots, and with an adapter a plan without its `capacity`, and starts no more than `[flow] max_builders`, printing
+   `not started:` for the rest), never for a brief that is taken (the plan leaves those out), and never a session the plan does not name. Each
+   started session takes its brief with its own `session.py claim`; that `taken:` claim, made by the started session itself,
+   never by the conductor, is the record of the start, so post no `taken:` and run no `claim`. A refused adapter is reported,
+   not retried: quote its `FAIL launch:` and `not started:` lines and add `NEEDS-YOU: the adapter refused <session>`; do not run
+   the command again in this pass. When the plan starts nothing, run no `launch.py` at all.
+8. **The last lines.** End the pass with one line per pull request of the queue, review and skip lines alike:
    `#<n> <head7> <action>`, where the action is `verdict cleared (comment <id>)`, `verdict fix list (comment <id>)`,
-   `verdict rejected (comment <id>)`, `skip: <why>` or `nothing posted: <why>`; then the `NEEDS-YOU:` lines, if any. Nothing
-   else follows.
+   `verdict rejected (comment <id>)`, `skip: <why>` or `nothing posted: <why>`; then the `Start` and `waits for` lines of the
+   re-plan and any `started` lines; then the `NEEDS-YOU:` lines, if any. Nothing else follows, except the ready-to-paste
+   prompts of a re-plan with `auto_start` off.
 
 A pass keeps no state of its own: GitHub holds it (the heads, the labels, the comments), so the next pass reads it again.
