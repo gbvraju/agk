@@ -1,6 +1,6 @@
 # ADR-0181: a project learns when its kit is behind and what a newer release offers it (REQ-038, brief 320)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0017, ADR-0018, ADR-0108, ADR-0178
