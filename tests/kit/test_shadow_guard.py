@@ -210,3 +210,35 @@ def test_ac2_the_conductors_own_mode_reads_a_file_body_too_since_brief_238(proje
     its content check is the verdict check, which a Shadow comment does not meet."""
     path = shadow_file(tmp, GOOD)
     assert denial(run_hook(bash(file_post(path)), project, tmpdir=tmp).stdout) is None
+
+
+# --- a `#` is read the way bash reads it (brief #351, ADR-0199) -----------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git status#;id",
+        "gh api repos/x/y#;touch z",
+        "gh api --method GET repos/o/r/pulls/7/files#;id",
+        "date -u#;id",
+        f"{POST} -f body=Shadow:#7;id",
+        f"{POST} -f 'body=Shadow: #7 abc1234 cleared'#;id",
+        f"{POST} -f 'body=Shadow: #7 abc1234 cleared' #;id",
+    ],
+)
+def test_a_hash_outside_quotes_is_refused_in_shadow_mode(project, command):
+    """REQ-002: brief #351 answers 1, 2 and 3."""
+    found = denial(run_hook(bash(command), project, "--shadow").stdout)
+    assert found is not None and MARK in found["permissionDecisionReason"], command
+    assert command not in found["permissionDecisionReason"]
+
+
+def test_a_quoted_hash_in_a_body_file_path_is_read_as_bash_reads_it(project, tmp):
+    """REQ-002: brief #351 answer 3 (quoted: one path, as bash passes it; unquoted: refused)."""
+    path = shadow_file(tmp, GOOD, name="agk-conductor-1/c#1.md")
+    assert verdict_of(project, tmp, f"{POST} -F 'body=@{path}'") is None
+    assert verdict_of(project, tmp, f'{POST} -F "body=@{path}"') is None
+    found = verdict_of(project, tmp, file_post(path))
+    assert found is not None and MARK in found["permissionDecisionReason"]
+    assert str(path) not in found["permissionDecisionReason"]
