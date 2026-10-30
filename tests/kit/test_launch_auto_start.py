@@ -44,6 +44,8 @@ def test_the_two_settings_of_the_flow_table_are_read(tmp_path):
     assert launch_module.launch_settings(tmp_path) == (True, "scripts/start.sh --cloud")
     write(tmp_path, '[flow]\nlaunch_adapter = "scripts/start.sh"\n')
     assert launch_module.launch_settings(tmp_path) == (False, "scripts/start.sh")
+    write(tmp_path, '[flow]\nauto_start = false\nlaunch_adapter = ""\n')
+    assert launch_module.launch_settings(tmp_path) == (False, None)
 
 
 @pytest.mark.parametrize(

@@ -23,7 +23,7 @@ ready brief waited for a person to notice. The tests were written first.
    conductor's guard allows `session.py plan --json` (read-only, GET) beside the queue commands; `session.py plan` without
    `--json` stays denied.
 2. **The settings (answer 2).** Two optional settings of the `[flow]` table of `agk.toml`: `auto_start` (a boolean, `false` by
-   default) and `launch_adapter` (the project's command, a non-empty string). Both are a protected change (`agk.toml`). They are
+   default) and `launch_adapter` (the project's command, a string; empty means unset, as `unused_code = ""` is off). Both are a protected change (`agk.toml`). They are
    read by one function, `launch.launch_settings`, which refuses a value of the wrong kind naming the setting, never the value.
 3. **Off (answer 2).** With `auto_start` off, the pass prints the ready-to-paste prompts as `/agk:launch` does: it writes the
    plan it read into a regular file of its scratch directory and runs `python3 scripts/agk/launch.py prompts --plan <that file>`,

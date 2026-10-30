@@ -94,9 +94,9 @@ def test_the_pass_ends_by_re_planning_after_its_verdicts_and_posts_nothing_new()
     assert text.index("Post the verdict") < replan < text.index("The last lines")
     for phrase in (
         "python3 scripts/agk/session.py plan --json",
-        "`Start <n>:`",
+        "`Start <n>: <session> takes #<brief>, ...`",
         "`#<brief> waits for",
-        "It posts nothing new",
+        "the pass posts nothing new",
     ):
         assert phrase in text, phrase
 

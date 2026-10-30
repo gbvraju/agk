@@ -72,7 +72,7 @@ def read_plan(source: str) -> dict:
 
 def launch_settings(root: Path) -> tuple[bool, str | None]:
     """(`auto_start`, `launch_adapter`) of the `[flow]` table of agk.toml: off and none when
-    unset; a value of the wrong kind is refused naming the setting, never the value."""
+    unset (an empty `launch_adapter` is unset); a value of the wrong kind is refused naming the setting, never the value."""
     try:
         data = tomllib.loads((Path(root) / "agk.toml").read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -84,7 +84,7 @@ def launch_settings(root: Path) -> tuple[bool, str | None]:
     auto = table.get("auto_start", False)
     if not isinstance(auto, bool):
         raise CheckError("auto_start of the flow table must be true or false")
-    adapter = table.get("launch_adapter")
+    adapter = table.get("launch_adapter") or None  # "" is unset, as `unused_code = ""` is off
     if adapter is not None and (not isinstance(adapter, str) or not adapter.strip()):
         raise CheckError("launch_adapter of the flow table must be a command (a non-empty string)")
     return auto, adapter

@@ -52,5 +52,12 @@ review_mode = "team"
 # Optional settings of the session plan (session.py plan), off the defaults only when set. claim_stale_hours: the hours after which a
 # claim (a taken: comment) whose session has posted nothing and has no open pull request no longer holds its brief (24 by default);
 # the plan lists it as a stale claim. A change needs an ADR in the same pull request (agk.toml is a protected path).
+# auto_start and launch_adapter (brief #331): at the end of each review pass the conductor re-plans (session.py plan --json); with
+# auto_start = true and launch_adapter set to the project's own command (split into words, run without a shell, once per session with
+# the prompt on its standard input), it starts the sessions the plan names through that command, never more than the plan's capacity;
+# with auto_start = false (the default) it prints their ready-to-paste prompts. The kit installs no adapter; the getting-started guide
+# shows two examples. Each is a protected change: an ADR in the same pull request (agk.toml is a protected path).
 # [flow]
 # claim_stale_hours = 24
+# auto_start = false
+# launch_adapter = ""
