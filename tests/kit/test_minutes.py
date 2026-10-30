@@ -208,6 +208,7 @@ def test_a_capped_run_history_says_the_estimate_is_a_lower_bound(repo, tmp_path)
     assert data["estimate"]["complete"] is False
     out = minutes(repo, api).stdout
     assert "estimate from run history: at least 17" in out
+    assert "minutes per merged pull request: at least 8.5 (2 merged this month)" in out
 
 
 def test_a_run_whose_jobs_cannot_be_read_makes_the_estimate_a_lower_bound(repo, tmp_path):
@@ -228,6 +229,8 @@ def test_minutes_per_merged_pull_request_over_the_month(repo, tmp_path):
     assert data["merged_pulls"] == 2 and data["per_merged_pull"] == 8.5
     out = minutes(repo, case(tmp_path / "b")).stdout
     assert "minutes per merged pull request: 8.5 (2 merged this month)" in out
+    assert "  (1 job on a self-hosted runner, not billed)" in out
+    assert "  (1 job still running, not counted yet)" in out
 
 
 # --- the warning threshold ------------------------------------------------------------------------
@@ -292,14 +295,17 @@ def test_an_invalid_threshold_is_refused_naming_the_setting(repo, tmp_path, valu
     repo.write("agk.toml", f'default_branch = "main"\nminutes_warn = {value}\n')
     proc = minutes(repo, case(tmp_path))
     assert proc.returncode == 1
-    assert "setting: minutes_warn in agk.toml" in proc.stdout
-    assert value not in proc.stdout.replace("agk.toml", "")
+    assert proc.stdout == (
+        "FAIL minutes: minutes_warn must be a whole number from 1 to 100 "
+        "(setting: minutes_warn in agk.toml)\n"
+    )
 
 
 def test_nothing_is_written(repo, tmp_path):
     """REQ-020: brief #324 answer 2 (nothing is written)."""
     api = case(tmp_path)
     before = sorted(p.name for p in api.iterdir())
+    repo.write("agk.toml", 'default_branch = "main"\n')
     repo.git("add", "-A")
     repo.git("commit", "-q", "-m", "start")
     minutes(repo, api)
