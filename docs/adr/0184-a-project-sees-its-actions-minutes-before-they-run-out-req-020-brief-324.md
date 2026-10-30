@@ -1,6 +1,6 @@
 # ADR-0184: a project sees its Actions minutes before they run out (REQ-020, brief 324)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0180
