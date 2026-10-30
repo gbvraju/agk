@@ -54,7 +54,8 @@ first checkpoint of the pull request).
 5. **The guide and the session rules (answer 5).** `docs/guides/local-mode.md` replaces its `bash -c` snippet with lines that
    each stand alone: `lock.py run --name heavy --session <id> -- make governance AGK_BASE="$base"` (governance runs under the
    lock, as rule 30 says; finding 4), then the same for `make test` and `proof.py`, with the PowerShell spellings. `tests/kit_dev/test_local_mode_guide.py` (outside `Touches:`) checks the new
-   lines instead of the snippet (Q-337-4). Session rule 30 names `lock.py run --name heavy` as the way to take the heavy-step
+   lines instead of the snippet (Q-337-4). `docs/guides/reference.md` (outside `Touches:`) names `lock.py` under Local mode,
+   which `tests/kit_dev/test_reference_commands.py` (merged from #354) requires of every installed script. Session rule 30 names `lock.py run --name heavy` as the way to take the heavy-step
    lock, and rule 31 says a `prepush.py` run with its tests is a heavy step on a shared machine, run under the same lock
    (Q-337-1).
 6. **Tests (answer 6).** `tests/kit/test_lock.py`: take and release with the owner recorded; a failing command's exit code and
@@ -86,3 +87,5 @@ first checkpoint of the pull request).
 - 2026-10-30: the verdict on f9f953f, findings 1 to 4: a short mutex serialises take, clear and release (two waiters could
   let two runs hold the lock); the command's process id is recorded and counts as a holder; a command killed by a signal exits
   128 + n; the guide runs governance under the lock, as rule 30 says (decisions 1, 3, 5, 6).
+- 2026-10-30: after #354 merged, `tests/kit_dev/test_reference_commands.py` requires every installed script in the reference;
+  `docs/guides/reference.md` names `lock.py` under Local mode (decision 5).

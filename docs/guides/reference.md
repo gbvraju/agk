@@ -99,6 +99,13 @@ When GitHub Actions is blocked (minutes exhausted, billing blocked, an outage), 
 disable and re-enable the workflows with `gh workflow`, what a builder runs and pastes as its `Local evidence:` line, what the
 conductor runs instead of reading CI, what is lost, and the one issue that records every merge (session rule 30, ADR-0182).
 
+Several sessions on one machine take turns on heavy steps (governance, the tests, proof) with `python3 scripts/agk/lock.py run
+--name heavy --session <id> -- <command...>`: it waits its turn, printing the holder once a minute (`--timeout S` gives up with
+exit 3), runs the command without a shell and releases the lock when it ends, also on failure or interrupt, with the command's exit
+code. A lock left by a session that died is cleared with a line saying so: when neither its process nor its command runs on this
+machine, or when it is older than `lock_stale_minutes` (120 by default). The lock is a folder in the user's temp folder, or
+`lock_dir` in `agk.toml`. `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` (ADR-0191).
+
 ## Actions minutes
 
     python3 scripts/agk/minutes.py [--json] [--repo OWNER/REPO] [--today YYYY-MM-DD] [--api-dir DIR]
