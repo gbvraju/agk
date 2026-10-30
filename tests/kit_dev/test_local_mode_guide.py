@@ -175,3 +175,39 @@ def _installed() -> list[str]:
         if isinstance(value, list):
             paths.extend(v for v in value if isinstance(v, str))
     return paths
+
+
+def test_fix_1_the_ci_first_exception_is_bounded_in_the_rule_and_the_role():
+    """Verdict on 712354d, item 1."""
+    for rel in ("config/session-rules.md", ".claude/agents/conductor.md"):
+        text = flat(rel)
+        for phrase in (
+            "while the one local-mode record issue is open",
+            "required checks that never reported on that head",
+            "A red check still blocks a clearing verdict",
+        ):
+            assert phrase in text, (rel, phrase)
+
+
+def test_fix_2_entering_removes_a_frozen_ci_running_label_and_the_conductor_reads_all():
+    """Verdict on 712354d, item 2."""
+    enter = " ".join(section("Enter local mode").split())
+    assert "gh pr edit <n> --remove-label agk:ci-running" in enter
+    conductor = section("What the conductor checks instead of CI")
+    assert "python3 scripts/agk/session.py review-queue --all" in conductor
+
+
+def test_fix_3_a_billing_refusal_is_a_sign_and_a_new_head_is_pushed_once_disabled():
+    """Verdict on 712354d, item 3."""
+    body = " ".join(section("When to use it").split())
+    for phrase in ("recent account payments have failed", "spending limit", "push a new head"):
+        assert phrase in body, phrase
+
+
+def test_fix_4_the_lock_block_runs_as_one_script():
+    """Verdict on 712354d, item 4."""
+    body = section("What a builder runs before asking for review")
+    assert "bash -c '" in body and "one script" in body
+    script = body.split("bash -c '", 1)[1].split("\n'", 1)[0]
+    for phrase in ("mkdir", "trap", "rmdir", "make governance", "proof.py"):
+        assert phrase in script, phrase
