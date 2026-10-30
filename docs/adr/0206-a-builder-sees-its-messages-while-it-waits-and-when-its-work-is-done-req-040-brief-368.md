@@ -14,7 +14,8 @@ Brief #368 (#286 part 2). ADR-0187 (brief #327) added `session.py tell` and `inb
 `Tell:` lines. A builder spends most of its time in `watch --pr N`, which knows no session and never reads the
 `agk-conductor` issue, and `after` printed nothing from the inbox, so a `Tell:` such as `#52 merged, rebase` sent while a
 builder waits on its pull request was read only when someone told the builder to look. The tests were written first
-(7 failed, 31 passed in `tests/kit/test_session_tell.py` at the first checkpoint).
+(7 failed, 31 passed in `tests/kit/test_session_tell.py` at the first checkpoint; the four tests of the verdict on
+e90f60b failed 4, passed 37 at their checkpoint).
 
 ## Decision
 
@@ -23,8 +24,12 @@ builder waits on its pull request was read only when someone told the builder to
    comment newer than the baseline whose first line is `Tell: <ID> <message>` by a listed verdict author (the same
    reading as `inbox` and `watch --assign`). A verdict, a merge, a close, a conflict, a correction and a label change
    of the same poll keep their place before it. The conductor issue has its own count of unread polls: five in a row end
-   the watch with `error: the comments of #<n> cannot be read` (exit 4, session rule 21); no single open
-   `agk-conductor` issue is a refusal naming the label. `--session` is taken by `watch --pr` only. Without it the watch
+   the watch with `error: the comments of #<n> cannot be read` (exit 4, session rule 21). A failed listing of the
+   `agk-conductor` issues is retried the same way, and the fifth in a row ends the watch with
+   `error: the open issues labelled agk-conductor cannot be read` (exit 4). Without exactly one such issue (a project
+   with `assign = "next"` need not have one) the watch prints `messages: not read (no open issue labelled agk-conductor)`
+   or `(more than one open issue ...)` and goes on watching the pull request as it does without `--session` (the
+   verdict on e90f60b, item 1). `--session` is taken by `watch --pr` only. Without it the watch
    makes exactly the calls it made before and never reads the conductor issue.
 2. **`after --session ID` (answer 2).** `after` first prints the unread `Tell:` lines as `inbox` does, with the same mark
    in the git directory, so a message is printed once by either command; then it prints what it printed before. An

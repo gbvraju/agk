@@ -488,15 +488,31 @@ class Told:
     issue that is newer than the start. Its own count of unread polls (session rule 21)."""
 
     def __init__(self, root, repo: str, me: str, interval: float) -> None:
-        self.me, self.interval = me, interval
-        self.issue = conductor_issue(repo)
-        self.path = f"repos/{repo}/issues/{self.issue}/comments"
+        self.me, self.interval, self.repo = me, interval, repo
+        self.issue: int | None = None
+        self.path = ""
         self.allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None)}
         self.reads = Reads(root)
         self.seen = 0
 
     def start(self) -> int | None:
-        """Read the baseline: an unread one would make an old line look new."""
+        """Find the one open `agk-conductor` issue and read its baseline: an unread baseline would
+        make an old line look new. A failed read is retried and the fifth in a row ends the watch
+        (session rule 21); without exactly one such issue the watch says so in one line and goes
+        on watching the pull request (the verdict on e90f60b, item 1)."""
+        listing = f"repos/{self.repo}/issues?state=open&labels={ASSIGN_LABEL}"
+        while (found := pages(listing)) is None:
+            if self.reads.failed(f"the open issues labelled {ASSIGN_LABEL}"):
+                return EXIT_UNREADABLE
+            time.sleep(self.interval)
+        self.reads.good()
+        issues = [i for i in found if "pull_request" not in i and isinstance(i.get("number"), int)]
+        if len(issues) != 1:
+            why = "no open issue" if not issues else "more than one open issue"
+            print(f"messages: not read ({why} labelled {ASSIGN_LABEL})", flush=True)
+            return None
+        self.issue = issues[0]["number"]
+        self.path = f"repos/{self.repo}/issues/{self.issue}/comments"
         while (comments := pages(self.path)) is None:
             if self.reads.failed(f"the comments of #{self.issue}"):
                 return EXIT_UNREADABLE
@@ -507,6 +523,8 @@ class Told:
 
     def poll(self) -> int | None:
         """0 after printing a new `tell` line, EXIT_UNREADABLE on five unread polls, or None."""
+        if self.issue is None:
+            return None
         comments = pages(self.path)
         if comments is None:
             return EXIT_UNREADABLE if self.reads.failed(f"the comments of #{self.issue}") else None
