@@ -1,6 +1,6 @@
 # ADR-0203: a project can remove the kit cleanly in one branch (REQ-009, brief 348 build b)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0196
