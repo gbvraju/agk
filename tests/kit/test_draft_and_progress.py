@@ -69,7 +69,8 @@ def test_ac2_the_workflow_runs_on_ready_for_review_and_passes_the_draft_flag():
     """REQ-040 AC2"""
     text = (ROOT / ".github" / "workflows" / "governance.yml").read_text(encoding="utf-8")
     assert "ready_for_review" in text.split("jobs:")[0]
-    assert text.count("PR_DRAFT: ${{ github.event.pull_request.draft }}") == 2
+    # the body check, the final-clearance check and (brief #283) the skip of the heavy steps
+    assert text.count("PR_DRAFT: ${{ github.event.pull_request.draft }}") == 3
     assert 'check_pr_body.py --draft "$PR_DRAFT" -' in text
     assert '--author "$PR_AUTHOR" --draft "$PR_DRAFT"' in text
 
