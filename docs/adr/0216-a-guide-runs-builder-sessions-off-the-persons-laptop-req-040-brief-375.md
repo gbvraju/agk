@@ -1,6 +1,6 @@
 # ADR-0216: a guide runs builder sessions off the person's laptop (REQ-040, brief 375)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: none
