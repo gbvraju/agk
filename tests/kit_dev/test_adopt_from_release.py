@@ -120,3 +120,44 @@ def test_the_usage_names_the_new_option(tmp_path):
         env=clean_env(),
     )
     assert proc.returncode == 2 and "--unreleased" in proc.stderr
+
+
+def init(kit: Path, target: Path, *args: str) -> subprocess.CompletedProcess:
+    target.mkdir(parents=True, exist_ok=True)
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(kit / "scripts" / "agk" / "init.py"), str(target), *args],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+
+
+@pytest.mark.parametrize("installer", ["adopt", "init"])
+@pytest.mark.parametrize("source", sorted(set(manifest()["adopt"]["block_sources"].values())))
+def test_an_unreleased_block_source_is_refused_by_both_installers(tmp_path, installer, source):
+    """REQ-039: brief #263 build (c) (verdict on 7c7e85c, item 1): a file written as a marked
+    block (`kit/templates/gitignore`, `kit/templates/gitattributes`) is compared with the release
+    row's `blocks`, as `kit_hashes.snapshot_of` hashes it, by init and adopt alike."""
+    kit = kit_copy(tmp_path / "kit")
+    path = kit / source
+    path.write_text(path.read_text(encoding="utf-8") + "unreleased-entry/\n", encoding="utf-8")
+    if installer == "adopt":
+        proc = adopt(kit, make_existing(tmp_path / "p"), "--dry-run")
+    else:
+        proc = init(kit, tmp_path / "t", "--dry-run")
+    assert proc.returncode == 1, proc.stdout
+    assert "are not those of release" in proc.stdout
+
+
+@pytest.mark.parametrize("installer", ["adopt", "init"])
+def test_a_block_source_at_the_release_with_crlf_still_installs(tmp_path, installer):
+    """REQ-039: brief #263 build (c) with item 7: a CRLF block source of the release passes."""
+    kit = kit_copy(tmp_path / "kit")
+    for source in set(manifest()["adopt"]["block_sources"].values()):
+        path = kit / source
+        path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+    if installer == "adopt":
+        proc = adopt(kit, make_existing(tmp_path / "p"), "--dry-run")
+    else:
+        proc = init(kit, tmp_path / "t", "--dry-run")
+    assert proc.returncode == 0, proc.stdout

@@ -212,7 +212,9 @@ def estimate(src: Any, start: datetime, end: datetime, rates: bool = True) -> Es
     if isinstance(data.get("total_count"), int) and data["total_count"] > len(runs):
         est.complete = False
     floor = start - timedelta(days=1)
-    chosen = [r for r in runs if (c := stamp(r.get("created_at"))) is not None and floor <= c < end]
+    chosen = [
+        r for r in runs if (c := stamp(r.get("created_at"))) is not None and floor <= c < end
+    ]
     est.runs = len(chosen)
 
     def jobs_of(run_: dict) -> tuple[int, Any]:
@@ -338,7 +340,8 @@ def plural(n: int, word: str) -> str:
 def render(data: dict) -> str:
     used, inc, est = data["used"], data["included"], data["estimate"]
     lines = [
-        f"agk minutes: {data['repository']}, month {data['month']} (UTC, through {data['through']})"
+        f"agk minutes: {data['repository']}, month {data['month']} "
+        f"(UTC, through {data['through']})"
     ]
     if used["source"] == "billing":
         lines.append(f"minutes used this month: {used['minutes']} (billing, the whole account)")
