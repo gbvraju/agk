@@ -16,8 +16,8 @@ no method (and no field or input flag); `gh api --method POST` to the comments o
 request of the repository named by this checkout's origin remote (read from `.git/config`), with
 `-f` fields only; `date -u`; `make governance`; or a read-only script of `scripts/agk/`
 (READ_ONLY_SCRIPTS). Options of an allowed `git` command that run a program, write a file or reach a
-config-driven command are denied (GIT_FORBIDDEN_LONG). Shell operators, substitutions and
-redirections are denied.
+config-driven command are denied (GIT_FORBIDDEN_LONG). Shell operators, substitutions, redirections
+and a `#` outside a quoted string (brief #351: bash and the lexer read it differently) are denied.
 The message names the rule, never the command or the path. Standard library only; no network.
 """
 
@@ -116,11 +116,39 @@ def path_allowed(file_path: object, root: str) -> bool:
     return rel.startswith("docs" + os.sep) or rel == WRITE_ALLOWED_FILE
 
 
+def hash_outside_quotes(command: str) -> bool:
+    """True when a `#` stands outside a quoted string, escaped or not (brief #351).
+
+    Bash starts a comment with a `#` only at the start of a word, while the lexer's default starts
+    one anywhere; a command whose `#` the two could read differently is refused, never guessed.
+    """
+    quote = ""
+    escaped = False
+    for c in command:
+        if escaped:
+            escaped = False
+            if c == "#" and not quote:
+                return True
+        elif quote == "'":
+            quote = "" if c == "'" else quote
+        elif c == "\\":
+            escaped = True
+        elif quote == '"':
+            quote = "" if c == '"' else quote
+        elif c in "'\"":
+            quote = c
+        elif c == "#":
+            return True
+    return False
+
+
 def tokens_of(command: str) -> list[str] | None:
-    """The words of a simple command, or None when it has an operator or a substitution."""
-    if UNSAFE.search(command):
+    """The words of a simple command, or None when it has an operator, a substitution or a `#`
+    outside a quoted string (brief #351: the words are the words bash would pass)."""
+    if UNSAFE.search(command) or hash_outside_quotes(command):
         return None
     lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.commenters = ""
     lexer.whitespace_split = True
     try:
         words = list(lexer)
