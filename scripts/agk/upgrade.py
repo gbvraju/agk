@@ -740,8 +740,10 @@ def apply(target: Path, plan: Plan) -> tuple[bool, list[str]]:
 
 def opt_in_lines(kit_root: Path, old: str, new: str) -> list[str]:
     """Brief #320 answer 3: after a written upgrade, one line `opt-in: <setting>: <summary>` per
-    entry of the kit's changelog between OLD (excluded) and NEW (included) that carries an opt-in
-    marker; none when there is none. It reads the changelog only and writes nothing."""
+    setting of each entry of the kit's changelog between OLD (excluded) and NEW (included) that
+    carries an opt-in marker, an entry that speaks for an earlier release counting as that
+    release's (brief #340); none when there is none. It reads the changelog only and writes
+    nothing."""
     if old == new:
         return []
     try:
