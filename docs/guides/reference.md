@@ -101,9 +101,11 @@ To pause the kit, add the top-level line `paused = true` to `agk.toml` (before a
 since `agk.toml` is a protected path. Once it is on the default branch, governance and proof report success with the one line
 `agk paused` and skip every other step, the router writes no label, the conductor and builder sessions stop with that line
 (session rule 33), and `agk doctor` reports the state `paused` instead of its checks. On a pull request the workflows read the
-setting at the base, so the pull request that pauses is itself checked in full. Remove the line to resume; nothing is deleted
-while paused. The query form above prints `agk paused` or `agk not paused` (exit 0), reads only `agk.toml` (at `REF` when
-given) and calls no `gh`; a value other than `true` or `false` is refused by the setting's name (brief #348, ADR-0196).
+setting at the base, so the pull request that pauses is itself checked in full, and no change can skip its own checks; a
+push reads the commit pushed. The local targets (`make governance`, `prepush.py`) are unchanged and run every check. Remove the
+line to resume; nothing is deleted while paused. The query form above prints `agk paused` or `agk not paused` (exit 0), reads
+only `agk.toml` (at `REF` when given) and calls no `gh`; a value other than `true` or `false` is refused by the setting's name
+(brief #348, ADR-0196).
 
 ## Local mode
 

@@ -34,6 +34,7 @@ workflows by hand.
    request the step reads the setting at the base of the merge ref (`AGK_BASE`), never at the head: the pull request that adds
    `paused = true` is still checked in full, its ADR included, so the line cannot be used to skip the checks of the change that
    adds it. On a push to the default branch it reads the commit pushed. A value that is not a boolean fails the step and so the job.
+   The local targets (`make governance`, `prepush.py`) are unchanged: they run every check whatever the setting.
 4. **The router writes no label (answer 1).** `route.py`, whatever it is asked to route, prints `agk paused`, reads nothing and
    writes nothing (no label, no issue, no comment) while the checkout it runs from (the default branch) is paused.
 5. **The roles stop with the line (answer 1).** A new session rule 33: a session runs `python3 scripts/agk/doctor.py --paused`
@@ -57,4 +58,10 @@ state. The command that writes the pause pull request (`/agk:uninstall --pause`)
 
 ## Residual
 
-- 2026-10-30: Q-348-1, Q-348-2 and Q-348-3 (in the pull request) wait for the conductor's answer.
+- 2026-10-30: Q-348-1 answered in the verdict on 2f2527b: the reading is right; build (a) delivers the setting and every effect
+  of it and documents adding the line by hand with an ADR; `/agk:uninstall --pause` comes with build (b) (decision 1).
+- 2026-10-30: Q-348-2 answered in the verdict on 2f2527b: the session rule only here; making `session.py` refuse `claim`,
+  `next`, `queue` and `watch` while paused is part of build (b), after #356 and #345 merge (decision 5).
+- 2026-10-30: Q-348-3 answered in the verdict on 2f2527b: yes, the intended and safe reading; on a pull request the workflows
+  read `paused` at the base, so no change can skip its own checks; a push reads the pushed commit; the local targets are
+  unchanged, as decision 3 and the guide say.
