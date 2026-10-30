@@ -1,6 +1,6 @@
 # ADR-0197: an edited description cures a full governance run that failed only on the description (REQ-039, brief 349)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0159, ADR-0171, ADR-0192
