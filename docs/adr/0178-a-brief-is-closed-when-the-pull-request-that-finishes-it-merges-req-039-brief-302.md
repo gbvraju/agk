@@ -1,6 +1,6 @@
 # ADR-0178: a brief is closed when the pull request that finishes it merges (REQ-039, brief 302)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-29
 - Deciders: maintainers
 - Related: ADR-0165, ADR-0174
