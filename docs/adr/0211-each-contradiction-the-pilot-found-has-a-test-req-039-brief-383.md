@@ -1,6 +1,6 @@
 # ADR-0211: each contradiction the pilot found has a test (REQ-039, brief 383)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0161, ADR-0163
