@@ -272,3 +272,42 @@ def test_the_stack_adr_template_carries_the_fast_ci_practice():
     practices = text[text.index("2. **Practices**") : text.index("3. **Chosen**")]
     line = next(ln for ln in practices.splitlines() if ln.strip().startswith("- fast CI:"))
     assert ": check (step: " in line and "ci-drafts" in line and "ci-concurrency" in line
+
+
+# --- the fix list of 8579af0 ---------------------------------------------------------------------
+
+
+def test_a_workflow_that_skips_drafts_without_ready_for_review_is_warned_as_its_own_case(tmp_path):
+    """REQ-039: brief #283 answer 3 (a draft's green check would stay when it is marked ready)."""
+    text = slow(CONCURRENCY, NOT_DRAFT).replace(
+        "    types: [opened, synchronize, reopened, ready_for_review]\n",
+        "    types: [opened, synchronize, reopened]\n",
+    )
+    _, report = ci_case(tmp_path / "a", {"slow.yml": text})
+    entry = report["ci-drafts"]
+    assert entry["status"] == "fail"
+    assert "skips drafts but has no ready_for_review" in entry["message"]
+    assert "slow" not in entry["message"]
+    assert "ready_for_review" in entry["fix"]
+    bare = text.replace(
+        "  pull_request:\n    types: [opened, synchronize, reopened]\n", "  pull_request:\n"
+    )
+    _, report = ci_case(tmp_path / "b", {"slow.yml": bare})
+    assert "skips drafts but has no ready_for_review" in report["ci-drafts"]["message"]
+
+
+def test_a_workflow_that_runs_on_drafts_is_named_as_that_case(tmp_path):
+    """REQ-039: brief #283 answer 3 (the two draft cases are told apart in the message)."""
+    _, report = ci_case(tmp_path, {"slow.yml": slow(CONCURRENCY)})
+    message = report["ci-drafts"]["message"]
+    assert "runs on drafts" in message and "skips drafts but has no" not in message
+
+
+def test_the_guide_names_no_build_action_setting_and_says_why_ready_for_review_matters():
+    """REQ-039: brief #283 answers 1 and 4 (Q-283-3: no vendor-prefixed name)."""
+    text = GUIDE.read_text(encoding="utf-8")
+    assert "DOCKER" not in text.upper()
+    five = text.split("## 5.", 1)[1].split("\n## ", 1)[0]
+    assert "build record" in five and "build summary" in five and "(verify)" in five
+    one = text.split("## 1.", 1)[1].split("\n## ", 1)[0]
+    assert "merge" in one and "ready_for_review" in one and "no new commit" in one
