@@ -20,8 +20,11 @@ from conftest import KIT_ROOT
 REFERENCE = KIT_ROOT / "docs" / "guides" / "reference.md"
 GUIDES = KIT_ROOT / "docs" / "guides"
 # Installed scripts that are a command of their own but not yet in the reference: none may be
-# added here without a brief (Q-341-2).
-NOT_YET_LISTED = {"check_brief.py"}
+# added here without a brief (Q-341-2, ADR-0201).
+NOT_YET_LISTED = {
+    # A person's own check of a saved brief (SPEC-0030 rule 4); brief #341 writes no other section.
+    "check_brief.py",
+}
 
 COMMANDS = {
     "minutes.py": {
