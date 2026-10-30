@@ -6,7 +6,7 @@
 - Related: ADR-0182, ADR-0186
 - Requirements: REQ-040
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `config/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `config/`
 
 ## Context
 
