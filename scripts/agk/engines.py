@@ -22,7 +22,11 @@ options, trade-offs, practices told apart as check or judgement, the lock). Mess
 and never quote the idea or a name. No network and no model. `stack-next-steps` and
 `design-next-steps` print the commit, the push and a pull request body that passed the
 repository's body check (`pr_body.py`, brief #273): the stack options, or the accepting change,
-and the design theme with its mockup (`Brief: none (design)`).
+and the design theme with its mockup (`Brief: none (design)`). Once an option is accepted,
+`stack-next-steps` also offers the default local-profile requirement (brief #267): a `/agk:spec`
+sentence from `kit/templates/local-profile.md`, filled in with the option's `External services:`,
+that writes nothing; `stack-check` prints `local profile: not decided` until a requirement names it
+or the stack ADR's Residual declines it with a reason and a date.
 """
 
 from __future__ import annotations
@@ -32,7 +36,7 @@ import json
 import re
 import subprocess  # nosec B404 - a fixed argument list, no shell
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -46,9 +50,10 @@ from common import (
     load_config,
     merge_base,
     next_free_ids,
+    parse_requirements,
     resolve_base,
 )
-from intake import section
+from intake import Refusal, check_sentence, section
 from pr_body import brief_option, prepare, print_body
 
 KIT = Path(__file__).resolve().parents[2]
@@ -110,6 +115,15 @@ PRACTICE = re.compile(r"^\s*-\s+(.+?):\s+(check|judgement)(?:\s+\((.*)\))?\s*$")
 STACK_PLACEHOLDER = re.compile(r"TODO\(architect\)")
 # The lock of an Accepted stack ADR: one option, then at most a one-line reason (brief 274).
 CHOSEN = re.compile(r"Option ([A-C])(?: — \S.*)?")
+# Brief 267: the default local-profile requirement, offered once a stack option is accepted.
+LOCAL_PROFILE = TEMPLATES / "local-profile.md"
+SERVICES_KEY = "External services:"
+NO_SERVICES = "none named by the stack yet"
+DECLINE_MARK = "local profile: declined"
+DECLINED = re.compile(r"^(?:[-*]\s+)?local profile: declined, (.+) \((\d{4}-\d{2}-\d{2})\)$")
+MIN_REASON = 20
+DECLINE_FORM = "local profile: declined, <reason of at least 20 characters> (YYYY-MM-DD)"
+NOT_DECIDED = "local profile: not decided"
 
 
 def idea_of(text: str) -> tuple[str, str] | None:
@@ -282,6 +296,7 @@ def stack_problems(name: str, text: str) -> list[str]:
         if "Practices:" not in body or not names:
             out.append(f"rule 5: option {m.group(1)} names no Practices")
         named |= set(names)
+        out += services_problems(m.group(1), body)
     recorded: set[str] = set()
     for line in items["Practices"]:
         if not line.strip():
@@ -295,6 +310,7 @@ def stack_problems(name: str, text: str) -> list[str]:
         recorded.add(m.group(1))
     if named - recorded:
         out.append("rule 5: a practice named by an option is not in the Practices item")
+    out += decline_problems(text)
     status = re.search(r"(?m)^- Status: (\w+)$", text)
     chosen_lines = [ln.strip() for ln in items["Chosen"] if ln.strip()]
     chosen = " ".join(chosen_lines)
@@ -315,6 +331,152 @@ def stack_problems(name: str, text: str) -> list[str]:
     return out
 
 
+def services_problems(letter: str, body: str) -> list[str]:
+    """Brief 267 answer 3: an option names its external services once, before its Practices."""
+    if SERVICES_KEY not in body:
+        return []
+    services = option_services(body)
+    if body.count(SERVICES_KEY) != 1 or services is None:
+        return [
+            f"rule 5: option {letter} names External services after its Practices or more than "
+            "once; they are one list before Practices"
+        ]
+    if not services:
+        return [f"rule 5: option {letter} has an External services segment that lists none"]
+    if '"' in services:
+        return [
+            f"rule 5: option {letter} has a double quote in External services, which would break "
+            "the quoted /agk:spec sentence of the local-profile offer"
+        ]
+    return []
+
+
+def option_services(body: str) -> str | None:
+    """The External services text of one option ('' when empty), None when misplaced or absent."""
+    head, key, tail = body.partition(SERVICES_KEY)
+    if not key or "Practices:" in head:
+        return None
+    if "Practices:" not in tail:
+        return None
+    return tail.split("Practices:", 1)[0].strip().rstrip(".").strip()
+
+
+def residual_lines(text: str) -> list[str]:
+    return [ln.strip() for ln in section(text, "Residual") or [] if ln.strip()]
+
+
+def decline_problems(text: str) -> list[str]:
+    """Brief 267 answer 2: a decline is one Residual line with a reason and a date."""
+    out: list[str] = []
+    for line in residual_lines(text):
+        if DECLINE_MARK not in line:
+            continue
+        m = DECLINED.match(line)
+        if not m or len(m.group(1).strip()) < MIN_REASON or not real_date(m.group(2)):
+            out.append(f"rule 5: the local profile decline in the Residual is not `{DECLINE_FORM}`")
+    return out
+
+
+def real_date(text: str) -> bool:
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+def declined(line: str) -> bool:
+    m = DECLINED.match(line)
+    return bool(m and len(m.group(1).strip()) >= MIN_REASON and real_date(m.group(2)))
+
+
+def accepted_stack(root: Path) -> tuple[str, str, str] | None:
+    """(file name, text, chosen letter) of the one Accepted stack ADR that passes, else None."""
+    files = sorted(
+        p for p in root.glob("docs/adr/*.md") if STACK_NAME.match(p.relative_to(root).as_posix())
+    )
+    if len(files) != 1:
+        return None
+    text = files[0].read_text(encoding="utf-8")
+    status = STATUS.search(text)
+    chosen = CHOSEN_LINE.search(text)
+    if not status or status.group(1) != "Accepted" or not chosen:
+        return None
+    if stack_problems(files[0].name, text):
+        return None
+    return files[0].name, text, chosen.group(1)
+
+
+def local_profile_decided(root: Path, text: str) -> bool:
+    """Brief 267 answer 2: declined in the stack ADR's Residual, or a requirement names it."""
+    if any(declined(line) for line in residual_lines(text)):
+        return True
+    path = root / "docs" / "requirements.md"
+    try:
+        reqs = parse_requirements(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return False
+    return any(
+        "local profile" in f"{r['title'] or ''} {r['acceptance'] or ''}".lower() for r in reqs
+    )
+
+
+def local_profile_sentence(text: str, letter: str) -> str:
+    """The template sentence, filled in with the chosen option's external services."""
+    body = next(
+        (m.group(2) for m in map(OPTION.match, text.splitlines()) if m and m.group(1) == letter),
+        "",
+    )
+    services = option_services(body) or NO_SERVICES
+    template = LOCAL_PROFILE.read_text(encoding="utf-8").strip()
+    return template.replace("{{services}}", services)
+
+
+def local_profile_offer(root: Path) -> list[str]:
+    """Brief 267 answer 1: the extra step once a stack is accepted; [] when not due."""
+    stack = accepted_stack(root)
+    if stack is None:
+        return []
+    name, text, letter = stack
+    if local_profile_decided(root, text):
+        return []
+    sentence = local_profile_sentence(text, letter)
+    lines = [
+        "One more step, once the accepted stack is on the default branch: the default local",
+        "profile requirement, in which the whole product runs on one machine with a stand-in for",
+        f"every external service that option {letter} names. It is an offer: nothing is written",
+        "until a person runs it, from a fresh default branch:",
+        "",
+        f'    /agk:spec "{sentence}"',
+        "",
+    ]
+    try:
+        check_sentence(sentence)
+    except Refusal as exc:
+        lines += [
+            f"/agk:spec refuses this sentence ({exc}); shorten or reword the list of",
+            "services in the brackets before running it.",
+            "",
+        ]
+    lines += [
+        "A spec approver (`spec_approvers` in `config/reviewers.yaml`) accepts it with the",
+        "`Approve:` line of the intake, as any requirement. A maintainer declines it instead with",
+        f"one line in the Residual of ADR-{name[:4]}:",
+        "",
+        f"    {DECLINE_FORM}",
+        "",
+        f"Until one of the two is done, `engines.py stack-check` prints `{NOT_DECIDED}`.",
+    ]
+    return lines
+
+
+def print_offer(root: Path) -> None:
+    lines = local_profile_offer(root)
+    if lines:
+        print()
+        print("\n".join(lines))
+
+
 def cmd_stack_check(root: Path) -> int:
     files = sorted(
         p for p in root.glob("docs/adr/*.md") if STACK_NAME.match(p.relative_to(root).as_posix())
@@ -329,6 +491,9 @@ def cmd_stack_check(root: Path) -> int:
         print(f"FAIL engines: {problem}")
     if not problems:
         print("ok engines-stack")
+        stack = accepted_stack(root)
+        if stack is not None and not local_profile_decided(root, stack[1]):
+            print(f"info engines: {NOT_DECIDED}")
     return 1 if problems else 0
 
 
@@ -415,7 +580,9 @@ def cmd_stack_next_steps(root: Path, opts: dict[str, str]) -> int:
             ("Questions", "none"),
             verified,
         ]
-        return steps(root, opts, f"stack: accept option {letter} of {adr}", branch, fields)
+        code = steps(root, opts, f"stack: accept option {letter} of {adr}", branch, fields)
+        print_offer(root)
+        return code
     fields = [
         ("Advances", reqs),
         ("Build-state row", f"{today} {reqs} unchanged, the stack options {adr} proposed"),

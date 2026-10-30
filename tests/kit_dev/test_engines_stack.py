@@ -209,7 +209,9 @@ def test_ac4_chosen_with_a_one_line_reason_and_accepted_together_pass(started, c
     """REQ-036 AC4: brief 274 answer 1 (one ordinary commit sets Chosen and Status together)."""
     stack_root(started, accepted(chosen))
     proc = engines(started, "stack-check")
-    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n"), proc.stdout
+    # Brief 267 answer 2: an accepted stack with no local-profile decision adds one info line.
+    info = "info engines: local profile: not decided\n"
+    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n" + info), proc.stdout
 
 
 @pytest.mark.parametrize(

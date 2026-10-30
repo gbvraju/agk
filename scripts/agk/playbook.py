@@ -45,7 +45,7 @@ from common import (
 )
 from doctor import origin_repo
 from engines import TOPICS as ALL_TOPICS
-from engines import has_idea, vision_problems
+from engines import has_idea, print_offer, vision_problems
 from intake import section, slug
 from pr_body import brief_option, prepare, print_body
 
@@ -317,6 +317,7 @@ def cmd_next_steps(root: Path, opts: dict[str, str]) -> int:
         "what you meant. That is the review of the pull request; merging approves the charter\n"
         "as a proposal."
     )
+    print_offer(root)
     return 0
 
 

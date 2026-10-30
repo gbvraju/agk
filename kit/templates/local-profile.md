@@ -1,0 +1,1 @@
+A local profile runs the whole product on one machine with one command, a setting swaps each external service ({{services}}) for a stand-in, invented data is seeded on start, and a startup guard refuses it outside the local environment.
