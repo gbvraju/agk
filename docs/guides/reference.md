@@ -149,10 +149,12 @@ and cannot run without the kit's fixtures, so delete it in your own change. The 
 between `# >>> agk` and `# <<< agk`: add your own ignore lines outside that block, and the upgrade and the doctor compare and
 replace only the block and report your lines once as `project lines kept: n`; an older `.gitignore` without the markers, the kit's
 lines followed by yours, gets the block on the next upgrade (ADR-0164). After a written upgrade it ends with one line
-`opt-in: <setting>: <summary>` for each entry of the kit's `CHANGELOG.md` between your old version and the new one that
-ends with the marker `(opt-in: <setting>)`: a feature that stays off until you set that setting in `agk.toml` (a change
-that needs an ADR). With no such entry it prints nothing more; a dry run lists none, and the listing writes nothing
-(ADR-0181). See `docs/specs/0008-upgrade.md` and ADR-0018.
+`opt-in: <setting>: <summary>` for each setting of each entry of the kit's `CHANGELOG.md` between your old version and
+the new one that ends with the marker `(opt-in: <setting>)` or `(opt-in: <setting>, <setting>)`: a feature that stays off
+until you set that setting in `agk.toml` (a change that needs an ADR). An entry that starts `<version> added ` speaks for
+that earlier release and is listed when your upgrade crosses it, so an upgrade from 0.58.0 or older also lists the opt-in
+settings of 0.59.0 (ADR-0193). With no such entry it prints nothing more; a dry run lists none, and the listing writes
+nothing (ADR-0181). See `docs/specs/0008-upgrade.md` and ADR-0018.
 
 ## Experimental: reviewer agent
 
@@ -235,8 +237,9 @@ In flow mode (`pr_mode = "flow"`, which this repository uses) a kit build pull r
    `CHANGELOG.md`; the shape is `kit/templates/changelog.md`. A fragment is required exactly when a file the installer
    writes changes, and a check fails a build that adds none or more than one. A change that a project switches on by a
    setting ends its line with one marker, `- <one-line change> (opt-in: <setting>)` (a key of `agk.toml`, or `table.key`;
-   for a table, its name); the release keeps it, and `upgrade.py` lists it to each project that upgrades past it. The
-   summary it shows is the change up to its first `: `.
+   for a table, its name; several settings are separated by `, `, each once); the release keeps it, and `upgrade.py` lists
+   it to each project that upgrades past it, one line per setting. The summary it shows is the change up to its first
+   `: `. A line that starts `<version> added ` speaks for that earlier release and is listed to an upgrade that crosses it.
 2. The build does not edit `kit/hashes.json` either: the table is a function of the history and the tree, and the release
    regenerates it, so the check of the table leaves the row of the current version to the release.
 3. A build never collides with another on `CHANGELOG.md` or `kit/hashes.json`, because it does not touch them; each

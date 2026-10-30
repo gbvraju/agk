@@ -96,45 +96,68 @@ def moved_unchanged(old: str, new: str, version: str, gathered: list[str] | None
     )
 
 
-# The opt-in marker of a changelog entry (brief #320 answer 2): one `(opt-in: <setting>)` at the end
-# of the line, for a feature a project switches on by a setting of `agk.toml`; a dotted setting
-# names a key of a table. The release moves the line unchanged, so the marker stays with it.
+# The opt-in marker of a changelog entry (brief #320 answer 2): one `(opt-in: <settings>)` at the
+# end of the line, for a feature a project switches on by a setting of `agk.toml`; a dotted setting
+# names a key of a table. The marker may name several settings separated by `, ` (brief #340
+# answer 1), each once. The release moves the line unchanged, so the marker stays with it.
 SETTING = r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*"
-OPT_IN = re.compile(rf"(?P<text>.*\S) \(opt-in: (?P<setting>{SETTING})\)")
+OPT_IN = re.compile(rf"(?P<text>.*\S) \(opt-in: (?P<settings>{SETTING}(?:, {SETTING})*)\)")
 ENTRY = re.compile(r"- (?:#\d+ )?(?P<rest>.*)")
 SUMMARY_LIMIT = 120
 RELEASED = re.compile(r"## (\d+(?:\.\d+)*) \(\d{4}-\d{2}-\d{2}\)")
+# An entry whose change starts with `<version> added ` speaks for that earlier release (brief #340
+# answer 3): a later release may list what an older one shipped before the marker existed.
+NAMED = re.compile(r"(?P<version>\d+(?:\.\d+)*) added ")
 
 
-def opt_in(line: str) -> tuple[str, str] | None:
-    """(setting, one-line summary) of a changelog line `- [#n ]<change> (opt-in: <setting>)`, else
-    None (no marker, a marker not at the end, or more than one). The summary is the change up to
-    its first `: `, cut to SUMMARY_LIMIT characters at a word boundary."""
+def opt_in(line: str) -> tuple[tuple[str, ...], str] | None:
+    """(settings, one-line summary) of a changelog line `- [#n ]<change> (opt-in: <settings>)`,
+    else None (no marker, a marker not at the end, more than one, or a malformed list). The
+    summary is the change up to its first `: `, cut to SUMMARY_LIMIT characters at a word
+    boundary."""
     entry = ENTRY.fullmatch(line.strip())
     found = OPT_IN.fullmatch(entry.group("rest")) if entry else None
     if found is None or "(opt-in:" in found.group("text"):
         return None
+    settings = tuple(found.group("settings").split(", "))
+    if len(set(settings)) != len(settings):
+        return None
     summary = found.group("text").split(": ", 1)[0].strip()
     if len(summary) > SUMMARY_LIMIT:
         summary = summary[: SUMMARY_LIMIT + 1].rsplit(" ", 1)[0].rstrip(" ,;")
-    return found.group("setting"), summary
+    return settings, summary
+
+
+def release_named(line: str) -> str | None:
+    """The version an entry speaks for when its change starts with `<version> added `, else None."""
+    entry = ENTRY.fullmatch(line.strip())
+    named = NAMED.match(entry.group("rest")) if entry else None
+    return named.group("version") if named else None
 
 
 def opt_ins(changelog: str, old: str, new: str) -> list[tuple[str, str]]:
-    """The (setting, summary) of every opt-in entry of the released sections `## V (<date>)` with
-    old < V <= new, newest section first, in the changelog's order. `## Unreleased` is not read."""
+    """One (setting, summary) per setting of every opt-in entry of the released sections
+    `## V (<date>)` with V <= new, newest section first, in the changelog's order. An entry counts
+    when old < V, or, when it speaks for an earlier release R < V, when old < R instead.
+    `## Unreleased` is not read."""
     low, high = numbers(old), numbers(new)
     if low is None or high is None:
         return []
     found: list[tuple[str, str]] = []
-    inside = False
+    section = None
     for line in changelog.splitlines():
         if line.startswith(HEADING):
             heading = RELEASED.fullmatch(line.strip())
             version = numbers(heading.group(1)) if heading else None
-            inside = version is not None and low < version <= high
-        elif inside and (item := opt_in(line)) is not None:
-            found.append(item)
+            section = version if version is not None and version <= high else None
+            continue
+        if section is None or (item := opt_in(line)) is None:
+            continue
+        named = release_named(line)
+        speaks = numbers(named) if named else None
+        since = speaks if speaks is not None and speaks < section else section
+        if low < since:
+            found.extend((setting, item[1]) for setting in item[0])
     return found
 
 
