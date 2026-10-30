@@ -16,7 +16,7 @@ import init  # noqa: E402
 import upgrade  # noqa: E402
 
 ROUTER = KIT_ROOT / ".github" / "workflows" / "agk-route.yml"
-TYPES = "    types: [opened, synchronize, reopened, edited, closed]"
+TYPES = "    types: [opened, synchronize, reopened, closed]"  # brief #369 dropped `edited`
 RELEASED = "    types: [opened, synchronize, reopened, edited]"
 MERGED = (
     "(github.event_name != 'pull_request' || github.event.action != 'closed' "
