@@ -1,6 +1,6 @@
 # ADR-0198: a question on a draft pull request reaches the conductor (REQ-037, brief 350)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0173, ADR-0175
