@@ -1,6 +1,6 @@
 # ADR-0220: a [testing] table maps changed code to the tests that guard it, and the test plan shows the selection (REQ-016, brief 373)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0185, ADR-0172
