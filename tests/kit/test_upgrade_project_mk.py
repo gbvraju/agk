@@ -85,6 +85,25 @@ def test_a_target_in_project_mk_is_run_by_make_beside_the_kit_targets(tmp_path):
     assert proc.stdout.split() == ["project-hello", "agk-governance"]
 
 
+@NEEDS_MAKE
+def test_a_prerequisite_added_to_a_kit_target_in_project_mk_runs_both_recipes(tmp_path):
+    """Verdict on f0a82fa, item 1: a project extends `test` by a prerequisite, never a recipe."""
+    root = project(tmp_path, with_project_mk=False)
+    extend = "test: project-test\n\n.PHONY: project-test\nproject-test:\n\t@echo project-test\n"
+    (root / PROJECT_MK).write_text(extend, encoding="utf-8")
+    proc = make(root, "test")
+    assert proc.returncode == 0, proc.stderr
+    assert sorted(proc.stdout.split()) == ["agk-project-test", "agk-test", "project-test"]
+    assert "overriding recipe" not in proc.stderr
+
+
+def test_the_guide_extends_a_kit_target_by_a_prerequisite_never_a_recipe():
+    """Verdict on f0a82fa, item 1: the guide gives the prerequisite form and its example."""
+    guide = (ROOT / "docs" / "guides" / "getting-started.md").read_text(encoding="utf-8")
+    assert "test: project-test" in guide and "\tpython3 -m pytest" in guide
+    assert "never give a kit target" in guide.lower() and "overriding recipe" in guide
+
+
 def test_the_kit_never_installs_lists_or_hashes_project_mk():
     manifest = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
     assert PROJECT_MK not in json.dumps(manifest)

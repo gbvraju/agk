@@ -352,6 +352,19 @@ release. It replaces each kit file you have not edited and refuses, writing noth
   includes `project.mk` after `agk.mk` when that file exists; the kit never installs, lists or writes `project.mk`, so your
   targets survive every upgrade. If an upgrade refuses over `Makefile`, move your own targets to `project.mk`, restore the
   kit's `Makefile`, and run the upgrade again.
+- **`project.mk` adds targets; it extends a kit target only by a prerequisite.** Never give a kit target (`test`, `lint`,
+  `governance`, `traceability` or an `agk-` one) a second recipe: make keeps one recipe per target and, when it sees two,
+  drops one and only prints `warning: overriding recipe`. To run your own steps with a kit target, give them a target of
+  their own and add it as a prerequisite, with no recipe:
+
+  ```make
+  test: project-test
+
+  project-test:
+  	python3 -m pytest -q tests/app
+  ```
+
+  `make test` then runs the kit's recipe and `project-test`.
 - **Windows.** Fetch the kit from its release tag with git and no line-ending conversion
   (`git -c core.autocrlf=false clone --branch v<version> <the kit repository URL>`), or use the plugin cache. A copy
   with CRLF line endings is read as LF by the upgrade, so line endings alone never cause a refusal.
