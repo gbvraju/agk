@@ -1,7 +1,8 @@
 """agk doctor (SPEC-0006): report what is misconfigured in a repository that agk governs.
 
 Standard library only. Read-only: it reads local files and runs `git` only to read, and `gh api`
-only with GET on seven paths, and an eighth where the product report is installed (`gh` holds the
+only with GET on seven paths of the repository, an eighth where the product report is installed,
+and one more of the kit's own repository, its newest release (brief #320; `gh` holds the
 credential; this script holds none). It writes nothing.
 A check that could not read what it needs is `cannot-check` with a reason class, never `ok`.
 Messages name a setting or a path class, never a value. Output is a text report or, with --json,
@@ -177,6 +178,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "the kit version differs from version in agk.toml",
         "run /agk:upgrade (SPEC-0008)",
     ),
+    "kit-behind": (
+        "warn",
+        "the installed kit is not older than the newest kit release",
+        "the installed kit is older than the newest kit release",
+        "run /agk:upgrade with the newest kit release (SPEC-0008); the upgrade ends with the "
+        "opt-in features the newer releases offer",
+    ),
     "vendored-missing": (
         "error",
         "every vendored file is present",
@@ -299,6 +307,9 @@ HINTS = {
     "bad-response": "the input could not be read",
     "plugin-unreadable": "only the project's and this plugin's skills are read; check it by hand",
     "no-ruleset": "no ruleset targets the default branch; fix ruleset-missing or ruleset-target",
+    "no-release": "the kit's repository has no published release, or it cannot be seen",
+    "release-unreadable": "the newest release of the kit's repository could not be read; try "
+    "again later or check `gh` access to it",
 }
 
 
@@ -844,6 +855,63 @@ def kit_results(root: Path, kit_root: Path | None, config: dict) -> tuple[dict[s
     }, kit_version
 
 
+PLUGIN = ".claude-plugin/plugin.json"
+KIT_RELEASE = "/releases/latest"
+RELEASE_TAG = re.compile(r"v?(\d+(?:\.\d+)*)")
+
+
+def version_numbers(text: object) -> tuple[int, ...] | None:
+    """The numbers of a dotted version (`0.59.0`, or a tag `v0.59.0`), else None."""
+    found = RELEASE_TAG.fullmatch(text) if isinstance(text, str) else None
+    return tuple(int(n) for n in found.group(1).split(".")) if found else None
+
+
+def kit_repo(kit_root: Path) -> tuple[str | None, str]:
+    """(OWNER/REPO of the kit, "") from the `repository` of the kit's plugin file, else (None,
+    reason class)."""
+    try:
+        data = json.loads((kit_root / PLUGIN).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, "bad-response"
+    url = data.get("repository") if isinstance(data, dict) else None
+    if isinstance(url, dict):
+        url = url.get("url")
+    if not isinstance(url, str):
+        return None, "bad-response"
+    match = re.fullmatch(r"(?:https://|git@)github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?", url)
+    return (match.group(1), "") if match else (None, "not-github")
+
+
+def kit_behind_result(kit_root: Path | None, config: dict, api_dir: Path | None) -> Result:
+    """`kit-behind` (brief #320 answer 1): the installed version against the newest release of the
+    kit's repository, read with one GET. Older fails naming both; equal or newer (a checkout
+    between releases) is ok; a release that cannot be read is cannot-check, never ok."""
+    if kit_root is None:
+        return Result("cannot-check", "no-kit-root")
+    installed = config.get("version")
+    if version_numbers(installed) is None:
+        return Result("cannot-check", "bad-response")
+    repo, why = kit_repo(kit_root)
+    if repo is None:
+        return Result("cannot-check", why)
+    data, why = Reads(repo, api_dir).get("kit-release", KIT_RELEASE, not_found="no-release")
+    if data is None:
+        return Result("cannot-check", "release-unreadable" if why == "no-admin" else why)
+    tag = data.get("tag_name") if isinstance(data, dict) else None
+    newest = version_numbers(tag)
+    if newest is None:
+        return Result("cannot-check", "bad-response")
+    mine = version_numbers(installed) or ()
+    width = max(len(mine), len(newest))  # `1.0` and `1.0.0` are the same version
+    mine, newest = mine + (0,) * (width - len(mine)), newest + (0,) * (width - len(newest))
+    if mine < newest:
+        shown = RELEASE_TAG.fullmatch(str(tag))
+        return Result("fail", message=f" (installed {installed}, newest release {shown.group(1)})")
+    if mine > newest:
+        return Result("ok", message=" (newer than the newest release: a checkout between releases)")
+    return Result("ok")
+
+
 def kept_lines(kept: dict[str, int]) -> str:
     """The one report of the project's lines of each extendable file (brief #269 answer 2)."""
     shown = [f"{rel}: project lines kept: {n}" for rel, n in sorted(kept.items()) if n]
@@ -934,6 +1002,7 @@ def run_checks(
     )
     kit, version = kit_results(root, kit_root, config)
     results.update(kit)
+    results["kit-behind"] = kit_behind_result(kit_root, config, api_dir)
     results["router-wake"] = router_result(root, config)
     results.update(ci_results(root, config))
     results.update(engine_results(root, kit_root, config))
