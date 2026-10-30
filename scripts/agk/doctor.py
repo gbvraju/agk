@@ -12,6 +12,9 @@ exit 0, with no read of GitHub; `--paused [--ref REF]` prints only `agk paused` 
 After a removal (brief #348 build (b), ADR-0203), a git work tree with no agk.toml and none of the
 kit's files left is reported as `no kit installed`, exit 0; anything else without agk.toml is the
 refusal of SPEC-0006 rule 13.
+`actions-minutes` (brief #370, ADR-0215) prints the one line of `minutes.py --line`: it reads, also
+with GET, the account's Actions billing and, only when that cannot be read, this month's run history
+of the repository; a warning from the 50% level on, never a failure.
 """
 
 from __future__ import annotations
@@ -28,13 +31,16 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-# The one kit script the doctor imports: the router's list is read as upgrade.py writes it, and
-# the check names of a workflow's jobs as the router reads them (brief #283).
+# The kit scripts the doctor imports: the router's list is read as upgrade.py writes it, and
+# the check names of a workflow's jobs as the router reads them (brief #283); the minutes line as
+# minutes.py prints it (brief #370).
+import minutes  # noqa: E402
 from common import (  # noqa: E402
     PAUSED_LINE,
     ROUTER_WORKFLOW,
     CheckError,
     jobs_of,
+    minutes_warn,
     paused,
     router_names,
     router_wanted,
@@ -315,6 +321,15 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "engines.review is invalid, or names a skill the session cannot find",
         ENGINE_FIX,
     ),
+    "actions-minutes": (
+        "warn",
+        "the Actions minutes are under the 50% level, or their level is unknown",
+        "the Actions minutes have passed the 50% level",
+        "the Actions minutes have passed the 50% level (setting: minutes_warn in agk.toml sets the "
+        "middle level); see `python3 scripts/agk/minutes.py` for where they go, the defaults in "
+        "docs/guides/project-ci.md to use fewer, and local mode in docs/guides/local-mode.md for "
+        "when they run out",
+    ),
 }
 RULESET_IDS = [
     "ruleset-enforcement",
@@ -345,6 +360,9 @@ HINTS = {
     "no-release": "the kit's repository has no published release, or it cannot be seen",
     "release-unreadable": "the newest release of the kit's repository could not be read; try "
     "again later or check `gh` access to it",
+    "minutes-unknown": "the token can read neither the account's Actions billing nor the run "
+    "history; run `python3 scripts/agk/minutes.py` with a token that can "
+    "(docs/guides/project-ci.md)",
 }
 
 
@@ -403,9 +421,17 @@ class Reads:
     def __init__(self, repo: str | None, api_dir: Path | None) -> None:
         self.repo = repo
         self.api_dir = api_dir
+        self.seen: dict[tuple[str, str, str | None], tuple[Any, str]] = {}
 
     def get(self, name: str, path: str, not_found: str | None = None) -> tuple[Any, str]:
-        """(data, "") or (None, reason class); a 404 is `not_found` when that is given."""
+        """(data, "") or (None, reason class); a 404 is `not_found` when that is given. Each read
+        is made once (the repository is read by two checks, brief #370)."""
+        key = (name, path, not_found)
+        if key not in self.seen:
+            self.seen[key] = self.read(name, path, not_found)
+        return self.seen[key]
+
+    def read(self, name: str, path: str, not_found: str | None = None) -> tuple[Any, str]:
         if self.api_dir is not None:
             file = self.api_dir / f"{name}.json"
             if not file.is_file():
@@ -758,6 +784,37 @@ def ci_results(root: Path, config: dict) -> dict[str, Result]:
     draft_result = Result("fail", message=f" ({'; '.join(parts)})") if parts else Result("ok")
     group_result = Result("fail", message=f" ({groups})") if groups else Result("ok")
     return {"ci-drafts": draft_result, "ci-concurrency": group_result}
+
+
+def minutes_result(root: Path, reads: Reads, today: datetime.date | None = None) -> Result:
+    """`actions-minutes` (brief #370 answer 2): the line of `minutes.py --line`; a warning from the
+    50% level on, never a failure; cannot-check when the repository cannot be read, or when
+    neither billing nor the run history can (`minutes-unknown`)."""
+    repo_data, reason = reads.get("repo", "")
+    if not isinstance(repo_data, dict):
+        return Result("cannot-check", reason or "bad-response")
+    try:
+        warn = minutes_warn(root)
+    except CheckError:
+        return Result("cannot-check", "bad-response")
+    if reads.api_dir is not None:
+        src: Any = minutes.ApiDir(reads.api_dir)
+    elif reads.repo:
+        src = minutes.Gh(reads.repo)
+    else:
+        return Result("cannot-check", "not-github")
+    if not isinstance(repo_data.get("owner"), dict):  # the owner as the full name gives it
+        owner = str(repo_data.get("full_name") or reads.repo or "").split("/")[0]
+        repo_data = {**repo_data, "owner": {"login": owner}}
+    try:
+        level, line = minutes.outlook(
+            src, repo_data, today or datetime.datetime.now(datetime.UTC).date(), warn
+        )
+    except CheckError:
+        return Result("cannot-check", "bad-response")
+    if line.startswith("actions minutes: unknown"):
+        return Result("cannot-check", "minutes-unknown")
+    return Result("ok" if level in ("ok", "unknown") else "fail", message=f" ({line})")
 
 
 def placeholder_result(path: Path) -> Result:
@@ -1120,6 +1177,7 @@ def run_checks(
     results["router-wake"] = router_result(root, config)
     results.update(ci_results(root, config))
     results.update(engine_results(root, kit_root, config))
+    results["actions-minutes"] = minutes_result(root, reads)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]

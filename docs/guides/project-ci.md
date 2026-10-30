@@ -128,6 +128,7 @@ readers of later weeks use it.
 |---|---|---|
 | `ci-drafts` | a workflow that holds a check of `required_checks` and runs on `pull_request` never reads `github.event.pull_request.draft` (outside a comment) | default 1 |
 | `ci-concurrency` | a workflow that holds a check of `required_checks` has no `concurrency:` group, at the top or on a job | default 2 |
+| `actions-minutes` | the Actions minutes have passed the `50%` level (the line of `minutes.py --line`, below); `cannot check (minutes-unknown)` when the token can read neither billing nor the run history | the section below |
 
 The router's own workflow is not judged: it labels every pull request, drafts included, and runs no test.
 
@@ -159,5 +160,16 @@ It prints:
 - a **warning** line once the higher of the two figures passes `minutes_warn` percent of the included minutes (`minutes_warn`
   in `agk.toml`, 80 when unset); it then exits 3. With the included minutes unknown it never warns.
 
+- a **level** and the day the minutes **run out** (brief #370): the level is the highest of `50%`, `minutes_warn` (80 when
+  unset) and `95%` that the higher figure has reached of the included minutes, else `ok`, and `unknown` with the included
+  minutes unknown; the day is when the included minutes are used up at this month's daily rate so far (the minutes used over
+  the days of the month through today): `runs out about <YYYY-MM-DD>`, or `not this month`.
+
+`python3 scripts/agk/minutes.py --line` prints only the level and the day, in one line, reading billing first and the run
+history only when billing cannot be read, for example
+`actions minutes: 1900 of 2000 used (95%), level 95%; runs out about 2026-10-20; at this level, see local mode in
+docs/guides/local-mode.md`. The doctor prints the same line as its check `actions-minutes`, a warning from the `50%` level on and
+never a failure, and `/agk:launch` prints it before it asks to start sessions.
+
 When the minutes run out, the checks cannot run on GitHub until the month turns or the plan changes: see local mode
-(brief #322) for how to keep working.
+(brief #322, `docs/guides/local-mode.md`) for how to keep working.

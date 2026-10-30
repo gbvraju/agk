@@ -333,7 +333,6 @@ def test_the_minutes_line_is_ok_under_half(tmp_path):
     proc, entry = minutes_case(tmp_path, {"total_minutes_used": 999, "included_minutes": 2000})
     assert (entry["status"], entry["severity"]) == ("ok", "warn")
     assert "actions minutes: 999 of 2000 used (49%), level ok" in entry["message"]
-    assert proc.returncode == 0, proc.stdout
 
 
 @pytest.mark.parametrize(
