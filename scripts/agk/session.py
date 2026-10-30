@@ -97,7 +97,7 @@ from reviewers import verdict_authors
 
 NAME = "session"
 USAGE = (
-    "usage: session.py watch (--pr N [--since ID] | --merged N | --assign ID)\n"
+    "usage: session.py watch (--pr N [--since ID] [--session ID] | --merged N | --assign ID)\n"
     "                        [--interval S] [--timeout S]\n"
     "       session.py next --session ID\n"
     "       session.py claim --session ID --brief N [--build X]\n"
@@ -399,6 +399,9 @@ def watch(root, args: dict[str, str]) -> int:
     since = int(args.get("--since", 0))
     first = True
     floor = 0
+    told = Told(root, repo, args["--session"], interval) if "--session" in args else None
+    if told is not None and told.start() is not None:
+        return EXIT_UNREADABLE
     if not only_merge:
         while (found := newest(pages(f"repos/{repo}/issues/{number}/comments"))) is None:
             if reads.failed(f"the comments of #{number}"):
@@ -471,10 +474,50 @@ def watch(root, args: dict[str, str]) -> int:
                 elif now != label:
                     print(f"label {now}")
                     return 0
+        if told is not None and (code := told.poll()) is not None:
+            return code
         if late():
             print("timeout")
             return 3
         time.sleep(interval)
+
+
+class Told:
+    """The `Tell:` lines of `watch --pr N --session ID` (brief #368 answer 1): the watch also ends,
+    with `tell <message>`, on a `Tell: <ID> ...` by a listed author on the one open `agk-conductor`
+    issue that is newer than the start. Its own count of unread polls (session rule 21)."""
+
+    def __init__(self, root, repo: str, me: str, interval: float) -> None:
+        self.me, self.interval = me, interval
+        self.issue = conductor_issue(repo)
+        self.path = f"repos/{repo}/issues/{self.issue}/comments"
+        self.allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None)}
+        self.reads = Reads(root)
+        self.seen = 0
+
+    def start(self) -> int | None:
+        """Read the baseline: an unread one would make an old line look new."""
+        while (comments := pages(self.path)) is None:
+            if self.reads.failed(f"the comments of #{self.issue}"):
+                return EXIT_UNREADABLE
+            time.sleep(self.interval)
+        self.reads.good()
+        self.seen = newest(comments) or 0
+        return None
+
+    def poll(self) -> int | None:
+        """0 after printing a new `tell` line, EXIT_UNREADABLE on five unread polls, or None."""
+        comments = pages(self.path)
+        if comments is None:
+            return EXIT_UNREADABLE if self.reads.failed(f"the comments of #{self.issue}") else None
+        self.reads.good()
+        for comment in sorted(comments, key=lambda c: c.get("id", 0)):
+            line = tell_line(comment, self.me, self.allowed)
+            match = TELL.fullmatch(line) if line and comment.get("id", 0) > self.seen else None
+            if match:
+                print(f"tell {match.group(2)}", flush=True)
+                return 0
+        return None
 
 
 # --- the shape of a brief (rule 4) ------------------------------------------------------------
@@ -1098,6 +1141,16 @@ def inbox_mark(root, me: str) -> Path:
 def inbox(root, me: str) -> int:
     """Print the `Tell:` lines for this session posted since its last `Request:` or since the
     inbox last printed one, oldest first, or `no message` (GET only; brief #327 answer 2)."""
+    lines = unread(root, me)
+    for line in lines:
+        print(line)
+    if not lines:
+        print("no message")
+    return 0
+
+
+def unread(root, me: str) -> list[str]:
+    """The unread `Tell:` lines of `inbox`, oldest first; the mark moves past the newest."""
     repo = repo_name(root)
     issue = conductor_issue(repo)
     comments = pages(f"repos/{repo}/issues/{issue}/comments")
@@ -1115,14 +1168,10 @@ def inbox(root, me: str) -> int:
         for c in sorted(comments, key=lambda c: c.get("id", 0))
         if c.get("id", 0) > floor and (line := tell_line(c, me, allowed))
     ]
-    for _, line in lines:
-        print(line)
-    if not lines:
-        print("no message")
-        return 0
-    mark.parent.mkdir(parents=True, exist_ok=True)
-    mark.write_text(f"{lines[-1][0]}\n", encoding="utf-8")
-    return 0
+    if lines:
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        mark.write_text(f"{lines[-1][0]}\n", encoding="utf-8")
+    return [line for _, line in lines]
 
 
 def is_red(item: dict) -> bool:
@@ -1178,8 +1227,16 @@ def next_brief(root, me: str) -> int:
 
 
 def after(root, me: str) -> int:
-    """Where a builder goes when its work is done, by `[flow] assign` (rule 12)."""
-    if assign_mode(root) == "next":
+    """Where a builder goes when its work is done, by `[flow] assign` (rule 12), after the unread
+    `Tell:` lines of the inbox, with its mark (brief #368 answer 2). An inbox that cannot be read
+    is said in one line and never shown as an empty one; `after` then goes on."""
+    mode = assign_mode(root)
+    try:
+        for line in unread(root, me):
+            print(line)
+    except CheckError as exc:
+        print(exc)
+    if mode == "next":
         return next_brief(root, me)
     print(f"ask the conductor on #{conductor_issue(repo_name(root))}")
     return 0
@@ -1630,7 +1687,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     cmd, opts = args[0], dict(zip(args[1::2], args[2::2], strict=False))
     allowed = {
-        "watch": {"--pr", "--merged", "--assign", "--interval", "--timeout", "--since"},
+        "watch": {
+            "--pr",
+            "--merged",
+            "--assign",
+            "--interval",
+            "--timeout",
+            "--since",
+            "--session",
+        },
         "next": {"--session"},
         "claim": {"--session", "--brief", "--build"},
         "after": {"--session"},
@@ -1655,6 +1720,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         ok = ok and all(number_ok(opts[k]) for k in ("--interval", "--timeout") if k in opts)
         ok = ok and ("--since" not in opts or ("--pr" in opts and opts["--since"].isdigit()))
+        ok = ok and (
+            "--session" not in opts
+            or ("--pr" in opts and bool(SESSION_ID.fullmatch(opts["--session"])))
+        )
     elif cmd == "queue":
         ok = opts.get("--role") in ROLES and (
             "--author" not in opts or bool(SESSION_ID.fullmatch(opts["--author"].lstrip("@")))

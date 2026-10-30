@@ -272,7 +272,9 @@ def test_watch_pr_with_a_session_ends_with_an_error_when_the_conductor_issue_sta
     stub.serve(PR, pull())
     stub.serve(PR_COMMENTS, [])
     out = session(proj, stub, *WATCH_ME, "--timeout", "5")
-    assert out.returncode == 4 and out.stdout.strip() == "error: the comments of #204 cannot be read"
+    assert (
+        out.returncode == 4 and out.stdout.strip() == "error: the comments of #204 cannot be read"
+    )
 
 
 def test_watch_pr_with_a_session_needs_one_conductor_issue(proj, stub):
@@ -299,7 +301,9 @@ def test_session_is_taken_by_watch_pr_only(proj, stub):
 
 
 def configure(proj, value: str) -> None:
-    proj.write("agk.toml", f'default_branch = "main"\npr_mode = "flow"\n[flow]\nassign = "{value}"\n')
+    proj.write(
+        "agk.toml", f'default_branch = "main"\npr_mode = "flow"\n[flow]\nassign = "{value}"\n'
+    )
 
 
 def after(proj, stub):
@@ -321,7 +325,10 @@ def test_after_prints_the_inbox_once_and_then_nothing(proj, stub):
     )
     first = after(proj, stub)
     assert first.returncode == 0, first.stdout
-    assert first.stdout.splitlines() == ["Tell: s-me #52 merged, rebase", "ask the conductor on #204"]
+    assert first.stdout.splitlines() == [
+        "Tell: s-me #52 merged, rebase",
+        "ask the conductor on #204",
+    ]
     second = after(proj, stub)
     assert second.stdout.splitlines() == ["ask the conductor on #204"]
     assert inbox(proj, stub).stdout.splitlines() == ["no message"]  # the same mark
