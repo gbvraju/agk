@@ -47,3 +47,10 @@ skipped concludes `skipped` (verify), which is what lets the router ignore it.
 
 - 2026-10-30: SPEC-0032 rule 1 still lists `edited` among the router's `pull_request` types (it also predates `closed`, brief
   #302); whether the spec is amended is a reviewer's decision (Q-369-1).
+- 2026-10-30: `(verify)` a workflow run whose only job is skipped concludes `skipped` (`workflow_run.conclusion == "skipped"`), and
+  a draft push starts two jobs; the first live draft push after the merge confirms both.
+
+## Log
+
+- 2026-10-30, verdict on d3fd83c: fix list; the brief is met, and the `skipped`
+  conclusion stays a `(verify)` residual until the first live draft push after the merge.
