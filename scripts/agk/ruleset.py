@@ -18,6 +18,10 @@ its fix and changes only with `--tighten`. Phase 1 is every element except the r
 check `governance`; phase 2 adds it once `governance.yml` has succeeded on the default branch.
 Exit 0: a plan or `nothing to do`; 4: it could not read the repository or the caller is not an
 admin (the text of the ruleset and the settings path are printed, nothing else); 2: usage.
+On exit 4 the reason names the cause: `plan-limit` when GitHub answers that rulesets need a paid
+plan for a private repository, `no-admin` only when `permissions.admin` is not true, `forbidden`
+when an admin is refused for another reason; the printed text is the rules of the phase the plan
+chose (brief #263 build (a)).
 """
 
 from __future__ import annotations
@@ -31,7 +35,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from doctor import Reads, origin_repo, targets_default
+from doctor import Reads, admin_reason, origin_repo, targets_default
 
 KIT = Path(__file__).resolve().parents[2]
 USAGE = (
@@ -44,6 +48,15 @@ SETTINGS_PATH = (
     "automatically delete head branches) (verify)"
 )
 CONTEXT = "governance"
+PHASE2_CLAUSE = f"; required status check `{CONTEXT}`"
+WHY = {
+    "plan-limit": "rulesets and branch protection on a private repository need a paid plan (GitHub "
+    "Pro, Team or Enterprise); upgrade the plan or make the repository public, then run it again. "
+    "Until then nothing protects the default branch, and applying it by hand is refused the same "
+    "way. The ruleset to apply then:",
+    "forbidden": "GitHub refused the read although the account is an admin of the repository; read "
+    "GitHub's message with `gh api` on the same path. Apply it by hand:",
+}
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
@@ -59,11 +72,37 @@ def desired() -> dict:
     return json.loads((KIT / "kit" / "templates" / "ruleset.json").read_text(encoding="utf-8"))
 
 
-def cannot(reason: str) -> Stop:
+class Cannot(Exception):
+    """The ruleset cannot be applied from here, for a reason class."""
+
+    def __init__(self, reason: str, branch: str | None = None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.branch = branch  # the default branch, when the repository could be read
+
+
+def cannot(reason: str, branch: str | None = None) -> Cannot:
+    return Cannot(reason, branch)
+
+
+def rules_text(phase: int) -> str:
+    """The kit's ruleset text for a phase: phase 1 leaves out the required status check and says
+    when it is added; phase 2 is `branch-rules.txt` exactly (brief #263 answer 2)."""
     text = (KIT / "kit" / "templates" / "branch-rules.txt").read_text(encoding="utf-8").strip()
+    if phase == 2 or PHASE2_CLAUSE not in text:
+        return text
+    return (
+        text.replace(PHASE2_CLAUSE, "", 1)
+        + f"\nPhase 2, once `{CONTEXT}` has succeeded on the default branch: add the required "
+        f"status check `{CONTEXT}`."
+    )
+
+
+def cannot_text(reason: str, phase: int, how: str) -> Stop:
+    why = WHY.get(reason, "Apply it by hand:")
     return Stop(
-        f"cannot apply the ruleset from here ({reason}). Apply it by hand:\n{text}\n"
-        f"Where: {SETTINGS_PATH}",
+        f"cannot apply the ruleset from here ({reason}). {why}\n"
+        f"phase {phase} ({how})\n{rules_text(phase)}\nWhere: {SETTINGS_PATH}",
         4,
     )
 
@@ -214,26 +253,39 @@ def read_repo(reads: Reads) -> dict:
     if not isinstance(repo_data, dict):
         raise cannot(reason or "bad-response")
     if (repo_data.get("permissions") or {}).get("admin") is not True:
-        raise cannot("no-admin")
+        raise cannot("no-admin", repo_data.get("default_branch") or "main")
     return repo_data
 
 
-def read_rest(reads: Reads, branch: str) -> tuple[list[dict], bool | None]:
+def read_rest(reads: Reads, branch: str, repo_data: dict) -> tuple[list[dict], bool | None]:
     listing, reason = reads.get("rulesets", "/rulesets")
     if not isinstance(listing, list):
-        raise cannot(reason or "bad-response")
+        raise cannot(admin_reason(reason or "bad-response", repo_data), branch)
     details = []
     for entry in sorted(listing, key=lambda e: str(e.get("id"))):
         if entry.get("target") != "branch":
             continue
         data, reason = reads.get(f"ruleset-{entry.get('id')}", f"/rulesets/{entry.get('id')}")
         if not isinstance(data, dict):
-            raise cannot(reason or "bad-response")
+            raise cannot(admin_reason(reason or "bad-response", repo_data), branch)
         details.append(data)
+    return details, governance_ran(reads, branch)
+
+
+def governance_ran(reads: Reads, branch: str) -> bool | None:
     path = f"/actions/workflows/governance.yml/runs?branch={branch}&status=success&per_page=1"
     runs, _ = reads.get("governance-runs", path)
-    ran = None if not isinstance(runs, dict) else int(runs.get("total_count") or 0) >= 1
-    return details, ran
+    return None if not isinstance(runs, dict) else int(runs.get("total_count") or 0) >= 1
+
+
+def choose_phase(given: str, ran: bool | None) -> tuple[int, str]:
+    if given != "auto":
+        return int(given), "given"
+    if ran:
+        return 2, "auto: governance has succeeded on the default branch"
+    if ran is False:
+        return 1, "auto: governance has not succeeded on the default branch"
+    return 1, "auto: the runs of governance could not be read"
 
 
 def render(
@@ -288,22 +340,16 @@ def main(argv: list[str] | None = None) -> int:
             raise Stop("repository unknown; pass --repo OWNER/REPO (path class: git remote)", 2)
         api_dir = Path(opts["api_dir"]) if opts.get("api_dir") else None
         reads = Reads(repo, api_dir)
-        repo_data = read_repo(reads)
-        branch = repo_data.get("default_branch") or "main"
-        details, ran = read_rest(reads, branch)
-        if opts["phase"] == "auto":
-            phase, how = (
-                (2, "auto: governance has succeeded on the default branch")
-                if ran
-                else (
-                    1,
-                    "auto: governance has not succeeded on the default branch"
-                    if ran is False
-                    else "auto: the runs of governance could not be read",
-                )
-            )
-        else:
-            phase, how = int(opts["phase"]), "given"
+        try:
+            repo_data = read_repo(reads)
+            branch = repo_data.get("default_branch") or "main"
+            details, ran = read_rest(reads, branch, repo_data)
+        except Cannot as exc:
+            # the phase the plan would choose; without a repository read the runs are not read
+            auto = opts["phase"] == "auto" and exc.branch
+            ran = governance_ran(reads, exc.branch) if auto else None
+            raise cannot_text(exc.reason, *choose_phase(opts["phase"], ran)) from None
+        phase, how = choose_phase(opts["phase"], ran)
         plan = plan_for(repo, branch, repo_data, details, phase, opts["tighten"])
         payload_dir = Path(opts["payload_dir"]) if opts.get("payload_dir") else None
         if payload_dir is not None:

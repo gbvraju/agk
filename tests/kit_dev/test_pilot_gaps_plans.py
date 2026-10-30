@@ -28,7 +28,11 @@ CHECK = "required status check `governance`"
 
 
 def error(message: str, status: str = "403") -> dict:
-    return {"message": message, "documentation_url": "https://docs.github.com/rest", "status": status}
+    return {
+        "message": message,
+        "documentation_url": "https://docs.github.com/rest",
+        "status": status,
+    }
 
 
 def api_dir(tmp_path: Path, admin: bool = True, rulesets: object = None, runs=None) -> Path:
@@ -57,7 +61,9 @@ def plan(path: Path, *args: str):
 
 
 def ruleset_sentence(out: str) -> str:
-    return next(ln for ln in out.splitlines() if ln.startswith("The ruleset for the default branch"))
+    return next(
+        ln for ln in out.splitlines() if ln.startswith("The ruleset for the default branch")
+    )
 
 
 # --- answer 1: the plan limit is named, `no-admin` only when the account is not an admin ------
@@ -148,7 +154,10 @@ def test_answer2_the_kit_text_holds_the_phase_2_clause_that_phase_1_leaves_out()
 )
 def test_answer2_the_hand_apply_text_is_the_rules_of_the_phase_chosen(tmp_path, args, runs, phase):
     """REQ-039: brief #263 answer 2."""
-    proc = plan(api_dir(tmp_path, rulesets=error("Resource not accessible by integration"), runs=runs), *args)
+    proc = plan(
+        api_dir(tmp_path, rulesets=error("Resource not accessible by integration"), runs=runs),
+        *args,
+    )
     assert proc.returncode == 4
     assert f"phase {phase} (" in proc.stdout
     sentence = ruleset_sentence(proc.stdout)

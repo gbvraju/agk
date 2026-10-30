@@ -116,15 +116,21 @@ def live_doctor(tmp_path, admin: bool = True, message: str = PLAN_MESSAGE):
     repo = json.loads((ok / "api" / "repo.json").read_text(encoding="utf-8"))
     repo["permissions"]["admin"] = admin
     (tmp_path / "repo.json").write_text(json.dumps(repo), encoding="utf-8")
-    refused = {"message": message, "documentation_url": "https://docs.github.com/rest", "status": "403"}
+    refused = {
+        "message": message,
+        "documentation_url": "https://docs.github.com/rest",
+        "status": "403",
+    }
     (tmp_path / "refused.json").write_text(json.dumps(refused), encoding="utf-8")
     gh = bin_dir / "gh"
     gh.write_text(
         "#!/bin/sh\n"
         'case "$*" in\n'
-        f'  *"/rulesets"*) cat {tmp_path}/refused.json; echo "gh: {message} (HTTP 403)" >&2; exit 1;;\n'
+        f'  *"/rulesets"*) cat {tmp_path}/refused.json; '
+        f'echo "gh: {message} (HTTP 403)" >&2; exit 1;;\n'
         f'  *"api --method GET repos/example-owner/example-repo") cat {tmp_path}/repo.json;;\n'
-        '  *) echo \'{"message": "Not Found", "status": "404"}\'; echo "gh: Not Found (HTTP 404)" >&2; exit 1;;\n'
+        '  *) echo \'{"message": "Not Found", "status": "404"}\'; '
+        'echo "gh: Not Found (HTTP 404)" >&2; exit 1;;\n'
         "esac\n",
         encoding="utf-8",
     )
@@ -164,4 +170,7 @@ def test_answer1_the_hints_say_the_plan_need_and_name_no_value():
     hint = HINTS["plan-limit"]
     assert "paid plan" in hint and "private repositor" in hint and "branch protection" in hint
     assert "admin" not in hint and "example" not in hint
-    assert "admin" in HINTS["forbidden"] and "use an account with admin rights" not in HINTS["forbidden"]
+    assert (
+        "admin" in HINTS["forbidden"]
+        and "use an account with admin rights" not in HINTS["forbidden"]
+    )
