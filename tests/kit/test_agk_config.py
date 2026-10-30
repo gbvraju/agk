@@ -21,6 +21,7 @@ DEFAULTS = {
     "pr_mode": "strict",
     "required_checks": ["proof", "governance"],
     "agent_apps": ["claude"],
+    "review_mode": "team",  # brief 277 (ADR-0179)
 }
 
 

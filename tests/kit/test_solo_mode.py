@@ -341,3 +341,63 @@ def test_in_team_mode_the_confirmation_covers_nothing(repo, tmp_path):
         "check_final_clearance.py", "--comments", str(comments(tmp_path, body)), "--head", "HEAD~1"
     )
     assert proc.returncode == 1 and "rule 3" in proc.stdout, proc.stdout
+
+
+# --- the spec check (answer 2: the approval inside the confirmation) ----------------------------
+
+SPEC_ONE = "docs/specs/0001-thing.md"
+
+
+def thing(status: str) -> str:
+    return (
+        f"# SPEC-0001: Thing\n\n- Status: {status}\n- Owner: reviewers\n\n## Rules\n\n1. A rule.\n"
+    )
+
+
+@pytest.mark.parametrize(("mode", "code"), [("solo", 0), ("team", 1)])
+def test_the_spec_check_reads_the_approval_of_a_solo_confirmation(repo, mode, code):
+    """REQ-039: brief #277 answers 2 and 7 (check_specs, run by governance)."""
+    repo.commit(
+        {
+            "config/reviewers.yaml": REVIEWERS,
+            SPEC_ONE: thing("Draft"),
+            "agk.toml": "agent_apps = []\n",
+        },
+        "base",
+    )
+    repo.branch()
+    repo.commit({"agk.toml": f'agent_apps = []\nreview_mode = "{mode}"\n'}, "reviewed")
+    sha = repo.git("rev-parse", "HEAD").strip()
+    final = f"Final: {SPEC_ONE} Draft -> Approved"
+    body = confirmation(sha=sha, verdict="fix list", middle=(final, "Approve: SPEC-0001"))
+    repo.commit({SPEC_ONE: thing("Approved")}, "final")
+    item = {"user": {"login": "boss"}, "body": body, "created_at": "2026-10-30T02:30:00Z"}
+    repo.write("comments.json", json.dumps([item]))
+    proc = repo.run("check_specs.py", "--base", "main", "--comments", "comments.json")
+    assert proc.returncode == code, proc.stdout
+
+
+# --- the weekly report (metrics.py) --------------------------------------------------------------
+
+
+class Saved(dict):
+    def get(self, key, endpoint=None):
+        return dict.get(self, key)
+
+
+@pytest.mark.parametrize(("is_solo", "cleared"), [(True, "yes"), (False, "unknown")])
+def test_the_weekly_report_counts_a_solo_confirmation_as_the_verdict(is_solo, cleared):
+    """REQ-039: brief #277 answer 2 (the report reads what the router reads)."""
+    import metrics
+
+    src = Saved({"comments-7": [said(5, "boss", confirmation())]})
+    detail = {
+        "number": 7,
+        "merged_at": "2026-10-30T03:00:00Z",
+        "created_at": "2026-10-30T01:00:00Z",
+        "head": {"sha": HEAD},
+        "user": {"login": "boss"},
+        "body": "",
+    }
+    ctx = metrics.Context(src, Path("."), [], ["boss"], is_solo, ("claude",))
+    assert metrics.build_record(ctx, detail)["merged_head_cleared"] == cleared

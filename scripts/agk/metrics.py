@@ -24,17 +24,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from common import (
     REQUIREMENTS,
     CheckError,
+    agent_apps,
     covered_fix_list,
     git,
     matches,
     parse_estimate,
     read_list,
     repo_root,
+    review_mode,
     run,
     show,
     test_dirs,
 )
-from reviewers import verdict_authors
+from reviewers import confirmed_comments, verdict_authors
 
 NAME = "metrics"
 USAGE = (
@@ -241,6 +243,8 @@ class Context:
     root: Path
     dirs: list[str]
     authors: list[str] | None = None
+    solo: bool = False  # brief 277: a confirmation counts as its verdict
+    apps: tuple[str, ...] = ()
 
 
 def hours_between(opened: str | None, closed: str | None) -> str:
@@ -450,6 +454,8 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
     n = detail["number"]
     merged = bool(detail.get("merged_at"))
     comments = ctx.src.get(f"comments-{n}", f"repos/{{repo}}/issues/{n}/comments")
+    if ctx.solo and isinstance(comments, list):
+        comments = confirmed_comments(comments, ctx.apps)
     files = ctx.src.get(f"files-{n}", f"repos/{{repo}}/pulls/{n}/files")
     commits = ctx.src.get(f"commits-{n}", f"repos/{{repo}}/pulls/{n}/commits")
     authors = counted_authors(ctx.authors, author_of(detail))
@@ -657,7 +663,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     root = repo_root()
     src = ApiDir(Path(options["api"])) if options["api"] else Gh(options["repo"] or origin_repo())
-    ctx = Context(src, root, test_dirs(root), verdict_authors(root))
+    solo = review_mode(root) == "solo"
+    ctx = Context(src, root, test_dirs(root), verdict_authors(root), solo, tuple(agent_apps(root)))
     body, incomplete = report(ctx, today, issues)
     sys.stdout.write(body)
     return 1 if incomplete else 0

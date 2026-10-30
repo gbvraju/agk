@@ -13,7 +13,9 @@ approval by an account in `spec_approvers`: a first line `Approve: <sha> SPEC-<n
 `Approve: SPEC-<n>` (the text at the `head_sha` of the latest run created before the comment,
 GitHub's time, never a commit date), or a review in state `APPROVED` (at its own `commit_id`, for
 the one spec the pull request sets Approved or the one its first line names). The spec file at the
-head must equal the approved text apart from its status line. Without `--comments` the approval is
+head must equal the approved text apart from its status line. With `review_mode = "solo"` an
+`Approve: SPEC-<n>` line of a solo confirmation approves the text at its confirmed sha (brief 277,
+`reviewers.confirmed_comments`). Without `--comments` the approval is
 not checked (a local run has no comments).
 (4) Rule b (SPEC-0013 rule 24): a spec whose Approved status line is added or changed in the diff
 has no open `Q-` id (a table row or list item in the spec or its notes file that has no row in the
@@ -45,10 +47,11 @@ from common import (
     git,
     read_text,
     repo_root,
+    review_mode,
     run,
     show,
 )
-from reviewers import approval_shas, spec_approvers
+from reviewers import approval_shas, confirmed_comments, spec_approvers
 
 NAME = "specs"
 SPEC_PREFIX = "docs/specs/"
@@ -281,8 +284,11 @@ def main(argv: list[str] | None = None) -> int:
     if comments is not None:
         reviews = file_arg(argv, "--reviews")
         runs = file_arg(argv, "--runs")
+        items = comments_of(Path(comments))
+        if review_mode(root) == "solo":  # brief 277: the Approve: line of a confirmation
+            items = confirmed_comments(items, agent_apps(root))
         approvals = approval_shas(
-            comments_of(Path(comments)),
+            items,
             comments_of(Path(reviews)) if reviews else [],
             spec_approvers(root),
             runs_of(root, runs),

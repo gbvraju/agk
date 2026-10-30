@@ -51,6 +51,7 @@ from common import (
     load_config,
     repo_root,
     required_checks,
+    review_mode,
     verdict_problem,
 )
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
@@ -58,6 +59,7 @@ from reviewers import (
     APPROVE,
     APPROVE_SHORT,
     approval_shas,
+    confirmed_comments,
     first_line,
     login_of,
     person_approvals,
@@ -227,6 +229,8 @@ def decide(f: dict) -> str:
         return "agk:ci-red"
     head = str(f.get("head") or "")
     comments = f.get("comments") or []
+    if f.get("solo"):  # brief 277: a confirmation counts as the verdict and the approval
+        comments = confirmed_comments(comments, f.get("agent_apps") or ())
     authors = counted_authors(f.get("authors"), f.get("author"))
     listed = verdicts(comments, authors) or []
     kind, sha = listed[-1] if listed else ("", "")
@@ -295,6 +299,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "approvers": spec_approvers(root),
         "required": required_checks(root),
         "agent_apps": agent_apps(root),
+        "solo": review_mode(root) == "solo",
         "author": (pr.get("user") or {}).get("login"),
         "files": files,
         "commit": commit if isinstance(commit, dict) else {},
