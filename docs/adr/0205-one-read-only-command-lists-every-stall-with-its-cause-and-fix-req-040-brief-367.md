@@ -1,6 +1,6 @@
 # ADR-0205: one read-only command lists every stall with its cause and fix (REQ-040, brief 367)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0184, ADR-0191, ADR-0195
