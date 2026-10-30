@@ -5,13 +5,19 @@
 # red", and, when a pull request merges, the brief its `Finishes:` line names (brief #302). A label set with the job's token starts
 # no workflow, and no trigger below listens to a label change, so it cannot loop.
 # A comment starts a job only when its first line can change a state: `Verdict:`, `Approve:`, `Approval:` or `Correction:` (brief #216).
+# Brief #369 (ADR-0207): GitHub bills every job as at least one whole minute, so a job starts only where it can change a label.
+# A `pull_request` event of a draft starts no job: a draft's governance run wakes the router when it finishes, and the label is
+# set again when it is marked ready, by the router run that the `ready_for_review` governance run wakes. A `workflow_run` whose
+# conclusion is `skipped` (proof on a draft) starts no job either, since a skipped run changes no label.
 name: agk-route
 
 on:
   # `closed` (brief #302): when a pull request merges, the brief its `Finishes:` line names is closed; the job runs for a closed
   # pull request only when it merged.
+  # `edited` is not a trigger (brief #369, ADR-0207): an edited description starts `governance edited`, whose finished run wakes
+  # this router for the same state, so a run of its own would bill a second minute for nothing.
   pull_request:
-    types: [opened, synchronize, reopened, edited, closed]
+    types: [opened, synchronize, reopened, closed]
   issue_comment:
     types: [created]
   workflow_run:
@@ -43,7 +49,7 @@ concurrency:
 
 jobs:
   agk-route:
-    if: ${{ (github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true) && (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) && (github.event_name != 'issue_comment' || startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || startsWith(github.event.comment.body, 'Approval:') || startsWith(github.event.comment.body, 'Correction:')) }}
+    if: ${{ (github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true) && (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) && (github.event_name != 'issue_comment' || startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || startsWith(github.event.comment.body, 'Approval:') || startsWith(github.event.comment.body, 'Correction:')) && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0

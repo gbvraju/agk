@@ -213,9 +213,8 @@ def test_the_workflow_wakes_on_closed_and_its_job_runs_for_a_merge_only():
         "opened",
         "synchronize",
         "reopened",
-        "edited",
         "closed",
-    ]
+    ]  # brief #369: `edited` wakes the router through the `governance edited` run
     condition = re.search(r"^    if: \$\{\{ (.+) \}\}$", text, re.MULTILINE)
     assert condition, text
     assert (

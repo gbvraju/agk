@@ -93,6 +93,18 @@ repository (the `repository` of the kit's `.claude-plugin/plugin.json`), naming 
 repository's latest release. A kit newer than the newest release (a checkout between releases) is `ok`; a release it cannot
 read is `??` (`no-release`, `release-unreadable`, `offline`, ...), never `ok`.
 
+## Stalls
+
+    python3 scripts/agk/stalls.py [--json]
+
+Lists every place where the project's pull requests or sessions have stopped, each with its cause and its fix in one line:
+`stall <kind> #<n>: <cause>; fix: <one plain step>`, or `no stall`. The kinds are `stale-label` (green checks, `agk:ci-running`
+still on after 10 minutes), `no-verdict` (`agk:review` for 30 minutes with no verdict naming the head), `stuck-run` (a required
+run queued or in progress for 60 minutes, or cancelled with no newer run), `red-default` (the issue "The default branch is
+red" is open), `idle-capacity` (the plan names sessions to start and no brief was taken for 15 minutes) and `claim-no-pr` (a
+live take with no pull request and no post by its session for 2 hours). `--json` gives the same. It reads with `gh api` (GET
+only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repository cannot be read (ADR-0205).
+
 ## Pausing the kit
 
     python3 scripts/agk/doctor.py --paused [--ref REF] [ROOT]
@@ -297,7 +309,7 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:stack` | `scripts/agk/engines.py stack-ids`, `stack-write`, `stack-check` | one Proposed ADR of stack options on a new branch |
 | `/agk:design` | `scripts/agk/design.py write`, `screenshots`, `scripts/agk/check_design.py` | `docs/design/theme.md` (when absent) and a mockup folder with `index.html` and `README.md` on a new branch |
 | `/agk:launch` | `scripts/agk/session.py plan`, `scripts/agk/launch.py prompts` | nothing in the repository (after you say yes, one session per planned slot is started through an adapter, or its prompt is printed) |
-| `/agk:review-pass` | `scripts/agk/session.py review-queue`, the conductor's protocol, `gh api` | one `Verdict:` comment per pull request that needs one (never two on one head), from a conductor session |
+| `/agk:review-pass` | `scripts/agk/session.py review-queue`, the conductor's protocol, `gh api`, then `scripts/agk/session.py plan --json` and `scripts/agk/launch.py prompts` | one `Verdict:` comment per pull request that needs one (never two on one head), from a conductor session; at the end it prints the plan, and starts the planned sessions through the project's adapter only with `[flow] auto_start = true` |
 | `/agk:confirm` | `gh api` (GET), the conductor's protocol | nothing (solo mode: prints the one `Confirmed:` comment for the person to post; a session never posts it) |
 | `/agk:spec` | `scripts/agk/new_spec.py`, `scripts/agk/intake.py` | a Draft spec, or a requirement proposal with its ADR draft, or (from one sentence) a requirement, a Draft spec and an ADR stub |
 | `/agk:architect` | `scripts/agk/playbook.py architect` | nothing (prints how to start `claude --agent architect`) |

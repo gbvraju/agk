@@ -28,7 +28,7 @@ KIT_ROUTER = (
     "name: agk-route\n"
     "on:\n"
     "  pull_request:\n"
-    "    types: [opened, synchronize, reopened, edited]\n"
+    "    types: [opened, synchronize, reopened, closed]\n"
     "  workflow_run:\n"
     "    # the workflows of required_checks\n"
     "    workflows: [governance, proof]\n"
@@ -222,3 +222,28 @@ def test_the_new_check_is_after_the_kit_checks(name):
     ids = list(doctor_script.CHECKS)
     assert ids.index(name) == ids.index("vendored-differs") + 1
     assert doctor_script.CHECKS[name][0] == "warn"
+
+
+# --- brief #369: an edit is labelled through the `governance edited` wake ---
+
+
+def test_the_router_still_labels_a_pull_request_after_an_edit():
+    """REQ-039: brief #369 answer 2 (`edited` leaves the router's own triggers; the finished
+    `governance edited` run, a run of the workflow named `governance`, wakes it instead)."""
+    from test_ci_saving import holds, jobs_started, pr_event, router_condition, triggers, workflow
+
+    router = workflow("agk-route.yml")
+    assert "edited" not in triggers(router)["pull_request"]["types"]
+    assert "edited" in triggers(workflow("governance.yml"))["pull_request"]["types"]
+    assert "governance" in doc.router_names(router)
+    for draft in (True, False):
+        count = jobs_started(pr_event("edited", draft))
+        assert (count["agk-route.yml"], count["agk-route wake"]) == (0, 1), draft
+    for conclusion in ("success", "failure", "cancelled"):
+        run = {"name": "governance", "conclusion": conclusion}
+        wake = {
+            "event_name": "workflow_run",
+            "ref_name": "main",
+            "event": {"workflow_run": run, "repository": {"default_branch": "main"}},
+        }
+        assert holds(router_condition(), wake), conclusion

@@ -26,6 +26,7 @@ def plan(*sessions: tuple[str, int, str]) -> dict:
         "start": [{"session": s, "brief": b, "title": t} for s, b, t in sessions],
         "waits": [],
         "skipped": [],
+        "capacity": {"slots": len(sessions)},  # an adapter starts nothing without it (brief #331)
     }
 
 
@@ -223,7 +224,7 @@ def test_a_build_that_is_not_a_name_is_refused_naming_the_field(tmp_path, build)
 
 
 def test_the_adapter_environment_carries_the_build(tmp_path, adapter):
-    doc = {"start": [{"session": "builder-a", "brief": 5, "build": "b"}]}
+    doc = {"start": [{"session": "builder-a", "brief": 5, "build": "b"}], "capacity": {"slots": 1}}
     out = run_adapter(tmp_path, adapter, doc)
     assert out.returncode == 0, out.stderr
     assert "--build b" in calls(tmp_path)[0]["prompt"]

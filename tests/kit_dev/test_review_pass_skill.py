@@ -79,3 +79,90 @@ def test_the_reference_and_the_role_file_name_the_command():
     role = flat(ROLE)
     assert "`review-pass` command" in role and "session.py review-queue" in role
     assert "never two verdicts on one head" in role
+
+
+# --- the re-plan at the end of a pass (brief #331, ADR-0190) -------------------------------------
+
+TEMPLATE = KIT_ROOT / "kit" / "templates" / "agk.toml"
+
+
+def test_the_pass_ends_by_re_planning_after_its_verdicts_and_posts_nothing_new():
+    """REQ-041: brief #331 answer 1 (the last step runs the plan and prints start and waits)."""
+    text = flat(SKILL)
+    assert "**Re-plan.**" in text
+    replan = text.index("**Re-plan.**")
+    assert text.index("Post the verdict") < replan < text.index("The last lines")
+    for phrase in (
+        "python3 scripts/agk/session.py plan --json",
+        "`Start <n>: <session> takes #<brief>, ...`",
+        "`#<brief> waits for",
+        "the pass posts nothing new",
+    ):
+        assert phrase in text, phrase
+
+
+def test_the_pass_prints_the_prompts_off_and_starts_through_the_adapter_on():
+    """REQ-041: brief #331 answers 2 and 4."""
+    text = flat(SKILL)
+    for phrase in (
+        "`auto_start`",
+        "`launch_adapter`",
+        "python3 scripts/agk/launch.py prompts --plan <the scratch file>",
+        "launch.py prompts --plan <the scratch file> --adapter <launch_adapter>",
+        "ready-to-paste",
+        "never more than the plan's capacity",
+        "never for a brief that is taken",
+        "made by the started session itself, never by the conductor",
+        "not retried",
+    ):
+        assert phrase in text, phrase
+
+
+def test_the_template_carries_both_settings_off_and_names_their_adr():
+    """REQ-041: brief #331 answer 2 (an optional setting, false by default, a protected change)."""
+    text = TEMPLATE.read_text(encoding="utf-8")
+    assert "# auto_start = false" in text and '# launch_adapter = ""' in text
+    flow = text[text.index("# [flow]") :]
+    assert "auto_start" in flow and "launch_adapter" in flow
+    assert "protected" in flat(TEMPLATE)
+
+
+def test_the_guide_documents_two_example_adapters_each_marked_verify():
+    """REQ-041: brief #331 answer 3 (a local terminal one and a cloud one; none installed)."""
+    text = flat(GUIDE)
+    start = text.index("Automatic starts after a review pass")
+    part = text[start : start + 4000]
+    for phrase in (
+        "auto_start = true",
+        "launch_adapter",
+        "A local terminal adapter",
+        "A cloud adapter",
+        "The kit installs neither",
+        "AGK_SESSION",
+    ):
+        assert phrase in part, phrase
+    assert part.count("(verify") >= 2
+
+
+def test_the_role_file_names_the_re_plan_and_the_one_command_it_may_run():
+    """REQ-041: brief #331 answer 2 (the guard allows that one command)."""
+    role = flat(ROLE)
+    for phrase in (
+        "session.py plan --json",
+        "launch.py prompts --plan",
+        "`auto_start = true`",
+        "`launch_adapter`",
+    ):
+        assert phrase in role, phrase
+
+
+def test_the_role_and_the_skill_end_an_empty_pass_the_same_way():
+    """REQ-041: brief #331 answer 1 (the verdict on 2d53a5d, item 3: an empty pass re-plans)."""
+    phrase = "`queue empty` followed by its `Start` and `waits for` lines"
+    assert phrase in flat(SKILL)
+    role = flat(ROLE)
+    assert (
+        "end with the line `queue empty` followed by the re-plan's `Start` and `waits for` lines"
+        in role
+    )
+    assert "end with the one line `queue empty`" not in role
