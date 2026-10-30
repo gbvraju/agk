@@ -73,22 +73,22 @@ def test_briefs_whose_touches_overlap_never_start_in_the_same_wave(proj, stub):
         stub,
         [
             issue(5, brief("scripts/**")),
-            issue(6, brief("scripts/agk/")),
+            issue(6, brief("scripts/agk/x.py")),
             issue(7, brief("docs/**")),
         ],
     )
     free(stub, 5, 6, 7)
     lines = plan(proj, stub).stdout.splitlines()
     assert lines[0] == "Start 2: builder-a takes #5, builder-b takes #7."
-    assert "#6 waits for #5 (both touch scripts/agk/)." in lines  # two folders, the narrower
+    assert "#6 waits for #5 (both touch scripts/agk/x.py)." in lines  # the file, not the folder
 
 
 def test_the_priority_and_then_the_number_decide_who_waits(proj, stub):
-    listing(stub, [issue(5, brief("a/")), issue(6, brief("a/b/", priority=1))])
+    listing(stub, [issue(5, brief("a/")), issue(6, brief("a/b", priority=1))])
     free(stub, 5, 6)
     lines = plan(proj, stub).stdout.splitlines()
     assert lines[0] == "Start 1: builder-a takes #6."
-    assert "#5 waits for #6 (both touch a/b/)." in lines
+    assert "#5 waits for #6 (both touch a/b)." in lines
 
 
 def changed(stub: Stub, number: int, *entries: tuple[str, str]) -> None:
@@ -100,7 +100,7 @@ def changed(stub: Stub, number: int, *entries: tuple[str, str]) -> None:
 
 
 def test_a_brief_that_overlaps_running_work_waits_for_it(proj, stub):
-    listing(stub, [issue(5, brief("scripts/agk/session.py")), issue(6, brief("docs/**"))])
+    listing(stub, [issue(5, brief("scripts/**")), issue(6, brief("docs/**"))])
     stub.serve(PULLS, [labelled(20, 1, "agk:review")])
     changed(stub, 20, ("modified", "scripts/agk/session.py"))
     free(stub, 5, 6)
@@ -123,7 +123,7 @@ def test_a_file_a_pull_request_adds_blocks_only_on_an_exact_path(proj, stub):
 
 
 def test_a_modified_renamed_or_removed_file_matched_by_a_glob_blocks(proj, stub):
-    listing(stub, [issue(5, brief("a/*.py")), issue(6, brief("b/*.py")), issue(7, brief("c/*.py"))])
+    listing(stub, [issue(5, brief("a/**")), issue(6, brief("b/**")), issue(7, brief("c/**"))])
     stub.serve(PULLS, [labelled(20, 1, "agk:review")])
     changed(stub, 20, ("modified", "a/x.py"), ("removed", "b/y.py"), ("renamed", "c/z.py"))
     free(stub, 5, 6, 7)
@@ -133,7 +133,7 @@ def test_a_modified_renamed_or_removed_file_matched_by_a_glob_blocks(proj, stub)
 
 
 def test_a_renamed_file_blocks_by_its_old_name_too(proj, stub):
-    listing(stub, [issue(5, brief("old/*.py"))])
+    listing(stub, [issue(5, brief("old/**"))])
     stub.serve(PULLS, [labelled(20, 1, "agk:review")])
     stub.serve(
         f"{PULLS}/20/files",
@@ -306,7 +306,7 @@ def test_ready_pull_requests_that_share_no_file_are_one_set_and_the_rest_wait_fo
 
 def test_the_set_is_ordered_by_the_briefs_it_unblocks_then_priority_then_age(proj, stub):
     # #5 waits for pull request #21 (it modifies a file the brief names), so #21 goes first
-    listing(stub, [issue(5, brief("w/*.py")), issue(70, brief("q/", priority=3))])
+    listing(stub, [issue(5, brief("w/**")), issue(70, brief("q/", priority=3))])
     free(stub, 5, 70)
     waiting = [
         labelled(20, 70, "agk:ready", at=iso(-timedelta(days=4))),
@@ -404,14 +404,14 @@ def test_a_brief_marked_stale_by_a_line_or_a_label_is_skipped_by_plan_and_next(p
 
 
 def test_the_json_and_the_words_describe_the_same_plan(proj, stub):
-    listing(stub, [issue(5, brief("a/")), issue(6, brief("a/b/"))])
+    listing(stub, [issue(5, brief("a/")), issue(6, brief("a/b"))])
     free(stub, 5, 6)
     got = data(proj, stub)
     assert set(got) >= {
         "start", "waits", "skipped", "capacity", "merge", "merge_set", "behind", "conflicts",
         "stale_claims",
     }  # fmt: skip
-    assert got["waits"] == [{"brief": 6, "waits_for": 5, "why": "both touch a/b/"}]
+    assert got["waits"] == [{"brief": 6, "waits_for": 5, "why": "both touch a/b"}]
     assert "Start 1: builder-a takes #5." in plan(proj, stub).stdout
 
 

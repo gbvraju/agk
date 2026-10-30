@@ -46,13 +46,49 @@ def test_two_briefs_under_one_folder_with_different_files_start_together(proj, s
     assert [s["brief"] for s in got["start"]] == [5, 6, 7] and got["waits"] == []
 
 
-def test_a_folder_entry_does_not_hold_a_brief_that_names_a_file_under_it(proj, stub):
-    """A taken brief whose `Touches:` is `docs/guides/` holds no brief that names one guide."""
+def test_a_folder_only_brief_waits_for_a_brief_that_names_a_file_under_it(proj, stub):
+    """The verdict on 1f1969e, item 1: `docs/guides/` against `docs/guides/a.md` waits, and the
+    wait names the file."""
     listing(stub, [issue(4, brief("docs/guides/")), issue(5, brief("docs/guides/a.md"))])
     stub.serve(f"{ISSUES}/4/comments", [comment(1, "x", f"taken: builder-x {DAY}")])
     free(stub, 5)
     got = data(proj, stub)
+    assert got["start"] == []
+    assert got["waits"] == [{"brief": 5, "waits_for": 4, "why": "both touch docs/guides/a.md"}]
+
+
+def test_a_folder_with_a_file_named_under_it_counts_only_for_that_file(proj, stub):
+    """`docs/guides/` plus `docs/guides/b.md` against `docs/guides/a.md` does not wait."""
+    listing(
+        stub,
+        [issue(4, brief("docs/guides/, docs/guides/b.md")), issue(5, brief("docs/guides/a.md"))],
+    )
+    stub.serve(f"{ISSUES}/4/comments", [comment(1, "x", f"taken: builder-x {DAY}")])
+    free(stub, 5)
+    got = data(proj, stub)
     assert [s["brief"] for s in got["start"]] == [5] and got["waits"] == []
+
+
+def test_a_folder_of_the_repository_without_its_slash_is_a_folder(proj, stub):
+    """The verdict on 1f1969e, item 2: `docs/guides` behaves like `docs/guides/`."""
+    proj.write("docs/guides/a.md", "a\n")
+    listing(
+        stub,
+        [
+            issue(4, brief("docs/guides")),
+            issue(5, brief("docs/guides/a.md")),
+            issue(6, brief("docs/guides/sub/b.md")),
+            issue(7, brief("docs/guide, docs/guide/a.md")),
+        ],
+    )
+    stub.serve(f"{ISSUES}/4/comments", [comment(1, "x", f"taken: builder-x {DAY}")])
+    free(stub, 5, 6, 7)
+    got = data(proj, stub)
+    assert got["waits"] == [
+        {"brief": 5, "waits_for": 4, "why": "both touch docs/guides/a.md"},
+        {"brief": 6, "waits_for": 4, "why": "both touch docs/guides/sub/b.md"},
+    ]
+    assert [s["brief"] for s in got["start"]] == [7]  # `docs/guide` is no folder: it names a file
 
 
 def test_the_same_file_waits_and_the_plan_names_that_file(proj, stub):
@@ -93,23 +129,30 @@ def test_shared_mechanical_files_still_never_overlap(proj, stub):
     assert [s["brief"] for s in data(proj, stub)["start"]] == [5, 6]
 
 
-def test_a_changed_file_overlaps_a_folder_entry_only_when_the_brief_names_that_file(proj, stub):
+def test_a_changed_file_under_a_folder_only_brief_waits(proj, stub):
+    """The verdict on 1f1969e, item 1: `tests/kit/` waits for a pull request that modifies
+    `tests/kit/test_x.py`; a brief that names other files under the folder does not."""
     listing(
         stub,
         [
-            issue(5, brief("docs/guides/")),
-            issue(6, brief("docs/guides/, docs/guides/x.md")),
-            issue(7, brief("docs/guides/y.md")),
+            issue(5, brief("tests/kit/")),
+            issue(6, brief("tests/kit/, tests/kit/test_y.py")),
+            issue(7, brief("tests/kit/, tests/kit/test_x.py")),
+            issue(8, brief("tests/kit/test_z.py")),
         ],
     )
     stub.serve(PULLS, [labelled(20, 1, "agk:review")])
-    changed(stub, 20, ("modified", "docs/guides/x.md"))
-    free(stub, 5, 6, 7)
+    changed(stub, 20, ("modified", "tests/kit/test_x.py"), ("added", "tests/kit/test_new.py"))
+    free(stub, 5, 6, 7, 8)
     got = data(proj, stub)
-    assert [s["brief"] for s in got["start"]] == [5, 7]
-    assert got["waits"] == [{"brief": 6, "pull_request": 20, "why": "it changes docs/guides/x.md"}]
+    assert [s["brief"] for s in got["start"]] == [6, 8]
+    why = "it changes tests/kit/test_x.py"
+    assert got["waits"] == [
+        {"brief": 5, "pull_request": 20, "why": why},
+        {"brief": 7, "pull_request": 20, "why": why},
+    ]
     words = plan(proj, stub).stdout.splitlines()
-    assert "#6 waits for pull request #20 (it changes docs/guides/x.md)." in words
+    assert "#5 waits for pull request #20 (it changes tests/kit/test_x.py)." in words
 
 
 # --- answer 2: a claim whose session is gone ------------------------------------------------------
@@ -225,3 +268,76 @@ def test_a_later_post_of_the_session_keeps_its_claim_fresh(proj, stub):
     )
     got = data(proj, stub)
     assert got["stale_claims"] == [] and [s["brief"] for s in got["start"]] == [6]
+
+
+# --- the verdict on 1f1969e, item 3: a session's own comments are posts ---------------------------
+
+CONDUCTOR = 40
+
+
+def gone_case(stub) -> None:
+    """builder-f took build (b) 30 hours ago and has no pull request; build (a)'s open pull
+    request of builder-e keeps the take live."""
+    listing(stub, [issue(5, brief("a/x.py") + THREE)])
+    stub.serve(PULLS, [built(20, 5, "(a)", timedelta(0), state="open")])
+    changed(stub, 20, ("modified", "z/a.py"))
+
+
+def takes(*extra: dict) -> list[dict]:
+    old = iso(-timedelta(hours=30))
+    return [
+        comment(1, "x", f"taken: builder-e {DAY} build (a)", iso(-timedelta(hours=1))),
+        comment(2, "x", f"taken: builder-f {DAY} build (b)", old),
+        *extra,
+    ]
+
+
+def test_without_a_comment_of_its_own_the_session_is_stale(proj, stub):
+    gone_case(stub)
+    stub.serve(f"{ISSUES}/5/comments", takes())
+    got = data(proj, stub)
+    assert [c["session"] for c in got["stale_claims"]] == ["builder-f"]
+
+
+def test_a_report_on_the_brief_that_names_the_session_keeps_it_fresh(proj, stub):
+    gone_case(stub)
+    recent = iso(-timedelta(hours=2))
+    other = comment(3, "x", "Report: builder-ff is still at it", recent)
+    stub.serve(f"{ISSUES}/5/comments", takes(other))
+    assert [c["session"] for c in data(proj, stub)["stale_claims"]] == ["builder-f"]
+    mine = comment(4, "x", "Progress: builder-f build (b) done 2/5; next: 3", recent)
+    stub.serve(f"{ISSUES}/5/comments", takes(other, mine))
+    assert data(proj, stub)["stale_claims"] == []
+
+
+def test_a_request_on_the_conductor_issue_that_names_the_session_keeps_it_fresh(proj, stub):
+    gone_case(stub)
+    stub.serve(f"{ISSUES}/5/comments", takes())
+    conductor = {**issue(CONDUCTOR, "the conductor"), "labels": [{"name": "agk-conductor"}]}
+    stub.serve(ISSUES, [conductor], nth=2)  # the first read lists the briefs
+    stub.serve(
+        f"{ISSUES}/{CONDUCTOR}/comments",
+        [comment(9, "x", "Request: builder-f new", iso(-timedelta(hours=2)))],
+    )
+    assert data(proj, stub)["stale_claims"] == []
+
+
+def test_a_report_on_a_pull_request_of_the_session_keeps_it_fresh(proj, stub):
+    """builder-f merged build (c) 30 hours ago and still reports on that pull request."""
+    listing(stub, [issue(5, brief("a/x.py") + THREE)])
+    old = iso(-timedelta(hours=40))
+    stub.serve(
+        f"{ISSUES}/5/comments",
+        [
+            comment(1, "x", f"taken: builder-f {DAY} build (c)", old),
+            comment(2, "x", f"taken: builder-y {DAY} build (b)", iso(-timedelta(hours=1))),
+        ],
+    )
+    stub.serve(
+        PULLS,
+        [built(20, 5, "(c)", timedelta(hours=30)), built(21, 5, "b", timedelta(0), state="open")],
+    )
+    changed(stub, 21, ("modified", "z/b.py"))
+    report = comment(7, "x", "Report: abc1234 the follow-up is filed", iso(-timedelta(hours=2)))
+    stub.serve(f"{ISSUES}/20/comments", [report])
+    assert data(proj, stub)["stale_claims"] == []

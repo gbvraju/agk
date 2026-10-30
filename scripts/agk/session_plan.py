@@ -111,17 +111,37 @@ def file_clash(x: str, y: str) -> str | None:
     return None
 
 
+def under(path: str, folder: str) -> bool:
+    """A path or the fixed part of a glob that lies in a folder entry."""
+    return glob_regex(folder).fullmatch(path) is not None or literal(path).startswith(
+        literal(folder)
+    )
+
+
+def covering(entries: list[str]) -> list[str]:
+    """The folder entries that cover every file under them: those under which the same brief
+    names no file (the verdict on 1f1969e, item 1). A folder under which the brief names files
+    counts only for those files."""
+    files = [g for g in entries if not is_folder(g)]
+    return [f for f in entries if is_folder(f) and not any(under(g, f) for g in files)]
+
+
 def clash(a: list[str], b: list[str]) -> str | None:
     """What two `Touches:` lists both touch, else None (brief #330 answers 1 and 3).
 
-    Two entries that name files overlap on the file they both name. A folder entry overlaps only
-    another folder entry above or below it (the narrower is named); against an entry that names a
-    file under it, it overlaps only when its own brief names that file too, which the first rule
-    finds."""
+    Two entries that name files overlap on the file they both name. A folder entry covers every
+    file under it unless its brief names files under it, so it overlaps an entry of the other
+    brief that names a file under it (that file is named). Two folder entries overlap when one is
+    above or below the other, as before (the narrower is named)."""
     for x in a:
         for y in b:
             if not is_folder(x) and not is_folder(y) and (found := file_clash(x, y)):
                 return found
+    for folders, files in ((covering(a), b), (covering(b), a)):
+        for f in folders:
+            for y in files:
+                if not is_folder(y) and under(y, f):
+                    return y
     for x in a:
         for y in b:
             if is_folder(x) and is_folder(y):
@@ -134,13 +154,14 @@ def file_conflict(item: dict, mine: list[str], shared: list) -> str | None:
     """Why a changed file of a running pull request blocks a brief, else None.
 
     A modified, renamed or removed file blocks when an entry of the brief that names files matches
-    it (a renamed file also by its old name); a folder entry never does, since a brief whose folder
-    holds the file blocks only when it names that file too (brief #330 answer 1). A file the pull
-    request only *adds* blocks only on an exact path: every build adds an ADR, a changelog fragment
-    and tests, and a new file cannot conflict with a brief that does not name it."""
+    it, or a folder entry that covers it (`covering`; a renamed file also by its old name). A
+    file the pull request only *adds* blocks only on an exact path: every build adds an ADR, a
+    changelog fragment and tests, and a new file cannot conflict with a brief that does not name
+    it."""
     names = [str(item.get("filename"))]
     if item.get("status") == "renamed" and item.get("previous_filename"):
         names.append(str(item["previous_filename"]))
+    folders = covering(mine)
     for path in names:
         if any(r.fullmatch(path) for r in shared):
             continue
@@ -149,16 +170,28 @@ def file_conflict(item: dict, mine: list[str], shared: list) -> str | None:
                 return f"it adds {path}"
         elif any(glob_regex(g).fullmatch(path) for g in mine if not is_folder(g)):
             return f"it changes {path}"
+        elif any(glob_regex(f).fullmatch(path) for f in folders):
+            return f"it changes {path}"
     return None
+
+
+def entries_of(root, globs: list[str]) -> list[str]:
+    """The `Touches:` entries with a folder of the repository written without its slash read as
+    that folder (`docs/guides` is `docs/guides/`; the verdict on 1f1969e, item 2)."""
+    out = []
+    for g in globs:
+        plain_path = not has_wildcard(g) and not g.endswith("/")
+        out.append(g + "/" if plain_path and g and (Path(root) / g).is_dir() else g)
+    return out
 
 
 def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
     """What running work the brief waits for: a taken brief or an open builder pull request."""
-    mine = unshared(touches_of(brief["body"]), shared)
+    mine = unshared(entries_of(root, touches_of(brief["body"])), shared)
     for number, theirs in s.held:
         if number == brief["number"]:
             continue  # another build of the same brief is not a rival
-        if found := clash(mine, unshared(theirs, shared)):
+        if found := clash(mine, unshared(entries_of(root, theirs), shared)):
             return {"brief": brief["number"], "waits_for": number, "why": f"both touch {found}"}
     for pr in s.builders:
         if pr_brief(pr) == brief["number"]:
@@ -428,9 +461,10 @@ def waves(root, s: Survey, ready: list[dict]) -> tuple[list[dict], list[dict]]:
         if found := running_conflict(root, s, brief, shared):
             waits.append(found)
             continue
-        mine = unshared(touches_of(brief["body"]), shared)
+        mine = unshared(entries_of(root, touches_of(brief["body"])), shared)
         for other in chosen:
-            if found := clash(mine, unshared(touches_of(other["body"]), shared)):
+            theirs = unshared(entries_of(root, touches_of(other["body"])), shared)
+            if found := clash(mine, theirs):
                 waits.append(
                     {
                         "brief": brief["number"],
