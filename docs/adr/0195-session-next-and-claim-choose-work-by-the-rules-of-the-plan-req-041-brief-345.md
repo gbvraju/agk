@@ -1,6 +1,6 @@
 # ADR-0195: session next and claim choose work by the rules of the plan (REQ-041, brief 345)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0124, ADR-0125, ADR-0155, ADR-0189
