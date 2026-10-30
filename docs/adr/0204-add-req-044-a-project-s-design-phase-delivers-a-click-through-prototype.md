@@ -1,6 +1,6 @@
 # ADR-0204: Add REQ-044: A design phase delivers a click-through prototype that sign-off freezes
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: SPEC-0037, SPEC-0029, REQ-036

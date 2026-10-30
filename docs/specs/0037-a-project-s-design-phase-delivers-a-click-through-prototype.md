@@ -1,6 +1,6 @@
 # SPEC-0037: A design phase delivers a click-through prototype on a default UX standard, signed off once and held to by every build
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-044
 
