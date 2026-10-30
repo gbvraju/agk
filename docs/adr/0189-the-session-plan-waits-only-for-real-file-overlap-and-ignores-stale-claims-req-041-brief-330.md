@@ -1,6 +1,6 @@
 # ADR-0189: the session plan waits only for real file overlap and ignores stale claims (REQ-041, brief 330)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0124, ADR-0153, ADR-0155
