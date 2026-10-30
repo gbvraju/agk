@@ -39,9 +39,16 @@ conductor.
 
 A builder blocked on a question while its pull request is still a draft is answered within one pass. A pass reads one more
 GitHub list per open draft. A verdict that answers a draft's question names the draft's head; if the builder marks the pull
-request ready on that same head, the rule against two verdicts on one head skips it until a new comment or push (Q-350-1).
+request ready on that same head, the rule against two verdicts on one head skips it until a new comment or push; the
+builder's `Report:` on marking it ready is such a comment, so the queue lists it again (Q-350-1).
 
 ## Residual
 
-- 2026-10-30: Q-350-1, whether a pull request marked ready on the head of a verdict that only answered a draft's question
-  should be reviewed again, is open.
+- 2026-10-30: whether a verdict on a draft should stop counting as the verdict on its head once the pull request is ready is a
+  later brief, if it ever bites (Q-350-1).
+
+## Log
+
+- 2026-10-30, verdict on d19520a: Q-350-1 answered, as built is enough: the builder's `Report:` on marking the pull request
+  ready is a trigger after the verdict, so the queue lists it again; a verdict on a draft that stops counting once it is ready
+  is a later brief, if this ever bites.
