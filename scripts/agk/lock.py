@@ -145,7 +145,7 @@ def pid_alive(pid: int, windows: bool = os.name == "nt", kernel=None) -> bool:
     if pid <= 0:
         return False
     if windows:
-        k = kernel if kernel is not None else ctypes.windll.kernel32  # type: ignore[attr-defined]
+        k = kernel if kernel is not None else ctypes.WinDLL("kernel32")
         handle = k.OpenProcess(QUERY, False, pid)
         if not handle:
             return False
