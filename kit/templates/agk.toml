@@ -30,6 +30,8 @@ agent_apps = ["claude"]
 # session, counts as the verdict, its Final lines and the spec approval of the head it names; refused when config/reviewers.yaml lists
 # nobody or more than one person). A change needs an ADR.
 review_mode = "team"
+# Optional: the percent of the plan's included Actions minutes past which `python3 scripts/agk/minutes.py` warns (80 if unset).
+# minutes_warn = 80
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.
 # Engines (optional, off by default): the name of a skill the session can see for each step; absent means the kit's own template is used.
 # An engine only drafts, through the kit's template and checks; it never decides, approves or edits a protected file. Choose once;
@@ -39,3 +41,8 @@ review_mode = "team"
 # stack = "<skill name>"
 # design = "<skill name>"
 # review = "<skill name>"
+# Optional settings of the session plan (session.py plan), off the defaults only when set. claim_stale_hours: the hours after which a
+# claim (a taken: comment) whose session has posted nothing and has no open pull request no longer holds its brief (24 by default);
+# the plan lists it as a stale claim. A change needs an ADR in the same pull request (agk.toml is a protected path).
+# [flow]
+# claim_stale_hours = 24

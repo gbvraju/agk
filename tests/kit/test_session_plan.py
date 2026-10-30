@@ -80,7 +80,7 @@ def test_briefs_whose_touches_overlap_never_start_in_the_same_wave(proj, stub):
     free(stub, 5, 6, 7)
     lines = plan(proj, stub).stdout.splitlines()
     assert lines[0] == "Start 2: builder-a takes #5, builder-b takes #7."
-    assert "#6 waits for #5 (both touch scripts/**)." in lines
+    assert "#6 waits for #5 (both touch scripts/agk/x.py)." in lines  # the file, not the folder
 
 
 def test_the_priority_and_then_the_number_decide_who_waits(proj, stub):
@@ -88,7 +88,7 @@ def test_the_priority_and_then_the_number_decide_who_waits(proj, stub):
     free(stub, 5, 6)
     lines = plan(proj, stub).stdout.splitlines()
     assert lines[0] == "Start 1: builder-a takes #6."
-    assert "#5 waits for #6 (both touch a/)." in lines
+    assert "#5 waits for #6 (both touch a/b)." in lines
 
 
 def changed(stub: Stub, number: int, *entries: tuple[str, str]) -> None:
@@ -408,9 +408,10 @@ def test_the_json_and_the_words_describe_the_same_plan(proj, stub):
     free(stub, 5, 6)
     got = data(proj, stub)
     assert set(got) >= {
-        "start", "waits", "skipped", "capacity", "merge", "merge_set", "behind", "conflicts"
+        "start", "waits", "skipped", "capacity", "merge", "merge_set", "behind", "conflicts",
+        "stale_claims",
     }  # fmt: skip
-    assert got["waits"] == [{"brief": 6, "waits_for": 5, "why": "both touch a/"}]
+    assert got["waits"] == [{"brief": 6, "waits_for": 5, "why": "both touch a/b"}]
     assert "Start 1: builder-a takes #5." in plan(proj, stub).stdout
 
 

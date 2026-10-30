@@ -1,0 +1,40 @@
+{
+  "total_count": 5,
+  "workflow_runs": [
+    {
+      "id": 105,
+      "name": "proof",
+      "path": ".github/workflows/proof.yml",
+      "created_at": "2026-10-05T10:00:00Z",
+      "run_attempt": 1
+    },
+    {
+      "id": 104,
+      "name": "project",
+      "path": ".github/workflows/project.yml",
+      "created_at": "2026-10-04T10:00:00Z",
+      "run_attempt": 1
+    },
+    {
+      "id": 103,
+      "name": "agk-route",
+      "path": ".github/workflows/agk-route.yml",
+      "created_at": "2026-10-03T10:00:00Z",
+      "run_attempt": 1
+    },
+    {
+      "id": 102,
+      "name": "governance",
+      "path": ".github/workflows/governance.yml",
+      "created_at": "2026-10-02T10:00:00Z",
+      "run_attempt": 1
+    },
+    {
+      "id": 101,
+      "name": "governance",
+      "path": ".github/workflows/governance.yml",
+      "created_at": "2026-09-30T23:58:00Z",
+      "run_attempt": 1
+    }
+  ]
+}
