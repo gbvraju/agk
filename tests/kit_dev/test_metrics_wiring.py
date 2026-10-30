@@ -65,7 +65,13 @@ def test_ac1_adopt_prints_the_issues_write_note(tmp_path):
     target.mkdir()
     subprocess.run(["git", "init", "-q", str(target)], check=True)
     proc = subprocess.run(
-        [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "adopt.py"), str(target), "--dry-run"],
+        [
+            sys.executable,
+            str(KIT_ROOT / "scripts" / "agk" / "adopt.py"),
+            str(target),
+            "--dry-run",
+            "--unreleased",
+        ],
         capture_output=True,
         text=True,
         env=clean_env(),
