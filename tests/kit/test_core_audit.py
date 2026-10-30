@@ -163,7 +163,7 @@ def repo(tmp_path: Path) -> Path:
     for rel, text in files.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(text, encoding="utf-8")
-    subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607
+    subprocess.run(["git", "init", "-q", str(root)], check=True)  # nosec B603 B607 - fixed argument list, no shell
     return root
 
 
