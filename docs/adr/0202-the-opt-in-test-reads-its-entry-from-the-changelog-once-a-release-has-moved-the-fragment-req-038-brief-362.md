@@ -1,6 +1,6 @@
 # ADR-0202: the opt-in test reads its entry from the changelog once a release has moved the fragment (REQ-038, brief 362)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Deciders: maintainers
 - Related: ADR-0193
