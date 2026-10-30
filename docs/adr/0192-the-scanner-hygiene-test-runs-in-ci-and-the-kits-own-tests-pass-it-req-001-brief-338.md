@@ -44,3 +44,7 @@ instead of passing unseen. A project that installs the kit runs the same step, s
   the tooling is a later brief if wanted.
 - 2026-10-30, verdict on 9b0419f: Q-338-2 answered, `.github/workflows/governance.yml` is changed in this pull request now that
   #329 has merged (merged into this branch from the default branch, no force-push).
+- 2026-10-30, verdict on a5439ff: Q-338-3 answered, the full governance run of a5439ff failed only in `PR body shape`, having
+  read the body from before its `Build-state row:` was dated; an edit cannot cure it because of the defect filed as #347
+  (`full_run.py` counts the skipped `Post` steps of a failed job as not reached). This commit, which records Q-338-1 to Q-338-3
+  here, starts a full run that reads the current body; #347 is not fixed in this pull request.
