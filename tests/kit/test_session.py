@@ -338,7 +338,7 @@ def test_ac3_next_skips_a_bad_shape_an_open_dependence_and_a_live_take_with_reas
     lines = out.stdout.splitlines()
     assert lines[0].startswith("skip #4: rule 4") and "no shape here" not in out.stdout
     assert "skip #5: depends on #3, which is open" in lines
-    assert "skip #6: taken by s-other" in lines
+    assert any(x.startswith("skip #6: taken by s-other until ") for x in lines)  # brief #345
     assert any(line == "brief #8" for line in lines) and out.returncode == 0
 
 

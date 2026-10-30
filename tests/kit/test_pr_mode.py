@@ -184,4 +184,6 @@ def test_ac8_the_step_runs_unless_cancelled_and_is_in_the_governance_recipe():
     mk = (ROOT / "agk.mk").read_text(encoding="utf-8")
     assert "$(PY) scripts/agk/check_pr_mode.py\n" in mk
     block = WORKFLOW.read_text(encoding="utf-8").split("      - name: check_pr_mode\n", 1)[1]
-    assert block.startswith("        if: ${{ !cancelled() }}\n")
+    # brief #348: and not while the kit is paused
+    paused = " && steps.paused.outputs.paused != 'true'"
+    assert block.startswith("        if: ${{ !cancelled()" + paused + " }}\n")

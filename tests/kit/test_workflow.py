@@ -88,7 +88,8 @@ def test_ac2_every_check_step_runs_unless_cancelled():
         # brief #216: on an edited description only the steps that read the body run
         assert re.search(
             r"        if: \$\{\{ !cancelled\(\)( && github\.event\.action != 'edited')?"
-            r"( && steps\.status\.outputs\.skip != 'true')? \}\}\n",
+            r"( && steps\.status\.outputs\.skip != 'true')?"
+            r" && steps\.paused\.outputs\.paused != 'true' \}\}\n",  # brief #348
             block,
         ), name
     # the job is not marked to continue on error, so one failing step fails the job
@@ -140,7 +141,8 @@ def test_ac2_project_tests_run_only_where_the_kits_own_suite_is_not_installed():
     assert project == (
         "name: Project tests\n"
         + "        if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') == ''"
-        + " && github.event.action != 'edited' && steps.status.outputs.skip != 'true' }}\n"
+        + " && github.event.action != 'edited' && steps.status.outputs.skip != 'true'"
+        + " && steps.paused.outputs.paused != 'true' }}\n"  # brief #348
         + "        run: make -f agk.mk agk-project-test\n"
     )
     assert (
@@ -307,7 +309,9 @@ def test_ac1_check_specs_reads_the_pull_request_body_from_a_file_written_first()
     assert names.index("PR body file") < names.index("check_specs")
     assert "github.event.pull_request.body" in blocks["PR body file"]
     assert 'check_specs.py --body "$RUNNER_TEMP/pr-body.md"' in blocks["check_specs"]
-    assert "if: ${{ !cancelled() }}" in blocks["check_specs"]
+    assert (
+        "if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}" in blocks["check_specs"]
+    )  # brief #348
 
 
 def test_rule9_the_pr_body_step_is_given_a_saved_copy_of_the_briefs():
@@ -362,8 +366,9 @@ def test_the_secret_scan_keeps_its_name_its_place_and_its_condition():
     assert names[-1] == "Secret scan" and names[-2] == "Project tests"
     # brief #261: `!cancelled()`, so that a failed body step no longer hides the scan
     assert (
-        "        if: ${{ !cancelled() && github.event.action != 'edited' }}\n"
-        in blocks["Secret scan"]
+        "        if: ${{ !cancelled() && github.event.action != 'edited'"
+        " && steps.paused.outputs.paused != 'true' }}\n"
+        in blocks["Secret scan"]  # brief #348
     )
 
 
@@ -380,7 +385,9 @@ def test_the_secret_scanner_is_restored_from_a_cache_keyed_on_its_version_and_di
     cache = blocks["Restore the secret scanner"]
     pin = r"^        uses: actions/cache@[0-9a-f]{40}\s+# v\d+(\.\d+){1,2}$"
     assert re.search(pin, cache, re.M)
-    assert "\n        if: ${{ !cancelled() && github.event.action != 'edited' }}\n" in cache
+    edited = "!cancelled() && github.event.action != 'edited'"
+    edited += " && steps.paused.outputs.paused != 'true'"  # brief #348
+    assert f"\n        if: ${{{{ {edited} }}}}\n" in cache
     scan = blocks["Secret scan"]
     version = re.search(r"^          GITLEAKS_VERSION: (\S+)$", scan, re.M).group(1)
     digest = re.search(r"^          GITLEAKS_SHA256: (\S+)$", scan, re.M).group(1)
