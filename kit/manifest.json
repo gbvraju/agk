@@ -53,6 +53,7 @@
     "scripts/agk/launch.py",
     "scripts/agk/metrics.py",
     "scripts/agk/minutes.py",
+    "scripts/agk/prepush.py",
     "scripts/agk/product_report.py",
     "scripts/agk/proof.py",
     "scripts/agk/reviewers.py",
