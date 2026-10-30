@@ -72,7 +72,8 @@ def read_plan(source: str) -> dict:
 
 def launch_settings(root: Path) -> tuple[bool, str | None]:
     """(`auto_start`, `launch_adapter`) of the `[flow]` table of agk.toml: off and none when
-    unset (an empty `launch_adapter` is unset); a value of the wrong kind is refused naming the setting, never the value."""
+    unset (an empty `launch_adapter` is unset); a value of the wrong kind is refused naming the
+    setting, never the value."""
     try:
         data = tomllib.loads((Path(root) / "agk.toml").read_text(encoding="utf-8"))
     except FileNotFoundError:
