@@ -31,12 +31,11 @@ from common import (
     parse_estimate,
     read_list,
     repo_root,
-    review_mode,
     run,
     show,
     test_dirs,
 )
-from reviewers import confirmed_comments, verdict_authors
+from reviewers import confirmed_comments, solo_person, verdict_authors
 
 NAME = "metrics"
 USAGE = (
@@ -243,7 +242,7 @@ class Context:
     root: Path
     dirs: list[str]
     authors: list[str] | None = None
-    solo: bool = False  # brief 277: a confirmation counts as its verdict
+    solo_person: str | None = None  # brief 277: the person's confirmation counts as a verdict
     apps: tuple[str, ...] = ()
 
 
@@ -454,8 +453,8 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
     n = detail["number"]
     merged = bool(detail.get("merged_at"))
     comments = ctx.src.get(f"comments-{n}", f"repos/{{repo}}/issues/{n}/comments")
-    if ctx.solo and isinstance(comments, list):
-        comments = confirmed_comments(comments, ctx.apps)
+    if ctx.solo_person and isinstance(comments, list):
+        comments = confirmed_comments(comments, ctx.apps, ctx.solo_person)
     files = ctx.src.get(f"files-{n}", f"repos/{{repo}}/pulls/{n}/files")
     commits = ctx.src.get(f"commits-{n}", f"repos/{{repo}}/pulls/{n}/commits")
     authors = counted_authors(ctx.authors, author_of(detail))
@@ -663,8 +662,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     root = repo_root()
     src = ApiDir(Path(options["api"])) if options["api"] else Gh(options["repo"] or origin_repo())
-    solo = review_mode(root) == "solo"
-    ctx = Context(src, root, test_dirs(root), verdict_authors(root), solo, tuple(agent_apps(root)))
+    person = solo_person(root)
+    ctx = Context(
+        src, root, test_dirs(root), verdict_authors(root), person, tuple(agent_apps(root))
+    )
     body, incomplete = report(ctx, today, issues)
     sys.stdout.write(body)
     return 1 if incomplete else 0

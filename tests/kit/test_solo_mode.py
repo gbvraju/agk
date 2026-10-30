@@ -66,7 +66,7 @@ def confirmation(
 
 
 def solo(**kw) -> dict:
-    return facts(solo=True, authors=["boss"], approvers=["boss"], author="boss", **kw)
+    return facts(solo_person="boss", authors=["boss"], approvers=["boss"], author="boss", **kw)
 
 
 # --- the setting (answer 1) ---------------------------------------------------------------------
@@ -144,8 +144,8 @@ def test_the_reviewers_check_refuses_solo_with_two_people(repo):
 # --- reading a confirmation (answer 2) ----------------------------------------------------------
 
 
-def read(*comments: dict, apps=APPS) -> list[dict]:
-    return reviewers.confirmed_comments(list(comments), apps)
+def read(*comments: dict, apps=APPS, person="boss", heads=None, runs=None) -> list[dict]:
+    return reviewers.confirmed_comments(list(comments), apps, person, heads, runs)
 
 
 def test_a_confirmation_adds_its_verdict_and_its_approvals_as_the_person():
@@ -194,6 +194,38 @@ def test_a_confirmation_through_an_agent_app_never_counts():
     assert len(read(sent, apps=[])) == 2  # a project that lists no app
 
 
+def test_only_the_one_listed_person_confirms():
+    """REQ-039: brief #277 answer 2 (the verdict on f58803a: the single listed person)."""
+    body = confirmation(login="other")
+    assert read(said(5, "other", body)) == [said(5, "other", body)]
+    assert len(read(said(5, "other", body), person="other")) == 2
+    assert read(said(5, "boss", confirmation()), person=None) == [said(5, "boss", confirmation())]
+
+
+def test_a_confirmation_counts_only_for_a_head_the_reader_names():
+    """REQ-039: brief #277 answer 7 (the verdict on f58803a: the current head when read)."""
+    item = said(5, "boss", confirmation(middle=("Approve: SPEC-0032",)))
+    assert len(read(item, heads={HEAD})) == 3
+    assert read(item, heads={OLD}) == [item]
+    before = {"event": "pull_request", "head_sha": HEAD, "created_at": "2026-10-25T10:00:00Z"}
+    later = {"event": "pull_request", "head_sha": OLD, "created_at": "2026-10-25T10:01:00Z"}
+    assert len(read(item, runs=[before])) == 3  # the head when it was posted, by GitHub's times
+    assert read(item, runs=[before, later]) == [item]
+    assert read(item, runs=[]) == [item]  # no run: no head is known, nothing counts
+
+
+def test_the_one_person_is_read_from_the_project(tmp_path):
+    """REQ-039: brief #277 answer 1 (solo mode with one person listed, else nobody)."""
+    (tmp_path / "config").mkdir()
+    yaml = tmp_path / "config" / "reviewers.yaml"
+    yaml.write_text("version: 1\nverdict_authors: [Boss]\nspec_approvers: [boss]\n")
+    assert reviewers.solo_person(tmp_path) is None  # team mode by default
+    (tmp_path / "agk.toml").write_text('review_mode = "solo"\n')
+    assert reviewers.solo_person(tmp_path) == "boss"
+    yaml.write_text("version: 1\nverdict_authors: [boss, other]\nspec_approvers: [boss]\n")
+    assert reviewers.solo_person(tmp_path) is None
+
+
 # --- the router (answers 2, 3 and 7) ------------------------------------------------------------
 
 
@@ -220,9 +252,9 @@ def test_the_same_comment_in_team_mode_counts_for_nothing():
     """REQ-039: brief #277 answers 2 and 7."""
     body = confirmation(middle=("Approve: SPEC-0032",))
     team = solo(comments=[said(5, "boss", body)], files=approved_spec())
-    team["solo"] = False
+    team["solo_person"] = None
     assert route.decide(team) == "agk:review"
-    del team["solo"]
+    del team["solo_person"]
     assert route.decide(team) == "agk:review"
 
 
@@ -233,7 +265,13 @@ def test_an_agent_app_confirmation_never_counts_in_solo_mode():
 
 
 def test_a_confirmation_naming_an_old_head_counts_for_nothing():
-    """REQ-039: brief #277 answer 7."""
+    """REQ-039: brief #277 answer 7 (also the parent of a head that is not its Final commit)."""
+    parent = said(5, "boss", confirmation(sha=OLD, middle=("Approve: SPEC-0032",)))
+    commit = {"parents": [{"sha": OLD}], "files": [{"filename": "x.py", "status": "modified"}]}
+    assert route.decide(solo(comments=[parent], commit=commit)) == "agk:review"
+    assert route.decide(solo(comments=[parent], commit=commit, files=approved_spec())) == (
+        "agk:review"
+    )
     old = said(5, "boss", confirmation(sha=OLD))
     assert route.decide(solo(comments=[old])) == "agk:review"
     mixed = said(5, "boss", confirmation(named=OLD))
@@ -326,6 +364,11 @@ def test_a_solo_confirmation_carries_the_spec_approval(repo, tmp_path):
     sent = comments(tmp_path, body, app="claude")
     proc = repo.run("check_final_clearance.py", "--comments", str(sent))
     assert proc.returncode == 0 and "ok" in proc.stdout  # nothing is covered: nothing to check
+    repo.commit({"config/reviewers.yaml": REVIEWERS.replace("[boss]\n", "[boss, other]\n", 1)})
+    proc = repo.run(
+        "check_final_clearance.py", "--comments", str(comments(tmp_path, body)), "--head", "HEAD~1"
+    )
+    assert proc.returncode == 0 and "ok" in proc.stdout  # two people listed: solo reads nothing
 
 
 def test_in_team_mode_the_confirmation_covers_nothing(repo, tmp_path):
@@ -354,27 +397,67 @@ def thing(status: str) -> str:
     )
 
 
-@pytest.mark.parametrize(("mode", "code"), [("solo", 0), ("team", 1)])
-def test_the_spec_check_reads_the_approval_of_a_solo_confirmation(repo, mode, code):
-    """REQ-039: brief #277 answers 2 and 7 (check_specs, run by governance)."""
+def spec_case(repo, mode: str, authors: str = "boss") -> str:
+    """main with a Draft spec; the branch's reviewed commit (its sha) and the Final commit."""
+    reviewers_text = f"version: 1\nverdict_authors: [{authors}]\nspec_approvers: [boss]\n"
     repo.commit(
-        {
-            "config/reviewers.yaml": REVIEWERS,
-            SPEC_ONE: thing("Draft"),
-            "agk.toml": "agent_apps = []\n",
-        },
+        {"config/reviewers.yaml": reviewers_text, SPEC_ONE: thing("Draft")},
         "base",
     )
     repo.branch()
-    repo.commit({"agk.toml": f'agent_apps = []\nreview_mode = "{mode}"\n'}, "reviewed")
+    repo.commit({"agk.toml": f'agent_apps = ["claude"]\nreview_mode = "{mode}"\n'}, "reviewed")
     sha = repo.git("rev-parse", "HEAD").strip()
-    final = f"Final: {SPEC_ONE} Draft -> Approved"
-    body = confirmation(sha=sha, verdict="fix list", middle=(final, "Approve: SPEC-0001"))
     repo.commit({SPEC_ONE: thing("Approved")}, "final")
-    item = {"user": {"login": "boss"}, "body": body, "created_at": "2026-10-30T02:30:00Z"}
+    return sha
+
+
+def spec_check(repo, sha: str, login: str = "boss", app: str | None = None, pinned: str = ""):
+    final = f"Final: {SPEC_ONE} Draft -> Approved"
+    body = confirmation(
+        sha=sha, verdict="fix list", middle=(final, "Approve: SPEC-0001"), login=login
+    )
+    item = {"user": {"login": login}, "body": body, "created_at": "2026-10-30T02:30:00Z"}
+    if app:
+        item["performed_via_github_app"] = {"slug": app}
+    runs = [
+        {"event": "pull_request", "head_sha": pinned or sha, "created_at": "2026-10-30T02:00:00Z"}
+    ]
     repo.write("comments.json", json.dumps([item]))
-    proc = repo.run("check_specs.py", "--base", "main", "--comments", "comments.json")
+    repo.write("runs.json", json.dumps({"total_count": 1, "workflow_runs": runs}))
+    args = ["--base", "main", "--comments", "comments.json", "--runs", "runs.json"]
+    return repo.run("check_specs.py", *args)
+
+
+@pytest.mark.parametrize(("mode", "code"), [("solo", 0), ("team", 1)])
+def test_the_spec_check_reads_the_approval_of_a_solo_confirmation(repo, mode, code):
+    """REQ-039: brief #277 answers 2 and 7 (check_specs, run by governance)."""
+    sha = spec_case(repo, mode)
+    proc = spec_check(repo, sha)
     assert proc.returncode == code, proc.stdout
+
+
+def test_the_spec_check_refuses_a_confirmation_by_another_account(repo):
+    """REQ-039: brief #277 (the verdict on 1ae4fd4, item 2: another account)."""
+    sha = spec_case(repo, "solo")
+    assert spec_check(repo, sha, login="stranger").returncode == 1
+
+
+def test_the_spec_check_refuses_a_confirmation_through_an_agent_app(repo):
+    """REQ-039: brief #277 answer 3 (the verdict on 1ae4fd4, item 2: an agent app)."""
+    sha = spec_case(repo, "solo")
+    assert spec_check(repo, sha, app="claude").returncode == 1
+
+
+def test_the_spec_check_refuses_solo_mode_with_two_people_listed(repo):
+    """REQ-039: brief #277 answer 1 (the verdict on 1ae4fd4, item 2: more than one person)."""
+    sha = spec_case(repo, "solo", authors="boss, other")
+    assert spec_check(repo, sha).returncode == 1
+
+
+def test_the_spec_check_refuses_a_confirmation_of_another_head_than_the_runs_show(repo):
+    """REQ-039: brief #277 answer 7 (the sha read by the rule of a team short Approve: line)."""
+    sha = spec_case(repo, "solo")
+    assert spec_check(repo, sha, pinned="f" * 40).returncode == 1
 
 
 # --- the weekly report (metrics.py) --------------------------------------------------------------
@@ -399,5 +482,5 @@ def test_the_weekly_report_counts_a_solo_confirmation_as_the_verdict(is_solo, cl
         "user": {"login": "boss"},
         "body": "",
     }
-    ctx = metrics.Context(src, Path("."), [], ["boss"], is_solo, ("claude",))
+    ctx = metrics.Context(src, Path("."), [], ["boss"], "boss" if is_solo else None, ("claude",))
     assert metrics.build_record(ctx, detail)["merged_head_cleared"] == cleared

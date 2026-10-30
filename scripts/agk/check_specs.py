@@ -14,7 +14,8 @@ approval by an account in `spec_approvers`: a first line `Approve: <sha> SPEC-<n
 GitHub's time, never a commit date), or a review in state `APPROVED` (at its own `commit_id`, for
 the one spec the pull request sets Approved or the one its first line names). The spec file at the
 head must equal the approved text apart from its status line. With `review_mode = "solo"` an
-`Approve: SPEC-<n>` line of a solo confirmation approves the text at its confirmed sha (brief 277,
+`Approve: SPEC-<n>` line of the one listed person's confirmation approves the text at its confirmed
+sha, which must be the head of the latest run before the comment, as for a short line (brief 277,
 `reviewers.confirmed_comments`). Without `--comments` the approval is
 not checked (a local run has no comments).
 (4) Rule b (SPEC-0013 rule 24): a spec whose Approved status line is added or changed in the diff
@@ -47,11 +48,10 @@ from common import (
     git,
     read_text,
     repo_root,
-    review_mode,
     run,
     show,
 )
-from reviewers import approval_shas, confirmed_comments, spec_approvers
+from reviewers import approval_shas, confirmed_comments, solo_person, spec_approvers
 
 NAME = "specs"
 SPEC_PREFIX = "docs/specs/"
@@ -284,14 +284,15 @@ def main(argv: list[str] | None = None) -> int:
     if comments is not None:
         reviews = file_arg(argv, "--reviews")
         runs = file_arg(argv, "--runs")
-        items = comments_of(Path(comments))
-        if review_mode(root) == "solo":  # brief 277: the Approve: line of a confirmation
-            items = confirmed_comments(items, agent_apps(root))
+        pinned = runs_of(root, runs)
+        items = confirmed_comments(  # brief 277: the head by the rule of a short Approve: line
+            comments_of(Path(comments)), agent_apps(root), solo_person(root), runs=pinned
+        )
         approvals = approval_shas(
             items,
             comments_of(Path(reviews)) if reviews else [],
             spec_approvers(root),
-            runs_of(root, runs),
+            pinned,
             set(flipped_specs(root, mb, changed)),
             agent_apps(root),
         )
