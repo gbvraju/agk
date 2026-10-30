@@ -45,11 +45,12 @@ the session's working directory or by its full path, never through a link): exac
 `python3 scripts/agk/session.py queue --role conductor`. Both only read GitHub (GET); every other
 command of the script (`watch`, `next`, `claim`, `after`, `inbox` and the rest), another role,
 another flag, another interpreter or another copy of the script, such as one in a pull request's
-worktree, stays denied, and the shadow mode gets none of them. Without `--shadow` the conductor may also send a
-session one message (brief 327, ADR-0187): exactly `python3 scripts/agk/session.py tell --session
-<id> --text <message>`, the two options in that order, a session ID that is not an option, and a
-message of one line of 1 to 300 characters that does not start with `Approve:`, `Confirmed:` or
-`Verdict:` (the shape `session.py tell` itself requires).
+worktree, stays denied, and the shadow mode gets none of them.
+Without `--shadow` the conductor may also send a session one message (brief 327, ADR-0187):
+exactly `python3 scripts/agk/session.py tell --session <id> --text <message>`, the two options in
+that order, a session ID that is not an option, and a message of one line of 1 to 300 characters
+that does not start with `Approve:`, `Confirmed:` or `Verdict:` (the shape `session.py tell`
+itself requires).
 A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
 by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
 29), because GitHub cannot tell a comment the person typed from one a session posted.
