@@ -8,7 +8,8 @@ rules in short form:
 2. One PR per item, branched from the default branch (`origin/<default branch>`), never stacked on another's
    unmerged change; a dependence is declared with `Depends-on: #n`. One open PR per session: several sessions may
    have one each in flow mode (`pr_mode` in `agk.toml`); in strict mode, the default, a person has one open PR at a
-   time. Push and stop; never poll CI; never merge; never enable auto-merge.
+   time. Push and stop; never poll CI; never merge; never enable auto-merge. Never post a comment whose first line
+   is `Confirmed:`: in solo mode you print its text and the person posts it (session rule 29).
 3. Protected paths (`config/protected-paths.txt`) change only with an ADR in the same PR that names each changed
    path class.
 4. Tests first. Every check ships with tests of the check. You never mark anything done.

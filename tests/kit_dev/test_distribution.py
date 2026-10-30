@@ -19,6 +19,7 @@ COMMANDS = [
     "adopt",
     "architect",
     "brief",
+    "confirm",
     "design",
     "doctor",
     "init",
@@ -36,6 +37,7 @@ COMMANDS = [
 USER_ONLY = [
     "adopt",
     "brief",
+    "confirm",
     "design",
     "init",
     "issue",
