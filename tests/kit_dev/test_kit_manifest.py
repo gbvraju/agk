@@ -26,6 +26,7 @@ KIT_ONLY = {
     "scripts/agk/design.py",
     "scripts/agk/shadow_count.py",
     "scripts/agk/pr_body.py",
+    "scripts/agk/core_audit.py",
 }
 # Files under the law roots that belong to this repository only and are not installed in targets.
 REPO_ONLY = {".github/ISSUE_TEMPLATE/stuck.md", ".github/workflows/agk-tag.yml"}

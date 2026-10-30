@@ -101,8 +101,9 @@ class Api:
         jobs: bool = True,
         unsplit: bool = False,
     ) -> None:
-        """Pull request N: one commit per entry of FAILED (the failed step names of its governance
-        run; an empty entry is a green run), and its comments. A False flag leaves a page unsaved."""
+        """Pull request N: one commit per entry of FAILED (the failed step names of its
+        governance run; an empty entry is a green run), and its comments. A False flag leaves a
+        page unsaved."""
         failed = [[]] if failed is None else failed
         self.pulls.append({"number": n, "created_at": created, "user": {"login": "builder"}})
         self.save("pulls", self.pulls)
@@ -248,7 +249,7 @@ def test_a_failed_proof_run_is_not_a_governance_failure(repo, api):
 
 
 def test_a_rule_cited_in_a_verdict_is_counted(repo, api):
-    """Brief #328 answer 1: session rules and spec rules cited in a Verdict: comment, with counts."""
+    """Brief #328 answer 1: session and spec rules cited in a Verdict: comment, with counts."""
     history(api)
     data = report(repo, api)
     assert data["session_rules"] == {"1": 0, "2": 1, "3": 0}
@@ -272,7 +273,7 @@ def test_only_a_verdict_of_a_listed_author_counts(repo, api):
 
 
 def test_lists_of_rules_and_the_long_form_are_read_and_a_verdict_counts_once(repo, api):
-    """`rules 1 and 3`, `rules 1, 2 and 3`, `rule 3 of the session rules`; one verdict, one count."""
+    """`rules 1 and 3`, `rules 1, 2 and 3`, `rule 3 of the session rules`; a verdict counts once."""
     body = (
         "session rules 1 and 3 hold; SPEC-0007 rules 1, 2 and 3 apply; "
         "again session rule 1, and rule 3 of the session rules"
@@ -426,3 +427,11 @@ def test_it_reads_with_get_only_and_holds_no_credential():
     text = SCRIPT.read_text(encoding="utf-8")
     assert not re.search(r"\b(POST|PATCH|PUT|DELETE)\b", text)
     assert "GH_TOKEN" not in text and "GITHUB_TOKEN" not in text
+
+
+def test_one_unreadable_check_run_page_among_readable_ones_cannot_be_checked(repo, api):
+    """A failure on the commit whose page is missing could hide behind a green later commit."""
+    api.pull(1, failed=[["check_specs"], []], comments=[])
+    (api.path / f"checks-{sha_of(1, 0)}.json").unlink()
+    data = report(repo, api)
+    assert data["checks"]["check_specs"] == "cannot-check"
