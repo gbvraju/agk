@@ -159,7 +159,9 @@ def test_json_gives_the_same_stalls(proj, stub):
     assert [s["kind"] for s in data["stalls"]] == ["stale-label"]
     item = data["stalls"][0]
     assert item["number"] == 20
-    assert f"stall {item['kind']} #{item['number']}: {item['cause']}; fix: {item['fix']}" == words[0]
+    assert (
+        f"stall {item['kind']} #{item['number']}: {item['cause']}; fix: {item['fix']}" == words[0]
+    )
 
 
 def test_json_with_no_stall_is_an_empty_list_and_exit_0(proj, stub):
@@ -178,9 +180,7 @@ def test_an_unknown_argument_is_usage_exit_2(proj, stub, args):
 
 
 @pytest.mark.parametrize("endpoint", [ISSUES, PULLS])
-def test_a_repository_that_cannot_be_read_exits_1_naming_the_rule_not_a_value(
-    proj, stub, endpoint
-):
+def test_a_repository_that_cannot_be_read_exits_1_naming_the_rule_not_a_value(proj, stub, endpoint):
     stub.serve(endpoint, "FAIL")
     out = stalls(proj, stub)
     assert out.returncode == 1, out.stdout + out.stderr
