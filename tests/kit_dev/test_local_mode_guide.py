@@ -1,4 +1,7 @@
-"""Kit-only tests of the local-mode guide and the lines that point to it (brief #322, ADR-0182; REQ-039)."""
+"""Kit-only tests of the local-mode guide and the lines that point to it.
+
+Brief #322, ADR-0182; REQ-039.
+"""
 
 from __future__ import annotations
 
@@ -15,8 +18,8 @@ SECTIONS = (
     "What is lost",
     "Leave local mode",
 )
-# Names of hosts, clouds, runners, scanners and model makers that a guide of the kit could slip into; GitHub is the one host
-# the kit is built for (answer 4 of the brief).
+# Names of hosts, clouds, runners, scanners and model makers that a guide of the kit could
+# slip into; GitHub is the one host the kit is built for (answer 4 of the brief).
 VENDORS = (
     "gitlab",
     "bitbucket",
@@ -108,7 +111,8 @@ def test_the_conductor_reruns_governance_on_the_head_and_reads_checks_not_report
 
 def test_what_is_lost_is_stated_plainly():
     body = section("What is lost").lower()
-    for phrase in ("router", "label", "proof", "server-side", "the person's call", "local evidence"):
+    phrases = ("router", "label", "proof", "server-side", "the person's call", "local evidence")
+    for phrase in phrases:
         assert phrase in body, phrase
 
 
@@ -135,8 +139,9 @@ def test_every_kit_script_and_make_target_the_guide_calls_exists():
     makefile = (KIT_ROOT / "Makefile").read_text(encoding="utf-8")
     for target in set(re.findall(r"make (?:-C <scratch> )?([a-z-]+)", text)):
         assert re.search(rf"(?m)^{re.escape(target)}:", makefile), target
+    session = (KIT_ROOT / "scripts" / "agk" / "session.py").read_text(encoding="utf-8")
     for sub in set(re.findall(r"scripts/agk/session\.py ([a-z-]+)", text)):
-        assert f'"{sub}"' in (KIT_ROOT / "scripts" / "agk" / "session.py").read_text(encoding="utf-8"), sub
+        assert f'"{sub}"' in session, sub
 
 
 def test_the_guide_names_no_vendor_beyond_github():
