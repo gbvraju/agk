@@ -172,4 +172,4 @@ def test_the_three_commands_are_found_by_the_check():
     """The check reads the reference: minutes is installed and named there only by this brief."""
     assert "minutes.py" in installed_scripts()
     assert "minutes.py" not in run_by_the_kit()
-    assert not imported("minutes.py", installed_scripts())
+    assert "minutes.py" in reference()

@@ -70,8 +70,9 @@ COLUMNS = (
     "estimated_hours rejected rejected_verdicts "
     "review_rounds merged_head_cleared blocked_weakenings governance_failures deviations "
     "cost_class protected_classes adrs_added additions deletions changed_files tests_before "
-    "tests_after"
+    "tests_after minutes pool_minutes wait_minutes reruns"
 ).split()
+CI_FIELDS = ("minutes", "pool_minutes", "wait_minutes", "reruns")
 PAGE = 100
 
 
@@ -118,7 +119,26 @@ class Gh:
         endpoint = endpoint.replace("{repo}", self.repo)
         if name == "pulls" or name.startswith(("comments-", "files-", "commits-")):
             return self.pages(endpoint, until)
+        if name.startswith("runs-"):
+            return self.keyed(endpoint, "workflow_runs")
+        if name.startswith("run-jobs-"):
+            return self.keyed(endpoint, "jobs")
         return self.one(endpoint)
+
+    def keyed(self, endpoint: str, key: str) -> Any:
+        """A paged response that holds its list under `key` (the Actions run and job lists)."""
+        sep = "&" if "?" in endpoint else "?"
+        out: dict = {"total_count": 0, key: []}
+        page = 1
+        while True:
+            chunk = self.one(f"{endpoint}{sep}per_page={PAGE}&page={page}")
+            if not isinstance(chunk, dict) or not isinstance(chunk.get(key), list):
+                return None
+            out["total_count"] = chunk.get("total_count", 0)
+            out[key] += chunk[key]
+            if len(chunk[key]) < PAGE or len(out[key]) >= out["total_count"]:
+                return out
+            page += 1
 
     def pages(self, endpoint: str, until: Any) -> Any:
         sep = "&" if "?" in endpoint else "?"
@@ -439,6 +459,104 @@ def usage_of(comments: Any, login: str) -> int | str:
     return sum(found) if found else "not-reported"
 
 
+# --- minutes, waits and re-runs (brief 376, ADR-0209) ------------------------------------------
+
+
+def tenths(value: Decimal) -> str:
+    return str(value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+
+
+def ci_fields(src: Any, shas: list[str] | None) -> dict[str, str]:
+    """`minutes`, `pool_minutes`, `wait_minutes` and `reruns` of the runs of the head commits.
+
+    The billing rule is `minutes.py`'s `job_minutes`, imported at the time of use (minutes.py
+    imports this module). A field whose runs or jobs cannot be read is `unknown`, never 0."""
+    from minutes import SELF_HOSTED, job_minutes
+
+    unknown = dict.fromkeys(CI_FIELDS, UNKNOWN)
+    if shas is None or not all(isinstance(s, str) and s for s in shas):
+        return unknown
+    runs: dict[Any, dict] = {}
+    for sha in shas:
+        data = src.get(f"runs-{sha}", f"repos/{{repo}}/actions/runs?head_sha={sha}")
+        listed = data.get("workflow_runs") if isinstance(data, dict) else None
+        if not isinstance(listed, list) or not all(isinstance(r, dict) for r in listed):
+            return unknown
+        for run_ in listed:
+            runs.setdefault(run_.get("id"), run_)
+    reruns: int | None = 0
+    hosted: dict[str, int] = {}
+    pool: int | None = 0
+    billed = True
+    wait: Decimal | None = Decimal(0)
+    for rid in sorted(runs, key=str):
+        run_ = runs[rid]
+        attempt = run_.get("run_attempt")
+        if not isinstance(attempt, int) or isinstance(attempt, bool):
+            reruns = None
+        elif reruns is not None and attempt > 1:
+            reruns += 1
+        data = src.get(f"run-jobs-{rid}", f"repos/{{repo}}/actions/runs/{rid}/jobs?filter=all")
+        jobs = data.get("jobs") if isinstance(data, dict) else None
+        if not isinstance(jobs, list) or not all(isinstance(j, dict) for j in jobs):
+            billed, pool, wait = False, None, None
+            continue
+        name = str(run_.get("name") or run_.get("path") or UNKNOWN).replace("|", "/")
+        hosted.setdefault(name, 0)
+        for job in jobs:
+            value = job_minutes(job)
+            if SELF_HOSTED in (job.get("labels") or []):
+                pool = None if value is None or pool is None else pool + value
+            elif value is None:
+                billed = False
+            else:
+                hosted[name] += value
+        if wait is not None and jobs:
+            created = stamp(run_.get("created_at"))
+            starts = [t for j in jobs if (t := stamp(j.get("started_at"))) is not None]
+            if created is None or not starts:
+                wait = None
+            else:
+                seconds = max(0.0, (min(starts) - created).total_seconds())
+                wait += Decimal(str(seconds)) / Decimal(60)
+    out = dict(unknown)
+    if billed:
+        parts = ", ".join(f"{n} {m}" for n, m in sorted(hosted.items()))
+        total = sum(hosted.values())
+        out["minutes"] = f"{total} ({parts})" if parts else str(total)
+    if pool is not None:
+        out["pool_minutes"] = str(pool)
+    if wait is not None:
+        out["wait_minutes"] = tenths(wait)
+    if reruns is not None:
+        out["reruns"] = str(reruns)
+    return out
+
+
+def figure(value: Decimal) -> str:
+    """A whole number without a decimal, any other with one decimal, round half up."""
+    text = tenths(value)
+    return text[:-2] if text.endswith(".0") else text
+
+
+def ci_totals(records: list[dict[str, str]]) -> str:
+    """The median and the largest of each of the four fields over the records where it is known;
+    `unknown` when it is known for none, `-` when there is no record (answer 2)."""
+    parts = []
+    for name in CI_FIELDS:
+        cells = [r.get(name, UNKNOWN) for r in records]
+        known = sorted(Decimal(c.split(" ", 1)[0]) for c in cells if c != UNKNOWN)
+        missing = len(cells) - len(known)
+        if known:
+            mid = len(known) // 2
+            median = known[mid] if len(known) % 2 else (known[mid - 1] + known[mid]) / 2
+            low, high = figure(median), figure(known[-1])
+        else:
+            low = high = UNKNOWN if cells else NONE
+        parts.append(f"{name} median={low} largest={high} unknown={missing}")
+    return "ci totals: " + "; ".join(parts)
+
+
 def merged_head_cleared(src: Any, head: str, comments: Any, authors: list[str] | None) -> str:
     """`yes`, `no` or `unknown` for a merged pull request (SPEC-0007 rule 8, SPEC-0021 rule 7)."""
     listed = verdicts(comments if isinstance(comments, list) else None, authors)
@@ -475,6 +593,7 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
     size, expected = parse_estimate(detail.get("body"))
     shas = [c.get("sha") for c in commits] if isinstance(commits, list) else None
     blocked, failures = governance(ctx, shas)
+    ci = ci_fields(ctx.src, shas)
 
     names = (
         [(f.get("filename", ""), f.get("status", "")) for f in files]
@@ -521,6 +640,7 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
         "changed_files": num("changed_files"),
         "tests_before": before,
         "tests_after": after,
+        **ci,
     }
 
 
@@ -560,6 +680,7 @@ def render(
     lines += [
         "",
         totals(records),
+        ci_totals(records),
         f"closed in window: {listed}; recorded: {len(records)}; unknown cells: {unknown_cells}",
         "",
         NOTE,
