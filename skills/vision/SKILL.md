@@ -16,7 +16,8 @@ way the text is written through the kit's script and passes the kit's checks. An
 edits a protected file by itself: `constitution/` is protected and changes only in this pull request, with the charter ADR that names it.
 
 1. Fetch the default branch and make sure the work tree is clean; if it is not, stop and say so. Read the next free ADR number and the
-   branch name (the idea stands for the statement), then create the branch from the default branch:
+   branch name (the idea stands for the statement), then create the branch from the default branch without tracking it, as
+   `/agk:start` step 3 says (`--no-track`):
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" start-ids --statement "IDEA"
@@ -58,5 +59,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" vision-check
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/playbook.py" next-steps --brief <n|none>
 ```
+
+   Show the owner the vision and the charter it prints, in full, before the commit steps, and offer the command that opens the
+   pull request with the body file where the script prints one, as `/agk:start` step 6 says.
 
 Do not commit or push, and do not open a pull request: the person or their session runs the commands the script prints.

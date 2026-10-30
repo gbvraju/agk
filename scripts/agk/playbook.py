@@ -12,10 +12,12 @@ Usage:
 Kit-only (never installed). `start-ids`, `check-start` and `next-steps` serve `/agk:start`
 (rules 2 to 5): the next free ADR number and the branch name, the deterministic checks of the two
 files it writes, and the commands for the person, with a pull request body that passed
-the repository's body check (`pr_body.py`, brief #273). `architect` prints how to start the role and
-checks, read-only, that `agk.toml` is present, that `gh` is logged in and which branch is the
-default. `brief` prints a brief skeleton from `kit/templates/playbook/` in which the next
-requirement, ADR and spec numbers are read from `origin/<default branch>`
+the repository's body check (`pr_body.py`, brief #273); `next-steps` shows the vision and the
+charter before the commit steps, prints `git push -u origin HEAD`, and, where `gh` is logged in,
+offers `gh pr create --body-file` with that body (brief #263 answers 5 and 6). `architect` prints
+how to start the role and checks, read-only, that `agk.toml` is present, that `gh` is logged in
+and which branch is the default. `brief` prints a brief skeleton from `kit/templates/playbook/`
+in which the next requirement, ADR and spec numbers are read from `origin/<default branch>`
 (`common.next_free_ids`), the repository and the default branch come from `origin` and
 `agk.toml`, and no pull request number is written in advance.
 Nothing is written.
@@ -84,6 +86,19 @@ TOPICS = ("users", "existing", "runs", "data", "scale", "compliance")
 NOT_KNOWN = "not known yet"
 BULLET = re.compile(r"^[-*]\s+([A-Za-z]+):\s*(.*)$")
 MEASURABLE = re.compile(r"\d|\b(?:all|every|none|zero)\b", re.IGNORECASE)
+
+
+def gh_logged_in() -> bool:
+    """Whether `gh auth status` succeeds; `gh` missing or failing is not logged in."""
+    try:
+        return (
+            subprocess.run(  # nosec B603 B607 - fixed argument list, read-only, no shell
+                ["gh", "auth", "status"], capture_output=True, text=True, encoding="utf-8"
+            ).returncode
+            == 0
+        )
+    except OSError:
+        return False
 
 
 def cmd_architect(root: Path) -> int:
@@ -308,10 +323,22 @@ def cmd_next_steps(root: Path, opts: dict[str, str]) -> int:
     path, body = prepare(
         root, fields, brief=brief, issues=opts.get("issues"), changed=None, base=mb
     )
-    print("Commit message:\n\nstart: the vision and the project charter\n")
-    print(f"Push command:\n\ngit push -u origin {branch}\n")
+    charter = next(p for p in changed_files(root, mb) if CHARTER_NAME.match(p))
+    for what, rel in (("vision", VISION), ("project charter", charter)):
+        print(f"The {what} for your approval ({rel}):\n")
+        print((_read(root, rel) or "").rstrip("\n") + "\n")
+    title = "start: the vision and the project charter"
+    print(f"Commit message:\n\n{title}\n")
+    print("Push command:\n\ngit push -u origin HEAD\n")
     print("Open the pull request from that branch into the default branch with this body.\n")
     print_body(path, body)
+    if gh_logged_in():
+        default = load_config(root)["default_branch"]
+        print(
+            "`gh` is logged in, so after the push it can open the pull request with this body\n"
+            "unchanged (the repository's pull request template does not replace it):\n"
+        )
+        print(f'gh pr create --base {default} --title "{title}" --body-file "{path}"\n')
     print(
         "The checks cannot tell that the milestones are the right ones or that the vision says\n"
         "what you meant. That is the review of the pull request; merging approves the charter\n"

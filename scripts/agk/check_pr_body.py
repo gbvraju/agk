@@ -7,7 +7,8 @@ the pull request is marked ready for review (SPEC-0033 rule 2); any other value 
 
 SPEC-0034 rule 9: `--issues FILE` is a saved copy of the repository's issues (a JSON list, as
 `gh api repos/OWNER/REPO/issues` returns it); when it holds an issue labelled `agk-brief` (a pull
-request does not count) the body needs `Brief: #n`, or `Brief: none (design)` for a change of
+request does not count, and neither does the router's red-branch issue, `session.is_red`, brief
+#263 answer 4) the body needs `Brief: #n`, or `Brief: none (design)` for a change of
 `docs/design/`, or `Brief: none (spec)` for a change of `docs/specs/` or `docs/requirements.md`
 (brief #273), each with at most `docs/adr/`, `docs/runs/proposed-spec-amendments-*.md` and
 `docs/runs/decisions-log.md` beside it and no other path: the changed files are read with git
@@ -75,7 +76,13 @@ def field(text: str, label: str) -> str | None:
 
 
 def has_brief(path: str) -> bool:
-    """Whether the saved copy lists an `agk-brief` issue; an unreadable copy lists none."""
+    """Whether the saved copy lists an `agk-brief` issue; an unreadable copy lists none.
+
+    The router's red-branch issue (`session.is_red`) is not a brief for rule 9 (brief #263
+    answer 4): while the default branch is red it is open with the label, and a project with no
+    other brief would need a `Brief:` line that no body it prints carries."""
+    from session import is_red  # here: session imports check_specs, which imports this module
+
     try:
         with open(path, encoding="utf-8") as fh:
             issues = json.load(fh)
@@ -84,6 +91,7 @@ def has_brief(path: str) -> bool:
     return isinstance(issues, list) and any(
         isinstance(i, dict)
         and "pull_request" not in i
+        and not is_red(i)
         and any(isinstance(x, dict) and x.get("name") == "agk-brief" for x in i.get("labels") or [])
         for i in issues
     )

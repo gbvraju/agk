@@ -581,7 +581,7 @@ def test_ac1_next_steps_print_the_commands_and_a_body_that_passes_check_pr_body(
         str(started),
     )
     assert proc.returncode == 0, proc.stdout
-    assert "git push -u origin start/a-reading-list" in proc.stdout
+    assert "git push -u origin HEAD" in proc.stdout
     body = proc.stdout.split("Pull request body:\n\n", 1)[1]
     ok = subprocess.run(
         [sys.executable, str(KIT_ROOT / "scripts" / "agk" / "check_pr_body.py"), "-"],
