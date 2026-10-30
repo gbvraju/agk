@@ -1,0 +1,16 @@
+{
+  "cannot": {
+    "required-check-governance": "plan-limit",
+    "ruleset-bypass": "plan-limit",
+    "ruleset-deletion": "plan-limit",
+    "ruleset-enforcement": "plan-limit",
+    "ruleset-force-push": "plan-limit",
+    "ruleset-linear-history": "plan-limit",
+    "ruleset-missing": "plan-limit",
+    "ruleset-pull-request": "plan-limit",
+    "ruleset-target": "plan-limit"
+  },
+  "delete": [],
+  "fail": [],
+  "origin_head": true
+}

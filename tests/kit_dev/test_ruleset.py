@@ -272,6 +272,7 @@ def test_ac1_rules_of_other_active_rulesets_count(api):
 def test_ac1_not_an_admin_prints_the_ruleset_text_and_the_path_and_nothing_else(api):
     """REQ-020 AC1: rule 19 (exit 4)."""
     api.repo["permissions"] = {"admin": False, "push": True}
+    api.runs = {"total_count": 1}  # phase 2: the whole text (brief #263 answer 2)
     proc = plan(api.save())
     assert proc.returncode == 4
     text = (KIT_ROOT / "kit" / "templates" / "branch-rules.txt").read_text(encoding="utf-8")

@@ -18,8 +18,9 @@ automatically delete head branches). Phase 1 is every element except the require
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/ruleset.py" plan --payload-dir DIR
 ```
 
-2. If the plan says the ruleset cannot be applied from here (not an admin, `gh` missing or not logged in), it prints the exact text of
-   the ruleset and the place in the settings; show that and stop. Do nothing else.
+2. If the plan says the ruleset cannot be applied from here (not an admin, a private repository on a plan without rulesets, `gh`
+   missing or not logged in), it prints the cause, the rules of the phase it chose and the place in the settings; show that and
+   stop. Do nothing else.
 3. Show the plan to the person: the phase, each finding and each numbered command. A finding is a value looser than the kit's or a
    bypass actor; it changes only if the person asks for it, by running the plan again with `--tighten`. Never pass `--tighten` on your own.
 4. Ask the person whether to apply the plan. Only after a clear yes, run the commands the plan printed, one by one, exactly as printed
