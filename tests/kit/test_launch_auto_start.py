@@ -128,3 +128,57 @@ def test_a_refused_adapter_is_reported_once_and_never_retried(tmp_path, adapter)
     assert "FAIL launch: the adapter failed for builder-a" in out.stderr
     assert "not started: builder-b #7" in out.stderr
     assert "refused" not in out.stderr and "started builder" not in out.stdout
+
+
+# --- a plan without its capacity, and max_builders (the verdict on 2d53a5d, item 1) --------------
+
+
+def start_in(root: Path, doc: dict, adapter: Path, **env: str):  # noqa: F811
+    """`launch.py prompts --plan FILE --adapter ...` run from the project folder ROOT."""
+    import json
+    import os
+    import subprocess  # nosec B404 - fixed argument list, no shell
+
+    path = root / "plan.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    full = {**os.environ, "ADAPTER_LOG": str(root / "calls.log"), **env}
+    command = f"{sys.executable} {adapter} --fixed"
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPT), "prompts", "--plan", str(path), "--adapter", command],
+        capture_output=True,
+        text=True,
+        env=full,
+        cwd=str(root),
+        timeout=60,
+    )
+
+
+def test_with_an_adapter_a_plan_without_its_capacity_starts_nothing(tmp_path, adapter):  # noqa: F811
+    """REQ-041: brief #331 answer 4 (a plan with no `capacity.slots` starts nothing)."""
+    doc = plan(("builder-a", 5, "t"), ("builder-b", 7, "u"))
+    del doc["capacity"]
+    out = start_in(tmp_path, doc, adapter)
+    assert out.returncode == 2 and "(field capacity)" in out.stderr
+    assert calls(tmp_path) == []
+
+
+def test_slots_above_max_builders_start_only_max_builders(tmp_path, adapter):  # noqa: F811
+    """REQ-041: brief #331 answer 4 (never more than `[flow] max_builders`)."""
+    write(tmp_path, "[flow]\nmax_builders = 2\n")
+    doc = capped(5, ("builder-a", 5, "t"), ("builder-b", 7, "u"), ("builder-c", 8, "v"))
+    out = start_in(tmp_path, doc, adapter)
+    assert out.returncode == 0, out.stderr
+    assert [c["session"] for c in calls(tmp_path)] == ["builder-a", "builder-b"]
+    assert "not started: builder-c #8 (max_builders is 2)" in out.stdout
+
+
+def test_max_builders_is_three_by_default_and_a_bad_value_names_the_setting(tmp_path, adapter):  # noqa: F811
+    """REQ-041: brief #331 answer 4 (`max_builders` as the plan reads it: 3 by default)."""
+    doc = capped(5, *[(f"builder-{c}", n, "t") for c, n in zip("abcd", (5, 6, 7, 8), strict=True)])
+    out = start_in(tmp_path, doc, adapter)
+    assert out.returncode == 0 and len(calls(tmp_path)) == 3
+    (tmp_path / "calls.log").unlink()
+    write(tmp_path, '[flow]\nmax_builders = "secretvalue"\n')
+    out = start_in(tmp_path, doc, adapter)
+    assert out.returncode == 2 and "max_builders" in out.stderr and "secretvalue" not in out.stderr
+    assert calls(tmp_path) == []

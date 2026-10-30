@@ -30,21 +30,56 @@ def tmp(tmp_path_factory) -> Path:
     return root
 
 
+def git(root: Path, *args: str, text: str | None = None) -> str:
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "HOME": str(root),
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@example.com",
+    }
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "-C", str(root), *args],
+        input=text,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    ).stdout.strip()
+
+
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
     root = tmp_path / "project"
     (root / "scripts" / "agk").mkdir(parents=True)
     for name in ("session.py", "launch.py"):
         (root / "scripts" / "agk" / name).write_text("print('x')\n", encoding="utf-8")
-    (root / ".git").mkdir()
-    (root / ".git" / "config").write_text(
-        '[remote "origin"]\n\turl = https://github.com/o/r.git\n', encoding="utf-8"
-    )
+    git(root, "init", "-q")
+    git(root, "remote", "add", "origin", "https://github.com/o/r.git")
     return root
 
 
-def settings(project: Path, text: str) -> None:
-    (project / "agk.toml").write_text(f'default_branch = "main"\n{text}', encoding="utf-8")
+def commit_with(project: Path, text: str | None, ref: str = "main") -> str:
+    """Point `origin/REF` at a commit whose agk.toml is TEXT (None: a commit without agk.toml)."""
+    entries = ""
+    if text is not None:
+        blob = git(project, "hash-object", "-w", "--stdin", text=text)
+        entries = f"100644 blob {blob}\tagk.toml\n"
+    tree = git(project, "mktree", text=entries)
+    commit = git(project, "commit-tree", tree, "-m", ref, text="")
+    git(project, "update-ref", f"refs/remotes/origin/{ref}", commit)
+    return commit
+
+
+def settings(project: Path, text: str, default: str | None | bool = True) -> None:
+    """The checkout's agk.toml is TEXT; the default branch's is the same unless DEFAULT is given
+    (a text, None for a commit without agk.toml, False for no default branch at all)."""
+    full = f'default_branch = "main"\n{text}'
+    (project / "agk.toml").write_text(full, encoding="utf-8")
+    if default is not False:
+        commit_with(project, full if default is True else default)  # type: ignore[arg-type]
 
 
 def on(project: Path, adapter: str = ADAPTER) -> None:
@@ -214,3 +249,54 @@ def test_the_conductor_never_claims_for_a_started_session(project, tmp, command)
     """REQ-041: brief #331 answer 4 (the `taken:` claim is made by the started session itself)."""
     on(project)
     assert not allowed(run_hook(command, project, tmp))
+
+
+# --- the default branch decides as well (the verdict on 2d53a5d, item 2) -------------------------
+
+YES = f"[flow]\nauto_start = true\nlaunch_adapter = {json.dumps(ADAPTER)}\n"
+OFF = 'default_branch = "main"\n[flow]\nauto_start = false\nlaunch_adapter = "x"\n'
+
+
+@pytest.mark.parametrize(
+    "default",
+    [
+        OFF,
+        f'default_branch = "main"\n[flow]\nlaunch_adapter = {json.dumps(ADAPTER)}\n',
+        'default_branch = "main"\n[flow]\nauto_start = true\nlaunch_adapter = "other.sh"\n',
+        'default_branch = "main"\n[flow\n',
+        None,
+    ],
+)
+def test_a_checkout_that_says_yes_and_a_default_branch_that_says_no_starts_nothing(
+    project, tmp, default
+):
+    """REQ-041: brief #331 answer 2 (the checkout and the default branch both say yes)."""
+    on(project)
+    commit_with(project, default)
+    assert denied(run_hook(start(plan_file(tmp)), project, tmp))
+    assert allowed(run_hook(f"python3 {LAUNCH} prompts --plan {plan_file(tmp)}", project, tmp))
+
+
+def test_without_the_default_branch_no_adapter_runs(project, tmp):
+    """REQ-041: brief #331 answer 2 (no `origin/<default branch>` that git can read)."""
+    settings(project, YES, default=False)
+    assert denied(run_hook(start(plan_file(tmp)), project, tmp))
+
+
+def test_the_default_branch_is_the_one_agk_toml_names(project, tmp):
+    """REQ-041: brief #331 answer 2 (`default_branch` of agk.toml names the branch read)."""
+    full = f'default_branch = "trunk"\n{YES}'
+    (project / "agk.toml").write_text(full, encoding="utf-8")
+    commit_with(project, OFF)
+    commit_with(project, full, ref="trunk")
+    assert allowed(run_hook(start(plan_file(tmp)), project, tmp))
+    commit_with(project, OFF, ref="trunk")
+    assert denied(run_hook(start(plan_file(tmp)), project, tmp))
+
+
+@pytest.mark.parametrize("name", ["-x", "a b", "../x", "x..y", "main:agk.toml", 5])
+def test_a_default_branch_that_is_not_a_branch_name_starts_nothing(project, tmp, name):
+    """REQ-041: brief #331 answer 2 (a name git would read as an option or a path is refused)."""
+    commit_with(project, f"default_branch = {json.dumps(name)}\n{YES}")
+    (project / "agk.toml").write_text(f"default_branch = {json.dumps(name)}\n{YES}", "utf-8")
+    assert denied(run_hook(start(plan_file(tmp)), project, tmp))
