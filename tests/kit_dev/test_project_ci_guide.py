@@ -18,8 +18,8 @@ from conftest import KIT_ROOT
 GUIDE = KIT_ROOT / "docs" / "guides" / "project-ci.md"
 TITLE = "4. A heavy check runs only when its inputs change"
 # Names of hosts, clouds, runners, scanners and model makers that a guide of the kit could slip
-# into; GitHub is the one host the kit is built for (answer 4). Matched as whole words, so a file
-# name such as a container build file is not read as a vendor's name (Q-416-1).
+# into; GitHub is the one host the kit is built for (answer 4). Matched anywhere, as the guide's
+# own test of brief #283 does, so no file name carries one either (Q-416-1).
 VENDORS = (
     "gitlab",
     "bitbucket",
@@ -89,6 +89,10 @@ def _scalar(text: str):
         return [_scalar(part) for part in text[1:-1].split(",") if part.strip()]
     if len(text) >= 2 and text[0] == text[-1] and text[0] in "'\"":
         return text[1:-1]
+    if re.fullmatch(r"-?\d+", text):
+        return int(text)
+    if ": " in text or text.endswith(":") or text[:1] in "&*!%@`|>{":
+        raise ValueError(f"a plain scalar YAML would not read as text: {text!r}")
     return text
 
 
@@ -274,6 +278,7 @@ def test_the_reader_refuses_what_it_cannot_read():
         "jobs:\n\tsuite: {}\n",
         "jobs:\n  suite:\n  suite:\n",
         "jobs:\n  not a key here\n",
+        "steps:\n  - run: echo \"skipped: none\"\n",
     ):
         with pytest.raises(ValueError):
             read_block_yaml(broken)
@@ -291,7 +296,7 @@ def test_the_inputs_step_lists_the_changed_files_against_the_base_and_names_its_
     words = globs.split()
     assert any(w.startswith("src/") for w in words), "application code"
     assert any(w.startswith("tests/") for w in words), "tests"
-    assert any("ockerfile" in w or "Containerfile" in w for w in words), "container build files"
+    assert any(w.startswith("Containerfile") for w in words), "container build files"
     assert any("compose" in w for w in words), "compose files"
     assert any(w.startswith(".github/workflows/") for w in words), "the workflow itself"
     assert "pull_request.base.sha" in str(found.get("env", {}))
@@ -407,7 +412,9 @@ def test_a_change_to_other_files_skips(tmp_path):
     [
         ["src/app/main.py"],
         ["tests/test_main.py"],
-        ["Dockerfile"],
+        ["Containerfile"],
+        ["services/api/Containerfile.dev"],
+        ["Makefile"],
         ["compose.yaml"],
         [".github/workflows/suite.yml"],
         ["docs/x.md", "src/a b.py"],
@@ -458,5 +465,5 @@ def test_the_section_names_no_vendor_beyond_github():
     """REQ-039: brief #416 answer 4."""
     text = section().lower()
     for vendor in VENDORS:
-        assert not re.search(rf"\b{vendor}\b", text), vendor
+        assert vendor not in text, vendor
     assert "github" in text
