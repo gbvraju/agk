@@ -77,6 +77,76 @@ def installed_version(root: Path) -> str | None:
     return value if isinstance(value, str) else None
 
 
+# --- the machine's available memory (brief #409 answer 2) ---------------------------------------
+
+MEMINFO = Path("/proc/meminfo")
+SYSCTL = ["sysctl", "-n", "hw.pagesize", "vm.page_free_count"]  # (verify) macOS sysctl names
+
+
+def meminfo_available(text: str) -> int | None:
+    """The bytes of the `MemAvailable:` line of `/proc/meminfo` text (in kB), else None."""
+    for line in text.splitlines():
+        name, _, rest = line.partition(":")
+        if name.strip() == "MemAvailable":
+            parts = rest.split()
+            return int(parts[0]) * 1024 if parts and parts[0].isdigit() else None
+    return None
+
+
+def sysctl_available(text: str) -> int | None:
+    """The free bytes from `sysctl -n hw.pagesize vm.page_free_count`: two whole numbers, one a
+    line, the page size and the free pages; else None. Free pages leave out the memory macOS can
+    reclaim, so the figure errs low, the safe side for a limit."""
+    parts = text.split()
+    if len(parts) != 2 or not all(p.isdigit() for p in parts):
+        return None
+    return int(parts[0]) * int(parts[1])
+
+
+def windows_available() -> int | None:
+    """`ullAvailPhys` of `GlobalMemoryStatusEx` through ctypes (Windows only), else None."""
+    import ctypes
+
+    class MemoryStatusEx(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", ctypes.c_ulong),
+            ("dwMemoryLoad", ctypes.c_ulong),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    status = MemoryStatusEx()
+    status.dwLength = ctypes.sizeof(MemoryStatusEx)
+    kernel32 = vars(ctypes)["windll"].kernel32  # windll exists on Windows only
+    if not kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+        return None
+    return int(status.ullAvailPhys)
+
+
+def available_memory() -> int | None:
+    """The machine's available memory in bytes, read with no new dependency: `/proc/meminfo` on
+    Linux, `sysctl` on macOS, `GlobalMemoryStatusEx` on Windows. None when it cannot be read, on
+    any other platform and on any failure: the caller then says `memory: unknown`."""
+    try:
+        if sys.platform.startswith("linux"):
+            return meminfo_available(MEMINFO.read_text(encoding="utf-8"))
+        if sys.platform == "darwin":
+            proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+                SYSCTL, capture_output=True, text=True, encoding="utf-8", timeout=10
+            )
+            return sysctl_available(proc.stdout) if proc.returncode == 0 else None
+        if sys.platform == "win32":
+            return windows_available()
+    except (OSError, ValueError, AttributeError, KeyError, subprocess.SubprocessError):
+        return None
+    return None
+
+
 def git(root: Path, *args: str, check: bool = True) -> str:
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8"
