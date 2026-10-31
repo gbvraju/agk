@@ -1,6 +1,6 @@
 # ADR-0224: the self-hosted runner guide adds one shared, opt-in pool for an organisation (REQ-039, brief 410)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0217
