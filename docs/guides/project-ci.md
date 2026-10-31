@@ -172,4 +172,4 @@ docs/guides/local-mode.md`. The doctor prints the same line as its check `action
 never a failure, and `/agk:launch` prints it before it asks to start sessions.
 
 When the minutes run out, the checks cannot run on GitHub until the month turns or the plan changes: see local mode
-(brief #322, `docs/guides/local-mode.md`) for how to keep working.
+(brief #322) for how to keep working.
