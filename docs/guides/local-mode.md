@@ -127,9 +127,11 @@ Step 1 of the conductor's protocol (CI first) has nothing to read in local mode,
        python3 scripts/agk/evidence.py check <record file> --head <sha>
 
    It reports `stale` when the record names another head, `dirty` when the builder's tree was not clean and `failed` when a
-   recorded step did not exit 0; otherwise it adds a detached worktree of the head in a temporary folder, runs governance
-   there with the record's base, re-runs a sample of the recorded steps (one by default, `--sample N` for more; the same head
-   always gives the same sample) under the heavy-step lock, compares their exit codes and removes the worktree. A different
+   recorded step failed; otherwise it adds a detached worktree of the head in a temporary folder, runs governance there with
+   the record's base, rebuilds from the head the commands prepush runs (a recorded command that is not one of them is
+   reported as `not what prepush runs` and never run), re-runs a sample of them (one by default, `--sample N` for more; the
+   same head always gives the same sample) under the heavy-step lock, compares their exit codes with the record's and
+   removes the worktree. A different
    output digest is a note, not a failure. It posts nothing and ends with one line to quote:
    `Evidence check: agrees|differs, head <sha12>, record <sha12>, governance <outcome>, sample <k> of <m> same exit`, exit 0
    when the record agrees and 1 when it differs. Its `record` digest must equal the one in the builder's `Evidence:` line.

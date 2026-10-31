@@ -185,9 +185,10 @@ label what it starts, for example containers, by session (ADR-0231).
 
 A builder in local mode records its run with `python3 scripts/agk/prepush.py --record FILE` (ADR-0208), and the conductor checks
 that record before its verdict with `python3 scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--json]`: `stale`,
-`dirty` or `failed` when the record names another head, an unclean tree or a step that did not exit 0; otherwise governance and a
-sample of the recorded steps (one by default, chosen from the head sha) re-run in a temporary worktree of the head under the
-heavy-step lock, exit codes compared. It ends with one `Evidence check: agrees|differs, ...` line to quote, posts nothing, and
+`dirty` or `failed` when the record names another head, an unclean tree or a failed step; otherwise, in a temporary worktree of
+the head under the heavy-step lock, governance runs and a sample of the steps (one by default, chosen from the head sha) re-runs
+as prepush builds them from the head, never as the record writes them, exit codes compared; a recorded command that is not what
+prepush runs is a difference. It ends with one `Evidence check: agrees|differs, ...` line to quote, posts nothing, and
 exits 0 when the record agrees, 1 when it differs, 2 on a usage error or a bad record, 3 on an I/O error (ADR-0233).
 
 ## Actions minutes

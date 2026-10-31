@@ -212,6 +212,24 @@ def test_a_changed_argv_is_reported_and_never_run(repo, outside):
     assert LINE.search(proc.stdout).group(1) == "differs"
 
 
+@pytest.mark.parametrize(
+    "name,argv",
+    [
+        ("governance", ["make", "-f", "agk.mk", "agk-governance", "X=1"]),
+        ("secret-scan", ["<outside>/gitleaks", "detect"]),
+        ("tests", ["python3", "scripts/agk/test_plan.py", "--json"]),
+        ("pr-body", ["python3", "scripts/agk/other.py", "--draft", "false", "b.md"]),
+    ],
+)
+def test_every_known_step_is_compared_with_what_prepush_builds(repo, outside, name, argv):
+    """REQ-039: verdict on 57c122a, item 1 (each step prepush knows, not only lint)."""
+    project(repo, outside)
+    record = write(outside / "record.json", repo, [step(name, argv)])
+    proc = check(repo, outside, str(record), "--sample", "10")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert f"evidence: not what prepush runs: {name} (field: argv)" in proc.stdout
+
+
 def test_an_unknown_step_is_reported_and_never_run(repo, outside):
     """REQ-039: verdict on 57c122a, item 1 (a step whose name prepush does not know)."""
     project(repo, outside)

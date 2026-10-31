@@ -19,21 +19,30 @@ script, its tests and the kit manifest are protected path classes, so this ADR n
 
 ## Decision
 
-1. **The command (answer 1).** `scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--json]`. A record whose
-   `schema` is not 1, or whose `head`, `base` (40 hex), `tree_clean` (a boolean) or `steps` (each with `name`, `argv`, `cwd`,
-   `exit`, `output_sha256`, and `runs` of `name`, `command`, `cwd`, `exit` where present) are not as schema 1 writes them, is
+1. **The command (answer 1; verdict on 57c122a, item 2).** `scripts/agk/evidence.py check RECORD [--head SHA] [--sample N]
+   [--json]`. A record whose `schema` is not 1, or whose `head`, `base` (40 hex), `tree_clean` (a boolean), `result`
+   (`passed` or `failed`) or `steps` (each with `name`, `outcome` (`ok`, `FAIL` or `skipped`), `argv`, `cwd`, `exit`,
+   `output_sha256`, and `runs` of `name`, `command`, `cwd`, `exit` where present) are not as schema 1 writes them, is
    refused with exit 2, naming the field, never its value. It reports, in this order and each on its own line, `stale` when
    the record's `head` is not SHA (by default the current `HEAD`), `dirty` when `tree_clean` is false, and `failed` for each
-   recorded step whose `exit` is neither 0 nor null (null: it ran nothing) and for each run of the tests step whose `exit`
-   is not 0 (null there is a timeout). Any of these is a difference, and nothing is re-run.
-2. **The re-run (answer 2).** Otherwise it makes a new temporary folder, adds a detached worktree of the head in it, runs
-   `make -f agk.mk agk-governance` there with `AGK_BASE` set to the record's `base` (as prepush ran it), and re-runs N
-   recorded units (default 1): a step's `argv` in its `cwd` without a shell, or a run of the tests step as its shell command
-   with the project's `proof_timeout`. `python3` is the running interpreter, a kit script `scripts/agk/<name>` is taken from
-   the worktree or, when the head has none, from this kit, and a command written `<outside>/<name>` is looked up on PATH. A
-   unit with any other argument naming a path outside the repository (the body file, say) cannot be repeated: it is listed as
-   `not repeatable` and never sampled. Governance is always re-run, so it is not a sampled unit. The worktree and the folder
-   are removed in a `finally`, also on a failure or an interrupt, and git's note of the worktree is pruned.
+   recorded step whose `exit` is neither 0 nor null or whose `outcome` is `FAIL` (prepush records some FAIL steps with no
+   exit, or with the exit 0 of a command a refusal followed), for each run of the tests step whose `exit` is not 0 (null
+   there is a timeout), and when `result` is not `passed`. Any of these is a difference, and nothing is re-run.
+2. **The re-run never executes the record (answer 2; verdict on 57c122a, items 1 and 3).** Otherwise it makes a new
+   temporary folder, adds a detached worktree of the head in it, runs `make -f agk.mk agk-governance` there with
+   `AGK_BASE` set to the record's `base` (as prepush ran it), and rebuilds from the head what prepush runs: `pr-body`
+   (`check_pr_body.py --draft false <body>`), `lint` (`make lint`), `governance`, `secret-scan` (gitleaks over merge base
+   to head) and `tests` (`test_plan.py --json --base <merge base> --head HEAD`), and the test runs from that plan run in the
+   worktree, with the regression set of `impact.py` where the head has a `[testing]` table, matched to the recorded runs by
+   set and name. A recorded step or run whose name is not one of these, or whose argv, command (scrubbed as prepush scrubs
+   it) or folder is not the rebuilt one, is reported as `not what prepush runs: <name> (field: name|argv|command|cwd)`, a
+   difference, and never run. N rebuilt units (default 1) are re-run: an argv without a shell, a test run through `sh -c`
+   with the project's `proof_timeout`. A kit script is the worktree's, or this kit's when the head has none. A body file
+   outside the repository, or a gitleaks not installed on the conductor's machine, cannot be repeated: the unit is listed
+   `not repeatable` and never sampled. Governance is always re-run, so it is not a sampled unit. Every command, governance
+   and the plan run included, runs in its own process group; on a timeout, a signal or any error its whole tree is killed
+   (`proof.kill_tree`) before the lock is released and the worktree removed. The worktree and the folder are removed in a
+   `finally` and git's note of the worktree is pruned.
 3. **The sample (answer 2).** The units are ordered by the sha256 of `<head sha>:<unit name>` and the first N taken; the
    same head always gives the same sample, the record's order does not matter and no random generator or Python version
    enters. It compares exit codes; a different output digest is printed as a note and never makes the record differ.
@@ -43,10 +52,10 @@ script, its tests and the kit manifest are protected path classes, so this ADR n
 5. **The answer (answer 4).** One `evidence: ...` line per finding, governance's own output when it fails, then one line to
    quote: `Evidence check: agrees|differs, head <sha12>, record <sha12 of the file>, governance ok|FAIL|not run, sample <k>
    of <m> same exit`. The record digest is the one of the builder's `Evidence:` line. `--json` prints one object (`result`,
-   `head`, `record_sha256`, `problems`, `governance`, `sample` with `name`, `recorded_exit`, `exit`, `same_exit`,
-   `same_output`, and `notes`). Exit 0 agrees, 1 differs, 2 a usage error, a bad record or a head that does not resolve,
-   3 an I/O error (a record that cannot be read, a temporary folder or worktree that cannot be made, make not installed).
-   It posts nothing and makes no network call.
+   `head`, `record_sha256`, `problems` (with the `not what prepush runs` lines), `governance`, `sample` with `name`,
+   `recorded_exit`, `exit`, `same_exit`, `same_output`, and `notes`). Exit 0 agrees, 1 differs, 2 a usage error, a bad
+   record or a head that does not resolve, 3 an I/O error (a record that cannot be read, a temporary folder or worktree
+   that cannot be made, make not installed). It posts nothing and makes no network call.
 6. **The guide (answer 5).** `docs/guides/local-mode.md`: a builder adds `prepush.py --record` under the lock to its lines
    and puts the `Evidence:` line in the body beside its `Local evidence:` line; the conductor runs `evidence.py check` and
    quotes its line in the verdict's `Local evidence:` line. The hand-made worktree run stays as the way for a record-less
@@ -59,8 +68,10 @@ script, its tests and the kit manifest are protected path classes, so this ADR n
 
 - A clearing verdict in local mode can rest on a command the conductor ran on the exact head, not on pasted text.
 - One sampled step per head keeps the check short; a conductor that doubts a record asks for more with `--sample N`.
-- The re-runs execute the record's commands, which a builder wrote; the conductor runs them only on a head it is reviewing,
-  in a worktree of that head, as it already runs that head's governance.
+- The conductor runs only commands rebuilt from the head it reviews, in a worktree of that head, as it already runs that
+  head's governance; a record can name what ran, never what the conductor runs.
+- A prepush that changes how it builds a step must change `evidence.py` with it, or its records are reported as `not what
+  prepush runs`.
 
 ## Residual
 
