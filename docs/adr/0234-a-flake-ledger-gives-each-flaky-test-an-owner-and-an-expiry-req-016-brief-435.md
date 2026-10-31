@@ -1,6 +1,6 @@
 # ADR-0234: a flake ledger gives each flaky test an owner and an expiry (REQ-016, brief 435)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0181, ADR-0220, ADR-0227
