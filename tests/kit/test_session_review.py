@@ -9,6 +9,7 @@ serves saved JSON copies of the GitHub responses; no network, GET only."""
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 
 import pytest
@@ -355,3 +356,224 @@ def test_an_unreadable_draft_comment_list_fails_and_never_reads_as_skipped(proj,
     draft_comments(stub, 7, "FAIL")
     out = session(proj, stub, "review-queue", "--all")
     assert out.returncode == 2 and "skip: draft" not in out.stdout
+
+
+# --- a request on the conductor issue and a question on a brief (brief #408) -------------------
+
+ISSUES = f"repos/{REPO}/issues"
+CONDUCTOR = {"number": 50, "labels": [{"name": "agk-conductor"}], "title": "conductor"}
+
+
+def brief(n: int, label: str = "agk-brief") -> dict:
+    return {"number": n, "labels": [{"name": label}], "title": f"Brief {n}", "body": "x\n"}
+
+
+def issues(stub: Stub, conductor: list | None = None, briefs: list | None = None, extra=()):
+    """The open issues: both reads (one per label) get the same list, each keeps its own label."""
+    found = ([CONDUCTOR] if conductor is not None else []) + [b[0] for b in briefs or []]
+    stub.serve(ISSUES, [*found, *extra])
+    if conductor is not None:
+        stub.serve(f"{ISSUES}/50/comments", conductor)
+    for issue, comments in briefs or []:
+        stub.serve(f"{ISSUES}/{issue['number']}/comments", comments)
+
+
+def took(cid: int, when: int = 590, who: str = "builder-x", login: str = "builder"):
+    return note(cid, f"taken: {who} 2026-10-31", when, login=login)
+
+
+def asks(stub, *extra):
+    stub.serve(OPEN, list(extra))
+
+
+def request_lines(lines: list[str]) -> list[tuple[str, int, int]]:
+    """(session, comment id, minutes) of each `request` line, which must have the brief's shape."""
+    out = []
+    for line in lines:
+        if line.startswith("request "):
+            found = re.fullmatch(r"request (\S+) \(comment (\d+)\) waiting (\d+)m", line)
+            assert found, line
+            out.append((found.group(1), int(found.group(2)), int(found.group(3))))
+    return out
+
+
+@pytest.fixture(autouse=True)
+def _no_issues_by_default(stub):
+    """No conductor issue and no brief: what every earlier test of this file reads."""
+    stub.serve(ISSUES, [])
+
+
+def test_an_unanswered_request_is_listed_with_its_session_comment_and_wait(proj, stub):
+    """REQ-037: brief #408 answers 1 and 4 (an unanswered request listed)."""
+    asks(stub)
+    issues(stub, [note(3, "Request: builder-x finished #12\n\nmore", 510)])
+    lines = queue(proj, stub)
+    found = request_lines(lines)
+    assert len(lines) == 1 and len(found) == 1, lines
+    who, cid, minutes = found[0]
+    assert (who, cid) == ("builder-x", 3) and 89 <= minutes <= 91
+
+
+def test_a_request_answered_by_a_listed_authors_assign_after_it_is_skipped(proj, stub):
+    """REQ-037: brief #408 answers 1 and 4 (an answered request skipped)."""
+    asks(stub)
+    for answer in (
+        "Assign: builder-x #12",
+        "Assign: builder-x none",
+        "Assign: builder-x #9 build (b)",
+    ):
+        issues(stub, [note(3, "Request: builder-x new", 510), note(4, answer, 520, login="boss")])
+        assert queue(proj, stub) == ["empty"], answer
+
+
+def test_an_assign_that_does_not_answer_the_request_leaves_it_listed(proj, stub):
+    """REQ-037: brief #408 answer 1 (an `Assign: <session>` by a listed author, after it)."""
+    asks(stub)
+    for other in (
+        note(4, "Assign: builder-x #12", 520, login="someone"),  # not a listed author
+        note(4, "Assign: builder-y #12", 520, login="boss"),  # another session
+        note(4, "assign builder-x #12", 520, login="boss"),  # not an Assign line
+        note(2, "Assign: builder-x #12", 500, login="boss"),  # before the request
+    ):
+        issues(stub, [note(3, "Request: builder-x new", 510), other])
+        assert [r[:2] for r in request_lines(queue(proj, stub))] == [("builder-x", 3)], other
+
+
+def test_each_session_waits_on_its_own_and_requests_follow_the_pull_requests(proj, stub):
+    """REQ-037: brief #408 answer 1 (one line per unanswered request, after the pull requests)."""
+    stub.serve(OPEN, [listed(7, "agk:review")])
+    facts(stub, 7, [])
+    issues(
+        stub,
+        [
+            note(3, "Request: builder-x new", 510),
+            note(4, "Request: builder-y finished #12", 520),
+            note(5, "Assign: builder-y #13", 530, login="boss"),
+            note(6, "Request: builder-z new", 540),
+            note(7, "Report: not a request", 545),
+        ],
+    )
+    lines = queue(proj, stub)
+    assert lines[0] == f"#7 {SHORT} review: labelled agk:review; no verdict yet"
+    assert [r[:2] for r in request_lines(lines[1:])] == [("builder-x", 3), ("builder-z", 6)]
+    assert len(lines) == 3
+
+
+def test_a_question_on_a_taken_brief_with_no_pull_request_is_listed(proj, stub):
+    """REQ-037: brief #408 answers 1 and 4 (a question on a taken brief, no pull request)."""
+    asks(stub)
+    issues(stub, None, [(brief(60), [took(1), note(2, "Question: Q-60-1 which file?", 595)])])
+    assert queue(proj, stub) == ["#60 question on a brief"]
+
+
+def test_a_question_by_the_same_listed_account_that_took_the_brief_is_still_listed(proj, stub):
+    """REQ-037: brief #408 answer 1 (a session that posts as a listed author: its own `taken:`
+    and `Question:` are not an answer, Q-408-1)."""
+    asks(stub)
+    comments = [
+        note(1, "Field note (conductor): start now.", 580, login="boss"),
+        took(2, 590, login="boss"),
+        note(3, "Question: Q-60-1 which file?", 595, login="boss"),
+    ]
+    issues(stub, None, [(brief(60), comments)])
+    assert queue(proj, stub) == ["#60 question on a brief"]
+
+
+def test_a_question_on_a_brief_with_an_open_pull_request_is_left_to_the_pull_request(proj, stub):
+    """REQ-037: brief #408 answer 4 (the pull request's own rules apply)."""
+    pr = {**listed(7, None, draft=True), "body": "Brief: #60\n"}
+    stub.serve(OPEN, [pr])
+    draft_comments(stub, 7, [])
+    issues(stub, None, [(brief(60), [took(1), note(2, "Question: Q-60-1 which file?", 595)])])
+    assert queue(proj, stub, "--all") == ["empty", f"#7 {SHORT} skip: draft"]
+
+
+def test_an_answered_question_on_a_brief_is_skipped_and_an_edit_lists_it_again(proj, stub):
+    """REQ-037: brief #408 answer 1 (created or edited after the last listed author's comment)."""
+    asks(stub)
+    asked = [took(1), note(2, "Question: Q-60-1 which file?", 595)]
+    issues(stub, None, [(brief(60), [*asked, note(3, "Use the first one.", 597, login="boss")])])
+    assert queue(proj, stub) == ["empty"]
+    edited = [took(1), note(2, "Question: Q-60-1 which file?", 595, edited=599)]
+    issues(stub, None, [(brief(60), [*edited, note(3, "Use the first one.", 597, login="boss")])])
+    assert queue(proj, stub) == ["#60 question on a brief"]
+
+
+def test_a_comment_by_an_unlisted_author_does_not_answer_a_question_on_a_brief(proj, stub):
+    """REQ-037: brief #408 answer 1."""
+    asks(stub)
+    comments = [took(1), note(2, "Question: Q-1 ok?", 595), note(3, "Sure.", 597, login="x")]
+    issues(stub, None, [(brief(60), comments)])
+    assert queue(proj, stub) == ["#60 question on a brief"]
+
+
+def test_a_question_on_a_brief_that_is_not_taken_or_not_a_brief_is_not_listed(proj, stub):
+    """REQ-037: brief #408 answer 1 (a live `taken:` on an open `agk-brief` issue)."""
+    asks(stub)
+    question = note(2, "Question: Q-1 ok?", 595)
+    released = note(3, "released: builder-x", 596)
+    issues(
+        stub,
+        None,
+        [
+            (brief(60), [question]),  # never taken
+            (brief(61), [took(1), question, released]),  # released
+            (brief(62), [took(1, when=0), question]),  # a take older than claim_hours
+            (brief(63), [took(1), note(2, "thanks, Question: later", 595)]),  # not a Question
+        ],
+        extra=[{**brief(64, label="bug"), "number": 64}],
+    )
+    stub.serve(f"{ISSUES}/64/comments", [took(1), question])
+    assert queue(proj, stub) == ["empty"]
+
+
+def test_the_fingerprint_changes_on_a_new_request_and_a_new_question_but_not_with_time(proj, stub):
+    """REQ-037: brief #408 answers 2 and 4."""
+    asks(stub)
+    issues(stub, [], [(brief(60), [took(1)])])
+    first = fingerprint(proj, stub)
+    assert fingerprint(proj, stub) == first
+    issues(stub, [note(3, "Request: builder-x new", 510)], [(brief(60), [took(1)])])
+    requested = fingerprint(proj, stub)
+    assert fingerprint(proj, stub) == requested  # the minutes waited are not in it
+    asked = [took(1), note(2, "Question: Q-1 ok?", 595)]
+    issues(stub, [note(3, "Request: builder-x new", 510)], [(brief(60), asked)])
+    questioned = fingerprint(proj, stub)
+    edited = [took(1), note(2, "Question: Q-1 ok?", 595, edited=598)]
+    issues(stub, [note(3, "Request: builder-x new", 510)], [(brief(60), edited)])
+    again = fingerprint(proj, stub)
+    assert len({first, requested, questioned, again}) == 4
+
+
+def test_requests_and_questions_are_read_with_gets_only(proj, stub):
+    """REQ-037: brief #408 (read-only: the pass answers, the command posts nothing)."""
+    asks(stub)
+    issues(stub, [note(3, "Request: builder-x new", 510)], [(brief(60), [took(1)])])
+    queue(proj, stub, "--all")
+    queue(proj, stub, "--fingerprint")
+    calls = stub.calls()
+    assert any(c[1].startswith(f"{ISSUES}/50/comments") for c in calls)
+    assert any(c[1].startswith(f"{ISSUES}/60/comments") for c in calls)
+    assert all(call[0] == "GET" for call in calls)
+
+
+@pytest.mark.parametrize("which", ["issues", "conductor", "brief"])
+def test_an_unreadable_issue_list_or_comments_fail_and_never_read_as_empty(proj, stub, which):
+    """REQ-037: brief #408 (a failed read fails the command, as for pull requests)."""
+    asks(stub)
+    issues(stub, [note(3, "Request: builder-x new", 510)], [(brief(60), [took(1)])])
+    target = {"issues": ISSUES, "conductor": f"{ISSUES}/50/comments"}.get(
+        which, f"{ISSUES}/60/comments"
+    )
+    stub.serve(target, "FAIL")
+    out = session(proj, stub, "review-queue")
+    assert out.returncode == 2 and "empty" not in out.stdout
+
+
+def test_two_open_conductor_issues_fail_naming_the_label(proj, stub):
+    """REQ-037: brief #408 (the one open `agk-conductor` issue; Q-408-2)."""
+    asks(stub)
+    issues(stub, [], extra=[{**CONDUCTOR, "number": 51}])
+    stub.serve(f"{ISSUES}/51/comments", [])
+    out = session(proj, stub, "review-queue")
+    assert out.returncode == 2 and "agk-conductor" in out.stdout
