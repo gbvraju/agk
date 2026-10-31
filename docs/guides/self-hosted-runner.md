@@ -29,7 +29,9 @@ longer-term change.
    (files, caches, credentials, processes) survives into the next. A runner that is reused between jobs is not allowed, even on
    a machine you trust.
 2. **Never on a public repository, never for forks.** Register the runner on the one private repository, not on an account or
-   organisation that also holds public ones, and keep pull requests from forks off it: their code is not yours to run.
+   organisation that also holds public ones, and keep pull requests from forks off it: their code is not yours to run. An
+   organisation with several private projects can instead share one pool limited to them by name:
+   [one pool for an organisation](#one-pool-for-an-organisation).
 3. **No secret beyond the job's own.** The job gets only what its own steps need (its `GITHUB_TOKEN`, with the least
    `permissions:` it needs). The machine holds no other token, key or credential the job could read, and the runner's
    registration token is used once and not stored.
@@ -113,3 +115,79 @@ within a day `(verify)`. When the runner is down for longer than you can wait:
 
 Cancel a heavy job that is still waiting once you have fallen back, so that it does not start later on a runner that comes
 back.
+
+## One pool for an organisation
+
+An organisation with several AGK projects can run one pool of ephemeral runners that serves the heavy jobs of all of them,
+with shared caches, so that a new project adds work for the pool instead of hosted minutes (brief #410, ADR-0224). The rules
+above still hold for every runner of the pool; these are added:
+
+- **A runner group limited to named private repositories.** The pool's runners belong to one organisation runner group whose
+  repository access is "Selected repositories", each a private repository named one by one; never a public repository, and
+  never "All repositories", which would take in a public one created later.
+- **Ephemeral runners only.** Each runner takes one job and is then removed, as in rule 1. Start with one machine that
+  recreates its runner after each job, and autoscale later, when the jobs wait too long, by starting more such machines.
+- **Shared caches that hold no credential.** The caches that make a fresh runner fast (container layers, package managers'
+  downloads, browsers for end-to-end tests) live on one volume that every runner mounts. The volume holds no credential: no
+  token, key, login or configuration file with a secret, so a job that writes to it leaves nothing another project's job could
+  use to act as it.
+- **No deploy or production secret on any runner.** No job on the pool deploys, publishes or holds a production credential,
+  and the job token has read permissions only (`permissions: contents: read`); a job that needs more stays on GitHub-hosted
+  runners.
+- **Governance and proof stay on GitHub-hosted runners.** The kit's governance and proof checks are the trust anchor of every
+  merge in every project of the organisation, and no project moves them to the pool (see [how a heavy job opts
+  in](#how-a-heavy-job-opts-in)).
+
+### The job: the pool when the variable is set, GitHub-hosted runners otherwise
+
+In each project's own workflow (not a file of the kit), the heavy job reads its runner from the repository variable
+`AGK_HEAVY_RUNNER` and falls back to GitHub-hosted runners when the variable is unset, and its `if:` keeps a pull request from a
+fork off the pool, while a push still runs the job:
+
+```yaml
+jobs:
+  heavy-tests:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ vars.AGK_HEAVY_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/heavy-suite.sh   # the project's own heavy step
+```
+
+Set the variable to `self-hosted` `(verify)`: every self-hosted runner carries that label, so it picks the pool only while the
+pool's group holds the repository's only self-hosted runners `(verify)` (step 4 below checks it), and `minutes.py` reads a job
+as self-hosted by that label among the labels the job asked for. A label of the
+pool's own alone (for example `heavy`) still runs on the pool, but `minutes.py` would count the job as hosted minutes. To step
+back, delete the variable: the next run uses `ubuntu-latest`.
+
+### What the person sets up
+
+The kit sets up no runner, no runner group and no variable. Each is a step the person takes, with an owner's rights, in the
+organisation's or the repository's settings; check each against GitHub's documentation for self-hosted runners and runner
+groups, which depend on the plan:
+
+1. **Create the runner group** `(verify)`: in the organisation's Settings, Actions, Runner groups, a new group with repository
+   access "Selected repositories", naming each private project, and with public repositories not allowed.
+2. **Start one ephemeral runner in the group** `(verify)`: as in [set up an ephemeral runner](#set-up-an-ephemeral-runner), but
+   with an organisation registration token (`gh api --method POST orgs/{org}/actions/runners/registration-token --jq .token`)
+   and `./config.sh --url https://github.com/<org> --runnergroup <group> --ephemeral --unattended`, on a machine that mounts the
+   cache volume and holds no credential.
+3. **Keep forks off** `(verify)`: in the organisation's and each repository's Settings, Actions, General, the setting that runs
+   workflows from fork pull requests stays off; the `if:` above is the second guard.
+4. **Check that the repository reaches no other self-hosted runner** `(verify)`: in the repository's Settings, Actions, Runners,
+   the only self-hosted runners listed are the pool's. That means no runner registered on the repository (the one-project setup
+   above), and an organisation Default group that holds no runner or does not include the repository; a runner there also
+   carries `self-hosted` and could take the job.
+5. **Set the variable in each project that opts in** `(verify)`: in the repository's Settings, Secrets and variables, Actions,
+   Variables, `AGK_HEAVY_RUNNER` with the value `self-hosted`, or `gh variable set AGK_HEAVY_RUNNER --body self-hosted` in the
+   repository. A project without the variable keeps its heavy job on GitHub-hosted runners.
+
+### How to measure it
+
+`python3 scripts/agk/minutes.py` already lists a job on a self-hosted runner and counts it as not billed
+([project-ci.md](project-ci.md#how-many-minutes-are-left)). In each project that opts in, run it one week before the variable is
+set and note the estimate and the minutes per merged pull request; run it again one week after and compare: the heavy job's
+minutes should leave the estimate and appear as jobs on a self-hosted runner. Compare the time the heavy job waits in the queue
+too: when it grows, add a machine to the pool.
