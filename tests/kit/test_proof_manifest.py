@@ -251,3 +251,16 @@ def test_the_summary_step_appends_the_manifest_on_every_outcome_skipped_included
     assert '>> "$GITHUB_STEP_SUMMARY"' in block
     assert "--not-run" in block and "draft" in block and "status-only" in block
     assert "steps.status.outputs.skip" in block
+
+
+def test_a_timed_out_run_and_a_command_with_backticks_read_right():
+    """REQ-016: brief #425 answer 1 (the seconds of a run ended by proof_timeout)."""
+    import proof
+
+    run = proof.Run("api", ["t/test_a.py"], "echo `date`", ".", [900, None], "base")
+    lines = proof.ran_lines(run)
+    assert "- command: `` echo `date` ``" in lines  # a fence longer than the backticks inside
+    assert "- seconds: base 900 (timed out, setting: proof_timeout), head not run" in lines
+    run = proof.Run("api", ["t/test_a.py"], "true", ".", [2, 900], "head")
+    assert "- seconds: base 2, head 900 (timed out, setting: proof_timeout)" in proof.ran_lines(run)
+    assert proof.code("a`b") == "``a`b``" and proof.code("`x") == "`` `x ``"
