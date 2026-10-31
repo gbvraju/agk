@@ -258,6 +258,7 @@ def test_a_second_ledger_table_is_malformed(repo):
     code, out = run(repo, "--today", TODAY)
     assert code == 1
     assert out[0] == "malformed: line 9: a second ledger table (the ledger holds one)"
+    assert len(out) == 2, out  # its separator line is part of it, not a stray row
 
 
 def test_rows_in_a_fenced_block_are_an_example_and_not_read(repo):
@@ -273,6 +274,30 @@ def test_the_table_ends_at_the_first_line_that_is_not_a_row(repo):
     row = "| tests/test_a.py::t | builder-a1 | 1 | watch |  |  |"
     with_ledger(repo, ledger(row) + "\nA note.\n")
     assert run(repo, "--today", TODAY) == (0, [f"flakes: nothing due (1 entry) in {LEDGER}"])
+
+
+def test_a_row_after_a_break_in_the_table_is_malformed_never_hidden(repo):
+    """REQ-016: verdict on 5e4043d, finding 1: a row cut off from the table by a blank line or
+    prose is listed as malformed with its line number, so an expired quarantine is never hidden."""
+    row = "| tests/test_a.py::t | builder-a1 | 0 | watch |  |  |"
+    late = "| tests/test_b.py::u | builder-a1 | 3 | quarantined | 2020-01-01 |  |"
+    with_ledger(repo, ledger(row) + "\n" + late + "\n")
+    code, out = run(repo, "--today", TODAY)
+    assert code == 1, out
+    assert out == [
+        "malformed: line 7: a row outside the ledger table",
+        f"flakes: 1 listed (0 expired, 0 brief due, 1 malformed) in {LEDGER}",
+    ]
+    with_ledger(repo, ledger(row) + "\nA note.\n" + late + "\n")
+    code, out = run(repo, "--today", TODAY)
+    assert code == 1 and out[0] == "malformed: line 8: a row outside the ledger table", out
+
+
+def test_a_row_inside_a_fence_after_the_table_is_still_not_read(repo):
+    """REQ-016: verdict on 5e4043d, finding 1: a fenced example below the ledger stays unread."""
+    late = "| tests/test_b.py::u | builder-a1 | 3 | quarantined | 2020-01-01 |  |"
+    with_ledger(repo, ledger() + "\n```text\n" + late + "\n```\n")
+    assert run(repo, "--today", TODAY) == (0, [f"flakes: nothing due (0 entries) in {LEDGER}"])
 
 
 def test_the_lines_are_in_file_order_and_the_reasons_stack(repo):
