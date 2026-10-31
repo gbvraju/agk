@@ -173,6 +173,16 @@ code. A lock left by a session that died is cleared with a line saying so: when 
 machine, or when it is older than `lock_stale_minutes` (120 by default). The lock is a folder in the user's temp folder, or
 `lock_dir` in `agk.toml`. `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` (ADR-0191).
 
+A machine that can carry several heavy runs sets `lock_slots` in `agk.toml` (a positive whole number, 1 by default; with 1
+nothing changes): `run` takes any free slot (slot 1 is the folder `agk-lock-heavy`, slot k `agk-lock-heavy.k`) and `status`
+prints one line per slot with its holder. `run --priority P` (0 to 3, 2 by default) orders the waiting runs: a run that waits
+leaves a ticket, a free slot goes to the lowest priority and then to the oldest ticket, and the ticket of a process that no
+longer runs is dropped with a line saying so. `lock_cleanup` in `agk.toml` (empty by default; the kit ships none) is a command
+run once, through `sh -c`, when the lock of a run whose process no longer runs is cleared, with `AGK_LOCK_SESSION` and
+`AGK_LOCK_PID` of that run; its output is shown, and a failure is reported and never blocks. It is not run for a lock cleared by
+age, whose run may still go on, nor for one that names no session. The locked command gets `AGK_LOCK_SESSION`, so a project can
+label what it starts, for example containers, by session (ADR-0231).
+
 ## Actions minutes
 
     python3 scripts/agk/minutes.py [--json | --line] [--repo OWNER/REPO] [--today YYYY-MM-DD] [--api-dir DIR]
