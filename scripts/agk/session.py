@@ -75,6 +75,11 @@ brief) print one line that starts `agk paused` and names the setting, read and w
 GitHub and exit 5. The default branch is the ref `origin/<default_branch>`, which session rule 33's
 fetch keeps current, never the session's own branch; without that ref the checkout's `agk.toml` is
 read.
+Brief #424 (ADR-0229): `mine --session ID (--pr N | --brief N)` (GET only) prints `mine` and exits 0
+when the session holds a live take of the brief (any build of it), for a pull request the brief
+that its `Brief: #n` line names; otherwise it prints `not mine: #<brief> belongs to <session>` (the
+oldest live take of another session), `not mine: #<brief> has no live take`, or, for a pull request
+without that line, `not mine: #<pr> names no brief`, and exits 1. A read that fails exits 2.
 """
 
 from __future__ import annotations
@@ -126,7 +131,8 @@ USAGE = (
     "       session.py plan [--json]\n"
     "       session.py push-check\n"
     "       session.py tell --session ID --text MESSAGE\n"
-    "       session.py inbox --session ID"
+    "       session.py inbox --session ID\n"
+    "       session.py mine --session ID (--pr N | --brief N)"
 )
 COMMANDS = (
     "watch",
@@ -142,6 +148,7 @@ COMMANDS = (
     "push-check",
     "tell",
     "inbox",
+    "mine",
 )
 PAGE = 100
 PAUSED_EXIT = 5
@@ -968,6 +975,35 @@ def take(s: Survey, brief: dict, reserve, build: str | None = None) -> str | Non
     if oldest and oldest[0][2] != me:
         return f"lost the take to {oldest[0][2]}"
     return None
+
+
+def mine(root, me: str, pr_number: int | None, brief: int | None) -> int:
+    """Brief #424: whether this session holds the work a message names (GET only)."""
+    repo = repo_name(root)
+    if pr_number is not None:
+        pull = gh(f"repos/{repo}/pulls/{pr_number}")
+        if not isinstance(pull, dict) or "number" not in pull:
+            raise CheckError("rule 5: the pull request cannot be read")
+        brief = brief_number(pull)
+        if brief is None:
+            print(f"not mine: #{pr_number} names no brief")
+            return 1
+    comments = pages(f"repos/{repo}/issues/{brief}/comments")
+    prs = pages(f"repos/{repo}/pulls?state=all")
+    if comments is None or prs is None:
+        raise CheckError("rule 5: the brief and the pull requests cannot be read")
+    takes = live_takes(
+        comments, int(brief or 0), prs, flow_int(root, "claim_hours", CLAIM_HOURS, 1)
+    )
+    if any(t[2] == me for t in takes):
+        print("mine")
+        return 0
+    print(
+        f"not mine: #{brief} belongs to {takes[0][2]}"
+        if takes
+        else f"not mine: #{brief} has no live take"
+    )
+    return 1
 
 
 # --- a build claim, the answer of the conductor and `after` (SPEC-0034 rules 1, 5 and 12) -----
@@ -1866,6 +1902,7 @@ def main(argv: list[str] | None = None) -> int:
         "push-check": set(),
         "tell": {"--session", "--text"},
         "inbox": {"--session"},
+        "mine": {"--session", "--pr", "--brief"},
     }
     if not set(opts) <= allowed[cmd] or len(opts) != len(args[1::2]):
         print(USAGE)
@@ -1900,6 +1937,10 @@ def main(argv: list[str] | None = None) -> int:
         ok = True
     elif cmd == "tell":
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and "--text" in opts
+    elif cmd == "mine":
+        targets = [k for k in ("--pr", "--brief") if k in opts]
+        ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and len(targets) == 1
+        ok = ok and number_of(opts[targets[0]])
     else:
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", "")))
     if not ok:
@@ -1932,6 +1973,9 @@ def main(argv: list[str] | None = None) -> int:
             return tell(root, opts["--session"], opts["--text"])
         if cmd == "inbox":
             return inbox(root, opts["--session"])
+        if cmd == "mine":
+            number = {k: int(v) for k, v in opts.items() if k in ("--pr", "--brief")}
+            return mine(root, opts["--session"], number.get("--pr"), number.get("--brief"))
         return next_brief(root, opts["--session"])
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}")
