@@ -49,6 +49,7 @@
     "scripts/agk/doctor.py",
     "scripts/agk/drift_audit.py",
     "scripts/agk/facts.py",
+    "scripts/agk/flakes.py",
     "scripts/agk/full_run.py",
     "scripts/agk/impact.py",
     "scripts/agk/launch.py",
@@ -85,6 +86,7 @@
     "docs/build-state.md": "kit/templates/build-state.md",
     "docs/requirements.md": "kit/templates/requirements.md",
     "docs/runs/decisions-log.md": "kit/templates/decisions-log.md",
+    "docs/runs/flakes.md": "kit/templates/flakes.md",
     "docs/runs/residuals.md": "kit/templates/residuals.md",
     "pyproject.toml": "kit/templates/pyproject.toml"
   },
@@ -112,6 +114,7 @@
       "docs/build-state.md": "kit/templates/build-state.md",
       "docs/requirements.md": "kit/templates/requirements.md",
       "docs/runs/decisions-log.md": "kit/templates/decisions-log.md",
+      "docs/runs/flakes.md": "kit/templates/flakes.md",
       "docs/runs/residuals.md": "kit/templates/residuals.md"
     },
     "block_sources": {

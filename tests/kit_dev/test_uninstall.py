@@ -622,6 +622,7 @@ def test_a_real_install_leaves_only_the_projects_own_files(
         "docs/build-state.md",
         "docs/requirements.md",
         "docs/runs/decisions-log.md",
+        "docs/runs/flakes.md",
         "docs/runs/residuals.md",
         "pyproject.toml",
     }, out

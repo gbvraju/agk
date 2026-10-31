@@ -257,7 +257,7 @@ def test_a_second_ledger_table_is_malformed(repo):
     with_ledger(repo, text)
     code, out = run(repo, "--today", TODAY)
     assert code == 1
-    assert out[0] == "malformed: line 8: a second ledger table (the ledger holds one)"
+    assert out[0] == "malformed: line 9: a second ledger table (the ledger holds one)"
 
 
 def test_rows_in_a_fenced_block_are_an_example_and_not_read(repo):
