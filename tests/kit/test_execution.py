@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
+import sys
 from pathlib import Path
 
 import common
@@ -362,7 +363,7 @@ def test_it_has_no_api_path_of_its_own():
 def test_help_runs_without_network(tmp_path):
     """REQ-039: brief #441 answer 4 (the script imports with the standard library only)."""
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        ["python3", "-I", "-c", f"import runpy; runpy.run_path({str(SCRIPT)!r}, run_name='x')"],
+        [sys.executable, "-I", "-c", f"import runpy; runpy.run_path({str(SCRIPT)!r})"],
         capture_output=True,
         text=True,
         cwd=tmp_path,
