@@ -1,6 +1,6 @@
 # ADR-0231: the heavy-step lock lets N heavy runs share a machine in priority order, and cleans up after a dead run (REQ-040, brief 426)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0191, ADR-0227
