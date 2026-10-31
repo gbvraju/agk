@@ -1,1 +1,0 @@
-- a builder waiting on its pull request now wakes on a new message from the conductor (`watch --pr N --session ID` ends with `tell <message>`), and `after` prints its unread messages first (brief #368, ADR-0206 Proposed)

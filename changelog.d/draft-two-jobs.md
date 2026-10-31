@@ -1,1 +1,0 @@
-- a push to a draft pull request starts two jobs instead of five, and a description edit starts no router run of its own: proof skips a draft at job level, and the router starts no job for a draft's event, a skipped run or an edit (brief #369, ADR-0207 Proposed)
