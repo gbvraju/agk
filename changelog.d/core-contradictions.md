@@ -1,0 +1,1 @@
+- Two of the three contradictions a project pilot found in the kit's rules have a test that fails if it comes back; the third is recorded as a decided rule.
