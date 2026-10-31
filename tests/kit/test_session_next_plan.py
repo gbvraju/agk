@@ -12,7 +12,7 @@ from datetime import timedelta
 
 import pytest
 from test_session import ISSUES, REPO, Stub, comment, iso, issue, listing, posts, session
-from test_session_flow import DAY, PULLS, brief, flow, merged
+from test_session_flow import DAY, PULLS, base, brief, flow, merged
 from test_session_plan import changed, data, free, labelled
 
 THREE = "Builds: (a) the first part; (b) independent: the second; (c) independent: the third\n"
@@ -279,7 +279,9 @@ def test_440_after_in_next_mode_still_takes(proj, stub):
 
 
 def test_440_the_printed_claim_command_takes_the_same_brief(proj, stub):
-    """REQ-041. Answer 5: the command `next` prints takes the brief it showed, and nothing else."""
+    """REQ-041. Answer 5: the command `next` prints takes the brief it showed, and nothing else,
+    and reserves the numbers in its take as `next --take` does (verdict on c26b62e, finding 1)."""
+    base(proj)
     listing(stub, [issue(5, brief("a/", priority=3)), issue(6, brief("b/", priority=1))])
     free(stub, 5, 6)
     line = claim_line(look(proj, stub))
@@ -288,7 +290,27 @@ def test_440_the_printed_claim_command_takes_the_same_brief(proj, stub):
     assert words[0] == "session.py"
     out = session(proj, stub, *words[1:])
     assert out.returncode == 0 and out.stdout.strip() == "claimed #6", out.stdout + out.stderr
-    assert posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}"]]]
+    body = f"body=taken: s-me {DAY} reserves ADR-0004"
+    assert posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", body]]]
+
+
+@pytest.mark.parametrize(
+    ("advances", "reserves"), [("new", "REQ-002, SPEC-0001, ADR-0004"), ("REQ-001", "ADR-0004")]
+)
+def test_440_claim_of_a_whole_brief_reserves_past_the_numbers_in_use(
+    proj, stub, advances, reserves
+):
+    """REQ-041 AC4 (verdict on c26b62e, finding 1): `claim` without `--build` reserves what the
+    brief's Advances implies, past another live take's reservation; a build reserves nothing."""
+    base(proj, adrs=2)
+    listing(stub, [issue(5, brief("a/", advances=advances)), issue(6, brief("b/"))])
+    other = comment(1, "x", f"taken: builder-x {DAY} reserves ADR-0003")
+    stub.serve(f"{ISSUES}/6/comments", [other])
+    free(stub, 5)
+    out = session(proj, stub, "claim", "--session", "s-me", "--brief", "5")
+    assert out.returncode == 0 and out.stdout.strip() == "claimed #5", out.stdout + out.stderr
+    body = f"body=taken: s-me {DAY} reserves {reserves}"
+    assert posts(stub) == [["POST", f"{ISSUES}/5/comments", ["-f", body]]]
 
 
 def test_440_next_shows_a_stalled_pull_request_without_taking_it_over(proj, stub):
