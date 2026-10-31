@@ -198,6 +198,15 @@ files in no area as "not run by proof"; without the table it prints `project_tes
 files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0185.
 
+## Flake ledger
+
+    python3 scripts/agk/flakes.py [--today YYYY-MM-DD] [--json]
+
+Reads `docs/runs/flakes.md`, the one table of flaky tests with their owner, strikes, status and expiry, and lists each
+quarantine past its expiry (`expired`), each test with two strikes or more and no issue (`brief due`) and each malformed row
+with its line number. Exit 0 when nothing is listed, 1 otherwise. It is not a governance step and blocks nothing. See
+[testing.md](testing.md#the-flake-ledger) and ADR-0234.
+
 ## Core audit
 
     python3 scripts/agk/core_audit.py [--since YYYY-MM-DD] [--json] [--write] [--today YYYY-MM-DD] [--repo OWNER/REPO | --api-dir DIR] [--authors LOGIN,LOGIN]

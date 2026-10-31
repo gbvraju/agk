@@ -73,3 +73,5 @@ checkpoint, no module `flakes`; 4 failed, 30 passed with the script alone, befor
   builder's own pull request unchanged, so the guide says a pull request of its own.
 - Q-435-7 (2026-10-31): the run asked to regenerate the manifest and hashes with the kit's scripts; `kit_hashes.py` checks
   the table as `ok` without `--write`, and session rule 14 says a build never edits `kit/hashes.json`, so it is unchanged.
+- Q-435-8 (2026-10-31): a kit test requires every installed script to be named in `docs/guides/reference.md`, outside the
+  brief's `Touches`; it gains a short `## Flake ledger` section that points to the testing guide.
