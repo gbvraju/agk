@@ -465,3 +465,88 @@ def test_the_reference_names_the_new_settings():
     text = (KIT / "docs" / "guides" / "reference.md").read_text(encoding="utf-8")
     for word in ("lock_slots", "--priority", "lock_cleanup", "AGK_LOCK_SESSION", "AGK_LOCK_PID"):
         assert word in text, word
+
+
+# The verdict on 74659dc, finding 1: under session rule 31 `prepush.py` takes and finds its lock
+# in any slot, so the slots apply to the pre-push gate too.
+
+
+def gate_project(repo, outside: Path, area_cmd: str = "echo kit {files} >> LOG") -> None:
+    from test_prepush_regression import project, toml
+
+    project(repo, "lock_slots = 2\n" + toml(outside, area_cmd=area_cmd))
+
+
+def gate_env(outside: Path) -> dict[str, str]:
+    from test_prepush import path_with, scanner
+
+    env = {**os.environ, "PATH": path_with(scanner(outside / "bin", 0))}
+    for key in ("GITHUB_BASE_REF", "AGK_BASE", "CI"):
+        env.pop(key, None)
+    return env
+
+
+def gate_ran(outside: Path) -> list[str]:
+    log = outside / "ran.log"
+    return log.read_text(encoding="utf-8").splitlines() if log.is_file() else []
+
+
+def test_prepush_under_a_caller_in_slot_2_does_not_take_a_slot_again(repo, tmp_path):
+    """REQ-040: verdict on 74659dc, finding 1 (rule 31: the caller holds slot 2, and the gate
+    sees it, so it neither waits for slot 1 nor takes a slot of its own)."""
+    outside = tmp_path / "outside"
+    gate_project(repo, outside)
+    slot1 = plant(outside / "locks", pid=os.getpid(), session="builder-a")
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [
+            PY,
+            str(SCRIPT),
+            "run",
+            "--name",
+            "heavy",
+            "--session",
+            "builder-b",
+            "--timeout",
+            "5",
+            "--",
+            PY,
+            str(SCRIPT.parent / "prepush.py"),
+        ],
+        cwd=repo.root,
+        capture_output=True,
+        text=True,
+        env=gate_env(outside),
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "lock heavy: held by this run's caller (lock.py run); not taken again" in proc.stdout
+    assert "waiting" not in proc.stdout
+    assert gate_ran(outside) == ["kit tests/billing/test_pay.py"]
+    assert slot1.exists()  # builder-a's slot is never touched
+    assert not (outside / "locks" / "agk-lock-heavy.2").exists()  # released
+
+
+def test_prepush_without_a_caller_takes_the_free_slot_2_and_releases_it(repo, tmp_path):
+    """REQ-040: verdict on 74659dc, finding 1 (slot 1 held: the gate takes slot 2, at once)."""
+    outside = tmp_path / "outside"
+    slot2 = outside / "locks" / "agk-lock-heavy.2"
+    gate_project(repo, outside, f"test -d {slot2} && echo slot2 >> LOG; echo kit {{files}} >> LOG")
+    slot1 = plant(outside / "locks", pid=os.getpid(), session="builder-a")
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [PY, str(SCRIPT.parent / "prepush.py")],
+        cwd=repo.root,
+        capture_output=True,
+        text=True,
+        env=gate_env(outside),
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "waiting" not in proc.stdout
+    assert gate_ran(outside) == ["slot2", "kit tests/billing/test_pay.py"]
+    assert slot1.exists()
+    assert not slot2.exists()
+    assert not ticket_leftovers(outside / "locks")
+
+
+def ticket_leftovers(folder: Path) -> list[str]:
+    return [p.name for p in folder.iterdir() if p.name.startswith(".")]
