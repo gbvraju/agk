@@ -1,6 +1,6 @@
 # ADR-0221: a builder files a bug it finds outside its brief instead of fixing it in its pull request (REQ-037, brief 405)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0170, ADR-0216
