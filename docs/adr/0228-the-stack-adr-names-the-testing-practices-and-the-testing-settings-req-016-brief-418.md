@@ -1,6 +1,6 @@
 # ADR-0228: the stack ADR names the testing practices and the [testing] settings a new project starts with (REQ-016, brief 418)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0176, ADR-0180, ADR-0220
