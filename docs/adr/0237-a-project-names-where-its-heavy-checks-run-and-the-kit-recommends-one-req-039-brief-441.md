@@ -1,6 +1,6 @@
 # ADR-0237: a project names where its heavy checks run in one setting, and the kit recommends one (REQ-039, brief 441)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0184, ADR-0215, ADR-0217, ADR-0224
