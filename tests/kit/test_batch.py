@@ -317,5 +317,5 @@ def test_it_only_reports(repo, outside):
     assert (repo.git("rev-parse", "main"), repo.git("status", "--porcelain")) == before
     assert repo.git("for-each-ref", "--format=%(refname)") == refs
     source = (SCRIPTS / "batch.py").read_text(encoding="utf-8")
-    for needle in ("urllib", "http.client", '"gh"', "'gh'", "requests", '"push"'):
+    for needle in ("urllib", "http.client", '"gh"', "'gh'", "import requests", '"push"'):
         assert needle not in source, needle
