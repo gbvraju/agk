@@ -1040,6 +1040,22 @@ def stale_view(root, s: Survey, number: int) -> None:
     read_gone(root, s)
 
 
+def claim_reservation(root, s: Survey, number: int) -> list[str]:
+    """The numbers a `claim` of a whole brief reserves, as `next --take` does (rule 4; the verdict
+    on c26b62e of brief #440): read from a survey that sees the open builder pull requests and the
+    reservations of every live take. A read that fails reserves nothing, with a note."""
+    try:
+        seen = survey(root, s.repo, s.me)
+        brief = seen.briefs.get(number) or gh(f"repos/{s.repo}/issues/{number}")
+        if not isinstance(brief, dict) or not isinstance(brief.get("body"), str):
+            raise CheckError("rule 4: the brief cannot be read")
+    except CheckError:
+        print("note: the numbers cannot be counted, none is reserved (rule 4)", file=sys.stderr)
+        return []
+    seen.comments[number] = s.comments[number]
+    return reservation(root, seen, brief)
+
+
 def claim(root, me: str, number: int, build: str | None) -> int:
     repo = repo_name(root)
     comments = pages(f"repos/{repo}/issues/{number}/comments")
@@ -1050,7 +1066,8 @@ def claim(root, me: str, number: int, build: str | None) -> int:
     s = Survey(repo, me, 0, hours, prs, [], {number: comments})
     if any(t[2] != me for t in live_takes(comments, number, prs, hours)):
         stale_view(root, s, number)
-    if why := take(s, {"number": number}, list, build):
+    reserve = list if build is not None else (lambda: claim_reservation(root, s, number))
+    if why := take(s, {"number": number}, reserve, build):
         print(f"skip #{number}: {why}")
         return 1
     print(f"claimed #{number}" + (f" build ({build})" if build else ""))

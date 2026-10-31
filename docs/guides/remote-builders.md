@@ -37,8 +37,9 @@ A remote builder starts exactly as a local one, from GitHub alone:
 
 1. Clone the repository into the environment and run `git fetch origin <default branch>`, then
    `python3 scripts/agk/doctor.py --paused --ref origin/<default branch>`; stop if it prints `agk paused` (session rule 33).
-2. Find the next item with `python3 scripts/agk/session.py next --session <id>`, or take the item the conductor assigned with
-   `python3 scripts/agk/session.py claim --session <id> --brief <n>` (session rules 5 and 18).
+2. Find the next item with `python3 scripts/agk/session.py next --session <id>`, which only shows it, and take it with the
+   `claim` line it prints, `python3 scripts/agk/session.py claim --session <id> --brief <n>` (or choose and take in one step
+   with `next --session <id> --take`); take the item the conductor assigned with the same `claim` (session rules 5 and 18).
 3. Build it test-first on its own branch, checkpoint and push as the session rules say, and wait for the verdict with
    `python3 scripts/agk/session.py watch --pr <n>` in the background.
 
