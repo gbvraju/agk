@@ -21,7 +21,11 @@ The plan, in the order it is decided:
    open pull request is stale: it holds nothing and is listed as `stale claim by <session>, <age>`.
 3. **Capacity.** The sessions to start are the smallest of the ready, non-overlapping briefs,
    `max_builders` less the running builders (open builder pull requests and claims with no pull
-   request yet) and `reviews_in_flight` less the pull requests waiting for a verdict.
+   request yet) and `reviews_in_flight` less the pull requests waiting for a verdict. When
+   `builder_memory_gb` of the `[flow]` table is set (brief #409, ADR-0223), also the machine's
+   available memory divided by it, rounded down and never below 1; memory that cannot be read is
+   `memory: unknown` and leaves the figure as it was. The plan names the limit that applied:
+   `max_builders`, `reviews` or `memory` (the first of them on a tie).
 4. **The merge queue.** The merge rate is the merged pull requests of the last 14 days divided by
    the active hours (hour-long buckets, counted back from now, that hold a merge). While the
    `agk:ready` pull requests exceed `merge_hours` times the rate, no session starts; a running
@@ -45,6 +49,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import common
 from common import matches, read_list
 from session import (
     RELEASED,
@@ -52,6 +57,7 @@ from session import (
     all_takes,
     brief_number,
     flow_int,
+    flow_value,
     gh,
     glob_regex,
     literal,
@@ -72,6 +78,7 @@ BUILD_ITEM = re.compile(r"\(([A-Za-z0-9._-]+)\)\s*(.*)")
 INDEPENDENT = "independent:"
 MERGED_ALL = "every build is merged; the conductor closes it"
 RULE = 15
+GIB = 1024**3  # builder_memory_gb counts in GiB, the lower reading of a GB (Q-409-2)
 WINDOW_DAYS = 14
 DEFAULTS = {
     "reviews_in_flight": 3,
@@ -699,7 +706,12 @@ def build(root) -> dict:
     waits = build_waits + waits
     running = len(s.builders) + len(s.held)
     waiting_review = sum(1 for p in s.builders if "agk:review" in label_names(p))
-    slots = max(0, min(s.max_builders - running, reviews - waiting_review))
+    limits = [("max_builders", s.max_builders - running), ("reviews", reviews - waiting_review)]
+    memory = memory_capacity(root)
+    if isinstance(memory.get("memory"), dict):
+        limits.append(("memory", memory["memory"]["builders"]))
+    limit, lowest = min(limits, key=lambda x: x[1])  # min keeps the first of a tie
+    slots = max(0, lowest)
     ready_prs = [p for p in s.prs if p.get("state") == "open" and "agk:ready" in label_names(p)]
     known, rate = merge_rate(s.prs, now)
     hold = known and rate is not None and len(ready_prs) > hours * rate
@@ -743,7 +755,9 @@ def build(root) -> dict:
             "waiting_for_verdict": waiting_review,
             "slots": slots,
             "ready": len(chosen),
-        },
+            "limit": limit,
+        }
+        | memory,
         "merge": {
             "waiting": len(ready_prs),
             "merge_hours": hours,
@@ -758,6 +772,38 @@ def build(root) -> dict:
         "default_branch": default,
         "stale_commits": behind_limit,
     }
+
+
+def memory_capacity(root) -> dict:
+    """The memory figure of the capacity (brief #409 answers 1 and 2): nothing when
+    `builder_memory_gb` is not set; else the setting and `memory`, either `unknown` or the
+    available bytes and the builders they carry (rounded down, never below 1)."""
+    if flow_value(root, "builder_memory_gb", None, RULE) is None:
+        return {}
+    per = flow_int(root, "builder_memory_gb", 1, RULE)
+    available = common.available_memory()
+    if available is None:
+        return {"builder_memory_gb": per, "memory": "unknown"}
+    builders = max(1, available // (per * GIB))
+    return {
+        "builder_memory_gb": per,
+        "memory": {"available_bytes": available, "builders": builders},
+    }
+
+
+def capacity_line(cap: dict) -> str | None:
+    """`Capacity: <slots> (limit: <name>; ...)` when `builder_memory_gb` is set, else None."""
+    if "builder_memory_gb" not in cap:
+        return None
+    memory = cap["memory"]
+    if memory == "unknown":
+        detail = "memory: unknown"
+    else:
+        detail = (
+            f"{memory['available_bytes'] // GIB} GB available, builder_memory_gb is "
+            f"{cap['builder_memory_gb']}, room for {memory['builders']}"
+        )
+    return f"Capacity: {cap['slots']} (limit: {cap['limit']}; {detail})."
 
 
 def _default_branch(root) -> str:
@@ -795,6 +841,8 @@ def words(plan: dict) -> str:
         lines.append(f"Start {len(started)}: {takes}.")
     else:
         lines.append(f"Start 0: {reason(plan)}.")
+    if line := capacity_line(plan["capacity"]):
+        lines.append(line)
     for w in plan["waits"]:
         lines.append(f"#{w['brief']} {wait_text(w)}.")
     if plan["stale_claims"]:
