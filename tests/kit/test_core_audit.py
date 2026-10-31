@@ -210,7 +210,12 @@ def test_a_check_that_failed_on_two_pull_requests_counts_two(repo, api):
     data = report(repo, api)
     assert data["checks"]["check_adrs"] == 2
     assert data["checks"]["Lint"] == 1
-    assert data["pull_requests"] == {"total": 3, "unread_checks": 0, "unread_verdicts": 0}
+    assert data["pull_requests"] == {
+        "total": 3,
+        "unread_checks": 0,
+        "unread_verdicts": 0,
+        "unread": [],
+    }
 
 
 def test_a_check_that_never_failed_is_zero_and_listed_as_never_fired(repo, api):
@@ -466,3 +471,190 @@ def test_two_hundred_and_fifty_commits_without_a_count_are_a_short_read(repo, ap
     data = report(repo, api)
     assert data["pull_requests"]["unread_checks"] == 1
     assert data["checks"]["check_adrs"] == "at least 1"
+
+
+# --- the unread pages (brief #381) ------------------------------------------------------------
+
+
+def unread_lines(out: str) -> list[str]:
+    """The lines of the `Unread pages:` section of the text report."""
+    lines = out.splitlines()
+    at = lines.index("Unread pages:")
+    found = []
+    for line in lines[at + 1 :]:
+        if not line.startswith("  "):
+            break
+        found.append(line.strip())
+    return found
+
+
+@pytest.mark.parametrize(
+    ("flags", "page"),
+    [
+        ({"commits": False}, "commits"),
+        ({"checks": False}, "check runs"),
+        ({"jobs": False}, "job"),
+        ({"unsplit": True}, "combined step"),
+    ],
+)
+def test_a_pull_request_whose_check_pages_cannot_be_read_is_named_with_the_page(
+    repo, api, flags, page
+):
+    """Brief #381 answer 1: one entry per pull request and page, in the text and in the JSON."""
+    history(api)
+    api.pull(4, failed=[["check_adrs"]], comments=[], **flags)
+    data = report(repo, api)
+    assert data["pull_requests"]["unread"] == [{"number": 4, "page": page}]
+    proc = run(repo, api)
+    assert proc.returncode == 0, proc.stdout
+    assert unread_lines(proc.stdout) == [f"#4 {page}"]
+
+
+def test_a_pull_request_whose_comments_cannot_be_read_is_named_with_comments(repo, api):
+    """Brief #381 answer 1: the comments page."""
+    history(api)
+    api.pull(4)  # no comments page saved
+    data = report(repo, api)
+    assert data["pull_requests"]["unread"] == [{"number": 4, "page": "comments"}]
+    assert unread_lines(run(repo, api).stdout) == ["#4 comments"]
+
+
+def test_a_short_read_of_check_runs_is_named_check_runs(repo, api):
+    """A `total_count` above the runs received is an unread check-runs page."""
+    api.pull(1, failed=[["check_adrs"]], comments=[])
+    name = f"checks-{sha_of(1, 0)}"
+    page = json.loads((api.path / f"{name}.json").read_text(encoding="utf-8"))
+    page["total_count"] = 101
+    api.save(name, page)
+    assert report(repo, api)["pull_requests"]["unread"] == [{"number": 1, "page": "check runs"}]
+
+
+def test_a_short_read_of_commits_is_named_commits(repo, api):
+    """Fewer commits than the pull request's `commits` count is an unread commits page."""
+    api.pull(1, failed=[["check_adrs"], []], comments=[])
+    api.pulls[-1]["commits"] = 3
+    api.save("pulls", api.pulls)
+    assert report(repo, api)["pull_requests"]["unread"] == [{"number": 1, "page": "commits"}]
+
+
+def test_the_unread_list_is_in_number_order_and_matches_the_text(repo, api):
+    """Brief #381 answers 1 and 4: number order; a pull request with two unread pages has two."""
+    api.pull(9, failed=[["check_adrs"]], comments=[], checks=False)
+    api.pull(3)  # no comments page
+    api.pull(5, failed=[["check_adrs"]], unsplit=True)  # and no comments page
+    api.pull(7, comments=[])
+    data = report(repo, api)
+    expected = [
+        {"number": 3, "page": "comments"},
+        {"number": 5, "page": "combined step"},
+        {"number": 5, "page": "comments"},
+        {"number": 9, "page": "check runs"},
+    ]
+    assert data["pull_requests"]["unread"] == expected
+    assert data["pull_requests"]["unread_checks"] == 2
+    assert data["pull_requests"]["unread_verdicts"] == 2
+    text = unread_lines(run(repo, api).stdout)
+    assert text == [f"#{u['number']} {u['page']}" for u in expected]
+
+
+def test_with_every_page_read_the_unread_list_is_empty(repo, api):
+    """Brief #381 answer 3: the counts stay as they were; the section says none."""
+    history(api)
+    data = report(repo, api)
+    assert data["pull_requests"]["unread"] == []
+    assert data["checks"]["check_adrs"] == 2
+    assert unread_lines(run(repo, api).stdout) == ["none"]
+
+
+def test_an_unreadable_list_of_pull_requests_has_no_unread_list(repo, api):
+    """Without `pulls.json` no pull request can be named: the list is cannot-check, never empty."""
+    data = report(repo, api)
+    assert data["pull_requests"]["unread"] == "cannot-check"
+    assert unread_lines(run(repo, api).stdout) == ["cannot-check"]
+
+
+# --- --only (brief #381 answer 2) -------------------------------------------------------------
+
+
+def test_only_reads_just_the_named_pull_requests(repo, api):
+    """Brief #381 answers 2 and 4: the others are not read (their pages are missing here)."""
+    history(api)
+    api.pull(4, failed=[["check_specs"]], commits=False)  # unread, and not named
+    data = report(repo, api, "--only", "2,3")
+    assert data["pull_requests"]["total"] == 2
+    assert data["pull_requests"]["unread"] == []
+    assert data["checks"]["check_adrs"] == 1
+    assert data["checks"]["Lint"] == 1
+    assert data["spec_rules"]["SPEC-0007"]["3"] == 1
+    assert data["session_rules"]["2"] == 0
+
+
+def test_only_names_the_pages_it_still_cannot_read(repo, api):
+    """A re-read that fails again names the pull request again."""
+    history(api)
+    api.pull(4, failed=[["check_specs"]], commits=False, comments=[])
+    data = report(repo, api, "--only", "4")
+    assert data["pull_requests"]["unread"] == [{"number": 4, "page": "commits"}]
+    assert data["checks"]["check_specs"] == "cannot-check"
+
+
+def test_only_keeps_the_period(repo, api):
+    """Every other rule unchanged: a named pull request older than --since is left out."""
+    api.pull(1, failed=[["check_specs"]], created=OLD, comments=[])
+    api.pull(2, comments=[])
+    data = report(repo, api, "--only", "1,2", "--since", "2026-06-01")
+    assert data["pull_requests"]["total"] == 1
+    assert data["checks"]["check_specs"] == 0
+
+
+def test_only_refuses_a_number_that_is_no_pull_request(repo, api):
+    """A named number missing from the list of pull requests is a bad call, never a quiet zero."""
+    history(api)
+    proc = run(repo, api, "--only", "2,8")
+    assert proc.returncode == 2
+    assert "--only" in proc.stdout
+
+
+def test_only_writes_nothing(repo, api):
+    history(api)
+    assert run(repo, api, "--only", "1").returncode == 0
+    assert not (repo / "docs" / "runs").exists()
+
+
+@pytest.mark.parametrize("value", ["", "x", "1,,2", "1;2", "-3", "0"])
+def test_a_bad_only_prints_the_usage(repo, api, value):
+    proc = run(repo, api, "--only", value)
+    assert proc.returncode == 2
+    assert proc.stdout.startswith("usage: core_audit.py")
+
+
+def test_only_says_so_in_the_header(repo, api):
+    """Verdict on a29c44d item 1: a report from `--only` names the pull requests it read."""
+    history(api)
+    data = report(repo, api, "--only", "3,1")
+    assert data["only"] == [1, 3]
+    assert report(repo, api)["only"] is None
+    proc = run(repo, api, "--only", "3,1")
+    assert proc.returncode == 0, proc.stdout
+    assert proc.stdout.splitlines()[0] == "agk core audit, only #1, #3, read on 2026-10-30"
+    since = run(repo, api, "--only", "1", "--since", "2026-01-01").stdout.splitlines()[0]
+    assert since == "agk core audit, since 2026-01-01, only #1, read on 2026-10-30"
+
+
+def test_only_judges_nothing_as_never_fired(repo, api):
+    """Verdict on a29c44d item 1: a subset is no evidence that a check or rule never fired."""
+    history(api)
+    data = report(repo, api, "--only", "3")
+    assert data["never_fired"] == "not judged (--only)"
+    out = run(repo, api, "--only", "3").stdout
+    assert "Never fired in the period: not judged (--only)" in out
+    assert "  checks: " not in out
+
+
+def test_only_with_write_is_refused(repo, api):
+    """Verdict on a29c44d item 1: no evidence page is ever written from a subset."""
+    history(api)
+    proc = run(repo, api, "--only", "1", "--write")
+    assert proc.returncode == 2
+    assert "--only" in proc.stdout and "--write" in proc.stdout
+    assert not (repo / "docs" / "runs").exists()
