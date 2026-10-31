@@ -1,0 +1,1 @@
+- session rule 7: a builder still commits a `checkpoint:` at every step but pushes only at milestones (the draft, tests red, tests green, ready, before a foreseeable stop), and rule 8 posts the `Progress:` line at each push (brief #415, ADR-0225 Proposed)
