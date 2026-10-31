@@ -122,7 +122,8 @@ def windows_available() -> int | None:
 
     status = MemoryStatusEx()
     status.dwLength = ctypes.sizeof(MemoryStatusEx)
-    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):  # type: ignore[attr-defined]
+    kernel32 = vars(ctypes)["windll"].kernel32  # windll exists on Windows only
+    if not kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
         return None
     return int(status.ullAvailPhys)
 
@@ -135,13 +136,13 @@ def available_memory() -> int | None:
         if sys.platform.startswith("linux"):
             return meminfo_available(MEMINFO.read_text(encoding="utf-8"))
         if sys.platform == "darwin":
-            proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-                SYSCTL, capture_output=True, text=True, timeout=10
+            proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+                SYSCTL, capture_output=True, text=True, encoding="utf-8", timeout=10
             )
             return sysctl_available(proc.stdout) if proc.returncode == 0 else None
         if sys.platform == "win32":
             return windows_available()
-    except (OSError, ValueError, AttributeError, subprocess.SubprocessError):
+    except (OSError, ValueError, AttributeError, KeyError, subprocess.SubprocessError):
         return None
     return None
 
