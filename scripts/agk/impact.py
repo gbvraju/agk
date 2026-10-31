@@ -9,7 +9,9 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
 - `budget_seconds`: the target time of the full project suite (300 by default), read later by the
   metrics;
 - `excluded`: a list of `"<tag>: <reason>"` texts, the tests that the project's own command leaves
-  out (brief #425, ADR-0230). Nothing here interprets them; proof lists them in its manifest.
+  out (brief #425, ADR-0230). Nothing here interprets them; proof lists them in its manifest;
+- `proof_regression`: a boolean, false by default; with true and a `[proof]` table, proof also runs
+  the selection on the head (brief #442, ADR-0238, off until a person approves the spec change).
 
 For the change base..head `impact` gives the existing test files of the head (`test_dirs`,
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
@@ -18,8 +20,8 @@ each with that file and the entry; `full`, with its reason, when a changed file 
 folders that no entry covers. Under `balanced` an unmapped file makes the selection full (when
 unsure, run more); under `fast` it is only listed. A change of only `*.md` files and files under
 `docs/` selects nothing under every profile, and such a file is never unmapped. Without the table
-the selection is full ("no [testing] table"), which is what governance runs today. Nothing runs the
-selection yet: `test_plan.py` shows it.
+the selection is full ("no [testing] table"), which is what governance runs today. `test_plan.py`
+shows the selection; proof runs it on the head only with `proof_regression = true`.
 
 A glob is a path glob: `*` and `?` stay in one folder, `**` crosses folders, and `dir/` is
 `dir/**`. A bad setting is refused (CheckError), naming the setting.
@@ -38,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from common import CheckError, config_source, git, load_config
 
 PROFILES = ("fast", "balanced", "thorough")
-KEYS = {"profile", "always_full", "map", "budget_seconds", "excluded"}
+KEYS = {"profile", "always_full", "map", "budget_seconds", "excluded", "proof_regression"}
 EXCLUDED = re.compile(r"[^\s:]+: \S[^\n]*")
 ENTRY_KEYS = {"code", "tests"}
 DEFAULT_BUDGET = 300
@@ -119,8 +121,8 @@ def testing_table(root: Path) -> dict | None:
         return None
     if not isinstance(table, dict) or set(table) - KEYS:
         raise CheckError(
-            "[testing] is a table of profile, always_full, map, budget_seconds and excluded "
-            "(setting: testing)"
+            "[testing] is a table of profile, always_full, map, budget_seconds, excluded and "
+            "proof_regression (setting: testing)"
         )
     profile = table.get("profile", "balanced")
     if profile not in PROFILES:
@@ -159,6 +161,10 @@ def testing_table(root: Path) -> dict | None:
             "(setting: testing.budget_seconds)"
         )
     check_excluded(table.get("excluded", []))
+    if not isinstance(table.get("proof_regression", False), bool):
+        raise CheckError(
+            "proof_regression must be true or false (setting: testing.proof_regression)"
+        )
     return {
         "profile": profile,
         "always_full": list(always_full),
@@ -189,6 +195,14 @@ def excluded_entries(root: Path) -> list[str]:
     if testing_table(root) is None:
         return []
     return check_excluded(config_source(root)["testing"].get("excluded", []))
+
+
+def proof_regression(root: Path) -> bool:
+    """`[testing] proof_regression`, false without the table or the key. The whole table is
+    checked first, so a bad setting is refused (CheckError) as everywhere else."""
+    if testing_table(root) is None:
+        return False
+    return config_source(root)["testing"].get("proof_regression", False)
 
 
 def is_doc(path: str) -> bool:

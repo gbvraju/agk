@@ -24,7 +24,7 @@ AREA = (
 MAP = '[[testing.map]]\ncode = "src/**"\ntests = ["tests/test_old.py"]\n'
 
 
-def testing(setting: str | None = "true", profile: str = "balanced", extra: str = "") -> str:
+def table_toml(setting: str | None = "true", profile: str = "balanced", extra: str = "") -> str:
     lines = f'[testing]\nprofile = "{profile}"\n{extra}'
     if setting is not None:
         lines += f"proof_regression = {setting}\n"
@@ -64,7 +64,7 @@ def data(repo) -> dict:
 
 def test_ac1_a_green_regression_run_keeps_the_outcome_proven(repo):
     """REQ-016 AC1: brief #442 answers 1 and 3 (regression green: proven, the run listed)."""
-    start(repo, AREA + testing())
+    start(repo, AREA + table_toml())
     change(repo)
     proc = proof(repo)
     assert proc.stdout.strip() == "proof: proven", proc.stdout + proc.stderr
@@ -81,7 +81,7 @@ def test_ac1_a_green_regression_run_keeps_the_outcome_proven(repo):
 
 def test_ac1_a_red_regression_run_makes_the_outcome_not_proven_naming_the_area(repo):
     """REQ-016 AC1: brief #442 answer 1 (regression red: `not-proven (regression)`)."""
-    start(repo, AREA + testing())
+    start(repo, AREA + table_toml())
     change(repo, broken=True)
     proc = proof(repo)
     assert proc.stdout.strip() == "proof: not-proven (regression: unit)", proc.stdout + proc.stderr
@@ -94,7 +94,7 @@ def test_ac1_a_red_regression_run_makes_the_outcome_not_proven_naming_the_area(r
 
 def test_ac1_the_third_run_is_on_the_head_only(repo):
     """REQ-016 AC1: brief #442 answer 1 (never on the base) and Q-442-1 (only the selection)."""
-    start(repo, AREA + testing())
+    start(repo, AREA + table_toml())
     change(repo)
     proc = proof(repo)
     places = [ln.split("AT=", 1)[1] for ln in proc.stderr.splitlines() if ln.startswith("AT=")]
@@ -108,7 +108,7 @@ def test_ac1_the_third_run_is_on_the_head_only(repo):
 
 def test_ac1_a_full_selection_runs_nothing_extra(repo):
     """REQ-016 AC1: brief #442 answer 1 (`full`: governance runs the full suite)."""
-    start(repo, AREA + testing(extra='always_full = ["src/**"]\n'), old="exit 1\n")
+    start(repo, AREA + table_toml(extra='always_full = ["src/**"]\n'), old="exit 1\n")
     change(repo)
     proc = proof(repo)
     assert proc.stdout.strip() == "proof: proven", proc.stdout + proc.stderr
@@ -121,7 +121,7 @@ def test_ac1_a_full_selection_runs_nothing_extra(repo):
 
 def test_ac1_nothing_selected_runs_nothing_extra(repo):
     """REQ-016 AC1: brief #442 answer 1 (an empty selection has no third run)."""
-    start(repo, AREA + testing(profile="fast").replace('code = "src/**"', 'code = "lib/**"'))
+    start(repo, AREA + table_toml(profile="fast").replace('code = "src/**"', 'code = "lib/**"'))
     change(repo)
     proc = proof(repo)
     assert proc.stdout.strip() == "proof: proven", proc.stdout + proc.stderr
@@ -132,7 +132,7 @@ def test_ac1_nothing_selected_runs_nothing_extra(repo):
 @pytest.mark.parametrize("setting", [None, "false"])
 def test_ac1_with_the_key_off_proof_is_exactly_as_today(repo, setting):
     """REQ-016 AC1: brief #442 answer 2 (false or absent: no third run, no new output)."""
-    start(repo, AREA + testing(setting))
+    start(repo, AREA + table_toml(setting))
     change(repo, broken=True)
     proc = proof(repo)
     assert proc.stdout.strip() == "proof: proven", proc.stdout + proc.stderr
@@ -152,9 +152,7 @@ def test_ac1_without_a_proof_table_the_head_run_already_ran_every_test(repo):
     """REQ-016 AC1: Q-442-2 (without `[proof]`, run 2 is `project_tests`, the whole suite)."""
     repo.commit(
         {
-            "agk.toml": BASE_TOML
-            + "project_tests = 'test -f src/be.txt'\n"
-            + testing(),
+            "agk.toml": BASE_TOML + "project_tests = 'test -f src/be.txt'\n" + table_toml(),
             "src/code.txt": "base\n",
             "tests/test_old.py": "#\n",
         },
@@ -172,7 +170,7 @@ def test_ac1_without_a_proof_table_the_head_run_already_ran_every_test(repo):
 
 def test_ac1_the_third_run_waits_for_the_pull_requests_own_tests_to_be_proven(repo):
     """REQ-016 AC1: Q-442-3 (a not-proven own run is not changed and no third run is made)."""
-    start(repo, AREA + testing())
+    start(repo, AREA + table_toml())
     repo.commit({"src/broken.txt": "x\n", "tests/test_new.py": "exit 0\n"}, "change")
     proc = proof(repo)
     assert proc.stdout.strip() == "proof: not-proven (unit: green-on-base)", proc.stdout
@@ -184,7 +182,7 @@ def test_ac1_the_third_run_waits_for_the_pull_requests_own_tests_to_be_proven(re
 
 def test_ac1_a_selected_file_in_no_proof_area_is_listed_as_not_run(repo):
     """REQ-016 AC1: Q-442-4 (no area command can take it, so it is listed, never run)."""
-    toml = AREA + testing().replace(
+    toml = AREA + table_toml().replace(
         'tests = ["tests/test_old.py"]', 'tests = ["tests/test_old.py", "tests/x_e2e.py"]'
     )
     start(repo, toml, patterns='["test_*.py", "*_e2e.py"]', files={"tests/x_e2e.py": "exit 1\n"})
@@ -198,7 +196,7 @@ def test_ac1_a_selected_file_in_no_proof_area_is_listed_as_not_run(repo):
 
 def test_ac1_proof_timeout_applies_to_the_third_run_separately(repo):
     """REQ-016 AC1: brief #442 answer 3 (a slow regression run is unknown, never proven)."""
-    start(repo, "proof_timeout = 1\n" + AREA + testing(), old="sleep 5\n")
+    start(repo, "proof_timeout = 1\n" + AREA + table_toml(), old="sleep 5\n")
     change(repo)
     proc = proof(repo)
     out = proc.stdout.strip()
@@ -212,7 +210,7 @@ def test_ac1_proof_timeout_applies_to_the_third_run_separately(repo):
 
 def test_ac1_the_manifest_lists_the_regression_run(repo, tmp_path):
     """REQ-016 AC1: brief #442 answer 3 (the run, its files and seconds, also in the manifest)."""
-    start(repo, AREA + testing())
+    start(repo, AREA + table_toml())
     change(repo)
     target = tmp_path / "manifest.md"
     assert proof(repo, "--manifest", str(target)).returncode == 0
@@ -225,7 +223,7 @@ def test_ac1_the_manifest_lists_the_regression_run(repo, tmp_path):
 
 def test_ac1_the_manifest_says_why_no_regression_ran(repo, tmp_path):
     """REQ-016 AC1: brief #442 answer 3 (an empty third run names its reason under Not run)."""
-    start(repo, AREA + testing(extra='always_full = ["src/**"]\n'))
+    start(repo, AREA + table_toml(extra='always_full = ["src/**"]\n'))
     change(repo)
     target = tmp_path / "manifest.md"
     proof(repo, "--manifest", str(target))
@@ -236,7 +234,7 @@ def test_ac1_the_manifest_says_why_no_regression_ran(repo, tmp_path):
 @pytest.mark.parametrize("value", ['"yes"', "1", "[true]"])
 def test_ac1_impact_refuses_a_proof_regression_that_is_not_a_boolean(repo, value):
     """REQ-016 AC1: brief #442 answer 2 (a boolean; the refusal names the setting)."""
-    start(repo, AREA + testing(value))
+    start(repo, AREA + table_toml(value))
     with pytest.raises(CheckError) as caught:
         impact.proof_regression(repo.root)
     assert "(setting: testing.proof_regression)" in str(caught.value)
@@ -247,7 +245,7 @@ def test_ac1_impact_refuses_a_proof_regression_that_is_not_a_boolean(repo, value
 
 def test_ac1_impact_reads_proof_regression_with_false_by_default(repo):
     """REQ-016 AC1: brief #442 answer 2 (default false; the table's settings are unchanged)."""
-    start(repo, AREA + testing(None))
+    start(repo, AREA + table_toml(None))
     assert impact.proof_regression(repo.root) is False
     assert "proof_regression" not in impact.testing_table(repo.root)
     assert impact.proof_regression(repo.root.parent / "absent") is False
@@ -255,7 +253,7 @@ def test_ac1_impact_reads_proof_regression_with_false_by_default(repo):
 
 def test_ac1_impact_reads_proof_regression_true(repo):
     """REQ-016 AC1: brief #442 answer 2."""
-    start(repo, AREA + testing("true"))
+    start(repo, AREA + table_toml("true"))
     assert impact.proof_regression(repo.root) is True
 
 
