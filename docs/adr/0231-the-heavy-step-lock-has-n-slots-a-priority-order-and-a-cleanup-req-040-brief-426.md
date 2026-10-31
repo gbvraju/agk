@@ -38,6 +38,9 @@ unchanged one-slot paths and the absent cleanup).
    (`--timeout`) or is interrupted, and the ticket folder goes when it is empty. While runs go before it, the waiting line
    says `<n> waiting run(s) go(es) first`. `take` keeps its arguments; called as `prepush.py` calls it, it is the one-slot
    lock with a ticket at the default priority and no cleanup, and it returns the slot's folder (a true value) or None.
+   `prepush.py` (verdict on 74659dc, finding 1, outside `Touches`) passes `slots_setting(root)` to `take`, finds a caller's
+   lock (session rule 31) in any slot (`caller_slot`, over `slot_folders`), and releases the slot folder that `take`
+   returned; with one slot it is unchanged.
 3. **Cleanup (answer 3).** `lock_cleanup` in `agk.toml` is an optional command line, empty by default; the kit ships none, and
    a value that is not a string is refused naming the setting. When `run` clears the lock of a run whose process no longer
    runs on this machine, the cleanup runs once (by the run that cleared it), through `sh -c` in the repository's top folder,
@@ -55,8 +58,10 @@ unchanged one-slot paths and the absent cleanup).
    live ticket of a higher priority goes first; cleanup run on a stale clear with both variables, its output shown; a failing
    cleanup reported and not blocking; no cleanup by age or without a session; no cleanup when unset; the command's
    `AGK_LOCK_SESSION`; one slot unchanged (folder, `status`, `lock_folder`); `take` as `prepush.py` calls it; refusals of
-   `lock_slots`, `lock_cleanup` and `--priority`; the templates and the reference. `tests/kit/test_lock.py` and
-   `tests/kit/test_prepush_regression.py` pass unchanged.
+   `lock_slots`, `lock_cleanup` and `--priority`; the templates and the reference. From the verdict on 74659dc: with two
+   slots, `prepush.py` under a caller that holds slot 2 takes no slot again, and without a caller it takes the free slot 2
+   while slot 1 is held and releases it. `tests/kit/test_lock.py` and `tests/kit/test_prepush_regression.py` pass
+   unchanged.
 5. **Flow mode.** One changelog fragment of one line, `changelog.d/lock-slots.md`; no version bump; `kit/hashes.json` not
    edited (session rule 14).
 
@@ -66,14 +71,13 @@ unchanged one-slot paths and the absent cleanup).
 - A project that labels its containers by `AGK_LOCK_SESSION` and sets `lock_cleanup` gets them removed when a run died.
 - With one slot and no cleanup, the lock behaves as before, except that waiting runs now take their turn in ticket order
   instead of by chance.
-- `prepush.py` still takes only slot 1 (Q-426-1).
+- The pre-push gate takes any free slot, so under session rule 31 the slots apply to it too.
 
 ## Residual
 
-- Q-426-1 (2026-10-31): `prepush.py` (outside `Touches`) calls `take` and `clear_if_same` on slot 1 only, and recognises its
-  caller's lock only in slot 1. With `lock_slots` above 1 its own take waits for slot 1 alone (its ticket still counts in the
-  order), and under `lock.py run --name heavy` it does not see a caller that holds slot 2. With one slot it works unchanged.
-  A follow-up brief may let it take any slot; not changed here.
+- Q-426-1 (2026-10-31): `prepush.py` (outside `Touches`) took and released slot 1 only, and found its caller only in slot 1,
+  so under session rule 31 the slots never applied. Answered in the verdict on 74659dc (finding 1): a defect, fixed in this
+  pull request (decision 2), tests first.
 - Q-426-2 (2026-10-31): answer 3 says the cleanup runs "when a stale lock is cleared", and the brief's sentence speaks of "a
   dead run's lock". Read conservatively, it runs only for a lock cleared because its process no longer runs: a lock cleared
   by age may belong to a run that still goes on (another machine, or a run longer than `lock_stale_minutes`), and a lock that

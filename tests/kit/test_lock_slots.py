@@ -531,15 +531,21 @@ def test_prepush_without_a_caller_takes_the_free_slot_2_and_releases_it(repo, tm
     outside = tmp_path / "outside"
     slot2 = outside / "locks" / "agk-lock-heavy.2"
     gate_project(repo, outside, f"test -d {slot2} && echo slot2 >> LOG; echo kit {{files}} >> LOG")
-    slot1 = plant(outside / "locks", pid=os.getpid(), session="builder-a")
-    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [PY, str(SCRIPT.parent / "prepush.py")],
-        cwd=repo.root,
-        capture_output=True,
-        text=True,
-        env=gate_env(outside),
-        timeout=60,
-    )
+    other = subprocess.Popen([PY, "-c", "import time; time.sleep(120)"])  # nosec B603 - fixed argument list, no shell
+    try:
+        # builder-a's live run in slot 1; not this test's process, which is the gate's parent
+        slot1 = plant(outside / "locks", pid=other.pid, session="builder-a")
+        proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+            [PY, str(SCRIPT.parent / "prepush.py")],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+            env=gate_env(outside),
+            timeout=60,
+        )
+    finally:
+        other.kill()
+        other.wait()
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "waiting" not in proc.stdout
     assert gate_ran(outside) == ["slot2", "kit tests/billing/test_pay.py"]
