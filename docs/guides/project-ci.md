@@ -89,8 +89,9 @@ base with the job's own input globs, and skip the heavy steps when none matched.
 - any error (no base, a base the clone does not hold, a failed diff) runs in full;
 - the skip reason is always visible: the step summary and the log say `skipped: none of <globs> changed`.
 
-Write the globs once, on the job, as `INPUTS`; a glob's `*` also matches `/`, so `src/*` is everything under `src/`. Add every
-file the heavy steps read, or the check skips a change it should have tested.
+Write the globs once, on the job, as `INPUTS`, with the workflow's own file name in place of `<this workflow>`; a glob's `*`
+also matches `/`, so `src/*` is everything under `src/`. Add every file the heavy steps read, or the check skips a change it
+should have tested.
 
 ```yaml
 on:
@@ -104,8 +105,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # The files this job reads: application code, tests, the build file of `make test`, container build files, compose
-      # files and this workflow. Name your container build file as it is named in your repository.
-      INPUTS: "src/* tests/* Makefile Containerfile* */Containerfile* compose*.y*ml */compose*.y*ml .github/workflows/suite.yml"
+      # files and this workflow. Write your container build file and this workflow's file by their names in your repository.
+      INPUTS: "src/* tests/* Makefile *Containerfile* *compose*.y*ml .github/workflows/<this workflow>.yml"
     steps:
       - uses: actions/checkout@<pinned sha>
         with:

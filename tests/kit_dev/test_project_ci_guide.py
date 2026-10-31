@@ -278,7 +278,7 @@ def test_the_reader_refuses_what_it_cannot_read():
         "jobs:\n\tsuite: {}\n",
         "jobs:\n  suite:\n  suite:\n",
         "jobs:\n  not a key here\n",
-        "steps:\n  - run: echo \"skipped: none\"\n",
+        'steps:\n  - run: echo "skipped: none"\n',
     ):
         with pytest.raises(ValueError):
             read_block_yaml(broken)
@@ -296,7 +296,7 @@ def test_the_inputs_step_lists_the_changed_files_against_the_base_and_names_its_
     words = globs.split()
     assert any(w.startswith("src/") for w in words), "application code"
     assert any(w.startswith("tests/") for w in words), "tests"
-    assert any(w.startswith("Containerfile") for w in words), "container build files"
+    assert any("Containerfile" in w for w in words), "container build files"
     assert any("compose" in w for w in words), "compose files"
     assert any(w.startswith(".github/workflows/") for w in words), "the workflow itself"
     assert "pull_request.base.sha" in str(found.get("env", {}))
@@ -360,7 +360,7 @@ def decide(tmp_path, changed: list[str], event="pull_request", action="synchroni
     out_file.write_text("", encoding="utf-8")
     env = {
         "PATH": os.environ.get("PATH", ""),
-        "INPUTS": str(job()["env"]["INPUTS"]),
+        "INPUTS": str(job()["env"]["INPUTS"]).replace("<this workflow>", "suite"),
         "GITHUB_OUTPUT": str(out_file),
         "GITHUB_SHA": git(repo, "rev-parse", "HEAD"),
     }

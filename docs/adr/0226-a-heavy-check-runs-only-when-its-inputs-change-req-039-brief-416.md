@@ -18,10 +18,11 @@ never reports. Brief #416 gives the answers: the guide's section 4 and its tests
 ## Decision
 
 1. **Section 4 (answer 1).** It becomes "A heavy check runs only when its inputs change". One copyable job sets the job's own
-   input globs once (`INPUTS`: application code, tests, container build files, compose files, the workflow itself); one step
-   lists the files the pull request changed against its base and compares them with the globs; the following step writes
-   `skipped: none of <globs> changed` to the step summary and the log when none matched, and the heavy steps run unless that
-   step said `false`. The job ends green either way.
+   input globs once (`INPUTS`: application code, tests, the `Makefile`, container build files, compose files, the workflow
+   itself, written `.github/workflows/<this workflow>.yml` as the guide writes `<pinned sha>`); one step lists the files the
+   pull request changed against its base and compares them with the globs; the following step writes `skipped: none of <globs>
+   changed` to the step summary and the log when none matched, and the heavy steps run unless that step said `false`. The job
+   ends green either way.
 2. **The must-nots (answer 2).** The guide states them: a required check is never removed or weakened; a push to the default
    branch and `ready_for_review` always run in full (the step decides `true` for every event but an ordinary pull request
    update, and for any error, an unknown base or a failed diff); the skip reason is always visible.
@@ -30,9 +31,10 @@ never reports. Brief #416 gives the answers: the guide's section 4 and its tests
    snippet as a workflow with a small reader of the block style it uses, and with PyYAML as well where it is installed (the
    proof job installs only pytest and ruff); runs the shell step under `bash` in throwaway git repositories for each case of
    decisions 1 and 2; and checks the must-nots and that the section names no vendor beyond GitHub.
-5. **A file name is not a vendor (Q-416-1).** Answer 1 names container build files, whose usual name contains a word that the
-   kit's vendor lists hold; read conservatively, the vendor check of answer 4 matches whole words, so the glob that matches that
-   file name stays copyable, while the prose says "container build files".
+5. **No vendor in a file name either (Q-416-1).** Answer 1 names container build files, whose most common name carries a
+   container vendor's name; answer 4 and the guide's own test of brief #283 (Q-283-3) keep every vendor name out of the guide.
+   Read conservatively, the glob is the vendor-neutral `*Containerfile*` and the job's comment tells the project to write its
+   container build file by its own name; the vendor check matches anywhere in the section, file names included.
 6. **The older snippet (Q-416-2).** `tests/kit/test_doctor_ci.py` (outside `Touches:`) still reads section 4 by its number and
    looks for `outputs.docs_only`; the section keeps one sentence naming the older step's output, so a project that copied it
    knows what the new step replaces, and that test is left unchanged.
