@@ -7,6 +7,9 @@
 # superseded run is cancelled; and a status-only final commit (one commit after a parent whose proof passed, changing only `- Status:`
 # lines, on an unchanged merge base) reports success without running the suite, by `scripts/agk/status_only.py`. The parent's conclusion
 # is the one GET of this file; if it cannot be read the suite runs in full.
+# The test manifest (brief #425, ADR-0230): proof.py writes what ran, what did not and why, and the `Test manifest` step appends
+# it to the job summary on every outcome, skipped included; a skip that this job decides (a draft, a status-only commit) is
+# written by `proof.py --not-run`, which runs nothing. While agk is paused the step is skipped like every other (ADR-0196).
 name: proof
 
 # Fast CI (brief #283): `ready_for_review` runs the suite in full; a superseded run is cancelled by the concurrency group.
@@ -105,7 +108,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           rc=0
-          printf '%s\n' "$PR_BODY" | python scripts/agk/proof.py --head "$HEAD_SHA" --body - --json > "$RUNNER_TEMP/proof.json" || rc=$?
+          printf '%s\n' "$PR_BODY" | python scripts/agk/proof.py --head "$HEAD_SHA" --body - --json --manifest "$RUNNER_TEMP/proof-manifest.md" > "$RUNNER_TEMP/proof.json" || rc=$?
           cat "$RUNNER_TEMP/proof.json"
           case "$rc" in
             0|1|4) ;;
@@ -125,3 +128,21 @@ jobs:
       - name: "outcome: unknown (${{ steps.proof.outputs.reason }})"
         if: ${{ steps.proof.outputs.outcome == 'unknown' && steps.paused.outputs.paused != 'true' }}
         run: echo "proof unknown"
+      - name: Test manifest
+        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          SKIP: ${{ steps.status.outputs.skip }}
+        run: |
+          # Brief #425: the manifest of the run, or of the skip this job decided, never a silent skip.
+          manifest="$RUNNER_TEMP/proof-manifest.md"
+          if [ ! -f "$manifest" ] && [ "$SKIP" = true ]; then
+            if [ "$PR_DRAFT" = true ]; then why=draft; else why=status-only; fi
+            python scripts/agk/proof.py --head "$HEAD_SHA" --not-run "$why" --manifest "$manifest" || true
+          fi
+          if [ -f "$manifest" ]; then
+            cat "$manifest" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "proof: no test manifest; proof.py failed before writing it (see the Red-then-green step)" >> "$GITHUB_STEP_SUMMARY"
+          fi

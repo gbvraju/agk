@@ -1,0 +1,1 @@
+- `metrics.py`: each merged pull request shows `project_test_seconds` and `proof_seconds`, and the weekly report lists backstop escapes (a red push after a proven merge) and governance runs whose `Project tests` step took longer than `[testing] budget_seconds` (brief #427, ADR-0232 Proposed)

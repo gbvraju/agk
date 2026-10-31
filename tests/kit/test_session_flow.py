@@ -454,3 +454,100 @@ def test_rule7b_the_new_commands_take_no_option(proj, stub):
     """REQ-041 AC7"""
     for cmd in ("ids", "demand", "push-check"):
         assert session(proj, stub, cmd, "--session", "x").returncode == 2
+
+
+# --- brief #424: `mine` tells a builder whether a pull request or brief is its own -----------
+
+
+def mine(proj, stub, who: str, *target: str):
+    return session(proj, stub, "mine", "--session", who, *target)
+
+
+def test_mine_a_session_own_take_prints_mine_exits_0_and_posts_nothing(proj, stub):
+    """Brief #424 answers 1 and 3: the session's own take."""
+    stub.serve(PULLS, [])
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: s-me {DAY}")])
+    out = mine(proj, stub, "s-me", "--brief", "5")
+    assert (out.returncode, out.stdout) == (0, "mine\n") and posts(stub) == []
+
+
+def test_mine_another_session_take_names_that_session_and_exits_1(proj, stub):
+    """Brief #424 answers 1 and 3: another session's take."""
+    stub.serve(PULLS, [])
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: s-other {DAY}")])
+    out = mine(proj, stub, "s-me", "--brief", "5")
+    assert (out.returncode, out.stdout) == (1, "not mine: #5 belongs to s-other\n")
+    assert posts(stub) == []
+
+
+def test_mine_a_released_or_expired_take_is_no_live_take(proj, stub):
+    """Brief #424 answers 1 and 3: a released take, the session's own included."""
+    stub.serve(PULLS, [])
+    taken = comment(1, "x", f"taken: s-me {DAY}")
+    stub.serve(f"{ISSUES}/5/comments", [taken, comment(2, "x", "released: s-me")])
+    out = mine(proj, stub, "s-me", "--brief", "5")
+    assert (out.returncode, out.stdout) == (1, "not mine: #5 has no live take\n")
+    old = comment(3, "x", f"taken: s-me {DAY}", iso(-timedelta(hours=5)))
+    stub.serve(f"{ISSUES}/6/comments", [old])
+    out = mine(proj, stub, "s-me", "--brief", "6")
+    assert (out.returncode, out.stdout) == (1, "not mine: #6 has no live take\n")
+
+
+def test_mine_a_pull_request_is_judged_by_the_brief_its_brief_line_names(proj, stub):
+    """Brief #424 answer 1: the take of the brief named by `Brief: #n`, kept live by the open
+    pull request beyond claim_hours."""
+    old = comment(1, "x", f"taken: s-other {DAY}", iso(-timedelta(hours=30)))
+    stub.serve(f"{PULLS}/20", pr(20, 5))
+    stub.serve(PULLS, [pr(20, 5)])
+    stub.serve(f"{ISSUES}/5/comments", [old])
+    out = mine(proj, stub, "s-other", "--pr", "20")
+    assert (out.returncode, out.stdout) == (0, "mine\n")
+    out = mine(proj, stub, "s-me", "--pr", "20")
+    assert (out.returncode, out.stdout) == (1, "not mine: #5 belongs to s-other\n")
+    assert posts(stub) == []
+
+
+def test_mine_a_pull_request_without_a_brief_line_is_not_mine(proj, stub):
+    """Brief #424 answer 3 (Q-424-1): no `Brief:` line, so no take can make it the session's."""
+    stub.serve(f"{PULLS}/21", pr(21))
+    stub.serve(PULLS, [pr(21)])
+    out = mine(proj, stub, "s-me", "--pr", "21")
+    assert (out.returncode, out.stdout) == (1, "not mine: #21 names no brief\n")
+    assert [c[1] for c in stub.calls() if "/comments" in c[1]] == [] and posts(stub) == []
+
+
+def test_mine_a_brief_built_in_parts_is_mine_when_the_session_holds_one_build(proj, stub):
+    """Brief #424 answer 3: builds (a) and (b) taken by two sessions; each holds the brief."""
+    a = comment(1, "x", f"taken: s-other {DAY} build (a)")
+    b = comment(2, "x", f"taken: s-me {DAY} build (b)")
+    stub.serve(PULLS, [])
+    stub.serve(f"{ISSUES}/5/comments", [a, b])
+    assert mine(proj, stub, "s-me", "--brief", "5").stdout == "mine\n"
+    assert mine(proj, stub, "s-other", "--brief", "5").stdout == "mine\n"
+    out = mine(proj, stub, "s-third", "--brief", "5")
+    assert (out.returncode, out.stdout) == (1, "not mine: #5 belongs to s-other\n")
+
+
+def test_mine_unreadable_github_fails_naming_the_rule(proj, stub):
+    """Brief #424: a read that fails is no answer; exit 2, never `mine`."""
+    stub.serve(PULLS, "FAIL")
+    out = mine(proj, stub, "s-me", "--brief", "5")
+    assert out.returncode == 2 and out.stdout.startswith("FAIL session:")
+    assert "mine\n" not in out.stdout.splitlines(keepends=True)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("--session", "s-me"),
+        ("--session", "s-me", "--pr", "1", "--brief", "2"),
+        ("--pr", "1"),
+        ("--session", "s me", "--pr", "1"),
+        ("--session", "s-me", "--pr", "x"),
+        ("--session", "s-me", "--brief", "0"),
+    ],
+)
+def test_mine_takes_a_session_and_exactly_one_of_pr_or_brief(proj, stub, args):
+    """Brief #424 answer 1: `mine --session ID (--pr N | --brief N)`."""
+    out = session(proj, stub, "mine", *args)
+    assert out.returncode == 2 and out.stdout.startswith("usage:") and stub.calls() == []
