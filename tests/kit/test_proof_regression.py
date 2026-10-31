@@ -221,6 +221,43 @@ def test_ac1_the_manifest_lists_the_regression_run(repo, tmp_path):
     assert "- seconds: head " in part and "base" not in part.split("###", 1)[0]
 
 
+@pytest.mark.parametrize(
+    ("args", "body", "named"),
+    [
+        (["--not-run", "status-only"], None, "regression: not run (status-only)"),
+        (["--not-run", "draft"], None, "regression: not run (draft)"),
+        ([], "Behaviour: unchanged\n", "regression: not run (Behaviour: unchanged)"),
+    ],
+)
+def test_ac1_a_skipped_run_names_the_skip_not_not_proven(repo, tmp_path, args, body, named):
+    """REQ-016 AC1: verdict on 4a45ff8, finding 1 (a skip is not a failed own run)."""
+    start(repo, AREA + table_toml())
+    change(repo)
+    extra = list(args)
+    if body is not None:
+        source = tmp_path / "body.md"
+        source.write_text(body, encoding="utf-8")
+        extra += ["--body", str(source)]
+    target = tmp_path / "manifest.md"
+    proc = proof(repo, *extra, "--manifest", str(target))
+    assert proc.stdout.strip().startswith("proof: skipped"), proc.stdout + proc.stderr
+    text = target.read_text(encoding="utf-8")
+    assert f"- {named}\n" in text
+    assert "not proven" not in text
+    assert json.loads(proof(repo, *extra, "--json").stdout)["regression"]["reason"] == named[12:]
+
+
+def test_ac1_no_test_files_stays_unknown_with_no_third_run(repo):
+    """REQ-016 AC1: Q-442-3 answered (no test files: `unknown (no-test-files)`, no third run)."""
+    start(repo, AREA + table_toml())
+    repo.commit({"src/be.txt": "change\n"}, "change")
+    proc = proof(repo)
+    assert proc.stdout.strip() == "proof: unknown (no-test-files)", proc.stdout + proc.stderr
+    assert "run 3" not in proc.stderr
+    reg = data(repo)["regression"]
+    assert reg["runs"] == [] and reg["reason"] == "the pull request's own tests are not proven"
+
+
 def test_ac1_the_manifest_says_why_no_regression_ran(repo, tmp_path):
     """REQ-016 AC1: brief #442 answer 3 (an empty third run names its reason under Not run)."""
     start(repo, AREA + table_toml(extra='always_full = ["src/**"]\n'))
