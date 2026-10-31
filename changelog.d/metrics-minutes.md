@@ -1,1 +1,0 @@
-- the weekly metrics show, for each closed pull request, its hosted minutes per workflow and in total (`minutes.py`'s rounding), its minutes on self-hosted runners, its waits for a runner and its re-runs, with the median and the largest of each in a `ci totals` line; a figure that cannot be read is `unknown` (brief #376, ADR-0209 Proposed)
