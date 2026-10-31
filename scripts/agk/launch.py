@@ -1,6 +1,6 @@
 """`launch.py prompts`: the prompts of a confirmed plan, and the adapter that starts the sessions.
 
-    python3 launch.py prompts --plan FILE|- [--adapter COMMAND]
+    python3 launch.py prompts --plan FILE|- [--resume] [--adapter COMMAND]
 
 Brief 247 build (b); SPEC-0034 rule 16. `FILE` is the plan that `session.py plan --json` printed
 (`-` reads standard input). The script prints one ready-to-paste prompt for each session to start,
@@ -21,6 +21,15 @@ each session past it gets a `not started:` line. `launch_settings` reads `auto_s
 `launch_adapter` of the `[flow]` table of agk.toml, in the checkout or at a commit, the two
 settings by which the conductor's review pass starts the planned sessions itself (its guard reads
 them through this function, in the checkout and on the default branch).
+
+Brief 402 (ADR-0219): with `--resume` it reads the plan's list `running` instead of `start`, one
+entry per session that holds work (a live take or an open builder pull request: `session`,
+`brief`, and optionally `build`, `pull_request` and `author`), and prints for each one a prompt of
+one line that starts `You are session <id>`, names its brief and pull request, and tells it to run
+`session.py queue --role builder --author <login>` and `session.py inbox --session <id>` first
+(session rule 11), then carry on from GitHub alone. No running session prints nothing (exit 0).
+With `--adapter` the adapter is called once per running session, as for a start; `max_builders`
+still caps the run, and `capacity.slots` is not required (the running sessions hold their slots).
 """
 
 from __future__ import annotations
@@ -39,9 +48,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from common import CheckError
 
 NAME = "launch"
-USAGE = "usage: launch.py prompts --plan FILE|- [--adapter COMMAND]"
+USAGE = "usage: launch.py prompts --plan FILE|- [--resume] [--adapter COMMAND]"
 SEPARATOR = "-" * 72
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
+LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")  # a GitHub login (its letters, at most 39)
 
 PROMPT = """\
 You are session {session}, a builder of this repository. You work through pull requests only.
@@ -56,6 +66,26 @@ work is done, run
     python3 scripts/agk/session.py after --session {session}
 and do what it says. Report on your pull request; ask on it; never merge.
 """
+
+
+RESUME = (
+    "You are session {session}, a builder of this repository, and you resume your work: {work}, "
+    "{where}. Read CLAUDE.md and config/session-rules.md first and follow them in full. Then run "
+    "`python3 scripts/agk/session.py queue --role builder{author}; "
+    "python3 scripts/agk/session.py inbox --session {session}` (session rule 11) and carry on "
+    "from what they and GitHub show: {carry} When your work is done, run "
+    "`python3 scripts/agk/session.py after --session {session}` and do what it says. "
+    "Report on your pull request; ask on it; never merge.\n"
+)
+CARRY_PR = (
+    "run `python3 scripts/agk/session.py resume --pr {pr}` and continue from its `next:` step on "
+    "the same branch and the same pull request (session rule 9); never open a second one."
+)
+CARRY_TAKE = (
+    "the brief is already yours, so do not take it again; read it on GitHub, build it from a "
+    "fresh origin/<default branch> on its own branch and open one pull request that names it "
+    "with `Brief: #{brief}`."
+)
 
 
 def read_plan(source: str) -> dict:
@@ -168,24 +198,66 @@ def within_capacity(plan: dict, count: int, required: bool = False) -> None:
         raise CheckError("the plan starts more sessions than its slots (field capacity)")
 
 
-def sessions(plan: dict) -> list[tuple[str, int, str | None]]:
+def sessions(plan: dict, what: str = "a session to start") -> list[tuple[str, int, str | None]]:
     found: list[tuple[str, int, str | None]] = []
     for item in plan["start"]:
         name = item.get("session") if isinstance(item, dict) else None
         number = item.get("brief") if isinstance(item, dict) else None
         if not isinstance(name, str) or not SESSION_ID.fullmatch(name):
-            raise CheckError("a session to start has no valid name (field session)")
+            raise CheckError(f"{what} has no valid name (field session)")
         if isinstance(number, bool) or not isinstance(number, int) or number < 1:
-            raise CheckError("a session to start has no valid brief number (field brief)")
+            raise CheckError(f"{what} has no valid brief number (field brief)")
         build = item.get("build") if "build" in item else None
         if "build" in item and (not isinstance(build, str) or not SESSION_ID.fullmatch(build)):
-            raise CheckError("a session to start has no valid build name (field build)")
+            raise CheckError(f"{what} has no valid build name (field build)")
         if any(name == other for other, _, _ in found):
-            raise CheckError("a session to start is named twice (field session)")
+            raise CheckError(f"{what} is named twice (field session)")
         if any((number, build) == (n, b) for _, n, b in found):
             raise CheckError("a brief to start is named twice (field brief)")
         found.append((name, number, build))
     return found
+
+
+Running = tuple[str, int, str | None, int | None, str | None]
+
+
+def running_sessions(plan: dict) -> list[Running]:
+    """(session, brief, build, pull request, author) of each entry of the plan's `running` list,
+    in its order; no list (or `null`) is no running session."""
+    items = plan.get("running")
+    if items is None:
+        return []
+    if not isinstance(items, list):
+        raise CheckError("the plan's running sessions are not a list (field running)")
+    found: list[Running] = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise CheckError("a running session has no valid name (field session)")
+        name, number, build = sessions({"start": [item]}, "a running session")[0]
+        pr = item.get("pull_request")
+        if "pull_request" in item and (isinstance(pr, bool) or not isinstance(pr, int) or pr < 1):
+            raise CheckError("a running session has no valid pull request (field pull_request)")
+        author = item.get("author")
+        if "author" in item and (not isinstance(author, str) or not LOGIN.fullmatch(author)):
+            raise CheckError("a running session has no valid author (field author)")
+        if any(name == other[0] for other in found):
+            raise CheckError("a running session is named twice (field session)")
+        found.append((name, number, build, pr, author))
+    return found
+
+
+def resume_for(session: str, brief: int, build: str | None, pr: int | None, author: str | None):
+    """The one-line prompt that resumes a running session from GitHub alone (brief 402)."""
+    work = f"build ({build}) of brief #{brief}" if build else f"brief #{brief}"
+    where = f"pull request #{pr}" if pr else "no pull request yet"
+    carry = CARRY_PR.format(pr=pr) if pr else CARRY_TAKE.format(brief=brief)
+    return RESUME.format(
+        session=session,
+        work=work,
+        where=where,
+        author=f" --author {author}" if author else "",
+        carry=carry,
+    )
 
 
 def prompt_for(session: str, brief: int, build: str | None = None) -> str:
@@ -204,8 +276,11 @@ def not_started(rest: list[tuple[str, int, str | None]]) -> None:
         print(f"not started: {work_text(session, brief, build)}", file=sys.stderr)
 
 
-def start_with(adapter: str, found: list[tuple[str, int, str | None]]) -> int:
-    """Call the adapter once for each session; stop at the first one that fails."""
+def start_with(
+    adapter: str, found: list[tuple[str, int, str | None]], prompts: list[str] | None = None
+) -> int:
+    """Call the adapter once for each session; stop at the first one that fails. PROMPTS, when
+    given, are the prompts of the sessions in order (the resume prompts of brief 402)."""
     words = shlex.split(adapter)
     if not words:
         raise CheckError("the adapter is empty (option --adapter)")
@@ -216,7 +291,7 @@ def start_with(adapter: str, found: list[tuple[str, int, str | None]]) -> int:
         try:
             done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
                 words,
-                input=prompt_for(session, brief, build),
+                input=prompts[index] if prompts else prompt_for(session, brief, build),
                 text=True,
                 encoding="utf-8",
                 env=env,
@@ -236,6 +311,9 @@ def start_with(adapter: str, found: list[tuple[str, int, str | None]]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    resume = args.count("--resume") == 1 and args[:1] == ["prompts"]
+    if resume:
+        args.remove("--resume")
     opts = dict(zip(args[1::2], args[2::2], strict=False))
     if (
         args[:1] != ["prompts"]
@@ -246,6 +324,8 @@ def main(argv: list[str] | None = None) -> int:
     ):
         print(USAGE, file=sys.stderr)
         return 2
+    if resume:
+        return resume_main(opts)
     try:
         plan = read_plan(opts["--plan"])
         found = sessions(plan)
@@ -265,6 +345,30 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if code == 0:
         for session, brief, build in beyond:
+            print(f"not started: {work_text(session, brief, build)} (max_builders is {limit})")
+    return code
+
+
+def resume_main(opts: dict) -> int:
+    """`prompts --resume`: one resume prompt (or one adapter call) per running session."""
+    try:
+        plan = read_plan(opts["--plan"])
+        found = running_sessions(plan)
+        limit = max_builders(Path.cwd())
+        if not found:
+            return 0
+        found, beyond = found[:limit], found[limit:]
+        prompts = [resume_for(*item) for item in found]
+        if "--adapter" in opts:
+            code = start_with(opts["--adapter"], [item[:3] for item in found], prompts)
+        else:
+            print((SEPARATOR + "\n").join(prompts), end="")
+            code = 0
+    except CheckError as exc:
+        print(f"FAIL {NAME}: {exc}", file=sys.stderr)
+        return 2
+    if code == 0:
+        for session, brief, build, _, _ in beyond:
             print(f"not started: {work_text(session, brief, build)} (max_builders is {limit})")
     return code
 

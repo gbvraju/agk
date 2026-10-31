@@ -640,6 +640,47 @@ def pr_brief(pr: dict) -> int | None:
     return None
 
 
+def running_sessions(s: Survey) -> list[dict]:
+    """The sessions that hold work (brief #402, ADR-0219): one entry per open builder pull request
+    whose brief has a live take, then one per live take of a brief with no open pull request.
+    The take of a pull request is the newest by its author, else the newest; a pull request whose
+    brief has no live take names no session and is left out rather than guessed."""
+    found: list[dict] = []
+    seen: set[str] = set()
+
+    def add(take: tuple, number: int, pr: dict | None) -> None:
+        if take[2] in seen:
+            return
+        seen.add(take[2])
+        entry: dict = {"session": take[2], "brief": number}
+        if take[5]:
+            entry["build"] = take[5]
+        if pr is not None:
+            entry["pull_request"] = pr["number"]
+        login = pr_login(pr) if pr is not None else str(take[3] or "")
+        if login:
+            entry["author"] = login
+        found.append(entry)
+
+    for pr in sorted(s.builders, key=lambda p: p["number"]):
+        number = pr_brief(pr)
+        takes = live_takes(s.comments.get(number, []), number, s.prs, s.hours)
+        if number is None or not takes:
+            continue
+        mine = [t for t in takes if str(t[3] or "").lower() == pr_login(pr).lower()]
+        add((mine or takes)[-1], number, pr)
+    for number, _ in s.held:
+        for take in live_takes(s.comments.get(number, []), number, s.prs, s.hours):
+            add(take, number, None)
+    return found
+
+
+def pr_login(pr: dict) -> str:
+    user = pr.get("user")
+    login = user.get("login") if isinstance(user, dict) else None
+    return login if isinstance(login, str) else ""
+
+
 def build(root) -> dict:
     repo = repo_name(root)
     reviews = flow_int(root, "reviews_in_flight", DEFAULTS["reviews_in_flight"], RULE)
@@ -691,6 +732,7 @@ def build(root) -> dict:
             | ({"build": b["build"]} if b.get("build") else {})
             for i, b in enumerate(chosen[:count])
         ],
+        "running": running_sessions(s),
         "waits": waits,
         "skipped": [{"brief": n, "why": why} for n, why in [*s.skipped, *build_skips, *unplanned]],
         "stale_claims": stale,

@@ -50,6 +50,7 @@
     "scripts/agk/drift_audit.py",
     "scripts/agk/facts.py",
     "scripts/agk/full_run.py",
+    "scripts/agk/impact.py",
     "scripts/agk/launch.py",
     "scripts/agk/local_mode.py",
     "scripts/agk/lock.py",
