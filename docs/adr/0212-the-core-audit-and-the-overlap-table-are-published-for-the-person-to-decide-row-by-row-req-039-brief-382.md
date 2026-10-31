@@ -19,7 +19,8 @@ The evidence, both written on 2026-10-31 (the date from `date -u`) and committed
   73558ce, the whole history (no `--only`): 286 pull requests; 3 unread pages (#1 `job`, #2 `combined step`, #32
   `combined step`); of the 23 governance checks, 10 failed at least once and 13 are `cannot-check` (no counted failure in
   the pull requests that could be read, and a page that could not be read, so never zero, ADR-0210); no check is listed
-  as never fired; 21 of the 33 session rules were never cited by a verdict; totals ADRs 217, specs 37, requirements 44,
+  as never fired; 21 of the 33 session rules were never cited by a verdict (session rule 34 was added by #407 after the run and has
+  no count); totals ADRs 217, specs 37, requirements 44,
   scripts 56.
 - `docs/runs/core-overlap-1.md`: for each session rule and each spec named below, the other rules that state the same
   thing, by number, with the audit's count for each.
@@ -105,6 +106,7 @@ The count is the number of verdicts that cite the rule; the overlaps are those o
 | 54 | session rule 31 | 0 | keep | the pre-push run; receives row 36 | none from keeping | |
 | 55 | session rule 32 | 0 | keep | messages through GitHub | none from keeping | |
 | 56 | session rule 33 | 0 | keep | the pause check; receives row 34 | none from keeping | |
+| 57 | session rule 34 | not in the audit | keep | added by #407 after the audit; a bug outside the brief is filed, not fixed | row 29 must keep rule 34's case beside rule 6's "a check fails in a way the brief does not cover" | |
 
 ### Specs
 
@@ -112,14 +114,14 @@ Each row is a spec with rules that a session rule states again (`docs/runs/core-
 
 | Row | Spec rules | Count | Proposal | Reason | Risk | Decision: |
 | --- | --- | --- | --- | --- | --- | --- |
-| 57 | SPEC-0023 rule 2 | 0 | keep | the decided source of session rule 2 | none from keeping | |
-| 58 | SPEC-0025 rules 2, 3, 5 and 6 | 0, 1, 2, 0 | keep | the decided source of session rules 3, 14 and 15 | none from keeping | |
-| 59 | SPEC-0030 rules 1, 2 and 3 | 0, 0, 0 | keep | rule 1 asks for the session rules file; rows 29, 34 and 47 change the session rules, not this spec | an accepted merge may need an amendment that names the new rule numbers | |
-| 60 | SPEC-0032 rules 3, 4, 5, 6, 8, 9 and 10 | 2, 1, 2, 1, 0, 0, 0 | keep | the decided source of session rules 2, 10, 11, 19, 20 and 29 | none from keeping | |
-| 61 | SPEC-0033 rules 1, 2, 3, 4, 5, 7 and 8 | 1, 0, 0, 0, 0, 0, 0 | keep | rule 1 asks for one numbered session rule | none from keeping | |
-| 62 | SPEC-0034 rules 5, 7, 9, 11 and 12 | 2, 0 (7b 1, 7c 1), 0, 1, 0 | keep | rule 7 names the shared-mechanical list of the session rules | rows 36 and 37 move the rules it points at | |
-| 63 | SPEC-0035 rules 1, 2, 3 and 7 | 2, 0, 1, 0 | keep | rule 7 asks the session rules for the shapes | none from keeping | |
-| 64 | SPEC-0036 rules 1 and 6 | 2, 0 | keep | the decided source of session rule 27 | none from keeping | |
+| 58 | SPEC-0023 rule 2 | 0 | keep | the decided source of session rule 2 | none from keeping | |
+| 59 | SPEC-0025 rules 2, 3, 5 and 6 | 0, 1, 2, 0 | keep | the decided source of session rules 3, 14 and 15 | none from keeping | |
+| 60 | SPEC-0030 rules 1, 2 and 3 | 0, 0, 0 | keep | rule 1 asks for the session rules file; rows 29, 34 and 47 change the session rules, not this spec | an accepted merge may need an amendment that names the new rule numbers | |
+| 61 | SPEC-0032 rules 3, 4, 5, 6, 8, 9 and 10 | 2, 1, 2, 1, 0, 0, 0 | keep | the decided source of session rules 2, 10, 11, 19, 20 and 29 | none from keeping | |
+| 62 | SPEC-0033 rules 1, 2, 3, 4, 5, 7 and 8 | 1, 0, 0, 0, 0, 0, 0 | keep | rule 1 asks for one numbered session rule | none from keeping | |
+| 63 | SPEC-0034 rules 5, 7, 9, 11 and 12 | 2, 0 (7b 1, 7c 1), 0, 1, 0 | keep | rule 7 names the shared-mechanical list of the session rules | rows 36 and 37 move the rules it points at | |
+| 64 | SPEC-0035 rules 1, 2, 3 and 7 | 2, 0, 1, 0 | keep | rule 7 asks the session rules for the shapes | none from keeping | |
+| 65 | SPEC-0036 rules 1 and 6 | 2, 0 | keep | the decided source of session rule 27 | none from keeping | |
 
 ## Consequences
 

@@ -14,6 +14,8 @@ How it was made (brief #382, answer 2), on 2026-10-31 (the date from `date -u`):
   not count `CLAUDE.md` items, so they carry `(not counted)`.
 - A count is how often a verdict cited a rule, not how often a session followed it: a zero says the rule was never named in
   a refusal, not that it is unused.
+- Session rule 34 was added to the default branch (#407) after the audit was run, so the audit has no count for it; it
+  carries `(not in the audit)`.
 - "States the same thing" means the other rule gives the same instruction, in whole or in part, for the same actor; a
   rule that only points at another (for example "as in SPEC-0030 rule 3") is not listed.
 
@@ -26,7 +28,7 @@ How it was made (brief #382, answer 2), on 2026-10-31 (the date from `date -u`):
 | session rule 3 (0) | SPEC-0030 rule 1 (0), SPEC-0025 rule 5 (2), SPEC-0025 rule 6 (0), CLAUDE.md item 2 (not counted) |
 | session rule 4 (0) | SPEC-0030 rule 1 (0) |
 | session rule 5 (0) | SPEC-0030 rule 3 (0), session rule 18 (0) |
-| session rule 6 (0) | SPEC-0030 rule 1 (0), session rule 21 (1), CLAUDE.md item 1 (not counted) |
+| session rule 6 (0) | SPEC-0030 rule 1 (0), session rule 21 (1), session rule 34 (not in the audit), CLAUDE.md item 1 (not counted) |
 | session rule 7 (1) | SPEC-0033 rule 1 (1), SPEC-0033 rule 2 (0) |
 | session rule 8 (0) | SPEC-0033 rule 3 (0) |
 | session rule 9 (0) | SPEC-0033 rule 4 (0), SPEC-0033 rule 5 (0) |
@@ -41,7 +43,7 @@ How it was made (brief #382, answer 2), on 2026-10-31 (the date from `date -u`):
 | session rule 18 (0) | SPEC-0034 rule 5 (2), session rule 5 (0) |
 | session rule 19 (0) | SPEC-0032 rule 9 (0), session rule 21 (1) |
 | session rule 20 (0) | SPEC-0032 rule 10 (0), session rule 1 (1), session rule 24 (1) |
-| session rule 21 (1) | session rule 6 (0), session rule 16 (0), session rule 23 (0), CLAUDE.md item 1 (not counted) |
+| session rule 21 (1) | session rule 6 (0), session rule 16 (0), session rule 23 (0), session rule 34 (not in the audit), CLAUDE.md item 1 (not counted) |
 | session rule 22 (1) | none |
 | session rule 23 (0) | session rule 11 (0), session rule 13 (2), session rule 21 (1), session rule 33 (0) |
 | session rule 24 (1) | SPEC-0030 rule 2 (0), session rule 1 (1), session rule 10 (0), session rule 20 (0) |
@@ -54,6 +56,7 @@ How it was made (brief #382, answer 2), on 2026-10-31 (the date from `date -u`):
 | session rule 31 (0) | session rule 13 (2) |
 | session rule 32 (0) | session rule 10 (0), session rule 17 (1) |
 | session rule 33 (0) | session rule 11 (0), session rule 23 (0) |
+| session rule 34 (not in the audit) | session rule 6 (0), session rule 21 (1) |
 
 Three groups stand out, each one row of ADR-0212:
 
