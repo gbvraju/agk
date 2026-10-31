@@ -35,6 +35,7 @@ from common import (
     show,
     test_dirs,
 )
+from impact import DEFAULT_BUDGET, testing_table
 from reviewers import confirmed_comments, solo_person, verdict_authors
 
 NAME = "metrics"
@@ -70,7 +71,7 @@ COLUMNS = (
     "estimated_hours rejected rejected_verdicts "
     "review_rounds merged_head_cleared blocked_weakenings governance_failures deviations "
     "cost_class protected_classes adrs_added additions deletions changed_files tests_before "
-    "tests_after minutes pool_minutes wait_minutes reruns"
+    "tests_after project_test_seconds proof_seconds minutes pool_minutes wait_minutes reruns"
 ).split()
 CI_FIELDS = ("minutes", "pool_minutes", "wait_minutes", "reruns")
 PAGE = 100
@@ -100,6 +101,7 @@ class Gh:
 
     def __init__(self, repo: str) -> None:
         self.repo = repo
+        self.seen: dict[tuple[str, str], Any] = {}
 
     def one(self, endpoint: str) -> Any:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
@@ -116,6 +118,13 @@ class Gh:
             return None
 
     def get(self, name: str, endpoint: str, until: Any = None) -> Any:
+        """One read per name and endpoint: the record and the testing lines read the same runs."""
+        key = (name, endpoint)
+        if key not in self.seen:
+            self.seen[key] = self.read(name, endpoint, until)
+        return self.seen[key]
+
+    def read(self, name: str, endpoint: str, until: Any = None) -> Any:
         endpoint = endpoint.replace("{repo}", self.repo)
         if name == "pulls" or name.startswith(("comments-", "files-", "commits-")):
             return self.pages(endpoint, until)
@@ -557,6 +566,253 @@ def ci_totals(records: list[dict[str, str]]) -> str:
     return "ci totals: " + "; ".join(parts)
 
 
+# --- test time, backstop escapes and suites over budget (brief 427, ADR-0232) -----------------
+
+
+TESTS_STEP = "Project tests"
+RAN = ("success", "failure")  # a step or job that ran to its end; skipped and cancelled did not
+PASSED_OVER = ("skipped", "cancelled")
+FAILED = ("failure", "timed_out")
+
+
+def is_governance(run_: dict) -> bool:
+    """A run of the governance workflow: named `governance`, or by its run name `governance
+    full` or `governance edited`."""
+    name = str(run_.get("name") or "")
+    return name == "governance" or name.startswith("governance ")
+
+
+def runs_of(src: Any, sha: Any) -> list[dict] | None:
+    """The workflow runs of a commit (`runs-<sha>`), or None when they cannot be read."""
+    if not isinstance(sha, str) or not sha:
+        return None
+    data = src.get(f"runs-{sha}", f"repos/{{repo}}/actions/runs?head_sha={sha}")
+    listed = data.get("workflow_runs") if isinstance(data, dict) else None
+    if not isinstance(listed, list) or not all(isinstance(r, dict) for r in listed):
+        return None
+    return listed
+
+
+def jobs_of(src: Any, rid: Any) -> list[dict] | None:
+    """The jobs of a run, every attempt (`run-jobs-<id>`), or None when they cannot be read."""
+    data = src.get(f"run-jobs-{rid}", f"repos/{{repo}}/actions/runs/{rid}/jobs?filter=all")
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list) or not all(isinstance(j, dict) for j in jobs):
+        return None
+    return jobs
+
+
+def newest_first(runs: list[dict]) -> list[dict]:
+    def key(r: dict) -> tuple[str, int]:
+        rid = r.get("id")
+        return str(r.get("created_at") or ""), rid if isinstance(rid, int) else 0
+
+    return sorted(runs, key=key, reverse=True)
+
+
+def seconds_of(item: dict) -> int | None:
+    """Whole seconds from `started_at` to `completed_at`, round half up; None without both."""
+    a, b = stamp(item.get("started_at")), stamp(item.get("completed_at"))
+    if a is None or b is None or b < a:
+        return None
+    return int(Decimal(str((b - a).total_seconds())).quantize(Decimal(1), ROUND_HALF_UP))
+
+
+def latest_ran(items: list[dict]) -> tuple[str, dict | None]:
+    """(`ran`, the latest item that ran), (`not-run`, None) when every item was skipped or
+    cancelled, or (`unknown`, None) when one has not ended or has no known conclusion."""
+    ran = []
+    for item in items:
+        conclusion = item.get("conclusion")
+        if conclusion in RAN:
+            ran.append(item)
+        elif conclusion not in PASSED_OVER:
+            return UNKNOWN, None
+    if not ran:
+        return "not-run", None
+    return "ran", max(ran, key=lambda i: str(i.get("started_at") or ""))
+
+
+def tests_step(jobs: list[dict]) -> tuple[str, int | None]:
+    """The `Project tests` step of a run's jobs: (`ran`, its seconds or None), (`not-run`, None)
+    or (`unknown`, None); the latest attempt that ran it counts."""
+    steps = [
+        s
+        for j in jobs
+        for s in (j.get("steps") if isinstance(j.get("steps"), list) else [])
+        if isinstance(s, dict) and s.get("name") == TESTS_STEP
+    ]
+    state, found = latest_ran(steps)
+    return state, (seconds_of(found) if found else None)
+
+
+def project_test_seconds(src: Any, runs: list[dict] | None) -> str:
+    """Answer 1: the `Project tests` step of the last governance run of the head that ran it."""
+    if runs is None:
+        return UNKNOWN
+    for run_ in newest_first([r for r in runs if is_governance(r)]):
+        jobs = jobs_of(src, run_.get("id"))
+        if jobs is None:
+            return UNKNOWN
+        state, seconds = tests_step(jobs)
+        if state == UNKNOWN:
+            return UNKNOWN
+        if state == "ran":
+            return UNKNOWN if seconds is None else str(seconds)
+    return UNKNOWN
+
+
+def last_proof_job(src: Any, runs: list[dict] | None) -> dict | None:
+    """Answer 1: the last `proof` job of the head that ran (a draft's skipped job runs nothing);
+    None when there is none or it cannot be read."""
+    if runs is None:
+        return None
+    for run_ in newest_first([r for r in runs if r.get("name") == "proof"]):
+        jobs = jobs_of(src, run_.get("id"))
+        if jobs is None:
+            return None
+        state, job = latest_ran([j for j in jobs if j.get("name") == "proof"])
+        if state == UNKNOWN:
+            return None
+        if state == "ran":
+            return job
+    return None
+
+
+def proof_outcome(job: dict | None) -> str:
+    """The outcome of a proof job: the one `outcome: ` step that ended success (as facts.py
+    reads it), else unknown."""
+    steps = job.get("steps") if isinstance(job, dict) else None
+    if not isinstance(steps, list):
+        return UNKNOWN
+    won = [
+        str(s.get("name"))[len("outcome: ") :].split(" ", 1)[0]
+        for s in steps
+        if isinstance(s, dict)
+        and str(s.get("name") or "").startswith("outcome: ")
+        and s.get("conclusion") == "success"
+    ]
+    return won[0] if len(won) == 1 else UNKNOWN
+
+
+def testing_fields(src: Any, detail: dict) -> dict[str, str]:
+    """`project_test_seconds` and `proof_seconds` of a merged pull request; `-` for a closed one."""
+    if not detail.get("merged_at"):
+        return {"project_test_seconds": NONE, "proof_seconds": NONE}
+    runs = runs_of(src, (detail.get("head") or {}).get("sha"))
+    job = last_proof_job(src, runs)
+    seconds = seconds_of(job) if job else None
+    return {
+        "project_test_seconds": project_test_seconds(src, runs),
+        "proof_seconds": UNKNOWN if seconds is None else str(seconds),
+    }
+
+
+def push_runs(src: Any, detail: dict) -> list[dict] | None:
+    """The governance runs on the push of the merge commit to the base branch, or None."""
+    runs = runs_of(src, detail.get("merge_commit_sha"))
+    if runs is None:
+        return None
+    ref = (detail.get("base") or {}).get("ref")
+    return [
+        r
+        for r in runs
+        if is_governance(r)
+        and r.get("event") == "push"
+        and (not ref or r.get("head_branch") == ref)
+    ]
+
+
+def escape_of(src: Any, detail: dict) -> str:
+    """Answer 2 for a merged pull request: `escape`, `red` (a red push that is not an escape),
+    `green`, or `unknown` when the push run, the proof or the governance cannot be read."""
+    pushes = push_runs(src, detail)
+    if not pushes:
+        return UNKNOWN
+    if not any(r.get("conclusion") in FAILED for r in pushes):
+        return "green" if all(r.get("conclusion") for r in pushes) else UNKNOWN
+    runs = runs_of(src, (detail.get("head") or {}).get("sha"))
+    outcome = proof_outcome(last_proof_job(src, runs))
+    if outcome == UNKNOWN:
+        return UNKNOWN
+    if outcome != "proven":
+        return "red"
+    governed = newest_first([r for r in runs or [] if is_governance(r)])
+    if not governed or not governed[0].get("conclusion"):
+        return UNKNOWN
+    return "escape" if governed[0]["conclusion"] == "success" else "red"
+
+
+def escapes_line(details: list[dict], src: Any) -> str:
+    found: dict[str, list[str]] = {"escape": [], "red": [], UNKNOWN: []}
+    for d in details:
+        if not d.get("merged_at"):
+            continue
+        kind = escape_of(src, d)
+        if kind == UNKNOWN:
+            found[UNKNOWN].append(f"#{d['number']}")
+        elif kind in found:
+            found[kind].append(f"#{d['number']} {d.get('merge_commit_sha')}")
+
+    def part(items: list[str]) -> str:
+        return f"{len(items)} ({', '.join(items)})" if items else "0"
+
+    return (
+        f"backstop escapes: {part(found['escape'])}; red pushes not escapes: {part(found['red'])}; "
+        f"unknown: {part(found[UNKNOWN])}"
+    )
+
+
+def budget_of(root: Path) -> tuple[int | None, str]:
+    """`[testing] budget_seconds` (300 when unset), or None with the refusal naming the setting."""
+    try:
+        table = testing_table(root)
+    except CheckError as err:
+        return None, str(err)
+    return (table or {}).get("budget_seconds", DEFAULT_BUDGET), ""
+
+
+def over_budget_line(ctx: Context, details: list[dict]) -> str:
+    """Answer 3: each governance run of the window's pull requests (their commits and, when
+    merged, the push of the merge commit) whose `Project tests` step took longer than the budget;
+    each run once, in pull request order."""
+    budget, refusal = budget_of(ctx.root)
+    if budget is None:
+        return f"over budget: unknown ({refusal})"
+    listed: list[str] = []
+    unknown = 0
+    seen: set[Any] = set()
+    for d in details:
+        n = d["number"]
+        commits = ctx.src.get(f"commits-{n}", f"repos/{{repo}}/pulls/{n}/commits")
+        if not isinstance(commits, list):
+            unknown += 1
+            continue
+        shas = [c.get("sha") if isinstance(c, dict) else None for c in commits]
+        if d.get("merged_at"):
+            shas.append(d.get("merge_commit_sha"))
+        for sha in shas:
+            runs = runs_of(ctx.src, sha)
+            if runs is None:
+                unknown += 1
+                continue
+            governed = sorted((r for r in runs if is_governance(r)), key=lambda r: str(r.get("id")))
+            for run_ in governed:
+                if run_.get("id") in seen:
+                    continue
+                seen.add(run_.get("id"))
+                jobs = jobs_of(ctx.src, run_.get("id"))
+                state, seconds = tests_step(jobs) if jobs is not None else (UNKNOWN, None)
+                if state == "not-run":
+                    continue
+                if state == UNKNOWN or seconds is None:
+                    unknown += 1
+                elif seconds > budget:
+                    listed.append(f"#{n} run {run_.get('id')} {seconds}s")
+    found = f"{len(listed)} ({', '.join(listed)})" if listed else "0"
+    return f"over budget (budget_seconds {budget}): {found}; unknown: {unknown}"
+
+
 def merged_head_cleared(src: Any, head: str, comments: Any, authors: list[str] | None) -> str:
     """`yes`, `no` or `unknown` for a merged pull request (SPEC-0007 rule 8, SPEC-0021 rule 7)."""
     listed = verdicts(comments if isinstance(comments, list) else None, authors)
@@ -640,6 +896,7 @@ def build_record(ctx: Context, detail: dict) -> dict[str, str]:
         "changed_files": num("changed_files"),
         "tests_before": before,
         "tests_after": after,
+        **testing_fields(ctx.src, detail),
         **ci,
     }
 
@@ -671,7 +928,13 @@ def totals(records: list[dict[str, str]]) -> str:
 
 
 def render(
-    week: str, start: date, end: date, records: list[dict[str, str]], listed: int, flags: list[str]
+    week: str,
+    start: date,
+    end: date,
+    records: list[dict[str, str]],
+    listed: int,
+    flags: list[str],
+    testing: tuple[str, ...] = (),
 ) -> str:
     unknown_cells = sum(1 for r in records for v in r.values() if v == UNKNOWN)
     lines = [*flags, f"agk metrics {week} (window {start} to {end})", ""]
@@ -682,6 +945,7 @@ def render(
         totals(records),
         ci_totals(records),
         f"closed in window: {listed}; recorded: {len(records)}; unknown cells: {unknown_cells}",
+        *testing,
         "",
         NOTE,
         marker(week),
@@ -707,10 +971,14 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
         raise CheckError("cannot list pull requests (path class: the GitHub API)")
     in_window = listed_in_window(pulls, start, end)
     records = []
+    details = []
     for p in in_window:
         detail = ctx.src.get(f"pull-{p['number']}", f"repos/{{repo}}/pulls/{p['number']}")
         if isinstance(detail, dict) and "number" in detail:
             records.append(build_record(ctx, detail))
+            details.append(detail)
+    details.sort(key=lambda d: int(d["number"]))
+    testing = (escapes_line(details, ctx.src), over_budget_line(ctx, details))
     records.sort(key=lambda r: int(r["number"]))
     flags = []
     duplicates = matching(issues, week)
@@ -720,7 +988,7 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
     incomplete = len(records) != len(in_window)
     if incomplete:
         flags.append(f"INCOMPLETE: closed in window {len(in_window)}, recorded {len(records)}")
-    return render(week, start, end, records, len(in_window), flags), incomplete
+    return render(week, start, end, records, len(in_window), flags, testing), incomplete
 
 
 # --- command line -----------------------------------------------------------------------------
