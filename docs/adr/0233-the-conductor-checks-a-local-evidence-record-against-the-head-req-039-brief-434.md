@@ -51,8 +51,9 @@ script, its tests and the kit manifest are protected path classes, so this ADR n
    and puts the `Evidence:` line in the body beside its `Local evidence:` line; the conductor runs `evidence.py check` and
    quotes its line in the verdict's `Local evidence:` line. The hand-made worktree run stays as the way for a record-less
    builder. The lines the guide's existing tests read are kept.
-7. **Outside `Touches:`.** None beyond the brief's list; `kit/manifest.json` lists `scripts/agk/evidence.py` as installed
-   verbatim. Flow mode: fragment `changelog.d/evidence-check.md`; no version bump.
+7. **Outside `Touches:`.** `docs/guides/reference.md` names `evidence.py check` under Local mode, since every installed
+   script is named there (`tests/kit_dev/test_reference_commands.py`). `kit/manifest.json` lists `scripts/agk/evidence.py`
+   as installed verbatim. Flow mode: fragment `changelog.d/evidence-check.md`; no version bump.
 
 ## Consequences
 
