@@ -17,8 +17,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import signal
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -30,6 +34,9 @@ sys.path.insert(0, str(SCRIPTS))
 LINE = re.compile(
     r"^Evidence check: (agrees|differs), head ([0-9a-f]{12}), record ([0-9a-f]{12})", re.M
 )
+
+
+HANG_OFF = {"HANG_PIDFILE": ""}
 
 
 @pytest.fixture
@@ -182,17 +189,172 @@ def test_governance_that_fails_in_the_worktree_differs_and_the_worktree_is_remov
     assert left_over(outside) == []
 
 
-def test_the_worktree_is_removed_when_a_re_run_cannot_start(repo, outside):
-    """REQ-039: brief #434 answer 2 (removed afterwards, also on a failure)."""
+def recorded(repo, outside: Path, scan: Path | None = None) -> Path:
+    """A record that prepush writes for the fixture's head."""
+    record = outside / "record.json"
+    made = repo.run("prepush.py", "--record", str(record), PATH=path_with(scan), **HANG_OFF)
+    assert record.is_file(), made.stdout + made.stderr
+    return record
+
+
+def test_a_changed_argv_is_reported_and_never_run(repo, outside):
+    """REQ-039: verdict on 57c122a, item 1 (the record's commands are never executed; a step's
+    argv must be the one prepush builds for it)."""
     project(repo, outside)
-    gone = step("missing", ["no-such-tool-for-agk-evidence"])
-    record = write(outside / "record.json", repo, [gone])
-    proc = check(repo, outside, str(record))
+    planted = outside / "planted"
+    lint = step("lint", ["sh", "-c", f"touch '{planted}'"])
+    record = write(outside / "record.json", repo, [lint])
+    proc = check(repo, outside, str(record), "--sample", "10")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert re.search(r"^evidence: not what prepush runs: lint \(field: argv\)$", proc.stdout, re.M)
+    assert "re-ran lint" not in proc.stdout
+    assert not planted.exists()
+    assert LINE.search(proc.stdout).group(1) == "differs"
+
+
+def test_an_unknown_step_is_reported_and_never_run(repo, outside):
+    """REQ-039: verdict on 57c122a, item 1 (a step whose name prepush does not know)."""
+    project(repo, outside)
+    planted = outside / "planted"
+    record = write(outside / "record.json", repo, [step("extra", ["touch", str(planted)])])
+    proc = check(repo, outside, str(record), "--sample", "10")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert re.search(r"^evidence: not what prepush runs: extra \(field: name\)$", proc.stdout, re.M)
+    assert not planted.exists()
+
+
+def test_a_changed_test_run_command_is_reported_and_never_run(repo, outside):
+    """REQ-039: verdict on 57c122a, item 1 (the test runs are rebuilt from `test_plan.py` in the
+    worktree and matched by name; the recorded command is compared, never run)."""
+    project(repo, outside)
+    scan = scanner(outside / "bin", 0)
+    record = recorded(repo, outside, scan)
+    data = json.loads(record.read_text(encoding="utf-8"))
+    tests = next(s for s in data["steps"] if s["name"] == "tests")
+    assert [r["name"] for r in tests["runs"]] == ["project_tests"]
+    planted = outside / "planted"
+    tests["runs"][0]["command"] = f"touch '{planted}'"
+    record.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    proc = check(repo, outside, str(record), "--sample", "10", scan=scan)
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert re.search(
-        r"^evidence: re-ran missing: exit 127 \(recorded 0\) DIFFERS", proc.stdout, re.M
+        r"^evidence: not what prepush runs: tests/project_tests \(field: command\)$",
+        proc.stdout,
+        re.M,
     )
+    assert not planted.exists()
+    assert "re-ran tests/project_tests" not in proc.stdout
+
+
+def test_a_test_run_the_head_does_not_plan_is_reported(repo, outside):
+    """REQ-039: verdict on 57c122a, item 1 (a recorded run that the head's plan does not have)."""
+    project(repo, outside)
+    scan = scanner(outside / "bin", 0)
+    record = recorded(repo, outside, scan)
+    data = json.loads(record.read_text(encoding="utf-8"))
+    tests = next(s for s in data["steps"] if s["name"] == "tests")
+    tests["runs"].append({**tests["runs"][0], "name": "extra"})
+    record.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    proc = check(repo, outside, str(record), scan=scan)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert re.search(
+        r"^evidence: not what prepush runs: tests/extra \(field: name\)$", proc.stdout, re.M
+    )
+
+
+def test_a_record_of_a_failed_run_never_agrees(repo, outside):
+    """REQ-039: verdict on 57c122a, item 2 (a FAIL step with no exit code, or a failed result)."""
+    project(repo, outside)
+    repo.commit({"agk.mk": None}, "no agk.mk")  # prepush's governance FAILs with exit null
+    record = outside / "record.json"
+    made = repo.run("prepush.py", "--record", str(record), PATH=path_with(None))
+    assert made.returncode == 1, made.stdout + made.stderr
+    data = json.loads(record.read_text(encoding="utf-8"))
+    gov = next(s for s in data["steps"] if s["name"] == "governance")
+    assert gov["outcome"] == "FAIL" and gov["exit"] is None and data["result"] == "failed"
+    proc = check(repo, outside, str(record))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert re.search(r"^evidence: failed: step governance FAIL$", proc.stdout, re.M)
+    assert re.search(r"^evidence: failed: the record's result is failed", proc.stdout, re.M)
+
+
+def test_a_fail_outcome_with_exit_0_is_failed(repo, outside):
+    """REQ-039: verdict on 57c122a, item 2 (`test_plan.py` exited 0 and a refusal followed)."""
+    project(repo, outside)
+    tests = step("tests", ["python3", "scripts/agk/test_plan.py"], 0)
+    tests["outcome"] = "FAIL"
+    record = write(outside / "record.json", repo, [tests])
+    proc = check(repo, outside, str(record))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert re.search(r"^evidence: failed: step tests FAIL$", proc.stdout, re.M)
+
+
+def test_a_signal_during_a_re_run_leaves_no_process_behind(repo, outside):
+    """REQ-039: verdict on 57c122a, item 3 (on SIGTERM the sampled run's process tree is killed
+    before the lock is released and the worktree removed)."""
+    hang = TOML.replace(
+        "echo RAN_PROJECT_TESTS",
+        'if [ -n "$HANG_PIDFILE" ]; then echo $$ > "$HANG_PIDFILE"; exec sleep 60; fi; '
+        "echo RAN_PROJECT_TESTS",
+    )
+    files = {
+        "agk.toml": hang + f"lock_dir = '{outside / 'locks'}'\n",
+        "agk.mk": MK_OK,
+        "Makefile": LINT_OK,
+        "src/a.txt": "a\n",
+    }
+    repo.commit(files, "base")
+    repo.branch("feature")
+    repo.commit({"src/a.txt": "b\n", "tests/test_new.py": "# new\n"}, "change")
+    scan = scanner(outside / "bin", 0)
+    record = recorded(repo, outside, scan)
+    pidfile = outside / "hang.pid"
+    temp = outside / "tmp"
+    temp.mkdir(exist_ok=True)
+    env = {k: v for k, v in os.environ.items() if k not in ("AGK_BASE", "CI", "GITHUB_BASE_REF")}
+    env.update(PATH=path_with(scan), TMPDIR=str(temp), HANG_PIDFILE=str(pidfile))
+    proc = subprocess.Popen(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPTS / "evidence.py"), "check", str(record), "--sample", "10"],
+        cwd=repo.root,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 60
+        while not (pidfile.is_file() and pidfile.read_text().strip()):
+            assert proc.poll() is None, proc.communicate()[0]
+            assert time.monotonic() < deadline, "the sampled run never started"
+            time.sleep(0.1)
+        child = int(pidfile.read_text().strip())
+        proc.send_signal(signal.SIGTERM)
+        proc.communicate(timeout=30)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    assert proc.returncode != 0
+    time.sleep(0.2)
+    still = alive(child)
+    if still:
+        os.kill(child, signal.SIGKILL)  # leave nothing behind, even when the test fails
+    assert not still, "the sampled run outlived the check"
+    assert not (outside / "locks" / "agk-lock-heavy").exists()
     assert worktrees(repo) == 1 and left_over(outside) == []
+
+
+def alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    try:  # a zombie is not running
+        state = Path(f"/proc/{pid}/stat").read_text().split()[2]
+    except OSError:
+        return True
+    return state != "Z"
 
 
 def test_the_worktree_is_of_the_head_not_the_work_tree(repo, outside):
@@ -218,10 +380,10 @@ def test_a_different_output_digest_is_a_note_not_a_failure(repo, outside):
 def test_the_same_head_gives_the_same_sample(repo, outside):
     """REQ-039: brief #434 answers 2 and 6 (the sample is chosen from the head sha)."""
     project(repo, outside)
-    steps = [step(f"s{i}", ["true"]) for i in range(6)]
-    record = write(outside / "record.json", repo, steps)
-    first = check(repo, outside, str(record), "--sample", "2", "--json")
-    second = check(repo, outside, str(record), "--sample", "2", "--json")
+    scan = scanner(outside / "bin", 0)
+    record = recorded(repo, outside, scan)
+    first = check(repo, outside, str(record), "--sample", "2", "--json", scan=scan)
+    second = check(repo, outside, str(record), "--sample", "2", "--json", scan=scan)
     assert first.returncode == 0 and second.returncode == 0, first.stdout + first.stderr
     one = [s["name"] for s in json.loads(first.stdout)["sample"]]
     two = [s["name"] for s in json.loads(second.stdout)["sample"]]
@@ -229,7 +391,8 @@ def test_the_same_head_gives_the_same_sample(repo, outside):
     import evidence
 
     head = repo.git("rev-parse", "HEAD").strip()
-    assert one == evidence.sample(head, [f"s{i}" for i in range(6)], 2)
+    units = ["lint", "secret-scan", "tests", "tests/project_tests"]
+    assert one == evidence.sample(head, units, 2)
 
 
 def test_the_sample_is_a_pure_function_of_the_head():
@@ -320,6 +483,8 @@ def test_json_gives_the_whole_answer(repo, outside):
         ({"head": "not-a-sha"}, "head"),
         ({"tree_clean": "yes"}, "tree_clean"),
         ({"steps": {}}, "steps"),
+        ({"result": "maybe"}, "result"),
+        ({"steps": [{**step("lint", ["make", "lint"]), "outcome": "fine"}]}, "steps"),
     ],
 )
 def test_an_unknown_schema_or_a_bad_record_exits_2(repo, outside, fields, named):
