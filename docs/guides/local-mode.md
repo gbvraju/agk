@@ -73,9 +73,9 @@ A person with admin on the repository does this once, in a terminal on their own
 
 ## What a builder runs before asking for review
 
-A builder runs the governance checks and its own proof on its head, on its own machine, and pastes the result in the pull
-request body. Several sessions on one machine take turns through one lock, so two heavy runs never compete for the same memory
-and disk: each heavy step, governance included, runs under `python3 scripts/agk/lock.py run --name heavy --session <id> -- <command...>`, which waits
+A builder runs the governance checks and its own proof on its head, on its own machine, and records what ran in a file
+instead of pasting output into the pull request body. Several sessions on one machine take turns through one lock, so two
+heavy runs never compete for the same memory and disk: each heavy step, governance included, runs under `python3 scripts/agk/lock.py run --name heavy --session <id> -- <command...>`, which waits
 its turn, runs the command without a shell and releases the lock when it ends, also when it fails or is interrupted. Each line
 stands alone, so the lines can be run one by one, as an agent runs them:
 
@@ -84,6 +84,14 @@ stands alone, so the lines can be run one by one, as an agent runs them:
     python3 scripts/agk/lock.py run --name heavy --session <id> -- make test
     python3 scripts/agk/lock.py run --name heavy --session <id> -- python3 scripts/agk/proof.py --base "$base" --head HEAD
     python3 scripts/agk/check_pr_body.py --draft false body.md
+    python3 scripts/agk/lock.py run --name heavy --session <id> -- python3 scripts/agk/prepush.py --body body.md --record <record file>
+
+The last line is the record the conductor checks. `prepush.py --record <file>` (brief #374) runs the body check, lint,
+governance, the secret scan and the selected tests, in that order, and writes one JSON record of what ran: the head and
+base, whether the work tree was clean, and each step's command, exit code and a digest of its output, never the output
+itself. Keep the record file outside the repository (a
+record inside it makes the tree dirty) and where the conductor can read it, on a machine you share. Run it on a clean tree:
+a record of a dirty tree is reported as such.
 
 In PowerShell write `$base = git merge-base HEAD origin/main` and `python` where `python3` is not on the path; the `lock.py`
 lines are the same (`make governance AGK_BASE=$base` gives the base to the checks as an environment variable on every platform). While another session holds the lock, `lock.py` prints one line at once and then one a
@@ -96,12 +104,14 @@ kit's checks and the project's own tests (`project_tests` in `agk.toml`); `body.
 secret scan of the governance workflow is not part of `make governance`: run the same scanner over the branch's commits when it
 is installed, and write `secret scan: not run` when it is not.
 
-Then add one line to the pull request body, beside `Verified:`, that names the head it ran on:
+Then add the `Evidence:` line that prepush printed to the pull request body, beside `Verified:`, and one line that names
+the head it ran on:
 
+    Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>
     Local evidence: <head sha> governance ok; tests <n> passed; proof <outcome>; pr body ok; secret scan <result>
 
-with each figure copied verbatim from the output. A new push makes the line stale: run again and replace it. Mark the pull request
-ready only when the line names the current head.
+with each figure copied verbatim from the output. A new push makes both lines stale: run again and replace them. Mark the pull
+request ready only when they name the current head.
 
 ## What the conductor checks instead of CI
 
@@ -112,12 +122,24 @@ Step 1 of the conductor's protocol (CI first) has nothing to read in local mode,
    (see Enter local mode). That reason, and the one open record issue, is how the conductor knows it is in local mode. The
    exception to CI first holds only while the one local-mode record issue is open, and only for required checks that never
    reported on that head: a red check still blocks a clearing verdict.
-2. Re-run governance on the exact head with the bounded run of the conductor role: `git worktree add <scratch> <sha>`, then
-   `env -i PATH="$PATH" HOME=<scratch> AGK_BASE=<base sha> make -C <scratch> governance`, then remove the worktree.
+2. Check the builder's record against the head with one command (brief #434):
+
+       python3 scripts/agk/evidence.py check <record file> --head <sha>
+
+   It reports `stale` when the record names another head, `dirty` when the builder's tree was not clean and `failed` when a
+   recorded step did not exit 0; otherwise it adds a detached worktree of the head in a temporary folder, runs governance
+   there with the record's base, re-runs a sample of the recorded steps (one by default, `--sample N` for more; the same head
+   always gives the same sample) under the heavy-step lock, compares their exit codes and removes the worktree. A different
+   output digest is a note, not a failure. It posts nothing and ends with one line to quote:
+   `Evidence check: agrees|differs, head <sha12>, record <sha12>, governance <outcome>, sample <k> of <m> same exit`, exit 0
+   when the record agrees and 1 when it differs. Its `record` digest must equal the one in the builder's `Evidence:` line.
 3. Read the builder's `Local evidence:` line. It must name the head the verdict names; a line for an older head is no evidence.
 4. Name in the verdict the local evidence it relied on, in one line:
 
-       Local evidence: <head sha> governance ok (conductor's run); proof <outcome>, tests <n> passed (builder's line)
+       Local evidence: <head sha> Evidence check: agrees, ... (conductor's run); proof <outcome>, tests <n> passed (builder's line)
+
+Without a record (a builder on a kit older than brief #374), re-run governance by hand as before: `git worktree add <scratch>
+<sha>`, then `env -i PATH="$PATH" HOME=<scratch> AGK_BASE=<base sha> make -C <scratch> governance`, then remove the worktree.
 
 A verdict in local mode that clears a head without that line clears nothing.
 

@@ -27,7 +27,9 @@ from test_prepush import LINT_FAIL, LINT_OK, MK_FAIL, MK_OK, TOML, path_with, sc
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
 
-LINE = re.compile(r"^Evidence check: (agrees|differs), head ([0-9a-f]{12}), record ([0-9a-f]{12})")
+LINE = re.compile(
+    r"^Evidence check: (agrees|differs), head ([0-9a-f]{12}), record ([0-9a-f]{12})", re.M
+)
 
 
 @pytest.fixture
@@ -124,7 +126,7 @@ def test_a_record_of_another_head_is_stale(repo, outside):
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert re.search(r"^evidence: stale: ", proc.stdout, re.M)
     assert LINE.search(proc.stdout).group(1) == "differs"
-    assert "governance" not in proc.stdout  # nothing was re-run
+    assert "governance not run" in proc.stdout and "worktree" not in proc.stdout  # nothing re-ran
     # --head names the head explicitly: the earlier one agrees.
     earlier = repo.git("rev-parse", "HEAD~1").strip()
     proc = check(repo, outside, str(record), "--head", earlier)
@@ -138,7 +140,7 @@ def test_a_dirty_tree_is_reported(repo, outside):
     proc = check(repo, outside, str(record))
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert re.search(r"^evidence: dirty: .*\(field: tree_clean\)", proc.stdout, re.M)
-    assert "governance" not in proc.stdout
+    assert "governance not run" in proc.stdout and "worktree" not in proc.stdout
 
 
 def test_a_recorded_step_that_did_not_exit_0_is_failed(repo, outside):
@@ -163,7 +165,7 @@ def test_a_step_that_now_fails_differs(repo, outside):
     record = write(outside / "record.json", repo)  # it says lint exited 0
     proc = check(repo, outside, str(record))
     assert proc.returncode == 1, proc.stdout + proc.stderr
-    assert re.search(r"^evidence: re-ran lint: exit 1 \(recorded 0\) DIFFERS", proc.stdout, re.M)
+    assert re.search(r"^evidence: re-ran lint: exit 2 \(recorded 0\) DIFFERS", proc.stdout, re.M)
     assert LINE.search(proc.stdout).group(1) == "differs"
 
 
@@ -187,7 +189,9 @@ def test_the_worktree_is_removed_when_a_re_run_cannot_start(repo, outside):
     record = write(outside / "record.json", repo, [gone])
     proc = check(repo, outside, str(record))
     assert proc.returncode == 1, proc.stdout + proc.stderr
-    assert re.search(r"^evidence: re-ran missing: exit 127 \(recorded 0\) DIFFERS", proc.stdout, re.M)
+    assert re.search(
+        r"^evidence: re-ran missing: exit 127 \(recorded 0\) DIFFERS", proc.stdout, re.M
+    )
     assert worktrees(repo) == 1 and left_over(outside) == []
 
 
@@ -206,7 +210,9 @@ def test_a_different_output_digest_is_a_note_not_a_failure(repo, outside):
     record = write(outside / "record.json", repo, [step("lint", ["make", "lint"], 0, "other")])
     proc = check(repo, outside, str(record))
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert re.search(r"^evidence: re-ran lint: .* same; output digest differs \(a note\)", proc.stdout, re.M)
+    assert re.search(
+        r"^evidence: re-ran lint: .* same; output digest differs \(a note\)", proc.stdout, re.M
+    )
 
 
 def test_the_same_head_gives_the_same_sample(repo, outside):
@@ -229,13 +235,18 @@ def test_the_same_head_gives_the_same_sample(repo, outside):
 def test_the_sample_is_a_pure_function_of_the_head():
     """REQ-039: brief #434 answer 2 (default one step; the same sha, the same steps; another sha
     may pick others; the order of the record does not matter)."""
+    import evidence
+
     names = [f"step{i}" for i in range(8)]
     sha = "a" * 40
     assert evidence.sample(sha, names, 1) == evidence.sample(sha, list(reversed(names)), 1)
     assert len(evidence.sample(sha, names, 1)) == 1
     assert evidence.sample(sha, names, 20) == evidence.sample(sha, names, 8)
     assert sorted(evidence.sample(sha, names, 8)) == sorted(names)
-    picks = {tuple(evidence.sample(hashlib.sha1(str(i).encode()).hexdigest(), names, 1)) for i in range(40)}
+    picks = {
+        tuple(evidence.sample(hashlib.sha1(str(i).encode()).hexdigest(), names, 1))
+        for i in range(40)
+    }
     assert len(picks) > 1
     assert evidence.sample(sha, [], 1) == []
     assert evidence.DEFAULT_SAMPLE == 1
@@ -244,11 +255,16 @@ def test_the_sample_is_a_pure_function_of_the_head():
 def test_a_step_that_names_a_path_outside_the_repository_is_not_re_run(repo, outside):
     """REQ-039: brief #434 answer 2 (a body file outside the repository cannot be repeated)."""
     project(repo, outside)
-    body = step("pr-body", ["python3", "scripts/agk/check_pr_body.py", "--draft", "false", "<outside>/body.md"])
+    body = step(
+        "pr-body",
+        ["python3", "scripts/agk/check_pr_body.py", "--draft", "false", "<outside>/body.md"],
+    )
     record = write(outside / "record.json", repo, [body])
     proc = check(repo, outside, str(record), "--sample", "5")
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert re.search(r"^evidence: not repeatable: pr-body \(a path outside the repository\)", proc.stdout, re.M)
+    assert re.search(
+        r"^evidence: not repeatable: pr-body \(a path outside the repository\)", proc.stdout, re.M
+    )
     assert "re-ran pr-body" not in proc.stdout
 
 
@@ -265,7 +281,7 @@ def test_the_re_runs_hold_the_heavy_step_lock(repo, outside):
 
 
 def test_governance_gets_the_recorded_base(repo, outside):
-    """REQ-039: brief #434 answer 2 (governance runs as prepush ran it, AGK_BASE the record's base)."""
+    """REQ-039: brief #434 answer 2 (governance runs as prepush ran it, with the record's base)."""
     seen = outside / "base.txt"
     project(repo, outside, mk=f"agk-governance:\n\t@echo \"$$AGK_BASE\" > '{seen}'\n")
     record = write(outside / "record.json", repo)
@@ -285,13 +301,15 @@ def test_json_gives_the_whole_answer(repo, outside):
     assert data["head"] == repo.git("rev-parse", "HEAD").strip()
     assert data["record_sha256"] == hashlib.sha256(record.read_bytes()).hexdigest()
     assert data["problems"] == [] and data["governance"]["exit"] == 0
-    assert data["sample"][0] == {
-        "name": "lint",
-        "recorded_exit": 0,
-        "exit": 0,
-        "same_exit": True,
-        "same_output": True,
-    }
+    first = data["sample"][0]
+    assert set(first) == {"name", "recorded_exit", "exit", "same_exit", "same_output"}
+    assert (first["name"], first["recorded_exit"], first["exit"], first["same_exit"]) == (
+        "lint",
+        0,
+        0,
+        True,
+    )
+    assert first["same_output"] is False  # the record's digest is of no output
 
 
 @pytest.mark.parametrize(
@@ -335,7 +353,12 @@ def test_text_that_is_not_json_is_a_bad_record(repo, outside):
 
 @pytest.mark.parametrize(
     "args",
-    [[], ["record.json", "--sample", "x"], ["record.json", "--sample", "0"], ["record.json", "--what"]],
+    [
+        [],
+        ["record.json", "--sample", "x"],
+        ["record.json", "--sample", "0"],
+        ["record.json", "--what"],
+    ],
 )
 def test_usage_errors_exit_2(repo, outside, args):
     """REQ-039: brief #434 answer 4 (usage)."""
@@ -373,12 +396,16 @@ def test_it_posts_nothing_and_needs_no_network():
 def test_the_local_mode_guide_uses_the_record_in_both_roles():
     """REQ-039: brief #434 answer 5."""
     guide = (SCRIPTS.parents[1] / "docs" / "guides" / "local-mode.md").read_text(encoding="utf-8")
-    builder = guide.split("## What a builder runs before asking for review", 1)[1].split("\n## ", 1)[0]
+    builder = guide.split("## What a builder runs before asking for review", 1)[1].split(
+        "\n## ", 1
+    )[0]
     conductor = guide.split("## What the conductor checks instead of CI", 1)[1].split("\n## ", 1)[0]
     assert "prepush.py --record" in builder and "Evidence:" in builder
     assert "evidence.py check" in conductor
 
 
 def test_the_kit_installs_it():
-    manifest = json.loads((SCRIPTS.parents[1] / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (SCRIPTS.parents[1] / "kit" / "manifest.json").read_text(encoding="utf-8")
+    )
     assert "scripts/agk/evidence.py" in manifest["verbatim"]
