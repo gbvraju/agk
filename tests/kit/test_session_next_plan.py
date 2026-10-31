@@ -32,7 +32,7 @@ def proj(repo, stub):
 
 
 def nxt(proj, stub):
-    return session(proj, stub, "next", "--session", "s-me")
+    return session(proj, stub, "next", "--session", "s-me", "--take")
 
 
 def skips(out) -> dict[int, str]:

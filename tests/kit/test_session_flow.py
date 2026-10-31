@@ -62,7 +62,7 @@ def flow(proj, text: str) -> None:
 
 
 def nxt(proj, stub, who: str = "s-me"):
-    return session(proj, stub, "next", "--session", who)
+    return session(proj, stub, "next", "--session", who, "--take")
 
 
 def base(

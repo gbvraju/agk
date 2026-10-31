@@ -26,7 +26,7 @@ AGK sends nothing anywhere itself.
   (`tests/kit/test_architect_guard.py`), the drift audit (`tests/kit/test_drift_audit.py`) and the report renderer
   (`tests/kit/test_product_report.py`, which also checks that no socket is opened). The scripts that read GitHub
   (`scripts/agk/doctor.py`, `metrics.py`, `facts.py`, `ruleset.py`) do it only by running your `gh` with `api --method GET`. Two
-  scripts write to GitHub, each in one narrow way: `session.py next` posts the one `taken:` comment, and `route.py` (run by
+  scripts write to GitHub, each in one narrow way: `session.py claim` (and `next --take` or `after`, which take as `claim` does) posts the one `taken:` comment (`next` alone only shows the brief), and `route.py` (run by
   `.github/workflows/agk-route.yml` with the job's token) sets the `agk:` labels on pull requests (a fork's pull request gets a read-only token, so it is not labelled). Two skills can, after they show you what they will do and you say yes: `/agk:ruleset` runs the
   `gh api` commands that `scripts/agk/ruleset.py` printed, and `/agk:issue` runs `gh issue create`.
 - The GitHub-hosted runner that runs the workflows is GitHub's. The workflows run your repository's checks and, in `proof` and

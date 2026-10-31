@@ -1,0 +1,1 @@
+- `session.py next` only shows the brief it would take, posts nothing and prints `take it with: session.py claim --session ID --brief N`; `next --take` chooses and takes in one step as before, `after` still takes, and session rule 5 says a builder takes a brief with `claim` (brief #440, ADR-0236 Proposed)

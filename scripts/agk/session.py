@@ -53,8 +53,10 @@ brief after it (brief #252). When `gh` says it could not connect, the line is
 `github-unreachable: <what> cannot be read; local head <sha> not pushed; next: push, then post the
 Report:/Question:`; a rate limit is waited out to the reset time that GitHub reports and does
 not end a wait (answer 6).
-`next` prints the first free `agk-brief` issue and takes it with the one comment `taken: <ID>
-<YYYY-MM-DD>`, the only POST of this script; with none left it prints `no brief` and exits 1. This
+`next` prints the first free `agk-brief` issue and the line `take it with: session.py claim
+--session ID --brief N`, and posts nothing (brief #440, ADR-0236); `claim`, `next --take` and
+`after` take it with the one comment `taken: <ID> <YYYY-MM-DD>`, the only POST of this script
+besides `taken over:` and `tell`; with none left `next` prints `no brief` and exits 1. This
 is the only script that calls GitHub; no check does. Messages name the rule, never a value.
 SPEC-0034: `next` takes nothing and prints `full <open>/<max>` when `max_builders` builder pull
 requests are open (rule 1), skips a brief whose `Touches:` overlaps an open builder pull request or
@@ -120,7 +122,7 @@ NAME = "session"
 USAGE = (
     "usage: session.py watch (--pr N [--since ID] [--session ID] | --merged N | --assign ID)\n"
     "                        [--interval S] [--timeout S]\n"
-    "       session.py next --session ID\n"
+    "       session.py next --session ID [--take]\n"
     "       session.py claim --session ID --brief N [--build X]\n"
     "       session.py after --session ID\n"
     "       session.py queue --role conductor|builder|person [--author LOGIN]\n"
@@ -1264,11 +1266,14 @@ def is_red(item: dict) -> bool:
     )
 
 
-def next_brief(root, me: str) -> int:
+def next_brief(root, me: str, taking: bool = False) -> int:
+    """The work `next` would hand this session, with the same choice and reasons either way.
+    Without `taking` it only shows it and posts nothing, with the command that takes it; with
+    `taking` (`next --take`, and `after`) it takes it as before (brief #440, ADR-0236)."""
     repo = repo_name(root)
     issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
     red = [i for i in issues or [] if is_red(i)]
-    if not red and (found := offer_stalled(root, repo, me)) is not None:
+    if not red and (found := offer_stalled(root, repo, me, taking)) is not None:
         return found
     if issues is None:
         raise CheckError("rule 3: the open briefs cannot be read")
@@ -1290,13 +1295,16 @@ def next_brief(root, me: str) -> int:
     for brief in sorted(ready, key=lambda b: (priority_of(b["body"]), b["number"])):
         found = running_conflict(root, s, brief, shared)
         why = wait_text(found) if found else None
-        why = why or take(s, brief, lambda b=brief: reservation(root, s, b))
+        if taking:
+            why = why or take(s, brief, lambda b=brief: reservation(root, s, b))
         if why:
             print(f"skip #{brief['number']}: {why}")
             continue
         print(f"brief #{brief['number']}\ntitle: {brief.get('title')}")
         print(f"address: {brief.get('html_url')}\n")
         print(brief["body"])
+        if not taking:
+            print(f"\ntake it with: session.py claim --session {me} --brief {brief['number']}")
         return 0
     print("default branch red" if red else "no brief")
     return 1
@@ -1313,7 +1321,7 @@ def after(root, me: str) -> int:
     except CheckError as exc:
         print(exc)
     if mode == "next":
-        return next_brief(root, me)
+        return next_brief(root, me, True)  # a finished builder starts its next brief (answer 3)
     print(f"ask the conductor on #{conductor_issue(repo_name(root))}")
     return 0
 
@@ -1705,8 +1713,9 @@ def takeover_lost(comments: list, since: datetime, me: str) -> str | None:
     return found[0][2] if found and found[0][2] != me else None
 
 
-def offer_stalled(root, repo: str, me: str) -> int | None:
-    """Offer the first stalled pull request and take it over; None when there is none."""
+def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
+    """Offer the first stalled pull request and, with `taking`, take it over; None when there is
+    none. Without `taking` it posts nothing and prints the command that takes it over (Q-440-1)."""
     hours = stall_hours(root)
     prs = pages(f"repos/{repo}/pulls?state=open")
     if prs is None:
@@ -1723,6 +1732,10 @@ def offer_stalled(root, repo: str, me: str) -> int | None:
             continue
         if waits_for_a_person(root, pr, comments):
             continue
+        if not taking:
+            print(f"stalled #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
+            print(f"take it over with: session.py next --session {me} --take")
+            return 0
         day = datetime.now(UTC).strftime("%Y-%m-%d")
         body = f"body=taken over: {me} {day}"
         if gh(f"repos/{repo}/issues/{number}/comments", "-f", body, method="POST") is None:
@@ -1877,6 +1890,10 @@ def main(argv: list[str] | None = None) -> int:
         except CheckError as exc:
             print(f"FAIL {NAME}: {exc}")
             return 2
+    # `--take` is the one flag without a value, of `next` only (brief #440, ADR-0236).
+    take_flag = args[:1] == ["next"] and args.count("--take") == 1
+    if take_flag:
+        args = [a for a in args if a != "--take"]
     if not args or args[0] not in COMMANDS or len(args[1:]) % 2:
         print(USAGE)
         return 2
@@ -1976,7 +1993,7 @@ def main(argv: list[str] | None = None) -> int:
         if cmd == "mine":
             number = {k: int(v) for k, v in opts.items() if k in ("--pr", "--brief")}
             return mine(root, opts["--session"], number.get("--pr"), number.get("--brief"))
-        return next_brief(root, opts["--session"])
+        return next_brief(root, opts["--session"], take_flag)
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}")
         return 2
