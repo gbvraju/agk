@@ -1,0 +1,1 @@
+- A project's own make targets go in `project.mk`, which the kit's `Makefile` includes, so an upgrade never refuses over them
