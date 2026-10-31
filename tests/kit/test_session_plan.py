@@ -797,7 +797,7 @@ def test_the_reviews_limit_is_named_when_it_is_the_lowest(proj, stub, monkeypatc
 
 
 def test_memory_never_counts_below_one_builder(proj, stub, monkeypatch, capsys):
-    """REQ-041: brief #409 answer 1 (rounded down, never below 1)."""
+    """REQ-041: brief #409 answer 1 (rounded down, never below 1 while no builder runs)."""
     four_ready(stub)
     flow(proj, "max_builders = 3\nbuilder_memory_gb = 8")
     code, out = planned(proj, stub, monkeypatch, capsys, 3 * GIB, "--json")
@@ -892,3 +892,28 @@ def test_the_reading_follows_the_platform_and_any_failure_is_unknown(monkeypatch
 
     monkeypatch.setattr(common, "windows_available", no_ctypes)
     assert common.available_memory() is None
+
+
+def test_with_builders_running_memory_for_none_more_starts_none(proj, stub, monkeypatch, capsys):
+    """REQ-041: brief #409 answer 1, the verdict on 43ada36 (the floor of 1 holds only while no
+    builder runs; with builders running, memory for none more is 0 and memory is the limit)."""
+    listing(stub, [issue(n, brief(f"d{n}/")) for n in (5, 6, 7, 8)])
+    stub.serve(f"{ISSUES}/5/comments", [comment(1, "x", f"taken: builder-a {DAY}")])
+    stub.serve(f"{ISSUES}/6/comments", [comment(2, "y", f"taken: builder-b {DAY}")])
+    free(stub, 7, 8)
+    flow(proj, "max_builders = 4\nreviews_in_flight = 9\nbuilder_memory_gb = 6")
+    code, out = planned(proj, stub, monkeypatch, capsys, 2 * GIB, "--json")
+    got = json.loads(out)
+    assert code == 0 and got["start"] == [] and got["capacity"]["running"] == 2
+    cap = got["capacity"]
+    assert cap["slots"] == 0 and cap["limit"] == "memory"
+    assert cap["memory"] == {"available_bytes": 2 * GIB, "builders": 0}
+    code, words = planned(proj, stub, monkeypatch, capsys, 2 * GIB)
+    lines = words.splitlines()
+    assert lines[0] == (
+        "Start 0: the machine's memory has room for no more builders "
+        "(2 GB available, builder_memory_gb is 6)."
+    )
+    assert (
+        "Capacity: 0 (limit: memory; 2 GB available, builder_memory_gb is 6, room for 0)." in lines
+    )
