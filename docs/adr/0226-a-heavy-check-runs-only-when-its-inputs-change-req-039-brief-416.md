@@ -1,6 +1,6 @@
 # ADR-0226: a project's heavy check runs only when its inputs change, and says why it skipped (REQ-039, brief 416)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0217
