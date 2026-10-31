@@ -51,7 +51,7 @@ DEFAULT = "make -f agk.mk agk-project-test"
 SCHEMA = 1
 REMOTE = "origin"
 IDENTITY = ["-c", "user.name=agk-batch", "-c", "user.email=agk-batch@localhost.invalid"]
-QUIET = ["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"]
+QUIET = ["-c", "commit.gpgsign=false"]
 GREEN = ("batch-green", "green")
 
 
@@ -111,8 +111,9 @@ def fetch(root: Path, number: int) -> str | None:
 
 def merge(tree: Path, sha: str, number: int) -> bool:
     """Merge one head into the worktree; abort and say False when it does not merge cleanly."""
+    message = f"batch: #{number}"
     code, _ = quiet_git(
-        tree, *IDENTITY, "merge", "--no-ff", "--no-edit", "-q", "-m", f"batch: #{number}", sha
+        tree, *IDENTITY, "merge", "--no-ff", "--no-edit", "--no-verify", "-q", "-m", message, sha
     )
     if code != 0:
         quiet_git(tree, "merge", "--abort")
@@ -293,9 +294,7 @@ def main(argv: list[str] | None = None) -> int:
         quiet_git(root, "worktree", "prune")
         for sig, handler in previous.items():
             signal.signal(sig, handler)
-    rows = [
-        {"number": n, "head": heads[n], "status": status.get(n, "not-fetched")} for n in pulls
-    ]
+    rows = [{"number": n, "head": heads[n], "status": status.get(n, "not-fetched")} for n in pulls]
     all_green = all(row["status"] in GREEN for row in rows)
     batch_step = next((s for s in runner.steps if s["name"] == "batch"), None)
     if as_json:
