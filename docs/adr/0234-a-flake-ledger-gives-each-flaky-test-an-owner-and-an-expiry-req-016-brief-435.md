@@ -33,8 +33,9 @@ checkpoint, no module `flakes`; 4 failed, 30 passed with the script alone, befor
    - `brief due: line <n>: <test> (owner <owner>; <k> strikes, no issue)`, for an entry with two strikes or more and an empty
      `issue`, whatever its status; an entry may be listed both ways;
    - `malformed: line <n>: <reason>`, for a row that is not an entry, naming the column at fault and never the value, a test
-     listed twice (`test is listed already on line <m>`), a header without its separator line, a second ledger table, and a
-     file without the table (line 1) (Q-435-3).
+     listed twice (`test is listed already on line <m>`), a header without its separator line, a second ledger table, a row
+     below the table outside a fence (`a row outside the ledger table`: a break in the table never hides a row), and a file
+     without the table (line 1) (Q-435-3).
 
    It ends with `flakes: <k> listed (<e> expired, <b> brief due, <m> malformed) in docs/runs/flakes.md` or
    `flakes: nothing due (<k> entries) in docs/runs/flakes.md`; without a file, `flakes: no ledger at docs/runs/flakes.md;
@@ -65,7 +66,8 @@ checkpoint, no module `flakes`; 4 failed, 30 passed with the script alone, befor
 - Q-435-2 (2026-10-31): the template's invented example row is put in a fenced block above the ledger, so a new project's
   ledger holds no invented entry and `flakes.py` never reads one; the brief does not say where the row goes.
 - Q-435-3 (2026-10-31): the brief does not define a malformed row; read narrowly as the column rules of decision 1, a test
-  listed twice, a missing separator, a second table and a file without the table.
+  listed twice, a missing separator, a second table, a row after a break in the table (added on the conductor's fix list
+  for head 5e4043d, finding 1) and a file without the table.
 - Q-435-4 (2026-10-31): "past its expiry" is read as an `expires` date before today; on the day itself the quarantine
   still holds.
 - Q-435-5 (2026-10-31): without a ledger nothing is listed, so the exit is 0 (answer 2), with one line that says so.

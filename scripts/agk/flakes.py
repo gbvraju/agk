@@ -8,12 +8,14 @@ Reads `docs/runs/flakes.md` at the top of the repository, one Markdown table wit
 - `expired`: each entry whose status is `quarantined` and whose `expires` date is before today;
 - `brief due`: each entry with two strikes or more and no issue;
 - `malformed`: each row that is not an entry (its line number and the column at fault, never the
-  value), and a file without the one ledger table.
+  value), each row after a break in the table, and a file without the one ledger table.
 
-Rows inside a fenced block are an example and are not read. Today is `--today`, else the UTC date
-(as `date -u`). Exit 0 when nothing is listed (also when there is no ledger), 1 otherwise, 2 on a
-bad call or a ledger that cannot be read. It reads one file, uses no network and changes nothing.
-It is not a governance step and blocks nothing; a project that wants it in its checks adds it.
+The table ends at the first line that is not a row; a row below it, outside a fence, is malformed
+(it is never skipped). Rows inside a fenced block are an example and are not read. Today is
+`--today`, else the UTC date (as `date -u`). Exit 0 when nothing is listed (also when there is no
+ledger), 1 otherwise, 2 on a bad call or a ledger that cannot be read. It reads one file, uses no
+network and changes nothing. It is not a governance step and blocks nothing; a project that wants
+it in its checks adds it.
 """
 
 from __future__ import annotations
@@ -139,6 +141,8 @@ def read_ledger(text: str, today: str) -> Report:
                 report.malformed.append(
                     {"line": number, "reason": "a second ledger table (the ledger holds one)"}
                 )
+                if n < len(lines) and is_separator(lines[n]):
+                    n += 1  # its separator is part of it, not a stray row
                 continue
             header_at = number
             if n < len(lines) and is_separator(lines[n]):
@@ -148,6 +152,11 @@ def read_ledger(text: str, today: str) -> Report:
                 report.malformed.append(
                     {"line": number + 1, "reason": "no separator line under the header"}
                 )
+                if n < len(lines) and cells(lines[n]) is not None:
+                    n += 1  # that line is reported already, by its number
+        elif header_at is not None and cells(line) is not None:
+            # A row cut off from the table (a blank line, prose) is reported, never hidden.
+            report.malformed.append({"line": number, "reason": "a row outside the ledger table"})
     if header_at is None:
         header = " | ".join(COLUMNS)
         report.malformed.insert(0, {"line": 1, "reason": f"no ledger table (header: {header})"})

@@ -157,8 +157,9 @@ flakes: 3 listed (1 expired, 1 brief due, 1 malformed) in docs/runs/flakes.md
 - `brief due`: an entry with two strikes or more and no issue. Its owner files a bug brief (session rule 34) and writes its
   number in `issue`.
 - `malformed`: a row that is not an entry, with its line number and the column at fault, never the value; a test listed twice;
-  a file without the ledger table, or with a second one. Rows inside a fenced block, such as the template's invented example,
-  are not read.
+  a file without the ledger table, or with a second one; and a row below the table, after a blank line or prose
+  (`a row outside the ledger table`), so a row is never skipped. Rows inside a fenced block, such as the template's invented
+  example, are not read.
 
 It exits 0 when nothing is listed, also when there is no ledger (`flakes: no ledger at docs/runs/flakes.md; nothing due`), and
 1 otherwise. `--json` prints the same lists as an object: `ledger`, `present`, `today`, `entries`, `expired`, `brief_due`
