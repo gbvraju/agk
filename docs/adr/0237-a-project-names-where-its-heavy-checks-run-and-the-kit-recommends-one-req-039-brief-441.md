@@ -53,6 +53,8 @@ plan's included minutes and the minutes used, but nothing turns that reading int
    the JSON shape; nothing written; usage errors; no API path of its own; the templates and the manifest.
 5. **Kit and flow mode.** `kit/manifest.json` lists `scripts/agk/execution.py` as a verbatim file. One changelog fragment
    of one line, `changelog.d/execution-setting.md`; no version bump; `kit/hashes.json` not edited (session rule 14).
+   `docs/guides/reference.md` gains a section "Where checks run" (outside `Touches`: the kit's test of the reference
+   requires every installed script to be named there).
 
 ## Consequences
 
