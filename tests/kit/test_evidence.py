@@ -244,7 +244,7 @@ def test_the_sample_is_a_pure_function_of_the_head():
     assert evidence.sample(sha, names, 20) == evidence.sample(sha, names, 8)
     assert sorted(evidence.sample(sha, names, 8)) == sorted(names)
     picks = {
-        tuple(evidence.sample(hashlib.sha1(str(i).encode()).hexdigest(), names, 1))
+        tuple(evidence.sample(hashlib.sha256(str(i).encode()).hexdigest(), names, 1))
         for i in range(40)
     }
     assert len(picks) > 1
