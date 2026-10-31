@@ -1,0 +1,1 @@
+- `session.py mine --session ID (--pr N | --brief N)` (GET only) prints `mine` when the session holds a live take of the brief (for a pull request, the brief its `Brief: #n` line names), else `not mine: ...` with the holder or the reason, and session rule 35 makes a builder run it before it acts on work a message names (brief #424, ADR-0229 Proposed)
