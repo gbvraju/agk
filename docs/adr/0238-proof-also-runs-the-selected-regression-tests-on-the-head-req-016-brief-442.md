@@ -54,7 +54,11 @@ changes for a team that leaves it off, and this repository leaves it off.
 - 2026-10-31: Q-442-2: without a `[proof]` table, run 2 is `project_tests` on the head, which already runs every test, so a
   third run would repeat it; proof runs nothing extra and says `no [proof] table: project_tests ran every test on the head`.
 - 2026-10-31: Q-442-3: the third run is made only when the pull request's own runs are `proven`; any other outcome already
-  stands and a third run could not change it (`skipped`, `unknown` and `not-proven` are kept as they are).
+  stands and a third run could not change it (`skipped`, `unknown` and `not-proven` are kept as they are). Accepted by the
+  conductor's verdict on 4a45ff8: a pull request with no test files stays `unknown (no-test-files)` with no third run, and
+  amendment 104 says so. The same verdict (finding 1): a skipped run names its skip, `not run (draft)`, `not run
+  (status-only)` or `not run (Behaviour: unchanged)`, since the own tests did not run; "not proven" is kept for an own
+  outcome that ran.
 - 2026-10-31: Q-442-4: a selected file that lies in no `[proof]` area has no command that takes it; it is listed under
   `not_run` and never run, and the outcome does not depend on it.
 - 2026-10-31: Q-442-5: the amendment number 104 is the next free one; the brief named none.

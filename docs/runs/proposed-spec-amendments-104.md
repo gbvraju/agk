@@ -11,8 +11,9 @@ the next free one (Q-442-5). It needs a person's `Approve: SPEC-0010`; no sessio
    area's own command with only its selected files, in its `cwd`, in table order. When the selection is `full`, proof runs nothing
    extra, since governance runs the full suite; when it selects nothing, nothing runs. Without a `[proof]` table run 2 is
    `project_tests` on the head, which already runs every test, and nothing extra runs. A selected file in no `[proof]` area is
-   listed as not run. `proof_timeout` applies to run 3 separately (rule 15). With the setting false or absent there is no run 3
-   and nothing in proof's output changes."
+   listed as not run. A pull request with no added or changed test file stays `unknown` (`no-test-files`) with no run 3, and a
+   skipped run (rule 18, a draft or a status-only commit) makes no run 3 and says `not run (<skip>)`. `proof_timeout` applies to
+   run 3 separately (rule 15). With the setting false or absent there is no run 3 and nothing in proof's output changes."
 2. **SPEC-0010 rule 12, the outcomes**, gains, after `proven` is decided and before it is reported: "`unknown` (`timeout`) when
    run 3 exceeds `proof_timeout`, shown as `proof: unknown (regression: <area>: timeout after <n> s, setting: proof_timeout)`;
    `not-proven` (`regression`) when run 3 failed in one or more areas, shown as `proof: not-proven (regression: <area>[, ...])`.

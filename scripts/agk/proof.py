@@ -61,6 +61,7 @@ UNCHANGED = "the pull request body says `Behaviour: unchanged`"
 NO_PROOF_TABLE = "no [proof] table: project_tests ran every test on the head"
 NOTHING_SELECTED = "nothing selected"
 OWN_NOT_PROVEN = "the pull request's own tests are not proven"
+UNCHANGED_SKIP = "Behaviour: unchanged"
 SHOWN = 40
 EXIT = {"proven": 0, "skipped": 0, "not-proven": 1, "unknown": 4}
 
@@ -605,7 +606,7 @@ def prove(root: Path, base: str, head: str, body: str, not_run: str | None = Non
     shown = plan(root, base, head)
     regression = regression_plan(root, base, head, shown)
     if not_run is not None:  # the workflow skipped the run (a draft, a status-only commit)
-        not_proven(regression)
+        not_proven(regression, not_run)
         return Result(
             "skipped", not_run, base, head, sorted(shown.files), shown=shown, regression=regression
         )
@@ -627,10 +628,12 @@ def prove(root: Path, base: str, head: str, body: str, not_run: str | None = Non
     return Result(outcome, reason, base, head, names, seconds, shown=shown, regression=regression)
 
 
-def not_proven(regression: Regression | None) -> None:
-    """A planned third run that was not made because the own outcome is not `proven`."""
+def not_proven(regression: Regression | None, skip: str | None = None) -> None:
+    """A planned third run that was not made: for a skip, `not run (<skip>)`, since the own
+    tests did not run; else the own outcome ran and is not `proven`."""
     if regression is not None and regression.runs and not regression.made():
-        regression.reason = regression.reason or OWN_NOT_PROVEN
+        why = f"not run ({skip})" if skip is not None else OWN_NOT_PROVEN
+        regression.reason = regression.reason or why
 
 
 def prove_areas(
@@ -649,7 +652,7 @@ def prove_areas(
     names = sorted(shown.files)
 
     def result(outcome: str, reason: str | None = None, elapsed: int | None = None) -> Result:
-        not_proven(regression)
+        not_proven(regression, UNCHANGED_SKIP if outcome == "skipped" else None)
         return Result(outcome, reason, base, head, names, elapsed, areas, shown, regression)
 
     if declares_unchanged(body):
