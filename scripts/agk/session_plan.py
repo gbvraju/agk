@@ -23,7 +23,8 @@ The plan, in the order it is decided:
    `max_builders` less the running builders (open builder pull requests and claims with no pull
    request yet) and `reviews_in_flight` less the pull requests waiting for a verdict. When
    `builder_memory_gb` of the `[flow]` table is set (brief #409, ADR-0223), also the machine's
-   available memory divided by it, rounded down and never below 1; memory that cannot be read is
+   available memory divided by it, rounded down, and never below 1 while no builder runs (with
+   builders running it may be 0, the verdict on 43ada36); memory that cannot be read is
    `memory: unknown` and leaves the figure as it was. The plan names the limit that applied:
    `max_builders`, `reviews` or `memory` (the first of them on a tie).
 4. **The merge queue.** The merge rate is the merged pull requests of the last 14 days divided by
@@ -707,7 +708,7 @@ def build(root) -> dict:
     running = len(s.builders) + len(s.held)
     waiting_review = sum(1 for p in s.builders if "agk:review" in label_names(p))
     limits = [("max_builders", s.max_builders - running), ("reviews", reviews - waiting_review)]
-    memory = memory_capacity(root)
+    memory = memory_capacity(root, running)
     if isinstance(memory.get("memory"), dict):
         limits.append(("memory", memory["memory"]["builders"]))
     limit, lowest = min(limits, key=lambda x: x[1])  # min keeps the first of a tie
@@ -774,17 +775,21 @@ def build(root) -> dict:
     }
 
 
-def memory_capacity(root) -> dict:
+def memory_capacity(root, running: int) -> dict:
     """The memory figure of the capacity (brief #409 answers 1 and 2): nothing when
     `builder_memory_gb` is not set; else the setting and `memory`, either `unknown` or the
-    available bytes and the builders they carry (rounded down, never below 1)."""
+    available bytes and the builders they carry, rounded down. The available memory is what is
+    free after the running builders, so the floor of 1, which lets a project start its first
+    builder, holds only while none runs (the verdict on 43ada36)."""
     if flow_value(root, "builder_memory_gb", None, RULE) is None:
         return {}
     per = flow_int(root, "builder_memory_gb", 1, RULE)
     available = common.available_memory()
     if available is None:
         return {"builder_memory_gb": per, "memory": "unknown"}
-    builders = max(1, available // (per * GIB))
+    builders = available // (per * GIB)
+    if running == 0:
+        builders = max(1, builders)
     return {
         "builder_memory_gb": per,
         "memory": {"available_bytes": available, "builders": builders},
@@ -820,6 +825,12 @@ def reason(plan: dict) -> str:
         return (
             f"{merge['waiting']} pull requests wait for your merge, more than "
             f"{merge['merge_hours']} hour(s) of your merge rate ({merge['rate']:g} an hour)"
+        )
+    if cap.get("limit") == "memory":
+        return (
+            "the machine's memory has room for no more builders "
+            f"({cap['memory']['available_bytes'] // GIB} GB available, "
+            f"builder_memory_gb is {cap['builder_memory_gb']})"
         )
     if cap["reviews_in_flight"] - cap["waiting_for_verdict"] <= 0:
         return (

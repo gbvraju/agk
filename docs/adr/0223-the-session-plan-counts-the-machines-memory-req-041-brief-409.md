@@ -24,9 +24,10 @@ failed, 50 passed at the first checkpoint).
    setting and never the value.
 2. **The capacity (answer 1).** Unset, the plan is as before. Set, the plan's slots are the lowest of `max_builders` less the
    running builders, `reviews_in_flight` less the pull requests waiting for a verdict, and the available memory divided by
-   `builder_memory_gb` GiB, rounded down and never below 1. The available memory is read with the running builders already
-   on the machine, so the memory figure counts only builders still to start, as the other two do. A GB is read as a GiB
-   (1024^3 bytes), the lower count of builders (Q-409-2).
+   `builder_memory_gb` GiB, rounded down. The available memory is read with the running builders already on the machine,
+   so the memory figure counts only builders still to start, as the other two do. The floor of 1, which lets a project
+   start its first builder, holds only while no builder runs; with any builder running the memory figure may be 0, and then
+   nothing starts (the verdict on 43ada36). A GB is read as a GiB (1024^3 bytes), the lower count of builders (Q-409-2).
 3. **The reading (answer 2).** `common.available_memory()` uses no new dependency: on Linux the `MemAvailable:` line of
    `/proc/meminfo`; on macOS `sysctl -n hw.pagesize vm.page_free_count`, the free pages times the page size `(verify: the
    two sysctl names, not run on a Mac by the builder)`, which leaves out the memory macOS can reclaim and so errs low
@@ -37,9 +38,11 @@ failed, 50 passed at the first checkpoint).
    the lowest. With the setting it adds `capacity.builder_memory_gb` and `capacity.memory`, either `"unknown"` or
    `{"available_bytes": n, "builders": n}`. The plain words add, with the setting only, one line after the start line:
    `Capacity: <slots> (limit: <limit>; <n> GB available, builder_memory_gb is <g>, room for <b>).` or
-   `Capacity: <slots> (limit: <limit>; memory: unknown).`; without it the words are unchanged. `Start 0:` keeps its reason.
+   `Capacity: <slots> (limit: <limit>; memory: unknown).`; without it the words are unchanged. When memory is the limit
+   and nothing starts, the start line says `Start 0: the machine's memory has room for no more builders (<n> GB available,
+   builder_memory_gb is <g>).`; any other `Start 0:` keeps its reason.
 5. **Tests (answer 4).** Unset (unchanged, the limit named); a memory limit below `max_builders`; above it; the reviews
-   limit; never below 1; an unreadable reading; a value that is not a whole number (refused, naming the setting); the three
+   limit; never below 1 while nothing runs; two running with memory for none more (0 slots, `memory` the limit); an unreadable reading; a value that is not a whole number (refused, naming the setting); the three
    readers and the platform dispatch. The plan's memory tests run the plan in the test's process with the reading replaced,
    so no test depends on the memory of the machine that runs it.
 6. **Flow mode.** The template `kit/templates/agk.toml` documents the setting in its commented `[flow]` block; one fragment
@@ -55,3 +58,6 @@ failed, 50 passed at the first checkpoint).
 ## Residual
 
 - 2026-10-31: Q-409-1 to Q-409-4 asked on the pull request; the readings above are the most conservative ones.
+- 2026-10-31: the verdict on 43ada36 (comment 6539928803): Q-409-1 to Q-409-4 accepted as written; the conductor's ruling on
+  answer 1 limits the floor of 1 to the case with no builder running (decision 2), with a test of two running and memory for
+  none more.

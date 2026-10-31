@@ -59,7 +59,7 @@ review_mode = "team"
 # with auto_start = false (the default) it prints their ready-to-paste prompts. The kit installs no adapter; the getting-started guide
 # shows two examples. Each is a protected change: an ADR in the same pull request (agk.toml is a protected path).
 # builder_memory_gb (brief #409): the memory, in whole GB (GiB), that one builder needs, with its containers. When set, the plan
-# starts no more builders than the machine's available memory divided by it (rounded down, never below 1) and names the limit that
+# starts no more builders than the machine's available memory divided by it (rounded down; at least 1 while none runs) and names the limit that
 # applied (max_builders, reviews or memory); when the memory cannot be read it says "memory: unknown" and keeps its other limits.
 # Unset by default. A change needs an ADR in the same pull request (agk.toml is a protected path).
 # [flow]
