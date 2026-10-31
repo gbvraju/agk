@@ -173,3 +173,7 @@ never a failure, and `/agk:launch` prints it before it asks to start sessions.
 
 When the minutes run out, the checks cannot run on GitHub until the month turns or the plan changes: see local mode
 (brief #322) for how to keep working.
+
+When the minutes run short month after month, a private repository can move its own heavy jobs, never the kit's checks, to
+an ephemeral runner on a machine of its own: [self-hosted-runner.md](self-hosted-runner.md) says when that fits and the
+rules that keep it safe.

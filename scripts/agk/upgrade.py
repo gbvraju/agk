@@ -90,6 +90,12 @@ FIX = (
     "fix: restore the kit's copy of each edited file by hand, or move the edit out of the vendored "
     "file, then run again"
 )
+# Brief #390: an init project's own make targets go to project.mk, which the kit's Makefile
+# includes and the kit never installs, lists, hashes or writes.
+PROJECT_MK_FIX = (
+    "fix: move the project's own make targets from Makefile to project.mk, which the kit's "
+    "Makefile includes and an upgrade never writes, then run again"
+)
 
 
 @dataclass
@@ -627,6 +633,8 @@ def report(plan: Plan, dry_run: bool) -> list[str]:
             "refused: edited vendored files differ from every released copy; nothing was written"
         )
         lines.append(FIX)
+        if any(i.rel == "Makefile" for i in plan.conflicts):
+            lines.append(PROJECT_MK_FIX)
         return lines
     count = len(plan.writes)
     gone = len(plan.deletions)
