@@ -7,7 +7,9 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
 - `always_full`: path globs; a changed file that matches one makes the selection full;
 - `map`: a list of `{ code = "<glob>", tests = ["<glob>", ...] }`;
 - `budget_seconds`: the target time of the full project suite (300 by default), read later by the
-  metrics.
+  metrics;
+- `excluded`: a list of `"<tag>: <reason>"` texts, the tests that the project's own command leaves
+  out (brief #425, ADR-0230). Nothing here interprets them; proof lists them in its manifest.
 
 For the change base..head `impact` gives the existing test files of the head (`test_dirs`,
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
@@ -36,7 +38,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from common import CheckError, config_source, git, load_config
 
 PROFILES = ("fast", "balanced", "thorough")
-KEYS = {"profile", "always_full", "map", "budget_seconds"}
+KEYS = {"profile", "always_full", "map", "budget_seconds", "excluded"}
+EXCLUDED = re.compile(r"[^\s:]+: \S[^\n]*")
 ENTRY_KEYS = {"code", "tests"}
 DEFAULT_BUDGET = 300
 NO_TABLE = "no [testing] table"
@@ -116,7 +119,7 @@ def testing_table(root: Path) -> dict | None:
         return None
     if not isinstance(table, dict) or set(table) - KEYS:
         raise CheckError(
-            "[testing] is a table of profile, always_full, map and budget_seconds "
+            "[testing] is a table of profile, always_full, map, budget_seconds and excluded "
             "(setting: testing)"
         )
     profile = table.get("profile", "balanced")
@@ -155,12 +158,37 @@ def testing_table(root: Path) -> dict | None:
             "budget_seconds must be a whole number of seconds above 0 "
             "(setting: testing.budget_seconds)"
         )
+    check_excluded(table.get("excluded", []))
     return {
         "profile": profile,
         "always_full": list(always_full),
         "map": mapped,
         "budget_seconds": budget,
     }
+
+
+def check_excluded(value: object) -> list[str]:
+    """The `excluded` entries, each `"<tag>: <reason>"` (a tag with no space or colon, then one
+    line of reason); a malformed one is refused naming the setting, never its value."""
+    if not isinstance(value, list):
+        raise CheckError(
+            'excluded must be a list of "<tag>: <reason>" texts (setting: testing.excluded)'
+        )
+    for n, entry in enumerate(value, 1):
+        if not isinstance(entry, str) or EXCLUDED.fullmatch(entry.strip()) is None:
+            raise CheckError(
+                'an excluded entry is one "<tag>: <reason>" text '
+                f"(setting: testing.excluded[{n}])"
+            )
+    return [entry.strip() for entry in value]
+
+
+def excluded_entries(root: Path) -> list[str]:
+    """The `[testing] excluded` entries in their order, [] without the table or the key. The whole
+    table is checked first, so a bad setting is refused (CheckError) as everywhere else."""
+    if testing_table(root) is None:
+        return []
+    return check_excluded(config_source(root)["testing"].get("excluded", []))
 
 
 def is_doc(path: str) -> bool:

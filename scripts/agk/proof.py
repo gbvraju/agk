@@ -5,9 +5,11 @@ Standard library only, and no language: the test command, directories and patter
 and runs `project_tests` there, expecting it to fail, then runs it on the head (a second detached
 worktree), expecting it to pass. With a `[proof]` table, each test area's own command runs instead,
 with only the pull request's test files of that area (brief #305, ADR-0172). What runs is built by
-`plan`, which `test_plan.py` prints before anything runs (brief #325, ADR-0185). ROOT's work tree is
-never changed: the script adds two worktrees in a temporary directory outside ROOT and removes them
-at the end, also on a failure.
+`plan`, which `test_plan.py` prints before anything runs (brief #325, ADR-0185). With `--manifest
+FILE` it also writes a Markdown test manifest: what ran, what did not, and why (brief #425,
+ADR-0230); with `--not-run draft|status-only` it runs nothing and writes the manifest of that skip.
+ROOT's work tree is never changed: the script adds two worktrees in a temporary directory outside
+ROOT and removes them at the end, also on a failure.
 
 Exit: 0 proven or skipped, 1 not-proven, 4 unknown, 2 usage or a refused setting, 3 I/O.
 """
@@ -40,7 +42,16 @@ from common import (
     resolve_base,
 )
 
-USAGE = "usage: proof.py [--base REF] [--head REF] [--body FILE|-] [--json] [ROOT]"
+USAGE = (
+    "usage: proof.py [--base REF] [--head REF] [--body FILE|-] [--json] [--manifest FILE] "
+    "[--not-run draft|status-only] [ROOT]"
+)
+# The skips that the workflow decides before proof runs (brief #425 answer 1), and their reason.
+NOT_RUN = {
+    "draft": "a draft pull request; proof runs when it is marked ready for review",
+    "status-only": "a status-only final commit after a proven parent; proof is not run again",
+}
+UNCHANGED = "the pull request body says `Behaviour: unchanged`"
 SHOWN = 40
 EXIT = {"proven": 0, "skipped": 0, "not-proven": 1, "unknown": 4}
 
@@ -62,6 +73,7 @@ class Result:
     test_files: list[str]
     elapsed: int | None = None  # whole seconds of the run that timed out
     areas: list[dict] | None = None  # with a `[proof]` table: each area's files, outcome, seconds
+    shown: Plan | None = None  # the plan that ran, with each run's seconds (the manifest)
 
     def line(self) -> str:
         if self.areas is not None and self.outcome in ("not-proven", "unknown"):
@@ -99,13 +111,21 @@ def reason_text(reason: str | None, elapsed: int | None) -> str | None:
 
 
 def parse_args(args: list[str]) -> dict:
-    options: dict = {"base": None, "head": "HEAD", "body": None, "json": False, "root": "."}
+    options: dict = {
+        "base": None,
+        "head": "HEAD",
+        "body": None,
+        "json": False,
+        "manifest": None,
+        "not_run": None,
+        "root": ".",
+    }
     positional: list[str] = []
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in ("--base", "--head", "--body") and i + 1 < len(args):
-            options[arg[2:]] = args[i + 1]
+        if arg in ("--base", "--head", "--body", "--manifest", "--not-run") and i + 1 < len(args):
+            options[arg[2:].replace("-", "_")] = args[i + 1]
             i += 2
         elif arg == "--json":
             options["json"] = True
@@ -115,6 +135,8 @@ def parse_args(args: list[str]) -> dict:
         else:
             positional.append(arg)
             i += 1
+    if options["not_run"] is not None and options["not_run"] not in NOT_RUN:
+        raise Usage(USAGE)
     if positional:
         options["root"] = positional[0]
     return options
@@ -309,29 +331,34 @@ class Trees:
             raise Failure("a temporary worktree could not be removed (path class: temporary)")
 
 
-def run_pair(trees: list[Path], command: str, limit: int, label: str = "", cwd: str = "."):
+def run_pair(trees: list[Path], run: Run, limit: int, label: str = ""):
     """(run 1, run 2, seconds of the timed-out run or None, seconds of both runs). The command
-    runs in `cwd` of each tree; a folder the base lacks is made empty there."""
-    trees = [tree / cwd for tree in trees]
+    runs in `cwd` of each tree; a folder the base lacks is made empty there. The seconds of each
+    run, and which one timed out, are kept on `run` for the manifest."""
+    trees = [tree / run.cwd for tree in trees]
     trees[0].mkdir(parents=True, exist_ok=True)
-    status1, out1, seconds1 = execute(command, trees[0], limit)
+    status1, out1, seconds1 = execute(run.command, trees[0], limit)
+    run.seconds = [seconds1, None]
     show(f"run 1{label}: the base with the pull request's tests", out1)
     if status1 is None:
+        run.timed_out = "base"
         print(timeout_note(seconds1), file=sys.stderr)
         return None, None, seconds1, seconds1
-    status2, out2, seconds2 = execute(command, trees[1], limit)
+    status2, out2, seconds2 = execute(run.command, trees[1], limit)
+    run.seconds[1] = seconds2
     show(f"run 2{label}: the head", out2)
     if status2 is None:
+        run.timed_out = "head"
         print(timeout_note(seconds2), file=sys.stderr)
         return status1, None, seconds2, seconds1 + seconds2
     return status1, status2, None, seconds1 + seconds2
 
 
-def two_runs(root: Path, base: str, head: str, files: dict[str, str], command: str, limit: int):
+def two_runs(root: Path, base: str, head: str, files: dict[str, str], run: Run, limit: int):
     """(run 1, run 2, seconds): exit statuses, None for a timeout, None for run 2 when it was not
     made; seconds is the time of the run that timed out, else None."""
     with Trees(root, base, head, files) as trees:
-        status1, status2, seconds, _ = run_pair(trees, command, limit)
+        status1, status2, seconds, _ = run_pair(trees, run, limit)
     return status1, status2, seconds
 
 
@@ -354,9 +381,7 @@ def run_areas(root: Path, base: str, head: str, shown: Plan, limit) -> None:
     areas = {a["name"]: a for a in shown.areas or []}
     with Trees(root, base, head, shown.files) as trees:
         for run in shown.runs:
-            status1, status2, elapsed, seconds = run_pair(
-                trees, run.command, limit, f" ({run.name})", run.cwd
-            )
+            status1, status2, elapsed, seconds = run_pair(trees, run, limit, f" ({run.name})")
             area = areas[run.name]
             area["outcome"], area["reason"] = decide(status1, status2)
             area["seconds"], area["elapsed"] = seconds, elapsed
@@ -393,6 +418,8 @@ class Run:
     files: list[str]
     command: str
     cwd: str
+    seconds: list[int | None] | None = None  # [base, head] once run; None for a run not made
+    timed_out: str | None = None  # "base" or "head": the run that was ended by proof_timeout
 
 
 @dataclass
@@ -452,16 +479,18 @@ def plan(root: Path, base: str, head: str) -> Plan:
     return Plan(True, placed, runs, idle, outside, "", areas)
 
 
-def prove(root: Path, base: str, head: str, body: str) -> Result:
+def prove(root: Path, base: str, head: str, body: str, not_run: str | None = None) -> Result:
     table = proof_areas(root) is not None
     limit = proof_timeout(root)
     shown = plan(root, base, head)
+    if not_run is not None:  # the workflow skipped the run (a draft, a status-only commit)
+        return Result("skipped", not_run, base, head, sorted(shown.files), shown=shown)
     if table:
         return prove_areas(root, base, head, body, shown, limit)
     names = sorted(shown.files)
 
     def result(outcome: str, reason: str | None = None) -> Result:
-        return Result(outcome, reason, base, head, names)
+        return Result(outcome, reason, base, head, names, shown=shown)
 
     if not shown.command:
         return result("unknown", "no-project-tests")
@@ -469,11 +498,9 @@ def prove(root: Path, base: str, head: str, body: str) -> Result:
         return result("skipped")
     if not shown.runs:
         return result("unknown", "no-test-files")
-    status1, status2, seconds = two_runs(
-        root, base, head, shown.files, shown.runs[0].command, limit
-    )
+    status1, status2, seconds = two_runs(root, base, head, shown.files, shown.runs[0], limit)
     outcome, reason = decide(status1, status2)
-    return Result(outcome, reason, base, head, names, seconds)
+    return Result(outcome, reason, base, head, names, seconds, shown=shown)
 
 
 def prove_areas(root: Path, base: str, head: str, body: str, shown: Plan, limit: int) -> Result:
@@ -484,7 +511,7 @@ def prove_areas(root: Path, base: str, head: str, body: str, shown: Plan, limit:
     names = sorted(shown.files)
 
     def result(outcome: str, reason: str | None = None, elapsed: int | None = None) -> Result:
-        return Result(outcome, reason, base, head, names, elapsed, areas)
+        return Result(outcome, reason, base, head, names, elapsed, areas, shown)
 
     if declares_unchanged(body):
         return result("skipped")
@@ -492,6 +519,102 @@ def prove_areas(root: Path, base: str, head: str, body: str, shown: Plan, limit:
         return result("unknown", "no-test-files")
     run_areas(root, base, head, shown, limit)
     return result(*combine(areas))
+
+
+def code(text: str) -> str:
+    """Inline Markdown code that holds any backticks of `text`."""
+    longest = max((len(r) for r in _ticks(text)), default=0)
+    fence = "`" * (longest + 1)
+    pad = " " if text.startswith("`") or text.endswith("`") else ""
+    return f"{fence}{pad}{text}{pad}{fence}"
+
+
+def _ticks(text: str) -> list[str]:
+    runs, current = [], ""
+    for char in text:
+        if char == "`":
+            current += char
+        elif current:
+            runs.append(current)
+            current = ""
+    return runs + ([current] if current else [])
+
+
+def plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def ran_lines(run: Run) -> list[str]:
+    """One run of the manifest: area, command, folder, files (the first SHOWN) and seconds."""
+    lines = [f"#### {run.name}", "", f"- command: {code(run.command)}"]
+    lines.append(f"- folder: {code(run.cwd)}")
+    lines.append(f"- files: {len(run.files)}")
+    lines.extend(f"  - {code(p)}" for p in run.files[:SHOWN])
+    if len(run.files) > SHOWN:
+        lines.append(f"  - and {len(run.files) - SHOWN} more")
+    base, head = run.seconds or (None, None)
+    head_text = f"{head}" if head is not None else "not run"
+    if run.timed_out == "base":
+        lines.append(f"- seconds: base {base} (timed out, setting: proof_timeout), head not run")
+    elif run.timed_out == "head":
+        lines.append(f"- seconds: base {base}, head {head} (timed out, setting: proof_timeout)")
+    else:
+        lines.append(f"- seconds: base {base}, head {head_text}")
+    return lines + [""]
+
+
+def not_run_lines(result: Result, body_unchanged: bool) -> list[str]:
+    """What proof did not run, each with its reason (brief #425 answer 1)."""
+    shown = result.shown
+    lines: list[str] = []
+    skipped = None
+    if result.outcome == "skipped":
+        skipped = NOT_RUN.get(result.reason or "", UNCHANGED if body_unchanged else None)
+    if skipped is not None:
+        for run in shown.runs if shown else []:
+            lines.append(f"- {code(run.name)} ({plural(len(run.files), 'test file')}): {skipped}")
+        if not lines:
+            lines.append(f"- every test: {skipped}")
+    elif result.reason == "no-project-tests":
+        lines.append(f"- {code('project_tests')}: no test command (setting: project_tests)")
+    elif result.reason == "no-test-files":
+        lines.append("- no added or changed test file")
+    if shown is not None:
+        lines.extend(f"- {code(p)}: in no [proof] area" for p in shown.outside)
+        lines.extend(f"- {code(p)}: deleted" for p, s in sorted(shown.files.items()) if s == "D")
+    return lines or ["- nothing"]
+
+
+def manifest_text(result: Result, excluded: list[str], body_unchanged: bool) -> str:
+    """The Markdown test manifest of one proof run (brief #425, ADR-0230)."""
+    lines = [
+        "## Test manifest",
+        "",
+        f"{result.line()} (base {result.base[:7]}, head {result.head[:7]})",
+        "",
+        "### Ran",
+        "",
+    ]
+    made = [r for r in (result.shown.runs if result.shown else []) if r.seconds is not None]
+    for run in made:
+        lines.extend(ran_lines(run))
+    if not made:
+        lines.extend(["- nothing", ""])
+    lines.extend(["### Not run", "", *not_run_lines(result, body_unchanged), ""])
+    lines.extend(["### Excluded by the project", ""])
+    for entry in excluded:
+        tag, reason = entry.split(": ", 1)
+        lines.append(f"- {code(tag)}: {reason}")
+    if not excluded:
+        lines.append("- none")
+    return "\n".join(lines) + "\n"
+
+
+def write_manifest(path: str, text: str) -> None:
+    try:
+        Path(path).write_text(text, encoding="utf-8")
+    except OSError as exc:
+        raise Failure("the manifest cannot be written (path class: manifest file)") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -502,7 +625,15 @@ def main(argv: list[str] | None = None) -> int:
             raise Failure("ROOT is not a git work tree (path class: root)")
         body = read_body(options["body"])
         base, head = resolve_range(root, options["base"], options["head"])
-        result = prove(root, base, head, body)
+        excluded = None
+        if options["manifest"] is not None:  # a bad [testing] setting is refused before a run
+            from impact import excluded_entries
+
+            excluded = excluded_entries(root)
+        result = prove(root, base, head, body, options["not_run"])
+        if excluded is not None:
+            text = manifest_text(result, excluded, declares_unchanged(body))
+            write_manifest(options["manifest"], text)
     except Usage as exc:
         print(exc, file=sys.stderr)
         return 2
