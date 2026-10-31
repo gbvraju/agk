@@ -19,7 +19,9 @@ with that step's own output:
    `prepush: tests <area or full> ok|FAIL (<s>s): <reason>`. The whole step holds the heavy-step
    lock (`lock.py`, name `heavy`), with lock.py's wait lines; `--no-lock` leaves it out (for CI),
    and a run whose caller already holds it (`lock.py run --name heavy -- prepush.py`, session
-   rule 31) does not take it again. Without the table the step runs as before, with no lock.
+   rule 31) does not take it again. With `lock_slots` (brief #426, ADR-0231) it takes any free
+   slot, finds its caller in any slot, and releases the slot it took. Without the table the step
+   runs as before, with no lock.
 
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
 one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing,
@@ -267,6 +269,14 @@ def stop_signals() -> list[int]:
     return [s for s in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None)) if s]
 
 
+def caller_slot(held: Path, slots: int) -> Path | None:
+    """The slot this run's caller holds, in any of the lock's slots (brief #426, ADR-0231)."""
+    for folder in heavy_lock.slot_folders(held, slots):
+        if folder.exists() and caller_holds(heavy_lock.read_owner(folder)):
+            return folder
+    return None
+
+
 def caller_holds(owner: dict | None) -> bool:
     """The lock is this run's own: `lock.py run --name heavy -- prepush.py` took it, and this
     process is its command (session rule 31), so taking it again would wait for itself."""
@@ -280,7 +290,8 @@ def take_lock(root: Path) -> tuple[Path, str] | None:
     A refused setting raises `lock.Usage`, a folder that cannot be written OSError."""
     held = heavy_lock.lock_folder(root, LOCK)
     limit = heavy_lock.stale_minutes(root)
-    if held.exists() and caller_holds(heavy_lock.read_owner(held)):
+    slots = heavy_lock.slots_setting(root)
+    if caller_slot(held, slots) is not None:
         print(f"lock {LOCK}: held by this run's caller (lock.py run); not taken again", flush=True)
         return None
     token = uuid.uuid4().hex
@@ -291,8 +302,9 @@ def take_lock(root: Path) -> tuple[Path, str] | None:
         "started": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "token": token,
     }
-    heavy_lock.take(held, LOCK, owner, limit, None)  # no timeout: it waits its turn
-    return held, token
+    # No timeout: it waits its turn. The slot taken is the one released (brief #426, ADR-0231).
+    taken = heavy_lock.take(held, LOCK, owner, limit, None, slots=slots)
+    return (taken or held), token
 
 
 def rule(item: Selected) -> str:
