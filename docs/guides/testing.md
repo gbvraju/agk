@@ -6,8 +6,8 @@ the regression tests that a change selects and the rule that chose each. The rul
 `agk.toml` is a protected path, so a change of a rule comes with an ADR in the same pull request, and an agent cannot loosen
 the rules to pass a gate.
 
-Nothing runs the selection yet. Proof, the pre-push run and CI are unchanged: governance still runs every project test on
-every ready push. The plan shows what the selection would be, so a project can check its rules before later work uses them.
+The pre-push gate (`prepush.py`) runs the selection before a push, as described [below](#the-pre-push-gate). Proof and CI
+are unchanged: governance still runs every project test on every ready push.
 
 ## The table
 
@@ -73,4 +73,44 @@ or `regression: full (<reason>)`, for example `regression: full (always_full app
 files. With `--json` the same section is the `regression` object: `table`, `profile`, `full`, `reason`, `selected` (each with
 `file`, `changed`, `code` and `tests`) and `unmapped`.
 
-The decision is ADR-0220 (brief #373).
+## The pre-push gate
+
+```
+python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE]
+```
+
+With a `[testing]` table, the `tests` step of the pre-push gate first runs the pull request's own test files, as proof plans
+them, and then the regression set of the change:
+
+- **Full.** When the selection is full, `project_tests` runs once, in the top folder.
+- **Selected files.** Otherwise each selected file runs through the command of the `[proof]` area it lies in, with `{files}`
+  filled in as proof fills it, in the area's folder: one run per area.
+- **No area.** A selected file that lies in no `[proof]` area is listed as `not run (in no [proof] area)`, never dropped, and
+  the run ends `prepush: passed; not run: tests`. Without a `[proof]` table no area can take single files, so `project_tests`
+  runs once instead.
+- **Nothing selected.** A change that selects nothing says so, for example
+  `regression: nothing selected (only documentation changed)`; an unmapped file is listed as in the plan.
+
+Each run prints one line with the rule that chose it:
+
+```
+prepush: tests kit ok (0.4s): the pull request's own test files (the proof plan)
+prepush: tests kit ok (2.1s): app/billing/pay.py matches code app/billing/**, tests tests/billing/**
+prepush: tests full FAIL (41.0s): profile balanced: 1 unmapped file
+```
+
+The gate stops at the first run that fails, with its output, as before. Each run keeps proof's time limit (`proof_timeout`)
+and is listed in the `--record` file with its `set` (`proof` or `regression`) and its `reason`.
+
+**The heavy-step lock.** Two gates that run the tests at once on one machine slow each other down and can collide. The `tests`
+step holds the machine's heavy-step lock (`lock.py`, name `heavy`) for as long as it runs, and prints lock.py's own lines while
+it waits, `lock heavy: waiting; held by <session> ...` and `lock heavy: taken`. The lock is released when the step ends, also
+when a test fails. A gate started under the lock already, as session rule 31 runs it
+(`python3 scripts/agk/lock.py run --name heavy --session ID -- python3 scripts/agk/prepush.py`), does not take it again and
+says `lock heavy: held by this run's caller (lock.py run); not taken again`. `--no-lock` leaves the lock out, for CI, where a
+runner runs one job.
+
+`--quick` still skips every test and takes no lock. Without a `[testing]` table the `tests` step runs exactly as before: proof's
+plan alone, with no regression set and no lock.
+
+The decisions are ADR-0220 (brief #373) and ADR-0227 (brief #417).
