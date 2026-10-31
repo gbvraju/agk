@@ -1,6 +1,6 @@
 # ADR-0229: a builder checks that a pull request or brief is its own before it acts on it (REQ-041, brief 424)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0187, ADR-0195
