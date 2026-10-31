@@ -1,6 +1,6 @@
 # ADR-0227: the pre-push gate runs the selected regression tests too, under the heavy-step lock (REQ-016, brief 417)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0186, ADR-0191, ADR-0208, ADR-0220
