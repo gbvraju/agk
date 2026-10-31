@@ -8,7 +8,11 @@ function (`proof.plan`), so the plan shown is the plan run:
   `{files}` filled in exactly as proof fills it, and the folder it runs in;
 - the areas with nothing to run;
 - the added or changed test files (`test_dirs`, `test_patterns`) that match no area, as "not run by
-  proof", so a missing area is visible.
+  proof", so a missing area is visible;
+- a `regression` section (brief #373, ADR-0220): the regression tests that the `[testing]` table of
+  `agk.toml` selects for the change, each with the rule that chose it, or `full (<reason>)`, then
+  the unmapped files (`impact.py`). Without the table it is `regression: full (no [testing] table)`.
+  Nothing runs the selection yet.
 
 Without a `[proof]` table it prints `project_tests` and the test files `test_dirs` and
 `test_patterns` select. The base defaults to the merge base with the default branch, as in proof.
@@ -25,6 +29,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import CheckError, git
+from impact import Impact, impact
+from impact import text as regression_text
 from proof import Failure, Plan, plan, resolve_range
 
 NAME = "test-plan"
@@ -57,8 +63,9 @@ def parse_args(args: list[str]) -> dict:
     return options
 
 
-def data(shown: Plan, base: str, head: str) -> dict:
+def data(shown: Plan, base: str, head: str, found: Impact) -> dict:
     return {
+        "regression": found.data(),
         "base": base,
         "head": head,
         "proof_table": shown.table,
@@ -87,7 +94,7 @@ def why(shown: Plan, name: str) -> str:
     return f"they match dirs {', '.join(area['dirs'])} and patterns {', '.join(area['patterns'])}"
 
 
-def text(shown: Plan, base: str, head: str) -> list[str]:
+def text(shown: Plan, base: str, head: str, found: Impact) -> list[str]:
     lines = [f"test plan: base {base[:12]}, head {head[:12]}"]
     if not shown.table:
         lines.append("no [proof] table: proof runs project_tests once, on the base and on the head")
@@ -117,6 +124,7 @@ def text(shown: Plan, base: str, head: str) -> list[str]:
         for p, s in sorted(shown.files.items())
         if s == "D"
     )
+    lines.extend(regression_text(found))
     return lines
 
 
@@ -128,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
             raise Failure("ROOT is not a git work tree (path class: root)")
         base, head = resolve_range(root, options["base"], options["head"])
         shown = plan(root, base, head)
+        found = impact(root, base, head)
     except Usage as exc:
         print(exc, file=sys.stderr)
         return 2
@@ -141,9 +150,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL {NAME}: an input or output error (path class: root)")
         return 3
     if options["json"]:
-        print(json.dumps(data(shown, base, head), sort_keys=True))
+        print(json.dumps(data(shown, base, head, found), sort_keys=True))
     else:
-        print("\n".join(text(shown, base, head)))
+        print("\n".join(text(shown, base, head, found)))
     return 0
 
 
