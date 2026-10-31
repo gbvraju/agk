@@ -1,6 +1,6 @@
 # ADR-0230: every proof run publishes a test manifest: what ran, what did not, and why (REQ-016, brief 425)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0172, ADR-0185, ADR-0196, ADR-0220
