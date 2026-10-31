@@ -1,6 +1,6 @@
 # ADR-0222: the review queue lists unanswered requests and questions on briefs, and the pass answers them (REQ-037, brief 408)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0198
