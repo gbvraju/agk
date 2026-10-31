@@ -72,32 +72,80 @@ Build container images with the layer cache of GitHub Actions, so an unchanged l
 Measure before you cache a large image: restoring a tarball of a very large image can be slower than pulling a pinned base by
 digest and rebuilding. Keep the cache only where the run gets faster.
 
-## 4. A documentation-only change skips the heavy steps and still reports success
+## 4. A heavy check runs only when its inputs change
+
+A heavy check, such as the project's tests or its local profile, reads only some of the repository: its application code, its
+tests, its container build files, its compose files and its own workflow. A change to anything else (a brief, documentation,
+the kit's own files, another workflow) cannot change its result, so the check runs in full only when a file it reads changed,
+and otherwise ends green in seconds with the reason in its step summary.
 
 Never use `paths-ignore` (or `paths`) on a workflow that holds a required check: when it does not start, the check never reports
-and the pull request waits for it forever. Start the job every time, find out whether only documentation changed, and skip the
-heavy steps; the job then ends green.
+and the pull request waits for it forever. Start the job every time, compare the files the pull request changed against its
+base with the job's own input globs, and skip the heavy steps when none matched. Four rules hold:
+
+- a required check is never removed or weakened: the job always starts and always reports, and only its heavy steps skip;
+- a push to the default branch and `ready_for_review` always run in full, as does any other event, so the record of what merged
+  and the run of a draft marked ready never rest on a skip;
+- any error (no base, a base the clone does not hold, a failed diff) runs in full;
+- the skip reason is always visible: the step summary and the log say `skipped: none of <globs> changed`.
+
+Write the globs once, on the job, as `INPUTS`, with the workflow's own file name in place of `<this workflow>`; a glob's `*`
+also matches `/`, so `src/*` is everything under `src/`. Add every file the heavy steps read, or the check skips a change it
+should have tested.
 
 ```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    env:
+      # The files this job reads: application code, tests, the build file of `make test`, container build files, compose
+      # files and this workflow. Write your container build file and this workflow's file by their names in your repository.
+      INPUTS: "src/* tests/* Makefile *Containerfile* *compose*.y*ml .github/workflows/<this workflow>.yml"
+    steps:
       - uses: actions/checkout@<pinned sha>
         with:
           fetch-depth: 0
-      - name: Documentation only
-        id: changes
+      - name: Inputs changed
+        id: inputs
+        shell: bash
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          # Any error, or any file outside docs/ that is not Markdown, runs every step.
-          files="$(git diff --name-only "$BASE" "$GITHUB_SHA" 2>/dev/null)" || files="unknown"
-          if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '^docs/|\.md$'; then
-            echo "docs_only=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          # Runs in full unless this is an ordinary pull request update whose files match none of INPUTS.
+          set -f
+          run=true
+          if [ "$EVENT" = pull_request ] && [ "$ACTION" != ready_for_review ] && [ -n "$BASE" ] &&
+            files="$(git diff --name-only "$BASE" "$GITHUB_SHA")"; then
+            run=false
+            while IFS= read -r file; do
+              for glob in $INPUTS; do
+                case "$file" in $glob) run=true ;; esac
+              done
+            done <<< "$files"
           fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+      - name: Skip reason
+        if: ${{ steps.inputs.outputs.run == 'false' }}
+        run: |
+          echo "skipped: none of $INPUTS changed" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Tests
-        if: ${{ steps.changes.outputs.docs_only != 'true' }}
+        if: ${{ steps.inputs.outputs.run != 'false' }}
         run: make test
 ```
+
+Give every heavy step the same condition, `!= 'false'`, so a step whose output is missing runs rather than skips. A job that
+must also skip drafts keeps the condition of default 1 beside it.
+
+This replaces the documentation-only step of earlier versions of this guide (`steps.changes.outputs.docs_only`): a change only
+to documentation matches none of the globs, so it skips as before, and so does a change only to briefs or to the kit's files.
 
 The kit's `governance` does not do this: its checks read the documentation, so a documentation change runs them all. For the
 proof check, a change with no test of its own is reported as skipped, and the `[proof]` table of `agk.toml` runs only the pull
