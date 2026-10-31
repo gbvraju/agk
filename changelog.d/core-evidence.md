@@ -1,0 +1,1 @@
+- The core audit of 2026-10-31 and a table of rules that say the same thing are published, with a Proposed ADR for the person to decide row by row.
