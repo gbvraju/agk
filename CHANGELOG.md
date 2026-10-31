@@ -4,6 +4,19 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.62.0 (2026-10-31)
+
+- #401 `minutes.py` gives a level (`ok`, `50%`, `minutes_warn`, `95%`) and the day the included Actions minutes run out at this month's rate (`--json`: `level`, `runs_out`; `--line`: one line); the doctor prints that line as the warning `actions-minutes` from 50% on, and `/agk:launch` prints it before it asks, recommending local mode at 95% (brief #370, ADR-0215 Proposed)
+- #407 session rule 34: a builder that finds a bug outside its brief adds its evidence to the open issue for it or files one `found-bug` brief, leaves its own pull request unchanged, takes a `found-bug` brief only when the conductor assigns it, and removes the images and build cache of its probes (brief #405, ADR-0221 Proposed)
+- #411 `docs/guides/self-hosted-runner.md` gains "One pool for an organisation": one opt-in pool of ephemeral runners for every private AGK project of an organisation, in a runner group limited to named private repositories, with shared caches that hold no credential, no deploy or production secret, a read-only job token, governance and proof kept on GitHub-hosted runners, a job snippet that reads `AGK_HEAVY_RUNNER` with `ubuntu-latest` as fallback and a fork guard, the person's setup steps and how to measure it with `minutes.py` (brief #410, ADR-0224 Proposed)
+- #412 The review queue lists builders waiting on the conductor issue for their next brief, and questions on taken briefs.
+- #413 `session.py plan` starts no more builders than the machine's memory can carry when `[flow] builder_memory_gb` is set, and names the limit that applied: `max_builders`, `reviews` or `memory` (brief #409, ADR-0223 Proposed)
+- #414 The core audit of 2026-10-31 and a table of rules that say the same thing are published, with a Proposed ADR for the person to decide row by row.
+- #419 session rule 7: a builder still commits a `checkpoint:` at every step but pushes only at milestones (the draft, tests red, tests green, ready, before a foreseeable stop), and rule 8 posts the `Progress:` line at each push (brief #415, ADR-0225 Proposed)
+- #420 project CI guide, section 4: a heavy check runs only when its inputs change, comparing the pull request's changed files with the job's own input globs and writing `skipped: none of <globs> changed` to the step summary otherwise; a push to the default branch, `ready_for_review` and any error run in full (brief #416, ADR-0226 Proposed)
+- #421 the stack ADR template names the practices `fast tests` (a check) and `test selection` (a judgement), and `/agk:stack` copies the chosen option's `[testing]` values into `agk.toml` in the accepting pull request (brief #418, ADR-0228 Proposed)
+- #422 `prepush.py`: with a `[testing]` table the tests step also runs the regression set of `impact.py` (`project_tests` once when full, else each selected file through its `[proof]` area), prints why each run ran, and holds the heavy-step lock while it runs (`--no-lock` leaves it out) (brief #417, ADR-0227 Proposed)
+
 ## 0.61.0 (2026-10-31)
 
 - #364 `/agk:review-pass` ends by re-planning: it runs `session.py plan --json` and prints the plan's start and waits lines (an empty pass too); with `[flow] auto_start = true` and `launch_adapter` set in the checkout and on the default branch it starts the planned sessions through that one adapter (the only new command the conductor's guard allows), otherwise it prints their ready-to-paste prompts; with an adapter `launch.py` refuses a plan without its capacity, never starts more than its slots or `max_builders`, refuses a brief named twice and never retries a refused adapter; SPEC-0034 rule 6 gains the exception by amendment 103 (brief #331, ADR-0190 Proposed)
