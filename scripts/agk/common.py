@@ -534,6 +534,8 @@ DEFAULT_CONFIG = {
     "agent_apps": ["claude"],
     "review_mode": "team",
     "minutes_warn": 80,
+    "lock_slots": 1,
+    "lock_cleanup": "",
 }
 
 
@@ -744,6 +746,24 @@ def minutes_warn(root: Path) -> int:
             "minutes_warn must be a whole number from 1 to 100 (setting: minutes_warn in agk.toml)"
         )
     return value
+
+
+def lock_slots(root: Path) -> int:
+    """How many heavy runs may hold one heavy-step lock at once (brief 426, ADR-0231): a positive
+    whole number, 1 by default; refusals name the setting, never the value."""
+    value = load_config(root)["lock_slots"]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CheckError("lock_slots must be a positive whole number (setting: lock_slots)")
+    return value
+
+
+def lock_cleanup(root: Path) -> str:
+    """The project's cleanup command after a dead run's lock is cleared (brief 426, ADR-0231): a
+    shell command line, empty (none) by default; refusals name the setting, never the value."""
+    value = load_config(root)["lock_cleanup"]
+    if not isinstance(value, str):
+        raise CheckError("lock_cleanup must be a command line (setting: lock_cleanup)")
+    return value.strip()
 
 
 PAUSED_LINE = "agk paused"

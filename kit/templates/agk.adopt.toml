@@ -31,6 +31,17 @@ agent_apps = ["claude"]
 # session, counts as the verdict, its Final lines and the spec approval of the head it names; refused when config/reviewers.yaml lists
 # nobody or more than one person). A change needs an ADR.
 review_mode = "team"
+# Optional: the folder of the heavy-step lock of `python3 scripts/agk/lock.py` (the user's temp folder if unset), and the minutes after
+# which a lock left by a session counts as stale and is cleared (120 if unset).
+# lock_dir = ""
+# lock_stale_minutes = 120
+# Optional (ADR-0231): how many heavy runs may hold the lock at once on this machine (1 if unset; with 1 nothing changes), and a
+# cleanup command run once, through `sh -c`, when the lock of a run whose process no longer runs is cleared. The cleanup gets
+# AGK_LOCK_SESSION and AGK_LOCK_PID of that run; its output is shown and a failure is reported, never blocking. The locked command
+# also gets AGK_LOCK_SESSION, so a project can label what it starts by session. The kit ships no cleanup; an invented example is
+# "docker ps -aq --filter label=agk.session=$AGK_LOCK_SESSION | xargs -r docker rm -f". A change needs an ADR (agk.toml is protected).
+# lock_slots = 1
+# lock_cleanup = ""
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.
 # Optional (brief #373): which tests guard which code. `python3 scripts/agk/test_plan.py` shows, as its regression section, the tests a
 # change selects and the rule that chose each; nothing runs the selection yet. profile: "fast" (an unmapped file is only listed),

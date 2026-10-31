@@ -1,0 +1,1 @@
+- `lock.py`: `lock_slots` lets N heavy runs share a machine, `run --priority P` orders the waiting runs, and `lock_cleanup` runs once after a dead run's lock is cleared, with `AGK_LOCK_SESSION` and `AGK_LOCK_PID`; with one slot nothing changes (brief #426, ADR-0231 Proposed)
