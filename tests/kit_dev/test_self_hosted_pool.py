@@ -123,3 +123,22 @@ def test_the_one_repository_rule_points_to_the_organisation_pool():
     """REQ-039: brief #410: rule 2 of the guide no longer forbids the pool of the new section."""
     rules = re.search(r"(?ms)^## The rules\n(.*?)(?=^## )", guide()).group(1)
     assert "](#one-pool-for-an-organisation)" in rules
+
+
+def test_a_step_checks_that_the_repository_reaches_no_other_self_hosted_runner():
+    """REQ-039: brief #410, the verdict on 4c868ed item 1: the label picks the pool only alone."""
+    body = section()
+    steps = re.findall(r"(?ms)^\d+\. (.*?)(?=^\d+\. |^\S|\Z)", body)
+    found = [s for s in steps if "no other self-hosted runner" in flat(s).lower()]
+    assert len(found) == 1, steps
+    step = flat(found[0])
+    for phrase in (
+        "registered on the repository",
+        "Default group",
+        "Settings, Actions, Runners",
+        "(verify)",
+    ):
+        assert phrase in step, phrase
+    text = flat(body)
+    assert "so the label picks the pool" not in text
+    assert "only while the pool's group holds the repository's only self-hosted runners" in text
