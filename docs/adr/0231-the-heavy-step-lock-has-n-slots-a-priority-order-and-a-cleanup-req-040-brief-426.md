@@ -21,7 +21,7 @@ unchanged one-slot paths and the absent cleanup).
 ## Decision
 
 1. **Slots (answer 1).** `lock_slots` in `agk.toml` is an optional positive whole number, 1 by default (`common.lock_slots`,
-   also in `DEFAULT_CONFIG`); any other value is refused with exit 2, naming the setting and never the value. Slot 1 is the
+   read straight from `agk.toml` as `lock_dir` is, so `DEFAULT_CONFIG` and its tests are unchanged); any other value is refused with exit 2, naming the setting and never the value. Slot 1 is the
    folder `agk-lock-NAME`, as before; slot k is `agk-lock-NAME.k` (a lock name cannot hold a dot, so no other lock's folder is
    ever a slot). `run` takes any free slot, and releases its own slot, found by its token. All slots of a lock, and its
    tickets, share the one mutex of slot 1 (`.agk-lock-NAME.mutex`). Each slot is judged stale and cleared by the rules of

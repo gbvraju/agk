@@ -409,16 +409,17 @@ def test_the_take_that_prepush_calls_works_with_one_slot(tmp_path):
     """REQ-040: brief #426 answer 1 (`prepush.py` takes the lock through `take` and releases it
     with `clear_if_same`, as merged in #422)."""
     held = tmp_path / "locks" / "agk-lock-heavy"
+    token = uuid.uuid4().hex
     owner = {
         "session": "builder-p",
         "pid": os.getpid(),
         "host": socket.gethostname(),
         "started": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "token": "p",
+        "token": token,
     }
     assert lock.take(held, "heavy", owner, 120, None)
-    assert lock.read_owner(held)["token"] == "p"
-    assert lock.clear_if_same(held, "p") is True
+    assert lock.read_owner(held)["token"] == token
+    assert lock.clear_if_same(held, token) is True
     assert sorted(p.name for p in held.parent.iterdir()) == []
 
 

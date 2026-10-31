@@ -36,7 +36,7 @@ review_mode = "team"
 # which a lock left by a session counts as stale and is cleared (120 if unset).
 # lock_dir = ""
 # lock_stale_minutes = 120
-# Optional (ADR-0231): how many heavy runs may hold the lock at once on this machine (1 if unset; with 1 nothing changes), and a
+# Optional: how many heavy runs may hold the lock at once on this machine (1 if unset; with 1 nothing changes), and a
 # cleanup command run once, through `sh -c`, when the lock of a run whose process no longer runs is cleared. The cleanup gets
 # AGK_LOCK_SESSION and AGK_LOCK_PID of that run; its output is shown and a failure is reported, never blocking. The locked command
 # also gets AGK_LOCK_SESSION, so a project can label what it starts by session. The kit ships no cleanup; an invented example is
