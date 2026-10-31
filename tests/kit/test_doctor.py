@@ -27,6 +27,7 @@ REMOTE = {
     "default-branch-config",
     "brief-label",
     "brief-finished",
+    "actions-minutes",
 }
 KIT_REMOTE = {"kit-behind"}  # read from the kit's own repository (brief #320), not the target's
 LOCAL = set(IDS) - REMOTE - KIT_REMOTE
@@ -122,7 +123,7 @@ def test_ac1_the_ok_case_reports_none_and_exits_0(tmp_path):
     assert proc.returncode == 0, proc.stdout
     assert "FAIL" not in proc.stdout and "??" not in proc.stdout
     assert proc.stdout.splitlines()[0] == "agk doctor 9.9.9"
-    assert proc.stdout.splitlines()[-1] == "summary: 33 ok, 0 fail, 0 cannot-check"
+    assert proc.stdout.splitlines()[-1] == "summary: 34 ok, 0 fail, 0 cannot-check"
 
 
 def test_ac1_stricter_than_the_minimum_is_ok(tmp_path):
@@ -184,7 +185,7 @@ def test_ac1_text_report_shape(tmp_path):
     assert lines[i + 1] == "  fix: run /agk:upgrade (SPEC-0008)"
     j = lines.index(next(ln for ln in lines if ln.startswith("?? vendored-missing error ")))
     assert lines[j + 1].startswith("  to check: ")
-    assert lines[-1] == "summary: 29 ok, 2 fail, 2 cannot-check"
+    assert lines[-1] == "summary: 30 ok, 2 fail, 2 cannot-check"
 
 
 def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
@@ -192,7 +193,7 @@ def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
     proc, _, _ = run_case("vendored-edited", tmp_path, "--json")
     data = json.loads(proc.stdout)
     assert list(data) == sorted(data) == ["checks", "doctor", "summary"]
-    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 32}
+    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 33}
     for check in data["checks"]:
         assert list(check) == sorted(check)
         assert (check["status"] == "cannot-check") == ("reason" in check)
@@ -393,6 +394,7 @@ def test_ac1_live_mode_makes_only_get_reads_on_the_seven_paths(tmp_path):
         f"  *labels/agk-brief) /bin/cat '{api}/label-agk-brief.json';;\n"
         f"  */issues*) /bin/cat '{api}/briefs-open.json';;\n"
         f"  */pulls*) /bin/cat '{api}/pulls-all.json';;\n"
+        f"  *billing/actions) /bin/cat '{api}/billing.json';;\n"
         f"  *) /bin/cat '{api}/repo.json';;\n"
         "esac"
     )
@@ -410,6 +412,8 @@ def test_ac1_live_mode_makes_only_get_reads_on_the_seven_paths(tmp_path):
             f"{base}/issues?state=open&labels=agk-brief&per_page=100",
             f"{base}/pulls?state=all&per_page=100",
             "api --method GET repos/example-owner/example-kit/releases/latest",
+            # the account's Actions billing, for actions-minutes (brief #370)
+            "api --method GET /users/example-owner/settings/billing/actions",
         ]
     )
 
@@ -430,6 +434,7 @@ def test_ac1_an_installed_report_workflow_adds_the_eighth_read_to_the_one_check(
         f"  *labels/agk-brief) /bin/cat '{ok}/label-agk-brief.json';;\n"
         f"  */issues*) /bin/cat '{ok}/briefs-open.json';;\n"
         f"  */pulls*) /bin/cat '{ok}/pulls-all.json';;\n"
+        f"  *billing/actions) /bin/cat '{ok}/billing.json';;\n"
         f"  *) /bin/cat '{ok}/repo.json';;\n"
         "esac"
     )
@@ -442,7 +447,7 @@ def test_ac1_an_installed_report_workflow_adds_the_eighth_read_to_the_one_check(
     calls = log.read_text(encoding="utf-8").splitlines()
     base = "api --method GET repos/example-owner/example-repo"
     assert f"{base}/actions/workflows/product-report.yml" in calls
-    assert len(calls) == 9  # the eighth read, and the kit's release (brief #320)
+    assert len(calls) == 10  # the eighth read, the kit's release (brief #320) and billing (#370)
     assert checks_of(proc.stdout)["drift-workflow-state"]["status"] == "ok"
 
 
@@ -534,7 +539,7 @@ def test_ac1_default_root_is_the_current_directory(tmp_path):
 
 def test_ac1_every_id_has_a_severity_and_a_printed_fix():
     """REQ-002 AC1: rule 5."""
-    assert len(IDS) == 33
+    assert len(IDS) == 34
     for severity, ok_text, fail_text, fix in CHECKS.values():
         assert severity in ("error", "warn") and ok_text and fail_text and fix
     assert CHECKS["ruleset-missing"][3].endswith("use a ruleset (ADR-0001 decision 3)")

@@ -563,3 +563,121 @@ def test_a_refused_live_read_keeps_its_status():
     """REQ-020: fix 3 of 8e06ed5 (a refused page is the refusal, not an empty list)."""
     fake = FakeGh(lambda endpoint: (403, None))
     assert fake.gh.get("runs", "/repos/{repo}/actions/runs?created=%3E%3D2026-09-30") == (403, None)
+
+
+# --- brief #370: the level and the day the minutes run out ----------------------------------------
+
+
+def billed(tmp_path: Path, used: int, included: int = 2000) -> Path:
+    api = case(tmp_path)
+    save(api, "billing", {"total_minutes_used": used, "included_minutes": included})
+    return api
+
+
+@pytest.mark.parametrize(
+    ("used", "level"),
+    [
+        (0, "ok"),
+        (999, "ok"),
+        (1000, "50%"),
+        (1599, "50%"),
+        (1600, "80%"),
+        (1899, "80%"),
+        (1900, "95%"),
+        (2400, "95%"),
+    ],
+)
+def test_each_level_and_its_boundary(repo, tmp_path, used, level):
+    """REQ-020: brief #370 answers 1 and 4 (ok, 50%, minutes_warn (80 unset) and 95%)."""
+    assert report(repo, billed(tmp_path, used))["level"] == level
+
+
+def test_the_middle_level_is_minutes_warn(repo, tmp_path):
+    """REQ-020: brief #370 answer 1 (the level named by the setting; no new setting)."""
+    repo.write("agk.toml", 'default_branch = "main"\nminutes_warn = 70\n')
+    assert report(repo, billed(tmp_path / "a", 1399))["level"] == "50%"
+    assert report(repo, billed(tmp_path / "b", 1400))["level"] == "70%"
+    assert report(repo, billed(tmp_path / "c", 1900))["level"] == "95%"
+
+
+def test_the_run_out_day_early_in_a_month(repo, tmp_path):
+    """REQ-020: brief #370 answers 1 and 4 (500 a day on day 2: the rest of 1000 lasts 2 days)."""
+    data = report(repo, billed(tmp_path, 1000), today="2026-10-02")
+    assert data["runs_out"] == "2026-10-04"
+    proc = minutes(repo, billed(tmp_path / "t", 1000), today="2026-10-02")
+    assert "runs out about 2026-10-04" in proc.stdout
+
+
+def test_the_run_out_day_late_in_a_month(repo, tmp_path):
+    """REQ-020: brief #370 answers 1 and 4 (late: 1500 by day 30 lasts past the month's end)."""
+    assert report(repo, billed(tmp_path, 1500), today="2026-10-30")["runs_out"] == "not this month"
+    data = report(repo, billed(tmp_path / "b", 1950), today="2026-10-30")
+    assert data["runs_out"] == "2026-10-31"
+
+
+def test_minutes_already_used_up_run_out_today(repo, tmp_path):
+    """REQ-020: brief #370 answer 1 (all included minutes used: the day is today)."""
+    assert report(repo, billed(tmp_path, 2000), today="2026-10-12")["runs_out"] == "2026-10-12"
+
+
+def test_no_use_does_not_run_out_this_month(repo, tmp_path):
+    """REQ-020: brief #370 answer 1 (no rate, no day)."""
+    data = report(repo, billed(tmp_path, 0), today="2026-10-12")
+    assert (data["level"], data["runs_out"]) == ("ok", "not this month")
+
+
+def test_included_minutes_unknown_have_no_level_and_no_day(repo, tmp_path):
+    """REQ-020: brief #370 answers 1 and 4 (included minutes unknown)."""
+    api = case(tmp_path)
+    refuse(api, "billing", 403)
+    data = report(repo, api)
+    assert (data["level"], data["runs_out"]) == ("unknown", None)
+    proc = minutes(repo, api, "--line")
+    assert proc.returncode == 0
+    assert proc.stdout == (
+        "actions minutes: 17 used this month (estimate from run history), included minutes "
+        "unknown (refused); level unknown\n"
+    )
+
+
+def test_the_line_with_billing(repo, tmp_path):
+    """REQ-020: brief #370 answers 1 and 3 (the one line that the doctor and launch print)."""
+    proc = minutes(repo, billed(tmp_path, 1900), "--line", today="2026-10-19")
+    assert proc.returncode == 3  # past minutes_warn, as without --line
+    assert proc.stdout == (
+        "actions minutes: 1900 of 2000 used (95%), level 95%; runs out about 2026-10-20; "
+        "at this level, see local mode in docs/guides/local-mode.md\n"
+    )
+    proc = minutes(repo, billed(tmp_path / "b", 100), "--line", today="2026-10-19")
+    assert proc.returncode == 0
+    assert proc.stdout == (
+        "actions minutes: 100 of 2000 used (5%), level ok; runs out not this month\n"
+    )
+
+
+def test_the_line_with_nothing_known(repo, tmp_path):
+    """REQ-020: brief #370 answer 2 (`unknown` when billing and the run history cannot be read)."""
+    api = case(tmp_path)
+    refuse(api, "billing", 403)
+    refuse(api, "runs", 403)
+    proc = minutes(repo, api, "--line")
+    assert proc.returncode == 0
+    assert proc.stdout == (
+        "actions minutes: unknown (the token cannot read billing: refused, nor the run "
+        "history: refused)\n"
+    )
+
+
+def test_the_line_reads_no_run_history_when_billing_answers(repo, tmp_path):
+    """REQ-020: brief #370 answer 2 (the doctor's line reads billing first; the run history only
+    when billing cannot be read)."""
+    api = billed(tmp_path, 100)
+    refuse(api, "runs", 500)  # would make the full report's estimate unknown
+    proc = minutes(repo, api, "--line")
+    assert proc.stdout.startswith("actions minutes: 100 of 2000 used")
+
+
+def test_the_text_report_carries_the_line(repo, tmp_path):
+    """REQ-020: brief #370 answer 1 (the full report says the level and the day too)."""
+    out = minutes(repo, billed(tmp_path, 1000), today="2026-10-02").stdout
+    assert "level: 50%; runs out about 2026-10-04" in out

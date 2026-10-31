@@ -1,0 +1,1 @@
+- `minutes.py` gives a level (`ok`, `50%`, `minutes_warn`, `95%`) and the day the included Actions minutes run out at this month's rate (`--json`: `level`, `runs_out`; `--line`: one line); the doctor prints that line as the warning `actions-minutes` from 50% on, and `/agk:launch` prints it before it asks, recommending local mode at 95% (brief #370, ADR-0215 Proposed)
