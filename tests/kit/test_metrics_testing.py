@@ -265,8 +265,7 @@ def test_ac2_one_escape_and_one_red_push_that_is_not_one(repo, tmp_path):
     red_push(api, MERGE2, 22)
     body = report(repo, api)
     assert line(body, "backstop escapes:") == (
-        f"backstop escapes: 1 (#121 {MERGE}); red pushes not escapes: 1 (#122 {MERGE2}); "
-        "unknown: 0"
+        f"backstop escapes: 1 (#121 {MERGE}); red pushes not escapes: 1 (#122 {MERGE2}); unknown: 0"
     )
 
 
