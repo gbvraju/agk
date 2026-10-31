@@ -25,7 +25,9 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = ROOT / "scripts" / "agk"
+GUIDE = ROOT / "docs" / "guides" / "self-hosted-runner.md"
 CHECK = """import os, pathlib, sys
 names = sorted(p.name for p in pathlib.Path("values").glob("*.txt"))
 red = [n for n in names if "red" in pathlib.Path("values", n).read_text()]
@@ -114,7 +116,7 @@ def left_behind(repo, outside: Path) -> None:
     trees = [line for line in repo.git("worktree", "list", "--porcelain").splitlines()]
     assert sum(1 for line in trees if line.startswith("worktree ")) == 1, trees
     assert list(scratch(outside).iterdir()) == []
-    assert not (outside / "locks" / "agk-lock-heavy").exists()
+    assert not list((outside / "locks").glob("agk-lock-heavy*"))
 
 
 def test_three_pull_requests_green_together_cost_one_heavy_run(repo, outside):
@@ -319,3 +321,22 @@ def test_it_only_reports(repo, outside):
     source = (SCRIPTS / "batch.py").read_text(encoding="utf-8")
     for needle in ("urllib", "http.client", '"gh"', "'gh'", "import requests", '"push"'):
         assert needle not in source, needle
+
+
+def test_the_runner_guide_says_when_a_batch_run_replaces_the_per_pull_request_runs():
+    """REQ-039: brief #436 answer 4 (the guide)."""
+    text = GUIDE.read_text(encoding="utf-8")
+    found = re.search(r"(?ms)^## A batch run of ready pull requests\n(.*?)(?=^## |\Z)", text)
+    assert found, "the guide has no batch section"
+    section = " ".join(found.group(1).split())
+    for needle in (
+        "scripts/agk/batch.py",
+        "batch-green <sha12>",
+        "Several ready pull requests",
+        "On the pool or a local machine",
+        "governance and proof still run per pull request on GitHub-hosted runners",
+        "--record FILE",
+        "the person's decision",
+        "the kit never turns it on",
+    ):
+        assert needle in section, needle
