@@ -1,7 +1,7 @@
 """The GitHub Actions minutes of this month, before they run out (brief 324, ADR-0184).
 
-Usage: python3 scripts/agk/minutes.py [--json] [--repo OWNER/REPO] [--today YYYY-MM-DD]
-                                      [--api-dir DIR]
+Usage: python3 scripts/agk/minutes.py [--json | --line] [--repo OWNER/REPO]
+                                      [--today YYYY-MM-DD] [--api-dir DIR]
 
 Standard library only. It reads the GitHub REST API with `gh api` (GET only; `gh` holds the
 credential, this script holds none) or recorded responses (`--api-dir`, one `<name>.json` per
@@ -10,6 +10,13 @@ month, the plan's included minutes where the billing API answers, an estimate fr
 run history (each job rounded up to a whole minute, as GitHub bills it), the minutes per merged pull
 request, and a warning past `minutes_warn` percent of the included minutes. It writes nothing.
 A figure that cannot be read is `unknown` with its reason class, never 0.
+
+Brief #370 (ADR-0215): it also gives a level, `ok`, `50%`, `<minutes_warn>%` or `95%`, the highest
+one the used minutes have reached of the included minutes (`unknown` when those are unknown), and
+the day they run out at this month's daily rate so far (`runs out about YYYY-MM-DD`, or
+`not this month`). `--line` prints only that, in one line, reading billing first and the run
+history only when billing cannot be read; `doctor.py` (`actions-minutes`) and `/agk:launch` print
+the same line.
 
 Exit: 0 read, 3 the warning was printed, 1 refused (the repository cannot be read, or a setting is
 invalid), 2 usage.
@@ -34,12 +41,17 @@ from common import CheckError, minutes_warn, repo_root, run
 from metrics import origin_repo
 
 NAME = "minutes"
-USAGE = "usage: minutes.py [--json] [--repo OWNER/REPO] [--today YYYY-MM-DD] [--api-dir DIR]"
+USAGE = (
+    "usage: minutes.py [--json | --line] [--repo OWNER/REPO] [--today YYYY-MM-DD] [--api-dir DIR]"
+)
 PAGE = 100
 # The run list answers at most this many runs for a filtered query (verify); past it the estimate
 # is a lower bound.
 RUN_CAP = 1000
 GUIDE = "docs/guides/project-ci.md"
+LOCAL_MODE = "docs/guides/local-mode.md"
+HALF, TOP = 50, 95  # the fixed levels around minutes_warn (brief #370)
+NOT_THIS_MONTH = "not this month"
 SELF_HOSTED = "self-hosted"
 # The rates at which a private repository's job uses the included minutes, by the runner's
 # operating system as its labels name it (verify); any other runner counts once.
@@ -212,9 +224,7 @@ def estimate(src: Any, start: datetime, end: datetime, rates: bool = True) -> Es
     if isinstance(data.get("total_count"), int) and data["total_count"] > len(runs):
         est.complete = False
     floor = start - timedelta(days=1)
-    chosen = [
-        r for r in runs if (c := stamp(r.get("created_at"))) is not None and floor <= c < end
-    ]
+    chosen = [r for r in runs if (c := stamp(r.get("created_at"))) is not None and floor <= c < end]
     est.runs = len(chosen)
 
     def jobs_of(run_: dict) -> tuple[int, Any]:
@@ -279,12 +289,85 @@ def billing(src: Any, owner: dict) -> tuple[str, int | None, int | None, str | N
     return endpoint, math.ceil(used), int(included), None
 
 
-def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
+def level_of(used: int | None, included: int | None, warn: int) -> str:
+    """The highest level the used minutes have reached: `ok`, `50%`, `<warn>%` or `95%`;
+    `unknown` when either figure is unknown (brief #370 answer 1)."""
+    if used is None or not included:
+        return "unknown"
+    reached = [t for t in sorted({HALF, warn, TOP}) if used * 100 >= t * included]
+    return f"{reached[-1]}%" if reached else "ok"
+
+
+def runs_out(used: int | None, included: int | None, today: date) -> str | None:
+    """The day the included minutes run out at this month's daily rate so far (the used minutes
+    over the days of the month through today), `not this month`, or None when unknown."""
+    if used is None or not included:
+        return None
+    if used >= included:
+        return today.isoformat()
+    if used <= 0:
+        return NOT_THIS_MONTH
+    rate = used / today.day
+    day = today + timedelta(days=math.ceil((included - used) / rate))
+    _, end = month_of(today)
+    return day.isoformat() if day < end.date() else NOT_THIS_MONTH
+
+
+def run_out_text(day: str | None) -> str:
+    return f"runs out {NOT_THIS_MONTH}" if day == NOT_THIS_MONTH else f"runs out about {day}"
+
+
+def line_of(
+    used: int | None,
+    included: int | None,
+    included_reason: str | None,
+    estimate_reason: str | None,
+    warn: int,
+    today: date,
+) -> tuple[str, str]:
+    """(level, the one line): what the doctor and `/agk:launch` print (brief #370)."""
+    if used is None:
+        return "unknown", (
+            f"actions minutes: unknown (the token cannot read billing: {included_reason}, "
+            f"nor the run history: {estimate_reason})"
+        )
+    if included is None:
+        return "unknown", (
+            f"actions minutes: {used} used this month (estimate from run history), included "
+            f"minutes unknown ({included_reason}); level unknown"
+        )
+    level = level_of(used, included, warn)
+    text = (
+        f"actions minutes: {used} of {included} used ({used * 100 // included}%), level {level}; "
+        f"{run_out_text(runs_out(used, included, today))}"
+    )
+    if level == f"{TOP}%":
+        text += f"; at this level, see local mode in {LOCAL_MODE}"
+    return level, text
+
+
+def repo_of(src: Any) -> dict:
     status, repo = src.get("repo", "/repos/{repo}")
     if status != 200 or not isinstance(repo, dict):
         raise CheckError(
             f"the repository cannot be read ({reason_of(status)}; path class: repository)"
         )
+    return repo
+
+
+def outlook(src: Any, repo: dict, today: date, warn: int) -> tuple[str, str]:
+    """(level, line) reading billing first and the run history only when billing cannot be read
+    (the doctor's check and `--line`, brief #370 answer 2)."""
+    _, used, included, reason = billing(src, repo.get("owner") or {})
+    if used is not None:
+        return line_of(used, included, None, None, warn, today)
+    start, end = month_of(today)
+    est = estimate(src, start, end, repo.get("private") is not False)
+    return line_of(est.minutes, None, reason, est.reason, warn, today)
+
+
+def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
+    repo = repo_of(src)
     start, end = month_of(today)
     endpoint, used, included, reason = billing(src, repo.get("owner") or {})
     rates = repo.get("private") is not False
@@ -301,8 +384,8 @@ def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
         per_pull = round(est.minutes / merged, 1)
     warning = None
     known = [x for x in (used, est.minutes) if x is not None]
-    if included and known:
-        top = max(known)
+    top = max(known) if known else None
+    if included and top is not None:
         if top * 100 >= warn * included:
             warning = (
                 f"warning: {top} of {included} included minutes used ({top * 100 // included}%), "
@@ -330,6 +413,8 @@ def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
         "per_merged_pull": per_pull,
         "warn_percent": warn,
         "warning": warning,
+        "level": level_of(top, included, warn),
+        "runs_out": runs_out(top, included, today),
     }
 
 
@@ -340,8 +425,7 @@ def plural(n: int, word: str) -> str:
 def render(data: dict) -> str:
     used, inc, est = data["used"], data["included"], data["estimate"]
     lines = [
-        f"agk minutes: {data['repository']}, month {data['month']} "
-        f"(UTC, through {data['through']})"
+        f"agk minutes: {data['repository']}, month {data['month']} (UTC, through {data['through']})"
     ]
     if used["source"] == "billing":
         lines.append(f"minutes used this month: {used['minutes']} (billing, the whole account)")
@@ -396,6 +480,8 @@ def render(data: dict) -> str:
             "note: a public repository's standard runners are not billed; the figures show its "
             "use, not its cost (verify)"
         )
+    if data["level"] != "unknown":
+        lines.append(f"level: {data['level']}; {run_out_text(data['runs_out'])}")
     if data["warning"]:
         lines.append(data["warning"])
     return "\n".join(lines) + "\n"
@@ -405,12 +491,12 @@ def render(data: dict) -> str:
 
 
 def parse_args(args: list[str]) -> dict | None:
-    options: dict = {"today": None, "repo": None, "api": None, "json": False}
+    options: dict = {"today": None, "repo": None, "api": None, "json": False, "line": False}
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg == "--json":
-            options["json"] = True
+        if arg in ("--json", "--line"):
+            options[arg[2:]] = True
             i += 1
         elif arg in ("--today", "--repo", "--api-dir") and i + 1 < len(args):
             value = args[i + 1]
@@ -426,7 +512,7 @@ def parse_args(args: list[str]) -> dict | None:
             i += 2
         else:
             return None
-    return options
+    return None if options["json"] and options["line"] else options
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -442,6 +528,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         name = options["repo"] or origin_repo()
         src = Gh(name)
+    if options["line"]:
+        level, text = outlook(src, repo_of(src), today, warn)
+        print(text)
+        past = level not in ("ok", "unknown") and int(level.rstrip("%")) >= warn
+        return 3 if past else 0
     data = read(src, today, warn, name)
     if options["json"]:
         print(json.dumps(data, indent=2))

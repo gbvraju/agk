@@ -175,12 +175,14 @@ machine, or when it is older than `lock_stale_minutes` (120 by default). The loc
 
 ## Actions minutes
 
-    python3 scripts/agk/minutes.py [--json] [--repo OWNER/REPO] [--today YYYY-MM-DD] [--api-dir DIR]
+    python3 scripts/agk/minutes.py [--json | --line] [--repo OWNER/REPO] [--today YYYY-MM-DD] [--api-dir DIR]
 
 Shows how many GitHub Actions minutes the repository has used this month and warns before they run out. It prints the
 minutes used, the plan's included minutes where the billing API answers, an estimate from the run history, the minutes per
 merged pull request, and a warning past `minutes_warn` percent; a figure it cannot read is `unknown`, never 0. It reads with
-`gh api` (GET only) and writes nothing. See [project-ci.md](project-ci.md#how-many-minutes-are-left) and ADR-0184.
+`gh api` (GET only) and writes nothing. It also gives a level (`ok`, `50%`, `minutes_warn`, `95%`) and the day the included
+minutes run out at this month's rate; `--line` prints only that, the line that `doctor.py` (`actions-minutes`) and
+the launch skill print (ADR-0215). See [project-ci.md](project-ci.md#how-many-minutes-are-left) and ADR-0184.
 
 A private repository short of minutes can run its own heavy jobs on an ephemeral self-hosted runner, one job per runner, no
 secret beyond the job's own, never for forks, while governance and proof stay on GitHub-hosted runners:

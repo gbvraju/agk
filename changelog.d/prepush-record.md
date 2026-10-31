@@ -1,1 +1,0 @@
-- `prepush.py --record FILE` writes a JSON record of a local check run (each step's command, exit code, seconds and output digest, the tool versions, the head and base shas and whether the tree was clean; no output text, environment value or outside path) and prints one `Evidence:` line for the pull request body (brief #374, ADR-0208 Proposed)
