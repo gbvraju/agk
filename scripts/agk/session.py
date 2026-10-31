@@ -32,11 +32,18 @@ none yet); one whose checks are green under a stale `agk:ci-running` label. Neve
 a verdict that names the head, with no such comment after it, skips the pull request whatever its
 label; a draft and checks still running (whatever the label) skip it too, except that a draft with a
 `Question:` comment created or edited after the last verdict is listed with the reason `question
-on a draft`, whatever its head, label or checks (brief 350). Required checks that
+on a draft`, whatever its head, label or checks (brief 350). Brief 408: after the pull requests
+it lists each `Request: <session> ...` on the one open `agk-conductor` issue with no
+`Assign: <session> ...` by a listed author after it, as `request <session> (comment <id>)
+waiting <minutes>m`, and each open `agk-brief` issue with a live `taken:`, no open pull request
+with its `Brief: #n` line and a `Question:` comment created or edited after the brief's last
+comment by a listed author (a session's own `Question:`, `taken:`, `released:` and `taken over:`
+lines are no answer), as `#<brief> question on a brief`. Required checks that
 have not reported skip it under `agk:ci-running` and add the reason `checks not reported` under
 any other label. `--all` adds a line `#N <head7> skip: <why>`
 for each other open pull request; `--fingerprint` prints only `fingerprint <sha256>` of the heads,
-labels, draft flags, comment times (a draft's too) and check states, which changes only when the
+labels, draft flags, comment times (a draft's too), check states, and the waiting requests and
+brief questions (their ids and times, never the minutes waited), which changes only when the
 queue does, so a loop wakes the conductor only then.
 A wait never goes silent (brief #210): when GitHub cannot be read for 5 polls in a row it prints
 `error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since
@@ -1476,6 +1483,111 @@ def review_line(repo: str, root, pr: dict, authors: list[str]) -> tuple[str, lis
     return "review", reasons, facts
 
 
+REQUEST = re.compile(r"Request: (\S+) \S.*")
+NOT_ANSWERS = ("Question:", "taken:", "released:", "taken over:")  # a session's own lines
+
+
+def first_line(comment: dict) -> str:
+    body = comment.get("body")
+    return body.splitlines()[0].strip() if isinstance(body, str) and body.strip() else ""
+
+
+def labelled(issues: list, label: str) -> list:
+    """The issues (not pull requests) of a list that carry the label."""
+    return [
+        i
+        for i in issues
+        if isinstance(i.get("number"), int)
+        and "pull_request" not in i
+        and label in {str(x.get("name")) for x in i.get("labels") or [] if isinstance(x, dict)}
+    ]
+
+
+def waiting_requests(repo: str, authors: list[str]) -> tuple[list[str], list]:
+    """Brief 408 answer 1: each `Request: <session> ...` on the one open `agk-conductor` issue with
+    no `Assign: <session> ...` by a listed author after it, as a line and as a fact. No such
+    issue means no request (a project with `assign = "next"`); two or more fail, as
+    `watch --assign` does (Q-408-2)."""
+    found = pages(f"repos/{repo}/issues?state=open&labels={ASSIGN_LABEL}")
+    if found is None:
+        raise CheckError(f"rule 3: the open issues labelled {ASSIGN_LABEL} cannot be read")
+    open_ = labelled(found, ASSIGN_LABEL)
+    if not open_:
+        return [], []
+    if len(open_) > 1:
+        raise CheckError(f"rule 12: exactly one open issue labelled {ASSIGN_LABEL} is needed")
+    comments = pages(f"repos/{repo}/issues/{open_[0]['number']}/comments")
+    if comments is None:
+        raise CheckError(
+            f"rule 3: the comments of the issue labelled {ASSIGN_LABEL} cannot be read"
+        )
+    allowed = {a.lstrip("@").lower() for a in authors}
+    ordered = sorted((c for c in comments if isinstance(c.get("id"), int)), key=lambda c: c["id"])
+    lines, facts = [], []
+    now = datetime.now(UTC)
+    for c in ordered:
+        if not (match := REQUEST.fullmatch(first_line(c))):
+            continue
+        me = match.group(1)
+        if any(o["id"] > c["id"] and assign_line(o, me, allowed) for o in ordered):
+            continue
+        minutes = max(0, int((now - moment(c.get("created_at"))).total_seconds() // 60))
+        lines.append(f"request {me} (comment {c['id']}) waiting {minutes}m")
+        facts.append(["request", me, c["id"], stamp(c)])  # never the minutes: they change alone
+    return lines, facts
+
+
+def brief_question(comments: list, allowed: set[str]) -> dict | None:
+    """The newest `Question:` comment created or edited after the brief's last comment by a listed
+    author, else None. A session's own lines (`Question:`, `taken:`, `released:`, `taken over:`)
+    are never an answer, since a session may post as a listed author (Q-408-1)."""
+    marks = [
+        (str(c.get("created_at") or ""), c.get("id") or 0)
+        for c in comments
+        if author_of(c) in allowed and not first_line(c).startswith(NOT_ANSWERS)
+    ]
+    floor = max(marks, default=("", 0))
+    asked = [
+        c
+        for c in comments
+        if first_line(c).startswith("Question:") and (stamp(c), c.get("id") or 0) > floor
+    ]
+    return max(asked, key=lambda c: (stamp(c), c.get("id") or 0), default=None)
+
+
+def brief_questions(root, repo: str, authors: list[str], prs: list) -> tuple[list[str], list]:
+    """Brief 408 answer 1: each open `agk-brief` issue with a live `taken:`, no open pull request
+    with its `Brief: #n` line and an unanswered `Question:`, as a line and as a fact. A brief with
+    an open pull request is left to that pull request's own rules (a draft's question is listed
+    there)."""
+    found = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
+    if found is None:
+        raise CheckError(f"rule 3: the open issues labelled {LABEL} cannot be read")
+    named = {brief_number(p) for p in prs}
+    allowed = {a.lstrip("@").lower() for a in authors}
+    asked = []
+    for issue in sorted(labelled(found, LABEL), key=lambda i: i["number"]):
+        if issue["number"] in named:
+            continue
+        comments = pages(f"repos/{repo}/issues/{issue['number']}/comments")
+        if comments is None:
+            raise CheckError("rule 3: the comments of an open brief cannot be read")
+        if (question := brief_question(comments, allowed)) is not None:
+            asked.append((issue["number"], comments, question))
+    if not asked:
+        return [], []
+    every = pages(f"repos/{repo}/pulls?state=all")  # a merged pull request keeps a take live
+    if every is None:
+        raise CheckError("rule 3: the pull requests cannot be read")
+    hours = flow_int(root, "claim_hours", CLAIM_HOURS, 5)
+    lines, facts = [], []
+    for number, comments, question in asked:
+        if live_takes(comments, number, every, hours):
+            lines.append(f"#{number} question on a brief")
+            facts.append(["question", number, question.get("id"), stamp(question)])
+    return lines, facts
+
+
 def review_queue(root, mode: str) -> int:
     """Print the pull requests that qualify for a conductor's review, and why (read-only)."""
     repo = repo_name(root)
@@ -1497,6 +1609,10 @@ def review_queue(root, mode: str) -> int:
         line = f"#{pr['number']} {head[:7]} {verb}: {'; '.join(reasons)}"
         (review if verb == "review" else skip).append(line)
         prints.append([pr["number"], head, label_of(pr), bool(pr.get("draft")), facts])
+    requests, asked = waiting_requests(repo, authors)
+    questions, open_questions = brief_questions(root, repo, authors, found)
+    review += requests + questions
+    prints += asked + open_questions
     if mode == "--fingerprint":
         text = json.dumps(prints, sort_keys=True, separators=(",", ":"))
         print("fingerprint " + hashlib.sha256(text.encode("utf-8")).hexdigest())
