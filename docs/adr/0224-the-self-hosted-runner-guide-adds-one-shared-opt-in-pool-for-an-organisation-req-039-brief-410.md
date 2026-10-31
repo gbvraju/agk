@@ -29,12 +29,15 @@ The brief is documentation and one guide test; the test lives under `tests/kit_d
    as `github.event_name != 'pull_request' || <guard>` as in the guide's existing job, so that a push still runs the job.
 3. **Measuring (answer 3).** The section says to run `minutes.py` one week before and one week after the switch. Because
    `minutes.py` treats a job as self-hosted by the label `self-hosted` among the labels the job asked for, the guide sets the
-   variable to `self-hosted`; a custom label alone would be counted as hosted minutes (question Q-410-1 of the pull request).
+   variable to `self-hosted`; a custom label alone would be counted as hosted minutes (question Q-410-1, answered in the verdict
+   on 4c868ed: this reading stands). Since every self-hosted runner carries that label, it picks the pool only while the pool's
+   group holds the repository's only self-hosted runners, and a person step checks that the repository reaches no other one (no
+   runner registered on the repository, and a Default group that holds none or does not include it).
 4. **The person's steps (answer 4).** The kit sets up no runner, no runner group and no variable; the section lists each as a
    step the person takes in the organisation or repository settings, each marked `(verify)`.
 5. **Tests (answer 5).** `tests/kit_dev/test_self_hosted_pool.py`: the section exists once; each rule of answer 1; the snippet
-   with the variable, the hosted fallback, the fork guard and read permissions only; the measurement; the person's steps;
-   rule 2 points to the section.
+   with the variable, the hosted fallback, the fork guard and read permissions only; the measurement; the person's steps,
+   including the check that no other self-hosted runner reaches the repository; rule 2 points to the section.
 6. **Flow mode.** One fragment `changelog.d/self-hosted-pool.md`; no version bump; `kit/hashes.json` not edited (session rule
    14).
 
@@ -47,4 +50,4 @@ The brief is documentation and one guide test; the test lives under `tests/kit_d
 
 ## Residual
 
-- 2026-10-31: Q-410-1 (the variable's value, so that `minutes.py` reads the job as self-hosted) is open on the pull request.
+- 2026-10-31: none open (Q-410-1 answered in the verdict on 4c868ed).

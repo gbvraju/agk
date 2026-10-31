@@ -156,8 +156,9 @@ jobs:
       - run: ./scripts/heavy-suite.sh   # the project's own heavy step
 ```
 
-Set the variable to `self-hosted` `(verify)`: a repository can reach only the runners of the groups that name it, so the label
-picks the pool, and `minutes.py` reads a job as self-hosted by that label among the labels the job asked for. A label of the
+Set the variable to `self-hosted` `(verify)`: every self-hosted runner carries that label, so it picks the pool only while the
+pool's group holds the repository's only self-hosted runners `(verify)` (step 4 below checks it), and `minutes.py` reads a job
+as self-hosted by that label among the labels the job asked for. A label of the
 pool's own alone (for example `heavy`) still runs on the pool, but `minutes.py` would count the job as hosted minutes. To step
 back, delete the variable: the next run uses `ubuntu-latest`.
 
@@ -175,7 +176,11 @@ groups, which depend on the plan:
    cache volume and holds no credential.
 3. **Keep forks off** `(verify)`: in the organisation's and each repository's Settings, Actions, General, the setting that runs
    workflows from fork pull requests stays off; the `if:` above is the second guard.
-4. **Set the variable in each project that opts in** `(verify)`: in the repository's Settings, Secrets and variables, Actions,
+4. **Check that the repository reaches no other self-hosted runner** `(verify)`: in the repository's Settings, Actions, Runners,
+   the only self-hosted runners listed are the pool's. That means no runner registered on the repository (the one-project setup
+   above), and an organisation Default group that holds no runner or does not include the repository; a runner there also
+   carries `self-hosted` and could take the job.
+5. **Set the variable in each project that opts in** `(verify)`: in the repository's Settings, Secrets and variables, Actions,
    Variables, `AGK_HEAVY_RUNNER` with the value `self-hosted`, or `gh variable set AGK_HEAVY_RUNNER --body self-hosted` in the
    repository. A project without the variable keeps its heavy job on GitHub-hosted runners.
 
