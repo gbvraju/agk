@@ -30,7 +30,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-write
    (identity, email, storage, queues or schedulers, payments, and so on), and is left out when the option relies on none;
    **Practices** has one bullet for every practice any option names, `- <practice>: check (step: <the governance step the adopting
    build adds>)` when a check can verify it (pinned actions, least privilege, security headers, a host-boundary test), or
-   `- <practice>: judgement` when it is recorded judgement only, and keeps the template's `local profile` bullet; **Chosen** stays
+   `- <practice>: judgement` when it is recorded judgement only, and keeps the template's `local profile` bullet; it keeps the
+   template's `fast tests` and `test selection` bullets too, and writes in the parenthesis of `test selection`, for each option,
+   the `[testing]` profile and the `always_full` paths of `agk.toml` it proposes (`docs/guides/testing.md`); **Chosen** stays
    `none yet`. Never set `Status: Accepted` and never name an option as chosen: that is the
    architect's, in a later change.
 3. Check, and correct the file on a failure, at most three rounds, then stop and report:
@@ -46,7 +48,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
    `Chosen: Option <X> — <one-line reason>` together (the line reads `3. **Chosen**: Option <X> — <one-line reason>`), and nothing
    else. It is not a `Final:` commit: a `Final:` commit may change only status lines, and while the ADR is Proposed the check
    refuses any `Chosen` but `none yet`, so only the two lines together pass. `stack-check` accepts the pair, and the expected
-   verdict on that pull request is a plain `Verdict: cleared <sha>`. Print the text below for the person, with the ADR number and
+   verdict on that pull request is a plain `Verdict: cleared <sha>`. The build which accepts the stack also
+   copies the chosen option's `[testing]` values, as the ADR's `test selection` practice gives them, into the `[testing]` table
+   of `agk.toml` in the same pull request as the ADR, by a second ordinary commit that changes nothing else, so one ADR sets
+   them; the ADR names `agk.toml`, which covers that protected path. Print the text below for the person, with the ADR number and
    the file name filled in:
 
    The prompt for the accepting change:
@@ -54,9 +59,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
 ```
 Accept option <X> of the stack ADR ADR-<n> (docs/adr/<n>-stack-options.md). From a fresh default branch, on a new branch, change
 only two lines of that file in one ordinary commit: "- Status: Proposed" becomes "- Status: Accepted", and "3. **Chosen**: none
-yet" becomes "3. **Chosen**: Option <X> — <one-line reason>". Run engines.py stack-check and make governance; both must pass.
-Then run engines.py stack-next-steps and open one pull request with the body it prints, unchanged. This is not a Final
-commit, and it changes nothing else.
+yet" becomes "3. **Chosen**: Option <X> — <one-line reason>". Then, in a second ordinary commit, copy the [testing] values
+that the ADR's test selection practice gives for option <X> into the [testing] table of agk.toml. Run engines.py stack-check
+and make governance; both must pass. Then run engines.py stack-next-steps and open one pull request with the body it prints,
+unchanged. Neither commit is a Final commit, and they change nothing else.
 ```
 
    The body of its pull request is never written by hand: after the accepting commit, the session runs

@@ -107,7 +107,7 @@ def test_answer3_a_stack_drafted_from_the_template_with_both_lines_passes(starte
 def test_answer2_the_skill_names_the_copy_into_agk_toml_in_the_accepting_pull_request():
     """REQ-016: brief #418 answer 2 (one ADR sets the [testing] values)."""
     text = SKILL.read_text(encoding="utf-8")
-    last = text[text.index("\n4. ") : text.index("\n5. ")]
+    last = " ".join(text[text.index("\n4. ") : text.index("\n5. ")].split())
     assert "`[testing]`" in last and "`agk.toml`" in last
     assert "same pull request" in last and "one ADR sets them" in last
     assert "chosen option" in last
@@ -116,7 +116,7 @@ def test_answer2_the_skill_names_the_copy_into_agk_toml_in_the_accepting_pull_re
 def test_answer2_the_skill_has_each_option_name_its_testing_values():
     """REQ-016: brief #418 answers 1 and 2 (the values are in the ADR before they are copied)."""
     text = SKILL.read_text(encoding="utf-8")
-    fill = text[text.index("\n2. ") : text.index("\n3. ")]
+    fill = " ".join(text[text.index("\n2. ") : text.index("\n3. ")].split())
     for needle in ("`fast tests`", "`test selection`", "`[testing]`", "`always_full`"):
         assert needle in fill, needle
     assert "`agk.toml`" in fill
@@ -126,5 +126,5 @@ def test_answer2_the_accepting_prompt_names_the_copy():
     """REQ-016: brief #418 answer 2 (the printed prompt carries the step, so it is not lost)."""
     text = SKILL.read_text(encoding="utf-8")
     prompt = text[text.index("Accept option <X> of the stack ADR") :]
-    prompt = prompt[: prompt.index("```")]
+    prompt = " ".join(prompt[: prompt.index("```")].split())
     assert "[testing]" in prompt and "agk.toml" in prompt and "second ordinary commit" in prompt
