@@ -1,0 +1,1 @@
+- `prepush.py`: with a `[testing]` table the tests step also runs the regression set of `impact.py` (`project_tests` once when full, else each selected file through its `[proof]` area), prints why each run ran, and holds the heavy-step lock while it runs (`--no-lock` leaves it out) (brief #417, ADR-0227 Proposed)
