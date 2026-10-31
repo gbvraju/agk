@@ -181,6 +181,10 @@ minutes used, the plan's included minutes where the billing API answers, an esti
 merged pull request, and a warning past `minutes_warn` percent; a figure it cannot read is `unknown`, never 0. It reads with
 `gh api` (GET only) and writes nothing. See [project-ci.md](project-ci.md#how-many-minutes-are-left) and ADR-0184.
 
+A private repository short of minutes can run its own heavy jobs on an ephemeral self-hosted runner, one job per runner, no
+secret beyond the job's own, never for forks, while governance and proof stay on GitHub-hosted runners:
+[self-hosted-runner.md](self-hosted-runner.md) (ADR-0217).
+
 ## Test plan
 
     python3 scripts/agk/test_plan.py [--base REF] [--head REF] [--json] [ROOT]
