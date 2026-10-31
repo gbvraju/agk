@@ -1,1 +1,0 @@
-- project CI guide, section 4: a heavy check runs only when its inputs change, comparing the pull request's changed files with the job's own input globs and writing `skipped: none of <globs> changed` to the step summary otherwise; a push to the default branch, `ready_for_review` and any error run in full (brief #416, ADR-0226 Proposed)

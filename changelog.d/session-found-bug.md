@@ -1,1 +1,0 @@
-- session rule 34: a builder that finds a bug outside its brief adds its evidence to the open issue for it or files one `found-bug` brief, leaves its own pull request unchanged, takes a `found-bug` brief only when the conductor assigns it, and removes the images and build cache of its probes (brief #405, ADR-0221 Proposed)

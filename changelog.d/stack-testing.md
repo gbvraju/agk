@@ -1,1 +1,0 @@
-- the stack ADR template names the practices `fast tests` (a check) and `test selection` (a judgement), and `/agk:stack` copies the chosen option's `[testing]` values into `agk.toml` in the accepting pull request (brief #418, ADR-0228 Proposed)

@@ -1,1 +1,0 @@
-- `session.py plan` starts no more builders than the machine's memory can carry when `[flow] builder_memory_gb` is set, and names the limit that applied: `max_builders`, `reviews` or `memory` (brief #409, ADR-0223 Proposed)
