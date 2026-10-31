@@ -1,6 +1,6 @@
 # ADR-0232: the weekly metrics show test time per pull request, backstop escapes and suites over budget (REQ-012, brief 427)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0209, ADR-0220
