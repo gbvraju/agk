@@ -1,6 +1,6 @@
 # ADR-0223: the session plan counts the machine's memory when it says how many builders to start (REQ-041, brief 409)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0189, ADR-0219
