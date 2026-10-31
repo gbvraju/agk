@@ -164,7 +164,8 @@ def add_row(report: Report, row: list[str], number: int, day: date, seen: dict[s
     test, owner, strikes, status, expires, issue = row
     seen[test] = number
     report.entries += 1
-    if status == "quarantined" and as_date(expires) < day:  # type: ignore[operator]
+    ends = as_date(expires)
+    if status == "quarantined" and ends is not None and ends < day:
         report.expired.append({"line": number, "test": test, "owner": owner, "expires": expires})
     if int(strikes) >= DUE_STRIKES and not issue:
         report.brief_due.append(
