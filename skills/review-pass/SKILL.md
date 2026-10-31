@@ -31,8 +31,19 @@ And never:
   all skip it under `agk:ci-running`; under any other label it is reviewed with the reason `checks not reported` (a project
   whose workflows are off), and the verdict clears nothing while CI is missing.
 
+A builder that has no pull request waits too, and the pass answers it:
+
+- a `Request: <session> ...` comment on the one open `agk-conductor` issue with no `Assign: <session> ...` line by a listed
+  author after it: the builder finished its work, or is new, and waits for its next brief;
+- a `Question:` comment on an open `agk-brief` issue that a session has taken (a live `taken:`) and that no open pull request
+  names with `Brief: #<brief>`, created or **edited** after the brief's last comment by a listed author (a session's own
+  `Question:`, `taken:`, `released:` and `taken over:` lines are no answer). A brief with an open pull request is left to that
+  pull request's own rules.
+
 `python3 scripts/agk/session.py review-queue` applies exactly these rules, read-only, and prints one line per pull request that
-qualifies, `#<n> <head7> review: <why>`, or `empty`; with `--all` it also prints `#<n> <head7> skip: <why>` for the others.
+qualifies, `#<n> <head7> review: <why>`, then one line `request <session> (comment <id>) waiting <minutes>m` per waiting request
+and one line `#<brief> question on a brief` per waiting question, or `empty`; with `--all` it also prints
+`#<n> <head7> skip: <why>` for the other pull requests.
 
 ## The pass
 
@@ -40,7 +51,7 @@ qualifies, `#<n> <head7> review: <why>`, or `empty`; with `--all` it also prints
    pass and gives it to you after the command; use exactly that. In a session started by hand, the person runs it and pastes the
    output, because the conductor's guard runs no script outside the bounded run `(verify: Q-306-1 asks whether the guard should
    allow this one read-only command)`. Without the output, read the same facts with `gh api` GET (the open pull requests, the
-   comments of each, the check runs of each head) and apply the rules above yourself. When the queue is `empty` and has no skip
+   comments of each, the check runs of each head, the comments of the `agk-conductor` issue and of each taken brief) and apply the rules above yourself. When the queue is `empty` and has no skip
    lines, post nothing, run the re-plan of step 7 and end with the line `queue empty` followed by its `Start` and `waits for`
    lines: a merge that empties the queue is when briefs unblock.
 2. **Order.** Review the `review` lines in `Depends-on` order: a pull request after the ones it names.
@@ -49,6 +60,15 @@ qualifies, `#<n> <head7> review: <why>`, or `empty`; with `--all` it also prints
    `Correction:` and `Maintainer answer:` that the reason names in the verdict itself. For a `question on a draft`, answer
    the question in a verdict on the draft's head whose numbered items are the answers, and do not review the draft's code:
    it is not finished, and its checks may still be running.
+   **Answer each request and each question on a brief**, after the pull requests, with no review:
+   - a `request <session> ...` line: post one comment on the `agk-conductor` issue whose first line is
+     `Assign: <session> #<brief>` (with ` build (<x>)` after a brief built in parts) when the start list of
+     `python3 scripts/agk/session.py plan --json` names that session, with the brief it names for it, and otherwise
+     `Assign: <session> none`. Nothing else goes in that comment;
+   - a `#<brief> question on a brief` line: read the brief and its comments, and post one comment on that brief that
+     answers the question, naming its `Q-…` id. When only a person can answer it, say so in that comment and add
+     `NEEDS-YOU: #<brief> <what the person decides>`.
+   Write each comment with `Write` into a file in your scratch directory and post it as in step 5, on that issue's number.
 4. **Check again just before posting.** Read the pull request (`gh api repos/<owner>/<repo>/pulls/<n>`, a GET) and its newest
    comments. When the head is no longer the head you reviewed, or a verdict by a listed author that names this head was posted
    after the comment that made it qualify (another pass, or another conductor), post nothing and say so in the last lines. This
@@ -89,7 +109,8 @@ qualifies, `#<n> <head7> review: <why>`, or `empty`; with `--all` it also prints
    the command again in this pass. When the plan starts nothing, run no `launch.py` at all.
 8. **The last lines.** End the pass with one line per pull request of the queue, review and skip lines alike:
    `#<n> <head7> <action>`, where the action is `verdict cleared (comment <id>)`, `verdict fix list (comment <id>)`,
-   `verdict rejected (comment <id>)`, `skip: <why>` or `nothing posted: <why>`; then the `Start` and `waits for` lines of the
+   `verdict rejected (comment <id>)`, `skip: <why>` or `nothing posted: <why>`; then one line per request,
+   `request <session> answered (comment <id>)`, and one per question on a brief, `#<brief> answered (comment <id>)`; then the `Start` and `waits for` lines of the
    re-plan and any `started` lines; then the `NEEDS-YOU:` lines, if any. Nothing else follows, except the ready-to-paste
    prompts of a re-plan with `auto_start` off.
 
