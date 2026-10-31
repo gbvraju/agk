@@ -1,6 +1,6 @@
 """The fast checks before a push (brief #326, ADR-0186).
 
-    python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--record FILE]
+    python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE]
 
 Runs, in order, the checks CI would fail a pull request on first, and stops at the first failure
 with that step's own output:
@@ -11,7 +11,15 @@ with that step's own output:
    checks that need no network);
 4. `secret-scan`: gitleaks over the branch's commits (merge base to `HEAD`), when installed;
 5. `tests`: each run of `test_plan.py` (the plan proof runs), its command in its folder; `--quick`
-   skips this step.
+   skips this step. With a `[testing]` table (brief #417, ADR-0227) it then runs the regression
+   set of `impact.py`: `project_tests` once when the set is full (or when no `[proof]` table can
+   take the selected files), otherwise each selected file through the command of the `[proof]`
+   area it lies in, with `{files}` filled in as proof fills it; a selected file in no area is
+   listed as `not run (in no [proof] area)`. Each run prints
+   `prepush: tests <area or full> ok|FAIL (<s>s): <reason>`. The whole step holds the heavy-step
+   lock (`lock.py`, name `heavy`), with lock.py's wait lines; `--no-lock` leaves it out (for CI),
+   and a run whose caller already holds it (`lock.py run --name heavy -- prepush.py`, session
+   rule 31) does not take it again. Without the table the step runs as before, with no lock.
 
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
 one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing,
@@ -35,21 +43,36 @@ import json
 import os
 import re
 import shutil
+import signal
+import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
+import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, git, merge_base, proof_timeout, resolve_base
-from proof import execute, timeout_note
+import lock as heavy_lock
+from common import (
+    CheckError,
+    git,
+    load_config,
+    merge_base,
+    proof_areas,
+    proof_timeout,
+    resolve_base,
+)
+from impact import Impact, Selected, impact
+from proof import area_command, execute, is_test_file, timeout_note
 
 HERE = Path(__file__).resolve().parent
-USAGE = "usage: prepush.py [--body FILE] [--base REF] [--quick] [--record FILE]"
+USAGE = "usage: prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE]"
 SCHEMA = 1
+LOCK = "heavy"
+OWN = "the pull request's own test files (the proof plan)"
 
 
 class Usage(Exception):
@@ -88,7 +111,7 @@ class Ran:
 
 
 def parse_args(args: list[str]) -> dict:
-    options: dict = {"body": None, "base": None, "quick": False, "record": None}
+    options: dict = {"body": None, "base": None, "quick": False, "lock": True, "record": None}
     i = 0
     while i < len(args):
         arg = args[i]
@@ -97,6 +120,9 @@ def parse_args(args: list[str]) -> dict:
             i += 2
         elif arg == "--quick":
             options["quick"] = True
+            i += 1
+        elif arg == "--no-lock":
+            options["lock"] = False
             i += 1
         else:
             raise Usage(USAGE)
@@ -167,7 +193,7 @@ def secret_scan(root: Path, mb: str) -> Step:
     return ran_step([*cmd, "."], root)
 
 
-def tests(root: Path, mb: str, quick: bool) -> Step:
+def tests(root: Path, mb: str, quick: bool, use_lock: bool = True) -> Step:
     if quick:
         return Step("skipped", "--quick")
     plan = HERE / "test_plan.py"
@@ -178,7 +204,35 @@ def tests(root: Path, mb: str, quick: bool) -> Step:
     ran = Ran(cmd, root, code, out)
     if code != 0:
         return Step("FAIL", out, ran=ran)
-    runs = json.loads(out)["runs"]
+    shown = json.loads(out)
+    if not (shown.get("regression") or {}).get("table"):
+        return proof_runs(root, shown["runs"], ran)  # no [testing] table: as before (answer 4)
+    try:
+        limit = proof_timeout(root)
+        found = impact(root, mb, "HEAD")
+        areas = proof_areas(root)
+    except CheckError as exc:
+        return Step("FAIL", str(exc), ran=ran)
+    try:
+        taken = take_lock(root) if use_lock else None
+    except heavy_lock.Usage as exc:
+        return Step("FAIL", str(exc), ran=ran)
+    except OSError:
+        return Step("FAIL", f"lock {LOCK}: the lock folder cannot be written (setting: lock_dir)")
+    previous = {sig: signal.signal(sig, heavy_lock.on_signal) for sig in stop_signals()}
+    try:
+        return gate(root, shown["runs"], found, areas, limit, ran)
+    except heavy_lock.Stopped as exc:
+        raise SystemExit(exc.code) from None
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+        if taken is not None:
+            heavy_lock.clear_if_same(*taken)
+
+
+def proof_runs(root: Path, runs: list[dict], ran: Ran) -> Step:
+    """The tests step without a `[testing]` table: proof's plan alone, as brief #326 made it."""
     if not runs:
         return Step("ok", "tests: nothing to run (the test plan selects no test file)", ran=ran)
     try:
@@ -207,6 +261,132 @@ def tests(root: Path, mb: str, quick: bool) -> Step:
         if run_code != 0:
             return Step("FAIL", "\n".join([*lines, run_out.rstrip("\n")]), ran=ran, runs=made)
     return Step("ok", "\n".join(lines), ran=ran, runs=made)
+
+
+def stop_signals() -> list[int]:
+    return [s for s in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None)) if s]
+
+
+def caller_holds(owner: dict | None) -> bool:
+    """The lock is this run's own: `lock.py run --name heavy -- prepush.py` took it, and this
+    process is its command (session rule 31), so taking it again would wait for itself."""
+    if not owner or owner.get("host") != socket.gethostname():
+        return False
+    return owner.get("child") == os.getpid() or owner.get("pid") == os.getppid()
+
+
+def take_lock(root: Path) -> tuple[Path, str] | None:
+    """Take the heavy-step lock with lock.py's own wait lines; None when the caller holds it.
+    A refused setting raises `lock.Usage`, a folder that cannot be written OSError."""
+    held = heavy_lock.lock_folder(root, LOCK)
+    limit = heavy_lock.stale_minutes(root)
+    if held.exists() and caller_holds(heavy_lock.read_owner(held)):
+        print(f"lock {LOCK}: held by this run's caller (lock.py run); not taken again", flush=True)
+        return None
+    token = uuid.uuid4().hex
+    owner = {
+        "session": os.environ.get("AGK_SESSION") or "",
+        "pid": os.getpid(),
+        "host": socket.gethostname(),
+        "started": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "token": token,
+    }
+    heavy_lock.take(held, LOCK, owner, limit, None)  # no timeout: it waits its turn
+    return held, token
+
+
+def rule(item: Selected) -> str:
+    return f"{item.changed} matches code {item.code}, tests {', '.join(item.tests)}"
+
+
+def reasons(items: list[Selected]) -> str:
+    return "; ".join(dict.fromkeys(rule(i) for i in items))
+
+
+def regression_sets(
+    root: Path, found: Impact, areas: list[dict] | None
+) -> tuple[list[tuple[str, str, str, str]], list[str]]:
+    """The regression runs (name, command, folder, reason) and the lines of what is not run."""
+    notes = [f"tests: unmapped (no [testing] map entry covers it): {p}" for p in found.unmapped]
+    project = str(load_config(root)["project_tests"] or "").strip()
+    if found.full or (found.selected and areas is None):
+        reason = found.reason or (
+            f"{reasons(found.selected)}; no [proof] table runs single files, "
+            "so project_tests runs once"
+        )
+        if not project:
+            notes.append(f"tests: full not run: project_tests is not set ({reason})")
+            return [], notes
+        return [("full", project, ".", reason)], notes
+    if not found.selected:
+        extra = " (only documentation changed)" if found.docs_only else ""
+        return [], [f"tests: regression: nothing selected{extra}", *notes]
+    sets = []
+    placed: set[str] = set()
+    for area in areas or []:
+        mine = [s for s in found.selected if is_test_file(s.test, area["dirs"], area["patterns"])]
+        if mine:
+            command = area_command(area, [s.test for s in mine])
+            sets.append((area["name"], command, area["cwd"], reasons(mine)))
+            placed.update(s.test for s in mine)
+    notes.extend(
+        f"tests: not run (in no [proof] area): {s.test}"
+        for s in found.selected
+        if s.test not in placed
+    )
+    return sets, notes
+
+
+def gate(
+    root: Path,
+    runs: list[dict],
+    found: Impact,
+    areas: list[dict] | None,
+    limit: int,
+    ran: Ran,
+) -> Step:
+    """Proof's runs, then the regression set (brief #417 answers 1 and 2), each run with its line
+    printed when it ends; what is not run is printed before the regression runs."""
+    made: list[dict] = []
+    sets, notes = regression_sets(root, found, areas)
+    planned = [(r["name"], r["command"], r["cwd"], OWN, "proof") for r in runs]
+    planned.extend((*item, "regression") for item in sets)
+    shown = False
+    for name, command, cwd, reason, kind in planned:
+        if kind == "regression" and not shown:
+            say(notes)
+            shown = True
+        folder = root / cwd
+        started = time.monotonic()
+        code, out, _ = execute(command, folder, limit)
+        seconds = time.monotonic() - started
+        made.append(
+            {
+                "name": name,
+                "set": kind,
+                "reason": reason,
+                "command": safe_command(command, root),
+                "cwd": safe_cwd(folder, root),
+                "exit": code,
+                "seconds": round(seconds, 3),
+                **digest(out),
+            }
+        )
+        word = "ok" if code == 0 else "FAIL"
+        print(f"prepush: tests {name} {word} ({seconds:.1f}s): {reason}", flush=True)
+        if code is None:
+            return Step("FAIL", timeout_note(limit), ran=ran, runs=made)
+        if code != 0:
+            return Step("FAIL", out.rstrip("\n"), ran=ran, runs=made)
+    if not shown:
+        say(notes)
+    not_run = any("not run" in n for n in notes)
+    return Step("ok", "", not_run=not_run, ran=ran, runs=made)
+
+
+def say(lines: list[str]) -> None:
+    for line in lines:
+        print(line, flush=True)
 
 
 def digest(output: str) -> dict:
@@ -341,7 +521,7 @@ def main(argv: list[str] | None = None) -> int:
         ("lint", lambda: lint(root)),
         ("governance", lambda: governance(root, base)),
         ("secret-scan", lambda: secret_scan(root, mb)),
-        ("tests", lambda: tests(root, mb, options["quick"])),
+        ("tests", lambda: tests(root, mb, options["quick"], options["lock"])),
     ]
     not_run: list[str] = []
     for name, step in steps:

@@ -155,6 +155,7 @@ def test_a_selected_file_in_no_area_is_listed_never_dropped(repo, outside):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert ran(outside) == []
     assert "not run (in no [proof] area): tests/billing/test_pay.py" in proc.stdout
+    assert "prepush: passed; not run: tests" in proc.stdout
 
 
 def test_a_selection_without_a_proof_table_runs_project_tests_once(repo, outside):
@@ -179,7 +180,7 @@ def test_a_docs_only_change_selects_nothing_and_says_so(repo, outside):
 
 def test_the_lock_is_held_while_the_tests_run_and_released_on_a_failure(repo, outside):
     """REQ-016: brief #417 answer 3 (the lock taken and released on a failing test)."""
-    probe = f"test -d {held(outside)} && echo HELD >> LOG; exit 1"
+    probe = f": {{files}}; test -d {held(outside)} && echo HELD >> LOG; exit 1"
     project(repo, toml(outside, area_cmd=probe))
     proc = prepush(repo, outside)
     assert proc.returncode == 1, proc.stdout + proc.stderr
@@ -191,7 +192,7 @@ def test_the_lock_is_held_while_the_tests_run_and_released_on_a_failure(repo, ou
 
 def test_no_lock_leaves_the_lock_out(repo, outside):
     """REQ-016: brief #417 answer 3 (`--no-lock`, for CI)."""
-    probe = f"test -d {held(outside)} && echo HELD >> LOG || echo FREE >> LOG"
+    probe = f": {{files}}; test -d {held(outside)} && echo HELD >> LOG || echo FREE >> LOG"
     project(repo, toml(outside, area_cmd=probe))
     proc = prepush(repo, outside, "--no-lock")
     assert proc.returncode == 0, proc.stdout + proc.stderr
