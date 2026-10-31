@@ -183,6 +183,13 @@ run once, through `sh -c`, when the lock of a run whose process no longer runs i
 age, whose run may still go on, nor for one that names no session. The locked command gets `AGK_LOCK_SESSION`, so a project can
 label what it starts, for example containers, by session (ADR-0231).
 
+A builder in local mode records its run with `python3 scripts/agk/prepush.py --record FILE` (ADR-0208), and the conductor checks
+that record before its verdict with `python3 scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--json]`: `stale`,
+`dirty` or `failed` when the record names another head, an unclean tree or a step that did not exit 0; otherwise governance and a
+sample of the recorded steps (one by default, chosen from the head sha) re-run in a temporary worktree of the head under the
+heavy-step lock, exit codes compared. It ends with one `Evidence check: agrees|differs, ...` line to quote, posts nothing, and
+exits 0 when the record agrees, 1 when it differs, 2 on a usage error or a bad record, 3 on an I/O error (ADR-0233).
+
 ## Actions minutes
 
     python3 scripts/agk/minutes.py [--json | --line] [--repo OWNER/REPO] [--today YYYY-MM-DD] [--api-dir DIR]
