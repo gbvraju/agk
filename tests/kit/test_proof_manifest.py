@@ -1,7 +1,7 @@
-"""Every proof run publishes a test manifest: what ran, what did not, and why (brief #425, ADR-0230).
+"""Every proof run publishes a test manifest: what ran, what did not and why (brief #425, ADR-0230).
 
-`proof.py --manifest FILE` writes a Markdown manifest: each run with its area, command, files and the
-seconds of the base run and the head run; "Not run" with each changed test file in no area, each
+`proof.py --manifest FILE` writes a Markdown manifest: each run with its area, command, files and
+the seconds of the base run and the head run; "Not run" with each changed test file in no area, each
 deleted test file and the reason of a `Behaviour: unchanged` skip or a draft; and "Excluded by the
 project" with the `excluded` entries of the `[testing]` table, which proof never interprets.
 `proof.yml` appends the manifest to the job summary on every outcome. No toolchain, no network.

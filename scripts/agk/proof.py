@@ -5,11 +5,11 @@ Standard library only, and no language: the test command, directories and patter
 and runs `project_tests` there, expecting it to fail, then runs it on the head (a second detached
 worktree), expecting it to pass. With a `[proof]` table, each test area's own command runs instead,
 with only the pull request's test files of that area (brief #305, ADR-0172). What runs is built by
-`plan`, which `test_plan.py` prints before anything runs (brief #325, ADR-0185). With `--manifest FILE`
-it also writes a Markdown test manifest: what ran, what did not, and why (brief #425, ADR-0230); with
-`--not-run draft|status-only` it runs nothing and writes the manifest of that skip. ROOT's work tree is
-never changed: the script adds two worktrees in a temporary directory outside ROOT and removes them
-at the end, also on a failure.
+`plan`, which `test_plan.py` prints before anything runs (brief #325, ADR-0185). With `--manifest
+FILE` it also writes a Markdown test manifest: what ran, what did not, and why (brief #425,
+ADR-0230); with `--not-run draft|status-only` it runs nothing and writes the manifest of that skip.
+ROOT's work tree is never changed: the script adds two worktrees in a temporary directory outside
+ROOT and removes them at the end, also on a failure.
 
 Exit: 0 proven or skipped, 1 not-proven, 4 unknown, 2 usage or a refused setting, 3 I/O.
 """
@@ -546,7 +546,8 @@ def plural(count: int, noun: str) -> str:
 
 def ran_lines(run: Run) -> list[str]:
     """One run of the manifest: area, command, folder, files (the first SHOWN) and seconds."""
-    lines = [f"#### {run.name}", "", f"- command: {code(run.command)}", f"- folder: {code(run.cwd)}"]
+    lines = [f"#### {run.name}", "", f"- command: {code(run.command)}"]
+    lines.append(f"- folder: {code(run.cwd)}")
     lines.append(f"- files: {len(run.files)}")
     lines.extend(f"  - {code(p)}" for p in run.files[:SHOWN])
     if len(run.files) > SHOWN:
