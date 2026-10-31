@@ -1,6 +1,6 @@
 # ADR-0225: a builder commits each checkpoint and pushes only at milestones (REQ-040, brief 415)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0116, ADR-0186, ADR-0221
