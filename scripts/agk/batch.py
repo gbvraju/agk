@@ -20,10 +20,13 @@ It only reports: it labels, merges and posts nothing, changes no branch, ref or 
 checkout, and removes its worktree when it ends, also after a failure. `--record FILE` writes a
 record in the schema of brief #374 (`schema: 1`, `kind: "batch"`, one step per run, the pull
 requests and their status; no output text, no environment value, no path outside the repository)
-and prints `Evidence: batch schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>`.
+and prints `Evidence: batch schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>`; the
+head is the batch merge commit, `null` in the record and `-` in the line when nothing merged.
 
-Exit 0 when every pull request is green, 1 when one is red, `conflict` or `not-fetched`, 2 for a
-usage error or a base that does not resolve, 3 when the lock folder cannot be written.
+Exit 0 when every pull request is green, 1 when one is red, `conflict` or `not-fetched`, or when
+the batch failed although each pull request passed alone (`batch: #a, #b pass alone but fail
+together`, and `together: "FAIL"` under `--json`), 2 for a usage error or a base that does not
+resolve, 3 when the lock folder cannot be written.
 """
 
 from __future__ import annotations
@@ -295,12 +298,26 @@ def main(argv: list[str] | None = None) -> int:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
     rows = [{"number": n, "head": heads[n], "status": status.get(n, "not-fetched")} for n in pulls]
-    all_green = all(row["status"] in GREEN for row in rows)
     batch_step = next((s for s in runner.steps if s["name"] == "batch"), None)
+    # A failed batch with no red pull request of its own: they pass alone but fail together, so
+    # none of them is green to merge with the others (verdict on f3d89dd, item 1).
+    together = (
+        batch_step is not None
+        and batch_step["outcome"] == "FAIL"
+        and not any(row["status"] == "red" for row in rows)
+    )
+    if together:
+        alone = ", ".join(f"#{row['number']}" for row in rows if row["status"] == "green")
+        say(f"batch: {alone or 'the pull requests'} pass alone but fail together")
+    all_green = not together and all(row["status"] in GREEN for row in rows)
     if as_json:
         shown = {
             "base": base,
-            "batch": {"head": merged, "outcome": batch_step["outcome"] if batch_step else None},
+            "batch": {
+                "head": merged,
+                "outcome": batch_step["outcome"] if batch_step else None,
+                "together": "FAIL" if together else None,
+            },
             "pulls": rows,
         }
         print(json.dumps(shown, indent=2, sort_keys=True))
@@ -329,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
         print("batch: the record file cannot be written (option: --record)")
         return 2
     ok = sum(1 for step in runner.steps if step["outcome"] == "ok")
-    head = (merged or base)[:12]
+    head = merged[:12] if merged else "-"  # the record's `head` (verdict on f3d89dd, item 2)
     print(
         f"Evidence: batch schema {SCHEMA}, head {head}, {ok} steps ok, record {sha[:12]}",
         file=out,

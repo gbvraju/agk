@@ -198,9 +198,10 @@ When several pull requests are ready at once, each one's heavy job runs the proj
 ready pull requests cost five heavy runs. `python3 scripts/agk/batch.py PR [PR...]` (brief #436, ADR-0235) runs them once for
 the batch instead: it fetches each head (`refs/pull/<n>/head`, with git alone), merges the heads in the order given onto the
 default branch in a scratch worktree, leaves out a head that does not merge cleanly as `conflict`, and runs the heavy command
-(`--command CMD`, by default `make -f agk.mk agk-project-test`) once, under the heavy-step lock. When that run passes, each
-pull request is `batch-green <sha12>`; only when it fails does the command run again on each pull request's own head merged
-onto the default branch, and the red ones are named. A green batch of five therefore costs one heavy run instead of five.
+(`--command CMD`, by default `make -f agk.mk agk-project-test`) once, under the heavy-step lock. When that run passes, each pull
+request is `batch-green <sha12>`; only when it fails does the command run again on each pull request's own head merged onto the
+default branch, and the red ones are named; when none is red alone, they fail together and none counts as green. A green batch
+of five therefore costs one heavy run instead of five.
 
 A batch run replaces the per-pull-request heavy runs when all of these hold:
 
