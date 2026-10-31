@@ -31,10 +31,11 @@ GUIDE = ROOT / "docs" / "guides" / "self-hosted-runner.md"
 CHECK = """import os, pathlib, sys
 names = sorted(p.name for p in pathlib.Path("values").glob("*.txt"))
 red = [n for n in names if "red" in pathlib.Path("values", n).read_text()]
+pair = [n for n in names if "pair" in pathlib.Path("values", n).read_text()]
 with open(os.environ["BATCH_LOG"], "a", encoding="utf-8") as log:
     log.write(" ".join(names) + "\\n")
 print("CHECK_OUTPUT_TEXT", names)
-sys.exit(1 if red else 0)
+sys.exit(1 if red or len(pair) > 1 else 0)
 """
 LINE = re.compile(r"^#(\d+) (batch-green|green|red|conflict|not-fetched) ([0-9a-f]{12}|-)$", re.M)
 EVIDENCE = re.compile(
@@ -340,3 +341,44 @@ def test_the_runner_guide_says_when_a_batch_run_replaces_the_per_pull_request_ru
         "the kit never turns it on",
     ):
         assert needle in section, needle
+
+
+def test_pull_requests_that_pass_alone_but_fail_together_are_not_green(repo, outside):
+    """REQ-039: brief #436 answer 2 (verdict on f3d89dd, item 1: no false green)."""
+    base(repo, outside)
+    first = pull(repo, 101, {"values/pr101.txt": "pair\n"})
+    second = pull(repo, 102, {"values/pr102.txt": "pair\n"})
+    record = outside / "record.json"
+    proc = batch(repo, outside, "101", "102", "--record", str(record))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert runs(outside) == [
+        "base.txt pr101.txt pr102.txt",
+        "base.txt pr101.txt",
+        "base.txt pr102.txt",
+    ]
+    assert results(proc.stdout) == {101: ("green", first[:12]), 102: ("green", second[:12])}
+    assert "batch: #101, #102 pass alone but fail together" in proc.stdout
+    shown = json.loads(record.read_text(encoding="utf-8"))
+    assert shown["result"] == "failed"
+    assert [s["outcome"] for s in shown["steps"]] == ["FAIL", "ok", "ok"]
+    proc = batch(repo, outside, "101", "102", "--json")
+    assert proc.returncode == 1
+    assert json.loads(proc.stdout)["batch"]["together"] == "FAIL"
+
+
+def test_when_nothing_merged_the_record_and_the_evidence_line_agree(repo, outside):
+    """REQ-039: brief #436 answer 3 (verdict on f3d89dd, item 2)."""
+    base(repo, outside)
+    record = outside / "record.json"
+    proc = batch(repo, outside, "111", "--record", str(record))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert results(proc.stdout) == {111: ("not-fetched", "-")}
+    assert runs(outside) == []
+    shown = json.loads(record.read_text(encoding="utf-8"))
+    assert shown["head"] is None and shown["steps"] == [] and shown["result"] == "failed"
+    line = re.search(
+        r"^Evidence: batch schema 1, head (\S+), 0 steps ok, record ([0-9a-f]{12})$",
+        proc.stdout,
+        re.M,
+    )
+    assert line and line.group(1) == "-", proc.stdout
