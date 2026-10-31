@@ -1,0 +1,1 @@
+- `execution.py`: one optional setting, `execution` (hosted, hybrid, pool or local; hosted when unset), names where the heavy checks run, and the command prints the setting in force and the profile the kit recommends for the repository with its reason, from the minutes `minutes.py` reads; it reports only (brief #441, ADR-0237 Proposed)

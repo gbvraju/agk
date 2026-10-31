@@ -764,6 +764,21 @@ def lock_cleanup(root: Path) -> str:
     return value.strip()
 
 
+EXECUTIONS = ("hosted", "hybrid", "pool", "local")
+
+
+def execution(root: Path) -> str:
+    """Where a project's heavy checks run (brief 441, ADR-0237): `hosted` (the default, also when
+    absent), `hybrid`, `pool` or `local`, read straight from `agk.toml`; any other value is a
+    refusal that names the setting, never the value."""
+    value = config_source(root).get("execution", "hosted")
+    if not isinstance(value, str) or value not in EXECUTIONS:
+        raise CheckError(
+            "execution must be one of hosted, hybrid, pool or local (setting: execution)"
+        )
+    return value
+
+
 PAUSED_LINE = "agk paused"
 
 

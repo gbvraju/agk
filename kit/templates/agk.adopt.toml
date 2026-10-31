@@ -42,6 +42,12 @@ review_mode = "team"
 # "docker ps -aq --filter label=agk.session=$AGK_LOCK_SESSION | xargs -r docker rm -f". A change needs an ADR (agk.toml is protected).
 # lock_slots = 1
 # lock_cleanup = ""
+# Optional (brief #441): where the heavy checks run: "hosted" (the default, also when unset: every check on GitHub-hosted runners),
+# "hybrid" (the required light checks on GitHub-hosted runners, the heavy checks on a pool or locally), "pool" (a self-hosted pool,
+# see docs/guides/self-hosted-runner.md) or "local" (see docs/guides/local-mode.md); any other value is refused. It changes no
+# workflow: `python3 scripts/agk/execution.py` prints the setting in force and the profile the kit recommends for this repository
+# and why, in one line. A top-level line (not inside a [table]); a change needs an ADR (agk.toml is protected).
+# execution = "hosted"
 # Experimental, off by default: set experimental_reviewer = true, then run agk upgrade, to install the reviewer agent.
 # Optional (brief #373): which tests guard which code. `python3 scripts/agk/test_plan.py` shows, as its regression section, the tests a
 # change selects and the rule that chose each; nothing runs the selection yet. profile: "fast" (an unmapped file is only listed),

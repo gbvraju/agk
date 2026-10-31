@@ -48,6 +48,7 @@
     "scripts/agk/config.py",
     "scripts/agk/doctor.py",
     "scripts/agk/drift_audit.py",
+    "scripts/agk/execution.py",
     "scripts/agk/facts.py",
     "scripts/agk/full_run.py",
     "scripts/agk/impact.py",
