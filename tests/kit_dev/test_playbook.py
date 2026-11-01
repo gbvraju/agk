@@ -129,7 +129,9 @@ def test_ac1_no_instruction_file_names_the_graphql_command():
 
 def test_ac1_claude_md_carries_the_state_of_a_pull_request_line():
     """REQ-020 AC1: rule 17 (one line, a GET)."""
-    body = (KIT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    # CLAUDE.md points at the core-rules page, which holds its former list (ADR-0247).
+    rels = ("CLAUDE.md", "config/core-rules.md")
+    body = "".join((KIT_ROOT / rel).read_text(encoding="utf-8") for rel in rels)
     assert "gh api repos/{owner}/{repo}/pulls/{n}" in body and "(a GET)" in body
     assert body.count("pulls/{n}") == 1
 

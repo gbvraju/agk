@@ -11,6 +11,7 @@ import re
 from conftest import KIT_ROOT
 
 CLAUDE = KIT_ROOT / "CLAUDE.md"
+CORE = KIT_ROOT / "config" / "core-rules.md"
 PRINCIPLES = KIT_ROOT / "constitution" / "principles.md"
 REFERENCE = KIT_ROOT / "docs" / "guides" / "reference.md"
 WORKFLOW = KIT_ROOT / ".github" / "workflows" / "governance.yml"
@@ -44,7 +45,7 @@ def test_ac1_the_changelog_is_not_installed_in_a_project():
 
 def test_ac7_claude_md_and_the_principles_hold_the_rules_of_the_sessions():
     """REQ-035 AC7: rule 7 (several sessions in flow mode, never stacked, Depends-on)."""
-    claude = flat(CLAUDE)
+    claude = flat(CLAUDE) + " " + flat(CORE)  # CLAUDE.md points at the page (ADR-0247)
     assert "One open PR per session" in claude
     assert "several sessions may have one each" in claude
     assert "never stacked on another's unmerged change" in claude

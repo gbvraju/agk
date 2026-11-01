@@ -1,0 +1,1 @@
+- `config/core-rules.md` is the one page a session reads first: it names the core rules (the constitution, the safety rules and the working rules chosen in row 13 of plan #278) by number with one plain sentence each, and holds the former numbered list of `CLAUDE.md` with its numbers and exact text; `CLAUDE.md` points at it and restates no rule (brief #388, ADR-0247 Proposed)
