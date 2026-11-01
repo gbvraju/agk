@@ -12,7 +12,8 @@ function (`proof.plan`), so the plan shown is the plan run:
 - a `regression` section (brief #373, ADR-0220): the regression tests that the `[testing]` table of
   `agk.toml` selects for the change, each with the rule that chose it, or `full (<reason>)`, then
   the unmapped files (`impact.py`). Without the table it is `regression: full (no [testing] table)`.
-  Nothing runs the selection yet.
+  `prepush.py` runs the selected regression tests (brief #417), and `proof.py` runs them only
+  with `proof_regression = true` in the `[testing]` table (brief #442, off by default).
 
 Without a `[proof]` table it prints `project_tests` and the test files `test_dirs` and
 `test_patterns` select. The base defaults to the merge base with the default branch, as in proof.

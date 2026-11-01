@@ -12,8 +12,8 @@ the workflow; look at the workflows that hold your required checks.
 
 ## 1. Heavy jobs run only on pull requests that are not drafts
 
-A builder pushes a checkpoint to a draft pull request at every step; nothing on a draft can merge, so a heavy job there buys
-nothing. Run it on a ready pull request and on pushes to the default branch, and add `ready_for_review` so it runs once the draft
+A builder commits a checkpoint at every step but pushes its draft pull request only at its milestones (session rule 7); nothing
+on a draft can merge, so a heavy job there buys nothing. Run it on a ready pull request and on pushes to the default branch, and add `ready_for_review` so it runs once the draft
 is marked ready. A skipped job reports `skipped`, which GitHub counts as passing for a required check, and so does the router.
 That is why `ready_for_review` is not optional: without it, a draft marked ready with no new commit keeps the green check of
 its skipped run, and the pull request can merge with the heavy job never run.

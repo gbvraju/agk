@@ -21,7 +21,8 @@ folders that no entry covers. Under `balanced` an unmapped file makes the select
 unsure, run more); under `fast` it is only listed. A change of only `*.md` files and files under
 `docs/` selects nothing under every profile, and such a file is never unmapped. Without the table
 the selection is full ("no [testing] table"), which is what governance runs today. `test_plan.py`
-shows the selection; proof runs it on the head only with `proof_regression = true`.
+shows the selection; `prepush.py` runs the selected regression tests (brief #417), and `proof.py`
+runs them on the head only with `proof_regression = true` (brief #442, off by default).
 
 A glob is a path glob: `*` and `?` stay in one folder, `**` crosses folders, and `dir/` is
 `dir/**`. A bad setting is refused (CheckError), naming the setting.

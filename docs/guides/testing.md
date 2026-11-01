@@ -30,6 +30,8 @@ budget_seconds = 300
   that every test depends on, such as authentication or the database schema.
 - `map`: a list of entries. Each names a `code` glob and the `tests` globs of the tests that guard that code.
 - `budget_seconds`: the target time of the full project suite, 300 seconds if unset. The metrics read it later.
+- `excluded`: a list of `"<tag>: <reason>"` texts, the tests that the project's own command leaves out (brief #425, ADR-0230).
+  Nothing in the selection interprets them; proof lists them in its manifest.
 
 Every key is optional; an empty `[testing]` table takes the defaults. A bad entry is refused, and the message names the setting
 (for example `setting: testing.map[2].tests`), never its value.

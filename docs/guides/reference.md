@@ -15,12 +15,12 @@ aliases of them. Kit tests are collected only through `agk.mk` (they need `AGK_K
 
 Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI the pull-request base SHA is used.
 
-Before a push, `python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick]` runs the fast checks CI would fail on
+Before a push, `python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock]` runs the fast checks CI would fail on
 first, in order, and stops at the first failure with its message: the pull request body check (on `FILE`), `make lint` where
 the Makefile has the target, `make -f agk.mk agk-governance` (no network; `not run` without `make`), the secret scan over the branch's commits when
 `gitleaks` is installed (else `secret scan: not run`), and the tests that `test_plan.py` selects (`--quick` skips them). It prints
 `prepush: <step> ok|FAIL|skipped (<s>s)` per step and exits 0 when no step failed, 1 when one did, 2 on a usage error (session
-rule 31, ADR-0186). The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
+rule 31, ADR-0186). `--no-lock` leaves the heavy-step lock (`lock.py`, name `heavy`) of the tests step out, for CI. The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
 `python3 scripts/agk/reviewers.py --codeowners` prints the rendered CODEOWNERS; with `--write` it writes the file (in an
 adopted repository only the marked block). `python3 scripts/agk/traceability.py` prints the requirement-to-test matrix to stdout; it is never committed.
 

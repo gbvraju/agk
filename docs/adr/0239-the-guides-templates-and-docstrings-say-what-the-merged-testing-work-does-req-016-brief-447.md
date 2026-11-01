@@ -36,8 +36,8 @@ gained in brief #427. Brief #447 gives the answers. It changes text only, never 
    `over budget (budget_seconds <b>): ...`, and that rule 20 name their cases. It is a proposal only; no rule of the spec changes.
 6. **Tests (answer 6).** The kit tests that read the changed files were run before and after the change. No assertion pins a
    sentence this brief changes, so no test changes. `tests/kit/test_prepush_regression.py` asserts that the testing guide does
-   not say "Nothing runs the selection yet", which stays true. The manifest and hashes are regenerated with the kit's own
-   scripts.
+   not say "Nothing runs the selection yet", which stays true. `python3 scripts/agk/kit_hashes.py` checks the table `ok`; the
+   manifest and the table do not change (Q-447-3).
 
 ## Consequences
 
@@ -51,3 +51,7 @@ does changes.
   asks.
 - 2026-11-01: Q-447-2: the testing guide's opening paragraph says proof is unchanged by the selection, which `proof_regression`
   (brief #442) now qualifies; answer 4 names only `excluded`, so the paragraph stays and the question is asked.
+- 2026-11-01: Q-447-3: the brief asks to regenerate the manifest and hashes, but in flow mode a build never edits
+  `kit/hashes.json` (session rule 14; the reference guide, "Developing the kit") and the release regenerates it;
+  `kit_hashes.py --write` would rewrite the current version's row. No file this brief adds is installed, so `kit/manifest.json`
+  lists nothing new, and no kit script writes it. The conservative reading leaves both unchanged and checks the table.
