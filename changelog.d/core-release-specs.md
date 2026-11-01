@@ -1,0 +1,1 @@
+- The flow-mode release rules live in one spec: SPEC-0031's changelog-fragment rules are rules 11 to 18 of SPEC-0028, whose rules 2, 4, 5 and 6 carry the text SPEC-0031 gave them, and SPEC-0031 keeps one pointer line per old rule (brief #386, amendment 108, ADR-0245 Proposed)
