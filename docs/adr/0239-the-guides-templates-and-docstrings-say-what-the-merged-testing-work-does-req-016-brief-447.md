@@ -46,11 +46,15 @@ does changes.
 
 ## Residual
 
-- 2026-11-01: Q-447-1: the commented `[testing]` tables of both templates also say "nothing runs the selection yet", which the
-  brief's sentence contradicts but its answer 4 does not name. The conservative reading changes only what answer 4 names and
-  asks.
-- 2026-11-01: Q-447-2: the testing guide's opening paragraph says proof is unchanged by the selection, which `proof_regression`
-  (brief #442) now qualifies; answer 4 names only `excluded`, so the paragraph stays and the question is asked.
+- 2026-11-01: Q-447-1: the commented `[testing]` tables of both templates also said "nothing runs the selection yet". Answered
+  by the conductor's verdict on fc0da3e (item 1): they now say, in the words of `impact.py`'s docstring, that `prepush.py` runs
+  the selected regression tests and proof runs them only with `proof_regression = true` (off by default); the example table
+  gains no `proof_regression` line.
+- 2026-11-01: Q-447-2: the testing guide's opening paragraph said proof was unchanged by the selection. Answered by the same
+  verdict (item 2): it now says that proof also runs the selected tests only with `proof_regression = true`, off by default,
+  and that governance still runs every project test on every ready push; the key list under "The table" gains
+  `proof_regression` in the words of `impact.py`'s docstring. The same verdict (item 3) rewraps the lines this pull request
+  lengthened, with no other word changed.
 - 2026-11-01: Q-447-3: the brief asks to regenerate the manifest and hashes, but in flow mode a build never edits
   `kit/hashes.json` (session rule 14; the reference guide, "Developing the kit") and the release regenerates it;
   `kit_hashes.py --write` would rewrite the current version's row. No file this brief adds is installed, so `kit/manifest.json`

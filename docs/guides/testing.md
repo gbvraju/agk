@@ -6,8 +6,9 @@ the regression tests that a change selects and the rule that chose each. The rul
 `agk.toml` is a protected path, so a change of a rule comes with an ADR in the same pull request, and an agent cannot loosen
 the rules to pass a gate.
 
-The pre-push gate (`prepush.py`) runs the selection before a push, as described [below](#the-pre-push-gate). Proof and CI
-are unchanged: governance still runs every project test on every ready push.
+The pre-push gate (`prepush.py`) runs the selection before a push, as described [below](#the-pre-push-gate). Proof also
+runs the selected tests on the head, only with `proof_regression = true` in the `[testing]` table, off by default. CI is
+unchanged: governance still runs every project test on every ready push.
 
 ## The table
 
@@ -32,6 +33,8 @@ budget_seconds = 300
 - `budget_seconds`: the target time of the full project suite, 300 seconds if unset. The metrics read it later.
 - `excluded`: a list of `"<tag>: <reason>"` texts, the tests that the project's own command leaves out (brief #425, ADR-0230).
   Nothing in the selection interprets them; proof lists them in its manifest.
+- `proof_regression`: a boolean, false by default; with true and a `[proof]` table, proof also runs the selection on the head
+  (brief #442, ADR-0238, off until a person approves the spec change).
 
 Every key is optional; an empty `[testing]` table takes the defaults. A bad entry is refused, and the message names the setting
 (for example `setting: testing.map[2].tests`), never its value.
