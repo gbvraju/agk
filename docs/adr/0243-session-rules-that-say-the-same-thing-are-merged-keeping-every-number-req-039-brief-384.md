@@ -41,7 +41,7 @@ merge: never renumber; a merged number stays as a pointer line. Brief #384 gives
    figure on a `Report:` line) moves word for word into step 6 of "Running the loop" of
    `docs/guides/getting-started.md`, after the guide's own sentence, which is kept. Each number stays as one line,
    `N. Moved to `<file>` (ADR-0243).`. SPEC-0035 rules 1, 3 and 7 and SPEC-0033 rule 8 stay their decided sources and are
-   not edited (Q-384-1, Q-384-2).
+   not edited (Q-384-1, Q-384-2, Q-384-4).
 4. **The safety rules (answer 4).** Rules 2, 14, 15, 22, 29, 30 and 33 are unchanged byte for byte; rules 7 to 11, 19,
    27, 28, 32, 34 and 35 are unchanged too.
 5. **Tests (answer 5).** `tests/kit/test_session_rules.py` holds the text of each merged and moved rule before the change
@@ -64,3 +64,12 @@ merge: never renumber; a merged number stays as a pointer line. Brief #384 gives
 - 2026-11-01: SPEC-0035 rule 7 says the session rules give the shapes of `Shadow:` and `Marks:`; after row 8 the session
   rules point at the shadow role file, which gives them. Amending the sentence of the Approved spec is for a person
   (Q-384-2).
+- 2026-11-01: brief #384 answer 3 names "the reporting guide" for rule 12; no file has that name. Conservative reading: the
+  guide section that already states the usage figure for a builder, step 6 of "Running the loop" of
+  `docs/guides/getting-started.md`, keeping its own sentence and adding the rule word for word (Q-384-1).
+- 2026-11-01: brief #384 answer 3 also names SPEC-0035 as a destination; SPEC-0035 is Approved and already holds the
+  shapes in rules 1 and 3, so it is not edited and rules 25 and 26 move whole to the shadow role file, its reader's file
+  (Q-384-4).
+- 2026-11-01: three tests outside the brief's `Touches:` line read the moved text and now read it where it lives
+  (`tests/kit/test_shadow_rules.py`, `tests/kit/test_usage_figures.py`, `tests/kit_dev/test_session_rules_push.py`), and
+  the shadow role file and the getting-started guide receive rules 25, 26 and 12, as answer 3 requires (Q-384-3).
