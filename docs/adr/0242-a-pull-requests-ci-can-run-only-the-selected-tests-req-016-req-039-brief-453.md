@@ -1,6 +1,6 @@
 # ADR-0242: a pull request's CI can run only the selected tests, while the default branch and every release run the full suite (REQ-016, REQ-039, brief 453)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: maintainers
 - Related: ADR-0220, ADR-0227, ADR-0238
