@@ -291,3 +291,15 @@ def test_the_workflow_passes_the_event_and_agk_mk_calls_the_script():
 def test_the_kit_repository_does_not_set_pr_tests():
     """REQ-016: brief #453 answer 5 (the kit's own agk.toml leaves `pr_tests` out)."""
     assert "pr_tests" not in (ROOT / "agk.toml").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "text", ['version = "1.2.3"\n', "", "version = 3\n", "not = [toml", None, 'x = "1"\n']
+)
+def test_the_version_reading_equals_check_release(text):
+    """REQ-016: brief #453 answer 3, Q-453-7 (`check_release.py` is kit-only, so the installed
+    script restates `toml_version`; the two read every text alike)."""
+    import check_release
+    import project_tests
+
+    assert project_tests.toml_version(text) == check_release.toml_version(text)

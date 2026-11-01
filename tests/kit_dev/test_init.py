@@ -443,11 +443,11 @@ def test_ac2_make_test_is_the_kit_suite_then_the_project_tests(shared_copy):
     """REQ-009 AC2: rule 18. `make test` runs agk-test, then agk-project-test, and nothing else."""
     plan = make(shared_copy, "-n", "test").stdout
     suite = plan.index("kit's own tests are not installed")  # the notice of agk-test in a project
-    project = plan.index("scripts/agk/config.py project_tests")
+    project = plan.index("scripts/agk/project_tests.py")
     assert suite < project
     skipped = make(shared_copy, "-n", "-o", "agk-test", "test").stdout
     assert "kit's own tests are not installed" not in skipped
-    assert "scripts/agk/config.py project_tests" in skipped
+    assert "scripts/agk/project_tests.py" in skipped
 
 
 def test_ac2_installed_adr_records_the_one_direct_commit(installed):

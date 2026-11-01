@@ -24,15 +24,14 @@ while the default branch runs in full. The regression selection of `impact.py` (
    `impact.pr_tests(root)` reads it: `full` without the table or the key. With `full`, or with no `[testing]` table, the
    step runs the `project_tests` command exactly as before and prints nothing more.
 2. **The script (answer 2).** `agk-project-test` calls a new installed script, `scripts/agk/project_tests.py`, listed in
-   `kit/manifest.json` (verbatim). It keeps the notice of an empty `project_tests` word for word, imports no network module
-   and reuses `prepush.regression_sets`, `impact.impact`, `impact.text` and `check_release.toml_version` rather than copying
-   them. With `selected` it decides by the event, which the workflow passes in as `EVENT: ${{ github.event_name }}`, as the
+   `kit/manifest.json` (verbatim). It keeps the notice of an empty `project_tests` word for word, makes no network call
+   and reuses `prepush.regression_sets`, `impact.impact` and `impact.text` rather than copying them. With `selected` it decides by the event, which the workflow passes in as `EVENT: ${{ github.event_name }}`, as the
    `Secret scan` step does. On `pull_request` it runs the regression set of the head against its merge base with the base
    (`AGK_BASE`, set by the step `Base of the merge ref`): the full `project_tests` command when the plan is full (an
    `always_full` path, `thorough`, unmapped files under `balanced`), else each selected run in its `[proof]` area's folder
    with that area's command. On `push`, on any other event, or when `EVENT` is unset, it runs the full command.
 3. **Release (answer 3).** A pull request whose `agk.toml` `version` differs from the base's, read with
-   `check_release.toml_version`, runs the full command (`project tests: full (release: version raised in agk.toml)`).
+   `check_release.toml_version` reads it (Q-453-7), runs the full command (`project tests: full (release: version raised in agk.toml)`).
 4. **What is said (answer 4).** Under `selected`, before anything runs, the step prints
    `project tests: pr_tests selected, event <event>`, then the plan's `regression` section and the lines of what is not run
    and why, then the decision (`project tests: full (<why>)` or one line per selected run), and appends the same lines to
@@ -69,3 +68,10 @@ leaves it out.
   `proof_timeout` stays proof's.
 - 2026-11-01: Q-453-6: the kit has no script that writes `kit/manifest.json`; the one line is added in sorted order, as the
   pull request of brief #441 did, and `kit_hashes.py` checks it.
+- 2026-11-01: Q-453-7: `check_release.py` is kit-only and never installed, so the installed script cannot import it;
+  `project_tests.toml_version` restates its reading of `version` (stdlib `tomllib`), and a kit test pins the two equal on the
+  same texts, as `new_spec.py` restates a common rule (Q-K4-216). `prepush.py`, which the script imports, imports `socket` only
+  for the lock owner's host name; nothing here opens a connection.
+- 2026-11-01: Q-453-8: three existing tests pinned the old recipe of `agk-project-test` and the old `Project tests` step
+  (`tests/kit/test_workflow.py`, `tests/kit_dev/test_init.py`, `tests/kit_dev/test_make_once.py`); they now pin the new recipe
+  and the `env:` block, and assert the same order and the same outcomes as before.

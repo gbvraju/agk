@@ -10,9 +10,9 @@ in as `EVENT`:
 - `pull_request`: the regression set that `prepush.regression_sets` builds for the head against
   its merge base with the base (`AGK_BASE`, else the default branch): the full command when the
   plan is full, else each selected run, the command of its `[proof]` area in that area's folder;
-- the full command for a push, any other event, an unset `EVENT`, a release pull request (one whose
-  `version` in `agk.toml` differs from the base's, read with `check_release.toml_version`), a base
-  that does not resolve, and a selected file that no `[proof]` area can take.
+- the full command for a push, any other event, an unset `EVENT`, a release pull request (one
+  whose `version` in `agk.toml` differs from the base's, read as `check_release.toml_version`
+  reads it), a base that does not resolve, and a selected file that no `[proof]` area can take.
 
 Under `selected` it first prints, and appends to `$GITHUB_STEP_SUMMARY` when that is set, the
 line `project tests: pr_tests selected, event <event>`, the plan's `regression` section, the lines
@@ -20,6 +20,9 @@ of what is not run and why, and the decision. Each run ends with
 `project tests: <name> ok|FAIL (<s>s): <reason>`; the first failure ends it with exit 1. With
 `full`, or without a `[testing]` table, it runs the full command exactly as `agk.mk` did and prints
 nothing more. A bad setting is refused naming it (exit 1). It calls no network.
+
+`check_release.py` is kit-only (never installed), so `toml_version` restates its reading of
+`version`; a kit test pins the two equal (Q-453-7).
 """
 
 from __future__ import annotations
@@ -28,11 +31,11 @@ import os
 import subprocess  # nosec B404 - the project's own test command, run as the caller
 import sys
 import time
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from check_release import toml_version
 from common import CheckError, git, load_config, merge_base, proof_areas, repo_root, resolve_base
 from impact import impact, pr_tests, text
 from prepush import regression_sets
@@ -43,7 +46,19 @@ EVENT = "pull_request"
 
 def shell(command: str, cwd: Path) -> int:
     """Run the project's command with its output shown as it comes, as `sh -c` in agk.mk did."""
-    return subprocess.run(["sh", "-c", command], cwd=cwd).returncode  # nosec B603 B607
+    proc = subprocess.run(  # nosec B603 B607 - the project's own test command, run as the caller
+        ["sh", "-c", command], cwd=cwd
+    )
+    return proc.returncode
+
+
+def toml_version(text: str | None) -> str | None:
+    """`version` of an agk.toml text, None when absent or unreadable (as check_release reads it)."""
+    try:
+        value = tomllib.loads(text or "").get("version")
+    except tomllib.TOMLDecodeError:
+        return None
+    return value if isinstance(value, str) else None
 
 
 def say(lines: list[str]) -> None:
