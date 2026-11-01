@@ -1,6 +1,6 @@
 # ADR-0241: stack-check says whether the [testing] table matches the chosen stack option (REQ-016, brief 450)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: maintainers
 - Related: ADR-0220, ADR-0228
