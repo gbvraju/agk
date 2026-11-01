@@ -206,12 +206,15 @@ def test_ac8_a_busy_week_sums_every_merged_pull_request_and_lists_none():
     assert entry["usage"] == 100 * entry["merged"] and entry["usage_reported"] == entry["merged"]
 
 
-def test_ac8_the_rules_file_and_the_amendment_say_the_figure_is_since_the_previous_report():
-    """REQ-040 AC8 (the verdict on the first head: a running total would be summed twice)"""
+def test_ac8_the_guide_and_the_amendment_say_the_figure_is_since_the_previous_report():
+    """REQ-040 AC8 (the verdict on the first head: a running total would be summed twice);
+    session rule 12 moved to the getting-started guide with a pointer line (ADR-0243)."""
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
-    rules = (root / "config" / "session-rules.md").read_text(encoding="utf-8")
+    pointer = "12. Moved to `docs/guides/getting-started.md` (ADR-0243)."
+    assert pointer in (root / "config" / "session-rules.md").read_text(encoding="utf-8")
+    rules = (root / "docs" / "guides" / "getting-started.md").read_text(encoding="utf-8")
     for phrase in (
         "Usage: <n> tokens",
         "since the previous `Report:` of the same pull request",
