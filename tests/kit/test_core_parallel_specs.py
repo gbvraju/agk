@@ -1,4 +1,6 @@
-"""SPEC-0025 (parallel pull requests) folded into SPEC-0034 (parallel builders) (brief #387, ADR-0246).
+"""SPEC-0025 (parallel pull requests) folds into SPEC-0034 (parallel builders) (brief #387).
+
+ADR-0246.
 
 The rules of SPEC-0025 move into a new section of SPEC-0034's `## Rules`, rule n of SPEC-0025
 becoming rule n + 16 there (15 and 16 are left to the new rules that amendments 88 and 89 propose),
@@ -29,7 +31,7 @@ OFFSET = 16
 RULE = re.compile(r"^(\d+[a-z]?)\. (.*)$")
 POINTER = re.compile(r"^(\d+)\. Now SPEC-0034 rule (\d+)\.$")
 
-# rule of SPEC-0025 -> (its bold title, the first 16 hex digits of the SHA-256 of its text after "N. ")
+# rule of SPEC-0025 -> (its bold title, the first 16 hex digits of the SHA-256 of its text)
 OLD = {
     1: ("Duplicate numbers fail.", "730cf2034738dc30"),
     2: ("Renumbering is a command, never a hand edit.", "42f0623bc47e2b5b"),
@@ -47,13 +49,14 @@ OLD = {
 # becomes the text of amendment 50 item 2, the release model SPEC-0028 gave it.
 RULE_8_KEPT = (
     "**This repository.** Parts 1 to 5 are built for every project. After they are released a "
-    "separate pull request switches this repository to `flow` by an ADR; until then this repository "
-    "stays strict, with the maintainers' docs-only exception of 2026-10-24."
+    "separate pull request switches this repository to `flow` by an ADR; until then this "
+    "repository stays strict, with the maintainers' docs-only exception of 2026-10-24."
 )
 RULE_8_OLD_TAIL = (
-    "The release model in answer 7 (kit build pull requests do not bump the version in flow mode; one "
-    "release pull request bumps `agk.toml`, `kit/manifest.json` and the plugin together and moves an "
-    "Unreleased changelog section) is a later intake of this repository only and is not built here."
+    "The release model in answer 7 (kit build pull requests do not bump the version in flow mode; "
+    "one release pull request bumps `agk.toml`, `kit/manifest.json` and the plugin together and "
+    "moves an Unreleased changelog section) is a later intake of this repository only and is not "
+    "built here."
 )
 RULE_8_NEW_LEAD = "The release model, as SPEC-0028 amended it (amendment 50, item 2): "
 
@@ -104,7 +107,7 @@ def old_text_at(commit: str) -> str | None:
 
 
 def test_the_pins_are_the_text_spec_0025_had_before_the_fold():
-    """Brief #387 answer 5 (REQ-041): the pinned digests are those of SPEC-0025's rules before it."""
+    """Brief #387 answer 5 (REQ-041): the pins are the digests of SPEC-0025's old rules."""
     old = old_text_at(BEFORE)
     if old is None:
         pytest.skip("the commit before the fold is not in this clone's history")
@@ -118,7 +121,7 @@ def test_the_pins_are_the_text_spec_0025_had_before_the_fold():
 
 @pytest.mark.parametrize("n", [n for n in OLD if n != 8])
 def test_each_rule_of_spec_0025_is_in_spec_0034_unchanged(n):
-    """Brief #387 answers 1 and 5 (REQ-041): SPEC-0025 rule n is SPEC-0034 rule n + 16, word for word."""
+    """Brief #387 answers 1 and 5 (REQ-041): SPEC-0025 rule n is SPEC-0034 rule n + 16."""
     moved = rules(read(SPEC_0034)).get(str(n + OFFSET))
     title, pin = OLD[n]
     assert moved is not None, f"SPEC-0034 rule {n + OFFSET}"
@@ -127,7 +130,7 @@ def test_each_rule_of_spec_0025_is_in_spec_0034_unchanged(n):
 
 
 def test_rule_8_moves_in_the_text_spec_0028_amended_it_to():
-    """Brief #387 answer 1 (REQ-041): the release model of rule 8 is amendment 50 item 2's text."""
+    """Brief #387 answer 1 (REQ-041): rule 8's release model is amendment 50 item 2's text."""
     moved = rules(read(SPEC_0034)).get(str(8 + OFFSET))
     assert moved == expected_rule_8()
     assert "is a later intake of this repository only" not in moved
@@ -135,7 +138,7 @@ def test_rule_8_moves_in_the_text_spec_0028_amended_it_to():
 
 
 def test_spec_0034_keeps_its_own_rules_and_leaves_15_and_16_free():
-    """Brief #387 answer 3 (REQ-041): rules 1 to 14 stay; 15 and 16 stay for amendments 88 and 89."""
+    """Brief #387 answer 3 (REQ-041): rules 1 to 14 stay; 15 and 16 wait for 88 and 89."""
     numbers = list(rules(read(SPEC_0034)))
     own = [str(n) for n in range(1, 15)]
     moved = [str(n + OFFSET) for n in OLD]
@@ -144,7 +147,7 @@ def test_spec_0034_keeps_its_own_rules_and_leaves_15_and_16_free():
 
 
 def test_spec_0025_says_where_each_rule_went():
-    """Brief #387 answers 2 and 5 (REQ-041): one pointer line per old rule, each naming a rule that exists."""
+    """Brief #387 answers 2 and 5 (REQ-041): a pointer per old rule, to a rule that exists."""
     text = read(SPEC_0025)
     assert text.startswith("# SPEC-0025: ")
     inside = False
@@ -187,8 +190,8 @@ def test_both_specs_stay_approved_and_their_other_sections_stay():
 
 
 def test_the_amendment_names_both_specs_and_check_specs_passes(repo):
-    """Brief #387 answer 5 (REQ-041): `check_specs` passes the change with the amendment, fails without."""
-    placeholder = "# SPEC-{n}: x\n\n- Status: Approved\n- Owner: maintainers\n\n## Rules\n\n1. old\n"
+    """Brief #387 answer 5 (REQ-041): `check_specs` passes with the amendment, fails without it."""
+    placeholder = "# SPEC-{n}: x\n\n- Status: Approved\n- Owner: maintainers\n\n## Rules\n\n1. o\n"
     repo.commit(
         {
             SPEC_0025: placeholder.format(n="0025"),
@@ -209,7 +212,7 @@ def test_the_amendment_names_both_specs_and_check_specs_passes(repo):
 
 
 def test_no_script_is_touched_and_citations_still_resolve():
-    """Brief #387 answer 3 (REQ-041): every `SPEC-0025 rule n` cited in scripts names a pointer line."""
+    """Brief #387 answer 3 (REQ-041): each `SPEC-0025 rule n` a script cites is a pointer line."""
     pointers = rules(read(SPEC_0025))
     cited = set()
     for path in sorted((ROOT / "scripts" / "agk").glob("*.py")):
