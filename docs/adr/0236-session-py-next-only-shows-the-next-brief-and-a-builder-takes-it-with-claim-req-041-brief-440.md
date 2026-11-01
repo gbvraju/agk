@@ -1,6 +1,6 @@
 # ADR-0236: session.py next only shows the next brief, and a builder takes it with claim (REQ-041, brief 440)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0195, ADR-0229
