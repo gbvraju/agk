@@ -1,6 +1,6 @@
 # ADR-0239: the guides, templates and docstrings say what the merged testing work does (REQ-016, brief 447)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: maintainers
 - Related: ADR-0185, ADR-0220, ADR-0227, ADR-0230, ADR-0232, ADR-0238
