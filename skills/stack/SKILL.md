@@ -51,7 +51,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-check
    verdict on that pull request is a plain `Verdict: cleared <sha>`. The build which accepts the stack also
    copies the chosen option's `[testing]` values, as the ADR's `test selection` practice gives them, into the `[testing]` table
    of `agk.toml` in the same pull request as the ADR, by a second ordinary commit that changes nothing else, so one ADR sets
-   them; the ADR names `agk.toml`, which covers that protected path. Print the text below for the person, with the ADR number and
+   them; the ADR names `agk.toml`, which covers that protected path; after the second commit, `stack-check` prints whether
+   the copy matches, in one information line that never fails it. Print the text below for the person, with the ADR number and
    the file name filled in:
 
    The prompt for the accepting change:

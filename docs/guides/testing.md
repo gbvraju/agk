@@ -42,6 +42,11 @@ Every key is optional; an empty `[testing]` table takes the defaults. A bad entr
 A glob is a path from the top of the repository. `*` and `?` stay inside one folder, `**` crosses folders, and a glob that ends
 in `/` means everything below that folder. A glob uses `/` between folders, never `\`, and may not start with `/` or hold a `..` part.
 
+A new project's first values come from its stack ADR: the pull request that accepts the stack copies the `[testing]` profile
+and the `always_full` paths that the chosen option's `test selection` practice names into this table, by a second ordinary
+commit (`/agk:stack`, ADR-0228); after the second commit, `stack-check` prints whether the copy matches, in one information
+line that names the setting and never fails it (`engines.py stack-check`, ADR-0241).
+
 ## What a change selects
 
 For a change, the selection is worked out from git and files only, with no network:

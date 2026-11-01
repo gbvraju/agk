@@ -28,6 +28,9 @@ SKILL = KIT_ROOT / "skills" / "stack" / "SKILL.md"
 SERVICES = "sign-in, outgoing mail, file storage and timed jobs"
 WITH_SERVICES = OPTION_B.replace(" Practices:", f" External services: {SERVICES}. Practices:")
 INFO = "info engines: local profile: not decided\n"
+# Brief 450 (ADR-0241): an accepted stack also gets one [testing] line before it; these ADRs
+# carry no test selection practice.
+TESTING = "info engines: [testing] not compared: the stack ADR has no test selection practice\n"
 DECLINE = "local profile: declined, the product is a single static page with no services"
 
 
@@ -154,7 +157,7 @@ def test_ac4_an_accepted_stack_without_a_decision_gets_one_information_line(star
     """REQ-036 AC4: brief 267 answer 2 (`local profile: not decided`, never a failure)."""
     stack_root(started, accepted())
     proc = engines(started, "stack-check")
-    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n" + INFO), proc.stdout
+    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n" + TESTING + INFO), proc.stdout
 
 
 def test_ac4_a_proposed_stack_gets_no_information_line(started):
@@ -168,7 +171,7 @@ def test_ac4_a_declined_local_profile_is_decided(started):
     """REQ-036 AC4: brief 267 answer 2 (one Residual line with a reason and a date)."""
     stack_root(started, with_residual(accepted(), f"{DECLINE} (2026-10-29)"))
     proc = engines(started, "stack-check")
-    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n"), proc.stdout
+    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n" + TESTING), proc.stdout
 
 
 def test_ac4_a_local_profile_requirement_is_decided(started):
@@ -181,7 +184,7 @@ def test_ac4_a_local_profile_requirement_is_decided(started):
     )
     stack_root(started, accepted())
     proc = engines(started, "stack-check")
-    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n"), proc.stdout
+    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n" + TESTING), proc.stdout
 
 
 @pytest.mark.parametrize(
@@ -348,7 +351,7 @@ def test_ac4_the_engines_script_still_runs_without_the_template_in_isolated_mode
         text=True,
         env=clean_env(),
     )
-    assert proc.stdout == "ok engines-stack\n" + INFO
+    assert proc.stdout == "ok engines-stack\n" + TESTING + INFO
 
 
 # --- the fix list of a576d87 ------------------------------------------------------------------

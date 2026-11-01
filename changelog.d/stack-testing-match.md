@@ -1,0 +1,1 @@
+- `engines.py stack-check`: with an accepted stack option, one information line says whether `[testing]` in `agk.toml` matches the profile and `always_full` paths of the chosen option's `test selection` practice; it never fails the command (brief #450, ADR-0241 Proposed)
