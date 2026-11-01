@@ -1,6 +1,6 @@
 # ADR-0235: the heavy checks run once for a batch of ready pull requests, and per pull request only on failure (REQ-039, brief 436)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0191, ADR-0208, ADR-0217, ADR-0224
