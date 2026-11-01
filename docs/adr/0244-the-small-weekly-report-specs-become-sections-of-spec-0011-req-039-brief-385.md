@@ -48,3 +48,10 @@ its pointer line. Later amendments to the report change SPEC-0011 only.
   parallel brief takes it first this proposal moves to the next free one (due 2026-11-15).
 - 2026-11-01: Q-385-2: the amendment files that amend these specs without rewriting their text (46, 55, 58, 66, 78 and
   later ones) are not folded into the moved text; they keep applying at the new numbers (due 2026-12-31).
+- 2026-11-01: Q-385-3: SPEC-0011's `Requirements:` line is unchanged (REQ-017, REQ-018); the eight specs keep their own
+  `Requirements:` lines (REQ-021 to REQ-033), so every requirement is still named by a spec (due 2026-12-31).
+- 2026-11-01: Q-385-4: only the `## Rules` sections of the eight specs are replaced; their tests, proof, residual and
+  question sections stay, since the brief moves rules only, and a bare `rule N` there now reads through the pointer line
+  (due 2026-12-31).
+- 2026-11-01: Q-385-5: the history before 2026-10-30 is one imported commit, so the order of approval was read from the
+  implementing ADRs (0050, 0051, 0057, 0058, 0063, 0070, 0078) and SPEC-0026 last; it is the numeric order (due 2026-12-31).
