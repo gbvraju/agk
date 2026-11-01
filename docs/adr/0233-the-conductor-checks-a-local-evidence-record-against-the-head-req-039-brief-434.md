@@ -1,6 +1,6 @@
 # ADR-0233: the conductor checks a local evidence record against the head and re-runs a sample of it (REQ-039, brief 434)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0182, ADR-0186, ADR-0191, ADR-0208
