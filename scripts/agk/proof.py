@@ -8,6 +8,10 @@ with only the pull request's test files of that area (brief #305, ADR-0172). Wha
 `plan`, which `test_plan.py` prints before anything runs (brief #325, ADR-0185). With `--manifest
 FILE` it also writes a Markdown test manifest: what ran, what did not, and why (brief #425,
 ADR-0230); with `--not-run draft|status-only` it runs nothing and writes the manifest of that skip.
+With `[testing] proof_regression = true` and a `[proof]` table, once the pull request's own tests
+are proven, a third run executes on the head, never on the base, the regression tests that
+`impact.py` selects, each area's command with its selected files (brief #442, ADR-0238; off by
+default, and the spec change is a proposal until a person approves it).
 ROOT's work tree is never changed: the script adds two worktrees in a temporary directory outside
 ROOT and removes them at the end, also on a failure.
 
@@ -27,13 +31,14 @@ import subprocess  # nosec B404 - fixed argument lists, and the project's own te
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
     CheckError,
+    config_source,
     declares_unchanged,
     git,
     load_config,
@@ -52,6 +57,11 @@ NOT_RUN = {
     "status-only": "a status-only final commit after a proven parent; proof is not run again",
 }
 UNCHANGED = "the pull request body says `Behaviour: unchanged`"
+# Why the third run (brief #442) runs nothing.
+NO_PROOF_TABLE = "no [proof] table: project_tests ran every test on the head"
+NOTHING_SELECTED = "nothing selected"
+OWN_NOT_PROVEN = "the pull request's own tests are not proven"
+UNCHANGED_SKIP = "Behaviour: unchanged"
 SHOWN = 40
 EXIT = {"proven": 0, "skipped": 0, "not-proven": 1, "unknown": 4}
 
@@ -74,8 +84,11 @@ class Result:
     elapsed: int | None = None  # whole seconds of the run that timed out
     areas: list[dict] | None = None  # with a `[proof]` table: each area's files, outcome, seconds
     shown: Plan | None = None  # the plan that ran, with each run's seconds (the manifest)
+    regression: Regression | None = None  # the third run; None with `proof_regression` off
 
     def line(self) -> str:
+        if self.regression is not None and self.regression.decided:
+            return f"proof: {self.outcome} ({self.regression.line()})"
         if self.areas is not None and self.outcome in ("not-proven", "unknown"):
             named = [
                 f"{a['name']}: {reason_text(a['reason'], a['elapsed'])}"
@@ -101,6 +114,8 @@ class Result:
                 {k: a[k] for k in ("name", "files", "outcome", "reason", "seconds")}
                 for a in self.areas
             ]
+        if self.regression is not None:
+            out["regression"] = self.regression.data()
         return out
 
 
@@ -376,8 +391,9 @@ def area_command(area: dict, paths: list[str]) -> str:
 REASON_ORDER = ("timeout", "green-on-base", "red-on-head")
 
 
-def run_areas(root: Path, base: str, head: str, shown: Plan, limit) -> None:
-    """Each run of the plan, on the base (all the areas' tests placed) and on the head."""
+def run_areas(root: Path, base: str, head: str, shown: Plan, limit, regression=None) -> None:
+    """Each run of the plan, on the base (all the areas' tests placed) and on the head; then,
+    once every area is proven, the third run of `regression` on the head only (brief #442)."""
     areas = {a["name"]: a for a in shown.areas or []}
     with Trees(root, base, head, shown.files) as trees:
         for run in shown.runs:
@@ -385,6 +401,8 @@ def run_areas(root: Path, base: str, head: str, shown: Plan, limit) -> None:
             area = areas[run.name]
             area["outcome"], area["reason"] = decide(status1, status2)
             area["seconds"], area["elapsed"] = seconds, elapsed
+        if regression is not None and combine(list(areas.values()))[0] == "proven":
+            run_regression(trees[1], regression, limit)
 
 
 def combine(areas: list[dict]) -> tuple[str, str | None, int | None]:
@@ -420,6 +438,43 @@ class Run:
     cwd: str
     seconds: list[int | None] | None = None  # [base, head] once run; None for a run not made
     timed_out: str | None = None  # "base" or "head": the run that was ended by proof_timeout
+    outcome: str | None = None  # a regression run: passed, failed or timeout; None until made
+
+
+@dataclass
+class Regression:
+    """The third run (brief #442): the selected regression tests on the head, one run per
+    `[proof]` area that holds some of them. Built before anything runs."""
+
+    runs: list[Run]
+    reason: str | None  # why nothing runs; None when runs are planned
+    not_run: list[str] = field(default_factory=list)  # selected files in no `[proof]` area
+    decided: bool = False  # the third run made the outcome (a failure or a timeout)
+
+    def made(self) -> list[Run]:
+        return [r for r in self.runs if r.outcome is not None]
+
+    def line(self) -> str:
+        timed = [r for r in self.runs if r.outcome == "timeout"]
+        if timed:
+            named = [f"{r.name}: {reason_text('timeout', (r.seconds or [0, 0])[1])}" for r in timed]
+            return "regression: " + "; ".join(named)
+        return "regression: " + ", ".join(r.name for r in self.runs if r.outcome == "failed")
+
+    def data(self) -> dict:
+        return {
+            "runs": [
+                {
+                    "name": r.name,
+                    "files": list(r.files),
+                    "outcome": r.outcome,
+                    "seconds": (r.seconds or [None, None])[1],
+                }
+                for r in self.made()
+            ],
+            "reason": self.reason,
+            "not_run": list(self.not_run),
+        }
 
 
 @dataclass
@@ -479,18 +534,88 @@ def plan(root: Path, base: str, head: str) -> Plan:
     return Plan(True, placed, runs, idle, outside, "", areas)
 
 
+def regression_on(root: Path) -> bool:
+    """`[testing] proof_regression`. Without the key the table is not read here, so proof is
+    exactly as before (brief #442 answer 2); with it, `impact.py` checks the whole table."""
+    try:
+        table = config_source(root).get("testing")
+    except (OSError, UnicodeDecodeError, ValueError):
+        table = None
+    if not isinstance(table, dict) or "proof_regression" not in table:
+        return False
+    from impact import proof_regression
+
+    return proof_regression(root)
+
+
+def regression_plan(root: Path, base: str, head: str, shown: Plan) -> Regression | None:
+    """The third run of the change, or None with the setting off: git and files only."""
+    if not regression_on(root):
+        return None
+    if not shown.table:
+        return Regression([], NO_PROOF_TABLE)
+    from impact import impact
+
+    found = impact(root, base, head)
+    if found.full:
+        return Regression([], f"full ({found.reason}): governance runs the full suite")
+    files = [s.test for s in found.selected]
+    if not files:
+        return Regression([], NOTHING_SELECTED)
+    runs: list[Run] = []
+    placed: set[str] = set()
+    for area in shown.areas or []:
+        mine = [f for f in files if is_test_file(f, area["dirs"], area["patterns"])]
+        placed.update(mine)
+        if mine:
+            runs.append(Run(area["name"], mine, area_command(area, mine), area["cwd"]))
+    return Regression(runs, None, [f for f in files if f not in placed])
+
+
+def run_regression(head_tree: Path, regression: Regression, limit: int) -> None:
+    """Each regression run on the head worktree only; proof_timeout applies to each one."""
+    for run in regression.runs:
+        cwd = head_tree / run.cwd
+        status, out, seconds = execute(run.command, cwd, limit)
+        run.seconds = [None, seconds]
+        show(f"run 3 ({run.name}): regression tests on the head", out)
+        if status is None:
+            run.timed_out, run.outcome = "head", "timeout"
+            print(timeout_note(seconds), file=sys.stderr)
+        else:
+            run.outcome = "passed" if status == 0 else "failed"
+
+
+def with_regression(outcome: str, reason: str | None, elapsed: int | None, regression):
+    """The outcome once the third run is made: a timeout before a failure (rule 12 order)."""
+    if regression is None or outcome != "proven":
+        return outcome, reason, elapsed
+    timed = [r for r in regression.runs if r.outcome == "timeout"]
+    if timed:
+        regression.decided = True
+        return "unknown", "timeout", (timed[0].seconds or [0, 0])[1]
+    if any(r.outcome == "failed" for r in regression.runs):
+        regression.decided = True
+        return "not-proven", "regression", None
+    return outcome, reason, elapsed
+
+
 def prove(root: Path, base: str, head: str, body: str, not_run: str | None = None) -> Result:
     table = proof_areas(root) is not None
     limit = proof_timeout(root)
     shown = plan(root, base, head)
+    regression = regression_plan(root, base, head, shown)
     if not_run is not None:  # the workflow skipped the run (a draft, a status-only commit)
-        return Result("skipped", not_run, base, head, sorted(shown.files), shown=shown)
+        not_proven(regression, not_run)
+        return Result(
+            "skipped", not_run, base, head, sorted(shown.files), shown=shown, regression=regression
+        )
     if table:
-        return prove_areas(root, base, head, body, shown, limit)
+        return prove_areas(root, base, head, body, shown, limit, regression)
     names = sorted(shown.files)
 
     def result(outcome: str, reason: str | None = None) -> Result:
-        return Result(outcome, reason, base, head, names, shown=shown)
+        return Result(outcome, reason, base, head, names, shown=shown, regression=regression)
 
     if not shown.command:
         return result("unknown", "no-project-tests")
@@ -500,10 +625,26 @@ def prove(root: Path, base: str, head: str, body: str, not_run: str | None = Non
         return result("unknown", "no-test-files")
     status1, status2, seconds = two_runs(root, base, head, shown.files, shown.runs[0], limit)
     outcome, reason = decide(status1, status2)
-    return Result(outcome, reason, base, head, names, seconds, shown=shown)
+    return Result(outcome, reason, base, head, names, seconds, shown=shown, regression=regression)
 
 
-def prove_areas(root: Path, base: str, head: str, body: str, shown: Plan, limit: int) -> Result:
+def not_proven(regression: Regression | None, skip: str | None = None) -> None:
+    """A planned third run that was not made: for a skip, `not run (<skip>)`, since the own
+    tests did not run; else the own outcome ran and is not `proven`."""
+    if regression is not None and regression.runs and not regression.made():
+        why = f"not run ({skip})" if skip is not None else OWN_NOT_PROVEN
+        regression.reason = regression.reason or why
+
+
+def prove_areas(
+    root: Path,
+    base: str,
+    head: str,
+    body: str,
+    shown: Plan,
+    limit: int,
+    regression: Regression | None = None,
+) -> Result:
     """With a `[proof]` table: each area's own command with only the pull request's files."""
     areas = shown.areas or []
     for area in areas:
@@ -511,14 +652,15 @@ def prove_areas(root: Path, base: str, head: str, body: str, shown: Plan, limit:
     names = sorted(shown.files)
 
     def result(outcome: str, reason: str | None = None, elapsed: int | None = None) -> Result:
-        return Result(outcome, reason, base, head, names, elapsed, areas, shown)
+        not_proven(regression, UNCHANGED_SKIP if outcome == "skipped" else None)
+        return Result(outcome, reason, base, head, names, elapsed, areas, shown, regression)
 
     if declares_unchanged(body):
         return result("skipped")
     if not shown.runs:
         return result("unknown", "no-test-files")
-    run_areas(root, base, head, shown, limit)
-    return result(*combine(areas))
+    run_areas(root, base, head, shown, limit, regression)
+    return result(*with_regression(*combine(areas), regression))
 
 
 def code(text: str) -> str:
@@ -563,6 +705,23 @@ def ran_lines(run: Run) -> list[str]:
     return lines + [""]
 
 
+def regression_lines(run: Run) -> list[str]:
+    """One regression run of the manifest (brief #442): on the head only, so one seconds."""
+    lines = [f"#### regression: {run.name}", "", f"- command: {code(run.command)}"]
+    lines.append(f"- folder: {code(run.cwd)}")
+    lines.append(f"- files: {len(run.files)}")
+    lines.extend(f"  - {code(p)}" for p in run.files[:SHOWN])
+    if len(run.files) > SHOWN:
+        lines.append(f"  - and {len(run.files) - SHOWN} more")
+    head = (run.seconds or [None, None])[1]
+    if run.timed_out:
+        lines.append(f"- seconds: head {head} (timed out, setting: proof_timeout)")
+    else:
+        lines.append(f"- seconds: head {head}")
+    lines.append(f"- outcome: {run.outcome}")
+    return lines + [""]
+
+
 def not_run_lines(result: Result, body_unchanged: bool) -> list[str]:
     """What proof did not run, each with its reason (brief #425 answer 1)."""
     shown = result.shown
@@ -582,6 +741,13 @@ def not_run_lines(result: Result, body_unchanged: bool) -> list[str]:
     if shown is not None:
         lines.extend(f"- {code(p)}: in no [proof] area" for p in shown.outside)
         lines.extend(f"- {code(p)}: deleted" for p, s in sorted(shown.files.items()) if s == "D")
+    regression = result.regression
+    if regression is not None:
+        if regression.reason is not None:
+            lines.append(f"- regression: {regression.reason}")
+        lines.extend(
+            f"- {code(p)}: selected for regression, in no [proof] area" for p in regression.not_run
+        )
     return lines or ["- nothing"]
 
 
@@ -598,7 +764,10 @@ def manifest_text(result: Result, excluded: list[str], body_unchanged: bool) -> 
     made = [r for r in (result.shown.runs if result.shown else []) if r.seconds is not None]
     for run in made:
         lines.extend(ran_lines(run))
-    if not made:
+    third = result.regression.made() if result.regression is not None else []
+    for run in third:
+        lines.extend(regression_lines(run))
+    if not made and not third:
         lines.extend(["- nothing", ""])
     lines.extend(["### Not run", "", *not_run_lines(result, body_unchanged), ""])
     lines.extend(["### Excluded by the project", ""])

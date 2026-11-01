@@ -1,0 +1,1 @@
+- `proof.py`: with `[testing] proof_regression = true` (off by default, awaiting approval of spec amendment 104) and a `[proof]` table, proof also runs the selected regression tests on the head; a failure is `not-proven (regression)` (brief #442, ADR-0238 Proposed)
