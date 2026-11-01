@@ -1,0 +1,1 @@
+- SPEC-0025 (parallel pull requests) folds into SPEC-0034 (parallel builders): its rules move unchanged into a new section as SPEC-0034 rules 17 to 27, rule 8 with the release model of SPEC-0028, and SPEC-0025 keeps one pointer line per rule (brief #387, ADR-0246 Proposed)
