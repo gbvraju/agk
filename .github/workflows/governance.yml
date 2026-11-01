@@ -266,6 +266,10 @@ jobs:
           key: gitleaks-${{ env.GITLEAKS_VERSION }}-${{ env.GITLEAKS_SHA256 }}
       - name: Project tests
         if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') == '' && github.event.action != 'edited' && steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
+        env:
+          # With `[testing] pr_tests = "selected"` a pull request runs only the selected tests; a push and a release pull
+          # request run the full suite (brief #453, ADR-0242). Without the setting the step runs the full suite as before.
+          EVENT: ${{ github.event_name }}
         run: make -f agk.mk agk-project-test
       - name: Secret scan
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}

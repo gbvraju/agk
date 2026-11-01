@@ -33,10 +33,9 @@ agk-test:
 endif
 
 # The project's own tests, from agk.toml `project_tests` (a shell command); empty means none to run here.
+# The project's tests; with [testing] pr_tests = "selected" a pull request runs only its selected tests (ADR-0242).
 agk-project-test:
-	@cmd="$$($(PY) scripts/agk/config.py project_tests)"; \
-	if [ -z "$$cmd" ]; then echo "agk: no project_tests configured; the project runs its own tests"; exit 0; fi; \
-	sh -c "$$cmd"
+	@$(PY) scripts/agk/project_tests.py
 
 agk-traceability:
 	$(PY) scripts/agk/traceability.py

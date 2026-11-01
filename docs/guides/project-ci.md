@@ -170,6 +170,31 @@ Upload an artifact only when a person or a later job reads it, and keep it a few
 The kit's router keeps its pipeline document for 7 days; the weekly product report keeps its data for 90 days on purpose, since
 readers of later weeks use it.
 
+## Selected tests on pull requests
+
+By default the `Project tests` step of `governance` runs the whole `project_tests` command on every ready push. A project that
+keeps a `[testing]` table (see the testing guide) can let a pull request run only the tests its change selects:
+
+```toml
+[testing]
+pr_tests = "selected"   # "full", the default, runs everything everywhere
+```
+
+What runs where (brief #453, ADR-0242):
+
+| Where | What runs |
+|---|---|
+| a pull request | the regression set of its change, as `prepush.py` runs it: each selected run through its `[proof]` area's command, or the whole `project_tests` command when the plan is full (an `always_full` path, `thorough`, unmapped files under `balanced`) or a selected file lies in no `[proof]` area; nothing when only documentation changed |
+| a release pull request (it changes `version` in `agk.toml`) | the whole `project_tests` command |
+| a push to the default branch, any other event | the whole `project_tests` command |
+
+The workflow passes the event to the step (`EVENT: ${{ github.event_name }}`). Before anything runs, the step prints, and adds to
+the job summary, the plan's regression section and what is not run and why. The full suite is never skipped: it runs on the
+default branch, and a red default branch becomes a priority-0 brief through the router.
+
+To step back, set `pr_tests = "full"` or remove the line. `agk.toml` is a protected path, so a project sets or changes
+`pr_tests` by a pull request with an ADR in the same pull request. Any other value is refused, naming `setting: pr_tests`.
+
 ## What the doctor checks
 
 | Id | Warns when | Fix |

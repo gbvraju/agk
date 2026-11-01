@@ -14,7 +14,7 @@ import subprocess  # nosec B404 - fixed argument lists, no shell
 from conftest import KIT_ROOT, clean_env, manifest
 
 GNU = KIT_ROOT / "GNUmakefile"
-PROJECT_RECIPE = "scripts/agk/config.py project_tests"
+PROJECT_RECIPE = "scripts/agk/project_tests.py"
 
 
 def dry_run(*args: str) -> str:

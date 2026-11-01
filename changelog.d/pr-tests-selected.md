@@ -1,0 +1,1 @@
+- `project_tests.py`: with `[testing] pr_tests = "selected"` a pull request's `Project tests` step runs only the selected tests, while a push to the default branch and every release pull request run the full suite; `agk-project-test` calls the script and the workflow passes the event (brief #453, ADR-0242 Proposed)

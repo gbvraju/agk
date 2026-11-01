@@ -143,6 +143,12 @@ def test_ac2_project_tests_run_only_where_the_kits_own_suite_is_not_installed():
         + "        if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') == ''"
         + " && github.event.action != 'edited' && steps.status.outputs.skip != 'true'"
         + " && steps.paused.outputs.paused != 'true' }}\n"  # brief #348
+        + "        env:\n"  # brief #453: the event decides under `pr_tests = selected`
+        + "          # With `[testing] pr_tests = \"selected\"` a pull request runs only the"
+        + " selected tests; a push and a release pull\n"
+        + "          # request run the full suite (brief #453, ADR-0242). Without the setting the"
+        + " step runs the full suite as before.\n"
+        + "          EVENT: ${{ github.event_name }}\n"
         + "        run: make -f agk.mk agk-project-test\n"
     )
     assert (

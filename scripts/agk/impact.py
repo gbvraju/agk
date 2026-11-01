@@ -11,7 +11,10 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
 - `excluded`: a list of `"<tag>: <reason>"` texts, the tests that the project's own command leaves
   out (brief #425, ADR-0230). Nothing here interprets them; proof lists them in its manifest;
 - `proof_regression`: a boolean, false by default; with true and a `[proof]` table, proof also runs
-  the selection on the head (brief #442, ADR-0238, off until a person approves the spec change).
+  the selection on the head (brief #442, ADR-0238, off until a person approves the spec change);
+- `pr_tests`: `full` (the default) or `selected`; with `selected`, a pull request's CI step
+  `Project tests` runs only the selection, while a push and a release run the full suite
+  (`project_tests.py`, brief #453, ADR-0242).
 
 For the change base..head `impact` gives the existing test files of the head (`test_dirs`,
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
@@ -41,7 +44,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from common import CheckError, config_source, git, load_config
 
 PROFILES = ("fast", "balanced", "thorough")
-KEYS = {"profile", "always_full", "map", "budget_seconds", "excluded", "proof_regression"}
+KEYS = {
+    "profile",
+    "always_full",
+    "map",
+    "budget_seconds",
+    "excluded",
+    "proof_regression",
+    "pr_tests",
+}
+PR_TESTS = ("full", "selected")
 EXCLUDED = re.compile(r"[^\s:]+: \S[^\n]*")
 ENTRY_KEYS = {"code", "tests"}
 DEFAULT_BUDGET = 300
@@ -122,8 +134,8 @@ def testing_table(root: Path) -> dict | None:
         return None
     if not isinstance(table, dict) or set(table) - KEYS:
         raise CheckError(
-            "[testing] is a table of profile, always_full, map, budget_seconds, excluded and "
-            "proof_regression (setting: testing)"
+            "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
+            "proof_regression and pr_tests (setting: testing)"
         )
     profile = table.get("profile", "balanced")
     if profile not in PROFILES:
@@ -166,6 +178,8 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "proof_regression must be true or false (setting: testing.proof_regression)"
         )
+    if table.get("pr_tests", "full") not in PR_TESTS:
+        raise CheckError("pr_tests is full or selected (setting: pr_tests)")
     return {
         "profile": profile,
         "always_full": list(always_full),
@@ -204,6 +218,14 @@ def proof_regression(root: Path) -> bool:
     if testing_table(root) is None:
         return False
     return config_source(root)["testing"].get("proof_regression", False)
+
+
+def pr_tests(root: Path) -> str:
+    """`[testing] pr_tests`, `full` without the table or the key (brief #453, ADR-0242). The whole
+    table is checked first, so a bad setting is refused (CheckError) as everywhere else."""
+    if testing_table(root) is None:
+        return "full"
+    return config_source(root)["testing"].get("pr_tests", "full")
 
 
 def is_doc(path: str) -> bool:
