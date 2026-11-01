@@ -87,10 +87,12 @@ review_mode = "team"
 # each entry names code globs and the test globs that guard them. budget_seconds: the target time of the full suite (300 if unset).
 # excluded: a list of "<tag>: <reason>" texts, the tests that the project's own command leaves out (brief #425); nothing in the
 # selection interprets them, and proof lists them in its manifest. A change of only *.md files and docs/ selects nothing. A change
-# needs an ADR in the same pull request (agk.toml is a protected path). See docs/guides/testing.md.
+# needs an ADR in the same pull request (agk.toml is a protected path). See docs/guides/testing.md. pr_tests: "full" (the default)
+# or "selected": a pull request's CI runs only the selected tests, the default branch and releases the full suite (brief #453).
 # [testing]
 # profile = "balanced"
 # always_full = ["migrations/**"]
 # map = [{ code = "app/billing/**", tests = ["tests/billing/**"] }]
 # budget_seconds = 300
 # excluded = ["e2e: needs a browser the runner lacks"]
+# pr_tests = "full"

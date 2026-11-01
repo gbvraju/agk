@@ -7,8 +7,9 @@ the regression tests that a change selects and the rule that chose each. The rul
 the rules to pass a gate.
 
 The pre-push gate (`prepush.py`) runs the selection before a push, as described [below](#the-pre-push-gate). Proof also
-runs the selected tests on the head, only with `proof_regression = true` in the `[testing]` table, off by default. CI is
-unchanged: governance still runs every project test on every ready push.
+runs the selected tests on the head, only with `proof_regression = true` in the `[testing]` table, off by default. By default
+governance still runs every project test on every ready push; with `pr_tests = "selected"` a pull request runs only the selected
+tests, while the default branch and every release pull request run them all (see the project CI guide).
 
 ## The table
 
@@ -35,6 +36,9 @@ budget_seconds = 300
   Nothing in the selection interprets them; proof lists them in its manifest.
 - `proof_regression`: a boolean, false by default; with true and a `[proof]` table, proof also runs the selection on the head
   (brief #442, ADR-0238, off until a person approves the spec change).
+- `pr_tests`: `full` (the default) or `selected`. With `selected`, the CI step `Project tests` of a pull request runs only the
+  selection, and a push and a release pull request run the full suite (brief #453, ADR-0242; `docs/guides/project-ci.md`,
+  "Selected tests on pull requests"). Any other value is refused with `setting: pr_tests`.
 
 Every key is optional; an empty `[testing]` table takes the defaults. A bad entry is refused, and the message names the setting
 (for example `setting: testing.map[2].tests`), never its value.
