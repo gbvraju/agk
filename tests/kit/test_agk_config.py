@@ -13,6 +13,7 @@ DEFAULTS = {
     "project_tests": "",
     "unused_code": "",  # brief 244 build b (ADR-0177)
     "coverage": "",
+    "mutation": "",  # brief 449 (ADR-0240)
     "test_patterns": ["test_*.py"],
     "mode": "",
     "inbox_hours": 48,

@@ -524,6 +524,7 @@ DEFAULT_CONFIG = {
     "project_tests": "",
     "unused_code": "",
     "coverage": "",
+    "mutation": "",
     "test_patterns": ["test_*.py"],
     "mode": "",
     "inbox_hours": 48,

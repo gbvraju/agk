@@ -171,4 +171,24 @@ It exits 0 when nothing is listed, also when there is no ledger (`flakes: no led
 and `malformed`. `flakes.py` is not a governance step and blocks nothing; adding it to a project's checks is the project's
 choice.
 
-The decisions are ADR-0220 (brief #373), ADR-0227 (brief #417) and ADR-0234 (brief #435).
+## Mutation testing in the weekly audit
+
+Coverage says which lines ran; it does not say whether a test would notice a wrong line. A mutation-testing tool injects
+small faults into the code and counts how many of them the tests catch. The optional `mutation` setting of `agk.toml`,
+empty (off) by default, is a shell command of the project's own; the kit ships, chooses and installs none. When it is set,
+the weekly drift audit runs it once a week beside `unused_code` and `coverage`, with `AGK_CHANGED_FILES` naming a file
+that lists, one path per line, the code files changed on the default branch in the last 7 days (not documentation, not
+test files; at most 20, the first by name, so a run can be repeated). The command prints the score, the share of injected
+faults killed, as a number on its last line, with or without `%`. An invented example, where the script is the project's
+own:
+
+```toml
+mutation = "sh scripts/mutation-score.sh \"$AGK_CHANGED_FILES\""
+```
+
+The audit lists it under D9 as `mutation | killed <n>% of injected faults in <k> files`, with the change since the
+previous audit, as it does for coverage. A command that fails, runs longer than `proof_timeout` or prints no number reads
+`unknown`; with no changed code file the command is not run, and the line says so. The line is listed, never blocking: a
+low score is a question for the next brief, not a failure.
+
+The decisions are ADR-0220 (brief #373), ADR-0227 (brief #417), ADR-0234 (brief #435) and ADR-0240 (brief #449).

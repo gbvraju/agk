@@ -1,0 +1,1 @@
+- `drift_audit.py`: an optional `mutation` command in `agk.toml`, empty by default, runs in the weekly audit with `AGK_CHANGED_FILES` naming the code files changed that week, and is listed under D9 as `killed <n>% of injected faults in <k> files` with the change since the previous audit, never blocking (brief #449, ADR-0240 Proposed)
