@@ -211,7 +211,9 @@ def test_ac4_chosen_with_a_one_line_reason_and_accepted_together_pass(started, c
     proc = engines(started, "stack-check")
     # Brief 267 answer 2: an accepted stack with no local-profile decision adds one info line.
     info = "info engines: local profile: not decided\n"
-    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n" + info), proc.stdout
+    # Brief 450 (ADR-0241): and one [testing] line before it; this ADR has no test selection.
+    testing = "info engines: [testing] not compared: the stack ADR has no test selection practice\n"
+    assert (proc.returncode, proc.stdout) == (0, "ok engines-stack\n" + testing + info), proc.stdout
 
 
 @pytest.mark.parametrize(

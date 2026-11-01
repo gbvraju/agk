@@ -26,7 +26,10 @@ and the design theme with its mockup (`Brief: none (design)`). Once an option is
 `stack-next-steps` also offers the default local-profile requirement (brief #267): a `/agk:spec`
 sentence from `kit/templates/local-profile.md`, filled in with the option's `External services:`,
 that writes nothing; `stack-check` prints `local profile: not decided` until a requirement names it
-or the stack ADR's Residual declines it with a reason and a date.
+or the stack ADR's Residual declines it with a reason and a date. With an accepted option it
+also prints, before that line, whether `[testing]` in `agk.toml` matches the profile and the
+`always_full` paths of the chosen option's part of the `test selection` practice (brief #450):
+`matches`, `differs` naming the setting, or `not compared` with the reason; never a failure.
 """
 
 from __future__ import annotations
@@ -53,6 +56,8 @@ from common import (
     parse_requirements,
     resolve_base,
 )
+from impact import KEYS as TESTING_KEYS
+from impact import NO_TABLE, PROFILES, testing_table
 from intake import Refusal, check_sentence, section
 from pr_body import brief_option, prepare, print_body
 
@@ -124,6 +129,12 @@ DECLINED = re.compile(r"^(?:[-*]\s+)?local profile: declined, (.+) \((\d{4}-\d{2
 MIN_REASON = 20
 DECLINE_FORM = "local profile: declined, <reason of at least 20 characters> (YYYY-MM-DD)"
 NOT_DECIDED = "local profile: not decided"
+# Brief 450: the chosen option's part of the `test selection` practice, against `[testing]`.
+SELECTION = re.compile(r"^\s*-\s+test selection:\s+(?:check|judgement)(?:\s+\((.*)\))?\s*$")
+OPTION_MARK = re.compile(r"\bOption ([A-Z])\b")
+PROFILE_WORD = re.compile(r"\b(" + "|".join(PROFILES) + r")\b")
+BACKTICKED = re.compile(r"`([^`\n]+)`")
+NOT_A_PATH = {*PROFILES, *TESTING_KEYS, "[testing]"}
 
 
 def idea_of(text: str) -> tuple[str, str] | None:
@@ -477,6 +488,51 @@ def print_offer(root: Path) -> None:
         print("\n".join(lines))
 
 
+def selection_part(text: str, letter: str) -> str | None:
+    """Brief 450 answer 1: the chosen option's part of the `test selection` parenthesis; the
+    whole parenthesis when it names no option, '' when it names others only, None without the
+    practice."""
+    lines = section(text, "Decision") or []
+    found = next((m for m in map(SELECTION.match, lines) if m), None)
+    if found is None:
+        return None
+    inside = found.group(1) or ""
+    marks = list(OPTION_MARK.finditer(inside))
+    if not marks:
+        return inside
+    for n, mark in enumerate(marks):
+        if mark.group(1) == letter:
+            end = marks[n + 1].start() if n + 1 < len(marks) else len(inside)
+            return inside[mark.end() : end]
+    return ""
+
+
+def testing_match(root: Path, text: str, letter: str) -> str:
+    """Brief 450 answer 2: the rest of the one information line; names settings, never values."""
+    part = selection_part(text, letter)
+    if part is None:
+        return "not compared: the stack ADR has no test selection practice"
+    profiles = set(PROFILE_WORD.findall(part))
+    if len(profiles) != 1:
+        many = "more than one profile" if profiles else "no profile"
+        return f"not compared: the test selection practice names {many} for option {letter}"
+    paths = [p for p in BACKTICKED.findall(part) if p not in NOT_A_PATH]
+    try:
+        table = testing_table(root)
+    except CheckError as exc:
+        return f"not compared: {exc}"
+    if table is None:
+        return f"not compared: {NO_TABLE}"
+    differs = []
+    if table["profile"] not in profiles:
+        differs.append("profile")
+    if not set(paths) <= set(table["always_full"]):
+        differs.append("always_full")
+    if differs:
+        return f"differs from option {letter}: {', '.join(differs)}"
+    return f"matches option {letter}"
+
+
 def cmd_stack_check(root: Path) -> int:
     files = sorted(
         p for p in root.glob("docs/adr/*.md") if STACK_NAME.match(p.relative_to(root).as_posix())
@@ -492,6 +548,8 @@ def cmd_stack_check(root: Path) -> int:
     if not problems:
         print("ok engines-stack")
         stack = accepted_stack(root)
+        if stack is not None:
+            print(f"info engines: [testing] {testing_match(root, stack[1], stack[2])}")
         if stack is not None and not local_profile_decided(root, stack[1]):
             print(f"info engines: {NOT_DECIDED}")
     return 1 if problems else 0
