@@ -4,16 +4,22 @@ Standard library only; no network, no `gh`, no model, no writes. It reads git hi
 files and prints one report on stdout. `--print-action` and `--print-title` give the issue
 action and title from the same inputs, so the decision stays in this tested script.
 
-The one process it starts beyond `git`: when a project sets `unused_code` or `coverage` in
-`agk.toml`, the report run runs that command of the project's own, through `proof.execute`, and
-adds one finding D9 for it (SPEC-0004 rule 25, brief 244 build b). `--previous FILE` is the body of
-the open audit issue, from which the coverage change is computed.
+The one process it starts beyond `git`: when a project sets `unused_code`, `coverage` or
+`mutation` in `agk.toml`, the report run runs that command of the project's own, through
+`proof.execute`, and adds one finding D9 for it (SPEC-0004 rule 25, brief 244 build b; `mutation`,
+brief 449, ADR-0240). The mutation command reads `AGK_CHANGED_FILES`, a file outside the checkout
+listing the code files changed on the default branch in the window, removed after the run.
+`--previous FILE` is the body of the open audit issue, from which the coverage and mutation changes
+are computed.
 """
 
 from __future__ import annotations
 
+import fnmatch
 import re
+import shlex
 import sys
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -75,9 +81,13 @@ RULES = {
 }
 UNTAGGED_LIMIT = 20
 UNUSED_LIMIT = 20
-COMMAND_SETTINGS = ("coverage", "unused_code")  # the subjects of D9, in report order
+COMMAND_SETTINGS = ("coverage", "mutation", "unused_code")  # the subjects of D9, in report order
+CHANGED_LIMIT = 20
+CHANGED_ENV = "AGK_CHANGED_FILES"
+NOT_RUN = f"not run: no code file changed on the default branch in the last {WINDOW_DAYS} days"
 PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*%?")
 PREVIOUS_COVERAGE = re.compile(r"^- D9 coverage \| [^|]+ \| covered (\d+(?:\.\d+)?)%", re.M)
+PREVIOUS_MUTATION = re.compile(r"^- D9 mutation \| [^|]+ \| killed (\d+(?:\.\d+)?)%", re.M)
 UNREADABLE = "unknown: the command failed or printed nothing readable"
 DATE_TEXT = re.compile(r"\d{4}-\d{2}-\d{2}")
 DUE = re.compile(r"\(due (\d{4}-\d{2}-\d{2})\)")
@@ -468,11 +478,12 @@ def d8(root: Path) -> list[Finding]:
     return [Finding("D8", "tests", f"{len(files)} {noun} no requirement marker: {shown}{more}")]
 
 
-# --- D9: the project's own unused-code and coverage commands ----------------------------------
+# --- D9: the project's own unused-code, coverage and mutation commands -------------------------
 
 
 def command_settings(root: Path) -> dict[str, str]:
-    """The set commands among `unused_code` and `coverage`, by setting; empty or absent is unset."""
+    """The set commands among `unused_code`, `coverage` and `mutation`, by setting; empty or
+    absent is unset."""
     cfg = load_config(root)
     found = {}
     for key in COMMAND_SETTINGS:
@@ -512,9 +523,13 @@ def coverage_value(status: int | None, out: str) -> float | None:
     return value if value is not None and value <= 100 else None
 
 
-def previous_coverage(previous: str | None) -> float | None:
-    match = PREVIOUS_COVERAGE.search(previous or "")
+def previous_value(pattern: re.Pattern, previous: str | None) -> float | None:
+    match = pattern.search(previous or "")
     return float(match.group(1)) if match else None
+
+
+def change_text(value: float, before: float | None) -> str:
+    return "unknown" if before is None else f"{round(value - before, 2):+g}"
 
 
 def coverage_sentence(status: int | None, out: str, previous: str | None, limit: int) -> str:
@@ -523,12 +538,76 @@ def coverage_sentence(status: int | None, out: str, previous: str | None, limit:
     value = coverage_value(status, out)
     if value is None:
         return UNREADABLE
-    before = previous_coverage(previous)
-    change = "unknown" if before is None else f"{round(value - before, 2):+g}"
+    change = change_text(value, previous_value(PREVIOUS_COVERAGE, previous))
     return f"covered {number(value)}%, change since the previous audit: {change}"
 
 
-def d9(root: Path, previous: str | None, execute=proof.execute) -> list[Finding]:
+def is_code(path: str, dirs: list[str], patterns: list[str]) -> bool:
+    """Not documentation and not a test file: the reading of impact.py (Q-449-1)."""
+    if path.endswith(".md") or path.startswith("docs/"):
+        return False
+    in_dirs = any(d.strip("/") in ("", ".") or path.startswith(d.strip("/") + "/") for d in dirs)
+    name = path.rsplit("/", 1)[-1]
+    return not (in_dirs and any(fnmatch.fnmatchcase(name, p) for p in patterns))
+
+
+def changed_code(root: Path, ref: str, today: date) -> list[str]:
+    """The code files added or modified by the window's first-parent commits that still exist on
+    the default branch, by name, at most CHANGED_LIMIT (the first), so a run can be repeated."""
+    since = today - timedelta(days=WINDOW_DAYS)
+    paths: set[str] = set()
+    log = git(root, "log", "--first-parent", "--format=%H%x1f%P%x1f%cI", ref)
+    for line in log.splitlines():
+        sha, parents, stamp = line.split("\x1f")
+        when = datetime.fromisoformat(stamp).astimezone(UTC).date()
+        if since <= when <= today:
+            parent = parents.split()[0] if parents.strip() else None
+            paths |= {p for p, kind in commit_changes(root, sha, parent).items() if kind in "AM"}
+    present = set(git(root, "ls-tree", "-r", "-z", "--name-only", ref).split("\0"))
+    cfg = load_config(root)
+    dirs, patterns = list(cfg["test_dirs"]), list(cfg["test_patterns"])
+    code = sorted(p for p in paths & present if p and is_code(p, dirs, patterns))
+    return code[:CHANGED_LIMIT]
+
+
+def mutation_sentence(
+    status: int | None, out: str, previous: str | None, limit: int, files: int
+) -> str:
+    if status is None:
+        return f"unknown: the command did not finish within proof_timeout ({limit} s)"
+    value = coverage_value(status, out)
+    if value is None:
+        return UNREADABLE
+    change = change_text(value, previous_value(PREVIOUS_MUTATION, previous))
+    noun = "file" if files == 1 else "files"
+    return (
+        f"killed {number(value)}% of injected faults in {files} {noun}, "
+        f"change since the previous audit: {change}"
+    )
+
+
+def run_mutation(
+    root: Path, command: str, files: list[str], previous: str | None, limit: int, execute
+) -> str:
+    """The command with AGK_CHANGED_FILES naming the list, in a directory outside the checkout
+    that is removed after the run; no changed code file means it is not run (answer 3)."""
+    if not files:
+        return NOT_RUN
+    with tempfile.TemporaryDirectory(prefix="agk-mutation-") as work:
+        listing = Path(work) / "changed-files.txt"
+        listing.write_text("".join(f"{p}\n" for p in files), encoding="utf-8")
+        line = f"{CHANGED_ENV}={shlex.quote(str(listing))}; export {CHANGED_ENV}\n"
+        status, out, _ = execute(line + command, root, limit, merge_stderr=False)
+    return mutation_sentence(status, out, previous, limit, len(files))
+
+
+def d9(
+    root: Path,
+    previous: str | None,
+    ref: str | None = None,
+    today: date | None = None,
+    execute=proof.execute,
+) -> list[Finding]:
     """One finding per set command. They never block; the command itself is never shown.
 
     With no command set it reads no other setting, so a project that has not opted in is never
@@ -539,6 +618,12 @@ def d9(root: Path, previous: str | None, execute=proof.execute) -> list[Finding]
     limit = proof_timeout(root)
     found = []
     for key, command in commands.items():
+        if key == "mutation":
+            where = ref or resolve_ref(root, load_config(root)["default_branch"])
+            files = changed_code(root, where, today or datetime.now(UTC).date())
+            sentence = run_mutation(root, command, files, previous, limit, execute)
+            found.append(Finding("D9", key, sentence))
+            continue
         status, out, _ = execute(command, root, limit, merge_stderr=False)
         if key == "coverage":
             sentence = coverage_sentence(status, out, previous, limit)
@@ -634,7 +719,8 @@ def main(argv: list[str] | None = None) -> int:
         # a set command always gives the report one D9 finding, so the action needs no run of it
         print(choose_action(options["open"], bool(found) or bool(command_settings(root))))
     else:
-        found += d9(root, read_previous(options["previous"]))
+        ref = resolve_ref(root, options["branch"] or load_config(root)["default_branch"])
+        found += d9(root, read_previous(options["previous"]), ref, today)
         sys.stdout.write(render(today, found, undated))
     return 0
 
