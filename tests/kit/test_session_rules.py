@@ -314,10 +314,10 @@ def test_ac1_each_moved_rule_is_a_pointer_line_and_its_file_holds_its_text():
 def test_ac1_every_command_and_comment_shape_of_a_merged_rule_is_still_named():
     """REQ-039: brief 384 answer 5 (each command, option and comment shape stays word for word)."""
     rules = numbered()
-    for number, before in BEFORE.items():
+    for number in BEFORE:
         where = rules[MERGED[number]] if number in MERGED else read(ROOT / MOVED[number])
-        for span in re.findall(r"`([^`]+)`", before):
-            assert f"`{span}`" in where, (number, span)
+        for span in re.findall(r"`([^`]+)`", moved_text(number)):
+            assert f"`{span}`" in flat(where), (number, span)
 
 
 def test_ac1_no_rule_cites_a_number_that_is_now_a_pointer():
@@ -326,7 +326,8 @@ def test_ac1_no_rule_cites_a_number_that_is_now_a_pointer():
     for number, text in numbered().items():
         if number in pointers:
             continue
-        cited = {int(n) for n in re.findall(r"\brules? (\d+)\b", text)}
+        # "`check_pr_mode.py` rule 5" or "SPEC-0030 rule 1" cites another file, not this one.
+        cited = {int(n) for n in re.findall(r"(?<!` )(?<!\d )\brules? (\d+)\b", text)}
         assert not cited & pointers, (number, sorted(cited & pointers))
 
 
