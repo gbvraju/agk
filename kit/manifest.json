@@ -47,6 +47,7 @@
     "scripts/agk/check_specs.py",
     "scripts/agk/common.py",
     "scripts/agk/config.py",
+    "scripts/agk/design_standard.py",
     "scripts/agk/doctor.py",
     "scripts/agk/drift_audit.py",
     "scripts/agk/evidence.py",
