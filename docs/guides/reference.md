@@ -212,6 +212,20 @@ A private repository short of minutes can run its own heavy jobs on an ephemeral
 secret beyond the job's own, never for forks, while governance and proof stay on GitHub-hosted runners:
 [self-hosted-runner.md](self-hosted-runner.md) (ADR-0217).
 
+## Where checks run
+
+    python3 scripts/agk/execution.py [--json] [--repo OWNER/REPO] [--api-dir DIR]
+
+`execution` in `agk.toml` names, in one top-level line, where the heavy checks run: `hosted` (the default, also when unset),
+`hybrid` (the required light checks on GitHub-hosted runners, the heavy checks on a pool or locally), `pool` or `local`; any
+other value is refused, naming the setting. The command prints one line, `execution: <set> (recommended: <profile>:
+<reason>)`, from a fixed table: Actions disabled for the repository or its included minutes used up gives `local` (see
+[local-mode.md](local-mode.md)); a public repository gives `hosted`; a private one past half of its included minutes, or past
+`minutes_warn`, gives `hybrid`; more than half left, or a billing reading that is unknown, gives `hosted` with that reason.
+With `pool` or `hybrid` set and no repository variable `AGK_HEAVY_RUNNER`, a second line points to
+[self-hosted-runner.md](self-hosted-runner.md). It reads through `minutes.py` (GET only), changes no workflow and writes
+nothing (ADR-0237).
+
 ## Test plan
 
     python3 scripts/agk/test_plan.py [--base REF] [--head REF] [--json] [ROOT]
