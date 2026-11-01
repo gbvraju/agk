@@ -180,7 +180,7 @@ def serve_list(stub, items: list[tuple[dict, list, timedelta]]) -> None:
 
 
 def nxt(proj, stub, *extra: str):
-    return session(proj, stub, "next", "--session", "s-me", *extra)
+    return session(proj, stub, "next", "--session", "s-me", "--take", *extra)
 
 
 def offered(out) -> bool:

@@ -12,7 +12,7 @@ from datetime import timedelta
 
 import pytest
 from test_session import ISSUES, REPO, Stub, comment, iso, issue, listing, posts, session
-from test_session_flow import DAY, PULLS, brief, flow, merged
+from test_session_flow import DAY, PULLS, base, brief, flow, merged
 from test_session_plan import changed, data, free, labelled
 
 THREE = "Builds: (a) the first part; (b) independent: the second; (c) independent: the third\n"
@@ -32,7 +32,7 @@ def proj(repo, stub):
 
 
 def nxt(proj, stub):
-    return session(proj, stub, "next", "--session", "s-me")
+    return session(proj, stub, "next", "--session", "s-me", "--take")
 
 
 def skips(out) -> dict[int, str]:
@@ -209,3 +209,141 @@ def test_claim_keeps_the_old_reading_when_the_open_briefs_cannot_be_read(proj, s
     stub.serve(PULLS, [built(20, "(a)", timedelta(hours=1))])
     out = claim(proj, stub)
     assert out.returncode == 1 and "taken by builder-f" in out.stdout and posts(stub) == []
+
+
+# --- next only shows; claim or next --take takes (brief #440, ADR-0236) ---------------------------
+
+
+def look(proj, stub, *extra: str):
+    return session(proj, stub, "next", "--session", "s-me", *extra)
+
+
+def claim_line(out) -> str | None:
+    for line in out.stdout.splitlines():
+        if line.startswith("take it with: "):
+            return line[len("take it with: ") :]
+    return None
+
+
+def test_440_next_shows_the_brief_it_would_take_and_posts_nothing(proj, stub):
+    """REQ-041. Answer 1: the same choice and reasons as before, the claim line, no comment."""
+    listing(stub, [issue(5, brief("a/x.py")), issue(6, brief("a/x.py", priority=1))])
+    free(stub, 5, 6)
+    out = look(proj, stub)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert taken(out) == 6
+    assert claim_line(out) == "session.py claim --session s-me --brief 6"
+    assert posts(stub) == [] and all(c[0] == "GET" for c in stub.calls())
+
+
+def test_440_next_keeps_the_reasons_it_prints_for_a_skipped_brief(proj, stub):
+    """REQ-041. Answer 1: a brief that waits is skipped with the plan's reason, as before."""
+    listing(stub, [issue(5, brief("a/x.py")), issue(6, brief("a/x.py"))])
+    young = comment(1, "x", f"taken: builder-f {DAY}", iso(-timedelta(hours=1)))
+    stub.serve(f"{ISSUES}/5/comments", [young])
+    free(stub, 6)
+    out = look(proj, stub)
+    assert skips(out)[6] == "waits for #5 (both touch a/x.py)"
+    assert out.returncode == 1 and out.stdout.splitlines()[-1] == "no brief"
+    assert claim_line(out) is None and posts(stub) == []
+
+
+def test_440_next_says_full_and_posts_nothing(proj, stub):
+    """REQ-041. Answer 1: `full` is unchanged."""
+    flow(proj, "max_builders = 1")
+    listing(stub, [issue(5, brief("a/"))])
+    stub.serve(PULLS, [labelled(20, 1)])
+    out = look(proj, stub)
+    assert out.stdout.strip() == "full 1/1" and out.returncode == 1 and posts(stub) == []
+
+
+def test_440_next_take_keeps_todays_behaviour_with_the_one_take(proj, stub):
+    """REQ-041. Answer 2: `--take` chooses and takes in one step, before or after `--session`."""
+    for args in (("--take",), ()):
+        listing(stub, [issue(6, brief("a/x.py"))])
+        free(stub, 6)
+        argv = ("next", "--take", "--session", "s-me") if args else ()
+        out = session(proj, stub, *argv) if args else look(proj, stub, "--take")
+        assert out.returncode == 0 and taken(out) == 6, out.stdout + out.stderr
+        assert claim_line(out) is None
+    assert posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}"]]] * 2
+
+
+def test_440_after_in_next_mode_still_takes(proj, stub):
+    """REQ-041. Answer 3: a finished builder starts the next brief, so `after` takes."""
+    listing(stub, [issue(6, brief("a/x.py"))])
+    free(stub, 6)
+    out = session(proj, stub, "after", "--session", "s-me")
+    assert out.returncode == 0 and taken(out) == 6, out.stdout + out.stderr
+    assert posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}"]]]
+
+
+def test_440_the_printed_claim_command_takes_the_same_brief(proj, stub):
+    """REQ-041. Answer 5: the command `next` prints takes the brief it showed, and nothing else,
+    and reserves the numbers in its take as `next --take` does (verdict on c26b62e, finding 1)."""
+    base(proj)
+    listing(stub, [issue(5, brief("a/", priority=3)), issue(6, brief("b/", priority=1))])
+    free(stub, 5, 6)
+    line = claim_line(look(proj, stub))
+    assert line is not None and posts(stub) == []
+    words = line.split()
+    assert words[0] == "session.py"
+    out = session(proj, stub, *words[1:])
+    assert out.returncode == 0 and out.stdout.strip() == "claimed #6", out.stdout + out.stderr
+    body = f"body=taken: s-me {DAY} reserves ADR-0004"
+    assert posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", body]]]
+
+
+@pytest.mark.parametrize(
+    ("advances", "reserves"), [("new", "REQ-002, SPEC-0001, ADR-0004"), ("REQ-001", "ADR-0004")]
+)
+def test_440_claim_of_a_whole_brief_reserves_past_the_numbers_in_use(
+    proj, stub, advances, reserves
+):
+    """REQ-041 AC4 (verdict on c26b62e, finding 1): `claim` without `--build` reserves what the
+    brief's Advances implies, past another live take's reservation; a build reserves nothing."""
+    base(proj, adrs=2)
+    listing(stub, [issue(5, brief("a/", advances=advances)), issue(6, brief("b/"))])
+    other = comment(1, "x", f"taken: builder-x {DAY} reserves ADR-0003")
+    stub.serve(f"{ISSUES}/6/comments", [other])
+    free(stub, 5)
+    out = session(proj, stub, "claim", "--session", "s-me", "--brief", "5")
+    assert out.returncode == 0 and out.stdout.strip() == "claimed #5", out.stdout + out.stderr
+    body = f"body=taken: s-me {DAY} reserves {reserves}"
+    assert posts(stub) == [["POST", f"{ISSUES}/5/comments", ["-f", body]]]
+
+
+def test_440_next_shows_a_stalled_pull_request_without_taking_it_over(proj, stub):
+    """REQ-041. Answer 1 (Q-440-1): a stalled pull request is offered first as before, with the
+    command that takes it over; `next` posts no `taken over:`, and `next --take` does."""
+    old = iso(-timedelta(hours=9))
+    stalled = {**labelled(7, 5), "draft": True, "head": {"sha": "a" * 40}, "title": "build 7"}
+    stub.serve(PULLS, [stalled])
+    stub.serve(f"{ISSUES}/7/comments", [])
+    stub.serve(f"repos/{REPO}/commits/{'a' * 40}", {"commit": {"committer": {"date": old}}})
+    listing(stub, [issue(6, brief("b/"))])
+    free(stub, 6)
+    out = look(proj, stub)
+    assert out.returncode == 0 and out.stdout.startswith("stalled #7\n"), out.stdout + out.stderr
+    assert "take it over with: session.py next --session s-me --take" in out.stdout
+    assert posts(stub) == []
+    out = look(proj, stub, "--take")
+    assert out.stdout.startswith("stalled #7\n") and "take it over with" not in out.stdout
+    assert posts(stub) == [["POST", f"{ISSUES}/7/comments", ["-f", f"body=taken over: s-me {DAY}"]]]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ("next", "--take"),
+        ("next", "--session", "s-me", "--take", "--take"),
+        ("next", "--session", "s-me", "--take", "yes"),
+        ("next", "--session", "--take"),
+        ("claim", "--session", "s-me", "--brief", "5", "--take"),
+        ("after", "--session", "s-me", "--take"),
+    ],
+)
+def test_440_take_is_a_flag_of_next_only(proj, stub, argv):
+    """REQ-041. `--take` is one flag of `next` and nothing else; a misuse prints the usage."""
+    out = session(proj, stub, *argv)
+    assert out.returncode == 2 and out.stdout.startswith("usage:") and posts(stub) == []
