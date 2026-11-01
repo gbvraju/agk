@@ -37,7 +37,7 @@ def toml(outside: Path, testing: str | None = SELECTED, version: str = "1.0.0") 
         'default_branch = "main"\ntest_dirs = ["tests"]\ntest_patterns = ["test_*.py"]\n'
         f"project_tests = 'echo full >> {log}'\n"
         "[proof]\n"
-        f"kit = {{ dirs = [\"tests\"], patterns = [\"test_*.py\"], "
+        f'kit = {{ dirs = ["tests"], patterns = ["test_*.py"], '
         f"command = 'echo kit {{files}} >> {log}' }}\n"
     )
     if testing is not None:
@@ -60,13 +60,18 @@ def write(root: Path, files: dict[str, str]) -> None:
 
 
 def project(
-    tmp_path: Path, base_toml: str, change: dict[str, str] | None = None, head_toml: str | None = None
+    tmp_path: Path,
+    base_toml: str,
+    change: dict[str, str] | None = None,
+    head_toml: str | None = None,
 ) -> Path:
     """An invented project: `agk.mk` and `scripts/agk` of the kit, a base commit on main, and a
     feature branch with one change commit."""
     root = tmp_path / "proj"
     shutil.copytree(
-        ROOT / "scripts" / "agk", root / "scripts" / "agk", ignore=shutil.ignore_patterns("__pycache__")
+        ROOT / "scripts" / "agk",
+        root / "scripts" / "agk",
+        ignore=shutil.ignore_patterns("__pycache__"),
     )
     shutil.copy(ROOT / "agk.mk", root / "agk.mk")
     git(root, "init", "-q", "-b", "main")
