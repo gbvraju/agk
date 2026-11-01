@@ -1,0 +1,1 @@
+- `flakes.py` and the flake ledger `docs/runs/flakes.md` (installed when absent): each flaky test has an owner, strikes and, when quarantined, an expiry; the script lists an expired quarantine, a test with two strikes and no issue (`brief due`) and a malformed row (brief #435, ADR-0234 Proposed)

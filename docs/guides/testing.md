@@ -113,4 +113,57 @@ runner runs one job.
 `--quick` still skips every test and takes no lock. Without a `[testing]` table the `tests` step runs exactly as before: proof's
 plan alone, with no regression set and no lock.
 
-The decisions are ADR-0220 (brief #373) and ADR-0227 (brief #417).
+## The flake ledger
+
+A flaky test passes and fails on the same code. Retrying it until it passes, or skipping it quietly, hides it: nobody owns it
+and nobody fixes it. The kit records each one in `docs/runs/flakes.md`, which init, adopt and upgrade install from the kit's
+template when the file is absent and never overwrite. The file holds one table:
+
+```
+| test | owner | strikes | status | expires | issue |
+| --- | --- | --- | --- | --- | --- |
+```
+
+- `test`: the test's id, as the test runner names it; one row per test.
+- `owner`: one role or session id (`conductor`, a builder's session id), who looks after the entry.
+- `strikes`: a whole number, how many flaky failures have been seen.
+- `status`: `watch`, the test still runs, or `quarantined`, the test is set aside until its expiry.
+- `expires`: the date the quarantine ends, `YYYY-MM-DD`. A quarantine always names its expiry; a `watch` row leaves it empty.
+- `issue`: the issue that fixes the flake, `#n` or a link, empty until there is one.
+
+**To add a strike**, when a test fails and then passes on the same code: find its row and add one to `strikes`, or, for a test
+not yet in the ledger, add a row with `strikes` 1, status `watch`, an owner and empty `expires` and `issue`. The change goes in
+a pull request of its own, never into an unrelated one: session rule 34 keeps a builder's own pull request unchanged when it
+finds a flake, and a fix of the test belongs in its own pull request too.
+
+**To quarantine** a test that blocks work: set its status to `quarantined` and its `expires` to the date the quarantine ends,
+and name the issue that fixes it. A quarantine without an expiry is malformed. When the date passes, the entry is listed
+`expired`, and its owner fixes the test, ends the quarantine or sets a new date in a pull request that says why.
+
+```
+python3 scripts/agk/flakes.py [--today YYYY-MM-DD] [--json]
+```
+
+`flakes.py` reads the ledger and lists, in the order of the file:
+
+```
+expired: line 9: tests/test_upload.py::test_retries (owner conductor; quarantined until <date>)
+brief due: line 10: tests/test_list.py::test_order (owner builder-x1; 2 strikes, no issue)
+malformed: line 11: strikes is not a whole number
+flakes: 3 listed (1 expired, 1 brief due, 1 malformed) in docs/runs/flakes.md
+```
+
+- `expired`: a quarantined entry whose `expires` date is before today (today is `--today`, else the UTC date).
+- `brief due`: an entry with two strikes or more and no issue. Its owner files a bug brief (session rule 34) and writes its
+  number in `issue`.
+- `malformed`: a row that is not an entry, with its line number and the column at fault, never the value; a test listed twice;
+  a file without the ledger table, or with a second one; and a row below the table, after a blank line or prose
+  (`a row outside the ledger table`), so a row is never skipped. Rows inside a fenced block, such as the template's invented
+  example, are not read.
+
+It exits 0 when nothing is listed, also when there is no ledger (`flakes: no ledger at docs/runs/flakes.md; nothing due`), and
+1 otherwise. `--json` prints the same lists as an object: `ledger`, `present`, `today`, `entries`, `expired`, `brief_due`
+and `malformed`. `flakes.py` is not a governance step and blocks nothing; adding it to a project's checks is the project's
+choice.
+
+The decisions are ADR-0220 (brief #373), ADR-0227 (brief #417) and ADR-0234 (brief #435).

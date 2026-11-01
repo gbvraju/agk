@@ -191,7 +191,7 @@ def kit_bytes(path: Path) -> bytes:
 
 
 # Created when absent, left as it is when it exists (never compared, so never a conflict).
-CREATE_ONLY = ("docs/runs/residuals.md", ".gitattributes")
+CREATE_ONLY = ("docs/runs/residuals.md", "docs/runs/flakes.md", ".gitattributes")
 
 
 def passes_symlink(target: Path, rel: str) -> bool:
