@@ -1,7 +1,7 @@
-"""SPEC-0031 (changelog fragments) folded into SPEC-0028 (the flow-mode release) (brief #386, REQ-039).
+"""SPEC-0031 (changelog fragments) folded into SPEC-0028 (the flow-mode release) (#386, REQ-039).
 
-The flow-mode release rules live in one spec. SPEC-0028 holds its own rules, with rules 2, 4, 5 and 6
-in the text that SPEC-0031 rule 7 (amendment 54) gave them, and SPEC-0031's eight rules, text
+The flow-mode release rules live in one spec. SPEC-0028 holds its own rules, with rules 2, 4, 5
+and 6 in the text that SPEC-0031 rule 7 (amendment 54) gave them, and SPEC-0031's eight rules, text
 unchanged, as rules 11 to 18 of a new section of its `## Rules`. SPEC-0031 keeps its number and its
 history and holds one pointer line per old rule. The digests below are those of the rule texts on
 the default branch before the change (ebc556f), so "text unchanged" is checked, not read. Spec
@@ -84,7 +84,7 @@ def digest(rule: str) -> str:
 
 
 def test_each_rule_of_spec_0031_is_in_spec_0028_text_unchanged():
-    """REQ-039: brief #386 answers 1 and 5 (every SPEC-0031 rule is in SPEC-0028, text unchanged)."""
+    """REQ-039: #386 answers 1 and 5 (each SPEC-0031 rule is in SPEC-0028, text unchanged)."""
     now = rules(S28)
     for number, old in OLD_31.items():
         assert number + OFFSET in now, f"SPEC-0031 rule {number} is missing from SPEC-0028"
