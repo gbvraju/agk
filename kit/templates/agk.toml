@@ -75,13 +75,16 @@ review_mode = "team"
 # auto_start = false
 # launch_adapter = ""
 # Optional (brief #373): which tests guard which code. `python3 scripts/agk/test_plan.py` shows, as its regression section, the tests a
-# change selects and the rule that chose each; nothing runs the selection yet. profile: "fast" (an unmapped file is only listed),
-# "balanced" (the default: an unmapped file selects the full suite) or "thorough" (always the full suite). always_full: path globs that
-# always select the full suite. map: each entry names code globs and the test globs that guard them. budget_seconds: the target time of
-# the full suite (300 if unset). A change of only *.md files and docs/ selects nothing. A change needs an ADR in the same pull request
-# (agk.toml is a protected path). See docs/guides/testing.md.
+# change selects and the rule that chose each; `prepush.py` runs the selected regression tests, and proof runs them only with
+# `proof_regression = true` (off by default). profile: "fast" (an unmapped file is only listed), "balanced" (the default: an unmapped
+# file selects the full suite) or "thorough" (always the full suite). always_full: path globs that always select the full suite. map:
+# each entry names code globs and the test globs that guard them. budget_seconds: the target time of the full suite (300 if unset).
+# excluded: a list of "<tag>: <reason>" texts, the tests that the project's own command leaves out (brief #425); nothing in the
+# selection interprets them, and proof lists them in its manifest. A change of only *.md files and docs/ selects nothing. A change
+# needs an ADR in the same pull request (agk.toml is a protected path). See docs/guides/testing.md.
 # [testing]
 # profile = "balanced"
 # always_full = ["migrations/**"]
 # map = [{ code = "app/billing/**", tests = ["tests/billing/**"] }]
 # budget_seconds = 300
+# excluded = ["e2e: needs a browser the runner lacks"]

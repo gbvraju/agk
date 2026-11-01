@@ -1,0 +1,1 @@
+- the guides, the commented `[testing]` tables and the docstrings of `impact.py` and `test_plan.py` say what the merged testing work does: milestone pushes, `prepush.py --no-lock`, who runs the selection and `[testing] excluded`; amendment 105 proposes the SPEC-0007 text for the metrics of brief #427 (brief #447, ADR-0239 Proposed)
