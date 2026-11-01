@@ -31,6 +31,7 @@
     "docs/adr/TEMPLATE.md",
     "docs/briefs/TEMPLATE.md",
     "docs/specs/TEMPLATE.md",
+    "scripts/agk/batch.py",
     "scripts/agk/check_adrs.py",
     "scripts/agk/check_brief.py",
     "scripts/agk/check_build_state.py",

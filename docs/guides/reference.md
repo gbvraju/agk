@@ -173,6 +173,11 @@ code. A lock left by a session that died is cleared with a line saying so: when 
 machine, or when it is older than `lock_stale_minutes` (120 by default). The lock is a folder in the user's temp folder, or
 `lock_dir` in `agk.toml`. `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` (ADR-0191).
 
+When several pull requests are ready, `python3 scripts/agk/batch.py PR [PR...] [--command CMD] [--json] [--record FILE]` merges
+their heads in a scratch worktree and runs the heavy command (`make -f agk.mk agk-project-test` by default) once under the
+heavy-step lock, and per pull request only when that run fails; it only reports, one `#<n> <status> <sha12>` line per pull
+request ([self-hosted-runner.md](self-hosted-runner.md#a-batch-run-of-ready-pull-requests), ADR-0235).
+
 A machine that can carry several heavy runs sets `lock_slots` in `agk.toml` (a positive whole number, 1 by default; with 1
 nothing changes): `run` takes any free slot (slot 1 is the folder `agk-lock-heavy`, slot k `agk-lock-heavy.k`) and `status`
 prints one line per slot with its holder. `run --priority P` (0 to 3, 2 by default) orders the waiting runs: a run that waits
