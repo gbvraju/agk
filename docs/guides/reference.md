@@ -173,6 +173,11 @@ code. A lock left by a session that died is cleared with a line saying so: when 
 machine, or when it is older than `lock_stale_minutes` (120 by default). The lock is a folder in the user's temp folder, or
 `lock_dir` in `agk.toml`. `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` (ADR-0191).
 
+When several pull requests are ready, `python3 scripts/agk/batch.py PR [PR...] [--command CMD] [--json] [--record FILE]` merges
+their heads in a scratch worktree and runs the heavy command (`make -f agk.mk agk-project-test` by default) once under the
+heavy-step lock, and per pull request only when that run fails; it only reports, one `#<n> <status> <sha12>` line per pull
+request ([self-hosted-runner.md](self-hosted-runner.md#a-batch-run-of-ready-pull-requests), ADR-0235).
+
 A machine that can carry several heavy runs sets `lock_slots` in `agk.toml` (a positive whole number, 1 by default; with 1
 nothing changes): `run` takes any free slot (slot 1 is the folder `agk-lock-heavy`, slot k `agk-lock-heavy.k`) and `status`
 prints one line per slot with its holder. `run --priority P` (0 to 3, 2 by default) orders the waiting runs: a run that waits
@@ -182,6 +187,14 @@ run once, through `sh -c`, when the lock of a run whose process no longer runs i
 `AGK_LOCK_PID` of that run; its output is shown, and a failure is reported and never blocks. It is not run for a lock cleared by
 age, whose run may still go on, nor for one that names no session. The locked command gets `AGK_LOCK_SESSION`, so a project can
 label what it starts, for example containers, by session (ADR-0231).
+
+A builder in local mode records its run with `python3 scripts/agk/prepush.py --record FILE` (ADR-0208), and the conductor checks
+that record before its verdict with `python3 scripts/agk/evidence.py check RECORD [--head SHA] [--sample N] [--json]`: `stale`,
+`dirty` or `failed` when the record names another head, an unclean tree or a failed step; otherwise, in a temporary worktree of
+the head under the heavy-step lock, governance runs and a sample of the steps (one by default, chosen from the head sha) re-runs
+as prepush builds them from the head, never as the record writes them, exit codes compared; a recorded command that is not what
+prepush runs is a difference. It ends with one `Evidence check: agrees|differs, ...` line to quote, posts nothing, and
+exits 0 when the record agrees, 1 when it differs, 2 on a usage error or a bad record, 3 on an I/O error (ADR-0233).
 
 ## Actions minutes
 
@@ -221,6 +234,15 @@ changed test files, the command line with `{files}` filled in and its folder, th
 files in no area as "not run by proof"; without the table it prints `project_tests` and the files it selects. It reads git and
 files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0185.
+
+## Flake ledger
+
+    python3 scripts/agk/flakes.py [--today YYYY-MM-DD] [--json]
+
+Reads `docs/runs/flakes.md`, the one table of flaky tests with their owner, strikes, status and expiry, and lists each
+quarantine past its expiry (`expired`), each test with two strikes or more and no issue (`brief due`) and each malformed row
+with its line number. Exit 0 when nothing is listed, 1 otherwise. It is not a governance step and blocks nothing. See
+[testing.md](testing.md#the-flake-ledger) and ADR-0234.
 
 ## Core audit
 

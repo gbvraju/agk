@@ -1,0 +1,1 @@
+- `batch.py PR [PR...]` merges the heads of several ready pull requests in a scratch worktree and runs the heavy checks once under the heavy-step lock, and per pull request only when that run fails; it only reports, with `--json` and a `--record FILE` in the schema of the local run record (brief #436, ADR-0235 Proposed)

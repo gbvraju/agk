@@ -294,7 +294,7 @@ def take(cid: int, who: str, when: str | None = None, login: str = "someone") ->
 
 
 def nxt(proj, stub, who: str = "s-me"):
-    return session(proj, stub, "next", "--session", who)
+    return session(proj, stub, "next", "--session", who, "--take")
 
 
 def posts(stub: Stub) -> list[list]:

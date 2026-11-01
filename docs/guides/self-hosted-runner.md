@@ -191,3 +191,30 @@ groups, which depend on the plan:
 set and note the estimate and the minutes per merged pull request; run it again one week after and compare: the heavy job's
 minutes should leave the estimate and appear as jobs on a self-hosted runner. Compare the time the heavy job waits in the queue
 too: when it grows, add a machine to the pool.
+
+## A batch run of ready pull requests
+
+When several pull requests are ready at once, each one's heavy job runs the project's heavy checks on its own head, so five
+ready pull requests cost five heavy runs. `python3 scripts/agk/batch.py PR [PR...]` (brief #436, ADR-0235) runs them once for
+the batch instead: it fetches each head (`refs/pull/<n>/head`, with git alone), merges the heads in the order given onto the
+default branch in a scratch worktree, leaves out a head that does not merge cleanly as `conflict`, and runs the heavy command
+(`--command CMD`, by default `make -f agk.mk agk-project-test`) once, under the heavy-step lock. When that run passes, each pull
+request is `batch-green <sha12>`; only when it fails does the command run again on each pull request's own head merged onto the
+default branch, and the red ones are named; when none is red alone, they fail together and none counts as green. A green batch
+of five therefore costs one heavy run instead of five.
+
+A batch run replaces the per-pull-request heavy runs when all of these hold:
+
+- **Several ready pull requests.** Two or more are ready for review at the same time and each would otherwise run the same
+  heavy check; for one pull request a batch saves nothing.
+- **On the pool or a local machine.** It runs where the heavy jobs already run: a runner of the pool (above), or a person's or
+  a session's own machine in [local mode](local-mode.md), where the heavy-step lock keeps it to one heavy run at a time.
+- **Only the project's heavy checks.** The kit's governance and proof still run per pull request on GitHub-hosted runners, as
+  every rule above says; a batch never stands in for them.
+- **A person decides what it stands in for.** The command only reports: it labels, merges and posts nothing, and changes no
+  repository setting. `--record FILE` writes the batch result as a record in the schema of a local run
+  ([local-mode.md](local-mode.md)), so it is evidence a reviewer can check; whether that evidence replaces a pull request's own
+  required heavy check is the person's decision, not the kit's.
+
+GitHub's merge queue does the same job inside GitHub where the plan and the repository's visibility allow it; turning it on is
+a repository setting and a person's decision, and the kit never turns it on. Where it is on, the batch command is not needed.

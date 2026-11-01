@@ -56,7 +56,7 @@ def red(number: int = 9, body: str = BODY, title: str = TITLE) -> dict:
 
 
 def nxt(proj, stub, who: str = "s-me"):
-    return session(proj, stub, "next", "--session", who)
+    return session(proj, stub, "next", "--session", who, "--take")
 
 
 # --- the shape the router writes (the amendment of SPEC-0034 rule 2) --------------------------
