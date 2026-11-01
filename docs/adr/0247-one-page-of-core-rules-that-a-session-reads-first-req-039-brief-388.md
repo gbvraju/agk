@@ -7,7 +7,7 @@
 - Requirements: REQ-039
 
 Protected classes: `config/` (`config/core-rules.md`), `CLAUDE.md`, `tests/kit/`, `tests/kit_dev/`, `kit/`
-(`kit/manifest.json`)
+(`kit/manifest.json`, `kit/templates/gitattributes`)
 
 ## Context
 
@@ -25,7 +25,8 @@ the answers; this ADR number was reserved for it by the conductor (the field not
    rule and each working rule is one line: its reference and a plain summary of at most one sentence that adds nothing.
    The constitution is named whole (principles 1 to 12, already one sentence each) and is not summarised. The page says at
    its top that the numbered rules win over the summaries. It is listed in `kit/manifest.json` (verbatim), beside
-   `config/session-rules.md`, so an installed project that receives the new `CLAUDE.md` receives the page it points at.
+   `config/session-rules.md`, so an installed project that receives the new `CLAUDE.md` receives the page it points at,
+   and the installed `.gitattributes` template (`kit/templates/gitattributes`) pins it to LF like every installed file.
 2. **CLAUDE.md (answer 2).** `CLAUDE.md` keeps its title, its first sentence (the constitution is authoritative, twelve
    numbered rules), its pointer to `config/session-rules.md` and its compaction-recovery section word for word, and
    replaces its numbered list with a pointer to `config/core-rules.md`. Every item of that list carries some text found
@@ -37,9 +38,10 @@ the answers; this ADR number was reserved for it by the conductor (the field not
    the change is on the page with its number and exact text; that the page has at most 60 lines; and that `CLAUDE.md`
    points at the page, carries no numbered list, keeps its compaction-recovery section and still points at
    `config/session-rules.md` (the existing test of REQ-037 AC1 is unchanged and passes).
-5. **Existing tests that read the moved text.** Four existing tests asserted phrases of the old list in `CLAUDE.md`
+5. **Existing tests that read the moved text.** Five existing tests asserted phrases of the old list in `CLAUDE.md`
    (`tests/kit/test_session_rules.py`, `tests/kit/test_solo_mode.py`, `tests/kit_dev/test_flow_texts.py`,
-   `tests/kit_dev/test_playbook.py`). Each now reads `CLAUDE.md` together with the page it points at; every asserted phrase
+   `tests/kit_dev/test_playbook.py`, and `tests/kit_dev/test_init.py` on an installed project). Each now reads
+   `CLAUDE.md` together with the page it points at (the installed page for `test_init.py`); every asserted phrase
    and count is unchanged, so no check is weakened (principle 11). `tests/kit_dev/test_kit_manifest.py` lists the page
    among the single verbatim files.
 
@@ -60,5 +62,5 @@ the answers; this ADR number was reserved for it by the conductor (the field not
 - Q-388-3: row 13 names `CLAUDE.md` items 3, 5 and 8 as safety rules; the page lists them under the safety rules with a
   one-sentence summary and keeps their exact text, with the other seven items, in its `CLAUDE.md items` section, so the
   exact text is held once (conservative reading: nothing dropped, nothing renumbered).
-- Q-388-4: brief #388's `Touches:` line names four files; the manifest entry, the four existing tests of decision 5 and
-  this ADR are outside it and are needed for the kit to install the page and for the suite to read the moved text.
+- Q-388-4: brief #388's `Touches:` line names four files; the manifest entry, the `.gitattributes` template line, the
+  existing tests of decision 5 and this ADR are outside it and are needed for the kit to install the page and for the suite to read the moved text.
