@@ -1,6 +1,6 @@
 # ADR-0240: the weekly drift audit runs a project's optional mutation-testing command on recently changed code (REQ-011, brief 449)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: maintainers
 - Related: ADR-0177
