@@ -51,7 +51,8 @@ def test_ac1_claude_md_and_the_architect_file_point_at_the_rules_file():
 
 def test_ac1_nothing_in_the_operating_rules_contradicts_the_rules_file():
     """REQ-037 AC1: the rules file does not allow what CLAUDE.md forbids."""
-    claude = read(ROOT / "CLAUDE.md").lower()
+    # CLAUDE.md points at the core-rules page, which holds its former list (ADR-0247).
+    claude = (read(ROOT / "CLAUDE.md") + read(ROOT / "config" / "core-rules.md")).lower()
     assert "never merge" in claude and "never poll ci" in claude
     assert "never merges" in read(RULES).lower()
 

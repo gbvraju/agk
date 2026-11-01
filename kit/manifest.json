@@ -25,6 +25,7 @@
     "CLAUDE.md",
     "Makefile",
     "agk.mk",
+    "config/core-rules.md",
     "config/review-checklist.md",
     "config/session-rules.md",
     "constitution/principles.md",
