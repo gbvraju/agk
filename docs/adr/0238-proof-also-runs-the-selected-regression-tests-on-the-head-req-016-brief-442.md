@@ -1,6 +1,6 @@
 # ADR-0238: proof also runs the selected regression tests on the head, off until a person approves the spec change (REQ-016, brief 442)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainers
 - Related: ADR-0172, ADR-0185, ADR-0220, ADR-0230
