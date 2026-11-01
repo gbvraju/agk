@@ -15,68 +15,18 @@ is due 2026-12-31.
 
 ## Rules
 
-1. **One option.** `python3 scripts/agk/product_report.py --facts FILE [--today D] [--week W] --json OUT` prints the markdown report as before and also writes `OUT`, a file `report.json`, from the same facts, in
-   the same run, with the same `--today` and `--week`. Without `--json` the script behaves as before and writes no file. `--json` is refused with `--inbox` and with `--print-action`.
-2. **The structure comes first.** The script builds one structure from the facts and the day and the week, and renders the markdown from that structure alone; `report.json` is that structure written as JSON. A
-   function that takes the structure and nothing else renders the markdown, so a test can render it from the parsed `report.json` and compare it with what the script printed (byte for byte). The inbox output
-   (`--inbox`) and the markdown of every existing golden are byte-identical to before; the inbox is built from the same item builders and is not part of `report.json`.
-3. **The document.** `report.json` has the keys `schema` (the number 2 since SPEC-0024), `week` (`2026-W41`), `opening`, `sections` and `notices`, and no other. `opening` is `{"first", "last", "as_of"}`, three dates
-   (`first` the Monday, `last` the Sunday, `as_of` the day the lists are as of). `sections` has the keys `delivered`, `proven`, `needs_you`, `at_risk` and `cost`, each a list in the order the markdown prints, an
-   empty list when the markdown prints `nothing this week`; `needs_you` is a list of groups `{"group", "count", "items"}` in the order of the markdown (`group` one of `spec`, `adr`, `question`, `pull-request`, `residual`, `requirement`; `count` a number or `"unknown"`). `notices` is the
-   list of the footer lines in the order printed.
-4. **Items.** Every item is an object with `kind` (a word of the list in rule 5), the fields of that kind and nothing else, and `links`: a list of `{"to", "url"}` objects, `to` being `pull-request`, `file`,
-   `directory`, `issue` or `search`, in the order the markdown prints them (empty when the line has none). A date is `YYYY-MM-DD`; a number is a JSON number; a title is the text the report prints and is present
-   only where the report prints it.
-5. **The fixed list of kinds** (the fields of each kind besides `kind` and `links`):
-
-   | Section | `kind` | Fields |
-   | --- | --- | --- |
-   | delivered | `requirement-done` | `id`, `title`, `criteria` (a list of criterion ids, or `"unknown"`), `became_done` (`"this-week"` or `"unknown"`) |
-   | delivered | `pull-request-merged` | `number`, `title`, `merged_on` |
-   | delivered | `pull-requests-merged` | `count` (the busy-week line, SPEC-0015) |
-   | proven | `requirement-proven` | `id`, `last_change` (`{"number", "proof"}`, `proof` being `proven` or `skipped`) |
-   | proven | `requirement-not-proven` | `id`, `reasons` (a list of `{"reason": "criteria-unknown"}`, `{"reason": "no-criteria"}`, `{"reason": "no-test", "ac"}`, `{"reason": "no-merged-change"}`, `{"reason": "not-shown", "number", "proof", "why"}`, `{"reason": "unknown-proof", "number", "proof", "why"}`; `why` is the printed reason word or `"unknown"`) |
-   | proven | `planned-not-counted` | `count` |
-   | needs_you | `draft-spec` | `id`, `title` |
-   | needs_you | `proposed-adr` | `id`, `title` |
-   | needs_you | `question` | `id`, `asked_in` |
-   | needs_you | `pull-request-no-verdict` | `number`, `title`, `days` |
-   | needs_you | `overdue-residual` | `due`, `text` (as printed, shortened) |
-   | needs_you | `unspecced-requirement` | `id`, `title` |
-   | at_risk | `residual-overdue` | `due`, `days`, `text` (as printed, shortened) |
-   | at_risk | `pull-requests-open-long` | `entries` (a list of `{"number", "days"}`, with `title` when the list has one entry) |
-   | at_risk | `pull-requests-sent-back` | `entries` (`{"number", "times"}`, with `title` when one) |
-   | at_risk | `pull-requests-merged-no-verdict` | `entries` (`{"number"}`; the report prints no title for it) |
-   | at_risk | `pull-requests-merged-not-cleared` | `entries` (`{"number"}`; the report prints no title for it) |
-   | at_risk | `drift-audit` | `total` (a number or `"unknown"`), `counts` (an object of the finding kinds to numbers or `"unknown"`), `open_issue` (a number, `"none"` or `"unknown"`) |
-   | cost | `pull-request-cost` | `number`, `title`, `hours` (a decimal string or `"unknown"`), `fix_verdicts` (a number or `"unknown"`) |
-   | cost | `week-totals` | `merged`, `hours`, `hours_unknown` (a number, how many of the week's merged pull requests have the hours `unknown`; SPEC-0024), `fix_verdicts`, `behaviour_unchanged`, `estimate` (`{"within", "counted"}` or `"none-declared"`), `busy` (a boolean) |
-   | any section, and `needs_you` groups | `unknown` | `what` (the thing that could not be read: `requirements`, `pull requests`, `test markers`, `questions`, `residuals`, `the drift counts`, `the age limit for pull requests (inbox_hours)`) |
-   | notices | `facts-commit` | `commit` |
-   | notices | `working-tree-modified` | `dirty` (the printed value) |
-   | notices | `kit-version` | `version` (a string or `"unknown"`) |
-   | notices | `metrics-issue` | `state` (`found`, `none-found` or `unknown`), and `number`, `title` when found |
-   | notices | `drift-audit-issue` | `state` (as above), and `number`, `title` when found |
-
-6. **Unknown stays unknown.** Wherever the facts mark a value `"unknown"`, or a value cannot be read, the field holds the string `"unknown"` and is never a number, a null, a guess or a default; an `unknown`
-   item (rule 5) stands where the markdown prints `unknown: <what> could not be read`.
-7. **Versioned, and the list is closed.** `schema` is 2 (SPEC-0024 added a field to `week-totals`; it was 1). A kind or a field that is not in rule 5 does not exist in schema 2: adding one, or changing a field, raises the number (and this spec is amended).
-   `kit/report-schema.json` is a hand-written JSON Schema of rules 3 to 5 (kit-only, not installed, like `kit/facts-schema.json`; its test is `tests/kit_dev/test_report_wiring.py`), and a test validates every golden `report.json` against it and fails on an extra
-   key, an extra kind or a missing field.
-8. **Determinism.** The same facts, `--today` and `--week` give a byte-identical `report.json` (keys in the order of rules 3 to 5, two-space indent, UTF-8, a final newline), and a byte-identical markdown.
-9. **The artifact.** In the `product-report` workflow the report step writes the markdown and `report.json` in one run of `product_report.py` and before the issue is written. The upload step names the two files
-   (`facts.json` and `report.json`, each by its path, no pattern) in the one artifact `agk-facts-<week>`, whose name does not change. `facts.json` is the byte-identical file of SPEC-0019 rule 2. The upload fails
-   the run when either file is missing or empty; the issue already written stays (SPEC-0019 rule 4). Retention, the pinned action, the order after the issue, `overwrite` and the `permissions` block are
-   unchanged, and the workflow commits, pushes and publishes nothing else.
-10. **Generic.** The script, the schema file and the tests name no project and no reader, and read nothing but the facts file; `product_report.py` adds no import (SPEC-0011 rule 13). The links are the ones
-    the markdown prints, built from the facts' repository and commit.
-11. **How it changes.** SPEC-0011 and SPEC-0019 are Approved: the build changes them by `docs/runs/proposed-spec-amendments-N.md`, applied by its ADR. SPEC-0011 rules 1, 8 to 11, 13, 14 and 18 gain the option, the
-    structure and the schema; SPEC-0019 rules 1 to 4 and 8 name the second file. The build is a kit change (a bump, the hashes, the plugin and `agk.toml` versions, an ADR that names the protected classes
-    `.github/`, `scripts/agk/`, `tests/kit/`, `kit/`, `.claude-plugin/`, `agk.toml`) and the security guide's line for `product-report.yml` names the second file. It is large, and the maintainers' size rule
-    applies: it may be split in the brief (the structure and the markdown first, the file and the artifact after).
-12. **The tests.** The recorded facts of the report goldens give one `report.json` each; a test renders the markdown from each and compares it with the golden markdown; a test validates each against
-    `kit/report-schema.json`; a test builds a facts document with unknown values in every section; a test runs the script twice; the workflow file is read for rule 9; the inbox goldens are unchanged. No
-    network and no model.
+1. Now SPEC-0011 rule 66.
+2. Now SPEC-0011 rule 67.
+3. Now SPEC-0011 rule 68.
+4. Now SPEC-0011 rule 69.
+5. Now SPEC-0011 rule 70.
+6. Now SPEC-0011 rule 71.
+7. Now SPEC-0011 rule 72.
+8. Now SPEC-0011 rule 73.
+9. Now SPEC-0011 rule 74.
+10. Now SPEC-0011 rule 75.
+11. Now SPEC-0011 rule 76.
+12. Now SPEC-0011 rule 77.
 
 ## Tests
 

@@ -164,6 +164,204 @@ were read on 2026-10-16.
 23. **Order.** Built after SPEC-0009 and SPEC-0010 (ADR-0021 decision 7: inbox and report by 2026-11-23). SPEC-0012 (intake) and
     SPEC-0013 (playbook) do not read this spec's output.
 
+### From SPEC-0014: The weekly product report footer names the kit version
+
+Moved from SPEC-0014 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0014 rule N, and SPEC-0014 rule N is rule N + 23 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0014.
+
+24. **The facts carry the version.** The facts document gains an optional top-level property `kit_version`: the version string, or `"unknown"` when it cannot be
+   read. `schema` stays `1`: no released consumer reads the property (as for `path` and `proof_reason`), and a renderer that does not know it ignores it.
+25. **One reader of the installed version.** The installed version is read by one function of `common.py`: the `version` of `agk.toml`, or, when `agk.toml` is absent, the
+   `version` of the legacy `[tool.agk]` table of `pyproject.toml` (the stamp of kits 0.1.0 and 0.2.0). `facts.py` calls it, and `upgrade.py` calls it for the stamp it
+   already reads; the output of `upgrade.py` on the existing fixtures is byte-identical before and after. `upgrade.py` is not installed, so the function lives in
+   `common.py`.
+26. **Unknown, never a guess.** A missing file, an unreadable file, a missing `version` key or a value that is not a string gives `"unknown"`. Nothing falls back to a
+   constant, to the kit's manifest or to the version of the script that renders.
+27. **The footer line.** The weekly report prints `kit version: <value>` as the line directly after the `facts:` line of the footer, where `<value>` is the facts'
+   `kit_version`, or `unknown` when the facts carry none (a document made before this rule). The line has no link: its evidence is the facts commit named above it.
+28. **The renderer stays pure.** `product_report.py` reads the facts file and no other file, and its imports are unchanged (SPEC-0011 rule 13). The inbox output has no
+   `kit version:` line and does not change.
+
+### From SPEC-0015: A busy week's report links the full list of merged pull requests
+
+Moved from SPEC-0015 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0015 rule N, and SPEC-0015 rule N is rule N + 28 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0015.
+
+29. **A busy week.** A week is busy when more than ten pull requests merged in it, counted as `merged_in_week` selects them (`state` `merged` and `merged_at` inside the report's week). Ten is one
+   named constant in `product_report.py`, not a setting, not read from `agk.toml` and not carried by the facts. Ten or fewer is a quiet week.
+30. **A quiet week is unchanged.** For a quiet week the report is byte-identical to what the same facts gave before this change. The existing report goldens are the test; the boundary is tested at
+   exactly ten (unchanged) and at eleven (collapsed).
+31. **Delivered in a busy week.** Every requirement whose `status` is `done` is still listed, in the same order and with the same lines as today. The lines `PR #N "<title>" was merged on <day>` are not
+   printed. In their place there is one line after the requirements: `<N> pull requests were merged this week` (`N` the number of pull requests merged in the week), ending with the week link of rule 5.
+32. **Cost in a busy week.** No line is printed for a single pull request. The totals line `This week: ...` is printed with its text exactly as today (with the ending of SPEC-0018 rule 6) and ends with the week link of rule 5 instead of the
+   link to all merged pull requests. It is the only line of the section.
+33. **The week link.** `<repo URL>/pulls?q=is%3Apr+is%3Amerged+merged%3A<start>..<end>`, where `<repo URL>` is `https://github.com/` plus `repo` of the facts and `<start>` and `<end>` are the Monday
+   and the Sunday of the report's week in UTC, `YYYY-MM-DD`, the dates of the opening line. It is built from `repo` and those two dates only (Q-S0015-1).
+34. **Nothing else changes.** Proven, Needs you and At risk are unchanged: every pull request that At risk or Needs you named is still named (a pull request sent back, merged without a verdict or
+   merged before its last commit was cleared stays in At risk). The footer, the inbox output and the metrics issue are unchanged.
+35. **The renderer stays pure.** `product_report.py` reads the facts file and no other file, and its imports are unchanged (SPEC-0011 rule 13).
+36. **Unknown is not a count.** When the facts mark `pull_requests` `"unknown"` the report prints today's unknown line and does not collapse; the count of rule 1 is made only from known rows.
+
+### From SPEC-0016: At risk shows one line per kind of pull request risk
+
+Moved from SPEC-0016 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0016 rule N, and SPEC-0016 rule N is rule N + 36 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0016.
+
+37. **The four kinds.** The kinds are the lines of `at_risk` that name one pull request: *open too long* (an open pull request older than `OLD_PULL_REQUEST_DAYS`), *sent back* (closed in the week with two or
+   more fix verdicts or a rejected one), *merged with no verdict* and *merged before its last commit was cleared*. The overdue-residual lines and the drift line are not kinds of this rule and are printed as today.
+38. **One pull request stays as today.** A kind with exactly one pull request prints the line printed before this change, byte for byte (its title, its value and its link).
+39. **Two or more become one line.** A kind with two or more pull requests prints one line that names every one of them: `PR` becomes `PRs`, the numbers are in ascending order, separated by `, ` and the
+   last by ` and `, each number written as its own link to that pull request (`[#12](<pull request URL>)`), never a range, and the line has no trailing link of its own.
+40. **The grouped wording.** Open too long: `PRs #12 (41 days), #15 (30 days) and #20 (9 days) have been open`. Sent back: `PRs #12 (3 times) and #15 (2 times) were sent back`. Merged with no verdict:
+   `PRs #12, #15 and #20 were merged with no verdict`. Merged before cleared: `PRs #12 and #15 were merged before their last commit was cleared`. A value in brackets is the one the single line prints
+   (`plural(days, "day", "days")` of the pull request, `plural(fixes + rejected, "time", "times")`). A grouped line prints no title (Q-S0016-1).
+41. **Every pull request is still named.** The set of pull request numbers that appear in the At risk section is the same as before this change. No number is dropped, merged into a range or replaced by a count.
+42. **Where a grouped line stands.** The lines keep the order of today's section: residuals, open too long, sent back, the drift line, then the merged pull requests. A grouped line takes the place of the
+   line of its lowest-numbered pull request. So when no kind has two or more pull requests, the section is byte-identical to today's.
+43. **Nothing else changes.** Delivered, Proven, Needs you, Cost, the footer, the inbox output and the metrics issue are byte-identical to the report of the same facts before this change.
+44. **The renderer stays pure.** `product_report.py` reads the facts file and no other file, and its imports are unchanged (SPEC-0011 rule 13). The number of pull requests of a kind is counted from the
+   facts rows only.
+45. **Unknown is not a count.** When the facts mark `pull_requests` `"unknown"`, At risk prints today's unknown line and does not group.
+46. **Goldens.** The quiet-week goldens change only in At risk, and only where a kind has two or more pull requests; the implementation pull request shows the diff of each golden in its body.
+
+### From SPEC-0017: Delivered lists only the requirements that became done in the week
+
+Moved from SPEC-0017 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0017 rule N, and SPEC-0017 rule N is rule N + 46 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0017.
+
+47. **The date a requirement became done.** For each requirement, `facts.py` reads the first-parent history of the default branch for the commits that changed the requirement's `Status:` line in
+   `docs/requirements.md`, and takes the latest one whose change set the status to `done` (a requirement added already `done` counts as that commit). The field is `done_on` on the requirement's row, the
+   commit's committer date in UTC, `YYYY-MM-DD`. It is `unknown` when no such commit is found, the history is shallow or git cannot read it. It is computed from the repository's history only: no clock, no
+   network, no pull request lookup.
+48. **The schema.** `schema` stays 1. `done_on` is optional: a facts document without it is valid, and the renderer reads a missing `done_on` as `unknown` (no migration of old facts).
+49. **Delivered lists the week's requirements.** A requirement whose `status` is `done` and whose `done_on` is a date inside the report's week (the same Monday and Sunday, in UTC, as the report's opening
+   line) is listed with the line printed before this change. One whose `done_on` is a date outside the week is not listed.
+50. **Unknown stays visible.** A requirement whose `status` is `done` and whose `done_on` is `unknown` or missing is listed with its usual line followed by ` (week it became done: unknown)`, before the link. It
+   is never dropped.
+51. **A week with nothing newly done.** Delivered prints no requirement line. Its pull request lines (a quiet week) or the single busy-week line (SPEC-0015) are unchanged. A requirement whose `status` is not
+   `done` is not listed, as before.
+52. **The workflow reads enough history.** The `product-report` workflow checks out the full history (`fetch-depth: 0`). A test reads the workflow file and fails if its checkout does not set `fetch-depth: 0`,
+   so a shallow clone cannot turn every done requirement into `unknown`. (`facts.py` still writes `unknown` for a shallow history; it never guesses a date.)
+53. **Nothing else changes.** Proven, Needs you, At risk, Cost, the footer, the inbox output and the metrics issue are byte-identical to the report of the same facts before this change. The quiet-week and
+   busy-week goldens change only in Delivered; the implementation pull request shows the diff of each.
+54. **The renderer stays pure.** `product_report.py` reads the facts file and no other file, and its imports are unchanged (SPEC-0011 rule 13). The week of a requirement is decided from `done_on` alone.
+55. **Unknown is not a date.** When the facts mark `requirements` `"unknown"`, Delivered prints today's unknown line.
+
+### From SPEC-0019: The weekly report publishes the facts it was rendered from
+
+Moved from SPEC-0019 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0019 rule N, and SPEC-0019 rule N is rule N + 55 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0019.
+
+56. **One artifact per run.** After the step that writes the issue, the `product-report` workflow has a step that uploads the facts as a workflow artifact named `agk-facts-<week>`, `<week>` being the week label of
+   the report (`2026-W42`, the label of the issue title; the first line of the report names it). The artifact holds one file, `facts.json`. From SPEC-0022 the artifact also holds `report.json` (rule 9 there).
+57. **The same file.** The file is the facts document that `product_report.py` read for that report, byte for byte: it is the path the workflow wrote with `facts.py`, uploaded as it is, not regenerated, filtered,
+   renamed inside the artifact or given another field.
+58. **The step.** The upload action is pinned by a full commit SHA with its tag in a comment, like the checkout (SPEC-0011 rule 17); the path is that one file and no pattern; `retention-days` is 90, stated in the
+   workflow; `if-no-files-found` is `error`. The step comes after the step that writes the issue, and the week label reaches it from the report step as a step output (Q-S0019-2). From SPEC-0022 the upload names two files, `facts.json` and `report.json`, each by its path, and no pattern.
+59. **A failed upload fails the run.** A missing or empty facts file, or an upload that errors, fails the run; the issue already written is not changed or removed. A run for which the issue could not be written does
+   not upload (the earlier step failed). The same holds for `report.json` (SPEC-0022 rule 9).
+60. **A re-run.** A re-run of the workflow for the same week produces the artifact again under the same name, and the artifact of the latest run is the one used; the upload replaces an artifact of that name in the
+   same run and the workflow deletes no other artifact (Q-S0019-1).
+61. **Access is GitHub's.** The artifact is readable by those who can read the repository's workflow runs: on a public repository anyone signed in to GitHub, on a private one those who can read it, and by the API
+   with a token that can. There is no anonymous download, no sharing mechanism, no release, no page and no other place; the workflow publishes the file nowhere but as a workflow artifact.
+62. **No new permission, no new write.** The `permissions` block is what SPEC-0011 rule 15 gave (`contents`, `pull-requests`, `checks` and `actions` read, `issues` write); the workflow commits and pushes nothing and
+   writes nothing to the repository but the issue and the label as before.
+63. **Nothing else changes.** `facts.py`, `product_report.py`, the report, the issue and its label, the inbox output and the metrics workflow are byte-identical to before. The workflow's header comment says the
+   facts are also uploaded, and its "only writes" sentence names the artifact (SPEC-0011 rule 15 is amended for that). With SPEC-0022, `product_report.py` gains `--json` and the report step of the workflow uses it.
+64. **How it changes.** The workflow is a verbatim kit file, so the build is a kit change: a bump, the hashes, and an ADR that names the protected classes it touches. SPEC-0011 is Approved; the build changes it by an
+   amendment file `docs/runs/proposed-spec-amendments-N.md`, applied by that ADR. The security guide's account of what each workflow may write gains a line for the artifact.
+65. **The test.** A test reads the workflow file and fails when the upload step is missing, comes before the step that writes the issue, uploads anything but that one file, names the artifact otherwise than
+    `agk-facts-<week>`, omits the 90-day retention or `if-no-files-found: error`, is not pinned by a full commit SHA, or when the permissions differ from rule 7. No network is used.
+
+### From SPEC-0022: The weekly report also publishes its sections as data in report.json
+
+Moved from SPEC-0022 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0022 rule N, and SPEC-0022 rule N is rule N + 65 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0022.
+
+66. **One option.** `python3 scripts/agk/product_report.py --facts FILE [--today D] [--week W] --json OUT` prints the markdown report as before and also writes `OUT`, a file `report.json`, from the same facts, in
+   the same run, with the same `--today` and `--week`. Without `--json` the script behaves as before and writes no file. `--json` is refused with `--inbox` and with `--print-action`.
+67. **The structure comes first.** The script builds one structure from the facts and the day and the week, and renders the markdown from that structure alone; `report.json` is that structure written as JSON. A
+   function that takes the structure and nothing else renders the markdown, so a test can render it from the parsed `report.json` and compare it with what the script printed (byte for byte). The inbox output
+   (`--inbox`) and the markdown of every existing golden are byte-identical to before; the inbox is built from the same item builders and is not part of `report.json`.
+68. **The document.** `report.json` has the keys `schema` (the number 2 since SPEC-0024), `week` (`2026-W41`), `opening`, `sections` and `notices`, and no other. `opening` is `{"first", "last", "as_of"}`, three dates
+   (`first` the Monday, `last` the Sunday, `as_of` the day the lists are as of). `sections` has the keys `delivered`, `proven`, `needs_you`, `at_risk` and `cost`, each a list in the order the markdown prints, an
+   empty list when the markdown prints `nothing this week`; `needs_you` is a list of groups `{"group", "count", "items"}` in the order of the markdown (`group` one of `spec`, `adr`, `question`, `pull-request`, `residual`, `requirement`; `count` a number or `"unknown"`). `notices` is the
+   list of the footer lines in the order printed.
+69. **Items.** Every item is an object with `kind` (a word of the list in rule 5), the fields of that kind and nothing else, and `links`: a list of `{"to", "url"}` objects, `to` being `pull-request`, `file`,
+   `directory`, `issue` or `search`, in the order the markdown prints them (empty when the line has none). A date is `YYYY-MM-DD`; a number is a JSON number; a title is the text the report prints and is present
+   only where the report prints it.
+70. **The fixed list of kinds** (the fields of each kind besides `kind` and `links`):
+
+   | Section | `kind` | Fields |
+   | --- | --- | --- |
+   | delivered | `requirement-done` | `id`, `title`, `criteria` (a list of criterion ids, or `"unknown"`), `became_done` (`"this-week"` or `"unknown"`) |
+   | delivered | `pull-request-merged` | `number`, `title`, `merged_on` |
+   | delivered | `pull-requests-merged` | `count` (the busy-week line, SPEC-0015) |
+   | proven | `requirement-proven` | `id`, `last_change` (`{"number", "proof"}`, `proof` being `proven` or `skipped`) |
+   | proven | `requirement-not-proven` | `id`, `reasons` (a list of `{"reason": "criteria-unknown"}`, `{"reason": "no-criteria"}`, `{"reason": "no-test", "ac"}`, `{"reason": "no-merged-change"}`, `{"reason": "not-shown", "number", "proof", "why"}`, `{"reason": "unknown-proof", "number", "proof", "why"}`; `why` is the printed reason word or `"unknown"`) |
+   | proven | `planned-not-counted` | `count` |
+   | needs_you | `draft-spec` | `id`, `title` |
+   | needs_you | `proposed-adr` | `id`, `title` |
+   | needs_you | `question` | `id`, `asked_in` |
+   | needs_you | `pull-request-no-verdict` | `number`, `title`, `days` |
+   | needs_you | `overdue-residual` | `due`, `text` (as printed, shortened) |
+   | needs_you | `unspecced-requirement` | `id`, `title` |
+   | at_risk | `residual-overdue` | `due`, `days`, `text` (as printed, shortened) |
+   | at_risk | `pull-requests-open-long` | `entries` (a list of `{"number", "days"}`, with `title` when the list has one entry) |
+   | at_risk | `pull-requests-sent-back` | `entries` (`{"number", "times"}`, with `title` when one) |
+   | at_risk | `pull-requests-merged-no-verdict` | `entries` (`{"number"}`; the report prints no title for it) |
+   | at_risk | `pull-requests-merged-not-cleared` | `entries` (`{"number"}`; the report prints no title for it) |
+   | at_risk | `drift-audit` | `total` (a number or `"unknown"`), `counts` (an object of the finding kinds to numbers or `"unknown"`), `open_issue` (a number, `"none"` or `"unknown"`) |
+   | cost | `pull-request-cost` | `number`, `title`, `hours` (a decimal string or `"unknown"`), `fix_verdicts` (a number or `"unknown"`) |
+   | cost | `week-totals` | `merged`, `hours`, `hours_unknown` (a number, how many of the week's merged pull requests have the hours `unknown`; SPEC-0024), `fix_verdicts`, `behaviour_unchanged`, `estimate` (`{"within", "counted"}` or `"none-declared"`), `busy` (a boolean) |
+   | any section, and `needs_you` groups | `unknown` | `what` (the thing that could not be read: `requirements`, `pull requests`, `test markers`, `questions`, `residuals`, `the drift counts`, `the age limit for pull requests (inbox_hours)`) |
+   | notices | `facts-commit` | `commit` |
+   | notices | `working-tree-modified` | `dirty` (the printed value) |
+   | notices | `kit-version` | `version` (a string or `"unknown"`) |
+   | notices | `metrics-issue` | `state` (`found`, `none-found` or `unknown`), and `number`, `title` when found |
+   | notices | `drift-audit-issue` | `state` (as above), and `number`, `title` when found |
+71. **Unknown stays unknown.** Wherever the facts mark a value `"unknown"`, or a value cannot be read, the field holds the string `"unknown"` and is never a number, a null, a guess or a default; an `unknown`
+   item (rule 5) stands where the markdown prints `unknown: <what> could not be read`.
+72. **Versioned, and the list is closed.** `schema` is 2 (SPEC-0024 added a field to `week-totals`; it was 1). A kind or a field that is not in rule 5 does not exist in schema 2: adding one, or changing a field, raises the number (and this spec is amended).
+   `kit/report-schema.json` is a hand-written JSON Schema of rules 3 to 5 (kit-only, not installed, like `kit/facts-schema.json`; its test is `tests/kit_dev/test_report_wiring.py`), and a test validates every golden `report.json` against it and fails on an extra
+   key, an extra kind or a missing field.
+73. **Determinism.** The same facts, `--today` and `--week` give a byte-identical `report.json` (keys in the order of rules 3 to 5, two-space indent, UTF-8, a final newline), and a byte-identical markdown.
+74. **The artifact.** In the `product-report` workflow the report step writes the markdown and `report.json` in one run of `product_report.py` and before the issue is written. The upload step names the two files
+   (`facts.json` and `report.json`, each by its path, no pattern) in the one artifact `agk-facts-<week>`, whose name does not change. `facts.json` is the byte-identical file of SPEC-0019 rule 2. The upload fails
+   the run when either file is missing or empty; the issue already written stays (SPEC-0019 rule 4). Retention, the pinned action, the order after the issue, `overwrite` and the `permissions` block are
+   unchanged, and the workflow commits, pushes and publishes nothing else.
+75. **Generic.** The script, the schema file and the tests name no project and no reader, and read nothing but the facts file; `product_report.py` adds no import (SPEC-0011 rule 13). The links are the ones
+    the markdown prints, built from the facts' repository and commit.
+76. **How it changes.** SPEC-0011 and SPEC-0019 are Approved: the build changes them by `docs/runs/proposed-spec-amendments-N.md`, applied by its ADR. SPEC-0011 rules 1, 8 to 11, 13, 14 and 18 gain the option, the
+    structure and the schema; SPEC-0019 rules 1 to 4 and 8 name the second file. The build is a kit change (a bump, the hashes, the plugin and `agk.toml` versions, an ADR that names the protected classes
+    `.github/`, `scripts/agk/`, `tests/kit/`, `kit/`, `.claude-plugin/`, `agk.toml`) and the security guide's line for `product-report.yml` names the second file. It is large, and the maintainers' size rule
+    applies: it may be split in the brief (the structure and the markdown first, the file and the artifact after).
+77. **The tests.** The recorded facts of the report goldens give one `report.json` each; a test renders the markdown from each and compares it with the golden markdown; a test validates each against
+    `kit/report-schema.json`; a test builds a facts document with unknown values in every section; a test runs the script twice; the workflow file is read for rule 9; the inbox goldens are unchanged. No
+    network and no model.
+
+### From SPEC-0024: The report's cost totals count the merged changes whose hours are not known
+
+Moved from SPEC-0024 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0024 rule N, and SPEC-0024 rule N is rule N + 77 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0024.
+
+78. **The field.** The cost totals item of `report.json` (kind `week-totals`, SPEC-0022 rule 5) gains the field `hours_unknown`: a JSON integer, the number of the week's merged pull requests whose hours are `unknown` (the same condition that makes the `hours` of their `pull-request-cost` item and the `hours` of the totals read `unknown`: the created or the merged time is missing or cannot be read). It is present in every totals item and is 0 when every hours is known; it is never omitted, never a null and never the string `unknown`.
+79. **The set counted.** It counts every pull request merged in the report's week, the set that `merged` counts, whether or not the per-change cost items are printed (a busy week leaves them out). So `merged` minus `hours_unknown` is the number of changes whose hours are in the total of `hours`; when `hours_unknown` is above 0 the total of `hours` is `unknown`, as before.
+80. **Nothing printed changes.** The markdown report and the inbox output are byte-identical to before: the field is data only and the line "This week: ..." does not print it. The markdown rendered from `report.json` alone still equals the printed markdown (SPEC-0022 rule 2); the existing markdown and inbox goldens do not change.
+81. **The schema number rises.** `report.json` `schema` is the number 2 for every report (SPEC-0022 rules 3 and 7: adding a field raises the number). `kit/report-schema.json` requires the number 2 and the field `hours_unknown` (an integer, at least 0) on the totals item, so a missing or an extra field fails. `facts.json` and its schema keep their own number 1. A reader that expects schema 1 sees the number change and knows to update.
+82. **Unknown stays unknown.** When the facts do not hold the pull requests (SPEC-0022 rule 6) there is no totals item; the `unknown` item stands as before. A week with no merged pull request has no cost items, as before.
+83. **Generic and deterministic.** The change adds no import and reads only the facts file; the same facts, day and week give a byte-identical `report.json` (SPEC-0022 rule 8).
+84. **How it changes.** SPEC-0022 is Approved: the build changes it by `docs/runs/proposed-spec-amendments-N.md`, applied by its ADR: rules 3 (the number of the schema), 5 (the fields of `week-totals`) and 7 (`schema` is 2). The build is a kit change (a bump, the hashes, the plugin and `agk.toml` versions, an ADR that names the protected classes `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `.claude-plugin/`, `agk.toml`), and the `report.json` goldens, which hold the number and the field, are regenerated with it. It is small.
+85. **The tests.** The recorded facts of the report goldens, where some pull request has no time, give a count above 0 and the same facts with the times filled give 0; a busy week counts every merged pull request; every golden `report.json` validates against `kit/report-schema.json` with the number 2; a totals item without the field, with the string `unknown` or with an extra field fails the schema; the markdown and inbox goldens and the markdown rendered from `report.json` are unchanged. No network and no model.
+
+### From SPEC-0026: Each section of the weekly report, each grouped item in it and each total that can be unknown states how many it holds
+
+Moved from SPEC-0026 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0026 rule N, and SPEC-0026 rule N is rule N + 85 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0026.
+
+86. **The section counts.** `report.json` (SPEC-0022 rule 3) gains the key `counts`: an object with exactly the keys `delivered`, `proven`, `needs_you` and `at_risk`, the keys of the sections, each counted by meaning and not by list entries: `delivered` is the number of its `requirement-done` items; `proven` the number of its `requirement-proven` items; `needs_you` the number of the items of all its groups together, `unknown` items excluded; `at_risk` the number of its items, `unknown` items excluded. The busy-week summary item of `delivered` and the `planned-not-counted` and `requirement-not-proven` items of `proven` are not counted, so the same requirements give the same `delivered` count in a quiet and in a busy week. An empty section is the integer 0. When a section holds an `unknown` item its count is the string `"unknown"`, never a number: unknown is not shown as a count. `counts` is always present and has these four keys. The `cost` section ("Time and review") has no count.
+87. **The group counts.** Every grouped item, the kinds that list `entries` (`pull-requests-open-long`, `pull-requests-sent-back`, `pull-requests-merged-no-verdict`, `pull-requests-merged-not-cleared`), gains the field `count`: a JSON integer, the number of its `entries`, always present. The groups of the decisions section keep their `count` (a number or `"unknown"`, SPEC-0022 rule 3); the drift-audit item keeps its `total` and `counts` as they are.
+88. **The unknown fix verdicts.** The `week-totals` item (SPEC-0022 rule 5) gains `fix_verdicts_unknown`: a JSON integer, the number of the week's merged pull requests whose verdicts are unknown, the same set as `merged` counts, whether or not the per-change cost items are printed. It is present in every totals item and is 0 when none is unknown; it is never omitted and never `"unknown"`. When it is above 0 the total `fix_verdicts` is `unknown`, as before.
+89. **What stays not known yet.** A decisions group whose source cannot be read keeps `count` `"unknown"` and its single `unknown` item, and the drift-audit `total` stays a number or `"unknown"`: their items cannot be counted, so no unknown count is added for them and they are not turned into numbers.
+90. **Open pull requests with unknown verdicts are not skipped.** Open pull requests whose verdicts cannot be read are no longer left out of the report. The pull-request group of the decisions section gains one `unknown` item, and so does the at-risk section, each naming in its `what` how many open pull requests could not be read, with a link to each of them (`links`, kind `pull-request`). When none is unreadable nothing is added. The `unknown` item has the fields it has (SPEC-0022 rule 5), so the number is in the text of `what`.
+91. **The drift-audit line.** The `drift-audit` item of the at-risk section is present only when its `total` is above 0 or `"unknown"`; a total of 0 with no open drift-audit issue is left out (the section may then be empty and prints `nothing this week`). A total of 0 with an open issue stays listed, since the open issue is itself a thing to look at.
+92. **The schema number rises and the markdown changes only where asked.** `report.json` `schema` is the number 3 for every report (SPEC-0022 rules 3 and 7: adding a field raises the number), the list of kinds is unchanged, and `kit/report-schema.json` requires the number 3, `counts`, and the new field of each kind, so a missing or an extra field fails. `facts.json` and its schema keep their own number. The markdown report and the inbox output change only by the unknown lines of rule 5 and the absent drift-audit line of rule 6; their goldens change only there, and the markdown rendered from `report.json` alone still equals the printed markdown (SPEC-0022 rule 2).
+93. **Generic and deterministic.** The change adds no import and reads only the facts file; the same facts, day and week give a byte-identical `report.json` and markdown (SPEC-0022 rule 8).
+94. **How it changes.** SPEC-0022 is Approved: the build changes it by `docs/runs/proposed-spec-amendments-N.md`, applied by its ADR: rules 3 (the key `counts`, the number of the schema), 5 (the fields) and 7 (`schema` is 3), and the rule that skipped open pull requests. The build is a kit change (a bump, the hashes, the plugin and `agk.toml` versions, an ADR that names the protected classes `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `.claude-plugin/`, `agk.toml`), the goldens of `report.json` and of the markdown are regenerated with it, and it is measured first and split at about 600 changed lines of code and tests.
+95. **The tests.** For every golden `report.json`: each number of `counts` equals the number of the items of its kind (rule 1), a busy and a quiet week give the same `delivered` count for the same requirements, a section with an `unknown` item gives `"unknown"`, each group `count` equals its entries and `fix_verdicts_unknown` equals the merged pull requests with unknown verdicts, and a test fails if any count differs from what it counts by meaning (rule 1) or a field is missing; a week with facts that could not read the pull requests keeps the `unknown` items and adds no count to them; open pull requests with unknown verdicts give the two `unknown` items with their links, and none give no item; a drift-audit total of 0 with and without an open issue, above 0 and unknown; every golden validates against the schema file with the number 3 and a missing or an extra field fails; the markdown goldens differ from before only in the lines of rules 5 and 6. No network and no model.
+
 ## Tests
 
 - Rules 1 to 6, 18 (inbox): `tests/kit/test_product_report.py`, marker `REQ-017 AC1`.

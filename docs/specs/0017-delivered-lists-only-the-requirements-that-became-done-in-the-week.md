@@ -14,23 +14,15 @@ appeared in the report of week W42 (`docs/runs/short-report-live-1.md`), and eve
 
 ## Rules
 
-1. **The date a requirement became done.** For each requirement, `facts.py` reads the first-parent history of the default branch for the commits that changed the requirement's `Status:` line in
-   `docs/requirements.md`, and takes the latest one whose change set the status to `done` (a requirement added already `done` counts as that commit). The field is `done_on` on the requirement's row, the
-   commit's committer date in UTC, `YYYY-MM-DD`. It is `unknown` when no such commit is found, the history is shallow or git cannot read it. It is computed from the repository's history only: no clock, no
-   network, no pull request lookup.
-2. **The schema.** `schema` stays 1. `done_on` is optional: a facts document without it is valid, and the renderer reads a missing `done_on` as `unknown` (no migration of old facts).
-3. **Delivered lists the week's requirements.** A requirement whose `status` is `done` and whose `done_on` is a date inside the report's week (the same Monday and Sunday, in UTC, as the report's opening
-   line) is listed with the line printed before this change. One whose `done_on` is a date outside the week is not listed.
-4. **Unknown stays visible.** A requirement whose `status` is `done` and whose `done_on` is `unknown` or missing is listed with its usual line followed by ` (week it became done: unknown)`, before the link. It
-   is never dropped.
-5. **A week with nothing newly done.** Delivered prints no requirement line. Its pull request lines (a quiet week) or the single busy-week line (SPEC-0015) are unchanged. A requirement whose `status` is not
-   `done` is not listed, as before.
-6. **The workflow reads enough history.** The `product-report` workflow checks out the full history (`fetch-depth: 0`). A test reads the workflow file and fails if its checkout does not set `fetch-depth: 0`,
-   so a shallow clone cannot turn every done requirement into `unknown`. (`facts.py` still writes `unknown` for a shallow history; it never guesses a date.)
-7. **Nothing else changes.** Proven, Needs you, At risk, Cost, the footer, the inbox output and the metrics issue are byte-identical to the report of the same facts before this change. The quiet-week and
-   busy-week goldens change only in Delivered; the implementation pull request shows the diff of each.
-8. **The renderer stays pure.** `product_report.py` reads the facts file and no other file, and its imports are unchanged (SPEC-0011 rule 13). The week of a requirement is decided from `done_on` alone.
-9. **Unknown is not a date.** When the facts mark `requirements` `"unknown"`, Delivered prints today's unknown line.
+1. Now SPEC-0011 rule 47.
+2. Now SPEC-0011 rule 48.
+3. Now SPEC-0011 rule 49.
+4. Now SPEC-0011 rule 50.
+5. Now SPEC-0011 rule 51.
+6. Now SPEC-0011 rule 52.
+7. Now SPEC-0011 rule 53.
+8. Now SPEC-0011 rule 54.
+9. Now SPEC-0011 rule 55.
 
 ## Tests
 
