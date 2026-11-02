@@ -74,8 +74,8 @@ want of one (#459, #457). An existing theme, mockup folder or project without an
   free to change after sign-off, which is why the `inventory` row carries its own digest; reading 5 (counting the
   `Approve:` line stays with `check_final_clearance.py`) is why `rows` only reads; reading 6 (seven builds) makes this
   build (b) of the seven.
-- 2026-11-02: Q-456-7 to Q-456-15 are this build's own conservative readings, listed in the pull request body: the
+- 2026-11-02: Q-456-7 to Q-456-16 are this build's own conservative readings, listed in the pull request body: the
   digest's path form (7), `none` for a requirement no spec names (8) and for a screen that links nowhere (11), a stale or
   repeated requirement section failing (9), the closed shape (10), where a problem is named and what is never echoed
-  (12), the row format (13), retired requirements and unlisted screens (14), and an inventory alone being a design
-  record (15).
+  (12), the row format (13), retired requirements and unlisted screens (14), an inventory alone being a design
+  record (15), and the reference guide, outside this brief's files, not yet naming the inventory step (16).
