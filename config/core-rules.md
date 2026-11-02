@@ -34,15 +34,14 @@ All of `constitution/principles.md`, principles 1 to 12, is core; it is short, s
 
 ## CLAUDE.md items
 
-The numbered list that `CLAUDE.md` carried before ADR-0247, with its numbers and its exact text.
+The numbered list that `CLAUDE.md` carried before ADR-0247, with its numbers and its exact text, except
+`CLAUDE.md item 2` and `CLAUDE.md item 10`, which stay in `CLAUDE.md` itself.
 
 1. You implement; you never decide. Decisions are ADRs or requirement statuses written by the reviewers. Where a
    brief leaves something open, record it as a `Q-…` question and choose the most conservative reading.
-2. One PR per item, branched from the default branch (`origin/<default branch>`), never stacked on another's
-   unmerged change; a dependence is declared with `Depends-on: #n`. One open PR per session: several sessions may
-   have one each in flow mode (`pr_mode` in `agk.toml`); in strict mode, the default, a person has one open PR at a
-   time. Push and stop; never poll CI; never merge; never enable auto-merge. Never post a comment whose first line
-   is `Confirmed:`: in solo mode you print its text and the person posts it (session rule 29).
+
+`CLAUDE.md item 2` is in `CLAUDE.md`.
+
 3. Protected paths (`config/protected-paths.txt`) change only with an ADR in the same PR that names each changed
    path class.
 4. Tests first. Every check ships with tests of the check. You never mark anything done.
@@ -54,5 +53,5 @@ The numbered list that `CLAUDE.md` carried before ADR-0247, with its numbers and
    setting, never the value.
 9. Unsure of a Claude Code fact: mark it `(verify)` in the file and in the PR body; an unconfirmed fact is a
    question, not a guess.
-10. Check the state of a pull request with `gh api repos/{owner}/{repo}/pulls/{n}` (a GET); the GraphQL form of the
-    command is blocked in cloud sessions.
+
+`CLAUDE.md item 10` is in `CLAUDE.md`.

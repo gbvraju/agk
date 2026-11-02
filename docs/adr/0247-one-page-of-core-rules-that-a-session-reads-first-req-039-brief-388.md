@@ -30,37 +30,47 @@ the answers; this ADR number was reserved for it by the conductor (the field not
 2. **CLAUDE.md (answer 2).** `CLAUDE.md` keeps its title, its first sentence (the constitution is authoritative, twelve
    numbered rules), its pointer to `config/session-rules.md` and its compaction-recovery section word for word, and
    replaces its numbered list with a pointer to `config/core-rules.md`. Every item of that list carries some text found
-   nowhere else, so all ten move to the last section of the page, `CLAUDE.md items`, with their exact text and their
-   numbers, and are cited as `CLAUDE.md item N` as before; none is dropped and none is renumbered.
+   nowhere else. Items 2 and 10 stay in `CLAUDE.md` with their numbers and exact text, because approved texts require
+   their wording in `CLAUDE.md` itself (Q-388-5); the other eight move to the last section of the page,
+   `CLAUDE.md items`, with their exact text and their numbers, and the page cites items 2 and 10 there by number. All are
+   cited as `CLAUDE.md item N` as before; none is dropped and none is renumbered, and each list counts up by one, so no
+   item renders under another number.
 3. **No rule changes (answer 3).** Nothing in `constitution/principles.md`, `config/session-rules.md` or a spec changes.
 4. **Tests first (answer 4).** `tests/kit/test_core_rules_page.py` checks that every rule the page names exists; that the
    page names exactly the core of row 13; that each summary is at most one sentence; that every item of `CLAUDE.md` before
-   the change is on the page with its number and exact text; that the page has at most 60 lines; and that `CLAUDE.md`
-   points at the page, carries no numbered list, keeps its compaction-recovery section and still points at
+   the change is on the page or, for items 2 and 10, still in `CLAUDE.md`, with its number and exact text; that the page
+   cites items 2 and 10 by number; that no list renders with other numbers; that the page has at most 60 lines; and that
+   `CLAUDE.md` points at the page, keeps only items 2 and 10, keeps its compaction-recovery section and still points at
    `config/session-rules.md` (the existing test of REQ-037 AC1 is unchanged and passes).
-5. **Existing tests that read the moved text.** Five existing tests asserted phrases of the old list in `CLAUDE.md`
-   (`tests/kit/test_session_rules.py`, `tests/kit/test_solo_mode.py`, `tests/kit_dev/test_flow_texts.py`,
-   `tests/kit_dev/test_playbook.py`, and `tests/kit_dev/test_init.py` on an installed project). Each now reads
-   `CLAUDE.md` together with the page it points at (the installed page for `test_init.py`); every asserted phrase
-   and count is unchanged, so no check is weakened (principle 11). `tests/kit_dev/test_kit_manifest.py` lists the page
-   among the single verbatim files.
+5. **Existing tests that read the moved text.** The existing tests that pin the wording of items 2 and 10 in `CLAUDE.md`
+   (`tests/kit/test_session_rules.py`, `tests/kit/test_solo_mode.py`, `tests/kit_dev/test_flow_texts.py` and
+   `tests/kit_dev/test_playbook.py`) are unchanged and still read `CLAUDE.md` alone. `tests/kit_dev/test_init.py` on an
+   installed project, which asserts that no text assumes `origin/main`, reads the installed `CLAUDE.md` together with the
+   installed page, so it checks more text and no less (principle 11). `tests/kit_dev/test_kit_manifest.py` lists the
+   page among the single verbatim files.
 
 ## Consequences
 
 - A session reads one page of at most 60 lines first; the numbered rules stay the source, cited by number.
-- A rule now lives once: the page holds the former `CLAUDE.md` items and only cites the constitution and the session rules.
+- A rule now lives once: the page holds eight former `CLAUDE.md` items, `CLAUDE.md` keeps items 2 and 10, and the page
+  only cites the constitution, the session rules and those two items.
 - When a session rule named on the page is merged into another by a later brief, its number stays as a pointer line, so the
   page's citations stay valid; a later change of the core is a change of this page with its own ADR.
 
 ## Residual
 
 - Q-388-1: the review context's `Operating rules` section is the text of `CLAUDE.md` (SPEC-0003 rule 5 (h)), so after this
-  change it holds the pointer rather than the ten items. Brief #388 answer 3 changes no spec, so `review_context.py` is not
+  change it holds the pointer and items 2 and 10 rather than the ten items. Brief #388 answer 3 changes no spec, so `review_context.py` is not
   changed; adding the page to that section is a spec amendment for a later brief (conservative reading: no spec change).
 - Q-388-2: the compaction-recovery section is kept word for word (answer 2), so it does not add the page to its list of
   files to re-read; the pointer at the top of `CLAUDE.md`, which is re-read, names the page (conservative reading).
 - Q-388-3: row 13 names `CLAUDE.md` items 3, 5 and 8 as safety rules; the page lists them under the safety rules with a
-  one-sentence summary and keeps their exact text, with the other seven items, in its `CLAUDE.md items` section, so the
+  one-sentence summary and keeps their exact text, with items 1, 4, 6, 7 and 9, in its `CLAUDE.md items` section, so the
   exact text is held once (conservative reading: nothing dropped, nothing renumbered).
 - Q-388-4: brief #388's `Touches:` line names four files; the manifest entry, the `.gitattributes` template line, the
   existing tests of decision 5 and this ADR are outside it and are needed for the kit to install the page and for the suite to read the moved text.
+- Q-388-5: approved texts require the wording of items 2 and 10 in `CLAUDE.md` itself: SPEC-0013 rule 17 (the line on
+  the state of a pull request, item 10), REQ-035 AC7 (one open pull request per session and `Depends-on`, item 2) and
+  SPEC-0028 rule 7 (`CLAUDE.md rule 2`). Answer 3 changes no spec, so both items stay in `CLAUDE.md` with their exact
+  text and numbers, the page cites them by number, and the tests that pin that wording read `CLAUDE.md` alone as before
+  (conservative reading, the fix list on #465). Moving them to the page is a spec change the person may decide later.
