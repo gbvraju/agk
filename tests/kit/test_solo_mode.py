@@ -500,9 +500,7 @@ def test_the_rules_say_a_session_never_posts_a_confirmation():
     rules = flat("config/session-rules.md")
     assert "29. A session never posts a comment whose first line is `Confirmed:`" in rules
     assert "the person posts it from the browser or the GitHub app" in rules
-    # CLAUDE.md points at the core-rules page, which holds its former list (ADR-0247).
-    operating = flat("CLAUDE.md") + " " + flat("config/core-rules.md")
-    assert "Never post a comment whose first line is `Confirmed:`" in operating
+    assert "Never post a comment whose first line is `Confirmed:`" in flat("CLAUDE.md")
     assert "Post a comment whose first line is `Confirmed:`" in flat(".claude/agents/conductor.md")
 
 

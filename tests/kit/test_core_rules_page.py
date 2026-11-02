@@ -2,8 +2,9 @@
 
 The page names the core rules chosen in row 13 of the decision table of plan #278 by their
 numbers, with at most one plain sentence each, and holds the numbered list that `CLAUDE.md`
-carried before, item for item with its numbers; `CLAUDE.md` points at the page instead of
-restating the rules (ADR-0247).
+carried before, item for item with its numbers, except items 2 and 10: approved texts require
+their wording in `CLAUDE.md` itself, so they stay there word for word and the page cites them
+by number (Q-388-5). `CLAUDE.md` points at the page instead of restating the rest (ADR-0247).
 """
 
 from __future__ import annotations
@@ -63,6 +64,10 @@ OLD_CLAUDE_ITEMS = {
         "(a GET); the GraphQL form of the command is blocked in cloud sessions."
     ),
 }
+
+# Items that approved texts pin to CLAUDE.md itself (SPEC-0013 rule 17, REQ-035 AC7, SPEC-0028
+# rule 7): they stay there with their numbers and exact text (Q-388-5).
+KEPT_IN_CLAUDE = {2, 10}
 
 COMPACTION = (
     "## Compaction recovery\n\nAfter compaction or a new session, re-read CLAUDE.md, "
@@ -153,7 +158,7 @@ def test_req039_every_rule_the_page_names_exists():
     text = read(PAGE)
     rules = numbered(read(RULES))
     principles = numbered(read(PRINCIPLES))
-    items = numbered(section(text, "CLAUDE.md items"))
+    items = numbered(section(text, "CLAUDE.md items")) | numbered(read(CLAUDE))
     assert len(principles) == 12
     named = set(REF.findall(text))
     assert named, "the page names no rule"
@@ -170,18 +175,55 @@ def test_req039_every_rule_the_page_names_exists():
 def test_req039_every_old_claude_md_item_is_on_the_page_with_its_number_and_exact_text():
     """REQ-039: brief #388 answers 2 and 4 (never dropped, never renumbered, exact text)."""
     items = numbered(section(read(PAGE), "CLAUDE.md items"))
-    assert set(items) == set(OLD_CLAUDE_ITEMS)
-    for n, text in OLD_CLAUDE_ITEMS.items():
-        assert items[n] == flat(text), f"CLAUDE.md item {n}"
+    assert set(items) == set(OLD_CLAUDE_ITEMS) - KEPT_IN_CLAUDE
+    for n, text in items.items():
+        assert text == flat(OLD_CLAUDE_ITEMS[n]), f"CLAUDE.md item {n}"
 
 
-def test_req039_claude_md_points_at_the_page_and_restates_no_rule():
-    """REQ-039: brief #388 answer 2 (a pointer instead of the numbered list)."""
+def test_req039_the_page_cites_the_items_kept_in_claude_md_by_number():
+    """REQ-039: Q-388-5 (items 2 and 10 stay in CLAUDE.md; the page cites them, restates none)."""
+    page = section(read(PAGE), "CLAUDE.md items")
+    for n in KEPT_IN_CLAUDE:
+        assert f"`CLAUDE.md item {n}`" in page, f"CLAUDE.md item {n} is not cited"
+        assert flat(OLD_CLAUDE_ITEMS[n])[:40] not in flat(read(PAGE)), f"item {n} restated"
+
+
+def test_req039_claude_md_points_at_the_page_and_keeps_only_items_2_and_10():
+    """REQ-039: brief #388 answer 2 and Q-388-5 (a pointer; items 2 and 10 kept, exact text)."""
     text = read(CLAUDE)
     assert "`config/core-rules.md`" in text
-    assert not numbered(text), "CLAUDE.md still carries a numbered list"
+    items = numbered(text)
+    assert set(items) == KEPT_IN_CLAUDE
+    for n in KEPT_IN_CLAUDE:
+        assert items[n] == flat(OLD_CLAUDE_ITEMS[n]), f"CLAUDE.md item {n}"
     for n, item in OLD_CLAUDE_ITEMS.items():
-        assert flat(item)[:40] not in flat(text), f"CLAUDE.md item {n} is still restated"
+        if n not in KEPT_IN_CLAUDE:
+            assert flat(item)[:40] not in flat(text), f"CLAUDE.md item {n} is still restated"
+
+
+def test_req039_no_list_renders_with_other_numbers():
+    """REQ-039: brief #388 answer 4 (never renumbered, also as rendered markdown).
+
+    A markdown ordered list renders from its first number up, so a gap inside one list
+    would show other numbers; each list of the page and of CLAUDE.md counts up by one.
+    """
+    for path in (PAGE, CLAUDE):
+        runs: list[list[int]] = []
+        previous_blank_or_item = False
+        for line in read(path).splitlines():
+            m = re.match(r"^(\d+)\. ", line)
+            if m:
+                if runs and previous_blank_or_item:
+                    runs[-1].append(int(m.group(1)))
+                else:
+                    runs.append([int(m.group(1))])
+                previous_blank_or_item = True
+            elif not line.strip() or line.startswith("   "):
+                continue
+            else:
+                previous_blank_or_item = False
+        for run in runs:
+            assert run == list(range(run[0], run[0] + len(run))), (path.name, run)
 
 
 def test_req039_claude_md_keeps_its_compaction_recovery_section_and_the_rules_file_pointer():
