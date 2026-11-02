@@ -1,5 +1,6 @@
-"""The session rules give the shapes of `Shadow:` and `Marks:` (SPEC-0035 rules 1, 3, 7; AC8).
+"""The shapes of `Shadow:` and `Marks:` and where each lives (SPEC-0035 rules 1, 3, 7; AC8).
 
+Session rules 25 and 26 moved to the shadow role file, each leaving a pointer line (ADR-0243).
 Text only. No network.
 """
 
@@ -11,13 +12,27 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def rules() -> str:
+def session_rules() -> str:
     return (ROOT / "config" / "session-rules.md").read_text(encoding="utf-8")
+
+
+def rules() -> str:
+    """The section of the shadow role file that holds session rules 25 and 26 (ADR-0243)."""
+    text = (ROOT / ".claude" / "agents" / "shadow.md").read_text(encoding="utf-8")
+    return text.split("## Moved from the session rules", 1)[1].split("\n## ", 1)[0]
+
+
+def test_ac8_the_session_rules_point_at_the_shadow_role_file_for_both_shapes():
+    """REQ-042 AC8: rule 7 (the session rules say where the shapes are, ADR-0243)."""
+    for number in (25, 26):
+        line = f"{number}. Moved to `.claude/agents/shadow.md` (ADR-0243)."
+        assert line in session_rules().splitlines(), number
 
 
 def test_ac8_the_rules_number_without_a_gap_after_the_shadow_rules():
     """REQ-042 AC8"""
-    numbers = [int(line.split(".")[0]) for line in rules().splitlines() if line[:1].isdigit()]
+    lines = session_rules().splitlines()
+    numbers = [int(line.split(".")[0]) for line in lines if line[:1].isdigit()]
     assert numbers == list(range(1, len(numbers) + 1)) and len(numbers) >= 26
 
 

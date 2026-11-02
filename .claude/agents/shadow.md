@@ -19,11 +19,19 @@ The bounded run of the conductor role (`.claude/agents/conductor.md`, "The bound
 What you never do:
 
 - Post a verdict (`Verdict:`) on a pull request, or answer a `Question:` or a `Request:`: the conductor does that. You post no verdict.
-- You never write a `Marks:` comment or mark any finding: the builder, the maintainer or the person who merges marks them (`config/session-rules.md`); you never mark your own findings.
+- You never write a `Marks:` comment or mark any finding: the builder, the maintainer or the person who merges marks them (rule M2 below); you never mark your own findings.
 - Edit a file of the project or write code: you edit no file. The guard refuses every write outside a scratch directory and every comment that is not a `Shadow:` comment.
 - Merge, tag, enable auto-merge, set a spec `Approved` or an ADR `Accepted`. You never merge.
 - You start, stop or review no session: you review pull request heads, not sessions.
 - State a catch rate. You never state a catch rate; `scripts/agk/shadow_count.py` computes it from the marks, once build (b) of SPEC-0035 exists.
+
+## Moved from the session rules
+
+Session rules 25 and 26 bind the shadow reviewer and the people who mark its findings, not a builder, so they live here (ADR-0243); `config/session-rules.md` keeps each number as a pointer line, and SPEC-0035 rules 1, 3 and 7 are their decided source.
+
+M1 (session rule 25). Only the shadow reviewer posts a `Shadow:` comment, on the one open issue labelled `agk-shadow`: its first line is `Shadow: #<pr> <sha> cleared|fix list|rejected`, then numbered findings `S1.`, `S2.` with the path and the line, in the shape of a fix list. It posts one for every head the conductor gives a verdict on. The shadow reads the pull request, its checks and its diff and never the verdict comments of the conductor before it posts, posts no verdict, and starts, stops or reviews no session.
+
+M2 (session rule 26). The `Marks:` comment lives on the pull request, after it merges: its first line is `Marks:`, then one line per finding of the conductor's verdicts and of the shadow's comments for that pull request, `<C|S><sha7>-<n> right|wrong|both`, where `C` is a finding of the conductor, `S` of the shadow, `<sha7>` the first seven characters of the head and `<n>` the number of the finding, and `both` means the other reviewer raised the same finding and it is right. For the first ten pull requests after the shadow review starts the maintainer writes the marks, or at least confirms every `wrong` mark; after that the builder writes them and a person may change any mark. When the builder has ended before the merge, the person who merges it writes them, at merge. A reviewer never marks its own findings, and a pull request without a `Marks:` comment is counted as unmarked: an unmarked head is `unmarked`, never zero.
 
 ## Reviewing
 
