@@ -1,0 +1,526 @@
+/* agk design standard 1 */
+/* The kit's default UX standard (SPEC-0037 rule 1): tokens, focus, targets, density, alignment and
+   breakpoints, with the classes of the pattern library (design-patterns.md). Vendor-neutral, no
+   framework, no external resource. A project overrides only its theme block (the brand colour roles
+   and the font stacks) and its layout block (density and alignment) in theme.css, never this file. */
+
+:root {
+  --color-background: #ffffff;
+  --color-surface: #f5f6f8;
+  --color-text: #15181d;
+  --color-muted: #4f5661;
+  --color-border: #7a828e;
+  --color-accent: #1a56db;
+  --color-on-accent: #ffffff;
+  --color-focus: #0b57d0;
+  --color-success: #1b6e3a;
+  --color-on-success: #ffffff;
+  --color-warning: #8a5a00;
+  --color-on-warning: #ffffff;
+  --color-danger: #b3261e;
+  --color-on-danger: #ffffff;
+  --color-info: #155e9c;
+  --color-on-info: #ffffff;
+  --font-body: system-ui, sans-serif;
+  --font-heading: system-ui, sans-serif;
+  --font-size-1: 0.875rem;
+  --font-size-2: 1rem;
+  --font-size-3: 1.125rem;
+  --font-size-4: 1.375rem;
+  --font-size-5: 1.75rem;
+  --font-size-6: 2.25rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --radius-1: 0.25rem;
+  --radius-2: 0.5rem;
+  --radius-3: 1rem;
+  --elevation-1: 0 1px 2px rgb(0 0 0 / 0.12);
+  --elevation-2: 0 2px 8px rgb(0 0 0 / 0.16);
+  --elevation-3: 0 8px 24px rgb(0 0 0 / 0.22);
+  --motion-fast: 120ms;
+  --motion-normal: 200ms;
+  --motion-slow: 320ms;
+  --gap: var(--space-4);
+  --pad: var(--space-3);
+  --page-width: 72rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #101418;
+    --color-surface: #1b2027;
+    --color-text: #f2f4f7;
+    --color-muted: #b4bcc8;
+    --color-border: #7d8794;
+    --color-accent: #8ab4ff;
+    --color-on-accent: #101418;
+    --color-focus: #a8c7fa;
+    --color-success: #6dd58c;
+    --color-on-success: #0b1f12;
+    --color-warning: #f2c14e;
+    --color-on-warning: #241a00;
+    --color-danger: #ffb4ab;
+    --color-on-danger: #3b0906;
+    --color-info: #8ccff7;
+    --color-on-info: #0a2233;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-normal: 0ms;
+    --motion-slow: 0ms;
+  }
+}
+
+/* Targets of at least 44 by 44 px for every control. */
+button,
+input,
+select,
+textarea,
+.button,
+.nav-link {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-body);
+  font-size: 100%;
+  line-height: 1.5;
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+body {
+  margin: 0;
+  font-size: var(--font-size-2);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  line-height: 1.25;
+  margin: 0 0 var(--space-3);
+}
+
+h1 {
+  font-size: var(--font-size-5);
+}
+
+h2 {
+  font-size: var(--font-size-4);
+}
+
+h3 {
+  font-size: var(--font-size-3);
+}
+
+a {
+  color: var(--color-accent);
+}
+
+/* Density and alignment: the layout block of a theme picks one value of each. */
+[data-density="compact"] {
+  --gap: var(--space-2);
+  --pad: var(--space-2);
+}
+
+[data-density="comfortable"] {
+  --gap: var(--space-4);
+  --pad: var(--space-3);
+}
+
+[data-density="spacious"] {
+  --gap: var(--space-6);
+  --pad: var(--space-5);
+}
+
+[data-align="start"] .page {
+  margin-inline: 0;
+}
+
+[data-align="centre"] .page {
+  margin-inline: auto;
+}
+
+/* Layout */
+.page {
+  max-width: var(--page-width);
+  padding: var(--pad);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  box-shadow: var(--elevation-1);
+  padding: var(--pad);
+}
+
+.muted {
+  color: var(--color-muted);
+}
+
+.long-text {
+  overflow-wrap: anywhere;
+}
+
+/* App shell and navigation */
+.shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 100vh;
+}
+
+.shell-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--pad);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.brand {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-3);
+  font-weight: 700;
+}
+
+.shell-nav {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2);
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-1);
+  text-decoration: none;
+}
+
+.nav-link[aria-current="page"] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.shell-main {
+  padding: var(--pad);
+}
+
+/* Controls */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-decoration: none;
+  transition: background var(--motion-fast);
+}
+
+.button-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.button-danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: var(--color-on-danger);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.input {
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.hint {
+  color: var(--color-muted);
+  font-size: var(--font-size-1);
+}
+
+.field-error {
+  color: var(--color-text);
+  font-size: var(--font-size-1);
+  border-inline-start: 4px solid var(--color-danger);
+  padding-inline-start: var(--space-2);
+}
+
+/* Status: always a word as well as a colour. */
+.alert {
+  border-radius: var(--radius-2);
+  padding: var(--pad);
+}
+
+.alert-success {
+  background: var(--color-success);
+  color: var(--color-on-success);
+}
+
+.alert-warning {
+  background: var(--color-warning);
+  color: var(--color-on-warning);
+}
+
+.alert-danger {
+  background: var(--color-danger);
+  color: var(--color-on-danger);
+}
+
+.alert-info {
+  background: var(--color-info);
+  color: var(--color-on-info);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-3);
+  background: var(--color-info);
+  color: var(--color-on-info);
+  font-size: var(--font-size-1);
+}
+
+.empty {
+  text-align: center;
+  padding: var(--space-7) var(--pad);
+  color: var(--color-muted);
+}
+
+.skeleton {
+  min-height: var(--space-5);
+  border-radius: var(--radius-1);
+  background: var(--color-surface);
+  animation: pulse var(--motion-slow) ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.5;
+  }
+}
+
+/* List with filter and sort, search, notifications */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.list-item {
+  padding: var(--pad);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.list-item[data-unread="true"] {
+  border-inline-start: 4px solid var(--color-accent);
+}
+
+/* Detail */
+.detail-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-1) var(--gap);
+  margin: 0;
+}
+
+.detail-list dd {
+  margin: 0 0 var(--space-2);
+}
+
+/* Table */
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  text-align: start;
+  padding: var(--space-2) var(--pad);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Dashboard */
+.metric-value {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-6);
+  margin: 0;
+}
+
+/* Wizard */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+}
+
+.step[aria-current="step"] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+/* Confirmation dialog */
+.dialog {
+  max-width: 32rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background: var(--color-background);
+  color: var(--color-text);
+  box-shadow: var(--elevation-3);
+  padding: var(--space-5);
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Breakpoints: 360 (phone), 600, 900, 1200 and 1440 px (wide desktop); set here, never by a project. */
+@media (min-width: 360px) {
+  .page {
+    padding: var(--pad) var(--space-4);
+  }
+}
+
+@media (min-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-list {
+    grid-template-columns: max-content 1fr;
+  }
+}
+
+@media (min-width: 900px) {
+  .shell {
+    grid-template-columns: 16rem 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .shell-header {
+    grid-column: 1 / -1;
+  }
+
+  .shell-nav {
+    border-bottom: 0;
+    border-inline-end: 1px solid var(--color-border);
+  }
+
+  .nav-list {
+    flex-direction: column;
+  }
+
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --page-width: 84rem;
+  }
+}

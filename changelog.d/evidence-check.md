@@ -1,1 +1,0 @@
-- `evidence.py check` checks a local evidence record against the head, re-runs governance and a sample of its steps in a clean worktree

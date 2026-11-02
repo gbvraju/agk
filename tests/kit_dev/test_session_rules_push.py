@@ -72,8 +72,12 @@ def test_ac_rule_8_posts_the_progress_line_at_each_push():
 
 
 def test_ac_rule_23_is_unchanged():
-    """Answer 2: GitHub unreachable still means commit locally and push later."""
-    text = rules()[23]
+    """Answer 2: GitHub unreachable still means commit locally and push later; rule 23 is
+    merged into rule 21 word for word, its number kept as a pointer line (ADR-0243)."""
+    assert rules()[23] == "Merged into rule 21 (ADR-0243)."
+    text = rules()[21].split("When GitHub cannot be reached at all", 1)
+    assert len(text) == 2
+    text = "When GitHub cannot be reached at all" + text[1]
     assert text.startswith(
         "When GitHub cannot be reached at all, a session keeps committing locally"
     )

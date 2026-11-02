@@ -1,12 +1,17 @@
-"""The design check (SPEC-0029 rule 7). Kit-only: never installed.
+"""The design check (SPEC-0029 rule 7; SPEC-0037 rule 2). Installed: `kit/manifest.json` lists it in
+`verbatim`, with the module it imports, `design_standard.py`.
 
 Reads `docs/design/theme.md` and the folders of `docs/design/mockups/` and fails, naming the rule
 and the path and never a value, on: a script or an event handler in a mockup, an external request
 or a loaded resource, a colour that is not a token, a token block that is not one with a light and
 a dark set, a contrast under 4.5:1 (computed from the tokens, in both modes), a brand value with no
-source, an evidence line that points to no mockup folder. Two things are information and not
-failures: a theme whose evidence folder has no approval line reads "not approved yet", and a
-placeholder brand is reported as at risk. Files only: no network, no model, nothing written.
+source, an evidence line that points to no mockup or prototype folder. A theme with the line
+`Standard: agk design standard <n>` is on the kit's standard (SPEC-0037 rule 2): it may set only its
+theme block and its layout block, and its contrast is computed on the standard's colour roles after
+its overrides, in light and dark; a theme without the line is checked as before. Two things are
+information and not failures: a theme whose evidence folder has no approval line, or that points to
+a prototype version, reads "not approved yet", and a placeholder brand is reported as at risk.
+Files only: no network, no model, nothing written.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import design_standard
 from common import repo_root, run
 
 NAME = "design"
@@ -24,7 +30,10 @@ THEME = "docs/design/theme.md"
 MOCKUPS = "docs/design/mockups"
 MIN_CONTRAST = 4.5
 FOLDER = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*$")
-EVIDENCE = re.compile(r"^Evidence:\s*docs/design/mockups/([^/\s]+)/?\s*$", re.M)
+EVIDENCE = re.compile(
+    r"^Evidence:\s*docs/design/(?:mockups/([^/\s]+)|prototype/(v[1-9]\d*))/?\s*$", re.M
+)
+PROTOTYPE = "docs/design/prototype"
 APPROVAL = re.compile(r"(?m)^Approved by \S.* on \d{4}-\d{2}-\d{2}\s*$")
 BRAND = re.compile(r"^- ([^:]+):\s+(.+?)\s+—\s+source:\s+(\S.*)$")
 PAIR = re.compile(r"^-\s+(--[\w-]+)\s+on\s+(--[\w-]+)\s*$")
@@ -175,11 +184,28 @@ def theme_parts(text: str) -> tuple[dict[str, list[str]], list[str]]:
     return sections, [ln for ln in sections.get("Contrast", []) if ln.strip()]
 
 
+def standard_problems(text: str) -> list[str]:
+    """SPEC-0037 rule 2, and the contrast of rule 7 on the standard's roles after the overrides."""
+    out = design_standard.standard_theme_problems(text)
+    if any("hex colour" in p or "one theme block" in p for p in out):
+        return out
+    light, dark = design_standard.theme_colours(text)
+    for mode, values in (("light", light), ("dark", dark)):
+        for first, second, minimum in design_standard.CONTRAST_PAIRS:
+            if contrast(values[first], values[second]) < minimum:
+                ratio = f"{minimum:g}:1 in {mode}"
+                out.append(f"rule 7: {THEME}: contrast below {ratio} for {first} on {second}")
+    return out
+
+
 def theme_problems(root: Path, text: str) -> tuple[list[str], list[tuple[str, str]], bool, bool]:
-    """(problems, contrast pairs, placeholder brand, approved) of the theme."""
+    """(problems, contrast pairs of the mockups, placeholder brand, approved) of the theme."""
     sections, pair_lines = theme_parts(text)
     out: list[str] = []
+    standard = design_standard.theme_format(text) == "standard"
     pairs = [m.groups() for ln in pair_lines if (m := PAIR.match(ln.strip()))] or DEFAULT_PAIRS
+    if standard:
+        pairs = DEFAULT_PAIRS  # the old tokens of an existing mockup folder
     placeholder = False
     if "Brand" not in sections:
         out.append(f"rule 7: {THEME}: the theme has no Brand section")
@@ -191,20 +217,28 @@ def theme_problems(root: Path, text: str) -> tuple[list[str], list[tuple[str, st
             out.append(f"rule 7: {THEME}: a brand value has no source line")
         elif re.search(r"\[[^\]]*\]", match.group(2)):
             placeholder = True
-    body = "\n".join(sections.get("Tokens", []))
-    fences = re.findall(r"```css\n(.*?)```", body, re.S)
-    if len(fences) != 1:
-        out.append(f"rule 7: {THEME}: the theme does not hold one token block")
+    if standard:
+        out += standard_problems(text)
     else:
-        out += token_problems(THEME, fences[0], pairs)[0]
+        body = "\n".join(sections.get("Tokens", []))
+        fences = re.findall(r"```css\n(.*?)```", body, re.S)
+        if len(fences) != 1:
+            out.append(f"rule 7: {THEME}: the theme does not hold one token block")
+        else:
+            out += token_problems(THEME, fences[0], pairs)[0]
     approved = False
     evidence = EVIDENCE.search("\n".join(sections.get("Evidence", [])))
-    folder = root / MOCKUPS / evidence.group(1) if evidence else None
+    if evidence is None:
+        folder = None
+    elif evidence.group(1):
+        folder = root / MOCKUPS / evidence.group(1)
+    else:
+        folder = root / PROTOTYPE / evidence.group(2)
     if "Evidence" not in sections:
         out.append(f"rule 7: {THEME}: the theme has no Evidence section")
     elif folder is None or not folder.is_dir():
-        out.append(f"rule 7: {THEME}: the evidence line points to no mockup folder")
-    else:
+        out.append(f"rule 7: {THEME}: the evidence line points to no mockup or prototype folder")
+    elif evidence is not None and evidence.group(1):
         readme = folder / "README.md"
         approved = readme.is_file() and bool(APPROVAL.search(readme.read_text(encoding="utf-8")))
     return out, pairs, placeholder, approved
