@@ -1,6 +1,6 @@
 # ADR-0247: one page of core rules that a session reads first, with CLAUDE.md pointing at it (REQ-039, brief 388)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: maintainers
 - Related: ADR-0212
