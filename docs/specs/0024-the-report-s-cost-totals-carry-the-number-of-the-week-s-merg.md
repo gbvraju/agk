@@ -10,14 +10,14 @@ The maintainers answered 3 questions before it was written: the field is `hours_
 
 ## Rules
 
-1. **The field.** The cost totals item of `report.json` (kind `week-totals`, SPEC-0022 rule 5) gains the field `hours_unknown`: a JSON integer, the number of the week's merged pull requests whose hours are `unknown` (the same condition that makes the `hours` of their `pull-request-cost` item and the `hours` of the totals read `unknown`: the created or the merged time is missing or cannot be read). It is present in every totals item and is 0 when every hours is known; it is never omitted, never a null and never the string `unknown`.
-2. **The set counted.** It counts every pull request merged in the report's week, the set that `merged` counts, whether or not the per-change cost items are printed (a busy week leaves them out). So `merged` minus `hours_unknown` is the number of changes whose hours are in the total of `hours`; when `hours_unknown` is above 0 the total of `hours` is `unknown`, as before.
-3. **Nothing printed changes.** The markdown report and the inbox output are byte-identical to before: the field is data only and the line "This week: ..." does not print it. The markdown rendered from `report.json` alone still equals the printed markdown (SPEC-0022 rule 2); the existing markdown and inbox goldens do not change.
-4. **The schema number rises.** `report.json` `schema` is the number 2 for every report (SPEC-0022 rules 3 and 7: adding a field raises the number). `kit/report-schema.json` requires the number 2 and the field `hours_unknown` (an integer, at least 0) on the totals item, so a missing or an extra field fails. `facts.json` and its schema keep their own number 1. A reader that expects schema 1 sees the number change and knows to update.
-5. **Unknown stays unknown.** When the facts do not hold the pull requests (SPEC-0022 rule 6) there is no totals item; the `unknown` item stands as before. A week with no merged pull request has no cost items, as before.
-6. **Generic and deterministic.** The change adds no import and reads only the facts file; the same facts, day and week give a byte-identical `report.json` (SPEC-0022 rule 8).
-7. **How it changes.** SPEC-0022 is Approved: the build changes it by `docs/runs/proposed-spec-amendments-N.md`, applied by its ADR: rules 3 (the number of the schema), 5 (the fields of `week-totals`) and 7 (`schema` is 2). The build is a kit change (a bump, the hashes, the plugin and `agk.toml` versions, an ADR that names the protected classes `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `.claude-plugin/`, `agk.toml`), and the `report.json` goldens, which hold the number and the field, are regenerated with it. It is small.
-8. **The tests.** The recorded facts of the report goldens, where some pull request has no time, give a count above 0 and the same facts with the times filled give 0; a busy week counts every merged pull request; every golden `report.json` validates against `kit/report-schema.json` with the number 2; a totals item without the field, with the string `unknown` or with an extra field fails the schema; the markdown and inbox goldens and the markdown rendered from `report.json` are unchanged. No network and no model.
+1. Now SPEC-0011 rule 78.
+2. Now SPEC-0011 rule 79.
+3. Now SPEC-0011 rule 80.
+4. Now SPEC-0011 rule 81.
+5. Now SPEC-0011 rule 82.
+6. Now SPEC-0011 rule 83.
+7. Now SPEC-0011 rule 84.
+8. Now SPEC-0011 rule 85.
 
 ## Tests
 

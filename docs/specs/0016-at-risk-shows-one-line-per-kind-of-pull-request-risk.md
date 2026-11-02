@@ -12,22 +12,16 @@ value in brackets for the two kinds that have one. The case that prompted it: on
 
 ## Rules
 
-1. **The four kinds.** The kinds are the lines of `at_risk` that name one pull request: *open too long* (an open pull request older than `OLD_PULL_REQUEST_DAYS`), *sent back* (closed in the week with two or
-   more fix verdicts or a rejected one), *merged with no verdict* and *merged before its last commit was cleared*. The overdue-residual lines and the drift line are not kinds of this rule and are printed as today.
-2. **One pull request stays as today.** A kind with exactly one pull request prints the line printed before this change, byte for byte (its title, its value and its link).
-3. **Two or more become one line.** A kind with two or more pull requests prints one line that names every one of them: `PR` becomes `PRs`, the numbers are in ascending order, separated by `, ` and the
-   last by ` and `, each number written as its own link to that pull request (`[#12](<pull request URL>)`), never a range, and the line has no trailing link of its own.
-4. **The grouped wording.** Open too long: `PRs #12 (41 days), #15 (30 days) and #20 (9 days) have been open`. Sent back: `PRs #12 (3 times) and #15 (2 times) were sent back`. Merged with no verdict:
-   `PRs #12, #15 and #20 were merged with no verdict`. Merged before cleared: `PRs #12 and #15 were merged before their last commit was cleared`. A value in brackets is the one the single line prints
-   (`plural(days, "day", "days")` of the pull request, `plural(fixes + rejected, "time", "times")`). A grouped line prints no title (Q-S0016-1).
-5. **Every pull request is still named.** The set of pull request numbers that appear in the At risk section is the same as before this change. No number is dropped, merged into a range or replaced by a count.
-6. **Where a grouped line stands.** The lines keep the order of today's section: residuals, open too long, sent back, the drift line, then the merged pull requests. A grouped line takes the place of the
-   line of its lowest-numbered pull request. So when no kind has two or more pull requests, the section is byte-identical to today's.
-7. **Nothing else changes.** Delivered, Proven, Needs you, Cost, the footer, the inbox output and the metrics issue are byte-identical to the report of the same facts before this change.
-8. **The renderer stays pure.** `product_report.py` reads the facts file and no other file, and its imports are unchanged (SPEC-0011 rule 13). The number of pull requests of a kind is counted from the
-   facts rows only.
-9. **Unknown is not a count.** When the facts mark `pull_requests` `"unknown"`, At risk prints today's unknown line and does not group.
-10. **Goldens.** The quiet-week goldens change only in At risk, and only where a kind has two or more pull requests; the implementation pull request shows the diff of each golden in its body.
+1. Now SPEC-0011 rule 37.
+2. Now SPEC-0011 rule 38.
+3. Now SPEC-0011 rule 39.
+4. Now SPEC-0011 rule 40.
+5. Now SPEC-0011 rule 41.
+6. Now SPEC-0011 rule 42.
+7. Now SPEC-0011 rule 43.
+8. Now SPEC-0011 rule 44.
+9. Now SPEC-0011 rule 45.
+10. Now SPEC-0011 rule 46.
 
 ## Tests
 

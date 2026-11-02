@@ -13,18 +13,11 @@ Negative cases: none beyond AC2, because the only way for the line to be wrong i
 
 ## Rules
 
-1. **The facts carry the version.** The facts document gains an optional top-level property `kit_version`: the version string, or `"unknown"` when it cannot be
-   read. `schema` stays `1`: no released consumer reads the property (as for `path` and `proof_reason`), and a renderer that does not know it ignores it.
-2. **One reader of the installed version.** The installed version is read by one function of `common.py`: the `version` of `agk.toml`, or, when `agk.toml` is absent, the
-   `version` of the legacy `[tool.agk]` table of `pyproject.toml` (the stamp of kits 0.1.0 and 0.2.0). `facts.py` calls it, and `upgrade.py` calls it for the stamp it
-   already reads; the output of `upgrade.py` on the existing fixtures is byte-identical before and after. `upgrade.py` is not installed, so the function lives in
-   `common.py`.
-3. **Unknown, never a guess.** A missing file, an unreadable file, a missing `version` key or a value that is not a string gives `"unknown"`. Nothing falls back to a
-   constant, to the kit's manifest or to the version of the script that renders.
-4. **The footer line.** The weekly report prints `kit version: <value>` as the line directly after the `facts:` line of the footer, where `<value>` is the facts'
-   `kit_version`, or `unknown` when the facts carry none (a document made before this rule). The line has no link: its evidence is the facts commit named above it.
-5. **The renderer stays pure.** `product_report.py` reads the facts file and no other file, and its imports are unchanged (SPEC-0011 rule 13). The inbox output has no
-   `kit version:` line and does not change.
+1. Now SPEC-0011 rule 24.
+2. Now SPEC-0011 rule 25.
+3. Now SPEC-0011 rule 26.
+4. Now SPEC-0011 rule 27.
+5. Now SPEC-0011 rule 28.
 
 ## Tests
 

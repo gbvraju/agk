@@ -12,20 +12,14 @@ requests were merged besides the link.
 
 ## Rules
 
-1. **A busy week.** A week is busy when more than ten pull requests merged in it, counted as `merged_in_week` selects them (`state` `merged` and `merged_at` inside the report's week). Ten is one
-   named constant in `product_report.py`, not a setting, not read from `agk.toml` and not carried by the facts. Ten or fewer is a quiet week.
-2. **A quiet week is unchanged.** For a quiet week the report is byte-identical to what the same facts gave before this change. The existing report goldens are the test; the boundary is tested at
-   exactly ten (unchanged) and at eleven (collapsed).
-3. **Delivered in a busy week.** Every requirement whose `status` is `done` is still listed, in the same order and with the same lines as today. The lines `PR #N "<title>" was merged on <day>` are not
-   printed. In their place there is one line after the requirements: `<N> pull requests were merged this week` (`N` the number of pull requests merged in the week), ending with the week link of rule 5.
-4. **Cost in a busy week.** No line is printed for a single pull request. The totals line `This week: ...` is printed with its text exactly as today (with the ending of SPEC-0018 rule 6) and ends with the week link of rule 5 instead of the
-   link to all merged pull requests. It is the only line of the section.
-5. **The week link.** `<repo URL>/pulls?q=is%3Apr+is%3Amerged+merged%3A<start>..<end>`, where `<repo URL>` is `https://github.com/` plus `repo` of the facts and `<start>` and `<end>` are the Monday
-   and the Sunday of the report's week in UTC, `YYYY-MM-DD`, the dates of the opening line. It is built from `repo` and those two dates only (Q-S0015-1).
-6. **Nothing else changes.** Proven, Needs you and At risk are unchanged: every pull request that At risk or Needs you named is still named (a pull request sent back, merged without a verdict or
-   merged before its last commit was cleared stays in At risk). The footer, the inbox output and the metrics issue are unchanged.
-7. **The renderer stays pure.** `product_report.py` reads the facts file and no other file, and its imports are unchanged (SPEC-0011 rule 13).
-8. **Unknown is not a count.** When the facts mark `pull_requests` `"unknown"` the report prints today's unknown line and does not collapse; the count of rule 1 is made only from known rows.
+1. Now SPEC-0011 rule 29.
+2. Now SPEC-0011 rule 30.
+3. Now SPEC-0011 rule 31.
+4. Now SPEC-0011 rule 32.
+5. Now SPEC-0011 rule 33.
+6. Now SPEC-0011 rule 34.
+7. Now SPEC-0011 rule 35.
+8. Now SPEC-0011 rule 36.
 
 ## Tests
 

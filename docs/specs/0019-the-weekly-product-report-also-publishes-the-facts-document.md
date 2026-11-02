@@ -14,26 +14,16 @@ written first, then the upload, which fails the run when the file is missing or 
 
 ## Rules
 
-1. **One artifact per run.** After the step that writes the issue, the `product-report` workflow has a step that uploads the facts as a workflow artifact named `agk-facts-<week>`, `<week>` being the week label of
-   the report (`2026-W42`, the label of the issue title; the first line of the report names it). The artifact holds one file, `facts.json`. From SPEC-0022 the artifact also holds `report.json` (rule 9 there).
-2. **The same file.** The file is the facts document that `product_report.py` read for that report, byte for byte: it is the path the workflow wrote with `facts.py`, uploaded as it is, not regenerated, filtered,
-   renamed inside the artifact or given another field.
-3. **The step.** The upload action is pinned by a full commit SHA with its tag in a comment, like the checkout (SPEC-0011 rule 17); the path is that one file and no pattern; `retention-days` is 90, stated in the
-   workflow; `if-no-files-found` is `error`. The step comes after the step that writes the issue, and the week label reaches it from the report step as a step output (Q-S0019-2). From SPEC-0022 the upload names two files, `facts.json` and `report.json`, each by its path, and no pattern.
-4. **A failed upload fails the run.** A missing or empty facts file, or an upload that errors, fails the run; the issue already written is not changed or removed. A run for which the issue could not be written does
-   not upload (the earlier step failed). The same holds for `report.json` (SPEC-0022 rule 9).
-5. **A re-run.** A re-run of the workflow for the same week produces the artifact again under the same name, and the artifact of the latest run is the one used; the upload replaces an artifact of that name in the
-   same run and the workflow deletes no other artifact (Q-S0019-1).
-6. **Access is GitHub's.** The artifact is readable by those who can read the repository's workflow runs: on a public repository anyone signed in to GitHub, on a private one those who can read it, and by the API
-   with a token that can. There is no anonymous download, no sharing mechanism, no release, no page and no other place; the workflow publishes the file nowhere but as a workflow artifact.
-7. **No new permission, no new write.** The `permissions` block is what SPEC-0011 rule 15 gave (`contents`, `pull-requests`, `checks` and `actions` read, `issues` write); the workflow commits and pushes nothing and
-   writes nothing to the repository but the issue and the label as before.
-8. **Nothing else changes.** `facts.py`, `product_report.py`, the report, the issue and its label, the inbox output and the metrics workflow are byte-identical to before. The workflow's header comment says the
-   facts are also uploaded, and its "only writes" sentence names the artifact (SPEC-0011 rule 15 is amended for that). With SPEC-0022, `product_report.py` gains `--json` and the report step of the workflow uses it.
-9. **How it changes.** The workflow is a verbatim kit file, so the build is a kit change: a bump, the hashes, and an ADR that names the protected classes it touches. SPEC-0011 is Approved; the build changes it by an
-   amendment file `docs/runs/proposed-spec-amendments-N.md`, applied by that ADR. The security guide's account of what each workflow may write gains a line for the artifact.
-10. **The test.** A test reads the workflow file and fails when the upload step is missing, comes before the step that writes the issue, uploads anything but that one file, names the artifact otherwise than
-    `agk-facts-<week>`, omits the 90-day retention or `if-no-files-found: error`, is not pinned by a full commit SHA, or when the permissions differ from rule 7. No network is used.
+1. Now SPEC-0011 rule 56.
+2. Now SPEC-0011 rule 57.
+3. Now SPEC-0011 rule 58.
+4. Now SPEC-0011 rule 59.
+5. Now SPEC-0011 rule 60.
+6. Now SPEC-0011 rule 61.
+7. Now SPEC-0011 rule 62.
+8. Now SPEC-0011 rule 63.
+9. Now SPEC-0011 rule 64.
+10. Now SPEC-0011 rule 65.
 
 ## Tests
 

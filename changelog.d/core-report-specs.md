@@ -1,0 +1,1 @@
+- The eight small weekly-report specs (SPEC-0014, 0015, 0016, 0017, 0019, 0022, 0024, 0026) become sections of SPEC-0011 (rules 24 to 95), text unchanged except SPEC-0022 rules 3, 5 and 7, which carry SPEC-0026's amendment, and each old spec file keeps its number with one pointer line per old rule (brief #385, ADR-0244 Proposed)
