@@ -1,11 +1,14 @@
-"""The design check (SPEC-0029 rule 7; SPEC-0037 rule 2). Installed: `kit/manifest.json` lists it in
-`verbatim`, with the module it imports, `design_standard.py`.
+"""The design check (SPEC-0029 rule 7; SPEC-0037 rules 2, 3). Installed: `kit/manifest.json` lists
+it in `verbatim`, with the modules it imports, `design_standard.py` and `design_inventory.py`.
 
 Reads `docs/design/theme.md` and the folders of `docs/design/mockups/` and fails, naming the rule
 and the path and never a value, on: a script or an event handler in a mockup, an external request
 or a loaded resource, a colour that is not a token, a token block that is not one with a light and
 a dark set, a contrast under 4.5:1 (computed from the tokens, in both modes), a brand value with no
-source, an evidence line that points to no mockup or prototype folder. A theme with the line
+source, an evidence line that points to no mockup or prototype folder. When
+`docs/design/inventory.md` exists, `design_inventory.py` checks it (SPEC-0037 rule 3): an empty
+slot, a requirement or a screen left out, a pattern that is not the standard's, a link to no screen
+or a missing state fails naming the rule and the screen. A theme with the line
 `Standard: agk design standard <n>` is on the kit's standard (SPEC-0037 rule 2): it may set only its
 theme block and its layout block, and its contrast is computed on the standard's colour roles after
 its overrides, in light and dark; a theme without the line is checked as before. Two things are
@@ -22,11 +25,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import design_inventory
 import design_standard
 from common import repo_root, run
 
 NAME = "design"
 THEME = "docs/design/theme.md"
+INVENTORY = design_inventory.INVENTORY
 MOCKUPS = "docs/design/mockups"
 MIN_CONTRAST = 4.5
 FOLDER = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*$")
@@ -247,7 +252,8 @@ def theme_problems(root: Path, text: str) -> tuple[list[str], list[tuple[str, st
 def cmd_check(root: Path) -> int:
     theme = root / THEME
     folders = sorted(p for p in (root / MOCKUPS).glob("*") if p.is_dir())
-    if not theme.is_file() and not folders:
+    inventory = (root / INVENTORY).is_file()
+    if not theme.is_file() and not folders and not inventory:
         print("ok design (no design record)")
         return 0
     problems: list[str] = []
@@ -264,6 +270,8 @@ def cmd_check(root: Path) -> int:
             notes.append("at risk design: placeholder brand")
     for folder in folders:
         problems += mockup_problems(root, folder, pairs)
+    if inventory:
+        problems += design_inventory.inventory_problems(root)
     for line in notes if not problems else []:
         print(line)
     for problem in problems:

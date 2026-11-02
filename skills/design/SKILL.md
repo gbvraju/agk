@@ -2,7 +2,7 @@
 name: design
 description: Write the theme (the brand record and the design rules) and one static mockup of a product's first page from the kit's templates, for the owner to approve by a line. Writes files; never commits.
 disable-model-invocation: true
-argument-hint: "<mockup name, a lower-case slug>"
+argument-hint: "<mockup name, a lower-case slug> | inventory"
 ---
 
 # /agk:design
@@ -53,3 +53,35 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" design-next-steps --req R
 ```
 
 Do not commit or push, and do not open a pull request: the person or their session does.
+
+## /agk:design inventory
+
+`/agk:design inventory` lists every screen and state of the product before anything is drawn (SPEC-0037 rule 3), in
+`docs/design/inventory.md`.
+
+1. Fetch the default branch, make sure the work tree is clean (stop and say so if it is not), create the branch from the
+   default branch, and write the skeleton. The script reads `docs/requirements.md` and the `Requirements:` lines of
+   `docs/specs/`, writes one section per requirement with its specs filled and every other slot empty, refuses when the
+   file exists, and never fills a slot:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" inventory
+```
+
+2. Fill the slots from the requirements and the specs, and from nothing else; if `[engines]` in `agk.toml` has a `design`
+   key, its skill may draft them, and the session writes them into the file's shape. Each requirement gets its screens or
+   `no screen: <reason>`; each screen gets its own section with its flow, its pattern (one of the kit's design standard),
+   the screens it links to and a `State` line for `default`, the six required states and any state a spec names, each
+   `yes` or `n/a: <reason>`. Never leave a required state out, and never take a name or a text from `private/` or
+   `reference/`.
+3. Check, and correct the file on a failure, at most three rounds, then stop and report. The check, not the session,
+   decides that the inventory is complete; it names the rule and the screen of each problem:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"
+```
+
+4. Leave the agreement to the person. The person agrees the inventory with a comment on its pull request whose first line
+   is `Approve: inventory <full head ID>`, from an account listed in `spec_approvers`; a session never posts that line,
+   and nothing is drawn before it is there. Do not commit or push, and do not open a pull request: the person or their
+   session does.
