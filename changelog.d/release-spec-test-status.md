@@ -1,0 +1,1 @@
+- The release-spec test of brief #386 accepts ADR-0245 as Proposed or Accepted, so the governance check on the default branch passes again after the ADR's status commit (brief #474; tests only)
