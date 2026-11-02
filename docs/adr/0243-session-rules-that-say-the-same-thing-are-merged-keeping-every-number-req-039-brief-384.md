@@ -1,6 +1,6 @@
 # ADR-0243: session rules that say the same thing are merged, keeping every rule number (REQ-039, brief 384)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: maintainers
 - Related: ADR-0212, ADR-0196, ADR-0225
