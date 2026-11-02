@@ -1,6 +1,6 @@
 # ADR-0249: the design inventory, its check and the sign-off record (REQ-044, brief 456)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-02
 - Deciders: maintainers
 - Related: ADR-0204, ADR-0248, SPEC-0037
