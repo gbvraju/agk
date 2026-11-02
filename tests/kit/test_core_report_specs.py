@@ -214,7 +214,7 @@ def test_every_rule_of_the_eight_specs_is_in_spec_0011_byte_for_byte_after_its_n
 
 
 def test_only_spec_0026s_amendment_of_spec_0022_changes_moved_text():
-    """REQ-039: brief #385 answer 1 (where one folded spec amends another, the amended text moves)."""
+    """REQ-039: brief #385 answer 1 (where a folded spec amends another, the amended text moves)."""
     start = start_of("0022")
     assert sorted(AMENDED) == [start + 2, start + 4, start + 6]  # SPEC-0022 rules 3, 5 and 7
     for number in AMENDED:
@@ -225,7 +225,8 @@ def test_only_spec_0026s_amendment_of_spec_0022_changes_moved_text():
     assert "`schema` (the number 3 since SPEC-0026)" in rules[start + 2]
     assert "`counts` and `notices`, and no other" in rules[start + 2]
     assert "`fix_verdicts_unknown`" in rules[start + 4]
-    assert rules[start + 4].count("`count` (") == 1 + 4  # the busy-week line, and the four entries kinds
+    # the busy-week line, and the four kinds that list entries
+    assert rules[start + 4].count("`count` (") == 1 + 4
     assert rules[start + 6].startswith("**Versioned, and the list is closed.** `schema` is 3 ")
     for number, text in rules.items():
         if start <= number < start + len(MOVED["0022"]):
