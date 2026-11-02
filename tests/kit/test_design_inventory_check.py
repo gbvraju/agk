@@ -111,6 +111,22 @@ def test_ac2_a_filled_inventory_passes(tmp_path):
     assert problems(tmp_path) == []
 
 
+def test_ac2_a_screen_that_links_nowhere_reads_none(tmp_path):
+    """REQ-044 AC2: SPEC-0037 rule 3 (Q-456-11: `- Links to: none`, never an empty slot)."""
+    project(tmp_path, INVENTORY_TEXT.replace("- Links to: books\n", "- Links to: none\n", 1))
+    assert problems(tmp_path) == []
+
+
+def test_ac2_the_template_holds_every_field_the_check_reads():
+    """REQ-044 AC2: SPEC-0037 rule 3 (the template and the installed check agree on the shape)."""
+    assert di is not None, "scripts/agk/design_inventory.py is missing"
+    text = (KIT_ROOT / "kit" / "templates" / "design-inventory.md").read_text(encoding="utf-8")
+    for part in di.PARTS:
+        assert f"\n## {part}\n" in text, part
+    for field in (*di.REQ_FIELDS, *di.SCREEN_FIELDS, "State default"):
+        assert f"- {field}:" in text, field
+
+
 def test_ac2_check_design_passes_a_filled_inventory_with_no_theme(tmp_path):
     """REQ-044 AC2: SPEC-0037 rule 3 (`check_design.py` reads the inventory when it exists)."""
     project(tmp_path)
