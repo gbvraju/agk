@@ -1,0 +1,53 @@
+{
+  "agk_fixtures": 1,
+  "about": "The kit's invented fixture set (SPEC-0037 rule 6). Every value is made up; email addresses and links are on example.com, example.org or example.net only. A prototype page takes its data from this file alone.",
+  "product": {
+    "name": "Shelfmark",
+    "long_name": "Shelfmark for Community Libraries, Reading Groups and School Book Clubs Across the Northern Region"
+  },
+  "person": {
+    "name": "Ada Fenwick",
+    "admin_name": "Tomas Okafor",
+    "long_name": "Maria-Josefina Alexandrovna Wetherington-Castellanos de la Fuente",
+    "email": "ada.fenwick@example.com",
+    "admin_email": "tomas.okafor@example.org",
+    "phone": "+1 202 555 0143",
+    "admin_phone": "+44 20 7946 0958"
+  },
+  "organisation": {
+    "name": "Northfield Reading Circle",
+    "name_2": "Harbour Lane Library",
+    "long_name": "The Northfield and District Cooperative Association of Volunteer Reading Circles and Lending Libraries",
+    "website": "https://www.example.org/northfield"
+  },
+  "address": {
+    "line": "12 Orchard Row, Northfield, NF1 2AB",
+    "long": "Flat 4B, The Old Granary Building, 117 Upper Riverside Quay, Harbour Lane Industrial Estate, Northfield-upon-Wyre, NF21 7QX"
+  },
+  "amount": {
+    "value": "24.50 EUR",
+    "value_2": "8.00 EUR",
+    "total": "32.50 EUR"
+  },
+  "item": {
+    "title": "The Quiet Orchard",
+    "title_2": "A Map of Small Rivers",
+    "date": "2026-03-14",
+    "date_2": "2026-04-02"
+  },
+  "metric": {
+    "open": "18",
+    "overdue": "3",
+    "long": "1,284,906"
+  },
+  "notice": {
+    "text": "Your reservation of The Quiet Orchard is ready to collect.",
+    "text_2": "A Map of Small Rivers is due back on 2026-04-16."
+  },
+  "text": {
+    "long_label": "Preferred collection point for reserved books and inter-library loans",
+    "long_label_2": "Reminder schedule for overdue items, renewals and waiting-list offers",
+    "long_title": "The Collected Letters, Notebooks and Unfinished Drafts of a Northfield Lighthouse Keeper, Volume Two",
+    "long_paragraph": "This reading list gathers every title the circle has borrowed since it began, with the date each was returned, the member who chose it and a short note on what the group made of it; it runs long on purpose, so that a page can show how wrapping, spacing and narrow screens hold up with real-length text."
+  }
+}

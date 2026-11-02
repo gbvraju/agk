@@ -1,22 +1,26 @@
 """agk design: the writer of `/agk:design`, its screenshots and the inventory skeleton.
 
 Usage:
-    python3 design.py write --name NAME [--date D] [--theme-file F] [--root DIR]
+    python3 design.py prototype [--root DIR]
     python3 design.py screenshots --folder FOLDER [--root DIR]
     python3 design.py inventory [--root DIR]
+    python3 design.py write ...   (refused: SPEC-0037 rule 12)
 
-Kit-only (never installed). `write` makes `docs/design/theme.md` (only when it is absent, from the
-engine's draft or from the kit's template) and the mockup folder
-`docs/design/mockups/<date>-<name>/` with `index.html` and `README.md`, from
-`kit/templates/design-*`. The approval line is the owner's: the README holds `Approved: not yet`
-and the script never writes `Approved by`. `screenshots` takes four pictures (360 and 1280 px
-wide, light and dark) with a headless browser found on PATH and runs nothing else; with none it
-says so and succeeds (SPEC-0029 rule 6). `inventory` writes the skeleton of
-`docs/design/inventory.md` from `kit/templates/design-inventory.md` (SPEC-0037 rule 3): one section
-for each requirement of `docs/requirements.md`, its `- Specs:` filled from the `Requirements:` lines
-of `docs/specs/*.md` (`none` when no spec names it), every other slot empty, and an empty
-`## Screens` part; it refuses when the file exists and never fills a slot. Messages name the rule,
-never a value. No network and no model; `check_design.py` checks what `write` and `inventory` made.
+Kit-only (never installed). `prototype` writes the next version folder
+`docs/design/prototype/v<n>/` from the standard, the theme and the agreed inventory
+(`design_prototype.py`, SPEC-0037 rules 4 to 6 and 12); it refuses an inventory whose digest has no
+`inventory` row in `docs/design/signoffs.md`. `write` no longer writes a mockup folder: it refuses,
+`rule 12: a new mockup folder is not written; use /agk:design prototype`, and writes nothing; the
+existing folders of `docs/design/mockups/` are only read and checked. `screenshots` takes four
+pictures (360 and 1280 px wide, light and dark) of an existing mockup folder with a headless
+browser found on PATH and runs nothing else; with none it says so and succeeds (SPEC-0029 rule 6).
+`inventory` writes the skeleton of `docs/design/inventory.md` from
+`kit/templates/design-inventory.md` (SPEC-0037 rule 3): one section for each requirement of
+`docs/requirements.md`, its `- Specs:` filled from the `Requirements:` lines of `docs/specs/*.md`
+(`none` when no spec names it), every other slot empty, and an empty `## Screens` part; it refuses
+when the file exists and never fills a slot. Messages name the rule, never a value. No network and
+no model; `check_design.py` checks what `prototype` and `inventory` made. A version's
+`screenshots/` folder is written only by `design.py screenshots`, never by hand.
 """
 
 from __future__ import annotations
@@ -25,23 +29,19 @@ import re
 import shutil
 import subprocess  # nosec B404 - a fixed argument list, no shell
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import design_prototype
 from common import CheckError, parse_requirements
 
 KIT = Path(__file__).resolve().parents[2]
 TEMPLATES = KIT / "kit" / "templates"
-USAGE = (
-    "usage: design.py write --name NAME [--date D] [--theme-file F] | "
-    "screenshots --folder FOLDER | inventory  [--root DIR]"
-)
-COMMANDS = ("write", "screenshots", "inventory")
+USAGE = "usage: design.py prototype | screenshots --folder FOLDER | inventory  [--root DIR]"
+COMMANDS = ("prototype", "write", "screenshots", "inventory")
+WRITE_REFUSAL = "rule 12: a new mockup folder is not written; use /agk:design prototype"
 FLAGS = ("--root", "--name", "--date", "--theme-file", "--folder")
-NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,49}$")
-DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 FOLDER = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*$")
 MOCKUPS = "docs/design/mockups"
 THEME = "docs/design/theme.md"
@@ -64,46 +64,15 @@ def template(name: str) -> str:
     return (TEMPLATES / name).read_text(encoding="utf-8")
 
 
-def valid_date(text: str) -> bool:
-    try:
-        datetime.strptime(text, "%Y-%m-%d")
-    except ValueError:
-        return False
-    return bool(DATE.match(text))
-
-
 def cmd_write(root: Path, opts: dict[str, str]) -> int:
-    name = opts.get("name", "")
-    if not NAME.match(name):
-        raise CheckError("rule 6: the name is not a lower-case slug of at most 50 characters")
-    date = opts["date"] if "date" in opts else datetime.now(UTC).date().isoformat()
-    if not valid_date(date):
-        raise CheckError("rule 6: the date is not a real YYYY-MM-DD")
-    folder = root / MOCKUPS / f"{date}-{name}"
-    if folder.exists():
-        raise CheckError("rule 6: the mockup folder already exists; it is never overwritten")
-    rel = f"{MOCKUPS}/{date}-{name}/"
-    theme = root / THEME
-    text = None
-    if not theme.exists():
-        if "theme-file" in opts:
-            try:
-                text = Path(opts["theme-file"]).read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
-                raise CheckError("rule 6: the theme file cannot be read") from None
-        else:
-            text = template("design-theme.md").replace("{{evidence}}", f"{rel}")
-    folder.mkdir(parents=True)
-    (folder / "index.html").write_text(template("design-index.html"), encoding="utf-8")
-    (folder / "README.md").write_text(
-        template("design-readme.md").replace("{{folder}}", f"{date}-{name}"), encoding="utf-8"
-    )
-    print(f"wrote {rel}")
-    if text is not None:
-        theme.parent.mkdir(parents=True, exist_ok=True)
-        theme.write_text(text, encoding="utf-8")
-        print(f"wrote {THEME}")
-    return 0
+    """SPEC-0037 rule 12 (`Q-S0037-10`): a new mockup folder is never written; nothing is."""
+    raise CheckError(WRITE_REFUSAL)
+
+
+def cmd_prototype(root: Path, opts: dict[str, str]) -> int:
+    if set(opts) - {"root"}:
+        raise ValueError("prototype takes only --root")
+    return design_prototype.write(root)
 
 
 def find_browser() -> str | None:
@@ -201,6 +170,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args[0] == "write":
             return cmd_write(root, opts)
+        if args[0] == "prototype":
+            return cmd_prototype(root, opts)
         if args[0] == "inventory":
             return cmd_inventory(root, opts)
         return cmd_screenshots(root, opts)

@@ -261,8 +261,9 @@ def test_ac5_the_skill_names_the_engine_the_template_the_owner_and_the_checks():
     assert text.startswith("---\nname: design\n") and "disable-model-invocation: true" in text
     assert "[engines]" in text and "`design`" in text and "never decides" in text
     assert "design.py" in text and "check_design.py" in text and "screenshots" in text
-    assert "approval line" in text and "owner" in text and "protected" in text
-    assert "Approved by" in text and "never write" in text
+    assert "owner" in text and "protected" in text
+    # brief #457 answer 6: sign-off is the person's `Approve: design` line, which no session posts
+    assert "Approve: design <version> <full head ID>" in text and "never posts" in text
     for verb in ("git push", "git commit", "gh pr", "gh issue"):
         assert verb not in text
 

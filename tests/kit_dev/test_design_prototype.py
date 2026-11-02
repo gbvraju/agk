@@ -660,8 +660,8 @@ def test_ac3_an_old_theme_keeps_its_brand_record_source_lines_and_evidence_line(
             assert line in theme.splitlines(), line
     assert "Evidence: docs/design/mockups/2026-10-24-home/" in theme.splitlines()
     assert design_standard.standard_theme_problems(theme) == []
-    proc = check(tmp_path)
-    assert "FAIL" not in proc.stdout, proc.stdout
+    proc = check(tmp_path)  # the empty mockup folder fails on its own; the theme does not
+    assert f"{THEME}:" not in proc.stdout, proc.stdout
 
 
 def test_ac3_an_old_theme_with_a_token_the_standard_has_no_role_for_is_refused(tmp_path):
