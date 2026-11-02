@@ -1,6 +1,6 @@
 # ADR-0244: The small weekly-report specs become sections of SPEC-0011, by one spec amendment (REQ-039, brief 385)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: maintainers
 - Related: ADR-0021, ADR-0050, ADR-0051, ADR-0057, ADR-0058, ADR-0063, ADR-0070, ADR-0078
