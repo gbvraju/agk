@@ -24,6 +24,9 @@ GUIDES = KIT_ROOT / "docs" / "guides"
 NOT_YET_LISTED = {
     # A person's own check of a saved brief (SPEC-0030 rule 4); brief #341 writes no other section.
     "check_brief.py",
+    # The sign-off digest and rows (SPEC-0037 rule 9); brief #456 defines it and no installed script
+    # imports it until the sign-off counting (#459); that build names it.
+    "design_signoff.py",
 }
 
 COMMANDS = {

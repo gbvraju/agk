@@ -26,7 +26,8 @@ ADR names the ones this build changes, because the protected-path check counts o
    `- Screens: no screen: <reason>`; and a `## Screens` part with one `### <screen>` section (a lower-case slug) each,
    holding `- Flow:`, `- Pattern:` (one of `design_standard.PATTERNS`), `- Links to:` and one `- State <state>:` line for
    `default`, each of `design_standard.REQUIRED_STATES` and any state a spec names, whose text is `yes` or
-   `n/a: <reason>`. A slot is a `- <field>:` line with nothing after the colon.
+   `n/a: <reason>`. A slot is a `- <field>:` line with nothing after the colon; a screen that links nowhere reads
+   `- Links to: none`.
 2. **The skeleton (answer 2).** `scripts/agk/design.py inventory` (kit-only, files only, no model) writes
    `docs/design/inventory.md` from the template: one section for each requirement that `common.parse_requirements` reads
    from `docs/requirements.md`, its `- Specs:` filled from the `Requirements:` lines of `docs/specs/*.md` (`none` when no
@@ -73,4 +74,8 @@ want of one (#459, #457). An existing theme, mockup folder or project without an
   free to change after sign-off, which is why the `inventory` row carries its own digest; reading 5 (counting the
   `Approve:` line stays with `check_final_clearance.py`) is why `rows` only reads; reading 6 (seven builds) makes this
   build (b) of the seven.
-- 2026-11-02: Q-456-7 to Q-456-14 are this build's own conservative readings, listed in the pull request body.
+- 2026-11-02: Q-456-7 to Q-456-15 are this build's own conservative readings, listed in the pull request body: the
+  digest's path form (7), `none` for a requirement no spec names (8) and for a screen that links nowhere (11), a stale or
+  repeated requirement section failing (9), the closed shape (10), where a problem is named and what is never echoed
+  (12), the row format (13), retired requirements and unlisted screens (14), and an inventory alone being a design
+  record (15).
