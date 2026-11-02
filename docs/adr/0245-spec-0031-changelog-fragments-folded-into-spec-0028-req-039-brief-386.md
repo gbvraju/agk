@@ -19,7 +19,7 @@ merged number stays as a pointer line. Brief #386 gives five answers.
 
 ## Decision
 
-1. **One amendment (answer 1).** `docs/runs/proposed-spec-amendments-108.md` writes SPEC-0028 as it stands with SPEC-0031
+1. **One amendment (answer 1).** `docs/runs/proposed-spec-amendments-109.md` writes SPEC-0028 as it stands with SPEC-0031
    applied: rules 2, 4, 5 and 6 in their amended text (the content of amendment 54, nothing more), and SPEC-0031's rules 1
    to 8, text unchanged, as rules 11 to 18 of a section `### The changelog fragments (from SPEC-0031)` inside `## Rules`,
    where `core_audit.py` counts them. SPEC-0028's Requirements line gains REQ-038 and its `## Tests` one line that points to

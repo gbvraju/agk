@@ -23,7 +23,7 @@ The maintainers gave 4 answers before it was written, in the brief of issue #160
 
 ### The changelog fragments (from SPEC-0031)
 
-These were SPEC-0031 rules 1 to 8, in their text unchanged; SPEC-0031 keeps its number and points here, its rule N being rule N + 10 (brief #386, amendment 108, ADR-0245). Inside them a bare "rule N" names rule N + 10 of this section, and "SPEC-0028 rule N" names rule N above.
+These were SPEC-0031 rules 1 to 8, in their text unchanged; SPEC-0031 keeps its number and points here, its rule N being rule N + 10 (brief #386, amendment 109, ADR-0245). Inside them a bare "rule N" names rule N + 10 of this section, and "SPEC-0028 rule N" names rule N above.
 
 11. **The fragment.** In flow mode a build pull request adds one file `changelog.d/<slug>.md`, where `<slug>` is the pull request number or the branch slug (`[a-z0-9-]+`). The file holds exactly one line, `- <one-line change>`, and a newline; it carries no pull request number.
 12. **The build.** In flow mode a pull request that changes a file the installer writes adds exactly one fragment and does not edit `CHANGELOG.md`. A pull request needs a fragment exactly when SPEC-0028 rule 2 requires a changelog line (the trigger of SPEC-0028 rule 2); one that does not meet that trigger may add a fragment and is not failed for it. The flow-mode check (the check of the bump rule of SPEC-0028 rule 2) fails, naming the rule and the path class and never a value, when `CHANGELOG.md` is edited, when no fragment is added, when more than one is added, or when a fragment does not have the form of rule 1. The line under `## Unreleased` that SPEC-0028 rule 2 requires is replaced by the fragment.

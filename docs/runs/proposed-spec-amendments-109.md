@@ -1,10 +1,10 @@
-# Proposed spec amendments 108 (SPEC-0028, SPEC-0031; REQ-035, REQ-038, REQ-039)
+# Proposed spec amendments 109 (SPEC-0028, SPEC-0031; REQ-035, REQ-038, REQ-039)
 
 Date: 2026-11-01 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). Written for
 ADR-0245 (brief #386), which stays `Proposed` for the maintainers' decision. The paths:
 `docs/specs/0028-in-flow-mode-a-kit-build-pull-request-does-not-bump-the-vers.md` and
-`docs/specs/0031-in-flow-mode-a-build-pull-request-adds-its-changelog-line-as.md`. The number 108 is the next free one on the
-default branch when this was written; the conductor reserved ADR-0245 for the brief and named no amendment number (Q-386-1).
+`docs/specs/0031-in-flow-mode-a-build-pull-request-adds-its-changelog-line-as.md`. The number 109 is the one the conductor's
+verdict on #463 gave this pull request (108 is reserved for brief #455), answering Q-386-1; ADR-0245 is reserved for the brief.
 It needs a person's `Approve: SPEC-0028`; no session posts it, and the pull request does not change a status line. It is the
 decision of row 10 of the split of plan #278 (SPEC-0031 into SPEC-0028), accepted by the person on 2026-11-01. Nothing about
 the release or the fragments changes: `changelog_fragments.py`, `check_release.py` and `kit_hashes.py` are not touched.

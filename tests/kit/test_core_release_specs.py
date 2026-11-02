@@ -5,7 +5,7 @@ and 6 in the text that SPEC-0031 rule 7 (amendment 54) gave them, and SPEC-0031'
 unchanged, as rules 11 to 18 of a new section of its `## Rules`. SPEC-0031 keeps its number and its
 history and holds one pointer line per old rule. The digests below are those of the rule texts on
 the default branch before the change (ebc556f), so "text unchanged" is checked, not read. Spec
-amendment 108 names both paths, so `check_specs.py` passes; ADR-0245 applies it. Files and git in
+amendment 109 names both paths, so `check_specs.py` passes; ADR-0245 applies it. Files and git in
 `tmp_path` only: no network, no model.
 """
 
@@ -20,7 +20,7 @@ import core_audit
 ROOT = Path(__file__).resolve().parents[2]
 S28 = "docs/specs/0028-in-flow-mode-a-kit-build-pull-request-does-not-bump-the-vers.md"
 S31 = "docs/specs/0031-in-flow-mode-a-build-pull-request-adds-its-changelog-line-as.md"
-AMENDMENT = "docs/runs/proposed-spec-amendments-108.md"
+AMENDMENT = "docs/runs/proposed-spec-amendments-109.md"
 ADR = "docs/adr/0245-spec-0031-changelog-fragments-folded-into-spec-0028-req-039-brief-386.md"
 NUMBERED = re.compile(r"^(\d+)\. (.*)$")
 POINTER = re.compile(r"^(\d+)\. Now SPEC-0028 rule (\d+)\.$")
