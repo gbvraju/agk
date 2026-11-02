@@ -1,6 +1,6 @@
 # ADR-0248: the kit ships one design standard and check_design.py holds a theme to its theme and layout blocks (REQ-044, brief 455)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: maintainers
 - Related: ADR-0204, SPEC-0037, SPEC-0029
