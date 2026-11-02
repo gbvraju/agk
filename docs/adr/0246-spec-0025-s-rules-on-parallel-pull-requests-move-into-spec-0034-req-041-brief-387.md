@@ -1,6 +1,6 @@
 # ADR-0246: SPEC-0025's rules on parallel pull requests move into SPEC-0034, and SPEC-0025 says where each went (REQ-041, brief 387)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: maintainers
 - Related: ADR-0096, ADR-0212
