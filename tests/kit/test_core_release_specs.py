@@ -161,7 +161,10 @@ def test_the_pull_request_does_not_approve_spec_0028():
 
 
 def test_the_amendment_names_both_paths_and_the_adr():
-    """REQ-039: brief #386 answer 1 (one amendment file, applied by ADR-0245); brief #474 answer 1 (Proposed or Accepted)."""
+    """REQ-039: brief #386 answer 1 (one amendment file, applied by ADR-0245).
+
+    Brief #474 answer 1: the ADR reads Proposed or Accepted.
+    """
     body = text(AMENDMENT)
     assert f"`{S28}`" in body and f"`{S31}`" in body
     assert "ADR-0245" in body
