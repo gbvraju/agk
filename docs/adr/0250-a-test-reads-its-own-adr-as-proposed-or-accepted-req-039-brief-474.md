@@ -1,6 +1,6 @@
 # ADR-0250: A test reads its own ADR as Proposed or Accepted (REQ-039, brief 474)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-02
 - Deciders: maintainers
 - Related: ADR-0245
