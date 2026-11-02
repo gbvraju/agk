@@ -2,7 +2,9 @@
 
 SPEC-0014, 0015, 0016, 0017, 0019, 0022, 0024 and 0026 each added one detail to the weekly product
 report of SPEC-0011. Their 72 rules move into SPEC-0011, one section per spec in the order the specs
-were approved, the text unchanged after the number (answers 1 and 3); each old file keeps its
+were approved, the text unchanged after the number (answers 1 and 3), except where one folded spec
+amends another: SPEC-0026 amends SPEC-0022 rules 3, 5 and 7, so SPEC-0011 rules 68, 70 and 72 carry
+the amended text and are pinned to it (answer 1, the verdict on 4868ede); each old file keeps its
 number and its history and holds one pointer line per old rule, `N. Now SPEC-0011 rule M.`
 (answer 2); the change is one spec amendment that `check_specs.py` accepts (answer 5). The text
 before the change is pinned by the SHA-256 of each rule, so the test needs no history; where the
@@ -22,7 +24,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SPECS = ROOT / "docs" / "specs"
 CORE = "docs/specs/0011-inbox-and-report.md"
-AMENDMENT = "docs/runs/proposed-spec-amendments-108.md"
+AMENDMENT = "docs/runs/proposed-spec-amendments-110.md"
 # The default branch before the change (brief #385 was built on it).
 BASE = "ebc556fe063b1ece17cb3e4adb4a70e44b2672ff"
 CORE_RULES = 23  # SPEC-0011's own rules keep their numbers 1 to 23
@@ -125,6 +127,17 @@ MOVED: dict[str, list[str]] = {
 }
 
 
+# Where a folded spec amends another, only the amended text moves (answer 1): SPEC-0026 rules 1, 2,
+# 3 and 7 amend SPEC-0022 rules 3 (the key `counts`, `schema` 3), 5 (the fields `count` and
+# `fix_verdicts_unknown`) and 7 (`schema` is 3). The SHA-256 of each amended text at its SPEC-0011
+# number; every other moved rule keeps the digest of its text before the move.
+AMENDED: dict[int, str] = {
+    68: "46120059ac145863bb6a42ae837e49df8c06856adae5f78ee2ca82411aa12f45",
+    70: "ec4e907da070d5251b32e1b37c1d3c7a0f9bf3a9a3bd81daeba3534d2680b98b",
+    72: "2a0bd48026efdd6aa76f6e5c2aac0399821d540acf727fb5133d835b5cce9610",
+}
+
+
 def spec_path(number: str) -> Path:
     found = sorted(SPECS.glob(f"{number}-*.md"))
     assert len(found) == 1, f"SPEC-{number}: one file expected"
@@ -173,6 +186,11 @@ def start_of(number: str) -> int:
     raise KeyError(number)
 
 
+def expected(number: int, before: str) -> str:
+    """The digest a moved rule has at its SPEC-0011 number: the amended one, else the one before."""
+    return AMENDED.get(number, before)
+
+
 def core() -> dict[int, str]:
     return rules_of((ROOT / CORE).read_text(encoding="utf-8"))
 
@@ -187,12 +205,31 @@ def test_every_rule_of_the_eight_specs_is_in_spec_0011_byte_for_byte_after_its_n
     rules = core()
     for spec, digests in MOVED.items():
         first = start_of(spec)
-        for i, expected in enumerate(digests):
+        for i, before in enumerate(digests):
             number = first + i
             assert number in rules, f"SPEC-0011 rule {number} (SPEC-{spec} rule {i + 1}) is missing"
-            assert digest(rules[number]) == expected, (
+            assert digest(rules[number]) == expected(number, before), (
                 f"SPEC-0011 rule {number} differs from SPEC-{spec} rule {i + 1}"
             )
+
+
+def test_only_spec_0026s_amendment_of_spec_0022_changes_moved_text():
+    """REQ-039: brief #385 answer 1 (where one folded spec amends another, the amended text moves)."""
+    start = start_of("0022")
+    assert sorted(AMENDED) == [start + 2, start + 4, start + 6]  # SPEC-0022 rules 3, 5 and 7
+    for number in AMENDED:
+        assert AMENDED[number] != MOVED["0022"][number - start]
+    rules = core()
+    schema_rule = start_of("0026") + 6  # SPEC-0026 rule 7
+    assert "`schema` is the number 3" in rules[schema_rule]
+    assert "`schema` (the number 3 since SPEC-0026)" in rules[start + 2]
+    assert "`counts` and `notices`, and no other" in rules[start + 2]
+    assert "`fix_verdicts_unknown`" in rules[start + 4]
+    assert rules[start + 4].count("`count` (") == 4
+    assert rules[start + 6].startswith("**Versioned, and the list is closed.** `schema` is 3 ")
+    for number, text in rules.items():
+        if start <= number < start + len(MOVED["0022"]):
+            assert "the number 2 since" not in text and "`schema` is 2" not in text
 
 
 def test_spec_0011_numbers_its_rules_once_and_keeps_its_own():
@@ -231,7 +268,7 @@ def test_each_old_spec_keeps_its_number_and_points_every_rule_to_one_that_exists
             assert match, f"SPEC-{spec}: line {i + 1} is not a pointer"
             old, new = int(match.group(1)), int(match.group(2))
             assert old == i + 1 and new == first + i
-            assert new in rules and digest(rules[new]) == digests[i]
+            assert new in rules and digest(rules[new]) == expected(new, digests[i])
 
 
 def test_the_digests_are_those_of_the_rules_before_the_change():
