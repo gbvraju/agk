@@ -1,1 +1,0 @@
-- every proof run writes a test manifest (what ran with its files and seconds, what did not and why, and the `[testing] excluded` tags) to the job summary (brief #425, ADR-0230 Proposed)
