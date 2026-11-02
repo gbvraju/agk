@@ -1,6 +1,6 @@
-"""Kit-only tests of `design.py prototype`: the click-through version folder (SPEC-0037 rules 4 to 6).
+"""Kit-only tests of `design.py prototype`: the click-through version (SPEC-0037 rules 4 to 6).
 
-Brief #457 (REQ-044 AC3, and the refusal clause of AC2; rule 12's refusal and theme move): from an
+Brief #457 (REQ-044 AC3, the refusal clause of AC2, rule 12's refusal and theme move): from an
 agreed inventory (an `inventory` row of `docs/design/signoffs.md` with its digest) and the theme,
 the script writes the next free `docs/design/prototype/v<n>/` with `index.html`, one
 `<screen>--<state>.html` per screen and state, `standard.css`, `theme.css`, the kit's runtime
@@ -549,7 +549,7 @@ def test_ac2_prototype_refuses_an_inventory_without_its_row_and_writes_nothing(t
 
 
 def test_ac2_a_row_for_an_earlier_inventory_does_not_count(tmp_path):
-    """REQ-044 AC2: SPEC-0037 rule 3 (the row names the digest; a changed inventory is not agreed)."""
+    """REQ-044 AC2: SPEC-0037 rule 3 (a row names a digest; a changed inventory is not agreed)."""
     project(tmp_path)
     put(tmp_path, INVENTORY, INVENTORY_TEXT.replace("Flow: Adding", "Flow: Writing"))
     proc = design(tmp_path, "prototype")
@@ -638,9 +638,7 @@ def test_ac3_an_old_theme_moves_its_five_tokens_unchanged_in_value_in_light_and_
     assert f"moved {THEME} to agk design standard {design_standard.STANDARD}" in proc.stdout
     theme = (tmp_path / THEME).read_text(encoding="utf-8")
     assert design_standard.theme_format(theme) == "standard"
-    assert re.search(
-        rf"(?m)^Standard: agk design standard {design_standard.STANDARD}$", theme
-    )
+    assert re.search(rf"(?m)^Standard: agk design standard {design_standard.STANDARD}$", theme)
     light, dark = design_standard.theme_colours(theme)
     for old, role in design_standard.OLD_TOKENS.items():
         assert light[role] == OLD_LIGHT[old], old

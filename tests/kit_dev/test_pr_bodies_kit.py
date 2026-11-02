@@ -256,7 +256,9 @@ def test_design_prints_the_none_form_and_a_body_that_passes_with_an_open_brief(t
     theme = root / "docs" / "design" / "theme.md"
     theme.parent.mkdir(parents=True)
     template = (KIT_ROOT / "kit" / "templates" / "design-theme.md").read_text(encoding="utf-8")
-    theme.write_text(template.replace("{{evidence}}", "docs/design/prototype/v1/"), encoding="utf-8")
+    theme.write_text(
+        template.replace("{{evidence}}", "docs/design/prototype/v1/"), encoding="utf-8"
+    )
     (root / "docs" / "design" / "prototype" / "v1").mkdir(parents=True)
     issues = saved(tmp_path, BRIEFS)
     proc = engines(
