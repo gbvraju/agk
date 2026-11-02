@@ -19,7 +19,7 @@ answers. The tests were written first (15 failed, 2 passed before the change).
 
 ## Decision
 
-1. **One spec, one amendment (answer 1).** `docs/runs/proposed-spec-amendments-108.md` moves SPEC-0025 rules 1 to 11 into a new
+1. **One spec, one amendment (answer 1).** `docs/runs/proposed-spec-amendments-111.md` moves SPEC-0025 rules 1 to 11 into a new
    section of SPEC-0034's `## Rules`, "Independent pull requests (from SPEC-0025)", as rules 17 to 27 (rule n becomes n + 16;
    15 and 16 stay for the new rules amendments 88 and 89 propose), their text unchanged. Rule 8, now rule 24, keeps its first
    two sentences and carries the release model in the text SPEC-0028 gave it by amendment 50, item 2.
@@ -43,8 +43,8 @@ pointer lines.
 
 ## Residual
 
-- 2026-11-01: Q-387-1: the amendment number 108 is the next free one, not one the conductor named; ADR-0246 is the conductor's
-  reservation, while `session.py claim` reserved ADR-0243, which this pull request does not use (due 2026-12-31).
+- 2026-11-01: Q-387-1: the amendment number 111 is the one the conductor's verdict named (108 is brief #455's); ADR-0246 is
+  the conductor's reservation, while `session.py claim` reserved ADR-0243, which this pull request does not use (due 2026-12-31).
 - 2026-11-01: Q-387-2: amendments 50 item 3, 94 and 97 are not applied into the moved text, as the brief says "text unchanged";
   applying them is a later amendment if the maintainers want it (due 2026-12-31).
 - 2026-11-01: Q-387-3: SPEC-0034's `- Requirements:` line still names REQ-041 alone, and REQ-032 stays named by SPEC-0025 (due

@@ -24,7 +24,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SPEC_0025 = "docs/specs/0025-a-team-can-run-independent-pull-requests-in-parallel-without.md"
 SPEC_0034 = "docs/specs/0034-a-team-sets-how-many-builder-sessions-run-at-once-and-agk-ha.md"
-AMENDMENT = "docs/runs/proposed-spec-amendments-108.md"
+AMENDMENT = "docs/runs/proposed-spec-amendments-111.md"
 AMENDMENT_50 = "docs/runs/proposed-spec-amendments-50.md"
 BEFORE = "ab1d6aeb3d9d0332054caef625d1ea7dea9e3d21"  # SPEC-0025's last change before the fold
 OFFSET = 16

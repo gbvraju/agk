@@ -10,7 +10,7 @@ The maintainers gave seven answers before it was written, in the issue and not a
 
 ## Rules
 
-The rules of this spec moved to SPEC-0034, in its section "Independent pull requests (from SPEC-0025)" (brief #387, ADR-0246, `docs/runs/proposed-spec-amendments-108.md`), the text unchanged and rule 8 in the text SPEC-0028 amended it to. Each line says where a rule went; a script, test, ADR or verdict that cites a rule of this spec reads it there.
+The rules of this spec moved to SPEC-0034, in its section "Independent pull requests (from SPEC-0025)" (brief #387, ADR-0246, `docs/runs/proposed-spec-amendments-111.md`), the text unchanged and rule 8 in the text SPEC-0028 amended it to. Each line says where a rule went; a script, test, ADR or verdict that cites a rule of this spec reads it there.
 
 1. Now SPEC-0034 rule 17.
 2. Now SPEC-0034 rule 18.

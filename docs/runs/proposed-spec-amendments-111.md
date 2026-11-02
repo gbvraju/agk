@@ -1,11 +1,12 @@
-# Proposed spec amendments 108 (SPEC-0025, SPEC-0034; REQ-032, REQ-041)
+# Proposed spec amendments 111 (SPEC-0025, SPEC-0034; REQ-032, REQ-041)
 
 Date: 2026-11-01 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). Written for ADR-0246
 (brief #387), which stays `Proposed` for the maintainers' decision. The paths:
 `docs/specs/0025-a-team-can-run-independent-pull-requests-in-parallel-without.md` and
-`docs/specs/0034-a-team-sets-how-many-builder-sessions-run-at-once-and-agk-ha.md`. The number 108 is the next free one on the
-default branch when the brief was taken (Q-387-1). It needs a person's `Approve: SPEC-0034` on the pull request; no session posts
-it. No rule changes what it says and no safety rule weakens: the rules move, and a merged number stays as a pointer line.
+`docs/specs/0034-a-team-sets-how-many-builder-sessions-run-at-once-and-agk-ha.md`. The number 111 is the one the conductor's
+verdict named; 108 is reserved for brief #455 (Q-387-1). It needs a person's `Approve: SPEC-0034` on the pull request; no
+session posts it. No rule changes what it says and no safety rule weakens: the rules move, and a merged number stays as a
+pointer line.
 
 1. **SPEC-0034, a new section of `## Rules`: "Independent pull requests (from SPEC-0025)".** After rule 14, rules 17 to 27 are
    SPEC-0025 rules 1 to 11, rule n of SPEC-0025 becoming rule n + 16, their text unchanged word for word. Numbers 15 and 16 stay
