@@ -542,7 +542,9 @@ def test_ac1_stamped_default_branch_survives_a_branch_rename(installed):
 
 def test_ac1_installed_text_does_not_assume_main(installed):
     """REQ-010 AC1: rule 8."""
-    claude = (installed / "CLAUDE.md").read_text(encoding="utf-8")
+    # CLAUDE.md points at the installed core-rules page, which holds its former list (ADR-0247).
+    rels = ("CLAUDE.md", "config/core-rules.md")
+    claude = "".join((installed / rel).read_text(encoding="utf-8") for rel in rels)
     principles = (installed / "constitution" / "principles.md").read_text(encoding="utf-8")
     assert "origin/main" not in claude
     assert "branched from main" not in principles
