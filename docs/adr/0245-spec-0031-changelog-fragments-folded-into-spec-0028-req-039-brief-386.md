@@ -1,6 +1,6 @@
 # ADR-0245: SPEC-0031 (changelog fragments) folded into SPEC-0028 (the flow-mode release) (REQ-039, brief 386)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: maintainers
 - Related: ADR-0108, ADR-0188, ADR-0211
