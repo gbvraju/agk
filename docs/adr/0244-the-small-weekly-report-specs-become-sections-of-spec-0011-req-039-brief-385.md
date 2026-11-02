@@ -7,7 +7,7 @@
 - Requirements: REQ-039
 
 Protected classes: `tests/kit/`. Unprotected classes named by the brief: `docs/specs/` (the amendment
-`docs/runs/proposed-spec-amendments-108.md`).
+`docs/runs/proposed-spec-amendments-110.md`).
 
 ## Context
 
@@ -19,10 +19,12 @@ every merge of that plan: never renumber; a merged number stays as a pointer lin
 
 ## Decision
 
-1. **One amendment (answer 1).** `docs/runs/proposed-spec-amendments-108.md` moves each rule of the eight specs into
+1. **One amendment (answer 1).** `docs/runs/proposed-spec-amendments-110.md` moves each rule of the eight specs into
    SPEC-0011 as a numbered rule of a new section per spec, `### From SPEC-NNNN: <title>`, in the order the specs were approved
    (by their ADRs 0050, 0051, 0057, 0058, 0063, 0070, 0078, then SPEC-0026), numbered 24 to 95 after SPEC-0011's own rules 1
-   to 23, the text after the number unchanged. A line under each heading says that a bare `rule N` there is the old spec's
+   to 23, the text after the number unchanged, except where one of the eight amends another: SPEC-0026 amends SPEC-0022
+   rules 3, 5 and 7, so SPEC-0011 rules 68, 70 and 72 carry that amended text (`schema` 3, the key `counts`, the fields
+   `count` and `fix_verdicts_unknown`) and the test pins them to it (Q-385-6). A line under each heading says that a bare `rule N` there is the old spec's
    rule N, so a moved rule keeps its meaning without a word of it changing.
 2. **Pointers (answer 2).** Each of the eight files keeps its number, its name, its status and its other sections; its
    `## Rules` section holds one line per old rule, `N. Now SPEC-0011 rule M.`. No spec number is reused or deleted.
@@ -31,7 +33,7 @@ every merge of that plan: never renumber; a merged number stays as a pointer lin
 4. **Approval (answer 4).** SPEC-0011 keeps its `Approved` status line; a person approves it after the change (SPEC-0032),
    by `Approve: SPEC-0011` on the pull request. The pull request approves nothing.
 5. **Tests first (answer 5).** `tests/kit/test_core_report_specs.py` pins the SHA-256 of every old rule's text after its
-   number and asserts it at the new number in SPEC-0011, reads the digests back from the base commit where the history holds
+   number and asserts it at the new number in SPEC-0011 (rules 68, 70 and 72 at the digest of their amended text), reads the digests back from the base commit where the history holds
    it, asserts that each pointer line names a rule that exists, and runs `check_specs.py` with and without the amendment.
 6. **Classes (answer 6).** The change touches `docs/specs/` (by the amendment), `docs/runs/`, `docs/adr/`, `changelog.d/` and
    the protected class `tests/kit/` (the new test, kit-only and not installed). No kit version is bumped and
@@ -44,10 +46,11 @@ its pointer line. Later amendments to the report change SPEC-0011 only.
 
 ## Residual
 
-- 2026-11-01: Q-385-1: no amendment number was reserved; 108 is the next free number on the default branch, and if a
-  parallel brief takes it first this proposal moves to the next free one (due 2026-11-15).
-- 2026-11-01: Q-385-2: the amendment files that amend these specs without rewriting their text (46, 55, 58, 66, 78 and
-  later ones) are not folded into the moved text; they keep applying at the new numbers (due 2026-12-31).
+- 2026-11-01: Q-385-1: no amendment number was reserved; 108 was the next free number on the default branch. 2026-11-02:
+  the verdict on 4868ede gave 108 to brief #455, so this proposal is amendments 110 (due 2026-11-15).
+- 2026-11-01: Q-385-2: the amendment files that amend these specs without rewriting their text and are not SPEC-0026's
+  (55, 58, 66, 78 and later ones) are not folded into the moved text; they keep applying at the new numbers, so
+  SPEC-0011 says `schema` 3 while `kit/report-schema.json` requires 7 by those amendments (due 2026-12-31).
 - 2026-11-01: Q-385-3: SPEC-0011's `Requirements:` line is unchanged (REQ-017, REQ-018); the eight specs keep their own
   `Requirements:` lines (REQ-021 to REQ-033), so every requirement is still named by a spec (due 2026-12-31).
 - 2026-11-01: Q-385-4: only the `## Rules` sections of the eight specs are replaced; their tests, proof, residual and
@@ -55,3 +58,7 @@ its pointer line. Later amendments to the report change SPEC-0011 only.
   (due 2026-12-31).
 - 2026-11-01: Q-385-5: the history before 2026-10-30 is one imported commit, so the order of approval was read from the
   implementing ADRs (0050, 0051, 0057, 0058, 0063, 0070, 0078) and SPEC-0026 last; it is the numeric order (due 2026-12-31).
+- 2026-11-02: Q-385-6: the verdict on 4868ede (fix list item 1) reads answer 1 as covering SPEC-0026's amendment of SPEC-0022,
+  made by amendments 46 and not in place: SPEC-0011 rules 68, 70 and 72 take it, as the least that ends the contradiction
+  with rule 92 (`schema` 3, `counts`, `count`, `fix_verdicts_unknown`), and nothing else of amendments 46 or a later one is
+  written in (due 2026-12-31).

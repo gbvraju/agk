@@ -166,7 +166,7 @@ were read on 2026-10-16.
 
 ### From SPEC-0014: The weekly product report footer names the kit version
 
-Moved from SPEC-0014 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0014 rule N, and SPEC-0014 rule N is rule N + 23 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0014.
+Moved from SPEC-0014 by proposed spec amendments 110 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0014 rule N, and SPEC-0014 rule N is rule N + 23 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0014.
 
 24. **The facts carry the version.** The facts document gains an optional top-level property `kit_version`: the version string, or `"unknown"` when it cannot be
    read. `schema` stays `1`: no released consumer reads the property (as for `path` and `proof_reason`), and a renderer that does not know it ignores it.
@@ -183,7 +183,7 @@ Moved from SPEC-0014 by proposed spec amendments 108 (ADR-0244), the text of eac
 
 ### From SPEC-0015: A busy week's report links the full list of merged pull requests
 
-Moved from SPEC-0015 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0015 rule N, and SPEC-0015 rule N is rule N + 28 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0015.
+Moved from SPEC-0015 by proposed spec amendments 110 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0015 rule N, and SPEC-0015 rule N is rule N + 28 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0015.
 
 29. **A busy week.** A week is busy when more than ten pull requests merged in it, counted as `merged_in_week` selects them (`state` `merged` and `merged_at` inside the report's week). Ten is one
    named constant in `product_report.py`, not a setting, not read from `agk.toml` and not carried by the facts. Ten or fewer is a quiet week.
@@ -202,7 +202,7 @@ Moved from SPEC-0015 by proposed spec amendments 108 (ADR-0244), the text of eac
 
 ### From SPEC-0016: At risk shows one line per kind of pull request risk
 
-Moved from SPEC-0016 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0016 rule N, and SPEC-0016 rule N is rule N + 36 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0016.
+Moved from SPEC-0016 by proposed spec amendments 110 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0016 rule N, and SPEC-0016 rule N is rule N + 36 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0016.
 
 37. **The four kinds.** The kinds are the lines of `at_risk` that name one pull request: *open too long* (an open pull request older than `OLD_PULL_REQUEST_DAYS`), *sent back* (closed in the week with two or
    more fix verdicts or a rejected one), *merged with no verdict* and *merged before its last commit was cleared*. The overdue-residual lines and the drift line are not kinds of this rule and are printed as today.
@@ -223,7 +223,7 @@ Moved from SPEC-0016 by proposed spec amendments 108 (ADR-0244), the text of eac
 
 ### From SPEC-0017: Delivered lists only the requirements that became done in the week
 
-Moved from SPEC-0017 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0017 rule N, and SPEC-0017 rule N is rule N + 46 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0017.
+Moved from SPEC-0017 by proposed spec amendments 110 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0017 rule N, and SPEC-0017 rule N is rule N + 46 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0017.
 
 47. **The date a requirement became done.** For each requirement, `facts.py` reads the first-parent history of the default branch for the commits that changed the requirement's `Status:` line in
    `docs/requirements.md`, and takes the latest one whose change set the status to `done` (a requirement added already `done` counts as that commit). The field is `done_on` on the requirement's row, the
@@ -245,7 +245,7 @@ Moved from SPEC-0017 by proposed spec amendments 108 (ADR-0244), the text of eac
 
 ### From SPEC-0019: The weekly report publishes the facts it was rendered from
 
-Moved from SPEC-0019 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0019 rule N, and SPEC-0019 rule N is rule N + 55 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0019.
+Moved from SPEC-0019 by proposed spec amendments 110 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0019 rule N, and SPEC-0019 rule N is rule N + 55 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0019.
 
 56. **One artifact per run.** After the step that writes the issue, the `product-report` workflow has a step that uploads the facts as a workflow artifact named `agk-facts-<week>`, `<week>` being the week label of
    the report (`2026-W42`, the label of the issue title; the first line of the report names it). The artifact holds one file, `facts.json`. From SPEC-0022 the artifact also holds `report.json` (rule 9 there).
@@ -270,16 +270,16 @@ Moved from SPEC-0019 by proposed spec amendments 108 (ADR-0244), the text of eac
 
 ### From SPEC-0022: The weekly report also publishes its sections as data in report.json
 
-Moved from SPEC-0022 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0022 rule N, and SPEC-0022 rule N is rule N + 65 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0022.
+Moved from SPEC-0022 by proposed spec amendments 110 (ADR-0244), the text of each rule unchanged except rules 68, 70 and 72 (SPEC-0022 rules 3, 5 and 7), which carry SPEC-0026's amendment of them. In this section a bare `rule N` means SPEC-0022 rule N, and SPEC-0022 rule N is rule N + 65 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0022.
 
 66. **One option.** `python3 scripts/agk/product_report.py --facts FILE [--today D] [--week W] --json OUT` prints the markdown report as before and also writes `OUT`, a file `report.json`, from the same facts, in
    the same run, with the same `--today` and `--week`. Without `--json` the script behaves as before and writes no file. `--json` is refused with `--inbox` and with `--print-action`.
 67. **The structure comes first.** The script builds one structure from the facts and the day and the week, and renders the markdown from that structure alone; `report.json` is that structure written as JSON. A
    function that takes the structure and nothing else renders the markdown, so a test can render it from the parsed `report.json` and compare it with what the script printed (byte for byte). The inbox output
    (`--inbox`) and the markdown of every existing golden are byte-identical to before; the inbox is built from the same item builders and is not part of `report.json`.
-68. **The document.** `report.json` has the keys `schema` (the number 2 since SPEC-0024), `week` (`2026-W41`), `opening`, `sections` and `notices`, and no other. `opening` is `{"first", "last", "as_of"}`, three dates
+68. **The document.** `report.json` has the keys `schema` (the number 3 since SPEC-0026), `week` (`2026-W41`), `opening`, `sections`, `counts` and `notices`, and no other. `opening` is `{"first", "last", "as_of"}`, three dates
    (`first` the Monday, `last` the Sunday, `as_of` the day the lists are as of). `sections` has the keys `delivered`, `proven`, `needs_you`, `at_risk` and `cost`, each a list in the order the markdown prints, an
-   empty list when the markdown prints `nothing this week`; `needs_you` is a list of groups `{"group", "count", "items"}` in the order of the markdown (`group` one of `spec`, `adr`, `question`, `pull-request`, `residual`, `requirement`; `count` a number or `"unknown"`). `notices` is the
+   empty list when the markdown prints `nothing this week`; `needs_you` is a list of groups `{"group", "count", "items"}` in the order of the markdown (`group` one of `spec`, `adr`, `question`, `pull-request`, `residual`, `requirement`; `count` a number, or `"unknown"` when the group holds an `unknown` item). `counts` is an object with exactly the keys `delivered`, `proven`, `needs_you` and `at_risk`, each the number of its section's items counted by meaning (SPEC-0026 rule 1) or the string `"unknown"`. `notices` is the
    list of the footer lines in the order printed.
 69. **Items.** Every item is an object with `kind` (a word of the list in rule 5), the fields of that kind and nothing else, and `links`: a list of `{"to", "url"}` objects, `to` being `pull-request`, `file`,
    `directory`, `issue` or `search`, in the order the markdown prints them (empty when the line has none). A date is `YYYY-MM-DD`; a number is a JSON number; a title is the text the report prints and is present
@@ -301,13 +301,13 @@ Moved from SPEC-0022 by proposed spec amendments 108 (ADR-0244), the text of eac
    | needs_you | `overdue-residual` | `due`, `text` (as printed, shortened) |
    | needs_you | `unspecced-requirement` | `id`, `title` |
    | at_risk | `residual-overdue` | `due`, `days`, `text` (as printed, shortened) |
-   | at_risk | `pull-requests-open-long` | `entries` (a list of `{"number", "days"}`, with `title` when the list has one entry) |
-   | at_risk | `pull-requests-sent-back` | `entries` (`{"number", "times"}`, with `title` when one) |
-   | at_risk | `pull-requests-merged-no-verdict` | `entries` (`{"number"}`; the report prints no title for it) |
-   | at_risk | `pull-requests-merged-not-cleared` | `entries` (`{"number"}`; the report prints no title for it) |
+   | at_risk | `pull-requests-open-long` | `entries` (a list of `{"number", "days"}`, with `title` when the list has one entry), `count` (the number of its entries; SPEC-0026) |
+   | at_risk | `pull-requests-sent-back` | `entries` (`{"number", "times"}`, with `title` when one), `count` (as above) |
+   | at_risk | `pull-requests-merged-no-verdict` | `entries` (`{"number"}`; the report prints no title for it), `count` (as above) |
+   | at_risk | `pull-requests-merged-not-cleared` | `entries` (`{"number"}`; the report prints no title for it), `count` (as above) |
    | at_risk | `drift-audit` | `total` (a number or `"unknown"`), `counts` (an object of the finding kinds to numbers or `"unknown"`), `open_issue` (a number, `"none"` or `"unknown"`) |
    | cost | `pull-request-cost` | `number`, `title`, `hours` (a decimal string or `"unknown"`), `fix_verdicts` (a number or `"unknown"`) |
-   | cost | `week-totals` | `merged`, `hours`, `hours_unknown` (a number, how many of the week's merged pull requests have the hours `unknown`; SPEC-0024), `fix_verdicts`, `behaviour_unchanged`, `estimate` (`{"within", "counted"}` or `"none-declared"`), `busy` (a boolean) |
+   | cost | `week-totals` | `merged`, `hours`, `hours_unknown` (a number, how many of the week's merged pull requests have the hours `unknown`; SPEC-0024), `fix_verdicts`, `fix_verdicts_unknown` (a number, how many of the week's merged pull requests have the verdicts unknown; SPEC-0026), `behaviour_unchanged`, `estimate` (`{"within", "counted"}` or `"none-declared"`), `busy` (a boolean) |
    | any section, and `needs_you` groups | `unknown` | `what` (the thing that could not be read: `requirements`, `pull requests`, `test markers`, `questions`, `residuals`, `the drift counts`, `the age limit for pull requests (inbox_hours)`) |
    | notices | `facts-commit` | `commit` |
    | notices | `working-tree-modified` | `dirty` (the printed value) |
@@ -316,7 +316,7 @@ Moved from SPEC-0022 by proposed spec amendments 108 (ADR-0244), the text of eac
    | notices | `drift-audit-issue` | `state` (as above), and `number`, `title` when found |
 71. **Unknown stays unknown.** Wherever the facts mark a value `"unknown"`, or a value cannot be read, the field holds the string `"unknown"` and is never a number, a null, a guess or a default; an `unknown`
    item (rule 5) stands where the markdown prints `unknown: <what> could not be read`.
-72. **Versioned, and the list is closed.** `schema` is 2 (SPEC-0024 added a field to `week-totals`; it was 1). A kind or a field that is not in rule 5 does not exist in schema 2: adding one, or changing a field, raises the number (and this spec is amended).
+72. **Versioned, and the list is closed.** `schema` is 3 (SPEC-0026 added `counts` and the fields `count` and `fix_verdicts_unknown`; it was 2 since SPEC-0024 added a field to `week-totals`, and 1 before). A kind or a field that is not in rule 5 does not exist in schema 3: adding one, or changing a field, raises the number (and this spec is amended).
    `kit/report-schema.json` is a hand-written JSON Schema of rules 3 to 5 (kit-only, not installed, like `kit/facts-schema.json`; its test is `tests/kit_dev/test_report_wiring.py`), and a test validates every golden `report.json` against it and fails on an extra
    key, an extra kind or a missing field.
 73. **Determinism.** The same facts, `--today` and `--week` give a byte-identical `report.json` (keys in the order of rules 3 to 5, two-space indent, UTF-8, a final newline), and a byte-identical markdown.
@@ -336,7 +336,7 @@ Moved from SPEC-0022 by proposed spec amendments 108 (ADR-0244), the text of eac
 
 ### From SPEC-0024: The report's cost totals count the merged changes whose hours are not known
 
-Moved from SPEC-0024 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0024 rule N, and SPEC-0024 rule N is rule N + 77 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0024.
+Moved from SPEC-0024 by proposed spec amendments 110 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0024 rule N, and SPEC-0024 rule N is rule N + 77 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0024.
 
 78. **The field.** The cost totals item of `report.json` (kind `week-totals`, SPEC-0022 rule 5) gains the field `hours_unknown`: a JSON integer, the number of the week's merged pull requests whose hours are `unknown` (the same condition that makes the `hours` of their `pull-request-cost` item and the `hours` of the totals read `unknown`: the created or the merged time is missing or cannot be read). It is present in every totals item and is 0 when every hours is known; it is never omitted, never a null and never the string `unknown`.
 79. **The set counted.** It counts every pull request merged in the report's week, the set that `merged` counts, whether or not the per-change cost items are printed (a busy week leaves them out). So `merged` minus `hours_unknown` is the number of changes whose hours are in the total of `hours`; when `hours_unknown` is above 0 the total of `hours` is `unknown`, as before.
@@ -349,7 +349,7 @@ Moved from SPEC-0024 by proposed spec amendments 108 (ADR-0244), the text of eac
 
 ### From SPEC-0026: Each section of the weekly report, each grouped item in it and each total that can be unknown states how many it holds
 
-Moved from SPEC-0026 by proposed spec amendments 108 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0026 rule N, and SPEC-0026 rule N is rule N + 85 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0026.
+Moved from SPEC-0026 by proposed spec amendments 110 (ADR-0244), the text of each rule unchanged. In this section a bare `rule N` means SPEC-0026 rule N, and SPEC-0026 rule N is rule N + 85 here; the tests, proof, residuals and rulings of these rules stay in SPEC-0026.
 
 86. **The section counts.** `report.json` (SPEC-0022 rule 3) gains the key `counts`: an object with exactly the keys `delivered`, `proven`, `needs_you` and `at_risk`, the keys of the sections, each counted by meaning and not by list entries: `delivered` is the number of its `requirement-done` items; `proven` the number of its `requirement-proven` items; `needs_you` the number of the items of all its groups together, `unknown` items excluded; `at_risk` the number of its items, `unknown` items excluded. The busy-week summary item of `delivered` and the `planned-not-counted` and `requirement-not-proven` items of `proven` are not counted, so the same requirements give the same `delivered` count in a quiet and in a busy week. An empty section is the integer 0. When a section holds an `unknown` item its count is the string `"unknown"`, never a number: unknown is not shown as a count. `counts` is always present and has these four keys. The `cost` section ("Time and review") has no count.
 87. **The group counts.** Every grouped item, the kinds that list `entries` (`pull-requests-open-long`, `pull-requests-sent-back`, `pull-requests-merged-no-verdict`, `pull-requests-merged-not-cleared`), gains the field `count`: a JSON integer, the number of its `entries`, always present. The groups of the decisions section keep their `count` (a number or `"unknown"`, SPEC-0022 rule 3); the drift-audit item keeps its `total` and `counts` as they are.

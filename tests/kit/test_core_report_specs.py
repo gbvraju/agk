@@ -225,7 +225,7 @@ def test_only_spec_0026s_amendment_of_spec_0022_changes_moved_text():
     assert "`schema` (the number 3 since SPEC-0026)" in rules[start + 2]
     assert "`counts` and `notices`, and no other" in rules[start + 2]
     assert "`fix_verdicts_unknown`" in rules[start + 4]
-    assert rules[start + 4].count("`count` (") == 4
+    assert rules[start + 4].count("`count` (") == 1 + 4  # the busy-week line, and the four entries kinds
     assert rules[start + 6].startswith("**Versioned, and the list is closed.** `schema` is 3 ")
     for number, text in rules.items():
         if start <= number < start + len(MOVED["0022"]):
