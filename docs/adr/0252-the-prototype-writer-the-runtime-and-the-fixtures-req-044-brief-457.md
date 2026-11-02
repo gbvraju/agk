@@ -25,3 +25,7 @@ check counts only an ADR of the same pull request (`Q-S0037-9`).
 ## Consequences
 
 (filled in as the build proceeds)
+
+## Residual
+
+- 2026-11-02: (filled in as the build proceeds)
