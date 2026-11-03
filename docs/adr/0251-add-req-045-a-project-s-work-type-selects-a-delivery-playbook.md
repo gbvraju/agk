@@ -21,7 +21,12 @@ work types the plan lists. It is recorded as one row of `docs/runs/decisions-log
 `date -u` (`Q-S0038-12`). Today the kit runs one flow for every project, and the only place the
 kind of work shows up is the stack ADR. In the pilot's Phase 2 a hand-designed strategy cut the
 critical path (contract first with mocks, a per-module `[testing]` map, milestone pull requests,
-lock slots and joins ordered by demo value), and nothing in the kit chose it.
+lock slots and joins ordered by demo value), and nothing in the kit chose it. The pilot's data is
+private: this ADR and the spec describe only the strategy's shape, and a run record that later
+turns a web-app claim into `measured` holds only timings, counts and that shape, with no project
+name, no organisation, no people, no screen or feature names and no data from the pilot, and
+invented names only (`example.com`); the review of the pull request that adds it checks this
+(SPEC-0038 rule 11).
 
 ## Decision
 
