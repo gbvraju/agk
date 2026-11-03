@@ -52,9 +52,13 @@ check counts only an ADR of the same pull request (`Q-S0037-9`).
 5. **The theme (answer 5).** `kit/templates/design-theme.md` becomes the standard format of #455 (`Standard: agk design
    standard 1`, Brand with a logo line, one theme block, a layout block, Rules, Evidence). With no theme the writer
    writes it with `{{evidence}}` set to the version. An old-format theme is moved: its five tokens map by
-   `design_standard.OLD_TOKENS` to their roles unchanged in value, in light and dark; its Brand section and its Evidence
-   section are carried over unchanged (the template's placeholder logo line is added when the record has none, because
-   the standard's check requires one; it reads as a placeholder at risk); the rest is the template's. An old token
+   `design_standard.OLD_TOKENS` to their roles unchanged in value, in light and dark. The owner's title, the text
+   before the first section and every section but Tokens, Contrast and Rules stay unchanged and in place, with the
+   `Standard:` line added under the title; Tokens becomes the theme and layout blocks, Rules the template's rules, and
+   Contrast goes (the standard computes it); a standard section the old theme lacks is the template's, with the
+   evidence set to the version. The template's placeholder logo line is added to Brand when the record has none, after
+   its last list line or at its end (the standard's check requires one; it reads as a placeholder at risk). An old
+   theme that already has a Theme or Layout section, or a section twice, is refused naming rule 2 ("move it by hand"). An old token
    block with any other declaration or rule is refused naming rule 2, nothing guessed. A theme already on the standard
    is never changed, and is refused naming rule 2 when it does not pass `design_standard.standard_theme_problems`.
 6. **No new mockup folder (answer 6).** `design.py write` refuses with `rule 12: a new mockup folder is not written; use

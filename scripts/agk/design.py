@@ -60,6 +60,11 @@ SCHEME = {
 }
 
 
+class UsageError(Exception):
+    """A command given an option it does not take: the usage text, exit 2 (never a ValueError,
+    so a decode or JSON error is not shown as usage)."""
+
+
 def template(name: str) -> str:
     return (TEMPLATES / name).read_text(encoding="utf-8")
 
@@ -71,7 +76,7 @@ def cmd_write(root: Path, opts: dict[str, str]) -> int:
 
 def cmd_prototype(root: Path, opts: dict[str, str]) -> int:
     if set(opts) - {"root"}:
-        raise ValueError("prototype takes only --root")
+        raise UsageError("prototype takes only --root")
     return design_prototype.write(root)
 
 
@@ -132,7 +137,7 @@ def spec_index(root: Path) -> dict[str, list[str]]:
 
 def cmd_inventory(root: Path, opts: dict[str, str]) -> int:
     if set(opts) - {"root"}:
-        raise ValueError("inventory takes only --root")
+        raise UsageError("inventory takes only --root")
     target = root / INVENTORY
     if target.exists():
         raise CheckError(f"rule 3: {INVENTORY} already exists; it is never overwritten")
@@ -175,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         if args[0] == "inventory":
             return cmd_inventory(root, opts)
         return cmd_screenshots(root, opts)
-    except ValueError:
+    except UsageError:
         print(USAGE, file=sys.stderr)
         return 2
     except CheckError as exc:

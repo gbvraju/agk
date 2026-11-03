@@ -195,11 +195,39 @@ def old_tokens(text: str) -> tuple[dict[str, str], dict[str, str]]:
     return light, dark
 
 
-def moved_theme(text: str) -> str:
-    """The old-format theme moved onto the standard (SPEC-0037 rules 2 and 12)."""
+REPLACED = {"Tokens", "Contrast", "Rules"}  # the old sections the standard's text replaces
+
+
+def with_logo(brand: list[str], logo: str) -> list[str]:
+    """The Brand section with the template's placeholder logo line when it has none."""
+    if any(design_standard.LOGO_LINE.match(line) for line in brand):
+        return brand
+    items = [i for i, ln in enumerate(brand) if ln.startswith("- ")]
+    if items:
+        return [*brand[: items[-1] + 1], logo, *brand[items[-1] + 1 :]]
+    filled = [i for i, ln in enumerate(brand) if ln.strip()]
+    if not filled:
+        return ["", logo, ""]
+    last = filled[-1] + 1
+    return [*brand[:last], "", logo, *brand[last:]]
+
+
+def moved_theme(text: str, version: str) -> str:
+    """The old-format theme moved onto the standard (SPEC-0037 rules 2 and 12).
+
+    The owner's title, the text before the first section and every section but Tokens, Contrast
+    and Rules stay unchanged and in place; Tokens becomes the theme and layout blocks, Rules the
+    standard's rules, Contrast goes (the standard computes it).
+    """
     light, dark = old_tokens(text)
-    old = dict(sections(text))
-    template = template_theme()
+    old = sections(text)
+    names = [heading for heading, _ in old[1:]]
+    if {"Theme", "Layout"} & set(names) or len(names) != len(set(names)):
+        raise CheckError(
+            f"rule 2: {THEME}: the old theme has a section the standard's would replace; "
+            "move it by hand"
+        )
+    template = dict(sections(template_theme().replace("{{evidence}}", f"{PROTOTYPE}/{version}/")))
 
     def block(values: dict[str, str], indent: str) -> list[str]:
         return [
@@ -217,20 +245,34 @@ def moved_theme(text: str) -> str:
             "  }",
             "}",
         ]
-    out: list[tuple[str, list[str]]] = []
-    for heading, lines in sections(template):
-        if heading == "Brand" and "Brand" in old:
-            brand = list(old["Brand"])
-            if not any(design_standard.LOGO_LINE.match(line) for line in brand):
-                logo = next(ln for ln in lines if design_standard.LOGO_LINE.match(ln))
-                last = max(i for i, ln in enumerate(brand) if ln.startswith("- "))
-                brand.insert(last + 1, logo)
-            lines = brand
-        elif heading == "Theme":
-            lines = ["", "```css", *css, "```", ""]
-        elif heading == "Evidence" and "Evidence" in old:
-            lines = list(old["Evidence"])
-        out.append((heading, lines))
+    standard = f"Standard: agk design standard {design_standard.STANDARD}"
+    lead = list(old[0][1])
+    at = 1 if lead and lead[0].startswith("# ") else 0
+    lead[at:at] = ["", standard] if at else [standard, ""]
+    logo = next(ln for ln in template["Brand"] if design_standard.LOGO_LINE.match(ln))
+    out: list[tuple[str, list[str]]] = [("", lead)]
+    for heading, lines in old[1:]:
+        if heading == "Brand":
+            out.append((heading, with_logo(list(lines), logo)))
+        elif heading == "Tokens":
+            out.append(("Theme", ["", "```css", *css, "```", ""]))
+            out.append(("Layout", list(template["Layout"])))
+        elif heading == "Rules":
+            out.append((heading, list(template["Rules"])))
+        elif heading not in REPLACED:
+            out.append((heading, list(lines)))
+    # a standard section the old theme lacks goes after the standard section before it
+    order = [h for h, _ in sections(template_theme())[1:]]
+    for i, heading in enumerate(order):
+        present = [h for h, _ in out]
+        if heading in present:
+            continue
+        before = [present.index(h) for h in order[:i] if h in present]
+        at = max(before, default=0) + 1
+        lines = list(template[heading])
+        if lines and lines[-1].strip():
+            lines.append("")
+        out.insert(at, (heading, lines))
     return joined(out)
 
 
@@ -244,9 +286,12 @@ def theme_for(root: Path, version: str) -> tuple[str, str | None, str]:
     if not path.is_file():
         text = template_theme().replace("{{evidence}}", f"{PROTOTYPE}/{version}/")
         return text, text, f"wrote {THEME}"
-    text = path.read_text(encoding="utf-8")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise CheckError(f"rule 2: {THEME} cannot be read") from None
     if design_standard.theme_format(text) == "old":
-        moved = moved_theme(text)
+        moved = moved_theme(text, version)
         return moved, moved, f"moved {THEME} to agk design standard {design_standard.STANDARD}"
     if design_standard.standard_theme_problems(text):
         raise CheckError(f"rule 2: {THEME}: the theme does not pass the standard's theme check")
@@ -424,7 +469,7 @@ def next_version(root: Path) -> str:
     numbers = [
         int(m.group(1))
         for p in (folder.iterdir() if folder.is_dir() else [])
-        if p.is_dir() and (m := VERSION.match(p.name))
+        if (m := VERSION.match(p.name))  # a file named `v<n>` is counted too: never reused
     ]
     return f"v{max(numbers, default=0) + 1}"
 
@@ -488,7 +533,12 @@ def write(root: Path) -> int:
     version = next_version(root)
     out, theme_out, note = build(root, version)
     folder = root / PROTOTYPE / version
-    folder.mkdir(parents=True, exist_ok=False)  # never overwritten
+    try:
+        folder.mkdir(parents=True, exist_ok=False)  # never overwritten
+    except (FileExistsError, NotADirectoryError):
+        raise CheckError(
+            f"rule 4: {PROTOTYPE}/{version}/ cannot be made; nothing is overwritten"
+        ) from None
     for name, text in out.items():
         (folder / name).write_text(text, encoding="utf-8")
     for name, source in COPIED.items():

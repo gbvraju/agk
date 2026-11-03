@@ -719,6 +719,16 @@ def test_ac3_an_old_theme_with_no_list_line_under_brand_gets_the_logo_line(tmp_p
     assert design_standard.standard_theme_problems(theme) == []
 
 
+def test_ac3_an_old_theme_with_a_theme_or_layout_section_is_refused(tmp_path):
+    """REQ-044 AC3: SPEC-0037 rule 2 (Q-457-19: a section the standard's would replace)."""
+    project(tmp_path)
+    put(tmp_path, THEME, OLD_THEME.replace("## Evidence\n", "## Layout\n\nWide.\n\n## Evidence\n"))
+    before = files(tmp_path)
+    proc = design(tmp_path, "prototype")
+    assert proc.returncode == 1 and "FAIL design: rule 2:" in proc.stdout
+    assert files(tmp_path) == before
+
+
 def test_a_value_error_that_is_not_a_usage_error_is_not_shown_as_usage(tmp_path):
     """Fix list item 2 on #502: only a usage error prints the usage text and exits 2."""
     project(tmp_path)
