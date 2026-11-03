@@ -1,6 +1,6 @@
 # ADR-0253: evidence check reads a Windows record's secret-scan tool as gitleaks (REQ-016, brief 504)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Deciders: maintainers
 - Related: ADR-0233, ADR-0208
