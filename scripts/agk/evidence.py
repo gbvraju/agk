@@ -52,7 +52,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import lock as heavy_lock
-from common import CheckError, proof_areas, proof_timeout
+from common import CheckError, long_temp_dir, proof_areas, proof_timeout, temp_env
 from impact import impact
 from prepush import (
     LOCK,
@@ -438,10 +438,16 @@ def remove(root: Path, temp: Path, tree: Path) -> None:
     git(root, "worktree", "prune")
 
 
+def run_env(base: str) -> dict:
+    """The environment of governance and every re-run: this process's, with `AGK_BASE`, and on
+    Windows the long temporary folder in `TEMP`, `TMP` and `TMPDIR` (brief #508, ADR-0257)."""
+    return temp_env({**os.environ, "AGK_BASE": base})
+
+
 def in_worktree(root: Path, record: dict, head: str, count: int) -> dict:
     """Governance and the sample, in a detached worktree of `head`, under the heavy-step lock."""
     try:
-        temp = Path(tempfile.mkdtemp(prefix="agk-evidence-"))
+        temp = Path(tempfile.mkdtemp(prefix="agk-evidence-", dir=long_temp_dir()))
     except OSError:
         raise Unreadable(
             "evidence: the temporary folder cannot be made (setting: TMPDIR)"
@@ -463,7 +469,7 @@ def in_worktree(root: Path, record: dict, head: str, count: int) -> dict:
             raise Unreadable(
                 f"evidence: lock {LOCK}: the lock folder cannot be written (setting: lock_dir)"
             ) from None
-        env = {**os.environ, "AGK_BASE": record["base"]}
+        env = run_env(record["base"])
         code, out = governance(tree, env)
         try:
             limit = proof_timeout(tree)
