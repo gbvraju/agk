@@ -1,6 +1,6 @@
 # ADR-0254: A heavy run passes its lock token to everything it starts (REQ-040, brief 505)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Deciders: maintainers
 - Related: ADR-0191, ADR-0231, ADR-0186
