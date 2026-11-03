@@ -33,7 +33,7 @@ holding a session and its memory while doing nothing.
 
 ## Decision
 
-1. REQ-047 is added to `docs/requirements.md` as `planned`, with nine criteria each testable
+1. REQ-047 is added to `docs/requirements.md` as `planned`, with eight criteria each testable
    with fake runs and a temporary queue folder. SPEC-0040 is added as `Draft`. Merging this pull
    request approves the requirement as a proposal; it does not approve the spec, which stays
    `Draft` until the owner's own `Approve:` line approves it.
