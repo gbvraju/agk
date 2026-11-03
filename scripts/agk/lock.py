@@ -30,6 +30,11 @@ default) runs once through `sh -c` with `AGK_LOCK_SESSION` and `AGK_LOCK_PID` of
 output is shown, and a failure is reported and never blocks. The locked command gets
 `AGK_LOCK_SESSION`, so a project can label what it starts by session.
 
+Brief #505 (ADR-0254): the locked command also gets `AGK_LOCK_TOKEN`, the token of the slot taken,
+and `AGK_LOCK_NAME`, and every process below it inherits them, so `prepush.py` inside a wrapper
+finds its caller's slot. The token is a random value with no secret meaning, and it is never
+printed.
+
 Standard library only; no network. POSIX and Windows: a process is looked up with signal 0 on
 POSIX and with OpenProcess on Windows, where `os.kill` would end it.
 """
@@ -614,8 +619,12 @@ def on_signal(signum, _frame) -> None:
     raise Stopped(128 + signum)
 
 
-def run_held(command: list[str], held: Path, token: str, session: str = "") -> int:
-    env = {**os.environ, "AGK_LOCK_SESSION": session}
+def run_held(
+    command: list[str], held: Path, token: str, session: str = "", name: str = ""
+) -> int:
+    # The slot's token and name travel down to every process the command starts, so prepush
+    # inside a wrapper finds its caller's slot (brief #505, ADR-0254). The token is never printed.
+    env = {**os.environ, "AGK_LOCK_SESSION": session, "AGK_LOCK_TOKEN": token, "AGK_LOCK_NAME": name}
     try:
         child = subprocess.Popen(command, env=env)  # nosec B603 - the person's own argument list
     except OSError:
@@ -691,7 +700,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         if taken is None:
             return 3
-        return run_held(options["command"], taken, token, owner["session"])
+        return run_held(options["command"], taken, token, owner["session"], name)
     except KeyboardInterrupt:
         return 130
     except Stopped as exc:
