@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 GUIDE = ROOT / "docs" / "guides" / "getting-started.md"
-ADR = next((ROOT / "docs" / "adr").glob("0255-*.md"))
+ADR_DIR = ROOT / "docs" / "adr"
 HEADER = "A Windows Terminal adapter"
 
 
@@ -125,7 +125,9 @@ def test_the_section_says_how_the_tab_ends_and_how_to_try_it():
 
 def test_the_adr_names_the_protected_class_and_is_proposed_or_accepted():
     """REQ-041"""
-    text = ADR.read_text(encoding="utf-8")
+    adrs = sorted(ADR_DIR.glob("0255-*.md"))
+    assert len(adrs) == 1, "ADR-0255 is missing or doubled"
+    text = adrs[0].read_text(encoding="utf-8")
     assert "`tests/kit/`" in text
     status = [line for line in text.splitlines() if line.startswith("- Status: ")]
     assert status in (["- Status: Proposed"], ["- Status: Accepted"])
