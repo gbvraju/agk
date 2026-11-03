@@ -1,6 +1,6 @@
 # ADR-0252: the prototype writer, the kit's runtime and the fixture set (REQ-044, brief 457)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-02
 - Deciders: maintainers
 - Related: ADR-0204, ADR-0248, ADR-0249, SPEC-0037
