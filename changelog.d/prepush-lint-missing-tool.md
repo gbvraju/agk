@@ -1,0 +1,1 @@
+- `prepush.py` fails the lint step with one line naming a command that `make lint` could not start (ruff, say) and how to install it, instead of the raw `CreateProcess` or `make (e=2)` error; any other lint failure prints as before (brief #507, ADR-0256 Proposed)
