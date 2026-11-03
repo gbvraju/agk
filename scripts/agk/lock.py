@@ -619,12 +619,15 @@ def on_signal(signum, _frame) -> None:
     raise Stopped(128 + signum)
 
 
-def run_held(
-    command: list[str], held: Path, token: str, session: str = "", name: str = ""
-) -> int:
+def run_held(command: list[str], held: Path, token: str, session: str = "", name: str = "") -> int:
     # The slot's token and name travel down to every process the command starts, so prepush
     # inside a wrapper finds its caller's slot (brief #505, ADR-0254). The token is never printed.
-    env = {**os.environ, "AGK_LOCK_SESSION": session, "AGK_LOCK_TOKEN": token, "AGK_LOCK_NAME": name}
+    env = {
+        **os.environ,
+        "AGK_LOCK_SESSION": session,
+        "AGK_LOCK_TOKEN": token,
+        "AGK_LOCK_NAME": name,
+    }
     try:
         child = subprocess.Popen(command, env=env)  # nosec B603 - the person's own argument list
     except OSError:

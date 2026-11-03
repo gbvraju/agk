@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 import os
 import socket
-import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -186,7 +185,9 @@ def test_the_direct_parent_case_is_unchanged(fake, monkeypatch, capsys):
 def test_the_direct_child_case_is_unchanged(fake, monkeypatch):
     """REQ-040: brief #505 answer 2 (the recorded command pid is this process)."""
     folder, _ = fake
-    held = plant(folder, session="builder-a", token=uuid.uuid4().hex, pid=424_243, child=os.getpid())
+    held = plant(
+        folder, session="builder-a", token=uuid.uuid4().hex, pid=424_243, child=os.getpid()
+    )
     assert prepush.caller_slot(held, 1) == held
 
 
