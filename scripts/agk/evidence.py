@@ -47,7 +47,7 @@ import signal
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
@@ -252,6 +252,16 @@ class Unit:
         self.command = command
 
 
+def tool_name(argv0: str) -> str:
+    """The executable's base name, lower-cased, with one trailing `.exe` removed (brief #504).
+
+    A value that holds a backslash is read as a Windows path on any operating system, so that a
+    record written on Windows (`C:\\...\\gitleaks.EXE`) names the same tool as `gitleaks`."""
+    path = PureWindowsPath(argv0) if "\\" in argv0 else PurePosixPath(argv0)
+    name = path.name.lower()
+    return name[: -len(".exe")] if name.endswith(".exe") else name
+
+
 def kit_script(tree: Path, name: str) -> str:
     """A kit script of the head's worktree, or of this kit when the head has none."""
     path = tree / "scripts" / "agk" / name
@@ -318,7 +328,7 @@ def rebuild(
                 f"--log-opts={mb}..{head}",
                 ".",
             ]
-            if not recorded or Path(recorded[0]).name != "gitleaks" or recorded[1:] != tail:
+            if not recorded or tool_name(recorded[0]) != "gitleaks" or recorded[1:] != tail:
                 differ(name, "argv")
             elif shutil.which("gitleaks") is None:
                 notes.append(f"not repeatable: {name} (gitleaks is not installed here)")
