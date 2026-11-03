@@ -86,20 +86,22 @@ def test_a_matching_token_in_the_environment_is_not_taken_again(fake, monkeypatc
 
 
 @pytest.mark.parametrize(
-    "env",
+    ("with_token", "name"),
     [
-        {"AGK_LOCK_NAME": "heavy"},  # no token
-        {"AGK_LOCK_TOKEN": "TOKEN", "AGK_LOCK_NAME": "other"},  # another lock's token
-        {"AGK_LOCK_TOKEN": "TOKEN"},  # no name
+        (False, "heavy"),  # no token
+        (True, "other"),  # another lock's token
+        (True, None),  # no name
     ],
 )
-def test_a_token_counts_only_with_the_lock_name(fake, monkeypatch, env):
+def test_a_token_counts_only_with_the_lock_name(fake, monkeypatch, with_token, name):
     """REQ-040: brief #505 answer 2 (the token and the name both match)."""
     folder, calls = fake
     token = uuid.uuid4().hex
     plant(folder, session="builder-other", token=token, pid=999_999_002)
-    for key, value in env.items():
-        monkeypatch.setenv(key, token if value == "TOKEN" else value)
+    if with_token:
+        monkeypatch.setenv("AGK_LOCK_TOKEN", token)
+    if name is not None:
+        monkeypatch.setenv("AGK_LOCK_NAME", name)
     assert prepush.caller_slot(folder / "agk-lock-heavy", 1) is None
 
 
