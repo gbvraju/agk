@@ -1,6 +1,6 @@
 # ADR-0255: The guide shows a Windows Terminal launch adapter (REQ-041, brief 506)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Deciders: maintainers
 - Related: ADR-0190
