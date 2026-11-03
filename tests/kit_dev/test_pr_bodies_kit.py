@@ -251,23 +251,15 @@ def test_design_prints_the_none_form_and_a_body_that_passes_with_an_open_brief(t
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", "base")
     git(root, "switch", "-q", "-c", "design/home")
-    written = subprocess.run(
-        [
-            sys.executable,
-            str(KIT_ROOT / "scripts" / "agk" / "design.py"),
-            "write",
-            "--name",
-            "home",
-            "--date",
-            "2026-10-29",
-            "--root",
-            str(root),
-        ],
-        capture_output=True,
-        text=True,
-        env=clean_env(),
+    # brief #457: `design.py write` no longer writes a mockup folder; a design change is any file
+    # under `docs/design/`, here the theme from the kit's template
+    theme = root / "docs" / "design" / "theme.md"
+    theme.parent.mkdir(parents=True)
+    template = (KIT_ROOT / "kit" / "templates" / "design-theme.md").read_text(encoding="utf-8")
+    theme.write_text(
+        template.replace("{{evidence}}", "docs/design/prototype/v1/"), encoding="utf-8"
     )
-    assert written.returncode == 0, written.stdout
+    (root / "docs" / "design" / "prototype" / "v1").mkdir(parents=True)
     issues = saved(tmp_path, BRIEFS)
     proc = engines(
         root, "design-next-steps", "--base", "main", "--req", "REQ-001", "--issues", issues

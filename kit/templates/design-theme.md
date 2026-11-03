@@ -1,50 +1,49 @@
 # Theme
 
-The brand record and the rules of this product's design. Every brand value has a source line; a value still in
-brackets is a placeholder and is reported as at risk until the owner gives it.
+Standard: agk design standard 1
+
+The brand record of this product and its overrides of the kit's design standard (SPEC-0037 rule 2). Every brand value
+has a source line; a value still in brackets is a placeholder and is reported as at risk until the owner gives it. The
+theme overrides only its theme block (the brand colour roles and the font stacks, in light and dark) and its layout
+block (density and alignment); every other token and rule is the standard's, in `standard.css` of each prototype
+version.
 
 ## Brand
 
 - name: [brand name] — source: [where the owner wrote it down]
 - primary: [primary colour as a hex value] — source: [where the owner wrote it down]
 - font: system-ui — source: the kit's default, a system font with no download
+- logo: [logo file] — source: [where the owner wrote it down]
 
-## Tokens
+## Theme
 
 ```css
 :root {
-  --bg: #ffffff;
-  --fg: #111111;
-  --muted: #555555;
-  --accent: #1a56db;
-  --accent-fg: #ffffff;
+  --color-accent: #1a56db;
+  --color-on-accent: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101418;
-    --fg: #f2f2f2;
-    --muted: #b0b0b0;
-    --accent: #8ab4ff;
-    --accent-fg: #101418;
+    --color-accent: #8ab4ff;
+    --color-on-accent: #101418;
   }
 }
 ```
 
-## Contrast
+## Layout
 
-- --fg on --bg
-- --muted on --bg
-- --accent-fg on --accent
+- density: comfortable
+- alignment: start
 
 ## Rules
 
-1. One token block, light and dark; every colour of a page is a token.
-2. Contrast of 4.5:1 or more for each pair above, in both modes, by a computed test (`check_design.py`).
+1. Only the theme block and the layout block are the project's; the standard holds every other token and rule.
+2. Contrast of 4.5:1 for text and 3:1 for large text and UI parts, in light and dark, computed after the overrides
+   (`check_design.py`).
 3. Status is word plus colour: a word as well as a colour, never a colour alone.
-4. Native controls (button, input, select, a); no custom widget.
-5. Targets of 44 px or more.
-6. The layout works from 360 px to wide.
-7. A system font, no script, no external request.
+4. Native controls (button, input, select, a); no custom widget; targets of 44 px or more.
+5. The layout works from 360 px to wide.
+6. No script but the kit's runtime, and no external request.
 
 ## Evidence
 

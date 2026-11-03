@@ -1,7 +1,7 @@
 """Kit-only tests of `/agk:design`: the writer, the screenshots, the governance step (SPEC-0029).
 
-`design.py write` makes the theme (when absent) and a mockup folder from the kit's templates with
-the approval line left to the owner; `design.py screenshots` takes four screenshots when a headless
+`design.py write` now refuses and writes nothing: a new mockup folder is never made (SPEC-0037
+rule 12, brief #457); `design.py screenshots` takes four screenshots when a headless
 browser exists; `check_design.py` becomes a step of `make governance`. No network, no model.
 """
 
@@ -46,116 +46,101 @@ def check(root):
     )
 
 
-def write(root, name="home", date="2026-10-24", *extra):
-    return design(root, "write", "--name", name, "--date", date, *extra)
+def existing_mockup(root, folder=FOLDER):
+    """A mockup folder as the retired writer made it, with its old-format theme (SPEC-0029)."""
+    target = mockup(root, folder)
+    target.mkdir(parents=True)
+    templates = KIT_ROOT / "kit" / "templates"
+    (target / "index.html").write_text(
+        (templates / "design-index.html").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    (target / "README.md").write_text(
+        (templates / "design-readme.md").read_text(encoding="utf-8").replace("{{folder}}", folder),
+        encoding="utf-8",
+    )
+    theme = root / "docs" / "design" / "theme.md"
+    theme.write_text(
+        OLD_THEME.replace("{{evidence}}", f"docs/design/mockups/{folder}/"), encoding="utf-8"
+    )
+    return target
 
 
 def mockup(root, folder=FOLDER):
     return root / "docs" / "design" / "mockups" / folder
 
 
-# --- write -------------------------------------------------------------------------------------
+OLD_THEME = """# Theme
+
+The brand record and the rules of this product's design.
+
+## Brand
+
+- name: [brand name] — source: [where the owner wrote it down]
+- font: system-ui — source: the kit's default, a system font with no download
+
+## Tokens
+
+```css
+:root {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #555555;
+  --accent: #1a56db;
+  --accent-fg: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101418;
+    --fg: #f2f2f2;
+    --muted: #b0b0b0;
+    --accent: #8ab4ff;
+    --accent-fg: #101418;
+  }
+}
+```
+
+## Evidence
+
+Evidence: {{evidence}}
+"""
 
 
-def test_ac5_write_makes_the_theme_and_the_mockup_folder_from_the_templates(tmp_path):
-    """REQ-036 AC5: SPEC-0029 rule 6 (theme.md, index.html and README.md)."""
-    proc = write(tmp_path)
-    assert proc.returncode == 0, proc.stdout
-    theme = (tmp_path / "docs" / "design" / "theme.md").read_text(encoding="utf-8")
-    assert f"Evidence: docs/design/mockups/{FOLDER}/" in theme
-    for heading in ("## Brand", "## Tokens", "## Contrast", "## Rules", "## Evidence"):
-        assert heading in theme
-    for rule in (
-        "one token block",
-        "44 px",
-        "360 px",
-        "4.5:1",
-        "native controls",
-        "word plus colour",
-    ):
-        assert rule in theme.lower(), rule
-    page = (mockup(tmp_path) / "index.html").read_text(encoding="utf-8")
-    assert "<script" not in page and "://" not in page and "[Product name]" in page
-    assert page.count("<style") == 1 and "system-ui" in page
-    assert (mockup(tmp_path) / "README.md").is_file()
+# --- write (SPEC-0037 rule 12: no new mockup folder) -------------------------------------------
+
+REFUSAL = "FAIL design: rule 12: a new mockup folder is not written; use /agk:design prototype\n"
 
 
-def test_ac5_what_write_makes_passes_the_check_with_two_notes_and_no_failure(tmp_path):
-    """REQ-036 AC5 and AC7: SPEC-0029 rules 6 and 7 (a fresh record: not approved, brand open)."""
-    write(tmp_path)
-    proc = check(tmp_path)
-    assert proc.returncode == 0, proc.stdout
-    assert proc.stdout.splitlines() == [
-        "design: the theme is not approved yet",
-        "at risk design: placeholder brand",
-        "ok design",
-    ]
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("--name", "home", "--date", "2026-10-24"),
+        ("--name", "home"),
+        ("--name", "Home"),
+        ("--name", "home", "--theme-file", "draft.md"),
+    ],
+)
+def test_ac5_write_refuses_a_new_mockup_folder_and_writes_nothing(tmp_path, args):
+    """REQ-036 AC5 as SPEC-0037 rule 12 changes it (`Q-S0037-10`; brief #457 answer 6)."""
+    proc = design(tmp_path, "write", *args)
+    assert (proc.returncode, proc.stdout) == (1, REFUSAL)
+    assert not (tmp_path / "docs").exists()
 
 
-def test_ac5_the_approval_line_is_the_owners_and_write_never_writes_it(tmp_path):
+def test_ac5_write_refuses_beside_an_existing_mockup_folder_and_changes_nothing(tmp_path):
+    """REQ-036 AC5 as SPEC-0037 rule 12 changes it (existing folders are only read and checked)."""
+    existing_mockup(tmp_path)
+    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    proc = design(tmp_path, "write", "--name", "about", "--date", "2026-10-24")
+    assert (proc.returncode, proc.stdout) == (1, REFUSAL)
+    assert before == {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    assert check(tmp_path).returncode == 0
+
+
+def test_ac5_the_approval_line_is_the_owners_and_no_template_writes_it():
     """REQ-036 AC5: SPEC-0029 rule 6 (the session never writes the approval line)."""
-    write(tmp_path)
-    readme = (mockup(tmp_path) / "README.md").read_text(encoding="utf-8")
-    assert not check_design.APPROVAL.search(readme) and "Approved: not yet" in readme
     for rel in ("design-readme.md", "design-index.html", "design-theme.md"):
         text = (KIT_ROOT / "kit" / "templates" / rel).read_text(encoding="utf-8")
         assert not check_design.APPROVAL.search(text), rel
-    (mockup(tmp_path) / "README.md").write_text(readme + f"\n{OWNER}\n", encoding="utf-8")
-    assert check(tmp_path).stdout == "at risk design: placeholder brand\nok design\n"
-
-
-def test_ac5_the_date_comes_from_the_clock_when_none_is_given(tmp_path):
-    """REQ-036 AC5: principle 10 (dates come from `date -u`)."""
-    proc = design(tmp_path, "write", "--name", "home")
-    assert proc.returncode == 0, proc.stdout
-    today = subprocess.run(["date", "-u", "+%F"], capture_output=True, text=True).stdout.strip()
-    assert (mockup(tmp_path, f"{today}-home") / "index.html").is_file()
-
-
-@pytest.mark.parametrize("name", ["", "Home", "a b", "../x", "-x", "a/b", "x" * 61])
-def test_ac5_a_name_that_is_not_a_slug_is_refused_and_nothing_is_written(tmp_path, name):
-    """REQ-036 AC5: SPEC-0029 rule 6 (`<date>-<name>`; the refusal names the rule only)."""
-    proc = write(tmp_path, name)
-    assert proc.returncode == 1 and "rule 6" in proc.stdout
-    assert not name or name not in proc.stdout
-    assert not (tmp_path / "docs").exists()
-
-
-@pytest.mark.parametrize("date", ["2026-13-45", "today", "2026-1-1", ""])
-def test_ac5_a_date_that_is_not_a_date_is_refused(tmp_path, date):
-    """REQ-036 AC5: SPEC-0029 rule 6 (the date is a real YYYY-MM-DD)."""
-    proc = write(tmp_path, "home", date)
-    assert proc.returncode == 1 and "rule 6" in proc.stdout
-    assert not (tmp_path / "docs").exists()
-
-
-def test_ac5_an_existing_folder_and_an_existing_theme_are_never_overwritten(tmp_path):
-    """REQ-036 AC5: SPEC-0029 rule 6 (the theme is the owner's once written)."""
-    write(tmp_path)
-    theme = tmp_path / "docs" / "design" / "theme.md"
-    theme.write_text(theme.read_text(encoding="utf-8") + "\nOwner's line.\n", encoding="utf-8")
-    before = theme.read_bytes()
-    again = write(tmp_path)
-    assert again.returncode == 1 and "rule 6" in again.stdout and "folder" in again.stdout
-    second = write(tmp_path, "about")
-    assert second.returncode == 0 and theme.read_bytes() == before
-    assert (mockup(tmp_path, "2026-10-24-about") / "index.html").is_file()
-
-
-def test_ac5_a_draft_theme_is_written_as_given_through_the_check(tmp_path):
-    """REQ-036 AC5: SPEC-0029 rules 3 and 6 (an engine's draft goes in the theme's place)."""
-    write(tmp_path, "first")
-    draft = (tmp_path / "docs" / "design" / "theme.md").read_text(encoding="utf-8")
-    other = tmp_path.parent / (tmp_path.name + "-draft.md")
-    draft = draft.replace("[brand name]", "Reading List")
-    draft = draft.replace("[primary colour as a hex value]", "#1a56db")
-    other.write_text(draft, encoding="utf-8")
-    fresh = tmp_path.parent / (tmp_path.name + "-fresh")
-    fresh.mkdir()
-    proc = write(fresh, "first", "2026-10-24", "--theme-file", str(other))
-    assert proc.returncode == 0, proc.stdout
-    assert "Reading List" in (fresh / "docs" / "design" / "theme.md").read_text(encoding="utf-8")
-    assert "placeholder brand" not in check(fresh).stdout
 
 
 # --- screenshots -------------------------------------------------------------------------------
@@ -177,7 +162,7 @@ def fake_browser(directory, name="chromium"):
 
 def test_ac5_screenshots_takes_four_with_a_headless_browser(tmp_path):
     """REQ-036 AC5: SPEC-0029 rule 6 (four screenshots with a headless browser)."""
-    write(tmp_path)
+    existing_mockup(tmp_path)
     log = fake_browser(tmp_path.parent / (tmp_path.name + "-bin"))
     path = f"{log.parent}{os.pathsep}{os.environ['PATH']}"
     proc = design(tmp_path, "screenshots", "--folder", FOLDER, path=path)
@@ -200,7 +185,7 @@ def test_ac5_screenshots_takes_four_with_a_headless_browser(tmp_path):
 
 def test_ac5_without_a_headless_browser_the_screenshots_are_skipped_not_failed(tmp_path):
     """REQ-036 AC5: SPEC-0029 rule 6 (when a headless browser exists; otherwise a note)."""
-    write(tmp_path)
+    existing_mockup(tmp_path)
     empty = tmp_path.parent / (tmp_path.name + "-empty")
     empty.mkdir()
     proc = design(tmp_path, "screenshots", "--folder", FOLDER, path=str(empty))
@@ -212,7 +197,7 @@ def test_ac5_without_a_headless_browser_the_screenshots_are_skipped_not_failed(t
 @pytest.mark.parametrize("folder", ["missing", "../x", "2026-10-24-home/../.."])
 def test_ac5_screenshots_of_a_folder_that_does_not_exist_are_refused(tmp_path, folder):
     """REQ-036 AC5: SPEC-0029 rule 6 (only a mockup folder, never another path)."""
-    write(tmp_path)
+    existing_mockup(tmp_path)
     proc = design(tmp_path, "screenshots", "--folder", folder)
     assert proc.returncode == 1 and "rule 6" in proc.stdout and folder not in proc.stdout
 
@@ -276,8 +261,9 @@ def test_ac5_the_skill_names_the_engine_the_template_the_owner_and_the_checks():
     assert text.startswith("---\nname: design\n") and "disable-model-invocation: true" in text
     assert "[engines]" in text and "`design`" in text and "never decides" in text
     assert "design.py" in text and "check_design.py" in text and "screenshots" in text
-    assert "approval line" in text and "owner" in text and "protected" in text
-    assert "Approved by" in text and "never write" in text
+    assert "owner" in text and "protected" in text
+    # brief #457 answer 6: sign-off is the person's `Approve: design` line, which no session posts
+    assert "Approve: design <version> <full head ID>" in text and "never posts" in text
     for verb in ("git push", "git commit", "gh pr", "gh issue"):
         assert verb not in text
 
