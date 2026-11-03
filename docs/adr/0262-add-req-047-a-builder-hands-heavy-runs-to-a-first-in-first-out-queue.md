@@ -20,7 +20,10 @@ The brief is issue #520; the conductor reserved REQ-047, SPEC-0040 and this ADR 
 row of `docs/runs/decisions-log.md`: "on low memory machines, waiting for 2 builders are time
 taking on heavy locks, it is really killing hours and hours time and slow. Why can't we prioritize
 development works when heavy runs are planned, at least we can move progress on development side.
-Heavylock queue can operate FIFO."
+Heavylock queue can operate FIFO." The owner's ruling on the order, the same day, quoted as data
+and recorded as a second row: "one run at a time (or as many as your lock slots allow) - this is
+the right strategy. I agree FIFO or Priority based queuing to unblock the development is great
+strategy here."
 
 Today the heavy-step lock (`scripts/agk/lock.py`: ADR-0191, slots and priority order in ADR-0231,
 the lock token in ADR-0254) is a wait, not a queue: `lock.py run --name heavy` blocks its caller
@@ -30,14 +33,18 @@ holding a session and its memory while doing nothing.
 
 ## Decision
 
-1. REQ-047 is added to `docs/requirements.md` as `planned`, with eight criteria each testable
+1. REQ-047 is added to `docs/requirements.md` as `planned`, with nine criteria each testable
    with fake runs and a temporary queue folder. SPEC-0040 is added as `Draft`. Merging this pull
    request approves the requirement as a proposal; it does not approve the spec, which stays
    `Draft` until the owner's own `Approve:` line approves it.
 2. The queue is off by default: `queue = true` in a new `[locks]` table of `agk.toml` turns it on,
    and with it off every command does exactly what it does today (SPEC-0040 rule 1). With it on,
-   `lock.py submit` writes a job and returns at once, one `lock.py runner` works the jobs strictly
-   first in, first out under the existing lock and slot rules, each on a detached worktree of its
+   `lock.py submit` writes a job and returns at once, one `lock.py runner` works the jobs in the order
+   that `[locks] queue_order` sets (`"fifo"`, the default: submission order; `"priority"`: the
+   brief's `Priority:` first, an unreadable one last and never 0, then submission order, with a job
+   waiting longer than `queue_max_wait` minutes, 120 by default, moving ahead of newer ones), one
+   job or `lock_slots` jobs at a time and never pre-empting a running one, under the existing lock
+   and slot rules, each on a detached worktree of its
    exact head, and `lock.py status` shows the queue with an estimated start from past durations
    (rules 2 to 8). Duplicates are one job and a newer head of the same branch replaces a waiting
    job in place; a dead, stale or crashed job is failed and never passed (rules 5 and 14).
@@ -72,4 +79,4 @@ request, and a project that does not set `[locks] queue = true` sees no change f
 
 None. The intake checks cannot tell whether strict first in, first out, the replace-in-place rule
 or the estimate are the right ones; that is the review of this pull request and the owner's
-rulings on `Q-S0040-1` to `Q-S0040-16`.
+rulings on `Q-S0040-1` to `Q-S0040-18` (`Q-S0040-2` is ruled).
