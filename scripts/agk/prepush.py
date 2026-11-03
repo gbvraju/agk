@@ -21,7 +21,10 @@ with that step's own output:
    and a run whose caller already holds it (`lock.py run --name heavy -- prepush.py`, session
    rule 31) does not take it again. With `lock_slots` (brief #426, ADR-0231) it takes any free
    slot, finds its caller in any slot, and releases the slot it took. Without the table the step
-   runs as before, with no lock.
+   runs as before, with no lock. Brief #505 (ADR-0254): the caller's slot is also the one whose
+   token is `AGK_LOCK_TOKEN` under the name `AGK_LOCK_NAME` on this host, which `lock.py run`
+   passes down through any wrapper; a slot held in another process by the same non-empty
+   `AGK_SESSION`, without that token, fails the step at once with one line naming the fix.
 
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
 one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing,
@@ -217,7 +220,7 @@ def tests(root: Path, mb: str, quick: bool, use_lock: bool = True) -> Step:
         return Step("FAIL", str(exc), ran=ran)
     try:
         taken = take_lock(root) if use_lock else None
-    except heavy_lock.Usage as exc:
+    except (heavy_lock.Usage, HeldBySession) as exc:
         return Step("FAIL", str(exc), ran=ran)
     except OSError:
         return Step("FAIL", f"lock {LOCK}: the lock folder cannot be written (setting: lock_dir)")
@@ -279,24 +282,52 @@ def caller_slot(held: Path, slots: int) -> Path | None:
 
 def caller_holds(owner: dict | None) -> bool:
     """The lock is this run's own: `lock.py run --name heavy -- prepush.py` took it, and this
-    process is its command (session rule 31), so taking it again would wait for itself."""
+    process is its command (session rule 31), so taking it again would wait for itself. Through
+    wrappers, the slot's token that `lock.py run` passed down names it (brief #505, ADR-0254)."""
     if not owner or owner.get("host") != socket.gethostname():
         return False
-    return owner.get("child") == os.getpid() or owner.get("pid") == os.getppid()
+    if owner.get("child") == os.getpid() or owner.get("pid") == os.getppid():
+        return True
+    token = os.environ.get("AGK_LOCK_TOKEN") or ""
+    return bool(token) and os.environ.get("AGK_LOCK_NAME") == LOCK and owner.get("token") == token
+
+
+class HeldBySession(Exception):
+    """A slot held by this run's own session in another process, which the token cannot name."""
+
+
+def session_slot(held: Path, slots: int, limit: int, session: str) -> Path | None:
+    """A live slot held by `session` (non-empty) that is not this run's caller's (brief #505
+    answer 3); a stale one is left to `take`, which clears it as before."""
+    if not session:
+        return None
+    for folder in heavy_lock.slot_folders(held, slots):
+        owner = heavy_lock.read_owner(folder) if folder.exists() else None
+        if owner and owner.get("session") == session:
+            if heavy_lock.stale_reason(owner, folder, limit) is None:
+                return folder
+    return None
 
 
 def take_lock(root: Path) -> tuple[Path, str] | None:
     """Take the heavy-step lock with lock.py's own wait lines; None when the caller holds it.
-    A refused setting raises `lock.Usage`, a folder that cannot be written OSError."""
+    A refused setting raises `lock.Usage`, a folder that cannot be written OSError, and a slot
+    that this run's own session holds in another process `HeldBySession` (it would never free)."""
     held = heavy_lock.lock_folder(root, LOCK)
     limit = heavy_lock.stale_minutes(root)
     slots = heavy_lock.slots_setting(root)
     if caller_slot(held, slots) is not None:
         print(f"lock {LOCK}: held by this run's caller (lock.py run); not taken again", flush=True)
         return None
+    session = os.environ.get("AGK_SESSION") or ""
+    if session_slot(held, slots, limit, session) is not None:
+        raise HeldBySession(
+            f"lock {LOCK}: held by this session ({session}) in another process; run prepush "
+            f"directly under lock.py run --name {LOCK}, or end that run first"
+        )
     token = uuid.uuid4().hex
     owner = {
-        "session": os.environ.get("AGK_SESSION") or "",
+        "session": session,
         "pid": os.getpid(),
         "host": socket.gethostname(),
         "started": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),

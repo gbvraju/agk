@@ -1,0 +1,1 @@
+- `lock.py run` passes `AGK_LOCK_TOKEN` and `AGK_LOCK_NAME` to the command it starts, so `prepush.py` inside a wrapper under `lock.py run --name heavy` finds its caller's slot by the token and never waits on itself; a slot held by the same session in another process fails at once with a line naming the fix (brief #505, ADR-0254 Proposed)
