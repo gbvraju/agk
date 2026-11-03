@@ -6,7 +6,7 @@
 - Related: ADR-0251, ADR-0260, SPEC-0038
 - Requirements: REQ-045
 
-Protected classes: `scripts/agk/`, `agk.mk`, `.github/`, `kit/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `agk.mk`, `.github/`, `kit/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -43,8 +43,8 @@ SPEC-0038 changes `.github/` (Q-513-2).
    prints `ok playbooks (<n> playbooks)`, `ok playbooks (none)`, or one `FAIL playbooks:` line per
    problem with exit 1. It is one line of `agk-governance` in `agk.mk`, after `check_design.py`,
    and one matching `check_playbooks` step of `.github/workflows/governance.yml` after
-   `check_design`, so that `agk.mk` and the workflow stay equal; `tests/kit/test_workflow.py`
-   counts 14 steps. This narrows ADR-0251 decision 3 for this one governance step only; nothing
+   `check_design`, so that `agk.mk` and the workflow stay equal; `tests/kit/test_workflow.py`,
+   `tests/kit/test_ci_saving.py` and `tests/kit_dev/test_init.py` count 14 checks. This narrows ADR-0251 decision 3 for this one governance step only; nothing
    else under `.github/` changes (ruling on Q-513-2).
 4. No playbook file is added (web-app is build c). `kit/hashes.json` is not edited.
 
