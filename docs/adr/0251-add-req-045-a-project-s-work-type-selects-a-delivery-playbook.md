@@ -1,6 +1,6 @@
 # ADR-0251: Add REQ-045: A project's work type selects a delivery playbook that never weakens a gate
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-02
 - Deciders: maintainers
 - Related: SPEC-0038, SPEC-0034, SPEC-0037, REQ-020
