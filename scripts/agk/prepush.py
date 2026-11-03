@@ -30,6 +30,13 @@ One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step
 one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing,
 downloads nothing and changes no file other than the record.
 
+Brief #507 (ADR-0256): when `make lint` exits non-zero and its output shows that a command could not
+be started (`CreateProcess(NULL, <cmd> ...) failed`, `<cmd>: command not found`, `<cmd>: not found`,
+`<cmd>: No such file or directory` with an exit of 127, or an exit of 127 alone), the lint step
+fails with one line naming `<cmd>` and how to install it, and the raw output is not echoed; any
+other lint failure prints as before. It stays a FAIL, never `not run`: lint is a rule of the
+project, unlike the optional secret scan.
+
 `--record FILE` (brief #374, ADR-0208) also writes one JSON record of the run, `schema: 1`: the
 head and base shas, `started` (UTC), `tree_clean` (a dirty tree is recorded, never hidden), each
 step that ran with its `name`, `outcome`, `argv`, `cwd`, `exit`, `seconds`, `output_sha256` and
@@ -177,7 +184,53 @@ def lint(root: Path) -> Step:
         return Step("skipped", "make is not installed")
     if not has_lint(root):
         return Step("skipped", "no lint target in the Makefile (target: lint)")
-    return ran_step(["make", "lint"], root)
+    step = ran_step(["make", "lint"], root)
+    if step.outcome == "FAIL" and step.ran is not None:
+        cmd = missing_tool(step.ran.code, step.ran.output)
+        if cmd is not None:
+            step.text = (
+                f"lint: the lint target runs {cmd}, which is not installed (target: lint); "
+                f"install it (for example: uv tool install {cmd} or pip install {cmd}) "
+                "and run prepush again"
+            )
+    return step
+
+
+CREATE_PROCESS = re.compile(r'CreateProcess\(NULL,\s*("[^"]+"|[^\s,]+)')
+NOT_FOUND = re.compile(r"(?:^|: )([^\s:]+): (?:command not found|not found)\s*$")
+NO_SUCH_FILE = re.compile(r"(?:^|: )([^\s:]+): No such file or directory\s*$")
+EXIT_127 = re.compile(r"\bError 127\b")
+TOOL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
+
+
+def tool_name(word: str) -> str | None:
+    """A command's file name as the line shows it: no quotes, folder or `.exe`; None when it is
+    not a plain name."""
+    name = re.split(r"[\\/]", word.strip().strip('"'))[-1]
+    if name.lower().endswith(".exe"):
+        name = name[:-4]
+    return name if TOOL.fullmatch(name) else None
+
+
+def missing_tool(code: int | None, output: str) -> str | None:
+    """The command `make lint` could not start, by the signs of brief #507 answer 1, or None."""
+    lines = output.splitlines()
+    found = CREATE_PROCESS.search(output)
+    if found:
+        return tool_name(found.group(1))
+    for text in lines:
+        found = NOT_FOUND.search(text)
+        if found:
+            return tool_name(found.group(1))
+    exit_127 = code == 127 or any(EXIT_127.search(text) for text in lines)
+    if not exit_127:
+        return None
+    for text in lines:
+        found = NO_SUCH_FILE.search(text)
+        if found:
+            return tool_name(found.group(1))
+    echoed = [t for t in lines if t.strip() and not t.startswith(("make", "process_begin"))]
+    return tool_name(echoed[-1].split()[0]) if echoed else None
 
 
 def governance(root: Path, base: str) -> Step:

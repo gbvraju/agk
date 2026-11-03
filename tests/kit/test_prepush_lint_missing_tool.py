@@ -133,7 +133,10 @@ def test_the_command_is_named_by_its_file_name(fake):
 
 def test_a_missing_makefile_is_not_read_as_a_missing_tool(fake):
     """REQ-016: brief #507 answer 1 (a file make cannot read is not a command it cannot start)."""
-    out = "make: agk.mk: No such file or directory\nmake: *** No rule to make target 'agk.mk'.  Stop."
+    out = (
+        "make: agk.mk: No such file or directory\n"
+        "make: *** No rule to make target 'agk.mk'.  Stop."
+    )
     step = fake(2, out)
     assert step.outcome == "FAIL" and step.text == out
 
@@ -147,7 +150,7 @@ def test_the_record_keeps_what_ran(fake):
 def test_the_rule_is_in_the_module_docstring():
     """REQ-016: brief #507 answer 2 (lint stays a FAIL; the rule is in the docstring)."""
     doc = " ".join((prepush.__doc__ or "").split())
-    assert "brief #507" in doc
+    assert "Brief #507 (ADR-0256)" in doc
     assert "lint is a rule of the project" in doc
 
 
