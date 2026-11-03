@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 GUIDE = ROOT / "docs" / "guides" / "getting-started.md"
-ADR = ROOT / "docs" / "adr" / "0255-the-guide-shows-a-windows-terminal-launch-adapter-req-041-brief-506.md"
+ADR = next((ROOT / "docs" / "adr").glob("0255-*.md"))
 HEADER = "A Windows Terminal adapter"
 
 
@@ -50,7 +50,7 @@ def test_the_script_is_named_and_marked_verify():
     body = section()
     assert "scripts/start-session-windows.ps1" in script()
     assert "(verify" in body
-    assert "not installed by the kit" in body or "installs neither" in body or "kit installs none" in body
+    assert "not installed by the kit" in body
 
 
 def test_the_worktree_is_made_before_the_tab_opens():
