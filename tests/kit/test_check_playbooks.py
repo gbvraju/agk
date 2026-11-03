@@ -462,3 +462,91 @@ def test_ac1_two_playbooks_are_counted(tmp_path):
     result = check(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.strip() == "ok playbooks (2 playbooks)"
+
+
+# --- where the reader lives and how governance runs it (rulings on Q-513-1 and Q-513-2) ----------
+
+MODULE = KIT_ROOT / "scripts" / "agk" / "playbook_format.py"
+EIGHT = (
+    "web-app",
+    "mobile",
+    "cloud-migration",
+    "rag-app",
+    "mcp-server",
+    "multi-agent",
+    "voice-agent",
+    "pilot",
+)
+
+
+def load_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("playbook_format_under_test", MODULE)
+    assert spec and spec.loader, MODULE
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_ac1_the_format_module_holds_the_work_types_and_the_format():
+    """REQ-045 AC1: SPEC-0038 rules 1 and 2 (one constant of the eight work types, `FORMAT = 1`)."""
+    module = load_module()
+    assert tuple(module.WORK_TYPES) == EIGHT
+    assert module.FORMAT == 1
+
+
+def test_ac1_problems_reads_one_playbook(tmp_path):
+    """REQ-045 AC1: SPEC-0038 rules 1 to 4 (`problems(path, root)` returns one line per problem)."""
+    module = load_module()
+    path = write(tmp_path)
+    assert module.problems(path, tmp_path) == []
+    path.write_text(replace('profile = "balanced"', 'profile = "fast"'), encoding="utf-8")
+    found = module.problems(path, tmp_path)
+    assert len(found) == 1 and "rule 4" in found[0] and REL in found[0], found
+    assert all(isinstance(line, str) for line in found)
+
+
+def test_ac1_every_shipped_work_type_is_a_valid_file_name(tmp_path):
+    """REQ-045 AC1: SPEC-0038 rule 1 (each of the eight work types passes as its own file)."""
+    for work_type in EIGHT:
+        write(
+            tmp_path,
+            replace('work_type = "web-app"', f'work_type = "{work_type}"'),
+            rel=f"config/playbooks/{work_type}.toml",
+        )
+    result = check(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "ok playbooks (8 playbooks)"
+
+
+def test_ac1_both_scripts_are_installed_and_the_start_helper_stays_kit_only():
+    """REQ-045 AC1: SPEC-0038 rule 12 (a), ruling on Q-513-1 (`playbook.py` is not installed)."""
+    import json
+
+    manifest = json.loads((KIT_ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    verbatim = manifest["verbatim"]
+    assert "scripts/agk/playbook_format.py" in verbatim
+    assert "scripts/agk/check_playbooks.py" in verbatim
+    assert "scripts/agk/playbook.py" not in verbatim
+    assert verbatim == sorted(verbatim)
+
+
+def test_ac4_the_check_runs_in_governance_after_the_design_check():
+    """REQ-045 AC4: SPEC-0038 rule 4 (one line of `agk-governance`, after `check_design.py`)."""
+    mk = (KIT_ROOT / "agk.mk").read_text(encoding="utf-8")
+    recipe = mk.split("agk-governance:\n", 1)[1].split("\n\n", 1)[0]
+    lines = [ln.strip() for ln in recipe.splitlines()]
+    design = lines.index("$(PY) scripts/agk/check_design.py")
+    assert lines[design + 1] == "$(PY) scripts/agk/check_playbooks.py"
+
+
+def test_ac4_the_workflow_runs_the_check_as_its_own_step():
+    """REQ-045 AC4: ruling on Q-513-2 (the `check_playbooks` step follows `check_design`)."""
+    text = (KIT_ROOT / ".github" / "workflows" / "governance.yml").read_text(encoding="utf-8")
+    design = text.index("      - name: check_design\n")
+    step = text.index("      - name: check_playbooks\n")
+    assert design < step
+    block = text[step:].split("\n      - ", 1)[0]
+    assert "run: python scripts/agk/check_playbooks.py" in block
+    assert "steps.paused.outputs.paused != 'true'" in block
