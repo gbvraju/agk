@@ -1,6 +1,6 @@
 # ADR-0260: SPEC-0038 gains the pilot work type, researched before it is built (REQ-045, brief 516)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Deciders: maintainers
 - Related: ADR-0251, SPEC-0038
