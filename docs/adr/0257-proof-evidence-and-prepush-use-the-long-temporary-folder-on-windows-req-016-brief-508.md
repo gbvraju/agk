@@ -1,6 +1,6 @@
 # ADR-0257: proof, evidence and prepush use the long temporary folder on Windows (REQ-016, brief 508)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Deciders: maintainers
 - Related: ADR-0233, ADR-0253, ADR-0256
