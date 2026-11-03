@@ -26,14 +26,17 @@ protected class. This ADR number was reserved for brief #506 by the conductor (t
    the long path, and `CLAUDE_CODE_CHILD_SESSION` removed; and opens a Windows Terminal tab with
    `wt -w 0 new-tab --profile "AGK builder" --title <session> -d <worktree>` running a small wrapper that starts
    `claude` with the prompt. When `claude` exits, the wrapper writes `<worktree>/.agk-session-exit` with the exit code
-   and the UTC time, and exits.
+   and the UTC time, and exits. After the worktree exists, the script appends `.agk-session-exit` to the worktree's
+   exclude file (`git rev-parse --git-path info/exclude`), so the exit file never reaches a commit. The guide says,
+   before the script, that it needs PowerShell 7 (`pwsh`) and must not run under Windows PowerShell 5.1, which strips
+   the embedded double quotes of a prompt passed to `claude`.
 2. The guide shows the Windows Terminal profile "AGK builder" with `"closeOnExit": "always"`, so the tab closes on any
    exit, a crash included, and says that the default `graceful` keeps a tab open after a non-zero exit and that other
    tabs keep their own setting.
 3. The guide says that a builder's tab therefore closes when the session ends, that the exit file shows a crash, and how
    to try the adapter once by hand.
 4. `tests/kit/test_guide_windows_adapter.py` checks the guide's section: the worktree step before `new-tab`, the removal
-   of `CLAUDE_CODE_CHILD_SESSION`, `TEMP`/`TMP`/`TMPDIR`, `closeOnExit` `always` and the exit file. It reads this ADR as
+   of `CLAUDE_CODE_CHILD_SESSION`, `TEMP`/`TMP`/`TMPDIR`, `closeOnExit` `always`, the exit file, its exclude step and the PowerShell 7 sentence. It reads this ADR as
    Proposed or Accepted (ADR-0250).
 
 ## Consequences

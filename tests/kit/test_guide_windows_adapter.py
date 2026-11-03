@@ -131,3 +131,24 @@ def test_the_adr_names_the_protected_class_and_is_proposed_or_accepted():
     assert "`tests/kit/`" in text
     status = [line for line in text.splitlines() if line.startswith("- Status: ")]
     assert status in (["- Status: Proposed"], ["- Status: Accepted"])
+
+
+def test_the_section_says_the_adapter_needs_powershell_7_before_the_script():
+    """REQ-041"""
+    body = section()
+    need = body.find("PowerShell 7")
+    block = body.find("```powershell")
+    assert -1 < need < block, "the section does not say PowerShell 7 before the script"
+    assert "winget install Microsoft.PowerShell" in body[:block]
+    assert "5.1" in body[:block]
+
+
+def test_the_exit_file_is_kept_out_of_git_by_the_worktree_exclude():
+    """REQ-041"""
+    code = script()
+    exclude = code.find("rev-parse --git-path info/exclude")
+    wait = code.find("Test-Path")
+    tab = code.find("new-tab")
+    assert -1 < wait < exclude < tab
+    assert re.search(r"Add-Content[^\n]*\$exclude[^\n]*\.agk-session-exit", code)
+    assert "info/exclude" in section().split("```powershell")[0]

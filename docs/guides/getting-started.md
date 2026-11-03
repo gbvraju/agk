@@ -373,7 +373,7 @@ Priority: 2
    claude --remote "$prompt"
    ```
 
-   A Windows Terminal adapter, a new tab in its own worktree that closes when the session ends `(verify: the options of wt, the profile settings of Windows Terminal and the PowerShell calls are the terminal's and the shell's, and were not run by the session that wrote this example)`. The script `scripts/start-session-windows.ps1` is shown here and not installed by the kit; set `launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"`. It reads `AGK_SESSION`, `AGK_BRIEF` and the prompt on standard input; creates the session's worktree with `git worktree add` and waits until its folder exists, so that no tab opens on a folder that is not there yet; and writes a small wrapper that the tab runs. The wrapper builds the tab's environment itself, because a tab opened in a running Windows Terminal window may start from the terminal's environment rather than the adapter's: PATH read fresh from the machine and user values, `TEMP`, `TMP` and `TMPDIR` set to the long path of the temporary folder (not its short `~1` form), and `CLAUDE_CODE_CHILD_SESSION` removed, so the builder is a session of its own and its transcript is saved. It then starts `claude` with the prompt, and when `claude` exits it writes `<worktree>/.agk-session-exit` with the exit code and the UTC time, and exits with the same code. The exit file is written after the session has ended, so it never reaches one of the session's commits.
+   A Windows Terminal adapter, a new tab in its own worktree that closes when the session ends `(verify: the options of wt, the profile settings of Windows Terminal and the PowerShell calls are the terminal's and the shell's, and were not run by the session that wrote this example)`. The script `scripts/start-session-windows.ps1` is shown here and not installed by the kit; set `launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"`. It reads `AGK_SESSION`, `AGK_BRIEF` and the prompt on standard input; creates the session's worktree with `git worktree add` and waits until its folder exists, so that no tab opens on a folder that is not there yet; and writes a small wrapper that the tab runs. The wrapper builds the tab's environment itself, because a tab opened in a running Windows Terminal window may start from the terminal's environment rather than the adapter's: PATH read fresh from the machine and user values, `TEMP`, `TMP` and `TMPDIR` set to the long path of the temporary folder (not its short `~1` form), and `CLAUDE_CODE_CHILD_SESSION` removed, so the builder is a session of its own and its transcript is saved. It then starts `claude` with the prompt, and when `claude` exits it writes `<worktree>/.agk-session-exit` with the exit code and the UTC time, and exits with the same code. Once the worktree exists, the script appends `.agk-session-exit` to the worktree's exclude file (the path `git -C <worktree> rev-parse --git-path info/exclude` names), so the exit file, which is written into the worktree untracked, never reaches a commit, not even through a later `git add -A` in that worktree. The adapter needs PowerShell 7 (`pwsh`; install it with `winget install Microsoft.PowerShell`), which Windows does not install by default, and it must not be run under Windows PowerShell 5.1 (`powershell.exe`): there, `& claude $prompt` passes the prompt to a native program with its embedded double quotes stripped, so a prompt that holds quotes arrives changed.
 
    ```powershell
    # scripts/start-session-windows.ps1: one Windows Terminal tab per session, in its own worktree.
@@ -393,6 +393,13 @@ Priority: 2
    while (-not (Test-Path -LiteralPath (Join-Path $worktree '.git'))) {
        if ((Get-Date) -gt $deadline) { throw 'the worktree folder did not appear' }
        Start-Sleep -Milliseconds 200
+   }
+   # Keep the exit file out of git: the worktree's exclude file names it.
+   $exclude = (git -C $worktree rev-parse --git-path info/exclude).Trim()
+   if (-not [IO.Path]::IsPathRooted($exclude)) { $exclude = Join-Path $worktree $exclude }
+   New-Item -ItemType Directory -Force -Path (Split-Path $exclude -Parent) | Out-Null
+   if (-not ((Test-Path -LiteralPath $exclude) -and (Select-String -LiteralPath $exclude -SimpleMatch -Quiet '.agk-session-exit'))) {
+       Add-Content -LiteralPath $exclude -Value '.agk-session-exit'
    }
 
    # 2. The prompt and the wrapper, in a folder of the session under the long temporary path.
