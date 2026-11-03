@@ -1,7 +1,7 @@
 """Kit-only tests of `/agk:design`: the writer, the screenshots, the governance step (SPEC-0029).
 
-`design.py write` makes the theme (when absent) and a mockup folder from the kit's templates with
-the approval line left to the owner; `design.py screenshots` takes four screenshots when a headless
+`design.py write` now refuses and writes nothing: a new mockup folder is never made (SPEC-0037
+rule 12, brief #457); `design.py screenshots` takes four screenshots when a headless
 browser exists; `check_design.py` becomes a step of `make governance`. No network, no model.
 """
 

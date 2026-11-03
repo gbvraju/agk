@@ -676,6 +676,71 @@ def test_ac3_an_old_theme_with_a_token_the_standard_has_no_role_for_is_refused(t
     assert files(tmp_path) == before
 
 
+def test_ac3_an_old_theme_keeps_its_title_lead_text_and_other_sections_in_place(tmp_path):
+    """REQ-044 AC3: SPEC-0037 rule 12 (fix list item 1 on #502: the owner's text is kept)."""
+    project(tmp_path)
+    old = OLD_THEME.replace("# Theme\n", "# Reading List look and feel\n", 1).replace(
+        "## Evidence\n", "## Notes\n\nThe owner prefers short labels.\n\n## Evidence\n", 1
+    )
+    put(tmp_path, THEME, old)
+    (tmp_path / "docs/design/mockups/2026-10-24-home").mkdir(parents=True)
+    prototype(tmp_path)
+    theme = (tmp_path / THEME).read_text(encoding="utf-8")
+    lines = theme.splitlines()
+    assert lines[0] == "# Reading List look and feel"
+    assert "The brand record and the rules of this product's design." in lines
+    assert lines.index("The brand record and the rules of this product's design.") < lines.index(
+        "## Brand"
+    )
+    assert "The owner prefers short labels." in lines
+    headings = [ln for ln in lines if ln.startswith("## ")]
+    assert headings.index("## Brand") < headings.index("## Theme") < headings.index("## Notes")
+    assert headings.index("## Notes") < headings.index("## Evidence")
+    assert "## Tokens" not in headings and "## Contrast" not in headings
+    assert headings.count("## Rules") == 1
+    assert design_standard.theme_format(theme) == "standard"
+    assert design_standard.standard_theme_problems(theme) == []
+
+
+def test_ac3_an_old_theme_with_no_list_line_under_brand_gets_the_logo_line(tmp_path):
+    """REQ-044 AC3: SPEC-0037 rule 12 (fix list item 2 on #502: no usage text, no traceback)."""
+    project(tmp_path)
+    brand = OLD_THEME[OLD_THEME.index("## Brand\n") : OLD_THEME.index("## Tokens\n")]
+    old = OLD_THEME.replace(brand, "## Brand\n\nThe brand is not written down yet.\n\n", 1)
+    put(tmp_path, THEME, old)
+    (tmp_path / "docs/design/mockups/2026-10-24-home").mkdir(parents=True)
+    proc = design(tmp_path, "prototype")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stderr == ""
+    theme = (tmp_path / THEME).read_text(encoding="utf-8")
+    section = theme[theme.index("## Brand\n") : theme.index("## Theme\n")].splitlines()
+    assert "The brand is not written down yet." in section
+    assert any(design_standard.LOGO_LINE.match(line) for line in section)
+    assert design_standard.standard_theme_problems(theme) == []
+
+
+def test_a_value_error_that_is_not_a_usage_error_is_not_shown_as_usage(tmp_path):
+    """Fix list item 2 on #502: only a usage error prints the usage text and exits 2."""
+    project(tmp_path)
+    (tmp_path / THEME).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / THEME).write_bytes(b"# Theme\n\xff\xfe not text\n")
+    proc = design(tmp_path, "prototype")
+    assert proc.returncode != 2
+    assert "usage:" not in proc.stderr.lower()
+
+
+def test_ac3_a_file_named_like_a_version_is_counted_and_never_crashes_the_writer(tmp_path):
+    """REQ-044 AC3: SPEC-0037 rule 4 (fix list item 3 on #502: a file `v1` is never a crash)."""
+    project(tmp_path)
+    put(tmp_path, f"{PROTOTYPE}/v1", "a file, not a version folder\n")
+    proc = design(tmp_path, "prototype")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert f"wrote {PROTOTYPE}/v2/" in proc.stdout
+    assert (tmp_path / PROTOTYPE / "v1").read_text(encoding="utf-8") == (
+        "a file, not a version folder\n"
+    )
+
+
 # --- answer 6: no new mockup folder -----------------------------------------------------------
 
 
