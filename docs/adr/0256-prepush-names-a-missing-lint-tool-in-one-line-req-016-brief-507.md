@@ -1,6 +1,6 @@
 # ADR-0256: prepush names a missing lint tool in one line (REQ-016, brief 507)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Deciders: maintainers
 - Related: ADR-0186, ADR-0208, ADR-0254
