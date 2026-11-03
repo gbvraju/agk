@@ -76,6 +76,7 @@ from common import (
     proof_areas,
     proof_timeout,
     resolve_base,
+    temp_env,
 )
 from impact import Impact, Selected, impact
 from proof import area_command, execute, is_test_file, timeout_note
@@ -302,7 +303,7 @@ def proof_runs(root: Path, runs: list[dict], ran: Ran) -> Step:
     for item in runs:
         folder = root / item["cwd"]
         started = time.monotonic()
-        run_code, run_out, _ = execute(item["command"], folder, limit)
+        run_code, run_out, _ = execute(item["command"], folder, limit, env=temp_env())
         made.append(
             {
                 "name": item["name"],
@@ -454,7 +455,7 @@ def gate(
             shown = True
         folder = root / cwd
         started = time.monotonic()
-        code, out, _ = execute(command, folder, limit)
+        code, out, _ = execute(command, folder, limit, env=temp_env())
         seconds = time.monotonic() - started
         made.append(
             {
