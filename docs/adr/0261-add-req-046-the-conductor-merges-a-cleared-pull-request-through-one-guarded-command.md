@@ -1,6 +1,6 @@
 # ADR-0261: Add REQ-046: The conductor merges a cleared pull request through one guarded kit command
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Deciders: maintainers
 - Related: SPEC-0039, SPEC-0032, SPEC-0030, SPEC-0021, REQ-039, REQ-016
