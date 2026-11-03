@@ -1,11 +1,11 @@
 """`evidence.py check` reads a Windows record's secret-scan tool as gitleaks (brief #504, ADR-0253).
 
 On Windows, prepush records the secret scan's tool as `shutil.which` gives it, for example
-`C:\\Tools\\gitleaks.EXE`. `evidence.py check` reads the executable's base name, lower-cased and
-with one trailing `.exe` removed, so that any case of `gitleaks`, with or without `.exe`, is the same
-tool and the scan is repeated. Nothing else is loosened: another tool name, or a changed tail, still
-reads `not what prepush runs: secret-scan (field: argv)`. The records are invented, under
-`tmp_path`, and the tests run on a POSIX runner.
+`C:\\Tools\\gitleaks.EXE`. `evidence.py check` reads the executable's base name, lower-cased
+and with one trailing `.exe` removed, so that any case of `gitleaks`, with or without `.exe`, is
+the same tool and the scan is repeated. Nothing else is loosened: another tool name, or a changed
+tail, still reads `not what prepush runs: secret-scan (field: argv)`. The records are invented,
+under `tmp_path`, and the tests run on a POSIX runner.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from test_prepush import scanner
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
-
 
 
 @pytest.fixture
