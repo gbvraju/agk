@@ -1,6 +1,6 @@
 # ADR-0262: Add REQ-047: A builder hands heavy runs to a first-in-first-out queue and keeps developing
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Deciders: maintainers
 - Related: SPEC-0040, ADR-0191, ADR-0223, ADR-0231, ADR-0254, REQ-040
