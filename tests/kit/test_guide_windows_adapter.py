@@ -86,7 +86,7 @@ def test_path_is_read_fresh_and_temp_is_the_long_path():
     assert "GetEnvironmentVariable('Path', 'User')" in code
     for name in ("TEMP", "TMP", "TMPDIR"):
         assert re.search(rf"\$env:{name}\s*=", code), name
-    assert "GetLongPathName" in code or "GetFullPath" in code or "LongPath" in code
+    assert "GetFolderPath('LocalApplicationData')" in code
 
 
 def test_the_session_input_is_read():
