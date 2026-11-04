@@ -55,8 +55,8 @@ listed in SPEC-0042 rule 2; what could not be confirmed there is marked `(verify
 4. The guard is a second line after least privilege, not a wall: patterns lower the risk and
    cannot catch every secret or every name in free text, and a hook guards the tools of a Claude
    Code session, not other programs the person runs. The spec, the security guide and `doctor`
-   say so (SPEC-0042 rule 15).
-5. The builds of SPEC-0042 rule 16 will change these protected path classes: `.claude/`
+   say so (SPEC-0042 rule 16).
+5. The builds of SPEC-0042 rule 18 will change these protected path classes: `.claude/`
    (`.claude/hooks/data_guard.py`, new; its registration in `.claude/settings.json`;
    `.claude/hooks/architect_guard.py` and `.claude/hooks/conductor_guard.py`, which scan comment
    bodies before a post), `scripts/agk/` (`guard.py` and `guard_logs.py`, new and installed;
