@@ -223,3 +223,21 @@ def test_req001_claude_md_item_3_changed_by_exactly_the_one_sentence():
     assert page.count("`Covered-by:`") == 1
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     assert "Covered-by" not in claude
+
+
+def test_req001_prepush_passes_the_body_to_governance(tmp_path, monkeypatch):
+    """REQ-001: brief #545 answer 2 (prepush's governance step reads the same body)."""
+    import prepush  # noqa: PLC0415 - conftest puts scripts/agk on the path
+
+    (tmp_path / "agk.mk").write_text("agk-governance:\n", encoding="utf-8")
+    seen: dict = {}
+    monkeypatch.setattr(prepush.shutil, "which", lambda _name: "/usr/bin/make")
+    monkeypatch.setattr(prepush, "ran_step", lambda cmd, root, env: seen.update(env) or "ok")
+    body = tmp_path / "pr-body.md"
+    body.write_text("Covered-by: ADR-0009\n", encoding="utf-8")
+    prepush.governance(tmp_path, "main", body)
+    assert seen["AGK_PR_BODY"] == str(body.resolve())
+    seen.clear()
+    monkeypatch.delenv("AGK_PR_BODY", raising=False)
+    prepush.governance(tmp_path, "main")
+    assert "AGK_PR_BODY" not in seen

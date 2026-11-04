@@ -1,18 +1,29 @@
-"""Fail when a protected path changes without an ADR in the same change set that names its class."""
+"""Fail when a protected path changes without an ADR in the same change set that names its class.
+
+Brief #545 (ADR-0271): with the pull request body (`--body FILE`, or the file that `AGK_PR_BODY`
+names), a change set that no ADR of its own covers also passes on one `Covered-by: ADR-nnnn` line
+naming an ADR that is Accepted on the merge base, names every changed class, and has a
+`Requirements:` entry that the body's `Advances:` line names. It never covers `constitution/`,
+`.github/workflows/` or `config/reviewers.yaml`. Messages name the rule or the class, never a value.
+"""
 
 from __future__ import annotations
 
+import os
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
+    REQ_ID,
     CheckError,
     base_arg,
     base_context,
     changed_files,
     changed_lines,
+    git,
     matches,
     read_list,
     repo_root,
@@ -23,6 +34,10 @@ from common import (
 NAME = "protected-changes"
 LIST_PATH = "config/protected-paths.txt"
 STATUS_ONLY_FILE = "docs/requirements.md"
+COVERED_BY = "Covered-by:"
+COVERED_FORM = re.compile(r"Covered-by: ADR-(\d{4})")
+# Paths a `Covered-by:` line never covers: each needs an ADR in the same PR (ADR-0271).
+OWN_ADR = ("constitution/", ".github/workflows/", "config/reviewers.yaml")
 
 
 def is_adr(path: str, status: str) -> bool:
@@ -48,6 +63,77 @@ def covering_adrs(root, mb, changed: dict[str, str], classes: list[str]) -> list
         if all(entry in text for entry in classes):
             found.append(path)
     return found
+
+
+def body_text(argv: list[str] | None) -> str | None:
+    """The pull request body from `--body FILE` or the file `AGK_PR_BODY` names, else None."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    path = None
+    if "--body" in args:
+        i = args.index("--body")
+        if i + 1 >= len(args):
+            raise CheckError("--body needs a value")
+        path = args[i + 1]
+    elif os.environ.get("AGK_PR_BODY"):
+        path = os.environ["AGK_PR_BODY"]
+    if path is None:
+        return None
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CheckError("cannot read the PR body file (option: --body or AGK_PR_BODY)") from exc
+
+
+def first_field(text: str, label: str) -> str | None:
+    for line in text.splitlines():
+        if line.startswith(label):
+            return line[len(label) :].strip()
+    return None
+
+
+def covered_by_problems(
+    root, mb, body: str | None, changed: dict[str, str], classes: list[str]
+) -> list[str] | None:
+    """None when the body has no `Covered-by:` line; [] when it covers; else what is missing."""
+    if body is None:
+        return None
+    lines = [ln.strip() for ln in body.splitlines() if ln.startswith(COVERED_BY)]
+    if not lines:
+        return None
+    if len(lines) != 1:
+        return [f"the body needs exactly one '{COVERED_BY}' line, it has {len(lines)}"]
+    form = COVERED_FORM.fullmatch(lines[0])
+    if not form:
+        return [f"the '{COVERED_BY}' line must be '{COVERED_BY} ADR-nnnn'"]
+    problems = [
+        f"'{COVERED_BY}' never covers '{x}': it needs an ADR in the same PR"
+        for x in OWN_ADR
+        if any(matches(p, x) for p in changed)
+    ]
+    number = form.group(1)
+    names = [
+        n
+        for n in git(root, "ls-tree", "--name-only", mb, "docs/adr/").splitlines()
+        if Path(n).name.startswith(f"{number}-") and n.endswith(".md")
+    ]
+    text = show(root, mb, names[0]) if len(names) == 1 else None
+    if text is None:
+        problems.append(f"the '{COVERED_BY}' ADR is not one file of docs/adr/ on the merge base")
+        return problems
+    if "- Status: Accepted" not in text.splitlines():
+        problems.append(f"the '{COVERED_BY}' ADR is not '- Status: Accepted' on the merge base")
+    for entry in classes:
+        if entry not in text:
+            problems.append(
+                f"protected path class '{entry}' is not named by the '{COVERED_BY}' ADR"
+            )
+    reqs = set(REQ_ID.findall(first_field(text, "- Requirements:") or ""))
+    advances = set(REQ_ID.findall(first_field(body, "Advances:") or ""))
+    if not reqs & advances:
+        problems.append(
+            f"no requirement of the '{COVERED_BY}' ADR's 'Requirements:' line is in 'Advances:'"
+        )
+    return problems
 
 
 def release_pull_request(root, mb) -> bool:
@@ -97,6 +183,12 @@ def main(argv: list[str] | None = None) -> int:
     if covering_adrs(root, mb, changed, classes):
         print(f"ok {NAME} (protected change covered by an ADR)")
         return 0
+    problems = covered_by_problems(root, mb, body_text(argv), changed, classes)
+    if problems == []:
+        print(f"ok {NAME} (protected change covered by an Accepted ADR named in '{COVERED_BY}')")
+        return 0
+    for problem in problems or []:
+        print(f"FAIL {NAME}: {problem}")
     for entry in classes:
         print(
             f"FAIL {NAME}: protected path class '{entry}' changed without an ADR that names it "

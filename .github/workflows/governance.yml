@@ -185,7 +185,7 @@ jobs:
           fi
       - name: check_protected_changes
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
-        run: python scripts/agk/check_protected_changes.py
+        run: python scripts/agk/check_protected_changes.py --body "$RUNNER_TEMP/pr-body.md"
       - name: check_requirements
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_requirements.py
