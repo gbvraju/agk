@@ -122,7 +122,7 @@ def answer(body: str, login: str = OWNER, at: int = 8) -> dict:
     return comment(body, login, at)
 
 
-ACCEPT = f"Maintainer answer: the difference is accepted for {HEAD}"
+ACCEPT = f"Maintainer answer: accept {HEAD}"
 
 
 @pytest.mark.parametrize(
@@ -130,7 +130,8 @@ ACCEPT = f"Maintainer answer: the difference is accepted for {HEAD}"
     [
         ("no answer", [], False),
         ("a spec approver accepts for the head", [answer(ACCEPT)], True),
-        ("a spec approver accepts by the short head", [answer(ACCEPT.replace(HEAD, SHA12))], True),
+        ("the exact line with more lines below", [answer(f"{ACCEPT}\n\nThe proof is fine.")], True),
+        ("the short head", [answer(ACCEPT.replace(HEAD, SHA12))], False),
         ("another account accepts", [answer(ACCEPT, BUILDER)], False),
         ("an answer before the verdict", [answer(ACCEPT, at=2)], False),
         ("an answer for another head", [answer(ACCEPT.replace(HEAD, OLD))], False),
@@ -140,18 +141,43 @@ ACCEPT = f"Maintainer answer: the difference is accepted for {HEAD}"
             [answer(f"Maintainer answer: {HEAD}\n\naccepted")],
             False,
         ),
+        ("I can't accept", [answer(f"Maintainer answer: I can't accept {HEAD}")], False),
+        ("I don't accept", [answer(f"Maintainer answer: I don't accept {HEAD}")], False),
+        ("I won't accept", [answer(f"Maintainer answer: I won't accept {HEAD}")], False),
+        ("refuse to accept", [answer(f"Maintainer answer: refuse to accept {HEAD}")], False),
+        ("accepted, a free sentence", [answer(f"Maintainer answer: accepted for {HEAD}")], False),
+        ("text after the sha", [answer(f"{ACCEPT} unless the proof fails")], False),
+        ("upper case", [answer(f"Maintainer answer: ACCEPT {HEAD}")], False),
+        ("a space before", [answer(f" {ACCEPT}")], False),
+        ("an upper-case sha", [answer(ACCEPT.replace(HEAD, HEAD.upper()))], False),
     ],
 )
 def test_an_evidence_check_that_differs_merges_only_with_a_spec_approvers_answer(
     tmp_path, name, later, merges
 ):
-    """REQ-046 AC3: SPEC-0039 rule 4 (`differs` and a later `Maintainer answer:`)."""
+    """REQ-046 AC3: SPEC-0039 rule 4 (`differs` and the one exact `Maintainer answer: accept
+    <head>` first line by a spec approver after the verdict; the fix list on cb0a7ef, item 2)."""
     verdict = cleared(extra=evidence(HEAD, "differs"))
     proc, made = merge_cleared_run(tmp_path, LOCAL, [verdict, *later], reviewers_yaml=APPROVERS)
     if merges:
         assert one_line(proc) == MERGED, name
     else:
-        held(proc, "rule 4")
+        held(proc, "evidence differs")
+        no_merge(made)
+
+
+def test_a_reviewers_file_that_cannot_be_parsed_is_refused_naming_the_setting(tmp_path):
+    """REQ-046 AC2: SPEC-0039 rules 2 and 3 (a malformed config/reviewers.yaml never empties
+    conductor_accounts; the fix list on cb0a7ef, item 1)."""
+    broken = f'version: 1\nconductor_accounts: ["@{CONDUCTOR}"]\n  : {HIDDEN}\n'
+    for sub, login in (("a", BUILDER), ("b", CONDUCTOR)):
+        proc, made = merge_cleared_run(
+            tmp_path / sub, toml(ON), [cleared(login=login)], reviewers_yaml=broken
+        )
+        line = one_line(proc)
+        assert line.startswith(f"merge-cleared #7 {SHA12}: refused: "), line
+        assert "config/reviewers.yaml" in line and HIDDEN not in line and login not in line
+        assert proc.returncode == 1
         no_merge(made)
 
 
@@ -408,6 +434,38 @@ def test_a_head_that_pauses_while_the_default_branch_does_not_changes_nothing(tm
         tmp_path, toml(ON), [bare()], head_toml=f"paused = true\n{toml(ON)}"
     )
     assert one_line(proc) == MERGED
+
+
+@pytest.mark.parametrize(
+    ("name", "count", "listed"),
+    [
+        ("fewer files read than changed", 5, 3),
+        ("no count of changed files", None, 1),
+        ("a count that is not a number", "1", 1),
+        ("more files read than changed", 1, 2),
+    ],
+)
+def test_the_files_read_must_be_every_changed_file(tmp_path, name, count, listed):
+    """REQ-046 AC4: SPEC-0039 rules 2 and 5 (a partial file list is never a pass; the fix list on
+    cb0a7ef, item 4)."""
+    files = [patch(f"docs/x{i}.md", "+x") for i in range(listed)]
+    the_pull = pull(changed_files=count) if count is not None else pull()
+    proc, made = merge_cleared_run(
+        tmp_path, toml(ON), [bare()], pull=the_pull, files=files, changed=False
+    )
+    held(proc, "files not all read (rule 5)")
+    no_merge(made)
+
+
+def test_a_protected_file_past_the_3000_file_limit_is_held(tmp_path):
+    """REQ-046 AC4: SPEC-0039 rule 5 (the list-files endpoint stops at 3,000 files; the fix list on
+    cb0a7ef, item 4)."""
+    files = [patch(f"docs/x{i}.md", "+x") for i in range(3000)]
+    files.append(patch("constitution/principles.md", "+x"))
+    proc, made = merge_cleared_run(tmp_path, toml(ON), [bare()], files=files)
+    held(proc, "files not all read (rule 5)")
+    no_merge(made)
+    assert len([c for c in made if any("/files" in a for a in c)]) == 31
 
 
 def test_an_unreadable_hold_list_read_is_never_a_pass(tmp_path):

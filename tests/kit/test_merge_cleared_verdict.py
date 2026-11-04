@@ -177,7 +177,7 @@ elif method != 'GET':
 elif parts[0] == 'pulls' and len(parts) == 2 and parts[1] == '7':
     out = data['pull']
 elif parts[0] == 'pulls' and parts[2:] == ['files']:
-    out = paged(data['files'])
+    out = paged(data['files'][:3000])  # GitHub lists at most 3,000 files
 elif parts[0] == 'issues' and parts[2:] == ['comments']:
     out = paged(data['comments'])
 elif parts == ['issues']:
@@ -202,16 +202,21 @@ def fake_gh(
     pull: object = None,
     comments: object = None,
     fail: bool = False,
+    changed: bool = True,
     **saved: object,
 ):
-    """A `gh` on PATH that answers from saved JSON (`world`) and logs each argument list."""
+    """A `gh` on PATH that answers from saved JSON (`world`) and logs each argument list; with
+    CHANGED, a pull request without `changed_files` is given the number of its saved files."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(parents=True)
     path = tmp_path / "saved.json"
     log = tmp_path / "gh-calls.jsonl"
     if pull is None:
         pull = world()["pull"]
-    path.write_text(json.dumps(world(pull=pull, comments=comments, **saved)), encoding="utf-8")
+    data = world(pull=pull, comments=comments, **saved)
+    if changed and isinstance(data["pull"], dict) and "changed_files" not in data["pull"]:
+        data["pull"] = {**data["pull"], "changed_files": len(data["files"])}
+    path.write_text(json.dumps(data), encoding="utf-8")
     script = bin_dir / "gh"
     script.write_text(
         f"#!{sys.executable}\nLOG, SAVED, FAIL = {str(log)!r}, {str(path)!r}, {fail!r}\n" + FAKE_GH,
