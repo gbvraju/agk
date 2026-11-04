@@ -1,6 +1,6 @@
 # ADR-0266: AGK turns auto-merge on for its own repository (REQ-046, brief 534)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: ADR-0261, ADR-0263, ADR-0265, SPEC-0039
