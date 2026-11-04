@@ -176,16 +176,18 @@ def setting_on(data: dict) -> None:
 # --- reads --------------------------------------------------------------------------------------
 
 
+def gh_api(args: list[str]) -> subprocess.CompletedProcess:
+    """`gh api ARGS`: the one way this command calls GitHub, an argument list with no shell."""
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["gh", "api", *args], capture_output=True, text=True, encoding="utf-8"
+    )
+
+
 def read_json(endpoint: str, kind: type, what: str) -> Any:
     """One `gh api` GET of a REST ENDPOINT, parsed here; an answer that fails, is not JSON or is
     not of KIND is tried again, and the fifth failure in a row raises Unreadable."""
     for attempt in range(READS):
-        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["gh", "api", "--method", "GET", endpoint],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-        )
+        proc = gh_api(["--method", "GET", endpoint])
         if proc.returncode == 0:
             try:
                 value = json.loads(proc.stdout)
@@ -441,11 +443,9 @@ def hold_list(repo: str, number: int, pull: dict, comments: list, approvers: lis
 # --- rule 6: the pinned merge -------------------------------------------------------------------
 
 
-def write_once(argv: list[str]) -> tuple[int, str, str]:
+def write_once(args: list[str]) -> tuple[int, str, str]:
     """One `gh` call that writes: never retried (SPEC-0039 rule 6)."""
-    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        argv, capture_output=True, text=True, encoding="utf-8"
-    )
+    proc = gh_api(args)
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -457,9 +457,9 @@ def current_head(repo: str, number: int) -> str:
 
 def merge_pull(repo: str, number: int, sha: str) -> str:
     """The one merge call, pinned to SHA with the squash method; the merge commit's sha."""
-    argv = ["gh", "api", "--method", "PUT", f"repos/{repo}/pulls/{number}/merge"]
-    argv += ["-f", f"sha={sha}", "-f", f"merge_method={METHOD}"]
-    code, out, err = write_once(argv)
+    args = ["--method", "PUT", f"repos/{repo}/pulls/{number}/merge"]
+    args += ["-f", f"sha={sha}", "-f", f"merge_method={METHOD}"]
+    code, out, err = write_once(args)
     if code != 0:
         found = HTTP.search(err)
         status = int(found.group(1)) if found else 0
