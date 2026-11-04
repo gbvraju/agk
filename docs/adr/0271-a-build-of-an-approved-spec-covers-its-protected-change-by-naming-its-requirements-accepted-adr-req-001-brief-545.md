@@ -1,0 +1,60 @@
+# ADR-0271: A build of an Approved spec covers its protected change by naming its requirement's Accepted ADR (REQ-001, brief 545)
+
+- Status: Proposed
+- Date: 2026-11-04
+- Deciders: maintainers
+- Related: ADR-0247
+- Requirements: REQ-001
+
+## Context
+
+Principle 1 ("A protected change requires an ADR in the same PR"), `CLAUDE.md item 3` (kept on
+`config/core-rules.md` since ADR-0247) and `scripts/agk/check_protected_changes.py`
+(`covering_adrs`, which counts only an ADR added or modified in the change set) make every build
+write an ADR of its own. Plan #542 measures this as about a third of the document work of a build.
+The owner ruled D1 on plan #542 (2026-11-04, comment 6635044641), quoted as data: "one ADR per
+requirement, written at intake; a build records its decisions in the PR body and writes a new ADR
+only when it changes a decision." This ADR is the decision that changes the rule, so it is written
+in the old way.
+
+## Decision
+
+1. Principle 1 becomes: "A protected change requires an ADR in the same PR, or, for a build of an
+   Approved spec, a `Covered-by:` line naming that spec's Accepted ADR, which names the class."
+   `CLAUDE.md item 3` on `config/core-rules.md` carries the same clause after its own text. Nothing
+   else in those files changes.
+2. `check_protected_changes.py` reads the pull request body from `--body FILE`, or from the file
+   that `AGK_PR_BODY` names (prepush passes the body that way). Without a body it works as before.
+   With one, a change set that no ADR of its own covers still passes when all of these hold:
+   - the body has exactly one line starting `Covered-by:`, and it is `Covered-by: ADR-nnnn`;
+   - that ADR is a file `docs/adr/nnnn-*.md` on the merge base, with the line `- Status: Accepted`
+     there (an ADR added in the change set, or one whose status the change set raises, never counts);
+   - its text on the merge base names every changed protected class;
+   - its `Requirements:` line names a requirement that the body's `Advances:` line also names;
+   - no changed path is under `constitution/` or `.github/workflows/`, or is `config/reviewers.yaml`.
+   Every other case fails as before, with one line naming what is missing (the rule or the path
+   class, never a value). An ADR in the change set still counts as before.
+3. The governance workflow passes the body file it already writes (`$RUNNER_TEMP/pr-body.md`) to
+   the check with `--body`, and `prepush.py --body FILE` sets `AGK_PR_BODY` for its governance step.
+4. The constitution, `config/reviewers.yaml`, the workflows and the ruleset still need an ADR in the
+   same PR. A build that changes a decision of its spec or ADR writes a new ADR. The `Decisions
+   taken:` line of the PR body carries the build's decisions, and the verdict reads it.
+5. The brief template and the session rules (new session rule 36) say when to use `Covered-by:` and
+   when to write an ADR, in one paragraph. The conductor's agent file says that the `Final:` lines
+   of a build that used `Covered-by:` name no ADR, so a verdict clears the head directly once green.
+
+Protected path classes this pull request changes: `constitution/`, `config/`, `.claude/`,
+`.github/`, `scripts/agk/`, `tests/kit/`.
+
+## Consequences
+
+A build of an Approved spec writes no ADR and makes no status commit for one. The check now reads
+the PR body; in CI the step `check_protected_changes` does not run on an `edited` event, so a
+`Covered-by:` line added by editing the body is read on the next push (Q-545-2). An Accepted intake
+ADR must name every protected class its builds will change; one that does not leaves those builds
+writing an ADR of their own, as today.
+
+## Residual
+
+- 2026-11-04: the ruleset has no file in the repository, so the check cannot exclude it by path; it
+  stays a person's change under session rule 30 and principle 2.
