@@ -1,6 +1,6 @@
 # ADR-0270: Add REQ-051: A large test suite finishes sooner without removing a test
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: SPEC-0044, SPEC-0040, SPEC-0038, SPEC-0010, ADR-0185, ADR-0208, ADR-0220, ADR-0227, ADR-0242, ADR-0258, REQ-016, REQ-039, REQ-047
