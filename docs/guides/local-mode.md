@@ -147,7 +147,7 @@ A verdict in local mode that clears a head without that line clears nothing.
 
 ## Tidying finished builders
 
-Each builder session gets a worktree and a `claude/brief-<n>` branch, and they stay after the pull request merges; `git branch -d`
+Each builder session gets a worktree and a branch of its own, and they stay after the pull request merges; `git branch -d`
 refuses a squash-merged branch, so removing them by hand is slow and risky. From the main clone, run:
 
     python3 scripts/agk/session.py tidy
