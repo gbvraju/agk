@@ -65,14 +65,18 @@ on a machine instead.
    (SPEC-0041 rules 26 and 27), with the security rules of SPEC-0041 rule 28.
 9. The rules that conflict with personal mode change only through
    `docs/runs/proposed-spec-amendments-113.md` and the builds that apply it: principle 10, SPEC-0005
-   rules 1, 2 and 7, two guides and a new session rule (SPEC-0041 rule 29). This pull request
-   applies none of them.
+   rules 1, 2, 7 and 8 (rule 8: a personal-mode command commits only to the sidecar, and only the
+   person's own terminal `confirm` sets a sidecar spec `Approved` or ADR `Accepted`, never in the
+   product repository; amendment item 6), two guides and a new session rule (SPEC-0041 rule 29).
+   This pull request applies none of them.
 10. The builds (b) to (n) of SPEC-0041 rule 30 will change these protected path classes:
     `constitution/` (principle 10, build (b)), `config/` (the new session rule 36 and one line of
     `config/core-rules.md` in build (b); `config/protected-paths.txt` and `config/reviewers.yaml`
     only if build (i) adds a new plugin folder to the protected list), `scripts/agk/`
     (`personal_state.py`, `forge.py`, `personal.py`, `survey.py`, `personal_adopt.py`, new, and
-    `common.py`, `prepush.py`, `proof.py`, `metrics.py`, `doctor.py` and `upgrade.py`), `kit/`
+    `common.py`, `reviewers.py` (`terminal_confirmations`, build (g)), `check_specs.py`,
+    `check_adrs.py` and `check_requirements.py` (their sidecar `--comments` readings, build (g)),
+    `prepush.py`, `proof.py`, `metrics.py`, `doctor.py` and `upgrade.py`), `kit/`
     (`kit/templates/personal.toml` and the other sidecar templates, and `kit/manifest.json`; never
     `kit/hashes.json`, session rule 14), `skills/` (`/agk:personal` and `/agk:personal-adopt`),
     `.claude-plugin/` (user-scope packaging, build (l)), `.claude/` (only if the personal reviewer
