@@ -20,8 +20,21 @@ the squash method, and prints one line:
 
 and exit 4 when GitHub cannot answer one read five times in a row. A reason names a rule, a
 setting or a path class, never a value. Standard library only; every `gh` call is an argument list
-with no shell and no jq filter, and the JSON is read here. The governance run after the merge, the
-red-branch stop and the record line are build (c).
+with no shell and no jq filter, and the JSON is read here.
+
+Build (c) (brief #551, ADR-0273) adds the rest of rule 6 and rule 7. Before the merge the command
+needs one record issue (the open local-mode record issue, else the one open issue labelled
+`agk-auto-merge`), else `held: no record issue (rule 7)`. After the merge, still under the lock, it
+posts one comment `Auto merge: #<n> <merge sha> <UTC time> <verdict link>` there, then fetches the
+default branch, adds a detached worktree of the merge commit in a temporary folder outside the
+checkout and runs `lock.py run --name heavy --session merge-cleared -- env -i PATH=<PATH>
+HOME=<scratch> make -C <worktree> governance AGK_BASE=<parent of the merge commit>`, and removes
+the worktree in every case. A red run (or a fetch or worktree that fails) opens or updates the
+red-branch issue through `route.write_red`, prints
+
+    merge-cleared: stopped: default branch red after #<n>         exit 1
+
+and that open issue holds every later run. It never reverts, writes no file and pushes nothing.
 """
 
 from __future__ import annotations
@@ -34,6 +47,7 @@ import shutil
 import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tempfile
 import time
 import tomllib
 import uuid
@@ -62,6 +76,8 @@ REMOTE = "refs/remotes/origin/"
 LOCK = "merge-cleared"  # the named lock of a run (SPEC-0039 rule 9)
 RED_TITLE = "The default branch is red"  # the router's red-branch issue (SPEC-0032 rule 7)
 RECORD_TITLE = "Local mode since"  # the one local-mode record issue (docs/guides/local-mode.md)
+RECORD_LABEL = "agk-auto-merge"  # the record issue the owner opens once (SPEC-0039 rule 7)
+HEAVY = "heavy"  # the heavy-step lock of the governance run (SPEC-0039 rule 6)
 LOCAL_EVIDENCE = re.compile(r"Local evidence: ([0-9a-f]{12,40})(?![0-9A-Za-z])")
 EVIDENCE = re.compile(r"Evidence check: (agrees|differs), head ([0-9a-f]{12})(?![0-9A-Za-z])")
 ACCEPT = "Maintainer answer: accept {}"  # the one accepted first line (SPEC-0039 rule 4)
@@ -94,6 +110,15 @@ class Refused(CheckError):
 
 class Held(Exception):
     """A hold of SPEC-0039 rules 3 to 5: the reason, named by rule; exit 3."""
+
+
+class Stopped(Exception):
+    """A red governance run after the merge of pull request NUMBER (SPEC-0039 rule 6); exit 1."""
+
+    def __init__(self, number: int, filed: bool) -> None:
+        super().__init__(number)
+        self.number = number
+        self.filed = filed
 
 
 class Unreadable(Exception):
@@ -488,6 +513,122 @@ def merge_pull(repo: str, number: int, sha: str) -> str:
     return merged
 
 
+# --- rule 7: the record -------------------------------------------------------------------------
+
+
+def record_issue(issues: list[dict]) -> int | None:
+    """The number of the issue the record line goes to: the one open local-mode record issue while
+    one is open, else the one open issue labelled `agk-auto-merge`; None with neither, or with more
+    than one of the kind it would use (SPEC-0039 rule 7)."""
+    plain = [i for i in issues if "pull_request" not in i and isinstance(i.get("number"), int)]
+    local = [i for i in plain if str(i.get("title") or "").startswith(RECORD_TITLE)]
+    found = local or [i for i in plain if RECORD_LABEL in labels_of(i)]
+    return int(found[0]["number"]) if len(found) == 1 else None
+
+
+def verdict_link(repo: str, number: int, verdict: dict) -> str:
+    url = verdict.get("html_url")
+    if isinstance(url, str) and url.startswith("https://"):
+        return url
+    return f"https://github.com/{repo}/pull/{number}#issuecomment-{verdict.get('id')}"
+
+
+def post_record(repo: str, issue: int, number: int, merged: str, verdict: dict) -> bool:
+    """The one record line of SPEC-0039 rule 7, posted once; whether GitHub took it."""
+    when = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    line = f"Auto merge: #{number} {merged} {when} {verdict_link(repo, number, verdict)}"
+    args = ["--method", "POST", f"repos/{repo}/issues/{issue}/comments", "-f", f"body={line}"]
+    code, _, _ = write_once(args)
+    return code == 0
+
+
+# --- rule 6: governance after the merge, and the red-branch stop -------------------------------
+
+
+def governance_argv(tree: Path, home: Path, base: str) -> list[str]:
+    """The governance run of SPEC-0039 rule 6 as one argument list: the project's own lock.py,
+    the heavy lock, and `env -i` so that only PATH and HOME reach the merged code."""
+    lock_py = Path(__file__).resolve().parent / "lock.py"
+    return [
+        sys.executable,
+        str(lock_py),
+        "run",
+        "--name",
+        HEAVY,
+        "--session",
+        LOCK,
+        "--",
+        "env",
+        "-i",
+        f"PATH={os.environ.get('PATH', '')}",
+        f"HOME={home}",
+        "make",
+        "-C",
+        str(tree),
+        "governance",
+        f"AGK_BASE={base}",
+    ]
+
+
+def run_governance(root: Path, tree: Path, home: Path, base: str) -> bool:
+    """Run governance once in TREE; its output goes to standard error. Whether it passed."""
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        governance_argv(tree, home, base),
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    sys.stderr.write(proc.stdout + proc.stderr)
+    return proc.returncode == 0
+
+
+def governance(root: Path, branch: str, merged: str) -> str | None:
+    """Fetch the default branch, run governance on the merge commit in a temporary worktree
+    outside the checkout, and remove the worktree in every case. None when green, else the
+    failing step (`fetch`, `worktree` or `make governance`)."""
+    code, _ = git_out(root, "fetch", "-q", "origin", branch)
+    if code != 0:
+        return "fetch"
+    code, _ = git_out(root, "merge-base", "--is-ancestor", merged, f"{REMOTE}{branch}")
+    parent_code, parent = git_out(root, "rev-parse", "--verify", "-q", f"{merged}^1")
+    if code != 0 or parent_code != 0 or not SHA.fullmatch(parent):
+        return "fetch"
+    scratch = Path(tempfile.mkdtemp(prefix="agk-merge-cleared-"))
+    tree, home = scratch / "tree", scratch / "home"
+    try:
+        home.mkdir()
+        code, _ = git_out(root, "worktree", "add", "--detach", "-q", str(tree), merged)
+        if code != 0:
+            return "worktree"
+        return None if run_governance(root, tree, home, parent) else "make governance"
+    finally:
+        git_out(root, "worktree", "remove", "--force", str(tree))
+        shutil.rmtree(scratch, ignore_errors=True)
+        git_out(root, "worktree", "prune")
+
+
+def commit_url(repo: str, sha: str) -> str:
+    return f"https://github.com/{repo}/commit/{sha}"
+
+
+def file_red(repo: str, step: str, merged: str) -> bool:
+    """Open or update the red-branch issue through the router's writer (SPEC-0039 rule 6,
+    Q-S0039-6), naming the failing step and the merge commit and no cause; whether it was
+    written."""
+    import route  # route imports session; read only after a red run
+
+    try:
+        found = read_pages(f"repos/{repo}/issues?state=open&labels=agk-brief", "the open briefs")
+        open_red = sorted((i for i in found if route.is_red(i)), key=lambda i: i["number"])
+        body = route.red_body(step, merged, commit_url(repo, merged))
+        route.write_red(repo, open_red, body, route.Labels(repo))
+    except (Unreadable, route.ReadOnly, CheckError):
+        return False
+    return True
+
+
 # --- rule 9: the lock ---------------------------------------------------------------------------
 
 
@@ -557,12 +698,21 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
         issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
         if titled(issues, RED_TITLE, exact=True):
             raise Held("the default branch is red (rule 5)")
+        record = record_issue(issues)
+        if record is None:
+            raise Held("no record issue (rule 7)")
         if data.get("execution") == "local" or titled(issues, RECORD_TITLE):
             local_evidence(verdict, comments, sha, approvers)
         else:
             ci_evidence(repo, sha, required)
         hold_list(repo, number, pull, comments, approvers)
         merged = merge_pull(repo, number, sha)
+        recorded = post_record(repo, record, number, merged, verdict)
+        step = governance(root, str(data.get("default_branch", "main")), merged)
+        if step is not None:
+            raise Stopped(number, file_red(repo, step, merged))
+    if not recorded:
+        return f"merged {merged[:12]}", "the record line cannot be posted (rule 7)", EXIT_REFUSED
     return f"merged {merged[:12]}", "", EXIT_CLEARED
 
 
@@ -584,6 +734,10 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
     except Unreadable as err:
         print(f"{prefix} refused: GitHub cannot be read ({err}, {READS} reads in a row)")
         return EXIT_UNREADABLE
+    except Stopped as stop:
+        missing = "" if stop.filed else " (the red-branch issue cannot be written)"
+        print(f"merge-cleared: stopped: default branch red after #{stop.number}{missing}")
+        return EXIT_REFUSED
     print(f"{prefix} {word}: {reason}" if reason else f"{prefix} {word}")
     return code
 

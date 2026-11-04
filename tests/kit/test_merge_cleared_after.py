@@ -161,7 +161,8 @@ def test_the_governance_run_gets_no_token_and_a_scratch_home(tmp_path, monkeypat
     proc, _, ran, _ = after_run(tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     env = ran[0]["env"]
-    assert set(env) <= {"PATH", "HOME", "PWD", "MAKELEVEL", "MAKEFLAGS", "MFLAGS"}, sorted(env)
+    # LC_CTYPE is set by the fake make's own Python (PEP 538), not passed by the command
+    assert set(env) <= {"PATH", "HOME", "LC_CTYPE"}, sorted(env)
     assert HIDDEN not in json.dumps(env)
     assert Path(env["HOME"]) != Path.home()
 
@@ -281,7 +282,7 @@ def test_the_command_writes_no_file_and_pushes_nothing(tmp_path):
     for call in writes(made):
         assert (call[2], call[3].rsplit("/", 1)[-1]) in allowed, call
     text = SCRIPT.read_text(encoding="utf-8")
-    for word in ("git push", '"push"', '"tag"', "reviews", "Timer(", "revert"):
+    for word in ("git push", '"push"', '"tag"', "reviews", "Timer(", '"revert"'):
         assert word not in text, word
 
 

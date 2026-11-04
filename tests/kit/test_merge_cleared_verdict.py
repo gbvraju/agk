@@ -583,7 +583,7 @@ def test_a_cleared_verdict_on_the_second_page_counts(tmp_path):
     comments.append(cleared(at=30))
     proc, made = merge_cleared_run(tmp_path, toml(ON), comments)
     assert one_line(proc).endswith(f": merged {MERGE12}")
-    assert len([c for c in made if any("/comments" in a for a in c)]) == 2
+    assert len([c for c in made if c[2] == "GET" and any("/comments" in a for a in c)]) == 2
 
 
 def test_a_sha_that_is_not_the_head_is_refused(tmp_path):
@@ -730,7 +730,9 @@ def test_the_reads_are_rest_gets_as_argument_lists_with_no_jq(tmp_path):
         ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100&page=1"],
         ["api", "--method", "GET", f"repos/{REPO}/pulls/7/files?per_page=100&page=1"],
         merge_call(),
+        made[-1],
     ]
+    assert made[-1][:4] == ["api", "--method", "POST", f"repos/{REPO}/issues/41/comments"]
     flat = [a for c in made for a in c]
     assert "--jq" not in flat and "graphql" not in flat
 
@@ -821,9 +823,12 @@ def test_a_remote_that_is_not_github_or_no_gh_is_refused(tmp_path):
 
 
 def test_the_script_writes_no_file_and_makes_no_other_write():
-    """REQ-046 AC5: SPEC-0039 rule 8 (build (b) adds the one merge call and nothing else)."""
+    """REQ-046 AC5: SPEC-0039 rule 8 (build (b) adds the one merge call and nothing else; build
+    (c) adds the one record line, a POST of a comment, SPEC-0039 rule 7)."""
     text = SCRIPT.read_text(encoding="utf-8")
-    words = ('"POST"', '"PATCH"', '"DELETE"', ".write_text(", "open(", '"push"', "--jq")
+    assert text.count('"POST"') == 1
+    assert '"POST", f"repos/{repo}/issues/{issue}/comments"' in text
+    words = ('"PATCH"', '"DELETE"', ".write_text(", "open(", '"push"', "--jq")
     words += ("shell=True", "graphql", '"tag"', "/reviews")
     for word in words:
         assert word not in text, word

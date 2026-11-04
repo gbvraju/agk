@@ -505,8 +505,9 @@ def test_a_merge_is_one_pinned_put_and_one_line(tmp_path):
     proc, made = merge_cleared_run(tmp_path, toml(ON), [cleared()])
     assert proc.stdout == MERGED + "\n" and proc.returncode == 0
     writes = [c for c in made if c[2] != "GET"]
-    assert writes == [merge_call()]
-    assert made[-1] == merge_call(), "the merge is the last call"
+    record = ["api", "--method", "POST", f"repos/{REPO}/issues/41/comments"]
+    assert writes[0] == merge_call() and [c[:4] for c in writes[1:]] == [record]
+    assert made[-2:] == writes, "the merge, then the record line of build (c), are the last calls"
 
 
 def test_every_call_is_a_rest_get_but_the_merge_and_nothing_tags_approves_or_pushes(tmp_path):
@@ -516,7 +517,9 @@ def test_every_call_is_a_rest_get_but_the_merge_and_nothing_tags_approves_or_pus
     )
     assert proc.returncode == 0
     for argv in made:
-        assert argv[:2] == ["api", "--method"] and argv[2] in ("GET", "PUT"), argv
+        assert argv[:2] == ["api", "--method"] and argv[2] in ("GET", "PUT", "POST"), argv
+        if argv[2] == "POST":  # build (c): the one record line (SPEC-0039 rule 7)
+            assert argv[3] == f"repos/{REPO}/issues/41/comments", argv
         assert argv[3].startswith(f"repos/{REPO}/"), argv
         assert "--jq" not in argv and "graphql" not in " ".join(argv)
         for word in ("/reviews", "/git/refs", "/git/tags", "/releases", "/contents", "/labels"):
