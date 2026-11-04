@@ -35,8 +35,23 @@ and `AGK_LOCK_NAME`, and every process below it inherits them, so `prepush.py` i
 finds its caller's slot. The token is a random value with no secret meaning, and it is never
 printed.
 
-Standard library only; no network. POSIX and Windows: a process is looked up with signal 0 on
-POSIX and with OpenProcess on Windows, where `os.kill` would end it.
+Brief #529 (ADR-0264, SPEC-0040 build (a)): with `queue = true` in the `[locks]` table of agk.toml,
+
+    python3 scripts/agk/lock.py submit --name NAME --session S [--kind K] [--brief N] -- COMMAND...
+    python3 scripts/agk/lock.py status --name NAME [--ticket T]
+
+`submit` writes one job for the committed head into the queue beside the lock (`heavy_queue.py`),
+under the lock's mutex and never taking a slot, prints `queued <ticket> position <n> of <m> (head
+<sha12>)` and returns at once; a work tree with uncommitted changes to tracked files writes nothing
+(exit 2). The job's priority is the `Priority:` line of brief N, read once with one REST GET;
+anything unreadable is `unknown`, never 0. `status` adds the order in force, the running and
+waiting jobs with an estimated start, or `queue empty`. `runner` is build (b) and exits 2 with
+`not built yet`. With the setting off, `submit`, `runner` and `status --ticket` exit 2 naming the
+setting, and everything else is as before.
+
+Standard library only; no network but the one brief GET of `submit --brief`. POSIX and Windows:
+a process is looked up with signal 0 on POSIX and with OpenProcess on Windows, where `os.kill`
+would end it.
 """
 
 from __future__ import annotations
@@ -59,14 +74,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, config_source, lock_cleanup, lock_slots
+import heavy_queue
+from common import CheckError, config_source, lock_cleanup, lock_slots, queue_settings
 
 USAGE = (
     "usage: lock.py run --name NAME [--session ID] [--priority P] [--timeout S]"
     " -- COMMAND [ARG...]\n"
-    "       lock.py status --name NAME\n"
+    "       lock.py status --name NAME [--ticket T]\n"
+    "       lock.py submit --name NAME --session ID [--kind prepush|proof|other] [--brief N]"
+    " -- COMMAND [ARG...]\n"
+    "       lock.py runner --name NAME\n"
     "--priority P is 0 to 3 (2 by default); the lowest goes first"
 )
+QUEUE_OFF = "the heavy-run queue is off (setting: [locks] queue)"
+PRIORITY_LINE = re.compile(r"Priority: ([0-3])")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 STALE_MINUTES = 120
 POLL = 0.5  # seconds between two tries
@@ -93,7 +114,7 @@ class Stopped(Exception):
 
 
 def parse_args(args: list[str]) -> dict:
-    if not args or args[0] not in ("run", "status"):
+    if not args or args[0] not in ("run", "status", "submit", "runner"):
         raise Usage(USAGE)
     options: dict = {
         "action": args[0],
@@ -101,6 +122,9 @@ def parse_args(args: list[str]) -> dict:
         "session": None,
         "timeout": None,
         "priority": None,
+        "ticket": None,
+        "kind": None,
+        "brief": None,
     }
     rest = args[1:]
     command: list[str] | None = None
@@ -110,17 +134,25 @@ def parse_args(args: list[str]) -> dict:
     i = 0
     while i < len(rest):
         arg = rest[i]
-        if arg in ("--name", "--session", "--timeout", "--priority") and i + 1 < len(rest):
+        allowed = {
+            "run": ("--name", "--session", "--timeout", "--priority"),
+            "status": ("--name", "--ticket"),
+            "submit": ("--name", "--session", "--kind", "--brief"),
+            "runner": ("--name",),
+        }[options["action"]]
+        if arg in allowed and i + 1 < len(rest) and options[arg[2:]] is None:
             options[arg[2:]] = rest[i + 1]
             i += 2
         else:
             raise Usage(USAGE)
     if not options["name"] or not NAME.fullmatch(options["name"]):
         raise Usage(USAGE)
-    if options["action"] == "status":
-        if command is not None or options["session"] or options["timeout"] or options["priority"]:
+    if options["action"] in ("status", "runner"):
+        if command is not None:
             raise Usage(USAGE)
         return options
+    if options["action"] == "submit":
+        return submit_options(options, command)
     if not command:
         raise Usage(USAGE)
     if options["timeout"] is not None:
@@ -141,19 +173,43 @@ def parse_args(args: list[str]) -> dict:
     return options
 
 
-def repo_root() -> Path:
-    """The work tree's top folder, or the current folder outside one."""
+def submit_options(options: dict, command: list[str] | None) -> dict:
+    """`submit`: a session and a command are needed; the kind is one of three, `other` by
+    default; the brief is a positive whole number. No option sets the priority (rule 3)."""
+    if not command or not options["session"]:
+        raise Usage(USAGE)
+    options["kind"] = options["kind"] or "other"
+    if options["kind"] not in heavy_queue.KINDS:
+        raise Usage(USAGE)
+    brief = options["brief"]
+    if brief is not None:
+        if not re.fullmatch(r"[1-9][0-9]*", brief):
+            raise Usage(USAGE)
+        options["brief"] = int(brief)
+    options["command"] = command
+    return options
+
+
+def git(cwd: Path | None, *args: str) -> tuple[int, str]:
+    """One git call without a shell: (its exit code, its output); 127 when git cannot start."""
     try:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["git", "rev-parse", "--show-toplevel"],
+            ["git", *args],
+            cwd=cwd,
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
         )
     except OSError:
-        return Path.cwd()
-    return Path(proc.stdout.strip()) if proc.returncode == 0 else Path.cwd()
+        return 127, ""
+    return proc.returncode, proc.stdout
+
+
+def repo_root() -> Path:
+    """The work tree's top folder, or the current folder outside one."""
+    code, out = git(None, "rev-parse", "--show-toplevel")
+    return Path(out.strip()) if code == 0 else Path.cwd()
 
 
 def settings(root: Path) -> dict:
@@ -615,6 +671,91 @@ def run_cleanup(command: str, root: Path, session: str, pid: int | None) -> int 
     return 128 - code if code < 0 else code
 
 
+def queue_setting(root: Path) -> dict:
+    settings(root)
+    try:
+        return queue_settings(root)
+    except CheckError as exc:
+        raise Usage(str(exc)) from None
+
+
+def brief_priority(root: Path, number: int | None) -> int | str:
+    """The single `Priority:` line (0 to 3) of brief `number`, read once with one REST GET the
+    way `session.py` reads a brief; no brief, a failed read, no line, several lines or a value
+    outside 0 to 3 is `unknown`, never 0 (SPEC-0040 rule 3)."""
+    if number is None:
+        return heavy_queue.UNKNOWN
+    try:
+        import session  # only here: the one read of GitHub that `submit --brief` makes
+
+        data = session.gh(f"repos/{session.repo_name(root)}/issues/{number}")
+    except (CheckError, OSError, ValueError):
+        return heavy_queue.UNKNOWN
+    body = data.get("body") if isinstance(data, dict) else None
+    if not isinstance(body, str):
+        return heavy_queue.UNKNOWN
+    lines = [x.strip() for x in body.splitlines() if x.startswith("Priority:")]
+    match = PRIORITY_LINE.fullmatch(lines[0]) if len(lines) == 1 else None
+    return int(match.group(1)) if match else heavy_queue.UNKNOWN
+
+
+def enqueue(
+    held: Path, name: str, job: dict, order: str, max_wait: int, now: datetime
+) -> tuple[str, str, tuple[int, int] | None]:
+    """Add the job under the lock's mutex: (its ticket, how, its position among the waiting)."""
+    folder = heavy_queue.queue_folder(held)
+    with mutex(held):
+        placed, how = heavy_queue.submit(folder, name, job)
+        return placed["ticket"], how, heavy_queue.position(
+            folder, placed["ticket"], order, max_wait, now
+        )
+
+
+def submit_job(root: Path, held: Path, options: dict, queue: dict) -> int:
+    """`lock.py submit` (SPEC-0040 rule 3): one job for the committed head, at once."""
+    name = options["name"]
+    code, top = git(None, "rev-parse", "--show-toplevel")
+    if code != 0:
+        raise Usage(f"lock {name}: submit runs inside a git work tree")
+    top_folder = Path(top.strip())
+    code, dirty = git(top_folder, "status", "--porcelain", "--untracked-files=no")
+    if code != 0 or dirty.strip():
+        raise Usage(
+            f"lock {name}: the work tree has uncommitted changes to tracked files; commit them"
+            " first, because a job runs on the committed head (nothing queued)"
+        )
+    code, sha = git(top_folder, "rev-parse", "HEAD")
+    if code != 0:
+        raise Usage(f"lock {name}: the work tree has no commit (nothing queued)")
+    code, branch = git(top_folder, "symbolic-ref", "--short", "-q", "HEAD")
+    try:
+        here = Path.cwd().resolve().relative_to(top_folder.resolve()).as_posix()
+    except ValueError:
+        here = "."
+    now = datetime.now(UTC)
+    job = heavy_queue.new_job(
+        session=options["session"],
+        repository=str(top_folder),
+        branch=branch.strip() if code == 0 and branch.strip() else "detached",
+        head=sha.strip(),
+        command=options["command"],
+        folder=here or ".",
+        kind=options["kind"],
+        brief=options["brief"],
+        priority=brief_priority(root, options["brief"]),
+        submitted=now,
+    )
+    ticket, how, place = enqueue(
+        held, name, job, queue["queue_order"], queue["queue_max_wait"], now
+    )
+    where = "running" if place is None else f"position {place[0]} of {place[1]}"
+    print(f"queued {ticket} {where} (head {job['head'][:12]})", flush=True)
+    folder = heavy_queue.queue_folder(held)
+    if not heavy_queue.runner_alive(folder, pid_alive, socket.gethostname()):
+        print(f"no runner; start one with lock.py runner --name {name}", flush=True)
+    return 0
+
+
 def on_signal(signum, _frame) -> None:
     raise Stopped(128 + signum)
 
@@ -663,10 +804,29 @@ def main(argv: list[str] | None = None) -> int:
         limit = stale_minutes(root)
         slots = slots_setting(root)
         cleanup = cleanup_setting(root) if options["action"] == "run" else ""
+        queue = queue_setting(root)
+        action = options["action"]
+        if not queue["queue"] and (action in ("submit", "runner") or options["ticket"]):
+            raise Usage(f"lock.py {action}: {QUEUE_OFF}")
+        if action == "runner":
+            raise Usage(
+                "lock.py runner: not built yet (SPEC-0040 build (b)); the queued jobs wait"
+            )
+        if action == "submit":
+            return submit_job(root, held, options, queue)
     except Usage as exc:
         print(exc, file=sys.stderr)
         return 2
+    except OSError:
+        print(f"lock {options['name']}: the queue cannot be written (setting: lock_dir)")
+        return 3
     name = options["name"]
+    if options["ticket"]:
+        lines, code = heavy_queue.status_lines(
+            heavy_queue.queue_folder(held), queue, slots, datetime.now(UTC), options["ticket"]
+        )
+        print("\n".join(lines))
+        return code
     if options["action"] == "status":
         for k, folder in enumerate(slot_folders(held, slots), start=1):
             label = f"lock {name}" if slots == 1 else f"lock {name} slot {k}"
@@ -676,6 +836,11 @@ def main(argv: list[str] | None = None) -> int:
             current = read_owner(folder)
             reason = stale_reason(current, folder, limit)
             print(f"{label}: {describe(current)}" + (f"; stale ({reason})" if reason else ""))
+        if queue["queue"]:
+            lines, _ = heavy_queue.status_lines(
+                heavy_queue.queue_folder(held), queue, slots, datetime.now(UTC)
+            )
+            print("\n".join(lines))
         return 0
     token = uuid.uuid4().hex
     owner = {

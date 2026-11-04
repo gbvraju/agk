@@ -46,9 +46,14 @@ def settings(repo, folder: Path, locks: str | None = "queue = true\n", extra: st
     repo.commit({"agk.toml": text}, "settings")
 
 
+def outside(tmp_path: Path, name: str) -> Path:
+    """A folder beside the temporary repository (whose top is `tmp_path`), never inside it."""
+    return tmp_path.parent / f"{tmp_path.name}-{name}"
+
+
 @pytest.fixture
 def where(repo, tmp_path) -> Path:
-    folder = tmp_path / "locks"
+    folder = outside(tmp_path, "locks")
     settings(repo, folder)
     return folder
 
@@ -68,9 +73,9 @@ def read(path: Path) -> dict:
 
 def fake_gh(tmp_path: Path, bodies: dict[int, str]) -> Path:
     """A `gh` on PATH that answers `repos/<o>/<r>/issues/<n>` from saved bodies, else fails."""
-    bin_dir = tmp_path / "bin"
+    bin_dir = outside(tmp_path, "bin")
     bin_dir.mkdir(exist_ok=True)
-    saved = tmp_path / "briefs.json"
+    saved = bin_dir / "briefs.json"
     saved.write_text(json.dumps({str(k): v for k, v in bodies.items()}), encoding="utf-8")
     script = bin_dir / "gh"
     script.write_text(
@@ -112,7 +117,7 @@ def head(repo) -> str:
 @pytest.mark.parametrize("locks", [None, "queue = false\n"])
 def test_with_the_queue_off_status_and_run_print_what_they_print_today(repo, tmp_path, locks):
     """REQ-047 AC1: SPEC-0040 rule 1; no queue folder is made."""
-    folder = tmp_path / "locks"
+    folder = outside(tmp_path, "locks")
     settings(repo, folder, locks)
     status = repo.run("lock.py", "status", "--name", "heavy")
     assert (status.returncode, status.stdout, status.stderr) == (0, "lock heavy: free\n", "")
@@ -127,7 +132,7 @@ def test_with_the_queue_off_submit_and_runner_exit_2_naming_the_setting(
     repo, tmp_path, locks, action
 ):
     """REQ-047 AC1: SPEC-0040 rule 1; the setting is named, never a value."""
-    folder = tmp_path / "locks"
+    folder = outside(tmp_path, "locks")
     settings(repo, folder, locks)
     if action == "submit":
         proc = submit(repo)
@@ -154,7 +159,7 @@ def test_with_the_queue_off_submit_and_runner_exit_2_naming_the_setting(
 )
 def test_an_invalid_locks_value_is_refused_naming_the_setting(repo, tmp_path, locks, key):
     """REQ-047 AC1: SPEC-0040 rule 1 (any other value of a `[locks]` key is refused)."""
-    settings(repo, tmp_path / "locks", locks)
+    settings(repo, outside(tmp_path, "locks"), locks)
     for args in (["status", "--name", "heavy"], ["run", "--name", "heavy", "--", PY, "-V"]):
         proc = repo.run("lock.py", *args)
         assert proc.returncode == 2, proc.stdout
@@ -165,7 +170,7 @@ def test_an_invalid_locks_value_is_refused_naming_the_setting(repo, tmp_path, lo
 
 def test_a_locks_value_that_is_not_a_table_is_refused(repo, tmp_path):
     """REQ-047 AC1: SPEC-0040 rule 1."""
-    repo.commit({"agk.toml": f"lock_dir = '{(tmp_path / 'l').as_posix()}'\nlocks = 3\n"})
+    repo.commit({"agk.toml": f"lock_dir = '{outside(tmp_path, 'l').as_posix()}'\nlocks = 3\n"})
     proc = repo.run("lock.py", "status", "--name", "heavy")
     assert proc.returncode == 2 and "(setting: [locks])" in proc.stderr
 
@@ -368,8 +373,9 @@ def test_a_replacing_job_reads_its_brief_again(repo, where, tmp_path):
     repo.git("remote", "add", "origin", "https://github.com/example/demo.git")
     queued(submit(repo, "--brief", "7", bin_dir=fake_gh(tmp_path, {7: "Priority: 3\n"})))
     repo.commit({"a.txt": "more\n"}, "next step")
-    (tmp_path / "briefs.json").write_text(json.dumps({"7": "Priority: 1\n"}), encoding="utf-8")
-    queued(submit(repo, "--brief", "7", bin_dir=tmp_path / "bin"))
+    saved = outside(tmp_path, "bin") / "briefs.json"
+    saved.write_text(json.dumps({"7": "Priority: 1\n"}), encoding="utf-8")
+    queued(submit(repo, "--brief", "7", bin_dir=outside(tmp_path, "bin")))
     [job] = [read(p) for p in job_files(where)]
     assert job["priority"] == 1 and job["head"] == head(repo)
 
@@ -525,7 +531,7 @@ def test_status_shows_the_fifo_queue_with_estimates_and_changes_no_file(repo, wh
 
 def test_status_shows_the_priority_order_with_priorities_and_overdue(repo, tmp_path):
     """REQ-047 AC6: SPEC-0040 rule 7 under `"priority"`; positions are in the order in force."""
-    folder = tmp_path / "locks"
+    folder = outside(tmp_path, "locks")
     settings(repo, folder, 'queue = true\nqueue_order = "priority"\nqueue_max_wait = 3\n')
     jobs = three_jobs() + [live_job(9, 2, 30)]
     plant_queue(folder, jobs, five_results())
@@ -579,7 +585,7 @@ def test_status_of_one_ticket(repo, where):
 
 def test_status_of_a_ticket_with_the_queue_off_is_refused(repo, tmp_path):
     """REQ-047 AC1: SPEC-0040 rule 1."""
-    settings(repo, tmp_path / "locks", None)
+    settings(repo, outside(tmp_path, "locks"), None)
     proc = repo.run("lock.py", "status", "--name", "heavy", "--ticket", "heavy-000001-abcd")
     assert proc.returncode == 2 and "setting: [locks] queue" in proc.stderr
 

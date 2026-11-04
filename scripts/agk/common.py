@@ -816,6 +816,43 @@ def lock_cleanup(root: Path) -> str:
     return value.strip()
 
 
+QUEUE_DEFAULTS = {
+    "queue": False,
+    "queue_autostart": False,
+    "queue_idle_minutes": 10,
+    "queue_order": "fifo",
+    "queue_max_wait": 120,
+}
+QUEUE_ORDERS = ("fifo", "priority")
+
+
+def queue_settings(root: Path) -> dict:
+    """The heavy-run queue's settings, the `[locks]` table of agk.toml (SPEC-0040 rule 1, brief
+    529, ADR-0264): off, fifo, 10 idle minutes and 120 minutes of maximum wait by default, also
+    when the table is absent. A value of another type, a key the table does not hold, or a `locks`
+    value that is not a table is a refusal that names the setting, never the value."""
+    table = config_source(root).get("locks")
+    found = dict(QUEUE_DEFAULTS)
+    if table is None:
+        return found
+    if not isinstance(table, dict):
+        raise CheckError("locks must be a table of the queue's settings (setting: [locks])")
+    for key, value in table.items():
+        if key not in QUEUE_DEFAULTS:
+            raise CheckError(f"[locks] holds only the queue's settings (setting: [locks] {key})")
+        if key in ("queue", "queue_autostart"):
+            ok, want = isinstance(value, bool), "true or false"
+        elif key == "queue_order":
+            ok, want = isinstance(value, str) and value in QUEUE_ORDERS, '"fifo" or "priority"'
+        else:
+            ok = isinstance(value, int) and not isinstance(value, bool) and value >= 1
+            want = "a positive whole number of minutes"
+        if not ok:
+            raise CheckError(f"{key} must be {want} (setting: [locks] {key})")
+        found[key] = value
+    return found
+
+
 EXECUTIONS = ("hosted", "hybrid", "pool", "local")
 
 
