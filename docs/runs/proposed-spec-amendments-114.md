@@ -14,14 +14,16 @@ risk".
    lists never grow." becomes "No secrets in the repository or in an agent session, and the data guard stops reads and
    writes that would carry one; scanners' ignore lists never grow." Nothing else of the constitution changes. The owner
    merges this item by hand (build (f)).
-2. **`docs/guides/security.md`, the paragraph "Secrets in a session".** Its last two sentences, "That is a rule the checks
+2. **`docs/guides/security.md`, the bullet "Secrets in a session".** Its last two sentences, "That is a rule the checks
    and the scan look for. It is not a wall: the architect role can read any file in the folder it is started in.", become a
    short statement of what the data guard does (layer 1 denies reads of secret files, raw logs, remote shells and
    databases and the environment before they happen; layer 2, `agk logs`, is the one way to read a log; layer 3 blocks a
    pasted message that holds a secret or personal data; layer 4 refuses any AGK write that holds one) and what it does
    not do (SPEC-0042 rule 16: patterns cannot catch every secret or name; the hook guards a Claude Code session's tools,
    not other programs; the guard is a second line after least privilege), with a link to `docs/guides/data-guard.md`.
-   The section "What AGK stores" gains one line for the guard log outside the repository (SPEC-0042 rule 15).
+   In the section "What AGK stores", the sentence "Nothing outside your repository." becomes "Nothing outside your
+   repository, except the data guard's log of counts (SPEC-0042 rule 15).", and the bullet "On your machine" gains the
+   guard log: one line per denial or block, counts only, kept 90 days.
 3. **SPEC-0005 rule 7 ("Footprint").** Only if the owner rules `Q-S0042-15` that the plugin ships the guard: "The plugin
    ships no hook, no MCP or LSP server, no monitor and no `bin/` directory in K3." becomes "The plugin ships one hook, the
    data guard of SPEC-0042 (`hooks/hooks.json` registering `data_guard.py` for `PreToolUse` and `UserPromptSubmit`), and
