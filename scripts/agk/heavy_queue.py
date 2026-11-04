@@ -165,7 +165,8 @@ def same_run(a: dict, b: dict) -> bool:
 
 
 def same_pull(a: dict, b: dict) -> bool:
-    """Rule 5: the same repository, branch, session and command, never a detached head."""
+    """Rule 5: the same repository, branch, session and command, never a detached head (a
+    replace also needs a different head, which `submit` checks)."""
     if a.get("branch") == "detached" or b.get("branch") == "detached":
         return False
     return all(a.get(k) == b.get(k) for k in ("repository", "branch", "session", "command"))
@@ -181,7 +182,7 @@ def submit(folder: Path, name: str, job: dict) -> tuple[dict, str]:
         if same_run(other, job):
             return other, "duplicate"
     for other in sorted(present, key=lambda j: j["seq"]):
-        if running(other) or not same_pull(other, job):
+        if running(other) or not same_pull(other, job) or other.get("head") == job.get("head"):
             continue
         placed = {**job, "seq": other["seq"], "submitted": other["submitted"]}
         placed["ticket"] = make_ticket(name, other["seq"])

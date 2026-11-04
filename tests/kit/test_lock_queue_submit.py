@@ -368,6 +368,20 @@ def test_a_later_head_replaces_the_waiting_job_in_its_position(repo, where):
     assert shown.stdout.startswith(f"result {old} replaced by {new} head {old_job['head'][:12]}")
 
 
+def test_the_same_head_from_another_folder_is_a_new_job_and_replaces_nothing(repo, where):
+    """REQ-047 AC4: SPEC-0040 rule 5 and Q-S0040-8 (a replace needs a different head)."""
+    repo.branch("claude/brief-1")
+    repo.commit({"sub/keep.txt": "kept\n"}, "a folder")
+    first = queued(submit(repo)).group(1)
+    inside = type(repo)(repo.root / "sub")  # the same repository, run from its `sub` folder
+    match = queued(submit(inside))
+    assert match.group(1) != first and match.group(2, 3) == ("2", "2")
+    jobs = {read(p)["ticket"]: read(p) for p in job_files(where)}
+    assert set(jobs) == {first, match.group(1)}
+    assert {j["folder"] for j in jobs.values()} == {".", "sub"}
+    assert not (queue_of(where) / "results" / f"{first}.json").exists()
+
+
 def test_a_replacing_job_reads_its_brief_again(repo, where, tmp_path):
     """REQ-047 AC4: SPEC-0040 rule 5 (its priority is read again from its brief)."""
     repo.git("remote", "add", "origin", "https://github.com/example/demo.git")
