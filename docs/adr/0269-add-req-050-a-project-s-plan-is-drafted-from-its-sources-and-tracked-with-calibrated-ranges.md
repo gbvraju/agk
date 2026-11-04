@@ -1,6 +1,6 @@
 # ADR-0269: Add REQ-050: A project's plan is drafted from its sources and tracked with calibrated ranges
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0009, SPEC-0011, SPEC-0012, SPEC-0013, SPEC-0018, SPEC-0034, SPEC-0037, SPEC-0038, SPEC-0040, ADR-0153
