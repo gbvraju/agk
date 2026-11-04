@@ -33,7 +33,7 @@ OLD = "0f9e8d7c6b" * 4
 SHA12 = HEAD[:12]
 REPO = "example-owner/example-repo"
 ON = 'auto_merge = true\nauto_merge_method = "squash"\n'
-SECRET = "secretvalue"  # a value no output line may ever show
+HIDDEN = "secretvalue"  # a value no output line may ever show
 CONDUCTOR = "conductor-two"
 BUILDER = "builder-one"
 OWNER = "owner-three"
@@ -174,11 +174,11 @@ OFF_CASES = [
     ('assign = "next"\n', "auto_merge"),  # the table without the key
     ('auto_merge = false\nauto_merge_method = "squash"\n', "auto_merge"),
     ("auto_merge = false\n", "auto_merge"),
-    (f'auto_merge = "{SECRET}"\nauto_merge_method = "squash"\n', "auto_merge"),
+    (f'auto_merge = "{HIDDEN}"\nauto_merge_method = "squash"\n', "auto_merge"),
     ('auto_merge = 1\nauto_merge_method = "squash"\n', "auto_merge"),
     ('auto_merge = "true"\nauto_merge_method = "squash"\n', "auto_merge"),
     ('auto_merge = true\nauto_merge_method = "merge"\n', "auto_merge_method"),
-    (f'auto_merge = true\nauto_merge_method = "{SECRET}"\n', "auto_merge_method"),
+    (f'auto_merge = true\nauto_merge_method = "{HIDDEN}"\n', "auto_merge_method"),
     ('auto_merge = true\nauto_merge_method = "Squash"\n', "auto_merge_method"),
     ("auto_merge = true\nauto_merge_method = 1\n", "auto_merge_method"),
     ("auto_merge = true\n", "auto_merge_method"),
@@ -195,7 +195,7 @@ def test_every_setting_but_true_with_squash_merges_nothing_and_names_the_setting
     line = one_line(proc)
     assert line.startswith(f"merge-cleared #7 {SHA12}: refused: "), line
     assert setting in line
-    assert SECRET not in line and "Squash" not in line
+    assert HIDDEN not in line and "Squash" not in line
     assert proc.returncode == 1
     assert made == [], "with the setting off nothing reads GitHub"
 
@@ -249,17 +249,17 @@ def test_a_default_branch_not_fetched_or_without_agk_toml_is_refused(tmp_path):
 
 def test_unreadable_toml_on_the_default_branch_names_the_path_class(tmp_path):
     """REQ-046 AC1: SPEC-0039 rule 1 (malformed)."""
-    proc, made = merge_cleared_run(tmp_path, f'[flow\nauto_merge = "{SECRET}"\n', [cleared()])
+    proc, made = merge_cleared_run(tmp_path, f'[flow\nauto_merge = "{HIDDEN}"\n', [cleared()])
     line = one_line(proc)
-    assert "refused" in line and "agk.toml" in line and SECRET not in line
+    assert "refused" in line and "agk.toml" in line and HIDDEN not in line
     assert proc.returncode == 1 and made == []
 
 
 def test_a_flow_key_that_is_not_a_table_is_refused(tmp_path):
     """REQ-046 AC1: SPEC-0039 rule 1 (malformed)."""
-    proc, _ = merge_cleared_run(tmp_path, f'flow = "{SECRET}"\n', [cleared()])
+    proc, _ = merge_cleared_run(tmp_path, f'flow = "{HIDDEN}"\n', [cleared()])
     line = one_line(proc)
-    assert "refused" in line and "flow" in line and SECRET not in line and proc.returncode == 1
+    assert "refused" in line and "flow" in line and HIDDEN not in line and proc.returncode == 1
 
 
 def test_the_setting_reader_returns_off_or_on_and_refuses_naming_the_setting():
@@ -270,13 +270,13 @@ def test_the_setting_reader_returns_off_or_on_and_refuses_naming_the_setting():
     on = {"flow": {"auto_merge": True, "auto_merge_method": "squash"}}
     assert merge_cleared.auto_merge_setting(on) == "on"
     for flow, name in (
-        ({"auto_merge": SECRET}, "auto_merge"),
+        ({"auto_merge": HIDDEN}, "auto_merge"),
         ({"auto_merge": False, "auto_merge_method": "rebase"}, "auto_merge_method"),
         ({"auto_merge": True}, "auto_merge_method"),
     ):
         with pytest.raises(CheckError) as err:
             merge_cleared.auto_merge_setting({"flow": flow})
-        assert name in str(err.value) and SECRET not in str(err.value)
+        assert name in str(err.value) and HIDDEN not in str(err.value)
 
 
 # --- rule 1: the doctor line --------------------------------------------------------------------
@@ -291,8 +291,8 @@ def test_doctor_prints_auto_merge_off_or_on_with_the_method():
     )
     assert on.status == "ok" and on.message == "on, method squash"
     assert doctor_module.auto_merge_result({}).message == "off"
-    bad = doctor_module.auto_merge_result({"flow": {"auto_merge": SECRET}})
-    assert bad.status == "fail" and "auto_merge" in bad.message and SECRET not in bad.message
+    bad = doctor_module.auto_merge_result({"flow": {"auto_merge": HIDDEN}})
+    assert bad.status == "fail" and "auto_merge" in bad.message and HIDDEN not in bad.message
     severity, ok_text, fail_text, _fix = doctor_module.CHECKS["auto-merge-setting"]
     assert severity == "error" and ok_text == "auto-merge: "
 
@@ -302,7 +302,7 @@ def test_doctor_prints_auto_merge_off_or_on_with_the_method():
     [
         ("", "ok auto-merge-setting error auto-merge: off", 0),
         (ON, "ok auto-merge-setting error auto-merge: on, method squash", 0),
-        (f'auto_merge = "{SECRET}"\n', "FAIL auto-merge-setting error", 1),
+        (f'auto_merge = "{HIDDEN}"\n', "FAIL auto-merge-setting error", 1),
     ],
 )
 def test_doctor_reports_the_line_in_a_full_run(tmp_path, flow, expected, code):
@@ -325,7 +325,7 @@ def test_doctor_reports_the_line_in_a_full_run(tmp_path, flow, expected, code):
     )
     line = next(x for x in proc.stdout.splitlines() if "auto-merge-setting" in x)
     assert line.startswith(expected), proc.stdout
-    assert SECRET not in proc.stdout
+    assert HIDDEN not in proc.stdout
     if code:
         assert proc.returncode == 1
 
@@ -486,7 +486,7 @@ def test_a_placeholder_a_spec_approver_or_a_bad_list_is_refused_naming_the_setti
     line = one_line(proc)
     assert line.startswith(f"merge-cleared #7 {SHA12}: refused: ")
     assert "conductor_accounts" in line
-    assert SECRET not in line and OWNER not in line
+    assert HIDDEN not in line and OWNER not in line
     assert proc.returncode == 1 and made == []
 
 
@@ -508,12 +508,12 @@ def test_reviewers_reads_the_optional_conductor_accounts():
     for bad in (
         {"conductor_accounts": ["@REPLACE-ME"]},
         {"conductor_accounts": [f"@{OWNER}"], "spec_approvers": [f"@{OWNER}"]},
-        {"conductor_accounts": SECRET},
-        {"conductor_accounts": [f"@org/{SECRET}"]},
+        {"conductor_accounts": HIDDEN},
+        {"conductor_accounts": [f"@org/{HIDDEN}"]},
     ):
         with pytest.raises(CheckError) as err:
             reviewers.conductors_of(bad)
-        assert "conductor_accounts" in str(err.value) and SECRET not in str(err.value)
+        assert "conductor_accounts" in str(err.value) and HIDDEN not in str(err.value)
         assert OWNER not in str(err.value)
     assert "conductor_accounts" in reviewers.TOP_KEYS
 
@@ -618,7 +618,7 @@ def test_a_remote_that_is_not_github_or_no_gh_is_refused(tmp_path):
         tmp_path, toml(ON), [cleared()], origin="https://example.com/secretvalue.git"
     )
     line = one_line(proc)
-    assert "refused" in line and "origin" in line and SECRET not in line
+    assert "refused" in line and "origin" in line and HIDDEN not in line
     assert proc.returncode == 1 and made == []
 
 
