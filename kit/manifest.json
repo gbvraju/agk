@@ -59,6 +59,7 @@
     "scripts/agk/facts.py",
     "scripts/agk/flakes.py",
     "scripts/agk/full_run.py",
+    "scripts/agk/heavy_queue.py",
     "scripts/agk/impact.py",
     "scripts/agk/launch.py",
     "scripts/agk/local_mode.py",
