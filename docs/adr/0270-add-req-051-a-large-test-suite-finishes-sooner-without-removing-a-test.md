@@ -43,9 +43,13 @@ the heavy-run queue (SPEC-0040, build (a) merged in #532) and `docs/guides/testi
    own `parallel_command`, giving the same result as one worker (rules 4 to 7); the after-merge
    smoke run chosen by change kind, never a gate (rule 8); and `doctor.py` suggesting
    `proof_timeout` from a record, never writing it (rule 9). Front-end test layouts are detected
-   by `adopt` (rule 10, #484), and the guide says to measure before and after (rule 11).
+   by `adopt`, and for a project already adopted `doctor.py` reports stamped test folders that
+   match no test file while the front-end patterns would (rule 10, #484, `Q-S0044-10`); the guide
+   says to measure before and after (rule 11).
 4. No Approved spec changes, so proposed spec amendment 116, reserved for this intake, is not
-   used (`Q-S0044-9`).
+   used: the timing readers print a separate line and leave SPEC-0040 rule 7's `result` line as
+   it is (`Q-S0044-9`), and the change-kind smoke choice is never the evidence of SPEC-0038 rule
+   10's web-app gate "an e2e smoke run per merge batch", which stays as it is (rule 8).
 5. Per plan #542, this is the one ADR of REQ-051: each build of SPEC-0044 rule 12 cites it and
    records its decisions in its pull request body. The builds will change these protected path classes: `scripts/agk/`
    (`impact.py`, `prepush.py`, `proof.py`, `evidence.py`, `project_tests.py`, `lock.py` or
