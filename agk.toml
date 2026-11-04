@@ -31,7 +31,7 @@ review_mode = "team"
 [flow]
 assign = "conductor"
 # auto_merge and auto_merge_method (SPEC-0039 rule 1): off by default and when absent; only auto_merge = true with
-# auto_merge_method = "squash", read from the default branch, lets merge_cleared.py merge. This repository does not turn it on;
-# doing so is the owner's change, by an ADR in the same pull request.
-# auto_merge = false
-# auto_merge_method = "squash"
+# auto_merge_method = "squash", read from the default branch, lets merge_cleared.py merge. This repository turns it on by the
+# owner's choice, ADR-0266; turning it off is again the owner's change, by an ADR in the same pull request.
+auto_merge = true
+auto_merge_method = "squash"

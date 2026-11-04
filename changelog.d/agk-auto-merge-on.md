@@ -1,0 +1,1 @@
+- AGK turns `[flow] auto_merge` on for its own repository, so the conductor merges cleared pull requests outside the hold list through `merge_cleared.py` (brief #534, ADR-0266 Proposed)
