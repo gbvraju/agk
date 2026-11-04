@@ -1,12 +1,12 @@
-"""The heavy-run queue's job files, `submit` and `status` (brief #529, ADR-0264, SPEC-0040 build (a)).
+"""The heavy-run queue's job files, `submit` and `status` (brief #529, ADR-0264, SPEC-0040 (a)).
 
-REQ-047. With `[locks] queue = true` in agk.toml, `lock.py submit --name heavy --session S [--kind K]
-[--brief N] -- <cmd...>` writes one job file for the committed head into `.agk-lock-heavy.queue/`
-beside the lock, prints `queued <ticket> position <n> of <m> (head <sha12>)` at once and never waits
-on the lock; `lock.py status` adds the order in force, the running and waiting jobs with an estimated
-start from past results, and `queue empty`. With no `[locks]` table, or `queue = false`, nothing
-changes, no queue folder is made, and `submit` and `runner` exit 2 naming the setting. The runner
-is build (b): `runner` exits 2 with `not built yet`.
+REQ-047. With `[locks] queue = true` in agk.toml, `lock.py submit --name heavy --session S
+[--kind K] [--brief N] -- <cmd...>` writes one job file for the committed head into
+`.agk-lock-heavy.queue/` beside the lock, prints `queued <ticket> position <n> of <m> (head
+<sha12>)` at once and never waits on the lock; `lock.py status` adds the order in force, the
+running and waiting jobs with an estimated start from past results, and `queue empty`. With no
+`[locks]` table, or `queue = false`, nothing changes, no queue folder is made, and `submit` and
+`runner` exit 2 naming the setting. The runner is build (b): `runner` exits 2 with `not built yet`.
 
 Every test points `lock_dir` at its own folder, reads saved brief responses from a fake `gh` on
 PATH and makes no network call; data is invented (example.com).
@@ -29,7 +29,9 @@ import pytest
 
 PY = sys.executable
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
-QUEUED = re.compile(r"queued (heavy-\d{6}-[0-9a-f]{4}) position (\d+) of (\d+) \(head ([0-9a-f]{12})\)")
+QUEUED = re.compile(
+    r"queued (heavy-\d{6}-[0-9a-f]{4}) position (\d+) of (\d+) \(head ([0-9a-f]{12})\)"
+)
 COMMAND = ["python3", "-c", "print('suite')"]
 
 
