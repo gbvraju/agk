@@ -1,6 +1,6 @@
 # ADR-0265: merge_cleared.py merges a cleared pull request through one guarded command (REQ-046, brief 531)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: ADR-0261, ADR-0263, SPEC-0039
