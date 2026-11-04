@@ -1,6 +1,6 @@
 # SPEC-0038: A project's work type selects a delivery playbook that makes delivery faster and never weakens a gate
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-045
 
