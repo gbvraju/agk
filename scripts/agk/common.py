@@ -7,8 +7,9 @@ import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tempfile
 import tomllib
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 REQ_ID = re.compile(r"REQ-\d{3}")
@@ -126,6 +127,56 @@ def windows_available() -> int | None:
     if not kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
         return None
     return int(status.ullAvailPhys)
+
+
+TEMP_VARS = ("TEMP", "TMP", "TMPDIR")
+
+
+def on_windows() -> bool:
+    return os.name == "nt"
+
+
+def long_path_name(path: str) -> str | None:
+    """`GetLongPathNameW` of `path` through ctypes (Windows only); None when the call fails."""
+    import ctypes
+
+    kernel32 = vars(ctypes)["windll"].kernel32  # windll exists on Windows only
+    size = kernel32.GetLongPathNameW(path, None, 0)
+    if not size:
+        return None
+    buffer = ctypes.create_unicode_buffer(size)
+    got = kernel32.GetLongPathNameW(path, buffer, size)
+    if not got or got >= size:
+        return None
+    return buffer.value or None
+
+
+def long_temp_name() -> str:
+    """The temporary folder as text: on Windows its long form (brief #508, ADR-0257), so that an
+    8.3 short name such as `EXAMPL~1.USR` never reaches a test command; the value unchanged when
+    the expansion fails, and on any other system."""
+    temp = tempfile.gettempdir()
+    if not on_windows():
+        return temp
+    try:
+        return long_path_name(temp) or temp
+    except (OSError, ValueError, AttributeError, KeyError, TypeError):
+        return temp
+
+
+def long_temp_dir() -> Path:
+    """`long_temp_name()` as a path, where proof and evidence make their temporary folders."""
+    return Path(long_temp_name())
+
+
+def temp_env(base: Mapping[str, str] | None = None) -> dict[str, str]:
+    """A copy of `base` (the process environment by default) with `TEMP`, `TMP` and `TMPDIR` set
+    to `long_temp_dir()` on Windows; an unchanged copy elsewhere."""
+    env = dict(os.environ if base is None else base)
+    if on_windows():
+        folder = long_temp_name()
+        env.update(dict.fromkeys(TEMP_VARS, folder))
+    return env
 
 
 def available_memory() -> int | None:
