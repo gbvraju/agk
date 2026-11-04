@@ -1,6 +1,6 @@
 # ADR-0268: Add REQ-049: AGK guards secrets and personal data at every step
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: SPEC-0042, SPEC-0005, SPEC-0013, SPEC-0030, SPEC-0041, REQ-048
