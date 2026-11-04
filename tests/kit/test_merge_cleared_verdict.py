@@ -754,7 +754,7 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
 def test_the_script_is_installed_and_the_templates_carry_the_commented_keys():
     """REQ-046 AC1: brief #528 answers 1 and 4 (installed; the template's keys commented, off).
 
-    This repository's own agk.toml turns the setting on by the owner's choice (brief #534, ADR-0266).
+    This repository's own agk.toml turns it on by the owner's choice (brief #534, ADR-0266).
     """
     root = SCRIPTS.parents[1]
     manifest = json.loads((root / "kit" / "manifest.json").read_text(encoding="utf-8"))
