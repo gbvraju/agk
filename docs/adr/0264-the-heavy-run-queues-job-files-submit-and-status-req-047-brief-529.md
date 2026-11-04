@@ -1,6 +1,6 @@
 # ADR-0264: The heavy-run queue's job files, submit and status (REQ-047, brief 529)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: ADR-0262, SPEC-0040, ADR-0191, ADR-0231, ADR-0254
