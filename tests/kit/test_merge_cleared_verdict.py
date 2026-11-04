@@ -4,13 +4,17 @@ Brief #528, ADR-0263, REQ-046. `merge_cleared.py --pr N --sha SHA` reads `[flow]
 `auto_merge_method` from agk.toml as committed on the default branch of the remote, as last fetched,
 judges the latest `Verdict:` comment of the pull request and prints one line. Since build (b) (brief
 #531, ADR-0265) a cleared pull request whose other re-checks pass is merged by the one pinned call,
-so the saved world here is one the command may merge. Every test runs on a git repository in
+so the saved world here is one the command may merge; since build (c) (brief #551, ADR-0273) it
+also holds one open `agk-auto-merge` record issue, a fake `make` for the governance run after the
+merge and a local bare remote whose path ends `github.com/<owner>/<repo>.git` holding a fixed
+merge commit, so that nothing reaches the network. Every test runs on a git repository in
 `tmp_path` and a fake `gh` that answers from saved responses and records its argument lists. No
 network; invented logins, addresses at example.com.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess  # nosec B404 - fixed argument lists only, no shell
@@ -63,15 +67,42 @@ def toml(flow: str, mode: str = "strict", local: bool = False) -> str:
     return top + ("[flow]\n" + flow if flow else "")
 
 
+def remote(tmp_path: Path) -> str:
+    """A bare repository standing for GitHub (brief #551): its path ends with
+    `github.com/<owner>/<repo>.git`, so the command reads the repository name from it, and its
+    `main` is the fixed merge commit MERGE, so a fetch after the merge finds it with no network."""
+    bare = tmp_path / "remote" / "github.com" / f"{REPO}.git"
+    bare.mkdir(parents=True)
+    git(bare, "init", "-q", "--bare", "-b", "main")
+    tree = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "hash-object", "-w", "-t", "tree", "--stdin"],
+        cwd=bare, input=b"", capture_output=True, check=True,
+    ).stdout.decode().strip()  # fmt: skip
+    assert tree == EMPTY_TREE
+    for text, sha in ((BASE_TEXT, BASE), (MERGE_TEXT, MERGE)):
+        made = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "hash-object", "-w", "-t", "commit", "--stdin"],
+            cwd=bare, input=text, capture_output=True, check=True,
+        ).stdout.decode().strip()  # fmt: skip
+        assert made == sha
+    git(bare, "update-ref", "refs/heads/main", MERGE)
+    return bare.as_uri()
+
+
+LOCAL_REMOTE = "local bare remote"  # repo(): use remote() for origin
+
+
 def repo(
     tmp_path: Path,
     main: str,
     head: str | None = None,
     reviewers_yaml: str | None = None,
-    origin: str = f"https://github.com/{REPO}.git",
+    origin: str = LOCAL_REMOTE,
 ) -> Path:
     """A checkout whose `origin/main` holds MAIN; with HEAD, the checkout is a pull request's head
     branch whose agk.toml (committed and in the work tree) says HEAD instead."""
+    if origin == LOCAL_REMOTE:
+        origin = remote(tmp_path)
     root = tmp_path / "repo"
     root.mkdir(parents=True)
     git(root, "init", "-q", "-b", "main")
@@ -113,8 +144,24 @@ def cleared(sha: str = HEAD, login: str = OWNER, at: int = 5, extra: str | None 
     return comment(body + (evidence(sha) if extra is None else extra), login, at)
 
 
-MERGE = "c0ffee5eed" * 4  # the merge commit GitHub answers with
+def object_sha(kind: str, text: bytes) -> str:
+    return hashlib.sha1(f"{kind} {len(text)}\0".encode() + text, usedforsecurity=False).hexdigest()
+
+
+EMPTY_TREE = object_sha("tree", b"")
+STAMP = "Example <example@example.com> 1793000000 +0000"
+BASE_TEXT = f"tree {EMPTY_TREE}\nauthor {STAMP}\ncommitter {STAMP}\n\nbase\n".encode()
+BASE = object_sha("commit", BASE_TEXT)  # the parent of the merge commit
+MERGE_TEXT = f"tree {EMPTY_TREE}\nparent {BASE}\nauthor {STAMP}\ncommitter {STAMP}\n\nmerge\n"
+MERGE_TEXT = MERGE_TEXT.encode()
+MERGE = object_sha("commit", MERGE_TEXT)  # the merge commit GitHub answers with
 MERGE12 = MERGE[:12]
+AUTO_ISSUE = {  # the one open `agk-auto-merge` issue of SPEC-0039 rule 7
+    "number": 41,
+    "title": "Auto merge record",
+    "body": "One line per merge.",
+    "labels": [{"name": "agk-auto-merge"}],
+}
 GREEN_RUNS = [
     {"id": 11, "name": "proof", "status": "completed", "conclusion": "success"},
     {"id": 12, "name": "governance", "status": "completed", "conclusion": "success"},
@@ -137,7 +184,7 @@ def world(**saved: object) -> dict:
             "body": "Brief: #500\nAdvances: REQ-046\n",
         },
         "comments": [],
-        "issues": [],
+        "issues": [AUTO_ISSUE],
         "runs": GREEN_RUNS,
         "files": [{"filename": "scripts/agk/example.py", "status": "modified", "patch": "+x"}],
         "items": {},
@@ -172,6 +219,20 @@ if method == 'PUT' and parts[0] == 'pulls' and parts[2:] == ['merge']:
     if 'http' in answer:
         fail(answer['http'])
     out = answer
+elif method == 'POST' and parts[0] == 'issues' and parts[2:] == ['comments']:
+    if data.get('comment_fails'):
+        fail(422)
+    out = {'id': 5001, 'body': 'posted'}
+elif method == 'POST' and parts == ['issues']:
+    if data.get('issue_fails'):
+        fail(422)
+    out = {'number': 95}
+elif method == 'PATCH' and parts[0] == 'issues' and len(parts) == 2:
+    out = {'number': int(parts[1])}
+elif method == 'POST' and parts == ['labels']:
+    out = {'name': 'agk-brief'}
+elif method == 'GET' and parts == ['labels']:
+    out = paged(data.get('labels', []))
 elif method != 'GET':
     fail(405)
 elif parts[0] == 'pulls' and len(parts) == 2 and parts[1] == '7':
@@ -197,12 +258,22 @@ print(json.dumps(out))
 """
 
 
+FAKE_MAKE = """
+import json, os, sys
+with open(LOG, 'a', encoding='utf-8') as fh:
+    seen = {'args': sys.argv[1:], 'env': dict(os.environ), 'cwd': os.getcwd()}
+    fh.write(json.dumps(seen) + '\\n')
+sys.exit(EXIT)
+"""
+
+
 def fake_gh(
     tmp_path: Path,
     pull: object = None,
     comments: object = None,
     fail: bool = False,
     changed: bool = True,
+    make_exit: int = 0,
     **saved: object,
 ):
     """A `gh` on PATH that answers from saved JSON (`world`) and logs each argument list; with
@@ -223,6 +294,13 @@ def fake_gh(
         encoding="utf-8",
     )
     script.chmod(0o755)
+    make = bin_dir / "make"  # the governance run after the merge (brief #551)
+    make.write_text(
+        f"#!{sys.executable}\nLOG, EXIT = {str(tmp_path / 'make-calls.jsonl')!r}, {make_exit!r}\n"
+        + FAKE_MAKE,
+        encoding="utf-8",
+    )
+    make.chmod(0o755)
     return bin_dir, log
 
 
@@ -264,7 +342,7 @@ def merge_cleared_run(
     head_toml=None,
     pull=None,
     reviewers_yaml=None,
-    origin=f"https://github.com/{REPO}.git",
+    origin=LOCAL_REMOTE,
     **saved,
 ):
     root = repo(tmp_path, main, head_toml, reviewers_yaml, origin)

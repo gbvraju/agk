@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 from test_merge_cleared_verdict import (
+    AUTO_ISSUE,
     BUILDER,
     CONDUCTOR,
     GREEN_RUNS,
@@ -416,7 +417,11 @@ def test_the_red_branch_issue_holds_everything(tmp_path):
 
 def test_an_issue_of_another_title_or_a_pull_request_of_that_title_is_not_red(tmp_path):
     """REQ-046 AC4: SPEC-0039 rule 5 (the one issue of that title)."""
-    others = [{"number": 91, "title": "The default branch is green"}, {**RED, "pull_request": {}}]
+    others = [
+        {"number": 91, "title": "The default branch is green"},
+        {**RED, "pull_request": {}},
+        AUTO_ISSUE,
+    ]
     proc, _ = merge_cleared_run(tmp_path, toml(ON), [bare()], issues=others)
     assert one_line(proc) == MERGED
 
@@ -635,10 +640,13 @@ def test_the_script_runs_once_with_no_timer_and_no_head_command():
         "sched.",
         "ScheduleWakeup",
         "while True:\n        merge",
-        '"make"',
         "git push",
     ):
         assert word not in text, word
+    # build (c) (brief #551): `make` runs only in the governance run on the merged default branch
+    assert text.count('"make"') == 1, "make appears once"
+    run_body = text.split("def governance_argv(", 1)[1].split("\ndef ", 1)[0]
+    assert '"make"' in run_body, "only the governance run names make"
     assert text.count('--method", "PUT"') <= 1 and '"PUT"' in text
 
 
