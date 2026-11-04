@@ -37,11 +37,18 @@ fails with one line naming `<cmd>` and how to install it, and the raw output is 
 other lint failure prints as before. It stays a FAIL, never `not run`: lint is a rule of the
 project, unlike the optional secret scan.
 
+Brief #509 (ADR-0258): after the regression run named `full` finishes, when its seconds exceed
+`proof_timeout`, the tests step prints `prepush: warning: the full suite took <n> s, more than
+proof_timeout (<m> s); proof will not finish (setting: proof_timeout); a value of about <v> s leaves
+headroom`, with `<v>` = ceil(n * 1.5 / 60) * 60, and puts the line in the record's `notes`. The
+outcome does not change; a run ended by the limit already prints the timeout note instead.
+
 `--record FILE` (brief #374, ADR-0208) also writes one JSON record of the run, `schema: 1`: the
 head and base shas, `started` (UTC), `tree_clean` (a dirty tree is recorded, never hidden), each
 step that ran with its `name`, `outcome`, `argv`, `cwd`, `exit`, `seconds`, `output_sha256` and
 `output_bytes` (the tests step adds each run it made), and the `versions` of python3, git, make
-and gitleaks where found. It holds no output text, no environment value and no path outside the
+and gitleaks where found, and `notes`: the warnings of the run, such as brief #509's (ADR-0258).
+It holds no output text, no environment value and no path outside the
 repository (one outside is written `<outside>/<name>`, the interpreter `python3`). A failed step
 still writes it. Then it prints one line for the pull request body:
 `Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>`. A record
@@ -52,6 +59,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -76,6 +84,7 @@ from common import (
     proof_areas,
     proof_timeout,
     resolve_base,
+    temp_env,
 )
 from impact import Impact, Selected, impact
 from proof import area_command, execute, is_test_file, timeout_note
@@ -104,12 +113,14 @@ class Step:
         not_run: bool = False,
         ran: Ran | None = None,
         runs: list[dict] | None = None,
+        notes: list[str] | None = None,
     ) -> None:
         self.outcome = outcome
         self.text = text
         self.not_run = not_run  # skipped although it should have run (a missing tool)
         self.ran = ran
         self.runs = runs
+        self.notes = list(notes or [])  # warnings that do not change the outcome (brief #509)
 
 
 class Ran:
@@ -302,7 +313,7 @@ def proof_runs(root: Path, runs: list[dict], ran: Ran) -> Step:
     for item in runs:
         folder = root / item["cwd"]
         started = time.monotonic()
-        run_code, run_out, _ = execute(item["command"], folder, limit)
+        run_code, run_out, _ = execute(item["command"], folder, limit, env=temp_env())
         made.append(
             {
                 "name": item["name"],
@@ -433,6 +444,21 @@ def regression_sets(
     return sets, notes
 
 
+def full_suite_warning(seconds: float, limit: int) -> str | None:
+    """The warning when the full suite took longer than `proof_timeout` (brief #509, ADR-0258):
+    proof, held to the same limit, can never finish; the value suggested leaves half again as much,
+    rounded up to a whole minute."""
+    if seconds <= limit:
+        return None
+    took = round(seconds)
+    headroom = math.ceil(took * 1.5 / 60) * 60
+    return (
+        f"prepush: warning: the full suite took {took} s, more than proof_timeout ({limit} s); "
+        f"proof will not finish (setting: proof_timeout); a value of about {headroom} s leaves "
+        "headroom"
+    )
+
+
 def gate(
     root: Path,
     runs: list[dict],
@@ -444,6 +470,7 @@ def gate(
     """Proof's runs, then the regression set (brief #417 answers 1 and 2), each run with its line
     printed when it ends; what is not run is printed before the regression runs."""
     made: list[dict] = []
+    warnings: list[str] = []
     sets, notes = regression_sets(root, found, areas)
     planned = [(r["name"], r["command"], r["cwd"], OWN, "proof") for r in runs]
     planned.extend((*item, "regression") for item in sets)
@@ -454,7 +481,7 @@ def gate(
             shown = True
         folder = root / cwd
         started = time.monotonic()
-        code, out, _ = execute(command, folder, limit)
+        code, out, _ = execute(command, folder, limit, env=temp_env())
         seconds = time.monotonic() - started
         made.append(
             {
@@ -470,14 +497,19 @@ def gate(
         )
         word = "ok" if code == 0 else "FAIL"
         print(f"prepush: tests {name} {word} ({seconds:.1f}s): {reason}", flush=True)
+        if kind == "regression" and name == "full" and code is not None:
+            warning = full_suite_warning(seconds, limit)
+            if warning:
+                print(warning, flush=True)
+                warnings.append(warning)
         if code is None:
-            return Step("FAIL", timeout_note(limit), ran=ran, runs=made)
+            return Step("FAIL", timeout_note(limit), ran=ran, runs=made, notes=warnings)
         if code != 0:
-            return Step("FAIL", out.rstrip("\n"), ran=ran, runs=made)
+            return Step("FAIL", out.rstrip("\n"), ran=ran, runs=made, notes=warnings)
     if not shown:
         say(notes)
     not_run = any("not run" in n for n in notes)
-    return Step("ok", "", not_run=not_run, ran=ran, runs=made)
+    return Step("ok", "", not_run=not_run, ran=ran, runs=made, notes=warnings)
 
 
 def say(lines: list[str]) -> None:
@@ -611,6 +643,7 @@ def main(argv: list[str] | None = None) -> int:
             "tree_clean": git(root, "status", "--porcelain").strip() == "",
             "versions": versions(root),
             "steps": [],
+            "notes": [],
         }
     steps: list[tuple[str, Callable[[], Step]]] = [
         ("pr-body", lambda: pr_body(root, body)),
@@ -626,6 +659,7 @@ def main(argv: list[str] | None = None) -> int:
         seconds = time.monotonic() - started
         if record is not None:
             record["steps"].append(step_record(name, result, seconds, root))
+            record["notes"].extend(result.notes)
         line = f"prepush: {name} {result.outcome} ({seconds:.1f}s)"
         if result.outcome == "skipped":
             print(f"{line}: {result.text}")

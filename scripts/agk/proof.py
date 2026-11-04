@@ -42,9 +42,11 @@ from common import (
     declares_unchanged,
     git,
     load_config,
+    long_temp_dir,
     proof_areas,
     proof_timeout,
     resolve_base,
+    temp_env,
 )
 
 USAGE = (
@@ -266,11 +268,14 @@ def execute(
     popen=subprocess.Popen,
     run=subprocess.run,
     merge_stderr: bool = True,
+    env: dict | None = None,
 ) -> tuple[int | None, str, int]:
     """(exit status or None on a timeout, output, whole seconds taken). Its own process group.
 
     With `merge_stderr` False the output is the standard output alone and the error stream is
-    dropped (the drift audit reads a project command's lines, SPEC-0004 rule 25)."""
+    dropped (the drift audit reads a project command's lines, SPEC-0004 rule 25). Without `env`
+    the command inherits this process's environment; proof and prepush pass `temp_env()` (brief
+    #508, ADR-0257)."""
     began = time.monotonic()
     proc = popen(  # nosec B603 B607 - the project's own test command, run as the caller
         ["sh", "-c", command],
@@ -280,6 +285,7 @@ def execute(
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=env,
         **popen_options(windows),
     )
     try:
@@ -319,7 +325,7 @@ class Trees:
 
     def __init__(self, root: Path, base: str, head: str, files: dict[str, str]) -> None:
         self.root, self.base, self.head, self.files = root, base, head, files
-        self.temp = Path(tempfile.mkdtemp(prefix="agk-proof-"))
+        self.temp = Path(tempfile.mkdtemp(prefix="agk-proof-", dir=long_temp_dir()))
         self.trees = [self.temp / "base", self.temp / "head"]
         self.added: list[Path] = []
 
@@ -352,14 +358,15 @@ def run_pair(trees: list[Path], run: Run, limit: int, label: str = ""):
     run, and which one timed out, are kept on `run` for the manifest."""
     trees = [tree / run.cwd for tree in trees]
     trees[0].mkdir(parents=True, exist_ok=True)
-    status1, out1, seconds1 = execute(run.command, trees[0], limit)
+    env = temp_env()
+    status1, out1, seconds1 = execute(run.command, trees[0], limit, env=env)
     run.seconds = [seconds1, None]
     show(f"run 1{label}: the base with the pull request's tests", out1)
     if status1 is None:
         run.timed_out = "base"
         print(timeout_note(seconds1), file=sys.stderr)
         return None, None, seconds1, seconds1
-    status2, out2, seconds2 = execute(run.command, trees[1], limit)
+    status2, out2, seconds2 = execute(run.command, trees[1], limit, env=env)
     run.seconds[1] = seconds2
     show(f"run 2{label}: the head", out2)
     if status2 is None:
@@ -576,7 +583,7 @@ def run_regression(head_tree: Path, regression: Regression, limit: int) -> None:
     """Each regression run on the head worktree only; proof_timeout applies to each one."""
     for run in regression.runs:
         cwd = head_tree / run.cwd
-        status, out, seconds = execute(run.command, cwd, limit)
+        status, out, seconds = execute(run.command, cwd, limit, env=temp_env())
         run.seconds = [None, seconds]
         show(f"run 3 ({run.name}): regression tests on the head", out)
         if status is None:
