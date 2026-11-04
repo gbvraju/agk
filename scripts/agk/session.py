@@ -85,12 +85,19 @@ when the session holds a live take of the brief (any build of it), for a pull re
 that its `Brief: #n` line names; otherwise it prints `not mine: #<brief> belongs to <session>` (the
 oldest live take of another session), `not mine: #<brief> has no live take`, or, for a pull request
 without that line, `not mine: #<pr> names no brief`, and exits 1. A read that fails exits 2.
+Brief #548 (ADR-0272): `tidy [--apply] [--json]` lists each linked worktree and local branch as
+`remove <path> <branch> #<pr> merged|closed` or `kept: <reason> (<path> <branch>)`, and with
+`--apply` removes the candidates: a branch whose pull requests (one GET each) are all merged or
+closed, whose tip is the newest one's head, with a clean, unlocked worktree that is neither the
+current one nor the main clone, and that no live lock or queue record names. A read failure keeps
+the item; never `--force`, never a remote branch; refused while paused.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
@@ -101,6 +108,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
@@ -137,7 +145,8 @@ USAGE = (
     "       session.py push-check\n"
     "       session.py tell --session ID --text MESSAGE\n"
     "       session.py inbox --session ID\n"
-    "       session.py mine --session ID (--pr N | --brief N)"
+    "       session.py mine --session ID (--pr N | --brief N)\n"
+    "       session.py tidy [--apply] [--json]"
 )
 COMMANDS = (
     "watch",
@@ -154,6 +163,7 @@ COMMANDS = (
     "tell",
     "inbox",
     "mine",
+    "tidy",
 )
 PAGE = 100
 PAUSED_EXIT = 5
@@ -1394,6 +1404,199 @@ def push_check(root) -> int:
     return 1
 
 
+# --- tidy (brief #548, ADR-0272) -------------------------------------------------------------
+
+
+@dataclass
+class TidyItem:
+    """A linked worktree with its branch, or a local branch alone (`path` None); `kept` is the
+    reason it stays, None for a candidate."""
+
+    path: str | None
+    branch: str
+    pr: int | None = None
+    state: str = ""
+    head: str = ""
+    kept: str | None = None
+    main: bool = False
+    locked: bool = False
+
+
+def run_git(cwd, *args: str) -> tuple[int, str]:
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8"
+    )
+    return proc.returncode, proc.stdout
+
+
+def same_place(a: str | Path, b: str | Path) -> bool:
+    """Long and 8.3 Windows forms of one folder are the same place (#508)."""
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def worktrees_of(root) -> list[TidyItem]:
+    """`git worktree list --porcelain`: the first entry is the main clone."""
+    code, out = run_git(root, "worktree", "list", "--porcelain")
+    if code != 0:
+        raise CheckError("answer 1: the worktrees cannot be read (path class: git worktree list)")
+    found: list[TidyItem] = []
+    for block in out.strip().split("\n\n"):
+        fields = dict((line + " ").split(" ", 1) for line in block.splitlines())
+        if "worktree" not in fields:
+            continue
+        branch = fields.get("branch", "").strip().removeprefix("refs/heads/")
+        found.append(TidyItem(fields["worktree"].strip(), branch, locked="locked" in fields))
+    if found:
+        found[0].main = True
+    return found
+
+
+def running_records(base: Path, limit: int) -> list[dict]:
+    """Live lock owner records (`lock.py`) and queue jobs (`heavy_queue.py`) beside the heavy
+    lock; an owner file that cannot be read counts as a live record of an unknown session."""
+    import heavy_queue
+    import lock
+
+    found: list[dict] = []
+    for held in sorted(base.glob("agk-lock-*")):
+        owner = lock.read_owner(held)
+        if lock.stale_reason(owner, held, limit) is None:
+            found.append(owner or {"session": ""})
+    for folder in sorted(base.glob(".agk-lock-*.queue")):
+        found += heavy_queue.jobs(folder)
+    return found
+
+
+def names_item(record: dict, item: TidyItem) -> bool:
+    """A record names an item by its session (ADR-0272 decision 3, Q-548-1), a job also by its
+    branch or folder; a record with no session names every item."""
+    session = str(record.get("session") or "")
+    if not session or record.get("branch") == item.branch:
+        return True
+    folder = record.get("folder")
+    if folder and item.path and (same_place(folder, item.path) or item.path in str(folder)):
+        return True
+    names = {item.branch, item.branch.rsplit("/", 1)[-1]}
+    if item.path:
+        names.add(Path(item.path).name)
+    digits = set(re.findall(r"\d+", session)) & set(re.findall(r"\d+", item.branch))
+    return session in names or bool(item.path and session in item.path) or bool(digits)
+
+
+def pull_verdict(item: TidyItem, pulls: Any, tip: str | None) -> str | None:
+    """Answer 2 against the branch's pull requests; the reason kept, or None for a candidate."""
+    if not isinstance(pulls, list) or not all(isinstance(p, dict) for p in pulls):
+        return "could not read GitHub"
+    mine = [p for p in pulls if (p.get("head") or {}).get("ref") == item.branch]
+    if any(p.get("state") != "closed" for p in mine):
+        return "open pull request"
+    if not mine:
+        return "no pull request"
+    last = max(mine, key=lambda p: p.get("number") or 0)
+    item.pr, item.head = last.get("number"), str((last.get("head") or {}).get("sha") or "")
+    item.state = "merged" if last.get("merged_at") else "closed"
+    if tip is None:
+        return "could not read the branch"
+    return None if tip == item.head and len(tip) == 40 else "commits after the pull request's head"
+
+
+def branch_tip(root, branch: str) -> str | None:
+    code, out = run_git(root, "rev-parse", "--verify", "-q", f"refs/heads/{branch}^{{commit}}")
+    return out.strip() if code == 0 else None
+
+
+def tidy_items(root, read_pulls, records: list[dict], here) -> list[TidyItem]:
+    """Every linked worktree and local branch with its reason kept (answer 3) or none."""
+    items = worktrees_of(root)
+    code, out = run_git(root, "for-each-ref", "--format=%(refname:short)", "refs/heads/")
+    if code != 0:
+        raise CheckError("answer 1: the branches cannot be read (path class: git for-each-ref)")
+    held = {i.branch for i in items}
+    default = load_config(root)["default_branch"]
+    items += [TidyItem(None, b) for b in out.split() if b not in held]
+    for item in items:
+        if item.main:
+            item.kept = "main clone"
+        elif item.path and same_place(item.path, here):
+            item.kept = "current worktree"
+        elif item.locked:
+            item.kept = "locked"
+        elif not item.branch:
+            item.kept = "no branch"
+        elif item.branch == default:
+            item.kept = "default branch"
+        elif item.path and (status := run_git(item.path, "status", "--porcelain"))[0] != 0:
+            item.kept = "could not read the worktree"
+        elif item.path and status[1].strip():
+            item.kept = "uncommitted files"
+        elif any(names_item(r, item) for r in records):
+            item.kept = "running"
+        else:
+            item.kept = pull_verdict(item, read_pulls(item.branch), branch_tip(root, item.branch))
+    return items
+
+
+def removal_commands(root: str, item: TidyItem) -> list[list[str]]:
+    """Answer 4: argument lists, never a shell string, the path as git listed it; never --force."""
+    base = ["git", "-C", root]
+    worktree = [[*base, "worktree", "remove", item.path], [*base, "worktree", "prune"]]
+    return (worktree if item.path else []) + [[*base, "branch", "-D", item.branch]]
+
+
+def tidy_apply(root, items: list[TidyItem]) -> list[str]:
+    """Remove the candidates; a failed step keeps the item, and the tip is read again before -D."""
+    lines = []
+    for item in (i for i in items if i.kept is None):
+        where = f"{item.path or '-'} {item.branch}"
+        *trees, drop = removal_commands(str(root), item)
+        if branch_tip(root, item.branch) != item.head:
+            lines.append(f"kept: commits after the pull request's head ({where})")
+            continue
+        failed = any(run_git(None, *c[1:])[0] != 0 for c in trees)  # stops at the first failure
+        if failed or branch_tip(root, item.branch) != item.head or run_git(None, *drop[1:])[0]:
+            lines.append(f"kept: removal failed ({where})")
+            continue
+        lines.append(f"removed {where} #{item.pr} {item.state}")
+    return lines
+
+
+def github_pulls(repo: str):
+    owner = repo.split("/", 1)[0]
+    return lambda branch: gh(f"repos/{repo}/pulls?head={owner}:{quote(branch)}&state=all")
+
+
+def live_records(root) -> list[dict]:
+    """The records beside the heavy lock; when they cannot be read every item counts as running."""
+    import lock
+
+    try:
+        return running_records(lock.lock_folder(root, "heavy").parent, lock.stale_minutes(root))
+    except (lock.Usage, OSError, ValueError):
+        return [{"session": ""}]
+
+
+def tidy(root, apply: bool, as_json: bool) -> int:
+    items = tidy_items(root, github_pulls(repo_name(root)), live_records(root), repo_root())
+    done = tidy_apply(root, items) if apply else []
+    planned = [
+        f"remove {i.path or '-'} {i.branch} #{i.pr} {i.state}" for i in items if i.kept is None
+    ]
+    kept = [f"kept: {i.kept} ({i.path or '-'} {i.branch})" for i in items if i.kept]
+    if as_json:
+        keys = ("path", "branch", "pr", "state", "kept")
+        rows = [{**{k: getattr(i, k) for k in keys}, "action": "kept" if i.kept else "remove"}
+                for i in items]  # fmt: skip
+        print(json.dumps({"apply": apply, "items": rows, "done": done}, indent=2))
+        return 0
+    print(
+        "\n".join((done or planned) + kept + [f"tidy: {len(planned)} finished, {len(kept)} kept"])
+    )
+    return 0
+
+
 # --- paused (brief #348 build (c), ADR-0218) -------------------------------------------------
 
 
@@ -1926,6 +2129,20 @@ def main(argv: list[str] | None = None) -> int:
             from session_plan import plan  # the plan builds on this module
 
             return plan(repo_root(), args[1:] == ["--json"])
+        except CheckError as exc:
+            print(f"FAIL {NAME}: {exc}")
+            return 2
+    if args[:1] == ["tidy"]:
+        flags = args[1:]
+        if len(set(flags)) != len(flags) or not set(flags) <= {"--apply", "--json"}:
+            print(USAGE)
+            return 2
+        try:
+            root = repo_root()
+            if paused_default(root):
+                print(PAUSED_REFUSAL)
+                return PAUSED_EXIT
+            return tidy(root, "--apply" in flags, "--json" in flags)
         except CheckError as exc:
             print(f"FAIL {NAME}: {exc}")
             return 2

@@ -15,6 +15,9 @@ refusal of SPEC-0006 rule 13.
 `actions-minutes` (brief #370, ADR-0215) prints the one line of `minutes.py --line`: it reads, also
 with GET, the account's Actions billing and, only when that cannot be read, this month's run history
 of the repository; a warning from the 50% level on, never a failure.
+Brief #548 (ADR-0272): with more than five linked worktrees it reads, with one GET each, the pull
+requests of their branches and prints `tidy: <n> finished worktrees; run session.py tidy` before
+the summary when more than five are candidates of `session.py tidy`; it changes no exit code.
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
@@ -92,6 +96,7 @@ ENGINE_FIX = (
     "(a change to agk.toml needs an ADR in the same pull request)"
 )
 LIST_LIMIT = 10
+TIDY_LIMIT = 5  # more finished worktrees than this prints the tidy line (brief #548 answer 5)
 
 # id -> (severity, text when ok, text when it fails, printed fix); the order is the report order.
 CHECKS: dict[str, tuple[str, str, str, str]] = {
@@ -1214,11 +1219,35 @@ def run_checks(
     return report, version
 
 
+def tidy_line(root: Path, reads: Reads) -> str | None:
+    """`tidy: <n> finished worktrees; run session.py tidy` when more than TIDY_LIMIT linked
+    worktrees are candidates of `session.py tidy` (brief #548, ADR-0272); with no more linked
+    worktrees than that it reads nothing. Each read is one GET; a failed read keeps the item."""
+    import session
+
+    try:
+        linked = [i for i in session.worktrees_of(root) if not i.main]
+        if len(linked) <= TIDY_LIMIT:
+            return None
+        owner = (reads.repo or "").split("/", 1)[0]
+
+        def pulls(branch: str) -> Any:
+            name = "tidy-pulls-" + re.sub(r"[^A-Za-z0-9._-]", "-", branch)
+            data, reason = reads.get(name, f"/pulls?head={owner}:{quote(branch)}&state=all")
+            return None if reason else data
+
+        items = session.tidy_items(root, pulls, session.live_records(root), root)
+    except (CheckError, OSError):
+        return None
+    count = sum(1 for i in items if i.path and i.kept is None)
+    return f"tidy: {count} finished worktrees; run session.py tidy" if count > TIDY_LIMIT else None
+
+
 def summary(report: list[dict]) -> dict[str, int]:
     return {s: sum(1 for c in report if c["status"] == s) for s in ("ok", "fail", "cannot-check")}
 
 
-def render_text(report: list[dict], version: str) -> str:
+def render_text(report: list[dict], version: str, tidy: str | None = None) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
     for c in report:
@@ -1228,12 +1257,15 @@ def render_text(report: list[dict], version: str) -> str:
         elif c["status"] == "cannot-check":
             lines.append(f"  to check: {HINTS.get(c['reason'], HINTS['bad-response'])}")
     s = summary(report)
+    lines += [tidy] if tidy else []
     lines.append(f"summary: {s['ok']} ok, {s['fail']} fail, {s['cannot-check']} cannot-check")
     return "\n".join(lines) + "\n"
 
 
-def render_json(report: list[dict], version: str) -> str:
+def render_json(report: list[dict], version: str, tidy: str | None = None) -> str:
     data = {"doctor": version, "checks": report, "summary": summary(report)}
+    if tidy:
+        data["tidy"] = tidy
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 
@@ -1293,6 +1325,8 @@ def main(argv: list[str] | None = None) -> int:
             Path(options["kit"]) if options["kit"] else None,
             Path(options["api"]) if options["api"] else None,
         )
+        api = Path(options["api"]) if options["api"] else None
+        tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
     except Refusal as exc:
         print(f"refused: {exc}")
         return exc.code
@@ -1300,7 +1334,9 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version) if options["json"] else render_text(report, version)
+        render_json(report, version, tidy)
+        if options["json"]
+        else render_text(report, version, tidy)
     )
     return exit_code(report)
 

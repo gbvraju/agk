@@ -324,3 +324,69 @@ def test_paused_refuses_tidy(proj, stub):
     proj.git("update-ref", "refs/remotes/origin/main", "HEAD")
     out = session(proj, stub, "tidy", "--apply")
     assert out.returncode == 5 and out.stdout.startswith("agk paused")
+
+
+# --- answer 5: the doctor's line ---------------------------------------------------------------
+
+
+def finished(repo, count: int, api: Path) -> None:
+    """`count` merged worktrees, each with its recorded pull request in the doctor's api-dir."""
+    api.mkdir(exist_ok=True)
+    for n in range(count):
+        _, tip = worktree(repo, f"brief-{40 + n}")
+        data = [pull(40 + n, f"claude/brief-{40 + n}", tip)]
+        (api / f"tidy-pulls-claude-brief-{40 + n}.json").write_text(json.dumps(data), "utf-8")
+
+
+@pytest.mark.parametrize(("count", "line"), [(6, "tidy: 6 finished worktrees"), (5, None)])
+def test_doctor_prints_the_tidy_line_above_five(repo, tmp_path_factory, count, line):
+    """REQ-040: brief #548 answer 5: `doctor` names the finished worktrees when n is above 5."""
+    import doctor
+
+    started(repo)
+    api = tmp_path_factory.mktemp("api")
+    finished(repo, count, api)
+    found = doctor.tidy_line(repo.root, doctor.Reads(REPO, api))
+    expected = f"{line}; run session.py tidy" if line else None
+    assert found == expected
+    assert doctor.render_text([], "0.0.0", found).splitlines()[-2:-1] == (
+        [expected] if line else ["agk doctor 0.0.0"]
+    )
+
+
+def test_doctor_counts_no_unreadable_worktree(repo, tmp_path_factory):
+    """REQ-040: brief #548 answer 3: a missing recorded response keeps the item, so it is not
+    counted."""
+    import doctor
+
+    started(repo)
+    api = tmp_path_factory.mktemp("api")
+    finished(repo, 6, api)
+    (api / "tidy-pulls-claude-brief-40.json").unlink()
+    assert doctor.tidy_line(repo.root, doctor.Reads(REPO, api)) is None
+
+
+# --- answer 5: the conductor runs `tidy --apply`, and only that form ----------------------------
+
+
+@pytest.mark.parametrize(
+    ("words", "allowed"),
+    [
+        ("tidy --apply", True),
+        ("tidy", False),
+        ("tidy --json", False),
+        ("tidy --apply --json", False),
+        ("tidy --apply --apply", False),
+        ("tidy --apply; git push origin main", False),
+    ],
+)
+def test_the_conductor_guard_allows_exactly_tidy_apply(tmp_path, words, allowed):
+    """REQ-040: brief #548 answer 5: the conductor's guard lets exactly `tidy --apply` through."""
+    from test_conductor_guard_queue import SCRIPT, reason, run_hook
+
+    project = tmp_path / "project"
+    (project / "scripts" / "agk").mkdir(parents=True)
+    (project / SCRIPT).write_text("print('the project script')\n", encoding="utf-8")
+    out = run_hook(f"python3 {SCRIPT} {words}", project)
+    assert (reason(out.stdout) is None) is allowed, out.stdout
+    assert reason(run_hook(f"python3 {SCRIPT} {words}", project, shadow=True).stdout) is not None

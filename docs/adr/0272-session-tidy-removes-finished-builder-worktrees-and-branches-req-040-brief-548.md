@@ -25,7 +25,8 @@ plan #542, with no new capability.
    `removed ...` for each.
 2. An item is a candidate only when all of these hold, checked in this order, the first that fails
    being the reason printed: not the main clone (`main clone`), not the current worktree (`current
-   worktree`), not locked in `git worktree list --porcelain` (`locked`), its worktree has an empty
+   worktree`), not locked in `git worktree list --porcelain` (`locked`), on a branch (`no branch`)
+   that is not the default branch (`default branch`), its worktree has an empty
    `git status --porcelain` (`uncommitted files`; a status that cannot be read is
    `could not read the worktree`), no live lock owner record and no queue job names its session
    (`running`), its branch's pull requests read with one REST GET
