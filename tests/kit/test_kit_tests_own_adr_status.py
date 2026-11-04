@@ -143,3 +143,18 @@ def test_the_brief_template_says_a_test_never_pins_its_own_adr():
     assert "A test never pins its own ADR's status" in template
     rules = (KIT_ROOT / "config" / "session-rules.md").read_text(encoding="utf-8")
     assert "pins its own ADR" not in rules
+
+
+def test_a_title_that_starts_with_proposed_is_not_a_status(repo):
+    """REQ-009 AC2: the false positive found on 054a2e6 (a document title, not a status line)."""
+    base(repo)
+    test_text = (
+        'DOC = "docs/runs/x.md"\n\n\n'
+        "def test_doc():\n"
+        "    text = open(DOC).read()\n"
+        '    assert text.startswith("# Proposed spec amendments 1")\n'
+        '    assert "ADR-0900" in text\n'
+    )
+    repo.commit({NEW_ADR: adr("0900", "Proposed"), TEST: test_text})
+    proc = repo.run("check_kit_tests.py")
+    assert proc.returncode == 0, proc.stdout
