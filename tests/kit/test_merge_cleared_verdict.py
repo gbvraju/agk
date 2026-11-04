@@ -1,4 +1,4 @@
-"""merge_cleared.py build (a): the auto-merge setting and the verdict reader (SPEC-0039 rules 1 and 3).
+"""merge_cleared.py build (a): the auto-merge setting and the verdict reader (SPEC-0039 rules 1, 3).
 
 Brief #528, ADR-0263, REQ-046. `merge_cleared.py --pr N --sha SHA` reads `[flow] auto_merge` and
 `auto_merge_method` from agk.toml as committed on the default branch of the remote, as last fetched,
@@ -332,9 +332,8 @@ def test_doctor_reports_the_line_in_a_full_run(tmp_path, flow, expected, code):
 
 # --- rule 3: the verdict ------------------------------------------------------------------------
 
-FIX_LIST = comment(
-    f"Verdict: fix list {HEAD}\n\n1. Fix the test.\nVerdict: cleared {HEAD}\n", at=6
-)
+FIX_LIST = comment(f"Verdict: fix list {HEAD}\n\n1. Fix the test.\nVerdict: cleared {HEAD}\n", at=6)
+REJECTED = comment(f"Verdict: rejected {HEAD}", at=6)
 VERDICT_CASES = [
     ("the previous head", [cleared(OLD)], "held"),
     ("a 12-character sha", [comment(f"Verdict: cleared {SHA12}", at=5)], "held"),
@@ -343,7 +342,7 @@ VERDICT_CASES = [
     ("text before the verdict", [comment(f"Note. Verdict: cleared {HEAD}", at=5)], "held"),
     ("upper case", [comment(f"Verdict: cleared {HEAD.upper()}", at=5)], "held"),
     ("a multi-line fix list", [FIX_LIST], "held"),
-    ("hidden by a newer verdict", [cleared(at=5), comment(f"Verdict: rejected {HEAD}", at=6)], "held"),
+    ("hidden by a newer verdict", [cleared(at=5), REJECTED], "held"),
     ("hidden by a builder's verdict", [cleared(at=5), comment("Verdict: hm", BUILDER, 7)], "held"),
     ("no verdict at all", [comment("Report: ready", BUILDER, 3)], "held"),
     ("no comment at all", [], "held"),
@@ -479,9 +478,7 @@ def test_with_conductor_accounts_only_a_listed_author_clears(tmp_path):
         "conductor_accounts: secretvalue",
     ],
 )
-def test_a_placeholder_a_spec_approver_or_a_bad_list_is_refused_naming_the_setting(
-    tmp_path, entry
-):
+def test_a_placeholder_a_spec_approver_or_a_bad_list_is_refused_naming_the_setting(tmp_path, entry):
     """REQ-046 AC2: SPEC-0039 rule 3 (`@REPLACE-ME` or a spec approver is refused)."""
     proc, made = merge_cleared_run(
         tmp_path, toml(ON), [cleared(login=CONDUCTOR)], reviewers_yaml=yaml(entry)
@@ -631,7 +628,8 @@ def test_a_remote_that_is_not_github_or_no_gh_is_refused(tmp_path):
 def test_the_script_makes_no_merge_call_takes_no_lock_and_writes_no_file():
     """REQ-046 AC2: brief #528 answer 1 (no merge call, no lock, no file, no push)."""
     text = SCRIPT.read_text(encoding="utf-8")
-    for word in ('"PUT"', "/merge", "lock.py", ".write_text(", "open(", '"push"', "--jq", "shell=True"):
+    words = ('"PUT"', "/merge", "lock.py", ".write_text(", "open(", '"push"', "--jq", "shell=True")
+    for word in words:
         assert word not in text, word
 
 
