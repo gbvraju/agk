@@ -1,6 +1,6 @@
 # SPEC-0039: The conductor merges a cleared pull request through one guarded kit command
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-046
 
