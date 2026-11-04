@@ -1,6 +1,6 @@
 # SPEC-0041: One developer adopts AGK alone with nothing of AGK in the product repository
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-048
 
