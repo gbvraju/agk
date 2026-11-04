@@ -61,6 +61,16 @@ both in the checkout and at `origin/<default_branch>` as last fetched (no networ
 same adapter, and the one word after `--adapter` equals `launch_adapter` exactly; an agk.toml that
 cannot be read, either setting of the wrong kind or a default branch git cannot read allows no
 adapter.
+Without `--shadow` the conductor may also merge a pull request it cleared (brief #531, ADR-0265,
+SPEC-0039 rule 8, the one exception to principle 2 and session rule 2): exactly
+`python3 scripts/agk/merge_cleared.py --pr <n> --sha <40 lower-case hex>` (or `python`), the
+project's own regular file and the two options in that order, only when `[flow] auto_merge` reads
+`on` (merge_cleared.py's own reading) both in the checkout's agk.toml and at
+`origin/<default_branch>` as last fetched, as `auto_start` is read. For that one command the hook
+prints an explicit `allow` decision, so that the `ask` entries that hold builders back in
+`.claude/settings.json` do not stop the conductor `(verify: a PreToolUse hook's allow lifts a
+settings ask rule)`. `gh pr merge`, `gh api` with `PUT`, another copy, a link, another form and any
+extra option stay denied.
 A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
 by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
 29), because GitHub cannot tell a comment the person typed from one a session posted.
@@ -78,12 +88,14 @@ import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 from architect_guard import (
     WRITE_TOOLS,
     comment_target_ok,
     gh_api_allowed,
+    gh_api_methods,
     git_allowed,
     origin_repo,
     project_root,
@@ -113,6 +125,12 @@ try:  # the one reading of `auto_start` and `launch_adapter`, launch.py's (brief
     LAUNCH_SETTINGS = launch.launch_settings
 except ImportError:  # without it no adapter runs
     LAUNCH_SETTINGS = None
+try:  # the one reading of `auto_merge`, merge_cleared.py's (brief #531)
+    import merge_cleared
+
+    AUTO_MERGE = merge_cleared.auto_merge_setting
+except ImportError:  # without it nothing merges
+    AUTO_MERGE = None
 
 ENV_PREFIX = 'env -i PATH="$PATH" HOME='
 BASE_VAR = "AGK_BASE="  # the one variable a run may add, a sha, as CI sets it
@@ -132,6 +150,10 @@ BRIEF_LABEL = "labels[]=agk-brief"
 BODY_LIMIT = 65536  # GitHub's limit of an issue body; a longer file is not read in part
 SESSION_SCRIPT = os.path.join("scripts", "agk", "session.py")
 LAUNCH_SCRIPT = os.path.join("scripts", "agk", "launch.py")
+MERGE_SCRIPT = os.path.join("scripts", "agk", "merge_cleared.py")
+MERGE_PR = re.compile(r"[1-9][0-9]{0,9}")
+MERGE_SHA = re.compile(r"[0-9a-f]{40}")
+ALLOW_RULE = "conductor guard rule 6: the guarded merge of SPEC-0039 rule 8"
 QUEUE_FORMS = (  # the read-only commands of the conductor's queue (brief 284), exactly these
     ["review-queue"],
     ["review-queue", "--all"],
@@ -229,11 +251,8 @@ def git_judged(words: list[str]) -> bool:
 
 
 def is_post(words: list[str]) -> bool:
-    args = words[2:]
-    methods = [args[i + 1].upper() for i, a in enumerate(args[:-1]) if a in POST_METHODS] + [
-        a.split("=", 1)[1].upper() for a in args if a.startswith("--method=")
-    ]
-    return "POST" in methods
+    """Any method the command names is `POST`, read as `gh_api_allowed` reads it (brief #531)."""
+    return "POST" in gh_api_methods(words)
 
 
 def shadow_post_ok(words: list[str]) -> bool:
@@ -458,6 +477,43 @@ def launch_allowed(words: list[str], cwd: object) -> bool:
     return words[5] == "--adapter" and adapter is not None and words[6] == adapter
 
 
+def auto_merge_on_both() -> bool:
+    """`[flow] auto_merge` reads `on` in the checkout's agk.toml and at `origin/<default_branch>`
+    as last fetched (no network call here); anything that cannot be read is off (brief #531)."""
+    if AUTO_MERGE is None or LAUNCH_SETTINGS is None:
+        return False
+    root = Path(project_root())
+    try:
+        here = launch.checkout_text(root)
+        there = launch.text_at(root, f"origin/{launch.default_branch(root)}")
+        texts = [here, there]
+        return all(x is not None and AUTO_MERGE(tomllib.loads(x)) == "on" for x in texts)
+    except (launch.CheckError, tomllib.TOMLDecodeError):
+        return False
+
+
+def merge_allowed(words: list[str], cwd: object) -> bool:
+    """`python3|python scripts/agk/merge_cleared.py --pr <n> --sha <40 hex>`, the project's own
+    regular file, with `auto_merge` on in both places (brief #531, SPEC-0039 rule 8)."""
+    if len(words) != 6 or words[0] not in ("python3", "python"):
+        return False
+    if words[2] != "--pr" or words[4] != "--sha":
+        return False
+    if not MERGE_PR.fullmatch(words[3]) or not MERGE_SHA.fullmatch(words[5]):
+        return False
+    return own_script(words[1], cwd, MERGE_SCRIPT) and auto_merge_on_both()
+
+
+def guarded_merge(payload: object) -> bool:
+    """The tool call is the one guarded merge command that the conductor may run."""
+    if not isinstance(payload, dict) or payload.get("tool_name") != "Bash":
+        return False
+    data = payload.get("tool_input")
+    command = data.get("command") if isinstance(data, dict) else None
+    words = tokens_of(command) if isinstance(command, str) else None
+    return bool(words) and merge_allowed(words, payload.get("cwd"))
+
+
 def body_path_not_absolute(command: object) -> bool:
     """A comment `POST` whose `body=@` file is not an absolute path (brief 284, field note)."""
     words = tokens_of(command) if isinstance(command, str) else None
@@ -500,8 +556,8 @@ def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> b
         return gh_api_allowed(words)
     if words[0] == "date":
         return all(w == "-u" or w.startswith("+") for w in words[1:])
-    if words[0] == "python3" and not shadow:
-        return queue_allowed(words, cwd) or launch_allowed(words, cwd)
+    if words[0] in ("python3", "python") and not shadow:
+        return queue_allowed(words, cwd) or launch_allowed(words, cwd) or merge_allowed(words, cwd)
     return False
 
 
@@ -532,18 +588,21 @@ def main() -> int:
     except (json.JSONDecodeError, ValueError):
         payload = None
     arguments = sys.argv[1:]
+    decision = "deny"
     if arguments not in ([], ["--shadow"]):  # an unknown argument fails closed
         reason = BASH_RULE
     else:
         shadow = arguments == ["--shadow"]
         reason = decide(payload, shadow) if isinstance(payload, dict) else BASH_RULE
+        if reason is None and not shadow and guarded_merge(payload):
+            decision, reason = "allow", ALLOW_RULE  # lifts the builders' ask entries (verify)
     if reason:
         print(
             json.dumps(
                 {
                     "hookSpecificOutput": {
                         "hookEventName": "PreToolUse",
-                        "permissionDecision": "deny",
+                        "permissionDecision": decision,
                         "permissionDecisionReason": reason,
                     }
                 }
