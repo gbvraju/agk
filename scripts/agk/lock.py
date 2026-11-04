@@ -45,9 +45,17 @@ under the lock's mutex and never taking a slot, prints `queued <ticket> position
 <sha12>)` and returns at once; a work tree with uncommitted changes to tracked files writes nothing
 (exit 2). The job's priority is the `Priority:` line of brief N, read once with one REST GET;
 anything unreadable is `unknown`, never 0. `status` adds the order in force, the running and
-waiting jobs with an estimated start, or `queue empty`. `runner` is build (b) and exits 2 with
-`not built yet`. With the setting off, `submit`, `runner` and `status --ticket` exit 2 naming the
-setting, and everything else is as before.
+waiting jobs with an estimated start, or `queue empty`. With the setting off, `submit`, `runner`
+and `status --ticket` exit 2 naming the setting, and everything else is as before.
+
+Brief #552 (ADR-0274, SPEC-0040 build (b)): `runner --name NAME` claims `runner.json` (a live
+runner makes it exit 0 naming it), removes results older than seven days, and then, each pass
+under the mutex, fails the jobs that can no longer pass and starts the next waiting jobs in the
+order in force while a slot is free. Each job takes a slot with `take` at the default priority,
+runs without a shell in a detached worktree of its head outside every repository, and gets its
+result beside its ticket; a running job is never stopped by the order. The runner stops after
+`queue_idle_minutes` with an empty queue. With `queue_autostart = true`, `submit` starts a
+detached runner when none lives.
 
 Standard library only; no network but the one brief GET of `submit --brief`. POSIX and Windows:
 a process is looked up with signal 0 on POSIX and with OpenProcess on Windows, where `os.kill`
@@ -66,6 +74,7 @@ import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -98,6 +107,7 @@ MUTEX_STALE = 10.0  # seconds: a mutex this old was left by a process that died 
 PRIORITY = 2  # the default priority, as for briefs; 0 goes first
 PRIORITIES = range(0, 4)
 DEAD = "its process no longer runs"
+STOP_WAIT = 15  # seconds a stopped runner waits for each job to write its result
 CLEANUP_TIMEOUT = 300  # seconds a cleanup may take before it is ended and reported (Q-426-3)
 
 
@@ -751,9 +761,219 @@ def submit_job(root: Path, held: Path, options: dict, queue: dict) -> int:
     where = "running" if place is None else f"position {place[0]} of {place[1]}"
     print(f"queued {ticket} {where} (head {job['head'][:12]})", flush=True)
     folder = heavy_queue.queue_folder(held)
-    if not heavy_queue.runner_alive(folder, pid_alive, socket.gethostname()):
+    if heavy_queue.runner_alive(folder, pid_alive, socket.gethostname()):
+        return 0
+    if queue["queue_autostart"]:
+        print(f"runner started (pid {start_runner(root, name)})", flush=True)
+    else:
         print(f"no runner; start one with lock.py runner --name {name}", flush=True)
     return 0
+
+
+def start_runner(root: Path, name: str, popen=subprocess.Popen) -> int:
+    """`queue_autostart` (rule 8, Q-529-1): `lock.py runner` without a shell, detached from the
+    builder's process group, its output appended to `runner.log` in the queue folder."""
+    folder = heavy_queue.queue_folder(lock_folder(root, name))
+    folder.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+        )
+        detach: dict = {"creationflags": flags}
+    else:
+        detach = {"start_new_session": True}
+    with open(folder / "runner.log", "ab") as log:
+        proc = popen(  # nosec B603 - fixed argument list from sys.executable, no shell
+            [sys.executable, str(Path(__file__).resolve()), "runner", "--name", name],
+            cwd=root,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            **detach,
+        )
+    return proc.pid
+
+
+def drop_tree(job: dict) -> None:
+    """Remove a job's worktree and its temporary folder, also when they were never made."""
+    tree = job.get("worktree")
+    if not isinstance(tree, str):
+        return
+    repository = Path(str(job.get("repository") or "."))
+    if repository.is_dir():
+        git(repository, "worktree", "remove", "--force", tree)
+        git(repository, "worktree", "prune")
+    shutil.rmtree(Path(tree).parent, ignore_errors=True)
+
+
+def execute(root: Path, held: Path, name: str, job: dict, setup: dict, children: dict):
+    """One job (rules 4 and 6): (outcome, exit code, the time its command began)."""
+    repository = Path(str(job.get("repository")))
+    if not repository.is_dir() or git(repository, "cat-file", "-e", f"{job['head']}^{{commit}}")[0]:
+        return "failed (head not found)", None, None
+    tree = Path(job["worktree"])
+    if git(repository, "worktree", "add", "--detach", "-q", str(tree), job["head"])[0]:
+        return "failed (the worktree cannot be made)", None, None
+    clock = setup["clock"]
+    token = uuid.uuid4().hex
+    owner: dict = {
+        "session": str(job.get("session") or ""),
+        "pid": os.getpid(),
+        "host": socket.gethostname(),
+        "started": heavy_queue.stamp(clock()),
+        "token": token,
+    }
+    slot = take(
+        held, name, owner, setup["limit"], None, setup["slots"], PRIORITY, setup["cleanup"], root
+    )
+    if slot is None:
+        return "failed (no slot was taken)", None, None
+    env = {
+        **os.environ,
+        "AGK_LOCK_SESSION": owner["session"],
+        "AGK_LOCK_TOKEN": token,
+        "AGK_LOCK_NAME": name,
+    }
+    out = setup["folder"] / "results" / f"{job['ticket']}.out"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    began = clock()
+    try:
+        with open(out, "wb") as sink:
+            try:
+                child = subprocess.Popen(  # nosec B603 - the job's own argument list, no shell
+                    job["command"],
+                    cwd=tree / str(job.get("folder") or "."),
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=sink,
+                    stderr=subprocess.STDOUT,
+                )
+            except OSError:
+                return "failed (the command cannot be started)", 127, began
+            children[job["ticket"]] = child
+            record_child(slot, token, child.pid)
+            code = child.wait()
+    finally:
+        children.pop(job["ticket"], None)
+        clear_if_same(slot, token)
+    if code < 0:
+        return f"failed (killed by signal {-code})", 128 - code, began
+    return ("passed" if code == 0 else f"failed (exit {code})"), code, began
+
+
+def work_job(root: Path, held: Path, name: str, job: dict, setup: dict, children: dict, wake):
+    """Run one job in its own thread, then write its result under the mutex and wake the runner."""
+    outcome, code, began = "failed (the job cannot be run)", None, None
+    try:
+        outcome, code, began = execute(root, held, name, job, setup, children)
+    except OSError:
+        pass
+    finally:
+        drop_tree(job)
+        with mutex(held):
+            heavy_queue.finish(setup["folder"], job, outcome, setup["clock"](), code, began)
+        print(f"runner {name}: {job['ticket']} {outcome}", flush=True)
+        wake.set()
+
+
+def dispatch(folder: Path, held: Path, name: str, setup: dict, me: dict, active: dict) -> list:
+    """One pass under the mutex: fail what can no longer pass (rule 14), then mark started the
+    next waiting jobs in the order in force while a slot is free (rules 4 and 5)."""
+    clock, queue = setup["clock"], setup["queue"]
+    host = me["host"]
+    with mutex(held):
+        for job, reason in heavy_queue.sweep(
+            folder, clock(), pid_alive, host, setup["limit"], set(active)
+        ):
+            drop_tree(job)
+            heavy_queue.finish(folder, job, f"failed ({reason})", clock())
+            print(f"runner {name}: {job['ticket']} failed ({reason})", flush=True)
+        order = heavy_queue.waiting_order(
+            heavy_queue.jobs(folder), queue["queue_order"], queue["queue_max_wait"], clock()
+        )
+        started = []
+        for job in order[: max(0, setup["slots"] - len(active))]:
+            place = Path(tempfile.mkdtemp(prefix="agk-job-"))
+            job = {
+                **job,
+                "started": heavy_queue.stamp(clock()),
+                "worktree": str(place / "tree"),
+                "runner": {"pid": me["pid"], "host": host},
+            }
+            heavy_queue.write_whole(folder / "jobs" / f"{job['ticket']}.json", json.dumps(job))
+            started.append(job)
+        me["read"] = heavy_queue.stamp(clock())
+        heavy_queue.write_whole(folder / "runner.json", json.dumps(me))
+        return started
+
+
+def runner(root: Path, name: str, clock=None, sleep=time.sleep) -> int:
+    """`lock.py runner` (SPEC-0040 rules 4, 8 and 14); the clock and sleep are for its tests."""
+    clock = clock or (lambda: datetime.now(UTC))
+    held = lock_folder(root, name)
+    folder = heavy_queue.queue_folder(held)
+    setup = {
+        "clock": clock,
+        "folder": folder,
+        "limit": stale_minutes(root),
+        "slots": slots_setting(root),
+        "cleanup": cleanup_setting(root),
+        "queue": queue_setting(root),
+    }
+    host = socket.gethostname()
+    me = {"pid": os.getpid(), "host": host, "started": heavy_queue.stamp(clock())}
+    with mutex(held):
+        mine, line = heavy_queue.claim(folder, me, pid_alive, host, setup["limit"], clock())
+    if line:
+        print(line, flush=True)
+    if not mine:
+        return 0
+    heavy_queue.prune(folder, clock())
+    active: dict[str, threading.Thread] = {}
+    children: dict[str, subprocess.Popen] = {}
+    wake = threading.Event()
+    idle = setup["queue"]["queue_idle_minutes"]
+    since = None
+    code = 0
+    try:
+        while True:
+            for ticket in [t for t, th in active.items() if not th.is_alive()]:
+                active.pop(ticket).join()
+            for job in dispatch(folder, held, name, setup, me, active):
+                thread = threading.Thread(
+                    target=work_job,
+                    args=(root, held, name, job, setup, children, wake),
+                    daemon=True,
+                )
+                active[job["ticket"]] = thread
+                thread.start()
+            if active:
+                wake.wait(POLL)
+                wake.clear()
+                since = None
+                continue
+            now = clock()
+            if heavy_queue.jobs(folder):
+                since = None
+            elif since is None:
+                since = now
+            elif (now - since).total_seconds() >= idle * 60:
+                print(f"runner idle for {idle} min; stopped", flush=True)
+                return 0
+            sleep(POLL)
+    except KeyboardInterrupt:
+        code = 130
+    except Stopped as exc:
+        code = exc.code
+    finally:
+        for child in list(children.values()):
+            stop(child)
+        for thread in active.values():
+            thread.join(timeout=STOP_WAIT)  # a job still waiting for a slot fails at the next sweep
+        with mutex(held):
+            if (heavy_queue.read_json(folder / "runner.json") or {}).get("pid") == me["pid"]:
+                (folder / "runner.json").unlink(missing_ok=True)
+    return code
 
 
 def on_signal(signum, _frame) -> None:
@@ -809,9 +1029,10 @@ def main(argv: list[str] | None = None) -> int:
         if not queue["queue"] and (action in ("submit", "runner") or options["ticket"]):
             raise Usage(f"lock.py {action}: {QUEUE_OFF}")
         if action == "runner":
-            raise Usage(
-                "lock.py runner: not built yet (SPEC-0040 build (b)); the queued jobs wait"
-            )
+            for signum in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None)):
+                if signum is not None:
+                    signal.signal(signum, on_signal)
+            return runner(root, options["name"])
         if action == "submit":
             return submit_job(root, held, options, queue)
     except Usage as exc:

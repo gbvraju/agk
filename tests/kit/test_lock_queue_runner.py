@@ -45,14 +45,14 @@ class Clock:
 
 @pytest.fixture
 def where(repo, tmp_path) -> Path:
+    return configure(repo, tmp_path)
+
+
+def configure(repo, tmp_path: Path, locks: str = "", extra: str = "") -> Path:
     folder = tmp_path.parent / f"{tmp_path.name}-locks"
-    configure(repo, folder)
-    return folder
-
-
-def configure(repo, folder: Path, locks: str = "", extra: str = "") -> None:
     text = f"lock_dir = '{folder.as_posix()}'\n{extra}[locks]\nqueue = true\n{locks}"
     repo.commit({"agk.toml": text, "which.txt": "one\n"}, "settings")
+    return folder
 
 
 def queue_of(folder: Path) -> Path:
@@ -63,21 +63,18 @@ def head(repo) -> str:
     return repo.git("rev-parse", "HEAD").strip()
 
 
-def add(repo, where, label: str, *, code: str = LOG, priority=heavy_queue.UNKNOWN, at=None, **kw):
-    """One waiting job written as `submit` writes it; its command logs `label`."""
-    job = heavy_queue.new_job(
-        session=kw.get("session", "b1"),
-        repository=str(repo.root),
-        branch="main",
-        head=kw.get("sha") or head(repo),
-        command=kw.get("command") or [PY, "-c", code, label, str(where / "log.txt")],
-        folder=".",
-        kind=kw.get("kind", "other"),
-        brief=None,
-        priority=priority,
-        submitted=at or NOW,
-    )
-    return heavy_queue.submit(queue_of(where), "heavy", job)[0]
+def job_of(repo, where, label: str, priority=heavy_queue.UNKNOWN, at=None, **kw) -> dict:
+    """A job as `submit` writes it; its command logs `label` unless another is given."""
+    command = kw.get("command") or [PY, "-c", LOG, label, str(where / "log.txt")]
+    return heavy_queue.new_job(
+        session=kw.get("session", "b1"), repository=str(repo.root), branch="main",
+        head=kw.get("sha") or head(repo), command=command, folder=".",
+        kind=kw.get("kind", "other"), brief=None, priority=priority, submitted=at or NOW,
+    )  # fmt: skip
+
+
+def add(repo, where, label: str, **kw) -> dict:
+    return heavy_queue.submit(queue_of(where), "heavy", job_of(repo, where, label, **kw))[0]
 
 
 def work(repo, clock: Clock | None = None) -> int:
@@ -100,8 +97,8 @@ def test_jobs_run_in_submission_order_each_on_its_own_head_with_a_full_result(re
     """REQ-047 AC3: SPEC-0040 rules 4 and 6; the result carries `kind` (Q-529-2)."""
     first = add(repo, where, "a", kind="prepush")
     repo.commit({"which.txt": "two\n"}, "two")
-    second = add(repo, where, "b", command=[PY, "-c", LOG, "b", str(where / "log.txt"), "--record",
-                                           str(where / "rec.json")])
+    record = ["--record", str(where / "rec.json")]
+    second = add(repo, where, "b", command=[PY, "-c", LOG, "b", str(where / "log.txt"), *record])
     repo.commit({"which.txt": "three\n"}, "builder moves on")
     assert work(repo) == 0
     assert (where / "log.txt").read_text(encoding="utf-8") == "a one\nb two\n"
@@ -141,8 +138,7 @@ def test_a_job_gets_the_session_token_and_name_of_its_slot(repo, where):
 )
 def test_the_runner_takes_jobs_in_the_order_in_force(repo, tmp_path, order, priorities, ran):
     """REQ-047 AC3: SPEC-0040 rules 4 and 5; fifo ignores priorities."""
-    where = tmp_path.parent / f"{tmp_path.name}-locks"
-    configure(repo, where, f'queue_order = "{order}"\n' if order else "")
+    where = configure(repo, tmp_path, f'queue_order = "{order}"\n' if order else "")
     for n, p in enumerate(priorities):
         add(repo, where, f"p{n}", priority=p)
     assert work(repo) == 0
@@ -151,8 +147,7 @@ def test_the_runner_takes_jobs_in_the_order_in_force(repo, tmp_path, order, prio
 
 def test_an_overdue_job_runs_before_a_newer_job_of_a_higher_priority(repo, tmp_path):
     """REQ-047 AC3: SPEC-0040 rule 5 (Q-S0040-18), with a fake clock."""
-    where = tmp_path.parent / f"{tmp_path.name}-locks"
-    configure(repo, where, 'queue_order = "priority"\nqueue_max_wait = 1\n')
+    where = configure(repo, tmp_path, 'queue_order = "priority"\nqueue_max_wait = 1\n')
     add(repo, where, "late", priority=3, at=NOW - timedelta(minutes=5))
     add(repo, where, "later", priority=2, at=NOW - timedelta(minutes=3))
     add(repo, where, "urgent", priority=0)
@@ -163,13 +158,8 @@ def test_an_overdue_job_runs_before_a_newer_job_of_a_higher_priority(repo, tmp_p
 @pytest.mark.parametrize("order", ["fifo", "priority"])
 def test_a_running_job_is_never_pre_empted_by_a_job_of_priority_0(repo, tmp_path, order):
     """REQ-047 AC3: SPEC-0040 rules 4 and 5; the urgent job is submitted while the other runs."""
-    where = tmp_path.parent / f"{tmp_path.name}-locks"
-    configure(repo, where, f'queue_order = "{order}"\n')
-    urgent = heavy_queue.new_job(
-        session="b2", repository=str(repo.root), branch="main", head=head(repo),
-        command=[PY, "-c", LOG, "urgent", str(where / "log.txt")], folder=".", kind="other",
-        brief=None, priority=0, submitted=NOW,
-    )
+    where = configure(repo, tmp_path, f'queue_order = "{order}"\n')
+    urgent = job_of(repo, where, "urgent", priority=0, session="b2")
     inserts = (
         "import sys, json; sys.path.insert(0, sys.argv[1]); import heavy_queue, lock\n"
         "from pathlib import Path; held = Path(sys.argv[2])\n"
@@ -177,9 +167,9 @@ def test_a_running_job_is_never_pre_empted_by_a_job_of_priority_0(repo, tmp_path
         " json.loads(sys.argv[3]))\n"
         "open(sys.argv[4], 'a').write('slow x\\n')\n"
     )
-    slow = add(repo, where, "slow", priority=3, command=[
-        PY, "-c", inserts, SCRIPTS, str(where / "agk-lock-heavy"), json.dumps(urgent),
-        str(where / "log.txt")])
+    held, logged = str(where / "agk-lock-heavy"), str(where / "log.txt")
+    command = [PY, "-c", inserts, SCRIPTS, held, json.dumps(urgent), logged]
+    slow = add(repo, where, "slow", priority=3, command=command)
     assert work(repo) == 0
     assert log(where) == ["slow", "urgent"]
     assert results(where)[slow["ticket"]]["outcome"] == "passed"
@@ -187,8 +177,7 @@ def test_a_running_job_is_never_pre_empted_by_a_job_of_priority_0(repo, tmp_path
 
 def test_with_two_slots_two_jobs_run_at_once_and_none_overtakes(repo, tmp_path):
     """REQ-047 AC3: SPEC-0040 rule 4 (Q-S0040-15)."""
-    where = tmp_path.parent / f"{tmp_path.name}-locks"
-    configure(repo, where, extra="lock_slots = 2\n")
+    where = configure(repo, tmp_path, extra="lock_slots = 2\n")
     busy = where / "busy"
     code = (
         "import sys, os, time; from pathlib import Path; box = Path(sys.argv[2]);"
@@ -200,7 +189,8 @@ def test_with_two_slots_two_jobs_run_at_once_and_none_overtakes(repo, tmp_path):
         add(repo, where, label, command=[PY, "-c", code, label, str(busy), str(where / "log.txt")])
     assert work(repo) == 0
     lines = (where / "log.txt").read_text(encoding="utf-8").split("\n")[:-1]
-    assert [x.split()[0] for x in lines] == ["j1", "j2", "j3"]
+    ran = [x.split()[0] for x in lines]  # j1 and j2 start together, in either order
+    assert sorted(ran[:2]) == ["j1", "j2"] and ran[2] == "j3"
     assert max(int(x.split()[1]) for x in lines) <= 2
     started = [r["started"] for r in sorted(results(where).values(), key=lambda r: r["ticket"])]
     assert started == sorted(started)
@@ -228,8 +218,8 @@ def test_jobs_that_cannot_pass_get_a_failed_result_naming_why(repo, where):
     orphan = add(repo, where, "orphan")
     mark_running(where, orphan, pid=dead_pid(), host=host)
     elsewhere = add(repo, where, "elsewhere", session="b3")
-    mark_running(where, elsewhere, pid=1, host="other.example.com",
-                 started=NOW - timedelta(minutes=200))
+    old = NOW - timedelta(minutes=200)
+    mark_running(where, elsewhere, pid=1, host="other.example.com", started=old)
     exits = add(repo, where, "exit", command=[PY, "-c", "raise SystemExit(3)"])
     missing = add(repo, where, "missing", command=["agk-no-such-command-anywhere"])
     gone = add(repo, where, "gone", sha="0" * 40)
@@ -243,8 +233,8 @@ def test_jobs_that_cannot_pass_get_a_failed_result_naming_why(repo, where):
         "heavy-000099-abcd": "failed (unreadable job)",
     }
     if os.name != "nt":
-        killed = add(repo, where, "killed", command=[
-            PY, "-c", "import os, signal; os.kill(os.getpid(), signal.SIGKILL)"])
+        kill = "import os, signal; os.kill(os.getpid(), signal.SIGKILL)"
+        killed = add(repo, where, "killed", command=[PY, "-c", kill])
         want[killed["ticket"]] = "failed (killed by signal 9)"
     assert work(repo) == 0
     assert {t: r["outcome"] for t, r in results(where).items()} == want
@@ -262,19 +252,23 @@ def test_old_results_are_removed_when_a_runner_starts(repo, where):
             old = (NOW - timedelta(days=days)).timestamp()
             os.utime(path, (old, old))
     assert work(repo) == 0
-    assert sorted(p.name for p in box.iterdir()) == ["heavy-000002-bbbb.json",
-                                                    "heavy-000002-bbbb.out"]
+    kept = ["heavy-000002-bbbb.json", "heavy-000002-bbbb.out"]
+    assert sorted(p.name for p in box.iterdir()) == kept
 
 
 # --- rule 8: one runner, idle stop, autostart ---------------------------------------------------
 
 
-def test_a_runner_stops_after_the_idle_minutes_and_removes_its_runner_file(repo, where, capsys):
-    """REQ-047 AC5: SPEC-0040 rule 8 (Q-S0040-3: 10 minutes by default)."""
+def test_a_runner_replaces_a_dead_runners_file_and_stops_when_idle(repo, where, capsys):
+    """REQ-047 AC5: SPEC-0040 rules 8 and 14 (Q-S0040-3: 10 minutes by default)."""
+    pid = dead_pid()
+    dead = {"pid": pid, "host": socket.gethostname()}
+    heavy_queue.write_whole(queue_of(where) / "runner.json", json.dumps(dead))
     clock = Clock()
     assert work(repo, clock) == 0
-    assert "runner idle for 10 min; stopped" in capsys.readouterr().out
-    assert clock.now - NOW >= timedelta(minutes=10)
+    out = capsys.readouterr().out
+    assert f"replaced the runner file of pid {pid}, which no longer runs" in out
+    assert "runner idle for 10 min; stopped" in out and clock.now - NOW >= timedelta(minutes=10)
     assert not (queue_of(where) / "runner.json").exists()
 
 
@@ -288,20 +282,10 @@ def test_a_second_runner_exits_0_naming_the_live_one(repo, where):
     assert json.loads((queue_of(where) / "runner.json").read_text(encoding="utf-8")) == me
 
 
-def test_a_runner_file_of_a_dead_runner_is_replaced_with_a_line(repo, where, capsys):
-    """REQ-047 AC5: SPEC-0040 rule 14."""
-    pid = dead_pid()
-    heavy_queue.write_whole(queue_of(where) / "runner.json",
-                            json.dumps({"pid": pid, "host": socket.gethostname()}))
-    assert work(repo) == 0
-    assert f"replaced the runner file of pid {pid}, which no longer runs" in capsys.readouterr().out
-
-
 @pytest.mark.parametrize("autostart", ["", "queue_autostart = true\n"])
 def test_submit_starts_a_runner_only_with_autostart(repo, tmp_path, monkeypatch, capsys, autostart):
     """REQ-047 AC5: SPEC-0040 rule 8 (Q-S0040-1, Q-529-1)."""
-    where = tmp_path.parent / f"{tmp_path.name}-locks"
-    configure(repo, where, autostart)
+    configure(repo, tmp_path, autostart)
     started: list[str] = []
     monkeypatch.setattr(lock, "start_runner", lambda root, name: started.append(name) or 4242)
     monkeypatch.chdir(repo.root)
