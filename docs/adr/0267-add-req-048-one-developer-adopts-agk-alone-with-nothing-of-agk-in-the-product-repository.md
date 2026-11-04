@@ -44,7 +44,7 @@ on a machine instead.
 3. Personal state lives outside the product, in a private sidecar git repository under
    `AGK_HOME` with the kit's own layout, so the existing file checks run on it unchanged; nothing
    is written in the clone, not even under `.git/`, except the one opt-in pre-push hook that the
-   person installs by name (SPEC-0041 rules 2 to 5 and 18).
+   person installs by name (SPEC-0041 rules 2 to 5 and 19).
 4. GitHub's role is played by files: `scripts/agk/forge.py` puts the existing GitHub readers behind
    one interface and adds a file-backed one, and `personal.py api-view` renders the file names
    that the existing `--api-dir` readers already read, so `facts.py`, `metrics.py` and
