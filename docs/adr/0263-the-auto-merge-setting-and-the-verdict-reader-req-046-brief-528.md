@@ -53,7 +53,8 @@ reserved for brief #528 by the conductor (the field note on #528).
 7. `kit/templates/agk.toml` and this repository's `agk.toml` carry the two keys commented, with
    `auto_merge = false`. This repository does not turn the setting on.
 8. In this build the command makes no merge call, takes no lock, writes no file and pushes nothing.
-   `docs/guides/reference.md` names the command, because every installed script is named there.
+   `docs/guides/reference.md` is not changed: `doctor.py` imports the script, which the reference
+   check accepts, and the guide of build (e) describes the command.
 
 ## Consequences
 

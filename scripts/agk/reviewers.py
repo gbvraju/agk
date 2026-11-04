@@ -27,6 +27,7 @@ NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 USER_RE = re.compile(r"^@?[A-Za-z0-9_.-]+$")
 AUTHORS = "verdict_authors"
 APPROVERS = "spec_approvers"
+CONDUCTORS = "conductor_accounts"  # SPEC-0039 rule 3: the optional second account (brief #528)
 APPROVE = re.compile(r"Approve: ([0-9a-f]{7,40}) (SPEC-\d{4})")
 APPROVE_SHORT = re.compile(r"Approve: (SPEC-\d{4})")  # SPEC-0032 rule 5: pinned by the runs
 CONFIRMED = re.compile(r"Confirmed: ([0-9a-f]{40})")  # brief 277: the full head ID
@@ -177,6 +178,27 @@ def approvers_of(data: dict) -> list[str]:
         return []
     names = [a.lstrip("@").lower() for a in listed]
     return [n for n in names if n != PLACEHOLDER]
+
+
+def conductors_of(data: dict) -> list[str]:
+    """The optional `conductor_accounts` (SPEC-0039 rule 3), lower case without `@`: absent or
+    empty lists nobody (one account, the default). A value that is not a list of user handles, the
+    placeholder `@REPLACE-ME` or an account also in `spec_approvers` is refused, naming the setting
+    and never a value (Q-S0039-10)."""
+    listed = data.get(CONDUCTORS)
+    setting = f"(setting: {CONDUCTORS} in {CONFIG})"
+    if listed is None:
+        return []
+    if not isinstance(listed, list) or not all(
+        isinstance(a, str) and USER_RE.match(a) for a in listed
+    ):
+        raise ReviewerError(f"{CONDUCTORS} must be a list of user handles {setting}")
+    names = [a.lstrip("@").lower() for a in listed]
+    if PLACEHOLDER in names:
+        raise ReviewerError(f"{CONDUCTORS} lists the installed placeholder {setting}")
+    if set(names) & set(approvers_of(data)):
+        raise ReviewerError(f"{CONDUCTORS} lists an account that is a spec approver {setting}")
+    return names
 
 
 def spec_approvers(root) -> list[str]:
@@ -433,7 +455,7 @@ def parse(text: str) -> dict:
     return data
 
 
-TOP_KEYS = ("version", "classes", "teams", AUTHORS, APPROVERS)
+TOP_KEYS = ("version", "classes", "teams", AUTHORS, APPROVERS, CONDUCTORS)
 
 
 def misplaced(data: dict) -> list[str]:

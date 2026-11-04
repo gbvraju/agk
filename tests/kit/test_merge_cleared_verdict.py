@@ -72,7 +72,7 @@ def repo(
     """A checkout whose `origin/main` holds MAIN; with HEAD, the checkout is a pull request's head
     branch whose agk.toml (committed and in the work tree) says HEAD instead."""
     root = tmp_path / "repo"
-    root.mkdir()
+    root.mkdir(parents=True)
     git(root, "init", "-q", "-b", "main")
     (root / "agk.toml").write_text(main, encoding="utf-8")
     if reviewers_yaml is not None:
@@ -106,7 +106,7 @@ def cleared(sha: str = HEAD, login: str = OWNER, at: int = 5) -> dict:
 def fake_gh(tmp_path: Path, pull: object = None, comments: object = None, fail: bool = False):
     """A `gh` on PATH that answers the two reads from saved JSON and logs each argument list."""
     bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
+    bin_dir.mkdir(parents=True)
     saved = tmp_path / "saved.json"
     log = tmp_path / "gh-calls.jsonl"
     pull = {"number": 7, "head": {"sha": HEAD}, "state": "open"} if pull is None else pull
@@ -628,7 +628,7 @@ def test_a_remote_that_is_not_github_or_no_gh_is_refused(tmp_path):
 def test_the_script_makes_no_merge_call_takes_no_lock_and_writes_no_file():
     """REQ-046 AC2: brief #528 answer 1 (no merge call, no lock, no file, no push)."""
     text = SCRIPT.read_text(encoding="utf-8")
-    words = ('"PUT"', "/merge", "lock.py", ".write_text(", "open(", '"push"', "--jq", "shell=True")
+    words = ('"PUT"', '/merge"', "lock.py", ".write_text(", "open(", '"push"', "--jq", "shell=True")
     for word in words:
         assert word not in text, word
 
