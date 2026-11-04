@@ -21,6 +21,7 @@ import pytest
 from impact import Impact, Selected
 from test_prepush import LINT_OK, MK_OK, path_with, scanner
 
+TESTING = '[testing]\nprofile = "balanced"\nmap = [ { code = "src/a/**", tests = ["tests/**"] } ]\n'
 WARNING = (
     "prepush: warning: the full suite took 1234 s, more than proof_timeout (900 s); "
     "proof will not finish (setting: proof_timeout); a value of about 1860 s leaves headroom"
@@ -64,7 +65,8 @@ def toml(timeout: str = "900", proof: bool = False) -> str:
         f"project_tests = 'FULL'\nproof_timeout = {timeout}\n"
     )
     if proof:
-        text += "[proof]\nkit = { dirs = [\"tests\"], patterns = [\"test_*.py\"], command = 'KIT {files}' }\n"
+        area = 'dirs = ["tests"], patterns = ["test_*.py"], command = \'KIT {files}\''
+        text += f"[proof]\nkit = {{ {area} }}\n"
     return text
 
 
@@ -163,11 +165,12 @@ def test_a_proof_plan_run_over_the_limit_prints_nothing(repo, clock, monkeypatch
 def test_a_refused_proof_timeout_keeps_todays_refusal(repo):
     """REQ-016: brief #509 answer 3 (a refused `proof_timeout` setting keeps today's refusal)."""
     text = toml("0").replace("project_tests = 'FULL'", "project_tests = 'echo full'")
-    text += '[testing]\nprofile = "balanced"\nmap = [ { code = "src/a/**", tests = ["tests/**"] } ]\n'
+    text += TESTING
     repo.commit({"agk.toml": text, "agk.mk": MK_OK, "Makefile": LINT_OK, "src/b.py": "x\n"})
     repo.branch("feature")
     repo.commit({"src/b.py": "y\n"})
-    proc = repo.run("prepush.py", "--no-lock", PATH=path_with(scanner(repo.root / ".." / "bin-509", 0)))
+    bin_dir = scanner(repo.root / ".." / "bin-509", 0)
+    proc = repo.run("prepush.py", "--no-lock", PATH=path_with(bin_dir))
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert "proof_timeout must be a positive integer (setting: proof_timeout)" in proc.stdout
     assert "prepush: stopped at tests" in proc.stdout
@@ -177,7 +180,7 @@ def test_a_refused_proof_timeout_keeps_todays_refusal(repo):
 def test_the_warning_is_in_the_records_notes(repo, clock, monkeypatch, tmp_path_factory, capsys):
     """REQ-016: brief #509 answer 1 (the line is in the record's notes)."""
     outside = tmp_path_factory.mktemp("outside")
-    text = toml() + '[testing]\nprofile = "balanced"\nmap = [ { code = "src/a/**", tests = ["tests/**"] } ]\n'
+    text = toml() + TESTING
     repo.commit({"agk.toml": text, "agk.mk": MK_OK, "Makefile": LINT_OK, "src/b.py": "x\n"})
     repo.branch("feature")
     repo.commit({"src/b.py": "y\n"})
@@ -202,7 +205,7 @@ def test_a_record_without_a_warning_has_empty_notes(
 ):
     """REQ-016: brief #509 answer 1 (no warning, no note)."""
     outside = tmp_path_factory.mktemp("outside")
-    text = toml() + '[testing]\nprofile = "balanced"\nmap = [ { code = "src/a/**", tests = ["tests/**"] } ]\n'
+    text = toml() + TESTING
     repo.commit({"agk.toml": text, "agk.mk": MK_OK, "Makefile": LINT_OK, "src/b.py": "x\n"})
     repo.branch("feature")
     repo.commit({"src/b.py": "y\n"})
