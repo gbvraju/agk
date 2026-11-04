@@ -64,8 +64,9 @@ reads a project's source documents, forecasts a milestone or controls a change o
    `.claude-plugin/` is `(verify)`, read by build (c). Each build adds its own ADR naming the
    classes it changes and citing this one (`Q-S0043-18`). No build changes `constitution/`,
    `config/`, `.claude/`, `CLAUDE.md`, `Makefile` or `pyproject.toml`.
-7. The builds that read sources declare `Depends-on` the build of brief #538 that adds the data
-   guard, and build (i) the build of brief #536 that adds the file forge. This pull request changes
+7. The builds that read sources declare `Depends-on` the builds of brief #538 that add the data
+   guard (`scripts/agk/guard.py` and `.claude/hooks/data_guard.py`), which has no off switch, so
+   `plan_intake.py` refuses when it is not installed and runs `guard.scan_text` on each source first, and build (i) the build of brief #536 that adds the file forge. This pull request changes
    documents only and declares no dependence: the brief's `Depends-on: #538` is for the builds
    (the field note on #539).
 
@@ -79,4 +80,4 @@ request, and a project without `docs/plan/` sees no change from any build.
 
 None. The intake checks cannot tell whether the calibration minimum, the simulation or the status
 rule are the right ones; that is the review of this pull request and the owner's rulings on
-`Q-S0043-1` to `Q-S0043-18`.
+`Q-S0043-1` to `Q-S0043-19`.
