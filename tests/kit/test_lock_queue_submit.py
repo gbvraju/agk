@@ -6,7 +6,7 @@ REQ-047. With `[locks] queue = true` in agk.toml, `lock.py submit --name heavy -
 <sha12>)` at once and never waits on the lock; `lock.py status` adds the order in force, the
 running and waiting jobs with an estimated start from past results, and `queue empty`. With no
 `[locks]` table, or `queue = false`, nothing changes, no queue folder is made, and `submit` and
-`runner` exit 2 naming the setting. The runner is build (b): `runner` exits 2 with `not built yet`.
+`runner` exit 2 naming the setting. The runner is build (b), tested in test_lock_queue_runner.py.
 
 Every test points `lock_dir` at its own folder, reads saved brief responses from a fake `gh` on
 PATH and makes no network call; data is invented (example.com).
@@ -321,13 +321,6 @@ def test_a_brief_that_is_not_a_number_is_refused(repo, where):
     """REQ-047 AC2: SPEC-0040 rule 3."""
     assert submit(repo, "--brief", "seven").returncode == 2
     assert job_files(where) == []
-
-
-def test_the_runner_is_not_built_yet_and_says_so(repo, where):
-    """REQ-047 AC1: brief #529 answer 2 (a call is never silent)."""
-    proc = repo.run("lock.py", "runner", "--name", "heavy")
-    assert proc.returncode == 2 and "not built yet" in proc.stderr
-    assert not (queue_of(where) / "runner.json").exists()
 
 
 # --- rule 5: dedupe and replace in place --------------------------------------------------------
