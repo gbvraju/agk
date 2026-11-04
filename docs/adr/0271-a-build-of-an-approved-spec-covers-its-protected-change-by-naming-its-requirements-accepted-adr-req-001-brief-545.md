@@ -36,6 +36,9 @@ in the old way.
    class, never a value). An ADR in the change set still counts as before.
 3. The governance workflow passes the body file it already writes (`$RUNNER_TEMP/pr-body.md`) to
    the check with `--body`, and `prepush.py --body FILE` sets `AGK_PR_BODY` for its governance step.
+   Because the step now reads the body, it becomes a body step (brief #216): it runs on an edited
+   description too, and `full_run.py` lists it in `BODY_STEPS`, so a full run that failed only
+   there is cured by editing the body and the partial run repeats the whole check and decides.
 4. The constitution, `config/reviewers.yaml`, the workflows and the ruleset still need an ADR in the
    same PR. A build that changes a decision of its spec or ADR writes a new ADR. The `Decisions
    taken:` line of the PR body carries the build's decisions, and the verdict reads it.
@@ -49,8 +52,8 @@ Protected path classes this pull request changes: `constitution/`, `config/`, `.
 ## Consequences
 
 A build of an Approved spec writes no ADR and makes no status commit for one. The check now reads
-the PR body; in CI the step `check_protected_changes` does not run on an `edited` event, so a
-`Covered-by:` line added by editing the body is read on the next push (Q-545-2). An Accepted intake
+the PR body, so a `Covered-by:` line added by editing the body is read by the partial run of that
+edit, which repeats the whole check on the same head. An Accepted intake
 ADR must name every protected class its builds will change; one that does not leaves those builds
 writing an ADR of their own, as today.
 
