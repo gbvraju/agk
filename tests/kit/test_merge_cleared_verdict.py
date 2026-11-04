@@ -634,17 +634,24 @@ def test_the_script_makes_no_merge_call_takes_no_lock_and_writes_no_file():
 
 
 def test_the_script_is_installed_and_the_templates_carry_the_commented_keys():
-    """REQ-046 AC1: brief #528 answers 1 and 4 (installed; the keys commented, off)."""
+    """REQ-046 AC1: brief #528 answers 1 and 4 (installed; the template's keys commented, off).
+
+    This repository's own agk.toml turns the setting on by the owner's choice (brief #534, ADR-0266).
+    """
     root = SCRIPTS.parents[1]
     manifest = json.loads((root / "kit" / "manifest.json").read_text(encoding="utf-8"))
     assert "scripts/agk/merge_cleared.py" in manifest["verbatim"]
     assert manifest["verbatim"] == sorted(manifest["verbatim"])
-    for rel in ("kit/templates/agk.toml", "agk.toml"):
-        lines = (root / rel).read_text(encoding="utf-8").splitlines()
-        assert "# auto_merge = false" in lines, rel
-        assert '# auto_merge_method = "squash"' in lines, rel
-        assert not any(x.startswith("auto_merge") for x in lines), rel
+    lines = (root / "kit/templates/agk.toml").read_text(encoding="utf-8").splitlines()
+    assert "# auto_merge = false" in lines
+    assert '# auto_merge_method = "squash"' in lines
+    assert not any(x.startswith("auto_merge") for x in lines)
     import tomllib
 
+    template = tomllib.loads((root / "kit/templates/agk.toml").read_text(encoding="utf-8"))
+    assert merge_cleared.auto_merge_setting(template) == "off"
+    lines = (root / "agk.toml").read_text(encoding="utf-8").splitlines()
+    assert "auto_merge = true" in lines
+    assert 'auto_merge_method = "squash"' in lines
     data = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
-    assert merge_cleared.auto_merge_setting(data) == "off"
+    assert merge_cleared.auto_merge_setting(data) == "on"

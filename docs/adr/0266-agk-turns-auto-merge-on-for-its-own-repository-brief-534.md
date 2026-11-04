@@ -6,7 +6,7 @@
 - Related: ADR-0261, ADR-0263, ADR-0265, SPEC-0039
 - Requirements: REQ-046
 
-Protected classes: `agk.toml`
+Protected classes: `agk.toml`, `tests/kit/`
 
 ## Context
 
@@ -18,7 +18,9 @@ requests stop waiting on a hand merge. This ADR number was reserved for brief #5
 ## Decision
 
 1. `agk.toml` sets `auto_merge = true` and `auto_merge_method = "squash"` under `[flow]`. Nothing
-   else in the file changes apart from the comment above the two lines.
+   else in the file changes apart from the comment above the two lines. The one test that pinned this
+   repository's setting off (`tests/kit/test_merge_cleared_verdict.py`) now pins it on, and still
+   pins the kit template's keys commented and off.
 2. Only the conductor merges, only through `merge_cleared.py --pr <n> --sha <sha>`, in the same act
    as posting `Verdict: cleared <sha>` (principle 2 and session rule 2 as amended by #531). Builders
    never merge.
