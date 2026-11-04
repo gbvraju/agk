@@ -150,7 +150,7 @@ def test_governance_runs_only_the_steps_that_read_the_body_when_the_description_
 def test_governance_still_runs_every_step_on_a_commit():
     """Brief #216 principle: no check that runs today is lost on a commit that can change it."""
     full = [n for n in steps(workflow("governance.yml")) if n.startswith(("check_", "reviewers"))]
-    assert len(full) == 13
+    assert len(full) == 14
     assert types_of(workflow("governance.yml")) >= {"opened", "synchronize", "reopened", "edited"}
 
 
