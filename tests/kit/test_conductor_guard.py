@@ -384,3 +384,203 @@ def test_a_hash_in_a_bounded_run_is_refused(work):
     ):
         found = work.bash(command)
         assert found is not None and MARK in found["permissionDecisionReason"], command
+
+
+# --- the guarded merge (brief #531, ADR-0265; SPEC-0039 rule 8) -----------------------------------
+
+MERGE_SCRIPT = "scripts/agk/merge_cleared.py"
+FULL = "a1b2c3d4e5" * 4
+ALLOW_RULE = "conductor guard rule 6: the guarded merge"
+FLOW_ON = '[flow]\nauto_merge = true\nauto_merge_method = "squash"\n'
+FLOW_OFF = "[flow]\nauto_merge = false\n"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def git_in(root: Path, *args: str, text: str | None = None) -> str:
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "HOME": str(root),
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@example.com",
+    }
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "-C", str(root), *args], input=text, capture_output=True, text=True, check=True,
+        env=env,
+    ).stdout.strip()  # fmt: skip
+
+
+def merge_project(tmp_path: Path, here: str, there: str | None) -> Path:
+    """A project whose checkout's agk.toml has the flow table HERE and whose `origin/main` has
+    THERE (None: no default branch fetched)."""
+    root = tmp_path / "project"
+    (root / "scripts" / "agk").mkdir(parents=True)
+    (root / MERGE_SCRIPT).write_text("print('x')\n", encoding="utf-8")
+    git_in(root, "init", "-q")
+    git_in(root, "remote", "add", "origin", "https://github.com/o/r.git")
+    (root / "agk.toml").write_text(f'default_branch = "main"\n{here}', encoding="utf-8")
+    if there is not None:
+        blob = git_in(
+            root, "hash-object", "-w", "--stdin", text=f'default_branch = "main"\n{there}'
+        )
+        tree = git_in(root, "mktree", text=f"100644 blob {blob}\tagk.toml\n")
+        commit = git_in(root, "commit-tree", tree, "-m", "main", text="")
+        git_in(root, "update-ref", "refs/remotes/origin/main", commit)
+    return root
+
+
+def merge_decision(root: Path, command: str, shadow: bool = False) -> dict | None:
+    temp = root.parent / "systmp"
+    temp.mkdir(exist_ok=True)
+    env = {"PATH": "/usr/bin:/bin", "CLAUDE_PROJECT_DIR": str(root), "TMPDIR": str(temp)}
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(HOOK), *(["--shadow"] if shadow else [])],
+        input=json.dumps(bash_of(command, root)),
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(root),
+    )
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+
+
+def allows_merge(found: dict | None) -> bool:
+    return (
+        found is not None
+        and found["permissionDecision"] == "allow"
+        and found["permissionDecisionReason"].startswith(ALLOW_RULE)
+    )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"python3 {MERGE_SCRIPT} --pr 7 --sha {FULL}",
+        f"python {MERGE_SCRIPT} --pr 7 --sha {FULL}",
+        f"python3 ./{MERGE_SCRIPT} --pr 1234 --sha {FULL}",
+    ],
+)
+def test_the_exact_merge_command_is_allowed_with_auto_merge_on_in_both_places(tmp_path, command):
+    """REQ-046 AC5: SPEC-0039 rule 8 (the one exception, as the guard reads `auto_start`)."""
+    root = merge_project(tmp_path, FLOW_ON, FLOW_ON)
+    assert allows_merge(merge_decision(root, command)), command
+
+
+def test_the_full_path_of_the_projects_own_script_is_allowed(tmp_path):
+    """REQ-046 AC5: SPEC-0039 rule 8 (the project's own regular file)."""
+    root = merge_project(tmp_path, FLOW_ON, FLOW_ON)
+    command = f"python3 {root / MERGE_SCRIPT} --pr 7 --sha {FULL}"
+    assert allows_merge(merge_decision(root, command))
+
+
+@pytest.mark.parametrize(
+    ("here", "there"),
+    [
+        (FLOW_OFF, FLOW_ON),
+        (FLOW_ON, FLOW_OFF),
+        ("", FLOW_ON),
+        (FLOW_ON, ""),
+        (FLOW_ON, None),
+        ('[flow]\nauto_merge = true\nauto_merge_method = "merge"\n', FLOW_ON),
+        ('[flow]\nauto_merge = "true"\nauto_merge_method = "squash"\n', FLOW_ON),
+        ("[flow\n", FLOW_ON),
+    ],
+)
+def test_the_merge_command_is_denied_unless_the_setting_is_on_in_both_places(tmp_path, here, there):
+    """REQ-046 AC5: SPEC-0039 rule 8 (off, absent or malformed in either place denies)."""
+    root = merge_project(tmp_path, here, there)
+    found = merge_decision(root, f"python3 {MERGE_SCRIPT} --pr 7 --sha {FULL}")
+    assert found is not None and found["permissionDecision"] == "deny"
+    assert found["permissionDecisionReason"].startswith(MARK)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"python3 {MERGE_SCRIPT} --pr 7 --sha {FULL[:12]}",
+        f"python3 {MERGE_SCRIPT} --pr 7 --sha {FULL.upper()}",
+        f"python3 {MERGE_SCRIPT} --pr 7 --sha {FULL}0",
+        f"python3 {MERGE_SCRIPT} --pr 07x --sha {FULL}",
+        f"python3 {MERGE_SCRIPT} --pr 0 --sha {FULL}",
+        f"python3 {MERGE_SCRIPT} --sha {FULL} --pr 7",
+        f"python3 {MERGE_SCRIPT} --pr 7 --sha {FULL} --force",
+        f"python3 {MERGE_SCRIPT} --pr 7",
+        f"python3 -I {MERGE_SCRIPT} --pr 7 --sha {FULL}",
+        f"python3.12 {MERGE_SCRIPT} --pr 7 --sha {FULL}",
+        f"python3 ../copy/scripts/agk/merge_cleared.py --pr 7 --sha {FULL}",
+        f"python3 other/merge_cleared.py --pr 7 --sha {FULL}",
+        f"python3 {MERGE_SCRIPT} --pr 7 --sha {FULL}; gh pr merge 7",
+        f"AGK_X=1 python3 {MERGE_SCRIPT} --pr 7 --sha {FULL}",
+        f"gh api --method PUT repos/o/r/pulls/7/merge -f sha={FULL} -f merge_method=squash",
+        f"gh api -X PUT repos/o/r/pulls/7/merge -f sha={FULL}",
+        "gh pr merge 7 --squash",
+        f"python3 scripts/agk/session.py merge --pr 7 --sha {FULL}",
+    ],
+)
+def test_every_other_form_and_every_other_merge_path_is_denied(tmp_path, command):
+    """REQ-046 AC5: SPEC-0039 rule 8 (a short sha, an extra option, another copy, another path)."""
+    root = merge_project(tmp_path, FLOW_ON, FLOW_ON)
+    other = root / "other"
+    other.mkdir()
+    (other / "merge_cleared.py").write_text("print('x')\n", encoding="utf-8")
+    found = merge_decision(root, command)
+    assert found is not None and found["permissionDecision"] == "deny", command
+
+
+def test_a_link_to_the_script_is_denied(tmp_path):
+    """REQ-046 AC5: SPEC-0039 rule 8 (never through a link)."""
+    root = merge_project(tmp_path, FLOW_ON, FLOW_ON)
+    (root / "linked.py").symlink_to(root / MERGE_SCRIPT)
+    found = merge_decision(root, f"python3 linked.py --pr 7 --sha {FULL}")
+    assert found is not None and found["permissionDecision"] == "deny"
+
+
+def test_the_shadow_reviewer_never_runs_the_merge(tmp_path):
+    """REQ-046 AC5: SPEC-0039 rule 8 (only the conductor role)."""
+    root = merge_project(tmp_path, FLOW_ON, FLOW_ON)
+    found = merge_decision(root, f"python3 {MERGE_SCRIPT} --pr 7 --sha {FULL}", shadow=True)
+    assert found is not None and found["permissionDecision"] == "deny"
+
+
+def test_builders_are_never_allowed_the_command_and_no_project_wide_deny_is_added():
+    """REQ-046 AC5: SPEC-0039 rule 8 and Q-S0039-15 (the builders' settings ask, never allow)."""
+    data = json.loads((REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    ask = data["permissions"]["ask"]
+    for entry in (
+        "Bash(python3 scripts/agk/merge_cleared.py*)",
+        "Bash(python scripts/agk/merge_cleared.py*)",
+        "Bash(*merge_cleared.py*)",
+    ):
+        assert entry in ask, entry
+    assert not any("merge_cleared" in e for e in data["permissions"]["deny"])
+    assert not any("merge_cleared" in e for e in data["permissions"]["allow"])
+
+
+def numbered(path: Path, number: int) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return next(x for x in lines if x.startswith(f"{number}. "))
+
+
+PRINCIPLE_2 = (
+    "2. Agents never merge, and never bypass checks. The one exception: with `auto_merge = true` "
+    "on the default branch, the conductor alone may merge a pull request it cleared, and only "
+    "through `scripts/agk/merge_cleared.py`."
+)
+SESSION_RULE_2 = (
+    "2. A session never merges, never tags, never enables auto-merge, never posts a verdict and "
+    "never touches a secret. The one exception: with `auto_merge = true` on the default branch, "
+    "the conductor alone may merge a pull request it cleared, and only through "
+    "`scripts/agk/merge_cleared.py`."
+)
+
+
+def test_principle_2_and_session_rule_2_each_gain_exactly_the_one_sentence():
+    """REQ-046 AC5: SPEC-0039 rule 8 and Q-S0039-14 (one sentence each, nothing else)."""
+    principles = REPO_ROOT / "constitution" / "principles.md"
+    assert numbered(principles, 2) == PRINCIPLE_2
+    assert numbered(REPO_ROOT / "config" / "session-rules.md", 2) == SESSION_RULE_2
+    rules = [x for x in principles.read_text(encoding="utf-8").splitlines() if x[:1].isdigit()]
+    assert len(rules) == 12
