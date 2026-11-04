@@ -198,9 +198,11 @@ BEFORE = {
 }
 
 SAFETY = {
-    2: (
+    2: (  # brief #531 (ADR-0265, SPEC-0039 rule 8) added the one exception's sentence
         "A session never merges, never tags, never enables auto-merge, never posts a "
-        "verdict and never touches a secret."
+        "verdict and never touches a secret. The one exception: with `auto_merge = true` on the "
+        "default branch, the conductor alone may merge a pull request it cleared, and only "
+        "through `scripts/agk/merge_cleared.py`."
     ),
     14: (
         "The shared-mechanical files are the files marked `merge=union` in "
