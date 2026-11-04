@@ -115,6 +115,9 @@ prepush: tests full FAIL (41.0s): profile balanced: 1 unmapped file
 
 The gate stops at the first run that fails, with its output, as before. Each run keeps proof's time limit (`proof_timeout`)
 and is listed in the `--record` file with its `set` (`proof` or `regression`) and its `reason`.
+So that proof can finish, set `proof_timeout` above the full suite's time with headroom, and prepush warns when it is not:
+after a `full` run that took longer, it prints `prepush: warning: the full suite took <n> s, more than proof_timeout`
+with both durations and a suggested value, and the line is in the record's `notes` (ADR-0258).
 
 **The heavy-step lock.** Two gates that run the tests at once on one machine slow each other down and can collide. The `tests`
 step holds the machine's heavy-step lock (`lock.py`, name `heavy`) for as long as it runs, and prints lock.py's own lines while
