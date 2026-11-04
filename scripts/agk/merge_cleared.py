@@ -64,8 +64,7 @@ RED_TITLE = "The default branch is red"  # the router's red-branch issue (SPEC-0
 RECORD_TITLE = "Local mode since"  # the one local-mode record issue (docs/guides/local-mode.md)
 LOCAL_EVIDENCE = re.compile(r"Local evidence: ([0-9a-f]{12,40})(?![0-9A-Za-z])")
 EVIDENCE = re.compile(r"Evidence check: (agrees|differs), head ([0-9a-f]{12})(?![0-9A-Za-z])")
-ACCEPTS = re.compile(r"\baccept", re.IGNORECASE)
-NEGATION = re.compile(r"\b(?:not|no|never|cannot)\b", re.IGNORECASE)
+ACCEPT = "Maintainer answer: accept {}"  # the one accepted first line (SPEC-0039 rule 4)
 APPROVAL = re.compile(r"Approval: (SPEC-\d{4})(?![0-9])")
 DEPENDS = re.compile(r"Depends-on: #(\d+)")
 RELEASE = {  # a release changes the kit's version (SPEC-0039 rule 5)
@@ -277,13 +276,18 @@ def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]
 
 
 def reviewers_at(root: Path, sha: str) -> dict:
+    """config/reviewers.yaml at the default branch's commit SHA; absent is no settings, and one
+    that cannot be parsed is refused, never read as empty (SPEC-0039 rules 2 and 3)."""
     text = show(root, sha, CONFIG)
     if text is None:
         return {}
     try:
         return parse(text)
     except CheckError:
-        return {}
+        raise Refused(
+            "config/reviewers.yaml on the default branch cannot be parsed (setting: "
+            "conductor_accounts and spec_approvers in config/reviewers.yaml)"
+        ) from None
 
 
 def conductors_in(data: dict) -> list[str]:
@@ -317,16 +321,13 @@ def stamp(item: dict) -> tuple[str, int]:
 
 
 def answered(comments: list[dict], verdict: dict, sha: str, approvers: list[str]) -> bool:
-    """A `Maintainer answer:` by a spec approver, after the verdict, whose first line names the
-    head and accepts the difference (SPEC-0039 rule 4)."""
+    """A comment by a spec approver, after the verdict, whose first line is exactly
+    `Maintainer answer: accept <the 40-character head>` (SPEC-0039 rule 4)."""
+    wanted = ACCEPT.format(sha)
     for item in comments:
-        line = first_line(item)
-        if not line.startswith("Maintainer answer:") or login(item) not in approvers:
+        if first_line(item) != wanted or login(item) not in approvers:
             continue
-        if stamp(item) <= stamp(verdict):
-            continue
-        named = sha in line or re.search(rf"(?<![0-9a-f]){sha[:12]}(?![0-9a-f])", line)
-        if named and ACCEPTS.search(line) and not NEGATION.search(line):
+        if stamp(item) > stamp(verdict):
             return True
     return False
 
@@ -339,7 +340,7 @@ def local_evidence(verdict: dict, comments: list[dict], sha: str, approvers: lis
     if not named or not checks:
         raise Held("no local evidence for this head (rule 4)")
     if "differs" in checks and not answered(comments, verdict, sha, approvers):
-        raise Held("the evidence check differs and no maintainer answer accepts it (rule 4)")
+        raise Held("evidence differs (rule 4)")
 
 
 def ci_evidence(repo: str, sha: str, required: list[str]) -> None:
@@ -422,6 +423,9 @@ def dependence_unmet(repo: str, pull: dict) -> bool:
 def hold_list(repo: str, number: int, pull: dict, comments: list, approvers: list) -> None:
     """The holds of SPEC-0039 rule 5 after the red branch and paused, in the rule's order."""
     files = read_pages(f"repos/{repo}/pulls/{number}/files", "the files of the pull request")
+    count = pull.get("changed_files")
+    if not isinstance(count, int) or isinstance(count, bool) or count != len(files):
+        raise Held("files not all read (rule 5)")  # GitHub lists at most 3,000 files (rule 2)
     sha = str(pull["head"]["sha"])
     if released(files):
         raise Held("release (rule 5)")

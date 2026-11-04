@@ -221,7 +221,13 @@ def comment_target_ok(endpoint: str) -> bool:
     return own is not None and f"{match.group(1)}/{match.group(2)}".lower() == own
 
 
+GH_VALUE_OPTIONS = ("-H", "--header", "--jq", "-q", "--template", "-t", "--cache", "--hostname")
+GH_FLAGS = ("--paginate", "--slurp", "--silent", "-i", "--include", "--verbose")
+
+
 def gh_api_allowed(words: list[str]) -> bool:
+    """Every option is one the guard knows: the method in each form `gh` reads (`--method V`,
+    `--method=V`, `-X V`, `-XV`, `-X=V`), a field, a read-only option; any other is denied."""
     args = words[2:]
     method = None
     endpoint = None
@@ -230,19 +236,25 @@ def gh_api_allowed(words: list[str]) -> bool:
     while i < len(args):
         arg = args[i]
         if arg in ("--method", "-X"):
-            method = args[i + 1].upper() if i + 1 < len(args) else None
+            method = args[i + 1].upper() if i + 1 < len(args) else ""
             i += 2
             continue
         if arg.startswith("--method="):
             method = arg.split("=", 1)[1].upper()
+        elif arg.startswith("-X"):
+            method = arg[2:].removeprefix("=").upper()
         elif arg in FIELD_FLAGS:
             flags.add(arg)
             i += 2
             continue
+        elif arg in GH_VALUE_OPTIONS:
+            i += 2
+            continue
         elif arg.startswith("-"):
-            if arg in ("-H", "--header", "--jq", "-q", "--template", "-t", "--cache", "--hostname"):
-                i += 2
-                continue
+            if arg not in GH_FLAGS and not (
+                arg.startswith("--") and arg.split("=", 1)[0] in GH_VALUE_OPTIONS and "=" in arg
+            ):
+                return False
         elif endpoint is None:
             endpoint = arg
         else:

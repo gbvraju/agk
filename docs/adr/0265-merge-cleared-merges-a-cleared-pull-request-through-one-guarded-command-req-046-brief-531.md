@@ -26,19 +26,23 @@ reserved for brief #531 by the conductor (the field note on #531).
    4); the rest of the hold list in the order of rule 5 (`release`, `spec approval`,
    `protected class <class>`, `hold label`, `draft`, `depends-on`, `conflict`). Every hold prints
    `held: <reason> (rule n)` and exits 3. The setting, `paused`, `required_checks`,
-   `spec_approvers` and `conductor_accounts` are all read from the one default-branch commit.
+   `spec_approvers` and `conductor_accounts` are all read from the one default-branch commit; a
+   `config/reviewers.yaml` there that cannot be parsed is refused, naming the settings, and is
+   never read as empty (an absent file is the one-account default).
 2. Evidence. Local mode is `execution = "local"` on the default branch, or an open issue whose
    title starts `Local mode since` (the record issue of `docs/guides/local-mode.md`). There the
    verdict's body needs a line starting `Local evidence: <sha>`, the sha at least 12 characters
    and a prefix of the head, and an `Evidence check: agrees|differs, head <sha12>` naming the
-   head. `differs` passes only with a comment whose first line starts `Maintainer answer:`, by an
-   account in `spec_approvers`, posted after the verdict, naming the head (its full sha or its
-   first 12 characters) and holding a word starting `accept` and none of `not`, `no`, `never`
-   or `cannot` (Q-531-2). In CI mode each name of
+   head. `differs` passes only with a comment whose first line is exactly
+   `Maintainer answer: accept <the 40-character head sha>`, by an account in `spec_approvers`,
+   posted after the verdict; any other answer holds as `evidence differs` (the fix list on
+   cb0a7ef, item 2, which replaces Q-531-2). In CI mode each name of
    `required_checks` needs a latest check run on the head (the router's `latest_runs`) that is
    `completed` with `success`: a red or other conclusion holds as red, a missing one as missing,
    and one not completed as `checks pending`.
-3. The hold list reads the pull request's files page by page. `release` is a patch line that adds
+3. The hold list reads the pull request's files page by page, and holds as `files not all read`
+   unless the number read equals the pull request's `changed_files` (the list-files endpoint
+   stops at 3,000 files; rule 2: a partial read is never a pass). `release` is a patch line that adds
    or removes `version =` in `agk.toml` or `"kit_version":` in `kit/manifest.json`, or either file
    with no patch shown. `spec approval` is the label `agk:approve`, or a body line
    `Approval: SPEC-nnnn` with no comment `Approve: <sha> SPEC-nnnn` by a spec approver whose sha
@@ -69,7 +73,9 @@ reserved for brief #531 by the conductor (the field note on #531).
    7) do not stop the conductor `(verify: a PreToolUse hook's allow lifts a settings ask rule)`;
    if it does not, the conductor is asked, which is the safe side. `gh pr merge`, `gh api` with
    `PUT` on a merge route, another copy, a link, another interpreter form and any extra option
-   stay denied.
+   stay denied. `gh_api_allowed` in `.claude/hooks/architect_guard.py`, which this guard imports,
+   reads the method in each form `gh` accepts (`--method V`, `--method=V`, `-X V`, `-XV`,
+   `-X=V`) and denies any option it does not recognise.
 7. The builders' block (Q-S0039-15, Q-531-1): builder sessions start with
    `.claude/settings.json`, which allows `Bash(python3 scripts/agk/*)`. Its `ask` list gains
    `Bash(python3 scripts/agk/merge_cleared.py*)`, `Bash(python scripts/agk/merge_cleared.py*)` and
@@ -98,6 +104,6 @@ head it judged; a builder cannot run the command unasked. `kit/manifest.json` an
 - 2026-11-04: the `ask` entries hold a builder only while the person answering the prompt says no;
   a builder started with every permission skipped is held only by the account boundary and the
   residual of SPEC-0039 (due 2026-12-31).
-- 2026-11-04: a `Maintainer answer:` is read by the words of its first line; an acceptance
-  written in other words holds the pull request until the guide of build (e) gives the exact form
-  (due 2026-12-31).
+- 2026-11-04: only the exact first line `Maintainer answer: accept <head>` accepts a `differs`
+  check; an acceptance written in other words holds the pull request until the guide of build (e)
+  states the form (due 2026-12-31).
