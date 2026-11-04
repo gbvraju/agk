@@ -95,6 +95,7 @@ from architect_guard import (
     WRITE_TOOLS,
     comment_target_ok,
     gh_api_allowed,
+    gh_api_methods,
     git_allowed,
     origin_repo,
     project_root,
@@ -250,11 +251,8 @@ def git_judged(words: list[str]) -> bool:
 
 
 def is_post(words: list[str]) -> bool:
-    args = words[2:]
-    methods = [args[i + 1].upper() for i, a in enumerate(args[:-1]) if a in POST_METHODS] + [
-        a.split("=", 1)[1].upper() for a in args if a.startswith("--method=")
-    ]
-    return "POST" in methods
+    """Any method the command names is `POST`, read as `gh_api_allowed` reads it (brief #531)."""
+    return "POST" in gh_api_methods(words)
 
 
 def shadow_post_ok(words: list[str]) -> bool:

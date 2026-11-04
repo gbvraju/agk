@@ -373,3 +373,23 @@ def test_tokens_of_reads_the_words_bash_passes():
     assert guard.tokens_of("git log 'a #b'") == ["git", "log", "a #b"]
     assert guard.tokens_of('git log "a#b"') == ["git", "log", "a#b"]
     assert guard.tokens_of("git status") == ["git", "status"]
+
+
+def test_the_method_reader_is_shared_by_the_conductor_guard():
+    """REQ-046: brief #531 (fix list on 5ddd126: one reading of the method for both guards)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".claude" / "hooks"))
+    import architect_guard
+    import conductor_guard
+
+    assert conductor_guard.gh_api_methods is architect_guard.gh_api_methods
+    for form, method in [
+        (["--method", "post"], "POST"),
+        (["--method=Post"], "POST"),
+        (["-X", "POST"], "POST"),
+        (["-XPOST"], "POST"),
+        (["-X=post"], "POST"),
+        (["-H", "-XPOST"], None),
+        (["-f", "-XPOST"], None),
+    ]:
+        found = architect_guard.gh_api_methods(["gh", "api", *form, "repos/o/r/issues/7/comments"])
+        assert found == ([method] if method else []), form

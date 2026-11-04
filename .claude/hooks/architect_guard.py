@@ -225,41 +225,59 @@ GH_VALUE_OPTIONS = ("-H", "--header", "--jq", "-q", "--template", "-t", "--cache
 GH_FLAGS = ("--paginate", "--slurp", "--silent", "-i", "--include", "--verbose")
 
 
-def gh_api_allowed(words: list[str]) -> bool:
-    """Every option is one the guard knows: the method in each form `gh` reads (`--method V`,
-    `--method=V`, `-X V`, `-XV`, `-X=V`), a field, a read-only option; any other is denied."""
-    args = words[2:]
-    method = None
-    endpoint = None
-    flags: set[str] = set()
+def gh_api_items(args: list[str]):
+    """The arguments of `gh api` as `gh` reads them, one `(kind, arg, value)` at a time: kind is
+    `method` (in each form: `--method V`, `--method=V`, `-X V`, `-XV`, `-X=V`; value upper-cased),
+    `field`, `value` (a read-only option and its value), `flag`, `unknown` or `positional`. The one
+    reading of the method, shared by the architect's and the conductor's guards (brief #531)."""
     i = 0
     while i < len(args):
         arg = args[i]
         if arg in ("--method", "-X"):
-            method = args[i + 1].upper() if i + 1 < len(args) else ""
+            yield "method", arg, args[i + 1].upper() if i + 1 < len(args) else ""
+            i += 2
+            continue
+        if arg in FIELD_FLAGS or arg in GH_VALUE_OPTIONS:
+            kind = "field" if arg in FIELD_FLAGS else "value"
+            yield kind, arg, args[i + 1] if i + 1 < len(args) else ""
             i += 2
             continue
         if arg.startswith("--method="):
-            method = arg.split("=", 1)[1].upper()
+            yield "method", arg, arg.split("=", 1)[1].upper()
         elif arg.startswith("-X"):
-            method = arg[2:].removeprefix("=").upper()
-        elif arg in FIELD_FLAGS:
-            flags.add(arg)
-            i += 2
-            continue
-        elif arg in GH_VALUE_OPTIONS:
-            i += 2
-            continue
+            yield "method", arg, arg[2:].removeprefix("=").upper()
         elif arg.startswith("-"):
-            if arg not in GH_FLAGS and not (
+            known = arg in GH_FLAGS or (
                 arg.startswith("--") and arg.split("=", 1)[0] in GH_VALUE_OPTIONS and "=" in arg
-            ):
-                return False
-        elif endpoint is None:
-            endpoint = arg
+            )
+            yield ("flag" if known else "unknown"), arg, ""
         else:
-            return False
+            yield "positional", arg, ""
         i += 1
+
+
+def gh_api_methods(words: list[str]) -> list[str]:
+    """Every method a `gh api` command names, in order, read by `gh_api_items`."""
+    return [value for kind, _, value in gh_api_items(words[2:]) if kind == "method"]
+
+
+def gh_api_allowed(words: list[str]) -> bool:
+    """Every option is one the guard knows: the method in each form `gh` reads (`--method V`,
+    `--method=V`, `-X V`, `-XV`, `-X=V`), a field, a read-only option; any other is denied."""
+    method = None
+    endpoint = None
+    flags: set[str] = set()
+    for kind, arg, value in gh_api_items(words[2:]):
+        if kind == "method":
+            method = value
+        elif kind == "field":
+            flags.add(arg)
+        elif kind == "unknown":
+            return False
+        elif kind == "positional":
+            if endpoint is not None:
+                return False
+            endpoint = arg
     if endpoint is None or not endpoint.lstrip("/").startswith("repos/"):
         return False
     if method == "GET" or (method is None and not flags):
