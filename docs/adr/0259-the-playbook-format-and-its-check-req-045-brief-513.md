@@ -1,6 +1,6 @@
 # ADR-0259: The playbook format and its check (REQ-045, brief 513)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Deciders: maintainers
 - Related: ADR-0251, ADR-0260, SPEC-0038
