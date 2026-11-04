@@ -35,7 +35,10 @@
       "Edit(/kit/**)",
       "Edit(/tests/kit_dev/**)",
       "Edit(/.claude-plugin/**)",
-      "Edit(/skills/**)"
+      "Edit(/skills/**)",
+      "Bash(python3 scripts/agk/merge_cleared.py*)",
+      "Bash(python scripts/agk/merge_cleared.py*)",
+      "Bash(*merge_cleared.py*)"
     ],
     "deny": [
       "Bash(git push --force:*)",

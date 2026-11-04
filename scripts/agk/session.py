@@ -44,7 +44,10 @@ any other label. `--all` adds a line `#N <head7> skip: <why>`
 for each other open pull request; `--fingerprint` prints only `fingerprint <sha256>` of the heads,
 labels, draft flags, comment times (a draft's too), check states, and the waiting requests and
 brief questions (their ids and times, never the minutes waited), which changes only when the
-queue does, so a loop wakes the conductor only then.
+queue does, so a loop wakes the conductor only then. With `[flow] auto_merge = true` on the
+default branch (brief #531, SPEC-0039 rule 9), a pull request that would be skipped for a verdict
+on its head, whose latest `Verdict:` comment is exactly `Verdict: cleared <its full head>`, is
+listed as `#N <head7> cleared, not merged`, and the conductor runs `merge_cleared.py` for it again.
 A wait never goes silent (brief #210): when GitHub cannot be read for 5 polls in a row it prints
 `error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since
 <id>` when it starts. `--assign` also takes at once the newest `Assign:` for the session posted
@@ -1508,8 +1511,31 @@ def check_state(repo: str, root, head: str) -> tuple[str, list]:
     return ("missing" if missing or not (runs or statuses) else "green"), seen
 
 
-def review_line(repo: str, root, pr: dict, authors: list[str]) -> tuple[str, list, list]:
-    """(`review` or `skip`, the reasons, the facts for the fingerprint) of one open pull request."""
+def auto_merge_on(root) -> bool:
+    """`[flow] auto_merge` is on at the default branch of the remote as last fetched, read as
+    `merge_cleared.py` reads it (SPEC-0039 rule 9); a setting that cannot be read is off."""
+    import merge_cleared  # the one reading of the setting (brief #531)
+
+    try:
+        _, data = merge_cleared.default_ref(Path(root))
+        return merge_cleared.auto_merge_setting(data) == "on"
+    except CheckError:
+        return False
+
+
+def cleared_unmerged(comments: list, head: str) -> bool:
+    """The latest `Verdict:` comment clears exactly this head, as `merge_cleared.py` reads it."""
+    import merge_cleared
+
+    latest = merge_cleared.latest_verdict(comments)
+    return latest is not None and merge_cleared.first_line(latest) == f"Verdict: cleared {head}"
+
+
+def review_line(
+    repo: str, root, pr: dict, authors: list[str], auto: bool = False
+) -> tuple[str, list, list]:
+    """(`review`, `skip` or, with AUTO (`auto_merge` on, brief #531), `cleared`, the reasons, the
+    facts for the fingerprint) of one open pull request."""
     number, head = pr["number"], str((pr.get("head") or {}).get("sha") or "")
     label = label_of(pr)
     comments = pages(f"repos/{repo}/issues/{number}/comments")
@@ -1530,6 +1556,8 @@ def review_line(repo: str, root, pr: dict, authors: list[str]) -> tuple[str, lis
     sha = (match.group(2) or "") if match else ""
     asked = since_verdict(comments, mark) if mark else []
     if sha and head.startswith(sha) and not asked:
+        if auto and cleared_unmerged(comments, head):
+            return "cleared", ["not merged"], facts
         return "skip", [f"verdict on this head (comment {mark['id']})"], facts
     reasons = ["labelled agk:review"] if label == "agk:review" else []
     reasons += asked
@@ -1662,13 +1690,16 @@ def review_queue(root, mode: str) -> int:
     if found is None:
         raise CheckError("rule 3: the open pull requests cannot be read")
     review, skip, prints = [], [], []
+    auto = auto_merge_on(root)
     for pr in sorted(
         (p for p in found if isinstance(p.get("number"), int)), key=lambda p: p["number"]
     ):
         head = str((pr.get("head") or {}).get("sha") or "")
-        verb, reasons, facts = review_line(repo, root, pr, authors)
+        verb, reasons, facts = review_line(repo, root, pr, authors, auto)
         line = f"#{pr['number']} {head[:7]} {verb}: {'; '.join(reasons)}"
-        (review if verb == "review" else skip).append(line)
+        if verb == "cleared":  # SPEC-0039 rule 9: the conductor runs merge_cleared.py again
+            line = f"#{pr['number']} {head[:7]} cleared, not merged"
+        (skip if verb == "skip" else review).append(line)
         prints.append([pr["number"], head, label_of(pr), bool(pr.get("draft")), facts])
     requests, asked = waiting_requests(repo, authors)
     questions, open_questions = brief_questions(root, repo, authors, found)

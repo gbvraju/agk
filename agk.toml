@@ -35,3 +35,9 @@ assign = "conductor"
 # owner's choice, ADR-0266; turning it off is again the owner's change, by an ADR in the same pull request.
 auto_merge = true
 auto_merge_method = "squash"
+# The heavy-run queue (SPEC-0040 rule 1, brief #529): off by default and when absent. This repository keeps it off; turning it on is the
+# owner's change, by an ADR in the same pull request.
+# [locks]
+# queue = false
+# queue_order = "fifo"
+# queue_max_wait = 120
