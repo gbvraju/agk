@@ -1,6 +1,6 @@
 # ADR-0267: Add REQ-048: One developer adopts AGK alone with nothing of AGK in the product repository
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: SPEC-0041, SPEC-0002, SPEC-0003, SPEC-0005, SPEC-0007, SPEC-0010, SPEC-0012, ADR-0179, ADR-0186, ADR-0208, ADR-0213
