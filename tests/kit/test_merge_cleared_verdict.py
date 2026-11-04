@@ -33,7 +33,7 @@ OLD = "0f9e8d7c6b" * 4
 SHA12 = HEAD[:12]
 REPO = "example-owner/example-repo"
 ON = 'auto_merge = true\nauto_merge_method = "squash"\n'
-HIDDEN = "secretvalue"  # a value no output line may ever show
+HIDDEN = "not-for-output"  # a value no output line may ever show
 CONDUCTOR = "conductor-two"
 BUILDER = "builder-one"
 OWNER = "owner-three"
