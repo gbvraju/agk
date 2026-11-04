@@ -15,14 +15,23 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 REQS = "# Requirements\n\n### REQ-001 — A\n\n- Acceptance: AC1\n- Status: planned\n"
-CLASSES = "constitution/ config/ .github/ docs/requirements.md scripts/agk/"
+CLASSES = "constitution/ config/ .github/ docs/requirements.md CLAUDE.md scripts/agk/ kit/"
 
 
-def adr(status: str = "Accepted", names: str = "config/ scripts/agk/", reqs: str = "REQ-001"):
+def adr(
+    status: str = "Accepted",
+    names: str = "config/ scripts/agk/",
+    reqs: str = "REQ-001",
+    prose: str | None = None,
+    tail: str = "",
+):
+    """An ADR listing `names` in backticks, as `Protected classes:` lines do; `prose` replaces
+    that list with free text."""
+    listed = " ".join(f"`{n}`" for n in names.split()) if prose is None else prose
     return (
         "# ADR-0009: Intake of an invented requirement\n\n"
         f"- Status: {status}\n- Date: 2026-01-01\n- Deciders: maintainers\n- Related: none\n"
-        f"- Requirements: {reqs}\n\n## Decision\n\nThe build changes {names}.\n"
+        f"- Requirements: {reqs}\n\n## Decision\n\nThe build changes {listed}.\n{tail}"
     )
 
 
@@ -177,6 +186,75 @@ def test_req001_unknown_adr_fails(accepted, tmp_path):
     proc = check(accepted, body("ADR-0042"), tmp_path)
     assert proc.returncode == 1
     assert "merge base" in proc.stdout
+
+
+# --- fix list on 3df2f20 (comment 6638465877) ---------------------------------------------------
+
+
+@pytest.mark.parametrize("path", ["kit/templates/ruleset.json", ".github/CODEOWNERS"])
+def test_req001_ruleset_and_codeowners_need_an_adr_of_their_own(repo, tmp_path, path):
+    """REQ-001: brief #545 answer 3 (the ruleset and the code owners keep their own ADR)."""
+    make_base(repo, adr(names="kit/ .github/"))
+    repo.commit({path: "changed\n"})
+    proc = check(repo, body("ADR-0009"), tmp_path)
+    assert proc.returncode == 1
+    assert f"'{path}'" in proc.stdout
+
+
+def test_req001_other_kit_change_is_still_covered(repo, tmp_path):
+    """REQ-001 AC1: only the ruleset file of `kit/` is held back."""
+    make_base(repo, adr(names="kit/"))
+    repo.commit({"kit/templates/other.txt": "changed\n"})
+    assert check(repo, body("ADR-0009"), tmp_path).returncode == 0
+
+
+def test_req001_status_is_the_adrs_own_first_status_line(repo, tmp_path):
+    """REQ-001 AC1: a fenced `- Status: Accepted` below a Proposed field does not count."""
+    fenced = "\n```\n- Status: Accepted\n```\n"
+    make_base(repo, adr(status="Proposed", tail=fenced))
+    repo.commit({"config/x.txt": "y\n"})
+    proc = check(repo, body("ADR-0009"), tmp_path)
+    assert proc.returncode == 1
+    assert "Accepted" in proc.stdout
+
+
+@pytest.mark.parametrize(
+    ("changed", "prose", "listed"),
+    [
+        ("config/x.txt", "myconfig/thing and `scripts/agk/`", "config/"),
+        ("kit/a.txt", "`tests/kit/` and `config/`", "kit/"),
+        ("CLAUDE.md", "`CLAUDE.md item 3` and `config/`", "CLAUDE.md"),
+    ],
+)
+def test_req001_near_miss_mentions_do_not_name_a_class(repo, tmp_path, changed, prose, listed):
+    """REQ-001 AC1: a covering ADR names a class only as the whole name in backticks."""
+    make_base(repo, adr(prose=prose))
+    repo.commit({changed: "changed\n"})
+    proc = check(repo, body("ADR-0009"), tmp_path)
+    assert proc.returncode == 1
+    assert f"'{listed}'" in proc.stdout
+
+
+def test_req001_deleting_the_covering_adr_fails(accepted, tmp_path):
+    """REQ-001 AC1: the change set may not delete the ADR its `Covered-by:` line names."""
+    accepted.commit(
+        {"config/x.txt": "y\n", "docs/adr/0009-intake-of-an-invented-requirement.md": None}
+    )
+    proc = check(accepted, body("ADR-0009"), tmp_path)
+    assert proc.returncode == 1
+    assert "deleted or renamed" in proc.stdout
+
+
+def test_req001_renaming_the_covering_adr_fails(accepted, tmp_path):
+    """REQ-001 AC1: a rename is a deletion of the named path (moved out of docs/adr/, so the
+    moved file is no ADR of the change set either)."""
+    old = "docs/adr/0009-intake-of-an-invented-requirement.md"
+    (accepted.root / "docs" / "archive").mkdir()
+    accepted.git("mv", old, "docs/archive/0009-renamed.md")
+    accepted.commit({"config/x.txt": "y\n"})
+    proc = check(accepted, body("ADR-0009"), tmp_path)
+    assert proc.returncode == 1
+    assert "deleted or renamed" in proc.stdout
 
 
 # --- the one sentence in principle 1 and in CLAUDE.md item 3 ------------------------------------

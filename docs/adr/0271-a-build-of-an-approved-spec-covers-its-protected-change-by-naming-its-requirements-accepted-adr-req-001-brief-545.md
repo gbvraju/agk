@@ -27,11 +27,16 @@ in the old way.
    that `AGK_PR_BODY` names (prepush passes the body that way). Without a body it works as before.
    With one, a change set that no ADR of its own covers still passes when all of these hold:
    - the body has exactly one line starting `Covered-by:`, and it is `Covered-by: ADR-nnnn`;
-   - that ADR is a file `docs/adr/nnnn-*.md` on the merge base, with the line `- Status: Accepted`
-     there (an ADR added in the change set, or one whose status the change set raises, never counts);
-   - its text on the merge base names every changed protected class;
+   - that ADR is a file `docs/adr/nnnn-*.md` on the merge base whose own first `- Status:` line
+     (`common.STATUS_LINE`) is `Accepted` there (an ADR added in the change set, or one whose status
+     the change set raises, never counts), and the change set does not delete or rename it;
+   - its text on the merge base names every changed protected class as the whole name in
+     backticks (`` `kit/` ``), as an ADR's `Protected classes:` line lists them; a passing mention
+     (`myconfig/`, `` `tests/kit/` `` for `kit/`) does not name a class;
    - its `Requirements:` line names a requirement that the body's `Advances:` line also names;
-   - no changed path is under `constitution/` or `.github/workflows/`, or is `config/reviewers.yaml`.
+   - no changed path is under `constitution/` or `.github/workflows/`, or is
+     `config/reviewers.yaml`, the ruleset `kit/templates/ruleset.json` (which `scripts/agk/ruleset.py`
+     applies) or `.github/CODEOWNERS`.
    Every other case fails as before, with one line naming what is missing (the rule or the path
    class, never a value). An ADR in the change set still counts as before.
 3. The governance workflow passes the body file it already writes (`$RUNNER_TEMP/pr-body.md`) to
@@ -39,8 +44,8 @@ in the old way.
    Because the step now reads the body, it becomes a body step (brief #216): it runs on an edited
    description too, and `full_run.py` lists it in `BODY_STEPS`, so a full run that failed only
    there is cured by editing the body and the partial run repeats the whole check and decides.
-4. The constitution, `config/reviewers.yaml`, the workflows and the ruleset still need an ADR in the
-   same PR. A build that changes a decision of its spec or ADR writes a new ADR. The `Decisions
+4. The constitution, `config/reviewers.yaml`, the workflows, the ruleset
+   (`kit/templates/ruleset.json`) and `.github/CODEOWNERS` still need an ADR in the same PR. A build that changes a decision of its spec or ADR writes a new ADR. The `Decisions
    taken:` line of the PR body carries the build's decisions, and the verdict reads it.
 5. The brief template and the session rules (new session rule 36) say when to use `Covered-by:` and
    when to write an ADR, in one paragraph. The conductor's agent file says that the `Final:` lines
@@ -59,5 +64,5 @@ writing an ADR of their own, as today.
 
 ## Residual
 
-- 2026-11-04: the ruleset has no file in the repository, so the check cannot exclude it by path; it
-  stays a person's change under session rule 30 and principle 2.
+- 2026-11-04: an intake ADR that names a class only in prose, not in backticks, covers no build;
+  such builds write an ADR of their own, as today.

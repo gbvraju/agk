@@ -4,7 +4,8 @@ Brief #545 (ADR-0271): with the pull request body (`--body FILE`, or the file th
 names), a change set that no ADR of its own covers also passes on one `Covered-by: ADR-nnnn` line
 naming an ADR that is Accepted on the merge base, names every changed class, and has a
 `Requirements:` entry that the body's `Advances:` line names. It never covers `constitution/`,
-`.github/workflows/` or `config/reviewers.yaml`. Messages name the rule or the class, never a value.
+`.github/workflows/`, `config/reviewers.yaml`, the ruleset (`kit/templates/ruleset.json`) or
+`.github/CODEOWNERS`. Messages name the rule or the class, never a value.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from common import (
     REQ_ID,
+    STATUS_LINE,
     CheckError,
     base_arg,
     base_context,
@@ -37,7 +39,13 @@ STATUS_ONLY_FILE = "docs/requirements.md"
 COVERED_BY = "Covered-by:"
 COVERED_FORM = re.compile(r"Covered-by: ADR-(\d{4})")
 # Paths a `Covered-by:` line never covers: each needs an ADR in the same PR (ADR-0271).
-OWN_ADR = ("constitution/", ".github/workflows/", "config/reviewers.yaml")
+OWN_ADR = (
+    "constitution/",
+    ".github/workflows/",
+    "config/reviewers.yaml",
+    "kit/templates/ruleset.json",
+    ".github/CODEOWNERS",
+)
 
 
 def is_adr(path: str, status: str) -> bool:
@@ -91,6 +99,15 @@ def first_field(text: str, label: str) -> str | None:
     return None
 
 
+def own_status(text: str) -> str | None:
+    """The value of the ADR's own first `- Status:` line."""
+    for line in text.splitlines():
+        m = STATUS_LINE.match(line)
+        if m:
+            return m.group(1)
+    return None
+
+
 def covered_by_problems(
     root, mb, body: str | None, changed: dict[str, str], classes: list[str]
 ) -> list[str] | None:
@@ -120,12 +137,15 @@ def covered_by_problems(
     if text is None:
         problems.append(f"the '{COVERED_BY}' ADR is not one file of docs/adr/ on the merge base")
         return problems
-    if "- Status: Accepted" not in text.splitlines():
+    if changed.get(names[0]) == "D":
+        problems.append(f"the '{COVERED_BY}' ADR is deleted or renamed in the change set")
+    if own_status(text) != "Accepted":
         problems.append(f"the '{COVERED_BY}' ADR is not '- Status: Accepted' on the merge base")
     for entry in classes:
-        if entry not in text:
+        if f"`{entry}`" not in text:
             problems.append(
-                f"protected path class '{entry}' is not named by the '{COVERED_BY}' ADR"
+                f"protected path class '{entry}' is not named in backticks "
+                f"by the '{COVERED_BY}' ADR"
             )
     reqs = set(REQ_ID.findall(first_field(text, "- Requirements:") or ""))
     advances = set(REQ_ID.findall(first_field(body, "Advances:") or ""))
