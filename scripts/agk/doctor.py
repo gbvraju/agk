@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 # The kit scripts the doctor imports: the router's list is read as upgrade.py writes it, and
 # the check names of a workflow's jobs as the router reads them (brief #283); the minutes line as
 # minutes.py prints it (brief #370).
+import merge_cleared  # noqa: E402
 import minutes  # noqa: E402
 from common import (  # noqa: E402
     PAUSED_LINE,
@@ -289,6 +290,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "pr_mode in agk.toml is strict or flow",
         "pr_mode in agk.toml is neither strict nor flow",
         "set pr_mode in agk.toml to strict or flow (a change needs an ADR)",
+    ),
+    "auto-merge-setting": (
+        "error",
+        "auto-merge: ",
+        "auto-merge: ",
+        "set auto_merge in the flow table of agk.toml to true or false and auto_merge_method to "
+        '"squash" (SPEC-0039 rule 1; a change needs an ADR in the same pull request)',
     ),
     "actions-minutes": (
         "warn",
@@ -817,6 +825,16 @@ def minutes_result(root: Path, reads: Reads, today: datetime.date | None = None)
     return Result("ok" if level in ("ok", "unknown") else "fail", message=f" ({line})")
 
 
+def auto_merge_result(config: dict) -> Result:
+    """`auto-merge: off` or `auto-merge: on, method squash` (SPEC-0039 rule 1, brief #528), by
+    merge_cleared.py's one reading; a malformed value fails naming the setting, never the value."""
+    try:
+        state = merge_cleared.auto_merge_setting(config)
+    except CheckError as err:
+        return Result("fail", message=str(err))
+    return Result("ok", message="on, method squash" if state == "on" else "off")
+
+
 def placeholder_result(path: Path) -> Result:
     try:
         text = path.read_text(encoding="utf-8")
@@ -1178,6 +1196,7 @@ def run_checks(
     results.update(ci_results(root, config))
     results.update(engine_results(root, kit_root, config))
     results["actions-minutes"] = minutes_result(root, reads)
+    results["auto-merge-setting"] = auto_merge_result(config)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]

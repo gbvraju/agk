@@ -78,11 +78,18 @@ review_mode = "team"
 # starts no more builders than the machine's available memory divided by it (rounded down; at least 1 while none runs) and names the limit that
 # applied (max_builders, reviews or memory); when the memory cannot be read it says "memory: unknown" and keeps its other limits.
 # Unset by default. A change needs an ADR in the same pull request (agk.toml is a protected path).
+# auto_merge and auto_merge_method (SPEC-0039 rule 1): with auto_merge = true and auto_merge_method = "squash" (the only accepted
+# method), the conductor runs `python3 scripts/agk/merge_cleared.py --pr <n> --sha <sha>` in the act of clearing; the command reads the
+# two keys from this file as committed on the default branch of the remote, never from a pull request's head, and `agk doctor` prints
+# `auto-merge: off` or `auto-merge: on, method squash`. Off (false) by default and when absent; any other value merges nothing. Turning
+# it on is the owner's change: an ADR in the same pull request (agk.toml is a protected path).
 # [flow]
 # claim_stale_hours = 24
 # builder_memory_gb = 6
 # auto_start = false
 # launch_adapter = ""
+# auto_merge = false
+# auto_merge_method = "squash"
 # Optional (brief #373): which tests guard which code. `python3 scripts/agk/test_plan.py` shows, as its regression section, the tests a
 # change selects and the rule that chose each; `prepush.py` runs the selected regression tests, and proof runs them only with
 # `proof_regression = true` (off by default). profile: "fast" (an unmapped file is only listed), "balanced" (the default: an unmapped
