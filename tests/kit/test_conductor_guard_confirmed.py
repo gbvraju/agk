@@ -72,7 +72,7 @@ GLUED = "repos/o/r/issues/7/comments"
 
 @pytest.mark.parametrize("method", ["-XPOST", "-X=POST", "-Xpost", "-X=post"])
 def test_a_confirmed_body_with_a_glued_method_is_refused_by_name(project, method):
-    """REQ-046: brief #531 (fix list on 5ddd126: `is_post` reads the method as `gh_api_allowed` does)."""
+    """REQ-046: brief #531 (fix list on 5ddd126: `is_post` reads the method as the reads do)."""
     command = f"gh api {method} {GLUED} -f 'body=Confirmed: {SHA}'"
     found = denial(run_hook(bash(command), project).stdout)
     assert found is not None and found["permissionDecisionReason"].startswith(RULE)
