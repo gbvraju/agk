@@ -1,6 +1,6 @@
 # SPEC-0040: A builder hands heavy runs to a first-in-first-out queue and keeps developing instead of waiting on the heavy lock
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-047
 
