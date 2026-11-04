@@ -13,6 +13,7 @@ Operating rules that apply to every item (cite constitution/principles.md by num
 - Acceptance: observable results
 - Branch: chore/short-name
 - Size: S|M|L
+- Reserved: ADR-nnnn and amendment number <n> (for each spec amendment the item adds), both reserved in the brief's field note
 - Expected: <low>-<high> hours
 
 ## Report format
