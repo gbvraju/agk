@@ -1,6 +1,6 @@
 # ADR-0263: The auto-merge setting and the verdict reader (REQ-046, brief 528)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: ADR-0261, SPEC-0039
