@@ -1,6 +1,6 @@
 # ADR-0258: prepush warns when the full suite takes longer than proof_timeout (REQ-016, brief 509)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: ADR-0186, ADR-0208, ADR-0227, ADR-0257
