@@ -2,10 +2,11 @@
 
 Brief #528, ADR-0263, REQ-046. `merge_cleared.py --pr N --sha SHA` reads `[flow] auto_merge` and
 `auto_merge_method` from agk.toml as committed on the default branch of the remote, as last fetched,
-judges the latest `Verdict:` comment of the pull request and prints one line; it merges nothing in
-this build. Every test runs on a git repository in `tmp_path` and a fake `gh` that answers from
-saved responses and records its argument lists. No network; invented logins, addresses at
-example.com.
+judges the latest `Verdict:` comment of the pull request and prints one line. Since build (b) (brief
+#531, ADR-0265) a cleared pull request whose other re-checks pass is merged by the one pinned call,
+so the saved world here is one the command may merge. Every test runs on a git repository in
+`tmp_path` and a fake `gh` that answers from saved responses and records its argument lists. No
+network; invented logins, addresses at example.com.
 """
 
 from __future__ import annotations
@@ -99,44 +100,144 @@ def comment(body: str, login: str = OWNER, at: int = 0, cid: int | None = None) 
     }
 
 
-def cleared(sha: str = HEAD, login: str = OWNER, at: int = 5) -> dict:
-    return comment(f"Verdict: cleared {sha}\n\nReviewed against the brief.\n", login, at)
+def evidence(sha: str = HEAD, check: str = "agrees") -> str:
+    """The evidence lines of a verdict in local mode (docs/guides/local-mode.md)."""
+    return (
+        f"Local evidence: {sha} Evidence check: {check}, head {sha[:12]}, record {sha[:12]}, "
+        "governance ok, sample 3 of 3 same exit (conductor's run); proof ok, tests 9 passed\n"
+    )
 
 
-def fake_gh(tmp_path: Path, pull: object = None, comments: object = None, fail: bool = False):
-    """A `gh` on PATH that answers the two reads from saved JSON and logs each argument list."""
+def cleared(sha: str = HEAD, login: str = OWNER, at: int = 5, extra: str | None = None) -> dict:
+    body = f"Verdict: cleared {sha}\n\nReviewed against the brief.\n"
+    return comment(body + (evidence(sha) if extra is None else extra), login, at)
+
+
+MERGE = "c0ffee5eed" * 4  # the merge commit GitHub answers with
+MERGE12 = MERGE[:12]
+GREEN_RUNS = [
+    {"id": 11, "name": "proof", "status": "completed", "conclusion": "success"},
+    {"id": 12, "name": "governance", "status": "completed", "conclusion": "success"},
+]
+
+
+def world(**saved: object) -> dict:
+    """The saved GitHub answers of a pull request that the command may merge; SAVED replaces any
+    of them: `pull`, `comments`, `issues` (the open ones), `runs` (the check runs of the head),
+    `files`, `items` (issue or pull number -> its JSON, for `Depends-on`) and `merge` (the answer
+    of the merge call: a JSON object, or {"http": <code>} for a failure)."""
+    base = {
+        "pull": {
+            "number": 7,
+            "head": {"sha": HEAD},
+            "state": "open",
+            "draft": False,
+            "labels": [],
+            "mergeable_state": "clean",
+            "body": "Brief: #500\nAdvances: REQ-046\n",
+        },
+        "comments": [],
+        "issues": [],
+        "runs": GREEN_RUNS,
+        "files": [{"filename": "scripts/agk/example.py", "status": "modified", "patch": "+x"}],
+        "items": {},
+        "merge": {"sha": MERGE, "merged": True, "message": "Pull Request successfully merged"},
+    }
+    base.update({k: v for k, v in saved.items() if v is not None})
+    return base
+
+
+FAKE_GH = """
+import json, sys
+args = sys.argv[1:]
+with open(LOG, 'a', encoding='utf-8') as fh:
+    fh.write(json.dumps(args) + '\\n')
+if FAIL:
+    sys.stderr.write('HTTP 502: Bad Gateway\\n'); sys.exit(1)
+data = json.load(open(SAVED, encoding='utf-8'))
+method = args[args.index('--method') + 1] if '--method' in args else 'GET'
+path = next(a for a in args if a.startswith('repos/'))
+route, _, query = path.partition('?')
+page = int(query.split('page=')[-1]) if 'page=' in query else 1
+parts = route.split('/')[3:]
+
+def paged(items):
+    return items[(page - 1) * 100 : page * 100]
+
+def fail(code):
+    sys.stderr.write('gh: Example failure (HTTP %d)\\n' % code); sys.exit(1)
+
+if method == 'PUT' and parts[0] == 'pulls' and parts[2:] == ['merge']:
+    answer = data['merge']
+    if 'http' in answer:
+        fail(answer['http'])
+    out = answer
+elif method != 'GET':
+    fail(405)
+elif parts[0] == 'pulls' and len(parts) == 2 and parts[1] == '7':
+    out = data['pull']
+elif parts[0] == 'pulls' and parts[2:] == ['files']:
+    out = paged(data['files'][:3000])  # GitHub lists at most 3,000 files
+elif parts[0] == 'issues' and parts[2:] == ['comments']:
+    out = paged(data['comments'])
+elif parts == ['issues']:
+    out = paged(data['issues'])
+elif parts[0] == 'commits' and parts[2:] == ['check-runs']:
+    runs = paged(data['runs'])
+    out = {'total_count': len(data['runs']), 'check_runs': runs}
+elif parts[0] in ('issues', 'pulls') and len(parts) == 2 and parts[1] in data['items']:
+    item = data['items'][parts[1]]
+    if parts[0] == 'pulls' and 'pull' in item:
+        out = item['pull']
+    else:
+        out = {k: v for k, v in item.items() if k != 'pull'}
+else:
+    fail(404)
+print(json.dumps(out))
+"""
+
+
+def fake_gh(
+    tmp_path: Path,
+    pull: object = None,
+    comments: object = None,
+    fail: bool = False,
+    changed: bool = True,
+    **saved: object,
+):
+    """A `gh` on PATH that answers from saved JSON (`world`) and logs each argument list; with
+    CHANGED, a pull request without `changed_files` is given the number of its saved files."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(parents=True)
-    saved = tmp_path / "saved.json"
+    path = tmp_path / "saved.json"
     log = tmp_path / "gh-calls.jsonl"
-    pull = {"number": 7, "head": {"sha": HEAD}, "state": "open"} if pull is None else pull
-    saved.write_text(
-        json.dumps({"pull": pull, "comments": [] if comments is None else comments}),
-        encoding="utf-8",
-    )
+    if pull is None:
+        pull = world()["pull"]
+    data = world(pull=pull, comments=comments, **saved)
+    if changed and isinstance(data["pull"], dict) and "changed_files" not in data["pull"]:
+        data["pull"] = {**data["pull"], "changed_files": len(data["files"])}
+    path.write_text(json.dumps(data), encoding="utf-8")
     script = bin_dir / "gh"
     script.write_text(
-        f"#!{sys.executable}\n"
-        "import json, sys\n"
-        f"log, saved, fail = {str(log)!r}, {str(saved)!r}, {fail!r}\n"
-        "with open(log, 'a', encoding='utf-8') as fh:\n"
-        "    fh.write(json.dumps(sys.argv[1:]) + '\\n')\n"
-        "if fail:\n"
-        "    sys.stderr.write('HTTP 502: Bad Gateway\\n'); sys.exit(1)\n"
-        "data = json.load(open(saved, encoding='utf-8'))\n"
-        "path = next(a for a in sys.argv[1:] if a.startswith('repos/'))\n"
-        "if '/issues/' in path and path.split('/')[-1].startswith('comments'):\n"
-        "    page = int(path.split('page=')[-1]) if 'page=' in path else 1\n"
-        "    out = data['comments'][(page - 1) * 100 : page * 100]\n"
-        "elif '/pulls/' in path:\n"
-        "    out = data['pull']\n"
-        "else:\n"
-        "    sys.stderr.write('HTTP 404: Not Found\\n'); sys.exit(1)\n"
-        "print(json.dumps(out))\n",
+        f"#!{sys.executable}\nLOG, SAVED, FAIL = {str(log)!r}, {str(path)!r}, {fail!r}\n" + FAKE_GH,
         encoding="utf-8",
     )
     script.chmod(0o755)
     return bin_dir, log
+
+
+def merge_call(number: int = 7, sha: str = HEAD) -> list[str]:
+    """The one merge call of SPEC-0039 rule 6, pinned to the head."""
+    return [
+        "api",
+        "--method",
+        "PUT",
+        f"repos/{REPO}/pulls/{number}/merge",
+        "-f",
+        f"sha={sha}",
+        "-f",
+        "merge_method=squash",
+    ]
 
 
 def calls(log: Path) -> list[list[str]]:
@@ -148,14 +249,26 @@ def calls(log: Path) -> list[list[str]]:
 def run(root: Path, bin_dir: Path, *args: str):
     env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")}
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    temp = bin_dir.parent / "temp"  # the merge-cleared lock of this test alone
+    temp.mkdir(exist_ok=True)
+    env["TMPDIR"] = env["TEMP"] = env["TMP"] = str(temp)
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(SCRIPT), *args], cwd=root, capture_output=True, text=True, env=env
     )
 
 
-def merge_cleared_run(tmp_path, main, comments=None, head_toml=None, pull=None, **kw):
-    root = repo(tmp_path, main, head_toml, **kw)
-    bin_dir, log = fake_gh(tmp_path, pull, comments)
+def merge_cleared_run(
+    tmp_path,
+    main,
+    comments=None,
+    head_toml=None,
+    pull=None,
+    reviewers_yaml=None,
+    origin=f"https://github.com/{REPO}.git",
+    **saved,
+):
+    root = repo(tmp_path, main, head_toml, reviewers_yaml, origin)
+    bin_dir, log = fake_gh(tmp_path, pull, comments, **saved)
     proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD)
     return proc, calls(log)
 
@@ -204,9 +317,9 @@ def test_every_setting_but_true_with_squash_merges_nothing_and_names_the_setting
 def test_a_well_formed_true_with_squash_lets_a_cleared_verdict_through(tmp_path, mode, local):
     """REQ-046 AC1: SPEC-0039 rule 1 (the one case that may merge)."""
     proc, made = merge_cleared_run(tmp_path, toml(ON, mode, local), [cleared()])
-    assert one_line(proc) == f"merge-cleared #7 {SHA12}: cleared (merge not yet built)"
+    assert one_line(proc) == f"merge-cleared #7 {SHA12}: merged {MERGE12}"
     assert proc.returncode == 0
-    assert len(made) == 2
+    assert [c for c in made if "PUT" in c] == [merge_call()]
 
 
 def test_a_head_that_turns_the_setting_on_while_the_default_branch_does_not_merges_nothing(
@@ -235,7 +348,7 @@ def test_the_default_branch_turning_it_on_counts_whatever_the_checkout_says(tmp_
     proc, _ = merge_cleared_run(
         tmp_path, toml(ON), [cleared()], head_toml=toml("auto_merge = false\n")
     )
-    assert "cleared (merge not yet built)" in one_line(proc) and proc.returncode == 0
+    assert f"merged {MERGE12}" in one_line(proc) and proc.returncode == 0
 
 
 def test_a_default_branch_not_fetched_or_without_agk_toml_is_refused(tmp_path):
@@ -369,14 +482,14 @@ def test_a_cleared_verdict_after_other_comments_clears(tmp_path):
         comment("Progress: done 6/6", BUILDER, 4),
     ]
     proc, _ = merge_cleared_run(tmp_path, toml(ON), comments)
-    assert one_line(proc).endswith(": cleared (merge not yet built)") and proc.returncode == 0
+    assert one_line(proc).endswith(f": merged {MERGE12}") and proc.returncode == 0
 
 
 def test_a_crlf_body_still_reads_its_first_line(tmp_path):
     """REQ-046 AC2: SPEC-0039 rule 3 (a body written on Windows)."""
     body = f"Verdict: cleared {HEAD}\r\n\r\nReviewed.\r\n"
     proc, _ = merge_cleared_run(tmp_path, toml(ON), [comment(body, at=5)])
-    assert one_line(proc).endswith(": cleared (merge not yet built)")
+    assert one_line(proc).endswith(f": merged {MERGE12}")
 
 
 def test_the_newest_verdict_is_found_by_time_not_by_list_order(tmp_path):
@@ -391,7 +504,7 @@ def test_a_cleared_verdict_on_the_second_page_counts(tmp_path):
     comments = [comment(f"Report: {i}", BUILDER, 0, cid=i) for i in range(150)]
     comments.append(cleared(at=30))
     proc, made = merge_cleared_run(tmp_path, toml(ON), comments)
-    assert one_line(proc).endswith(": cleared (merge not yet built)")
+    assert one_line(proc).endswith(f": merged {MERGE12}")
     assert len([c for c in made if any("/comments" in a for a in c)]) == 2
 
 
@@ -441,7 +554,7 @@ def test_without_conductor_accounts_a_cleared_verdict_by_any_author_clears(tmp_p
         proc, _ = merge_cleared_run(
             tmp_path / sub, toml(ON), [cleared(login=login)], reviewers_yaml=yaml()
         )
-        assert one_line(proc).endswith(": cleared (merge not yet built)")
+        assert one_line(proc).endswith(f": merged {MERGE12}")
 
 
 def test_an_empty_conductor_accounts_list_is_the_one_account_default(tmp_path):
@@ -449,7 +562,7 @@ def test_an_empty_conductor_accounts_list_is_the_one_account_default(tmp_path):
     proc, _ = merge_cleared_run(
         tmp_path, toml(ON), [cleared(login=BUILDER)], reviewers_yaml=yaml("conductor_accounts: []")
     )
-    assert one_line(proc).endswith(": cleared (merge not yet built)")
+    assert one_line(proc).endswith(f": merged {MERGE12}")
 
 
 def test_with_conductor_accounts_only_a_listed_author_clears(tmp_path):
@@ -458,7 +571,7 @@ def test_with_conductor_accounts_only_a_listed_author_clears(tmp_path):
     proc, _ = merge_cleared_run(
         tmp_path / "a", toml(ON), [cleared(login=CONDUCTOR.upper())], reviewers_yaml=listed
     )
-    assert one_line(proc).endswith(": cleared (merge not yet built)")
+    assert one_line(proc).endswith(f": merged {MERGE12}")
     proc, _ = merge_cleared_run(
         tmp_path / "b", toml(ON), [cleared(login=BUILDER)], reviewers_yaml=listed
     )
@@ -535,9 +648,13 @@ def test_the_reads_are_rest_gets_as_argument_lists_with_no_jq(tmp_path):
     assert made == [
         ["api", "--method", "GET", f"repos/{REPO}/pulls/7"],
         ["api", "--method", "GET", f"repos/{REPO}/issues/7/comments?per_page=100&page=1"],
+        ["api", "--method", "GET", f"repos/{REPO}/issues?state=open&per_page=100&page=1"],
+        ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100&page=1"],
+        ["api", "--method", "GET", f"repos/{REPO}/pulls/7/files?per_page=100&page=1"],
+        merge_call(),
     ]
     flat = [a for c in made for a in c]
-    assert "--jq" not in flat and "graphql" not in flat and "PUT" not in flat
+    assert "--jq" not in flat and "graphql" not in flat
 
 
 def recorded_runs(monkeypatch, platform: str) -> list[tuple[list[str], dict]]:
@@ -625,10 +742,11 @@ def test_a_remote_that_is_not_github_or_no_gh_is_refused(tmp_path):
 # --- this build merges nothing ------------------------------------------------------------------
 
 
-def test_the_script_makes_no_merge_call_takes_no_lock_and_writes_no_file():
-    """REQ-046 AC2: brief #528 answer 1 (no merge call, no lock, no file, no push)."""
+def test_the_script_writes_no_file_and_makes_no_other_write():
+    """REQ-046 AC5: SPEC-0039 rule 8 (build (b) adds the one merge call and nothing else)."""
     text = SCRIPT.read_text(encoding="utf-8")
-    words = ('"PUT"', '/merge"', "lock.py", ".write_text(", "open(", '"push"', "--jq", "shell=True")
+    words = ('"POST"', '"PATCH"', '"DELETE"', ".write_text(", "open(", '"push"', "--jq")
+    words += ("shell=True", "graphql", '"tag"', "/reviews")
     for word in words:
         assert word not in text, word
 

@@ -65,3 +65,14 @@ def test_other_comments_are_unchanged(project, tmp_path_factory):
     note.write_text("A note.\nConfirmed: not the first line\n", encoding="utf-8")
     assert denial(run_hook(bash(f"{POST} -F body=@{note}"), project, tmp_path).stdout) is None
     assert not Path(note).read_text(encoding="utf-8").startswith("Confirmed:")
+
+
+GLUED = "repos/o/r/issues/7/comments"
+
+
+@pytest.mark.parametrize("method", ["-XPOST", "-X=POST", "-Xpost", "-X=post"])
+def test_a_confirmed_body_with_a_glued_method_is_refused_by_name(project, method):
+    """REQ-046: brief #531 (fix list on 5ddd126: `is_post` reads the method as the reads do)."""
+    command = f"gh api {method} {GLUED} -f 'body=Confirmed: {SHA}'"
+    found = denial(run_hook(bash(command), project).stdout)
+    assert found is not None and found["permissionDecisionReason"].startswith(RULE)
