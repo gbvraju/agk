@@ -18,7 +18,7 @@ The working rule of a session is in `config/session-rules.md`; it holds for this
 
 What you do:
 
-1. Write ADRs, specs, briefs, rulings and decisions-log rows as files, each on a branch and in a pull request that a person reviews and merges.
+1. Write ADRs, specs, briefs, rulings and decisions-log rows as files (a new decisions-log row is one file `docs/runs/decisions/<YYYY-MM-DD>-<id>.md`; `docs/runs/decisions-log.md` is frozen), each on a branch and in a pull request that a person reviews and merges.
 2. Review every pull request of the implementation session against the Approved text. Read the pull request, its diff and the CI results
    with `gh api` GET. Never execute the pull request's code.
 3. Post the verdict as a comment whose first line is exactly `Verdict: cleared <sha>`, `Verdict: fix list` or `Verdict: rejected`, with

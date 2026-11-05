@@ -59,12 +59,14 @@ NONE_SHARED = (
     "docs/adr/",
     "docs/runs/proposed-spec-amendments-*.md",
     "docs/runs/decisions-log.md",
+    "docs/runs/decisions/",
 )
 NONE_RULE = (
     "rule 9: 'Brief: none (design)' is for a change of docs/design/, and 'Brief: none (spec)' "
     "for a "
     "change of docs/specs/ or docs/requirements.md, each with at most docs/adr/, "
-    "docs/runs/proposed-spec-amendments-*.md and docs/runs/decisions-log.md beside (path classes)"
+    "docs/runs/proposed-spec-amendments-*.md, docs/runs/decisions-log.md and docs/runs/decisions/ "
+    "beside (path classes)"
 )
 
 

@@ -8,6 +8,10 @@ When the latest verdict by a listed author is a covered fix list (`Verdict: fix 
 sha, the commit must change exactly the named status lines (one that also sets the `Chosen` line
 of a stack ADR fails saying that line is set by an ordinary commit, brief 274); a head two or more
 commits past the reviewed sha (counted on the first-parent line) fails (SPEC-0030 rule 7).
+A covered fix list whose sha is the head and whose every `Final:` line accepts an ADR is the
+acceptance itself (rule 3a, brief 557): each named ADR must be one that the pull request adds or
+changes (`git diff` from the merge base) and `Proposed` at the head, and no status commit follows; a
+stack-options ADR keeps rule 3.
 Anything else passes unchecked. With `review_mode = "solo"` in agk.toml the one listed person's
 confirmation counts as its verdict and its `Approve:` lines (brief 277,
 `reviewers.confirmed_comments`). Without
@@ -25,14 +29,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+from check_adrs import status_of
 from common import (
     CheckError,
     agent_apps,
     covered_fix_list,
+    final_accepts,
     final_commit_problems,
     git,
     repo_root,
+    resolve_base,
     run,
+    show,
 )
 from metrics import counted_authors, latest_verdict_body
 from reviewers import (
@@ -48,6 +56,12 @@ SPEC_FILE = re.compile(r"docs/specs/(\d{4})-[^/]+\.md")
 STACK_ADR = re.compile(r"docs/adr/\d{4}-stack-options\.md")
 CHOSEN_LINE = re.compile(r"\s*\d+\.\s+\*\*Chosen\*\*")
 STACK_CHOSEN = "rule 3: a stack's Chosen line is set by an ordinary commit, not a Final commit"
+ACCEPT_NOT_PROPOSED = "rule 3a: a Final line accepts only an ADR that is Proposed at the head"
+ACCEPT_NOT_CHANGED = (
+    "rule 3a: a Final line accepts only an ADR that the pull request adds or changes; "
+    "this pull request does not change a named path of docs/adr/"
+)
+NO_BASE = "rule 3a: no base ref resolves, so the pull request's files cannot be read"
 USAGE = (
     "usage: check_final_clearance.py [--comments FILE] [--reviews FILE] [--head SHA] "
     "[--author LOGIN] [--draft VALUE]"
@@ -99,6 +113,19 @@ def sets_stack_chosen(root: Path, first: str, second: str) -> bool:
     return False
 
 
+def pull_request_files(root: Path, commit: str) -> set[str]:
+    """The paths that the pull request adds or changes: `git diff` from the merge base of the
+    default branch to COMMIT (rule 3a). Fails closed when no base resolves."""
+    base = resolve_base(root, None)
+    if base is None:
+        raise CheckError(NO_BASE)
+    mb = git(root, "merge-base", base, commit, check=False).strip()
+    if not mb:
+        raise CheckError(NO_BASE)
+    out = git(root, "diff", "-z", "--name-only", "--no-renames", "--diff-filter=AM", mb, commit)
+    return set(filter(None, out.split("\0")))
+
+
 def specs_set_approved(edits: list[tuple[str, str | None, str, str]]) -> set[str]:
     """The specs a covered fix list sets to `Approved` (SPEC-0032 rule 5)."""
     found = set()
@@ -132,7 +159,15 @@ def check(
             )
         commit = git(root, "rev-parse", head).strip()
         parents = git(root, "rev-list", "--parents", "-n", "1", commit).split()[1:]
-        if len(parents) == 1 and parents[0].startswith(sha):
+        accepts = final_accepts(edits)
+        if commit.startswith(sha) and accepts is not None:
+            changed = pull_request_files(root, commit)
+            for path in accepts:  # rule 3a: the Final line is the acceptance; no commit follows
+                if path not in changed:
+                    raise CheckError(ACCEPT_NOT_CHANGED)
+                if status_of(show(root, commit, path) or "") != "Proposed":
+                    raise CheckError(ACCEPT_NOT_PROPOSED)
+        elif len(parents) == 1 and parents[0].startswith(sha):
             files_ok, bad = final_commit_problems(root, parents[0], commit, edits)
             moded = git(root, "diff", "--summary", parents[0], commit).strip()
             if not files_ok or bad or moded:

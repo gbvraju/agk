@@ -34,6 +34,7 @@ from common import (
     ac_coverage_mode,
     ac_markers_for,
     ac_shortfalls,
+    accepted_by_final,
     git,
     load_config,
     markers_for,
@@ -265,7 +266,10 @@ def d3(root: Path, ref: str, today: date) -> list[Finding]:
                 found.append(
                     Finding("D3", rel, f"Draft spec is {age} days old (limit {STALE_DAYS})")
                 )
+    recorded = accepted_by_final(root, ref)  # SPEC-0021 rule 3a: accepted by a Final
     for rel in docs(root, "adr"):
+        if Path(rel).name[:4] in recorded:
+            continue
         text = read(root, rel) or ""
         stamp = re.search(r"^- Date:\s*(\d{4}-\d{2}-\d{2})\s*$", text, flags=re.M)
         if re.search(r"^- Status:\s*Proposed\s*$", text, flags=re.M) and stamp:

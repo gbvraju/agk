@@ -159,9 +159,10 @@ def test_ac1_a_rulings_row_in_the_notes_file_rules_the_question(draft_spec):
 
 
 def test_ac1_a_decisions_log_row_rules_the_question(draft_spec):
-    """REQ-020 AC1: rule 24."""
-    log = EMPTY_LOG + "| 2026-10-18 | Q-AB-1 ruled: json |\n"
-    assert approve(draft_spec, **{LOG: log}).returncode == 0
+    """REQ-020 AC1: rule 24; the row is one file of the decisions folder (brief #557: the old log
+    is frozen)."""
+    row = "| 2026-10-18 | Q-AB-1 ruled: json |\n"
+    assert approve(draft_spec, **{"docs/runs/decisions/2026-10-18-q-ab-1.md": row}).returncode == 0
 
 
 def test_ac1_a_mention_in_prose_is_not_an_asked_question(repo):

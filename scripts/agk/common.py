@@ -317,6 +317,64 @@ def covered_fix_list(body: str) -> tuple[str, list[tuple[str, str | None, str, s
     return (head.group(1), edits) if edits else None
 
 
+ADR_PATH = re.compile(r"docs/adr/\d{4}-[a-z0-9][a-z0-9-]*\.md")
+STACK_ADR_PATH = re.compile(r"docs/adr/\d{4}-stack-options\.md")
+FINAL_ACCEPT = re.compile(r"ADR-(\d{4}) Accepted \(Final (\d+)\)")
+MERGED_BY = "Merged-by: merge_cleared.py"  # the squash message line of merge_cleared.py (rule 3a)
+
+
+def final_accepts(edits: list[tuple[str, str | None, str, str]]) -> list[str] | None:
+    """SPEC-0021 rule 3a (brief 557): the ADR paths when every `Final:` line of a covered fix list
+    is `docs/adr/<file> Proposed -> Accepted`, else None (today's path of rule 3 applies). A
+    stack-options ADR never counts: its Chosen line and its acceptance go in one commit (rule 3)."""
+    if not edits or any(
+        req is not None
+        or old != "Proposed"
+        or new != "Accepted"
+        or not ADR_PATH.fullmatch(path)
+        or STACK_ADR_PATH.fullmatch(path)
+        for path, req, old, new in edits
+    ):
+        return None
+    return list(dict.fromkeys(path for path, *_ in edits))
+
+
+SQUASH_SUBJECT = re.compile(r".* \(#(\d+)\)")
+
+
+def final_records(root: Path, ref: str) -> dict[str, tuple[int, int]]:
+    """ADR number -> (pull request, Final comment id) of each `ADR-nnnn Accepted (Final <id>)` line
+    in REF's history, read only from a squash commit that merge_cleared.py made: on REF's
+    first-parent line, with one parent, a subject that ends `(#n)` and the line `MERGED_BY`."""
+    out = git(
+        root,
+        "log",
+        "--first-parent",
+        "--format=%x1e%P%x1f%B",
+        "--fixed-strings",
+        "--grep",
+        "Accepted (Final ",
+        ref,
+        check=False,
+    )
+    found: dict[str, tuple[int, int]] = {}
+    for record in out.split("\x1e")[1:]:
+        parents, _, message = record.partition("\x1f")
+        lines = [ln.strip() for ln in message.strip().splitlines()]
+        subject = SQUASH_SUBJECT.fullmatch(lines[0]) if lines else None
+        if len(parents.split()) != 1 or subject is None or MERGED_BY not in lines:
+            continue
+        for ln in lines:
+            if m := FINAL_ACCEPT.fullmatch(ln):
+                found.setdefault(m.group(1), (int(subject.group(1)), int(m.group(2))))
+    return found
+
+
+def accepted_by_final(root: Path, ref: str) -> set[str]:
+    """The ADR numbers that `final_records` reads in REF's history."""
+    return set(final_records(root, ref))
+
+
 NOT_FIX_LIST = (
     "SPEC-0021 rule 1: a Final: line is read only under 'Verdict: fix list <sha>'; "
     "write that first line, or leave the Final: line out"
@@ -492,9 +550,51 @@ def open_section_ids(text: str, heading: str = "Open") -> set[str]:
     return found
 
 
+DECISIONS_DIR = "docs/runs/decisions"
+DECISION_FILE = re.compile(r"\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*\.md")
+TABLE_ROW = re.compile(r"\|.*\|")
+
+
+def decision_files(root: Path) -> list[Path]:
+    """The `.md` files of the decisions folder, sorted by name (SPEC-0009 rule 13, brief 557)."""
+    folder = root / DECISIONS_DIR
+    return sorted(folder.glob("*.md")) if folder.is_dir() else []
+
+
 def log_lines(root: Path) -> list[str] | None:
-    text = read_text(root, DECISIONS_LOG)
-    return None if text is None else text.splitlines()
+    """The decisions log: the old file, then one file per row of the folder in sorted order;
+    None when neither exists."""
+    texts = [read_text(root, DECISIONS_LOG)]
+    texts += [read_text(root, f"{DECISIONS_DIR}/{p.name}") for p in decision_files(root)]
+    found = [t for t in texts if t is not None]
+    if texts[0] is None and not decision_files(root):
+        return None
+    return [ln for text in found for ln in text.splitlines()]
+
+
+LOG_FROZEN = (
+    "SPEC-0009 rule 13: docs/runs/decisions-log.md is frozen at its length; "
+    "a new row goes to docs/runs/decisions/<YYYY-MM-DD>-<id>.md, one file each"
+)
+
+
+def frozen_log_problems(changed: dict[str, str]) -> list[str]:
+    """The old log only reads: a change or a deletion fails; creating it (init, adopt) does not."""
+    return [LOG_FROZEN] if changed.get(DECISIONS_LOG) in ("M", "D") else []
+
+
+def decision_file_problems(root: Path) -> list[str]:
+    """Each file of the folder must be `<YYYY-MM-DD>-<id>.md` and hold exactly one table row."""
+    problems = []
+    for p in decision_files(root):
+        rel = f"{DECISIONS_DIR}/{p.name}"
+        if not DECISION_FILE.fullmatch(p.name):
+            problems.append(f"{rel}: a decision file is named <YYYY-MM-DD>-<id>.md")
+            continue
+        rows = [ln for ln in (read_text(root, rel) or "").splitlines() if TABLE_ROW.match(ln)]
+        if len(rows) != 1:
+            problems.append(f"{rel}: a decision file holds exactly one table row")
+    return problems
 
 
 def question_index(root: Path) -> dict[str, set[str]]:

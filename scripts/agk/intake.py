@@ -32,6 +32,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from check_adrs import status_of as adr_status
 from check_specs import status_of as spec_status
 from common import (
+    DECISION_FILE,
+    DECISIONS_DIR,
     NUM_FILE,
     CheckError,
     changed_files,
@@ -53,7 +55,6 @@ MAX_SENTENCE = 300
 MAX_TITLE = 80
 MAX_CRITERIA = 8
 REQ_FILE = "docs/requirements.md"
-LOG_FILE = "docs/runs/decisions-log.md"
 IDS_KEYS = {"req": r"REQ-\d{3,}", "spec": r"\d{4}", "adr": r"\d{4}"}
 NEGATIVE = re.compile(
     r"\b(?:not|no|never|refuses|rejects|fails|cannot|without|error)\b", re.IGNORECASE
@@ -249,7 +250,7 @@ class Draft:
     def files(self) -> tuple[str | None, str | None]:
         spec, adr = self.added("docs/specs/"), self.added("docs/adr/")
         expect = {REQ_FILE} | set(spec[:1]) | set(adr[:1])
-        changed = {p for p in self.changed if p != LOG_FILE or not self.rows_only(LOG_FILE)}
+        changed = {p for p in self.changed if not self.decision_file(p)}
         if changed != expect or len(spec) != 1 or len(adr) != 1:
             self.fail(
                 "C2", "the difference is not the requirements file, one new spec and one new ADR"
@@ -264,24 +265,16 @@ class Draft:
                 self.fail("C1", f"the {label} number is not the next free one")
         return (spec[0] if len(spec) == 1 else None, adr[0] if len(adr) == 1 else None)
 
-    def rows_only(self, rel: str) -> bool:
-        """The file only gains lines: the rulings of the questions are recorded in the decisions
-        log before the spec flips (SPEC-0034 build (e)); a changed or removed row is not allowed."""
-        args = [
-            "diff",
-            "-U0",
-            "--no-renames",
-            self.mb,
-            *([self.rev] if self.rev else []),
-            "--",
-            rel,
-        ]
-        body = [
-            ln
-            for ln in git(self.root, *args).splitlines()
-            if ln[:1] in "+-" and not ln.startswith(("+++", "---"))
-        ]
-        return bool(body) and all(ln.startswith("+") for ln in body)
+    def decision_file(self, rel: str) -> bool:
+        """A new one-row file of the decisions folder: the rulings of the questions are recorded
+        before the spec flips (SPEC-0034 build (e)), one file each (SPEC-0009 rule 13 as amended,
+        brief 557); the old log is frozen, so a row added there fails C2."""
+        folder, _, name = rel.rpartition("/")
+        return (
+            folder == DECISIONS_DIR
+            and self.changed.get(rel) == "A"
+            and DECISION_FILE.fullmatch(name) is not None
+        )
 
     def names(self, spec: list[str], adr: list[str]) -> None:
         """Rule 4: the file names, directly in their folders; the message names no part of one."""

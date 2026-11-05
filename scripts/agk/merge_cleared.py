@@ -20,7 +20,14 @@ the squash method, and prints one line:
 
 and exit 4 when GitHub cannot answer one read five times in a row. A reason names a rule, a
 setting or a path class, never a value. Standard library only; every `gh` call is an argument list
-with no shell and no jq filter, and the JSON is read here.
+with no shell and no jq filter, and the JSON is read here. A covered fix list on exactly the head
+whose every `Final:` line accepts an ADR clears it too (SPEC-0021 rule 3a, brief 557): each named
+ADR must be among the pull request's files and read at the head as `Proposed`, and the squash
+message carries one line `ADR-nnnn Accepted (Final <comment id>)` per ADR and the line
+`Merged-by: merge_cleared.py`, the mark `common.final_records` reads. Every merge passes its own
+squash message (the line `Merged-by: merge_cleared.py` alone when nothing is accepted), and a
+pull request whose commits or body already hold either line is held. The governance run after
+the merge, the red-branch stop and the record line are build (c).
 
 Build (c) (brief #551, ADR-0273) adds the rest of rule 6 and rule 7. Before the merge the command
 needs one record issue (the open local-mode record issue, else the one open issue labelled
@@ -42,6 +49,8 @@ step `governance not finished`: the red-branch issue is still opened (the fix li
 
 from __future__ import annotations
 
+import base64
+import binascii
 import contextlib
 import json
 import os
@@ -63,7 +72,16 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import lock  # noqa: E402
-from common import DEFAULT_CONFIG, CheckError, show  # noqa: E402
+from common import (  # noqa: E402
+    DEFAULT_CONFIG,
+    FINAL_ACCEPT,
+    MERGED_BY,
+    STATUS_LINE,
+    CheckError,
+    covered_fix_list,
+    final_accepts,
+    show,
+)
 from reviewers import CONFIG, approval_shas, approvers_of, conductors_of, parse  # noqa: E402
 
 EXIT_CLEARED, EXIT_REFUSED, EXIT_HELD, EXIT_UNREADABLE = 0, 1, 3, 4
@@ -314,7 +332,7 @@ def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]
     verdict = latest_verdict(comments)
     if verdict is None:
         return "held", "no verdict (rule 3)"
-    if first_line(verdict) != f"Verdict: cleared {sha}":
+    if first_line(verdict) != f"Verdict: cleared {sha}" and accepted_adrs(verdict, sha) is None:
         return "held", "the latest verdict does not clear this head (rule 3)"
     if allowed and login(verdict) not in allowed:
         return "held", (
@@ -322,6 +340,41 @@ def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]
             "(rule 3; setting: conductor_accounts in config/reviewers.yaml)"
         )
     return "cleared", ""
+
+
+def accepted_adrs(verdict: dict, sha: str) -> list[str] | None:
+    """The ADRs a covered fix list on exactly SHA accepts by its `Final:` lines alone (SPEC-0021
+    rule 3a, brief 557), or None: such a verdict clears the head like `Verdict: cleared <sha>`."""
+    covered = covered_fix_list(str(verdict.get("body") or ""))
+    if covered is None or covered[0] != sha:
+        return None
+    return final_accepts(covered[1])
+
+
+def adr_status(repo: str, sha: str, path: str) -> str | None:
+    """The `- Status:` word of the ADR at PATH in the commit SHA, read with one GET; None when the
+    answer is not a base64 file or has no status line."""
+    item = read_json(f"repos/{repo}/contents/{path}?ref={sha}", dict, "an ADR a Final line names")
+    if item.get("type") != "file" or item.get("encoding") != "base64":
+        return None
+    try:
+        text = base64.b64decode(str(item.get("content") or ""), validate=False).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError):
+        return None
+    found = [m.group(1) for ln in text.splitlines() if (m := STATUS_LINE.match(ln))]
+    return found[0] if found else None
+
+
+def acceptance_lines(repo: str, sha: str, verdict: dict) -> list[str]:
+    """The squash message lines `ADR-nnnn Accepted (Final <comment id>)` of a Final accept, after
+    each named ADR is read as `Proposed` at the head; a held run otherwise (rule 3a)."""
+    lines = []
+    for path in accepted_adrs(verdict, sha) or []:
+        if adr_status(repo, sha, path) != "Proposed":
+            raise Held("a Final line accepts an ADR that is not Proposed at the head (rule 3)")
+        number = path.split("/")[-1][:4]
+        lines.append(f"ADR-{number} Accepted (Final {verdict.get('id')})")
+    return lines + [MERGED_BY] if lines else []
 
 
 # --- the default branch's other settings -----------------------------------------------------
@@ -472,12 +525,36 @@ def dependence_unmet(repo: str, pull: dict) -> bool:
     return False
 
 
-def hold_list(repo: str, number: int, pull: dict, comments: list, approvers: list) -> None:
-    """The holds of SPEC-0039 rule 5 after the red branch and paused, in the rule's order."""
+def holds_record(text: str) -> bool:
+    """Whether TEXT has a line that `common.final_records` would read as a record: an
+    `ADR-nnnn Accepted (Final <id>)` line or the line `MERGED_BY` (rule 3a). Only this command
+    writes them, so a pull request that carries one is held (brief 557)."""
+    lines = [ln.strip() for ln in text.splitlines()]
+    return any(ln == MERGED_BY or FINAL_ACCEPT.fullmatch(ln) for ln in lines)
+
+
+def hold_list(
+    repo: str, number: int, pull: dict, comments: list, approvers: list, accepts: list[str]
+) -> None:
+    """The holds of SPEC-0039 rule 5 after the red branch and paused, in the rule's order; first,
+    each ADR a Final line ACCEPTS must be one the pull request adds or changes (rule 3)."""
     files = read_pages(f"repos/{repo}/pulls/{number}/files", "the files of the pull request")
     count = pull.get("changed_files")
     if not isinstance(count, int) or isinstance(count, bool) or count != len(files):
         raise Held("files not all read (rule 5)")  # GitHub lists at most 3,000 files (rule 2)
+    touched = {
+        item.get("filename") for item in files if item.get("status") in ("added", "modified")
+    }
+    if any(path not in touched for path in accepts):
+        raise Held("a Final line accepts an ADR that this pull request does not change (rule 3)")
+    commits = read_pages(f"repos/{repo}/pulls/{number}/commits", "the commits of the pull request")
+    count = pull.get("commits")
+    if not isinstance(count, int) or isinstance(count, bool) or count != len(commits):
+        raise Held("commits not all read (rule 5)")  # GitHub lists at most 250 commits
+    texts = [str(pull.get("body") or "")]
+    texts += [str((c.get("commit") or {}).get("message") or "") for c in commits]
+    if any(holds_record(text) for text in texts):
+        raise Held("a commit or the body already holds a record line (rule 3)")
     sha = str(pull["head"]["sha"])
     if released(files):
         raise Held("release (rule 5)")
@@ -511,10 +588,13 @@ def current_head(repo: str, number: int) -> str:
     return str(head.get("sha") if isinstance(head, dict) else "")
 
 
-def merge_pull(repo: str, number: int, sha: str) -> str:
-    """The one merge call, pinned to SHA with the squash method; the merge commit's sha."""
+def merge_pull(repo: str, number: int, sha: str, message: list[str] | None = None) -> str:
+    """The one merge call, pinned to SHA with the squash method; the merge commit's sha. The
+    squash commit message is always this command's own: MESSAGE (the acceptance lines of rule 3a)
+    or the line `MERGED_BY` alone, never GitHub's default, which copies the commit bodies."""
     args = ["--method", "PUT", f"repos/{repo}/pulls/{number}/merge"]
     args += ["-f", f"sha={sha}", "-f", f"merge_method={METHOD}"]
+    args += ["-f", "commit_message=" + "\n".join(message or [MERGED_BY])]
     code, out, err = write_once(args)
     if code != 0:
         found = HTTP.search(err)
@@ -790,6 +870,7 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
         if state != "cleared":
             return "held", reason, EXIT_HELD
         verdict = latest_verdict(comments) or {}
+        accepted = acceptance_lines(repo, sha, verdict)
         issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
         if titled(issues, RED_TITLE, exact=True):
             raise Held("the default branch is red (rule 5)")
@@ -800,8 +881,8 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
             local_evidence(verdict, comments, sha, approvers)
         else:
             ci_evidence(repo, sha, required)
-        hold_list(repo, number, pull, comments, approvers)
-        merged = merge_pull(repo, number, sha)
+        hold_list(repo, number, pull, comments, approvers, accepted_adrs(verdict, sha) or [])
+        merged = merge_pull(repo, number, sha, accepted)
         recorded = after_merge(root, repo, number, merged, record, verdict, data)
     if not recorded:
         return f"merged {merged[:12]}", "the record line cannot be posted (rule 7)", EXIT_REFUSED

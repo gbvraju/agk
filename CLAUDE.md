@@ -20,4 +20,4 @@ The working rule of a session (what it acts on, what it never does, how it finds
 ## Compaction recovery
 
 After compaction or a new session, re-read CLAUDE.md, the current brief, `docs/runs/decisions-log.md` and the
-open PR body before acting.
+open PR body before acting. A new decisions-log row is one file under `docs/runs/decisions/`; the old log is frozen.

@@ -156,15 +156,32 @@ def covered_by_problems(
     return problems
 
 
-def release_pull_request(root, mb) -> bool:
+def comments_arg(argv: list[str] | None) -> str | None:
+    """The file of `--comments FILE`: the Final comments of the base's records, else None."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    if "--comments" not in args:
+        return None
+    i = args.index("--comments")
+    if i + 1 >= len(args):
+        raise CheckError("--comments needs a value")
+    return args[i + 1]
+
+
+def release_pull_request(root, mb, comments_file: str | None = None) -> bool:
     """A valid release pull request of SPEC-0028 needs no ADR: it changes only the release files,
-    and the release check passes. That check is kit-only, so a project, which does not have it,
-    has no exemption."""
+    and the release check passes, given the Final comments of COMMENTS_FILE (SPEC-0021 rule 3a;
+    an unreadable file is no exemption). That check is kit-only, so a project, which does not
+    have it, has no exemption."""
     try:
+        import check_adrs  # noqa: PLC0415 - kit-only reader of the comments
         import check_release  # noqa: PLC0415 - kit-only, absent from an installed copy
     except ImportError:
         return False
-    return check_release.valid_release(root, mb)
+    try:
+        comments = check_adrs.read_comments(comments_file)
+    except CheckError:
+        return False
+    return check_release.valid_release(root, mb, comments)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -197,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     if not classes:
         print(f"ok {NAME}")
         return 0
-    if release_pull_request(root, mb):
+    if release_pull_request(root, mb, comments_arg(argv)):
         print(f"ok {NAME} (a release pull request)")
         return 0
     if covering_adrs(root, mb, changed, classes):
