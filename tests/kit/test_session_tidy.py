@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import time
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from test_session import proj as session_proj  # noqa: F401  (the fixtures of te
 from test_session import stub as session_stub  # noqa: F401
 
 PULLS = f"repos/{REPO}/pulls"  # the stub ignores the query (`head=` and `state=all`)
+OLD = time.time() - 3 * 3600  # older than the 60 idle minutes of `[tidy] min_idle_minutes`
 
 
 @pytest.fixture
@@ -31,28 +33,48 @@ def proj(request):
     return request.getfixturevalue("session_proj")
 
 
-def started(repo) -> None:
-    """A first commit; the lock folder is the test's own, so a real lock never keeps an item."""
+def started(repo, tidy: str = "") -> None:
+    """A first commit; the lock folder is the test's own, so a real lock never keeps an item.
+    TIDY is the body of a `[tidy]` table of agk.toml, if any."""
     locks = (repo.root.parent / f"{repo.root.name}-locks").as_posix()
-    repo.commit({"README.md": "x\n", "agk.toml": f'lock_dir = "{locks}"\n'}, "start")
+    table = f"[tidy]\n{tidy}\n" if tidy else ""
+    repo.commit({"README.md": "x\n", "agk.toml": f'lock_dir = "{locks}"\n{table}'}, "start")
 
 
-def worktree(repo, name: str, commit: bool = True) -> tuple[Path, str]:
-    """A builder worktree on `claude/<name>` with one commit; returns its path and tip."""
+def worktree(
+    repo, name: str, commit: bool = True, branch: str | None = None, files: dict | None = None
+) -> tuple[Path, str]:
+    """A worktree on BRANCH (a builder's `claude/<name>` by default) with one commit, then FILES
+    left on disk uncommitted; the commit and every file are three hours old (`aged`). Returns
+    its path and tip."""
     path = repo.root / "wt" / name
-    repo.git("worktree", "add", "-q", "-b", f"claude/{name}", str(path), "main")
+    repo.git("worktree", "add", "-q", "-b", branch or f"claude/{name}", str(path), "main")
     if commit:
         (path / f"{name}.txt").write_text("work\n", encoding="utf-8")
         repo_git(path, "add", "-A")
-        repo_git(path, "commit", "-q", "-m", "work")
+        repo_git(path, "commit", "-q", "-m", "work", old=True)
+    for rel, text in (files or {}).items():
+        (path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (path / rel).write_text(text, encoding="utf-8")
+    aged(path)
     return path, repo_git(path, "rev-parse", "HEAD").strip()
 
 
-def repo_git(path: Path, *args: str) -> str:
+def aged(path: Path, when: float = OLD) -> None:
+    """Every file and folder of the worktree PATH last changed at WHEN."""
+    for folder, dirs, names in os.walk(path):
+        for entry in [*dirs, *names]:
+            os.utime(Path(folder) / entry, (when, when), follow_symlinks=False)
+    os.utime(path, (when, when))
+
+
+def repo_git(path: Path, *args: str, old: bool = False) -> str:
     import subprocess  # nosec B404 - fixed argument lists only, no shell
 
+    stamp = f"@{int(OLD)} +0000"
+    env = {**os.environ, "GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp} if old else None
     return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", *args], cwd=path, capture_output=True, text=True, check=True
+        ["git", *args], cwd=path, capture_output=True, text=True, check=True, env=env
     ).stdout
 
 
@@ -222,6 +244,120 @@ def test_live_lock_owner_records_are_read_and_stale_ones_ignored(tmp_path):
     (jobs / "1.json").write_text(json.dumps(job), encoding="utf-8")
     records = session_module.running_records(tmp_path, 120)
     assert sorted(r.get("session") for r in records) == ["b5", "b8"]
+
+
+# --- the fix list of 0085062: ignored files, other people's branches, an idle builder ----------
+
+
+GITIGNORE = ".env\ndata/\n__pycache__/\n.pytest_cache/\n"
+
+
+def test_ignored_files_that_are_not_caches_are_kept(repo):
+    """REQ-040: fix list item 1: `git worktree remove` deletes ignored files, so an ignored
+    `.env` or `data/db` keeps the item."""
+    started(repo)
+    repo.commit({".gitignore": GITIGNORE}, "ignore")
+    path, tip = worktree(repo, "brief-101", files={".env": "KEY=x\n", "data/db": "rows\n"})
+    item = plan(repo, {"claude/brief-101": [pull(101, "claude/brief-101", tip)]})[
+        "claude/brief-101"
+    ]
+    assert item.kept == "ignored files"
+    assert session_module.tidy_apply(repo.root, [item]) == []
+    assert (path / ".env").exists() and (path / "data" / "db").exists()
+
+
+def test_ignored_caches_alone_do_not_keep_it(repo):
+    """REQ-040: fix list item 1: only known caches are ignored files that may go."""
+    started(repo)
+    repo.commit({".gitignore": GITIGNORE}, "ignore")
+    caches = {"__pycache__/a.pyc": "x", "pkg/__pycache__/b.pyc": "x", ".pytest_cache/v": "x"}
+    path, tip = worktree(repo, "brief-102", files=caches)
+    item = plan(repo, {"claude/brief-102": [pull(102, "claude/brief-102", tip)]})[
+        "claude/brief-102"
+    ]
+    assert item.kept is None
+    session_module.tidy_apply(repo.root, [item])
+    assert not path.exists()
+
+
+def test_the_caches_setting_replaces_the_known_list(repo):
+    """REQ-040: fix list item 1: `[tidy] caches` names the caches that may go."""
+    started(repo, 'caches = ["__pycache__/"]')
+    repo.commit({".gitignore": GITIGNORE}, "ignore")
+    _, tip = worktree(repo, "brief-103", files={".pytest_cache/v": "x"})
+    item = plan(repo, {"claude/brief-103": [pull(103, "claude/brief-103", tip)]})[
+        "claude/brief-103"
+    ]
+    assert item.kept == "ignored files"
+
+
+def test_a_branch_that_is_not_a_builders_is_kept(repo):
+    """REQ-040: fix list item 2: a person's own `feature/x` worktree with a merged pull request
+    is never touched."""
+    started(repo)
+    path, tip = worktree(repo, "x", branch="feature/x")
+    repo.git("branch", "claude/brief-x")
+    table = {"feature/x": [pull(104, "feature/x", tip)], "claude/brief-x": [pull(105, "a", tip)]}
+    items = plan(repo, table)
+    assert items["feature/x"].kept == "not a builder branch"
+    assert items["claude/brief-x"].kept == "not a builder branch"  # the prefix and a number
+    assert session_module.tidy_apply(repo.root, list(items.values())) == []
+    assert path.exists() and "feature/x" in branches(repo)
+
+
+def test_the_branch_prefix_setting_names_the_builders(repo):
+    """REQ-040: fix list item 2: `[tidy] branch_prefix` replaces the builders' prefix."""
+    started(repo, 'branch_prefix = "agent/"')
+    _, tip = worktree(repo, "106", branch="agent/106")
+    _, other = worktree(repo, "brief-107")
+    table = {"agent/106": [pull(106, "agent/106", tip)],
+             "claude/brief-107": [pull(107, "claude/brief-107", other)]}  # fmt: skip
+    items = plan(repo, table)
+    assert items["agent/106"].kept is None
+    assert items["claude/brief-107"].kept == "not a builder branch"
+
+
+@pytest.mark.parametrize("fresh", ["file", "commit", "folder"])
+def test_a_recently_active_worktree_is_kept(repo, fresh):
+    """REQ-040: fix list item 3: a builder still open in its worktree after the merge has no
+    lock; a file, folder or commit younger than `[tidy] min_idle_minutes` (60) keeps it."""
+    started(repo)
+    path, tip = worktree(repo, "brief-108")
+    if fresh == "file":
+        aged(path, time.time() - 30 * 60)
+    elif fresh == "folder":
+        os.utime(path, None)
+    else:
+        (path / "brief-108.txt").write_text("again\n", encoding="utf-8")
+        repo_git(path, "commit", "-q", "-am", "now")
+        aged(path)
+        tip = repo_git(path, "rev-parse", "HEAD").strip()
+    item = plan(repo, {"claude/brief-108": [pull(108, "claude/brief-108", tip)]})[
+        "claude/brief-108"
+    ]
+    assert item.kept == "recently active"
+
+
+def test_min_idle_minutes_is_read(repo):
+    """REQ-040: fix list item 3: `[tidy] min_idle_minutes` replaces the 60 minutes."""
+    started(repo, "min_idle_minutes = 240")
+    _, tip = worktree(repo, "brief-109")
+    item = plan(repo, {"claude/brief-109": [pull(109, "claude/brief-109", tip)]})[
+        "claude/brief-109"
+    ]
+    assert item.kept == "recently active"
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["min_idle_minutes = 0", 'min_idle_minutes = "60"', "branch_prefix = \"\"", "caches = 3",
+     "other = 1"],  # fmt: skip
+)
+def test_a_wrong_tidy_setting_is_refused_by_name(repo, body):
+    """REQ-040: fix list items 1 to 3: a wrong `[tidy]` value is refused, naming the setting."""
+    started(repo, body)
+    with pytest.raises(session_module.CheckError, match=r"setting: \[tidy\]"):
+        plan(repo, {})
 
 
 # --- answer 1 and 4: dry run by default, removal --------------------------------------------------
