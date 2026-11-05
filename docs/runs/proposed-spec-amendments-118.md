@@ -44,7 +44,10 @@ Files changed: `docs/specs/0009-facts.md`, `docs/specs/0021-when-a-fix-list-verd
    - SPEC-0021 rule 3a: `check_adrs.py --pending --comments <file>` counts a record only when its Final comment in the
      file verifies it, and fails closed without the file while a record exists.
    - SPEC-0028 rule 5: `check_release.py --comments <file>` counts the same verified records only, and fails closed
-     without the file while the base holds a record.
+     without the file while the base holds a record. The release exemption of `check_protected_changes.py` asks the
+     same check with `--comments <file>`, so a release is exempt only with its verified records. The governance
+     workflow's `Record comments` step fetches each record's Final comment (`check_adrs.py --record-ids`) for both
+     (the fix list of 2026-11-05 on 94c0d39, Q-557-5).
 5. **SPEC-0034 rule 19 ("The append-only logs merge as a union").** The rule's open question is ruled: since GitHub's
    check does not honour `merge=union`, the decisions log takes one file per entry (SPEC-0009 rule 13 as amended), the
    old file is frozen and the intake records its rulings as such files; the union mark stays for the residuals and the

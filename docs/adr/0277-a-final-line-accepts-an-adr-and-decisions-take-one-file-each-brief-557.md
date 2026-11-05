@@ -6,7 +6,7 @@
 - Related: ADR-0263, ADR-0265, ADR-0266, SPEC-0009, SPEC-0021, SPEC-0028, SPEC-0034, SPEC-0039, plan #542
 - Requirements: REQ-028, REQ-046, REQ-018
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `.claude/`, `CLAUDE.md`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `.claude/`, `CLAUDE.md`, `.github/`
 
 ## Context
 
@@ -90,6 +90,9 @@ requirements half of item 2 are later builds (the pull request's `Questions:`).
   leaves one (due 2026-12-31).
 - 2026-11-05: the immutability rule of `check_adrs.py` and the drift audit cannot read a comment,
   so they trust the squash record of `merge_cleared.py`; `facts.py`, `check_adrs.py --pending` and
-  the release check verify the comment id. The governance workflow does not yet pass the Final
-  comments to the release check (a `.github/` change), so a release after a Final accept fails
-  closed in CI until it does (Q-557-4, Q-557-5, due 2026-11-30).
+  the release check verify the comment id (Q-557-4, due 2026-11-30). The governance workflow's
+  `Record comments` step fetches the Final comment of each record (`check_adrs.py --record-ids`)
+  and passes the file to the release check and to `check_protected_changes.py`, whose release
+  exemption asks `check_release.valid_release` with those comments; a comment that cannot be read
+  is left out, so its record counts for nothing (Q-557-5). This change to `.github/` is merged by
+  the owner by hand.
