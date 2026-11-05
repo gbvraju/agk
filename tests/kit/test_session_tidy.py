@@ -233,7 +233,7 @@ def test_live_lock_owner_records_are_read_and_stale_ones_ignored(tmp_path):
     live = tmp_path / "agk-lock-heavy"
     live.mkdir()
     owner = {"session": "b5", "pid": os.getpid(), "host": socket.gethostname(),
-             "started": "2099-01-01T00:00:00Z", "token": "t"}  # fmt: skip
+             "started": "2099-01-01T00:00:00Z"}  # fmt: skip
     (live / "owner.json").write_text(json.dumps(owner), encoding="utf-8")
     dead = tmp_path / "agk-lock-heavy.2"
     dead.mkdir()
