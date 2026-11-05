@@ -1,0 +1,1 @@
+- `merge_cleared.py`'s after-merge governance run gets the merged pull request's body as `AGK_PR_BODY` (a file in its temporary home, `env -i` now PATH, HOME and AGK_PR_BODY), so a `Covered-by:` merge is no longer reported red (brief #576, ADR-0284 Proposed)

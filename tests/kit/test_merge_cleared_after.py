@@ -41,6 +41,7 @@ from test_merge_cleared_verdict import (
     repo,
     run,
     toml,
+    world,
 )
 
 sys.path.insert(0, str(SCRIPTS))
@@ -70,6 +71,10 @@ def after_run(tmp_path: Path, issues: list | None = None, main: str | None = Non
     bin_dir, log = fake_gh(tmp_path, comments=[verdict()], **world)
     proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD)
     return proc, calls(log), makes(tmp_path), root
+
+
+# run_governance's first four arguments: the checkout, the worktree, the home, the body file
+GOVERN = (Path("checkout"), Path("tree"), Path("home"), Path("home") / "pr-body.md")
 
 
 def makes(tmp_path: Path) -> list[dict]:
@@ -166,9 +171,62 @@ def test_the_governance_run_gets_no_token_and_a_scratch_home(tmp_path, monkeypat
     assert proc.returncode == 0, proc.stdout + proc.stderr
     env = ran[0]["env"]
     # LC_CTYPE is set by the fake make's own Python (PEP 538), not passed by the command
-    assert set(env) <= {"PATH", "HOME", "LC_CTYPE"}, sorted(env)
+    assert set(env) - {"LC_CTYPE"} == {"PATH", "HOME", "AGK_PR_BODY"}, sorted(env)
     assert HIDDEN not in json.dumps(env)
     assert Path(env["HOME"]) != Path.home()
+
+
+COVERED_BODY = "Brief: #500\nAdvances: REQ-046\nCovered-by: ADR-0261\n"
+NEEDS_BODY = """
+import json, os, sys
+body = os.environ.get('AGK_PR_BODY')
+text = open(body, encoding='utf-8').read() if body and os.path.isfile(body) else None
+with open(LOG, 'a', encoding='utf-8') as fh:
+    seen = {'args': sys.argv[1:], 'env': dict(os.environ), 'body': text}
+    fh.write(json.dumps(seen) + '\\n')
+sys.exit(0 if text and 'Covered-by: ADR-0261' in text.splitlines() else 1)
+"""
+
+
+def body_world(tmp_path: Path, body: str):
+    """A run whose fake make passes only when AGK_PR_BODY names a file with the Covered-by line,
+    as check_protected_changes.py needs for a covered build (brief #576)."""
+    root = repo(tmp_path, toml(ON))
+    pull = {**world()["pull"], "body": body}
+    bin_dir, log = fake_gh(tmp_path, pull=pull, comments=[verdict()])
+    log_path = str(tmp_path / "make-calls.jsonl")
+    (bin_dir / "make").write_text(
+        f"#!{sys.executable}\nLOG = {log_path!r}\n" + NEEDS_BODY, encoding="utf-8"
+    )
+    proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD)
+    return proc, calls(log), makes(tmp_path), root
+
+
+def test_a_covered_by_merge_gets_its_body_and_is_not_reported_red(tmp_path):
+    """REQ-046 AC6: brief #576 answer 1 (the merged body reaches governance as AGK_PR_BODY)."""
+    proc, made, ran, root = body_world(tmp_path, COVERED_BODY)
+    assert one_line(proc) == MERGED and proc.returncode == 0, proc.stdout + proc.stderr
+    assert red_writes(made) == [], "no red-branch issue"
+    assert len(ran) == 1 and ran[0]["body"] == COVERED_BODY
+    body_file = Path(ran[0]["env"]["AGK_PR_BODY"])
+    assert body_file.parent == Path(ran[0]["env"]["HOME"]), "in the run's temporary home"
+    assert not body_file.is_relative_to(root), "outside the checkout"
+    assert not body_file.exists(), "removed with the run's temporary folder"
+
+
+def test_the_body_is_the_one_read_before_the_merge_with_no_second_read(tmp_path):
+    """REQ-046 AC6: brief #576 answer 1 (the body already read; change nothing else)."""
+    proc, made, ran, _ = body_world(tmp_path, COVERED_BODY)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    pulls = [c for c in made if c[3] == f"repos/{REPO}/pulls/7"]
+    assert len(pulls) == 1, made
+
+
+def test_a_pull_request_with_no_body_gets_an_empty_body_file(tmp_path):
+    """REQ-046 AC6: brief #576 answer 1 (a missing body is an empty file; the check decides)."""
+    proc, _, ran, _ = body_world(tmp_path, "")
+    assert proc.returncode == 1 and one_line(proc) == STOPPED, proc.stdout + proc.stderr
+    assert ran[0]["body"] == ""
 
 
 def test_the_governance_run_holds_the_heavy_lock(tmp_path):
@@ -306,16 +364,18 @@ def test_the_governance_argument_list_is_the_same_on_a_fake_windows_platform(mon
 
     monkeypatch.setattr(merge_cleared.subprocess, "Popen", fake_run)
     root, tree, home = Path("checkout"), Path("tree"), Path("home")
+    body = home / "pr-body.md"
     for platform in ("linux", "win32"):
         monkeypatch.setattr(sys, "platform", platform)
-        assert merge_cleared.run_governance(root, tree, home, BASE, 1800.0) is None
+        assert merge_cleared.run_governance(root, tree, home, body, BASE, 1800.0) is None
     assert seen[0][0] == seen[1][0]
     argv = seen[0][0]
     lock_py = str(Path(merge_cleared.__file__).resolve().parent / "lock.py")
     assert argv[:10] == [sys.executable, lock_py, "run", "--name", "heavy", "--session",
                          "merge-cleared", "--timeout", "1800", "--"]  # fmt: skip
     assert argv[10:12] == ["env", "-i"] and argv[12].startswith("PATH=")
-    assert argv[13:] == [f"HOME={home}", "make", "-C", str(tree), "governance", f"AGK_BASE={BASE}"]
+    assert argv[13:] == [f"HOME={home}", f"AGK_PR_BODY={body}", "make", "-C", str(tree),
+                         "governance", f"AGK_BASE={BASE}"]  # fmt: skip
     assert all(not kwargs.get("shell") for _, kwargs in seen)
 
 
@@ -402,7 +462,8 @@ def red_body_of(made: list[list[str]]) -> str:
 
 def test_the_heavy_lock_wait_is_bounded_by_a_timeout_in_the_argument_list():
     """REQ-046 AC6: fix list item 1 (`lock.py run ... --timeout S`, never an endless wait)."""
-    argv = merge_cleared.governance_argv(Path("tree"), Path("home"), BASE, 1800.0)
+    home = Path("home")
+    argv = merge_cleared.governance_argv(Path("tree"), home, home / "pr-body.md", BASE, 1800.0)
     cut = argv.index("--")
     assert argv[cut - 2 : cut] == ["--timeout", "1800"]
     assert argv[cut + 1 : cut + 3] == ["env", "-i"]
@@ -435,7 +496,7 @@ def test_the_setting_reaches_the_governance_run(tmp_path, monkeypatch, capsys):
     root = in_process(tmp_path, monkeypatch, main=toml(ON + "after_merge_timeout = 5\n"))
     seen: list[float] = []
 
-    def fake(root_, tree, home, base, wait):
+    def fake(root_, tree, home, body, base, wait):
         seen.append(wait)
 
     monkeypatch.setattr(merge_cleared, "run_governance", fake)
@@ -460,7 +521,7 @@ def test_lock_py_exit_3_is_the_heavy_lock_step(monkeypatch, code, step):
             return ("out\n", None)
 
     monkeypatch.setattr(merge_cleared.subprocess, "Popen", Child)
-    got = merge_cleared.run_governance(Path("checkout"), Path("tree"), Path("home"), BASE, 60.0)
+    got = merge_cleared.run_governance(*GOVERN, BASE, 60.0)
     assert got == step
 
 
@@ -489,7 +550,7 @@ def test_an_interrupt_while_governance_runs_stops_the_child_and_goes_on(monkeypa
 
     monkeypatch.setattr(merge_cleared.subprocess, "Popen", Child)
     with pytest.raises(KeyboardInterrupt):
-        merge_cleared.run_governance(Path("checkout"), Path("tree"), Path("home"), BASE, 60.0)
+        merge_cleared.run_governance(*GOVERN, BASE, 60.0)
     assert done[:2] == ["terminate", "wait"]
 
 
