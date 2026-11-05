@@ -133,6 +133,12 @@ def test_ac3_the_rule_file_names_its_release_and_every_rule_compiles():
     assert len(guard.compiled_rules()) == len([r for r in data["rules"] if "regex" in r])
 
 
+def test_ac3_the_rule_file_as_written_trips_none_of_its_own_rules():
+    """REQ-049 AC3: rule 10 (the governance secret scan stays green on the rule file itself)."""
+    raw = (SCRIPTS / "guard_rules.json").read_text(encoding="utf-8")
+    assert guard.scan_text(raw) == []
+
+
 # --- rule 10: true negatives and the exclusions -------------------------------------------------
 
 
