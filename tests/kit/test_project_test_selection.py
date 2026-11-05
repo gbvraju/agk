@@ -19,6 +19,7 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 from pathlib import Path
 
 import pytest
+from impact import pr_tests
 
 ROOT = Path(__file__).resolve().parents[2]
 MAP = 'map = [ { code = "src/billing/**", tests = ["tests/billing/**"] } ]\n'
@@ -288,9 +289,10 @@ def test_the_workflow_passes_the_event_and_agk_mk_calls_the_script():
     assert "scripts/agk/project_tests.py" in manifest["verbatim"]
 
 
-def test_the_kit_repository_does_not_set_pr_tests():
-    """REQ-016: brief #453 answer 5 (the kit's own agk.toml leaves `pr_tests` out)."""
-    assert "pr_tests" not in (ROOT / "agk.toml").read_text(encoding="utf-8")
+def test_the_kit_repository_sets_pr_tests_selected():
+    """REQ-016: brief #453 answer 5, changed by brief #578 (ADR-0285): the kit's own agk.toml sets
+    `pr_tests = "selected"`; its `Project tests` step stays skipped (`kit/agk-kit.mk`)."""
+    assert pr_tests(ROOT) == "selected"
 
 
 @pytest.mark.parametrize(
