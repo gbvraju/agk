@@ -1,0 +1,1 @@
+- `merge_cleared.py` (SPEC-0039 rule 10, the CI path): in CI mode it also reads the head's commit status over REST, and while a required check is still queued or in progress it merges nothing, turns on no auto-merge and exits 3 with `held: checks pending`; the next review pass merges once the checks are green (brief #569).
