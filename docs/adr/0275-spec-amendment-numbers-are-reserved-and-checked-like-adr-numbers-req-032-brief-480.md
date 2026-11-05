@@ -1,6 +1,6 @@
 # ADR-0275: spec-amendment numbers are reserved and checked like ADR numbers (REQ-032, brief 480)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: ADR-0083, SPEC-0025
