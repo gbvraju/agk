@@ -1,7 +1,7 @@
-"""This repository's own `proof_timeout` keeps headroom over its measured full suite (brief #568, ADR-0282).
+"""This repository's `proof_timeout` keeps headroom over its measured full suite (ADR-0282).
 
-Kit-only: an adopter keeps the default of `common.DEFAULT_CONFIG` until `doctor.py` suggests otherwise
-(SPEC-0044 rule 9), so this test reads only the kit repository's `agk.toml`.
+Brief #568. Kit-only: an adopter keeps the default of `common.DEFAULT_CONFIG` until `doctor.py`
+suggests otherwise (SPEC-0044 rule 9), so this test reads only the kit repository's `agk.toml`.
 """
 
 from __future__ import annotations
