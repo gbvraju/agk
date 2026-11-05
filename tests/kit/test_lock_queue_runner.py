@@ -476,8 +476,10 @@ def test_a_job_submitted_as_the_runner_goes_idle_is_never_left_without_a_runner(
     assert threads, "the interleaving was never forced"
     threads[0].join()
     assert not (queue_of(where) / "runner.json").exists()
-    assert [j["session"] for j in real_jobs(queue_of(where))] == [late["session"]]  # it waits
-    assert state["alive"] is False  # so the submit starts a runner for the waiting job
+    left = real_jobs(queue_of(where))
+    ran = [r for r in results(where).values() if r["outcome"] == "passed"]
+    # either the runner saw the job and ran it, or the submit saw no runner and starts one
+    assert (left, len(ran)) == ([], 1) or (len(left), state["alive"]) == (1, False)
 
 
 def test_a_job_worktree_is_made_under_the_long_temp_folder_on_windows(

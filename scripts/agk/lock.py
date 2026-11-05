@@ -86,7 +86,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import heavy_queue
-from common import CheckError, config_source, lock_cleanup, lock_slots, queue_settings
+from common import (
+    CheckError,
+    config_source,
+    lock_cleanup,
+    lock_slots,
+    long_temp_dir,
+    queue_settings,
+)
 
 USAGE = (
     "usage: lock.py run --name NAME [--session ID] [--priority P] [--timeout S]"
@@ -745,14 +752,16 @@ def raised(priority: int | str, blocked: list[int]) -> tuple[int | str, str | No
 
 def enqueue(
     held: Path, name: str, job: dict, order: str, max_wait: int, now: datetime
-) -> tuple[str, str, tuple[int, int] | None]:
-    """Add the job under the lock's mutex: (its ticket, how, its position among the waiting)."""
+) -> tuple[str, str, tuple[int, int] | None, bool]:
+    """Add the job under the lock's mutex: (its ticket, how, its position among the waiting,
+    whether a live runner will see it). The runner check shares the mutex with the runner's own
+    decision to stop (`idle_stop`), so a job is never left waiting with no runner."""
     folder = heavy_queue.queue_folder(held)
     with mutex(held):
         placed, how = heavy_queue.submit(folder, name, job)
-        return placed["ticket"], how, heavy_queue.position(
-            folder, placed["ticket"], order, max_wait, now
-        )
+        place = heavy_queue.position(folder, placed["ticket"], order, max_wait, now)
+        alive = heavy_queue.runner_alive(folder, pid_alive, socket.gethostname())
+        return placed["ticket"], how, place, alive
 
 
 def submit_job(root: Path, held: Path, options: dict, queue: dict) -> int:
@@ -790,16 +799,18 @@ def submit_job(root: Path, held: Path, options: dict, queue: dict) -> int:
         submitted=now,
     )
     if options["brief"] is not None and isinstance(job["priority"], int):
-        job["priority"], note = raised(job["priority"], unblocks(root, options["brief"]))
+        blocked = unblocks(root, options["brief"])
+        job["priority"], note = raised(job["priority"], blocked)
         if note:
             job["raised"] = note
-    ticket, how, place = enqueue(
+        if blocked:
+            job["unblocks"] = blocked  # first within its priority (the ruling on Q-552-3)
+    ticket, how, place, alive = enqueue(
         held, name, job, queue["queue_order"], queue["queue_max_wait"], now
     )
     where = "running" if place is None else f"position {place[0]} of {place[1]}"
     print(f"queued {ticket} {where} (head {job['head'][:12]})", flush=True)
-    folder = heavy_queue.queue_folder(held)
-    if heavy_queue.runner_alive(folder, pid_alive, socket.gethostname()):
+    if alive:
         return 0
     if queue["queue_autostart"]:
         print(f"runner started (pid {start_runner(root, name)})", flush=True)
@@ -907,11 +918,29 @@ def work_job(root: Path, held: Path, name: str, job: dict, setup: dict, children
     except OSError:
         pass
     finally:
-        drop_tree(job)
-        with mutex(held):
-            heavy_queue.finish(setup["folder"], job, outcome, setup["clock"](), code, began)
-        print(f"runner {name}: {job['ticket']} {outcome}", flush=True)
-        wake.set()
+        try:
+            drop_tree(job)
+            with mutex(held):
+                outcome = settle(setup["folder"], job, outcome, setup["clock"](), code, began)
+            print(f"runner {name}: {job['ticket']} {outcome}", flush=True)
+        finally:
+            wake.set()
+
+
+def settle(folder: Path, job: dict, outcome: str, now: datetime, code, began) -> str:
+    """Write the job's result; when that fails, write `failed (the result cannot be written)`
+    where possible and release the job either way, so no job stays started under a live runner
+    (rule 14). Under the mutex; returns the outcome written, or tried."""
+    try:
+        heavy_queue.finish(folder, job, outcome, now, code, began)
+        return outcome
+    except Exception:  # noqa: BLE001 - any failure here must not leave the job started
+        outcome = "failed (the result cannot be written)"
+    try:
+        heavy_queue.finish(folder, job, outcome, now, code, began)
+    except Exception:  # noqa: BLE001 - the job is still released below
+        (folder / "jobs" / f"{job['ticket']}.json").unlink(missing_ok=True)
+    return outcome
 
 
 def dispatch(folder: Path, held: Path, name: str, setup: dict, me: dict, active: dict) -> list:
@@ -931,7 +960,7 @@ def dispatch(folder: Path, held: Path, name: str, setup: dict, me: dict, active:
         )
         started = []
         for job in order[: max(0, setup["slots"] - len(active))]:
-            place = Path(tempfile.mkdtemp(prefix="agk-job-"))
+            place = Path(tempfile.mkdtemp(prefix="agk-job-", dir=long_temp_dir()))
             job = {
                 **job,
                 "started": heavy_queue.stamp(clock()),
@@ -996,8 +1025,10 @@ def runner(root: Path, name: str, clock=None, sleep=time.sleep) -> int:
             elif since is None:
                 since = now
             elif (now - since).total_seconds() >= idle * 60:
-                print(f"runner idle for {idle} min; stopped", flush=True)
-                return 0
+                if idle_stop(folder, held, me):
+                    print(f"runner idle for {idle} min; stopped", flush=True)
+                    return 0
+                since = None
             sleep(POLL)
     except KeyboardInterrupt:
         code = 130
@@ -1012,6 +1043,17 @@ def runner(root: Path, name: str, clock=None, sleep=time.sleep) -> int:
             if (heavy_queue.read_json(folder / "runner.json") or {}).get("pid") == me["pid"]:
                 (folder / "runner.json").unlink(missing_ok=True)
     return code
+
+
+def idle_stop(folder: Path, held: Path, me: dict) -> bool:
+    """Rule 8: stop only when, under the mutex, no job is queued; `runner.json` is removed in the
+    same mutex section, so a `submit` either sees this runner gone or is seen by it (`enqueue`)."""
+    with mutex(held):
+        if heavy_queue.jobs(folder):
+            return False
+        if (heavy_queue.read_json(folder / "runner.json") or {}).get("pid") == me["pid"]:
+            (folder / "runner.json").unlink(missing_ok=True)
+        return True
 
 
 def on_signal(signum, _frame) -> None:

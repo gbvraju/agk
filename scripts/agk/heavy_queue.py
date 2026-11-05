@@ -142,10 +142,11 @@ def waiting_order(all_jobs: list[dict], order: str, max_wait: int, now: datetime
     if order != "priority":
         return sorted(waiting, key=lambda j: j["seq"])
 
-    def key(j: dict) -> tuple[int, int, int]:
+    def key(j: dict) -> tuple[int, int, int, int]:
         if overdue(j, max_wait, now):
-            return (0, 0, j["seq"])
-        return (1, rank(j.get("priority")), j["seq"])
+            return (0, 0, 0, j["seq"])
+        # within one priority a job whose brief unblocks others goes first (the ruling on Q-552-3)
+        return (1, rank(j.get("priority")), 0 if j.get("unblocks") else 1, j["seq"])
 
     return sorted(waiting, key=key)
 
