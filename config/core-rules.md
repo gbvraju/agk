@@ -43,7 +43,8 @@ The numbered list that `CLAUDE.md` carried before ADR-0247, with its numbers and
 `CLAUDE.md item 2` is in `CLAUDE.md`.
 
 3. Protected paths (`config/protected-paths.txt`) change only with an ADR in the same PR that names each changed
-   path class.
+   path class, or, for a build of an Approved spec, a `Covered-by:` line naming that spec's Accepted ADR, which
+   names the class.
 4. Tests first. Every check ships with tests of the check. You never mark anything done.
 5. No secrets anywhere, ever; no network calls in checks; no new ignore entries for scanners.
 6. Dates from `date -u`. Refusal messages name the setting or path class, never a value.

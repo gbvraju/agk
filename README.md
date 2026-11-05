@@ -1,5 +1,7 @@
 # agk — Agentic Governance Kit
 
+> **AGK is an AI engineering workforce that works like a disciplined agile team: it delivers enterprise-quality products fast, with every change governed, secured and proven, and people make the decisions that matter.**
+
 AGK is a set of files and checks you install into a GitHub repository that you build with Claude Code.
 
 - **Decisions are recorded.** A change to a protected path needs an ADR in the same pull request.
