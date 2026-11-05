@@ -53,8 +53,9 @@ def outside(tmp_path: Path, name: str) -> Path:
 
 @pytest.fixture
 def where(repo, tmp_path) -> Path:
+    """`fifo` set explicitly, since amendment 117 made `priority` the default."""
     folder = outside(tmp_path, "locks")
-    settings(repo, folder)
+    settings(repo, folder, 'queue = true\nqueue_order = "fifo"\n')
     return folder
 
 
@@ -520,10 +521,8 @@ def three_jobs() -> list[dict]:
     ]
 
 
-def test_status_shows_the_fifo_queue_with_estimates_and_changes_no_file(repo, tmp_path):
+def test_status_shows_the_fifo_queue_with_estimates_and_changes_no_file(repo, where):
     """REQ-047 AC6: SPEC-0040 rule 7 (median 180 s; the running job has 120 s left)."""
-    where = outside(tmp_path, "locks")
-    settings(repo, where, 'queue = true\nqueue_order = "fifo"\n')
     box = plant_queue(where, three_jobs(), five_results())
     before = snapshot(box)
     proc = repo.run("lock.py", "status", "--name", "heavy")

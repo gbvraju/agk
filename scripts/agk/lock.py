@@ -44,7 +44,9 @@ Brief #529 (ADR-0264, SPEC-0040 build (a)): with `queue = true` in the `[locks]`
 under the lock's mutex and never taking a slot, prints `queued <ticket> position <n> of <m> (head
 <sha12>)` and returns at once; a work tree with uncommitted changes to tracked files writes nothing
 (exit 2). The job's priority is the `Priority:` line of brief N, read once with one REST GET;
-anything unreadable is `unknown`, never 0. `status` adds the order in force, the running and
+anything unreadable is `unknown`, never 0. A brief that an open brief or open pull request names in
+a `Depends-on:` line is raised one level, never to 0, with a `raised` note (amendment 117,
+ADR-0274). `status` adds the order in force, the running and
 waiting jobs with an estimated start, or `queue empty`. With the setting off, `submit`, `runner`
 and `status --ticket` exit 2 naming the setting, and everything else is as before.
 
@@ -97,6 +99,7 @@ USAGE = (
 )
 QUEUE_OFF = "the heavy-run queue is off (setting: [locks] queue)"
 PRIORITY_LINE = re.compile(r"Priority: ([0-3])")
+DEPENDS = re.compile(r"Depends-on: #(\d+)")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 STALE_MINUTES = 120
 POLL = 0.5  # seconds between two tries
@@ -709,6 +712,37 @@ def brief_priority(root: Path, number: int | None) -> int | str:
     return int(match.group(1)) if match else heavy_queue.UNKNOWN
 
 
+def unblocks(root: Path, number: int) -> list[int]:
+    """The open briefs (label `agk-brief`) and open pull requests, other than brief `number`
+    itself, with a `Depends-on: #<number>` line, read once at submission (amendment 117 to
+    SPEC-0040 rule 5, ADR-0274). A failed read is no item, so it never raises a priority."""
+    try:
+        import session  # only here, like `brief_priority`
+
+        items = session.pages(f"repos/{session.repo_name(root)}/issues?state=open")
+    except (CheckError, OSError, ValueError):
+        return []
+    found: list[int] = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict) or not isinstance(item.get("number"), int):
+            continue
+        labels = {x.get("name") for x in item.get("labels") or [] if isinstance(x, dict)}
+        body = item.get("body") if isinstance(item.get("body"), str) else ""
+        named = {int(m.group(1)) for x in body.splitlines() if (m := DEPENDS.fullmatch(x.strip()))}
+        kind_ok = "pull_request" in item or "agk-brief" in labels
+        if kind_ok and item["number"] != number and number in named:
+            found.append(item["number"])
+    return sorted(found)
+
+
+def raised(priority: int | str, blocked: list[int]) -> tuple[int | str, str | None]:
+    """One level up for a job whose brief unblocks others: 3 to 2, 2 to 1, never to 0, which stays
+    the red-default-branch brief's (Q-552-3); `unknown` and 0 and 1 stay as read (Q-552-4)."""
+    if not blocked or not isinstance(priority, int) or priority < 2:
+        return priority, None
+    return priority - 1, "raised: unblocks " + ", ".join(f"#{n}" for n in blocked)
+
+
 def enqueue(
     held: Path, name: str, job: dict, order: str, max_wait: int, now: datetime
 ) -> tuple[str, str, tuple[int, int] | None]:
@@ -755,6 +789,10 @@ def submit_job(root: Path, held: Path, options: dict, queue: dict) -> int:
         priority=brief_priority(root, options["brief"]),
         submitted=now,
     )
+    if options["brief"] is not None and isinstance(job["priority"], int):
+        job["priority"], note = raised(job["priority"], unblocks(root, options["brief"]))
+        if note:
+            job["raised"] = note
     ticket, how, place = enqueue(
         held, name, job, queue["queue_order"], queue["queue_max_wait"], now
     )

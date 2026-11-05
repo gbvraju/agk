@@ -6,7 +6,7 @@
 - Related: ADR-0262, ADR-0264, SPEC-0040, ADR-0191, ADR-0231, ADR-0254
 - Requirements: REQ-047
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `kit/` (the commented `[locks]` table of the two templates, amendment 117)
 
 ## Context
 
@@ -55,11 +55,20 @@ reserved this ADR number for brief #552 (the field note on #552).
    prints the line of build (a) as before.
 8. The runner's clock and sleep are parameters of `lock.runner`, so its tests use a fake clock and
    wait on no timer.
+9. Amendment 117 to SPEC-0040 (`docs/runs/proposed-spec-amendments-117.md`, the owner's direction
+   of 2026-11-05 in the conductor's field note on #552), applied to the spec in this pull request:
+   `queue_order` defaults to `"priority"` (`"fifo"` stays), and at `submit` a job whose brief is
+   named in a `Depends-on:` line of another open brief (label `agk-brief`) or open pull request is
+   raised one level, recording `raised: unblocks #<n>[, #<m>]` in its `raised` field. A raise never
+   reaches 0, which stays the red-default-branch brief's (Q-552-3); `unknown` is not raised and a
+   failed read raises nothing (Q-552-4). A running job is still never pre-empted, overdue jobs
+   still go first, and no gate is skipped. The kit's templates name the new default.
 
 ## Consequences
 
 With the setting on, a queued heavy run now runs, and its result for its exact head appears in
-the queue folder; `--queue` on `prepush.py` and the proof run is build (c).
+the queue folder. A project that turns the queue on without `queue_order` now gets the priority
+order, and its builds that others wait on run sooner; `queue_order = "fifo"` keeps the old order; `--queue` on `prepush.py` and the proof run is build (c).
 
 ## Residual
 
