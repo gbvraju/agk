@@ -19,11 +19,14 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
-import common
-import personal_state as ps
 import pytest
-import reviewers
-from conftest import SCRIPTS
+
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
+sys.path.insert(0, str(SCRIPTS))
+
+import common  # noqa: E402
+import personal_state as ps  # noqa: E402
+import reviewers  # noqa: E402
 
 PERSON = "demo-dev"
 ORIGIN = "https://someone@Example.com/Team/Demo-App.git"
