@@ -145,6 +145,22 @@ Without a record (a builder on a kit older than brief #374), re-run governance b
 
 A verdict in local mode that clears a head without that line clears nothing.
 
+## Tidying finished builders
+
+Each builder session gets a worktree and a branch of its own, and they stay after the pull request merges; `git branch -d`
+refuses a squash-merged branch, so removing them by hand is slow and risky. From the main clone, run:
+
+    python3 scripts/agk/session.py tidy
+
+It changes nothing: it prints `remove <path> <branch> #<pr> merged|closed` for each builder worktree or local branch whose pull
+request is merged or closed, whose tip is that pull request's last head, with no uncommitted or untracked files and no ignored file
+outside a cache folder, unchanged for an hour, not locked, not the current worktree or the main clone, and not named as running by
+a lock or queue file of `lock.py`; every other item prints `kept: <reason>`. A builder branch is the `[tidy] branch_prefix` of
+`agk.toml` followed by a number; `[tidy] min_idle_minutes` (60) and `[tidy] caches` set the rest. A failed read of GitHub keeps the item. Add `--apply` to remove exactly the listed candidates (`git worktree
+remove` without `--force`, then `git branch -D` after the tip is checked again); remote branches are never deleted, and `--json`
+prints the same as JSON. The conductor runs `tidy --apply` at its start and after each merge it makes; a builder never does.
+`doctor.py` prints `tidy: <n> finished worktrees; run session.py tidy` when more than five have piled up.
+
 ## What is lost
 
 Say it plainly to everyone working on the project:
