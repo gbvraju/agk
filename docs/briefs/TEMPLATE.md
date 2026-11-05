@@ -4,6 +4,8 @@
 
 Operating rules that apply to every item (cite constitution/principles.md by number).
 
+A test never pins its own ADR's status: a test of an ADR that the same pull request adds accepts Proposed or Accepted.
+
 ## Items
 
 ### Item 1 — Title
