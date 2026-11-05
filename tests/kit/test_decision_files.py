@@ -95,3 +95,47 @@ def test_a_spec_only_body_may_carry_decision_files_beside():
 
     assert "docs/runs/decisions/" in NONE_SHARED
     assert "docs/runs/decisions/" in NONE_RULE
+
+
+# --- fix list of 2026-11-05 on f623a77, item 3 -------------------------------------------------
+
+
+def test_check_specs_refuses_a_new_row_in_the_frozen_old_log(repo):
+    """REQ-018: SPEC-0009 rule 13 as amended (the old log is frozen; rows go to the folder)."""
+    repo.commit({LOG: HEAD + ROW_A}, "base")
+    repo.branch()
+    repo.commit({LOG: HEAD + ROW_A + ROW_B})
+    proc = repo.run("check_specs.py", "--base", "main")
+    assert proc.returncode == 1
+    assert "docs/runs/decisions-log.md" in proc.stdout and "frozen" in proc.stdout
+    assert "docs/runs/decisions/" in proc.stdout
+    repo.commit({LOG: HEAD + ROW_A, "docs/runs/decisions/2026-11-05-q-x1-2.md": ROW_B})
+    proc = repo.run("check_specs.py", "--base", "main")
+    assert proc.returncode == 0, proc.stdout
+
+
+def test_a_new_old_log_may_still_be_created(repo):
+    """REQ-018: SPEC-0001 and SPEC-0002 still create the file when it is absent."""
+    repo.commit({"README.md": "x\n"}, "base")
+    repo.branch()
+    repo.commit({LOG: HEAD})
+    proc = repo.run("check_specs.py", "--base", "main")
+    assert proc.returncode == 0, proc.stdout
+
+
+WRITERS = (
+    "CLAUDE.md",
+    ".claude/agents/architect.md",
+    "docs/guides/getting-started.md",
+    "docs/guides/product-owner.md",
+)
+
+
+def test_every_writer_of_the_log_is_pointed_to_the_folder():
+    """REQ-018: SPEC-0034 rule 19 as amended (no guidance says to append to the old log)."""
+    root = Path(__file__).resolve().parents[2]
+    for rel in WRITERS:
+        text = (root / rel).read_text(encoding="utf-8")
+        assert "docs/runs/decisions/" in text, rel
+    guide = (root / "docs/guides/getting-started.md").read_text(encoding="utf-8")
+    assert "only in `docs/runs/decisions-log.md`" not in guide

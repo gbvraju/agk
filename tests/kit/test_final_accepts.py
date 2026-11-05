@@ -89,7 +89,9 @@ def head_of(repo_) -> str:
 
 def test_a_final_accept_on_the_head_with_a_proposed_adr_passes(repo, tmp_path):
     """REQ-028: rule 3a (no status commit follows)."""
-    repo.commit({"config/reviewers.yaml": CONFIG, ADR: adr_text("Proposed")}, "reviewed")
+    repo.commit({"config/reviewers.yaml": CONFIG}, "base")
+    repo.branch()
+    repo.commit({ADR: adr_text("Proposed")}, "reviewed")
     body = fix_list(head_of(repo)[:7], ACCEPT)
     proc = repo.run("check_final_clearance.py", "--comments", str(comments_file(tmp_path, body)))
     assert proc.returncode == 0, proc.stdout + proc.stderr
@@ -98,7 +100,9 @@ def test_a_final_accept_on_the_head_with_a_proposed_adr_passes(repo, tmp_path):
 @pytest.mark.parametrize("files", [{ADR: None}, {ADR: "x"}])
 def test_a_final_accept_of_an_adr_that_is_not_proposed_at_the_head_fails(repo, tmp_path, files):
     """REQ-028: rule 3a (the ADR must be Proposed at the head; gone or other status fails)."""
-    repo.commit({"config/reviewers.yaml": CONFIG, ADR: adr_text("Proposed")}, "base")
+    repo.commit({"config/reviewers.yaml": CONFIG, "README.md": "x\n"}, "base")
+    repo.branch()
+    repo.commit({ADR: adr_text("Proposed")}, "added")
     accepted = {k: (adr_text("Accepted") if v == "x" else v) for k, v in files.items()}
     repo.commit(accepted, "reviewed")
     body = fix_list(head_of(repo)[:7], ACCEPT)
@@ -118,9 +122,12 @@ def test_a_final_accept_by_an_unlisted_author_is_not_read(repo, tmp_path):
 # --- check_adrs.py -----------------------------------------------------------------------------
 
 
-def accepted_on_main(repo_) -> None:
+RECORD = "Example (#7)\n\nADR-0001 Accepted (Final 42)\nMerged-by: merge_cleared.py\n"
+
+
+def accepted_on_main(repo_, message: str = RECORD) -> None:
     repo_.commit({ADR: adr_text("Proposed")}, "base")
-    repo_.commit({"README.md": "x\n"}, "Example (#7)\n\nADR-0001 Accepted (Final 42)\n")
+    repo_.commit({"README.md": "x\n"}, message)
     repo_.branch()
 
 
@@ -165,10 +172,14 @@ def contents(status: str) -> dict:
     return {"type": "file", "encoding": "base64", "content": raw}
 
 
-def merge_run(tmp_path, body: str, status: str = "Proposed"):
+ADR_FILE = {"filename": ADR, "status": "added", "patch": "+x"}
+
+
+def merge_run(tmp_path, body: str, status: str = "Proposed", files=None, later=()):
     root = repo(tmp_path, toml(ON), None, PEOPLE)
     verdict = comment(body, CONDUCTOR, at=5, cid=6649)
-    bin_dir, log = fake_gh(tmp_path, comments=[verdict], contents={ADR: contents(status)})
+    saved = {"contents": {ADR: contents(status)}, "files": files or [ADR_FILE]}
+    bin_dir, log = fake_gh(tmp_path, comments=[verdict, *later], **saved)
     proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD)
     return proc, calls(log)
 
@@ -178,7 +189,8 @@ def test_a_final_accept_on_the_head_merges_with_the_acceptance_in_the_squash_mes
     proc, made = merge_run(tmp_path, fix_list(HEAD, ACCEPT))
     assert one_line(proc) == f"merge-cleared #7 {SHA12}: merged {MERGE12}"
     put = [c for c in made if "PUT" in c]
-    assert put == [merge_call() + ["-f", "commit_message=ADR-0001 Accepted (Final 6649)"]]
+    message = "ADR-0001 Accepted (Final 6649)\nMerged-by: merge_cleared.py"
+    assert put == [merge_call() + ["-f", f"commit_message={message}"]]
     assert [f"repos/{REPO}/contents/{ADR}?ref={HEAD}" in c for c in made].count(True) == 1
 
 
@@ -217,3 +229,170 @@ def test_a_head_merged_under_a_final_accept_counts_as_cleared():
 class _NoRecord(dict):
     def get(self, *_args, **_kwargs):  # the commit record of SPEC-0021 rule 7 is unreadable
         return None
+
+
+# --- fix list of 2026-11-05 on f623a77 (brief #557) --------------------------------------------
+# Item 1: a Final accepts only an ADR the pull request adds or changes, never a stack-options ADR,
+# and a newer fix list hides an older accept. Item 2: the facts, the drift audit and the release
+# read the acceptance. Item 4: the record line counts only in a first-parent squash commit that
+# merge_cleared.py made, and the facts check its comment id against the pull request's comment.
+
+
+def test_a_stack_options_adr_is_never_accepted_by_a_final_line_alone():
+    """REQ-028: rule 3a (a stack ADR needs Chosen and Accepted in one commit, rule 3)."""
+    from common import final_accepts
+
+    stack = "docs/adr/0001-stack-options.md"
+    assert final_accepts([(stack, None, "Proposed", "Accepted")]) is None
+    both = [(ADR, None, "Proposed", "Accepted"), (stack, None, "Proposed", "Accepted")]
+    assert final_accepts(both) is None
+
+
+def test_a_final_accepting_an_adr_the_pull_request_does_not_change_fails(repo, tmp_path):
+    """REQ-028: rule 3a (another pull request's Proposed ADR, waiting on main, is not accepted)."""
+    repo.commit({"config/reviewers.yaml": CONFIG, ADR: adr_text("Proposed")}, "base")
+    repo.branch()
+    repo.commit({"README.md": "unrelated\n"}, "reviewed")
+    body = fix_list(head_of(repo)[:7], ACCEPT)
+    proc = repo.run("check_final_clearance.py", "--comments", str(comments_file(tmp_path, body)))
+    assert proc.returncode == 1
+    assert "rule 3a" in proc.stdout and "does not change" in proc.stdout
+
+
+def test_merge_cleared_holds_a_final_accepting_an_adr_the_pull_request_does_not_change(tmp_path):
+    """REQ-046: SPEC-0039 rule 3 as amended (each Final path is among the pull request's files)."""
+    other = [{"filename": "docs/runs/notes.md", "status": "modified", "patch": "+x"}]
+    proc, made = merge_run(tmp_path, fix_list(HEAD, ACCEPT), files=other)
+    line = one_line(proc)
+    assert line.startswith(f"merge-cleared #7 {SHA12}: held: "), line
+    assert "rule 3" in line
+    assert [c for c in made if "PUT" in c] == []
+
+
+def test_a_newer_fix_list_after_an_accept_holds_and_does_not_count_as_cleared(tmp_path):
+    """REQ-046: rule 3 (the latest verdict decides; an older accept is hidden by a newer list)."""
+    newer = comment(f"Verdict: fix list {HEAD}\n\n1. one more item\n", CONDUCTOR, at=9, cid=6650)
+    proc, made = merge_run(tmp_path, fix_list(HEAD, ACCEPT), later=[newer])
+    assert one_line(proc).startswith(f"merge-cleared #7 {SHA12}: held: ")
+    assert [c for c in made if "PUT" in c] == []
+    from metrics import merged_head_cleared
+
+    accept = {"body": fix_list(HEAD, ACCEPT), "created_at": "t1", "user": {"login": "reviewer"}}
+    later = {**accept, "body": newer["body"], "created_at": "t2"}
+    assert merged_head_cleared(_NoRecord(), HEAD, [accept, later], ["reviewer"]) != "yes"
+
+
+# --- item 4: the record line ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Example (#7)\n\nADR-0001 Accepted (Final 42)\n",  # no line of merge_cleared.py
+        "Example\n\nADR-0001 Accepted (Final 42)\nMerged-by: merge_cleared.py\n",  # no (#n)
+    ],
+)
+def test_a_record_line_outside_a_merge_cleared_squash_commit_is_not_read(repo, message):
+    """REQ-028: rule 3a (only merge_cleared.py's squash commit carries the record)."""
+    accepted_on_main(repo, message)
+    assert repo.run("check_adrs.py", "--pending").stdout == ""
+    repo.commit({ADR: adr_text("Proposed", body="changed")})
+    assert repo.run("check_adrs.py", "--base", "main").returncode == 0
+
+
+def test_a_record_line_off_the_first_parent_line_is_not_read(repo):
+    """REQ-028: rule 3a (a commit merged in from a side branch, or a merge commit, is not one)."""
+    repo.commit({ADR: adr_text("Proposed")}, "base")
+    repo.branch("side")
+    repo.commit({"README.md": "x\n"}, RECORD)
+    repo.git("checkout", "-q", "main")
+    repo.commit({"other.md": "y\n"}, "main moves")
+    repo.git("merge", "-q", "--no-ff", "-m", RECORD, "side")
+    from check_adrs import accepted_by_final
+
+    assert accepted_by_final(repo.root, "HEAD") == set()
+
+
+def test_the_record_names_its_pull_request_and_comment(repo):
+    """REQ-028: rule 3a (`final_records` gives the pull request and the Final comment id)."""
+    accepted_on_main(repo)
+    from check_adrs import final_records
+
+    assert final_records(repo.root, "HEAD") == {"0001": (7, 42)}
+
+
+def remote_comment(pr: int = 7, login: str = "reviewer", body: str | None = None) -> dict:
+    return {
+        "id": 42,
+        "issue_url": f"https://api.example.com/repos/example-owner/example-repo/issues/{pr}",
+        "user": {"login": login},
+        "body": fix_list("a1b2c3d", ACCEPT) if body is None else body,
+    }
+
+
+def test_the_record_is_verified_against_the_comment_on_its_pull_request():
+    """REQ-028: rule 3a (a copied message cannot accept an ADR)."""
+    from check_adrs import final_record_verified
+
+    record = (7, 42)
+    assert final_record_verified(ADR, record, remote_comment(), ["reviewer"])
+    assert not final_record_verified(ADR, record, remote_comment(pr=8), ["reviewer"])
+    assert not final_record_verified(ADR, record, remote_comment(login="other"), ["reviewer"])
+    other_adr = fix_list("a1b2c3d", "Final: docs/adr/0002-y.md Proposed -> Accepted")
+    assert not final_record_verified(ADR, record, remote_comment(body=other_adr), ["reviewer"])
+    assert not final_record_verified(ADR, record, None, ["reviewer"])
+    assert not final_record_verified(ADR, record, {**remote_comment(), "id": 43}, ["reviewer"])
+
+
+# --- item 2: the facts, the drift audit and the release ----------------------------------------
+
+
+def api_dir(tmp_path: Path, item: dict | None) -> Path:
+    folder = tmp_path / "api"
+    folder.mkdir()
+    if item is not None:
+        (folder / "comment-42.json").write_text(json.dumps(item), encoding="utf-8")
+    return folder
+
+
+@pytest.mark.parametrize(
+    ("item", "status"),
+    [
+        (remote_comment(), "Accepted"),
+        (remote_comment(pr=8), "Proposed"),  # a copied message: the comment is on another PR
+        (None, "Proposed"),  # the comment cannot be read: fail closed
+    ],
+)
+def test_facts_take_an_adrs_status_from_its_verified_final_record(repo, tmp_path, item, status):
+    """REQ-028: rule 3a (the owner's inbox and the questions read the acceptance)."""
+    import facts
+    import metrics
+
+    accepted_on_main(repo)
+    src = metrics.ApiDir(api_dir(tmp_path, item))
+    accepted = facts.final_accepted(repo.root, src, ["reviewer"])
+    records = facts.adr_records(repo.root, accepted)
+    assert [r["status"] for r in records if r["id"] == "ADR-0001"] == [status]
+
+
+def test_facts_without_a_source_keep_the_files_status(repo):
+    """REQ-028: rule 3a (no GitHub, nothing verified: the file's status stands)."""
+    import facts
+
+    accepted_on_main(repo)
+    assert facts.final_accepted(repo.root, None, ["reviewer"]) == set()
+
+
+def test_the_drift_audit_raises_no_stale_proposed_finding_for_a_recorded_adr(repo):
+    """REQ-028: rule 3a (D3 does not report an ADR the default branch records as accepted)."""
+    from datetime import date
+
+    import drift_audit
+
+    accepted_on_main(repo)
+    late = date(2027, 1, 1)
+    assert [f for f in drift_audit.d3(repo.root, "HEAD", late) if f.subject == ADR] == []
+    repo.git("checkout", "-q", "main")
+    repo.commit({"docs/adr/0002-y.md": adr_text("Proposed").replace("0001", "0002")})
+    paths = [f.subject for f in drift_audit.d3(repo.root, "HEAD", late)]
+    assert "docs/adr/0002-y.md" in paths and ADR not in paths

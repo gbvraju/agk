@@ -208,3 +208,56 @@ def test_ac5_the_pull_request_that_adds_the_check_is_not_checked_by_it(repo):
     put(repo, "scripts/agk/check_release.py", "# added by this pull request\n")
     proc = check(repo)
     assert (proc.returncode, proc.stdout) == (0, "ok release\n"), proc.stdout
+
+
+# --- brief #557 fix list item 2: the release flips each ADR accepted by a Final line -----------
+
+ADR = "docs/adr/0001-x.md"
+RECORD = "Example (#7)\n\nADR-0001 Accepted (Final 42)\nMerged-by: merge_cleared.py\n"
+
+
+def adr(status: str) -> str:
+    return f"# ADR-0001: x\n\n- Status: {status}\n- Date: 2026-11-05\n\n## Decision\n\nd\n"
+
+
+def recorded(root: Path, message: str = RECORD) -> None:
+    put(root, ADR, adr("Proposed"))
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", message)
+
+
+def test_a_release_fails_while_an_adr_accepted_by_a_final_still_says_proposed(repo):
+    """REQ-028: SPEC-0021 rule 3a and SPEC-0028 rule 5 as amended (the flip is a release step)."""
+    recorded(repo)
+    release(repo)
+    proc = check(repo)
+    failed(proc, "docs/adr/")
+    assert "Proposed" in proc.stdout
+
+
+def test_a_release_that_flips_the_status_line_of_each_recorded_adr_passes(repo):
+    """REQ-028: SPEC-0028 rules 4 and 5 as amended (the Status line only, Proposed to Accepted)."""
+    recorded(repo)
+    release(repo)
+    put(repo, ADR, adr("Accepted"))
+    proc = check(repo)
+    assert (proc.returncode, proc.stdout) == (0, "ok release\n"), proc.stdout
+
+
+def test_a_release_may_not_change_an_adr_beyond_its_status_line_or_an_unrecorded_one(repo):
+    """REQ-028: SPEC-0028 rule 5 as amended (no other ADR change rides on a release)."""
+    recorded(repo)
+    release(repo)
+    put(repo, ADR, adr("Accepted").replace("\nd\n", "\nchanged\n"))
+    failed(check(repo), ADR)
+    put(repo, ADR, adr("Accepted"))
+    put(repo, "docs/adr/0002-y.md", adr("Accepted").replace("0001", "0002"))
+    failed(check(repo), "docs/adr/0002-y.md")
+
+
+def test_an_unread_record_asks_no_flip(repo):
+    """REQ-028: rule 3a (a record line outside a merge_cleared.py squash commit is not read)."""
+    recorded(repo, "Example\n\nADR-0001 Accepted (Final 42)\n")
+    release(repo)
+    proc = check(repo)
+    assert (proc.returncode, proc.stdout) == (0, "ok release\n"), proc.stdout

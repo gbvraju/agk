@@ -804,12 +804,20 @@ def check_with(repo, ids):
 LOG = "docs/runs/decisions-log.md"
 
 
-def test_ac1_c2_rows_added_to_the_decisions_log_are_allowed(repo):
-    """Brief #176 (e) 2: the rulings of the intake's questions are recorded before it flips."""
+def test_ac1_c2_a_decision_file_added_beside_the_intake_is_allowed(repo):
+    """Brief #176 (e) 2, brief #557 fix list item 3: the rulings of the intake's questions are
+    recorded before it flips, one file each under docs/runs/decisions/."""
     draft(repo)
-    write(repo, LOG, "| 2026-10-25 | Q-S0014-1 ruled: yes |\n", "a")
+    write(repo, "docs/runs/decisions/2026-10-25-q-s0014-1.md", "| 2026-10-25 | Q-S0014-1 ruled |\n")
     proc = check(repo)
     assert (proc.returncode, proc.stdout) == (0, "ok intake\n"), proc.stdout
+
+
+def test_ac1_c2_rows_added_to_the_frozen_old_log_fail(repo):
+    """Brief #557 fix list item 3: the old decisions log is frozen at its length."""
+    draft(repo)
+    write(repo, LOG, "| 2026-10-25 | Q-S0014-1 ruled: yes |\n", "a")
+    failed(repo, "C2")
 
 
 @pytest.mark.parametrize("how", ["changed", "removed"])
