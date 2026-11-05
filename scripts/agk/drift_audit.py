@@ -11,11 +11,18 @@ brief 449, ADR-0240). The mutation command reads `AGK_CHANGED_FILES`, a file out
 listing the code files changed on the default branch in the window, removed after the run.
 `--previous FILE` is the body of the open audit issue, from which the coverage and mutation changes
 are computed.
+
+D1 exempts the release files of a valid release commit, as the per-pull-request check exempts a
+valid release pull request (SPEC-0004 rule 6 as amended by amendment 121, brief 594, ADR-0291): the
+kit-only `check_release.valid_release` judges the commit's release part at its parent, in a
+temporary shared clone outside the checkout that is removed after the run, with the Final comments
+of `--comments FILE` (without them while the parent holds a record, no exemption).
 """
 
 from __future__ import annotations
 
 import fnmatch
+import os
 import re
 import shlex
 import sys
@@ -52,7 +59,7 @@ from common import (
 NAME = "drift-audit"
 USAGE = (
     "usage: drift_audit.py [--today YYYY-MM-DD] [--branch NAME] [--open-issues 'N N'] "
-    "[--previous FILE] [--print-action | --print-title]"
+    "[--previous FILE] [--comments FILE] [--print-action | --print-title]"
 )
 WINDOW_DAYS = 7
 STALE_DAYS = 14
@@ -209,8 +216,102 @@ def covered(
     return False
 
 
-def d1(root: Path, ref: str, today: date) -> list[Finding]:
+class Releases:
+    """Judges the release part of a commit at its parent with the kit-only release check
+    (amendment 121). The part is the commit's changes to the release files of SPEC-0028 rule 4:
+    the five files, the deleted fragments and the edits of `docs/adr/` (Status flips). It is laid
+    on the parent in one temporary shared clone outside the checkout, removed by `close`."""
+
+    def __init__(self, root: Path, comments: list[dict] | None) -> None:
+        self.root, self.comments = root, comments
+        self.work: tempfile.TemporaryDirectory | None = None
+        try:
+            import check_release  # noqa: PLC0415 - kit-only, absent from an installed copy
+        except ImportError:
+            check_release = None
+        self.check = check_release
+
+    def part(self, sha: str, parent: str, changes: dict[str, str]) -> list[str]:
+        """The release paths of the commit, or [] when it raises no `version` in agk.toml."""
+        if self.check is None or "agk.toml" not in changes:
+            return []
+        old = self.check.toml_version(show(self.root, parent, "agk.toml"))
+        new = self.check.toml_version(show(self.root, sha, "agk.toml"))
+        if old is None or new is None or old == new:
+            return []
+        frags = self.check.FRAG_DIR
+        return sorted(
+            path
+            for path, status in changes.items()
+            if path in self.check.ALLOWED
+            or (path.startswith(frags) and status == "D")
+            or (path.startswith("docs/adr/") and status == "M")
+        )
+
+    def clone(self) -> Path:
+        if self.work is None:
+            self.work = tempfile.TemporaryDirectory(prefix="agk-drift-release-")
+            target = Path(self.work.name) / "repo"
+            git(self.root, "clone", "-q", "--shared", "--no-checkout", str(self.root), str(target))
+        return Path(self.work.name) / "repo"
+
+    def exempt(self, sha: str, parent: str, changes: dict[str, str]) -> set[str]:
+        """The release paths of a valid release commit, else the empty set."""
+        paths = self.part(sha, parent, changes)
+        if not paths:
+            return set()
+        copy = self.clone()
+        git(copy, "-c", "advice.detachedHead=false", "checkout", "-q", "-f", "--detach", parent)
+        git(copy, "reset", "-q", "--hard")
+        git(copy, "clean", "-q", "-f", "-d", "-x")
+        kept = [p for p in paths if changes[p] != "D"]
+        gone = [p for p in paths if changes[p] == "D"]
+        if kept:
+            git(copy, "checkout", "-q", sha, "--", *kept)
+        if gone:
+            git(copy, "rm", "-q", "--", *gone)
+        saved = os.environ.get("AGK_BASE")
+        os.environ["AGK_BASE"] = parent  # the release check reads its base from the environment
+        try:
+            valid = self.check.valid_release(copy, parent, self.comments)
+        finally:
+            if saved is None:
+                os.environ.pop("AGK_BASE", None)
+            else:
+                os.environ["AGK_BASE"] = saved
+        return set(paths) if valid else set()
+
+    def close(self) -> None:
+        if self.work is not None:
+            self.work.cleanup()
+            self.work = None
+
+
+def read_comments(path: str | None) -> list[dict] | None:
+    """The Final comments of FILE for the release check, or None (no file, an unreadable one,
+    or an installed copy without the reader: then no release is exempt while a record exists)."""
+    if path is None:
+        return None
+    try:
+        import check_adrs  # noqa: PLC0415 - the reader of the release check's comments
+
+        return check_adrs.read_comments(path)
+    except (ImportError, CheckError, OSError, ValueError):
+        return None
+
+
+def d1(root: Path, ref: str, today: date, comments: list[dict] | None = None) -> list[Finding]:
     since = today - timedelta(days=WINDOW_DAYS)
+    found = []
+    releases = Releases(root, comments)
+    try:
+        found = d1_commits(root, ref, since, today, releases)
+    finally:
+        releases.close()
+    return found
+
+
+def d1_commits(root: Path, ref: str, since: date, today: date, releases: Releases) -> list[Finding]:
     found = []
     log = git(root, "log", "--first-parent", "--format=%H%x1f%P%x1f%cI", ref)
     for line in log.splitlines():
@@ -221,6 +322,11 @@ def d1(root: Path, ref: str, today: date) -> list[Finding]:
         parent = parents.split()[0] if parents.strip() else None
         changes = commit_changes(root, sha, parent)
         classes = touched_classes(root, sha, parent, changes)
+        if classes and parent is not None:
+            exempt = releases.exempt(sha, parent, changes)
+            if exempt:
+                rest = {p: s for p, s in changes.items() if p not in exempt}
+                classes = touched_classes(root, sha, parent, rest)
         if classes and not covered(root, sha, parent, changes, classes):
             found += [
                 Finding(
@@ -641,10 +747,14 @@ def d9(
 
 
 def audit(
-    root: Path, today: date, branch: str | None, open_issues: Sequence[int]
+    root: Path,
+    today: date,
+    branch: str | None,
+    open_issues: Sequence[int],
+    comments: list[dict] | None = None,
 ) -> tuple[list[Finding], int]:
     ref = resolve_ref(root, branch or load_config(root)["default_branch"])
-    found = d1(root, ref, today) + d2(root) + d3(root, ref, today)
+    found = d1(root, ref, today, comments) + d2(root) + d3(root, ref, today)
     documents, undated = d4_documents(root, today)
     found += documents + d4_register(root, today) + d5(root) + d7(root) + d8(root)
     if len(open_issues) > 1:
@@ -679,12 +789,22 @@ def read_previous(path: str | None) -> str | None:
         return None
 
 
+VALUE_OPTIONS = ("--today", "--branch", "--open-issues", "--previous", "--comments")
+
+
 def parse_args(args: list[str]) -> dict | None:
-    options: dict = {"today": None, "branch": None, "open": [], "mode": "report", "previous": None}
+    options: dict = {
+        "today": None,
+        "branch": None,
+        "open": [],
+        "mode": "report",
+        "previous": None,
+        "comments": None,
+    }
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in ("--today", "--branch", "--open-issues", "--previous") and i + 1 < len(args):
+        if arg in VALUE_OPTIONS and i + 1 < len(args):
             value = args[i + 1]
             if arg == "--today":
                 if parse_date(value) is None:
@@ -694,6 +814,8 @@ def parse_args(args: list[str]) -> dict | None:
                 options["branch"] = value
             elif arg == "--previous":
                 options["previous"] = value
+            elif arg == "--comments":
+                options["comments"] = value
             else:
                 tokens = value.replace(",", " ").split()
                 if not all(t.isdigit() for t in tokens):
@@ -718,7 +840,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"agk drift audit {today}")
         return 0
     root = repo_root()
-    found, undated = audit(root, today, options["branch"], options["open"])
+    comments = read_comments(options["comments"])
+    found, undated = audit(root, today, options["branch"], options["open"], comments)
     if options["mode"] == "action":
         # a set command always gives the report one D9 finding, so the action needs no run of it
         print(choose_action(options["open"], bool(found) or bool(command_settings(root))))

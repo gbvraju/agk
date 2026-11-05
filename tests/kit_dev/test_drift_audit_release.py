@@ -133,7 +133,7 @@ def test_ac1_another_file_of_a_release_class_keeps_that_class_a_finding(repo):
 
 
 def test_ac1_an_invalid_release_gives_d1_as_today(repo):
-    """REQ-011 AC1: rule 6: the three versions differ, so it is no release and every class counts."""
+    """REQ-011 AC1: rule 6: the three versions differ, so it is no release: every class counts."""
     sha = release(repo, manifest="1.0.5")
     assert d1(repo) == [(sha[:12], c) for c in RELEASE_CLASSES]
 
