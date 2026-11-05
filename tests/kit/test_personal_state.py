@@ -19,12 +19,11 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
-import pytest
-from conftest import SCRIPTS
-
 import common
 import personal_state as ps
+import pytest
 import reviewers
+from conftest import SCRIPTS
 
 PERSON = "demo-dev"
 ORIGIN = "https://someone@Example.com/Team/Demo-App.git"
@@ -125,7 +124,11 @@ def write_toml(root: Path, text: str) -> Path:
 def test_rule1_only_forge_files_is_accepted_in_a_sidecar(tmp_path):
     """REQ-048 AC1: rule 1 (`files` accepted; `github`, absent and malformed refused)."""
     ok = write_toml(tmp_path / "ok", '[personal]\nforge = "files"\n')
-    assert common.personal_table(ok) == {"forge": "files", "level": "light", "ai_disclosure": "both"}
+    assert common.personal_table(ok) == {
+        "forge": "files",
+        "level": "light",
+        "ai_disclosure": "both",
+    }
     for name, text in (
         ("github", '[personal]\nforge = "github"\n'),
         ("absent", '[personal]\nlevel = "light"\n'),
