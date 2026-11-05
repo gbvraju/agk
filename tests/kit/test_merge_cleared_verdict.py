@@ -246,6 +246,10 @@ elif parts == ['issues']:
 elif parts[0] == 'commits' and parts[2:] == ['check-runs']:
     runs = paged(data['runs'])
     out = {'total_count': len(data['runs']), 'check_runs': runs}
+elif parts[0] == 'commits' and parts[2:] == ['status']:  # the combined status (brief #569)
+    statuses = data.get('statuses', [])
+    state = data.get('status_state') or ('success' if statuses else 'pending')
+    out = {'state': state, 'total_count': len(statuses), 'statuses': paged(statuses)}
 elif parts[0] in ('issues', 'pulls') and len(parts) == 2 and parts[1] in data['items']:
     item = data['items'][parts[1]]
     if parts[0] == 'pulls' and 'pull' in item:
@@ -728,6 +732,7 @@ def test_the_reads_are_rest_gets_as_argument_lists_with_no_jq(tmp_path):
         ["api", "--method", "GET", f"repos/{REPO}/issues/7/comments?per_page=100&page=1"],
         ["api", "--method", "GET", f"repos/{REPO}/issues?state=open&per_page=100&page=1"],
         ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100&page=1"],
+        ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/status?per_page=100&page=1"],
         ["api", "--method", "GET", f"repos/{REPO}/pulls/7/files?per_page=100&page=1"],
         merge_call(),
         made[-1],
