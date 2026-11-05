@@ -1,6 +1,7 @@
 """The fast checks before a push (brief #326, ADR-0186).
 
     python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE]
+        [--queue]
 
 Runs, in order, the checks CI would fail a pull request on first, and stops at the first failure
 with that step's own output:
@@ -54,6 +55,13 @@ repository (one outside is written `<outside>/<name>`, the interpreter `python3`
 still writes it. Then it prints one line for the pull request body:
 `Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>`. A record
 file that cannot be written exits 2.
+
+Brief #566 (SPEC-0040 build (c), rule 9): with `[locks] queue = true`, `--record FILE --queue`
+runs no step here: it submits the same command without `--queue`, with the body and record paths
+made absolute, as one heavy job of kind `prepush` (`lock.py submit`, with `--brief` from the
+body's `Brief: #n` line and the session from `AGK_SESSION`), prints the `queued` line and returns
+at once. `--queue` with the setting off, without `--record`, or with `--quick` (never queued)
+exits 2 naming the setting or the option.
 """
 
 from __future__ import annotations
@@ -91,7 +99,9 @@ from impact import Impact, Selected, impact
 from proof import area_command, execute, is_test_file, timeout_note
 
 HERE = Path(__file__).resolve().parent
-USAGE = "usage: prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE]"
+USAGE = (
+    "usage: prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE] [--queue]"
+)
 SCHEMA = 1
 LOCK = "heavy"
 OWN = "the pull request's own test files (the proof plan)"
@@ -135,7 +145,9 @@ class Ran:
 
 
 def parse_args(args: list[str]) -> dict:
-    options: dict = {"body": None, "base": None, "quick": False, "lock": True, "record": None}
+    options: dict = {
+        "body": None, "base": None, "quick": False, "lock": True, "record": None, "queue": False
+    }  # fmt: skip
     i = 0
     while i < len(args):
         arg = args[i]
@@ -148,9 +160,36 @@ def parse_args(args: list[str]) -> dict:
         elif arg == "--no-lock":
             options["lock"] = False
             i += 1
+        elif arg == "--queue":
+            options["queue"] = True
+            i += 1
         else:
             raise Usage(USAGE)
     return options
+
+
+def queued(options: dict) -> int:
+    """`--queue` (SPEC-0040 rule 9): hand the run to the heavy queue and run no step here."""
+    if options["quick"]:
+        print("prepush: --quick is never queued; run it here (option: --quick)", file=sys.stderr)
+        return 2
+    if not options["record"]:
+        print(
+            "prepush: --queue needs --record FILE, since a queued run without a record leaves"
+            " no evidence (option: --record)",
+            file=sys.stderr,
+        )
+        return 2
+    if options["body"] and not Path(options["body"]).is_file():
+        print("prepush: the body file cannot be read (option: --body)")
+        return 2
+    args: list[str] = []
+    for key in ("body", "base", "record"):
+        if options[key]:
+            value = options[key] if key == "base" else os.path.abspath(options[key])
+            args += [f"--{key}", value]
+    args += [] if options["lock"] else ["--no-lock"]
+    return heavy_lock.queue_self("prepush.py", "prepush", Path(__file__), args, options["body"])
 
 
 def run(cmd: list[str], cwd: Path, env: dict | None = None) -> tuple[int, str]:
@@ -615,6 +654,8 @@ def main(argv: list[str] | None = None) -> int:
     except Usage as exc:
         print(exc, file=sys.stderr)
         return 2
+    if options["queue"]:
+        return queued(options)
     code, top = run(["git", "rev-parse", "--show-toplevel"], Path.cwd())
     if code != 0:
         print("prepush: not inside a git work tree (path class: root)")
