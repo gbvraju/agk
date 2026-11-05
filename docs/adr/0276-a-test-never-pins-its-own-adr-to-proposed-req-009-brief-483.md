@@ -1,6 +1,6 @@
 # ADR-0276: A test never pins its own ADR to Proposed (REQ-009, brief 483)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: ADR-0250
