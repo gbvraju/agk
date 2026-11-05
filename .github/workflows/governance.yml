@@ -184,8 +184,9 @@ jobs:
             gh api --paginate --method GET "repos/${{ github.repository }}/pulls?state=open&per_page=100" --jq ".[] | select(.user.login == \"$PR_AUTHOR\") | {number: .number}" > "$RUNNER_TEMP/open-prs.json"
           fi
       - name: check_protected_changes
-        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
-        run: python scripts/agk/check_protected_changes.py
+        # Reads the body's `Covered-by:` line (brief #545, ADR-0271), so it runs on an edited description too.
+        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
+        run: python scripts/agk/check_protected_changes.py --body "$RUNNER_TEMP/pr-body.md"
       - name: check_requirements
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_requirements.py

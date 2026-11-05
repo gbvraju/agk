@@ -8,7 +8,8 @@ with that step's own output:
 1. `pr-body`: `check_pr_body.py --draft false FILE`, when `--body FILE` is given;
 2. `lint`: `make lint`, when the project's Makefile has a `lint` target;
 3. `governance`: `make -f agk.mk agk-governance` with `AGK_BASE` set to the base (the governance
-   checks that need no network);
+   checks that need no network), and `AGK_PR_BODY` set to the body file when `--body` is given, so
+   that `check_protected_changes.py` reads its `Covered-by:` line (brief #545, ADR-0271);
 4. `secret-scan`: gitleaks over the branch's commits (merge base to `HEAD`), when installed;
 5. `tests`: each run of `test_plan.py` (the plan proof runs), its command in its folder; `--quick`
    skips this step. With a `[testing]` table (brief #417, ADR-0227) it then runs the regression
@@ -244,12 +245,14 @@ def missing_tool(code: int | None, output: str) -> str | None:
     return tool_name(echoed[-1].split()[0]) if echoed else None
 
 
-def governance(root: Path, base: str) -> Step:
+def governance(root: Path, base: str, body: Path | None = None) -> Step:
     if not (root / "agk.mk").is_file():
         return Step("FAIL", "agk.mk is missing; governance cannot run (path class: agk.mk)")
     if shutil.which("make") is None:
         return Step("skipped", "governance: not run (make is not installed)", not_run=True)
     env = {**os.environ, "AGK_BASE": base}
+    if body is not None:  # the body's `Covered-by:` line (brief #545, ADR-0271)
+        env["AGK_PR_BODY"] = str(body.resolve())
     return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
 
 
@@ -648,7 +651,7 @@ def main(argv: list[str] | None = None) -> int:
     steps: list[tuple[str, Callable[[], Step]]] = [
         ("pr-body", lambda: pr_body(root, body)),
         ("lint", lambda: lint(root)),
-        ("governance", lambda: governance(root, base)),
+        ("governance", lambda: governance(root, base, body)),
         ("secret-scan", lambda: secret_scan(root, mb)),
         ("tests", lambda: tests(root, mb, options["quick"], options["lock"])),
     ]
