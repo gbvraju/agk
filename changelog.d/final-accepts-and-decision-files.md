@@ -1,0 +1,1 @@
+- A covered `Final:` that accepts an ADR on the full head is the acceptance: no status commit follows, `merge_cleared.py` merges with `ADR-nnnn Accepted (Final <id>)` in the squash message, and `check_adrs.py --pending` lists the flips for the release; decisions-log rows may go one per file in `docs/runs/decisions/` (brief #557, ADR-0277 Proposed)

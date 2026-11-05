@@ -21,8 +21,8 @@ the squash method, and prints one line:
 and exit 4 when GitHub cannot answer one read five times in a row. A reason names a rule, a
 setting or a path class, never a value. Standard library only; every `gh` call is an argument list
 with no shell and no jq filter, and the JSON is read here. A covered fix list on exactly the head
-whose every `Final:` line accepts an ADR clears it too (SPEC-0021 rule 3a, brief 557): each named ADR
-is read at the head and must be `Proposed`, and the squash message carries one line
+whose every `Final:` line accepts an ADR clears it too (SPEC-0021 rule 3a, brief 557): each named
+ADR is read at the head and must be `Proposed`, and the squash message carries one line
 `ADR-nnnn Accepted (Final <comment id>)` per ADR. The governance run after the merge, the
 red-branch stop and the record line are build (c).
 """

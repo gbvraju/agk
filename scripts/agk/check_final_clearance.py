@@ -10,7 +10,8 @@ of a stack ADR fails saying that line is set by an ordinary commit, brief 274); 
 commits past the reviewed sha (counted on the first-parent line) fails (SPEC-0030 rule 7).
 A covered fix list whose sha is the head and whose every `Final:` line accepts an ADR is the
 acceptance itself (rule 3a, brief 557): each named ADR must be `Proposed` at the head, and no status
-commit follows. Anything else passes unchecked. With `review_mode = "solo"` in agk.toml the one listed person's
+commit follows.
+Anything else passes unchecked. With `review_mode = "solo"` in agk.toml the one listed person's
 confirmation counts as its verdict and its `Approve:` lines (brief 277,
 `reviewers.confirmed_comments`). Without
 `--comments` it prints `skipped (no comments file)` and passes. With two or more listed
@@ -27,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+from check_adrs import status_of
 from common import (
     CheckError,
     agent_apps,
@@ -38,7 +40,6 @@ from common import (
     run,
     show,
 )
-from check_adrs import status_of
 from metrics import counted_authors, latest_verdict_body
 from reviewers import (
     confirmed_comments,

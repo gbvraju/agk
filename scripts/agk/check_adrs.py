@@ -48,13 +48,13 @@ def status_of(text: str) -> str | None:
 
 
 def accepted_by_final(root: Path, ref: str) -> set[str]:
-    """The ADR numbers that a `ADR-nnnn Accepted (Final <id>)` message line in REF's history names."""
+    """The ADR numbers named by an `ADR-nnnn Accepted (Final <id>)` line in REF's history."""
     text = git(root, "log", "--format=%B", "--fixed-strings", "--grep", "Accepted (Final ", ref)
     return {m.group(1) for ln in text.splitlines() if (m := FINAL_ACCEPT.fullmatch(ln.strip()))}
 
 
 def pending(root: Path, files: list[Path]) -> int:
-    """Print each ADR accepted by a Final line whose file still says Proposed (the release flips)."""
+    """Print each ADR accepted by a Final line whose file still says Proposed (release flips)."""
     recorded = accepted_by_final(root, "HEAD")
     for p in files:
         m = FILE_RE.match(p.name)

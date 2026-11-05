@@ -26,6 +26,11 @@ workflow fetches the pull request's comments with a read-only GET using the perm
 3. **The covered commit.** The head of the pull request is *cleared in advance* when its only parent starts with the reviewed sha of the latest covered fix list (a verdict later than every other verdict by
    listed authors), and the difference from that parent to the head is exactly the named status lines: one file per distinct `<path>`, and in each file one removed and one added line, `- Status: <old>` and
    `- Status: <new>` (rule 2), for each named section, and no other hunk, no other file and no mode or rename change. A head that is the reviewed sha itself, or two or more commits after it, is not covered.
+3a. **A Final line that accepts an ADR** (amendment 118, ADR-0277, brief 557). When the latest covered fix list names the head itself and every `Final:` line is
+   `docs/adr/<file> Proposed -> Accepted`, the comment is the ADR's acceptance and no status commit follows: `check_final_clearance.py` fails, naming rule 3a, unless each named ADR is
+   `Proposed` at the head; `merge_cleared.py` clears that head (SPEC-0039 rule 3) and writes one squash message line `ADR-nnnn Accepted (Final <comment id>)` per ADR; `check_adrs.py` treats an
+   ADR so recorded in the base's history as Accepted (only its Status line may change) and `check_adrs.py --pending` lists the ones whose file still says `Proposed`, which the release pull
+   request flips; and `merged_head_cleared` (rule 7) is `yes` for that head. Any other `Final:` line keeps rule 3.
 4. **The clearance check, before the merge.** `python3 scripts/agk/check_final_clearance.py --comments FILE [--head SHA]` (amendment 41: `--head` names the pull request's head; there is no `--base`) reads the pull request's comments from the file and git alone. When the latest covered fix list
    has a head that is its reviewed sha plus one commit, it fails if that commit is not the covered commit of rule 3, naming the rule and never a value. When no covered fix list exists, or the head is the
    reviewed sha itself, it passes without checking anything. It is a step of `make governance`; without `--comments` it prints `skipped (no comments file)` and passes, so a local run never fails for want of the
