@@ -467,7 +467,7 @@ def judge(payload: object) -> str | None:
 
 def main() -> int:
     try:
-        payload = json.loads(sys.stdin.read())
+        payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
         payload = None
     line = judge(payload)
