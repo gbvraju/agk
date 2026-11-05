@@ -15,9 +15,12 @@ import os
 import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tempfile
+import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import common
 import heavy_queue
 import lock
 import pytest
@@ -429,3 +432,131 @@ def test_a_failed_read_or_an_unknown_priority_raises_nothing(repo, tmp_path, wri
     repo.git("remote", "add", "origin", "https://github.com/example/demo.git")
     job = submit_brief(repo, where, fake_gh(tmp_path, {"7": written}, open_items), 7, "job")
     assert job["priority"] == (2 if open_items is None else "unknown") and "raised" not in job
+
+
+# --- the fix list of 2026-11-05 on #555 ----------------------------------------------------------
+
+
+def test_a_job_submitted_as_the_runner_goes_idle_is_never_left_without_a_runner(
+    repo, where, monkeypatch
+):
+    """REQ-047 AC5: SPEC-0040 rule 8; the stop decision and the submit's runner check share the
+    mutex. The submit is forced in at the runner's last read of an empty queue before it stops."""
+    clock = Clock()
+    gate = where / ".agk-lock-heavy.mutex"
+    real_jobs, real_dispatch = heavy_queue.jobs, lock.dispatch
+    state: dict = {"dispatching": False, "alive": None}
+    threads: list[threading.Thread] = []
+    late = job_of(repo, where, "late")
+
+    def submit() -> None:
+        held = where / "agk-lock-heavy"
+        state["alive"] = lock.enqueue(held, "heavy", late, "priority", 60, NOW)[3]
+
+    def dispatch(*args, **kw):
+        state["dispatching"] = True
+        try:
+            return real_dispatch(*args, **kw)
+        finally:
+            state["dispatching"] = False
+
+    def jobs(folder):
+        found = real_jobs(folder)
+        idle = clock.now - NOW >= timedelta(minutes=10)
+        if idle and not found and not state["dispatching"] and not threads:
+            threads.append(threading.Thread(target=submit))
+            threads[0].start()
+            if not gate.exists():  # the runner reads outside the mutex: the submit goes first
+                threads[0].join()
+        return found
+
+    monkeypatch.setattr(lock, "dispatch", dispatch)
+    monkeypatch.setattr(heavy_queue, "jobs", jobs)
+    assert work(repo, clock) == 0
+    assert threads, "the interleaving was never forced"
+    threads[0].join()
+    assert not (queue_of(where) / "runner.json").exists()
+    assert [j["session"] for j in real_jobs(queue_of(where))] == [late["session"]]  # it waits
+    assert state["alive"] is False  # so the submit starts a runner for the waiting job
+
+
+def test_a_job_worktree_is_made_under_the_long_temp_folder_on_windows(
+    repo, where, monkeypatch, tmp_path
+):
+    """REQ-047 AC3: SPEC-0040 rule 4 on a fake Windows; the 8.3 short name never reaches a job
+    (brief #508, ADR-0257)."""
+    short = r"C:\Users\EXAMPL~1.USR\AppData\Local\Temp"
+    long = tmp_path / "long temp"
+    long.mkdir()
+    monkeypatch.setattr(common, "on_windows", lambda: True)
+    monkeypatch.setattr(common, "long_path_name", lambda path: str(long) if path == short else None)
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: short)
+    job = add(repo, where, "w", command=[PY, "-c", "import os; print(os.getcwd())"])
+    assert work(repo) == 0
+    assert results(where)[job["ticket"]]["outcome"] == "passed"
+    out = (queue_of(where) / "results" / f"{job['ticket']}.out").read_text(encoding="utf-8")
+    assert Path(out.strip()).resolve().is_relative_to(long.resolve())
+    assert list(long.iterdir()) == []  # the job's temporary folder is removed
+
+
+class Ending(Clock):
+    """A clock whose sleep interrupts the runner after 30 min, so a runner that never stops ends."""
+
+    def sleep(self, seconds: float) -> None:
+        super().sleep(seconds)
+        if self.now - NOW > timedelta(minutes=30):
+            raise KeyboardInterrupt
+
+
+@pytest.mark.parametrize("fails", [1, 99])
+def test_a_result_that_cannot_be_written_never_leaves_the_job_started(
+    repo, where, monkeypatch, fails
+):
+    """REQ-047 AC5: SPEC-0040 rules 4 and 14; the runner fails the job where it can, releases it
+    and goes on to the next one and to its idle stop."""
+    real, calls = heavy_queue.finish, []
+
+    def finish(folder, job, outcome, *args, **kw):
+        calls.append(outcome)
+        if len(calls) <= fails:
+            raise OSError("the result cannot be written")
+        return real(folder, job, outcome, *args, **kw)
+
+    monkeypatch.setattr(heavy_queue, "finish", finish)
+    first, second = add(repo, where, "a"), add(repo, where, "b")
+    clock = Ending()
+    assert lock.runner(repo.root, "heavy", clock=clock, sleep=clock.sleep) == 0
+    assert log(where) == ["a", "b"]
+    assert list((queue_of(where) / "jobs").glob("*.json")) == []
+    done = {t: r["outcome"] for t, r in results(where).items()}
+    if fails == 1:
+        assert done == {
+            first["ticket"]: "failed (the result cannot be written)",
+            second["ticket"]: "passed",
+        }
+    else:
+        assert done == {}
+
+
+def test_an_unblocker_already_at_1_is_not_raised_but_goes_first_within_1(repo, tmp_path):
+    """REQ-047 AC3: amendment 117 item 2 and the ruling on Q-552-3: 0 stays the red-default-branch
+    brief's; within one priority an unblocker goes before other jobs, then by sequence number."""
+    where = configure(repo, tmp_path)
+    repo.git("remote", "add", "origin", "https://github.com/example/demo.git")
+    blocks = [brief(30, "Depends-on: #7\n"), pull(31, "Depends-on: #6\n")]
+    briefs = {
+        "6": "Priority: 2\n",
+        "7": "Priority: 1\n",
+        "8": "Priority: 1\n",
+        "9": "Priority: 0\n",
+    }
+    bin_dir = fake_gh(tmp_path, briefs, blocks)
+    older = submit_brief(repo, where, bin_dir, 8, "older")
+    one = submit_brief(repo, where, bin_dir, 7, "one")
+    two = submit_brief(repo, where, bin_dir, 6, "two")
+    red = submit_brief(repo, where, bin_dir, 9, "red")
+    assert (one["priority"], one["unblocks"], "raised" not in one) == (1, [30], True)
+    assert (two["priority"], two["unblocks"], two["raised"]) == (1, [31], "raised: unblocks #31")
+    assert (older["priority"], "unblocks" not in older, red["priority"]) == (1, True, 0)
+    assert work(repo) == 0
+    assert log(where) == ["red", "one", "two", "older"]
