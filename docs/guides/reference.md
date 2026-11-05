@@ -236,6 +236,17 @@ files in no area as "not run by proof"; without the table it prints `project_tes
 files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0185.
 
+## Reading a log
+
+    python3 scripts/agk/guard_logs.py [--max-lines N] FILE|-
+
+`agk logs`: prints the last `N` lines (default 2000) of a log, or of standard input with `-`, with every secret and every
+piece of personal data that the data guard's detectors find replaced by a label such as `[EMAIL-1]`, `[CARD-1]` or
+`[TOKEN-1]`; the same value keeps the same label in one run, and the rest of each line is unchanged. The last line holds
+the counts per kind only. It opens no socket, writes no file and keeps the values in memory only. A custom kind is added
+with `patterns` in the `[guard]` table of `agk.toml`, which can only add to the built-in detectors; a refused table, a bad
+option or a file it cannot read exits 2 naming the setting or option. See SPEC-0042 rules 10 and 11 and ADR-0268.
+
 ## Flake ledger
 
     python3 scripts/agk/flakes.py [--today YYYY-MM-DD] [--json]
