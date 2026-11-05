@@ -1,6 +1,6 @@
 # ADR-0273: merge_cleared.py runs governance after the merge, stops on red and records each merge (REQ-046, brief 551)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: ADR-0261, ADR-0263, ADR-0265, SPEC-0039, SPEC-0032
