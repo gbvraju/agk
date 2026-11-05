@@ -1,4 +1,4 @@
-"""A covered `Final:` that accepts an ADR on the reviewed head is the acceptance (brief #557 item 1).
+"""A covered `Final:` accepting an ADR on the reviewed head is the acceptance (brief #557 item 1).
 
 ADR-0277, amendment 118 (SPEC-0021 rule 3a, SPEC-0039 rule 3). When the latest covered fix list by
 a listed author names the head itself and every `Final:` line is `docs/adr/<file> Proposed ->

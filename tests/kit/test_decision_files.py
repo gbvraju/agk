@@ -12,7 +12,10 @@ from __future__ import annotations
 from pathlib import Path
 
 LOG = "docs/runs/decisions-log.md"
-HEAD = "# Decisions log\n\n| Date | Decision | Reason | Recorded in | By |\n| --- | --- | --- | --- | --- |\n"
+HEAD = (
+    "# Decisions log\n\n| Date | Decision | Reason | Recorded in | By |\n"
+    "| --- | --- | --- | --- | --- |\n"
+)
 ROW_A = "| 2026-11-01 | Q-X1-1 ruled as read | a | this log | reviewer |\n"
 ROW_B = "| 2026-11-05 | Q-X1-2 ruled as read | b | this log | reviewer |\n"
 ROW_C = "| 2026-11-05 | Q-X1-3 ruled as read | c | this log | reviewer |\n"
