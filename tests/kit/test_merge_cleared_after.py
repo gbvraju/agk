@@ -11,9 +11,13 @@ logins, addresses at example.com.
 from __future__ import annotations
 
 import json
+import os
 import re
+import signal
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -292,20 +296,26 @@ def test_the_governance_argument_list_is_the_same_on_a_fake_windows_platform(mon
 
     def fake_run(argv, **kwargs):
         seen.append((list(argv), kwargs))
-        return subprocess.CompletedProcess(argv, 0, "", "")
+        return FakeChild()
 
-    monkeypatch.setattr(merge_cleared.subprocess, "run", fake_run)
+    class FakeChild:
+        returncode = 0
+
+        def communicate(self):
+            return ("", None)
+
+    monkeypatch.setattr(merge_cleared.subprocess, "Popen", fake_run)
     root, tree, home = Path("checkout"), Path("tree"), Path("home")
     for platform in ("linux", "win32"):
         monkeypatch.setattr(sys, "platform", platform)
-        assert merge_cleared.run_governance(root, tree, home, BASE) is True
+        assert merge_cleared.run_governance(root, tree, home, BASE, 1800.0) is None
     assert seen[0][0] == seen[1][0]
     argv = seen[0][0]
     lock_py = str(Path(merge_cleared.__file__).resolve().parent / "lock.py")
-    assert argv[:8] == [sys.executable, lock_py, "run", "--name", "heavy", "--session",
-                        "merge-cleared", "--"]  # fmt: skip
-    assert argv[8:10] == ["env", "-i"] and argv[10].startswith("PATH=")
-    assert argv[11:] == [f"HOME={home}", "make", "-C", str(tree), "governance", f"AGK_BASE={BASE}"]
+    assert argv[:10] == [sys.executable, lock_py, "run", "--name", "heavy", "--session",
+                         "merge-cleared", "--timeout", "1800", "--"]  # fmt: skip
+    assert argv[10:12] == ["env", "-i"] and argv[12].startswith("PATH=")
+    assert argv[13:] == [f"HOME={home}", "make", "-C", str(tree), "governance", f"AGK_BASE={BASE}"]
     assert all(not kwargs.get("shell") for _, kwargs in seen)
 
 
@@ -351,3 +361,268 @@ def test_route_branch_still_writes_through_the_one_writer():
     branch = text.split("def route_branch(", 1)[1].split("\ndef ", 1)[0]
     assert "write_red(repo, open_red, body, labels)" in branch
     assert branch.count("method=") == 1, "only the close of a green branch writes here"
+
+
+# --- the fix list on 9782ebb: a run after the merge that cannot finish is red ------------------
+
+NOT_FINISHED = "governance not finished"
+LOCK_PY = SCRIPTS / "lock.py"
+
+
+def in_process(tmp_path: Path, monkeypatch, main: str | None = None, **saved) -> Path:
+    """The world of `after_run` for a call of `merge_cleared.main` in this process (so that one
+    function can be replaced); the fake `gh` and `make` are found on PATH. The checkout."""
+    root = repo(tmp_path, main or toml(ON))
+    world = {"issues": [AUTO_ISSUE], **saved}
+    bin_dir, _ = fake_gh(tmp_path, comments=[verdict()], **world)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    for name in ("GITHUB_BASE_REF", "AGK_BASE", "CI"):
+        monkeypatch.delenv(name, raising=False)
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    for name in ("TMPDIR", "TEMP", "TMP"):
+        monkeypatch.setenv(name, str(temp))
+    monkeypatch.setattr(tempfile, "tempdir", None)  # read TMPDIR again
+    monkeypatch.setattr(merge_cleared, "PAUSE", 0.0)
+    return root
+
+
+def main_in(root: Path, capsys) -> tuple[int, list[str], list[list[str]]]:
+    """One in-process run: (the exit code, the standard output lines, the gh calls)."""
+    code = merge_cleared.main(["--pr", "7", "--sha", HEAD], root=root)
+    lines = capsys.readouterr().out.splitlines()
+    return code, lines, calls(root.parent / "gh-calls.jsonl")
+
+
+def red_body_of(made: list[list[str]]) -> str:
+    opened = red_writes(made)
+    assert len(opened) == 1, made
+    return body_of(opened[0])
+
+
+def test_the_heavy_lock_wait_is_bounded_by_a_timeout_in_the_argument_list():
+    """REQ-046 AC6: fix list item 1 (`lock.py run ... --timeout S`, never an endless wait)."""
+    argv = merge_cleared.governance_argv(Path("tree"), Path("home"), BASE, 1800.0)
+    cut = argv.index("--")
+    assert argv[cut - 2 : cut] == ["--timeout", "1800"]
+    assert argv[cut + 1 : cut + 3] == ["env", "-i"]
+
+
+@pytest.mark.parametrize(
+    ("flow", "seconds"),
+    [({}, 1800.0), ({"after_merge_timeout": 5}, 300.0), ({"after_merge_timeout": 240}, 14400.0)],
+)
+def test_after_merge_timeout_is_minutes_and_30_by_default(flow, seconds):
+    """REQ-046 AC6: fix list item 1 (`[flow] after_merge_timeout`, 30 minutes by default)."""
+    assert merge_cleared.after_merge_seconds({"flow": {**flow}}) == seconds
+
+
+@pytest.mark.parametrize("value", ["0", "-5", "true", '"30"', "1.5", f'"{HIDDEN}"'])
+def test_a_bad_after_merge_timeout_merges_nothing_and_names_the_setting(tmp_path, value):
+    """REQ-046 AC6: fix list item 1 (the setting is read before the merge; the value is never
+    shown)."""
+    main = toml(ON + f"after_merge_timeout = {value}\n")
+    proc, made, ran, _ = after_run(tmp_path, main=main)
+    line = one_line(proc)
+    assert line.startswith(f"merge-cleared #7 {SHA12}: refused: "), line
+    assert "after_merge_timeout" in line and HIDDEN not in line and value not in line.split(":")[-1]
+    assert proc.returncode == 1
+    assert writes(made) == [] and ran == []
+
+
+def test_the_setting_reaches_the_governance_run(tmp_path, monkeypatch, capsys):
+    """REQ-046 AC6: fix list item 1 (the minutes of the default branch, as seconds)."""
+    root = in_process(tmp_path, monkeypatch, main=toml(ON + "after_merge_timeout = 5\n"))
+    seen: list[float] = []
+
+    def fake(root_, tree, home, base, wait):
+        seen.append(wait)
+
+    monkeypatch.setattr(merge_cleared, "run_governance", fake)
+    code, lines, _ = main_in(root, capsys)
+    assert lines == [MERGED] and code == 0
+    assert seen == [300.0]
+
+
+@pytest.mark.parametrize(
+    ("code", "step"), [(0, None), (3, "heavy lock"), (2, "make governance"), (1, "make governance")]
+)
+def test_lock_py_exit_3_is_the_heavy_lock_step(monkeypatch, code, step):
+    """REQ-046 AC6: fix list item 1 (`lock.py`'s exit 3, not taken in time, is a failed step)."""
+
+    class Child:
+        returncode = code
+
+        def __init__(self, argv, **kwargs):
+            assert not kwargs.get("shell")
+
+        def communicate(self):
+            return ("out\n", None)
+
+    monkeypatch.setattr(merge_cleared.subprocess, "Popen", Child)
+    got = merge_cleared.run_governance(Path("checkout"), Path("tree"), Path("home"), BASE, 60.0)
+    assert got == step
+
+
+def test_an_interrupt_while_governance_runs_stops_the_child_and_goes_on(monkeypatch):
+    """REQ-046 AC6: fix list item 1 (the child is ended, the interrupt reaches the caller)."""
+    done: list[str] = []
+
+    class Child:
+        returncode = None
+
+        def __init__(self, argv, **kwargs):
+            pass
+
+        def communicate(self):
+            raise KeyboardInterrupt
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            done.append("terminate")
+
+        def wait(self, timeout=None):
+            done.append("wait")
+            return -15
+
+    monkeypatch.setattr(merge_cleared.subprocess, "Popen", Child)
+    with pytest.raises(KeyboardInterrupt):
+        merge_cleared.run_governance(Path("checkout"), Path("tree"), Path("home"), BASE, 60.0)
+    assert done[:2] == ["terminate", "wait"]
+
+
+def hold_heavy(root: Path, locks: Path, temp: Path) -> subprocess.Popen:
+    """Another run holding the heavy lock until the test ends it."""
+    env = {**os.environ, "TMPDIR": str(temp), "TEMP": str(temp), "TMP": str(temp)}
+    holder = subprocess.Popen(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(LOCK_PY), "run", "--name", "heavy", "--session", "holder", "--",
+         sys.executable, "-c", "import time; time.sleep(60)"],
+        cwd=root, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )  # fmt: skip
+    owner = locks / "agk-lock-heavy" / "owner.json"
+    for _ in range(200):
+        if owner.exists() and "child" in owner.read_text(encoding="utf-8"):
+            return holder
+        time.sleep(0.05)
+    holder.kill()
+    raise AssertionError("the holder never took the heavy lock")
+
+
+def test_a_heavy_lock_still_busy_at_the_timeout_is_red(tmp_path, monkeypatch, capsys):
+    """REQ-046 AC6: fix list item 2 (the heavy lock still busy at the timeout: the red-branch
+    issue names `heavy lock`, the stop line, exit 1, make never runs)."""
+    locks = tmp_path / "locks"
+    root = in_process(tmp_path, monkeypatch, main=f'lock_dir = "{locks.as_posix()}"\n{toml(ON)}')
+    monkeypatch.setattr(merge_cleared, "MINUTE", 0.02)  # 30 minutes become 0.6 s here
+    holder = hold_heavy(root, locks, tmp_path / "temp")
+    try:
+        code, lines, made = main_in(root, capsys)
+    finally:
+        holder.terminate()
+        holder.wait(timeout=30)
+    assert lines == [STOPPED] and code == 1
+    assert "Failing check: heavy lock" in red_body_of(made)
+    assert makes(tmp_path) == []
+    assert worktrees(root) == [str(root)]
+
+
+@pytest.mark.parametrize("raised", [KeyboardInterrupt, OSError, RuntimeError, SystemExit])
+def test_an_interrupt_or_error_during_the_run_is_red(tmp_path, monkeypatch, capsys, raised):
+    """REQ-046 AC6: fix list item 2 (an interrupt during the run: the red-branch issue
+    `governance not finished`, the stop line, a non-zero exit, the worktree removed)."""
+    root = in_process(tmp_path, monkeypatch)
+
+    def cut(*args):
+        raise raised
+
+    monkeypatch.setattr(merge_cleared, "run_governance", cut)
+    code, lines, made = main_in(root, capsys)
+    assert lines == [STOPPED] and code == 1
+    assert f"Failing check: {NOT_FINISHED}" in red_body_of(made)
+    assert len([c for c in writes(made) if c[3].endswith("/comments")]) == 1, "still recorded"
+    assert worktrees(root) == [str(root)]
+
+
+def test_a_temporary_folder_that_cannot_be_made_is_red(tmp_path, monkeypatch, capsys):
+    """REQ-046 AC6: fix list item 2 (no temporary folder: the red-branch issue, the stop line)."""
+    root = in_process(tmp_path, monkeypatch)
+
+    def refuse(*args, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(merge_cleared.tempfile, "mkdtemp", refuse)
+    code, lines, made = main_in(root, capsys)
+    assert lines == [STOPPED] and code == 1
+    assert f"Failing check: {NOT_FINISHED}" in red_body_of(made)
+    assert makes(tmp_path) == []
+
+
+def test_an_interrupt_with_no_red_issue_written_says_so(tmp_path, monkeypatch, capsys):
+    """REQ-046 AC6: fix list item 2 (or the stop line saying the issue cannot be written)."""
+    root = in_process(tmp_path, monkeypatch, issue_fails=True)
+
+    def cut(*args):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(merge_cleared, "run_governance", cut)
+    code, lines, _ = main_in(root, capsys)
+    assert lines == [f"{STOPPED} (the red-branch issue cannot be written)"] and code == 1
+
+
+def test_an_interrupt_while_the_red_issue_is_written_says_it_cannot_be(
+    tmp_path, monkeypatch, capsys
+):
+    """REQ-046 AC6: fix list item 1 (nothing after the merge escapes as a traceback)."""
+    root = in_process(tmp_path, monkeypatch, make_exit=2)
+
+    def cut(*args):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(merge_cleared, "file_red", cut)
+    code, lines, _ = main_in(root, capsys)
+    assert lines == [f"{STOPPED} (the red-branch issue cannot be written)"] and code == 1
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGTERM") or os.name == "nt", reason="POSIX signals")
+def test_sigterm_during_the_run_opens_the_red_branch_issue(tmp_path):
+    """REQ-046 AC6: fix list items 1 and 2 (SIGTERM while governance waits: the red-branch
+    issue, the stop line, exit 1, the heavy lock released and the worktree removed)."""
+    locks = tmp_path / "locks"
+    root = repo(tmp_path, f'lock_dir = "{locks.as_posix()}"\n{toml(ON)}')
+    bin_dir, log = fake_gh(tmp_path, comments=[verdict()])
+    started, stop = tmp_path / "make-started", tmp_path / "make-stop"
+    (bin_dir / "make").write_text(
+        f"#!{sys.executable}\nimport pathlib, time\n"
+        f"pathlib.Path({str(started)!r}).write_text('x')\n"
+        f"for _ in range(600):\n"
+        f"    if pathlib.Path({str(stop)!r}).exists():\n        break\n    time.sleep(0.05)\n",
+        encoding="utf-8",
+    )
+    env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")}
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    env["TMPDIR"] = env["TEMP"] = env["TMP"] = str(temp)
+    proc = subprocess.Popen(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPT), "--pr", "7", "--sha", HEAD],
+        cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )  # fmt: skip
+    try:
+        for _ in range(600):
+            if started.exists() or proc.poll() is not None:
+                break
+            time.sleep(0.05)
+        assert started.exists(), "governance never started"
+        proc.send_signal(signal.SIGTERM)
+        out, err = proc.communicate(timeout=60)
+    finally:
+        stop.write_text("x", encoding="utf-8")
+        if proc.poll() is None:
+            proc.kill()
+    assert out.splitlines() == [STOPPED], out + err
+    assert proc.returncode == 1
+    assert f"Failing check: {NOT_FINISHED}" in red_body_of(calls(log))
+    assert not (locks / "agk-lock-heavy").exists(), "the heavy lock is released"
+    assert worktrees(root) == [str(root)]
