@@ -191,6 +191,8 @@ elif parts[0] in ('issues', 'pulls') and len(parts) == 2 and parts[1] in data['i
         out = item['pull']
     else:
         out = {k: v for k, v in item.items() if k != 'pull'}
+elif parts[0] == 'contents' and '/'.join(parts[1:]) in data.get('contents', {}):
+    out = data['contents']['/'.join(parts[1:])]
 else:
     fail(404)
 print(json.dumps(out))
