@@ -305,3 +305,98 @@ def test_a_release_that_flips_an_adr_of_a_forged_default_message_record_fails(re
     put(repo, ADR, adr("Proposed"))
     proc = check(repo, "--comments", final_comments(repo, pr, cid))
     assert (proc.returncode, proc.stdout) == (0, "ok release\n"), proc.stdout
+
+
+# --- fix list of 2026-11-05 on 94c0d39: a valid release with its Final comments is a release ----
+
+PROTECTED = KIT_ROOT / "scripts" / "agk" / "check_protected_changes.py"
+WORKFLOW = KIT_ROOT / ".github" / "workflows" / "governance.yml"
+ADRS = KIT_ROOT / "scripts" / "agk" / "check_adrs.py"
+
+
+def protected(root: Path, *args: str):
+    base = subprocess.run(
+        ["git", "rev-parse", "main"], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    env = {**clean_env(), "AGK_BASE": base}
+    return subprocess.run(
+        [sys.executable, str(PROTECTED), *args], cwd=root, capture_output=True, text=True, env=env
+    )
+
+
+def flipped_release(root: Path) -> None:
+    put(root, "config/protected-paths.txt", "agk.toml\nkit/\n.claude-plugin/\n")
+    recorded(root)
+    release(root)
+    put(root, ADR, adr("Accepted"))
+
+
+def test_a_valid_release_with_its_final_comment_is_a_release_for_both_checks(repo):
+    """REQ-028: SPEC-0028 rule 5 and SPEC-0021 rule 3a (the comments reach `valid_release`)."""
+    flipped_release(repo)
+    saved = final_comments(repo)
+    proc = check(repo, "--comments", saved)
+    assert (proc.returncode, proc.stdout) == (0, "ok release\n"), proc.stdout
+    proc = protected(repo, "--comments", saved)
+    assert proc.returncode == 0, proc.stdout
+    assert "(a release pull request)" in proc.stdout
+
+
+def test_a_release_without_the_final_comments_is_not_a_release_for_the_protected_check(repo):
+    """REQ-028: SPEC-0021 rule 3a (fail closed: no comments, no release exemption)."""
+    flipped_release(repo)
+    proc = protected(repo)
+    assert proc.returncode != 0, proc.stdout
+    assert "a release pull request" not in proc.stdout
+    proc = protected(repo, "--comments", str(repo.parent / "missing.json"))
+    assert proc.returncode != 0, proc.stdout
+
+
+def test_valid_release_passes_the_comments_to_check(repo):
+    """REQ-028: `valid_release` takes the comments `check` needs once the base holds a record."""
+    flipped_release(repo)
+    code = (
+        "import json, sys; sys.path.insert(0, sys.argv[1]); import check_release, check_adrs;"
+        "from pathlib import Path;"
+        "c = check_adrs.read_comments(sys.argv[2]);"
+        "print(check_release.valid_release(Path('.'), 'main', c),"
+        " check_release.valid_release(Path('.'), 'main'))"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code, str(SCRIPT.parent), final_comments(repo)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env={**clean_env(), "AGK_BASE": "main"},
+    )
+    assert proc.stdout.strip() == "True False", proc.stdout + proc.stderr
+
+
+def test_record_ids_lists_the_final_comment_id_of_each_read_record(repo):
+    """REQ-028: the workflow fetches the Final comment of each record `final_records` reads."""
+    recorded(repo)
+    for message in (
+        "Other (#9)\n\nADR-0002 Accepted (Final 77)\nMerged-by: merge_cleared.py\n",
+        "Unread\n\nADR-0003 Accepted (Final 99)\n",
+    ):
+        git(repo, "commit", "-q", "--allow-empty", "-m", message)
+    proc = subprocess.run(
+        [sys.executable, str(ADRS), "--record-ids"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    assert (proc.returncode, proc.stdout) == (0, "42\n77\n"), proc.stdout + proc.stderr
+
+
+def test_the_governance_workflow_saves_the_record_comments_and_passes_them():
+    """REQ-028: Q-557-5 (the Release check and check_protected_changes read the Final comments)."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "check_adrs.py --record-ids" in text
+    assert "issues/comments/$id" in text
+    assert 'check_release.py --comments "$RUNNER_TEMP/record-comments.json"' in text
+    assert '--comments "$RUNNER_TEMP/record-comments.json"' in text.split(
+        "check_protected_changes.py", 1
+    )[1].splitlines()[0]
+    assert text.index("name: Record comments") < text.index("name: check_protected_changes")
