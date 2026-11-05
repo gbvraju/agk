@@ -50,6 +50,11 @@ head and base shas, `started` (UTC), `tree_clean` (a dirty tree is recorded, nev
 step that ran with its `name`, `outcome`, `argv`, `cwd`, `exit`, `seconds`, `output_sha256` and
 `output_bytes` (the tests step adds each run it made), and the `versions` of python3, git, make
 and gitleaks where found, and `notes`: the warnings of the run, such as brief #509's (ADR-0258).
+Each run of the tests step also has a `timing` object (SPEC-0044 rule 3, brief #560): `files`
+(path and seconds, slowest first, at most 50), `total_seconds` and `source` (`durations`, `junit`
+or `unknown`), read by `impact.run_timing` from what the run already wrote; the kit adds no flag to
+the command, and nothing fails because timing is missing. A `[testing] junit` report that cannot be
+read, or that the run did not write, prints one line naming the setting.
 It holds no output text, no environment value and no path outside the
 repository (one outside is written `<outside>/<name>`, the interpreter `python3`). A failed step
 still writes it. Then it prints one line for the pull request body:
@@ -95,7 +100,7 @@ from common import (
     resolve_base,
     temp_env,
 )
-from impact import Impact, Selected, impact
+from impact import Impact, Selected, impact, junit_setting, run_timing
 from proof import area_command, execute, is_test_file, timeout_note
 
 HERE = Path(__file__).resolve().parent
@@ -354,7 +359,7 @@ def proof_runs(root: Path, runs: list[dict], ran: Ran) -> Step:
     made: list[dict] = []
     for item in runs:
         folder = root / item["cwd"]
-        started = time.monotonic()
+        started, since = time.monotonic(), wall_clock()
         run_code, run_out, _ = execute(item["command"], folder, limit, env=temp_env())
         made.append(
             {
@@ -364,6 +369,7 @@ def proof_runs(root: Path, runs: list[dict], ran: Ran) -> Step:
                 "exit": run_code,
                 "seconds": round(time.monotonic() - started, 3),
                 **digest(run_out),
+                "timing": run_timing(run_out, folder, None, since)[0],
             }
         )
         lines.append(f"tests: {item['name']} ({len(item['files'])} test files) in {item['cwd']}")
@@ -514,6 +520,7 @@ def gate(
     made: list[dict] = []
     warnings: list[str] = []
     sets, notes = regression_sets(root, found, areas)
+    junit = junit_setting(root)
     planned = [(r["name"], r["command"], r["cwd"], OWN, "proof") for r in runs]
     planned.extend((*item, "regression") for item in sets)
     shown = False
@@ -522,9 +529,12 @@ def gate(
             say(notes)
             shown = True
         folder = root / cwd
-        started = time.monotonic()
+        started, since = time.monotonic(), wall_clock()
         code, out, _ = execute(command, folder, limit, env=temp_env())
         seconds = time.monotonic() - started
+        timing, timing_note = run_timing(out, folder, junit, since)
+        if timing_note:
+            print(timing_note, flush=True)
         made.append(
             {
                 "name": name,
@@ -535,6 +545,7 @@ def gate(
                 "exit": code,
                 "seconds": round(seconds, 3),
                 **digest(out),
+                "timing": timing,
             }
         )
         word = "ok" if code == 0 else "FAIL"
@@ -552,6 +563,11 @@ def gate(
         say(notes)
     not_run = any("not run" in n for n in notes)
     return Step("ok", "", not_run=not_run, ran=ran, runs=made, notes=warnings)
+
+
+def wall_clock() -> float:
+    """Now, in seconds since the epoch: a JUnit report older than its run is not its report."""
+    return datetime.now(UTC).timestamp()
 
 
 def say(lines: list[str]) -> None:
