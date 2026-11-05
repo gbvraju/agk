@@ -38,6 +38,13 @@ Files changed: `docs/specs/0009-facts.md`, `docs/specs/0021-when-a-fix-list-verd
    - SPEC-0039 rule 3: each named ADR must be among the pull request's files (added or modified), and the squash message
      also carries the line `Merged-by: merge_cleared.py`.
    - SPEC-0009 rule 13: `docs/runs/decisions-log.md` is frozen at its length, and `check_specs.py` fails a change to it.
+4b. **The conductor's fix list of 2026-11-05 on e5e45d5.** A copied record line accepts nothing:
+   - SPEC-0039 rule 3: every merge passes the command's own squash message (`Merged-by: merge_cleared.py` alone when
+     nothing is accepted), and the command holds a pull request whose body or commits already hold a record line.
+   - SPEC-0021 rule 3a: `check_adrs.py --pending --comments <file>` counts a record only when its Final comment in the
+     file verifies it, and fails closed without the file while a record exists.
+   - SPEC-0028 rule 5: `check_release.py --comments <file>` counts the same verified records only, and fails closed
+     without the file while the base holds a record.
 5. **SPEC-0034 rule 19 ("The append-only logs merge as a union").** The rule's open question is ruled: since GitHub's
    check does not honour `merge=union`, the decisions log takes one file per entry (SPEC-0009 rule 13 as amended), the
    old file is frozen and the intake records its rulings as such files; the union mark stays for the residuals and the
@@ -45,8 +52,8 @@ Files changed: `docs/specs/0009-facts.md`, `docs/specs/0021-when-a-fix-list-verd
 6. **SPEC-0028 rules 4 and 5 (the release pull request and its check).** The release also sets to `Accepted` the Status
    line of each ADR that a Final line accepted (rule 3a), changing nothing else in it, and `check_release.py` fails a
    release that leaves one `Proposed`, or changes an ADR in any other way.
-7. **Tests.** `tests/kit/test_final_accepts.py` (items 1, 2 and 4), `tests/kit/test_decision_files.py` (items 3 to 5),
-   `tests/kit_dev/test_intake.py` (item 5) and `tests/kit_dev/test_release_check.py` (item 6).
+7. **Tests.** `tests/kit/test_final_accepts.py` (items 1, 2, 4 and 4b), `tests/kit/test_merge_cleared_verdict.py` (item 4b), `tests/kit/test_decision_files.py` (items 3 to 5),
+   `tests/kit_dev/test_intake.py` (item 5) and `tests/kit_dev/test_release_check.py` (items 4b and 6).
 
 Not in this amendment (later builds of brief #557, its pull request's `Questions:`): requirement entries in
 `docs/requirements.d/` (a new protected path class), an approval that survives a merge of main (SPEC-0032 rule 5), scoped

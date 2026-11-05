@@ -7,8 +7,11 @@ change only `CHANGELOG.md`, `agk.toml`, `kit/manifest.json`, `.claude-plugin/plu
 `## Unreleased` empty and the older sections as they were. The fragments under `changelog.d/` are
 gathered into those lines in pull request order (SPEC-0031 rules 3 and 4): their deletion is part of
 the release, a fragment left, added or edited fails it. Each ADR that a Final line accepted
-(`common.accepted_by_final` on the base, SPEC-0021 rule 3a) has its Status line flipped from
-`Proposed` to `Accepted` by the release and nothing else changed; one left `Proposed` fails it. In
+(a record on the base that its Final comment, given with `--comments FILE` as
+`gh api repos/{repo}/issues/comments/<id>` answers, verifies: `check_adrs.verified_records`,
+SPEC-0021 rule 3a) has its Status line flipped from `Proposed` to `Accepted` by the release and
+nothing else changed; one left `Proposed` fails it. An unverified record asks no flip, and a
+release without FILE fails closed while the base holds a record. In
 strict mode, when no version is raised and when the base does not have this script yet (the pull
 request that adds it is the last build that bumps itself, SPEC-0028 rule 9) it prints `ok release`
 and checks nothing. Git and files only: no network, no model. Messages name the rule and the
@@ -32,7 +35,6 @@ from changelog_fragments import FRAG_DIR, gathered_lines, tree_fragments
 from check_adrs import status_of
 from common import (
     CheckError,
-    accepted_by_final,
     changed_files,
     changed_lines,
     git,
@@ -175,10 +177,14 @@ UNFLIPPED = (
 )
 
 
-def recorded_adrs(root: Path, mb: str) -> set[str]:
+def recorded_adrs(root: Path, mb: str, comments: list[dict] | None = None) -> set[str]:
     """The ADR paths that a squash commit of merge_cleared.py on the base records as accepted by a
-    Final line (SPEC-0021 rule 3a): the release flips each one's Status line."""
-    numbers = accepted_by_final(root, mb)
+    Final line that COMMENTS verifies (SPEC-0021 rule 3a): the release flips each one's Status
+    line. Without COMMENTS while a record exists: a CheckError (fail closed)."""
+    try:
+        numbers = check_adrs.verified_records(root, mb, comments)
+    except CheckError as err:
+        raise CheckError(f"rule 5: {err}") from None
     names = git(root, "ls-tree", "-z", "--name-only", f"{mb}:docs/adr", check=False).split("\0")
     return {
         f"docs/adr/{name}"
@@ -200,7 +206,7 @@ def read_or_empty(path: Path) -> str:
         return ""
 
 
-def check(root: Path) -> int:
+def check(root: Path, comments: list[dict] | None = None) -> int:
     if pr_mode(root) != "flow":
         print(f"ok {NAME}")
         return 0
@@ -216,7 +222,7 @@ def check(root: Path) -> int:
         return 0
     changes = changed_files(root, mb)
     fragments = set(tree_fragments(root, mb))
-    flips = recorded_adrs(root, mb)
+    flips = recorded_adrs(root, mb, comments)
     for path in sorted(set(changes) - set(ALLOWED)):
         if path in fragments and changes[path] == "D":
             continue
@@ -268,9 +274,15 @@ def valid_release(root: Path, mb: str) -> bool:
         return False
 
 
+USAGE = "usage: check_release.py [--comments FILE]"
+
+
 def main() -> int:
+    args = sys.argv[1:]
+    if args and (len(args) != 2 or args[0] != "--comments"):
+        raise CheckError(USAGE)
     root = repo_root()
-    return check(root)
+    return check(root, check_adrs.read_comments(args[1] if args else None))
 
 
 if __name__ == "__main__":

@@ -47,9 +47,12 @@ requirements half of item 2 are later builds (the pull request's `Questions:`).
      `Merged-by: merge_cleared.py` (`check_adrs.final_records`). `facts.py` reports the ADR as
      `Accepted` only after it reads the comment of the record's id and finds it on the record's pull
      request, by a listed verdict author, accepting that ADR (`check_adrs.final_record_verified`);
-     without GitHub nothing is verified and the file's status stands. A copied message therefore
-     accepts nothing in the owner's view; offline, it can only make an ADR immutable or ask the
-     release for a flip, which the release's reviewer compares with the facts.
+     without GitHub nothing is verified and the file's status stands. `check_adrs.py --pending`
+     and `check_release.py` take the Final comments with `--comments <file>` and count only the
+     records they verify, failing closed without the file while a record exists. `merge_cleared.py`
+     always passes its own squash message and holds a pull request whose body or commits already
+     hold a record line. A copied message therefore accepts nothing; offline, it can only make an
+     ADR immutable (the stricter reading).
    - The release pull request flips each recorded ADR's Status line to `Accepted` and nothing else
      (SPEC-0028 rules 4 and 5 as amended); `check_release.py` fails a release that leaves one
      `Proposed`. The drift audit raises no stale-`Proposed` finding for a recorded ADR.
@@ -85,6 +88,8 @@ requirements half of item 2 are later builds (the pull request's `Questions:`).
 - 2026-11-05: until the release pull request flips them, an ADR accepted by a Final reads `Proposed`
   in its file; `check_adrs.py --pending` is the list and `check_release.py` fails a release that
   leaves one (due 2026-12-31).
-- 2026-11-05: the offline readers (`check_adrs.py`, the drift audit, the release check) cannot read
-  a comment, so they trust the squash record of `merge_cleared.py`; only `facts.py` verifies the
-  comment id (Q-557-4, due 2026-11-30).
+- 2026-11-05: the immutability rule of `check_adrs.py` and the drift audit cannot read a comment,
+  so they trust the squash record of `merge_cleared.py`; `facts.py`, `check_adrs.py --pending` and
+  the release check verify the comment id. The governance workflow does not yet pass the Final
+  comments to the release check (a `.github/` change), so a release after a Final accept fails
+  closed in CI until it does (Q-557-4, Q-557-5, due 2026-11-30).
