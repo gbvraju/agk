@@ -28,13 +28,16 @@ needs one record issue (the open local-mode record issue, else the one open issu
 posts one comment `Auto merge: #<n> <merge sha> <UTC time> <verdict link>` there, then fetches the
 default branch, adds a detached worktree of the merge commit in a temporary folder outside the
 checkout and runs `lock.py run --name heavy --session merge-cleared -- env -i PATH=<PATH>
-HOME=<scratch> make -C <worktree> governance AGK_BASE=<parent of the merge commit>`, and removes
-the worktree in every case. A red run (or a fetch or worktree that fails) opens or updates the
-red-branch issue through `route.write_red`, prints
+HOME=<scratch> AGK_PR_BODY=<scratch>/pr-body.md make -C <worktree> governance AGK_BASE=<parent of
+the merge commit>`, the body file holding the pull request body read before the merge (brief #576,
+so that a `Covered-by:` build is not reported red), and removes the worktree in every case. A red
+run (or a fetch or worktree that fails) opens or updates the red-branch issue through
+`route.write_red`, prints
 
     merge-cleared: stopped: default branch red after #<n>         exit 1
 
-and that open issue holds every later run. It never reverts, writes no file and pushes nothing.
+and that open issue holds every later run. It never reverts, pushes nothing and writes no file
+but that body file, which goes with the temporary folder.
 The heavy-lock wait is bounded by `[flow] after_merge_timeout` (minutes, 30 by default; lock.py's
 exit 3 is the step `heavy lock`), and any exception, interrupt or SIGTERM after the merge is the
 step `governance not finished`: the red-branch issue is still opened (the fix list on #556).
@@ -572,10 +575,11 @@ def post_record(repo: str, issue: int, number: int, merged: str, verdict: dict) 
 # --- rule 6: governance after the merge, and the red-branch stop -------------------------------
 
 
-def governance_argv(tree: Path, home: Path, base: str, wait: float) -> list[str]:
+def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) -> list[str]:
     """The governance run of SPEC-0039 rule 6 as one argument list: the project's own lock.py,
-    the heavy lock waited for at most WAIT seconds, and `env -i` so that only PATH and HOME reach
-    the merged code."""
+    the heavy lock waited for at most WAIT seconds, and `env -i` so that only PATH, HOME and
+    AGK_PR_BODY (the file BODY holding the merged pull request's body, brief #576) reach the
+    merged code."""
     lock_py = Path(__file__).resolve().parent / "lock.py"
     return [
         sys.executable,
@@ -592,6 +596,7 @@ def governance_argv(tree: Path, home: Path, base: str, wait: float) -> list[str]
         "-i",
         f"PATH={os.environ.get('PATH', '')}",
         f"HOME={home}",
+        f"AGK_PR_BODY={body}",
         "make",
         "-C",
         str(tree),
@@ -600,13 +605,15 @@ def governance_argv(tree: Path, home: Path, base: str, wait: float) -> list[str]
     ]
 
 
-def run_governance(root: Path, tree: Path, home: Path, base: str, wait: float) -> str | None:
+def run_governance(
+    root: Path, tree: Path, home: Path, body: Path, base: str, wait: float
+) -> str | None:
     """Run governance once in TREE; its output goes to standard error. None when it passed, else
     the failing step: `heavy lock` when lock.py did not take the lock in WAIT seconds (its exit
     3), otherwise `make governance`. An interrupt ends lock.py (which ends its command and frees
     the heavy lock) and is raised again."""
     child = subprocess.Popen(  # nosec B603 - fixed argument list, no shell
-        governance_argv(tree, home, base, wait),
+        governance_argv(tree, home, body, base, wait),
         cwd=root,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -635,10 +642,11 @@ def end_child(child: subprocess.Popen) -> None:
         child.wait()
 
 
-def governance(root: Path, branch: str, merged: str, wait: float) -> str | None:
+def governance(root: Path, branch: str, merged: str, wait: float, text: str) -> str | None:
     """Fetch the default branch, run governance on the merge commit in a temporary worktree
-    outside the checkout, and remove the worktree in every case. None when green, else the
-    failing step (`fetch`, `worktree`, `heavy lock` or `make governance`)."""
+    outside the checkout, with TEXT (the pull request body read before the merge) in a file of the
+    run's temporary home, and remove both in every case. None when green, else the failing step
+    (`fetch`, `worktree`, `heavy lock` or `make governance`)."""
     code, _ = git_out(root, "fetch", "-q", "origin", branch)
     if code != 0:
         return "fetch"
@@ -648,12 +656,14 @@ def governance(root: Path, branch: str, merged: str, wait: float) -> str | None:
         return "fetch"
     scratch = Path(tempfile.mkdtemp(prefix="agk-merge-cleared-"))
     tree, home = scratch / "tree", scratch / "home"
+    body = home / "pr-body.md"
     try:
         home.mkdir()
+        body.write_text(text, encoding="utf-8")
         code, _ = git_out(root, "worktree", "add", "--detach", "-q", str(tree), merged)
         if code != 0:
             return "worktree"
-        return run_governance(root, tree, home, parent, wait)
+        return run_governance(root, tree, home, body, parent, wait)
     finally:
         git_out(root, "worktree", "remove", "--force", str(tree))
         shutil.rmtree(scratch, ignore_errors=True)
@@ -701,7 +711,14 @@ def after_merge_signals() -> Iterator[None]:
 
 
 def after_merge(
-    root: Path, repo: str, number: int, merged: str, record: int, verdict: dict, data: dict
+    root: Path,
+    repo: str,
+    number: int,
+    merged: str,
+    record: int,
+    verdict: dict,
+    data: dict,
+    text: str,
 ) -> bool:
     """Everything after the merge (SPEC-0039 rules 6 and 7): the record line, then governance.
     Any exception, interrupt or termination counts as red (`governance not finished`): the
@@ -711,7 +728,8 @@ def after_merge(
     with after_merge_signals():
         try:
             recorded = post_record(repo, record, number, merged, verdict)
-            step = governance(root, str(data.get("default_branch", "main")), merged, wait)
+            branch = str(data.get("default_branch", "main"))
+            step = governance(root, branch, merged, wait, text)
         except BaseException:  # the merge stands; the run cannot show green (fix list, #556)
             step = NOT_FINISHED
         if step is not None:
@@ -802,7 +820,8 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
             ci_evidence(repo, sha, required)
         hold_list(repo, number, pull, comments, approvers)
         merged = merge_pull(repo, number, sha)
-        recorded = after_merge(root, repo, number, merged, record, verdict, data)
+        text = str(pull.get("body") or "")  # the body read above, for governance (brief #576)
+        recorded = after_merge(root, repo, number, merged, record, verdict, data, text)
     if not recorded:
         return f"merged {merged[:12]}", "the record line cannot be posted (rule 7)", EXIT_REFUSED
     return f"merged {merged[:12]}", "", EXIT_CLEARED
