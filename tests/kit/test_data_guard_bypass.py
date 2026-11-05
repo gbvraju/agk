@@ -1,4 +1,4 @@
-"""Adversarial tests of the data guard's layer 1 on command lines (SPEC-0042 rules 4 to 6, brief #589).
+"""Adversarial tests of the data guard's layer 1 on commands (SPEC-0042 rules 4 to 6, brief #589).
 
 The brief's Answer 2: path tricks, shell indirection, encoded names and an `allow_paths` entry
 naming a built-in secret file must each be denied, with a line naming the rule, never the value.
@@ -60,7 +60,8 @@ DENIED = [
     "head 0<.env", "cat > .env", "echo A=1 >> .env", "echo $(cat .env)", "echo `cat .env`",
     "cat .ENV", "CAT .env", "head APP.LOG", "cat ./.env", "cat sub/../.env", "cat ././.env",
     "cat ~/.ssh/id_rsa", "cat ~/.aws/credentials", "base64 .env", "xxd .env", "head -c 64 .env",
-    "od -c .env", "strings .env", "cp .env /tmp/x", "awk '{ while ((getline l < \".env\") > 0) print l }'",
+    "od -c .env", "strings .env", "cp .env /tmp/x",
+    "awk '{ while ((getline l < \".env\") > 0) print l }'",
     "sed -n '1r .env' /dev/null", "awk '{ print }' app.log", "jq . secrets.json",
     "git show HEAD:.env", "git cat-file -p HEAD:.env", "git show main:logs/a.txt",
     "cat $'\\x2eenv'", "cat $'\\056env'", "cat $(echo LmVudg== | base64 -d)",
@@ -95,7 +96,8 @@ def test_ac2_a_link_to_a_secret_file_is_denied_by_its_resolved_path(hook, tmp_pa
 def test_ac2_powershell_commands_are_judged_alike(hook, tmp_path):
     """REQ-049 AC2: rules 2 and 4 (the PowerShell tool beside Bash)."""
     folder = holding(tmp_path, ".env")
-    assert bash(hook, folder, "Get-Content .env", "PowerShell").startswith("data guard: secret-file")
+    line = bash(hook, folder, "Get-Content .env", "PowerShell")
+    assert line.startswith("data guard: secret-file")
     assert bash(hook, folder, "Get-ChildItem src", "PowerShell") is None
 
 
@@ -110,7 +112,8 @@ def test_ac2_nesting_past_depth_3_is_denied_even_without_a_name(hook, tmp_path):
 SEARCHES = [
     "grep -r foo .", "grep -R foo", "grep -rn foo src .", "grep --recursive foo",
     "grep -d recurse foo .", "egrep -r foo", "rg foo", "ag foo", "ack foo", "git grep foo",
-    "find . -type f -exec cat {} +", "find . -name '*.py' -execdir head {} \\;", "find . | xargs cat",
+    "find . -type f -exec cat {} +", "find . -name '*.py' -execdir head {} \\;",
+    "find . | xargs cat",
     "find | xargs grep foo",
 ]
 
@@ -149,10 +152,12 @@ def test_ac2_ordinary_commands_are_allowed(hook, tmp_path, command):
 
 def test_ac2_the_project_log_reader_is_the_one_allowed_reader(hook, tmp_path):
     """REQ-049 AC2: rule 6 (`python3 scripts/agk/guard_logs.py <file>`, piped onward)."""
-    folder = holding(tmp_path, "app.log", "scripts/agk/guard_logs.py", "other/guard_logs.py", ".env")
-    assert bash(hook, folder, "python3 scripts/agk/guard_logs.py app.log") is None
-    assert bash(hook, folder, "python3 scripts/agk/guard_logs.py --max-lines 9 app.log | head") is None
-    assert bash(hook, folder, "python3 other/guard_logs.py app.log").startswith("data guard: raw-log")
+    reader = "scripts/agk/guard_logs.py"
+    folder = holding(tmp_path, "app.log", reader, "other/guard_logs.py", ".env")
+    assert bash(hook, folder, f"python3 {reader} app.log") is None
+    assert bash(hook, folder, f"python3 {reader} --max-lines 9 app.log | head") is None
+    line = bash(hook, folder, "python3 other/guard_logs.py app.log")
+    assert line.startswith("data guard: raw-log")
     assert bash(hook, folder, "python3 scripts/agk/guard_logs.py .env").startswith(
         "data guard: secret-file"
     )

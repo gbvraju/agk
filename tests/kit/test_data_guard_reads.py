@@ -20,8 +20,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 HOOK_FILE = ROOT / ".claude" / "hooks" / "data_guard.py"
 LINE = re.compile(r"data guard: (secret-file|raw-log|cannot-judge) \([a-z ]+\): \S.*")
-SECRET = "data guard: secret-file ({}): ask the person for the one value you need, or for a cleaned copy"
-LOG = "data guard: raw-log ({}): read it through `agk logs <file>` (python3 scripts/agk/guard_logs.py)"
+SECRET = "data guard: secret-file ({}): " + (
+    "ask the person for the one value you need, or for a cleaned copy"
+)
+LOG = "data guard: raw-log ({}): " + (
+    "read it through `agk logs <file>` (python3 scripts/agk/guard_logs.py)"
+)
 
 
 def load_hook():
