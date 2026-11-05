@@ -1,4 +1,10 @@
-"""ADR format; Accepted ADRs change only their Status line relative to the base."""
+"""ADR format; Accepted ADRs change only their Status line relative to the base.
+
+An ADR that a squash message line `ADR-nnnn Accepted (Final <comment id>)` in the base's history
+records is Accepted too (SPEC-0021 rule 3a, brief 557), whatever its file says until the release
+pull request flips it. `check_adrs.py --pending` prints, one path a line, each such ADR whose file
+still says `Proposed`: the flips the release pull request makes.
+"""
 
 from __future__ import annotations
 
@@ -9,10 +15,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
+    FINAL_ACCEPT,
     STATUS_LINE,
     base_arg,
     changed_files,
     changed_lines,
+    git,
     merge_base,
     repo_root,
     resolve_base,
@@ -37,6 +45,22 @@ def status_of(text: str) -> str | None:
         if m:
             return m.group(1)
     return None
+
+
+def accepted_by_final(root: Path, ref: str) -> set[str]:
+    """The ADR numbers that a `ADR-nnnn Accepted (Final <id>)` message line in REF's history names."""
+    text = git(root, "log", "--format=%B", "--fixed-strings", "--grep", "Accepted (Final ", ref)
+    return {m.group(1) for ln in text.splitlines() if (m := FINAL_ACCEPT.fullmatch(ln.strip()))}
+
+
+def pending(root: Path, files: list[Path]) -> int:
+    """Print each ADR accepted by a Final line whose file still says Proposed (the release flips)."""
+    recorded = accepted_by_final(root, "HEAD")
+    for p in files:
+        m = FILE_RE.match(p.name)
+        if m and m.group(1) in recorded and status_of(p.read_text(encoding="utf-8")) == "Proposed":
+            print(p.relative_to(root).as_posix())
+    return 0
 
 
 def validate(name: str, text: str, known: set[str]) -> list[str]:
@@ -81,6 +105,8 @@ def main(argv: list[str] | None = None) -> int:
         else []
     )
     known = {m.group(1) for p in files if (m := FILE_RE.match(p.name))}
+    if "--pending" in (sys.argv[1:] if argv is None else argv):
+        return pending(root, files)
     problems: list[str] = []
 
     numbers: dict[str, str] = {}
@@ -97,11 +123,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{NAME}: no base ref available outside CI; immutability check skipped")
     else:
         mb = merge_base(root, base)
+        recorded = accepted_by_final(root, mb)
         for path, status in sorted(changed_files(root, mb).items()):
             if not path.startswith("docs/adr/") or path.endswith("/TEMPLATE.md"):
                 continue
             old = show(root, mb, path)
-            if old is None or status_of(old) != "Accepted":
+            number = FILE_RE.match(path.rsplit("/", 1)[-1])
+            final = bool(number) and number.group(1) in recorded  # rule 3a
+            if old is None or (status_of(old) != "Accepted" and not final):
                 continue
             if status == "D":
                 problems.append(f"{path}: an Accepted ADR cannot be deleted")

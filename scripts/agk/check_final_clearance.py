@@ -8,7 +8,9 @@ When the latest verdict by a listed author is a covered fix list (`Verdict: fix 
 sha, the commit must change exactly the named status lines (one that also sets the `Chosen` line
 of a stack ADR fails saying that line is set by an ordinary commit, brief 274); a head two or more
 commits past the reviewed sha (counted on the first-parent line) fails (SPEC-0030 rule 7).
-Anything else passes unchecked. With `review_mode = "solo"` in agk.toml the one listed person's
+A covered fix list whose sha is the head and whose every `Final:` line accepts an ADR is the
+acceptance itself (rule 3a, brief 557): each named ADR must be `Proposed` at the head, and no status
+commit follows. Anything else passes unchecked. With `review_mode = "solo"` in agk.toml the one listed person's
 confirmation counts as its verdict and its `Approve:` lines (brief 277,
 `reviewers.confirmed_comments`). Without
 `--comments` it prints `skipped (no comments file)` and passes. With two or more listed
@@ -29,11 +31,14 @@ from common import (
     CheckError,
     agent_apps,
     covered_fix_list,
+    final_accepts,
     final_commit_problems,
     git,
     repo_root,
     run,
+    show,
 )
+from check_adrs import status_of
 from metrics import counted_authors, latest_verdict_body
 from reviewers import (
     confirmed_comments,
@@ -48,6 +53,7 @@ SPEC_FILE = re.compile(r"docs/specs/(\d{4})-[^/]+\.md")
 STACK_ADR = re.compile(r"docs/adr/\d{4}-stack-options\.md")
 CHOSEN_LINE = re.compile(r"\s*\d+\.\s+\*\*Chosen\*\*")
 STACK_CHOSEN = "rule 3: a stack's Chosen line is set by an ordinary commit, not a Final commit"
+ACCEPT_NOT_PROPOSED = "rule 3a: a Final line accepts only an ADR that is Proposed at the head"
 USAGE = (
     "usage: check_final_clearance.py [--comments FILE] [--reviews FILE] [--head SHA] "
     "[--author LOGIN] [--draft VALUE]"
@@ -132,7 +138,12 @@ def check(
             )
         commit = git(root, "rev-parse", head).strip()
         parents = git(root, "rev-list", "--parents", "-n", "1", commit).split()[1:]
-        if len(parents) == 1 and parents[0].startswith(sha):
+        accepts = final_accepts(edits)
+        if commit.startswith(sha) and accepts is not None:
+            for path in accepts:  # rule 3a: the Final line is the acceptance; no commit follows
+                if status_of(show(root, commit, path) or "") != "Proposed":
+                    raise CheckError(ACCEPT_NOT_PROPOSED)
+        elif len(parents) == 1 and parents[0].startswith(sha):
             files_ok, bad = final_commit_problems(root, parents[0], commit, edits)
             moded = git(root, "diff", "--summary", parents[0], commit).strip()
             if not files_ok or bad or moded:

@@ -317,6 +317,21 @@ def covered_fix_list(body: str) -> tuple[str, list[tuple[str, str | None, str, s
     return (head.group(1), edits) if edits else None
 
 
+ADR_PATH = re.compile(r"docs/adr/\d{4}-[a-z0-9][a-z0-9-]*\.md")
+FINAL_ACCEPT = re.compile(r"ADR-(\d{4}) Accepted \(Final (\d+)\)")
+
+
+def final_accepts(edits: list[tuple[str, str | None, str, str]]) -> list[str] | None:
+    """SPEC-0021 rule 3a (brief 557): the ADR paths when every `Final:` line of a covered fix list
+    is `docs/adr/<file> Proposed -> Accepted`, else None (today's path of rule 3 applies)."""
+    if not edits or any(
+        req is not None or old != "Proposed" or new != "Accepted" or not ADR_PATH.fullmatch(path)
+        for path, req, old, new in edits
+    ):
+        return None
+    return list(dict.fromkeys(path for path, *_ in edits))
+
+
 NOT_FIX_LIST = (
     "SPEC-0021 rule 1: a Final: line is read only under 'Verdict: fix list <sha>'; "
     "write that first line, or leave the Final: line out"
@@ -492,9 +507,40 @@ def open_section_ids(text: str, heading: str = "Open") -> set[str]:
     return found
 
 
+DECISIONS_DIR = "docs/runs/decisions"
+DECISION_FILE = re.compile(r"\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*\.md")
+TABLE_ROW = re.compile(r"\|.*\|")
+
+
+def decision_files(root: Path) -> list[Path]:
+    """The `.md` files of the decisions folder, sorted by name (SPEC-0009 rule 13, brief 557)."""
+    folder = root / DECISIONS_DIR
+    return sorted(folder.glob("*.md")) if folder.is_dir() else []
+
+
 def log_lines(root: Path) -> list[str] | None:
-    text = read_text(root, DECISIONS_LOG)
-    return None if text is None else text.splitlines()
+    """The decisions log: the old file, then one file per row of the folder in sorted order;
+    None when neither exists."""
+    texts = [read_text(root, DECISIONS_LOG)]
+    texts += [read_text(root, f"{DECISIONS_DIR}/{p.name}") for p in decision_files(root)]
+    found = [t for t in texts if t is not None]
+    if texts[0] is None and not decision_files(root):
+        return None
+    return [ln for text in found for ln in text.splitlines()]
+
+
+def decision_file_problems(root: Path) -> list[str]:
+    """Each file of the folder must be `<YYYY-MM-DD>-<id>.md` and hold exactly one table row."""
+    problems = []
+    for p in decision_files(root):
+        rel = f"{DECISIONS_DIR}/{p.name}"
+        if not DECISION_FILE.fullmatch(p.name):
+            problems.append(f"{rel}: a decision file is named <YYYY-MM-DD>-<id>.md")
+            continue
+        rows = [ln for ln in (read_text(root, rel) or "").splitlines() if TABLE_ROW.match(ln)]
+        if len(rows) != 1:
+            problems.append(f"{rel}: a decision file holds exactly one table row")
+    return problems
 
 
 def question_index(root: Path) -> dict[str, set[str]]:

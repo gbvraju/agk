@@ -44,6 +44,7 @@ from common import (
     base_context,
     changed_files,
     changed_lines,
+    decision_file_problems,
     find_questions,
     git,
     read_text,
@@ -297,6 +298,7 @@ def main(argv: list[str] | None = None) -> int:
             agent_apps(root),
         )
     messages += approval_failures(root, mb, changed, approvals)
+    messages += decision_file_problems(root)  # one row per decision file (brief 557)
     if body is None or not body.strip():
         print(f"{NAME}: no pull request body; the lifecycle rule for Advances is skipped")
     else:
