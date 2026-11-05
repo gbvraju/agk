@@ -15,7 +15,6 @@ ROOT = Path(__file__).resolve().parents[2]
 PRINCIPLES = ROOT / "constitution" / "principles.md"
 RULES = ROOT / "config" / "session-rules.md"
 PAGE = ROOT / "config" / "core-rules.md"
-SPEC = next((ROOT / "docs" / "specs").glob("0041-*.md"))
 AMENDMENT = ROOT / "docs" / "runs" / "proposed-spec-amendments-119.md"
 
 OLD_10 = (
@@ -61,6 +60,13 @@ CORE_LINE = (
     "- `session rule 37`: in personal mode a session never pushes to the customer, never "
     "confirms and never strips attribution."
 )
+
+
+def spec_path() -> Path:
+    """SPEC-0041, found at run time so that collection never reads `docs/`."""
+    found = sorted((ROOT / "docs" / "specs").glob("0041-*.md"))
+    assert len(found) == 1, found
+    return found[0]
 
 
 def read(path: Path) -> str:
@@ -139,8 +145,9 @@ def test_req048_check_requirements_in_team_mode_counts_only_markers_in_tests(rep
 
 def test_req048_amendment_119_is_applied_to_spec_0041():
     """REQ-048 AC5: amendment 119 (ruling D2: the levels in team mode, `light` by default)."""
-    assert SPEC.relative_to(ROOT).as_posix() in read(AMENDMENT)
-    text = read(SPEC)
+    spec = spec_path()
+    assert spec.relative_to(ROOT).as_posix() in read(AMENDMENT)
+    text = read(spec)
     rule = numbered(text)[31]
     for phrase in (
         "`[governance] level`",
@@ -156,6 +163,6 @@ def test_req048_amendment_119_is_applied_to_spec_0041():
 
 def test_req048_spec_0041_names_the_new_session_rule_by_its_number():
     """REQ-048 AC6: amendment 119 (the rule amendment 113 called 36 is session rule 37)."""
-    spec = read(SPEC)
+    spec = read(spec_path())
     assert "session rule 36" not in spec
     assert spec.count("session rule 37") == 4
