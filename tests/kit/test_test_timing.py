@@ -128,7 +128,11 @@ def test_a_junit_report_without_file_sums_by_classname(tmp_path):
 
 @pytest.mark.parametrize(
     "text",
-    ["<testsuite><testcase time='1'", "<testsuite><testcase time='soon'/></testsuite>", JUNIT_DOCTYPE],
+    [
+        "<testsuite><testcase time='1'",
+        "<testsuite><testcase time='soon'/></testsuite>",
+        JUNIT_DOCTYPE,
+    ],
     ids=["truncated", "bad-time", "doctype"],
 )
 def test_a_report_that_cannot_be_parsed_is_unknown_with_one_line(tmp_path, text):
@@ -389,7 +393,8 @@ def test_status_prints_a_separate_timing_line_after_a_result_whose_record_holds_
     lines, code = heavy_queue.status_lines(box, SETTINGS, 1, datetime.now(UTC), TICKET)
     (only,), _ = heavy_queue.status_lines(plain, SETTINGS, 1, datetime.now(UTC), TICKET)
     assert code == 0
-    assert lines == [f"result {TICKET} passed head {'e' * 12} in 61s", "  timing 42.8 s (durations)"]
+    result = f"result {TICKET} passed head {'e' * 12} in 61s"
+    assert lines == [result, "  timing 42.8 s (durations)"]
     assert only == lines[0]
 
 
