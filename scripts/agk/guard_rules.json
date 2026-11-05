@@ -175,7 +175,7 @@
   },
   {
    "id": "aws-amazon-bedrock-api-key-short-lived",
-   "regex": "bedrock-api-key-\u0059mVkcm9jay5hbWF6b25hd3MuY29t",
+   "regex": "bedrock-api-key-[Y]mVkcm9jay5hbWF6b25hd3MuY29t",
    "keywords": [
     "bedrock-api-key-"
    ],

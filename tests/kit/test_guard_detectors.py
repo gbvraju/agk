@@ -7,9 +7,11 @@ from a fixed seed, so no secret-like constant sits in this file.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import itertools
 import json
+import re
 import string
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 from pathlib import Path
@@ -137,6 +139,23 @@ def test_ac3_the_rule_file_as_written_trips_none_of_its_own_rules():
     """REQ-049 AC3: rule 10 (the governance secret scan stays green on the rule file itself)."""
     raw = (SCRIPTS / "guard_rules.json").read_text(encoding="utf-8")
     assert guard.scan_text(raw) == []
+
+
+def test_ac3_the_rule_file_trips_none_of_its_own_rules_after_unicode_decoding():
+    """REQ-049 AC3: rule 10 (gitleaks decodes `\\uXXXX` escapes, so an escape is no disguise)."""
+    raw = (SCRIPTS / "guard_rules.json").read_text(encoding="utf-8")
+    decoded = re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), raw)
+    assert guard.scan_text(decoded) == []
+
+
+def test_ac3_the_short_lived_bedrock_rule_still_matches_its_shape():
+    """REQ-049 AC3: rule 10 (the `[Y]` spelling of the rule matches the same text)."""
+    data = json.loads((SCRIPTS / "guard_rules.json").read_text(encoding="utf-8"))
+    (rule,) = [r for r in data["rules"] if r["id"] == "aws-amazon-bedrock-api-key-short-lived"]
+    # The prefix is built at run time from an example host name, so no literal sits in this file.
+    value = "bedrock-api-key-" + base64.b64encode(b"bedrock.amazonaws.com").decode() + made(B64, 40)
+    assert re.search(guard.py_regex(rule["regex"]), value)
+    assert kinds(f"export it as {value} now") == ["SECRET"]
 
 
 # --- rule 10: true negatives and the exclusions -------------------------------------------------
