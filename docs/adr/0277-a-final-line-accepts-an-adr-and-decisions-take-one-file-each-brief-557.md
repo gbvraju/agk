@@ -1,6 +1,6 @@
 # ADR-0277: A Final line accepts an ADR without a status commit, and decisions take one file each (brief 557)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-05
 - Deciders: maintainers
 - Related: ADR-0263, ADR-0265, ADR-0266, SPEC-0009, SPEC-0021, SPEC-0028, SPEC-0034, SPEC-0039, plan #542
