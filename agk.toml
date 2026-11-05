@@ -237,8 +237,8 @@ tests = [
   "tests/kit_dev/test_engines_local_profile.py", "tests/kit_dev/test_experimental_reviewer.py",
   "tests/kit_dev/test_guide_fixes.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_origin_message.py",
   "tests/kit_dev/test_pilot_gaps_first_pr.py", "tests/kit_dev/test_pilot_gaps_plans.py",
-  "tests/kit_dev/test_playbook.py", "tests/kit_dev/test_pr_bodies_kit.py", "tests/kit_dev/test_ruleset.py",
-  "tests/kit_dev/test_start_discovery.py", "tests/kit_dev/test_uninstall.py",
+  "tests/kit_dev/test_playbook.py", "tests/kit_dev/test_pr_bodies_kit.py", "tests/kit_dev/test_repo_proof_timeout.py",
+  "tests/kit_dev/test_ruleset.py", "tests/kit_dev/test_start_discovery.py", "tests/kit_dev/test_uninstall.py",
   "tests/kit_dev/test_upgrade_route_triggers.py",
 ]
 [[testing.map]]
@@ -254,7 +254,10 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/evidence.py"
-tests = ["tests/kit/test_evidence.py", "tests/kit/test_evidence_windows_tool.py", "tests/kit/test_long_temp_dir.py"]
+tests = [
+  "tests/kit/test_evidence.py", "tests/kit/test_evidence_windows_tool.py", "tests/kit/test_long_temp_dir.py",
+  "tests/kit/test_test_timing.py",
+]
 [[testing.map]]
 code = "scripts/agk/execution.py"
 tests = ["tests/kit/test_execution.py"]
@@ -360,7 +363,8 @@ tests = [
   "tests/kit/test_prepush_lock_inherited.py", "tests/kit/test_prepush_proof_timeout_warning.py",
   "tests/kit/test_prepush_queue.py", "tests/kit/test_prepush_record.py", "tests/kit/test_prepush_regression.py",
   "tests/kit/test_project_test_selection.py", "tests/kit/test_protected_changes_covered_by.py",
-  "tests/kit_dev/test_init.py", "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_make_once.py",
+  "tests/kit/test_test_timing.py", "tests/kit_dev/test_init.py", "tests/kit_dev/test_intelligent_testing.py",
+  "tests/kit_dev/test_make_once.py",
 ]
 [[testing.map]]
 code = "scripts/agk/product_report.py"
