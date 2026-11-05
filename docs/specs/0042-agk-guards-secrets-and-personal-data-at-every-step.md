@@ -1,6 +1,6 @@
 # SPEC-0042: AGK guards secrets and personal data at every step
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-049
 
