@@ -8,6 +8,9 @@ with only the pull request's test files of that area (brief #305, ADR-0172). Wha
 `plan`, which `test_plan.py` prints before anything runs (brief #325, ADR-0185). With `--manifest
 FILE` it also writes a Markdown test manifest: what ran, what did not, and why (brief #425,
 ADR-0230); with `--not-run draft|status-only` it runs nothing and writes the manifest of that skip.
+Each run of the manifest has one line of the head run's per-file timing, read from its output or
+the `[testing] junit` report as `impact.measure` reads it (SPEC-0044 rule 3, brief #560):
+`- timing: <total> s over <n> files (<source>)` or `- per-file timing: unknown`.
 With `[testing] proof_regression = true` and a `[proof]` table, once the pull request's own tests
 are proven, a third run executes on the head, never on the base, the regression tests that
 `impact.py` selects, each area's command with its selected files (brief #442, ADR-0238; off by
@@ -388,7 +391,27 @@ class Trees:
             raise Failure("a temporary worktree could not be removed (path class: temporary)")
 
 
-def run_pair(trees: list[Path], run: Run, limit: int, label: str = ""):
+def head_timing(run: Run, out: str, folder: Path, junit: str | None, since: float) -> None:
+    """Keep the head run's timing on `run` for the manifest (SPEC-0044 rule 3): its total and
+    file count, or None for `unknown`; a report that cannot be read prints one line."""
+    from impact import measure
+
+    source, sums, note = measure(out, folder, junit, since)
+    if note:
+        print(note, file=sys.stderr)
+    run.timing = None
+    if sums is not None:
+        run.timing = {"source": source, "total_seconds": round(sum(sums.values()), 3)}
+        run.timing["count"] = len(sums)
+
+
+def junit_of(root: Path) -> str | None:
+    from impact import junit_setting
+
+    return junit_setting(root)
+
+
+def run_pair(trees: list[Path], run: Run, limit: int, label: str = "", junit: str | None = None):
     """(run 1, run 2, seconds of the timed-out run or None, seconds of both runs). The command
     runs in `cwd` of each tree; a folder the base lacks is made empty there. The seconds of each
     run, and which one timed out, are kept on `run` for the manifest."""
@@ -402,8 +425,11 @@ def run_pair(trees: list[Path], run: Run, limit: int, label: str = ""):
         run.timed_out = "base"
         print(timeout_note(seconds1), file=sys.stderr)
         return None, None, seconds1, seconds1
+    since = time.time()
     status2, out2, seconds2 = execute(run.command, trees[1], limit, env=env)
     run.seconds[1] = seconds2
+    if status2 is not None:
+        head_timing(run, out2, trees[1], junit, since)
     show(f"run 2{label}: the head", out2)
     if status2 is None:
         run.timed_out = "head"
@@ -415,8 +441,9 @@ def run_pair(trees: list[Path], run: Run, limit: int, label: str = ""):
 def two_runs(root: Path, base: str, head: str, files: dict[str, str], run: Run, limit: int):
     """(run 1, run 2, seconds): exit statuses, None for a timeout, None for run 2 when it was not
     made; seconds is the time of the run that timed out, else None."""
+    junit = junit_of(root)
     with Trees(root, base, head, files) as trees:
-        status1, status2, seconds, _ = run_pair(trees, run, limit)
+        status1, status2, seconds, _ = run_pair(trees, run, limit, junit=junit)
     return status1, status2, seconds
 
 
@@ -438,14 +465,16 @@ def run_areas(root: Path, base: str, head: str, shown: Plan, limit, regression=N
     """Each run of the plan, on the base (all the areas' tests placed) and on the head; then,
     once every area is proven, the third run of `regression` on the head only (brief #442)."""
     areas = {a["name"]: a for a in shown.areas or []}
+    junit = junit_of(root)
     with Trees(root, base, head, shown.files) as trees:
         for run in shown.runs:
-            status1, status2, elapsed, seconds = run_pair(trees, run, limit, f" ({run.name})")
+            label = f" ({run.name})"
+            status1, status2, elapsed, seconds = run_pair(trees, run, limit, label, junit)
             area = areas[run.name]
             area["outcome"], area["reason"] = decide(status1, status2)
             area["seconds"], area["elapsed"] = seconds, elapsed
         if regression is not None and combine(list(areas.values()))[0] == "proven":
-            run_regression(trees[1], regression, limit)
+            run_regression(trees[1], regression, limit, junit)
 
 
 def combine(areas: list[dict]) -> tuple[str, str | None, int | None]:
@@ -482,6 +511,7 @@ class Run:
     seconds: list[int | None] | None = None  # [base, head] once run; None for a run not made
     timed_out: str | None = None  # "base" or "head": the run that was ended by proof_timeout
     outcome: str | None = None  # a regression run: passed, failed or timeout; None until made
+    timing: dict | None = None  # the head run's per-file timing (SPEC-0044 rule 3); None: unknown
 
 
 @dataclass
@@ -615,11 +645,16 @@ def regression_plan(root: Path, base: str, head: str, shown: Plan) -> Regression
     return Regression(runs, None, [f for f in files if f not in placed])
 
 
-def run_regression(head_tree: Path, regression: Regression, limit: int) -> None:
+def run_regression(
+    head_tree: Path, regression: Regression, limit: int, junit: str | None = None
+) -> None:
     """Each regression run on the head worktree only; proof_timeout applies to each one."""
     for run in regression.runs:
         cwd = head_tree / run.cwd
+        since = time.time()
         status, out, seconds = execute(run.command, cwd, limit, env=temp_env())
+        if status is not None:
+            head_timing(run, out, cwd, junit, since)
         run.seconds = [None, seconds]
         show(f"run 3 ({run.name}): regression tests on the head", out)
         if status is None:
@@ -745,7 +780,15 @@ def ran_lines(run: Run) -> list[str]:
         lines.append(f"- seconds: base {base}, head {head} (timed out, setting: proof_timeout)")
     else:
         lines.append(f"- seconds: base {base}, head {head_text}")
-    return lines + [""]
+    return [*lines, timing_line(run), ""]
+
+
+def timing_line(run: Run) -> str:
+    """The head run's per-file timing (SPEC-0044 rule 3)."""
+    if run.timing is None:
+        return "- per-file timing: unknown"
+    total, count, source = run.timing["total_seconds"], run.timing["count"], run.timing["source"]
+    return f"- timing: {total:.1f} s over {count} files ({source})"
 
 
 def regression_lines(run: Run) -> list[str]:
@@ -762,7 +805,7 @@ def regression_lines(run: Run) -> list[str]:
     else:
         lines.append(f"- seconds: head {head}")
     lines.append(f"- outcome: {run.outcome}")
-    return lines + [""]
+    return [*lines, timing_line(run), ""]
 
 
 def not_run_lines(result: Result, body_unchanged: bool) -> list[str]:
