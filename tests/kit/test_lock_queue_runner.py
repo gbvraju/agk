@@ -336,7 +336,8 @@ def fake_gh(tmp_path: Path, briefs: dict[int, str], open_items: list[dict] | Non
         "    print(json.dumps(data['open'] if 'page=1' in tail.split('&') else [])); sys.exit(0)\n"
         "number = tail.lstrip('/')\n"
         "if number in data['briefs']:\n"
-        "    print(json.dumps({'number': int(number), 'body': data['briefs'][number]})); sys.exit(0)\n"
+        "    print(json.dumps({'number': int(number), 'body': data['briefs'][number]}))\n"
+        "    sys.exit(0)\n"
         "sys.stderr.write('HTTP 404: Not Found\\n'); sys.exit(1)\n",
         encoding="utf-8",
     )
