@@ -12,9 +12,8 @@ import sys
 import time
 from pathlib import Path
 
-import pytest
-
 import guard_logs
+import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "agk" / "guard_logs.py"
 LIMIT_SECONDS = 30  # Q-S0042-9: a 10 MB log within 30 seconds on the CI runner

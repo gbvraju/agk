@@ -13,10 +13,10 @@ import string
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 from pathlib import Path
 
+import guard
 import pytest
 
 import config
-import guard
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 RNG = random.Random(561)  # a fixed seed: the same invented values on every run
@@ -44,7 +44,8 @@ def test_ac3_each_personal_kind_is_found_with_its_position_and_never_its_text():
     """REQ-049 AC3: rule 10 (EMAIL, PHONE, CARD, AADHAAR, PAN, IP)."""
     text = (
         f"mail person@mail.example.io\nphone +44 20 7946 0958 and {PHONE}\n"
-        f"card {CARD}\naadhaar {AADHAAR}\npan ABCDE1234F\nip 10.1.2.3 and fe80::1ff:fe23:4567:890a\n"
+        f"card {CARD}\naadhaar {AADHAAR}\npan ABCDE1234F\n"
+        "ip 10.1.2.3 and fe80::1ff:fe23:4567:890a\n"
     )
     found = guard.scan_text(text)
     assert [f.kind for f in found] == [
