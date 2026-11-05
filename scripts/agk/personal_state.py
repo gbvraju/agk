@@ -22,6 +22,7 @@ import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
+from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -78,12 +79,12 @@ REVIEWERS = (
 TEST_MAP = "# REQ-n ACm -> test ids (path::name); no marker is written into the product's tests.\n"
 
 
-def agk_home(env: dict | None = None, osname: str | None = None) -> Path:
+def agk_home(env: Mapping[str, str] | None = None, osname: str | None = None) -> Path:
     """`AGK_HOME`, else `~/.agk` on POSIX and `%USERPROFILE%\\.agk` on Windows (rule 2)."""
-    env = os.environ if env is None else env
-    if env.get(HOME_SETTING):
-        return Path(env[HOME_SETTING])
-    base = env.get("USERPROFILE" if (osname or os.name) == "nt" else "HOME")
+    values: Mapping[str, str] = os.environ if env is None else env
+    if values.get(HOME_SETTING):
+        return Path(values[HOME_SETTING])
+    base = values.get("USERPROFILE" if (osname or os.name) == "nt" else "HOME")
     if not base:
         raise CheckError(f"no home folder for the state (setting: {HOME_SETTING})")
     return Path(base) / ".agk"
