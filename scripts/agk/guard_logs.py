@@ -6,10 +6,11 @@ Brief #561. Each finding of `guard.scan_text` is replaced by `[<KIND>-<n>]`, num
 order of first appearance over the lines printed, so one value keeps one label in a run; the
 mapping lives in memory only. Everything else of a line is printed unchanged. `--max-lines N`
 (default 2000) prints only the last N lines. The last line holds counts per kind only. Bytes that
-are not UTF-8 are replaced. It opens no socket, runs no program other than one local `git show`
-(the `[guard]` table of the default branch, no network) and writes no file. A usage error, a file
-it cannot read or a refused `[guard]` table exits 2, naming the option or the setting, never a
-path or a value.
+are not UTF-8 are replaced. It opens no socket, runs no program and writes no file: the
+`[guard] patterns` come from the nearest `agk.toml` at or above the current folder, found by
+walking up (patterns only add, so no default-branch check is needed). A usage error, a file it
+cannot read or a refused `[guard]` table exits 2, naming the option or the setting, never a path
+or a value.
 """
 
 from __future__ import annotations
@@ -20,7 +21,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, repo_root
 from guard import scan_text
 
 import config
@@ -89,11 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         max_lines, source = parse(args)
         try:
-            root = repo_root()
-        except CheckError:
-            root = Path.cwd()  # outside a repository: agk.toml of this folder, no escape counts
-        try:
-            patterns = config.guard_settings(root)["patterns"]
+            patterns = config.guard_patterns(Path.cwd())
         except config.GuardSettingError as exc:
             raise Usage(str(exc)) from None
         text = read_tail(source, max_lines)

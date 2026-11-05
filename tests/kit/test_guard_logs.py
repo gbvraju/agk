@@ -131,6 +131,43 @@ def test_ac3_no_socket_is_opened_and_no_file_is_written(tmp_path, monkeypatch, c
     assert "[EMAIL-1]" in capsys.readouterr().out
 
 
+def test_ac3_it_runs_no_program_and_opens_no_socket(tmp_path, monkeypatch, capsys):
+    """REQ-049 AC3: rule 11 (runs no program, opens no socket), inside a git repository too."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "app.log").write_text(LOG, encoding="utf-8")
+
+    def refuse(*_a, **_k):
+        raise AssertionError("a program was run or a socket was opened")
+
+    for name in ("run", "Popen", "call", "check_call", "check_output"):
+        monkeypatch.setattr(subprocess, name, refuse)
+    monkeypatch.setattr(socket, "socket", refuse)
+    monkeypatch.chdir(tmp_path)
+    assert guard_logs.main(["app.log"]) == 0
+    out = capsys.readouterr().out
+    assert "[EMAIL-1]" in out and "ana@" not in out
+
+
+def test_ac3_the_guard_table_is_found_by_walking_up_from_the_folder(tmp_path, monkeypatch, capsys):
+    """REQ-049 AC1 and AC3: rules 1 and 11, the nearest agk.toml above the folder, patterns only."""
+    (tmp_path / "agk.toml").write_text(
+        "[guard]\npatterns = [{ name = 'employee', regex = 'EMP-\\d{5}' }]\n"
+        "allow_paths = [{ path = 'docs/a.md', reason = 'r' }]\n",
+        encoding="utf-8",
+    )
+    deep = tmp_path / "svc" / "logs"
+    deep.mkdir(parents=True)
+    (deep / "a.log").write_text("id EMP-12345\n", encoding="utf-8")
+    monkeypatch.setattr(subprocess, "run", lambda *_a, **_k: (_ for _ in ()).throw(OSError()))
+    monkeypatch.chdir(deep)
+    assert guard_logs.main(["a.log"]) == 0
+    assert capsys.readouterr().out == "id [CUSTOM-employee-1]\nagk logs: CUSTOM-employee 1\n"
+    (tmp_path / "agk.toml").write_text("[guard]\nenabled = false\n", encoding="utf-8")
+    assert guard_logs.main(["a.log"]) == 2
+    out = capsys.readouterr().out
+    assert "(setting: [guard] enabled)" in out and "EMP" not in out
+
+
 def test_ac3_a_10_mb_generated_log_is_redacted_within_the_limit(tmp_path):
     """REQ-049 AC3: rule 11 and Q-S0042-9 (speed)."""
     lines = []

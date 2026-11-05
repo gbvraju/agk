@@ -117,6 +117,21 @@ def guard_settings(root: Path) -> dict:
     return settings
 
 
+def guard_patterns(start: Path) -> list:
+    """The `[guard] patterns` of the nearest agk.toml at or above START, read with no program and
+    no network, for the log reader (SPEC-0042 rule 11): patterns only add, so they need no
+    default-branch check. No agk.toml means none; a refused table raises GuardSettingError."""
+    for folder in (start, *start.parents):
+        path = folder / "agk.toml"
+        if path.is_file():
+            try:
+                source = tomllib.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                raise _refuse("guard") from None
+            return _guard_table(source)["patterns"]
+    return []
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if len(args) != 1:
