@@ -39,9 +39,11 @@ OLD_CLAUDE_ITEMS = {
         "enable auto-merge. Never post a comment whose first line is `Confirmed:`: in "
         "solo mode you print its text and the person posts it (session rule 29)."
     ),
+    # Item 3 carries the clause of ADR-0271 (brief #545, owner ruling D1 on plan #542).
     3: (
         "Protected paths (`config/protected-paths.txt`) change only with an ADR in the "
-        "same PR that names each changed path class."
+        "same PR that names each changed path class, or, for a build of an Approved spec, "
+        "a `Covered-by:` line naming that spec's Accepted ADR, which names the class."
     ),
     4: "Tests first. Every check ships with tests of the check. You never mark anything done.",
     5: "No secrets anywhere, ever; no network calls in checks; no new ignore entries for scanners.",

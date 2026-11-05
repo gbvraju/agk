@@ -51,6 +51,9 @@ exactly `python3 scripts/agk/session.py tell --session <id> --text <message>`, t
 that order, a session ID that is not an option, and a message of one line of 1 to 300 characters
 that does not start with `Approve:`, `Confirmed:` or `Verdict:` (the shape `session.py tell`
 itself requires).
+Without `--shadow` the conductor may also run exactly `python3 scripts/agk/session.py tidy --apply`
+(brief #548, ADR-0272), which removes only finished builder worktrees and local branches with
+nothing unsaved and never a remote branch; any other form of `tidy` stays denied.
 Without `--shadow` the conductor may also re-plan at the end of a review pass (brief #331,
 ADR-0190): exactly `python3 scripts/agk/session.py plan --json` (read-only, as the queue commands),
 and `python3 scripts/agk/launch.py prompts --plan <file>`, the project's own regular `launch.py` and
@@ -160,6 +163,7 @@ QUEUE_FORMS = (  # the read-only commands of the conductor's queue (brief 284), 
     ["review-queue", "--fingerprint"],
     ["queue", "--role", "conductor"],
     ["plan", "--json"],  # the re-plan at the end of a pass (brief #331)
+    ["tidy", "--apply"],  # finished builders, at the start and after each merge (brief #548)
 )
 SESSION_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")  # a session ID, never an option
 TELL_LIMIT = 300  # the longest message of `session.py tell` (brief 327)

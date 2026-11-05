@@ -2,7 +2,7 @@
 
 The twelve rules. Briefs cite them by number.
 
-1. A protected change requires an ADR in the same PR.
+1. A protected change requires an ADR in the same PR, or, for a build of an Approved spec, a `Covered-by:` line naming that spec's Accepted ADR, which names the class.
 2. Agents never merge, and never bypass checks. The one exception: with `auto_merge = true` on the default branch, the conductor alone may merge a pull request it cleared, and only through `scripts/agk/merge_cleared.py`.
 3. One PR per item, branched from the default branch; never stacked on another's unmerged change (a dependence is declared with `Depends-on`).
 4. Build-state is only appended, and only by docs commits.

@@ -128,6 +128,7 @@ BODY_STEPS = {
     "PR body file",
     "PR comments",
     "PR states and open pull requests",
+    "check_protected_changes",  # reads `Covered-by:` (brief #545, ADR-0271)
     "check_specs",
     "check_pr_mode",
     "Open briefs",
