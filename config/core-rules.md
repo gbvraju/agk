@@ -18,6 +18,7 @@ All of `constitution/principles.md`, principles 1 to 12, is core; it is short, s
 - `session rule 29`: a session never posts a `Confirmed:` comment, which is the person's own.
 - `session rule 30`: when GitHub Actions is blocked a session follows the local-mode guide and leaves workflows to a person.
 - `session rule 33`: a session checks the default branch for a pause first and on every wake, and stops when paused.
+- `session rule 37`: in personal mode a session never pushes to the customer, never confirms and never strips attribution.
 - `CLAUDE.md item 3`: a protected path changes only with an ADR in the same pull request that names its class.
 - `CLAUDE.md item 5`: no secrets, no network calls in checks and no new scanner ignore entries.
 - `CLAUDE.md item 8`: no token of the neutrality list appears in a tracked file.

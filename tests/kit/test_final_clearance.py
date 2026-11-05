@@ -38,7 +38,10 @@ def adr(status: str) -> str:
 
 
 def scenario(repo) -> str:
-    """The reviewed head: an ADR `Proposed` and two requirements `planned`."""
+    """The reviewed head: an ADR `Proposed` and two requirements `planned`, added by the pull
+    request's branch (SPEC-0021 rule 3a reads the files it adds or changes from the merge base)."""
+    repo.commit({"README.md": "base\n"}, "base")
+    repo.branch()
     repo.commit({"config/reviewers.yaml": CONFIG, ADR: adr("Proposed"), REQS: REQ_TEXT}, "reviewed")
     return repo.git("rev-parse", "HEAD").strip()
 

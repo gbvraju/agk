@@ -26,6 +26,7 @@ from common import (
     CheckError,
     agent_apps,
     covered_fix_list,
+    final_accepts,
     git,
     matches,
     parse_estimate,
@@ -820,6 +821,9 @@ def merged_head_cleared(src: Any, head: str, comments: Any, authors: list[str] |
         return UNKNOWN
     if any(k == "cleared" and head.startswith(sha) for k, sha in listed):
         return "yes"
+    covered = covered_fix_list(latest_verdict_body(comments, authors))
+    if covered and head and head.startswith(covered[0]) and final_accepts(covered[1]):
+        return "yes"  # SPEC-0021 rule 3a: a Final line that accepts an ADR on the head clears it
     return covered_head(src, head, comments, authors)
 
 

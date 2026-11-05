@@ -61,6 +61,17 @@ RULE_8_OLD_TAIL = (
 RULE_8_NEW_LEAD = "The release model, as SPEC-0028 amended it (amendment 50, item 2): "
 
 
+# Amendment 118 (brief #557, ADR-0277) rules the open question of rule 19 by appending this text.
+RULE_19_RULED = (
+    " Ruled by amendment 118 (ADR-0277, brief 557), since GitHub's check does not honour"
+    " `merge=union`: the decisions log takes one file per entry,"
+    " `docs/runs/decisions/<YYYY-MM-DD>-<id>.md` with one table row, read after the old file in"
+    " sorted order (SPEC-0009 rule 13); `docs/runs/decisions-log.md` is frozen at its length,"
+    " `check_specs.py` fails a change to it, and the intake records its rulings as such files; the"
+    " union mark stays for `docs/runs/residuals.md` and the catch logs."
+)
+
+
 def digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
@@ -126,6 +137,9 @@ def test_each_rule_of_spec_0025_is_in_spec_0034_unchanged(n):
     title, pin = OLD[n]
     assert moved is not None, f"SPEC-0034 rule {n + OFFSET}"
     assert moved.startswith(f"**{title}**")
+    if n == 3:  # rule 19 keeps its text and gains the ruling of amendment 118 at its end
+        assert moved.endswith(RULE_19_RULED)
+        moved = moved[: -len(RULE_19_RULED)]
     assert digest(moved) == pin
 
 

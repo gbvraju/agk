@@ -188,6 +188,7 @@ def world(**saved: object) -> dict:
         "runs": GREEN_RUNS,
         "files": [{"filename": "scripts/agk/example.py", "status": "modified", "patch": "+x"}],
         "items": {},
+        "commits": [{"sha": HEAD, "commit": {"message": "Example change\n\nA body.\n"}}],
         "merge": {"sha": MERGE, "merged": True, "message": "Pull Request successfully merged"},
     }
     base.update({k: v for k, v in saved.items() if v is not None})
@@ -239,6 +240,8 @@ elif parts[0] == 'pulls' and len(parts) == 2 and parts[1] == '7':
     out = data['pull']
 elif parts[0] == 'pulls' and parts[2:] == ['files']:
     out = paged(data['files'][:3000])  # GitHub lists at most 3,000 files
+elif parts[0] == 'pulls' and parts[2:] == ['commits']:
+    out = paged(data['commits'][:250])  # GitHub lists at most 250 commits
 elif parts[0] == 'issues' and parts[2:] == ['comments']:
     out = paged(data['comments'])
 elif parts == ['issues']:
@@ -252,6 +255,8 @@ elif parts[0] in ('issues', 'pulls') and len(parts) == 2 and parts[1] in data['i
         out = item['pull']
     else:
         out = {k: v for k, v in item.items() if k != 'pull'}
+elif parts[0] == 'contents' and '/'.join(parts[1:]) in data.get('contents', {}):
+    out = data['contents']['/'.join(parts[1:])]
 else:
     fail(404)
 print(json.dumps(out))
@@ -287,6 +292,8 @@ def fake_gh(
     data = world(pull=pull, comments=comments, **saved)
     if changed and isinstance(data["pull"], dict) and "changed_files" not in data["pull"]:
         data["pull"] = {**data["pull"], "changed_files": len(data["files"])}
+    if changed and isinstance(data["pull"], dict) and "commits" not in data["pull"]:
+        data["pull"] = {**data["pull"], "commits": len(data["commits"])}
     path.write_text(json.dumps(data), encoding="utf-8")
     script = bin_dir / "gh"
     script.write_text(
@@ -304,8 +311,11 @@ def fake_gh(
     return bin_dir, log
 
 
-def merge_call(number: int = 7, sha: str = HEAD) -> list[str]:
-    """The one merge call of SPEC-0039 rule 6, pinned to the head."""
+def merge_call(
+    number: int = 7, sha: str = HEAD, message: str = "Merged-by: merge_cleared.py"
+) -> list[str]:
+    """The one merge call of SPEC-0039 rule 6, pinned to the head, with merge_cleared.py's own
+    squash message (brief #557: never GitHub's default, which copies the commit bodies)."""
     return [
         "api",
         "--method",
@@ -315,6 +325,8 @@ def merge_call(number: int = 7, sha: str = HEAD) -> list[str]:
         f"sha={sha}",
         "-f",
         "merge_method=squash",
+        "-f",
+        f"commit_message={message}",
     ]
 
 
@@ -729,6 +741,7 @@ def test_the_reads_are_rest_gets_as_argument_lists_with_no_jq(tmp_path):
         ["api", "--method", "GET", f"repos/{REPO}/issues?state=open&per_page=100&page=1"],
         ["api", "--method", "GET", f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100&page=1"],
         ["api", "--method", "GET", f"repos/{REPO}/pulls/7/files?per_page=100&page=1"],
+        ["api", "--method", "GET", f"repos/{REPO}/pulls/7/commits?per_page=100&page=1"],
         merge_call(),
         made[-1],
     ]

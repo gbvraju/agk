@@ -11,6 +11,6 @@ The twelve rules. Briefs cite them by number.
 7. Questions are recorded, never guessed; unconfirmed facts are marked (verify).
 8. Refusals name the setting or path class, never the value.
 9. No secrets in the repository or in an agent session; scanners' ignore lists never grow.
-10. Dates come from `date -u`; PR bodies state what they advance; tests carry REQ markers.
+10. Dates come from `date -u`; PR bodies state what they advance; tests carry REQ markers or, in personal mode, the state's test map.
 11. A check is never weakened to go green; it is changed by ADR.
 12. Unattended work stops on ambiguity and reports per PR.

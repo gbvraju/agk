@@ -18,8 +18,9 @@ CLAUDE = ROOT / "CLAUDE.md"
 RULES = ROOT / "config" / "session-rules.md"
 PRINCIPLES = ROOT / "constitution" / "principles.md"
 
-# Row 13: the safety rules and the working rules of the core, by number.
-SAFETY_SESSION_RULES = {2, 14, 15, 22, 29, 30, 33}
+# Row 13: the safety rules and the working rules of the core, by number; session rule 37 is the
+# personal-mode rule of SPEC-0041 build (b) (brief #562, ADR-0280).
+SAFETY_SESSION_RULES = {2, 14, 15, 22, 29, 30, 33, 37}
 SAFETY_CLAUDE_ITEMS = {3, 5, 8}
 WORKING_SESSION_RULES = {1, 3, 7, 17, 18, 21, 31}
 
@@ -73,7 +74,8 @@ KEPT_IN_CLAUDE = {2, 10}
 
 COMPACTION = (
     "## Compaction recovery\n\nAfter compaction or a new session, re-read CLAUDE.md, "
-    "the current brief, `docs/runs/decisions-log.md` and the\nopen PR body before acting.\n"
+    "the current brief, `docs/runs/decisions-log.md` and the\nopen PR body before acting. "
+    "A new decisions-log row is one file under `docs/runs/decisions/`; the old log is frozen.\n"
 )
 
 REF = re.compile(r"`?(session rule|principle|CLAUDE\.md item) (\d+)`?")

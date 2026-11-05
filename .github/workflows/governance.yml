@@ -183,10 +183,24 @@ jobs:
             done
             gh api --paginate --method GET "repos/${{ github.repository }}/pulls?state=open&per_page=100" --jq ".[] | select(.user.login == \"$PR_AUTHOR\") | {number: .number}" > "$RUNNER_TEMP/open-prs.json"
           fi
+      - name: Record comments
+        # The Final comment of each record line (SPEC-0021 rule 3a, brief #557): the release check and the release
+        # exemption of check_protected_changes count a record only once its comment verifies it. A comment that
+        # cannot be read is left out, so its record counts for nothing (fail closed).
+        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          : > "$RUNNER_TEMP/record-comments.json"
+          if [ -f kit/agk-kit.mk ]; then
+            for id in $(python scripts/agk/check_adrs.py --record-ids); do
+              gh api --method GET "repos/${{ github.repository }}/issues/comments/$id" >> "$RUNNER_TEMP/record-comments.json" || echo "Record comments: comment $id could not be read"
+            done
+          fi
       - name: check_protected_changes
         # Reads the body's `Covered-by:` line (brief #545, ADR-0271), so it runs on an edited description too.
         if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
-        run: python scripts/agk/check_protected_changes.py --body "$RUNNER_TEMP/pr-body.md"
+        run: python scripts/agk/check_protected_changes.py --body "$RUNNER_TEMP/pr-body.md" --comments "$RUNNER_TEMP/record-comments.json"
       - name: check_requirements
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_requirements.py
@@ -236,7 +250,7 @@ jobs:
       # The release pull request check is a kit script (SPEC-0028): it runs where the kit's own suite is installed.
       - name: Release check
         if: ${{ !cancelled() && hashFiles('kit/agk-kit.mk') != '' && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
-        run: python scripts/agk/check_release.py
+        run: python scripts/agk/check_release.py --comments "$RUNNER_TEMP/record-comments.json"
       - name: Open briefs
         if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.paused.outputs.paused != 'true' }}
         env:
