@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 from test_merge_cleared_verdict import (
+    AUTO_ISSUE,
     BUILDER,
     CONDUCTOR,
     GREEN_RUNS,
@@ -416,7 +417,11 @@ def test_the_red_branch_issue_holds_everything(tmp_path):
 
 def test_an_issue_of_another_title_or_a_pull_request_of_that_title_is_not_red(tmp_path):
     """REQ-046 AC4: SPEC-0039 rule 5 (the one issue of that title)."""
-    others = [{"number": 91, "title": "The default branch is green"}, {**RED, "pull_request": {}}]
+    others = [
+        {"number": 91, "title": "The default branch is green"},
+        {**RED, "pull_request": {}},
+        AUTO_ISSUE,
+    ]
     proc, _ = merge_cleared_run(tmp_path, toml(ON), [bare()], issues=others)
     assert one_line(proc) == MERGED
 
@@ -500,8 +505,9 @@ def test_a_merge_is_one_pinned_put_and_one_line(tmp_path):
     proc, made = merge_cleared_run(tmp_path, toml(ON), [cleared()])
     assert proc.stdout == MERGED + "\n" and proc.returncode == 0
     writes = [c for c in made if c[2] != "GET"]
-    assert writes == [merge_call()]
-    assert made[-1] == merge_call(), "the merge is the last call"
+    record = ["api", "--method", "POST", f"repos/{REPO}/issues/41/comments"]
+    assert writes[0] == merge_call() and [c[:4] for c in writes[1:]] == [record]
+    assert made[-2:] == writes, "the merge, then the record line of build (c), are the last calls"
 
 
 def test_every_call_is_a_rest_get_but_the_merge_and_nothing_tags_approves_or_pushes(tmp_path):
@@ -511,7 +517,9 @@ def test_every_call_is_a_rest_get_but_the_merge_and_nothing_tags_approves_or_pus
     )
     assert proc.returncode == 0
     for argv in made:
-        assert argv[:2] == ["api", "--method"] and argv[2] in ("GET", "PUT"), argv
+        assert argv[:2] == ["api", "--method"] and argv[2] in ("GET", "PUT", "POST"), argv
+        if argv[2] == "POST":  # build (c): the one record line (SPEC-0039 rule 7)
+            assert argv[3] == f"repos/{REPO}/issues/41/comments", argv
         assert argv[3].startswith(f"repos/{REPO}/"), argv
         assert "--jq" not in argv and "graphql" not in " ".join(argv)
         for word in ("/reviews", "/git/refs", "/git/tags", "/releases", "/contents", "/labels"):
@@ -635,10 +643,13 @@ def test_the_script_runs_once_with_no_timer_and_no_head_command():
         "sched.",
         "ScheduleWakeup",
         "while True:\n        merge",
-        '"make"',
         "git push",
     ):
         assert word not in text, word
+    # build (c) (brief #551): `make` runs only in the governance run on the merged default branch
+    assert text.count('"make"') == 1, "make appears once"
+    run_body = text.split("def governance_argv(", 1)[1].split("\ndef ", 1)[0]
+    assert '"make"' in run_body, "only the governance run names make"
     assert text.count('--method", "PUT"') <= 1 and '"PUT"' in text
 
 
