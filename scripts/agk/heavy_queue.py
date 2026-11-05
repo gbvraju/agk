@@ -11,9 +11,7 @@ mutex. A job is running once the runner (build (b)) has written its `started` ti
 The order (rule 5): under `fifo` the sequence number only; under `priority` the job's priority (0
 first, `unknown` last), then the sequence number, with every job waiting longer than
 `queue_max_wait` minutes first, by sequence number. The estimate (rule 7) comes from past results
-only. After a result line, `timing_lines` adds one separate line with the timing total of the
-result's prepush record (SPEC-0044 rule 3, brief #560). Standard library only; no network, no
-process started.
+only. Standard library only; no network, no process started.
 """
 
 from __future__ import annotations
