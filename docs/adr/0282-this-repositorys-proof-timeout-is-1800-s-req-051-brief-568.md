@@ -1,6 +1,6 @@
 # ADR-0282: This repository's proof_timeout is 1800 s (REQ-051, brief 568)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-05
 - Deciders: maintainers
 - Related: ADR-0258, SPEC-0044
