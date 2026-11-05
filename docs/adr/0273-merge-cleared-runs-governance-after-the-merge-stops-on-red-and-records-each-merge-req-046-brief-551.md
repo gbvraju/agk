@@ -6,7 +6,7 @@
 - Related: ADR-0261, ADR-0263, ADR-0265, SPEC-0039, SPEC-0032
 - Requirements: REQ-046
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `.claude/`
 
 ## Context
 
@@ -56,12 +56,31 @@ line). The ADR number was reserved for brief #551 by the conductor (the field no
    wrote it, holds every later run (build b's `held: the default branch is red (rule 5)`); the
    `merge-cleared` lock makes a second run wait until the first run's governance and issue are
    done.
-7. The build (b) test fixtures change only where build (c) needs them: the saved world holds one
+7. **A run that cannot finish is red (the fix list on 9782ebb, #556).** The heavy-lock wait is
+   bounded: the governance argument list passes `lock.py run ... --timeout <S>`, S being
+   `[flow] after_merge_timeout` of the default branch in minutes (a whole number of at least 1;
+   30 when absent) times 60. The setting is read with the others before the merge; any other value
+   is refused, naming the setting, and nothing merges. `lock.py`'s exit 3 (the lock not taken in
+   time) is the failing step `heavy lock`. Everything after the merge (the record line, the fetch,
+   the temporary folder, the worktree, the run) is one block: any exception, `KeyboardInterrupt`,
+   or SIGTERM or SIGHUP (turned into an exception for that block, the handlers put back after it)
+   counts as the step `governance not finished`, and the red-branch issue is opened or updated
+   before the command prints the stop line and exits 1; a failure or an interrupt while that issue
+   is written is said on the stop line (`(the red-branch issue cannot be written)`). The run is
+   started with `subprocess.Popen`, so an interrupt ends `lock.py` with a termination (it ends
+   its command and frees the heavy lock) before the worktree is removed.
+8. **The conductor starts the command in the background.** `.claude/agents/conductor.md` says that
+   the governance run is in the foreground, inside the `merge-cleared` lock and behind a builder's
+   full suite (about 17 minutes), so the conductor starts `merge_cleared.py` as a background
+   command and keeps reviewing; other merges wait on the `merge-cleared` lock by design, one
+   checked merge at a time.
+9. The build (b) test fixtures change only where build (c) needs them: the saved world holds one
    open `agk-auto-merge` issue, the fake `gh` answers the writes of this build, a fake `make`
    records its argument list and environment, the remote is a local bare repository whose path
    ends `github.com/<owner>/<repo>.git` (so nothing reaches the network) holding a fixed merge
    commit, and the text check that `"make"` never appears now allows it only in the governance
-   run.
+   run. The text check that `open(` never appears does not count `subprocess.Popen(` of the
+   governance run.
 
 ## Consequences
 
@@ -71,6 +90,10 @@ red-branch brief and holds every later merge until it is closed. `kit/manifest.j
 `kit/hashes.json` are unchanged: no new file is installed.
 
 ## Residual
+
+- 2026-11-05: `--timeout` bounds the wait for the heavy lock, not the governance run itself; a run
+  that hangs once it holds the lock is ended only by an interrupt or a termination (then red, item
+  7) (Q-551-4, due 2026-12-31).
 
 - 2026-11-04: the red-branch issue the command opens is written under the conductor's login, so
   the router's `is_red` (which trusts only its own token) neither updates nor closes it; the

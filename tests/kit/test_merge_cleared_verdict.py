@@ -830,8 +830,8 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     assert '"POST", f"repos/{repo}/issues/{issue}/comments"' in text
     words = ('"PATCH"', '"DELETE"', ".write_text(", "open(", '"push"', "--jq")
     words += ("shell=True", "graphql", '"tag"', "/reviews")
-    for word in words:
-        assert word not in text, word
+    for word in words:  # `subprocess.Popen(` of the governance run is not a file open (#556)
+        assert word not in text.replace("subprocess.Popen(", "subprocess.Popen ("), word
 
 
 def test_the_script_is_installed_and_the_templates_carry_the_commented_keys():

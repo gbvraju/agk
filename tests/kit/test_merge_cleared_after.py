@@ -549,8 +549,12 @@ def test_a_temporary_folder_that_cannot_be_made_is_red(tmp_path, monkeypatch, ca
     """REQ-046 AC6: fix list item 2 (no temporary folder: the red-branch issue, the stop line)."""
     root = in_process(tmp_path, monkeypatch)
 
-    def refuse(*args, **kwargs):
-        raise OSError(28, "No space left on device")
+    made_by = tempfile.mkdtemp
+
+    def refuse(*args, **kwargs):  # only the folder of the governance run; lock.py's still made
+        if str(kwargs.get("prefix", "")).startswith("agk-merge-cleared-"):
+            raise OSError(28, "No space left on device")
+        return made_by(*args, **kwargs)
 
     monkeypatch.setattr(merge_cleared.tempfile, "mkdtemp", refuse)
     code, lines, made = main_in(root, capsys)

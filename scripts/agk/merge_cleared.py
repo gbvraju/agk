@@ -35,6 +35,9 @@ red-branch issue through `route.write_red`, prints
     merge-cleared: stopped: default branch red after #<n>         exit 1
 
 and that open issue holds every later run. It never reverts, writes no file and pushes nothing.
+The heavy-lock wait is bounded by `[flow] after_merge_timeout` (minutes, 30 by default; lock.py's
+exit 3 is the step `heavy lock`), and any exception, interrupt or SIGTERM after the merge is the
+step `governance not finished`: the red-branch issue is still opened (the fix list on #556).
 """
 
 from __future__ import annotations
@@ -44,6 +47,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -78,6 +82,11 @@ RED_TITLE = "The default branch is red"  # the router's red-branch issue (SPEC-0
 RECORD_TITLE = "Local mode since"  # the one local-mode record issue (docs/guides/local-mode.md)
 RECORD_LABEL = "agk-auto-merge"  # the record issue the owner opens once (SPEC-0039 rule 7)
 HEAVY = "heavy"  # the heavy-step lock of the governance run (SPEC-0039 rule 6)
+WAIT_SETTING = "after_merge_timeout"  # minutes the run waits for the heavy lock (fix list, #556)
+WAIT_MINUTES = 30
+MINUTE = 60.0  # seconds in a minute of after_merge_timeout
+LOCK_TIMEOUT = 3  # lock.py run: the lock was not taken in time (or its folder cannot be written)
+NOT_FINISHED = "governance not finished"  # the step of a run cut off after the merge
 LOCAL_EVIDENCE = re.compile(r"Local evidence: ([0-9a-f]{12,40})(?![0-9A-Za-z])")
 EVIDENCE = re.compile(r"Evidence check: (agrees|differs), head ([0-9a-f]{12})(?![0-9A-Za-z])")
 ACCEPT = "Maintainer answer: accept {}"  # the one accepted first line (SPEC-0039 rule 4)
@@ -119,6 +128,11 @@ class Stopped(Exception):
         super().__init__(number)
         self.number = number
         self.filed = filed
+
+
+class Interrupted(BaseException):
+    """A termination signal after the merge, raised so that the red-branch issue is still
+    opened."""
 
 
 class Unreadable(Exception):
@@ -186,6 +200,19 @@ def default_ref(root: Path) -> tuple[str, dict]:
             "(setting: default_branch)"
         )
     return sha, data
+
+
+def after_merge_seconds(data: dict) -> float:
+    """`[flow] after_merge_timeout` of the default branch in seconds: whole minutes, at least 1,
+    30 when absent; anything else is refused before the merge, naming the setting."""
+    flow = data.get("flow", {})
+    value = flow.get(WAIT_SETTING, WAIT_MINUTES) if isinstance(flow, dict) else WAIT_MINUTES
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise Refused(
+            f"{WAIT_SETTING} must be a positive whole number of minutes "
+            f"({SETTING.format(WAIT_SETTING)})"
+        )
+    return value * MINUTE
 
 
 def setting_on(data: dict) -> None:
@@ -545,9 +572,10 @@ def post_record(repo: str, issue: int, number: int, merged: str, verdict: dict) 
 # --- rule 6: governance after the merge, and the red-branch stop -------------------------------
 
 
-def governance_argv(tree: Path, home: Path, base: str) -> list[str]:
+def governance_argv(tree: Path, home: Path, base: str, wait: float) -> list[str]:
     """The governance run of SPEC-0039 rule 6 as one argument list: the project's own lock.py,
-    the heavy lock, and `env -i` so that only PATH and HOME reach the merged code."""
+    the heavy lock waited for at most WAIT seconds, and `env -i` so that only PATH and HOME reach
+    the merged code."""
     lock_py = Path(__file__).resolve().parent / "lock.py"
     return [
         sys.executable,
@@ -557,6 +585,8 @@ def governance_argv(tree: Path, home: Path, base: str) -> list[str]:
         HEAVY,
         "--session",
         LOCK,
+        "--timeout",
+        f"{wait:g}",
         "--",
         "env",
         "-i",
@@ -570,24 +600,45 @@ def governance_argv(tree: Path, home: Path, base: str) -> list[str]:
     ]
 
 
-def run_governance(root: Path, tree: Path, home: Path, base: str) -> bool:
-    """Run governance once in TREE; its output goes to standard error. Whether it passed."""
-    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        governance_argv(tree, home, base),
+def run_governance(root: Path, tree: Path, home: Path, base: str, wait: float) -> str | None:
+    """Run governance once in TREE; its output goes to standard error. None when it passed, else
+    the failing step: `heavy lock` when lock.py did not take the lock in WAIT seconds (its exit
+    3), otherwise `make governance`. An interrupt ends lock.py (which ends its command and frees
+    the heavy lock) and is raised again."""
+    child = subprocess.Popen(  # nosec B603 - fixed argument list, no shell
+        governance_argv(tree, home, base, wait),
         cwd=root,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
-    sys.stderr.write(proc.stdout + proc.stderr)
-    return proc.returncode == 0
+    try:
+        out, _ = child.communicate()
+    except BaseException:
+        end_child(child)
+        raise
+    sys.stderr.write(out or "")
+    if child.returncode == 0:
+        return None
+    return "heavy lock" if child.returncode == LOCK_TIMEOUT else "make governance"
 
 
-def governance(root: Path, branch: str, merged: str) -> str | None:
+def end_child(child: subprocess.Popen) -> None:
+    if child.poll() is None:
+        child.terminate()
+    try:
+        child.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.wait()
+
+
+def governance(root: Path, branch: str, merged: str, wait: float) -> str | None:
     """Fetch the default branch, run governance on the merge commit in a temporary worktree
     outside the checkout, and remove the worktree in every case. None when green, else the
-    failing step (`fetch`, `worktree` or `make governance`)."""
+    failing step (`fetch`, `worktree`, `heavy lock` or `make governance`)."""
     code, _ = git_out(root, "fetch", "-q", "origin", branch)
     if code != 0:
         return "fetch"
@@ -602,7 +653,7 @@ def governance(root: Path, branch: str, merged: str) -> str | None:
         code, _ = git_out(root, "worktree", "add", "--detach", "-q", str(tree), merged)
         if code != 0:
             return "worktree"
-        return None if run_governance(root, tree, home, parent) else "make governance"
+        return run_governance(root, tree, home, parent, wait)
     finally:
         git_out(root, "worktree", "remove", "--force", str(tree))
         shutil.rmtree(scratch, ignore_errors=True)
@@ -624,9 +675,52 @@ def file_red(repo: str, step: str, merged: str) -> bool:
         open_red = sorted((i for i in found if route.is_red(i)), key=lambda i: i["number"])
         body = route.red_body(step, merged, commit_url(repo, merged))
         route.write_red(repo, open_red, body, route.Labels(repo))
-    except (Unreadable, route.ReadOnly, CheckError):
+    except Exception:  # any failure to write it is said on the stop line (fix list, #556)
         return False
     return True
+
+
+def on_signal(signum: int, frame: object) -> None:
+    raise Interrupted(signum)
+
+
+@contextlib.contextmanager
+def after_merge_signals() -> Iterator[None]:
+    """After the merge, SIGTERM and SIGHUP raise Interrupted instead of ending the process, so
+    the red-branch issue is still opened; the handlers before are put back afterwards."""
+    before: dict[int, Any] = {}
+    for name in ("SIGTERM", "SIGHUP"):
+        signum = getattr(signal, name, None)
+        if signum is not None:
+            before[signum] = signal.signal(signum, on_signal)
+    try:
+        yield
+    finally:
+        for signum, handler in before.items():
+            signal.signal(signum, handler)
+
+
+def after_merge(
+    root: Path, repo: str, number: int, merged: str, record: int, verdict: dict, data: dict
+) -> bool:
+    """Everything after the merge (SPEC-0039 rules 6 and 7): the record line, then governance.
+    Any exception, interrupt or termination counts as red (`governance not finished`): the
+    red-branch issue is opened or updated and Stopped is raised. Whether the record was posted."""
+    wait = after_merge_seconds(data)
+    recorded = False
+    with after_merge_signals():
+        try:
+            recorded = post_record(repo, record, number, merged, verdict)
+            step = governance(root, str(data.get("default_branch", "main")), merged, wait)
+        except BaseException:  # the merge stands; the run cannot show green (fix list, #556)
+            step = NOT_FINISHED
+        if step is not None:
+            try:
+                filed = file_red(repo, step, merged)
+            except BaseException:  # an interrupt while it is written: said on the stop line
+                filed = False
+            raise Stopped(number, filed)
+    return recorded
 
 
 # --- rule 9: the lock ---------------------------------------------------------------------------
@@ -681,6 +775,7 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
     allowed = conductors_in(people)
     approvers = approvers_of(people)
     required = required_of(data)
+    after_merge_seconds(data)  # a bad setting is refused before anything is merged
     repo = repo_of(root)
     with merge_lock(root):
         pull = read_json(f"repos/{repo}/pulls/{number}", dict, "the pull request")
@@ -707,10 +802,7 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
             ci_evidence(repo, sha, required)
         hold_list(repo, number, pull, comments, approvers)
         merged = merge_pull(repo, number, sha)
-        recorded = post_record(repo, record, number, merged, verdict)
-        step = governance(root, str(data.get("default_branch", "main")), merged)
-        if step is not None:
-            raise Stopped(number, file_red(repo, step, merged))
+        recorded = after_merge(root, repo, number, merged, record, verdict, data)
     if not recorded:
         return f"merged {merged[:12]}", "the record line cannot be posted (rule 7)", EXIT_REFUSED
     return f"merged {merged[:12]}", "", EXIT_CLEARED
