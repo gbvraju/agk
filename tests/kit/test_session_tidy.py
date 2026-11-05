@@ -162,7 +162,8 @@ def test_a_commit_after_the_head_is_kept(repo):
     path, tip = worktree(repo, "brief-5")
     (path / "more.txt").write_text("later\n", encoding="utf-8")
     repo_git(path, "add", "-A")
-    repo_git(path, "commit", "-q", "-m", "later")
+    repo_git(path, "commit", "-q", "-m", "later", old=True)
+    aged(path)
     item = plan(repo, {"claude/brief-5": [pull(16, "claude/brief-5", tip)]})["claude/brief-5"]
     assert item.kept == "commits after the pull request's head"
 
@@ -270,7 +271,9 @@ def test_ignored_caches_alone_do_not_keep_it(repo):
     """REQ-040: fix list item 1: only known caches are ignored files that may go."""
     started(repo)
     repo.commit({".gitignore": GITIGNORE}, "ignore")
-    caches = {"__pycache__/a.pyc": "x", "pkg/__pycache__/b.pyc": "x", ".pytest_cache/v": "x"}
+    caches = {"__pycache__/a.pyc": "x", "pkg/__pycache__/b.pyc": "x", ".pytest_cache/v": "x",
+              "src/__pycache__/c.pyc": "x", "src/main.txt": "x"}  # fmt: skip
+    repo.commit({"src/main.txt": "x"}, "src")
     path, tip = worktree(repo, "brief-102", files=caches)
     item = plan(repo, {"claude/brief-102": [pull(102, "claude/brief-102", tip)]})[
         "claude/brief-102"

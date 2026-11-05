@@ -87,9 +87,11 @@ oldest live take of another session), `not mine: #<brief> has no live take`, or,
 without that line, `not mine: #<pr> names no brief`, and exits 1. A read that fails exits 2.
 Brief #548 (ADR-0272): `tidy [--apply] [--json]` lists each linked worktree and local branch as
 `remove <path> <branch> #<pr> merged|closed` or `kept: <reason> (<path> <branch>)`, and with
-`--apply` removes the candidates: a branch whose pull requests (one GET each) are all merged or
-closed, whose tip is the newest one's head, with a clean, unlocked worktree that is neither the
-current one nor the main clone, and that no live lock or queue record names. A read failure keeps
+`--apply` removes the candidates: a builder branch (`[tidy] branch_prefix` and a number) whose pull
+requests (one GET each) are all merged or closed, whose tip is the newest one's head, with a clean,
+unlocked worktree holding no ignored file outside the `[tidy] caches` and unchanged for
+`[tidy] min_idle_minutes` (60), that is neither the current one nor the main clone, and that no
+live lock or queue record names. A read failure keeps
 the item; never `--force`, never a remote branch; refused while paused.
 """
 
@@ -116,6 +118,7 @@ from common import (
     PAUSED_LINE,
     CheckError,
     _verify,
+    config_source,
     covered_fix_list,
     git,
     load_config,
@@ -1508,8 +1511,88 @@ def branch_tip(root, branch: str) -> str | None:
     return out.strip() if code == 0 else None
 
 
-def tidy_items(root, read_pulls, records: list[dict], here) -> list[TidyItem]:
+TIDY_DEFAULTS: dict[str, Any] = {
+    "branch_prefix": "claude/brief-",
+    "min_idle_minutes": 60,
+    "caches": ["__pycache__/", ".pytest_cache/", ".ruff_cache/", ".mypy_cache/", ".venv/",
+               "node_modules/"],
+}  # fmt: skip
+
+
+def tidy_settings(root) -> dict:
+    """The `[tidy]` table of agk.toml (the fix list of 0085062): the builders' branch prefix
+    (a branch is a builder's when the prefix is followed by a number), the idle minutes, and the
+    ignored folders that are caches (the list replaces the default one). A wrong value or key is
+    a refusal naming the setting."""
+    table = config_source(root).get("tidy")
+    found = {k: list(v) if isinstance(v, list) else v for k, v in TIDY_DEFAULTS.items()}
+    if table is None:
+        return found
+    if not isinstance(table, dict):
+        raise CheckError("tidy must be a table of tidy's settings (setting: [tidy])")
+    for key, value in table.items():
+        if key == "branch_prefix":
+            ok = isinstance(value, str) and bool(value.strip())
+        elif key == "min_idle_minutes":
+            ok = isinstance(value, int) and not isinstance(value, bool) and value >= 1
+        elif key == "caches":
+            ok = isinstance(value, list) and all(isinstance(v, str) and v.strip() for v in value)
+        else:
+            raise CheckError(f"[tidy] holds only tidy's settings (setting: [tidy] {key})")
+        if not ok:
+            raise CheckError(f"{key} has the wrong kind of value (setting: [tidy] {key})")
+        found[key] = value
+    return found
+
+
+def is_builder(branch: str, prefix: str) -> bool:
+    return branch.startswith(prefix) and branch[len(prefix) :].isdigit()
+
+
+def worktree_state(path: str, caches: list[str]) -> str | None:
+    """`git status --porcelain --ignored`: anything not ignored is unsaved work, and an ignored path
+    with no cache folder in it would be lost by `git worktree remove` (fix list item 1)."""
+    args = ("status", "--porcelain", "-z", "--ignored=matching", "--untracked-files=all")
+    code, out = run_git(path, *args)
+    if code != 0:
+        return "could not read the worktree"
+    entries = [e for e in out.split("\0") if e]
+    if any(not e.startswith("!! ") for e in entries):
+        return "uncommitted files"
+    names = {c.strip().strip("/") for c in caches}
+    if any(not names & set(e[3:].rstrip("/").split("/")) for e in entries):
+        return "ignored files"
+    return None
+
+
+def newest_change(path: str) -> float | None:
+    """The newest of the worktree's last commit time and the change time of every file and folder
+    in it (`.git` aside); None when any of it cannot be read (fix list item 3)."""
+    code, out = run_git(path, "log", "-1", "--format=%ct", "HEAD")
+    if code != 0 or not out.strip().isdigit():
+        return None
+    newest = float(out.strip())
+    try:
+        newest = max(newest, os.lstat(path).st_mtime)
+        for folder, dirs, names in os.walk(path, onerror=raise_error):
+            if Path(folder) == Path(path) and ".git" in dirs + names:
+                dirs[:] = [d for d in dirs if d != ".git"]
+                names = [n for n in names if n != ".git"]
+            for entry in dirs + names:
+                newest = max(newest, os.lstat(Path(folder) / entry).st_mtime)
+    except OSError:
+        return None
+    return newest
+
+
+def raise_error(error: OSError) -> None:
+    raise error
+
+
+def tidy_items(root, read_pulls, records: list[dict], here, now=None) -> list[TidyItem]:
     """Every linked worktree and local branch with its reason kept (answer 3) or none."""
+    settings = tidy_settings(root)
+    now = time.time() if now is None else now
     items = worktrees_of(root)
     code, out = run_git(root, "for-each-ref", "--format=%(refname:short)", "refs/heads/")
     if code != 0:
@@ -1528,10 +1611,14 @@ def tidy_items(root, read_pulls, records: list[dict], here) -> list[TidyItem]:
             item.kept = "no branch"
         elif item.branch == default:
             item.kept = "default branch"
-        elif item.path and (status := run_git(item.path, "status", "--porcelain"))[0] != 0:
+        elif not is_builder(item.branch, settings["branch_prefix"]):
+            item.kept = "not a builder branch"
+        elif item.path and (state := worktree_state(item.path, settings["caches"])):
+            item.kept = state
+        elif item.path and (changed := newest_change(item.path)) is None:
             item.kept = "could not read the worktree"
-        elif item.path and status[1].strip():
-            item.kept = "uncommitted files"
+        elif item.path and now - changed < settings["min_idle_minutes"] * 60:
+            item.kept = "recently active"
         elif any(names_item(r, item) for r in records):
             item.kept = "running"
         else:

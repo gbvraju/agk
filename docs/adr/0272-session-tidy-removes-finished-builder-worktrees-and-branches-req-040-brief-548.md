@@ -26,9 +26,16 @@ plan #542, with no new capability.
 2. An item is a candidate only when all of these hold, checked in this order, the first that fails
    being the reason printed: not the main clone (`main clone`), not the current worktree (`current
    worktree`), not locked in `git worktree list --porcelain` (`locked`), on a branch (`no branch`)
-   that is not the default branch (`default branch`), its worktree has an empty
-   `git status --porcelain` (`uncommitted files`; a status that cannot be read is
-   `could not read the worktree`), no live lock owner record and no queue job names its session
+   that is not the default branch (`default branch`), a builder's branch: the `[tidy]
+   branch_prefix` of agk.toml (`claude/brief-` by default) followed by a number (`not a builder
+   branch`), its worktree's `git status --porcelain --ignored=matching --untracked-files=all`
+   shows nothing but ignored paths (`uncommitted files`; a status that cannot be read is
+   `could not read the worktree`), each of them inside a cache folder, because
+   `git worktree remove` deletes ignored files (`ignored files`; the caches are `__pycache__/`,
+   `.pytest_cache/`, `.ruff_cache/`, `.mypy_cache/`, `.venv/` and `node_modules/`, or the
+   `[tidy] caches` list, which replaces them), its last commit and the change time of every file
+   and folder in it (`.git` aside) are at least `[tidy] min_idle_minutes` old, 60 by default
+   (`recently active`: a builder still open in its worktree after the merge holds no lock), no live lock owner record and no queue job names its session
    (`running`), its branch's pull requests read with one REST GET
    (`repos/{repo}/pulls?head=<owner>:<branch>&state=all`) include none that is open (`open pull
    request`), at least one (`no pull request`), and the read succeeded (`could not read GitHub`),
@@ -52,6 +59,10 @@ plan #542, with no new capability.
    session and after each merge it makes; its guard allows exactly that form. A builder never
    runs `--apply`.
 
+8. A wrong `[tidy]` value or an unknown key in that table is a refusal naming the setting, never
+   the value; `min_idle_minutes` is a whole number of at least 1, so the idle guard cannot be
+   turned off.
+
 ## Consequences
 
 Finished builders no longer pile up, and nothing unsaved, open or running is removed. A worktree
@@ -63,3 +74,7 @@ own refusal of a dirty tree stays the last guard.
 
 - 2026-11-04: the session-to-worktree match of decision 3 is by name (Q-548-1); a lock owner record
   that names its worktree would make it exact.
+- 2026-11-05: a builder session left open but idle in its worktree for longer than
+  `[tidy] min_idle_minutes` after its pull request closed holds no lock, so its folder can be
+  removed; the idle time is the guard, and a lock owner record that names its worktree would
+  close it (Q-548-3).
