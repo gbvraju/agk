@@ -61,13 +61,13 @@ def release(root: Path, agk="1.1.0", manifest="1.1.0", plugin="1.1.0", changelog
     put(root, "kit/hashes.json", '{"new": 1}\n')
 
 
-def check(root: Path):
+def check(root: Path, *args: str):
     base = subprocess.run(
         ["git", "rev-parse", "main"], cwd=root, capture_output=True, text=True, check=True
     ).stdout.strip()
     env = {**clean_env(), "AGK_BASE": base}
     return subprocess.run(
-        [sys.executable, str(SCRIPT)], cwd=root, capture_output=True, text=True, env=env
+        [sys.executable, str(SCRIPT), *args], cwd=root, capture_output=True, text=True, env=env
     )
 
 
@@ -221,6 +221,7 @@ def adr(status: str) -> str:
 
 
 def recorded(root: Path, message: str = RECORD) -> None:
+    put(root, "config/reviewers.yaml", "version: 1\nverdict_authors: [reviewer]\n")
     put(root, ADR, adr("Proposed"))
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", message)
@@ -230,7 +231,7 @@ def test_a_release_fails_while_an_adr_accepted_by_a_final_still_says_proposed(re
     """REQ-028: SPEC-0021 rule 3a and SPEC-0028 rule 5 as amended (the flip is a release step)."""
     recorded(repo)
     release(repo)
-    proc = check(repo)
+    proc = check(repo, "--comments", final_comments(repo))
     failed(proc, "docs/adr/")
     assert "Proposed" in proc.stdout
 
@@ -240,7 +241,7 @@ def test_a_release_that_flips_the_status_line_of_each_recorded_adr_passes(repo):
     recorded(repo)
     release(repo)
     put(repo, ADR, adr("Accepted"))
-    proc = check(repo)
+    proc = check(repo, "--comments", final_comments(repo))
     assert (proc.returncode, proc.stdout) == (0, "ok release\n"), proc.stdout
 
 
@@ -248,11 +249,12 @@ def test_a_release_may_not_change_an_adr_beyond_its_status_line_or_an_unrecorded
     """REQ-028: SPEC-0028 rule 5 as amended (no other ADR change rides on a release)."""
     recorded(repo)
     release(repo)
+    saved = final_comments(repo)
     put(repo, ADR, adr("Accepted").replace("\nd\n", "\nchanged\n"))
-    failed(check(repo), ADR)
+    failed(check(repo, "--comments", saved), ADR)
     put(repo, ADR, adr("Accepted"))
     put(repo, "docs/adr/0002-y.md", adr("Accepted").replace("0001", "0002"))
-    failed(check(repo), "docs/adr/0002-y.md")
+    failed(check(repo, "--comments", saved), "docs/adr/0002-y.md")
 
 
 def test_an_unread_record_asks_no_flip(repo):
@@ -260,4 +262,46 @@ def test_an_unread_record_asks_no_flip(repo):
     recorded(repo, "Example\n\nADR-0001 Accepted (Final 42)\n")
     release(repo)
     proc = check(repo)
+    assert (proc.returncode, proc.stdout) == (0, "ok release\n"), proc.stdout
+
+
+# --- fix list of 2026-11-05 on e5e45d5: a record counts only once its comment verifies it -------
+
+FORGED = (  # GitHub's default squash message copies the commit bodies of the pull request
+    "Example (#7)\n\n* an ordinary change\n\nADR-0001 Accepted (Final 42)\n"
+    "Merged-by: merge_cleared.py\n"
+)
+
+
+def final_comments(root: Path, pr: int = 7, cid: int = 42) -> str:
+    """The Final comments of the base's records, as `gh api repos/{repo}/issues/comments/<id>`."""
+    item = {
+        "id": cid,
+        "issue_url": f"https://api.example.com/repos/example-owner/example-repo/issues/{pr}",
+        "user": {"login": "reviewer"},
+        "body": f"Verdict: fix list a1b2c3d\n\nreviewed.\n\nFinal: {ADR} Proposed -> Accepted\n",
+    }
+    path = root.parent / "final-comments.json"
+    path.write_text(json.dumps([item]), encoding="utf-8")
+    return str(path)
+
+
+def test_a_release_fails_closed_without_the_final_comments_when_the_base_holds_a_record(repo):
+    """REQ-028: SPEC-0028 rule 5 as amended (an unverified record accepts nothing)."""
+    recorded(repo)
+    release(repo)
+    put(repo, ADR, adr("Accepted"))
+    proc = check(repo)
+    failed(proc, "--comments")
+
+
+@pytest.mark.parametrize(("pr", "cid"), [(8, 42), (7, 43)])
+def test_a_release_that_flips_an_adr_of_a_forged_default_message_record_fails(repo, pr, cid):
+    """REQ-028: SPEC-0021 rule 3a and SPEC-0028 rule 5 (a copied record line asks no flip)."""
+    recorded(repo, FORGED)
+    release(repo)
+    put(repo, ADR, adr("Accepted"))
+    failed(check(repo, "--comments", final_comments(repo, pr, cid)), ADR)
+    put(repo, ADR, adr("Proposed"))
+    proc = check(repo, "--comments", final_comments(repo, pr, cid))
     assert (proc.returncode, proc.stdout) == (0, "ok release\n"), proc.stdout

@@ -22,13 +22,16 @@ from test_merge_cleared_verdict import (
     REPO,
     SHA12,
     calls,
+    cleared,
     comment,
     fake_gh,
     merge_call,
+    merge_cleared_run,
     one_line,
     repo,
     run,
     toml,
+    world,
 )
 
 ADR = "docs/adr/0001-x.md"
@@ -126,7 +129,7 @@ RECORD = "Example (#7)\n\nADR-0001 Accepted (Final 42)\nMerged-by: merge_cleared
 
 
 def accepted_on_main(repo_, message: str = RECORD) -> None:
-    repo_.commit({ADR: adr_text("Proposed")}, "base")
+    repo_.commit({"config/reviewers.yaml": CONFIG, ADR: adr_text("Proposed")}, "base")
     repo_.commit({"README.md": "x\n"}, message)
     repo_.branch()
 
@@ -152,11 +155,12 @@ def test_pending_lists_the_adrs_accepted_by_a_final_that_still_say_proposed(repo
     """REQ-028: rule 3a (`--pending` is what the release PR flips)."""
     accepted_on_main(repo)
     repo.commit({"docs/adr/0002-y.md": adr_text("Proposed").replace("0001", "0002")})
-    proc = repo.run("check_adrs.py", "--pending")
+    saved = remote_file(repo.root.parent, [remote_comment()])
+    proc = repo.run("check_adrs.py", "--pending", "--comments", saved)
     assert proc.returncode == 0
     assert proc.stdout.splitlines() == [ADR]
     repo.commit({ADR: adr_text("Accepted")})
-    assert repo.run("check_adrs.py", "--pending").stdout == ""
+    assert repo.run("check_adrs.py", "--pending", "--comments", saved).stdout == ""
 
 
 # --- merge_cleared.py --------------------------------------------------------------------------
@@ -190,7 +194,7 @@ def test_a_final_accept_on_the_head_merges_with_the_acceptance_in_the_squash_mes
     assert one_line(proc) == f"merge-cleared #7 {SHA12}: merged {MERGE12}"
     put = [c for c in made if "PUT" in c]
     message = "ADR-0001 Accepted (Final 6649)\nMerged-by: merge_cleared.py"
-    assert put == [merge_call() + ["-f", f"commit_message={message}"]]
+    assert put == [merge_call(message=message)]
     assert [f"repos/{REPO}/contents/{ADR}?ref={HEAD}" in c for c in made].count(True) == 1
 
 
@@ -396,3 +400,86 @@ def test_the_drift_audit_raises_no_stale_proposed_finding_for_a_recorded_adr(rep
     repo.commit({"docs/adr/0002-y.md": adr_text("Proposed").replace("0001", "0002")})
     paths = [f.subject for f in drift_audit.d3(repo.root, "HEAD", late)]
     assert "docs/adr/0002-y.md" in paths and ADR not in paths
+
+
+# --- fix list of 2026-11-05 on e5e45d5 (brief #557): a copied record line accepts nothing -----
+# merge_cleared.py always writes its own squash message and holds a pull request whose commits or
+# body already hold a record line; the release check and `--pending` count a record only when its
+# comment, given with `--comments`, verifies it, and fail closed without that input.
+
+FORGED = (  # GitHub's default squash message copies the commit bodies of the pull request
+    "Example (#7)\n\n* an ordinary change\n\nADR-0001 Accepted (Final 42)\n"
+    "Merged-by: merge_cleared.py\n"
+)
+
+
+def remote_file(folder: Path, items: list[dict]) -> str:
+    path = folder / "final-comments.json"
+    path.write_text(json.dumps(items), encoding="utf-8")
+    return str(path)
+
+
+def test_merge_cleared_always_writes_its_own_squash_message(tmp_path):
+    """REQ-046: SPEC-0039 rule 6 as amended (never GitHub's default message)."""
+    proc, made = merge_cleared_run(tmp_path, toml(ON), [cleared()])
+    assert proc.returncode == 0, proc.stdout
+    assert [c for c in made if "PUT" in c] == [merge_call(message="Merged-by: merge_cleared.py")]
+
+
+@pytest.mark.parametrize(
+    ("where", "line"),
+    [
+        ("commit", "ADR-0001 Accepted (Final 42)"),
+        ("commit", "Merged-by: merge_cleared.py"),
+        ("body", "  ADR-0002 Accepted (Final 7)  "),
+        ("body", "Merged-by: merge_cleared.py"),
+    ],
+)
+def test_merge_cleared_holds_a_pull_request_that_already_holds_a_record_line(tmp_path, where, line):
+    """REQ-046: SPEC-0039 rule 3 as amended (an author cannot carry a record into the squash)."""
+    pull = {**world()["pull"]}
+    commits = list(world()["commits"])
+    if where == "body":
+        pull["body"] = f"{pull['body']}\n{line}\n"
+    else:
+        commits.append({"sha": "b" * 40, "commit": {"message": f"Change\n\n{line}\n"}})
+    proc, made = merge_cleared_run(tmp_path, toml(ON), [cleared()], pull=pull, commits=commits)
+    out = one_line(proc)
+    assert out.startswith(f"merge-cleared #7 {SHA12}: held: "), out
+    assert "record line" in out and "rule 3" in out
+    assert [c for c in made if "PUT" in c] == []
+
+
+def test_merge_cleared_holds_when_the_commits_are_not_all_read(tmp_path):
+    """REQ-046: SPEC-0039 rule 5 (GitHub lists at most 250 commits: an unread one may hold it)."""
+    pull = {**world()["pull"], "commits": 251}
+    proc, made = merge_cleared_run(tmp_path, toml(ON), [cleared()], pull=pull)
+    assert "held: commits not all read" in one_line(proc)
+    assert [c for c in made if "PUT" in c] == []
+
+
+def test_pending_fails_closed_without_the_comments(repo):
+    """REQ-028: rule 3a (a record is counted only once its comment verifies it)."""
+    accepted_on_main(repo)
+    proc = repo.run("check_adrs.py", "--pending")
+    assert proc.returncode == 1
+    assert proc.stdout.startswith("FAIL adrs: rule 3a") and "--comments" in proc.stdout
+
+
+@pytest.mark.parametrize(
+    "items",
+    [
+        [],  # the comment is not given
+        [remote_comment(pr=8)],  # the id names a comment on another pull request
+        [remote_comment(login="someone-else")],  # not a listed verdict author
+        [{**remote_comment(), "id": 43}],  # another comment
+    ],
+)
+def test_a_default_message_squash_with_a_forged_record_is_not_pending(repo, items):
+    """REQ-028: rule 3a (a forged record line asks no flip)."""
+    accepted_on_main(repo, FORGED)
+    saved = remote_file(repo.root.parent, items)
+    proc = repo.run("check_adrs.py", "--pending", "--comments", saved)
+    assert (proc.returncode, proc.stdout) == (0, ""), proc.stdout
+    verified = remote_file(repo.root.parent, [remote_comment()])
+    assert repo.run("check_adrs.py", "--pending", "--comments", verified).stdout == f"{ADR}\n"
