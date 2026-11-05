@@ -45,6 +45,12 @@ and that open issue holds every later run. It never reverts, writes no file and 
 The heavy-lock wait is bounded by `[flow] after_merge_timeout` (minutes, 30 by default; lock.py's
 exit 3 is the step `heavy lock`), and any exception, interrupt or SIGTERM after the merge is the
 step `governance not finished`: the red-branch issue is still opened (the fix list on #556).
+
+Build (d) (brief #569) adds rule 10, the CI path. GitHub's own auto-merge is offered only through
+GraphQL, which this command never calls (`Q-S0039-12`), so in CI mode it reads the head's check runs
+and its commit status over REST and, while a required check is still queued or in progress, merges
+nothing, turns nothing on and prints `merge-cleared #<n> <sha12>: held: checks pending` (exit 3);
+the conductor's next review pass merges once they are green. A red check holds as before.
 """
 
 from __future__ import annotations
@@ -125,6 +131,9 @@ HOLD_LABEL = "agk:hold"
 APPROVE_LABEL = "agk:approve"
 CONFLICT = ("dirty", "unknown")
 HTTP = re.compile(r"HTTP (\d{3})")
+PENDING = "checks pending"  # SPEC-0039 rule 10, exactly (brief #569)
+RED = ("failure", "error")  # a commit status that failed
+ENDED = ("success", *RED)  # a commit status that is no longer `pending`
 
 
 class Refused(CheckError):
@@ -449,18 +458,27 @@ def local_evidence(verdict: dict, comments: list[dict], sha: str, approvers: lis
 
 
 def ci_evidence(repo: str, sha: str, required: list[str]) -> None:
-    from route import latest_runs  # route imports session; read only when CI mode needs it
+    """Rule 4 in CI mode, with rule 10's pending hold (brief #569): every required name must have
+    reported, as a check run or a commit status of the head (both read over REST), and ended
+    green. A red one holds as red; one still queued or in progress holds with exactly `checks
+    pending`, nothing is merged and GitHub's own auto-merge is never turned on (GraphQL only,
+    `Q-S0039-12`), so the next review pass merges once they are green."""
+    from route import latest_runs, latest_statuses  # route imports session; read in CI mode only
 
     runs = read_pages(f"repos/{repo}/commits/{sha}/check-runs", "the check runs", "check_runs")
-    latest = {str(r.get("name") or ""): r for r in latest_runs(runs)}
-    found = [latest.get(name) for name in required]
-    done = [r for r in found if r is not None and r.get("status") == "completed"]
-    if any(r.get("conclusion") != "success" for r in done):
+    statuses = read_pages(f"repos/{repo}/commits/{sha}/status", "the commit status", "statuses")
+    by_run = {str(r.get("name") or ""): r for r in latest_runs(runs)}
+    by_status = {str(s.get("context") or ""): s for s in latest_statuses(statuses)}
+    found = [[x for x in (by_run.get(n), by_status.get(n)) if x is not None] for n in required]
+    reports = [x for name in found for x in name]
+    done = [r for r in reports if r.get("status") == "completed" or r.get("state") in ENDED]
+    if any(r.get("state") in RED if "context" in r else r.get("conclusion") != "success"
+           for r in done):  # fmt: skip
         raise Held("a required check is red (rule 4)")
-    if any(r is None for r in found):
+    if any(not name for name in found):
         raise Held("a required check is missing (rule 4)")
-    if len(done) != len(found):
-        raise Held("checks pending (rule 4)")
+    if len(done) != len(reports):
+        raise Held(PENDING)
 
 
 # --- rule 5: the hold list ----------------------------------------------------------------------
