@@ -1,6 +1,6 @@
 # ADR-0280: Personal mode's rule amendments, and `light` by default in team mode too (REQ-048, brief 562)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-05
 - Deciders: maintainers
 - Related: ADR-0267, ADR-0271, SPEC-0041
