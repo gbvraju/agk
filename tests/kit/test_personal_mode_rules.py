@@ -158,4 +158,4 @@ def test_req048_spec_0041_names_the_new_session_rule_by_its_number():
     """REQ-048 AC6: amendment 119 (the rule amendment 113 called 36 is session rule 37)."""
     spec = read(SPEC)
     assert "session rule 36" not in spec
-    assert spec.count("session rule 37") == 3
+    assert spec.count("session rule 37") == 4

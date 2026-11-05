@@ -38,8 +38,8 @@ Amendment 113 named the new session rule 36. Rule 36 was taken since by the `Cov
    No existing team-mode check is turned off by this amendment: which check a level leaves out is decided by the
    build that implements the setting, build (o), with its own ADR (principle 11). This pull request writes the rule,
    its Tests bullet and the build's line, and builds no code.
-4. **The rule number in SPEC-0041.** The three places of SPEC-0041 that name the new rule (rule 29, the first
-   residual and `Q-S0041-16`) read "session rule 37". The ruled text of `Q-S0041-16` in `docs/runs/decisions-log.md`
+4. **The rule number in SPEC-0041.** The four places of SPEC-0041 that name the new rule (rule 29, build (b) of
+   rule 30, the first residual and `Q-S0041-16`) read "session rule 37". The ruled text of `Q-S0041-16` in `docs/runs/decisions-log.md`
    is not edited (the log is only appended).
 5. **Tests first.** `tests/kit/test_personal_mode_rules.py` pins principle 10, the other eleven principles, session
    rule 37, its core-rules line and the applied amendment; `tests/kit/test_core_rules_page.py` lists session rule 37
