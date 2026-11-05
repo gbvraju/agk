@@ -8,6 +8,8 @@ lint_paths = ["scripts/agk", "tests", ".claude/hooks"]
 # The proof job installs no toolchain (SPEC-0010 rule 16), so the command installs pytest and ruff when either is missing
 # (the kit tests that run the installed governance steps in a target run its lint step).
 project_tests = "(python3 -m pytest --version && ruff --version) >/dev/null 2>&1 || python3 -m pip install -q pytest ruff; AGK_KIT_TESTS=1 python3 -m pytest -c tests/kit/pytest.ini tests/kit tests/kit_dev -q"
+# Seconds a proof or prepush test run may take: the measured full suite (1161 s) with 1.5x headroom (SPEC-0044 rule 9, ADR-0282). A change needs an ADR.
+proof_timeout = 1800
 # Optional cleanup commands of the weekly drift audit, empty (off) by default; the kit ships no tool and installs none.
 # unused_code prints one finding per line (for example "vulture . --min-confidence 80" or "npx knip");
 # coverage prints the covered percentage as a number on its last line. Both are listed, never blocking; a change needs an ADR.
