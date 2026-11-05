@@ -1,6 +1,6 @@
 # ADR-0271: A build of an Approved spec covers its protected change by naming its requirement's Accepted ADR (REQ-001, brief 545)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: ADR-0247
