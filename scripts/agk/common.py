@@ -920,7 +920,7 @@ QUEUE_DEFAULTS = {
     "queue": False,
     "queue_autostart": False,
     "queue_idle_minutes": 10,
-    "queue_order": "fifo",
+    "queue_order": "priority",  # amendment 117 to SPEC-0040 rule 5 (brief #552, ADR-0274)
     "queue_max_wait": 120,
 }
 QUEUE_ORDERS = ("fifo", "priority")
@@ -928,9 +928,10 @@ QUEUE_ORDERS = ("fifo", "priority")
 
 def queue_settings(root: Path) -> dict:
     """The heavy-run queue's settings, the `[locks]` table of agk.toml (SPEC-0040 rule 1, brief
-    529, ADR-0264): off, fifo, 10 idle minutes and 120 minutes of maximum wait by default, also
-    when the table is absent. A value of another type, a key the table does not hold, or a `locks`
-    value that is not a table is a refusal that names the setting, never the value."""
+    529, ADR-0264): off, priority (amendment 117, ADR-0274), 10 idle minutes and 120 minutes of
+    maximum wait by default, also when the table is absent. A value of another type, a key the
+    table does not hold, or a `locks` value that is not a table is a refusal that names the
+    setting, never the value."""
     table = config_source(root).get("locks")
     found = dict(QUEUE_DEFAULTS)
     if table is None:

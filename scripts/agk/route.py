@@ -632,6 +632,15 @@ def route_branch(
         return state
     name, url = failing(checks, statuses, repo, sha, required)
     body = red_body(name, sha, url)
+    write_red(repo, open_red, body, labels)
+    return state
+
+
+def write_red(repo: str, open_red: list[dict], body: str, labels: Labels) -> None:
+    """Open the red-branch brief with BODY, or update the oldest of OPEN_RED (the router's own
+    open ones, oldest first) when its body differs (SPEC-0032 rule 7). `merge_cleared.py` calls
+    it after a red governance run (SPEC-0039 rule 6, brief #551), so there is one issue."""
+    issues = f"repos/{repo}/issues"
     if open_red:
         if str(open_red[0].get("body") or "") != body:
             write(
@@ -645,7 +654,6 @@ def route_branch(
         labels.ensure("agk-brief")
         args = ("-f", f"title={RED_TITLE}", "-f", f"body={body}", "-f", "labels[]=agk-brief")
         write(issues, *args, method="POST", what="rule 7: the issue")
-    return state
 
 
 # --- which pull requests an event names (rule 1) ----------------------------------------------
