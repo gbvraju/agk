@@ -18,6 +18,14 @@ default, and the spec change is a proposal until a person approves it).
 ROOT's work tree is never changed: the script adds two worktrees in a temporary directory outside
 ROOT and removes them at the end, also on a failure.
 
+Brief #566 (SPEC-0040 build (c), rule 9): with `[locks] queue = true`, `--queue` runs nothing
+here: it submits the same command without `--queue`, with the body and manifest paths made
+absolute and ROOT relative to the current folder, as one heavy job of kind `proof` (`lock.py
+submit`, `--brief` from the body's `Brief: #n` line, the session from `AGK_SESSION`), prints the
+`queued` line and returns at once. The job proves the committed head it was submitted for, so
+`--queue` with `--body -`, a `--head` other than `HEAD`, a ROOT outside the current work tree, or
+the setting off exits 2 naming the option, the path class or the setting.
+
 Exit: 0 proven or skipped, 1 not-proven, 4 unknown, 2 usage or a refused setting, 3 I/O.
 """
 
@@ -54,7 +62,7 @@ from common import (
 
 USAGE = (
     "usage: proof.py [--base REF] [--head REF] [--body FILE|-] [--json] [--manifest FILE] "
-    "[--not-run draft|status-only] [ROOT]"
+    "[--not-run draft|status-only] [--queue] [ROOT]"
 )
 # The skips that the workflow decides before proof runs (brief #425 answer 1), and their reason.
 NOT_RUN = {
@@ -139,6 +147,7 @@ def parse_args(args: list[str]) -> dict:
         "manifest": None,
         "not_run": None,
         "root": ".",
+        "queue": False,
     }
     positional: list[str] = []
     i = 0
@@ -147,8 +156,8 @@ def parse_args(args: list[str]) -> dict:
         if arg in ("--base", "--head", "--body", "--manifest", "--not-run") and i + 1 < len(args):
             options[arg[2:].replace("-", "_")] = args[i + 1]
             i += 2
-        elif arg == "--json":
-            options["json"] = True
+        elif arg in ("--json", "--queue"):
+            options[arg[2:]] = True
             i += 1
         elif arg.startswith("--") or len(positional) == 1:
             raise Usage(USAGE)
@@ -160,6 +169,33 @@ def parse_args(args: list[str]) -> dict:
     if positional:
         options["root"] = positional[0]
     return options
+
+
+def queued(options: dict) -> int:
+    """`--queue` (SPEC-0040 rule 9): hand the proof run to the heavy queue and run nothing here."""
+    refused = None
+    if options["body"] == "-":
+        refused = "a queued run reads no standard input (option: --body)"
+    elif options["head"] != "HEAD":
+        refused = "a queued run proves the committed head it was submitted for (option: --head)"
+    root = Path(options["root"]).resolve()
+    top = git(Path.cwd(), "rev-parse", "--show-toplevel", check=False).strip()
+    if refused is None and not (top and root.is_relative_to(Path(top).resolve())):
+        refused = "ROOT is outside the current work tree (path class: root)"
+    if refused:
+        print(f"proof --queue: {refused}", file=sys.stderr)
+        return 2
+    args: list[str] = []
+    for key in ("base", "body", "manifest", "not_run"):
+        if options[key] is not None:
+            value = options[key]
+            value = os.path.abspath(value) if key in ("body", "manifest") else value
+            args += ["--" + key.replace("_", "-"), value]
+    args += ["--json"] if options["json"] else []
+    args.append(os.path.relpath(root, Path.cwd().resolve()))
+    import lock  # only here: proof.py itself never takes or reads the lock
+
+    return lock.queue_self("proof.py", "proof", Path(__file__), args, options["body"])
 
 
 def read_body(source: str | None) -> str:
@@ -839,6 +875,8 @@ def write_manifest(path: str, text: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     try:
         options = parse_args(list(sys.argv[1:] if argv is None else argv))
+        if options["queue"]:
+            return queued(options)
         root = Path(options["root"])
         if git(root, "rev-parse", "--is-inside-work-tree", check=False).strip() != "true":
             raise Failure("ROOT is not a git work tree (path class: root)")
