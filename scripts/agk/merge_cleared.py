@@ -22,9 +22,10 @@ and exit 4 when GitHub cannot answer one read five times in a row. A reason name
 setting or a path class, never a value. Standard library only; every `gh` call is an argument list
 with no shell and no jq filter, and the JSON is read here. A covered fix list on exactly the head
 whose every `Final:` line accepts an ADR clears it too (SPEC-0021 rule 3a, brief 557): each named
-ADR is read at the head and must be `Proposed`, and the squash message carries one line
-`ADR-nnnn Accepted (Final <comment id>)` per ADR. The governance run after the merge, the
-red-branch stop and the record line are build (c).
+ADR must be among the pull request's files and read at the head as `Proposed`, and the squash
+message carries one line `ADR-nnnn Accepted (Final <comment id>)` per ADR and the line
+`Merged-by: merge_cleared.py`, the mark `common.final_records` reads. The governance run after
+the merge, the red-branch stop and the record line are build (c).
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import lock  # noqa: E402
 from common import (  # noqa: E402
     DEFAULT_CONFIG,
+    MERGED_BY,
     STATUS_LINE,
     CheckError,
     covered_fix_list,
@@ -316,7 +318,7 @@ def acceptance_lines(repo: str, sha: str, verdict: dict) -> list[str]:
             raise Held("a Final line accepts an ADR that is not Proposed at the head (rule 3)")
         number = path.split("/")[-1][:4]
         lines.append(f"ADR-{number} Accepted (Final {verdict.get('id')})")
-    return lines
+    return lines + [MERGED_BY] if lines else []
 
 
 # --- the default branch's other settings -----------------------------------------------------
@@ -467,12 +469,20 @@ def dependence_unmet(repo: str, pull: dict) -> bool:
     return False
 
 
-def hold_list(repo: str, number: int, pull: dict, comments: list, approvers: list) -> None:
-    """The holds of SPEC-0039 rule 5 after the red branch and paused, in the rule's order."""
+def hold_list(
+    repo: str, number: int, pull: dict, comments: list, approvers: list, accepts: list[str]
+) -> None:
+    """The holds of SPEC-0039 rule 5 after the red branch and paused, in the rule's order; first,
+    each ADR a Final line ACCEPTS must be one the pull request adds or changes (rule 3)."""
     files = read_pages(f"repos/{repo}/pulls/{number}/files", "the files of the pull request")
     count = pull.get("changed_files")
     if not isinstance(count, int) or isinstance(count, bool) or count != len(files):
         raise Held("files not all read (rule 5)")  # GitHub lists at most 3,000 files (rule 2)
+    touched = {
+        item.get("filename") for item in files if item.get("status") in ("added", "modified")
+    }
+    if any(path not in touched for path in accepts):
+        raise Held("a Final line accepts an ADR that this pull request does not change (rule 3)")
     sha = str(pull["head"]["sha"])
     if released(files):
         raise Held("release (rule 5)")
@@ -612,7 +622,7 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
             local_evidence(verdict, comments, sha, approvers)
         else:
             ci_evidence(repo, sha, required)
-        hold_list(repo, number, pull, comments, approvers)
+        hold_list(repo, number, pull, comments, approvers, accepted_adrs(verdict, sha) or [])
         merged = merge_pull(repo, number, sha, accepted)
     return f"merged {merged[:12]}", "", EXIT_CLEARED
 

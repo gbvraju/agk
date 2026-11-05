@@ -46,6 +46,7 @@ from common import (
     changed_lines,
     decision_file_problems,
     find_questions,
+    frozen_log_problems,
     git,
     read_text,
     repo_root,
@@ -299,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     messages += approval_failures(root, mb, changed, approvals)
     messages += decision_file_problems(root)  # one row per decision file (brief 557)
+    messages += frozen_log_problems(changed)  # the old log is frozen (brief 557 fix list item 3)
     if body is None or not body.strip():
         print(f"{NAME}: no pull request body; the lifecycle rule for Advances is skipped")
     else:

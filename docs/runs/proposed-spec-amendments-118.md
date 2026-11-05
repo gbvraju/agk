@@ -1,4 +1,4 @@
-# Proposed spec amendments 118 (SPEC-0021, SPEC-0039, SPEC-0009; REQ-028, REQ-046, REQ-018)
+# Proposed spec amendments 118 (SPEC-0021, SPEC-0039, SPEC-0009, SPEC-0034, SPEC-0028; REQ-028, REQ-046, REQ-018)
 
 Date: 2026-11-05 (from `date -u`). Approved text changes only through a proposal like this one (principle 6). Written for
 ADR-0277 (brief #557, plan #542), which stays `Proposed` for the maintainers' decision. The number 118 is the one the
@@ -9,7 +9,7 @@ applies.
 The owner's direction of 2026-11-05 on brief #557, quoted as data: "take a same stab on existing ones also where we can
 bring speed and quality ... Currently it is taking too much time for a small line change also."
 
-Files changed: `docs/specs/0009-facts.md`, `docs/specs/0021-when-a-fix-list-verdict-s-only-item-is-the-final-commit-and.md`, `docs/specs/0039-the-conductor-merges-a-cleared-pull-request-through-one-guarded-command.md`.
+Files changed: `docs/specs/0009-facts.md`, `docs/specs/0021-when-a-fix-list-verdict-s-only-item-is-the-final-commit-and.md`, `docs/specs/0039-the-conductor-merges-a-cleared-pull-request-through-one-guarded-command.md`, `docs/specs/0034-a-team-sets-how-many-builder-sessions-run-at-once-and-agk-ha.md`, `docs/specs/0028-in-flow-mode-a-kit-build-pull-request-does-not-bump-the-vers.md`.
 
 1. **SPEC-0021, new rule 3a ("A Final line that accepts an ADR").** Added after rule 3: when the latest covered fix list
    names the head itself and every `Final:` line is `docs/adr/<file> Proposed -> Accepted`, the comment is the ADR's
@@ -28,7 +28,25 @@ Files changed: `docs/specs/0009-facts.md`, `docs/specs/0021-when-a-fix-list-verd
    `docs/runs/decisions-log.md` followed by the one-row files `docs/runs/decisions/<YYYY-MM-DD>-<id>.md` in sorted order".
    The old file is never rewritten. `check_specs.py` fails a file of the folder that is misnamed or does not hold exactly
    one table row, and `check_pr_body.py` lets a `Brief: none (spec)` change carry the folder beside it.
-4. **Tests.** `tests/kit/test_final_accepts.py` (items 1 and 2) and `tests/kit/test_decision_files.py` (item 3).
+4. **The conductor's fix list of 2026-11-05 on f623a77.** Each of items 1 to 3 gains:
+   - SPEC-0021 rule 3a: each named ADR must be one that the pull request adds or changes (`git diff` from the merge base);
+     a stack-options ADR never counts (rule 3 keeps its one commit); the record is read only from a squash commit of
+     `merge_cleared.py` on the base's first-parent line (one parent, a subject ending `(#n)`, the line
+     `Merged-by: merge_cleared.py`); `facts.py` reports the ADR `Accepted` only after it reads the comment of the
+     record's id on the record's pull request, by a listed verdict author, accepting that ADR; the drift audit raises no
+     stale-`Proposed` finding for a recorded ADR.
+   - SPEC-0039 rule 3: each named ADR must be among the pull request's files (added or modified), and the squash message
+     also carries the line `Merged-by: merge_cleared.py`.
+   - SPEC-0009 rule 13: `docs/runs/decisions-log.md` is frozen at its length, and `check_specs.py` fails a change to it.
+5. **SPEC-0034 rule 19 ("The append-only logs merge as a union").** The rule's open question is ruled: since GitHub's
+   check does not honour `merge=union`, the decisions log takes one file per entry (SPEC-0009 rule 13 as amended), the
+   old file is frozen and the intake records its rulings as such files; the union mark stays for the residuals and the
+   catch logs.
+6. **SPEC-0028 rules 4 and 5 (the release pull request and its check).** The release also sets to `Accepted` the Status
+   line of each ADR that a Final line accepted (rule 3a), changing nothing else in it, and `check_release.py` fails a
+   release that leaves one `Proposed`, or changes an ADR in any other way.
+7. **Tests.** `tests/kit/test_final_accepts.py` (items 1, 2 and 4), `tests/kit/test_decision_files.py` (items 3 to 5),
+   `tests/kit_dev/test_intake.py` (item 5) and `tests/kit_dev/test_release_check.py` (item 6).
 
 Not in this amendment (later builds of brief #557, its pull request's `Questions:`): requirement entries in
 `docs/requirements.d/` (a new protected path class), an approval that survives a merge of main (SPEC-0032 rule 5), scoped

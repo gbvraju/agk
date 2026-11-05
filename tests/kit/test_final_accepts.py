@@ -308,7 +308,7 @@ def test_a_record_line_off_the_first_parent_line_is_not_read(repo):
     repo.git("checkout", "-q", "main")
     repo.commit({"other.md": "y\n"}, "main moves")
     repo.git("merge", "-q", "--no-ff", "-m", RECORD, "side")
-    from check_adrs import accepted_by_final
+    from common import accepted_by_final
 
     assert accepted_by_final(repo.root, "HEAD") == set()
 
@@ -316,7 +316,7 @@ def test_a_record_line_off_the_first_parent_line_is_not_read(repo):
 def test_the_record_names_its_pull_request_and_comment(repo):
     """REQ-028: rule 3a (`final_records` gives the pull request and the Final comment id)."""
     accepted_on_main(repo)
-    from check_adrs import final_records
+    from common import final_records
 
     assert final_records(repo.root, "HEAD") == {"0001": (7, 42)}
 

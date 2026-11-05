@@ -318,18 +318,61 @@ def covered_fix_list(body: str) -> tuple[str, list[tuple[str, str | None, str, s
 
 
 ADR_PATH = re.compile(r"docs/adr/\d{4}-[a-z0-9][a-z0-9-]*\.md")
+STACK_ADR_PATH = re.compile(r"docs/adr/\d{4}-stack-options\.md")
 FINAL_ACCEPT = re.compile(r"ADR-(\d{4}) Accepted \(Final (\d+)\)")
+MERGED_BY = "Merged-by: merge_cleared.py"  # the squash message line of merge_cleared.py (rule 3a)
 
 
 def final_accepts(edits: list[tuple[str, str | None, str, str]]) -> list[str] | None:
     """SPEC-0021 rule 3a (brief 557): the ADR paths when every `Final:` line of a covered fix list
-    is `docs/adr/<file> Proposed -> Accepted`, else None (today's path of rule 3 applies)."""
+    is `docs/adr/<file> Proposed -> Accepted`, else None (today's path of rule 3 applies). A
+    stack-options ADR never counts: its Chosen line and its acceptance go in one commit (rule 3)."""
     if not edits or any(
-        req is not None or old != "Proposed" or new != "Accepted" or not ADR_PATH.fullmatch(path)
+        req is not None
+        or old != "Proposed"
+        or new != "Accepted"
+        or not ADR_PATH.fullmatch(path)
+        or STACK_ADR_PATH.fullmatch(path)
         for path, req, old, new in edits
     ):
         return None
     return list(dict.fromkeys(path for path, *_ in edits))
+
+
+SQUASH_SUBJECT = re.compile(r".* \(#(\d+)\)")
+
+
+def final_records(root: Path, ref: str) -> dict[str, tuple[int, int]]:
+    """ADR number -> (pull request, Final comment id) of each `ADR-nnnn Accepted (Final <id>)` line
+    in REF's history, read only from a squash commit that merge_cleared.py made: on REF's
+    first-parent line, with one parent, a subject that ends `(#n)` and the line `MERGED_BY`."""
+    out = git(
+        root,
+        "log",
+        "--first-parent",
+        "--format=%x1e%P%x1f%B",
+        "--fixed-strings",
+        "--grep",
+        "Accepted (Final ",
+        ref,
+        check=False,
+    )
+    found: dict[str, tuple[int, int]] = {}
+    for record in out.split("\x1e")[1:]:
+        parents, _, message = record.partition("\x1f")
+        lines = [ln.strip() for ln in message.strip().splitlines()]
+        subject = SQUASH_SUBJECT.fullmatch(lines[0]) if lines else None
+        if len(parents.split()) != 1 or subject is None or MERGED_BY not in lines:
+            continue
+        for ln in lines:
+            if m := FINAL_ACCEPT.fullmatch(ln):
+                found.setdefault(m.group(1), (int(subject.group(1)), int(m.group(2))))
+    return found
+
+
+def accepted_by_final(root: Path, ref: str) -> set[str]:
+    """The ADR numbers that `final_records` reads in REF's history."""
+    return set(final_records(root, ref))
 
 
 NOT_FIX_LIST = (
@@ -527,6 +570,17 @@ def log_lines(root: Path) -> list[str] | None:
     if texts[0] is None and not decision_files(root):
         return None
     return [ln for text in found for ln in text.splitlines()]
+
+
+LOG_FROZEN = (
+    "SPEC-0009 rule 13: docs/runs/decisions-log.md is frozen at its length; "
+    "a new row goes to docs/runs/decisions/<YYYY-MM-DD>-<id>.md, one file each"
+)
+
+
+def frozen_log_problems(changed: dict[str, str]) -> list[str]:
+    """The old log only reads: a change or a deletion fails; creating it (init, adopt) does not."""
+    return [LOG_FROZEN] if changed.get(DECISIONS_LOG) in ("M", "D") else []
 
 
 def decision_file_problems(root: Path) -> list[str]:

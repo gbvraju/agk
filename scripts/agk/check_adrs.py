@@ -15,12 +15,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
-    FINAL_ACCEPT,
     STATUS_LINE,
+    accepted_by_final,
     base_arg,
     changed_files,
     changed_lines,
-    git,
+    covered_fix_list,
+    final_accepts,
     merge_base,
     repo_root,
     resolve_base,
@@ -47,10 +48,22 @@ def status_of(text: str) -> str | None:
     return None
 
 
-def accepted_by_final(root: Path, ref: str) -> set[str]:
-    """The ADR numbers named by an `ADR-nnnn Accepted (Final <id>)` line in REF's history."""
-    text = git(root, "log", "--format=%B", "--fixed-strings", "--grep", "Accepted (Final ", ref)
-    return {m.group(1) for ln in text.splitlines() if (m := FINAL_ACCEPT.fullmatch(ln.strip()))}
+def final_record_verified(
+    path: str, record: tuple[int, int], comment: dict | None, authors: list[str] | None
+) -> bool:
+    """Whether COMMENT (`repos/{repo}/issues/comments/<id>`) is the record's Final: the same id, on
+    the record's pull request, by a listed verdict author, a covered fix list whose `Final:` lines
+    accept PATH (rule 3a). A copied squash message cannot pass it."""
+    if not isinstance(comment, dict) or comment.get("id") != record[1]:
+        return False
+    user = comment.get("user")
+    login = user.get("login") if isinstance(user, dict) else None
+    if not authors or login not in authors:
+        return False
+    if not str(comment.get("issue_url") or "").endswith(f"/issues/{record[0]}"):
+        return False
+    covered = covered_fix_list(str(comment.get("body") or ""))
+    return covered is not None and path in (final_accepts(covered[1]) or [])
 
 
 def pending(root: Path, files: list[Path]) -> int:

@@ -30,6 +30,7 @@ from common import (
     REQ_ID,
     CheckError,
     declares_unchanged,
+    final_records,
     find_ac_markers,
     find_questions,
     git,
@@ -245,7 +246,26 @@ def spec_records(root: Path) -> list[dict]:
     return records
 
 
-def adr_records(root: Path) -> list[dict]:
+def final_accepted(root: Path, src: Any, authors: list[str] | None) -> set[str]:
+    """The ADR numbers that a Final line accepted (SPEC-0021 rule 3a): each record that
+    `common.final_records` reads on HEAD whose comment, read from GitHub, is that pull
+    request's Final by a listed author. Without a source nothing is verified (fail closed)."""
+    if src is None:
+        return set()
+    found = set()
+    for number, record in sorted(final_records(root, "HEAD").items()):
+        comment = get_object(
+            src, f"comment-{record[1]}", f"repos/{{repo}}/issues/comments/{record[1]}"
+        )
+        paths = [r for r in drift_audit.docs(root, "adr") if Path(r).name.startswith(f"{number}-")]
+        if any(check_adrs.final_record_verified(p, record, comment, authors) for p in paths):
+            found.add(number)
+    return found
+
+
+def adr_records(root: Path, accepted: set[str] | None = None) -> list[dict]:
+    """The ADRs; one that ACCEPTED names (a verified Final record) reads `Accepted` while its file
+    still says `Proposed` until the release flips it (SPEC-0021 rule 3a)."""
     records = []
     for rel in drift_audit.docs(root, "adr"):
         name = Path(rel).name
@@ -256,6 +276,8 @@ def adr_records(root: Path) -> list[dict]:
         first = text.splitlines()[0] if text.strip() else ""
         title = first.split(": ", 1)[1].strip() if check_adrs.TITLE_RE.match(first) else UNKNOWN
         status = check_adrs.status_of(text)
+        if status == "Proposed" and match.group(1) in (accepted or set()):
+            status = "Accepted"
         date_text = field_of(text, "Date") or ""
         classes: list[str] = []
         for line in text.splitlines():
@@ -799,10 +821,10 @@ def drift_section(root: Path, today: date, cfg: dict | None, issues: Any) -> Any
 
 def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
     cfg = load_cfg(root)
-    specs, adrs = spec_records(root), adr_records(root)
+    authors = metrics.verdict_authors(root)
+    specs, adrs = spec_records(root), adr_records(root, final_accepted(root, src, authors))
     issues = issues_section(src)
     limits = flow_limits(root)
-    authors = metrics.verdict_authors(root)
     seen: list[tuple] = []
     kept: dict = {}
     pulls = pulls_section(src, today, weeks, authors, limits, seen, kept)
