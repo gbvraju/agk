@@ -131,13 +131,13 @@ def test_a_job_gets_the_session_token_and_name_of_its_slot(repo, where):
     "order, priorities, ran",
     [
         ("fifo", [3, 0, 2], ["p0", "p1", "p2"]),
-        ("", [3, 0, 2], ["p0", "p1", "p2"]),
+        ("", [3, 0, 2], ["p1", "p2", "p0"]),
         ("priority", [3, 2, 0, "unknown"], ["p2", "p1", "p0", "p3"]),
         ("priority", [1, 1], ["p0", "p1"]),
     ],
 )
 def test_the_runner_takes_jobs_in_the_order_in_force(repo, tmp_path, order, priorities, ran):
-    """REQ-047 AC3: SPEC-0040 rules 4 and 5; fifo ignores priorities."""
+    """REQ-047 AC3: SPEC-0040 rules 4 and 5; fifo ignores priorities; unset is priority (117)."""
     where = configure(repo, tmp_path, f'queue_order = "{order}"\n' if order else "")
     for n, p in enumerate(priorities):
         add(repo, where, f"p{n}", priority=p)
@@ -314,3 +314,117 @@ def test_an_autostarted_runner_is_detached_and_started_without_a_shell(repo, whe
     else:
         assert seen["start_new_session"] is True
     assert seen["stdin"] == subprocess.DEVNULL
+
+
+# --- amendment 117 to rule 5: priority by default, and a job that unblocks others goes first ----
+
+
+def fake_gh(tmp_path: Path, briefs: dict[int, str], open_items: list[dict] | None) -> Path:
+    """A `gh` on PATH: `repos/<o>/<r>/issues/<n>` from saved bodies, and the open issues and pull
+    requests from `open_items` (a failed read when None); anything else fails."""
+    bin_dir = tmp_path.parent / f"{tmp_path.name}-bin"
+    bin_dir.mkdir(exist_ok=True)
+    saved = bin_dir / "saved.json"
+    saved.write_text(json.dumps({"briefs": briefs, "open": open_items}), encoding="utf-8")
+    (bin_dir / "gh").write_text(
+        f"#!{PY}\n"
+        "import json, sys\n"
+        f"data = json.load(open({str(saved)!r}, encoding='utf-8'))\n"
+        "path = next((a for a in sys.argv[1:] if a.startswith('repos/')), '')\n"
+        "tail = path.split('/issues', 1)[-1]\n"
+        "if tail.startswith('?state=open') and data['open'] is not None:\n"
+        "    print(json.dumps(data['open'] if 'page=1' in tail.split('&') else [])); sys.exit(0)\n"
+        "number = tail.lstrip('/')\n"
+        "if number in data['briefs']:\n"
+        "    print(json.dumps({'number': int(number), 'body': data['briefs'][number]})); sys.exit(0)\n"
+        "sys.stderr.write('HTTP 404: Not Found\\n'); sys.exit(1)\n",
+        encoding="utf-8",
+    )
+    (bin_dir / "gh").chmod(0o755)
+    return bin_dir
+
+
+def brief(number: int, body: str) -> dict:
+    return {"number": number, "body": body, "labels": [{"name": "agk-brief"}]}
+
+
+def pull(number: int, body: str) -> dict:
+    return {"number": number, "body": body, "labels": [], "pull_request": {"url": "x"}}
+
+
+BLOCKS_TWO = [
+    brief(20, "Why: x\nDepends-on: #7\nPriority: 2\n"),
+    pull(21, "Brief: #22\nDepends-on: #7\n"),
+    brief(23, "Depends-on: #70\n"),  # names another number: not a dependence on #7
+    {"number": 24, "body": "Depends-on: #7\n", "labels": []},  # neither a brief nor a pull request
+]
+
+
+def submit_brief(repo, where, bin_dir: Path, number: int, label: str) -> dict:
+    """`lock.py submit --brief N` for a fake job that logs `label`; returns the job file."""
+    repo.commit({f"{label}.txt": label}, label)
+    proc = repo.run(
+        "lock.py", "submit", "--name", "heavy", "--session", label, "--brief", str(number), "--",
+        PY, "-c", LOG, label, str(where / "log.txt"),
+        PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+    )  # fmt: skip
+    assert proc.returncode == 0 and "queued heavy-" in proc.stdout, proc.stdout + proc.stderr
+    box = queue_of(where) / "jobs"
+    return max((json.loads(p.read_text(encoding="utf-8")) for p in box.glob("*.json")),
+               key=lambda j: j["seq"])  # fmt: skip
+
+
+def test_priority_is_the_default_order():
+    """REQ-047 AC3: amendment 117 item 1 to SPEC-0040 rule 5; `fifo` stays available."""
+    import common
+
+    assert common.QUEUE_DEFAULTS["queue_order"] == "priority"
+    assert common.QUEUE_ORDERS == ("fifo", "priority")
+
+
+def test_a_job_whose_brief_blocks_two_open_items_runs_before_an_older_job_of_its_priority(
+    repo, tmp_path
+):
+    """REQ-047 AC3: amendment 117 item 2; `queue_order` unset is `priority`."""
+    where = configure(repo, tmp_path)
+    repo.git("remote", "add", "origin", "https://github.com/example/demo.git")
+    bin_dir = fake_gh(tmp_path, {"7": "Priority: 2\n", "8": "Priority: 2\n"}, BLOCKS_TWO)
+    older = submit_brief(repo, where, bin_dir, 8, "older")
+    unblocker = submit_brief(repo, where, bin_dir, 7, "unblocker")
+    assert (older["priority"], "raised" not in older) == (2, True)
+    assert unblocker["priority"] == 1 and unblocker["raised"] == "raised: unblocks #20, #21"
+    assert work(repo) == 0
+    assert log(where) == ["unblocker", "older"]
+
+
+def test_the_red_branch_brief_stays_at_0_and_first(repo, tmp_path):
+    """REQ-047 AC3: amendment 117 item 2; a raise never takes a job to 0 (Q-552-3)."""
+    where = configure(repo, tmp_path)
+    repo.git("remote", "add", "origin", "https://github.com/example/demo.git")
+    blocks = [brief(30, "Depends-on: #7\n"), brief(31, "Depends-on: #9\n")]
+    bin_dir = fake_gh(tmp_path, {"7": "Priority: 1\n", "9": "Priority: 0\n"}, blocks)
+    one = submit_brief(repo, where, bin_dir, 7, "one")
+    red = submit_brief(repo, where, bin_dir, 9, "red")
+    assert (one["priority"], red["priority"]) == (1, 0)
+    assert work(repo) == 0
+    assert log(where) == ["red", "one"]
+
+
+def test_with_fifo_an_unblocker_takes_its_turn(repo, tmp_path):
+    """REQ-047 AC3: amendment 117 items 1 and 3; the raise is recorded, the order is unchanged."""
+    where = configure(repo, tmp_path, 'queue_order = "fifo"\n')
+    repo.git("remote", "add", "origin", "https://github.com/example/demo.git")
+    bin_dir = fake_gh(tmp_path, {"7": "Priority: 2\n", "8": "Priority: 2\n"}, BLOCKS_TWO)
+    submit_brief(repo, where, bin_dir, 8, "older")
+    assert submit_brief(repo, where, bin_dir, 7, "unblocker")["priority"] == 1
+    assert work(repo) == 0
+    assert log(where) == ["older", "unblocker"]
+
+
+@pytest.mark.parametrize("written, open_items", [("Priority: 2\n", None), ("Why: x\n", BLOCKS_TWO)])
+def test_a_failed_read_or_an_unknown_priority_raises_nothing(repo, tmp_path, written, open_items):
+    """REQ-047 AC3: amendment 117 item 2; a read failure leaves the priority as read."""
+    where = configure(repo, tmp_path)
+    repo.git("remote", "add", "origin", "https://github.com/example/demo.git")
+    job = submit_brief(repo, where, fake_gh(tmp_path, {"7": written}, open_items), 7, "job")
+    assert job["priority"] == (2 if open_items is None else "unknown") and "raised" not in job

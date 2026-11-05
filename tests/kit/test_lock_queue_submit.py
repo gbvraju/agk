@@ -176,14 +176,15 @@ def test_a_locks_value_that_is_not_a_table_is_refused(repo, tmp_path):
 
 
 def test_the_defaults_of_the_locks_table():
-    """REQ-047 AC1: SPEC-0040 rules 1 and 8 (fifo, 120 minutes, 10 idle minutes, both off)."""
+    """REQ-047 AC1: SPEC-0040 rules 1 and 8 (priority by amendment 117, 120 minutes, 10 idle
+    minutes, both off)."""
     import common
 
     assert common.QUEUE_DEFAULTS == {
         "queue": False,
         "queue_autostart": False,
         "queue_idle_minutes": 10,
-        "queue_order": "fifo",
+        "queue_order": "priority",
         "queue_max_wait": 120,
     }
 
@@ -519,8 +520,10 @@ def three_jobs() -> list[dict]:
     ]
 
 
-def test_status_shows_the_fifo_queue_with_estimates_and_changes_no_file(repo, where):
+def test_status_shows_the_fifo_queue_with_estimates_and_changes_no_file(repo, tmp_path):
     """REQ-047 AC6: SPEC-0040 rule 7 (median 180 s; the running job has 120 s left)."""
+    where = outside(tmp_path, "locks")
+    settings(repo, where, 'queue = true\nqueue_order = "fifo"\n')
     box = plant_queue(where, three_jobs(), five_results())
     before = snapshot(box)
     proc = repo.run("lock.py", "status", "--name", "heavy")
