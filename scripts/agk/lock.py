@@ -834,7 +834,7 @@ def ticket_for_head(
     folder: Path, queue: dict, slots: int, ticket: str, head: str
 ) -> tuple[list[str], int]:
     """`status --ticket T --head H` (SPEC-0040 rule 10): the result line and 0 only for a passed
-    result of exactly head H; `stale` or `failed` and 1; `waiting` or `running` and 3; reads only."""
+    result of exactly head H; `stale` or `failed` and 1; `waiting` or `running` and 3."""
     for result in heavy_queue.results(folder):
         if result.get("ticket") != ticket:
             continue

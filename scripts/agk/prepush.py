@@ -100,8 +100,7 @@ from proof import area_command, execute, is_test_file, timeout_note
 
 HERE = Path(__file__).resolve().parent
 USAGE = (
-    "usage: prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE]"
-    " [--queue]"
+    "usage: prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE] [--queue]"
 )
 SCHEMA = 1
 LOCK = "heavy"

@@ -118,7 +118,9 @@ def test_prepush_queue_without_a_brief_line_passes_no_brief(repo, tmp_path):
     folder = configure(repo, tmp_path)
     body = body_file(tmp_path, "Summary: x\n")
     record = outside(tmp_path, "out") / "rec.json"
-    proc = run(repo, tmp_path, "prepush.py", "--queue", "--record", str(record), "--body", str(body))
+    proc = run(
+        repo, tmp_path, "prepush.py", "--queue", "--record", str(record), "--body", str(body)
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     [job] = jobs(folder)
     assert job["brief"] is None and job["priority"] == "unknown"
