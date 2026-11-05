@@ -22,10 +22,12 @@ command or folder is not the rebuilt one, is a difference (`not what prepush run
 from the head sha (a sha256 of the sha and the unit's name orders them), so the same head always
 gives the same sample. A body file outside the repository, or a gitleaks that is not installed here,
 cannot be repeated: the unit is listed, not sampled. It compares exit codes with the record's; a
-different output digest is a note, never a failure, since outputs carry timings. Governance and the
-re-runs hold the heavy-step lock (`lock.py`, name `heavy`), unless the caller already holds it. Each
-command runs in its own process group, and on a timeout, a signal or an error its whole tree is
-killed before the lock is released and the worktree is removed, also on a failure or an interrupt.
+different output digest is a note, never a failure, since outputs carry timings. A run's optional
+`timing` object (SPEC-0044 rule 3) is accepted in its one form and never re-run or compared.
+Governance and the re-runs hold the heavy-step lock (`lock.py`, name `heavy`), unless the caller
+already holds it. Each command runs in its own process group, and on a timeout, a signal or an
+error its whole tree is killed before the lock is released and the worktree is removed, also on a
+failure or an interrupt.
 
 One line per finding (`evidence: ...`), then one line for the conductor to quote in the verdict:
 `Evidence check: agrees|differs, head <sha12>, record <sha12 of the file>, governance <outcome>,
@@ -73,6 +75,7 @@ SHA = re.compile(r"[0-9a-f]{40}")
 OUTSIDE = "<outside>/"
 OUTCOMES = ("ok", "FAIL", "skipped")
 RESULTS = ("passed", "failed")
+TIMING_SOURCES = ("durations", "junit", "unknown")
 GOVERNANCE = ["make", "-f", "agk.mk", "agk-governance"]
 
 
@@ -155,6 +158,25 @@ def valid_run(item) -> bool:
         and isinstance(item.get("cwd"), str)
         and "exit" in item
         and is_exit(item["exit"])
+        and ("timing" not in item or valid_timing(item["timing"]))
+    )
+
+
+def is_seconds(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+
+
+def valid_timing(item) -> bool:
+    """The one optional field of a run (SPEC-0044 rule 3): accepted in this form, never re-run
+    or compared."""
+    if not isinstance(item, dict) or item.get("source") not in TIMING_SOURCES:
+        return False
+    total, files = item.get("total_seconds"), item.get("files")
+    if not (total is None or is_seconds(total)) or not isinstance(files, list):
+        return False
+    return all(
+        isinstance(f, dict) and isinstance(f.get("path"), str) and is_seconds(f.get("seconds"))
+        for f in files
     )
 
 

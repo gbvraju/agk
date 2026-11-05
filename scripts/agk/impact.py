@@ -14,7 +14,11 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
   the selection on the head (brief #442, ADR-0238, off until a person approves the spec change);
 - `pr_tests`: `full` (the default) or `selected`; with `selected`, a pull request's CI step
   `Project tests` runs only the selection, while a push and a release run the full suite
-  (`project_tests.py`, brief #453, ADR-0242).
+  (`project_tests.py`, brief #453, ADR-0242);
+- `junit`: the path of the JUnit XML report that the project's own test command writes, relative
+  to the run's folder (SPEC-0044 rule 2, brief #560). `run_timing` reads it, or else the durations
+  table that pytest prints when the project's command passes `--durations=0`, for the per-file
+  timing of a run; the kit adds no flag to the command, and with neither the timing is `unknown`.
 
 For the change base..head `impact` gives the existing test files of the head (`test_dirs`,
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
@@ -34,8 +38,10 @@ A glob is a path glob: `*` and `?` stay in one folder, `**` crosses folders, and
 from __future__ import annotations
 
 import fnmatch
+import math
 import re
 import sys
+import xml.parsers.expat
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -52,12 +58,27 @@ KEYS = {
     "excluded",
     "proof_regression",
     "pr_tests",
+    "junit",
 }
 PR_TESTS = ("full", "selected")
 EXCLUDED = re.compile(r"[^\s:]+: \S[^\n]*")
 ENTRY_KEYS = {"code", "tests"}
 DEFAULT_BUDGET = 300
 NO_TABLE = "no [testing] table"
+# Per-file timing (SPEC-0044 rules 2 and 3).
+DURATIONS_HEAD = re.compile(r"^=+ slowest (?:\d+ )?durations =+$")
+DURATION_LINE = re.compile(r"^\s*(\d+(?:\.\d+)?)s\s+(?:call|setup|teardown)\s+(\S+?)::")
+MTIME_SLACK = 2  # seconds: a file system that keeps coarse modification times
+TIMING_FILES = 50  # the record keeps the slowest 50 files
+JUNIT_LIMIT = 32 * 1024 * 1024  # a larger report is not read
+JUNIT_UNREADABLE = (
+    "tests: the JUnit report cannot be read; per-file timing unknown (setting: testing.junit)"
+)
+JUNIT_MISSING = (
+    "tests: no JUnit report was written by this run; per-file timing unknown "
+    "(setting: testing.junit)"
+)
+UNKNOWN_TIMING = {"source": "unknown", "total_seconds": None, "files": []}
 
 
 @dataclass
@@ -135,7 +156,7 @@ def testing_table(root: Path) -> dict | None:
     if not isinstance(table, dict) or set(table) - KEYS:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
-            "proof_regression and pr_tests (setting: testing)"
+            "proof_regression, pr_tests and junit (setting: testing)"
         )
     profile = table.get("profile", "balanced")
     if profile not in PROFILES:
@@ -180,6 +201,10 @@ def testing_table(root: Path) -> dict | None:
         )
     if table.get("pr_tests", "full") not in PR_TESTS:
         raise CheckError("pr_tests is full or selected (setting: pr_tests)")
+    if "junit" in table and not _glob_ok(table["junit"]):
+        raise CheckError(
+            "junit must be a file path relative to the run's folder (setting: testing.junit)"
+        )
     return {
         "profile": profile,
         "always_full": list(always_full),
@@ -226,6 +251,107 @@ def pr_tests(root: Path) -> str:
     if testing_table(root) is None:
         return "full"
     return config_source(root)["testing"].get("pr_tests", "full")
+
+
+def junit_setting(root: Path) -> str | None:
+    """`[testing] junit`, None without the table or the key. The whole table is checked first,
+    so a bad setting is refused (CheckError) as everywhere else."""
+    if testing_table(root) is None:
+        return None
+    return config_source(root)["testing"].get("junit")
+
+
+def durations_sums(output: str) -> dict[str, float] | None:
+    """The seconds of each test file from pytest's durations table (`call`, `setup` and
+    `teardown` lines summed by the file of the test id), or None when the output has no table."""
+    sums: dict[str, float] | None = None
+    for line in output.splitlines():
+        if sums is None:
+            if DURATIONS_HEAD.match(line.strip()):
+                sums = {}
+            continue
+        if line.startswith("="):
+            break
+        found = DURATION_LINE.match(line)
+        if found:
+            sums[found.group(2)] = sums.get(found.group(2), 0.0) + float(found.group(1))
+    return sums
+
+
+class Unreadable(Exception):
+    """A JUnit report that cannot be parsed, or that declares a document type."""
+
+
+def junit_sums(data: bytes) -> dict[str, float]:
+    """The seconds of each `testcase` of a JUnit report, by its `file` attribute or else its
+    `classname`. A document type or entity declaration is refused, never expanded."""
+    sums: dict[str, float] = {}
+
+    def refuse(*_args) -> None:
+        raise Unreadable
+
+    def start(name: str, attrs: dict[str, str]) -> None:
+        if name != "testcase":
+            return
+        try:
+            seconds = float(attrs.get("time") or 0)
+        except ValueError:
+            raise Unreadable from None
+        if not math.isfinite(seconds) or seconds < 0:
+            raise Unreadable
+        key = attrs.get("file") or attrs.get("classname") or "(no file)"
+        sums[key] = sums.get(key, 0.0) + seconds
+
+    parser = xml.parsers.expat.ParserCreate()
+    parser.SetParamEntityParsing(xml.parsers.expat.XML_PARAM_ENTITY_PARSING_NEVER)
+    parser.StartDoctypeDeclHandler = refuse
+    parser.EntityDeclHandler = refuse
+    parser.StartElementHandler = start
+    try:
+        parser.Parse(data, True)
+    except xml.parsers.expat.ExpatError:
+        raise Unreadable from None
+    return sums
+
+
+def measure(
+    output: str, folder: Path, junit: str | None, since: float
+) -> tuple[str, dict[str, float] | None, str | None]:
+    """(source, seconds by file or None, the one line to print or None) of one test run: the
+    JUnit report at `junit` in `folder` when it was written at or after `since` (a file older than
+    the run is not this run's report), else the durations table of `output`, else `unknown`."""
+    if junit is not None:
+        report = folder / junit
+        try:
+            fresh = report.is_file() and report.stat().st_mtime >= since - MTIME_SLACK
+            data = report.read_bytes() if fresh and report.stat().st_size <= JUNIT_LIMIT else None
+        except OSError:
+            return "unknown", None, JUNIT_UNREADABLE
+        if fresh:
+            try:
+                if data is None:
+                    raise Unreadable
+                return "junit", junit_sums(data), None
+            except Unreadable:
+                return "unknown", None, JUNIT_UNREADABLE
+    sums = durations_sums(output)
+    if sums is not None:
+        return "durations", sums, None
+    return "unknown", None, JUNIT_MISSING if junit is not None else None
+
+
+def run_timing(
+    output: str, folder: Path, junit: str | None, since: float
+) -> tuple[dict, str | None]:
+    """The `timing` object of a run in the prepush record (SPEC-0044 rule 3): `files` (path and
+    seconds, slowest first, at most 50), `total_seconds` over every file and `source`; and the
+    one line to print, or None."""
+    source, sums, note = measure(output, folder, junit, since)
+    if sums is None:
+        return dict(UNKNOWN_TIMING, files=[]), note
+    ranked = sorted(sums.items(), key=lambda kv: (-kv[1], kv[0]))[:TIMING_FILES]
+    files = [{"path": p, "seconds": round(s, 3)} for p, s in ranked]
+    return {"source": source, "total_seconds": round(sum(sums.values()), 3), "files": files}, note
 
 
 def is_doc(path: str) -> bool:

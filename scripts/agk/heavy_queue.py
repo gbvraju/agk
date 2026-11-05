@@ -11,7 +11,9 @@ mutex. A job is running once the runner (build (b)) has written its `started` ti
 The order (rule 5): under `fifo` the sequence number only; under `priority` the job's priority (0
 first, `unknown` last), then the sequence number, with every job waiting longer than
 `queue_max_wait` minutes first, by sequence number. The estimate (rule 7) comes from past results
-only. Standard library only; no network, no process started.
+only. After a result line, `timing_lines` adds one separate line with the timing total of the
+result's prepush record (SPEC-0044 rule 3, brief #560). Standard library only; no network, no
+process started.
 """
 
 from __future__ import annotations
@@ -279,6 +281,27 @@ def result_line(folder: Path, result: dict) -> str:
     return line + (f", output {out}" if out.is_file() else "")
 
 
+def timing_lines(result: dict) -> list[str]:
+    """One separate line `  timing <total> s (<source>)` when the result's prepush record (its
+    `record` path, SPEC-0040 rule 4) holds a timing total, else none (SPEC-0044 rule 3). The sum
+    of the totals of the tests step's runs; the result line and the estimate are unchanged."""
+    path = result.get("record")
+    record = read_json(Path(path)) if isinstance(path, str) and path else None
+    total, sources = 0.0, []
+    for step in (record or {}).get("steps") or []:
+        if not isinstance(step, dict) or step.get("name") != "tests":
+            continue
+        for run in step.get("runs") or []:
+            timing = run.get("timing") if isinstance(run, dict) else None
+            seconds = timing.get("total_seconds") if isinstance(timing, dict) else None
+            if isinstance(seconds, (int, float)) and not isinstance(seconds, bool):
+                total += seconds
+                sources.append(str(timing.get("source")))
+    if not sources:
+        return []
+    return [f"  timing {total:.1f} s ({', '.join(dict.fromkeys(sources))})"]
+
+
 def status_lines(
     folder: Path, settings: dict, slots: int, now: datetime, ticket: str | None = None
 ) -> tuple[list[str], int]:
@@ -299,7 +322,7 @@ def status_lines(
     if ticket is not None:
         for r in past:
             if r["ticket"] == ticket:
-                return [result_line(folder, r)], 0
+                return [result_line(folder, r), *timing_lines(r)], 0
         return ["unknown ticket"], 1
     if settings["queue_order"] == "priority":
         head = f"order: priority, max wait {settings['queue_max_wait']} min"

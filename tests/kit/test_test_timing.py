@@ -241,9 +241,7 @@ def test_each_regression_run_of_the_record_carries_its_timing(repo, monkeypatch,
     assert made["timing"]["total_seconds"] == 5.0
 
 
-def test_an_unreadable_report_prints_one_line_and_changes_no_outcome(
-    repo, monkeypatch, capsys
-):
+def test_an_unreadable_report_prints_one_line_and_changes_no_outcome(repo, monkeypatch, capsys):
     """REQ-051 AC1: SPEC-0044 rules 2 and 3 (one line naming the setting; the run stays ok)."""
     repo.commit(
         {"agk.toml": 'project_tests = "FULL"\n[testing]\nprofile = "thorough"\njunit = "j.xml"\n'}
@@ -268,13 +266,26 @@ def evidence_record(path: Path, repo, timing: dict | None) -> Path:
     if timing is not None:
         run["timing"] = timing
     tests = {
-        "name": "tests", "outcome": "ok", "not_run": False, "argv": ["python3"], "cwd": ".",
-        "exit": 0, "seconds": 1.0, "output_sha256": "0" * 64, "output_bytes": 0, "runs": [run],
+        "name": "tests",
+        "outcome": "ok",
+        "not_run": False,
+        "argv": ["python3"],
+        "cwd": ".",
+        "exit": 0,
+        "seconds": 1.0,
+        "output_sha256": "0" * 64,
+        "output_bytes": 0,
+        "runs": [run],
     }
     record = {
-        "schema": 1, "head": repo.git("rev-parse", "HEAD").strip(),
-        "base": repo.git("rev-parse", "HEAD").strip(), "started": "2026-11-05T00:00:00Z",
-        "tree_clean": True, "steps": [tests], "not_run": [], "result": "passed",
+        "schema": 1,
+        "head": repo.git("rev-parse", "HEAD").strip(),
+        "base": repo.git("rev-parse", "HEAD").strip(),
+        "started": "2026-11-05T00:00:00Z",
+        "tree_clean": True,
+        "steps": [tests],
+        "not_run": [],
+        "result": "passed",
     }
     path.write_text(json.dumps(record), encoding="utf-8")
     return path
@@ -365,8 +376,10 @@ def queue_with(folder: Path, result: dict) -> Path:
 
 def prepush_record(path: Path, totals: list[float | None]) -> Path:
     runs = [
-        {"name": f"r{n}", "timing": {"source": "durations" if t else "unknown",
-                                      "total_seconds": t, "files": []}}
+        {
+            "name": f"r{n}",
+            "timing": {"source": "durations" if t else "unknown", "total_seconds": t, "files": []},
+        }
         for n, t in enumerate(totals)
     ]
     path.write_text(json.dumps({"schema": 1, "steps": [{"name": "tests", "runs": runs}]}))
@@ -378,8 +391,15 @@ TICKET = "heavy-000001-beef"
 
 
 def a_result(**extra) -> dict:
-    return {"schema": 1, "ticket": TICKET, "head": "e" * 40, "kind": "prepush",
-            "outcome": "passed", "run_seconds": 61, **extra}
+    return {
+        "schema": 1,
+        "ticket": TICKET,
+        "head": "e" * 40,
+        "kind": "prepush",
+        "outcome": "passed",
+        "run_seconds": 61,
+        **extra,
+    }
 
 
 def test_status_prints_a_separate_timing_line_after_a_result_whose_record_holds_a_total(
@@ -413,8 +433,10 @@ def test_status_prints_nothing_more_without_a_total(tmp_path, record):
 def test_the_estimate_ignores_timing_and_stays_the_median_of_run_seconds(tmp_path):
     """REQ-051 AC1: SPEC-0044 rule 3 and `Q-S0044-9` (the estimate is unchanged)."""
     record = prepush_record(tmp_path / "record.json", [9999.0])
-    past = [a_result(ticket=f"heavy-00000{n}-beef", run_seconds=60 * n, record=str(record))
-            for n in range(1, 4)]
+    past = [
+        a_result(ticket=f"heavy-00000{n}-beef", run_seconds=60 * n, record=str(record))
+        for n in range(1, 4)
+    ]
     bare = [{k: v for k, v in r.items() if k != "record"} for r in past]
     job = {"ticket": "heavy-000009-beef", "kind": "prepush", "seq": 9}
     now = datetime.now(UTC)
