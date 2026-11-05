@@ -21,7 +21,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import DEFAULT_CONFIG, CheckError, config_source, load_config, repo_root, run, show
-from guard import secret_file_name
 
 NAME = "config"
 GUARD_LISTS = ("deny_paths", "deny_commands", "allowed_hosts")
@@ -45,6 +44,8 @@ def _strings(table: dict, key: str) -> list[str]:
 
 
 def _allow_path(entry: object) -> dict:
+    from guard import secret_file_name  # noqa: PLC0415 - agk.mk runs config.py without guard.py
+
     if not isinstance(entry, dict) or set(entry) != {"path", "reason"}:
         raise _refuse("allow_paths")
     path, reason = entry["path"], entry["reason"]
