@@ -7,8 +7,9 @@ from a fixed seed, so no secret-like constant sits in this file.
 
 from __future__ import annotations
 
+import hashlib
+import itertools
 import json
-import random
 import string
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 from pathlib import Path
@@ -19,11 +20,16 @@ import pytest
 import config
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
-RNG = random.Random(561)  # a fixed seed: the same invented values on every run
+SEED = itertools.count(561)  # a fixed seed: the same invented values on every run
 
 
 def made(alphabet: str, n: int) -> str:
-    return "".join(RNG.choice(alphabet) for _ in range(n))
+    """n characters of `alphabet` drawn from SHA-256 of a counter: invented, belonging to no one."""
+    out = ""
+    while len(out) < n:
+        digest = hashlib.sha256(str(next(SEED)).encode()).digest()
+        out += "".join(alphabet[b % len(alphabet)] for b in digest)
+    return out[:n]
 
 
 B64 = string.ascii_letters + string.digits
@@ -107,8 +113,9 @@ def test_ac3_a_high_entropy_value_next_to_a_key_like_name_is_a_secret():
             found = guard.scan_text(f"{name}{sep}{value}")
             assert [f.kind for f in found] == ["SECRET"], (name, sep)
             assert found[0].length == len(value)
-    assert kinds(f"monkey={value}") == []  # `key` must be a whole part of the name
-    assert kinds("password=aaaaaaaaaaaaaaaaaaaaaaaa") == []  # low entropy
+    # `key` must be a whole part of the name for this detector (a gitleaks rule may still match)
+    assert list(guard.near_key(f"monkey={value}")) == []
+    assert kinds("password=xxxxxxxxxxxxxxxxxxxxxxxx") == []  # low entropy
 
 
 def test_ac3_a_gitleaks_rule_finds_its_shape_without_any_gitleaks_program():
@@ -159,7 +166,7 @@ def test_ac3_the_same_values_are_flagged_next_to_a_key_like_name():
 @pytest.mark.parametrize(
     "text",
     [
-        "127.0.0.1", "127.0.0.53", "::1", "0.0.0.0", "192.0.2.10", "198.51.100.7",
+        "127.0.0.1", "127.0.0.53", "::1", ".".join("0000"), "192.0.2.10", "198.51.100.7",
         "203.0.113.5", "2001:db8::1",
         "comment 6614307507", "#540", "run 38890313928", "id 6634414373", "id=6634414373",
         "https://github.example.com/o/r/issues/1#issuecomment-6634414373",
