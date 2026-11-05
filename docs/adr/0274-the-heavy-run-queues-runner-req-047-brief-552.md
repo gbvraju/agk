@@ -1,6 +1,6 @@
 # ADR-0274: The heavy-run queue's runner: first in, first out, one job at a time, replace in place and cleanup (REQ-047, brief 552)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: maintainers
 - Related: ADR-0262, ADR-0264, SPEC-0040, ADR-0191, ADR-0231, ADR-0254
