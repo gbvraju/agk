@@ -934,11 +934,11 @@ def settle(folder: Path, job: dict, outcome: str, now: datetime, code, began) ->
     try:
         heavy_queue.finish(folder, job, outcome, now, code, began)
         return outcome
-    except Exception:  # noqa: BLE001 - any failure here must not leave the job started
+    except Exception:  # any failure here must not leave the job started
         outcome = "failed (the result cannot be written)"
     try:
         heavy_queue.finish(folder, job, outcome, now, code, began)
-    except Exception:  # noqa: BLE001 - the job is still released below
+    except Exception:  # the job is still released below
         (folder / "jobs" / f"{job['ticket']}.json").unlink(missing_ok=True)
     return outcome
 
