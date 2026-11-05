@@ -1,6 +1,6 @@
 # SPEC-0043: A project's plan is drafted from its sources and tracked with calibrated ranges
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-050
 
