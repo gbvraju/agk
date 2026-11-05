@@ -38,3 +38,7 @@ A `Covered-by:` merge whose body names an Accepted ADR covering its classes is c
 checked it, and is no longer reported red. A body without the line is still red, as it would be
 in CI. The body is the author's text, which the merged code already reads in CI; it carries no
 token.
+
+## Residual
+
+None.
