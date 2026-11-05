@@ -256,11 +256,12 @@ def check(root: Path, comments: list[dict] | None = None) -> int:
     return 0
 
 
-def valid_release(root: Path, mb: str) -> bool:
+def valid_release(root: Path, mb: str, comments: list[dict] | None = None) -> bool:
     """Whether the change set from `mb` is a valid release pull request: flow mode, a raised
     version, nothing changed outside the release files (a deleted fragment is part of it) and
-    every rule of `check` met. `check_protected_changes.py` asks, so that a release needs no ADR
-    for the protected files it must change (brief #212)."""
+    every rule of `check` met, with the Final COMMENTS of the base's records (SPEC-0021 rule 3a;
+    without them while a record exists, not a release). `check_protected_changes.py` asks, so
+    that a release needs no ADR for the protected files it must change (brief #212)."""
     if pr_mode(root) != "flow" or show(root, mb, "scripts/agk/check_release.py") is None:
         return False
     old = toml_version(show(root, mb, "agk.toml"))
@@ -269,7 +270,7 @@ def valid_release(root: Path, mb: str) -> bool:
         return False
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            return check(root) == 0
+            return check(root, comments) == 0
     except CheckError:
         return False
 

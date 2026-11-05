@@ -6,7 +6,8 @@ pull request flips it. `check_adrs.py --pending --comments FILE` prints, one pat
 ADR whose file still says `Proposed` and whose record its Final comment in FILE verifies (the
 comments as `gh api repos/{repo}/issues/comments/<id>` answers): the flips the release pull request
 makes. A record that FILE does not verify is not counted; without FILE, while a record exists, it
-fails closed.
+fails closed. `check_adrs.py --record-ids` prints the Final comment id of each record read in
+HEAD's history, one a line, so that the governance workflow can fetch those comments.
 """
 
 from __future__ import annotations
@@ -128,6 +129,14 @@ def read_comments(path: str | None) -> list[dict] | None:
     return comments_of(Path(path))
 
 
+def record_ids(root: Path) -> int:
+    """Print the Final comment id of each record that `final_records` reads in HEAD's history,
+    one a line: the governance workflow fetches each one for `--comments`."""
+    for cid in sorted({record[1] for record in final_records(root, "HEAD").values()}):
+        print(cid)
+    return 0
+
+
 def pending(root: Path, files: list[Path], comments: list[dict] | None = None) -> int:
     """Print each ADR accepted by a verified Final record whose file still says Proposed."""
     try:
@@ -185,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     known = {m.group(1) for p in files if (m := FILE_RE.match(p.name))}
     args = sys.argv[1:] if argv is None else argv
+    if "--record-ids" in args:
+        return record_ids(root)
     if "--pending" in args:
         at = args.index("--comments") + 1 if "--comments" in args else None
         try:
