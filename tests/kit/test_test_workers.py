@@ -25,7 +25,7 @@ import doctor
 import impact
 import prepush
 import pytest
-from common import CheckError
+from common import CheckError, proof_areas
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "workers"
@@ -193,8 +193,11 @@ def test_evidence_rebuilds_the_command_a_record_made_with_workers(tmp_path):
     root = tree(tmp_path, f"{python} -m pytest -q", "workers = 2\n")
     shown = json.dumps({"runs": [], "regression": {"table": True}})
     plan = [sys.executable, "-c", f"print({shown!r})"]
-    head = git(root, "rev-parse", "HEAD").strip()
-    planned = evidence.planned_runs(root, plan, dict(os.environ), head, 60)
+    base = git(root, "rev-parse", "HEAD").strip()
+    (root / "app.py").write_text("print('example.com')\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "an unmapped change selects the full run")
+    planned = evidence.planned_runs(root, plan, dict(os.environ), base, 60)
     recorded = prepush.safe_command(full(root)[0][0][1], root)
     assert prepush.safe_command(planned[("regression", "full")][0], root) == recorded
     assert recorded.endswith(" -n 2")
@@ -224,29 +227,14 @@ def test_without_parallel_command_a_non_pytest_run_is_single_with_one_line(tmp_p
 
 def test_an_area_command_is_never_replaced(tmp_path):
     """REQ-051 AC2: SPEC-0044 rules 4 and 5 (a `[proof]` area's command stays as it is)."""
-    proof = '[proof]\nkit = { dirs = ["tests"], patterns = ["test_*.py"], command = \'npm run one {files}\' }\n'
-    root = tree(
-        tmp_path,
-        "npm test",
-        'workers = 3\nparallel_command = "npx jest -w {workers}"\n',
-        proof=proof,
+    area = (
+        "[proof]\nkit = { dirs = ['tests'], patterns = ['test_*.py'], command = 'one {files}' }\n"
     )
+    root = tree(tmp_path, "npm test", 'workers = 3\nparallel_command = "jest -w {workers}"\n', area)
     item = impact.Selected("tests/test_a.py", "src/a.js", "src/**", ["tests/**"])
     found = impact.Impact(table=True, profile="fast", full=False, reason=None, selected=[item])
-    sets, notes = prepush.regression_sets(
-        root,
-        found,
-        [
-            {
-                "name": "kit",
-                "dirs": ["tests"],
-                "patterns": ["test_*.py"],
-                "cwd": ".",
-                "command": "npm run one {files}",
-            }
-        ],
-    )
-    assert sets[0][1] == "npm run one tests/test_a.py"
+    sets, notes = prepush.regression_sets(root, found, proof_areas(root))
+    assert sets[0][1] == "one tests/test_a.py"
     assert notes == []
 
 
