@@ -248,7 +248,7 @@ def test_status_head_reports_failed_for_a_failed_or_replaced_result(repo, tmp_pa
     folder = configure(repo, tmp_path)
     put_result(folder, "heavy-000001-abcd", SHA_A, outcome)
     proc = status(repo, "heavy-000001-abcd", SHA_A)
-    assert proc.returncode == 1 and proc.stdout.startswith("failed ")
+    assert proc.returncode == 1 and proc.stdout.startswith("failed: result ")
 
 
 @pytest.mark.parametrize("started, word", [(False, "waiting"), (True, "running")])

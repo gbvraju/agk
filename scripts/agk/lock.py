@@ -59,6 +59,13 @@ result beside its ticket; a running job is never stopped by the order. The runne
 `queue_idle_minutes` with an empty queue. With `queue_autostart = true`, `submit` starts a
 detached runner when none lives.
 
+Brief #566 (SPEC-0040 build (c), rules 9 and 10): `prepush.py --record FILE --queue` and
+`proof.py --queue` submit themselves through `queue_self` as one job of kind `prepush` or `proof`,
+with `--brief` from the body's `Brief: #n` line and the session from `AGK_SESSION`. `status
+--ticket T --head SHA` (the full sha) prints the result line and exits 0 only for a passed result
+of exactly that head; `stale (result for <sha12>, asked <sha12>)` or `failed: <result line>` and 1;
+`waiting: <line>` or the `running` line and 3 while there is no result; `unknown ticket` and 1.
+
 Standard library only; no network but the one brief GET of `submit --brief`. POSIX and Windows:
 a process is looked up with signal 0 on POSIX and with OpenProcess on Windows, where `os.kill`
 would end it.
@@ -98,7 +105,7 @@ from common import (
 USAGE = (
     "usage: lock.py run --name NAME [--session ID] [--priority P] [--timeout S]"
     " -- COMMAND [ARG...]\n"
-    "       lock.py status --name NAME [--ticket T]\n"
+    "       lock.py status --name NAME [--ticket T [--head SHA]]\n"
     "       lock.py submit --name NAME --session ID [--kind prepush|proof|other] [--brief N]"
     " -- COMMAND [ARG...]\n"
     "       lock.py runner --name NAME\n"
@@ -107,6 +114,8 @@ USAGE = (
 QUEUE_OFF = "the heavy-run queue is off (setting: [locks] queue)"
 PRIORITY_LINE = re.compile(r"Priority: ([0-3])")
 DEPENDS = re.compile(r"Depends-on: #(\d+)")
+BRIEF_LINE = re.compile(r"Brief: #([1-9][0-9]*)")
+FULL_SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 STALE_MINUTES = 120
 POLL = 0.5  # seconds between two tries
@@ -145,6 +154,7 @@ def parse_args(args: list[str]) -> dict:
         "ticket": None,
         "kind": None,
         "brief": None,
+        "head": None,
     }
     rest = args[1:]
     command: list[str] | None = None
@@ -156,7 +166,7 @@ def parse_args(args: list[str]) -> dict:
         arg = rest[i]
         allowed = {
             "run": ("--name", "--session", "--timeout", "--priority"),
-            "status": ("--name", "--ticket"),
+            "status": ("--name", "--ticket", "--head"),
             "submit": ("--name", "--session", "--kind", "--brief"),
             "runner": ("--name",),
         }[options["action"]]
@@ -168,8 +178,9 @@ def parse_args(args: list[str]) -> dict:
     if not options["name"] or not NAME.fullmatch(options["name"]):
         raise Usage(USAGE)
     if options["action"] in ("status", "runner"):
-        if command is not None:
-            raise Usage(USAGE)
+        head = options["head"]
+        if command is not None or (head and not (options["ticket"] and FULL_SHA.fullmatch(head))):
+            raise Usage(USAGE)  # `--head` is the full sha of the head asked for (rule 10)
         return options
     if options["action"] == "submit":
         return submit_options(options, command)
@@ -819,6 +830,64 @@ def submit_job(root: Path, held: Path, options: dict, queue: dict) -> int:
     return 0
 
 
+def ticket_for_head(
+    folder: Path, queue: dict, slots: int, ticket: str, head: str
+) -> tuple[list[str], int]:
+    """`status --ticket T --head H` (SPEC-0040 rule 10): the result line and 0 only for a passed
+    result of exactly head H; `stale` or `failed` and 1; `waiting` or `running` and 3; reads only."""
+    for result in heavy_queue.results(folder):
+        if result.get("ticket") != ticket:
+            continue
+        if result.get("head") != head:
+            asked = f"result for {heavy_queue.short(result.get('head'))}, asked {head[:12]}"
+            return [f"stale ({asked})"], 1
+        line = heavy_queue.result_line(folder, result)
+        return ([line], 0) if result.get("outcome") == "passed" else ([f"failed: {line}"], 1)
+    lines, code = heavy_queue.status_lines(folder, queue, slots, datetime.now(UTC), ticket)
+    if code != 0:
+        return lines, 1  # `unknown ticket`: no evidence
+    return [lines[0] if lines[0].startswith("running ") else f"waiting: {lines[0]}"], 3
+
+
+def brief_of(body: str | None) -> int | None:
+    """The number of the one `Brief: #n` line of a body file, or None (SPEC-0040 rule 3)."""
+    try:
+        text = Path(body).read_text(encoding="utf-8") if body and body != "-" else ""
+    except (OSError, UnicodeDecodeError):
+        return None
+    found = [m.group(1) for x in text.splitlines() if (m := BRIEF_LINE.fullmatch(x.strip()))]
+    return int(found[0]) if len(found) == 1 else None
+
+
+def queue_self(tool: str, kind: str, script: Path, args: list[str], body: str | None) -> int:
+    """`prepush.py --queue` and `proof.py --queue` (SPEC-0040 rule 9): submit `script` with `args`
+    (the same command without `--queue`, its file paths already absolute, rule 6) as one heavy job
+    of `kind`, with `--brief` from the body's `Brief: #n` line, and return at once."""
+    try:
+        enabled = queue_setting(repo_root())["queue"]
+    except Usage as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    if not enabled:
+        print(f"{tool} --queue: {QUEUE_OFF}", file=sys.stderr)
+        return 2
+    session = os.environ.get("AGK_SESSION") or ""
+    if not session:
+        print(f"{tool} --queue: a job names its session (setting: AGK_SESSION)", file=sys.stderr)
+        return 2
+    try:
+        inside = script.resolve().is_relative_to(repo_root().resolve())
+        path = os.path.relpath(script.resolve(), Path.cwd().resolve()) if inside else None
+    except ValueError:  # another drive on Windows
+        path = None
+    brief = brief_of(body)
+    return main(
+        ["submit", "--name", "heavy", "--session", session, "--kind", kind]
+        + (["--brief", str(brief)] if brief else [])
+        + ["--", sys.executable, path or str(script), *args]
+    )
+
+
 def start_runner(root: Path, name: str, popen=subprocess.Popen) -> int:
     """`queue_autostart` (rule 8, Q-529-1): `lock.py runner` without a shell, detached from the
     builder's process group, its output appended to `runner.log` in the queue folder."""
@@ -1122,6 +1191,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"lock {options['name']}: the queue cannot be written (setting: lock_dir)")
         return 3
     name = options["name"]
+    if options["head"]:
+        lines, code = ticket_for_head(
+            heavy_queue.queue_folder(held), queue, slots, options["ticket"], options["head"]
+        )
+        print("\n".join(lines))
+        return code
     if options["ticket"]:
         lines, code = heavy_queue.status_lines(
             heavy_queue.queue_folder(held), queue, slots, datetime.now(UTC), options["ticket"]
