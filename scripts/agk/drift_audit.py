@@ -31,6 +31,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from types import ModuleType
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
@@ -225,11 +226,13 @@ class Releases:
     def __init__(self, root: Path, comments: list[dict] | None) -> None:
         self.root, self.comments = root, comments
         self.work: tempfile.TemporaryDirectory | None = None
+        self.check: ModuleType | None = None
         try:
             import check_release  # noqa: PLC0415 - kit-only, absent from an installed copy
+
+            self.check = check_release
         except ImportError:
-            check_release = None
-        self.check = check_release
+            pass
 
     def part(self, sha: str, parent: str, changes: dict[str, str]) -> list[str]:
         """The release paths of the commit, or [] when it raises no `version` in agk.toml."""
@@ -258,7 +261,7 @@ class Releases:
     def exempt(self, sha: str, parent: str, changes: dict[str, str]) -> set[str]:
         """The release paths of a valid release commit, else the empty set."""
         paths = self.part(sha, parent, changes)
-        if not paths:
+        if not paths or self.check is None:
             return set()
         copy = self.clone()
         git(copy, "-c", "advice.detachedHead=false", "checkout", "-q", "-f", "--detach", parent)
