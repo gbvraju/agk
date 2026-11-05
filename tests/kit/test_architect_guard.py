@@ -131,6 +131,8 @@ BASH_OK = [
     "gh api repos/o/r/pulls/7",
     "gh api --method GET repos/o/r/pulls/7/files",
     "gh api -X GET repos/o/r/issues/7/comments --jq .[].body",
+    "gh api -XGET repos/o/r/pulls/7",
+    "gh api -X=GET repos/o/r/pulls/7 --paginate",
     "gh api --method GET repos/o/r/actions/runs -f status=success",
     "gh api --method POST repos/o/r/issues/7/comments -f body='Verdict: cleared abc1234'",
     "date -u",
@@ -186,6 +188,13 @@ BASH_NO = [
     "gh api --method POST repos/o/r/issues/7/labels -f labels=x",
     "gh api repos/o/r/pulls/7 -f title=x",
     "gh api --method POST repos/o/r/issues/7/comments --input body.json",
+    "gh api -XPUT repos/o/r/pulls/7/merge",
+    "gh api -X=PUT repos/o/r/pulls/7/merge",
+    "gh api -XDELETE repos/o/r/issues/comments/9",
+    "gh api -X=DELETE repos/o/r/issues/comments/9",
+    "gh api --unknown repos/o/r/pulls/7",
+    "gh api --unknown=DELETE repos/o/r/pulls/7",
+    "gh api -Z repos/o/r/pulls/7",
     "gh api user",
     "gh auth login",
     "make test",
@@ -364,3 +373,23 @@ def test_tokens_of_reads_the_words_bash_passes():
     assert guard.tokens_of("git log 'a #b'") == ["git", "log", "a #b"]
     assert guard.tokens_of('git log "a#b"') == ["git", "log", "a#b"]
     assert guard.tokens_of("git status") == ["git", "status"]
+
+
+def test_the_method_reader_is_shared_by_the_conductor_guard():
+    """REQ-046: brief #531 (fix list on 5ddd126: one reading of the method for both guards)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".claude" / "hooks"))
+    import architect_guard
+    import conductor_guard
+
+    assert conductor_guard.gh_api_methods is architect_guard.gh_api_methods
+    for form, method in [
+        (["--method", "post"], "POST"),
+        (["--method=Post"], "POST"),
+        (["-X", "POST"], "POST"),
+        (["-XPOST"], "POST"),
+        (["-X=post"], "POST"),
+        (["-H", "-XPOST"], None),
+        (["-f", "-XPOST"], None),
+    ]:
+        found = architect_guard.gh_api_methods(["gh", "api", *form, "repos/o/r/issues/7/comments"])
+        assert found == ([method] if method else []), form

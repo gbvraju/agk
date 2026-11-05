@@ -242,3 +242,22 @@ def test_a_quoted_hash_in_a_body_file_path_is_read_as_bash_reads_it(project, tmp
     found = verdict_of(project, tmp, file_post(path))
     assert found is not None and MARK in found["permissionDecisionReason"]
     assert str(path) not in found["permissionDecisionReason"]
+
+
+# --- the method glued to -X is a POST in shadow mode too (brief #531, fix list on 5ddd126) --------
+
+
+@pytest.mark.parametrize("method", ["-XPOST", "-X=POST", "-Xpost", "-X=post"])
+@pytest.mark.parametrize("body", ["hello", "Confirmed: abc1234", "Verdict: cleared abc1234"])
+def test_a_glued_post_of_a_non_shadow_body_is_denied_in_shadow_mode(project, method, body):
+    """REQ-046: brief #531 (shadow mode reads `-XPOST` and `-X=POST` as the POST they are)."""
+    command = f"gh api {method} repos/o/r/issues/9/comments -f 'body={body}'"
+    found = denial(run_hook(bash(command), project, "--shadow").stdout)
+    assert found is not None and MARK in found["permissionDecisionReason"], command
+
+
+@pytest.mark.parametrize("method", ["-XGET", "-X=GET"])
+def test_a_glued_get_is_still_a_read_in_shadow_mode(project, method):
+    """REQ-046: brief #531 (only the method is read differently; a GET stays a read)."""
+    out = run_hook(bash(f"gh api {method} repos/o/r/pulls/7"), project, "--shadow")
+    assert denial(out.stdout) is None
