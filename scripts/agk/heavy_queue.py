@@ -12,10 +12,15 @@ The order (rule 5): under `fifo` the sequence number only; under `priority` the 
 first, `unknown` last), then the sequence number, with every job waiting longer than
 `queue_max_wait` minutes first, by sequence number. The estimate (rule 7) comes from past results
 only. Standard library only; no network, no process started.
+
+Build (b) (brief #552, ADR-0274, rules 4, 8 and 14): the runner's files. `claim` takes
+`runner.json`, `sweep` names the jobs that can no longer pass, `finish` writes a result (with its
+`kind`) beside its output and removes the job, and `prune` removes results older than seven days.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -30,6 +35,7 @@ UNKNOWN = "unknown"
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 LAST = 10  # the last ten finished results of a kind
 FEWEST = 3  # with fewer results of a kind ahead, the start is unknown
+KEEP_DAYS = 7  # results and output files older than this are removed (Q-S0040-9)
 
 
 def queue_folder(held: Path) -> Path:
@@ -136,10 +142,11 @@ def waiting_order(all_jobs: list[dict], order: str, max_wait: int, now: datetime
     if order != "priority":
         return sorted(waiting, key=lambda j: j["seq"])
 
-    def key(j: dict) -> tuple[int, int, int]:
+    def key(j: dict) -> tuple[int, int, int, int]:
         if overdue(j, max_wait, now):
-            return (0, 0, j["seq"])
-        return (1, rank(j.get("priority")), j["seq"])
+            return (0, 0, 0, j["seq"])
+        # within one priority a job whose brief unblocks others goes first (the ruling on Q-552-3)
+        return (1, rank(j.get("priority")), 0 if j.get("unblocks") else 1, j["seq"])
 
     return sorted(waiting, key=key)
 
@@ -338,3 +345,103 @@ def runner_alive(folder: Path, alive, host: str) -> bool:
     if data.get("host") != host or not isinstance(pid, int) or isinstance(pid, bool):
         return False
     return bool(alive(pid))
+
+
+def claim(folder: Path, me: dict, alive, host: str, limit: int, now: datetime):
+    """Take `runner.json` for `me`, under the mutex: (taken, a line or None). A live runner of this
+    machine, or one of another machine read within `limit` minutes, keeps it (rule 4); a file
+    whose process no longer runs is replaced with a line (rule 14)."""
+    data = read_json(folder / "runner.json")
+    line = None
+    if data is not None:
+        pid, where = data.get("pid"), data.get("host")
+        if where == host:
+            live = isinstance(pid, int) and not isinstance(pid, bool) and alive(pid)
+            if live and pid != me["pid"]:
+                return False, f"runner already running (pid {pid}, host {where})"
+            line = f"replaced the runner file of pid {pid}, which no longer runs"
+        else:
+            read = moment(data.get("read"))
+            if read is not None and (now - read).total_seconds() / 60 <= limit:
+                return False, f"runner already running (pid {pid}, host {where})"
+            line = f"replaced the runner file of pid {pid}, host {where}, unread for {limit} min"
+    write_whole(folder / "runner.json", json.dumps(me))
+    return True, line
+
+
+def sweep(folder: Path, now: datetime, alive, host: str, limit: int, mine) -> list[tuple]:
+    """Rule 14: (job, reason) for each job file that cannot be read, and each running job that is
+    not this runner's own (`mine`) whose runner no longer runs on this machine, or that another
+    machine's runner started more than `limit` minutes ago. A waiting job is never swept."""
+    box = folder / "jobs"
+    found: list[tuple] = []
+    for path in sorted(box.glob("*.json")) if box.is_dir() else []:
+        job = read_json(path)
+        if (
+            job is None
+            or not isinstance(job.get("ticket"), str)
+            or not isinstance(job.get("seq"), int)
+        ):
+            found.append(({"ticket": path.stem}, "unreadable job"))
+            continue
+        if job["ticket"] in mine or not running(job):
+            continue
+        owner = job.get("runner")
+        owner = owner if isinstance(owner, dict) else {}
+        pid = owner.get("pid")
+        if owner.get("host") == host:
+            if not (isinstance(pid, int) and not isinstance(pid, bool) and alive(pid)):
+                found.append((job, "its runner no longer runs"))
+        elif (now - (moment(job["started"]) or now)).total_seconds() / 60 > limit:
+            found.append((job, f"older than {limit} min, setting: lock_stale_minutes"))
+    return found
+
+
+def record_of(command: object) -> str | None:
+    """The path after `--record` (the record file of `prepush.py --record FILE`), or None."""
+    if not isinstance(command, list) or "--record" not in command:
+        return None
+    at = command.index("--record") + 1
+    return str(command[at]) if at < len(command) else None
+
+
+def finish(folder: Path, job: dict, outcome: str, now: datetime, code=None, began=None) -> dict:
+    """Write the job's result whole beside its output (an empty one when it never ran), then
+    remove the job file; under the mutex (rule 4)."""
+    ticket = job["ticket"]
+    out = folder / "results" / f"{ticket}.out"
+    if not out.is_file():
+        write_whole(out, "")
+    data = out.read_bytes()
+    started, submitted = moment(job.get("started")), moment(job.get("submitted"))
+    queued = (started - submitted).total_seconds() if started and submitted else None
+    result = {
+        "schema": SCHEMA,
+        "ticket": ticket,
+        "head": job.get("head"),
+        "kind": job.get("kind"),
+        "session": job.get("session"),
+        "outcome": outcome,
+        "exit": code,
+        "output_sha256": hashlib.sha256(data).hexdigest(),
+        "output_bytes": len(data),
+        "queued_seconds": queued,
+        "run_seconds": (now - began).total_seconds() if began else None,
+        "started": job.get("started"),
+        "ended": stamp(now),
+        "record": record_of(job.get("command")),
+    }
+    write_whole(folder / "results" / f"{ticket}.json", json.dumps(result, indent=1))
+    (folder / "jobs" / f"{ticket}.json").unlink(missing_ok=True)
+    return result
+
+
+def prune(folder: Path, now: datetime) -> None:
+    """Remove results and output files older than seven days (rule 14)."""
+    box = folder / "results"
+    for path in box.iterdir() if box.is_dir() else []:
+        try:
+            if now.timestamp() - path.stat().st_mtime > KEEP_DAYS * 86400:
+                path.unlink()
+        except OSError:
+            pass

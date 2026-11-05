@@ -71,12 +71,13 @@ review_mode = "team"
 # Optional (SPEC-0040, brief #529): the heavy-run queue of `python3 scripts/agk/lock.py`, off by default and when the table is absent,
 # when nothing changes. With queue = true, `lock.py submit --name heavy --session ID [--kind prepush|proof|other] [--brief N] -- <cmd...>`
 # queues one heavy run for the committed head and returns at once with a ticket, and `lock.py status --name heavy` shows the queue.
-# queue_order: "fifo" (the default: submission order only) or "priority" (the brief's Priority: line, 0 first and unknown last, and a job
-# waiting longer than queue_max_wait minutes, 120 if unset, goes first). queue_autostart (off) and queue_idle_minutes (10) are the
+# queue_order: "priority" (the default: the brief's Priority: line, 0 first and unknown last, a brief that an open brief or pull request
+# depends on one level higher, never to 0, and a job waiting longer than queue_max_wait minutes, 120 if unset, goes first) or "fifo"
+# (submission order only). queue_autostart (off) and queue_idle_minutes (10) are the
 # runner's. The table holds only these keys; any other value is refused naming the setting. A change needs an ADR (agk.toml is protected).
 # [locks]
 # queue = false
 # queue_autostart = false
 # queue_idle_minutes = 10
-# queue_order = "fifo"
+# queue_order = "priority"
 # queue_max_wait = 120
