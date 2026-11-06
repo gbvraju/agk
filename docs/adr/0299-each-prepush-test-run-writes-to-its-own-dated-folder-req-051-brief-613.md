@@ -1,6 +1,6 @@
 # ADR-0299: Each pre-push test run writes to its own dated folder (REQ-051, brief 613)
 
-- Status: Proposed
+- Status: Superseded
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0270, ADR-0208, ADR-0227, SPEC-0044, SPEC-0010
