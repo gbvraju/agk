@@ -1,6 +1,6 @@
 # SPEC-0045: Each kind of work runs on the model it needs and its token usage is recorded
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-052
 
