@@ -37,8 +37,8 @@ failure. The ADR number and amendment 132 of SPEC-0039 were reserved for brief #
    kit's tests are not installed in a project, and installed code names no kit test path (lean
    install, ADR-0052), so the list lives in the setting and not in the code. A malformed value
    is refused before anything runs, naming `testing.pre_merge_tests`. A listed name that is not
-   a file of the merge holds, naming the same setting. `impact.testing_table` accepts the key and refuses a listed name that is not a file
-   of the checkout.
+   a file of the merge holds, naming the same setting. `impact.testing_table` accepts the key
+   and refuses a listed name that is not a file of the checkout.
 3. **Fail-closed.** Any exit other than 0 holds, including a missing pytest, no test collected or
    an interrupt. `governance not finished` still covers an exception during the check.
 
