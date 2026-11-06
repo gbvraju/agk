@@ -1394,8 +1394,8 @@ def render_text(
             lines.append(f"  to check: {HINTS.get(c['reason'], HINTS['bad-response'])}")
     s = summary(report)
     # The information lines before the summary, in the order deprecation (SPEC-0046 rule 11),
-    # secret scan (ADR-0306) and work type (SPEC-0038 rule 5); the suite lines of SPEC-0044 (`extra`)
-    # stay last, right before the summary (its rule 7's test).
+    # secret scan (ADR-0306) and work type (SPEC-0038 rule 5); the suite lines of SPEC-0044
+    # (`extra`) stay last, right before the summary (its rule 7's test).
     lines += [tidy] if tidy else []
     lines += deprecation or []
     lines += [scan] if scan else []
