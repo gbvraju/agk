@@ -39,7 +39,9 @@ root (SPEC-0005 rule 6).
 4. **The list (answer 2).** `config/kit-only.txt` is seeded with every discipline that reaches no
    project today. A line whose reason is a true exception says it; a line whose reason could not be
    stated in this build says `gap:` and names its question (`Q-680-n`), so it is a move a
-   follow-up brief makes (plan #661). The kit test `tests/kit/test_parity.py` holds the count of
+   follow-up brief makes (plan #661). Seeded on 2026-11-06 with 10 lines: 4 exceptions (the list itself,
+   the kit's type baseline, its tag check and its release hash table) and 6 `gap:` lines
+   (Q-680-2 to Q-680-7). The kit test `tests/kit/test_parity.py` holds the count of
    lines as a ceiling: a count above it fails ("install it or ship it instead"), a count below it
    fails until the ceiling is lowered in the same pull request, as the rule budget does (ADR-0310).
 5. **Where it runs.** `kit/agk-kit.mk` wires no governance check today (it defines `agk-test`

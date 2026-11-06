@@ -186,7 +186,8 @@ def main(argv: list[str]) -> int:
     if problems:
         return 1
     kit_only = sum(1 for value in how.values() if value.startswith("kit-only"))
-    print(f"parity: {len(how)} disciplines; {len(how) - kit_only} reach a project, {kit_only} kit-only")
+    reach = len(how) - kit_only
+    print(f"parity: {len(how)} disciplines; {reach} reach a project, {kit_only} kit-only")
     return 0
 
 
