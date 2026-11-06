@@ -190,16 +190,17 @@ def test_a_dirty_tree_is_recorded(repo, outside):
 
 
 def test_gitleaks_missing_is_recorded_without_a_version(repo, outside):
-    """REQ-039: brief #374 answers 1 and 5 (gitleaks missing)."""
+    """REQ-039: brief #374 answers 1 and 5 (gitleaks missing), as brief #632 changes it
+    (ADR-0306): the scan step is a FAIL, never `not run`."""
     project(repo)
     record = outside / "record.json"
     proc = run(repo, "--quick", "--record", str(record), scan=None)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.returncode == 1, proc.stdout + proc.stderr
     data = load(record)
     assert "gitleaks" not in data["versions"]
     scan = next(s for s in data["steps"] if s["name"] == "secret-scan")
-    assert scan["outcome"] == "skipped" and scan["not_run"] is True and scan["exit"] is None
-    assert data["not_run"] == ["secret-scan"]
+    assert scan["outcome"] == "FAIL" and scan["not_run"] is False and scan["exit"] is None
+    assert data["not_run"] == [] and data["result"] == "failed"
     assert EVIDENCE.search(proc.stdout)
 
 

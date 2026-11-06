@@ -3,7 +3,7 @@
 `scripts/agk/prepush.py` runs, in order, the pull request body check (on a body file when one is
 given), `make lint` (where the project's Makefile has the target), the governance checks of
 `agk.mk` (`agk-governance`, which need no network), the secret scan over the branch's commits
-(gitleaks, when installed) and the tests that `test_plan.py` selects. It stops at the first
+(gitleaks; a missing gitleaks fails the run, brief #632) and the tests that `test_plan.py` selects. It stops at the first
 failure with that step's message, prints one line per step with its time, and exits 0 only when
 every step that ran passed. `--quick` skips the tests.
 
@@ -263,15 +263,16 @@ def test_the_scan_covers_the_branch_commits_only(repo, tmp_path):
 
 
 def test_no_scanner_installed_is_said_and_not_a_pass(repo, tmp_path):
-    """REQ-016: brief #326 answer 1 (a scan that cannot run is said, never skipped silently)."""
+    """REQ-016: brief #326 answer 1, as brief #632 changes it (ADR-0306): a scan that cannot run
+    is said and fails the run, never skipped."""
     project(repo)
     proc = prepush(repo, scan=None)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert steps(proc.stdout)["secret-scan"] == "skipped"
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert steps(proc.stdout)["secret-scan"] == "FAIL"
     assert "gitleaks is not installed" in proc.stdout
-    assert "secret scan: not run" in proc.stdout
+    assert "secret scan: not run" not in proc.stdout
     assert "prepush: all steps passed" not in proc.stdout
-    assert "prepush: passed; not run: secret-scan" in proc.stdout
+    assert "prepush: passed" not in proc.stdout
 
 
 def test_quick_skips_the_tests(repo, tmp_path):
