@@ -1,0 +1,1 @@
+- `scripts/agk/parity.py report|check` lists every discipline the kit applies to itself and how a project gets it (installed, through the plugin, or kit-only with its reason from `config/kit-only.txt`), and fails on one that reaches no project; the exception list may only shrink (brief #680, ADR-0326)

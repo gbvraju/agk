@@ -298,6 +298,18 @@ of that test's output, or only `evidence withheld: ...`. `issue-body` prints whe
 or a comment on an open one, from a saved issue list; with `[failures] issues` off (the default) it prints `action: none`.
 It reads files, prints and writes nothing. See SPEC-0046 rules 2, 3 and 5 and ADR-0303.
 
+## Parity
+
+    python3 scripts/agk/parity.py report [--root DIR]
+    python3 scripts/agk/parity.py check [--root DIR]
+
+Lists every discipline the kit applies to itself (each `scripts/agk/*.py`, each `.claude/agents/*.md`, each file directly
+under `config/` and each `docs/runs/` log an agent file names) with how a project gets it: `installed` (`kit/manifest.json`),
+`plugin` (a skill runs it from the plugin root, or a script the plugin runs imports it) or `kit-only (<reason>)` from
+`config/kit-only.txt`. `check` exits 1 naming each discipline in none of the three and each stale, unreasoned, repeated or
+empty line of the list; the list may only shrink (`tests/kit/test_parity.py`). A tree without `kit/manifest.json` has nothing
+to check. It reads files only. See ADR-0326.
+
 ## Core audit
 
     python3 scripts/agk/core_audit.py [--since YYYY-MM-DD] [--json] [--write] [--today YYYY-MM-DD] [--repo OWNER/REPO | --api-dir DIR] [--authors LOGIN,LOGIN]
