@@ -66,10 +66,11 @@ still writes it. Then it prints one line for the pull request body:
 `Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>`. A record
 file that cannot be written exits 2.
 
-Brief #613 (ADR-0299): when the tests step runs a command, it runs them all with `AGK_RUN_DIR`
-set to one new folder of `proof.run_folder`, `<results root>/<UTC time>-<head sha12>-prepush`; a
+Brief #613 (ADR-0299): when `[testing] results_dir` is set and the tests step runs a command, it
+runs them all with `AGK_RUN_DIR` set to one new folder of `proof.run_folder`, `<results root>/<UTC time>-<head sha12>-prepush`; a
 failed step keeps it, a passed one removes it unless `[testing] keep_passed = true`, and the
-record's `run_dir` names it (`path`, relative to the repository, and `kept`).
+record's `run_dir` names it (`path`, relative to the repository, and `kept`). Without the key the
+step is exactly as before: no variable, no folder, no `run_dir` (SPEC-0044 rule 1, `Q-613-2`).
 
 Brief #566 (SPEC-0040 build (c), rule 9): with `[locks] queue = true`, `--record FILE --queue`
 runs no step here: it submits the same command without `--queue`, with the body and record paths
@@ -118,6 +119,7 @@ from impact import (
     impact,
     junit_setting,
     parallel_command,
+    run_settings,
     run_timing,
     workers_setting,
 )
@@ -354,8 +356,14 @@ def tests(root: Path, mb: str, quick: bool, use_lock: bool = True) -> Step:
         return Step("FAIL", out, ran=ran)
     shown = json.loads(out)
     table = (shown.get("regression") or {}).get("table")
-    if not table and not shown["runs"]:
-        return proof_runs(root, shown["runs"], ran)  # nothing runs, so no run folder
+    try:
+        use_folder = run_settings(root)[0] is not None and bool(table or shown["runs"])
+    except CheckError as exc:
+        return Step("FAIL", str(exc), ran=ran)
+    if not use_folder:  # no results_dir (Q-613-2), or nothing runs: exactly as before
+        if not table:
+            return proof_runs(root, shown["runs"], ran)  # as before (brief #417 answer 4)
+        return regression_step(root, mb, shown, ran, use_lock)
     head = git(root, "rev-parse", "HEAD").strip()
     with ExitStack() as stack:
         try:

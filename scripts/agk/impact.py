@@ -25,8 +25,9 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
   filled with the number (rule 5);
 - `slow_suite_seconds`: above it a single-process full run gets doctor's line (rule 7; 600);
 - `results_dir`, `keep_passed`, `keep_runs`: the run folders of `proof.run_folder` (brief #613,
-  ADR-0299): the results root inside the repository (`.agk-runs` by default), whether a passed
-  run's folder is kept (false) and how many run folders stay at most (20).
+  ADR-0299): the results root inside the repository (no default: without it no run folder is
+  used, `Q-613-2`), whether a passed run's folder is kept (false) and how many run folders stay
+  at most (20).
 
 For the change base..head `impact` gives the existing test files of the head (`test_dirs`,
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
@@ -76,7 +77,6 @@ KEYS = {
     "keep_runs",
 }
 DEFAULT_SLOW = 600
-DEFAULT_RESULTS = ".agk-runs"
 DEFAULT_KEEP_RUNS = 20
 PR_TESTS = ("full", "selected")
 EXCLUDED = re.compile(r"[^\s:]+: \S[^\n]*")
@@ -333,13 +333,14 @@ def slow_suite_seconds(root: Path) -> int:
     return config_source(root)["testing"].get("slow_suite_seconds", DEFAULT_SLOW)
 
 
-def run_settings(root: Path) -> tuple[str, bool, int]:
-    """(`results_dir` without a trailing `/`, `keep_passed`, `keep_runs`) of `[testing]`, with
-    their defaults without the table or a key (brief #613). The whole table is checked first."""
+def run_settings(root: Path) -> tuple[str | None, bool, int]:
+    """(`results_dir` without a trailing `/`, or None when it is not set, `keep_passed`,
+    `keep_runs`) of `[testing]`, with their defaults without the table or a key (brief #613;
+    `Q-613-2`: no results root unless it is set). The whole table is checked first."""
     if testing_table(root) is None:
-        return DEFAULT_RESULTS, False, DEFAULT_KEEP_RUNS
+        return None, False, DEFAULT_KEEP_RUNS
     table = config_source(root)["testing"]
-    results = table.get("results_dir", DEFAULT_RESULTS).rstrip("/") or DEFAULT_RESULTS
+    results = table["results_dir"].rstrip("/") if "results_dir" in table else None
     return results, table.get("keep_passed", False), table.get("keep_runs", DEFAULT_KEEP_RUNS)
 
 

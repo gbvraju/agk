@@ -17,9 +17,9 @@ are proven, a third run executes on the head, never on the base, the regression 
 default, and the spec change is a proposal until a person approves it).
 Brief #613 (ADR-0299): `run_folder` gives one run its own folder,
 `<results root>/<UTC time>-<head sha12>-<kind>`, set as `AGK_RUN_DIR` for the project's command;
-`prepush.py` uses it with the kind `prepush`. A command may write its screenshots, traces and logs
-there. The results root is `[testing] results_dir` (`.agk-runs` by default), which ignores itself
-in git. A run that did not pass keeps its folder; a passed run's folder is removed unless
+`prepush.py` uses it with the kind `prepush`, only when `[testing] results_dir` is set (`Q-613-2`:
+without the key nothing changes). A command may write its screenshots, traces and logs there. The
+results root is that setting, which ignores itself in git. A run that did not pass keeps its folder; a passed run's folder is removed unless
 `[testing] keep_passed = true`. Then at most `[testing] keep_runs` (20) run folders stay, oldest
 removed first, never a failed or unfinished run's folder of the last 7 days, and only folders
 named that way are ever removed. Proof's own runs do not use it yet: SPEC-0010 rules 8 and 11
@@ -375,10 +375,12 @@ def run_folder(
     """A new folder `<results root>/<UTC time>-<head sha12>-<kind>` (a `-<n>` suffix when that
     name exists), set as `AGK_RUN_DIR` while the block runs and restored after it. On leaving, the
     folder gets its mark, is removed when the run passed and `keep_passed` is false, and `prune`
-    runs. OSError when the folder cannot be made; CheckError on a bad setting."""
+    runs. OSError when the folder cannot be made; CheckError on a bad or missing setting."""
     from impact import run_settings
 
     results_dir, keep_passed, keep_runs = run_settings(root)
+    if results_dir is None:
+        raise CheckError("no results root is set (setting: testing.results_dir)")
     results = root.resolve() / results_dir  # absolute: the command runs in another folder
     if not results.resolve().is_relative_to(root.resolve()):
         raise CheckError(
