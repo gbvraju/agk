@@ -53,7 +53,8 @@ def kit_tree(tmp_path: Path, testing: str, xdist: bool) -> Path:
         f'default_branch = "main"\nlint_paths = ["scripts/agk"]\n[testing]\n{testing}',
         encoding="utf-8",
     )
-    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)  # nosec B603 B607
+    git_init = ["git", "init", "-q", "-b", "main"]
+    subprocess.run(git_init, cwd=root, check=True)  # nosec B603 - fixed argument list
     return root
 
 
