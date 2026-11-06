@@ -30,6 +30,13 @@ one line that starts `You are session <id>`, names its brief and pull request, a
 (session rule 11), then carry on from GitHub alone. No running session prints nothing (exit 0).
 With `--adapter` the adapter is called once per running session, as for a start; `max_builders`
 still caps the run, and `capacity.slots` is not required (the running sessions hold their slots).
+
+Brief 612 (ADR-0298): with `[flow] min_free_memory_mb` set (a whole number of MiB, 1 or more),
+`--adapter`, starting or resuming, first reads the machine's free memory with
+`common.available_memory` (standard library, no network). Below the floor it starts nothing,
+prints `launch: not started: free memory below [flow] min_free_memory_mb` and exits 1; when the
+memory cannot be read it prints one note naming the setting and starts as before. Unset, the
+memory is not read. Printing the prompts starts nothing, so the floor does not apply there.
 """
 
 from __future__ import annotations
@@ -45,7 +52,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError
+from common import CheckError, available_memory
 
 NAME = "launch"
 USAGE = "usage: launch.py prompts --plan FILE|- [--resume] [--adapter COMMAND]"
@@ -183,6 +190,40 @@ def max_builders(root: Path) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise CheckError("max_builders of the flow table must be a whole number, 1 or more")
     return value
+
+
+MIB = 1024**2
+MEMORY_SETTING = "[flow] min_free_memory_mb"
+
+
+def min_free_memory_mb(root: Path) -> int | None:
+    """`[flow] min_free_memory_mb` of the checkout's agk.toml (None when unset), a whole number
+    1 or up; any other value is refused naming the setting, never the value."""
+    value = flow_of(checkout_text(root)).get("min_free_memory_mb")
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CheckError("min_free_memory_mb of the flow table must be a whole number, 1 or more")
+    return value
+
+
+def memory_allows(root: Path) -> bool:
+    """False, with one line naming the setting, when free memory is below the floor (brief 612);
+    True when the floor is unset, met, or the memory cannot be read (then with one note)."""
+    floor = min_free_memory_mb(root)
+    if floor is None:
+        return True
+    free = available_memory()
+    if free is None:
+        print(
+            f"launch: note: free memory cannot be read; started without {MEMORY_SETTING}",
+            file=sys.stderr,
+        )
+        return True
+    if free < floor * MIB:
+        print(f"launch: not started: free memory below {MEMORY_SETTING}", file=sys.stderr)
+        return False
+    return True
 
 
 def within_capacity(plan: dict, count: int, required: bool = False) -> None:
@@ -335,6 +376,8 @@ def main(argv: list[str] | None = None) -> int:
             print("no session to start")
             return 0
         found, beyond = found[:limit], found[limit:]
+        if "--adapter" in opts and not memory_allows(Path.cwd()):
+            return 1
         if "--adapter" in opts:
             code = start_with(opts["--adapter"], found)
         else:
@@ -359,6 +402,8 @@ def resume_main(opts: dict) -> int:
             return 0
         found, beyond = found[:limit], found[limit:]
         prompts = [resume_for(*item) for item in found]
+        if "--adapter" in opts and not memory_allows(Path.cwd()):
+            return 1
         if "--adapter" in opts:
             code = start_with(opts["--adapter"], [item[:3] for item in found], prompts)
         else:
