@@ -1,0 +1,1 @@
+- A pull request body with `Fixes-failure: #<issue>` must carry the four fix record lines `Symptom:`, `Cause:`, `Reproduce:` and `Fixed-by:`, each once, 1 to 300 characters and with no data guard finding; `check_pr_body.py` checks the shape offline and names the line, never its value; session rule 34 names the form (brief #635, SPEC-0046 build (c), ADR-0303)
