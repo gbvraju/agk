@@ -19,16 +19,20 @@ permissions:
   issues: read
   actions: read
 
-# CI runs only where it can change a result (brief #216): a superseded run of a pull request is cancelled, a push to the default branch
-# never is, and a run for an edited description has a group of its own so that it cannot cancel the full run of the same commit. On an
+# CI runs only where it can change a result (brief #216): a superseded run of a pull request is cancelled, a running push to the
+# default branch never is (a waiting one is replaced by a newer push, brief #621), and a run for an edited description has a group of its own so that it cannot cancel the full run of the same commit. On an
 # edited description only the steps that read the pull request body run (those without the condition `github.event.action != 'edited'`);
 # the job and its name stay, so the required check still reports.
 # Fast CI (brief #283): on a draft pull request the heavy steps (lint, the tests, the project tests) are skipped and the job
 # still reports, and `ready_for_review` runs them in full; a superseded run is cancelled by the concurrency group below. The
 # secret scanner's download is kept in a cache; the tooling install (two small packages) is not cached. A documentation-only
 # change still runs every check, since the checks read the documentation. Nothing is uploaded, so no retention applies.
+# Main checks run in batches (brief #621, ADR-0302): every push to the default branch shares one fixed group, so a running push run
+# is never cancelled (a run 80% done finishes) and pushes that arrive meanwhile wait as one run: GitHub keeps one running and at
+# most one waiting run per group and replaces an older waiting run with the newer one, which checks the newest commit and so every
+# change before it. A commit whose waiting run was replaced is covered by the next completed full run that contains it.
 concurrency:
-  group: governance-${{ github.event.pull_request.number || github.sha }}-${{ github.event.action == 'edited' && 'edited' || 'code' }}
+  group: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && format('governance-{0}-code', github.ref_name) || format('governance-{0}-{1}', github.event.pull_request.number || github.sha, github.event.action == 'edited' && 'edited' || 'code') }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
