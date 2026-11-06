@@ -300,7 +300,7 @@ def status_flip_only(old: str, new: str) -> bool:
         return False
     differ = [i for i, (a, b) in enumerate(zip(before, after, strict=True)) if a != b]
     first = next((i for i, a in enumerate(before) if STATUS_LINE.match(a.rstrip("\r\n"))), None)
-    if differ != [first]:
+    if first is None or differ != [first]:
         return False
     a, b = before[first], after[first]
     a_text, b_text = a.rstrip("\r\n"), b.rstrip("\r\n")
