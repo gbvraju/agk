@@ -53,14 +53,26 @@ for `[engines]`.
    (SPEC-0048 rule 12). The `data-pipeline` work type, the `[[discovery]]` section and the
    `skills` key are proposed by amendment 130 of SPEC-0038, written by build (c), and apply only
    after the owner's `Approve: SPEC-0038` (SPEC-0048 rule 18).
-7. Per plan #542, this is the one ADR of REQ-055 for the builds of SPEC-0048 rule 20. The builds
+7. The kit never ships a playbook for every kind of work: it ships the format and its check, one
+   `default` playbook with the gates every kind carries, SPEC-0038's kinds as accelerators and a
+   way to derive a new one. A kind no shipped playbook fits gets a derived playbook in the
+   project, `config/playbooks/<slug>.toml`, written by the architect from `default`, the gate
+   modules it names and the research record, each gate sourced and dated or `expected`; it
+   passes the same check, never drops or weakens a gate of `default` or of a module, is covered
+   by the owner's go on the design and never enters the kit. It is promoted into the kit only by
+   a person, on evidence of two projects or one measured record, and every playbook carries a
+   `reviewed` date and dated sources whose freshness is checked (SPEC-0048 rules 21 to 25; the
+   `default`, derived and `modules` items are in amendment 130, and `reviewed` is amendment 129,
+   marked `(verify)`).
+8. Per plan #542, this is the one ADR of REQ-055 for the builds of SPEC-0048 rule 20. The builds
    will change these protected path classes: `scripts/agk/` (`front_door.py`, `playbook_format.py`,
-   `engines.py`, `doctor.py`, builds (b) to (h)), `tests/kit/` and `tests/kit_dev/` (their
-   tests), `kit/` (`kit/manifest.json`, builds (b) and (g)), `.github/` (the issue form
+   `engines.py`, `doctor.py`, `check_playbooks.py`, builds (b) to (k)), `tests/kit/` and
+   `tests/kit_dev/` (their tests), `kit/` (`kit/manifest.json`, builds (b), (g) and (i)), `.github/` (the issue form
    `.github/ISSUE_TEMPLATE/problem.md`, build (b); not a workflow), `skills/`
    (`skills/vision/SKILL.md`, build (c)), `.claude/` (`.claude/agents/conductor.md`, builds (e)
    and (f)) and `config/` (`config/session-rules.md`, build (f), and
-   `config/playbooks/data-pipeline.toml`, build (g)). A build that changes a class named here and
+   `config/playbooks/data-pipeline.toml`, build (g), and `config/playbooks/default.toml`,
+   build (i)). A build that changes a class named here and
    no other may cite this ADR with `Covered-by: ADR-0314` once it is Accepted (session rule 36).
    No build changes `constitution/`, `config/reviewers.yaml`, a workflow, the ruleset
    (`kit/templates/ruleset.json`), `.github/CODEOWNERS`, `CLAUDE.md`, `Makefile`, `agk.mk`,
