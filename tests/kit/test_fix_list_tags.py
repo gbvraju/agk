@@ -31,6 +31,8 @@ def test_req037_fix_items_are_the_numbered_items_with_their_continuations():
     items = fix_items(TAGGED)
     assert len(items) == 3
     assert items[1].endswith("and rerun prepush. (rule: none)")
+    after = "Verdict: fix list 0066abc\n\n1. x (rule: none)\nFinal: docs/adr/0001-x.md A -> B\n"
+    assert fix_items(after) == ["1. x (rule: none)"]  # an unindented line ends the item
     assert fix_items("Verdict: cleared 0066abc\n\n1. a note\n") == []
     assert fix_items("Report: 0066abc\n\n1. x\n") == []
 

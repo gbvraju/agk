@@ -344,8 +344,8 @@ RULE_TAGS_FROM = "rule_tags_from"
 
 def fix_items(body: str) -> list[str]:
     """The numbered items of a `Verdict: fix list <sha>` comment (brief 647): each line that
-    starts `<n>. ` at the left margin, joined with the non-blank lines after it up to the next
-    item; an empty list for any other comment."""
+    starts `<n>. ` at the left margin, joined with the indented lines right after it; an empty
+    list for any other comment."""
     lines = body.splitlines()
     if not lines or FIX_LIST.fullmatch(lines[0].strip()) is None:
         return []
@@ -355,10 +355,10 @@ def fix_items(body: str) -> list[str]:
         if FIX_ITEM.match(line):
             items.append([line.strip()])
             open_item = True
-        elif not line.strip():
-            open_item = False  # a blank line ends the item
-        elif open_item:
-            items[-1].append(line.strip())
+        elif open_item and line[:1].isspace() and line.strip():
+            items[-1].append(line.strip())  # an indented line continues the item
+        else:
+            open_item = False  # a blank or unindented line ends it
     return [" ".join(item) for item in items]
 
 
