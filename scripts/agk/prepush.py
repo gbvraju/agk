@@ -10,7 +10,11 @@ with that step's own output:
 2. `lint`: `make lint`, when the project's Makefile has a `lint` target;
 3. `governance`: `make -f agk.mk agk-governance` with `AGK_BASE` set to the base (the governance
    checks that need no network), and `AGK_PR_BODY` set to the body file when `--body` is given, so
-   that `check_protected_changes.py` reads its `Covered-by:` line (brief #545, ADR-0271);
+   that `check_protected_changes.py` reads its `Covered-by:` line (brief #545, ADR-0271); with
+   that line and a SPEC-0021 rule 3a record on the base, the Final comment of each record, one
+   `gh api` GET each (the workflow's `Record comments` step), in a temporary file outside the
+   checkout that `AGK_RECORD_COMMENTS` names and that is removed afterwards; a comment that
+   cannot be read fails the step, naming the option (brief #601, ADR-0293);
 4. `secret-scan`: gitleaks over the branch's commits (merge base to `HEAD`), when installed;
 5. `tests`: each run of `test_plan.py` (the plan proof runs), its command in its folder; `--quick`
    skips this step. With a `[testing]` table (brief #417, ADR-0227) it then runs the regression
@@ -66,6 +70,13 @@ still writes it. Then it prints one line for the pull request body:
 `Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>`. A record
 file that cannot be written exits 2.
 
+Brief #613 (ADR-0299): when `[testing] results_dir` is set and the tests step runs a command, it
+runs them all with `AGK_RUN_DIR` set to one new folder of `proof.run_folder`, `<results root>/<UTC
+time>-<head sha12>-prepush`; a failed step keeps it, a passed one removes it unless `[testing]
+keep_passed = true`, and the record's `run_dir` names it (`path`, relative to the repository, and
+`kept`). Without the key the step is exactly as before: no variable, no folder, no `run_dir`
+(SPEC-0044 rule 1, `Q-613-2`).
+
 Brief #566 (SPEC-0040 build (c), rule 9): with `[locks] queue = true`, `--record FILE --queue`
 runs no step here: it submits the same command without `--queue`, with the body and record paths
 made absolute, as one heavy job of kind `prepush` (`lock.py submit`, with `--brief` from the
@@ -87,9 +98,11 @@ import signal
 import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tempfile
 import time
 import uuid
 from collections.abc import Callable
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -98,6 +111,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import lock as heavy_lock
 from common import (
     CheckError,
+    final_records,
     git,
     load_config,
     merge_base,
@@ -112,10 +126,11 @@ from impact import (
     impact,
     junit_setting,
     parallel_command,
+    run_settings,
     run_timing,
     workers_setting,
 )
-from proof import area_command, execute, is_test_file, timeout_note
+from proof import area_command, execute, is_test_file, run_folder, timeout_note
 
 HERE = Path(__file__).resolve().parent
 USAGE = (
@@ -131,6 +146,7 @@ NO_PARALLEL = (
     "tests: the command is not a simple pytest command and parallel_command is not set, running "
     "in one process (setting: testing.parallel_command)"
 )
+NO_RUN_FOLDER = "tests: the run folder cannot be made (setting: testing.results_dir)"
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 PYTHON = re.compile(r"python(?:\d+(?:\.\d+)?)?")
 SHELL_SYNTAX = set(";&|<>()`$\n\\*?[]{}~#")
@@ -161,6 +177,7 @@ class Step:
         self.ran = ran
         self.runs = runs
         self.notes = list(notes or [])  # warnings that do not change the outcome (brief #509)
+        self.run_dir: dict | None = None  # the run folder of the tests step (brief #613)
 
 
 class Ran:
@@ -313,15 +330,79 @@ def missing_tool(code: int | None, output: str) -> str | None:
     return tool_name(echoed[-1].split()[0]) if echoed else None
 
 
+RECORD_COMMENTS = "AGK_RECORD_COMMENTS"  # the comments file the checks read (amendment 122)
+ORIGIN = re.compile(r"github\.com[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$")
+NO_RECORD_COMMENTS = (
+    "governance: rule 3a: the Final comments of the base's records cannot be read for the "
+    "'Covered-by:' line (option: --comments, AGK_RECORD_COMMENTS)"
+)
+
+
+def covers(body: Path) -> bool:
+    """Whether the body file has a `Covered-by:` line, as check_protected_changes.py reads it."""
+    try:
+        text = body.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return any(line.startswith("Covered-by:") for line in text.splitlines())
+
+
+def fetch_record_comments(root: Path, base: str, folder: Path) -> Path | None:
+    """With records on BASE (SPEC-0021 rule 3a), the Final comment of each, one `gh api` GET each
+    as the workflow's `Record comments` step makes them, in a file of FOLDER: its path; None when
+    any cannot be read (fail closed); the folder alone when BASE holds no record."""
+    ids = sorted({record[1] for record in final_records(root, base).values()})
+    if not ids:
+        return folder
+    code, url = run(["git", "remote", "get-url", "origin"], root)
+    match = ORIGIN.search(url.strip()) if code == 0 else None
+    if match is None or shutil.which("gh") is None:
+        return None
+    found: list = []
+    for cid in ids:
+        endpoint = f"repos/{match.group(1)}/issues/comments/{cid}"
+        try:
+            proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+                ["gh", "api", "--method", "GET", endpoint],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            value = json.loads(proc.stdout) if proc.returncode == 0 else None
+        except (OSError, ValueError):
+            value = None
+        if not isinstance(value, dict):
+            return None
+        found.append(value)
+    path = folder / "record-comments.json"
+    path.write_text(json.dumps(found), encoding="utf-8")
+    return path
+
+
 def governance(root: Path, base: str, body: Path | None = None) -> Step:
     if not (root / "agk.mk").is_file():
         return Step("FAIL", "agk.mk is missing; governance cannot run (path class: agk.mk)")
     if shutil.which("make") is None:
         return Step("skipped", "governance: not run (make is not installed)", not_run=True)
     env = {**os.environ, "AGK_BASE": base}
-    if body is not None:  # the body's `Covered-by:` line (brief #545, ADR-0271)
-        env["AGK_PR_BODY"] = str(body.resolve())
-    return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+    if body is None:
+        return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+    env["AGK_PR_BODY"] = str(body.resolve())  # the body's `Covered-by:` line (ADR-0271)
+    if not covers(body):
+        return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+    # a `Covered-by:` ADR a Final accepted needs its record's comment (brief #601, ADR-0293)
+    folder = Path(tempfile.mkdtemp(prefix="agk-prepush-"))
+    try:
+        path = fetch_record_comments(root, base, folder)
+        if path is None:
+            return Step("FAIL", NO_RECORD_COMMENTS)
+        if path != folder:
+            env[RECORD_COMMENTS] = str(path)
+        return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def secret_scan(root: Path, mb: str) -> Step:
@@ -345,8 +426,34 @@ def tests(root: Path, mb: str, quick: bool, use_lock: bool = True) -> Step:
     if code != 0:
         return Step("FAIL", out, ran=ran)
     shown = json.loads(out)
-    if not (shown.get("regression") or {}).get("table"):
-        return proof_runs(root, shown["runs"], ran)  # no [testing] table: as before (answer 4)
+    table = (shown.get("regression") or {}).get("table")
+    try:
+        use_folder = run_settings(root)[0] is not None and bool(table or shown["runs"])
+    except CheckError as exc:
+        return Step("FAIL", str(exc), ran=ran)
+    if not use_folder:  # no results_dir (Q-613-2), or nothing runs: exactly as before
+        if not table:
+            return proof_runs(root, shown["runs"], ran)  # as before (brief #417 answer 4)
+        return regression_step(root, mb, shown, ran, use_lock)
+    head = git(root, "rev-parse", "HEAD").strip()
+    with ExitStack() as stack:
+        try:
+            folder = stack.enter_context(run_folder(root, head, "prepush"))
+        except CheckError as exc:
+            return Step("FAIL", str(exc), ran=ran)
+        except OSError:
+            return Step("FAIL", NO_RUN_FOLDER, ran=ran)
+        if not table:
+            result = proof_runs(root, shown["runs"], ran)  # as before (brief #417 answer 4)
+        else:
+            result = regression_step(root, mb, shown, ran, use_lock)
+        folder.passed = result.outcome == "ok"
+    result.run_dir = {"path": safe_cwd(folder.path, root), "kept": folder.kept}
+    return result
+
+
+def regression_step(root: Path, mb: str, shown: dict, ran: Ran, use_lock: bool) -> Step:
+    """The tests step with a `[testing]` table: the lock, proof's runs, the regression set."""
     try:
         limit = proof_timeout(root)
         found = impact(root, mb, "HEAD")
@@ -794,6 +901,8 @@ def main(argv: list[str] | None = None) -> int:
         if record is not None:
             record["steps"].append(step_record(name, result, seconds, root))
             record["notes"].extend(result.notes)
+            if result.run_dir is not None:
+                record["run_dir"] = result.run_dir
         line = f"prepush: {name} {result.outcome} ({seconds:.1f}s)"
         if result.outcome == "skipped":
             print(f"{line}: {result.text}")
