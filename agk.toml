@@ -291,7 +291,7 @@ code = "scripts/agk/failures.py"
 tests = ["tests/kit/test_failures.py"]
 [[testing.map]]
 code = "scripts/agk/flakes.py"
-tests = ["tests/kit/test_flakes.py"]
+tests = ["tests/kit/test_flakes.py", "tests/kit/test_rerun_alone.py"]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
 tests = [
@@ -427,9 +427,12 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/project_tests.py"
 tests = [
-  "tests/kit/test_project_test_selection.py", "tests/kit_dev/test_init.py",
+  "tests/kit/test_project_test_selection.py", "tests/kit/test_rerun_alone.py", "tests/kit_dev/test_init.py",
   "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_make_once.py",
 ]
+[[testing.map]]
+code = "scripts/agk/req_status.py"
+tests = ["tests/kit/test_req_status.py"]
 [[testing.map]]
 code = "scripts/agk/review_context.py"
 tests = [
