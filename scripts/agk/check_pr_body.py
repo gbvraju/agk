@@ -19,7 +19,11 @@ body that is not a draft has exactly one line `Summary: <one sentence>` of 1 to 
 the message says which case found (missing, repeated with the count, empty, or too long with its
 length; brief #237). Brief #302 (ADR-0178): an optional line `Finishes: #n` says the pull request
 is the last of brief #n, and is accepted only once and only beside `Brief: #n` naming the same
-number. Messages name the rule, never a value or a word of the body. Files and git only."""
+number. SPEC-0046 rule 7 (build (c)): a body with a `Fixes-failure: #<issue>` line carries it once
+and the four fix record lines `Symptom:`, `Cause:`, `Reproduce:` and `Fixed-by:`, each exactly
+once, of 1 to 300 characters and with no finding of the data guard's built-in detectors
+(`guard.scan_text`); a body without it is checked as before, and the issue's kind is not checked
+(no network). Messages name the rule, never a value or a word of the body. Files and git only."""
 
 from __future__ import annotations
 
@@ -50,6 +54,9 @@ LINK = re.compile(r"#\d+")
 DONE = re.compile(r"\bREQ-\d{3}\s+done\b", re.IGNORECASE)
 SUMMARY = "Summary:"
 SUMMARY_MAX = 120
+FIXES = "Fixes-failure:"
+RECORD = ("Symptom:", "Cause:", "Reproduce:", "Fixed-by:")
+RECORD_MAX = 300
 NONE_FORMS = {
     "none (design)": ("docs/design/",),
     "none (spec)": ("docs/specs/", "docs/requirements.md"),
@@ -155,6 +162,45 @@ def summary_problem(summaries: list[str]) -> str | None:
     return None
 
 
+def lines_of(text: str, label: str) -> list[str]:
+    return [x[len(label) :].strip() for x in text.splitlines() if x.startswith(label)]
+
+
+def fix_record_problems(text: str) -> list[str]:
+    """SPEC-0046 rule 7: the fix record's shape; each message names the line, never its value."""
+    fixes = lines_of(text, FIXES)
+    if not fixes:
+        return []
+    from guard import scan_text  # here: only a body with a fix record needs the detectors
+
+    rule = "SPEC-0046 rule 7: "
+    problems = []
+    if len(fixes) > 1:
+        problems.append(rule + f"there are {len(fixes)} '{FIXES}' lines; exactly one is required")
+    elif not re.fullmatch(LINK, fixes[0]):
+        problems.append(rule + f"the '{FIXES}' line must name one issue as '#<issue>'")
+    for label in RECORD:
+        values = lines_of(text, label)
+        if not values:
+            problems.append(rule + f"the '{label}' line is missing")
+        elif len(values) > 1:
+            count = len(values)
+            problems.append(rule + f"there are {count} '{label}' lines; repeated, one is required")
+        elif not values[0]:
+            problems.append(rule + f"the '{label}' line is empty")
+        elif len(values[0]) > RECORD_MAX:
+            problems.append(
+                rule + f"the '{label}' line is too long: {len(values[0])} characters; "
+                f"at most {RECORD_MAX}"
+            )
+        elif findings := scan_text(values[0]):
+            problems.append(
+                rule + f"the '{label}' line has {len(findings)} data guard finding(s) "
+                f"({', '.join(sorted({f.kind for f in findings}))})"
+            )
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     options: dict[str, str] = {}
@@ -194,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             problems.append("rule 9: 'Closes #n' line is required (a requirement is set to done)")
     if problem := finishes_problem(text):
         problems.append(problem)
+    problems.extend(fix_record_problems(text))
     if any(line != BEHAVIOUR_UNCHANGED for line in behaviour_lines(text)):
         problems.append("'Behaviour:' must be 'unchanged'")
     for problem in problems:
