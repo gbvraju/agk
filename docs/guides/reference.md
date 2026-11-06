@@ -258,6 +258,18 @@ quarantine past its expiry (`expired`), each test with two strikes or more and n
 with its line number. Exit 0 when nothing is listed, 1 otherwise. It is not a governance step and blocks nothing. See
 [testing.md](testing.md#the-flake-ledger) and ADR-0234.
 
+## Failure signature and evidence
+
+    python3 scripts/agk/failures.py signature --output FILE [--step NAME]
+    python3 scripts/agk/failures.py evidence --output FILE [--test ID]
+    python3 scripts/agk/failures.py issue-body --signature SIG --test ID [--issues FILE]
+
+`signature` prints `<signature> <test id>` for each failed test of a run's output (the `[testing] junit` report when it is
+readable, else the `FAILED <id>` lines; `step:NAME` when there is no test id). `evidence` prints the cleaned last 200 lines
+of that test's output, or only `evidence withheld: ...`. `issue-body` prints whether a failure needs a new `found-bug` issue
+or a comment on an open one, from a saved issue list; with `[failures] issues` off (the default) it prints `action: none`.
+It reads files, prints and writes nothing. See SPEC-0046 rules 2, 3 and 5 and ADR-0303.
+
 ## Core audit
 
     python3 scripts/agk/core_audit.py [--since YYYY-MM-DD] [--json] [--write] [--today YYYY-MM-DD] [--repo OWNER/REPO | --api-dir DIR] [--authors LOGIN,LOGIN]
