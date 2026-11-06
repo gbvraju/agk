@@ -52,6 +52,7 @@ from common import (  # noqa: E402
     jobs_of,
     minutes_warn,
     paused,
+    personal_table,
     router_names,
     router_wanted,
     with_router_names,
@@ -1154,6 +1155,23 @@ def render_no_kit(as_json: bool) -> str:
     return f"agk doctor none\n{NO_KIT}: {NO_KIT_TEXT}\nsummary: {NO_KIT}\n"
 
 
+def personal_line(root: Path) -> tuple[int, str] | None:
+    """On a sidecar (SPEC-0041 rule 1): the one personal-mode line and its exit, with no network
+    read; None in team mode. A malformed `[personal]` table fails naming the setting."""
+    try:
+        table = personal_table(root)
+    except CheckError as exc:
+        return 1, f"refused: {exc}"
+    except (OSError, ValueError):
+        return 1, "refused: agk.toml cannot be read (setting: personal)"
+    if table is None:
+        return None
+    return 0, (
+        f"personal mode: forge {table['forge']}, level {table['level']}, "
+        f"disclosure {table['ai_disclosure']}"
+    )
+
+
 def paused_report(root: Path) -> str | None:
     """The kit version when ROOT is paused (brief #348, ADR-0196), else None; reads agk.toml."""
     config = read_config(root)
@@ -1368,6 +1386,10 @@ def main(argv: list[str] | None = None) -> int:
             raise Refusal("ROOT is not a directory (path class: the target root)")
         if options["paused"]:
             return paused_query(root.resolve(), options["ref"])
+        personal = personal_line(root.resolve())
+        if personal is not None:
+            print(personal[1])
+            return personal[0]
         if no_kit(root.resolve()):
             sys.stdout.write(render_no_kit(options["json"]))
             return 0
