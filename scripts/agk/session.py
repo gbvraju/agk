@@ -93,6 +93,13 @@ unlocked worktree holding no ignored file outside the `[tidy] caches` and unchan
 `[tidy] min_idle_minutes` (60), that is neither the current one nor the main clone, and that no
 live lock or queue record names. A read failure keeps
 the item; never `--force`, never a remote branch; refused while paused.
+Brief #623 (SPEC-0045 rule 4, ADR-0289): `kind --brief N` (GET only, posts nothing) prints one line
+`kind: <kind>` from the brief's `Size:` and `Touches:` lines alone: `design` for a missing, repeated
+or unreadable line, a brief that cannot be read, or a glob that may match a design path (`**`, the
+requirements, specs, ADRs, constitution, `.github/`, the reviewers file, the hooks, the merge path
+or a guard file, Q-S0045-4); `small` for `Size: S` whose every glob may match no protected class of
+`config/protected-paths.txt` but the test folders; `build` otherwise. Never `review` or
+`mechanical`.
 """
 
 from __future__ import annotations
@@ -149,6 +156,7 @@ USAGE = (
     "       session.py tell --session ID --text MESSAGE\n"
     "       session.py inbox --session ID\n"
     "       session.py mine --session ID (--pr N | --brief N)\n"
+    "       session.py kind --brief N\n"
     "       session.py tidy [--apply] [--json]"
 )
 COMMANDS = (
@@ -166,6 +174,7 @@ COMMANDS = (
     "tell",
     "inbox",
     "mine",
+    "kind",
     "tidy",
 )
 PAGE = 100
@@ -1033,6 +1042,69 @@ def mine(root, me: str, pr_number: int | None, brief: int | None) -> int:
         else f"not mine: #{brief} has no live take"
     )
     return 1
+
+
+# --- the kind of a brief (SPEC-0045 rule 4, brief #623) ---------------------------------------
+
+# Rule 4's design paths: a directory ends with "/"; `scripts/agk/guard` is the prefix of the guard
+# files there (the hooks' guards are under `.claude/hooks/`).
+DESIGN_DIRS = ("docs/specs/", "docs/adr/", "constitution/", ".github/", ".claude/hooks/")
+DESIGN_FILES = (
+    "docs/requirements.md",
+    "config/reviewers.yaml",
+    "scripts/agk/merge_cleared.py",
+    "scripts/agk/route.py",
+)
+GUARD_PREFIX = "scripts/agk/guard"
+# The kit's own test folders, joined so that an installed copy names no kit test path.
+TEST_CLASSES = tuple(f"{Path('tests', name).as_posix()}/" for name in ("kit", "kit_dev"))
+PROTECTED_LIST = "config/protected-paths.txt"
+
+
+def may_touch(glob: str, entry: str) -> bool:
+    """Whether a `Touches:` glob may match a path of ENTRY (a directory ending with "/", a prefix
+    or one file); counting a doubtful glob as matching never lowers a kind (Q-S0045-4)."""
+    if entry.endswith("/") or entry == GUARD_PREFIX:
+        start = literal(glob)
+        return start.startswith(entry) or entry.startswith(start)
+    return bool(glob_regex(glob).fullmatch(entry))
+
+
+def kind_of(body: str, protected: list[str] | None) -> str:
+    """Rule 4, in order: an unreadable line or a design path gives `design`, `Size: S` touching
+    only unprotected paths and the test folders gives `small`, anything else `build`."""
+    lines = [x.rstrip() for x in body.splitlines()]
+    sizes = [x for x in lines if x.startswith("Size")]
+    touches = [x for x in lines if x.startswith("Touches")]
+    found = TOUCHES.fullmatch(touches[0]) if len(touches) == 1 else None
+    globs = [g.strip() for g in found.group(1).split(",")] if found else []
+    if len(sizes) != 1 or not SIZE.fullmatch(sizes[0]) or not globs or not all(globs):
+        return "design"
+    design = (*DESIGN_DIRS, *DESIGN_FILES, GUARD_PREFIX)
+    if any("guard" in g or any(may_touch(g, e) for e in design) for g in globs):
+        return "design"
+    if protected is None:
+        return "design"  # without the list nothing shows that the brief is small
+    others = [e for e in protected if e not in TEST_CLASSES]
+    if sizes[0] == "Size: S" and not any(may_touch(g, e) for g in globs for e in others):
+        return "small"
+    return "build"
+
+
+def protected_entries(root) -> list[str] | None:
+    try:
+        text = (root / PROTECTED_LIST).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    return [x.strip() for x in text.splitlines() if x.strip() and not x.startswith("#")]
+
+
+def brief_kind(root, number: int) -> int:
+    """`kind --brief N`: one GET; a brief that cannot be read gives `design`, never lower."""
+    brief = gh(f"repos/{repo_name(root)}/issues/{number}")
+    body = brief.get("body") if isinstance(brief, dict) else None
+    print(f"kind: {kind_of(body, protected_entries(root)) if isinstance(body, str) else 'design'}")
+    return 0
 
 
 # --- a build claim, the answer of the conductor and `after` (SPEC-0034 rules 1, 5 and 12) -----
@@ -2283,6 +2355,7 @@ def main(argv: list[str] | None = None) -> int:
         "tell": {"--session", "--text"},
         "inbox": {"--session"},
         "mine": {"--session", "--pr", "--brief"},
+        "kind": {"--brief"},
     }
     if not set(opts) <= allowed[cmd] or len(opts) != len(args[1::2]):
         print(USAGE)
@@ -2317,6 +2390,8 @@ def main(argv: list[str] | None = None) -> int:
         ok = True
     elif cmd == "tell":
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and "--text" in opts
+    elif cmd == "kind":
+        ok = number_of(opts.get("--brief"))
     elif cmd == "mine":
         targets = [k for k in ("--pr", "--brief") if k in opts]
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and len(targets) == 1
@@ -2353,6 +2428,8 @@ def main(argv: list[str] | None = None) -> int:
             return tell(root, opts["--session"], opts["--text"])
         if cmd == "inbox":
             return inbox(root, opts["--session"])
+        if cmd == "kind":
+            return brief_kind(root, int(opts["--brief"]))
         if cmd == "mine":
             number = {k: int(v) for k, v in opts.items() if k in ("--pr", "--brief")}
             return mine(root, opts["--session"], number.get("--pr"), number.get("--brief"))
