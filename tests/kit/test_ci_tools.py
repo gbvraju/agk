@@ -33,7 +33,9 @@ def governance_step(name: str) -> str:
 
 
 def pin_lines(text: str) -> list[str]:
-    return [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    return [
+        ln.strip() for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")
+    ]
 
 
 def run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -72,7 +74,7 @@ def saved(tmp_path: Path) -> Path:
     return folder  # gamma has no saved response: the upstream cannot be read
 
 
-# --- the pin file and the workflow (answers 1 and 3) -----------------------------------------------
+# --- the pin file and the workflow (answers 1 and 3) ----------------------------------------------
 
 
 def test_pin_file_has_one_exact_pin_per_line_sorted_and_unique():
@@ -86,14 +88,14 @@ def test_pin_file_has_one_exact_pin_per_line_sorted_and_unique():
 
 
 def test_pin_file_pins_the_four_ci_tools_and_the_measured_xdist():
-    """REQ-051: brief #698 answer 1. pytest, pytest-xdist (3.8.0, as #642 measured), ruff, bandit."""
+    """REQ-051: brief #698 answer 1. pytest, pytest-xdist (3.8.0, #642 measured), ruff, bandit."""
     pins = dict(ln.split("==", 1) for ln in pin_lines(PINS.read_text(encoding="utf-8")))
     assert {"bandit", "pytest", "pytest-xdist", "ruff"} <= set(pins)
     assert pins["pytest-xdist"] == "3.8.0"
 
 
 def test_install_tooling_installs_the_pin_file_and_nothing_else():
-    """REQ-051: brief #698 answers 1 and 4. One `pip install -r config/ci-tools.txt`, no other install."""
+    """REQ-051: brief #698 answers 1 and 4. One `pip install -r config/ci-tools.txt`, no other."""
     run_text = governance_step("Install tooling").split("run:", 1)[1]
     installs = re.findall(r"pip install ([^\n|]+)", run_text)
     assert [i.strip() for i in installs] == ["-r config/ci-tools.txt"]
@@ -109,18 +111,19 @@ def test_the_workflow_reads_the_pin_file_that_exists():
 
 
 def test_install_tooling_fails_by_name_when_xdist_is_missing():
-    """REQ-051: brief #698 answer 2. xdist has no `--version` module; the step imports it by name."""
+    """REQ-051: brief #698 answer 2. xdist has no `--version`; the step imports it by name."""
     run_text = governance_step("Install tooling").split("run:", 1)[1]
     assert re.search(
-        r'python -c "import xdist" [^\n]*\|\| \{ echo "[^"]*pytest-xdist[^"]*"; exit 1; \}', run_text
+        r'python -c "import xdist" [^\n]*\|\| \{ echo "[^"]*pytest-xdist[^"]*"; exit 1; \}',
+        run_text,
     )
 
 
-# --- ci_tools.py check (answer 3) ------------------------------------------------------------------
+# --- ci_tools.py check (answer 3) -----------------------------------------------------------------
 
 
 def test_check_prints_the_pins_with_no_network(tmp_path):
-    """REQ-051: brief #698 answer 3. `check` reads the file only; a `curl` on PATH is never run."""
+    """REQ-051: brief #698 answer 3. `check` reads the file only; a `curl` on PATH never runs."""
     root = project(tmp_path, GOOD)
     bin_dir, calls = curl_stub(tmp_path, saved(tmp_path))
     env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
@@ -143,11 +146,13 @@ def test_check_passes_on_the_repository_pin_file():
 
 
 def test_check_refuses_a_line_that_is_not_an_exact_pin_without_quoting_it(tmp_path):
-    """REQ-051: brief #698 answer 3; principle 8. A range pin fails naming the file, never the value."""
+    """REQ-051: brief #698 answer 3; principle 8: a range pin fails naming the path only."""
     root = project(tmp_path, "alpha-tool==1.0.0\nbeta>=2.1.0\n")
     proc = run("check", "--root", str(root))
     assert proc.returncode == 1
-    assert "FAIL ci-tools: line 2 is not <name>==<version> (path: config/ci-tools.txt)" in proc.stdout
+    assert (
+        "FAIL ci-tools: line 2 is not <name>==<version> (path: config/ci-tools.txt)" in proc.stdout
+    )
     assert "2.1.0" not in proc.stdout
 
 
@@ -218,7 +223,7 @@ def curl_stub(tmp_path: Path, folder: Path) -> tuple[Path, Path]:
 
 
 def test_upstream_reads_the_package_index_once_per_pin(tmp_path):
-    """REQ-051: brief #698 answer 3; SPEC-0047 rule 8. At most one GET per pin, of the index JSON."""
+    """REQ-051: brief #698 answer 3; SPEC-0047 rule 8. One GET per pin, of the index JSON."""
     root = project(tmp_path, GOOD)
     bin_dir, calls = curl_stub(tmp_path, saved(tmp_path))
     env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
@@ -233,7 +238,7 @@ def test_upstream_reads_the_package_index_once_per_pin(tmp_path):
 
 
 def test_unknown_command_or_option_prints_the_usage(tmp_path):
-    """REQ-051: brief #698 answer 3. Anything but `check` and its options is the usage, exit 2."""
+    """REQ-051: brief #698 answer 3. Anything but `check` and its options: the usage, exit 2."""
     for args in ([], ["update"], ["check", "--network"], ["check", "--responses"]):
         proc = run(*args)
         assert proc.returncode == 2, args
