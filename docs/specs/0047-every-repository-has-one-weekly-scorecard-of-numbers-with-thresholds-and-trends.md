@@ -1,6 +1,6 @@
 # SPEC-0047: Every repository has one weekly scorecard of numbers with thresholds and trends
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-054
 
