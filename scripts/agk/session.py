@@ -786,7 +786,7 @@ def is_stale(brief: dict) -> bool:
 
 
 def is_parked(brief: dict) -> bool:
-    """A parked brief (brief #615, ADR-0301): the label `agk:parked` or a line `Parked:` in its body."""
+    """A parked brief (#615, ADR-0301): the label `agk:parked` or a `Parked:` line in its body."""
     lines = (x.strip() for x in str(brief.get("body") or "").splitlines())
     labels = {str(x.get("name")) for x in brief.get("labels") or [] if isinstance(x, dict)}
     return PARKED_LABEL in labels or any(x.startswith(PARKED_PREFIX) for x in lines)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 import route
-from test_session import ISSUES, Stub, issue, listing, posts, session
+from test_session import Stub, issue, listing, posts, session
 from test_session_flow import brief
 from test_session_plan import free
 
@@ -56,7 +56,9 @@ def test_an_unparked_brief_is_offered_and_a_word_in_prose_does_not_park(proj, st
 def test_the_parked_label_is_created_once_when_missing(monkeypatch):
     posted = []
     monkeypatch.setattr(route, "listing", lambda endpoint: [{"name": "agk-brief"}])
-    monkeypatch.setattr(route, "write", lambda endpoint, *a, method="GET": posted.append((method, endpoint, a)))
+    monkeypatch.setattr(
+        route, "write", lambda endpoint, *a, method="GET": posted.append((method, endpoint, a))
+    )
     labels = route.Labels("acme/widgets")
     labels.ensure("agk:parked")
     labels.ensure("agk:parked")
