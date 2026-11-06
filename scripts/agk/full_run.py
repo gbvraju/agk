@@ -30,18 +30,23 @@ kit's own repository (the run's `Release check` ran: `KIT_ONLY`). A skipped step
 with `Post ` is a clean-up step that GitHub skips in any failed job and hides no check (brief #349).
 Otherwise the message names those steps: "the last full run did not reach <steps>; push a commit
 or re-run it". Every other message names the rule, never a value or a step.
-File only: no network, no model.
+
+Main checks run in batches (brief #621, ADR-0302): a push to the default branch whose run waited
+can be replaced by a newer push. `covered` is the one rule every reader of a default-branch
+commit's result uses, and `contained_in` answers its containment with `git merge-base
+--is-ancestor`. File and git only: no network, no model.
 """
 
 from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, run
+from common import CheckError, git, run
 
 NAME = "full-run"
 USAGE = "usage: full_run.py --runs FILE --head SHA [--jobs FILE]"
@@ -122,6 +127,59 @@ def live(full: list[dict]) -> list[dict]:
     (brief #272)."""
     kept = [r for r in full if r.get("conclusion") != "cancelled"]
     return kept or full
+
+
+def covered(
+    sha: str, runs: list[dict], contains: Callable[[str, str], bool]
+) -> tuple[str, dict | None]:
+    """(`green`, `red` or `pending`, the run that decides) for a default-branch commit (brief #621,
+    ADR-0302). RUNS are the default branch's workflow runs; only `governance full` push runs count.
+    A completed run of its own that was not cancelled decides; one of its own still running is
+    waited for. A commit whose own run was cancelled while it waited (the concurrency group
+    replaced it), or that has no run of its own, is covered by the next completed, not cancelled
+    run on a later commit that contains it (`contains(sha, later)`). A cancelled run is never a
+    result, and with no covering run yet the commit is pending, never green."""
+    full = [
+        r
+        for r in runs
+        if isinstance(r, dict) and r.get("display_title") == FULL and r.get("event") == "push"
+    ]
+    own = [r for r in full if r.get("head_sha") == sha and r.get("conclusion") != "cancelled"]
+    if any(r.get("status") != "completed" for r in own):
+        return "pending", None
+    if own:
+        latest = max(own, key=newest)
+        return ("green" if latest.get("conclusion") == "success" else "red"), latest
+    later = sorted(
+        (
+            r
+            for r in full
+            if r.get("head_sha") != sha
+            and r.get("status") == "completed"
+            and r.get("conclusion") not in (None, "cancelled")
+            and isinstance(r.get("head_sha"), str)
+            and contains(sha, r["head_sha"])
+        ),
+        key=newest,
+    )
+    if not later:
+        return "pending", None
+    first = later[0]
+    return ("green" if first.get("conclusion") == "success" else "red"), first
+
+
+def contained_in(root: Path) -> Callable[[str, str], bool]:
+    """`contains(older, newer)` for `covered`: `git merge-base --is-ancestor` in ROOT. Any other
+    answer than yes (a commit git does not know, an error) is no: the commit stays pending."""
+
+    def contains(older: str, newer: str) -> bool:
+        try:
+            git(root, "merge-base", "--is-ancestor", older, newer)
+        except CheckError:
+            return False
+        return True
+
+    return contains
 
 
 def check(runs: Path, head: str, jobs: Path | None = None) -> int:

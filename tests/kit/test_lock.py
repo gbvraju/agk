@@ -4,8 +4,9 @@
 atomically, holding the owner's session, process id, host and start time), runs the command
 without a shell, and releases the lock when the command ends, also on failure or interrupt. A
 second run waits its turn, printing who holds the lock; `--timeout S` gives up. A lock whose
-process no longer runs on this machine, or older than `lock_stale_minutes`, is cleared with a line
-saying so. `lock.py status` prints the holder or `free`.
+process no longer runs on this machine is cleared with a line saying so; a lock of another host
+is cleared when its heartbeat is older than `lock_stale_minutes` (brief #607, ADR-0295).
+`lock.py status` prints the holder or `free`.
 
 Every test points `lock_dir` (agk.toml) at its own folder, so no test touches the real temp lock.
 """
@@ -204,21 +205,34 @@ def test_status_says_a_dead_holder_is_stale_and_clears_nothing(repo, where):
     assert held.exists()
 
 
-def test_a_lock_older_than_the_setting_is_cleared(repo, where):
-    """REQ-040: brief #337 answers 3 and 6 (stale by age; the default is 120 minutes)."""
-    plant(where, pid=os.getpid(), minutes=121)
+def test_a_remote_lock_with_no_heartbeat_for_longer_than_the_setting_is_cleared(repo, where):
+    """REQ-040: brief #337 answers 3 and 6, as changed by brief #607 (ADR-0295): only a lock of
+    another host is stale by time, by its heartbeat (here its start; the default is 120 minutes)."""
+    plant(where, pid=os.getpid(), host="builder-two.example.com", minutes=121)
     proc = lock_run(repo, "run", "--name", "heavy", "--", PY, "-c", "print('RAN')")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert (
-        "cleared a stale lock of builder-old (older than 120 min, setting: lock_stale_minutes)"
-        in (proc.stdout)
+        "cleared a stale lock of builder-old (its heartbeat from host builder-two.example.com is"
+        " older than 120 min, setting: lock_stale_minutes)" in (proc.stdout)
     )
+
+
+def test_a_live_lock_older_than_the_setting_is_kept(repo, where):
+    """REQ-040: brief #607 answer 1 (ADR-0295): a live holder on this machine is never cleared by
+    age."""
+    held = plant(where, pid=os.getpid(), minutes=121)
+    proc = lock_run(
+        repo, "run", "--name", "heavy", "--timeout", "1", "--", PY, "-c", "print('RAN')"
+    )
+    assert proc.returncode == 3
+    assert "RAN" not in proc.stdout and "cleared" not in proc.stdout
+    assert held.exists()
 
 
 def test_lock_stale_minutes_is_read(repo, where):
     """REQ-040: brief #337 answer 3 (an optional setting)."""
     repo.commit({"agk.toml": f"lock_dir = '{where}'\nlock_stale_minutes = 300\n"}, "setting")
-    plant(where, pid=os.getpid(), minutes=121)
+    plant(where, pid=os.getpid(), host="builder-two.example.com", minutes=121)
     proc = lock_run(
         repo, "run", "--name", "heavy", "--timeout", "1", "--", PY, "-c", "print('RAN')"
     )

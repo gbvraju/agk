@@ -6,6 +6,12 @@ naming an ADR that is Accepted on the merge base, names every changed class, and
 `Requirements:` entry that the body's `Advances:` line names. It never covers `constitution/`,
 `.github/workflows/`, `config/reviewers.yaml`, the ruleset (`kit/templates/ruleset.json`) or
 `.github/CODEOWNERS`. Messages name the rule or the class, never a value.
+
+Brief #601 (ADR-0293): a `Covered-by:` ADR whose file still says `Proposed` counts as Accepted when
+a SPEC-0021 rule 3a record of it on the merge base is verified by its Final comment among the
+comments of `--comments FILE` (the workflow's `Record comments` step), or, without the option, of
+the file `AGK_RECORD_COMMENTS` names (merge_cleared.py's after-merge run and prepush, amendment
+122); without either, while such a record exists, the check fails closed and names the option.
 """
 
 from __future__ import annotations
@@ -25,6 +31,7 @@ from common import (
     base_context,
     changed_files,
     changed_lines,
+    final_records,
     git,
     matches,
     read_list,
@@ -108,8 +115,37 @@ def own_status(text: str) -> str | None:
     return None
 
 
+RECORD_COMMENTS = "AGK_RECORD_COMMENTS"  # the comments file without --comments (amendment 122)
+NOT_ACCEPTED = f"the '{COVERED_BY}' ADR is not '- Status: Accepted' on the merge base"
+
+
+def final_accept_problems(root, mb, number: str, comments_file: str | None) -> list[str]:
+    """[] when a rule 3a record of ADR NUMBER in the merge base's history is verified by its Final
+    comment in COMMENTS_FILE (brief #601, ADR-0293); else why the ADR does not count as Accepted.
+    Without the file, while such a record exists, it fails closed and names the option. The
+    readers are kit-only, so a project, which does not have them, keeps ADR-0271's rule."""
+    try:
+        import check_adrs  # noqa: PLC0415 - kit-only reader of the records
+    except ImportError:
+        return [NOT_ACCEPTED]
+    if number not in final_records(root, mb):
+        return [NOT_ACCEPTED]
+    if comments_file is None:
+        return [f"'{COVERED_BY}': {check_adrs.NO_COMMENTS}"]
+    try:
+        verified = check_adrs.verified_records(root, mb, check_adrs.read_comments(comments_file))
+    except CheckError:
+        return [NOT_ACCEPTED]
+    return [] if number in verified else [NOT_ACCEPTED]
+
+
 def covered_by_problems(
-    root, mb, body: str | None, changed: dict[str, str], classes: list[str]
+    root,
+    mb,
+    body: str | None,
+    changed: dict[str, str],
+    classes: list[str],
+    comments_file: str | None = None,
 ) -> list[str] | None:
     """None when the body has no `Covered-by:` line; [] when it covers; else what is missing."""
     if body is None:
@@ -140,7 +176,7 @@ def covered_by_problems(
     if changed.get(names[0]) == "D":
         problems.append(f"the '{COVERED_BY}' ADR is deleted or renamed in the change set")
     if own_status(text) != "Accepted":
-        problems.append(f"the '{COVERED_BY}' ADR is not '- Status: Accepted' on the merge base")
+        problems += final_accept_problems(root, mb, number, comments_file)
     for entry in classes:
         if f"`{entry}`" not in text:
             problems.append(
@@ -157,10 +193,12 @@ def covered_by_problems(
 
 
 def comments_arg(argv: list[str] | None) -> str | None:
-    """The file of `--comments FILE`: the Final comments of the base's records, else None."""
+    """The file of `--comments FILE`: the Final comments of the base's records; without the
+    option, the file that `AGK_RECORD_COMMENTS` names (the after-merge run of merge_cleared.py and
+    prepush, amendment 122, brief #601); else None."""
     args = list(sys.argv[1:] if argv is None else argv)
     if "--comments" not in args:
-        return None
+        return os.environ.get(RECORD_COMMENTS) or None
     i = args.index("--comments")
     if i + 1 >= len(args):
         raise CheckError("--comments needs a value")
@@ -220,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     if covering_adrs(root, mb, changed, classes):
         print(f"ok {NAME} (protected change covered by an ADR)")
         return 0
-    problems = covered_by_problems(root, mb, body_text(argv), changed, classes)
+    problems = covered_by_problems(root, mb, body_text(argv), changed, classes, comments_arg(argv))
     if problems == []:
         print(f"ok {NAME} (protected change covered by an Accepted ADR named in '{COVERED_BY}')")
         return 0

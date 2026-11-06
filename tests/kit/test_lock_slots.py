@@ -68,7 +68,14 @@ def dead_pid() -> int:
     return proc.pid
 
 
-def plant(folder: Path, *, pid: int, session: str = "builder-old", minutes: float = 0.0) -> Path:
+def plant(
+    folder: Path,
+    *,
+    pid: int,
+    session: str = "builder-old",
+    minutes: float = 0.0,
+    host: str | None = None,
+) -> Path:
     """A lock left by someone else in slot 1: its owner file as `lock.py` writes it."""
     held = folder / "agk-lock-heavy"
     held.mkdir(parents=True)
@@ -76,7 +83,7 @@ def plant(folder: Path, *, pid: int, session: str = "builder-old", minutes: floa
     owner = {
         "session": session,
         "pid": pid,
-        "host": socket.gethostname(),
+        "host": host or socket.gethostname(),
         "started": started.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "token": uuid.uuid4().hex,
     }
@@ -329,10 +336,11 @@ def test_a_failing_cleanup_is_reported_and_never_blocks(repo, tmp_path):
 
 def test_cleanup_is_not_run_for_a_lock_cleared_by_age(repo, tmp_path):
     """REQ-040: brief #426 answer 3, Q-426-2 (only a dead run is cleaned up after: a lock cleared
-    by age may belong to a run that still goes on)."""
+    by age may belong to a run that still goes on). Since brief #607 (ADR-0295) only a lock of
+    another host is cleared by the age of its heartbeat."""
     folder, log = tmp_path / "locks", tmp_path / "cleanup.log"
     settings(repo, folder, f"lock_cleanup = '''{CLEANUP}'''\n")
-    plant(folder, pid=os.getpid(), minutes=121)
+    plant(folder, pid=os.getpid(), host="builder-two.example.com", minutes=121)
     proc = repo.run(
         "lock.py",
         "run",

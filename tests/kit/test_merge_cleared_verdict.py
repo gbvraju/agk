@@ -33,7 +33,20 @@ import merge_cleared  # noqa: E402
 import reviewers  # noqa: E402
 from common import CheckError  # noqa: E402
 
-HEAD = "a1b2c3d4e5" * 4
+
+def object_sha(kind: str, text: bytes) -> str:
+    return hashlib.sha1(f"{kind} {len(text)}\0".encode() + text, usedforsecurity=False).hexdigest()
+
+
+EMPTY_TREE = object_sha("tree", b"")
+STAMP = "Example <example@example.com> 1793000000 +0000"
+BASE_TEXT = f"tree {EMPTY_TREE}\nauthor {STAMP}\ncommitter {STAMP}\n\nbase\n".encode()
+BASE = object_sha("commit", BASE_TEXT)  # the parent of the merge commit
+# the pull request's head: a real commit of the bare remote at `refs/pull/7/head`, so that the
+# check before the merge (brief #610) can build the would-be merge with no network
+HEAD_TEXT = f"tree {EMPTY_TREE}\nparent {BASE}\nauthor {STAMP}\ncommitter {STAMP}\n\nhead\n"
+HEAD_TEXT = HEAD_TEXT.encode()
+HEAD = object_sha("commit", HEAD_TEXT)
 OLD = "0f9e8d7c6b" * 4
 SHA12 = HEAD[:12]
 REPO = "example-owner/example-repo"
@@ -79,13 +92,14 @@ def remote(tmp_path: Path) -> str:
         cwd=bare, input=b"", capture_output=True, check=True,
     ).stdout.decode().strip()  # fmt: skip
     assert tree == EMPTY_TREE
-    for text, sha in ((BASE_TEXT, BASE), (MERGE_TEXT, MERGE)):
+    for text, sha in ((BASE_TEXT, BASE), (MERGE_TEXT, MERGE), (HEAD_TEXT, HEAD)):
         made = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
             ["git", "hash-object", "-w", "-t", "commit", "--stdin"],
             cwd=bare, input=text, capture_output=True, check=True,
         ).stdout.decode().strip()  # fmt: skip
         assert made == sha
     git(bare, "update-ref", "refs/heads/main", MERGE)
+    git(bare, "update-ref", "refs/pull/7/head", HEAD)  # GitHub's ref of a pull request's head
     return bare.as_uri()
 
 
@@ -144,14 +158,6 @@ def cleared(sha: str = HEAD, login: str = OWNER, at: int = 5, extra: str | None 
     return comment(body + (evidence(sha) if extra is None else extra), login, at)
 
 
-def object_sha(kind: str, text: bytes) -> str:
-    return hashlib.sha1(f"{kind} {len(text)}\0".encode() + text, usedforsecurity=False).hexdigest()
-
-
-EMPTY_TREE = object_sha("tree", b"")
-STAMP = "Example <example@example.com> 1793000000 +0000"
-BASE_TEXT = f"tree {EMPTY_TREE}\nauthor {STAMP}\ncommitter {STAMP}\n\nbase\n".encode()
-BASE = object_sha("commit", BASE_TEXT)  # the parent of the merge commit
 MERGE_TEXT = f"tree {EMPTY_TREE}\nparent {BASE}\nauthor {STAMP}\ncommitter {STAMP}\n\nmerge\n"
 MERGE_TEXT = MERGE_TEXT.encode()
 MERGE = object_sha("commit", MERGE_TEXT)  # the merge commit GitHub answers with
@@ -253,6 +259,10 @@ elif parts[0] == 'commits' and parts[2:] == ['status']:  # the combined status (
     statuses = data.get('statuses', [])
     state = data.get('status_state') or ('success' if statuses else 'pending')
     out = {'state': state, 'total_count': len(statuses), 'statuses': paged(statuses)}
+elif parts[:2] == ['issues', 'comments'] and len(parts) == 3:  # a record's Final (brief #601)
+    if parts[2] not in data.get('record_comments', {}):
+        fail(404)
+    out = data['record_comments'][parts[2]]
 elif parts[0] in ('issues', 'pulls') and len(parts) == 2 and parts[1] in data['items']:
     item = data['items'][parts[1]]
     if parts[0] == 'pulls' and 'pull' in item:
@@ -272,7 +282,7 @@ import json, os, sys
 with open(LOG, 'a', encoding='utf-8') as fh:
     seen = {'args': sys.argv[1:], 'env': dict(os.environ), 'cwd': os.getcwd()}
     fh.write(json.dumps(seen) + '\\n')
-sys.exit(EXIT)
+sys.exit(EXIT if 'AGK_BASE=' + BASE in sys.argv else PRE)  # PRE: the run before the merge
 """
 
 
@@ -283,6 +293,7 @@ def fake_gh(
     fail: bool = False,
     changed: bool = True,
     make_exit: int = 0,
+    premerge_exit: int = 0,
     **saved: object,
 ):
     """A `gh` on PATH that answers from saved JSON (`world`) and logs each argument list; with
@@ -305,10 +316,10 @@ def fake_gh(
         encoding="utf-8",
     )
     script.chmod(0o755)
-    make = bin_dir / "make"  # the governance run after the merge (brief #551)
+    make = bin_dir / "make"  # the governance runs before (brief #610) and after the merge (#551)
     make.write_text(
         f"#!{sys.executable}\nLOG, EXIT = {str(tmp_path / 'make-calls.jsonl')!r}, {make_exit!r}\n"
-        + FAKE_MAKE,
+        f"PRE, BASE = {premerge_exit!r}, {BASE!r}\n" + FAKE_MAKE,
         encoding="utf-8",
     )
     make.chmod(0o755)
@@ -843,14 +854,23 @@ def test_a_remote_that_is_not_github_or_no_gh_is_refused(tmp_path):
 def test_the_script_writes_no_file_and_makes_no_other_write():
     """REQ-046 AC5: SPEC-0039 rule 8 (build (b) adds the one merge call and nothing else; build
     (c) adds the one record line, a POST of a comment, SPEC-0039 rule 7; brief #576 adds the one
-    body file, written only in the governance run's temporary home)."""
+    body file, written only in the governance run's temporary home; brief #601 adds the one record
+    comments file there, amendment 122; brief #610 adds the close of the red-branch issue, one
+    comment and one PATCH, in `close_red` alone)."""
     text = SCRIPT.read_text(encoding="utf-8")
-    assert text.count('"POST"') == 1
+    close = text.split("\ndef close_red(", 1)[1].split("\ndef ", 1)[0]
+    assert text.count('"POST"') == 2 and close.count('"POST"') == 1
     assert '"POST", f"repos/{repo}/issues/{issue}/comments"' in text
-    assert text.count(".write_text(") == 1
-    run_body = text.split("\ndef governance(", 1)[1].split("\ndef ", 1)[0]
+    assert '"POST", f"{endpoint}/comments"' in close
+    assert text.count('"PATCH"') == 1
+    assert '"PATCH", endpoint, "-f", "state=closed", "-f", "state_reason=completed"' in close
+    text = text.replace(close, "")
+    assert text.count(".write_text(") == 2
+    run_body = text.split("\ndef in_worktree(", 1)[1].split("\ndef ", 1)[0]
     assert 'body = home / "pr-body.md"' in run_body and "body.write_text(text" in run_body
+    assert "(home / RECORD_COMMENTS).write_text(" in run_body
     text = text.replace("body.write_text(text", "body.(text")
+    text = text.replace("(home / RECORD_COMMENTS).write_text(", "(home / RECORD_COMMENTS).(")
     words = ('"PATCH"', '"DELETE"', ".write_text(", "open(", '"push"', "--jq")
     words += ("shell=True", "graphql", '"tag"', "/reviews")
     for word in words:  # `subprocess.Popen(` of the governance run is not a file open (#556)

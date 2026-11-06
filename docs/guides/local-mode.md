@@ -98,8 +98,9 @@ lines are the same (`make governance AGK_BASE=$base` gives the base to the check
 minute, `lock heavy: waiting; held by <session> (pid <n>, host <name>) for <m> min`; `--timeout <seconds>` gives up with exit 3.
 The lock is a folder `agk-lock-heavy` in the user's temp folder (or `lock_dir` in `agk.toml`), outside every repository, so it is
 never committed and is shared by all of the machine's projects. A lock left by a session that died is cleared by the next run,
-with a line saying so: when its process no longer runs on this machine, or when it is older than `lock_stale_minutes` (120 by
-default). `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` and changes nothing. `make test` runs the
+with a line saying so: when its process no longer runs on this machine. A holder that still runs here is never cleared, whatever
+its age and also after the machine slept; a lock of another host is cleared only when its heartbeat, written about once a minute,
+is older than `lock_stale_minutes` (120 by default, ADR-0295). `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` and changes nothing. `make test` runs the
 kit's checks and the project's own tests (`project_tests` in `agk.toml`); `body.md` is a copy of the pull request body. The
 secret scan of the governance workflow is not part of `make governance`: run the same scanner over the branch's commits when it
 is installed, and write `secret scan: not run` when it is not.

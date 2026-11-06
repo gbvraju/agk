@@ -13,6 +13,7 @@ import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -36,6 +37,7 @@ from common import (
     show,
     test_dirs,
 )
+from full_run import contained_in, covered
 from impact import DEFAULT_BUDGET, testing_table
 from reviewers import confirmed_comments, solo_person, verdict_authors
 
@@ -724,14 +726,39 @@ def push_runs(src: Any, detail: dict) -> list[dict] | None:
     ]
 
 
-def escape_of(src: Any, detail: dict) -> str:
+def covering_state(src: Any, detail: dict, contains: Callable[[str, str], bool]) -> str:
+    """`green`, `red` or `pending` for a merge commit with no push run of its own that was not
+    cancelled (brief #621, ADR-0302): the next completed full push run of `governance.yml` on a
+    later commit of the base branch that contains it, among the branch's last 100 push runs."""
+    ref = (detail.get("base") or {}).get("ref")
+    sha = detail.get("merge_commit_sha")
+    if not isinstance(ref, str) or not ref or not isinstance(sha, str) or not sha:
+        return "pending"
+    data = src.get(
+        f"branch-runs-{ref}",
+        f"repos/{{repo}}/actions/workflows/governance.yml/runs?branch={ref}&event=push&per_page=100",
+    )
+    listed = data.get("workflow_runs") if isinstance(data, dict) else None
+    if not isinstance(listed, list):
+        return "pending"
+    return covered(sha, listed, contains)[0]
+
+
+def escape_of(src: Any, detail: dict, contains: Callable[[str, str], bool] | None = None) -> str:
     """Answer 2 for a merged pull request: `escape`, `red` (a red push that is not an escape),
-    `green`, or `unknown` when the push run, the proof or the governance cannot be read."""
+    `green`, or `unknown` when the push run, the proof or the governance cannot be read. A push
+    run that was cancelled while it waited is no result: the run that covers the merge commit
+    decides (brief #621), and while none has ended the answer is `unknown`, never `green`."""
     pushes = push_runs(src, detail)
-    if not pushes:
+    if pushes is None:
         return UNKNOWN
-    if not any(r.get("conclusion") in FAILED for r in pushes):
-        return "green" if all(r.get("conclusion") for r in pushes) else UNKNOWN
+    own = [r for r in pushes if r.get("conclusion") != "cancelled"]
+    if own and not any(r.get("conclusion") in FAILED for r in own):
+        return "green" if all(r.get("conclusion") for r in own) else UNKNOWN
+    if not own:
+        state = covering_state(src, detail, contains or contained_in(repo_root()))
+        if state != "red":
+            return "green" if state == "green" else UNKNOWN
     runs = runs_of(src, (detail.get("head") or {}).get("sha"))
     outcome = proof_outcome(last_proof_job(src, runs))
     if outcome == UNKNOWN:

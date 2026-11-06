@@ -700,6 +700,54 @@ def config_source(root: Path) -> dict:
     return {}
 
 
+# Personal mode (SPEC-0041 rule 1): a sidecar is a root whose agk.toml has a `[personal]` table.
+PERSONAL_TABLE = "personal"
+FORGE_SETTING = "forge"
+FORGE_FILES = "files"
+PERSONAL_KEYS = (
+    "forge",
+    "level",
+    "ai_disclosure",
+    "survey_budget",
+    "quote_lines",
+    "sync_remote",
+    "test_command",
+    "sign",
+    "team_refs",
+    "schema",
+)
+PERSONAL_CHOICES = {
+    "level": ("light", "tests-first", "spec", "review", "evidence"),
+    "ai_disclosure": ("commit-trailer", "pr-note", "both"),
+}
+PERSONAL_DEFAULTS = {"level": "light", "ai_disclosure": "both"}
+
+
+def personal_table(root: Path) -> dict | None:
+    """The `[personal]` table of a sidecar's settings, defaults filled; None in team mode.
+
+    Only `forge = "files"` is accepted (rule 1); the other keys of rule 18 are known names, and
+    the values of `level` and `ai_disclosure` are checked here. Refusals name the setting."""
+    source = config_source(root)
+    if PERSONAL_TABLE not in source:
+        return None
+    table = source[PERSONAL_TABLE]
+    if not isinstance(table, dict):
+        raise CheckError(f"[{PERSONAL_TABLE}] must be a table (setting: {PERSONAL_TABLE})")
+    for key in sorted(table):
+        if key not in PERSONAL_KEYS:
+            raise CheckError(f"unknown key in [{PERSONAL_TABLE}] (setting: {key})")
+    if table.get(FORGE_SETTING) != FORGE_FILES:
+        raise CheckError(
+            f"a sidecar accepts only the files forge (setting: {PERSONAL_TABLE}.{FORGE_SETTING})"
+        )
+    out = {**PERSONAL_DEFAULTS, **table}
+    for key, allowed in PERSONAL_CHOICES.items():
+        if out[key] not in allowed:
+            raise CheckError(f"not an accepted value (setting: {PERSONAL_TABLE}.{key})")
+    return out
+
+
 def load_config(root: Path) -> dict:
     """agk.toml first, then [tool.agk] in pyproject.toml (earlier installs); defaults fill gaps."""
     cfg = {k: list(v) if isinstance(v, list) else v for k, v in DEFAULT_CONFIG.items()}

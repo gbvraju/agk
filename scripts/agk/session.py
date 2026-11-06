@@ -178,6 +178,8 @@ PAUSED_REFUSAL = (
 LABEL = "agk-brief"
 STALE_LABEL = "agk-stale"
 STALE_LINE = "Status: stale"
+PARKED_LABEL = "agk:parked"
+PARKED_PREFIX = "Parked:"
 MAX_BUILDERS = 3
 CLAIM_HOURS = 4
 VERDICT = re.compile(r"Verdict: (cleared|fix list|rejected) ([0-9a-f]{7,40})")
@@ -783,10 +785,19 @@ def is_stale(brief: dict) -> bool:
     return STALE_LABEL in labels or STALE_LINE in lines
 
 
+def is_parked(brief: dict) -> bool:
+    """A parked brief (#615, ADR-0301): the label `agk:parked` or a `Parked:` line in its body."""
+    lines = (x.strip() for x in str(brief.get("body") or "").splitlines())
+    labels = {str(x.get("name")) for x in brief.get("labels") or [] if isinstance(x, dict)}
+    return PARKED_LABEL in labels or any(x.startswith(PARKED_PREFIX) for x in lines)
+
+
 def judge(repo: str, brief: dict, me: str, prs: list, hours: int) -> tuple[str | None, list]:
     """Why the brief is not for this session (or None when it is free), and its comments."""
     if is_stale(brief):
         return "stale", []
+    if is_parked(brief):
+        return "parked", []
     problems = brief_problems(brief.get("body"))
     if problems:
         return problems[0], []
