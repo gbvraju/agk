@@ -6,7 +6,7 @@
 - Related: ADR-0251, ADR-0259, SPEC-0038
 - Requirements: REQ-045
 
-Protected classes: `config/`, `kit/`, `tests/kit/`
+Protected classes: `config/`, `kit/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -40,7 +40,11 @@ The owner asked on 2026-11-06 how playbooks are kept from going out of date (bri
    (`contract-tests`, `mock-parity`); this build adds no step to `agk-governance` and changes no
    file under `.github/` or `agk.mk` (rule 12 build (c) lists only the playbook, the manifest and
    one test; `Q-651-2`).
-5. `kit/hashes.json` is not edited; no version is bumped.
+5. The installed `.gitattributes` block (`kit/templates/gitattributes`) gains
+   `config/playbooks/** text eol=lf`, so every shipped playbook keeps LF line ends as every other
+   installed file does, and `tests/kit_dev/test_kit_manifest.py` lists the playbook among the
+   installed files outside the law roots; both tests failed without these lines.
+6. `kit/hashes.json` is not edited; no version is bumped.
 
 ## Consequences
 
