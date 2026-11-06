@@ -28,6 +28,11 @@ with that step's own output:
    passes down through any wrapper; a slot held in another process by the same non-empty
    `AGK_SESSION`, without that token, fails the step at once with one line naming the fix.
 
+SPEC-0044 rules 4 and 5 (brief #583): with `[testing] workers` above 1 the regression run named
+`full` is `full_command`'s: `-n <workers>` at the end of a simple pytest command whose interpreter
+imports xdist in the run's folder, `[testing] parallel_command` for another runner, or else the
+command of today after one line naming the setting. Proof's runs and area commands stay single.
+
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
 one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing,
 downloads nothing and changes no file other than the record.
@@ -76,6 +81,7 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -100,7 +106,15 @@ from common import (
     resolve_base,
     temp_env,
 )
-from impact import Impact, Selected, impact, junit_setting, run_timing
+from impact import (
+    Impact,
+    Selected,
+    impact,
+    junit_setting,
+    parallel_command,
+    run_timing,
+    workers_setting,
+)
 from proof import area_command, execute, is_test_file, timeout_note
 
 HERE = Path(__file__).resolve().parent
@@ -110,6 +124,16 @@ USAGE = (
 SCHEMA = 1
 LOCK = "heavy"
 OWN = "the pull request's own test files (the proof plan)"
+NO_XDIST = (
+    "tests: pytest-xdist is not importable, running in one process (setting: testing.workers)"
+)
+NO_PARALLEL = (
+    "tests: the command is not a simple pytest command and parallel_command is not set, running "
+    "in one process (setting: testing.parallel_command)"
+)
+ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+PYTHON = re.compile(r"python(?:\d+(?:\.\d+)?)?")
+SHELL_SYNTAX = set(";&|<>()`$\n\\*?[]{}~#")
 
 
 class Usage(Exception):
@@ -458,6 +482,55 @@ def reasons(items: list[Selected]) -> str:
     return "; ".join(dict.fromkeys(rule(i) for i in items))
 
 
+def pytest_interpreter(command: str) -> str | None:
+    """The interpreter of a simple pytest command (`pytest ...` or `<python> -m pytest ...`, after
+    any `NAME=value` words), `python3` for a bare `pytest`; None for anything else, a command with
+    shell syntax among them, since `-n` added at its end could reach another program."""
+    if not command or SHELL_SYNTAX & set(command):
+        return None
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return None
+    while words and ASSIGNMENT.fullmatch(words[0]):
+        words.pop(0)
+    if words and Path(words[0]).name == "pytest":
+        return "python3"  # (verify: a bare pytest may run under another interpreter)
+    if words[1:3] == ["-m", "pytest"] and PYTHON.fullmatch(Path(words[0]).name):
+        return words[0]
+    return None
+
+
+def imports_xdist(python: str, folder: Path) -> bool:
+    """`import xdist` succeeds with this interpreter in the run's folder; the kit installs
+    nothing (SPEC-0044 rule 4)."""
+    try:
+        proc = subprocess.run(  # nosec B603 - the project's own interpreter, fixed arguments
+            [python, "-c", "import xdist"], cwd=folder, capture_output=True, timeout=60
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0
+
+
+def full_command(root: Path, command: str, folder: Path) -> tuple[str, str | None]:
+    """The full run's command with `[testing] workers` (SPEC-0044 rules 4 and 5) and the one line
+    when it stays single: `-n <workers>` at the end of a pytest command whose interpreter imports
+    xdist, `parallel_command` for another runner; with one worker the command of today."""
+    workers = workers_setting(root)
+    if workers <= 1:
+        return command, None
+    python = pytest_interpreter(command)
+    if python is not None:
+        if imports_xdist(python, folder):
+            return f"{command} -n {workers}", None
+        return command, NO_XDIST
+    parallel = parallel_command(root)
+    if parallel is None:
+        return command, NO_PARALLEL
+    return parallel.replace("{workers}", str(workers)), None
+
+
 def regression_sets(
     root: Path, found: Impact, areas: list[dict] | None
 ) -> tuple[list[tuple[str, str, str, str]], list[str]]:
@@ -472,7 +545,8 @@ def regression_sets(
         if not project:
             notes.append(f"tests: full not run: project_tests is not set ({reason})")
             return [], notes
-        return [("full", project, ".", reason)], notes
+        command, single = full_command(root, project, root)
+        return [("full", command, ".", reason)], notes + ([single] if single else [])
     if not found.selected:
         extra = " (only documentation changed)" if found.docs_only else ""
         return [], [f"tests: regression: nothing selected{extra}", *notes]

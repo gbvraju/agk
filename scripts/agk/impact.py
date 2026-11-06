@@ -18,7 +18,12 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
 - `junit`: the path of the JUnit XML report that the project's own test command writes, relative
   to the run's folder (SPEC-0044 rule 2, brief #560). `run_timing` reads it, or else the durations
   table that pytest prints when the project's command passes `--durations=0`, for the per-file
-  timing of a run; the kit adds no flag to the command, and with neither the timing is `unknown`.
+  timing of a run; the kit adds no flag to the command, and with neither the timing is `unknown`;
+- `workers`: `1` (the default), `"auto"` (the CPU count, at least 1) or a positive whole number,
+  the parallel workers of the full run (SPEC-0044 rule 4, brief #583; `prepush.full_command`);
+- `parallel_command`: the full command of a non-pytest runner with more than one worker, `{workers}`
+  filled with the number (rule 5);
+- `slow_suite_seconds`: above it a single-process full run gets doctor's line (rule 7; 600).
 
 For the change base..head `impact` gives the existing test files of the head (`test_dirs`,
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
@@ -39,6 +44,7 @@ from __future__ import annotations
 
 import fnmatch
 import math
+import os
 import re
 import sys
 import xml.parsers.expat
@@ -59,7 +65,11 @@ KEYS = {
     "proof_regression",
     "pr_tests",
     "junit",
+    "workers",
+    "parallel_command",
+    "slow_suite_seconds",
 }
+DEFAULT_SLOW = 600
 PR_TESTS = ("full", "selected")
 EXCLUDED = re.compile(r"[^\s:]+: \S[^\n]*")
 ENTRY_KEYS = {"code", "tests"}
@@ -156,7 +166,8 @@ def testing_table(root: Path) -> dict | None:
     if not isinstance(table, dict) or set(table) - KEYS:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
-            "proof_regression, pr_tests and junit (setting: testing)"
+            "proof_regression, pr_tests, junit, workers, parallel_command and "
+            "slow_suite_seconds (setting: testing)"
         )
     profile = table.get("profile", "balanced")
     if profile not in PROFILES:
@@ -205,6 +216,20 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "junit must be a file path relative to the run's folder (setting: testing.junit)"
         )
+    workers = table.get("workers", 1)
+    if workers != "auto" and (
+        isinstance(workers, bool) or not isinstance(workers, int) or workers < 1
+    ):
+        raise CheckError('workers is "auto" or a whole number above 0 (setting: testing.workers)')
+    command = table.get("parallel_command", "x")
+    if not isinstance(command, str) or not command.strip():
+        raise CheckError("parallel_command must be a command (setting: testing.parallel_command)")
+    slow = table.get("slow_suite_seconds", DEFAULT_SLOW)
+    if isinstance(slow, bool) or not isinstance(slow, int) or slow <= 0:
+        raise CheckError(
+            "slow_suite_seconds must be a whole number of seconds above 0 "
+            "(setting: testing.slow_suite_seconds)"
+        )
     return {
         "profile": profile,
         "always_full": list(always_full),
@@ -223,8 +248,7 @@ def check_excluded(value: object) -> list[str]:
     for n, entry in enumerate(value, 1):
         if not isinstance(entry, str) or EXCLUDED.fullmatch(entry.strip()) is None:
             raise CheckError(
-                'an excluded entry is one "<tag>: <reason>" text '
-                f"(setting: testing.excluded[{n}])"
+                f'an excluded entry is one "<tag>: <reason>" text (setting: testing.excluded[{n}])'
             )
     return [entry.strip() for entry in value]
 
@@ -259,6 +283,29 @@ def junit_setting(root: Path) -> str | None:
     if testing_table(root) is None:
         return None
     return config_source(root)["testing"].get("junit")
+
+
+def workers_setting(root: Path) -> int:
+    """`[testing] workers` as a number, 1 without the table or the key; `"auto"` is the CPU count,
+    at least 1. The whole table is checked first, so a bad setting is refused (CheckError)."""
+    if testing_table(root) is None:
+        return 1
+    workers = config_source(root)["testing"].get("workers", 1)
+    return max(1, os.cpu_count() or 1) if workers == "auto" else workers
+
+
+def parallel_command(root: Path) -> str | None:
+    """`[testing] parallel_command`, None without the table or the key (checked first)."""
+    if testing_table(root) is None:
+        return None
+    return config_source(root)["testing"].get("parallel_command")
+
+
+def slow_suite_seconds(root: Path) -> int:
+    """`[testing] slow_suite_seconds`, 600 without the table or the key (checked first)."""
+    if testing_table(root) is None:
+        return DEFAULT_SLOW
+    return config_source(root)["testing"].get("slow_suite_seconds", DEFAULT_SLOW)
 
 
 def durations_sums(output: str) -> dict[str, float] | None:
