@@ -13,10 +13,10 @@ import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
