@@ -157,8 +157,8 @@ def test_sweep_reports_the_default_branch_and_a_red_issue(proj, stub):
         {"workflow_runs": [{"head_sha": OTHER, "status": "completed", "conclusion": "failure"}]},
     )
     red = {
-        "number": 50, "title": "The default branch is red", "user": {"login": "github-actions[bot]"},
-        "body": "Advances: none\nPriority: 0\n",
+        "number": 50, "title": "The default branch is red",
+        "user": {"login": "github-actions[bot]"}, "body": "Advances: none\nPriority: 0\n",
     }  # fmt: skip
     stub.serve(f"repos/{REPO}/issues", [red])
     lines = sweep(proj, stub)

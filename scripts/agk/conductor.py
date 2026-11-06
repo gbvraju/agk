@@ -190,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     if args[:1] == ["watch"] and len(args) >= 3 and args[1] == "--since":
         parsed = when(args[2])
         if parsed is None:
-            print(f"{USAGE}\n--since takes an ISO time such as 2026-11-06T10:00:00Z", file=sys.stderr)
+            print(f"{USAGE}\n--since takes a time such as 2026-11-06T10:00:00Z", file=sys.stderr)
             return 2
         since, args = parsed, ["watch", *args[3:]]
     if args not in (["sweep"], ["watch"], ["watch", "--once"]):
