@@ -289,6 +289,25 @@ def changed_lines(root: Path, mb: str, path: str) -> list[str]:
     return lines
 
 
+def status_flip_only(old: str, new: str) -> bool:
+    """Whether a spec text NEW is the approved text OLD, or OLD with its first `- Status:` line
+    `- Status: Draft` as `- Status: Approved` and nothing else changed (amendment 124 of SPEC-0039
+    rule 5 and SPEC-0032 rule 5, brief 628). Line endings count."""
+    if old == new:
+        return True
+    before, after = old.splitlines(keepends=True), new.splitlines(keepends=True)
+    if len(before) != len(after):
+        return False
+    differ = [i for i, (a, b) in enumerate(zip(before, after, strict=True)) if a != b]
+    first = next((i for i, a in enumerate(before) if STATUS_LINE.match(a.rstrip("\r\n"))), None)
+    if differ != [first]:
+        return False
+    a, b = before[first], after[first]
+    a_text, b_text = a.rstrip("\r\n"), b.rstrip("\r\n")
+    same_end = a[len(a_text) :] == b[len(b_text) :]
+    return same_end and (a_text, b_text) == ("- Status: Draft", "- Status: Approved")
+
+
 def show(root: Path, rev: str, path: str) -> str | None:
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["git", "show", f"{rev}:{path}"], cwd=root, capture_output=True, text=True, encoding="utf-8"

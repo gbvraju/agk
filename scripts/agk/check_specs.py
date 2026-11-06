@@ -52,6 +52,7 @@ from common import (
     repo_root,
     run,
     show,
+    status_flip_only,
 )
 from reviewers import approval_shas, confirmed_comments, solo_person, spec_approvers
 
@@ -99,18 +100,17 @@ def file_arg(argv: list[str] | None, name: str) -> str | None:
     return args[i + 1]
 
 
-def without_status(text: str) -> str:
-    return re.sub(r"(?m)^- Status:.*$", "- Status: -", text, count=1)
-
-
 def unchanged_since(root, sha: str, path: str) -> bool:
-    """The spec at the head equals the spec at `sha` apart from its status line."""
+    """The spec at the head is the spec at `sha`, a commit of the head's history, apart from its
+    status line going from `Draft` to `Approved` (amendment 124, brief 628)."""
     full = git(root, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).strip()
-    old = show(root, full, path) if full else None
+    if not in_history(root, full):
+        return False
+    old = show(root, full, path)
     new = read_text(root, path)
     if old is None or new is None:
         return False
-    return without_status(old) == without_status(new)
+    return status_flip_only(old, new)
 
 
 def requirements_of(root, folder: str) -> dict[str, tuple[list[str], str | None]]:
