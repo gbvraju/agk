@@ -20,10 +20,13 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    CI or the checks depend on. Options A (vendored, the plugin only drives init, adopt, doctor, brief and review) and B
    (the repository keeps configuration and the law only; CI installs the checks at a pinned kit version) are compared
    in `docs/runs/spec-0005-notes.md`; C is A plus the doctor comparison (rule 3) and the workflow commands (rule 8).
+   In personal mode (SPEC-0041) the law lives in the developer's state folder, a private sidecar repository outside
+   the product with the same layout, and nothing of it is in the product repository.
 2. **The repository works without the plugin.** `make governance`, `make test`, the stop hook, the governance
    workflow and the installed `reviewer` subagent run with no plugin installed. The plugin is needed for the
    commands of rule 8 only. A cloud session may not have the plugin at all (rule 15), so nothing in the law may depend
-   on it.
+   on it. In personal mode the product repository holds nothing of AGK and the sidecar's checks run from the plugin's
+   scripts (SPEC-0041 rule 26), so personal mode needs the plugin; team mode is unchanged.
 3. **The doctor comparison; no lock file.** `/agk:doctor` (SPEC-0006) compares every vendored file with the installed
    plugin's copy when the plugin version equals the version in `agk.toml`, and reports each difference; on a version
    mismatch it reports the mismatch and suggests `/agk:upgrade`. The plugin, outside the project tree, is the anchor.
@@ -51,6 +54,10 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    ships no copy of it, so there is no second `agk:reviewer`.
 8. **The commands.** Namespaced `/agk:<command>`. A command that writes does not commit, push or merge, and never sets
    a spec `Approved` or an ADR `Accepted` (principle 6).
+   In personal mode (SPEC-0041) a command may commit its own writes to the developer's sidecar repository and to
+   nothing else, and only `personal.py confirm`, run by the person at their own terminal and refused inside an agent
+   session, sets a sidecar spec `Approved` or ADR `Accepted` (SPEC-0041 rule 15); no command commits to, pushes to or
+   merges in the product repository, and no command an agent runs sets `Approved` or `Accepted`.
 
    | Command | What it runs | Writes | Network |
    | --- | --- | --- | --- |
@@ -65,6 +72,8 @@ reconfirmed is marked `(verify)`. This spec is K3 criterion a of ADR-0015.
    | `/agk:architect` | `playbook.py architect` (SPEC-0013 rule 7): prints how to start the architect session and checks the prerequisites | nothing | read-only `gh auth status` |
    | `/agk:start` | `playbook.py start-ids`, `check-start`, `next-steps` (SPEC-0013 rules 2 to 5): a vision and a project charter, two files on a branch | two files | none |
    | `/agk:review` | `review_context.py`, the `reviewer` subagent, `check_review_report.py` (SPEC-0003) | local files, never committed | none |
+   | `/agk:personal` | `personal.py` (SPEC-0041) | the sidecar only | none |
+   | `/agk:personal-adopt` | `survey.py` and `personal_adopt.py` (SPEC-0041 rules 10 to 15) | the sidecar only | none |
 
    `/agk:review` stays advisory: its output is never an approval and human review stays required (K2 ruling).
 9. **User-invoked.** The commands that write (init, adopt, upgrade, spec, issue, brief, ruleset, start) are not invoked by the model on

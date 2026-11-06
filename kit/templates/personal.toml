@@ -1,0 +1,10 @@
+# AGK personal mode: the settings of one developer's private sidecar (SPEC-0041 rules 1, 2 and 18).
+# This file lives under AGK_HOME, never in the product repository. Written by personal_state.py attach.
+default_branch = "main"
+review_mode = "solo"
+
+[personal]
+forge = "files"
+level = "light"
+ai_disclosure = "both"
+schema = 1
