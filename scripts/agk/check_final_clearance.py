@@ -12,6 +12,8 @@ A covered fix list whose sha is the head and whose every `Final:` line accepts a
 acceptance itself (rule 3a, brief 557): each named ADR must be one that the pull request adds or
 changes (`git diff` from the merge base) and `Proposed` at the head, and no status commit follows; a
 stack-options ADR keeps rule 3.
+A numbered item of the latest fix list that does not end with `(rule: <file> <n>)` or `(rule: none)`
+is a warning, and a failure from the date in `rule_tags_from` of agk.toml on (brief 647, ADR-0310).
 Anything else passes unchecked. With `review_mode = "solo"` in agk.toml the one listed person's
 confirmation counts as its verdict and its `Approve:` lines (brief 277,
 `reviewers.confirmed_comments`). Without
@@ -25,6 +27,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -36,9 +39,12 @@ from common import (
     covered_fix_list,
     final_accepts,
     final_commit_problems,
+    fix_items,
     git,
+    item_tag,
     repo_root,
     resolve_base,
+    rule_tags_from,
     run,
     show,
 )
@@ -60,6 +66,10 @@ ACCEPT_NOT_PROPOSED = "rule 3a: a Final line accepts only an ADR that is Propose
 ACCEPT_NOT_CHANGED = (
     "rule 3a: a Final line accepts only an ADR that the pull request adds or changes; "
     "this pull request does not change a named path of docs/adr/"
+)
+UNTAGGED = (
+    "brief 647: {n} fix-list {item} no rule; end each numbered item with (rule: <file> <n>) "
+    "or (rule: none) (setting: rule_tags_from)"
 )
 NO_BASE = "rule 3a: no base ref resolves, so the pull request's files cannot be read"
 USAGE = (
@@ -136,13 +146,28 @@ def specs_set_approved(edits: list[tuple[str, str | None, str, str]]) -> set[str
     return found
 
 
+def rule_tags(root: Path, body: str) -> None:
+    """Brief 647 (ADR-0310): each numbered item of the latest fix list names the rule it enforces.
+    An item with no tag is a warning, and a failure from the date in `rule_tags_from` on."""
+    required = rule_tags_from(root)
+    n = sum(1 for item in fix_items(body) if item_tag(item) is None)
+    if not n:
+        return
+    message = UNTAGGED.format(n=n, item="item names" if n == 1 else "items name")
+    if required is not None and datetime.now(UTC).date() >= required:
+        raise CheckError(message)
+    print(f"warning: {message.removeprefix('brief 647: ')}")
+
+
 def check(
     root: Path, comments: Path, head: str, author: str | None = None, reviews: Path | None = None
 ) -> int:
     authors = counted_authors(verdict_authors(root), author)
     items = comments_of(comments)
     items = confirmed_comments(items, agent_apps(root), solo_person(root))  # brief 277
-    covered = covered_fix_list(latest_verdict_body(items, authors))
+    body = latest_verdict_body(items, authors)
+    rule_tags(root, body)
+    covered = covered_fix_list(body)
     if covered is not None:
         sha, edits = covered
         flipped = specs_set_approved(edits)

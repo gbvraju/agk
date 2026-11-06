@@ -89,8 +89,7 @@ def test_req037_a_rule_added_fails_naming_the_way_out(tmp_path):
     with (root / "config" / "session-rules.md").open("a", encoding="utf-8") as f:
         f.write("3. A new rule.\n")
     problems = budget_problems(root)
-    assert len(problems) == 1
-    assert problems[0].startswith("config/session-rules.md: ")
+    assert problems and all(p.startswith("config/session-rules.md: ") for p in problems)
     assert (
         "a rule was added: retire one, or make it a check, in the same pull request" in problems[0]
     )

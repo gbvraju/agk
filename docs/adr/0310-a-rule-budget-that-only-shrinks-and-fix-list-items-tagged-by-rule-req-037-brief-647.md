@@ -29,7 +29,7 @@ the consolidation of `config/session-rules.md`, follows after a week of counts.
    outside fenced code. `python3 scripts/agk/rules.py budget` prints the counts and `--check`
    compares them; the kit test `tests/kit/test_rule_budget.py` fails when a count rises above its
    line ("a rule was added: retire one, or make it a check, in the same pull request"; for words,
-   cut words or move the how-to into a guide), when a line is above its file ("lower the
+   cut words or move the how-to to a guide), when a line is above its file ("lower the
    baseline"), when a listed file is gone and when an agent file is not listed. The baseline is
    under `config/`, a protected class, so raising it needs a decision record.
 2. **The tag (answer 2).** Item 8 of the review protocol, identical in
