@@ -10,15 +10,33 @@ globs match no protected class but the test folders; `build` otherwise; never `r
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from test_session import ISSUES, posts, session
 from test_session import proj as session_proj  # noqa: F401  (the fixtures of test_session)
 from test_session import stub as session_stub  # noqa: F401
 
-KIT = Path(__file__).resolve().parents[2]
-PROTECTED = (KIT / "config" / "protected-paths.txt").read_text(encoding="utf-8")
+# The kit's protected classes (`config/protected-paths.txt`), saved: a copied tree may lack it.
+PROTECTED = "\n".join(
+    [
+        "# Protected path classes.",
+        "constitution/",
+        "config/",
+        ".claude/",
+        ".github/",
+        "docs/requirements.md",
+        "CLAUDE.md",
+        "scripts/agk/",
+        "Makefile",
+        "pyproject.toml",
+        "agk.mk",
+        "agk.toml",
+        "tests/kit/",
+        "kit/",
+        "tests/kit_dev/",
+        ".claude-plugin/",
+        "skills/",
+    ]
+)
 
 
 @pytest.fixture
