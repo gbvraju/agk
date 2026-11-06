@@ -438,7 +438,8 @@ def floor_project(tmp_path: Path, monkeypatch, floor: object = None) -> Path:
 def free_memory(monkeypatch, mib: int | None) -> None:
     import launch as launch_module
 
-    monkeypatch.setattr(launch_module, "available_memory", lambda: None if mib is None else mib * MIB)
+    reading = None if mib is None else mib * MIB
+    monkeypatch.setattr(launch_module, "available_memory", lambda: reading)
 
 
 def start_in_process(tmp_path: Path, adapter: Path, doc: dict, *extra: str) -> int:
