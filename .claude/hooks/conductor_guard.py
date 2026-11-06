@@ -64,6 +64,10 @@ both in the checkout and at `origin/<default_branch>` as last fetched (no networ
 same adapter, and the one word after `--adapter` equals `launch_adapter` exactly; an agk.toml that
 cannot be read, either setting of the wrong kind or a default branch git cannot read allows no
 adapter.
+Without `--shadow` the conductor may also run its read-only routines (brief #643, ADR-0308):
+exactly `python3 scripts/agk/conductor.py sweep` and `python3 scripts/agk/conductor.py watch`,
+with `--since <YYYY-MM-DDTHH:MM:SSZ>`, then `--once`, or both in that order, the project's own
+regular file; every other form, such as `merge-queue`, stays denied.
 Without `--shadow` the conductor may also merge a pull request it cleared (brief #531, ADR-0265,
 SPEC-0039 rule 8, the one exception to principle 2 and session rule 2): exactly
 `python3 scripts/agk/merge_cleared.py --pr <n> --sha <40 lower-case hex>` (or `python`), the
@@ -154,6 +158,8 @@ BODY_LIMIT = 65536  # GitHub's limit of an issue body; a longer file is not read
 SESSION_SCRIPT = os.path.join("scripts", "agk", "session.py")
 LAUNCH_SCRIPT = os.path.join("scripts", "agk", "launch.py")
 MERGE_SCRIPT = os.path.join("scripts", "agk", "merge_cleared.py")
+CONDUCTOR_SCRIPT = os.path.join("scripts", "agk", "conductor.py")
+ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 MERGE_PR = re.compile(r"[1-9][0-9]{0,9}")
 MERGE_SHA = re.compile(r"[0-9a-f]{40}")
 ALLOW_RULE = "conductor guard rule 6: the guarded merge of SPEC-0039 rule 8"
@@ -449,6 +455,19 @@ def queue_allowed(words: list[str], cwd: object) -> bool:
     return own_script(words[1], cwd, SESSION_SCRIPT)
 
 
+def routine_allowed(words: list[str], cwd: object) -> bool:
+    """`python3 scripts/agk/conductor.py sweep` or `... watch [--since <ISO>] [--once]` (brief
+    #643), the project's own regular file; both only read GitHub."""
+    if len(words) < 3 or words[0] != "python3":
+        return False
+    rest = words[2:]
+    if rest[:2] == ["watch", "--since"] and len(rest) >= 3 and ISO_TIME.fullmatch(rest[2]):
+        rest = ["watch", *rest[3:]]
+    if rest not in (["sweep"], ["watch"], ["watch", "--once"]):
+        return False
+    return own_script(words[1], cwd, CONDUCTOR_SCRIPT)
+
+
 def configured_adapter() -> str | None:
     """`launch_adapter` when the flow table of agk.toml sets it and `auto_start = true` both in the
     checkout and at `origin/<default_branch>` (as last fetched, with no network call here), with
@@ -561,7 +580,12 @@ def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> b
     if words[0] == "date":
         return all(w == "-u" or w.startswith("+") for w in words[1:])
     if words[0] in ("python3", "python") and not shadow:
-        return queue_allowed(words, cwd) or launch_allowed(words, cwd) or merge_allowed(words, cwd)
+        return (
+            queue_allowed(words, cwd)
+            or routine_allowed(words, cwd)
+            or launch_allowed(words, cwd)
+            or merge_allowed(words, cwd)
+        )
     return False
 
 

@@ -106,6 +106,21 @@ red" is open), `idle-capacity` (the plan names sessions to start and no brief wa
 live take with no pull request and no post by its session for 2 hours). `--json` gives the same. It reads with `gh api` (GET
 only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repository cannot be read (ADR-0205).
 
+## Conductor routines
+
+    python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]
+    python3 scripts/agk/conductor.py sweep
+
+The conductor's watch and sweep (brief #643, ADR-0308). `watch` ends on the first poll that finds a comment created after
+`--since` (default: the start) whose first line starts `Question:` or `Report:`, on an open issue labelled `agk-brief` or an
+open pull request, and prints `<number> <first line>` for each; `--once` reads once and prints `nothing new` when there is none.
+`sweep` prints `#<n> <head7> <state> <age>` per open pull request (`draft`, `ready: no verdict`, `fix list on <head7>`,
+`cleared on <head7>`, `cleared, head moved`, `waiting: Approve SPEC-nnnn at <head7>`, `blocked: Question Q-n unanswered <age>`,
+`checks pending`, `red`), then the latest run of the default branch and any open red-branch issue; a `Question:` or `Report:`
+that no listed verdict author answered within `conductor_late_minutes` (30 by default) is marked `LATE`. The poll interval is
+`conductor_poll_seconds` (60 by default), both of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
+nothing; the conductor guard allows exactly these forms.
+
 ## Pausing the kit
 
     python3 scripts/agk/doctor.py --paused [--ref REF] [ROOT]
@@ -257,6 +272,18 @@ Reads `docs/runs/flakes.md`, the one table of flaky tests with their owner, stri
 quarantine past its expiry (`expired`), each test with two strikes or more and no issue (`brief due`) and each malformed row
 with its line number. Exit 0 when nothing is listed, 1 otherwise. It is not a governance step and blocks nothing. See
 [testing.md](testing.md#the-flake-ledger) and ADR-0234.
+
+## Failure signature and evidence
+
+    python3 scripts/agk/failures.py signature --output FILE [--step NAME]
+    python3 scripts/agk/failures.py evidence --output FILE [--test ID]
+    python3 scripts/agk/failures.py issue-body --signature SIG --test ID [--issues FILE]
+
+`signature` prints `<signature> <test id>` for each failed test of a run's output (the `[testing] junit` report when it is
+readable, else the `FAILED <id>` lines; `step:NAME` when there is no test id). `evidence` prints the cleaned last 200 lines
+of that test's output, or only `evidence withheld: ...`. `issue-body` prints whether a failure needs a new `found-bug` issue
+or a comment on an open one, from a saved issue list; with `[failures] issues` off (the default) it prints `action: none`.
+It reads files, prints and writes nothing. See SPEC-0046 rules 2, 3 and 5 and ADR-0303.
 
 ## Core audit
 

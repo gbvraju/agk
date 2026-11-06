@@ -16,6 +16,11 @@ effort outside the lists, a non-string value or `review` below `strongest` at `h
 naming `setting: models.<kind>` and never the value. `model_names(root)` reads the optional
 `[models.names]` table, a tier to a project's model name, which the kit never ships. No check,
 gate or reading list reads either in this build (rule 1).
+
+`failures_settings(root)` reads the optional `[failures]` table (SPEC-0046 rule 2, brief #634):
+`issues` and `artifacts` (booleans, false) and `artifact_paths` (relative path patterns, empty).
+An unknown key or a value of the wrong kind is refused, naming `setting: failures.<key>` and never
+the value.
 """
 
 from __future__ import annotations
@@ -207,6 +212,41 @@ def model_settings(root: Path) -> dict[str, dict[str, str]]:
             raise _refuse_model(f"models.{kind}")
         settings[kind] = {"tier": entry["tier"], "effort": entry["effort"]}
     return settings
+
+
+FAILURES_DEFAULTS = {"issues": False, "artifacts": False, "artifact_paths": []}
+
+
+class FailuresSettingError(CheckError):
+    """The `[failures]` table is refused (exit 2), naming the setting and never the value."""
+
+
+def _refuse_failures(setting: str) -> FailuresSettingError:
+    return FailuresSettingError(f"the [failures] table is refused (setting: {setting})")
+
+
+def _relative(value: object) -> bool:
+    """A non-empty path pattern inside the run's folder: not absolute, no drive, no `..` part."""
+    if not isinstance(value, str) or not value.strip() or "\\" in value:
+        return False
+    return not value.startswith("/") and ":" not in value and ".." not in value.split("/")
+
+
+def failures_settings(root: Path) -> dict:
+    """The three `[failures]` settings (rule 2): the table's value or the default."""
+    try:
+        table = config_source(root).get("failures", {})
+    except (OSError, ValueError):
+        raise _refuse_failures("failures") from None
+    if not isinstance(table, dict) or any(k not in FAILURES_DEFAULTS for k in table):
+        raise _refuse_failures("failures")
+    for key in ("issues", "artifacts"):
+        if not isinstance(table.get(key, False), bool):
+            raise _refuse_failures(f"failures.{key}")
+    paths = table.get("artifact_paths", [])
+    if not isinstance(paths, list) or not all(_relative(p) for p in paths):
+        raise _refuse_failures("failures.artifact_paths")
+    return {**FAILURES_DEFAULTS, **table, "artifact_paths": list(paths)}
 
 
 def main(argv: list[str] | None = None) -> int:
