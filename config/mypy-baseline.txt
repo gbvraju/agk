@@ -1,0 +1,58 @@
+# The type check baseline (ADR-0307, brief #633). tests/kit/test_scanner_hygiene.py runs mypy on
+# scripts/agk and fails when a file has more errors of a code than its line here (a change added one),
+# or fewer (lower the line in the same pull request). The mypy line pins the exact version that made
+# it; with another version installed the test skips. Lines: <file> <error code> <count>, no line numbers.
+mypy 2.3.1
+scripts/agk/batch.py index 1
+scripts/agk/check_adrs.py union-attr 1
+scripts/agk/check_design.py arg-type 1
+scripts/agk/check_design.py return-value 1
+scripts/agk/check_kit_tests.py assignment 2
+scripts/agk/check_kit_tests.py return-value 1
+scripts/agk/check_release.py operator 3
+scripts/agk/core_audit.py return-value 1
+scripts/agk/core_audit.py union-attr 1
+scripts/agk/doctor.py arg-type 2
+scripts/agk/doctor.py assignment 2
+scripts/agk/doctor.py union-attr 2
+scripts/agk/facts.py assignment 2
+scripts/agk/flakes.py arg-type 1
+scripts/agk/flakes.py union-attr 1
+scripts/agk/guard.py union-attr 1
+scripts/agk/heavy_queue.py union-attr 1
+scripts/agk/impact.py var-annotated 1
+scripts/agk/init.py union-attr 2
+scripts/agk/intake.py arg-type 1
+scripts/agk/intake.py list-item 2
+scripts/agk/local_mode.py arg-type 1
+scripts/agk/lock.py arg-type 1
+scripts/agk/lock.py assignment 1
+scripts/agk/lock.py attr-defined 1
+scripts/agk/lock.py union-attr 2
+scripts/agk/metrics.py union-attr 1
+scripts/agk/minutes.py arg-type 2
+scripts/agk/playbook_format.py arg-type 1
+scripts/agk/playbook_format.py union-attr 3
+scripts/agk/product_report.py index 2
+scripts/agk/product_report.py list-item 2
+scripts/agk/product_report.py misc 1
+scripts/agk/product_report.py operator 1
+scripts/agk/product_report.py return-value 2
+scripts/agk/product_report.py type-var 1
+scripts/agk/product_report.py union-attr 2
+scripts/agk/product_report.py var-annotated 2
+scripts/agk/proof.py assignment 1
+scripts/agk/proof.py misc 1
+scripts/agk/route.py union-attr 2
+scripts/agk/route.py var-annotated 1
+scripts/agk/ruleset.py arg-type 1
+scripts/agk/session.py arg-type 6
+scripts/agk/session.py assignment 4
+scripts/agk/session.py index 1
+scripts/agk/session.py return-value 1
+scripts/agk/session.py union-attr 4
+scripts/agk/session.py var-annotated 2
+scripts/agk/session_plan.py arg-type 1
+scripts/agk/session_plan.py assignment 2
+scripts/agk/shadow_rate.py union-attr 1
+scripts/agk/stalls.py assignment 1
