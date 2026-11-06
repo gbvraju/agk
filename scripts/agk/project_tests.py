@@ -81,6 +81,7 @@ def captured(command: str, cwd: Path) -> tuple[int, str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        encoding="utf-8",
         errors="replace",
     )
     kept = []
