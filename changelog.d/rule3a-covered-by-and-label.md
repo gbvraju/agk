@@ -1,0 +1,1 @@
+- An ADR accepted by a SPEC-0021 rule 3a `Final:` counts as Accepted for `Covered-by:` once its verified record is on the merge base (`check_protected_changes.py --comments FILE`, failing closed without it), and the router labels a head cleared by such a Final `agk:ready`, not `agk:fix` (brief #601, ADR-0293)
