@@ -33,6 +33,7 @@ import merge_cleared  # noqa: E402
 import reviewers  # noqa: E402
 from common import CheckError  # noqa: E402
 
+
 def object_sha(kind: str, text: bytes) -> str:
     return hashlib.sha1(f"{kind} {len(text)}\0".encode() + text, usedforsecurity=False).hexdigest()
 
