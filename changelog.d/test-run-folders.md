@@ -1,0 +1,1 @@
+- `prepush.py` runs the tests step with `AGK_RUN_DIR` set to its own dated folder under `[testing] results_dir` (`.agk-runs` by default, git-ignored), keeps a failed run's folder, removes a passed one unless `keep_passed = true`, keeps at most `keep_runs` (20) and never a failed run's folder of the last 7 days; the record names it in `run_dir` (brief #613, ADR-0299)

@@ -15,6 +15,15 @@ With `[testing] proof_regression = true` and a `[proof]` table, once the pull re
 are proven, a third run executes on the head, never on the base, the regression tests that
 `impact.py` selects, each area's command with its selected files (brief #442, ADR-0238; off by
 default, and the spec change is a proposal until a person approves it).
+Brief #613 (ADR-0299): `run_folder` gives one run its own folder,
+`<results root>/<UTC time>-<head sha12>-<kind>`, set as `AGK_RUN_DIR` for the project's command;
+`prepush.py` uses it with the kind `prepush`. A command may write its screenshots, traces and logs
+there. The results root is `[testing] results_dir` (`.agk-runs` by default), which ignores itself
+in git. A run that did not pass keeps its folder; a passed run's folder is removed unless
+`[testing] keep_passed = true`. Then at most `[testing] keep_runs` (20) run folders stay, oldest
+removed first, never a failed or unfinished run's folder of the last 7 days, and only folders
+named that way are ever removed. Proof's own runs do not use it yet: SPEC-0010 rules 8 and 11
+(nothing changes in ROOT's work tree; no extra variables) would have to change (`Q-613-1`).
 ROOT's work tree is never changed: the script adds two worktrees in a temporary directory outside
 ROOT and removes them at the end, also on a failure.
 
@@ -35,6 +44,7 @@ import fnmatch
 import json
 import os
 import posixpath
+import re
 import shlex
 import shutil
 import signal
@@ -42,7 +52,10 @@ import subprocess  # nosec B404 - fixed argument lists, and the project's own te
 import sys
 import tempfile
 import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -77,6 +90,12 @@ OWN_NOT_PROVEN = "the pull request's own tests are not proven"
 UNCHANGED_SKIP = "Behaviour: unchanged"
 SHOWN = 40
 EXIT = {"proven": 0, "skipped": 0, "not-proven": 1, "unknown": 4}
+# The run folders (brief #613, ADR-0299).
+RUN_ENV = "AGK_RUN_DIR"
+RUN_MARK = ".agk-run"  # holds `passed` or `failed` once the run has ended
+RUN_TIME = "%Y%m%dT%H%M%SZ"
+RUN_NAME = re.compile(r"(\d{8}T\d{6}Z)-[0-9a-f]{12}-(?:prepush|proof)(?:-\d+)?")
+RECENT = timedelta(days=7)  # a failed run's folder younger than this is never removed
 
 
 class Usage(Exception):
@@ -333,6 +352,106 @@ def execute(
         kill_tree(proc, windows, run)
         return None, "", round(time.monotonic() - began)
     return proc.returncode, out, round(time.monotonic() - began)
+
+
+@dataclass
+class RunFolder:
+    """One run's folder: its path, whether the run passed (the caller sets it) and, once the run
+    has ended, whether the folder was kept."""
+
+    path: Path
+    passed: bool = False
+    kept: bool = True
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+@contextmanager
+def run_folder(
+    root: Path, head: str, kind: str, now: Callable[[], datetime] = utc_now
+) -> Iterator[RunFolder]:
+    """A new folder `<results root>/<UTC time>-<head sha12>-<kind>` (a `-<n>` suffix when that
+    name exists), set as `AGK_RUN_DIR` while the block runs and restored after it. On leaving, the
+    folder gets its mark, is removed when the run passed and `keep_passed` is false, and `prune`
+    runs. OSError when the folder cannot be made; CheckError on a bad setting."""
+    from impact import run_settings
+
+    results_dir, keep_passed, keep_runs = run_settings(root)
+    results = root.resolve() / results_dir  # absolute: the command runs in another folder
+    if not results.resolve().is_relative_to(root.resolve()):
+        raise CheckError(
+            "the results root is outside the repository (setting: testing.results_dir)"
+        )
+    results.mkdir(parents=True, exist_ok=True)
+    ignore = results / ".gitignore"
+    if not ignore.exists():
+        ignore.write_text("*\n", encoding="utf-8")
+    name = f"{now().strftime(RUN_TIME)}-{head[:12]}-{kind}"
+    path, n = results / name, 1
+    while True:
+        try:
+            path.mkdir()
+            break
+        except FileExistsError:
+            n += 1
+            path = results / f"{name}-{n}"
+    run = RunFolder(path)
+    before = os.environ.get(RUN_ENV)
+    os.environ[RUN_ENV] = str(path)
+    try:
+        yield run
+    finally:
+        if before is None:
+            os.environ.pop(RUN_ENV, None)
+        else:
+            os.environ[RUN_ENV] = before
+        end_run(run, keep_passed)
+        prune(results, keep_runs, now())
+
+
+def end_run(run: RunFolder, keep_passed: bool) -> None:
+    """Mark the folder, or remove it for a passed run without `keep_passed`."""
+    try:
+        if run.passed and not keep_passed:
+            shutil.rmtree(run.path)
+            run.kept = False
+        else:
+            (run.path / RUN_MARK).write_text(
+                "passed\n" if run.passed else "failed\n", encoding="utf-8"
+            )
+    except OSError:
+        print("note: the run folder cannot be tidied (setting: testing.results_dir)")
+
+
+def prune(results: Path, keep_runs: int, now: datetime) -> None:
+    """Keep at most `keep_runs` run folders, removing the oldest first, but never a failed or
+    unfinished run's folder (no `passed` mark) younger than 7 days. Only run folders are seen."""
+    try:
+        found = sorted(
+            (m.group(1), p)
+            for p in results.iterdir()
+            if (m := RUN_NAME.fullmatch(p.name)) and p.is_dir() and not p.is_symlink()
+        )
+    except OSError:
+        return
+    excess = len(found) - keep_runs
+    for stamp, path in found:
+        if excess <= 0:
+            break
+        when = datetime.strptime(stamp, RUN_TIME).replace(tzinfo=UTC)
+        if not marked_passed(path) and now - when < RECENT:
+            continue
+        shutil.rmtree(path, ignore_errors=True)
+        excess -= 1
+
+
+def marked_passed(path: Path) -> bool:
+    try:
+        return (path / RUN_MARK).read_text(encoding="utf-8").strip() == "passed"
+    except (OSError, UnicodeDecodeError):
+        return False
 
 
 def show(label: str, out: str) -> None:

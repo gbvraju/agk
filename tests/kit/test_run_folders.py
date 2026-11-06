@@ -1,10 +1,11 @@
-"""Each test run writes to its own dated folder; a failed run's folder is kept (brief #613, REQ-051).
+"""Each test run writes to its own dated folder; a failed run's folder is kept (brief #613).
 
-`prepush.py` and `proof.py` set `AGK_RUN_DIR` for the project's test command to a new folder
-`<results root>/<UTC time>-<head sha12>-<kind>`; the results root is `[testing] results_dir`,
-`.agk-runs/` by default, and git-ignores itself. After the run a passed run's folder is removed
-unless `[testing] keep_passed = true`, a failed one is kept, and at most `[testing] keep_runs`
-folders (20) stay, oldest removed first, never a failed run's folder of the last 7 days.
+`prepush.py` sets `AGK_RUN_DIR` for the project's test command to a new folder
+`<results root>/<UTC time>-<head sha12>-<kind>` (proof does so only once `Q-613-1` is answered);
+the results root is `[testing] results_dir`, `.agk-runs/` by default, and git-ignores itself.
+After the run a passed run's folder is removed unless `[testing] keep_passed = true`, a failed
+one is kept, and at most `[testing] keep_runs` folders (20) stay, oldest removed first, never a
+failed run's folder of the last 7 days. REQ-051.
 
 The clock is injected; the projects are invented; nothing reaches the network.
 """
@@ -58,7 +59,7 @@ def test_the_run_gets_its_own_dated_folder_in_agk_run_dir(tmp_path, monkeypatch)
     root = settings(tmp_path)
     monkeypatch.setenv("AGK_RUN_DIR", "/elsewhere")
     with proof_module.run_folder(root, HEAD, "prepush", now=clock()) as run:
-        assert run.path == root / ".agk-runs" / NAME
+        assert run.path == root.resolve() / ".agk-runs" / NAME
         assert os.environ["AGK_RUN_DIR"] == str(run.path)
         assert run.path.is_dir()
         run.passed = False
@@ -81,7 +82,7 @@ def test_the_results_root_is_the_setting(tmp_path):
     """REQ-051: brief #613 answer 1 (`[testing] results_dir`)."""
     root = settings(tmp_path, 'results_dir = "build/runs"\n')
     with proof_module.run_folder(root, HEAD, "proof", now=clock()) as run:
-        assert run.path == root / "build" / "runs" / folder_name(NOW, "proof")
+        assert run.path == root.resolve() / "build" / "runs" / folder_name(NOW, "proof")
 
 
 def test_a_passed_run_is_removed_and_a_failed_run_is_kept(tmp_path):
@@ -133,7 +134,7 @@ def test_a_recent_failed_run_is_never_removed(tmp_path):
 
 def test_only_the_kits_run_folders_are_ever_removed(tmp_path):
     """REQ-051: brief #613 answer 2 (other files under the results root are left alone)."""
-    root = settings(tmp_path, "keep_runs = 1\n")
+    root = settings(tmp_path, "keep_passed = true\nkeep_runs = 1\n")
     results = root / ".agk-runs"
     mine = results / "notes"
     mine.mkdir(parents=True)
@@ -142,7 +143,8 @@ def test_only_the_kits_run_folders_are_ever_removed(tmp_path):
     with proof_module.run_folder(root, HEAD, "prepush", now=clock()) as run:
         run.passed = True
     assert mine.is_dir() and (results / "README.txt").is_file()
-    assert [p.name for p in results.iterdir() if proof_module.RUN_NAME.fullmatch(p.name)] == []
+    runs = [p.name for p in results.iterdir() if proof_module.RUN_NAME.fullmatch(p.name)]
+    assert runs == [run.path.name]
 
 
 def test_the_defaults_without_a_testing_table(tmp_path):
@@ -159,6 +161,8 @@ def test_the_defaults_without_a_testing_table(tmp_path):
         ('keep_passed = "yes"\n', "testing.keep_passed"),
         ("keep_runs = 0\n", "testing.keep_runs"),
         ("keep_runs = true\n", "testing.keep_runs"),
+        ('results_dir = "."\n', "testing.results_dir"),
+        ('results_dir = "a/./b"\n', "testing.results_dir"),
     ],
 )
 def test_a_bad_setting_is_refused_naming_the_setting(tmp_path, line, setting):
@@ -183,11 +187,16 @@ def runs_of(root: Path) -> list[Path]:
     return sorted(p for p in results.iterdir() if proof_module.RUN_NAME.fullmatch(p.name))
 
 
-def test_a_failed_prepush_keeps_its_files_and_a_rerun_keeps_both(repo, tmp_path):
+@pytest.fixture
+def outside(tmp_path_factory) -> Path:
+    """A folder outside the fixture repository, so the records keep its tree clean."""
+    return tmp_path_factory.mktemp("outside")
+
+
+def test_a_failed_prepush_keeps_its_files_and_a_rerun_keeps_both(repo, outside):
     """REQ-051: brief #613 answers 1 to 3 (the pilot's case: a rerun kept the first failure)."""
     prepush_project(repo, f"{WRITES}; exit 3")
-    out = tmp_path / "out"
-    out.mkdir()
+    out = outside
     records = []
     for n in (1, 2):
         record = out / f"record{n}.json"
@@ -205,11 +214,11 @@ def test_a_failed_prepush_keeps_its_files_and_a_rerun_keeps_both(repo, tmp_path)
     assert repo.git("status", "--porcelain") == ""  # the results root ignores itself
 
 
-def test_a_passed_prepush_removes_its_folder(repo, tmp_path):
-    """REQ-051: brief #613 answers 2 and 3 (a passed run's folder is removed; the record says so)."""
+def test_a_passed_prepush_removes_its_folder(repo, outside):
+    """REQ-051: brief #613 answers 2 and 3 (a passed run's folder is removed; the record says)."""
     prepush_project(repo, WRITES)
-    record = tmp_path / "record.json"
-    proc = repo.run("prepush.py", "--record", str(record), PATH=path_with(scanner(tmp_path, 0)))
+    record = outside / "record.json"
+    proc = repo.run("prepush.py", "--record", str(record), PATH=path_with(scanner(outside, 0)))
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert runs_of(repo.root) == []
     data = json.loads(record.read_text(encoding="utf-8"))
@@ -226,22 +235,12 @@ def test_a_prepush_with_a_testing_table_sets_the_folder_too(repo, tmp_path):
     assert len(kept) == 1 and (kept[0] / "trace.txt").is_file()
 
 
-def test_proof_writes_to_its_own_folder_and_keeps_a_failed_one(repo):
-    """REQ-051: brief #613 answers 1 and 2 (proof: kind `proof`; not proven is kept)."""
-    start(repo, f"{WRITES}; test -f feature.txt", files={"feature.txt": "already\n"})
-    repo.commit({"tests/test_new.py": "# new\n"}, "a test that passes on the base")
-    proc = repo.run("proof.py")
-    assert proc.stdout.strip() == "proof: not-proven (green-on-base)", proc.stdout + proc.stderr
-    kept = runs_of(repo.root)
-    assert len(kept) == 1 and kept[0].name.endswith("-proof")
-    assert (kept[0] / "trace.txt").is_file()
-    assert repo.git("status", "--porcelain") == ""
-
-
-def test_a_proven_proof_removes_its_folder(repo):
-    """REQ-051: brief #613 answer 2 (proof: proven is a passed run)."""
-    start(repo, f"{WRITES}; test -f feature.txt")
+def test_proof_sets_no_run_folder_while_spec_0010_says_so(repo):
+    """REQ-051: brief #613 answer 1, the conservative reading of `Q-613-1`: proof changes nothing
+    in ROOT's work tree and adds no variable (SPEC-0010 rules 8 and 11), so its command sees no
+    AGK_RUN_DIR and no results root is made, until an amendment says otherwise."""
+    start(repo, 'test -z "$AGK_RUN_DIR" && test -f feature.txt')
     repo.commit({"feature.txt": "x\n", "tests/test_new.py": "# new\n"}, "change and test")
-    proc = repo.run("proof.py")
+    proc = repo.run("proof.py", AGK_RUN_DIR="")
     assert proc.stdout.strip() == "proof: proven", proc.stdout + proc.stderr
-    assert runs_of(repo.root) == []
+    assert not (repo.root / ".agk-runs").exists()
