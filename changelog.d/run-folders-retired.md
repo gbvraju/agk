@@ -1,0 +1,1 @@
+- The run folders of `[testing] results_dir`, `keep_passed` and `keep_runs` are retired: the keys are still accepted with their checks but make no folder and set no `AGK_RUN_DIR`, and `prepush.py` and `doctor.py` print `deprecated: testing.results_dir (ADR-0303)` when one is set; a later release removes the keys (SPEC-0046 build (f), ADR-0303)

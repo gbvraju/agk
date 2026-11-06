@@ -32,6 +32,9 @@ agent_apps = ["claude"]
 # session, counts as the verdict, its Final lines and the spec approval of the head it names; refused when config/reviewers.yaml lists
 # nobody or more than one person). A change needs an ADR.
 review_mode = "team"
+# From this date an item of a `Verdict: fix list` that does not end with `(rule: <file> <n>)` or `(rule: none)` fails
+# check_final_clearance.py; before it the check warns, and without the setting it only warns (brief #647, ADR-0310).
+rule_tags_from = "2026-12-06"
 # The data guard (SPEC-0042 rule 1, brief #589): always on; no key turns it off or removes a built-in rule. The [guard] table may only add:
 # patterns (detector kinds CUSTOM-<name>), deny_paths (globs added to the secret files), deny_commands (added to the log commands),
 # allowed_hosts (added to the local hosts), and allow_paths, the one escape: one relative file with a reason, never a built-in secret
@@ -249,8 +252,8 @@ tests = [
   "tests/kit/test_doctor_ci.py", "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py",
   "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_run.py", "tests/kit/test_merge_cleared_verdict.py",
   "tests/kit/test_pause.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_route_triggers.py",
-  "tests/kit/test_session_rules.py", "tests/kit/test_session_tidy.py", "tests/kit/test_windows_install.py",
-  "tests/kit_dev/test_adopt.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_doctor_wiring.py",
+  "tests/kit/test_run_folders.py", "tests/kit/test_session_rules.py", "tests/kit/test_session_tidy.py",
+  "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_doctor_wiring.py",
   "tests/kit_dev/test_engines_local_profile.py", "tests/kit_dev/test_experimental_reviewer.py",
   "tests/kit_dev/test_guide_fixes.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_origin_message.py",
   "tests/kit_dev/test_pilot_gaps_first_pr.py", "tests/kit_dev/test_pilot_gaps_plans.py",
@@ -421,6 +424,12 @@ code = "scripts/agk/review_context.py"
 tests = [
   "tests/kit/test_check_kit_tests.py", "tests/kit/test_review_context.py",
   "tests/kit_dev/test_experimental_reviewer.py", "tests/kit_dev/test_reviewer_wiring.py",
+]
+[[testing.map]]
+code = "scripts/agk/rules.py"
+tests = [
+  "tests/kit/test_fix_list_tags.py", "tests/kit/test_rule_budget.py", "tests/kit/test_rules_dropped.py",
+  "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
 code = "scripts/agk/ruleset.py"

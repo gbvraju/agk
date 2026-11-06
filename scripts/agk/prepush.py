@@ -72,12 +72,10 @@ still writes it. Then it prints one line for the pull request body:
 `Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>`. A record
 file that cannot be written exits 2.
 
-Brief #613 (ADR-0299): when `[testing] results_dir` is set and the tests step runs a command, it
-runs them all with `AGK_RUN_DIR` set to one new folder of `proof.run_folder`, `<results root>/<UTC
-time>-<head sha12>-prepush`; a failed step keeps it, a passed one removes it unless `[testing]
-keep_passed = true`, and the record's `run_dir` names it (`path`, relative to the repository, and
-`kept`). Without the key the step is exactly as before: no variable, no folder, no `run_dir`
-(SPEC-0044 rule 1, `Q-613-2`).
+SPEC-0046 rule 11 (build (f)): the run folders of brief #613 (ADR-0299) are retired. The keys
+`[testing] results_dir`, `keep_passed` and `keep_runs` keep their checks and do nothing: no folder,
+no `AGK_RUN_DIR`, no `run_dir` in the record. When one is set, prepush prints one line
+`deprecated: testing.results_dir (ADR-0303)` before its steps, and the record's `notes` hold it.
 
 Brief #566 (SPEC-0040 build (c), rule 9): with `[locks] queue = true`, `--record FILE --queue`
 runs no step here: it submits the same command without `--queue`, with the body and record paths
@@ -104,7 +102,6 @@ import tempfile
 import time
 import uuid
 from collections.abc import Callable
-from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -129,11 +126,11 @@ from impact import (
     impact,
     junit_setting,
     parallel_command,
-    run_settings,
+    run_folder_deprecation,
     run_timing,
     workers_setting,
 )
-from proof import area_command, execute, is_test_file, run_folder, timeout_note
+from proof import area_command, execute, is_test_file, timeout_note
 
 HERE = Path(__file__).resolve().parent
 USAGE = (
@@ -149,7 +146,6 @@ NO_PARALLEL = (
     "tests: the command is not a simple pytest command and parallel_command is not set, running "
     "in one process (setting: testing.parallel_command)"
 )
-NO_RUN_FOLDER = "tests: the run folder cannot be made (setting: testing.results_dir)"
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 PYTHON = re.compile(r"python(?:\d+(?:\.\d+)?)?")
 SHELL_SYNTAX = set(";&|<>()`$\n\\*?[]{}~#")
@@ -180,7 +176,6 @@ class Step:
         self.ran = ran
         self.runs = runs
         self.notes = list(notes or [])  # warnings that do not change the outcome (brief #509)
-        self.run_dir: dict | None = None  # the run folder of the tests step (brief #613)
 
 
 class Ran:
@@ -436,29 +431,9 @@ def tests(root: Path, mb: str, quick: bool, use_lock: bool = True) -> Step:
         return Step("FAIL", out, ran=ran)
     shown = json.loads(out)
     table = (shown.get("regression") or {}).get("table")
-    try:
-        use_folder = run_settings(root)[0] is not None and bool(table or shown["runs"])
-    except CheckError as exc:
-        return Step("FAIL", str(exc), ran=ran)
-    if not use_folder:  # no results_dir (Q-613-2), or nothing runs: exactly as before
-        if not table:
-            return proof_runs(root, shown["runs"], ran)  # as before (brief #417 answer 4)
-        return regression_step(root, mb, shown, ran, use_lock)
-    head = git(root, "rev-parse", "HEAD").strip()
-    with ExitStack() as stack:
-        try:
-            folder = stack.enter_context(run_folder(root, head, "prepush"))
-        except CheckError as exc:
-            return Step("FAIL", str(exc), ran=ran)
-        except OSError:
-            return Step("FAIL", NO_RUN_FOLDER, ran=ran)
-        if not table:
-            result = proof_runs(root, shown["runs"], ran)  # as before (brief #417 answer 4)
-        else:
-            result = regression_step(root, mb, shown, ran, use_lock)
-        folder.passed = result.outcome == "ok"
-    result.run_dir = {"path": safe_cwd(folder.path, root), "kept": folder.kept}
-    return result
+    if not table:
+        return proof_runs(root, shown["runs"], ran)  # as before (brief #417 answer 4)
+    return regression_step(root, mb, shown, ran, use_lock)
 
 
 def regression_step(root: Path, mb: str, shown: dict, ran: Ran, use_lock: bool) -> Step:
@@ -854,6 +829,15 @@ def write_record(path: Path, record: dict) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def retired_keys_line(root: Path) -> str | None:
+    """SPEC-0046 rule 11: the deprecation line of the retired run-folder keys, or None. A malformed
+    `[testing]` table prints nothing here: the steps that read it refuse it naming the setting."""
+    try:
+        return run_folder_deprecation(root)
+    except CheckError:
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         options = parse_args(list(sys.argv[1:] if argv is None else argv))
@@ -895,6 +879,11 @@ def main(argv: list[str] | None = None) -> int:
             "steps": [],
             "notes": [],
         }
+    deprecated = retired_keys_line(root)
+    if deprecated is not None:
+        print(deprecated)
+        if record is not None:
+            record["notes"].append(deprecated)
     steps: list[tuple[str, Callable[[], Step]]] = [
         ("pr-body", lambda: pr_body(root, body)),
         ("lint", lambda: lint(root)),
@@ -910,8 +899,6 @@ def main(argv: list[str] | None = None) -> int:
         if record is not None:
             record["steps"].append(step_record(name, result, seconds, root))
             record["notes"].extend(result.notes)
-            if result.run_dir is not None:
-                record["run_dir"] = result.run_dir
         line = f"prepush: {name} {result.outcome} ({seconds:.1f}s)"
         if result.outcome == "skipped":
             print(f"{line}: {result.text}")

@@ -229,7 +229,7 @@ def test_ac3_nothing_is_checked_without_a_covered_fix_list_or_for_other_shapes(r
     repo.commit({"b.txt": "2\n"}, "two")
     late = check(repo, covered)  # two commits after: the clearance is late (SPEC-0030 rule 7)
     assert late.returncode == 1 and "rule 7" in late.stdout
-    numbered = comments_file(tmp_path, fix_list(reviewed, final, extra="1. an item"))
+    numbered = comments_file(tmp_path, fix_list(reviewed, final, extra="1. an item (rule: none)"))
     assert check(repo, numbered).stdout == ok
     stale = comments_file(tmp_path, fix_list("0" * 40, final))
     assert check(repo, stale).stdout == ok  # the sha is not in the history of the head
