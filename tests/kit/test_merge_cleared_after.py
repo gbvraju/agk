@@ -77,6 +77,13 @@ def after_run(tmp_path: Path, issues: list | None = None, main: str | None = Non
 GOVERN = (Path("checkout"), Path("tree"), Path("home"), Path("home") / "pr-body.md")
 
 
+def after_runs(ran: list[dict]) -> list[dict]:
+    """The governance runs after the merge (AGK_BASE the merge commit's parent); since brief #610
+    the same run is made before the merge too, on the would-be merge (AGK_BASE the default
+    branch)."""
+    return [r for r in ran if r["args"][-1] == f"AGK_BASE={BASE}"]
+
+
 def makes(tmp_path: Path) -> list[dict]:
     log = tmp_path / "make-calls.jsonl"
     if not log.exists():
@@ -143,7 +150,7 @@ def test_a_record_line_github_refuses_leaves_the_merge_and_exits_1(tmp_path):
     proc, made, ran, _ = after_run(tmp_path, comment_fails=True)
     assert one_line(proc) == f"{MERGED}: the record line cannot be posted (rule 7)"
     assert proc.returncode == 1
-    assert len(ran) == 1, "governance still runs after the merge"
+    assert len(after_runs(ran)) == 1, "governance still runs after the merge"
 
 
 # --- rule 6: governance after the merge ---------------------------------------------------------
@@ -153,8 +160,8 @@ def test_governance_runs_once_on_the_merge_commit_in_a_removed_worktree(tmp_path
     """REQ-046 AC6: SPEC-0039 rule 6 (`make -C <worktree> governance AGK_BASE=<parent>`)."""
     proc, _, ran, root = after_run(tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert len(ran) == 1
-    args = ran[0]["args"]
+    assert len(after_runs(ran)) == 1
+    args = after_runs(ran)[0]["args"]
     assert args[0] == "-C" and args[2:] == ["governance", f"AGK_BASE={BASE}"]
     tree = Path(args[1])
     assert not tree.is_relative_to(root), "the worktree is outside the checkout"
@@ -169,7 +176,7 @@ def test_the_governance_run_gets_no_token_and_a_scratch_home(tmp_path, monkeypat
         monkeypatch.setenv(name, HIDDEN)
     proc, _, ran, _ = after_run(tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    env = ran[0]["env"]
+    env = after_runs(ran)[0]["env"]
     # LC_CTYPE is set by the fake make's own Python (PEP 538), not passed by the command
     assert set(env) - {"LC_CTYPE"} == {"PATH", "HOME", "AGK_PR_BODY"}, sorted(env)
     assert HIDDEN not in json.dumps(env)
@@ -207,9 +214,9 @@ def test_a_covered_by_merge_gets_its_body_and_is_not_reported_red(tmp_path):
     proc, made, ran, root = body_world(tmp_path, COVERED_BODY)
     assert one_line(proc) == MERGED and proc.returncode == 0, proc.stdout + proc.stderr
     assert red_writes(made) == [], "no red-branch issue"
-    assert len(ran) == 1 and ran[0]["body"] == COVERED_BODY
-    body_file = Path(ran[0]["env"]["AGK_PR_BODY"])
-    assert body_file.parent == Path(ran[0]["env"]["HOME"]), "in the run's temporary home"
+    assert len(ran) == 2 and [r["body"] for r in ran] == [COVERED_BODY] * 2, "before and after"
+    body_file = Path(ran[-1]["env"]["AGK_PR_BODY"])
+    assert body_file.parent == Path(ran[-1]["env"]["HOME"]), "in the run's temporary home"
     assert not body_file.is_relative_to(root), "outside the checkout"
     assert not body_file.exists(), "removed with the run's temporary folder"
 
@@ -223,10 +230,13 @@ def test_the_body_is_the_one_read_before_the_merge_with_no_second_read(tmp_path)
 
 
 def test_a_pull_request_with_no_body_gets_an_empty_body_file(tmp_path):
-    """REQ-046 AC6: brief #576 answer 1 (a missing body is an empty file; the check decides)."""
-    proc, _, ran, _ = body_world(tmp_path, "")
-    assert proc.returncode == 1 and one_line(proc) == STOPPED, proc.stdout + proc.stderr
-    assert ran[0]["body"] == ""
+    """REQ-046 AC6: brief #576 answer 1 (a missing body is an empty file; the check decides).
+    Since brief #610 the check before the merge decides it, so nothing is merged."""
+    proc, made, ran, _ = body_world(tmp_path, "")
+    line = f"merge-cleared #7 {SHA12}: held: the merge with the default branch fails governance"
+    assert proc.returncode == 3 and one_line(proc) == f"{line} (make governance)", proc.stdout
+    assert len(ran) == 1 and ran[0]["body"] == ""
+    assert [c for c in made if "PUT" in c] == [], "nothing merged"
 
 
 def test_the_governance_run_holds_the_heavy_lock(tmp_path):
@@ -281,7 +291,7 @@ def test_a_fetch_that_does_not_bring_the_merge_commit_is_red(tmp_path):
     answer = {"sha": other, "merged": True, "message": "Pull Request successfully merged"}
     proc, made, ran, _ = after_run(tmp_path, merge=answer)
     assert one_line(proc) == STOPPED and proc.returncode == 1
-    assert ran == [], "make never runs without the merge commit"
+    assert after_runs(ran) == [], "make never runs after the merge without the merge commit"
     body = body_of(red_writes(made)[0])
     assert "Failing check: fetch" in body and other in body
 
@@ -502,7 +512,7 @@ def test_the_setting_reaches_the_governance_run(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(merge_cleared, "run_governance", fake)
     code, lines, _ = main_in(root, capsys)
     assert lines == [MERGED] and code == 0
-    assert seen == [300.0]
+    assert seen == [300.0, 300.0], "before the merge (brief #610) and after it"
 
 
 @pytest.mark.parametrize(
@@ -577,6 +587,7 @@ def test_a_heavy_lock_still_busy_at_the_timeout_is_red(tmp_path, monkeypatch, ca
     locks = tmp_path / "locks"
     root = in_process(tmp_path, monkeypatch, main=f'lock_dir = "{locks.as_posix()}"\n{toml(ON)}')
     monkeypatch.setattr(merge_cleared, "MINUTE", 0.02)  # 30 minutes become 0.6 s here
+    monkeypatch.setattr(merge_cleared, "merge_check", lambda *args: None)  # brief #610: green
     holder = hold_heavy(root, locks, tmp_path / "temp")
     try:
         code, lines, made = main_in(root, capsys)
@@ -594,8 +605,11 @@ def test_an_interrupt_or_error_during_the_run_is_red(tmp_path, monkeypatch, caps
     """REQ-046 AC6: fix list item 2 (an interrupt during the run: the red-branch issue
     `governance not finished`, the stop line, a non-zero exit, the worktree removed)."""
     root = in_process(tmp_path, monkeypatch)
+    real = merge_cleared.run_governance
 
-    def cut(*args):
+    def cut(*args):  # the run after the merge only; the one before it (brief #610) is green
+        if args[4] != BASE:
+            return real(*args)
         raise raised
 
     monkeypatch.setattr(merge_cleared, "run_governance", cut)
@@ -621,14 +635,17 @@ def test_a_temporary_folder_that_cannot_be_made_is_red(tmp_path, monkeypatch, ca
     code, lines, made = main_in(root, capsys)
     assert lines == [STOPPED] and code == 1
     assert f"Failing check: {NOT_FINISHED}" in red_body_of(made)
-    assert makes(tmp_path) == []
+    assert after_runs(makes(tmp_path)) == [], "no run after the merge"
 
 
 def test_an_interrupt_with_no_red_issue_written_says_so(tmp_path, monkeypatch, capsys):
     """REQ-046 AC6: fix list item 2 (or the stop line saying the issue cannot be written)."""
     root = in_process(tmp_path, monkeypatch, issue_fails=True)
+    real = merge_cleared.run_governance
 
-    def cut(*args):
+    def cut(*args):  # the run after the merge only (brief #610)
+        if args[4] != BASE:
+            return real(*args)
         raise KeyboardInterrupt
 
     monkeypatch.setattr(merge_cleared, "run_governance", cut)
@@ -658,8 +675,9 @@ def test_sigterm_during_the_run_opens_the_red_branch_issue(tmp_path):
     root = repo(tmp_path, f'lock_dir = "{locks.as_posix()}"\n{toml(ON)}')
     bin_dir, log = fake_gh(tmp_path, comments=[verdict()])
     started, stop = tmp_path / "make-started", tmp_path / "make-stop"
-    (bin_dir / "make").write_text(
-        f"#!{sys.executable}\nimport pathlib, time\n"
+    (bin_dir / "make").write_text(  # it waits in the run after the merge only (brief #610)
+        f"#!{sys.executable}\nimport pathlib, sys, time\n"
+        f"if 'AGK_BASE={BASE}' not in sys.argv:\n    sys.exit(0)\n"
         f"pathlib.Path({str(started)!r}).write_text('x')\n"
         f"for _ in range(600):\n"
         f"    if pathlib.Path({str(stop)!r}).exists():\n        break\n    time.sleep(0.05)\n",

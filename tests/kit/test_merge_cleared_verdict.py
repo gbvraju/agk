@@ -33,7 +33,19 @@ import merge_cleared  # noqa: E402
 import reviewers  # noqa: E402
 from common import CheckError  # noqa: E402
 
-HEAD = "a1b2c3d4e5" * 4
+def object_sha(kind: str, text: bytes) -> str:
+    return hashlib.sha1(f"{kind} {len(text)}\0".encode() + text, usedforsecurity=False).hexdigest()
+
+
+EMPTY_TREE = object_sha("tree", b"")
+STAMP = "Example <example@example.com> 1793000000 +0000"
+BASE_TEXT = f"tree {EMPTY_TREE}\nauthor {STAMP}\ncommitter {STAMP}\n\nbase\n".encode()
+BASE = object_sha("commit", BASE_TEXT)  # the parent of the merge commit
+# the pull request's head: a real commit of the bare remote at `refs/pull/7/head`, so that the
+# check before the merge (brief #610) can build the would-be merge with no network
+HEAD_TEXT = f"tree {EMPTY_TREE}\nparent {BASE}\nauthor {STAMP}\ncommitter {STAMP}\n\nhead\n"
+HEAD_TEXT = HEAD_TEXT.encode()
+HEAD = object_sha("commit", HEAD_TEXT)
 OLD = "0f9e8d7c6b" * 4
 SHA12 = HEAD[:12]
 REPO = "example-owner/example-repo"
@@ -79,13 +91,14 @@ def remote(tmp_path: Path) -> str:
         cwd=bare, input=b"", capture_output=True, check=True,
     ).stdout.decode().strip()  # fmt: skip
     assert tree == EMPTY_TREE
-    for text, sha in ((BASE_TEXT, BASE), (MERGE_TEXT, MERGE)):
+    for text, sha in ((BASE_TEXT, BASE), (MERGE_TEXT, MERGE), (HEAD_TEXT, HEAD)):
         made = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
             ["git", "hash-object", "-w", "-t", "commit", "--stdin"],
             cwd=bare, input=text, capture_output=True, check=True,
         ).stdout.decode().strip()  # fmt: skip
         assert made == sha
     git(bare, "update-ref", "refs/heads/main", MERGE)
+    git(bare, "update-ref", "refs/pull/7/head", HEAD)  # GitHub's ref of a pull request's head
     return bare.as_uri()
 
 
@@ -144,14 +157,6 @@ def cleared(sha: str = HEAD, login: str = OWNER, at: int = 5, extra: str | None 
     return comment(body + (evidence(sha) if extra is None else extra), login, at)
 
 
-def object_sha(kind: str, text: bytes) -> str:
-    return hashlib.sha1(f"{kind} {len(text)}\0".encode() + text, usedforsecurity=False).hexdigest()
-
-
-EMPTY_TREE = object_sha("tree", b"")
-STAMP = "Example <example@example.com> 1793000000 +0000"
-BASE_TEXT = f"tree {EMPTY_TREE}\nauthor {STAMP}\ncommitter {STAMP}\n\nbase\n".encode()
-BASE = object_sha("commit", BASE_TEXT)  # the parent of the merge commit
 MERGE_TEXT = f"tree {EMPTY_TREE}\nparent {BASE}\nauthor {STAMP}\ncommitter {STAMP}\n\nmerge\n"
 MERGE_TEXT = MERGE_TEXT.encode()
 MERGE = object_sha("commit", MERGE_TEXT)  # the merge commit GitHub answers with
@@ -272,7 +277,7 @@ import json, os, sys
 with open(LOG, 'a', encoding='utf-8') as fh:
     seen = {'args': sys.argv[1:], 'env': dict(os.environ), 'cwd': os.getcwd()}
     fh.write(json.dumps(seen) + '\\n')
-sys.exit(EXIT)
+sys.exit(EXIT if 'AGK_BASE=' + BASE in sys.argv else PRE)  # PRE: the run before the merge
 """
 
 
@@ -283,6 +288,7 @@ def fake_gh(
     fail: bool = False,
     changed: bool = True,
     make_exit: int = 0,
+    premerge_exit: int = 0,
     **saved: object,
 ):
     """A `gh` on PATH that answers from saved JSON (`world`) and logs each argument list; with
@@ -305,10 +311,10 @@ def fake_gh(
         encoding="utf-8",
     )
     script.chmod(0o755)
-    make = bin_dir / "make"  # the governance run after the merge (brief #551)
+    make = bin_dir / "make"  # the governance runs before (brief #610) and after the merge (#551)
     make.write_text(
         f"#!{sys.executable}\nLOG, EXIT = {str(tmp_path / 'make-calls.jsonl')!r}, {make_exit!r}\n"
-        + FAKE_MAKE,
+        f"PRE, BASE = {premerge_exit!r}, {BASE!r}\n" + FAKE_MAKE,
         encoding="utf-8",
     )
     make.chmod(0o755)
