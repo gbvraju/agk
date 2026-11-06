@@ -850,12 +850,18 @@ def test_a_remote_that_is_not_github_or_no_gh_is_refused(tmp_path):
 def test_the_script_writes_no_file_and_makes_no_other_write():
     """REQ-046 AC5: SPEC-0039 rule 8 (build (b) adds the one merge call and nothing else; build
     (c) adds the one record line, a POST of a comment, SPEC-0039 rule 7; brief #576 adds the one
-    body file, written only in the governance run's temporary home)."""
+    body file, written only in the governance run's temporary home; brief #610 adds the close of
+    the red-branch issue, one comment and one PATCH, in `close_red` alone)."""
     text = SCRIPT.read_text(encoding="utf-8")
-    assert text.count('"POST"') == 1
+    close = text.split("\ndef close_red(", 1)[1].split("\ndef ", 1)[0]
+    assert text.count('"POST"') == 2 and close.count('"POST"') == 1
     assert '"POST", f"repos/{repo}/issues/{issue}/comments"' in text
+    assert '"POST", f"{endpoint}/comments"' in close
+    assert text.count('"PATCH"') == 1
+    assert '"PATCH", endpoint, "-f", "state=closed", "-f", "state_reason=completed"' in close
+    text = text.replace(close, "")
     assert text.count(".write_text(") == 1
-    run_body = text.split("\ndef governance(", 1)[1].split("\ndef ", 1)[0]
+    run_body = text.split("\ndef in_worktree(", 1)[1].split("\ndef ", 1)[0]
     assert 'body = home / "pr-body.md"' in run_body and "body.write_text(text" in run_body
     text = text.replace("body.write_text(text", "body.(text")
     words = ('"PATCH"', '"DELETE"', ".write_text(", "open(", '"push"', "--jq")
