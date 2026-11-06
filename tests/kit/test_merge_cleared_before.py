@@ -146,7 +146,8 @@ def test_the_check_is_the_same_bounded_run_as_after_the_merge(tmp_path):
     assert Path(first["HOME"]) != Path(last["HOME"]), "each run has its own scratch home"
     for run_env in (first, last):
         assert Path(run_env["AGK_PR_BODY"]).parent == Path(run_env["HOME"])
-        assert Path(run_env["AGK_RECORD_COMMENTS"]) == Path(run_env["HOME"]) / "record-comments.json"
+        comments = Path(run_env["AGK_RECORD_COMMENTS"])
+        assert comments == Path(run_env["HOME"]) / "record-comments.json"
 
 
 PROBE = """

@@ -808,8 +808,8 @@ def in_worktree(
     """The governance run on COMMIT against BASE in a detached worktree of a new temporary folder
     outside the checkout (named with PREFIX), with TEXT in the body file of its temporary home and
     the Final comments of COMMIT's records (read from REPO, amendment 122) in its record-comments
-    file; both are removed in every case. The one run of rule 6, after the merge and before it (brief
-    #610). None when green, else the failing step."""
+    file; both are removed in every case. The one run of rule 6, after the merge and before it
+    (brief #610). None when green, else the failing step."""
     scratch = Path(tempfile.mkdtemp(prefix=prefix))
     tree, home = scratch / "tree", scratch / "home"
     body = home / "pr-body.md"
