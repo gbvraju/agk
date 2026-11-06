@@ -9,6 +9,13 @@ does not compile or an `allow_paths` entry that is not one relative file with a 
 names a built-in secret file) is refused, naming the setting and never the value. An
 `allow_paths` or `allowed_hosts` entry counts only when the same entry is in agk.toml at
 `origin/<default branch>` as last fetched (no network), so a branch cannot loosen its own guard.
+
+`model_settings(root)` reads the optional `[models]` table (SPEC-0045 rules 1 to 3, brief #623):
+each of the five kinds gets a tier and an effort, the table's or rule 2's default; a kind, tier or
+effort outside the lists, a non-string value or `review` below `strongest` at `high` is refused,
+naming `setting: models.<kind>` and never the value. `model_names(root)` reads the optional
+`[models.names]` table, a tier to a project's model name, which the kit never ships. No check,
+gate or reading list reads either in this build (rule 1).
 """
 
 from __future__ import annotations
@@ -130,6 +137,76 @@ def guard_patterns(start: Path) -> list:
                 raise _refuse("guard") from None
             return _guard_table(source)["patterns"]
     return []
+
+
+# --- the [models] table (SPEC-0045 rules 1 to 3, brief #623) ---------------------------------
+
+MODEL_KINDS = ("design", "review", "build", "small", "mechanical")
+MODEL_TIERS = ("strongest", "mid", "fast")
+MODEL_EFFORTS = ("low", "medium", "high")  # (verify: the names a runtime accepts, Q-S0045-2)
+# Rule 2's defaults (verify: what the conductor uses today; no file records it, Q-S0045-14).
+MODEL_DEFAULTS = {
+    "design": ("strongest", "high"),
+    "review": ("strongest", "high"),
+    "build": ("strongest", "medium"),
+    "small": ("mid", "low"),
+    "mechanical": ("mid", "low"),
+}
+# Rules 2 and 6: a reviewer runs on `strongest`, at `high` for a first review (Q-623-1).
+REVIEW_FLOOR = {"tier": "strongest", "effort": "high"}
+
+
+class ModelSettingError(CheckError):
+    """The `[models]` table is refused (exit 2); the message names the setting, never the value."""
+
+
+def _refuse_model(setting: str) -> ModelSettingError:
+    return ModelSettingError(f"the [models] table is refused (setting: {setting})")
+
+
+def _models_table(root: Path) -> dict:
+    """The raw `[models]` table of agk.toml, {} when there is none; an unreadable file refuses."""
+    try:
+        table = config_source(root).get("models", {})
+    except (OSError, ValueError):
+        raise _refuse_model("models") from None
+    if not isinstance(table, dict):
+        raise _refuse_model("models")
+    return table
+
+
+def model_names(root: Path) -> dict[str, str]:
+    """The optional `[models.names]` table: a tier to a project's own model name (rule 3)."""
+    names = _models_table(root).get("names", {})
+    if not isinstance(names, dict):
+        raise _refuse_model("models.names")
+    for tier, name in names.items():
+        if tier not in MODEL_TIERS or not isinstance(name, str) or not name.strip():
+            raise _refuse_model(f"models.names.{tier}")
+    return dict(names)
+
+
+def model_settings(root: Path) -> dict[str, dict[str, str]]:
+    """The tier and effort of every kind (rule 2): the table's entry or the default. A kind, tier
+    or effort outside the lists, a value that is not a string, an entry that is not exactly
+    `{ tier, effort }` and `review` below `strongest` at `high` are refused."""
+    table = _models_table(root)
+    model_names(root)
+    settings = {k: {"tier": t, "effort": e} for k, (t, e) in MODEL_DEFAULTS.items()}
+    for kind, entry in table.items():
+        if kind == "names":
+            continue
+        if (
+            kind not in MODEL_KINDS
+            or not isinstance(entry, dict)
+            or set(entry) != {"tier", "effort"}
+            or entry["tier"] not in MODEL_TIERS
+            or entry["effort"] not in MODEL_EFFORTS
+            or (kind == "review" and entry != REVIEW_FLOOR)
+        ):
+            raise _refuse_model(f"models.{kind}")
+        settings[kind] = {"tier": entry["tier"], "effort": entry["effort"]}
+    return settings
 
 
 def main(argv: list[str] | None = None) -> int:
