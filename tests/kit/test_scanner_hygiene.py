@@ -1,7 +1,9 @@
-"""Kit source under a project's own scanners: justified suppressions and clean types (ADR-0010).
+"""Kit source under a project's own scanners: justified suppressions and a type check ratchet.
 
 Pure checks of the source text; bandit and mypy are run only where they are installed. Governance
-installs bandit with its other tooling, so the bandit test runs in CI (brief #338, ADR-0192).
+installs bandit with its other tooling, so the bandit test runs in CI (brief #338, ADR-0192). The
+mypy errors may only go down from config/mypy-baseline.txt, made with the mypy version it pins (brief
+#633); CI installs no mypy, so that test runs where the pinned version is installed.
 """
 
 from __future__ import annotations
@@ -116,22 +118,83 @@ def test_bandit_finds_only_asserts_in_kit_source():
 
 # --- the type check ratchet (brief #633, ADR-0307) ------------------------------------------------
 
-def mypy_counts(output: str) -> dict[tuple[str, str], int]:
-    raise NotImplementedError
+Counts = dict[tuple[str, str], int]
+ERROR_LINE = re.compile(r"^(?P<file>[^:\s][^:]*):\d+(?::\d+)?: error: (?P<text>.*)$")
+ERROR_CODE = re.compile(r"  \[(?P<code>[a-z][a-z0-9-]*)\]$")
+SUMMARY = re.compile(r"^Found (?P<n>\d+) errors? in \d+ files?\b")
+VERSION_LINE = re.compile(r"mypy (?P<version>\d+\.\d+\.\d+)")
+COUNT_LINE = re.compile(r"(?P<file>[^\s:]+) (?P<code>[a-z][a-z0-9-]*) (?P<count>\S+)")
 
 
-def read_baseline(text: str) -> tuple[str, dict[tuple[str, str], int]]:
-    raise NotImplementedError
+def mypy_counts(output: str) -> Counts:
+    """Errors of mypy's output by (file, code), with no line numbers; fails closed on the unread."""
+    counts: Counts = {}
+    total = None
+    for line in output.splitlines():
+        if summary := SUMMARY.match(line):
+            total = int(summary.group("n"))
+            continue
+        error = ERROR_LINE.match(line)
+        if not error:
+            continue
+        code = ERROR_CODE.search(error.group("text"))
+        if not code:
+            raise ValueError(f"mypy error line without an error code: {line}")
+        key = (error.group("file"), code.group("code"))
+        counts[key] = counts.get(key, 0) + 1
+    found = sum(counts.values())
+    if found and total != found:
+        raise ValueError(f"mypy's summary says {total} errors; {found} error lines were read")
+    return counts
 
 
-def ratchet_problems(
-    current: dict[tuple[str, str], int], baseline: dict[tuple[str, str], int]
-) -> list[str]:
-    raise NotImplementedError
+def read_baseline(text: str) -> tuple[str, Counts]:
+    """The pinned mypy version and the counts of a baseline file; a malformed file fails."""
+    version = None
+    counts: Counts = {}
+    for number, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.split()[0] == "mypy":
+            pinned = VERSION_LINE.fullmatch(line)
+            if not pinned:
+                raise ValueError(f"line {number}: the mypy line must pin an exact version X.Y.Z")
+            if version is not None:
+                raise ValueError(f"line {number}: a second mypy line")
+            version = pinned.group("version")
+            continue
+        entry = COUNT_LINE.fullmatch(line)
+        if not entry:
+            raise ValueError(f"line {number}: a line is '<file> <code> <count>'")
+        if not entry.group("count").isdigit() or int(entry.group("count")) < 1:
+            raise ValueError(f"line {number}: the count is a whole number of at least 1")
+        key = (entry.group("file"), entry.group("code"))
+        if key in counts:
+            raise ValueError(f"line {number}: {key[0]} {key[1]} is listed twice")
+        counts[key] = int(entry.group("count"))
+    if version is None:
+        raise ValueError("the baseline has no mypy line pinning the version")
+    return version, counts
 
 
-def baseline_text(version: str, counts: dict[tuple[str, str], int]) -> str:
-    raise NotImplementedError
+def ratchet_problems(current: Counts, baseline: Counts) -> list[str]:
+    """One line per (file, code) whose count differs from its baseline: added, or to lower."""
+    problems = []
+    for file, code in sorted(set(current) | set(baseline)):
+        now, was = current.get((file, code), 0), baseline.get((file, code), 0)
+        if now > was:
+            problems.append(f"{file} {code}: {now} errors, baseline {was}: a change added one")
+        elif now < was:
+            problems.append(f"{file} {code}: {now} errors, baseline {was}: lower the baseline")
+    return problems
+
+
+def baseline_text(version: str, counts: Counts) -> str:
+    """The body of a baseline file for these counts, sorted by file and code."""
+    lines = [f"mypy {version}"]
+    lines += [f"{file} {code} {n}" for (file, code), n in sorted(counts.items())]
+    return "\n".join(lines) + "\n"
 
 
 SAMPLE = """\
