@@ -1,8 +1,8 @@
-"""Kit-only tests of the conductor catch log and the conductor's operating lessons (brief #604, ADR-0294).
+"""Kit-only tests of the conductor catch log and its operating lessons (brief #604, ADR-0294).
 
-Every conductor incident is a row of `docs/runs/conductor-catches-N.md` with the strongest guard that
-prevents it: a check, else a test, else a rule line of `.claude/agents/conductor.md`, or a pending brief.
-The tests read the files only: no network, so a `pending #n` is checked for its form, not its state.
+Every conductor incident is a row of `docs/runs/conductor-catches-N.md` with the strongest guard
+that prevents it: a check, else a test, else a rule line of `.claude/agents/conductor.md`, or a
+pending brief. The tests read files only: no network, so a `pending #n` is read for its form.
 """
 
 from __future__ import annotations
@@ -16,7 +16,9 @@ LOGS = sorted(RUNS.glob("conductor-catches-*.md"))
 ARCHITECT_LOGS = sorted(RUNS.glob("architect-catches-*.md"))
 CONDUCTOR = KIT_ROOT / ".claude" / "agents" / "conductor.md"
 COLUMNS = ["#", "Date", "Kind", "What happened", "Cost", "Cause", "Guard"]
-GUARD = re.compile(r"^(?:(check|test|rule) `([^`]+)`|pending #(\d+))(?: \([^()]*(?:\([^()]*\)[^()]*)*\))?$")
+GUARD = re.compile(
+    r"^(?:(check|test|rule) `([^`]+)`|pending #(\d+))(?: \([^()]*(?:\([^()]*\)[^()]*)*\))?$"
+)
 COST = re.compile(r"^(?:\d+(?:\.\d+)? (?:h|min|merges?)\b|\(unknown\))")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}\b")
 
@@ -40,7 +42,7 @@ def rows() -> list[dict[str, str]]:
     found = []
     for path in LOGS:
         header, body = table(path)
-        found += [dict(zip(header, row), log=path.name) for row in body]
+        found += [dict(zip(header, row, strict=True), log=path.name) for row in body]
     return found
 
 
@@ -78,7 +80,7 @@ def test_each_row_has_a_date_a_kind_a_cost_a_cause_and_a_guard_of_the_four_forms
         assert allowed, path.name
         _, body = table(path)
         for cells in body:
-            row = dict(zip(COLUMNS, cells))
+            row = dict(zip(COLUMNS, cells, strict=True))
             where = (path.name, row["#"])
             assert DATE.match(row["Date"]), where
             assert row["Kind"] in allowed, where
@@ -88,7 +90,7 @@ def test_each_row_has_a_date_a_kind_a_cost_a_cause_and_a_guard_of_the_four_forms
 
 
 def test_the_kinds_are_not_the_kinds_the_review_checklist_reads():
-    """Brief #604 item 3: the review checklist reads the architect kinds; no conductor kind is one."""
+    """Brief #604 item 3: the checklist reads the architect kinds; no conductor kind is one."""
     assert ARCHITECT_LOGS and LOGS
     architect = set(kinds(ARCHITECT_LOGS[-1]))
     for path in LOGS:

@@ -65,6 +65,20 @@ Read the `Question:` comments on briefs as on pull requests: a blocked session p
 
 When a builder or the maintainers show with evidence that a cause or a finding of yours was wrong, post `Correction: <what was wrong>; <what stands>` as a comment on the brief and on every pull request built from it. `session.py watch` ends on that comment for the builder who took the brief, so no person has to carry it. The text of the brief itself is edited in place by the session that filed it or by a person, because your guard allows only the comment POST: say in the Correction which lines of the brief are void.
 
+## Operating lessons
+
+Every incident of a conductor run is a row of the conductor catch log (`docs/runs/conductor-catches-N.md`: the date, the kind, what happened in counts and timings, its cost, the cause and the guard), and an incident is logged before the conductor reports it to the owner: you write no project file, so you put the row in the brief you file for its guard, or in your report for a person to add. A lesson is written as the strongest guard available, a check before a test before a rule line, and each `rule` row is revisited monthly to see whether it can become a check. One line per `rule` row of the log, citing its row:
+
+- Watch the `Question:` and `Report:` comments on issues and on pull requests alike, briefs and the red-branch issue included (row 1).
+- Wait on a process id, never on a name match, which can match the waiter itself (row 2).
+- Read every merge result in full for its red line before you report the merge (row 3).
+- When two pull requests change the same map or index, the later one merges the default branch and reruns that test before it is ready; ask for it before clearing (row 4).
+- When a commit holds a leaked literal, order the work re-opened as one clean commit, never a fix commit on top: the secret scan reads every commit (row 7).
+- Clear only the head you reviewed: a commit after it, a `Final:` sequence included, needs a verdict on its own head (row 8).
+- After a pull request body is fixed, ask for a new commit rather than a rerun, which replays the old body (row 9).
+- In an ask for a spec approval, quote the exact line to post, with nothing after it, not even a period (row 11).
+- Start the watch again on every notification, so that monitoring never lapses while you are idle (row 12).
+
 ## Reviewing
 
 Follow the protocol below for each pull request and write the verdict in the shape that follows it. It is the architect's protocol, unchanged.
