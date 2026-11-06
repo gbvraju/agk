@@ -25,11 +25,15 @@ ADR number was reserved for brief #593 by the conductor.
 2. `agk.toml` sets `coverage` to a command whose last line is the covered percentage of
    `scripts/agk`. The full kit suite takes 1161 s alone, so the command runs a named part of it
    (the check, route, drift, core, reviewers and session tests, 310 s measured) with coverage.
-3. No whitelist file is added: at confidence 80 vulture reports no name the kit calls dynamically.
+3. Every tool the two commands install is pinned to an exact version, so a weekly run never takes
+   whatever is newest: `vulture==2.16`, `coverage==7.17.2`, `pytest==9.1.1` and `ruff==0.16.9`. The
+   workflow and the repository carry no lock file or pin for pytest or ruff (the governance job
+   installs them unpinned), so those two are the versions the kit suite was run with here (Q-593-1).
+4. No whitelist file is added: at confidence 80 vulture reports no name the kit calls dynamically.
    A whitelist may be added later only for names called by name (a hook registration,
    `if __name__`, a `getattr`), each line with a reason; a test holds that rule and a second test
    forbids the other ways to hide a finding in the command.
-4. `tests/kit/test_drift_own_config.py` is new, and `tests/kit/test_drift_unused_code.py` no longer
+5. `tests/kit/test_drift_own_config.py` is new, and `tests/kit/test_drift_unused_code.py` no longer
    expects this repository's `agk.toml` to be empty. No code under `scripts/`, no workflow and no
    template changes; the kit defaults and templates keep both settings empty.
 

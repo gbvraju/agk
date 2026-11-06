@@ -170,3 +170,12 @@ def test_vulture_lists_the_fixture_function_through_the_plain_cli(tmp_path):
         ["vulture", str(tmp_path), "--min-confidence", "60"], capture_output=True, text=True
     ).stdout
     assert "never_called" in out
+
+
+def test_every_tool_the_commands_install_is_pinned_to_an_exact_version():
+    for key in ("unused_code", "coverage"):
+        command = own()[key]
+        installs = command.split("pip install -q ")[1].split(";")[0].split()
+        assert installs, key
+        for spec in installs:
+            assert re.fullmatch(r"[a-z]+==\d+(\.\d+)+", spec), (key, spec)
