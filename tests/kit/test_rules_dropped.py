@@ -73,7 +73,7 @@ def fixture(tmp_path: Path) -> tuple[Path, Path]:
 
 def dropped(root: Path, *args: str) -> subprocess.CompletedProcess:
     cmd = [sys.executable, str(SCRIPT), "dropped", "--root", str(root), "--repo", "o/r", *args]
-    return subprocess.run(cmd, capture_output=True, text=True, check=False)  # nosec B603
+    return subprocess.run(cmd, capture_output=True, text=True, check=False)  # nosec B603 - fixed argument list, no shell
 
 
 def test_req037_counts_per_rule_newest_first_and_lists_the_untagged(tmp_path):

@@ -156,15 +156,19 @@ def test_req037_this_repository_meets_its_budget():
     assert budget_problems(ROOT) == []
 
 
+def budget_call(root: Path, *args: str) -> subprocess.CompletedProcess:
+    cmd = [sys.executable, str(SCRIPT), "budget", "--root", str(root), *args]
+    return subprocess.run(cmd, capture_output=True, text=True, check=False)  # nosec B603 - fixed argument list, no shell
+
+
 def test_req037_budget_command_prints_counts_and_checks(tmp_path):
     """REQ-037 AC1: `budget` prints `<path> <words> <rules>`; `--check` exits 1 on a problem."""
     root = layout(tmp_path)
-    run = [sys.executable, str(SCRIPT), "budget", "--root", str(root)]
-    shown = subprocess.run(run, capture_output=True, text=True, check=False)  # nosec B603
+    shown = budget_call(root)
     assert shown.returncode == 0
     assert shown.stdout.splitlines()[0] == "CLAUDE.md 9 2"
-    checked = subprocess.run([*run, "--check"], capture_output=True, text=True, check=False)  # nosec B603
+    checked = budget_call(root, "--check")
     assert checked.returncode == 1 and "config/rule-budget.txt: cannot be read" in checked.stdout
     baseline(root)
-    checked = subprocess.run([*run, "--check"], capture_output=True, text=True, check=False)  # nosec B603
+    checked = budget_call(root, "--check")
     assert checked.returncode == 0 and checked.stdout.strip() == "ok rule-budget"
