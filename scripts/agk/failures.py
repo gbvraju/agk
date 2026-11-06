@@ -95,7 +95,8 @@ def junit_failures(data: bytes) -> list[tuple[str, str]]:
         if name == "testcase":
             case = attrs
         elif name in ("failure", "error") and case:
-            found.append((junit_id(case), (attrs.get("message") or "").splitlines()[:1]))
+            first = (attrs.get("message") or "").splitlines()
+            found.append((junit_id(case), first[0] if first else ""))
             case = {}
 
     parser = xml.parsers.expat.ParserCreate()
@@ -104,7 +105,7 @@ def junit_failures(data: bytes) -> list[tuple[str, str]]:
     parser.EntityDeclHandler = refuse
     parser.StartElementHandler = start
     parser.Parse(data, True)
-    return [(test_id, line[0] if line else "") for test_id, line in found]
+    return found
 
 
 def failed_tests(output: str, junit: Path | None) -> list[tuple[str, str]]:
