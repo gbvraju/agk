@@ -45,6 +45,7 @@ SINGLES = {
     "docs/specs/TEMPLATE.md",
     "docs/briefs/TEMPLATE.md",
     "config/core-rules.md",
+    "config/playbooks/web-app.toml",
     "config/review-checklist.md",
     "config/session-rules.md",
 }

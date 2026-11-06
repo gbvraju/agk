@@ -1,0 +1,101 @@
+format = 1
+work_type = "web-app"
+title = "Contract first, then mocks, then front end and back end in parallel, then joins by demo value"
+heavy_steps = ["e2e smoke run"]
+evidence = [
+  "the contract test output",
+  "the mock parity output",
+  "the e2e smoke run record of the merge batch",
+  "the accessibility review",
+]
+
+[[phases]]
+name = "contract"
+order = 1
+after = []
+
+[[phases]]
+name = "mocks"
+order = 2
+after = ["contract"]
+
+[[phases]]
+name = "front-end"
+order = 3
+after = ["mocks"]
+
+[[phases]]
+name = "back-end"
+order = 3
+after = ["mocks"]
+
+[[phases]]
+name = "joins"
+order = 4
+after = ["front-end", "back-end"]
+
+[split]
+brief_order = ["contract", "mock", "front-end", "back-end", "join"]
+depends_on = [
+  ["mock", "contract"],
+  ["front-end", "mock"],
+  ["back-end", "mock"],
+  ["join", "front-end"],
+  ["join", "back-end"],
+]
+
+[[lanes]]
+name = "front-end"
+kinds = ["front-end"]
+
+[[lanes]]
+name = "back-end"
+kinds = ["back-end"]
+
+[testing]
+profile = "balanced"
+always_full = ["contracts/**"]
+map = [
+  { code = "contracts/**", tests = "tests/contract/**" },
+  { code = "mocks/**", tests = "tests/mocks/**" },
+  { code = "frontend/**", tests = "tests/frontend/**" },
+  { code = "backend/**", tests = "tests/backend/**" },
+]
+
+[[gates]]
+id = "contract-tests"
+kind = "check"
+text = "Contract tests: the testing map names a test glob for every contract path."
+step = "contract-tests"
+owner_only = false
+
+[[gates]]
+id = "mock-parity"
+kind = "check"
+text = "Mock parity: the mock names exactly the operations of the contract file."
+step = "mock-parity"
+owner_only = false
+
+[[gates]]
+id = "e2e-smoke"
+kind = "judgement"
+text = "An end-to-end smoke run per merge batch; its run record is the evidence."
+owner_only = false
+
+[[gates]]
+id = "accessibility"
+kind = "judgement"
+text = "Accessibility, with the checks of SPEC-0037 where a prototype exists."
+owner_only = false
+
+[milestones]
+shape = "per-batch"
+batch_by = "demo value: the joins that show the most in a demo come first"
+
+[[claims]]
+text = "Front end and back end are built in parallel lanes against the contract and its mocks, so a feature is expected to finish sooner than when the two sides are built one after the other."
+basis = "expected"
+
+[[claims]]
+text = "Contract tests and mock parity find a mismatch between the two sides before the joins, so fewer join briefs are expected to need a fix."
+basis = "expected"

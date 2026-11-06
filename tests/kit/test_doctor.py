@@ -168,8 +168,12 @@ def test_ac1_text_and_json_carry_the_same_findings(tmp_path):
         report = checks_of(data.stdout)
         marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
         lines = [
-            ln for ln in text.stdout.splitlines() if not ln.startswith(("  ", "agk ", "summary"))
+            ln
+            for ln in text.stdout.splitlines()
+            if not ln.startswith(("  ", "agk ", "summary", "secret scan: "))
         ]
+        # the gitleaks line of brief #632 (ADR-0306) is `secret_scan` in the JSON
+        assert json.loads(data.stdout)["secret_scan"] in text.stdout.splitlines()
         assert lines == [
             f"{marks[c['status']]} {c['id']} {c['severity']} {c['message']}"
             for c in report.values()
@@ -192,7 +196,8 @@ def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
     """REQ-002 AC1: rule 11."""
     proc, _, _ = run_case("vendored-edited", tmp_path, "--json")
     data = json.loads(proc.stdout)
-    assert list(data) == sorted(data) == ["checks", "doctor", "summary"]
+    # `secret_scan`: the gitleaks line of brief #632 (ADR-0306)
+    assert list(data) == sorted(data) == ["checks", "doctor", "secret_scan", "summary"]
     assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 34}
     for check in data["checks"]:
         assert list(check) == sorted(check)
