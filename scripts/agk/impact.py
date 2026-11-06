@@ -23,7 +23,11 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
   the parallel workers of the full run (SPEC-0044 rule 4, brief #583; `prepush.full_command`);
 - `parallel_command`: the full command of a non-pytest runner with more than one worker, `{workers}`
   filled with the number (rule 5);
-- `slow_suite_seconds`: above it a single-process full run gets doctor's line (rule 7; 600).
+- `slow_suite_seconds`: above it a single-process full run gets doctor's line (rule 7; 600);
+- `results_dir`, `keep_passed`, `keep_runs`: the run folders of `proof.run_folder` (brief #613,
+  ADR-0299): the results root inside the repository (no default: without it no run folder is
+  used, `Q-613-2`), whether a passed run's folder is kept (false) and how many run folders stay
+  at most (20).
 
 For the change base..head `impact` gives the existing test files of the head (`test_dirs`,
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
@@ -68,8 +72,12 @@ KEYS = {
     "workers",
     "parallel_command",
     "slow_suite_seconds",
+    "results_dir",
+    "keep_passed",
+    "keep_runs",
 }
 DEFAULT_SLOW = 600
+DEFAULT_KEEP_RUNS = 20
 PR_TESTS = ("full", "selected")
 EXCLUDED = re.compile(r"[^\s:]+: \S[^\n]*")
 ENTRY_KEYS = {"code", "tests"}
@@ -150,6 +158,14 @@ def _glob_ok(value: object) -> bool:
     return not value.startswith("/") and ":" not in value and ".." not in value.split("/")
 
 
+def _folder_ok(value: object) -> bool:
+    """A folder inside the repository and below its root: a path as `_glob_ok` takes it, with no
+    empty, `.` or wildcard part (`.` would make the repository's root the results root)."""
+    if not isinstance(value, str) or not _glob_ok(value) or any(c in value for c in "*?["):
+        return False
+    return all(part not in ("", ".") for part in value.rstrip("/").split("/"))
+
+
 def _globs(value: object, empty_ok: bool) -> bool:
     return isinstance(value, list) and (empty_ok or bool(value)) and all(_glob_ok(v) for v in value)
 
@@ -166,8 +182,8 @@ def testing_table(root: Path) -> dict | None:
     if not isinstance(table, dict) or set(table) - KEYS:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
-            "proof_regression, pr_tests, junit, workers, parallel_command and "
-            "slow_suite_seconds (setting: testing)"
+            "proof_regression, pr_tests, junit, workers, parallel_command, "
+            "slow_suite_seconds, results_dir, keep_passed and keep_runs (setting: testing)"
         )
     profile = table.get("profile", "balanced")
     if profile not in PROFILES:
@@ -230,6 +246,15 @@ def testing_table(root: Path) -> dict | None:
             "slow_suite_seconds must be a whole number of seconds above 0 "
             "(setting: testing.slow_suite_seconds)"
         )
+    if "results_dir" in table and not _folder_ok(table["results_dir"]):
+        raise CheckError(
+            "results_dir must be a folder path inside the repository (setting: testing.results_dir)"
+        )
+    if not isinstance(table.get("keep_passed", False), bool):
+        raise CheckError("keep_passed must be true or false (setting: testing.keep_passed)")
+    keep = table.get("keep_runs", DEFAULT_KEEP_RUNS)
+    if isinstance(keep, bool) or not isinstance(keep, int) or keep < 1:
+        raise CheckError("keep_runs must be a whole number above 0 (setting: testing.keep_runs)")
     return {
         "profile": profile,
         "always_full": list(always_full),
@@ -306,6 +331,17 @@ def slow_suite_seconds(root: Path) -> int:
     if testing_table(root) is None:
         return DEFAULT_SLOW
     return config_source(root)["testing"].get("slow_suite_seconds", DEFAULT_SLOW)
+
+
+def run_settings(root: Path) -> tuple[str | None, bool, int]:
+    """(`results_dir` without a trailing `/`, or None when it is not set, `keep_passed`,
+    `keep_runs`) of `[testing]`, with their defaults without the table or a key (brief #613;
+    `Q-613-2`: no results root unless it is set). The whole table is checked first."""
+    if testing_table(root) is None:
+        return None, False, DEFAULT_KEEP_RUNS
+    table = config_source(root)["testing"]
+    results = table["results_dir"].rstrip("/") if "results_dir" in table else None
+    return results, table.get("keep_passed", False), table.get("keep_runs", DEFAULT_KEEP_RUNS)
 
 
 def durations_sums(output: str) -> dict[str, float] | None:
