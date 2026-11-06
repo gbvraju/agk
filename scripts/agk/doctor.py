@@ -1382,6 +1382,7 @@ def render_text(
     extra: list[str] | None = None,
     scan: str | None = None,
     work: str | None = None,
+    deprecation: list[str] | None = None,
 ) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
@@ -1392,12 +1393,14 @@ def render_text(
         elif c["status"] == "cannot-check":
             lines.append(f"  to check: {HINTS.get(c['reason'], HINTS['bad-response'])}")
     s = summary(report)
-    # The information lines before the summary, in the order deprecation (SPEC-0046 rule 11, in
-    # `extra`), secret scan (ADR-0306) and work type (SPEC-0038 rule 5).
+    # The information lines before the summary, in the order deprecation (SPEC-0046 rule 11),
+    # secret scan (ADR-0306) and work type (SPEC-0038 rule 5); the suite lines of SPEC-0044 (`extra`)
+    # stay last, right before the summary (its rule 7's test).
     lines += [tidy] if tidy else []
-    lines += extra or []
+    lines += deprecation or []
     lines += [scan] if scan else []
     lines += [work] if work else []
+    lines += extra or []
     lines.append(f"summary: {s['ok']} ok, {s['fail']} fail, {s['cannot-check']} cannot-check")
     return "\n".join(lines) + "\n"
 
@@ -1409,6 +1412,7 @@ def render_json(
     extra: list[str] | None = None,
     scan: str | None = None,
     work: str | None = None,
+    deprecation: list[str] | None = None,
 ) -> str:
     data: dict[str, Any] = {"doctor": version, "checks": report, "summary": summary(report)}
     if scan:
@@ -1417,8 +1421,8 @@ def render_json(
         data["work_type"] = work
     if tidy:
         data["tidy"] = tidy
-    if extra:
-        data["tests"] = extra
+    if extra or deprecation:  # `tests` carries the suite and deprecation lines, as before
+        data["tests"] = (extra or []) + (deprecation or [])
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 
@@ -1490,7 +1494,7 @@ def main(argv: list[str] | None = None) -> int:
         api = Path(options["api"]) if options["api"] else None
         tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
         extra = suite_lines(root.resolve(), Path(options["record"])) if options["record"] else []
-        extra += deprecation_lines(root.resolve())
+        deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()
         work, work_failed = work_type_line(root.resolve())
     except Refusal as exc:
@@ -1500,9 +1504,9 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version, tidy, extra, scan, work)
+        render_json(report, version, tidy, extra, scan, work, deprecation)
         if options["json"]
-        else render_text(report, version, tidy, extra, scan, work)
+        else render_text(report, version, tidy, extra, scan, work, deprecation)
     )
     return 1 if work_failed else exit_code(report)
 

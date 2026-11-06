@@ -36,13 +36,14 @@ reserved for brief #650 by the conductor (the field note on #650).
 3. `check_playbooks.py` prints one `FAIL playbooks:` line per problem of the declaration, beside
    those of the playbooks, and exits 1; with no declaration, or a sound one, its output is the
    same as before.
-4. `doctor.py` prints one line after the tidy, test, deprecation and secret scan lines and before
-   the summary, so that the information lines read deprecation (SPEC-0046 rule 11), secret scan
-   (ADR-0306), work type: `work type: none (no playbook)`, `work type: <work type> (playbook
-   config/playbooks/<work type>.toml)`, or `FAIL work type: <problem>`, which makes the exit code
-   1; the JSON report carries the same line as `work_type`, a key SPEC-0006 rule 11 gains by
-   `docs/runs/proposed-spec-amendments-131.md`. The paused, personal and no-kit reports do not
-   change.
+4. `doctor.py` prints one line among the information lines before the summary, which read, in
+   order: tidy, deprecation (SPEC-0046 rule 11), secret scan (ADR-0306), work type, and last the
+   suite lines of SPEC-0044 (its rule 7's test wants them right before the summary). The line is
+   `work type: none (no playbook)`, `work type: <work type> (playbook config/playbooks/<work
+   type>.toml)`, or `FAIL work type: <problem>`, which makes the exit code 1; the JSON report
+   carries the same line as `work_type`, a key SPEC-0006 rule 11 gains by
+   `docs/runs/proposed-spec-amendments-131.md`, and its `tests` key keeps the suite and
+   deprecation lines as before. The paused, personal and no-kit reports do not change.
    Two assertions of `tests/kit/test_doctor.py` that list the report's lines and its JSON keys
    name the new line and key.
 5. `kit/templates/agk.toml` and this repository's `agk.toml` carry the `[delivery]` table
