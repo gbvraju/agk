@@ -13,8 +13,11 @@ proof_timeout = 1800
 # Optional cleanup commands of the weekly drift audit, empty (off) by default; the kit ships no tool and installs none.
 # unused_code prints one finding per line (for example "vulture . --min-confidence 80" or "npx knip");
 # coverage prints the covered percentage as a number on its last line. Both are listed, never blocking; a change needs an ADR.
-unused_code = ""
-coverage = ""
+# This repository turns both on (ADR-0290, brief #593): vulture over the code and the hooks, installed first when missing
+# (the drift-audit job installs no toolchain); coverage of scripts/agk under a named part of the kit suite (checks, route,
+# drift, core, reviewers and session tests, about 310 s measured, inside proof_timeout; the full suite alone takes 1161 s).
+unused_code = 'python3 -m vulture --version >/dev/null 2>&1 || python3 -m pip install -q vulture==2.16; python3 -m vulture scripts/agk .claude/hooks --min-confidence 80'
+coverage = '(python3 -m coverage --version && python3 -m pytest --version && ruff --version) >/dev/null 2>&1 || python3 -m pip install -q coverage==7.17.2 pytest==9.1.1 ruff==0.16.9; export COVERAGE_FILE="${TMPDIR:-/tmp}/agk-coverage"; rm -f "$COVERAGE_FILE"; AGK_KIT_TESTS=1 python3 -m coverage run --source=scripts/agk -m pytest -q -c tests/kit/pytest.ini tests/kit/test_check_*.py tests/kit/test_route*.py tests/kit/test_drift*.py tests/kit/test_core_*.py tests/kit/test_reviewers*.py tests/kit/test_session*.py >/dev/null 2>&1; python3 -m coverage report --format=total'
 # Every criterion ACn of a done requirement needs a REQ-nnn ACn test marker (SPEC-0010).
 ac_coverage = "block"
 experimental_reviewer = true
