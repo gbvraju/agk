@@ -1,8 +1,9 @@
 """Each test run writes to its own dated folder; a failed run's folder is kept (brief #613).
 
-`prepush.py` sets `AGK_RUN_DIR` for the project's test command to a new folder
-`<results root>/<UTC time>-<head sha12>-<kind>` (proof does so only once `Q-613-1` is answered);
-the results root is `[testing] results_dir`, `.agk-runs/` by default, and git-ignores itself.
+With `[testing] results_dir` set, `prepush.py` sets `AGK_RUN_DIR` for the project's test command
+to a new folder `<results root>/<UTC time>-<head sha12>-<kind>` (proof does not: `Q-613-1`); the
+results root is that setting, and it git-ignores itself. Without the key prepush does exactly what
+the default branch does: no variable and no folder (SPEC-0044 rule 1, the answer to `Q-613-2`).
 After the run a passed run's folder is removed unless `[testing] keep_passed = true`, a failed
 one is kept, and at most `[testing] keep_runs` folders (20) stay, oldest removed first, never a
 failed run's folder of the last 7 days. REQ-051.
@@ -46,7 +47,10 @@ def old_run(results: Path, when: datetime, result: str | None, kind: str = "prep
     return path
 
 
-def settings(tmp_path: Path, testing: str = "") -> Path:
+ON = 'results_dir = ".agk-runs"\n'  # the one line that turns the run folders on
+
+
+def settings(tmp_path: Path, testing: str = ON) -> Path:
     (tmp_path / "agk.toml").write_text(
         'default_branch = "main"\n' + (f"[testing]\n{testing}" if testing else ""),
         encoding="utf-8",
@@ -100,7 +104,7 @@ def test_a_passed_run_is_removed_and_a_failed_run_is_kept(tmp_path):
 
 def test_keep_passed_keeps_a_passed_run(tmp_path):
     """REQ-051: brief #613 answer 2 (`[testing] keep_passed = true`)."""
-    root = settings(tmp_path, "keep_passed = true\n")
+    root = settings(tmp_path, ON + "keep_passed = true\n")
     with proof_module.run_folder(root, HEAD, "prepush", now=clock()) as run:
         run.passed = True
     assert run.kept is True
@@ -109,7 +113,7 @@ def test_keep_passed_keeps_a_passed_run(tmp_path):
 
 def test_at_most_keep_runs_folders_stay_oldest_first(tmp_path):
     """REQ-051: brief #613 answer 2 (keep_runs, oldest removed first)."""
-    root = settings(tmp_path, "keep_passed = true\nkeep_runs = 3\n")
+    root = settings(tmp_path, ON + "keep_passed = true\nkeep_runs = 3\n")
     results = root / ".agk-runs"
     olds = [old_run(results, NOW - timedelta(hours=h), "passed") for h in (5, 4, 3)]
     with proof_module.run_folder(root, HEAD, "prepush", now=clock()) as run:
@@ -120,7 +124,7 @@ def test_at_most_keep_runs_folders_stay_oldest_first(tmp_path):
 
 def test_a_recent_failed_run_is_never_removed(tmp_path):
     """REQ-051: brief #613 answer 2 (never a failed run's folder of the last 7 days)."""
-    root = settings(tmp_path, "keep_runs = 1\n")
+    root = settings(tmp_path, ON + "keep_runs = 1\n")
     results = root / ".agk-runs"
     recent = old_run(results, NOW - timedelta(days=6, hours=23), "failed")
     unmarked = old_run(results, NOW - timedelta(days=2), None)  # a run still going, or killed
@@ -134,7 +138,7 @@ def test_a_recent_failed_run_is_never_removed(tmp_path):
 
 def test_only_the_kits_run_folders_are_ever_removed(tmp_path):
     """REQ-051: brief #613 answer 2 (other files under the results root are left alone)."""
-    root = settings(tmp_path, "keep_passed = true\nkeep_runs = 1\n")
+    root = settings(tmp_path, ON + "keep_passed = true\nkeep_runs = 1\n")
     results = root / ".agk-runs"
     mine = results / "notes"
     mine.mkdir(parents=True)
@@ -148,8 +152,21 @@ def test_only_the_kits_run_folders_are_ever_removed(tmp_path):
 
 
 def test_the_defaults_without_a_testing_table(tmp_path):
-    """REQ-051: brief #613 answers 1 and 2 (`.agk-runs/`, keep_passed false, keep_runs 20)."""
-    assert run_settings(settings(tmp_path)) == (".agk-runs", False, 20)
+    """REQ-051: brief #613 answers 1 and 2, `Q-613-2` (no results root unless it is set;
+    keep_passed false, keep_runs 20)."""
+    assert run_settings(settings(tmp_path, "")) == (None, False, 20)
+    assert run_settings(settings(tmp_path, 'profile = "balanced"\n')) == (None, False, 20)
+    assert run_settings(settings(tmp_path, 'results_dir = "out/"\n')) == ("out", False, 20)
+
+
+def test_run_folder_refuses_without_the_setting(tmp_path):
+    """REQ-051: `Q-613-2` (no folder is made without `[testing] results_dir`)."""
+    root = settings(tmp_path, "")
+    with pytest.raises(CheckError) as caught:
+        with proof_module.run_folder(root, HEAD, "prepush", now=clock()):
+            pass
+    assert "(setting: testing.results_dir)" in str(caught.value)
+    assert list(root.iterdir()) == [root / "agk.toml"]
 
 
 @pytest.mark.parametrize(
@@ -168,11 +185,11 @@ def test_the_defaults_without_a_testing_table(tmp_path):
 def test_a_bad_setting_is_refused_naming_the_setting(tmp_path, line, setting):
     """REQ-051: brief #613 answers 1 and 2 (a malformed key names the setting, never the value)."""
     with pytest.raises(CheckError) as caught:
-        run_settings(settings(tmp_path, line))
+        run_settings(settings(tmp_path, ON + line if "results_dir" not in line else line))
     assert f"(setting: {setting})" in str(caught.value)
 
 
-def prepush_project(repo, command: str, testing: str = "") -> None:
+def prepush_project(repo, command: str, testing: str = "[testing]\n" + ON) -> None:
     toml = TOML.replace("echo RAN_PROJECT_TESTS", command)
     files = {"agk.toml": toml + testing, "agk.mk": MK_OK, "src/code.txt": "base\n"}
     repo.commit(files, "base")
@@ -228,11 +245,25 @@ def test_a_passed_prepush_removes_its_folder(repo, outside):
 
 def test_a_prepush_with_a_testing_table_sets_the_folder_too(repo, tmp_path):
     """REQ-051: brief #613 answers 1 and 2 (the regression path, with keep_passed)."""
-    prepush_project(repo, WRITES, '[testing]\nprofile = "thorough"\nkeep_passed = true\n')
+    prepush_project(repo, WRITES, '[testing]\nprofile = "thorough"\nkeep_passed = true\n' + ON)
     proc = repo.run("prepush.py", "--no-lock", PATH=path_with(scanner(tmp_path, 0)))
     assert proc.returncode == 0, proc.stdout + proc.stderr
     kept = runs_of(repo.root)
     assert len(kept) == 1 and (kept[0] / "trace.txt").is_file()
+
+
+@pytest.mark.parametrize("testing", ["", '[testing]\nprofile = "thorough"\n'])
+def test_without_results_dir_prepush_sets_no_variable_and_makes_no_folder(repo, outside, testing):
+    """REQ-051: `Q-613-2`, SPEC-0044 rule 1 read strictly: with no new key prepush does what the
+    default branch does today (no AGK_RUN_DIR, no folder, no `run_dir` in the record)."""
+    prepush_project(repo, 'test -z "${AGK_RUN_DIR+set}"', testing)
+    record = outside / "record.json"
+    args = ["--record", str(record)] + (["--no-lock"] if testing else [])
+    proc = repo.run("prepush.py", *args, PATH=path_with(scanner(outside, 0)))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert not (repo.root / ".agk-runs").exists()
+    assert "run_dir" not in json.loads(record.read_text(encoding="utf-8"))
+    assert repo.git("status", "--porcelain") == ""
 
 
 def test_proof_sets_no_run_folder_while_spec_0010_says_so(repo):
