@@ -407,3 +407,49 @@ def test_ac2_ruleset_skill_shows_the_plan_asks_and_never_tightens_on_its_own():
     assert "Ask the person" in text and "Never pass `--tighten` on your own" in text
     assert "add-only" in text and "none is stored or asked for" in text
     assert "--payload-dir" in text
+
+
+SPEC_0005 = KIT_ROOT / "docs" / "specs" / "0005-distribution.md"
+RULE_8_FIRST = (
+    "A command that writes does not commit, push or merge, and never sets\n"
+    "   a spec `Approved` or an ADR `Accepted` (principle 6)."
+)
+RULE_8_PERSONAL = (
+    "In personal mode (SPEC-0041) a command may commit its own writes to the developer's sidecar "
+    "repository and to nothing else, and only `personal.py confirm`, run by the person at their "
+    "own terminal and refused inside an agent session, sets a sidecar spec `Approved` or ADR "
+    "`Accepted` (SPEC-0041 rule 15); no command commits to, pushes to or merges in the product "
+    "repository, and no command an agent runs sets `Approved` or `Accepted`."
+)
+RULE_1_PERSONAL = (
+    "In personal mode (SPEC-0041) the law lives in the developer's state folder, a private "
+    "sidecar repository outside the product with the same layout, and nothing of it is in the "
+    "product repository."
+)
+RULE_2_PERSONAL = (
+    "In personal mode the product repository holds nothing of AGK and the sidecar's checks run "
+    "from the plugin's scripts (SPEC-0041 rule 26), so personal mode needs the plugin; team mode "
+    "is unchanged."
+)
+
+
+def spec_rule(n: int) -> str:
+    text = SPEC_0005.read_text(encoding="utf-8")
+    start = text.index(f"\n{n}. **")
+    end = text.index(f"\n{n + 1}. **", start)
+    return text[start:end]
+
+
+def test_spec0005_rules_1_2_and_8_gain_the_personal_mode_sentences():
+    """REQ-048 AC4: amendment 113 items 3, 4 and 6 (SPEC-0041 rule 29, build (c))."""
+    flat = {n: " ".join(spec_rule(n).split()) for n in (1, 2, 8)}
+    assert flat[1].endswith(RULE_1_PERSONAL)
+    assert "**Recommendation: the hybrid (option C).** The law stays vendored" in flat[1]
+    assert flat[2].endswith(RULE_2_PERSONAL)
+    assert RULE_8_FIRST in spec_rule(8)
+    assert " ".join(RULE_8_FIRST.split()) + " " + RULE_8_PERSONAL in flat[8]
+    rows = [ln for ln in spec_rule(8).splitlines() if ln.strip().startswith("| `/agk:personal")]
+    assert [ln.split("|")[1].strip() for ln in rows] == ["`/agk:personal`", "`/agk:personal-adopt`"]
+    for row in rows:
+        cells = [c.strip() for c in row.split("|")]
+        assert cells[3] == "the sidecar only" and cells[4] == "none"
