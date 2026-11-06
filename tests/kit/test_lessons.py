@@ -32,7 +32,7 @@ def row(n, date, kind, cost, cause, guard, what="a wait ended early"):
     return f"| {n} | {date} | {kind} | {what} | {cost} | {cause} | {guard} |\n"
 
 
-def project(tmp_path: Path, rows: list[str], role: str = ROLE, name="conductor-catches-1.md") -> Path:
+def project(tmp_path: Path, rows: list[str], role: str = ROLE, name="x-catches-1.md") -> Path:
     runs = tmp_path / "docs" / "runs"
     runs.mkdir(parents=True, exist_ok=True)
     (runs / name).write_text(HEADER + "".join(rows), encoding="utf-8")
@@ -55,9 +55,18 @@ def test_each_row_prints_its_strongest_level(tmp_path, capsys):
     root = project(
         tmp_path,
         [
-            row(1, "2026-11-05", "watch", "(unknown)", "no wake while idle", f"{RULE}; {CHECK} (in force)"),
+            row(
+                1,
+                "2026-11-05",
+                "watch",
+                "(unknown)",
+                "no wake while idle",
+                f"{RULE}; {CHECK} (in force)",
+            ),
             row(2, "2026-11-05", "kit-gap", "(unknown)", "a line matched exactly", "pending #12"),
-            row(3, "2026-11-05", "kit-gap", "(unknown)", "a sha read only", "pending (to be filed)"),
+            row(
+                3, "2026-11-05", "kit-gap", "(unknown)", "a sha read only", "pending (to be filed)"
+            ),
             row(4, "2026-11-05", "kit-gap", "(unknown)", "a map built early", "lesson"),
             row(5, "2026-11-05", "watch", "(unknown)", "a name match", "workflow `check_x.py`"),
             row(6, "2026-11-05", "watch", "(unknown)", "a stale body", "test `check_x.py`"),
@@ -66,18 +75,21 @@ def test_each_row_prints_its_strongest_level(tmp_path, capsys):
     code, out = ladder(root, capsys)
     assert code == 0, out
     lines = out.splitlines()
-    assert "row conductor-catches-1#1 check" in lines
-    assert "row conductor-catches-1#2 lesson" in lines
-    assert "row conductor-catches-1#3 lesson" in lines
-    assert "row conductor-catches-1#4 lesson" in lines
-    assert "row conductor-catches-1#5 workflow" in lines
-    assert "row conductor-catches-1#6 test" in lines
+    assert "row x-catches-1#1 check" in lines
+    assert "row x-catches-1#2 lesson" in lines
+    assert "row x-catches-1#3 lesson" in lines
+    assert "row x-catches-1#4 lesson" in lines
+    assert "row x-catches-1#5 workflow" in lines
+    assert "row x-catches-1#6 test" in lines
     assert lines[-1] == (
-        "lessons ladder: 6 rows (lesson 3, rule 0, test 1, check 1, workflow 1); due 0; missing 0; malformed 0"
+        "lessons ladder: 6 rows (lesson 3, rule 0, test 1, check 1, workflow 1);"
+        " due 0; missing 0; malformed 0"
     )
 
 
-def test_a_lesson_is_due_to_become_a_rule_when_a_second_row_has_the_same_kind_and_cause(tmp_path, capsys):
+def test_a_lesson_is_due_to_become_a_rule_when_a_second_row_has_the_same_kind_and_cause(
+    tmp_path, capsys
+):
     """REQ-037: answer 2, the first lesson rule (a repeat of kind and cause)."""
     root = project(
         tmp_path,
@@ -91,25 +103,36 @@ def test_a_lesson_is_due_to_become_a_rule_when_a_second_row_has_the_same_kind_an
     assert code == 0
     due = [ln for ln in out.splitlines() if ln.startswith("due ")]
     assert due == [
-        "due conductor-catches-1#1 lesson -> rule: row conductor-catches-1#2 has the same kind and cause",
-        "due conductor-catches-1#2 lesson -> rule: row conductor-catches-1#1 has the same kind and cause",
+        "due x-catches-1#1 lesson -> rule: x-catches-1#2 has the same kind and cause",
+        "due x-catches-1#2 lesson -> rule: x-catches-1#1 has the same kind and cause",
     ]
     assert "due 2;" in out.splitlines()[-1]
 
 
-@pytest.mark.parametrize(("cost", "due"), [("1 h", True), ("60 min", True), ("1.5 h", True), ("59 min", False),
-                                           ("(unknown): overnight", False), ("2 merges", False)])
-def test_a_lesson_is_due_to_become_a_rule_when_its_cost_is_one_hour_or_more(tmp_path, capsys, cost, due):
-    """REQ-037: answer 2, the second lesson rule (a cost of one hour or more); an unknown cost is never one."""
+@pytest.mark.parametrize(
+    ("cost", "due"),
+    [
+        ("1 h", True),
+        ("60 min", True),
+        ("1.5 h", True),
+        ("59 min", False),
+        ("(unknown): overnight", False),
+        ("2 merges", False),
+    ],
+)
+def test_a_lesson_is_due_to_become_a_rule_when_its_cost_is_one_hour_or_more(
+    tmp_path, capsys, cost, due
+):
+    """REQ-037: answer 2, a cost of one hour or more; an unknown cost is never one."""
     root = project(tmp_path, [row(1, "2026-11-05", "watch", cost, "no wake while idle", "lesson")])
     code, out = ladder(root, capsys)
     assert code == 0
-    expected = "due conductor-catches-1#1 lesson -> rule: its cost is one hour or more"
+    expected = "due x-catches-1#1 lesson -> rule: its cost is one hour or more"
     assert (expected in out.splitlines()) is due
 
 
 def test_a_rule_is_due_to_climb_when_a_later_row_repeats_its_kind_and_cause(tmp_path, capsys):
-    """REQ-037: answer 2, a row of the same kind and cause dated after the rule; a same-day row is not after."""
+    """REQ-037: answer 2, a later row of the same kind and cause; a same-day row is not later."""
     role = ROLE + "- Read the whole result (row 2).\n- Read it again (row 3).\n"
     root = project(
         tmp_path,
@@ -124,23 +147,30 @@ def test_a_rule_is_due_to_climb_when_a_later_row_repeats_its_kind_and_cause(tmp_
     assert code == 0, out
     due = [ln for ln in out.splitlines() if ln.startswith("due ")]
     assert due == [
-        "due conductor-catches-1#1 rule -> test or check: row conductor-catches-1#3 repeats its kind and cause after the rule",
-        "due conductor-catches-1#2 rule -> test or check: row conductor-catches-1#3 repeats its kind and cause after the rule",
+        "due x-catches-1#1 rule -> test or check: x-catches-1#3 repeats it after the rule",
+        "due x-catches-1#2 rule -> test or check: x-catches-1#3 repeats it after the rule",
     ]
 
 
-@pytest.mark.parametrize(("today", "due"), [("2026-11-30", False), ("2026-12-01", True), ("2027-01-15", True)])
+@pytest.mark.parametrize(
+    ("today", "due"), [("2026-11-30", False), ("2026-12-01", True), ("2027-01-15", True)]
+)
 def test_a_rule_is_due_to_climb_when_it_has_stood_30_days(tmp_path, capsys, today, due):
     """REQ-037: answer 2, a rule that has stood 30 days from the date of its row."""
-    root = project(tmp_path, [row(1, "2026-11-01 (unverified)", "watch", "(unknown)", "no wake while idle", RULE)])
+    root = project(
+        tmp_path,
+        [row(1, "2026-11-01 (unverified)", "watch", "(unknown)", "no wake while idle", RULE)],
+    )
     code, out = ladder(root, capsys, today=today)
     assert code == 0
-    expected = "due conductor-catches-1#1 rule -> test or check: the rule has stood 30 days (since 2026-11-01)"
+    expected = "due x-catches-1#1 rule -> test or check: it has stood 30 days since 2026-11-01"
     assert (expected in out.splitlines()) is due
 
 
-def test_a_test_or_a_check_is_never_due_and_a_check_climbs_only_with_the_owners_yes(tmp_path, capsys):
-    """REQ-037: answer 2, a check becomes a workflow only with the owner's yes, so the pass never names it."""
+def test_a_test_or_a_check_is_never_due_and_a_check_climbs_only_with_the_owners_yes(
+    tmp_path, capsys
+):
+    """REQ-037: answer 2, a check climbs only with the owner's yes; the pass never names it."""
     root = project(
         tmp_path,
         [
@@ -156,10 +186,12 @@ def test_a_test_or_a_check_is_never_due_and_a_check_climbs_only_with_the_owners_
 
 def test_a_row_without_a_date_is_not_decided_by_the_date_rules(tmp_path, capsys):
     """REQ-037: a rule that has no date is listed as undecided, never as due or as fine."""
-    root = project(tmp_path, [row(1, "(unknown)", "watch", "(unknown)", "no wake while idle", RULE)])
+    root = project(
+        tmp_path, [row(1, "(unknown)", "watch", "(unknown)", "no wake while idle", RULE)]
+    )
     code, out = ladder(root, capsys)
     assert code == 0
-    assert "undecided conductor-catches-1#1: the date is not YYYY-MM-DD" in out.splitlines()
+    assert "undecided x-catches-1#1: the date is not YYYY-MM-DD" in out.splitlines()
     assert not [ln for ln in out.splitlines() if ln.startswith("due ")]
 
 
@@ -174,33 +206,51 @@ def test_a_rule_row_whose_cited_line_is_missing_fails(tmp_path, capsys):
     )
     code, out = ladder(root, capsys)
     assert code == 1
-    assert "missing conductor-catches-1#2: no line of role.md cites (row 2)" in out.splitlines()
+    assert "missing x-catches-1#2: no line of role.md cites (row 2)" in out.splitlines()
     assert not any("#1:" in ln for ln in out.splitlines() if ln.startswith("missing "))
     assert out.splitlines()[-1].endswith("missing 1; malformed 0")
 
 
 def test_a_guard_whose_file_is_missing_fails(tmp_path, capsys):
-    root = project(tmp_path, [row(1, "2026-11-05", "watch", "(unknown)", "a name match", "check `gone.py`")])
+    root = project(
+        tmp_path, [row(1, "2026-11-05", "watch", "(unknown)", "a name match", "check `gone.py`")]
+    )
     code, out = ladder(root, capsys)
     assert code == 1
-    assert "missing conductor-catches-1#1: gone.py does not exist" in out.splitlines()
+    assert "missing x-catches-1#1: gone.py does not exist" in out.splitlines()
 
 
 @pytest.mark.parametrize(
-    "guard", ["pending 601", "pending (later)", "guess `x`", "rule role.md", "rule `../role.md`", "", "check `/etc/x`"]
+    "guard",
+    [
+        "pending 601",
+        "pending (later)",
+        "guess `x`",
+        "rule role.md",
+        "rule `../role.md`",
+        "",
+        "check `/etc/x`",
+    ],
 )
 def test_a_malformed_guard_fails_and_names_the_row_not_the_cell(tmp_path, capsys, guard):
     """REQ-037: answer 3, a malformed guard fails so that the record stays checkable."""
-    root = project(tmp_path, [row(1, "2026-11-05", "watch", "(unknown)", "no wake while idle", guard)])
+    root = project(
+        tmp_path, [row(1, "2026-11-05", "watch", "(unknown)", "no wake while idle", guard)]
+    )
     code, out = ladder(root, capsys)
     assert code == 1
-    assert "malformed conductor-catches-1#1: the guard is not one of the ladder's forms" in out.splitlines()
+    assert "malformed x-catches-1#1: the guard is not one of the ladder's forms" in out.splitlines()
     assert out.splitlines()[-1].endswith("malformed 1")
 
 
 def test_a_log_without_a_guard_column_is_named_and_not_on_the_ladder(tmp_path, capsys):
-    root = project(tmp_path, [row(1, "2026-11-05", "watch", "(unknown)", "no wake while idle", CHECK)])
-    other = "# Architect catches 1\n\n## The catches\n\n| # | Date | Kind | What |\n| --- | --- | --- | --- |\n| 1 | x | y | z |\n"
+    root = project(
+        tmp_path, [row(1, "2026-11-05", "watch", "(unknown)", "no wake while idle", CHECK)]
+    )
+    other = (
+        "# Architect catches 1\n\n## The catches\n\n"
+        "| # | Date | Kind | What |\n| --- | --- | --- | --- |\n| 1 | x | y | z |\n"
+    )
     (root / "docs" / "runs" / "architect-catches-1.md").write_text(other, encoding="utf-8")
     code, out = ladder(root, capsys)
     assert code == 0
@@ -224,15 +274,17 @@ def test_usage_errors_exit_2_and_name_the_option(tmp_path, capsys):
 
 
 def test_the_pass_is_read_only_and_opens_no_socket(tmp_path):
-    """REQ-037: answer 3, GET-free and read-only: no file is written, no network module is imported."""
+    """REQ-037: answer 3, read-only: no file is written, no network module is imported."""
     root = project(tmp_path, [row(1, "2026-11-05", "watch", "2 h", "no wake while idle", "lesson")])
     before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPT), "ladder", "--root", str(root), "--today", TODAY],
-        capture_output=True, text=True, check=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "due conductor-catches-1#1 lesson -> rule: its cost is one hour or more" in proc.stdout
+    assert "due x-catches-1#1 lesson -> rule: its cost is one hour or more" in proc.stdout
     assert {p: p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
     source = SCRIPT.read_text(encoding="utf-8")
     for module in ("socket", "urllib", "http", "subprocess", "requests"):
@@ -240,10 +292,12 @@ def test_the_pass_is_read_only_and_opens_no_socket(tmp_path):
 
 
 def test_this_repositorys_own_catch_logs_are_on_the_ladder_and_checkable():
-    """REQ-037: answer 3, the record of this repository has no malformed guard and no missing rule line."""
+    """REQ-037: answer 3, this repository's record has no malformed guard and no missing line."""
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPT), "ladder", "--root", str(KIT_ROOT)],
-        capture_output=True, text=True, check=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert proc.returncode == 0, proc.stdout
     assert "malformed 0" in proc.stdout.splitlines()[-1]
