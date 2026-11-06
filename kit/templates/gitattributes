@@ -15,6 +15,7 @@ scripts/agk/** text eol=lf
 .claude/agents/shadow.md text eol=lf
 .claude/hooks/architect_guard.py text eol=lf
 .claude/hooks/conductor_guard.py text eol=lf
+.claude/hooks/data_guard.py text eol=lf
 .claude/hooks/stop_check.py text eol=lf
 .claude/settings.json text eol=lf
 .github/ISSUE_TEMPLATE/proposal.md text eol=lf
