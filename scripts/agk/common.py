@@ -25,6 +25,13 @@ AC_COVERAGE = ("warn", "block")
 PR_MODES = ("strict", "flow")
 BEHAVIOUR_UNCHANGED = "Behaviour: unchanged"
 FENCE = re.compile(r"^\s*(```|~~~)")
+# The gitleaks version that `.github/workflows/governance.yml` pins with its SHA-256 (ADR-0158); a
+# test keeps the two equal. Named when gitleaks is missing (brief #632, ADR-0306).
+GITLEAKS_PIN = "8.30.1"
+GITLEAKS_INSTALL = (
+    f"install gitleaks {GITLEAKS_PIN} (the version the governance workflow pins) from the gitleaks "
+    "releases on GitHub and put it on PATH"
+)
 
 
 class CheckError(Exception):

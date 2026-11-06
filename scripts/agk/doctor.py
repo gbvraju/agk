@@ -22,6 +22,11 @@ SPEC-0044 rule 7 (brief #583): `--record FILE` reads that one prepush record, an
 another; when its `full` regression run took longer than `[testing] slow_suite_seconds` (600) while
 `workers` is 1, it prints one information line naming `testing.workers` before the summary. A record
 that cannot be read prints one line naming the option. Neither changes the exit code.
+Brief #632 (ADR-0306): one information line after the checks (before `tidy:` and the summary),
+and the same text as `secret_scan` in `--json`, says whether gitleaks is on PATH and which version
+`gitleaks version` prints (that one fixed argument list, no shell), naming the governance
+workflow's pin when the version is another, or, when gitleaks is missing, that prepush fails until
+it is installed and how. It changes no exit code.
 """
 
 from __future__ import annotations
@@ -29,6 +34,7 @@ from __future__ import annotations
 import datetime
 import json
 import re
+import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
@@ -46,6 +52,8 @@ import impact  # noqa: E402
 import merge_cleared  # noqa: E402
 import minutes  # noqa: E402
 from common import (  # noqa: E402
+    GITLEAKS_INSTALL,
+    GITLEAKS_PIN,
     PAUSED_LINE,
     ROUTER_WORKFLOW,
     CheckError,
@@ -1305,12 +1313,44 @@ def suite_lines(root: Path, path: Path) -> list[str]:
     ]
 
 
+def secret_scan_line() -> str:
+    """Whether gitleaks is on PATH and at which version (brief #632, ADR-0306)."""
+    tool = shutil.which("gitleaks")
+    if tool is None:
+        return (
+            "secret scan: gitleaks is not installed; prepush fails until it is (tool: gitleaks); "
+            + GITLEAKS_INSTALL
+        )
+    try:
+        proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+            [tool, "version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
+        out = proc.stdout.strip().splitlines() if proc.returncode == 0 else []
+    except (OSError, subprocess.SubprocessError):
+        out = []
+    version = out[0].strip().removeprefix("v") if out and out[0].strip() else "unknown"
+    line = f"secret scan: gitleaks {version} is installed"
+    if version != GITLEAKS_PIN:
+        line += f"; the governance workflow pins {GITLEAKS_PIN}"
+    return line
+
+
 def summary(report: list[dict]) -> dict[str, int]:
     return {s: sum(1 for c in report if c["status"] == s) for s in ("ok", "fail", "cannot-check")}
 
 
 def render_text(
-    report: list[dict], version: str, tidy: str | None = None, extra: list[str] | None = None
+    report: list[dict],
+    version: str,
+    tidy: str | None = None,
+    extra: list[str] | None = None,
+    scan: str | None = None,
 ) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
@@ -1321,6 +1361,7 @@ def render_text(
         elif c["status"] == "cannot-check":
             lines.append(f"  to check: {HINTS.get(c['reason'], HINTS['bad-response'])}")
     s = summary(report)
+    lines += [scan] if scan else []
     lines += [tidy] if tidy else []
     lines += extra or []
     lines.append(f"summary: {s['ok']} ok, {s['fail']} fail, {s['cannot-check']} cannot-check")
@@ -1328,9 +1369,15 @@ def render_text(
 
 
 def render_json(
-    report: list[dict], version: str, tidy: str | None = None, extra: list[str] | None = None
+    report: list[dict],
+    version: str,
+    tidy: str | None = None,
+    extra: list[str] | None = None,
+    scan: str | None = None,
 ) -> str:
     data = {"doctor": version, "checks": report, "summary": summary(report)}
+    if scan:
+        data["secret_scan"] = scan
     if tidy:
         data["tidy"] = tidy
     if extra:
@@ -1406,6 +1453,7 @@ def main(argv: list[str] | None = None) -> int:
         api = Path(options["api"]) if options["api"] else None
         tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
         extra = suite_lines(root.resolve(), Path(options["record"])) if options["record"] else []
+        scan = secret_scan_line()
     except Refusal as exc:
         print(f"refused: {exc}")
         return exc.code
@@ -1413,9 +1461,9 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version, tidy, extra)
+        render_json(report, version, tidy, extra, scan)
         if options["json"]
-        else render_text(report, version, tidy, extra)
+        else render_text(report, version, tidy, extra, scan)
     )
     return exit_code(report)
 

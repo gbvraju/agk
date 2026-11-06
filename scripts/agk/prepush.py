@@ -15,7 +15,9 @@ with that step's own output:
    `gh api` GET each (the workflow's `Record comments` step), in a temporary file outside the
    checkout that `AGK_RECORD_COMMENTS` names and that is removed afterwards; a comment that
    cannot be read fails the step, naming the option (brief #601, ADR-0293);
-4. `secret-scan`: gitleaks over the branch's commits (merge base to `HEAD`), when installed;
+4. `secret-scan`: gitleaks over the branch's commits (merge base to `HEAD`); a missing gitleaks
+   fails the step, naming the tool and the version the governance workflow pins (`GITLEAKS_PIN`),
+   and is never `not run`, in any mode and also with `--quick` (brief #632, ADR-0306);
 5. `tests`: each run of `test_plan.py` (the plan proof runs), its command in its folder; `--quick`
    skips this step. With a `[testing]` table (brief #417, ADR-0227) it then runs the regression
    set of `impact.py`: `project_tests` once when the set is full (or when no `[proof]` table can
@@ -46,7 +48,7 @@ be started (`CreateProcess(NULL, <cmd> ...) failed`, `<cmd>: command not found`,
 `<cmd>: No such file or directory` with an exit of 127, or an exit of 127 alone), the lint step
 fails with one line naming `<cmd>` and how to install it, and the raw output is not echoed; any
 other lint failure prints as before. It stays a FAIL, never `not run`: lint is a rule of the
-project, unlike the optional secret scan.
+project, as the secret scan is.
 
 Brief #509 (ADR-0258): after the regression run named `full` finishes, when its seconds exceed
 `proof_timeout`, the tests step prints `prepush: warning: the full suite took <n> s, more than
@@ -110,6 +112,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import lock as heavy_lock
 from common import (
+    GITLEAKS_INSTALL,
     CheckError,
     final_records,
     git,
@@ -405,10 +408,16 @@ def governance(root: Path, base: str, body: Path | None = None) -> Step:
         shutil.rmtree(folder, ignore_errors=True)
 
 
+NO_GITLEAKS = (
+    "gitleaks is not installed, so the secret scan cannot run and the run stops (tool: gitleaks); "
+    + GITLEAKS_INSTALL
+)
+
+
 def secret_scan(root: Path, mb: str) -> Step:
     tool = shutil.which("gitleaks")
     if tool is None:
-        return Step("skipped", "gitleaks is not installed; secret scan: not run", not_run=True)
+        return Step("FAIL", NO_GITLEAKS)  # never skipped, in any mode (brief #632, ADR-0306)
     head = git(root, "rev-parse", "HEAD").strip()
     cmd = [tool, "git", "--no-banner", "--redact", "--exit-code", "1", f"--log-opts={mb}..{head}"]
     return ran_step([*cmd, "."], root)

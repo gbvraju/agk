@@ -36,9 +36,9 @@ ADR-0186; every other decision of ADR-0186 stands.
    checking machine keeps the unit `not repeatable`, listed and not sampled, because the record itself carries the scan.
    The local-mode guide and the reference guide say what prepush now does. A test keeps any kit script from printing
    `secret scan: not run`.
-5. **doctor.** `doctor.py` prints one information line before its summary, and the same text as `secret_scan` in
-   `--json`: `secret scan: gitleaks <version> is installed`, with `; the governance workflow pins <pin>` when the version
-   that `gitleaks version` prints is another, or `secret scan: gitleaks is not installed; prepush fails until it is
+5. **doctor.** `doctor.py` prints one information line after its checks, before the `tidy:` line and the summary,
+   and the same text as `secret_scan` in `--json`: `secret scan: gitleaks <version> is installed`, with `; the
+   governance workflow pins <pin>` when the version that `gitleaks version` prints is another, or `secret scan: gitleaks is not installed; prepush fails until it is
    (tool: gitleaks); install gitleaks <pin> ...`. It changes no exit code and adds no check id, like the `tidy:` line.
    The doctor runs `gitleaks version` with a fixed argument list and no shell; it installs and downloads nothing.
 6. **Unchanged.** The data guard (SPEC-0042) is unchanged; no scanner ignore entry is added; the governance workflow's
