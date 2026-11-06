@@ -44,6 +44,13 @@ REQ-011 (drift audit): AC1 weekly; AC2 one issue per run; AC3 read-only. Rules m
    that fails yields one finding per touched protected class that no single ADR of the commit covers together, as
    the per-PR check prints one failure per class (the subject is the first 12 characters of the commit id, then the
    protected class, never content). The Status-only exemption for `docs/requirements.md` applies as in the check.
+   A valid release is exempt, as the check exempts a valid release pull request (SPEC-0028 rules 4 and 5): when a
+   commit raises `version` in `agk.toml`, its release part (its changes to the five release files, its deleted
+   fragments under `changelog.d/` and its edits of `docs/adr/`) is laid on its parent in a temporary copy outside the
+   checkout, removed after the run, and `check_release.valid_release` judges it with the Final comments of the
+   parent's records given by `--comments FILE` (SPEC-0021 rule 3a; without them while the parent holds a record, no
+   exemption). A valid release part yields no finding for its files; any other protected file of the commit is
+   judged as above. The release check is kit-only, so an installed copy of the audit exempts nothing (amendment 121).
 7. **D2 done requirements without markers.** At the head of the default branch, every requirement with
    `- Status: done` has a marker in the configured test directories and patterns (the logic of
    `check_requirements`). D2, D4 and D5 read the work tree and D1 and D3 read the history of the default branch, so
