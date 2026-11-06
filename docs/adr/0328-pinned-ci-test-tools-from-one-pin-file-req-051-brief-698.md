@@ -6,7 +6,7 @@
 - Related: ADR-0192, ADR-0270, ADR-0305, SPEC-0044, SPEC-0047
 - Requirements: REQ-051
 
-Protected classes: `.github/`, `config/`, `scripts/agk/`, `tests/kit/`, `kit/`, `agk.toml`
+Protected classes: `.github/`, `config/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `agk.toml`
 
 ## Context
 
