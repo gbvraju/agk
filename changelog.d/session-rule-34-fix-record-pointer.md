@@ -1,0 +1,1 @@
+- Session rule 34 points at the `Fixes-failure:` record that `check_pr_body.py` checks instead of restating its shape, and `config/rule-budget.txt` records the shorter `config/session-rules.md` (brief #657, ADR-0310)
