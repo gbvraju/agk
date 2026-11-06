@@ -3,9 +3,9 @@
 `scripts/agk/prepush.py` runs, in order, the pull request body check (on a body file when one is
 given), `make lint` (where the project's Makefile has the target), the governance checks of
 `agk.mk` (`agk-governance`, which need no network), the secret scan over the branch's commits
-(gitleaks; a missing gitleaks fails the run, brief #632) and the tests that `test_plan.py` selects. It stops at the first
-failure with that step's message, prints one line per step with its time, and exits 0 only when
-every step that ran passed. `--quick` skips the tests.
+(gitleaks; a missing gitleaks fails the run, brief #632) and the tests that `test_plan.py`
+selects. It stops at the first failure with that step's message, prints one line per step with
+its time, and exits 0 only when every step that ran passed. `--quick` skips the tests.
 
 The fixture repositories here hold a stand-in `agk.mk`, `Makefile` and `gitleaks`, so each step
 can be made to pass or fail on its own.

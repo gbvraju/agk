@@ -34,7 +34,9 @@ def versioned(folder: Path, version: str) -> Path:
     """A stand-in `gitleaks` that answers `gitleaks version` with `version`."""
     folder.mkdir(parents=True, exist_ok=True)
     tool = folder / "gitleaks"
-    tool.write_text(f'#!/bin/sh\n[ "$1" = version ] && echo "{version}"\nexit 0\n', encoding="utf-8")
+    tool.write_text(
+        f'#!/bin/sh\n[ "$1" = version ] && echo "{version}"\nexit 0\n', encoding="utf-8"
+    )
     tool.chmod(tool.stat().st_mode | stat.S_IEXEC)
     return folder
 
@@ -100,7 +102,7 @@ def test_no_kit_script_passes_a_scan_that_did_not_run():
     for path in scripts:
         text = path.read_text(encoding="utf-8")
         assert "secret scan: not run" not in text, path.name
-        assert 'gitleaks is not installed; secret scan' not in text, path.name
+        assert "gitleaks is not installed; secret scan" not in text, path.name
 
 
 def doctor_line(stdout: str) -> str:
@@ -127,8 +129,16 @@ def test_doctor_names_a_version_other_than_the_pin(tmp_path):
     """REQ-049: brief #632 answer 3 (a version that is not the workflow's pin is said)."""
     dirs = run_case("ok", tmp_path)[2]
     stub = versioned(tmp_path / "leaks", "8.0.0")
-    args = ["--api-dir", str(dirs["api"]), "--repo", "example-owner/example-repo", str(dirs["root"])]
-    line = doctor_line(doctor(*args, path=path_with(stub) + os.pathsep + str(tmp_path / "bin")).stdout)
+    args = [
+        "--api-dir",
+        str(dirs["api"]),
+        "--repo",
+        "example-owner/example-repo",
+        str(dirs["root"]),
+    ]
+    line = doctor_line(
+        doctor(*args, path=path_with(stub) + os.pathsep + str(tmp_path / "bin")).stdout
+    )
     assert line.startswith("secret scan: gitleaks 8.0.0 is installed")
     assert f"the governance workflow pins {pinned()}" in line
 
