@@ -74,6 +74,7 @@ KEYS = {
     "results_dir",
     "keep_passed",
     "keep_runs",
+    "rerun_alone",
 }
 DEFAULT_SLOW = 600
 DEFAULT_KEEP_RUNS = 20
@@ -184,7 +185,7 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
             "proof_regression, pr_tests, junit, workers, parallel_command, "
-            "slow_suite_seconds, results_dir, keep_passed and keep_runs (setting: testing)"
+            "slow_suite_seconds, results_dir, keep_passed, keep_runs and rerun_alone (setting: testing)"
         )
     profile = table.get("profile", "balanced")
     if profile not in PROFILES:
@@ -256,6 +257,8 @@ def testing_table(root: Path) -> dict | None:
     keep = table.get("keep_runs", DEFAULT_KEEP_RUNS)
     if isinstance(keep, bool) or not isinstance(keep, int) or keep < 1:
         raise CheckError("keep_runs must be a whole number above 0 (setting: testing.keep_runs)")
+    if not isinstance(table.get("rerun_alone", False), bool):
+        raise CheckError("rerun_alone must be true or false (setting: testing.rerun_alone)")
     return {
         "profile": profile,
         "always_full": list(always_full),
@@ -332,6 +335,14 @@ def slow_suite_seconds(root: Path) -> int:
     if testing_table(root) is None:
         return DEFAULT_SLOW
     return config_source(root)["testing"].get("slow_suite_seconds", DEFAULT_SLOW)
+
+
+def rerun_alone(root: Path) -> bool:
+    """`[testing] rerun_alone`, false without the table or the key (brief #670, ADR-0323). The
+    whole table is checked first, so a malformed key is refused naming the setting."""
+    if testing_table(root) is None:
+        return False
+    return config_source(root)["testing"].get("rerun_alone", False)
 
 
 def run_folder_deprecation(root: Path) -> str | None:

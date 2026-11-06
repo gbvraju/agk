@@ -220,7 +220,7 @@ def test_a_second_flaky_run_is_strike_two_and_a_brief_is_due(tmp_path):
 
 def test_a_non_pytest_command_is_not_rerun(tmp_path):
     """REQ-051 AC2: brief #670 answer 3 (no rerun the kit cannot build: today's exit, one line)."""
-    root = project(tmp_path, "rerun_alone = true\n", command="sh -c 'exit 3'")
+    root = project(tmp_path, "rerun_alone = true\n", command="exit 3")
     proc = run_tests(root)
     assert proc.returncode == 3
     assert "project tests: rerun alone needs a pytest command" in proc.stdout
