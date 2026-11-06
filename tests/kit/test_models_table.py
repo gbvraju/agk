@@ -123,7 +123,10 @@ def test_an_unreadable_agk_toml_is_refused_naming_the_table(tmp_path):
 
 def test_the_names_table_maps_a_tier_to_a_project_model_name(tmp_path):
     """REQ-052 AC1: rule 3, one optional `[models.names]` table; it is not a kind."""
-    text = '[models]\nsmall = { tier = "fast", effort = "low" }\n[models.names]\nfast = "example-fast-1"\n'
+    text = (
+        '[models]\nsmall = { tier = "fast", effort = "low" }\n'
+        '[models.names]\nfast = "example-fast-1"\n'
+    )
     root = project(tmp_path, text)
     assert config.model_names(root) == {"fast": "example-fast-1"}
     assert config.model_settings(root)["small"] == {"tier": "fast", "effort": "low"}

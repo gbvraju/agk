@@ -1,4 +1,6 @@
-"""`session.py kind --brief N`: a brief's kind from its `Size:` and `Touches:` lines (SPEC-0045 rule 4).
+"""`session.py kind --brief N`: a brief's kind from its `Size:` and `Touches:` lines.
+
+SPEC-0045 rule 4.
 
 REQ-052 AC2, brief #623 (build (b) of SPEC-0045, ADR-0289). The command reads one brief with a GET,
 posts nothing and prints one line `kind: <kind>`: `design` for a missing, repeated or unreadable
