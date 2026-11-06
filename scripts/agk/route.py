@@ -228,8 +228,10 @@ def final_accept_clears(body: str, head: str, files: list[dict]) -> bool:
     if covered is None or not head or covered[0] != head:
         return False
     accepts = final_accepts(covered[1])
+    if not accepts:
+        return False
     touched = {f.get("filename") for f in files if f.get("status") in ("added", "modified")}
-    return bool(accepts) and all(path in touched for path in accepts)
+    return all(path in touched for path in accepts)
 
 
 def decide(f: dict) -> str:
