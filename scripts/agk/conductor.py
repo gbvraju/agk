@@ -14,6 +14,15 @@ then the latest run of the default branch and any open red-branch issue. A `Ques
 `Report:` with no comment by a listed verdict author after it, older than
 `conductor_late_minutes` (30 by default), is marked `LATE` (row 13). The rules it reads are
 `session.py`'s and `merge_cleared.py`'s own functions, never a copy.
+
+Brief #669 (ADR-0322): after those lines `sweep` prints `SILENT <brief> <session> <minutes>;
+re-fire: Session name: <session>. Item: brief #<brief>.` for each open `agk-brief` issue whose
+newest live take (`session.live_takes`) is older than `silent_minutes` of `[flow]` (30 by
+default), measured from the take comment's creation time, with no branch `claude/brief-<n>`, no
+open pull request naming the brief, no pull request naming it created after the take, and no
+`Progress:`, `Report:` or `Question:` comment after the take. A brief with any `Report: ...
+escalate` comment is never SILENT. The sweep fires nothing; the conductor re-fires the session
+with the printed line.
 """
 
 from __future__ import annotations
@@ -36,6 +45,9 @@ TRIGGERS = ("Question:", "Report:")
 QUESTION_ID = re.compile(r"Question: (Q-\S+)")
 POLL = ("conductor_poll_seconds", 60)
 LATE = ("conductor_late_minutes", 30)
+SILENT = ("silent_minutes", 30)
+ALIVE = ("Progress:", "Report:", "Question:")
+ESCALATE = re.compile(r"Report: .*\bescalate\b")
 
 
 def when(text: str) -> datetime | None:
@@ -160,6 +172,40 @@ def pull_line(root, repo: str, pull: dict, authors, approvers, late: int, now) -
     return f"#{number} {head[:7]} {text}"
 
 
+def named(pull: dict, number: int) -> bool:
+    ref = str((pull.get("head") or {}).get("ref") or "")
+    return session.brief_number(pull) == number or ref == f"claude/brief-{number}"
+
+
+def silent_line(root, repo: str, issue: dict, pulls: list, every, wait: int, now) -> str | None:
+    """Brief #669: the SILENT line of a taken brief whose builder left no trace, else None."""
+    number = issue["number"]
+    comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+    hours = session.flow_int(root, "claim_hours", session.CLAIM_HOURS, 5)
+    takes = session.live_takes(comments, number, pulls, hours)
+    if not takes:
+        return None
+    when, cid, who = max(takes, key=lambda t: t[:2])[:3]
+    minutes = int((now - when).total_seconds() // 60)
+    if minutes <= wait or any(ESCALATE.match(session.first_line(c)) for c in comments):
+        return None
+    if any(
+        (session.moment(c.get("created_at")), c.get("id") or 0) > (when, cid)
+        and session.first_line(c).startswith(ALIVE)
+        for c in comments
+    ):
+        return None
+    if any(named(p, number) for p in pulls):
+        return None
+    branch = f"claude/brief-{number}"
+    refs = read(f"repos/{repo}/git/matching-refs/heads/{branch}", f"the branch of #{number}")
+    if any(r.get("ref") == f"refs/heads/{branch}" for r in refs if isinstance(r, dict)):
+        return None
+    if any(named(p, number) and session.moment(p.get("created_at")) >= when for p in every()):
+        return None
+    return f"SILENT {number} {who} {minutes}; re-fire: Session name: {who}. Item: brief #{number}."
+
+
 def sweep(root) -> int:
     repo = session.repo_name(root)
     authors, approvers = verdict_authors(root), spec_approvers(root)
@@ -183,6 +229,17 @@ def sweep(root) -> int:
         lines.append(f"{branch}: no run")
     issues = read(f"repos/{repo}/issues?state=open", "the open issues")
     lines += [f"red-branch issue: #{i['number']}" for i in issues if session.is_red(i)]
+    wait = session.flow_int(root, SILENT[0], SILENT[1], 0)
+    cache: list = []
+
+    def every() -> list:  # every pull request, read once and only when a brief needs it
+        if not cache:
+            cache.append(read(f"repos/{repo}/pulls?state=all", "the pull requests"))
+        return cache[0]
+
+    for issue in sorted(session.labelled(issues, session.LABEL), key=lambda i: i["number"]):
+        if found := silent_line(root, repo, issue, pulls, every, wait, now):
+            lines.append(found)
     print("\n".join(lines))
     return 0
 

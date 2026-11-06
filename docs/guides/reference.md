@@ -18,7 +18,8 @@ Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI t
 Before a push, `python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock]` runs the fast checks CI would
 fail on first, in order, and stops at the first failure with its message: the pull request body check (on `FILE`), `make lint`
 where the Makefile has the target, `make -f agk.mk agk-governance` (no network; `not run` without `make`), the secret scan over
-the branch's commits when `gitleaks` is installed (else `secret scan: not run`), and the tests that `test_plan.py` selects
+the branch's commits (a missing `gitleaks` fails the run, naming the tool and the pinned version, also with `--quick`;
+ADR-0306), and the tests that `test_plan.py` selects
 (`--quick` skips them). It prints `prepush: <step> ok|FAIL|skipped (<s>s)` per step and exits 0 when no step failed, 1 when one
 did, 2 on a usage error (session rule 31, ADR-0186). `--no-lock` leaves the heavy-step lock (`lock.py`, name `heavy`) of the
 tests step out, for CI. The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
@@ -117,8 +118,11 @@ open pull request, and prints `<number> <first line>` for each; `--once` reads o
 `sweep` prints `#<n> <head7> <state> <age>` per open pull request (`draft`, `ready: no verdict`, `fix list on <head7>`,
 `cleared on <head7>`, `cleared, head moved`, `waiting: Approve SPEC-nnnn at <head7>`, `blocked: Question Q-n unanswered <age>`,
 `checks pending`, `red`), then the latest run of the default branch and any open red-branch issue; a `Question:` or `Report:`
-that no listed verdict author answered within `conductor_late_minutes` (30 by default) is marked `LATE`. The poll interval is
-`conductor_poll_seconds` (60 by default), both of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
+that no listed verdict author answered within `conductor_late_minutes` (30 by default) is marked `LATE`. Then a taken brief with no
+branch `claude/brief-<n>`, no pull request and no `Progress:`, `Report:` or `Question:` after its take, older than
+`silent_minutes` (30 by default), is listed as `SILENT <brief> <session> <minutes>` with the line to re-fire it; a brief with a
+`Report: ... escalate` never is (brief #669, ADR-0322). The poll interval is
+`conductor_poll_seconds` (60 by default), all of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
 nothing; the conductor guard allows exactly these forms.
 
 ## Pausing the kit
