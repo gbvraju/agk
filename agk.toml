@@ -70,6 +70,8 @@ auto_merge_method = "squash"
 [testing]
 profile = "balanced"
 pr_tests = "selected"
+# The full suite in parallel workers where the interpreter imports xdist (brief #631, ADR-0305).
+workers = "auto"
 always_full = [
   "scripts/agk/common.py", "kit/agk-kit.mk", "Makefile", "agk.mk", ".github/workflows/**", "tests/kit/conftest.py",
   "tests/kit/pytest.ini", "tests/kit_dev/conftest.py",
