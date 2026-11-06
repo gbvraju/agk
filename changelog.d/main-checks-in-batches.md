@@ -1,0 +1,1 @@
+- A push to the default branch never cancels a running `governance` check; pushes that arrive meanwhile wait as one run for the newest commit, and a commit whose waiting run was replaced is covered by the next completed full run that contains it (`full_run.covered`; the backstop-escape line of `metrics.py` reads it) (brief #621, ADR-0302 Proposed)

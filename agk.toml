@@ -277,7 +277,10 @@ code = "scripts/agk/flakes.py"
 tests = ["tests/kit/test_flakes.py"]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
-tests = ["tests/kit/test_full_run.py", "tests/kit/test_full_run_body_steps.py", "tests/kit/test_full_run_post_steps.py"]
+tests = [
+  "tests/kit/test_full_run.py", "tests/kit/test_full_run_body_steps.py", "tests/kit/test_full_run_post_steps.py",
+  "tests/kit/test_main_batching.py",
+]
 [[testing.map]]
 code = "scripts/agk/guard.py"
 tests = [
