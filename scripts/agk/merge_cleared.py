@@ -72,6 +72,11 @@ with `AGK_BASE=<the fetched default branch>`. Green merges; red holds with
 pull request whose first `Brief:` line names the one open red-branch issue is not held for it, and
 when its run after the merge is green the command comments on that issue, naming the merge commit,
 and closes it; every other pull request stays held.
+
+Brief #628 (ADR-0304, amendment 124 of SPEC-0039 rule 5) keeps a spec approval on a later head: an
+`Approve: <sha> SPEC-<n>` counts for the head when the spec's text there is its text at `<sha>`
+apart from the status flip from `Draft` to `Approved`, read with local `git` (the head fetched
+from `refs/pull/<n>/head` only when missing); anything unreadable holds as `spec approval`.
 """
 
 from __future__ import annotations
@@ -109,6 +114,7 @@ from common import (  # noqa: E402
     final_accepts,
     final_records,
     show,
+    status_flip_only,
 )
 from reviewers import CONFIG, approval_shas, approvers_of, conductors_of, parse  # noqa: E402
 
@@ -548,14 +554,73 @@ def protected_class(files: list[dict]) -> str | None:
     return None
 
 
-def unapproved(pull: dict, comments: list[dict], sha: str, approvers: list[str]) -> bool:
+def git_bytes(root: Path, *args: str) -> bytes | None:
+    """The output of one local `git` read as bytes, or None when it fails."""
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=root, capture_output=True
+    )
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def head_present(root: Path, number: int, sha: str) -> bool:
+    """Whether the commit SHA is in the checkout, fetching `refs/pull/<n>/head` once when it is
+    not: the ref the check before the merge fetches anyway (amendment 123)."""
+    if git_out(root, "cat-file", "-e", f"{sha}^{{commit}}")[0] == 0:
+        return True
+    git_out(root, "fetch", "-q", "origin", f"refs/pull/{number}/head")
+    return git_out(root, "cat-file", "-e", f"{sha}^{{commit}}")[0] == 0
+
+
+def same_text(root: Path, sha: str, spec: str, approved: str) -> bool:
+    """Whether the spec SPEC-nnnn at the head SHA is its text at the APPROVED commit apart from the
+    status flip (amendment 124, brief 628). The approved commit must be the head or an ancestor of
+    it, and the spec the one `docs/specs/<nnnn>-*.md` at the head, at the same path at the
+    approved commit; anything unreadable is False (fail closed)."""
+    code, full = git_out(root, "rev-parse", "--verify", "-q", f"{approved}^{{commit}}")
+    if code != 0 or not SHA.fullmatch(full):
+        return False
+    if git_out(root, "merge-base", "--is-ancestor", full, sha)[0] != 0:
+        return False
+    code, names = git_out(root, "ls-tree", "--name-only", sha, "docs/specs/")
+    pattern = re.compile(rf"docs/specs/{spec[5:]}-[^/]*\.md")
+    found = [n for n in names.splitlines() if pattern.fullmatch(n)] if code == 0 else []
+    if len(found) != 1:
+        return False
+    texts = [git_bytes(root, "cat-file", "blob", f"{rev}:{found[0]}") for rev in (full, sha)]
+    if texts[0] is None or texts[1] is None:
+        return False
+    try:
+        return status_flip_only(texts[0].decode("utf-8"), texts[1].decode("utf-8"))
+    except UnicodeDecodeError:
+        return False
+
+
+def unapproved(
+    pull: dict,
+    comments: list[dict],
+    sha: str,
+    approvers: list[str],
+    root: Path | None = None,
+    number: int = 0,
+) -> bool:
+    """SPEC-0039 rule 5 (`spec approval`): an `Approval:` line whose spec has no approval by an
+    account in `spec_approvers` for the head SHA, or for an earlier commit of its history whose
+    spec text the head keeps apart from the status flip (amendment 124, brief 628)."""
     if APPROVE_LABEL in labels_of(pull):
         return True
     asked = set(APPROVAL.findall(str(pull.get("body") or "")))
     if not asked:
         return False
     approved = approval_shas(comments, [], approvers)
-    return any(not any(sha.startswith(s) for s in approved.get(spec, [])) for spec in asked)
+    for spec in sorted(asked):
+        shas = approved.get(spec, [])
+        if any(sha.startswith(s) for s in shas):
+            continue
+        if root is None or not shas or not head_present(root, number, sha):
+            return True
+        if not any(same_text(root, sha, spec, s) for s in shas):
+            return True
+    return False
 
 
 def dependence_unmet(repo: str, pull: dict) -> bool:
@@ -579,7 +644,13 @@ def holds_record(text: str) -> bool:
 
 
 def hold_list(
-    repo: str, number: int, pull: dict, comments: list, approvers: list, accepts: list[str]
+    repo: str,
+    number: int,
+    pull: dict,
+    comments: list,
+    approvers: list,
+    accepts: list[str],
+    root: Path | None = None,
 ) -> None:
     """The holds of SPEC-0039 rule 5 after the red branch and paused, in the rule's order; first,
     each ADR a Final line ACCEPTS must be one the pull request adds or changes (rule 3)."""
@@ -603,7 +674,7 @@ def hold_list(
     sha = str(pull["head"]["sha"])
     if released(files):
         raise Held("release (rule 5)")
-    if unapproved(pull, comments, sha, approvers):
+    if unapproved(pull, comments, sha, approvers, root, number):
         raise Held("spec approval (rule 5)")
     if (klass := protected_class(files)) is not None:
         raise Held(f"protected class {klass} (rule 5)")
@@ -1055,7 +1126,8 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
             local_evidence(verdict, comments, sha, approvers)
         else:
             ci_evidence(repo, sha, required)
-        hold_list(repo, number, pull, comments, approvers, accepted_adrs(verdict, sha) or [])
+        accepts = accepted_adrs(verdict, sha) or []
+        hold_list(repo, number, pull, comments, approvers, accepts, root)
         text = str(pull.get("body") or "")  # the body read above, for governance (brief #576)
         branch = str(data.get("default_branch", "main"))
         step = merge_check(root, branch, number, sha, after_merge_seconds(data), text, repo)
