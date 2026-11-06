@@ -1,6 +1,6 @@
 # SPEC-0050: Overlapping work never runs at once, and a second change to a file re-proves
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-057
 
