@@ -111,6 +111,7 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
 
     python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]
     python3 scripts/agk/conductor.py sweep
+    python3 scripts/agk/conductor.py merge-queue [--dry-run] [--max-batch N]
 
 The conductor's watch and sweep (brief #643, ADR-0308). `watch` ends on the first poll that finds a comment created after
 `--since` (default: the start) whose first line starts `Question:` or `Report:`, on an open issue labelled `agk-brief` or an
@@ -124,6 +125,18 @@ branch `claude/brief-<n>`, no pull request and no `Progress:`, `Report:` or `Que
 `Report: ... escalate` never is (brief #669, ADR-0322). The poll interval is
 `conductor_poll_seconds` (60 by default), all of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
 nothing; the conductor guard allows exactly these forms.
+
+`merge-queue` (brief #643 build (b), ADR-0329) is the batched merge: with `auto_merge` on, it judges every open pull request by
+`merge_cleared.py`'s own holds (a cleared head, green required checks, every hold of SPEC-0039 rule 5, the clearing verdict by a
+listed verdict author), prints `not queued: #<n> <sha12>: <reason>` for a cleared one that is held, and merges the rest in the
+order of their verdicts, at most `--max-batch N` of them (5 by default), each through
+`python3 scripts/agk/merge_cleared.py --pr <n> --sha <head>` with its line printed in full and no wait for the default branch's
+run in between. It stops at the first run that is not a merge (`merge-queue: stopped at #<n> (exit <code>); merged: ...`), then
+waits once for the default branch's run on the last merge (`full_run.covered`, polled every `conductor_poll_seconds` for at most
+`merge_queue_wait_minutes`, 60 by default) and prints `<branch> green at <sha12> after the batch #a #b`, or
+`stopped: <branch> red at <sha12> after the batch #a #b` (exit 1); in local mode there is no run to wait for. `--dry-run` prints
+the order and merges nothing. It posts nothing; the guard allows the dry run always and a run that merges only with `auto_merge`
+on in the checkout and on the default branch, and builders are asked first (`.claude/settings.json`).
 
 ## Pausing the kit
 

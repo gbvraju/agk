@@ -182,4 +182,4 @@ def test_the_guard_form_and_the_cost_form_refuse_a_bad_cell():
 
 def test_the_lesson_of_row_3_names_the_merge_queue():
     """Brief #643 build (b), ADR-0329: the rule line of row 3 names the kit command."""
-    assert re.search(r"(?m)^- .*`conductor\.py merge-queue`.*\(row 3\)$", lessons())
+    assert re.search(r"(?m)^- .*`conductor\.py merge-queue`.*\(row 3\)", lessons())

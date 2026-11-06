@@ -38,7 +38,8 @@
       "Edit(/skills/**)",
       "Bash(python3 scripts/agk/merge_cleared.py*)",
       "Bash(python scripts/agk/merge_cleared.py*)",
-      "Bash(*merge_cleared.py*)"
+      "Bash(*merge_cleared.py*)",
+      "Bash(*conductor.py*merge-queue*)"
     ],
     "deny": [
       "Bash(git push --force:*)",

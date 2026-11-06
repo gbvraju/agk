@@ -23,11 +23,34 @@ open pull request naming the brief, no pull request naming it created after the 
 `Progress:`, `Report:` or `Question:` comment after the take. A brief with any `Report: ...
 escalate` comment is never SILENT. The sweep fires nothing; the conductor re-fires the session
 with the printed line.
+
+Build (b) of brief #643 (ADR-0329, catch log rows 3 and 22):
+
+    python3 conductor.py merge-queue [--dry-run] [--max-batch N]
+
+`merge-queue` reads the default branch's settings as `merge_cleared.py` does (`merge_cleared.ruled`)
+and judges every open pull request with `merge_cleared.holds`, the same holds that command runs;
+the clearing verdict's author must be a listed verdict author. A pull request whose latest verdict
+does not clear its head is left out; a cleared one that is held is printed as `not queued: #<n>
+<sha12>: <reason>`. The rest are merged in the order of their verdicts, at most `--max-batch N` of
+them (5 by default), each through `python3 scripts/agk/merge_cleared.py --pr <n> --sha <head>` in
+its own process, its line printed in full, with no wait for the default branch's run between two
+merges (the check before each merge against the latest default branch is merge_cleared.py's own).
+The queue stops at the first run that does not exit 0 and lists what merged; then, when anything
+merged and no `stopped:` line ended it, it waits once for the default branch's run on the last
+merge commit (`full_run.covered`, the batched reading of ADR-0302), polling every
+`conductor_poll_seconds` for at most `merge_queue_wait_minutes` (60 by default), and prints
+`<branch> green at <sha12> after the batch #a #b` (exit as the stop's code) or `stopped: <branch>
+red at <sha12> after the batch #a #b` (exit 1). In local mode there is no run to wait for.
+Before the holds of each open pull request that is not a draft, and before each merge after the
+first, the pull request is read again until GitHub has computed its mergeable state. `--dry-run`
+prints the order and merges nothing. It posts nothing and merges only through merge_cleared.py.
 """
 
 from __future__ import annotations
 
 import re
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
 from datetime import UTC, datetime
@@ -38,9 +61,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import merge_cleared
 import session
 from common import CheckError, repo_root
-from reviewers import approval_shas, spec_approvers, verdict_authors
+from full_run import contained_in, covered
+from reviewers import approval_shas, authors_of, spec_approvers, verdict_authors
 
-USAGE = "usage: conductor.py watch [--since ISO] [--once] | conductor.py sweep"
+USAGE = (
+    "usage: conductor.py watch [--since ISO] [--once] | conductor.py sweep | "
+    "conductor.py merge-queue [--dry-run] [--max-batch N]"
+)
 TRIGGERS = ("Question:", "Report:")
 QUESTION_ID = re.compile(r"Question: (Q-\S+)")
 POLL = ("conductor_poll_seconds", 60)
@@ -244,7 +271,176 @@ def sweep(root) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+# --- merge-queue (rows 3 and 22; brief #643 build (b), ADR-0329) ------------------------------
+
+BATCH = 5  # merges in one batch unless --max-batch says otherwise
+BATCH_SIZE = re.compile(r"[1-9][0-9]?")
+WAIT = ("merge_queue_wait_minutes", 60)  # the one wait for the default branch's run, at the end
+SETTLE, PAUSE = 10, 3.0  # reads of a pull request until GitHub knows its mergeable state
+MERGED = re.compile(r"merge-cleared #\d+ [0-9a-f]{12}: merged ([0-9a-f]{12})")
+STOPPED = "merge-cleared: stopped:"  # merge_cleared.py's own red line (SPEC-0039 rule 6)
+RUNS = "repos/{}/actions/workflows/governance.yml/runs?branch={}&event=push&per_page=100"
+NOT_LISTED = (
+    "the verdict's author is not a listed verdict author "
+    "(setting: verdict_authors in config/reviewers.yaml)"
+)
+
+
+def settle(repo: str, number: int) -> None:
+    """Read the pull request again, at most SETTLE times a PAUSE apart, while GitHub says its
+    mergeable state is `unknown` (it computes the state in the background after a read; a hold
+    would read `unknown` as a conflict). What it says then is merge_cleared.py's to judge."""
+    for _ in range(SETTLE):
+        pull = merge_cleared.read_json(f"repos/{repo}/pulls/{number}", dict, "the pull request")
+        if pull.get("mergeable_state") != "unknown":
+            return
+        time.sleep(PAUSE)
+
+
+def queued(root, repo: str, rules: merge_cleared.Rules) -> tuple[list[tuple[int, str]], list[str]]:
+    """The open pull requests to merge, as (number, head) in the order of their clearing verdicts,
+    and one `not queued:` line for each cleared one that a hold or an unlisted author keeps out."""
+    authors = authors_of(rules.people)
+    found, kept_out = [], []
+    for pull in read(f"repos/{repo}/pulls?state=open", "the open pull requests"):
+        number, sha = int(pull["number"]), str((pull.get("head") or {}).get("sha") or "")
+        try:
+            if not pull.get("draft"):
+                settle(repo, number)
+            _, verdict, *_ = merge_cleared.holds(root, repo, number, sha, rules)
+            counted = session.counted_authors(authors, session.author_of(pull)) or []
+            if merge_cleared.login(verdict) not in {a.lstrip("@").lower() for a in counted}:
+                raise merge_cleared.Held(NOT_LISTED)
+        except merge_cleared.NotCleared:
+            continue
+        except (merge_cleared.Held, merge_cleared.Refused) as exc:
+            kept_out.append(f"not queued: #{number} {sha[:12]}: {exc}")
+            continue
+        found.append((merge_cleared.stamp(verdict), number, sha))
+    return [(number, sha) for _, number, sha in sorted(found)], kept_out
+
+
+def run_merge(root, number: int, sha: str) -> tuple[int, str]:
+    """`python3 scripts/agk/merge_cleared.py --pr N --sha SHA`, the project's own file beside this
+    one, as its own process; its line is printed in full. (Its exit code, its standard output.)"""
+    script = Path(__file__).resolve().parent / "merge_cleared.py"
+    proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(script), "--pr", str(number), "--sha", sha],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    print(proc.stdout, end="", flush=True)
+    return proc.returncode, proc.stdout
+
+
+def full_sha(root, short: str) -> str | None:
+    code, found = merge_cleared.git_out(root, "rev-parse", "--verify", "-q", f"{short}^{{commit}}")
+    return found if code == 0 and merge_cleared.SHA.fullmatch(found) else None
+
+
+def branch_state(root, repo: str, branch: str, sha: str) -> str:
+    """`green`, `red` or `pending` for the default branch's commit SHA: its last 100 push runs of
+    governance.yml, read as ADR-0302 reads them (a run replaced while it waited is covered by the
+    next completed run on a later commit that contains it)."""
+    merge_cleared.git_out(root, "fetch", "-q", "origin", branch)
+    data = session.gh(RUNS.format(repo, branch))
+    listed = data.get("workflow_runs") if isinstance(data, dict) else None
+    if not isinstance(listed, list):
+        raise CheckError("the runs of the default branch cannot be read")
+    return covered(sha, listed, contained_in(root))[0]
+
+
+def batch_run(root, repo: str, branch: str, sha: str, minutes: int) -> str:
+    """The one wait at the end: the state of SHA, polled until it is not `pending` or MINUTES
+    have passed; a read that fails is printed and tried again."""
+    interval = session.flow_int(root, POLL[0], POLL[1], 0)
+    end = time.monotonic() + minutes * 60
+    while True:
+        try:
+            state = branch_state(root, repo, branch, sha)
+        except CheckError as exc:
+            print(f"error: {exc}; retrying", file=sys.stderr, flush=True)
+            state = "pending"
+        if state != "pending" or time.monotonic() >= end:
+            return state
+        time.sleep(interval)
+
+
+def merge_queue(root, dry: bool, limit: int) -> int:
+    rules = merge_cleared.ruled(root)
+    repo = merge_cleared.repo_of(root)
+    order, kept_out = queued(root, repo, rules)
+    if kept_out:
+        print("\n".join(kept_out))
+    batch, rest = order[:limit], order[limit:]
+    if dry or not batch:
+        for place, (number, sha) in enumerate(batch, 1):
+            print(f"merge-queue: {place}. #{number} {sha[:12]}")
+        if rest:
+            print(f"merge-queue: {len(rest)} more wait for the next batch")
+        if not batch:
+            print("merge-queue: nothing to merge")
+        return 0
+    merged: list[tuple[int, str]] = []
+    code, red = 0, False
+    for place, (number, sha) in enumerate(batch):
+        if place:
+            settle(repo, number)
+        code, out = run_merge(root, number, sha)
+        if found := MERGED.search(out):
+            merged.append((number, found.group(1)))
+        elif out.startswith(STOPPED):
+            merged.append((number, ""))
+            red = True
+        if code != 0:
+            break
+    names = " ".join(f"#{n}" for n, _ in merged)
+    if code != 0:
+        print(f"merge-queue: stopped at #{number} (exit {code}); merged: {names or 'none'}")
+    elif rest:
+        print(f"merge-queue: {len(rest)} more wait for the next batch")
+    if not merged or red:
+        return code
+    issues = merge_cleared.read_pages(f"repos/{repo}/issues?state=open", "the open issues")
+    if merge_cleared.local_mode(rules.data, issues):
+        print(f"merge-queue: local mode, no run of the default branch to wait for; batch {names}")
+        return code
+    branch = str(rules.data.get("default_branch", "main"))
+    last = full_sha(root, merged[-1][1])
+    if last is None:
+        raise CheckError("the merge commit of the last merge cannot be read")
+    minutes = session.flow_int(root, WAIT[0], WAIT[1], 0)
+    state = batch_run(root, repo, branch, last, minutes)
+    if state == "green":
+        print(f"merge-queue: {branch} green at {last[:12]} after the batch {names}")
+        return code
+    if state == "red":
+        print(f"merge-queue: stopped: {branch} red at {last[:12]} after the batch {names}")
+        return 1
+    print(
+        f"merge-queue: the run of {branch} at {last[:12]} has not ended after {minutes} minutes; "
+        f"batch {names}"
+    )
+    return code or 3
+
+
+def queue_args(args: list[str]) -> tuple[bool, int] | None:
+    """(`--dry-run` given, the batch size) for `merge-queue [--dry-run] [--max-batch N]`; None
+    for any other form."""
+    rest = args[1:]
+    dry = rest[:1] == ["--dry-run"]
+    rest = rest[1:] if dry else rest
+    if not rest:
+        return dry, BATCH
+    if len(rest) == 2 and rest[0] == "--max-batch" and BATCH_SIZE.fullmatch(rest[1]):
+        return dry, int(rest[1])
+    return None
+
+
+def main(argv: list[str] | None = None, root: Path | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     since = datetime.now(UTC)
     if args[:1] == ["watch"] and len(args) >= 3 and args[1] == "--since":
@@ -253,14 +449,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{USAGE}\n--since takes a time such as 2026-11-06T10:00:00Z", file=sys.stderr)
             return 2
         since, args = parsed, ["watch", *args[3:]]
-    if args not in (["sweep"], ["watch"], ["watch", "--once"]):
+    queue = queue_args(args) if args[:1] == ["merge-queue"] else None
+    if queue is None and args not in (["sweep"], ["watch"], ["watch", "--once"]):
         print(USAGE, file=sys.stderr)
         return 2
     try:
-        root = repo_root()
+        root = repo_root() if root is None else root
+        if queue is not None:
+            return merge_queue(root, *queue)
         if args == ["sweep"]:
             return sweep(root)
         return watch(root, since, args[1:] == ["--once"])
+    except merge_cleared.Held as exc:
+        print(f"merge-queue: held: {exc}")
+        return merge_cleared.EXIT_HELD
+    except merge_cleared.Unreadable as exc:
+        print(f"FAIL conductor: GitHub cannot be read ({exc})", file=sys.stderr)
+        return merge_cleared.EXIT_UNREADABLE
     except CheckError as exc:
         print(f"FAIL conductor: {exc}", file=sys.stderr)
         return 1

@@ -29,7 +29,7 @@ merged pull request that builds the guard), `pending (to be filed)` (a guard who
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 2026-11-05 (unverified) | watch | a builder's `Question:` on an issue was not seen by the watch; the default branch stayed red overnight | (unknown): overnight (unverified) | the watch read questions and reports on pull requests only | check `scripts/agk/conductor.py` (watch and sweep, brief #643); rule `.claude/agents/conductor.md` |
 | 2 | 2026-11-05 (unverified) | watch | a merge script waited on a process name that matched its own command line | 25 min (unverified) | a wait on a name match, which matches the waiter itself | rule `.claude/agents/conductor.md` |
-| 3 | 2026-11-05 (unverified) | unread-result | a `REAL RED` line in a merge log was not read before the merge was reported | (unknown) | the result was reported from its last line | rule `.claude/agents/conductor.md`; check `scripts/agk/merge_cleared.py` (the red-branch issue holds merges, in force) |
+| 3 | 2026-11-05 (unverified) | unread-result | a `REAL RED` line in a merge log was not read before the merge was reported | (unknown) | the result was reported from its last line | check `scripts/agk/conductor.py` (merge-queue reads each result and stops at the first that is not a merge, brief #643 build (b)); check `scripts/agk/merge_cleared.py` (the red-branch issue holds merges, in force); rule `.claude/agents/conductor.md` |
 | 4 | 2026-11-05 | parallel-merge | two pull requests passed alone and broke the default branch together (#581 built its test map before #579 merged; found on #597) | (unknown): the default branch red from #597 on | a map built before a sibling merged | check `scripts/agk/merge_cleared.py` (the after-merge governance run, in force); rule `.claude/agents/conductor.md` |
 | 5 | 2026-11-05 | false-red | the after-merge governance run had no pull request body, so a `Covered-by:` merge was reported red (brief #576) | (unknown) | the run read no body | check `scripts/agk/merge_cleared.py` (#577, merged) |
 | 6 | 2026-11-06 | kit-gap | `Covered-by:` refused an ADR accepted by a rule 3a `Final:`, and a rule 3a merge kept the `agk:fix` label (#577 and #581) | 2 merges (#577, #581) with the wrong label | the file of an ADR accepted by rule 3a says `Proposed` until the release | pending #601 |
@@ -48,7 +48,7 @@ merged pull request that builds the guard), `pending (to be filed)` (a guard who
 | 19 | 2026-11-06 | false-red | a push to a ready pull request left only skipped runs | (unknown) | the runs of a push to a ready pull request are skipped | pending (to be filed) (draft, push, then ready, later a kit command) |
 | 20 | 2026-11-06 | kit-gap | the builders' sandbox refused the secret scanner's download, so prepush could not pass | 1.5 h (unverified) | prepush required the scanner in a session that cannot install it | check `scripts/agk/prepush.py` (the deferral, ADR-0327, #684, merged) |
 | 21 | 2026-11-06 | history | the conductor amended a pushed commit and attempted a force-push on `claude/brief-683` before its pull request existed; an ordinary push superseded it | (unknown) | a pushed commit was amended in the conductor's own checkout | pending (to be filed) (no amend after a push, own builds in a worktree) |
-| 22 | 2026-11-06 | unread-result | the conductor's merge script read one page of check runs and waited on a green default branch | 40 min (unverified) | one page of check runs was read as all of them | pending #643 (per_page=100 for now, later the kit's merge queue, build b) |
+| 22 | 2026-11-06 | unread-result | the conductor's merge script read one page of check runs and waited on a green default branch | 40 min (unverified) | one page of check runs was read as all of them | check `scripts/agk/conductor.py` (merge-queue merges through `merge_cleared.py`, which reads every page of the check runs, brief #643 build (b)) |
 
 ## What this shows
 
@@ -59,9 +59,9 @@ Counted from the table and nothing else. 22 rows; 5 with their numbers verified 
 - **By kind:** `watch` 5 (rows 1, 2, 12, 13, 17); `kit-gap` 4 (rows 6, 11, 14, 20); `parallel-merge` 3 (rows 4, 15, 16); `false-red` 3
   (rows 5, 18, 19); `unread-result` 2 (rows 3, 22); `history` 2 (rows 7, 21); `sequence` 1 (row 8); `stale-input` 1 (row 9);
   `conflict` 1 (row 10).
-- **By the strongest guard:** a check 9 (rows 1, 3, 4, 5, 10, 12, 13, 17, 20, of which rows 1, 3, 4, 12 and 13 also carry a rule line;
-  rows 1, 12 and 13 by `conductor.py`, brief #643; row 17 by `conductor.py`, brief #669; row 20 by `prepush.py`, #684); pending 8
-  (row 6, #601; rows 15 and 16, #667; row 22, #643; rows 14, 18, 19 and 21, to be filed); a rule line only 5 (rows 2, 7, 8, 9, 11).
+- **By the strongest guard:** a check 10 (rows 1, 3, 4, 5, 10, 12, 13, 17, 20, 22, of which rows 1, 3, 4, 12 and 13 also carry a rule
+  line; rows 1, 3, 12, 13 and 22 by `conductor.py`, brief #643; row 17 by `conductor.py`, brief #669; row 20 by `prepush.py`, #684);
+  pending 7 (row 6, #601; rows 15 and 16, #667; rows 14, 18, 19 and 21, to be filed); a rule line only 5 (rows 2, 7, 8, 9, 11).
   No row has a test as its strongest guard.
 - **Corrections of the given list:** row 1 named `pending #601` beside its rule; #601 builds the rule 3a gaps of row 6 and nothing
   about the watch, so row 1 keeps its rule line only. Brief #695 gives rows 18, 19 and 21 a practice as the guard; a `rule` guard

@@ -71,7 +71,7 @@ Every incident of a conductor run is a row of the conductor catch log (`docs/run
 
 - Watch with `conductor.py watch`; it ends on any `Question:` or `Report:` on an open brief, the red-branch issue, or an open pull request (row 1).
 - Wait on a process id, never on a name match, which can match the waiter itself (row 2).
-- Read every merge result in full for its red line before you report the merge (row 3).
+- Merge with `conductor.py merge-queue`, never a private script; it stops at the first red line (row 3).
 - When two pull requests change the same map or index, the later one merges the default branch and reruns that test before it is ready; ask for it before clearing (row 4).
 - When a commit holds a leaked literal, order the work re-opened as one clean commit, never a fix commit on top: the secret scan reads every commit (row 7).
 - Clear only the head you reviewed: any later commit needs a verdict on its own head (row 8).
