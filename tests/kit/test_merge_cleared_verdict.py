@@ -847,14 +847,17 @@ def test_a_remote_that_is_not_github_or_no_gh_is_refused(tmp_path):
 def test_the_script_writes_no_file_and_makes_no_other_write():
     """REQ-046 AC5: SPEC-0039 rule 8 (build (b) adds the one merge call and nothing else; build
     (c) adds the one record line, a POST of a comment, SPEC-0039 rule 7; brief #576 adds the one
-    body file, written only in the governance run's temporary home)."""
+    body file, written only in the governance run's temporary home; brief #601 adds the one record
+    comments file there, amendment 122)."""
     text = SCRIPT.read_text(encoding="utf-8")
     assert text.count('"POST"') == 1
     assert '"POST", f"repos/{repo}/issues/{issue}/comments"' in text
-    assert text.count(".write_text(") == 1
+    assert text.count(".write_text(") == 2
     run_body = text.split("\ndef governance(", 1)[1].split("\ndef ", 1)[0]
     assert 'body = home / "pr-body.md"' in run_body and "body.write_text(text" in run_body
+    assert "(home / RECORD_COMMENTS).write_text(" in run_body
     text = text.replace("body.write_text(text", "body.(text")
+    text = text.replace("(home / RECORD_COMMENTS).write_text(", "(home / RECORD_COMMENTS).(")
     words = ('"PATCH"', '"DELETE"', ".write_text(", "open(", '"push"', "--jq")
     words += ("shell=True", "graphql", '"tag"', "/reviews")
     for word in words:  # `subprocess.Popen(` of the governance run is not a file open (#556)

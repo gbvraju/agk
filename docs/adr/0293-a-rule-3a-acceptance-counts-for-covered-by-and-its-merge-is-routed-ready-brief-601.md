@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-06
 - Deciders: maintainers
-- Related: ADR-0271, ADR-0277, SPEC-0021, plan #542
+- Related: ADR-0271, ADR-0277, ADR-0284, ADR-0186, SPEC-0021, SPEC-0039, plan #542
 - Requirements: REQ-028
 
 Protected classes: `scripts/agk/`, `tests/kit/`
@@ -40,11 +40,31 @@ brief).
    waits), and so a pull request merged on it ends with `agk:ready`. The order of the labels and
    every other case are unchanged.
 
+3. The after-merge run (the conductor's fix list on 322b838, answering Q-601-1). Before its
+   governance run, `merge_cleared.py` fetches the Final comment of each rule 3a record in the
+   merge commit's history (the ids that `check_adrs.py --record-ids` prints there, read by the
+   command's own `common.final_records`), one GET each, the GETs of the workflow's `Record
+   comments` step, leaving out one that cannot be read, writes them to
+   `<scratch>/home/record-comments.json` and adds `AGK_RECORD_COMMENTS=<that file>` to the
+   `env -i` list. No token or other variable is passed, and the file goes with the scratch folder.
+   `check_protected_changes.py` and `check_release.py` read the file that `AGK_RECORD_COMMENTS`
+   names when `--comments` is absent; a given `--comments` wins. This amends ADR-0284 decision 2
+   (the list of exactly `PATH`, `HOME` and `AGK_PR_BODY`). SPEC-0039 rule 6 changes by amendment
+   122 (`docs/runs/proposed-spec-amendments-122.md`, the number the conductor reserved in that
+   fix list), applied to the spec in this pull request; it needs a person's `Approve: SPEC-0039`.
+4. `prepush.py` (ADR-0186): when the body file has a `Covered-by:` line and the base holds a rule
+   3a record, its governance step fetches the same comments (`gh api --method GET`, one each)
+   into a temporary file outside the checkout, passes it as `AGK_RECORD_COMMENTS` (the step runs
+   `make`, which takes no `--comments`) and removes it afterwards. When any comment cannot be read
+   (no GitHub origin, no `gh`, or a failed or non-JSON answer), the step fails closed with one
+   line naming rule 3a and the option, and `make` does not run.
+
 ## Consequences
 
 A build of an Approved spec can name an ADR accepted by a Final in its `Covered-by:` line on the
-next pull request, without waiting for the release. A local run without the record comments
-(prepush) fails on such a line, naming the option, and passes in CI where the comments are saved.
+next pull request, without waiting for the release. CI, prepush and the after-merge run of
+`merge_cleared.py` read the same Final comments, so such a line no longer passes CI and then
+raises a false red after the merge. A local run that cannot read them fails, naming the option.
 The router no longer leaves `agk:fix` on a pull request that the conductor merged on a rule 3a
 Final.
 

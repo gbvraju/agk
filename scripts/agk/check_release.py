@@ -11,7 +11,8 @@ the release, a fragment left, added or edited fails it. Each ADR that a Final li
 `gh api repos/{repo}/issues/comments/<id>` answers, verifies: `check_adrs.verified_records`,
 SPEC-0021 rule 3a) has its Status line flipped from `Proposed` to `Accepted` by the release and
 nothing else changed; one left `Proposed` fails it. An unverified record asks no flip, and a
-release without FILE fails closed while the base holds a record. In
+release without FILE fails closed while the base holds a record. Without `--comments`, FILE is the
+one `AGK_RECORD_COMMENTS` names (the after-merge run of merge_cleared.py, amendment 122). In
 strict mode, when no version is raised and when the base does not have this script yet (the pull
 request that adds it is the last build that bumps itself, SPEC-0028 rule 9) it prints `ok release`
 and checks nothing. Git and files only: no network, no model. Messages name the rule and the
@@ -23,6 +24,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import re
 import sys
 import tomllib
@@ -283,7 +285,9 @@ def main() -> int:
     if args and (len(args) != 2 or args[0] != "--comments"):
         raise CheckError(USAGE)
     root = repo_root()
-    return check(root, check_adrs.read_comments(args[1] if args else None))
+    # without the option, the file AGK_RECORD_COMMENTS names (amendment 122, brief #601)
+    path = args[1] if args else os.environ.get("AGK_RECORD_COMMENTS") or None
+    return check(root, check_adrs.read_comments(path))
 
 
 if __name__ == "__main__":

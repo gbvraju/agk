@@ -215,7 +215,9 @@ def test_req028_prepush_passes_the_record_comments_file(repo, tmp_path):
     proc = prepush(repo, tools, "--body", str(body))
     assert "prepush: governance ok" in proc.stdout, proc.stdout
     assert gh_calls(tmp_path) == [["api", "--method", "GET", COMMENT_PATH]]
-    assert repo.git("status", "--porcelain").strip() == "", "no file left in the checkout"
+    left = set(repo.git("status", "--porcelain", "-uall").split("\n")) - {""}
+    ours = {"?? gh-calls.jsonl", "?? pr-body.md", "?? tools/gh"}  # this test's own files
+    assert left == ours, "prepush leaves no file in the checkout"
 
 
 def test_req028_a_failed_fetch_fails_closed_naming_the_option(repo, tmp_path):

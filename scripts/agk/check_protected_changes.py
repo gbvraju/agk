@@ -9,8 +9,9 @@ naming an ADR that is Accepted on the merge base, names every changed class, and
 
 Brief #601 (ADR-0293): a `Covered-by:` ADR whose file still says `Proposed` counts as Accepted when
 a SPEC-0021 rule 3a record of it on the merge base is verified by its Final comment among the
-comments of `--comments FILE` (the workflow's `Record comments` step); without the file, while such
-a record exists, the check fails closed and names the option.
+comments of `--comments FILE` (the workflow's `Record comments` step), or, without the option, of
+the file `AGK_RECORD_COMMENTS` names (merge_cleared.py's after-merge run and prepush, amendment
+122); without either, while such a record exists, the check fails closed and names the option.
 """
 
 from __future__ import annotations
@@ -114,6 +115,7 @@ def own_status(text: str) -> str | None:
     return None
 
 
+RECORD_COMMENTS = "AGK_RECORD_COMMENTS"  # the comments file without --comments (amendment 122)
 NOT_ACCEPTED = f"the '{COVERED_BY}' ADR is not '- Status: Accepted' on the merge base"
 
 
@@ -191,10 +193,12 @@ def covered_by_problems(
 
 
 def comments_arg(argv: list[str] | None) -> str | None:
-    """The file of `--comments FILE`: the Final comments of the base's records, else None."""
+    """The file of `--comments FILE`: the Final comments of the base's records; without the
+    option, the file that `AGK_RECORD_COMMENTS` names (the after-merge run of merge_cleared.py and
+    prepush, amendment 122, brief #601); else None."""
     args = list(sys.argv[1:] if argv is None else argv)
     if "--comments" not in args:
-        return None
+        return os.environ.get(RECORD_COMMENTS) or None
     i = args.index("--comments")
     if i + 1 >= len(args):
         raise CheckError("--comments needs a value")

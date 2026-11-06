@@ -171,7 +171,8 @@ def test_the_governance_run_gets_no_token_and_a_scratch_home(tmp_path, monkeypat
     assert proc.returncode == 0, proc.stdout + proc.stderr
     env = ran[0]["env"]
     # LC_CTYPE is set by the fake make's own Python (PEP 538), not passed by the command
-    assert set(env) - {"LC_CTYPE"} == {"PATH", "HOME", "AGK_PR_BODY"}, sorted(env)
+    names = {"PATH", "HOME", "AGK_PR_BODY", "AGK_RECORD_COMMENTS"}  # amendment 122 (brief #601)
+    assert set(env) - {"LC_CTYPE"} == names, sorted(env)
     assert HIDDEN not in json.dumps(env)
     assert Path(env["HOME"]) != Path.home()
 
@@ -374,8 +375,9 @@ def test_the_governance_argument_list_is_the_same_on_a_fake_windows_platform(mon
     assert argv[:10] == [sys.executable, lock_py, "run", "--name", "heavy", "--session",
                          "merge-cleared", "--timeout", "1800", "--"]  # fmt: skip
     assert argv[10:12] == ["env", "-i"] and argv[12].startswith("PATH=")
-    assert argv[13:] == [f"HOME={home}", f"AGK_PR_BODY={body}", "make", "-C", str(tree),
-                         "governance", f"AGK_BASE={BASE}"]  # fmt: skip
+    assert argv[13:] == [f"HOME={home}", f"AGK_PR_BODY={body}",
+                         f"AGK_RECORD_COMMENTS={home / 'record-comments.json'}", "make", "-C",
+                         str(tree), "governance", f"AGK_BASE={BASE}"]  # fmt: skip
     assert all(not kwargs.get("shell") for _, kwargs in seen)
 
 
