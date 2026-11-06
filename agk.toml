@@ -343,6 +343,9 @@ tests = [
   "tests/kit/test_route_finishes.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_review_pass_skill.py",
 ]
 [[testing.map]]
+code = "scripts/agk/lessons.py"
+tests = ["tests/kit/test_lessons.py"]
+[[testing.map]]
 code = "scripts/agk/local_mode.py"
 tests = ["tests/kit/test_local_mode.py", "tests/kit_dev/test_local_mode_guide.py"]
 [[testing.map]]

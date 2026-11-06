@@ -302,3 +302,10 @@ def test_this_repositorys_own_catch_logs_are_on_the_ladder_and_checkable():
     assert proc.returncode == 0, proc.stdout
     assert "malformed 0" in proc.stdout.splitlines()[-1]
     assert "missing 0" in proc.stdout.splitlines()[-1]
+
+
+def test_a_row_whose_cells_do_not_match_the_header_fails(tmp_path, capsys):
+    root = project(tmp_path, ["| 1 | 2026-11-05 | watch | lesson |\n"])
+    code, out = ladder(root, capsys)
+    assert code == 1
+    assert "malformed x-catches-1#1: its cells do not match the header" in out.splitlines()
