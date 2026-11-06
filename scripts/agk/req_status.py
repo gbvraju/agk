@@ -34,7 +34,7 @@ is never printed or stored.
 from __future__ import annotations
 
 import json
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
@@ -144,11 +144,11 @@ def evaluate(root: Path, wanted: list[str]) -> tuple[list[dict], int]:
             continue
         entry = {"id": req["id"], "status": req["status"], "files": [], "failing": [], "slow": []}
         files = proof_files(req, markers)
-        plan = [(f, area_of(f, areas)) for f in files or []]
-        if not files or any(area is None for _, area in plan):
+        plan = {f: a for f in files or [] if (a := area_of(f, areas)) is not None}
+        if not files or len(plan) != len(files):
             found.append({**entry, "outcome": "no-proof"})
             continue
-        for file, area in plan:
+        for file, area in plan.items():
             if file not in results:
                 results[file] = run_file(root, area, file, limit)
         entry["files"] = files
