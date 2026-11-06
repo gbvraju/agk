@@ -2,8 +2,8 @@
 
 Pure checks of the source text; bandit and mypy are run only where they are installed. Governance
 installs bandit with its other tooling, so the bandit test runs in CI (brief #338, ADR-0192). The
-mypy errors may only go down from config/mypy-baseline.txt, made with the mypy version it pins (brief
-#633); CI installs no mypy, so that test runs where the pinned version is installed.
+mypy errors may only go down from config/mypy-baseline.txt, made with the mypy version it pins
+(brief #633); CI installs no mypy, so that test runs where the pinned version is installed.
 """
 
 from __future__ import annotations
