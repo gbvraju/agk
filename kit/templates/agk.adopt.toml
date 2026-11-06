@@ -81,3 +81,14 @@ review_mode = "team"
 # queue_idle_minutes = 10
 # queue_order = "priority"
 # queue_max_wait = 120
+# The data guard (SPEC-0042 rule 1, brief #589): always on; no key turns it off or removes a built-in rule. The [guard] table may only add:
+# patterns (detector kinds CUSTOM-<name>), deny_paths (globs added to the secret files), deny_commands (added to the log commands),
+# allowed_hosts (added to the local hosts), and allow_paths, the one escape: one relative file with a reason, never a built-in secret
+# file, which the hook reads itself and allows only clean. An allow_paths or allowed_hosts entry counts only when it is also in agk.toml
+# on the default branch. Any other key or value is refused, naming the setting. A change needs an ADR (agk.toml is protected).
+# [guard]
+# patterns = [{ name = "employee", regex = "EMP-\\d{5}" }]
+# deny_paths = ["*.sqlite"]
+# deny_commands = ["tail-prod"]
+# allowed_hosts = ["db.internal.example.com"]
+# allow_paths = [{ path = "docs/logs/README.md", reason = "a guide about logs, not a log" }]

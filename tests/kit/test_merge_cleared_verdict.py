@@ -259,6 +259,10 @@ elif parts[0] == 'commits' and parts[2:] == ['status']:  # the combined status (
     statuses = data.get('statuses', [])
     state = data.get('status_state') or ('success' if statuses else 'pending')
     out = {'state': state, 'total_count': len(statuses), 'statuses': paged(statuses)}
+elif parts[:2] == ['issues', 'comments'] and len(parts) == 3:  # a record's Final (brief #601)
+    if parts[2] not in data.get('record_comments', {}):
+        fail(404)
+    out = data['record_comments'][parts[2]]
 elif parts[0] in ('issues', 'pulls') and len(parts) == 2 and parts[1] in data['items']:
     item = data['items'][parts[1]]
     if parts[0] == 'pulls' and 'pull' in item:
@@ -850,8 +854,9 @@ def test_a_remote_that_is_not_github_or_no_gh_is_refused(tmp_path):
 def test_the_script_writes_no_file_and_makes_no_other_write():
     """REQ-046 AC5: SPEC-0039 rule 8 (build (b) adds the one merge call and nothing else; build
     (c) adds the one record line, a POST of a comment, SPEC-0039 rule 7; brief #576 adds the one
-    body file, written only in the governance run's temporary home; brief #610 adds the close of
-    the red-branch issue, one comment and one PATCH, in `close_red` alone)."""
+    body file, written only in the governance run's temporary home; brief #601 adds the one record
+    comments file there, amendment 122; brief #610 adds the close of the red-branch issue, one
+    comment and one PATCH, in `close_red` alone)."""
     text = SCRIPT.read_text(encoding="utf-8")
     close = text.split("\ndef close_red(", 1)[1].split("\ndef ", 1)[0]
     assert text.count('"POST"') == 2 and close.count('"POST"') == 1
@@ -860,10 +865,12 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     assert text.count('"PATCH"') == 1
     assert '"PATCH", endpoint, "-f", "state=closed", "-f", "state_reason=completed"' in close
     text = text.replace(close, "")
-    assert text.count(".write_text(") == 1
+    assert text.count(".write_text(") == 2
     run_body = text.split("\ndef in_worktree(", 1)[1].split("\ndef ", 1)[0]
     assert 'body = home / "pr-body.md"' in run_body and "body.write_text(text" in run_body
+    assert "(home / RECORD_COMMENTS).write_text(" in run_body
     text = text.replace("body.write_text(text", "body.(text")
+    text = text.replace("(home / RECORD_COMMENTS).write_text(", "(home / RECORD_COMMENTS).(")
     words = ('"PATCH"', '"DELETE"', ".write_text(", "open(", '"push"', "--jq")
     words += ("shell=True", "graphql", '"tag"', "/reviews")
     for word in words:  # `subprocess.Popen(` of the governance run is not a file open (#556)

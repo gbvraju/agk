@@ -26,7 +26,8 @@ itself, so the owner merged it by hand. The ADR number and amendment 123 were re
    (`git commit-tree`, one parent, the shape of the squash merge; an object only, no ref and no
    file of the checkout), and runs on it, in a detached worktree in a temporary folder outside the
    checkout, the same governance run as after the merge: the heavy lock with its timeout, `env -i`
-   with `PATH`, `HOME` and `AGK_PR_BODY`, `AGK_BASE=<the fetched default branch>`. Green merges as
+   with `PATH`, `HOME`, `AGK_PR_BODY` and `AGK_RECORD_COMMENTS` (amendment 122, the Final comments
+   of the records in that commit's history), `AGK_BASE=<the fetched default branch>`. Green merges as
    today. Red holds with `held: the merge with the default branch fails governance (<step>)`, exit
    3, nothing merged, recorded or filed; the step is `fetch`, `merge-tree`, `worktree`, `heavy
    lock`, `make governance` or `governance not finished` (an exception, interrupt or termination

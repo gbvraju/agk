@@ -11,7 +11,8 @@ person's `Approve: SPEC-0039` on the pull request; no session posts it.
    `git merge-tree --write-tree` as one commit on the fetched default branch (`git commit-tree`, one parent, the shape
    of the squash merge; an object only, no ref and no file of the checkout), and runs on it, in a detached worktree in a
    temporary folder outside the checkout, the same governance run as after the merge (the heavy lock, `env -i` with
-   `PATH`, `HOME` and `AGK_PR_BODY`), with `AGK_BASE=<the fetched default branch>`, then removes both in every case.
+   `PATH`, `HOME`, `AGK_PR_BODY` and, after amendment 122, `AGK_RECORD_COMMENTS`), with
+   `AGK_BASE=<the fetched default branch>`, then removes both in every case.
    Green merges. Red, or a step that cannot run, holds with `held: the merge with the default branch fails governance
    (<step>)`, exit 3, and nothing is merged, recorded or filed; a conflict holds as `conflict` (rule 5).
 2. **The red-branch fix (rule 5).** While the default branch is red, a pull request whose first `Brief:` line is

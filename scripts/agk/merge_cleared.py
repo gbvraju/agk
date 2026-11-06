@@ -35,16 +35,20 @@ needs one record issue (the open local-mode record issue, else the one open issu
 posts one comment `Auto merge: #<n> <merge sha> <UTC time> <verdict link>` there, then fetches the
 default branch, adds a detached worktree of the merge commit in a temporary folder outside the
 checkout and runs `lock.py run --name heavy --session merge-cleared -- env -i PATH=<PATH>
-HOME=<scratch> AGK_PR_BODY=<scratch>/pr-body.md make -C <worktree> governance AGK_BASE=<parent of
-the merge commit>`, the body file holding the pull request body read before the merge (brief #576,
-so that a `Covered-by:` build is not reported red), and removes the worktree in every case. A red
+HOME=<scratch> AGK_PR_BODY=<scratch>/pr-body.md AGK_RECORD_COMMENTS=<scratch>/record-comments.json
+make -C <worktree> governance AGK_BASE=<parent of the merge commit>`, the body file holding the pull
+request body read before the merge (brief #576, so that a `Covered-by:` build is not reported red)
+and the comments file the Final comment of each rule 3a record in the merge commit's history, one
+GET each as the workflow's `Record comments` step makes them, an unreadable one left out
+(amendment 122, brief #601, so that a `Covered-by:` of an ADR a Final accepted is not reported
+red), and removes the worktree in every case. A red
 run (or a fetch or worktree that fails) opens or updates the red-branch issue through
 `route.write_red`, prints
 
     merge-cleared: stopped: default branch red after #<n>         exit 1
 
 and that open issue holds every later run. It never reverts, pushes nothing and writes no file
-but that body file, which goes with the temporary folder.
+but those two files, which go with the temporary folder.
 The heavy-lock wait is bounded by `[flow] after_merge_timeout` (minutes, 30 by default; lock.py's
 exit 3 is the step `heavy lock`), and any exception, interrupt or SIGTERM after the merge is the
 step `governance not finished`: the red-branch issue is still opened (the fix list on #556).
@@ -103,6 +107,7 @@ from common import (  # noqa: E402
     CheckError,
     covered_fix_list,
     final_accepts,
+    final_records,
     show,
 )
 from reviewers import CONFIG, approval_shas, approvers_of, conductors_of, parse  # noqa: E402
@@ -692,11 +697,15 @@ def post_record(repo: str, issue: int, number: int, merged: str, verdict: dict) 
 # --- rule 6: governance after the merge, and the red-branch stop -------------------------------
 
 
+RECORD_COMMENTS = "record-comments.json"  # in the run's home (amendment 122, brief #601)
+
+
 def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) -> list[str]:
     """The governance run of SPEC-0039 rule 6 as one argument list: the project's own lock.py,
-    the heavy lock waited for at most WAIT seconds, and `env -i` so that only PATH, HOME and
-    AGK_PR_BODY (the file BODY holding the merged pull request's body, brief #576) reach the
-    merged code."""
+    the heavy lock waited for at most WAIT seconds, and `env -i` so that only PATH, HOME,
+    AGK_PR_BODY (the file BODY holding the merged pull request's body, brief #576) and
+    AGK_RECORD_COMMENTS (HOME's file of the records' Final comments, amendment 122, brief #601)
+    reach the merged code."""
     lock_py = Path(__file__).resolve().parent / "lock.py"
     return [
         sys.executable,
@@ -714,6 +723,7 @@ def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) 
         f"PATH={os.environ.get('PATH', '')}",
         f"HOME={home}",
         f"AGK_PR_BODY={body}",
+        f"AGK_RECORD_COMMENTS={home / RECORD_COMMENTS}",
         "make",
         "-C",
         str(tree),
@@ -759,11 +769,29 @@ def end_child(child: subprocess.Popen) -> None:
         child.wait()
 
 
-def governance(root: Path, branch: str, merged: str, wait: float, text: str) -> str | None:
+def record_comments(repo: str, root: Path, merged: str) -> list[dict]:
+    """The Final comment of each SPEC-0021 rule 3a record in the history of the merge commit
+    MERGED (the ids `check_adrs.py --record-ids` prints there, read here by the command's own
+    `common.final_records`), one GET each, the GETs of the workflow's `Record comments` step; a
+    comment that cannot be read is left out, so its record counts for nothing (amendment 122,
+    brief #601)."""
+    found: list[dict] = []
+    for cid in sorted({record[1] for record in final_records(root, merged).values()}):
+        try:
+            found.append(read_json(f"repos/{repo}/issues/comments/{cid}", dict, "a Final comment"))
+        except Unreadable:
+            continue
+    return found
+
+
+def governance(
+    root: Path, branch: str, merged: str, wait: float, text: str, repo: str = ""
+) -> str | None:
     """Fetch the default branch, run governance on the merge commit in a temporary worktree
-    outside the checkout, with TEXT (the pull request body read before the merge) in a file of the
-    run's temporary home, and remove both in every case. None when green, else the failing step
-    (`fetch`, `worktree`, `heavy lock` or `make governance`)."""
+    outside the checkout, with TEXT (the pull request body read before the merge) and the Final
+    comments of the merge commit's records (read from REPO) in files of the run's temporary home,
+    and remove all of them in every case. None when green, else the failing step (`fetch`,
+    `worktree`, `heavy lock` or `make governance`)."""
     code, _ = git_out(root, "fetch", "-q", "origin", branch)
     if code != 0:
         return "fetch"
@@ -771,15 +799,16 @@ def governance(root: Path, branch: str, merged: str, wait: float, text: str) -> 
     parent_code, parent = git_out(root, "rev-parse", "--verify", "-q", f"{merged}^1")
     if code != 0 or parent_code != 0 or not SHA.fullmatch(parent):
         return "fetch"
-    return in_worktree(root, merged, parent, wait, text, AFTER_PREFIX)
+    return in_worktree(root, merged, parent, wait, text, AFTER_PREFIX, repo)
 
 
 def in_worktree(
-    root: Path, commit: str, base: str, wait: float, text: str, prefix: str
+    root: Path, commit: str, base: str, wait: float, text: str, prefix: str, repo: str = ""
 ) -> str | None:
     """The governance run on COMMIT against BASE in a detached worktree of a new temporary folder
-    outside the checkout (named with PREFIX), with TEXT in the body file of its temporary home;
-    both are removed in every case. The one run of rule 6, after the merge and before it (brief
+    outside the checkout (named with PREFIX), with TEXT in the body file of its temporary home and
+    the Final comments of COMMIT's records (read from REPO, amendment 122) in its record-comments
+    file; both are removed in every case. The one run of rule 6, after the merge and before it (brief
     #610). None when green, else the failing step."""
     scratch = Path(tempfile.mkdtemp(prefix=prefix))
     tree, home = scratch / "tree", scratch / "home"
@@ -787,6 +816,8 @@ def in_worktree(
     try:
         home.mkdir()
         body.write_text(text, encoding="utf-8")
+        found = record_comments(repo, root, commit) if repo else []
+        (home / RECORD_COMMENTS).write_text(json.dumps(found), encoding="utf-8")
         code, _ = git_out(root, "worktree", "add", "--detach", "-q", str(tree), commit)
         if code != 0:
             return "worktree"
@@ -820,7 +851,7 @@ def would_be_merge(root: Path, branch: str, number: int, sha: str) -> tuple[str 
 
 
 def merge_check(
-    root: Path, branch: str, number: int, sha: str, wait: float, text: str
+    root: Path, branch: str, number: int, sha: str, wait: float, text: str, repo: str = ""
 ) -> str | None:
     """Governance on the would-be merge of SHA with the default branch, before the merge (brief
     #610, amendment 123): the run of rule 6 on it. None when green, else the failing step; any
@@ -830,7 +861,7 @@ def merge_check(
             commit, base = would_be_merge(root, branch, number, sha)
             if commit is None:
                 return base
-            return in_worktree(root, commit, base, wait, text, CHECK_PREFIX)
+            return in_worktree(root, commit, base, wait, text, CHECK_PREFIX, repo)
         except Held:
             raise
         except BaseException:  # a run that cannot finish is not green; nothing has merged
@@ -931,7 +962,7 @@ def after_merge(
         try:
             recorded = post_record(repo, record, number, merged, verdict)
             branch = str(data.get("default_branch", "main"))
-            step = governance(root, branch, merged, wait, text)
+            step = governance(root, branch, merged, wait, text, repo)
         except BaseException:  # the merge stands; the run cannot show green (fix list, #556)
             step = NOT_FINISHED
         if step is not None:
@@ -1027,7 +1058,7 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
         hold_list(repo, number, pull, comments, approvers, accepted_adrs(verdict, sha) or [])
         text = str(pull.get("body") or "")  # the body read above, for governance (brief #576)
         branch = str(data.get("default_branch", "main"))
-        step = merge_check(root, branch, number, sha, after_merge_seconds(data), text)
+        step = merge_check(root, branch, number, sha, after_merge_seconds(data), text, repo)
         if step is not None:
             raise Held(f"{FAILS} ({step})")
         merged = merge_pull(repo, number, sha, accepted)

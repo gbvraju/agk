@@ -134,15 +134,19 @@ def test_a_green_merge_check_merges_and_governance_runs_again_after(tmp_path):
 
 
 def test_the_check_is_the_same_bounded_run_as_after_the_merge(tmp_path):
-    """REQ-046 AC6: brief #610 answer 1 (`env -i`, the body file; no token reaches it)."""
+    """REQ-046 AC6: brief #610 answer 1 (`env -i`, the body file and the record comments file of
+    amendment 122, brief #601; no token reaches it)."""
     pull = pull_with("Brief: #500\nAdvances: REQ-046\nCovered-by: ADR-0261\n")
     proc, _, ran, _ = after_run(tmp_path, pull=pull)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     first, last = before(ran)[0]["env"], after(ran)[0]["env"]
-    assert set(first) - {"LC_CTYPE"} == {"PATH", "HOME", "AGK_PR_BODY"}, sorted(first)
+    names = {"PATH", "HOME", "AGK_PR_BODY", "AGK_RECORD_COMMENTS"}
+    assert set(first) - {"LC_CTYPE"} == names, sorted(first)
     assert set(first) == set(last)
     assert Path(first["HOME"]) != Path(last["HOME"]), "each run has its own scratch home"
-    assert Path(first["AGK_PR_BODY"]).parent == Path(first["HOME"])
+    for run_env in (first, last):
+        assert Path(run_env["AGK_PR_BODY"]).parent == Path(run_env["HOME"])
+        assert Path(run_env["AGK_RECORD_COMMENTS"]) == Path(run_env["HOME"]) / "record-comments.json"
 
 
 PROBE = """
