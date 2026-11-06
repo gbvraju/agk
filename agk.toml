@@ -332,6 +332,9 @@ tests = [
   "tests/kit_dev/test_project_req_ids.py",
 ]
 [[testing.map]]
+code = "scripts/agk/personal_state.py"
+tests = ["tests/kit/test_personal_state.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/playbook.py"
 tests = [
   "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
