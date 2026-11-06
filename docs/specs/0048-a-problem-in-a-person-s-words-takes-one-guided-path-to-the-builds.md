@@ -1,6 +1,6 @@
 # SPEC-0048: A problem in a person's words takes one guided path from discovery to the builds
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-055
 
