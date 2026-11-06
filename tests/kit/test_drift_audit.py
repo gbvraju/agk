@@ -113,8 +113,10 @@ def test_ac1_the_script_has_no_network_or_process_imports():
     forbidden = {"subprocess", "socket", "urllib", "http", "ftplib", "smtplib", "requests", "ssl"}
     assert not names & forbidden
     # `proof`: the project's own unused-code and coverage commands run through proof.execute
-    # (SPEC-0004 rule 25, ADR-0177); the script itself imports no process module.
-    assert names <= set(sys.stdlib_module_names) | {"common", "reviewers", "proof"}
+    # (SPEC-0004 rule 25, ADR-0177); the script itself imports no process module. D1 asks the
+    # kit-only release check, with the Final comments read by check_adrs (amendment 121).
+    kit = {"common", "reviewers", "proof", "check_release", "check_adrs"}
+    assert names <= set(sys.stdlib_module_names) | kit
 
 
 def test_ac1_findings_never_quote_file_content(repo):
