@@ -96,14 +96,13 @@ def parse_args(args: list[str]) -> tuple[Path, date]:
         if option == "--root":
             root = Path(value)
         else:
+            refused = Usage("the date must be YYYY-MM-DD (option: --today)")
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+                raise refused
             try:
-                today = (
-                    date.fromisoformat(value) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) else None
-                )
+                today = date.fromisoformat(value)
             except ValueError:
-                today = None
-            if today is None:
-                raise Usage("the date must be YYYY-MM-DD (option: --today)")
+                raise refused from None
     return root, today
 
 
