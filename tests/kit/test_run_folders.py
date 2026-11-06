@@ -155,3 +155,12 @@ def test_proof_sets_no_run_folder(repo):
     proc = repo.run("proof.py", AGK_RUN_DIR="")
     assert proc.stdout.strip() == "proof: proven", proc.stdout + proc.stderr
     assert not (repo.root / ".agk-runs").exists()
+
+
+def test_prepush_still_refuses_a_malformed_key_naming_the_setting(repo, outside):
+    """REQ-053 AC7: SPEC-0046 rule 11 (accepted with their checks, in prepush too)."""
+    prepush_project(repo, UNSET, "[testing]\nkeep_runs = 0\n")
+    proc = repo.run("prepush.py", "--no-lock", PATH=path_with(scanner(outside, 0)))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "(setting: testing.keep_runs)" in proc.stdout
+    assert "deprecated:" not in proc.stdout
