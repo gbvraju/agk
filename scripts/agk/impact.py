@@ -185,7 +185,8 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
             "proof_regression, pr_tests, junit, workers, parallel_command, "
-            "slow_suite_seconds, results_dir, keep_passed, keep_runs and rerun_alone (setting: testing)"
+            "slow_suite_seconds, results_dir, keep_passed, keep_runs and rerun_alone "
+            "(setting: testing)"
         )
     profile = table.get("profile", "balanced")
     if profile not in PROFILES:

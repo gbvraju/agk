@@ -116,6 +116,7 @@ def rerun_failed(root: Path, project: str, output: str, code: int) -> int:
     """Rerun each failed test alone, once; a pass is a strike (brief #670). The exit code."""
     import failures  # the failure signature and issue action (SPEC-0046)
     import flakes
+
     from config import failures_settings
 
     junit = junit_setting(root)

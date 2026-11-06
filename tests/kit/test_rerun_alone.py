@@ -25,7 +25,9 @@ from common import CheckError
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts" / "agk"
 LEDGER = "docs/runs/flakes.md"
-HEAD = "| test | owner | strikes | status | expires | issue |\n| --- | --- | --- | --- | --- | --- |\n"
+HEAD = (
+    "| test | owner | strikes | status | expires | issue |\n| --- | --- | --- | --- | --- | --- |\n"
+)
 TODAY = "2031-05-10"
 FLAKY = "tests/test_b_flaky.py::test_flaky"
 FAILING = "tests/test_c_fail.py::test_fails"
@@ -172,7 +174,7 @@ def test_an_unknown_option_is_refused(tmp_path):
 
 
 def test_a_flaky_test_passes_alone_records_one_strike_and_the_run_is_green(tmp_path):
-    """REQ-051 AC2: brief #670 answers 1 and 2 (a pass alone is a strike; every other test passed)."""
+    """REQ-051 AC2: brief #670 answers 1 and 2 (a pass alone is a strike; the rest passed)."""
     root = project(tmp_path, "rerun_alone = true\n", failing=False)
     proc = run_tests(root, session="builder-b9")
     assert proc.returncode == 0, proc.stdout + proc.stderr
@@ -196,7 +198,7 @@ def test_the_owner_is_unassigned_without_a_session(tmp_path):
 
 
 def test_a_test_that_fails_alone_is_a_real_failure(tmp_path):
-    """REQ-051 AC2: brief #670 answer 3 (a failure alone stays red; the flaky one still a strike)."""
+    """REQ-051 AC2: brief #670 answer 3 (a failure alone stays red; the flaky is a strike)."""
     root = project(tmp_path, "rerun_alone = true\n")
     proc = run_tests(root, session="builder-b9")
     assert proc.returncode == 1
@@ -254,20 +256,30 @@ def test_the_rerun_command_keeps_the_config_options_and_drops_the_paths():
 
 def test_add_creates_the_ledger_with_one_strike(repo):
     """REQ-051 AC2: brief #670 answer 2 (`flakes.py add`: owner, strikes, watch, 30-day expiry)."""
-    code, out = run_flakes(repo.root, "add", "--test", FLAKY, "--owner", "builder-b9",
-                           "--today", TODAY)
+    code, out = run_flakes(
+        repo.root, "add", "--test", FLAKY, "--owner", "builder-b9", "--today", TODAY
+    )
     assert code == 0, out
-    assert out == [f"flakes: strike 1 for {FLAKY} (owner builder-b9; expires 2031-06-09) in {LEDGER}"]
+    assert out == [
+        f"flakes: strike 1 for {FLAKY} (owner builder-b9; expires 2031-06-09) in {LEDGER}"
+    ]
     assert rows(repo.root) == [[FLAKY, "builder-b9", "1", "watch", "2031-06-09", ""]]
     assert run_flakes(repo.root, "--today", TODAY)[0] == 0
 
 
 def test_add_counts_a_second_strike_keeps_owner_and_expiry_and_sets_the_issue(repo):
     """REQ-051 AC2: brief #670 answer 2 (strike two is a brief due unless an issue is named)."""
-    repo.commit({LEDGER: "# Flake ledger\n\n" + HEAD + f"| {FLAKY} | builder-b9 | 1 | watch | 2031-05-20 |  |\n"
-                 + "| tests/test_x.py::t | conductor | 0 | watch |  |  |\n\nNotes below.\n"})
-    code, out = run_flakes(repo.root, "add", "--test", FLAKY, "--owner", "builder-c2",
-                           "--today", TODAY)
+    repo.commit(
+        {
+            LEDGER: "# Flake ledger\n\n"
+            + HEAD
+            + f"| {FLAKY} | builder-b9 | 1 | watch | 2031-05-20 |  |\n"
+            + "| tests/test_x.py::t | conductor | 0 | watch |  |  |\n\nNotes below.\n"
+        }
+    )
+    code, out = run_flakes(
+        repo.root, "add", "--test", FLAKY, "--owner", "builder-c2", "--today", TODAY
+    )
     assert code == 0
     assert out[0].startswith(f"flakes: strike 2 for {FLAKY} (owner builder-b9; expires 2031-05-20)")
     assert out[1] == f"flakes: brief due: {FLAKY} has 2 strikes and no issue"
@@ -280,7 +292,7 @@ def test_add_counts_a_second_strike_keeps_owner_and_expiry_and_sets_the_issue(re
 
 
 def test_add_refuses_a_malformed_ledger_and_a_bad_test_id(repo):
-    """REQ-051 AC2: brief #670 answer 2 (a refusal names the option or the ledger, never a value)."""
+    """REQ-051 AC2: brief #670 answer 2 (a refusal names the option or the ledger)."""
     bad = "# Flake ledger\n\n" + HEAD + "| tests/test_a.py::t | a person | 1 | watch |  |  |\n"
     repo.commit({LEDGER: bad})
     code, out = run_flakes(repo.root, "add", "--test", FLAKY, "--today", TODAY)

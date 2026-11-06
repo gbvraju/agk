@@ -199,6 +199,10 @@ def add_row(report: Report, row: list[str], number: int, day: date, seen: dict[s
         )
 
 
+def held(entry: dict) -> str:
+    return "watched" if entry.get("status") == "watch" else "quarantined"
+
+
 def text_lines(report: Report) -> list[str]:
     """The listed lines in file order (an entry in both lists: expired first), then the summary."""
     items: list[tuple[int, int, str]] = []
@@ -208,8 +212,7 @@ def text_lines(report: Report) -> list[str]:
                 e["line"],
                 0,
                 f"expired: line {e['line']}: {e['test']} "
-                f"(owner {e['owner']}; "
-                f"{'watched' if e.get('status') == 'watch' else 'quarantined'} until {e['expires']})",
+                f"(owner {e['owner']}; {held(e)} until {e['expires']})",
             )
         )
     for e in report.brief_due:
@@ -356,7 +359,10 @@ def add_main(args: list[str]) -> int:
         return 2
     try:
         lines = record_strike(
-            repo_root(), opts["--test"], opts.get("--owner", UNASSIGNED), today,
+            repo_root(),
+            opts["--test"],
+            opts.get("--owner", UNASSIGNED),
+            today,
             opts.get("--issue", ""),
         )
     except (Refused, CheckError) as exc:
