@@ -257,6 +257,20 @@ files in no area as "not run by proof"; without the table it prints `project_tes
 files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0185.
 
+## Requirement status
+
+    python3 scripts/agk/req_status.py report [--json] [--req REQ-nnn ...] [ROOT]
+    python3 scripts/agk/req_status.py apply [--req REQ-nnn ...] [ROOT]
+
+`report` prints each requirement whose status disagrees with its proof: `REQ-nnn planned -> done (proof: <n> tests pass)`,
+`REQ-nnn done but proof fails (<test file>)`, `REQ-nnn proof unknown (<test file> timed out)` and `REQ-nnn: no proof
+mapped`, then a summary line, and changes nothing. The proof is SPEC-0010 rule 1 (a `REQ-nnn ACn` marker for every
+criterion); it passes when each test file holding those markers passes when its `[proof]` area's command runs it alone.
+It runs every proving test file once, so a whole report is a heavy step. `apply` sets only the `- Status:` lines of the
+`-> done` requirements to `done`, in the one pull request the conductor opens for it. Exit 1 on a `done` whose proof
+fails, 4 on an unknown proof. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
+and ADR-0321.
+
 ## Reading a log
 
     python3 scripts/agk/guard_logs.py [--max-lines N] FILE|-
