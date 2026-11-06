@@ -253,6 +253,10 @@ elif parts[0] == 'commits' and parts[2:] == ['status']:  # the combined status (
     statuses = data.get('statuses', [])
     state = data.get('status_state') or ('success' if statuses else 'pending')
     out = {'state': state, 'total_count': len(statuses), 'statuses': paged(statuses)}
+elif parts[:2] == ['issues', 'comments'] and len(parts) == 3:  # a record's Final (brief #601)
+    if parts[2] not in data.get('record_comments', {}):
+        fail(404)
+    out = data['record_comments'][parts[2]]
 elif parts[0] in ('issues', 'pulls') and len(parts) == 2 and parts[1] in data['items']:
     item = data['items'][parts[1]]
     if parts[0] == 'pulls' and 'pull' in item:
