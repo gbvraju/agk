@@ -49,6 +49,7 @@
     "scripts/agk/check_requirements.py",
     "scripts/agk/check_specs.py",
     "scripts/agk/common.py",
+    "scripts/agk/conductor.py",
     "scripts/agk/config.py",
     "scripts/agk/design_inventory.py",
     "scripts/agk/design_signoff.py",
