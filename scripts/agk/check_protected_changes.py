@@ -258,9 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     if covering_adrs(root, mb, changed, classes):
         print(f"ok {NAME} (protected change covered by an ADR)")
         return 0
-    problems = covered_by_problems(
-        root, mb, body_text(argv), changed, classes, comments_arg(argv)
-    )
+    problems = covered_by_problems(root, mb, body_text(argv), changed, classes, comments_arg(argv))
     if problems == []:
         print(f"ok {NAME} (protected change covered by an Accepted ADR named in '{COVERED_BY}')")
         return 0

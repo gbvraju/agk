@@ -236,7 +236,9 @@ def test_req028_a_failed_fetch_fails_closed_naming_the_option(repo, tmp_path):
     [(None, PREPUSH_BODY), (RECORD, GOOD_BODY)],
     ids=["no-record", "no-covered-by"],
 )
-def test_req028_prepush_fetches_nothing_without_covered_by_or_a_record(repo, tmp_path, record, text):
+def test_req028_prepush_fetches_nothing_without_covered_by_or_a_record(
+    repo, tmp_path, record, text
+):
     """REQ-028: fix list item 2 (only a `Covered-by:` body on a base with a record fetches)."""
     tools, body = prepush_world(repo, tmp_path, PLAIN, record=record)
     body.write_text(text, encoding="utf-8")
