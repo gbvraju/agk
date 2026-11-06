@@ -268,6 +268,15 @@ tests = ["tests/kit/test_flakes.py"]
 code = "scripts/agk/full_run.py"
 tests = ["tests/kit/test_full_run.py", "tests/kit/test_full_run_body_steps.py", "tests/kit/test_full_run_post_steps.py"]
 [[testing.map]]
+code = "scripts/agk/guard.py"
+tests = [
+  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_guard_detectors.py",
+  "tests/kit/test_guard_logs.py", "tests/kit_dev/test_kit_manifest.py",
+]
+[[testing.map]]
+code = "scripts/agk/guard_logs.py"
+tests = ["tests/kit/test_agk_config.py", "tests/kit/test_guard_detectors.py", "tests/kit/test_guard_logs.py"]
+[[testing.map]]
 code = "scripts/agk/init.py"
 tests = [
   "tests/kit/test_architect_guard.py", "tests/kit/test_flakes.py", "tests/kit/test_personal_mode_rules.py",
