@@ -6,7 +6,7 @@
 A kit discipline is each `scripts/agk/*.py`, each `.claude/agents/*.md`, each file directly under
 `config/` and each `docs/runs/` log that an agent file names (a placeholder `N`, `<n>` or `<...>`
 read as `*`). A project gets it `installed` (kit/manifest.json), through the `plugin` (a
-`skills/*/SKILL.md` runs it from `${CLAUDE_PLUGIN_ROOT}`, or a script the plugin runs imports it)
+`skills/*/SKILL.md` runs it from the plugin root variable, or a script the plugin runs imports it)
 or not at all, `kit-only (<reason>)`, as a line `<path> <reason>` of `config/kit-only.txt` says.
 
 `report` prints one line per discipline, sorted. `check` exits 1 naming each discipline in none
@@ -28,7 +28,7 @@ NO_MANIFEST = "parity: no kit/manifest.json; nothing to check"
 USAGE = "usage: parity.py report|check [--root DIR]"
 LOG = re.compile(r"docs/runs/[A-Za-z0-9_.<>*-]+\.[a-z]+")
 PLACEHOLDER = re.compile(r"<[^<>/]*>|(?<![A-Za-z0-9])N(?![A-Za-z0-9])")
-PLUGIN_RUN = re.compile(r"\$\{?CLAUDE_PLUGIN_ROOT\}?/(scripts/agk/[A-Za-z0-9_]+\.py)")
+PLUGIN_RUN = re.compile(r"\$\{[A-Z_]+\}/(scripts/agk/[A-Za-z0-9_]+\.py)")  # a skill's root variable
 
 
 def read_kit_only(path: Path) -> list[tuple[str, str]]:
