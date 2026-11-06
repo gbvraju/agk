@@ -10,7 +10,11 @@ with that step's own output:
 2. `lint`: `make lint`, when the project's Makefile has a `lint` target;
 3. `governance`: `make -f agk.mk agk-governance` with `AGK_BASE` set to the base (the governance
    checks that need no network), and `AGK_PR_BODY` set to the body file when `--body` is given, so
-   that `check_protected_changes.py` reads its `Covered-by:` line (brief #545, ADR-0271);
+   that `check_protected_changes.py` reads its `Covered-by:` line (brief #545, ADR-0271); with
+   that line and a SPEC-0021 rule 3a record on the base, the Final comment of each record, one
+   `gh api` GET each (the workflow's `Record comments` step), in a temporary file outside the
+   checkout that `AGK_RECORD_COMMENTS` names and that is removed afterwards; a comment that
+   cannot be read fails the step, naming the option (brief #601, ADR-0293);
 4. `secret-scan`: gitleaks over the branch's commits (merge base to `HEAD`), when installed;
 5. `tests`: each run of `test_plan.py` (the plan proof runs), its command in its folder; `--quick`
    skips this step. With a `[testing]` table (brief #417, ADR-0227) it then runs the regression
@@ -94,6 +98,7 @@ import signal
 import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tempfile
 import time
 import uuid
 from collections.abc import Callable
@@ -106,6 +111,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import lock as heavy_lock
 from common import (
     CheckError,
+    final_records,
     git,
     load_config,
     merge_base,
@@ -324,15 +330,79 @@ def missing_tool(code: int | None, output: str) -> str | None:
     return tool_name(echoed[-1].split()[0]) if echoed else None
 
 
+RECORD_COMMENTS = "AGK_RECORD_COMMENTS"  # the comments file the checks read (amendment 122)
+ORIGIN = re.compile(r"github\.com[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$")
+NO_RECORD_COMMENTS = (
+    "governance: rule 3a: the Final comments of the base's records cannot be read for the "
+    "'Covered-by:' line (option: --comments, AGK_RECORD_COMMENTS)"
+)
+
+
+def covers(body: Path) -> bool:
+    """Whether the body file has a `Covered-by:` line, as check_protected_changes.py reads it."""
+    try:
+        text = body.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return any(line.startswith("Covered-by:") for line in text.splitlines())
+
+
+def fetch_record_comments(root: Path, base: str, folder: Path) -> Path | None:
+    """With records on BASE (SPEC-0021 rule 3a), the Final comment of each, one `gh api` GET each
+    as the workflow's `Record comments` step makes them, in a file of FOLDER: its path; None when
+    any cannot be read (fail closed); the folder alone when BASE holds no record."""
+    ids = sorted({record[1] for record in final_records(root, base).values()})
+    if not ids:
+        return folder
+    code, url = run(["git", "remote", "get-url", "origin"], root)
+    match = ORIGIN.search(url.strip()) if code == 0 else None
+    if match is None or shutil.which("gh") is None:
+        return None
+    found: list = []
+    for cid in ids:
+        endpoint = f"repos/{match.group(1)}/issues/comments/{cid}"
+        try:
+            proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+                ["gh", "api", "--method", "GET", endpoint],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            value = json.loads(proc.stdout) if proc.returncode == 0 else None
+        except (OSError, ValueError):
+            value = None
+        if not isinstance(value, dict):
+            return None
+        found.append(value)
+    path = folder / "record-comments.json"
+    path.write_text(json.dumps(found), encoding="utf-8")
+    return path
+
+
 def governance(root: Path, base: str, body: Path | None = None) -> Step:
     if not (root / "agk.mk").is_file():
         return Step("FAIL", "agk.mk is missing; governance cannot run (path class: agk.mk)")
     if shutil.which("make") is None:
         return Step("skipped", "governance: not run (make is not installed)", not_run=True)
     env = {**os.environ, "AGK_BASE": base}
-    if body is not None:  # the body's `Covered-by:` line (brief #545, ADR-0271)
-        env["AGK_PR_BODY"] = str(body.resolve())
-    return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+    if body is None:
+        return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+    env["AGK_PR_BODY"] = str(body.resolve())  # the body's `Covered-by:` line (ADR-0271)
+    if not covers(body):
+        return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+    # a `Covered-by:` ADR a Final accepted needs its record's comment (brief #601, ADR-0293)
+    folder = Path(tempfile.mkdtemp(prefix="agk-prepush-"))
+    try:
+        path = fetch_record_comments(root, base, folder)
+        if path is None:
+            return Step("FAIL", NO_RECORD_COMMENTS)
+        if path != folder:
+            env[RECORD_COMMENTS] = str(path)
+        return ran_step(["make", "-f", "agk.mk", "agk-governance"], root, env)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def secret_scan(root: Path, mb: str) -> Step:

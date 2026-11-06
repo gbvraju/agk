@@ -28,6 +28,9 @@ No review, no merge, and one comment only: the reply `Correction needed:` to a v
 job runs only for a merge), the brief its body finishes with `Finishes: #n` beside `Brief: #n` is
 closed as completed, with one comment that names the merge commit (brief 302, ADR-0178); that is
 the only other issue it closes. Messages name the rule, never a value.
+A covered fix list on the full head whose every `Final:` line accepts an ADR the pull request
+changes (SPEC-0021 rule 3a) clears the head for the label, as `merge_cleared.py` clears it, so a
+pull request merged on it ends with `agk:ready` (brief #601, ADR-0293).
 While the checkout's agk.toml sets `paused = true` (brief #348, ADR-0196) it prints `agk paused`
 and reads and writes nothing, whatever it was asked to route.
 """
@@ -50,6 +53,8 @@ from common import (
     PAUSED_LINE,
     CheckError,
     agent_apps,
+    covered_fix_list,
+    final_accepts,
     finished_brief,
     load_config,
     paused,
@@ -218,6 +223,21 @@ def judged(
     return runs, latest, wait and bool(names - seen)
 
 
+def final_accept_clears(body: str, head: str, files: list[dict]) -> bool:
+    """Whether the latest verdict BODY is a covered fix list on the full HEAD whose every `Final:`
+    line accepts an ADR that the pull request adds or modifies (SPEC-0021 rule 3a): the cases that
+    `merge_cleared.py` clears (`accepted_adrs`, and the file test of `hold_list`), which the label
+    reads as cleared (brief #601, ADR-0293)."""
+    covered = covered_fix_list(body)
+    if covered is None or not head or covered[0] != head:
+        return False
+    accepts = final_accepts(covered[1])
+    if not accepts:
+        return False
+    touched = {f.get("filename") for f in files if f.get("status") in ("added", "modified")}
+    return all(path in touched for path in accepts)
+
+
 def decide(f: dict) -> str:
     """The one label of a pull request from its facts; the first state that holds, in order."""
     if f.get("mergeable_state") == "dirty":
@@ -255,12 +275,14 @@ def decide(f: dict) -> str:
         flipped,
         f.get("agent_apps") or (),
     )
-    if names_head and asked_for(latest_verdict_body(comments, authors)) - people:
+    latest = latest_verdict_body(comments, authors)
+    if names_head and asked_for(latest) - people:
         return "agk:approve"
-    if names_head and kind in ("fix", "rejected"):
+    accepted = names_head and final_accept_clears(latest, head, f.get("files") or [])
+    if names_head and kind in ("fix", "rejected") and not accepted:
         return "agk:fix"
     covered = covered_head(Held(f.get("commit") or {}), head, comments, authors) == "yes"
-    if (names_head and kind == "cleared") or covered:
+    if (names_head and kind == "cleared") or accepted or covered:
         waiting = flipped - people
         return "agk:approve" if waiting else "agk:ready"
     return "agk:review"
