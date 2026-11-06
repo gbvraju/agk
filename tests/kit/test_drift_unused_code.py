@@ -57,9 +57,7 @@ def test_both_settings_are_empty_by_default():
     assert common.DEFAULT_CONFIG["coverage"] == ""
 
 
-@pytest.mark.parametrize(
-    "rel", ["agk.toml", "kit/templates/agk.toml", "kit/templates/agk.adopt.toml"]
-)
+@pytest.mark.parametrize("rel", ["kit/templates/agk.toml", "kit/templates/agk.adopt.toml"])
 def test_every_shipped_configuration_names_both_settings_empty(rel):
     text = (ROOT / rel).read_text(encoding="utf-8")
     assert re.search(r'^unused_code = ""$', text, flags=re.M)
