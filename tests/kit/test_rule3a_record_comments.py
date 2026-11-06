@@ -93,12 +93,13 @@ def test_req028_the_after_merge_run_gets_the_final_comment_of_each_record(
     assert all(c[1:3] == ["--method", "GET"] for c in gets), gets
     assert {c[3].rsplit("/", 1)[-1] for c in gets} == {"1005", "999"}
     run = seen(tmp_path)
-    assert len(run) == 1
-    assert json.loads(run[0]["comments"]) == [{"id": 1005, "body": "Verdict: fix list"}]
-    path = Path(run[0]["env"][VARIABLE])
-    assert path.parent == Path(run[0]["env"]["HOME"]) and path.name == "record-comments.json"
-    assert not path.exists(), "removed with the scratch folder"
-    assert set(run[0]["env"]) - {"LC_CTYPE"} == {"PATH", "HOME", "AGK_PR_BODY", VARIABLE}
+    assert len(run) == 2, "the run before the merge (brief #610) and the run after it"
+    for one in run:
+        assert json.loads(one["comments"]) == [{"id": 1005, "body": "Verdict: fix list"}]
+        path = Path(one["env"][VARIABLE])
+        assert path.parent == Path(one["env"]["HOME"]) and path.name == "record-comments.json"
+        assert not path.exists(), "removed with the scratch folder"
+        assert set(one["env"]) - {"LC_CTYPE"} == {"PATH", "HOME", "AGK_PR_BODY", VARIABLE}
 
 
 def test_req028_no_record_writes_an_empty_list_and_reads_nothing(tmp_path, monkeypatch, capsys):
