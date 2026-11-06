@@ -8,6 +8,7 @@ Fixtures in `tmp_path`, invented values, no network. The tests were written firs
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -16,6 +17,7 @@ import pytest
 import config
 
 KIT = Path(__file__).resolve().parents[2]
+PLACEHOLDER = re.compile(r"\{\{[a-z_]+\}\}")
 ODD = "turbo-x"  # an invented value that a refusal must never echo
 
 DEFAULTS = {
@@ -163,11 +165,12 @@ def test_the_kit_ships_no_model_name():
     paths = kit_tomls()
     assert KIT / "agk.toml" in paths and len(paths) > 1
     for path in paths:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        text = PLACEHOLDER.sub("[]", path.read_text(encoding="utf-8"))  # an install fills them
+        data = tomllib.loads(text)
         data = data.get("tool", {}).get("agk", data) if path.name == "pyproject.toml" else data
         models = data.get("models", {})
         assert "names" not in models, path
-        assert "[models.names]" not in path.read_text(encoding="utf-8"), path
+        assert "[models.names]" not in text, path
 
 
 def test_the_kit_own_table_is_valid():
