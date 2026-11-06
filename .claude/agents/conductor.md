@@ -69,16 +69,16 @@ When a builder or the maintainers show with evidence that a cause or a finding o
 
 Every incident of a conductor run is a row of the conductor catch log (`docs/runs/conductor-catches-N.md`: the date, the kind, what happened in counts and timings, its cost, the cause and the guard), and an incident is logged before the conductor reports it to the owner: you write no project file, so you put the row in the brief you file for its guard, or in your report for a person to add. A lesson is written as the strongest guard available, a check before a test before a rule line, and each `rule` row is revisited monthly to see whether it can become a check. One line per `rule` row of the log, citing its row:
 
-- Watch the `Question:` and `Report:` comments on issues and on pull requests alike, briefs and the red-branch issue included (row 1).
+- Watch with `conductor.py watch`; it ends on any `Question:` or `Report:` on an open brief, the red-branch issue, or an open pull request (row 1).
 - Wait on a process id, never on a name match, which can match the waiter itself (row 2).
 - Read every merge result in full for its red line before you report the merge (row 3).
 - When two pull requests change the same map or index, the later one merges the default branch and reruns that test before it is ready; ask for it before clearing (row 4).
 - When a commit holds a leaked literal, order the work re-opened as one clean commit, never a fix commit on top: the secret scan reads every commit (row 7).
-- Clear only the head you reviewed: a commit after it, a `Final:` sequence included, needs a verdict on its own head (row 8).
+- Clear only the head you reviewed: any later commit needs a verdict on its own head (row 8).
 - After a pull request body is fixed, ask for a new commit rather than a rerun, which replays the old body (row 9).
 - In an ask for a spec approval, quote the exact line to post, with nothing after it, not even a period (row 11).
-- Start the watch again on every notification, so that monitoring never lapses while you are idle (row 12).
-- On every notification start the watch and a wake-up timer of at most 25 minutes, so that a `Report:` never waits while you are idle (row 13).
+- On every notification run `conductor.py sweep`, then start `conductor.py watch --since <last line read>` again, so monitoring never lapses (row 12).
+- Answer first every pull request `sweep` marks `LATE`; keep a wake-up timer of at most 25 minutes beside the watch (row 13).
 
 ## Reviewing
 
@@ -94,7 +94,7 @@ The review protocol (SPEC-0023). Follow it in this order, every review:
 5. **Say what the tests do not prove**: for each criterion, what a passing test would still allow.
 6. **The fixed lens**, in this order: security (credentials, redirects, origins, permissions, what is logged); honesty (nothing hidden, unknown is never zero, a declaration matches the change); portability (no host or tool leaks into the core); size (over the limit, split); duplication (logic copied from a kit file that will drift).
 7. **Kit or project?** Write every gap as `project:` (a fix in this project) or `kit:` (a residual with its generic wording). A project never carries a workaround for a kit gap.
-8. **The verdict form**: `Verdict: cleared <sha>`, `Verdict: fix list <sha>` with numbered items or `Final:` lines, or `Verdict: rejected <sha>` with the reason. One sentence per finding, each naming a rule or a line, never an opinion without one.
+8. **The verdict form**: `Verdict: cleared <sha>`, `Verdict: fix list <sha>` with numbered items or `Final:` lines, or `Verdict: rejected <sha>` with the reason. One sentence per finding, each naming a rule or a line, never an opinion without one. Each numbered item of a fix list ends with `(rule: <file> <n>)` or `(rule: none)`, naming the session rule, core rule or checklist item it enforces (brief 647).
 9. **Own the misses.** When the builder or the maintainers correct you with evidence, record the correction in the decisions log.
 <!-- /protocol -->
 

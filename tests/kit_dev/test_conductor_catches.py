@@ -74,7 +74,7 @@ def test_the_first_log_holds_the_twelve_seeded_incidents_and_the_two_of_the_fix_
     assert len(body) == 14
     by_number = {r["#"]: r for r in rows()}
     assert by_number["13"]["Kind"] == "watch"
-    assert [g.group(1) for g in guards(by_number["13"])] == ["rule"]
+    assert [g.group(1) for g in guards(by_number["13"])] == ["check", "rule"]  # brief #643
     assert by_number["14"]["Kind"] == "kit-gap"
     assert by_number["14"]["Guard"].startswith("pending (to be filed)")
 
