@@ -15,13 +15,14 @@ then the latest run of the default branch and any open red-branch issue. A `Ques
 `conductor_late_minutes` (30 by default), is marked `LATE` (row 13). The rules it reads are
 `session.py`'s and `merge_cleared.py`'s own functions, never a copy.
 
-Brief #669 (ADR-0322): after those lines `sweep` prints `SILENT <brief> <session> <minutes>; re-fire:
-Session name: <session>. Item: brief #<brief>.` for each open `agk-brief` issue whose newest live
-take (`session.live_takes`) is older than `silent_minutes` of `[flow]` (30 by default), measured from
-the take comment's creation time, with no branch `claude/brief-<n>`, no open pull request naming the
-brief, no pull request naming it created after the take, and no `Progress:`, `Report:` or
-`Question:` comment after the take. A brief with any `Report: ... escalate` comment is never SILENT.
-The sweep fires nothing; the conductor re-fires the session with the printed line.
+Brief #669 (ADR-0322): after those lines `sweep` prints `SILENT <brief> <session> <minutes>;
+re-fire: Session name: <session>. Item: brief #<brief>.` for each open `agk-brief` issue whose
+newest live take (`session.live_takes`) is older than `silent_minutes` of `[flow]` (30 by
+default), measured from the take comment's creation time, with no branch `claude/brief-<n>`, no
+open pull request naming the brief, no pull request naming it created after the take, and no
+`Progress:`, `Report:` or `Question:` comment after the take. A brief with any `Report: ...
+escalate` comment is never SILENT. The sweep fires nothing; the conductor re-fires the session
+with the printed line.
 """
 
 from __future__ import annotations
