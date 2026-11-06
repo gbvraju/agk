@@ -103,8 +103,8 @@ its age and also after the machine slept; a lock of another host is cleared only
 is older than `lock_stale_minutes` (120 by default, ADR-0295). `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` and changes nothing. `make test` runs the
 kit's checks and the project's own tests (`project_tests` in `agk.toml`); `body.md` is a copy of the pull request body. The
 secret scan of the governance workflow is not part of `make governance`: `prepush.py` runs the same scanner over the branch's
-commits, and fails, naming the tool and the version the workflow pins, when gitleaks is not installed (ADR-0306): install it
-first, since a scan is never skipped in any mode. `doctor.py` prints whether gitleaks is installed and at which version.
+commits, and fails, naming the tool and the version the workflow pins, when the scanner is not installed (ADR-0306): install
+it first, since a scan is never skipped in any mode. `doctor.py` prints whether the scanner is installed and at which version.
 
 Then add the `Evidence:` line that prepush printed to the pull request body, beside `Verified:`, and one line that names
 the head it ran on:
