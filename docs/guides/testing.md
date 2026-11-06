@@ -127,22 +127,6 @@ when a test fails. A gate started under the lock already, as session rule 31 run
 says `lock heavy: held by this run's caller (lock.py run); not taken again`. `--no-lock` leaves the lock out, for CI, where a
 runner runs one job.
 
-**Each run's own folder** (brief #613). One line in `agk.toml` turns it on:
-
-```toml
-[testing]
-results_dir = ".agk-runs"
-```
-
-With it, the `tests` step sets `AGK_RUN_DIR` to a new folder for its runs, `<results root>/<UTC time>-<head sha12>-prepush`,
-so a rerun never overwrites the screenshots, traces and logs of an earlier failure. The results root is `results_dir`, and it
-ignores itself in git. Without the line nothing changes: no variable and no folder. The kit adds no flag
-to your command: the command writes there itself, for example `project_tests = 'pytest -q --junitxml="$AGK_RUN_DIR/junit.xml"'`,
-or a browser test that saves its screenshots under `"$AGK_RUN_DIR/screens"`. A failed run's folder is kept; a passed run's
-folder is removed unless `keep_passed = true`; at most `keep_runs` folders stay (20), oldest removed first, but a failed run's
-folder from the last 7 days is never removed. The `--record` file names the folder in `run_dir` (`path`, relative to the
-repository, and `kept`). Proof's own runs do not set the folder (`Q-613-1`; an amendment of SPEC-0010 comes first).
-
 `--quick` still skips every test and takes no lock. Without a `[testing]` table the `tests` step runs exactly as before: proof's
 plan alone, with no regression set and no lock.
 

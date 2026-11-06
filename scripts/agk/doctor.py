@@ -22,6 +22,9 @@ SPEC-0044 rule 7 (brief #583): `--record FILE` reads that one prepush record, an
 another; when its `full` regression run took longer than `[testing] slow_suite_seconds` (600) while
 `workers` is 1, it prints one information line naming `testing.workers` before the summary. A record
 that cannot be read prints one line naming the option. Neither changes the exit code.
+SPEC-0046 rule 11 (build (f)): when `[testing]` sets one of the retired run-folder keys of ADR-0299
+(`results_dir`, `keep_passed`, `keep_runs`), it prints `deprecated: testing.results_dir (ADR-0303)`
+before the summary; the exit code is unchanged.
 """
 
 from __future__ import annotations
@@ -1305,6 +1308,16 @@ def suite_lines(root: Path, path: Path) -> list[str]:
     ]
 
 
+def deprecation_lines(root: Path) -> list[str]:
+    """SPEC-0046 rule 11: the deprecation line of the retired run-folder keys, or none. A malformed
+    `[testing]` table gives none here; the commands that read it refuse it naming the setting."""
+    try:
+        line = impact.run_folder_deprecation(root)
+    except CheckError:
+        return []
+    return [line] if line else []
+
+
 def summary(report: list[dict]) -> dict[str, int]:
     return {s: sum(1 for c in report if c["status"] == s) for s in ("ok", "fail", "cannot-check")}
 
@@ -1406,6 +1419,7 @@ def main(argv: list[str] | None = None) -> int:
         api = Path(options["api"]) if options["api"] else None
         tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
         extra = suite_lines(root.resolve(), Path(options["record"])) if options["record"] else []
+        extra += deprecation_lines(root.resolve())
     except Refusal as exc:
         print(f"refused: {exc}")
         return exc.code
