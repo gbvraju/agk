@@ -1056,7 +1056,7 @@ DESIGN_FILES = (
     "scripts/agk/route.py",
 )
 GUARD_PREFIX = "scripts/agk/guard"
-# The kit's own test folders, joined so that an install names no kit test path (Q-K4-207).
+# The kit's own test folders, joined so that an installed copy names no kit test path.
 TEST_CLASSES = tuple(f"{Path('tests', name).as_posix()}/" for name in ("kit", "kit_dev"))
 PROTECTED_LIST = "config/protected-paths.txt"
 
