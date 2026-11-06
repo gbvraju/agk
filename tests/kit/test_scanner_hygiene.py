@@ -116,6 +116,24 @@ def test_bandit_finds_only_asserts_in_kit_source():
 
 # --- the type check ratchet (brief #633, ADR-0307) ------------------------------------------------
 
+def mypy_counts(output: str) -> dict[tuple[str, str], int]:
+    raise NotImplementedError
+
+
+def read_baseline(text: str) -> tuple[str, dict[tuple[str, str], int]]:
+    raise NotImplementedError
+
+
+def ratchet_problems(
+    current: dict[tuple[str, str], int], baseline: dict[tuple[str, str], int]
+) -> list[str]:
+    raise NotImplementedError
+
+
+def baseline_text(version: str, counts: dict[tuple[str, str], int]) -> str:
+    raise NotImplementedError
+
+
 SAMPLE = """\
 scripts/agk/a.py:3: error: Value of type "int | str" is not indexable  [index]
 scripts/agk/a.py:9: note: Right operand is of type "int | None"
@@ -138,7 +156,7 @@ def test_mypy_counts_errors_by_file_and_code_without_line_numbers():
 
 def test_mypy_counts_refuses_output_it_cannot_read_whole():
     """REQ-016: brief #633 answer 1. An error line it cannot parse is never silently dropped."""
-    no_code = "scripts/agk/a.py:3: error: Something\nFound 1 error in 1 file (checked 1 source file)\n"
+    no_code = "scripts/agk/a.py:3: error: Something\nFound 1 error in 1 file\n"
     with pytest.raises(ValueError, match="error code"):
         mypy_counts(no_code)
     short = SAMPLE.replace("Found 4 errors", "Found 5 errors")
