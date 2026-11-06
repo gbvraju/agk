@@ -36,10 +36,13 @@ reserved for brief #650 by the conductor (the field note on #650).
 3. `check_playbooks.py` prints one `FAIL playbooks:` line per problem of the declaration, beside
    those of the playbooks, and exits 1; with no declaration, or a sound one, its output is the
    same as before.
-4. `doctor.py` prints one line before the tidy, test and deprecation lines and the summary:
-   `work type: none (no playbook)`, `work type: <work type> (playbook config/playbooks/<work
-   type>.toml)`, or `FAIL work type: <problem>`, which makes the exit code 1; the JSON report
-   carries the same line as `work_type`. The paused, personal and no-kit reports do not change.
+4. `doctor.py` prints one line after the tidy, test, deprecation and secret scan lines and before
+   the summary, so that the information lines read deprecation (SPEC-0046 rule 11), secret scan
+   (ADR-0306), work type: `work type: none (no playbook)`, `work type: <work type> (playbook
+   config/playbooks/<work type>.toml)`, or `FAIL work type: <problem>`, which makes the exit code
+   1; the JSON report carries the same line as `work_type`, a key SPEC-0006 rule 11 gains by
+   `docs/runs/proposed-spec-amendments-131.md`. The paused, personal and no-kit reports do not
+   change.
    Two assertions of `tests/kit/test_doctor.py` that list the report's lines and its JSON keys
    name the new line and key.
 5. `kit/templates/agk.toml` and this repository's `agk.toml` carry the `[delivery]` table
@@ -64,3 +67,5 @@ its build lands, so no project can select a work type before its playbook exists
   to be byte for byte that of the default branch. This build reads the rule: the one line is
   added, and the test compares the rest byte for byte (Q-650-1; the next amendment of SPEC-0038
   may word the bullet so, due 2026-12-31).
+- 2026-11-06: SPEC-0006 rule 11 gains the `work_type` key by `docs/runs/proposed-spec-amendments-131.md`
+  (the conductor's fix list on #653), which needs the owner's `Approve: SPEC-0006`.
