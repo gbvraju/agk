@@ -1,6 +1,6 @@
 # SPEC-0046: A failing test opens one bug issue, and its fix leaves a record for the next one
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-053
 
