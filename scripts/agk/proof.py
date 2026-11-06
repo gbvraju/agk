@@ -15,15 +15,15 @@ With `[testing] proof_regression = true` and a `[proof]` table, once the pull re
 are proven, a third run executes on the head, never on the base, the regression tests that
 `impact.py` selects, each area's command with its selected files (brief #442, ADR-0238; off by
 default, and the spec change is a proposal until a person approves it).
-Brief #613 (ADR-0299): `run_folder` gives one run its own folder,
-`<results root>/<UTC time>-<head sha12>-<kind>`, set as `AGK_RUN_DIR` for the project's command;
-`prepush.py` uses it with the kind `prepush`, only when `[testing] results_dir` is set (`Q-613-2`:
-without the key nothing changes). A command may write its screenshots, traces and logs there. The
-results root is that setting, which ignores itself in git. A run that did not pass keeps its folder; a passed run's folder is removed unless
-`[testing] keep_passed = true`. Then at most `[testing] keep_runs` (20) run folders stay, oldest
-removed first, never a failed or unfinished run's folder of the last 7 days, and only folders
-named that way are ever removed. Proof's own runs do not use it yet: SPEC-0010 rules 8 and 11
-(nothing changes in ROOT's work tree; no extra variables) would have to change (`Q-613-1`).
+Brief #613 (ADR-0299): `run_folder` gives one run its own folder, `<results root>/<UTC time>-<head
+sha12>-<kind>`, set as `AGK_RUN_DIR` for the project's command; `prepush.py` uses it with the kind
+`prepush`, only when `[testing] results_dir` is set (`Q-613-2`: without the key nothing changes). A
+command may write its screenshots, traces and logs there. The results root is that setting, which
+ignores itself in git. A run that did not pass keeps its folder; a passed run's folder is removed
+unless `[testing] keep_passed = true`. Then at most `[testing] keep_runs` (20) run folders stay,
+oldest removed first, never a failed or unfinished run's folder of the last 7 days, and only
+folders named that way are ever removed. Proof's own runs do not use it yet: SPEC-0010 rules 8 and
+11 (nothing changes in ROOT's work tree; no extra variables) would have to change (`Q-613-1`).
 ROOT's work tree is never changed: the script adds two worktrees in a temporary directory outside
 ROOT and removes them at the end, also on a failure.
 

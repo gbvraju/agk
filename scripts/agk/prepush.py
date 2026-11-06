@@ -67,10 +67,11 @@ still writes it. Then it prints one line for the pull request body:
 file that cannot be written exits 2.
 
 Brief #613 (ADR-0299): when `[testing] results_dir` is set and the tests step runs a command, it
-runs them all with `AGK_RUN_DIR` set to one new folder of `proof.run_folder`, `<results root>/<UTC time>-<head sha12>-prepush`; a
-failed step keeps it, a passed one removes it unless `[testing] keep_passed = true`, and the
-record's `run_dir` names it (`path`, relative to the repository, and `kept`). Without the key the
-step is exactly as before: no variable, no folder, no `run_dir` (SPEC-0044 rule 1, `Q-613-2`).
+runs them all with `AGK_RUN_DIR` set to one new folder of `proof.run_folder`, `<results root>/<UTC
+time>-<head sha12>-prepush`; a failed step keeps it, a passed one removes it unless `[testing]
+keep_passed = true`, and the record's `run_dir` names it (`path`, relative to the repository, and
+`kept`). Without the key the step is exactly as before: no variable, no folder, no `run_dir`
+(SPEC-0044 rule 1, `Q-613-2`).
 
 Brief #566 (SPEC-0040 build (c), rule 9): with `[locks] queue = true`, `--record FILE --queue`
 runs no step here: it submits the same command without `--queue`, with the body and record paths
