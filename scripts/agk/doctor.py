@@ -18,6 +18,10 @@ of the repository; a warning from the 50% level on, never a failure.
 Brief #548 (ADR-0272): with more than five linked worktrees it reads, with one GET each, the pull
 requests of their branches and prints `tidy: <n> finished worktrees; run session.py tidy` before
 the summary when more than five are candidates of `session.py tidy`; it changes no exit code.
+SPEC-0044 rule 7 (brief #583): `--record FILE` reads that one prepush record, and never searches for
+another; when its `full` regression run took longer than `[testing] slow_suite_seconds` (600) while
+`workers` is 1, it prints one information line naming `testing.workers` before the summary. A record
+that cannot be read prints one line naming the option. Neither changes the exit code.
 """
 
 from __future__ import annotations
@@ -38,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 # The kit scripts the doctor imports: the router's list is read as upgrade.py writes it, and
 # the check names of a workflow's jobs as the router reads them (brief #283); the minutes line as
 # minutes.py prints it (brief #370).
+import impact  # noqa: E402
 import merge_cleared  # noqa: E402
 import minutes  # noqa: E402
 from common import (  # noqa: E402
@@ -47,13 +52,16 @@ from common import (  # noqa: E402
     jobs_of,
     minutes_warn,
     paused,
+    personal_table,
     router_names,
     router_wanted,
     with_router_names,
 )
 
+NO_RECORD = "tests: the prepush record cannot be read; nothing about the suite (option: --record)"
 USAGE = (
-    "usage: doctor.py [--repo OWNER/REPO] [--kit-root PATH] [--api-dir DIR] [--json] [ROOT]\n"
+    "usage: doctor.py [--repo OWNER/REPO] [--kit-root PATH] [--api-dir DIR] [--json] "
+    "[--record FILE] [ROOT]\n"
     "       doctor.py --paused [--ref REF] [ROOT]"
 )
 RESUME = (
@@ -1147,6 +1155,23 @@ def render_no_kit(as_json: bool) -> str:
     return f"agk doctor none\n{NO_KIT}: {NO_KIT_TEXT}\nsummary: {NO_KIT}\n"
 
 
+def personal_line(root: Path) -> tuple[int, str] | None:
+    """On a sidecar (SPEC-0041 rule 1): the one personal-mode line and its exit, with no network
+    read; None in team mode. A malformed `[personal]` table fails naming the setting."""
+    try:
+        table = personal_table(root)
+    except CheckError as exc:
+        return 1, f"refused: {exc}"
+    except (OSError, ValueError):
+        return 1, "refused: agk.toml cannot be read (setting: personal)"
+    if table is None:
+        return None
+    return 0, (
+        f"personal mode: forge {table['forge']}, level {table['level']}, "
+        f"disclosure {table['ai_disclosure']}"
+    )
+
+
 def paused_report(root: Path) -> str | None:
     """The kit version when ROOT is paused (brief #348, ADR-0196), else None; reads agk.toml."""
     config = read_config(root)
@@ -1243,11 +1268,50 @@ def tidy_line(root: Path, reads: Reads) -> str | None:
     return f"tidy: {count} finished worktrees; run session.py tidy" if count > TIDY_LIMIT else None
 
 
+def full_seconds(record: dict) -> float | None:
+    """The seconds of the record's `full` regression run, None without one."""
+    for step in record.get("steps") or []:
+        if isinstance(step, dict) and step.get("name") == "tests":
+            for run in step.get("runs") or []:
+                if isinstance(run, dict) and (run.get("name"), run.get("set")) == (
+                    "full",
+                    "regression",
+                ):
+                    seconds = run.get("seconds")
+                    ok = isinstance(seconds, (int, float)) and not isinstance(seconds, bool)
+                    return float(seconds) if ok else None
+    return None
+
+
+def suite_lines(root: Path, path: Path) -> list[str]:
+    """SPEC-0044 rule 7: the information line for a slow single-process full run of one record."""
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(record, dict):
+            raise ValueError("not an object")
+    except (OSError, UnicodeDecodeError, ValueError):
+        return [NO_RECORD]
+    seconds = full_seconds(record)
+    try:
+        limit, workers = impact.slow_suite_seconds(root), impact.workers_setting(root)
+    except CheckError as exc:
+        return [f"tests: {exc}"]
+    if seconds is None or seconds <= limit or workers != 1:
+        return []
+    return [
+        f"tests: the full suite took {round(seconds)} s in one process, more than "
+        f"slow_suite_seconds ({limit} s); see the testing guide on workers "
+        "(setting: testing.workers)"
+    ]
+
+
 def summary(report: list[dict]) -> dict[str, int]:
     return {s: sum(1 for c in report if c["status"] == s) for s in ("ok", "fail", "cannot-check")}
 
 
-def render_text(report: list[dict], version: str, tidy: str | None = None) -> str:
+def render_text(
+    report: list[dict], version: str, tidy: str | None = None, extra: list[str] | None = None
+) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
     for c in report:
@@ -1258,14 +1322,19 @@ def render_text(report: list[dict], version: str, tidy: str | None = None) -> st
             lines.append(f"  to check: {HINTS.get(c['reason'], HINTS['bad-response'])}")
     s = summary(report)
     lines += [tidy] if tidy else []
+    lines += extra or []
     lines.append(f"summary: {s['ok']} ok, {s['fail']} fail, {s['cannot-check']} cannot-check")
     return "\n".join(lines) + "\n"
 
 
-def render_json(report: list[dict], version: str, tidy: str | None = None) -> str:
+def render_json(
+    report: list[dict], version: str, tidy: str | None = None, extra: list[str] | None = None
+) -> str:
     data = {"doctor": version, "checks": report, "summary": summary(report)}
     if tidy:
         data["tidy"] = tidy
+    if extra:
+        data["tests"] = extra
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 
@@ -1279,15 +1348,19 @@ def exit_code(report: list[dict]) -> int:
 
 def parse_args(args: list[str]) -> dict | None:
     options: dict = {"repo": None, "kit": None, "api": None, "json": False, "root": None}
-    options.update(paused=False, ref=None)
+    options.update(paused=False, ref=None, record=None)
     i = 0
     while i < len(args):
         arg = args[i]
         if arg in ("--json", "--paused"):
             options[arg[2:]] = True
             i += 1
-        elif arg in ("--repo", "--kit-root", "--api-dir", "--ref") and i + 1 < len(args):
-            key = {"--repo": "repo", "--kit-root": "kit", "--api-dir": "api", "--ref": "ref"}[arg]
+        elif arg in ("--repo", "--kit-root", "--api-dir", "--ref", "--record") and i + 1 < len(
+            args
+        ):
+            key = {"--repo": "repo", "--kit-root": "kit", "--api-dir": "api", "--ref": "ref"}.get(
+                arg, "record"
+            )
             options[key] = args[i + 1]
             i += 2
         elif not arg.startswith("-") and options["root"] is None:
@@ -1296,6 +1369,7 @@ def parse_args(args: list[str]) -> dict | None:
         else:
             return None
     others = options["json"] or options["repo"] or options["kit"] or options["api"]
+    others = others or options["record"]
     if options["ref"] is not None and not options["paused"] or options["paused"] and others:
         return None
     return options
@@ -1312,6 +1386,10 @@ def main(argv: list[str] | None = None) -> int:
             raise Refusal("ROOT is not a directory (path class: the target root)")
         if options["paused"]:
             return paused_query(root.resolve(), options["ref"])
+        personal = personal_line(root.resolve())
+        if personal is not None:
+            print(personal[1])
+            return personal[0]
         if no_kit(root.resolve()):
             sys.stdout.write(render_no_kit(options["json"]))
             return 0
@@ -1327,6 +1405,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         api = Path(options["api"]) if options["api"] else None
         tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
+        extra = suite_lines(root.resolve(), Path(options["record"])) if options["record"] else []
     except Refusal as exc:
         print(f"refused: {exc}")
         return exc.code
@@ -1334,9 +1413,9 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version, tidy)
+        render_json(report, version, tidy, extra)
         if options["json"]
-        else render_text(report, version, tidy)
+        else render_text(report, version, tidy, extra)
     )
     return exit_code(report)
 

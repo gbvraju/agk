@@ -21,6 +21,11 @@ of what is not run and why, and the decision. Each run ends with
 `full`, or without a `[testing]` table, it runs the full command exactly as `agk.mk` did and prints
 nothing more. A bad setting is refused naming it (exit 1). It calls no network.
 
+With `[testing] workers` above 1 (SPEC-0044 rules 4 and 5, brief #583) the full command is
+`prepush.full_command`'s: `-n <workers>` added to a pytest command whose interpreter imports
+xdist, `parallel_command` for another runner, or else the command of today after one line naming
+the setting. A `[proof]` area's command is never changed.
+
 `check_release.py` is kit-only (never installed), so `toml_version` restates its reading of
 `version`; a kit test pins the two equal (Q-453-7).
 """
@@ -38,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from common import CheckError, git, load_config, merge_base, proof_areas, repo_root, resolve_base
 from impact import impact, pr_tests, text
-from prepush import regression_sets
+from prepush import full_command, regression_sets
 
 NOTICE = "agk: no project_tests configured; the project runs its own tests"
 EVENT = "pull_request"
@@ -121,7 +126,10 @@ def main() -> int:
         print(f"project tests: {exc}")
         return 1
     if mode == "full":
-        return shell(project, root)
+        command, single = full_command(root, project, root)
+        if single:
+            print(single, flush=True)
+        return shell(command, root)
     try:
         runs, lines = plan(root, project)
     except CheckError as exc:
