@@ -1,0 +1,1 @@
+- The conductor's watch and sweep become kit commands: `scripts/agk/conductor.py watch` ends on any builder `Question:` or `Report:` on an open brief or pull request, and `sweep` lists every open pull request by what it waits for, marking a late answer `LATE`; the conductor guard allows both (brief #643 build (a), ADR-0308 Proposed)

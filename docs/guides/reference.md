@@ -18,7 +18,8 @@ Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI t
 Before a push, `python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock]` runs the fast checks CI would
 fail on first, in order, and stops at the first failure with its message: the pull request body check (on `FILE`), `make lint`
 where the Makefile has the target, `make -f agk.mk agk-governance` (no network; `not run` without `make`), the secret scan over
-the branch's commits when `gitleaks` is installed (else `secret scan: not run`), and the tests that `test_plan.py` selects
+the branch's commits (a missing `gitleaks` fails the run, naming the tool and the pinned version, also with `--quick`;
+ADR-0306), and the tests that `test_plan.py` selects
 (`--quick` skips them). It prints `prepush: <step> ok|FAIL|skipped (<s>s)` per step and exits 0 when no step failed, 1 when one
 did, 2 on a usage error (session rule 31, ADR-0186). `--no-lock` leaves the heavy-step lock (`lock.py`, name `heavy`) of the
 tests step out, for CI. The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
@@ -105,6 +106,24 @@ run queued or in progress for 60 minutes, or cancelled with no newer run), `red-
 red" is open), `idle-capacity` (the plan names sessions to start and no brief was taken for 15 minutes) and `claim-no-pr` (a
 live take with no pull request and no post by its session for 2 hours). `--json` gives the same. It reads with `gh api` (GET
 only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repository cannot be read (ADR-0205).
+
+## Conductor routines
+
+    python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]
+    python3 scripts/agk/conductor.py sweep
+
+The conductor's watch and sweep (brief #643, ADR-0308). `watch` ends on the first poll that finds a comment created after
+`--since` (default: the start) whose first line starts `Question:` or `Report:`, on an open issue labelled `agk-brief` or an
+open pull request, and prints `<number> <first line>` for each; `--once` reads once and prints `nothing new` when there is none.
+`sweep` prints `#<n> <head7> <state> <age>` per open pull request (`draft`, `ready: no verdict`, `fix list on <head7>`,
+`cleared on <head7>`, `cleared, head moved`, `waiting: Approve SPEC-nnnn at <head7>`, `blocked: Question Q-n unanswered <age>`,
+`checks pending`, `red`), then the latest run of the default branch and any open red-branch issue; a `Question:` or `Report:`
+that no listed verdict author answered within `conductor_late_minutes` (30 by default) is marked `LATE`. Then a taken brief with no
+branch `claude/brief-<n>`, no pull request and no `Progress:`, `Report:` or `Question:` after its take, older than
+`silent_minutes` (30 by default), is listed as `SILENT <brief> <session> <minutes>` with the line to re-fire it; a brief with a
+`Report: ... escalate` never is (brief #669, ADR-0322). The poll interval is
+`conductor_poll_seconds` (60 by default), all of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
+nothing; the conductor guard allows exactly these forms.
 
 ## Pausing the kit
 
@@ -238,6 +257,20 @@ files in no area as "not run by proof"; without the table it prints `project_tes
 files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0185.
 
+## Requirement status
+
+    python3 scripts/agk/req_status.py report [--json] [--req REQ-nnn ...] [ROOT]
+    python3 scripts/agk/req_status.py apply [--req REQ-nnn ...] [ROOT]
+
+`report` prints each requirement whose status disagrees with its proof: `REQ-nnn planned -> done (proof: <n> tests pass)`,
+`REQ-nnn done but proof fails (<test file>)`, `REQ-nnn proof unknown (<test file> timed out)` and `REQ-nnn: no proof
+mapped`, then a summary line, and changes nothing. The proof is SPEC-0010 rule 1 (a `REQ-nnn ACn` marker for every
+criterion); it passes when each test file holding those markers passes when its `[proof]` area's command runs it alone.
+It runs every proving test file once, so a whole report is a heavy step. `apply` sets only the `- Status:` lines of the
+`-> done` requirements to `done`, in the one pull request the conductor opens for it. Exit 1 on a `done` whose proof
+fails, 4 on an unknown proof. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
+and ADR-0321.
+
 ## Reading a log
 
     python3 scripts/agk/guard_logs.py [--max-lines N] FILE|-
@@ -249,6 +282,15 @@ the counts per kind only. It opens no socket, writes no file and keeps the value
 with `patterns` in the `[guard]` table of `agk.toml`, which can only add to the built-in detectors; a refused table, a bad
 option or a file it cannot read exits 2 naming the setting or option. See SPEC-0042 rules 10 and 11 and ADR-0268.
 
+## The guard ladder
+
+    python3 scripts/agk/lessons.py ladder [--root DIR] [--today YYYY-MM-DD]
+
+Reads the catch logs (`docs/runs/*-catches-*.md`) and prints each row's guard level (`lesson`, `rule`, `test`, `check`,
+`workflow`), every row due to climb and the rule it meets, every guard whose file is missing or has no line citing its row,
+every malformed guard, and one count line. It reads files only; it exits 1 on a missing line or file or a malformed guard,
+and the due list never blocks. See [guard-ladder.md](guard-ladder.md) and ADR-0309.
+
 ## Flake ledger
 
     python3 scripts/agk/flakes.py [--today YYYY-MM-DD] [--json]
@@ -257,6 +299,18 @@ Reads `docs/runs/flakes.md`, the one table of flaky tests with their owner, stri
 quarantine past its expiry (`expired`), each test with two strikes or more and no issue (`brief due`) and each malformed row
 with its line number. Exit 0 when nothing is listed, 1 otherwise. It is not a governance step and blocks nothing. See
 [testing.md](testing.md#the-flake-ledger) and ADR-0234.
+
+## Failure signature and evidence
+
+    python3 scripts/agk/failures.py signature --output FILE [--step NAME]
+    python3 scripts/agk/failures.py evidence --output FILE [--test ID]
+    python3 scripts/agk/failures.py issue-body --signature SIG --test ID [--issues FILE]
+
+`signature` prints `<signature> <test id>` for each failed test of a run's output (the `[testing] junit` report when it is
+readable, else the `FAILED <id>` lines; `step:NAME` when there is no test id). `evidence` prints the cleaned last 200 lines
+of that test's output, or only `evidence withheld: ...`. `issue-body` prints whether a failure needs a new `found-bug` issue
+or a comment on an open one, from a saved issue list; with `[failures] issues` off (the default) it prints `action: none`.
+It reads files, prints and writes nothing. See SPEC-0046 rules 2, 3 and 5 and ADR-0303.
 
 ## Core audit
 

@@ -217,12 +217,13 @@ def test_ac2_doctor_without_a_declaration_adds_only_the_none_line(tmp_path):
     assert proc.returncode == 0, proc.stdout
     assert lines.count(NONE_LINE) == 1
     assert lines[-2:] == [NONE_LINE, "summary: 35 ok, 0 fail, 0 cannot-check"]
-    # Without the line, the report is the one the default branch renders from the same checks.
+    # Without the line, the report is the one the default branch renders from the same checks
+    # (with its secret scan line, ADR-0306).
     root = dirs["tree"].resolve()
     report, version = doctor.run_checks(
         root, "example-owner/example-repo", dirs["kit"], dirs["api"]
     )
-    legacy = doctor.render_text(report, version)
+    legacy = doctor.render_text(report, version, scan=doctor.secret_scan_line())
     assert [ln for ln in lines if ln != NONE_LINE] == legacy.splitlines()
 
 

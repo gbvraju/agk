@@ -32,6 +32,9 @@ agent_apps = ["claude"]
 # session, counts as the verdict, its Final lines and the spec approval of the head it names; refused when config/reviewers.yaml lists
 # nobody or more than one person). A change needs an ADR.
 review_mode = "team"
+# From this date an item of a `Verdict: fix list` that does not end with `(rule: <file> <n>)` or `(rule: none)` fails
+# check_final_clearance.py; before it the check warns, and without the setting it only warns (brief #647, ADR-0310).
+rule_tags_from = "2026-12-06"
 # The data guard (SPEC-0042 rule 1, brief #589): always on; no key turns it off or removes a built-in rule. The [guard] table may only add:
 # patterns (detector kinds CUSTOM-<name>), deny_paths (globs added to the secret files), deny_commands (added to the log commands),
 # allowed_hosts (added to the local hosts), and allow_paths, the one escape: one relative file with a reason, never a built-in secret
@@ -71,6 +74,8 @@ auto_merge_method = "squash"
 [testing]
 profile = "balanced"
 pr_tests = "selected"
+# The full suite in parallel workers where the interpreter imports xdist (brief #631, ADR-0305).
+workers = "auto"
 always_full = [
   "scripts/agk/common.py", "kit/agk-kit.mk", "Makefile", "agk.mk", ".github/workflows/**", "tests/kit/conftest.py",
   "tests/kit/pytest.ini", "tests/kit_dev/conftest.py",
@@ -199,10 +204,13 @@ tests = [
 code = "scripts/agk/check_tag.py"
 tests = ["tests/kit/test_agk_mk.py", "tests/kit_dev/test_check_tag.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/conductor.py"
+tests = ["tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py"]
+[[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
-  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_models_table.py",
-  "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_failures.py",
+  "tests/kit/test_models_table.py", "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
 code = "scripts/agk/core_audit.py"
@@ -284,8 +292,11 @@ tests = [
 code = "scripts/agk/execution.py"
 tests = ["tests/kit/test_execution.py"]
 [[testing.map]]
+code = "scripts/agk/failures.py"
+tests = ["tests/kit/test_failures.py"]
+[[testing.map]]
 code = "scripts/agk/flakes.py"
-tests = ["tests/kit/test_flakes.py"]
+tests = ["tests/kit/test_flakes.py", "tests/kit/test_rerun_alone.py"]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
 tests = [
@@ -347,6 +358,9 @@ tests = [
   "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_launch.py", "tests/kit/test_launch_auto_start.py",
   "tests/kit/test_route_finishes.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_review_pass_skill.py",
 ]
+[[testing.map]]
+code = "scripts/agk/lessons.py"
+tests = ["tests/kit/test_lessons.py"]
 [[testing.map]]
 code = "scripts/agk/local_mode.py"
 tests = ["tests/kit/test_local_mode.py", "tests/kit_dev/test_local_mode_guide.py"]
@@ -418,14 +432,23 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/project_tests.py"
 tests = [
-  "tests/kit/test_project_test_selection.py", "tests/kit_dev/test_init.py",
+  "tests/kit/test_project_test_selection.py", "tests/kit/test_rerun_alone.py", "tests/kit_dev/test_init.py",
   "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_make_once.py",
 ]
+[[testing.map]]
+code = "scripts/agk/req_status.py"
+tests = ["tests/kit/test_req_status.py"]
 [[testing.map]]
 code = "scripts/agk/review_context.py"
 tests = [
   "tests/kit/test_check_kit_tests.py", "tests/kit/test_review_context.py",
   "tests/kit_dev/test_experimental_reviewer.py", "tests/kit_dev/test_reviewer_wiring.py",
+]
+[[testing.map]]
+code = "scripts/agk/rules.py"
+tests = [
+  "tests/kit/test_fix_list_tags.py", "tests/kit/test_rule_budget.py", "tests/kit/test_rules_dropped.py",
+  "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
 code = "scripts/agk/ruleset.py"

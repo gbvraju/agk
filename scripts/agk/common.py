@@ -10,6 +10,7 @@ import sys
 import tempfile
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
+from datetime import date, datetime
 from pathlib import Path
 
 REQ_ID = re.compile(r"REQ-\d{3}")
@@ -25,6 +26,13 @@ AC_COVERAGE = ("warn", "block")
 PR_MODES = ("strict", "flow")
 BEHAVIOUR_UNCHANGED = "Behaviour: unchanged"
 FENCE = re.compile(r"^\s*(```|~~~)")
+# The gitleaks version that `.github/workflows/governance.yml` pins with its SHA-256 (ADR-0158); a
+# test keeps the two equal. Named when gitleaks is missing (brief #632, ADR-0306).
+GITLEAKS_PIN = "8.30.1"
+GITLEAKS_INSTALL = (
+    f"install gitleaks {GITLEAKS_PIN} (the version the governance workflow pins) from the gitleaks "
+    "releases on GitHub and put it on PATH"
+)
 
 
 class CheckError(Exception):
@@ -334,6 +342,55 @@ def covered_fix_list(body: str) -> tuple[str, list[tuple[str, str | None, str, s
                 return None
             edits.append((match.group(1), match.group(2), match.group(3), match.group(4)))
     return (head.group(1), edits) if edits else None
+
+
+FIX_ITEM = re.compile(r"\d+\.\s")
+RULE_TAG = re.compile(r"\(rule: (none|\S+ \d+[a-z]?)\)\.?")
+RULE_TAGS_FROM = "rule_tags_from"
+
+
+def fix_items(body: str) -> list[str]:
+    """The numbered items of a `Verdict: fix list <sha>` comment (brief 647): each line that
+    starts `<n>. ` at the left margin, joined with the indented lines right after it; an empty
+    list for any other comment."""
+    lines = body.splitlines()
+    if not lines or FIX_LIST.fullmatch(lines[0].strip()) is None:
+        return []
+    items: list[list[str]] = []
+    open_item = False
+    for line in lines[1:]:
+        if FIX_ITEM.match(line):
+            items.append([line.strip()])
+            open_item = True
+        elif open_item and line[:1].isspace() and line.strip():
+            items[-1].append(line.strip())  # an indented line continues the item
+        else:
+            open_item = False  # a blank or unindented line ends it
+    return [" ".join(item) for item in items]
+
+
+def item_tag(item: str) -> str | None:
+    """`none`, `<file> <n>` or None: the `(rule: ...)` tag that ends a fix-list item (brief 647)."""
+    tags = list(RULE_TAG.finditer(item))
+    if not tags or item.rstrip()[tags[-1].end() :]:
+        return None
+    return tags[-1].group(1)
+
+
+def rule_tags_from(root: Path) -> date | None:
+    """The date from which an untagged fix-list item fails `check_final_clearance.py` (brief 647,
+    ADR-0310), or None (warn only) when `rule_tags_from` is not set; refusals name the setting."""
+    value = config_source(root).get(RULE_TAGS_FROM)
+    if value is None:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    try:
+        if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            return date.fromisoformat(value)
+    except ValueError:
+        pass
+    raise CheckError(f"{RULE_TAGS_FROM} must be a YYYY-MM-DD date (setting: {RULE_TAGS_FROM})")
 
 
 ADR_PATH = re.compile(r"docs/adr/\d{4}-[a-z0-9][a-z0-9-]*\.md")
