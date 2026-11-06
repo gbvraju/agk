@@ -165,3 +165,59 @@ def test_doctor_json_carries_the_line(tmp_path):
     found = doctor(*args, path=path_with(stub) + os.pathsep + str(tmp_path / "bin"))
     data = json.loads(found.stdout)
     assert data["secret_scan"] == f"secret scan: gitleaks {pinned()} is installed"
+
+
+# --- brief #683 (ADR-0327, amendment 136): a declared deferral of the scan to CI -----------
+
+DEFER_BODY = (
+    "Brief: #1\nAdvances: REQ-001\nBuild-state row: 2026-11-06 REQ-001 (unchanged)\n\n"
+    "Summary: A person sees one plain line.\nSecret-scan: deferred to CI\n"
+)
+
+
+def deferring(repo, tmp_path, branch: str = "claude/brief-1"):
+    project(repo)
+    repo.git("checkout", "-b", branch)
+    body = tmp_path / "body.md"
+    body.write_text(DEFER_BODY, encoding="utf-8")
+    return body
+
+
+def test_a_declared_deferral_on_a_builder_branch_lets_the_run_go_on(repo, tmp_path):
+    """REQ-049: brief #683 answer 1 (no tool, the line, a builder branch: deferred, not FAIL)."""
+    body = deferring(repo, tmp_path)
+    proc = prepush(repo, "--quick", "--body", str(body), scan=None)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert steps(proc.stdout)["secret-scan"] == "ok"
+    assert "secret-scan deferred to CI" in proc.stdout
+    assert "Secret scan" in proc.stdout  # names the CI step that must pass before a merge
+    assert "gitleaks is not installed" not in proc.stdout
+
+
+def test_the_deferral_needs_the_body_line(repo, tmp_path):
+    """REQ-049: brief #683 answer 1 (a builder branch without the line still fails)."""
+    deferring(repo, tmp_path)
+    body = tmp_path / "plain.md"
+    body.write_text(DEFER_BODY.replace("Secret-scan: deferred to CI\n", ""), encoding="utf-8")
+    proc = prepush(repo, "--quick", "--body", str(body), scan=None)
+    assert proc.returncode == 1
+    assert steps(proc.stdout)["secret-scan"] == "FAIL"
+
+
+def test_the_deferral_needs_a_builder_branch(repo, tmp_path):
+    """REQ-049: brief #683 answer 1 (the line on another branch is refused naming the rule)."""
+    body = deferring(repo, tmp_path, branch="feature-2")
+    proc = prepush(repo, "--quick", "--body", str(body), scan=None)
+    assert proc.returncode == 1
+    assert steps(proc.stdout)["secret-scan"] == "FAIL"
+    assert "builder branch" in proc.stdout
+
+
+def test_an_installed_tool_scans_even_with_the_line(repo, tmp_path):
+    """REQ-049: brief #683 answer 2 (the deferral never replaces a scanner that is present)."""
+    body = deferring(repo, tmp_path)
+    folder = scanner(tmp_path / "bin", 1)
+    proc = prepush(repo, "--quick", "--body", str(body), scan=folder)
+    assert proc.returncode == 1
+    assert steps(proc.stdout)["secret-scan"] == "FAIL"
+    assert "leaks found: 1" in proc.stdout

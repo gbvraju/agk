@@ -409,10 +409,41 @@ NO_GITLEAKS = (
 )
 
 
-def secret_scan(root: Path, mb: str) -> Step:
+DEFER_LINE = "Secret-scan: deferred to CI"  # the one body line of a deferral (brief #683, ADR-0327)
+BUILDER_BRANCH = re.compile(r"^claude/brief-[1-9][0-9]*$")
+DEFERRED = (
+    "secret-scan deferred to CI: no gitleaks in this session and the body declares "
+    f"`{DEFER_LINE}` on a builder branch; the governance run's `Secret scan` step must pass on "
+    "this head before a merge (SPEC-0006 rule 11, amendment 136)"
+)
+NOT_BUILDER = (
+    f"`{DEFER_LINE}` is accepted on a builder branch only (claude/brief-<n>), never here "
+    "(SPEC-0006 rule 11, amendment 136); "
+)
+
+
+def deferred(root: Path, body: Path | None) -> str | None:
+    """The deferral of brief #683: gitleaks is absent, the body carries DEFER_LINE and the branch
+    is a builder's; the CI step then stands as the mandatory scan. The reason it does not apply,
+    else None."""
+    if body is None:
+        return "no body file names the deferral (option: --body); "
+    lines = [ln.strip() for ln in body.read_text(encoding="utf-8", errors="replace").splitlines()]
+    if DEFER_LINE not in lines:
+        return None
+    branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").strip()
+    return None if BUILDER_BRANCH.fullmatch(branch) else NOT_BUILDER
+
+
+def secret_scan(root: Path, mb: str, body: Path | None = None) -> Step:
     tool = shutil.which("gitleaks")
-    if tool is None:
-        return Step("FAIL", NO_GITLEAKS)  # never skipped, in any mode (brief #632, ADR-0306)
+    if tool is None:  # never skipped, in any mode (brief #632, ADR-0306): deferred to CI, or FAIL
+        reason = deferred(root, body)
+        if reason is None and body is not None and DEFER_LINE in [
+            ln.strip() for ln in body.read_text(encoding="utf-8", errors="replace").splitlines()
+        ]:
+            return Step("ok", DEFERRED)
+        return Step("FAIL", (reason or "") + NO_GITLEAKS if reason == NOT_BUILDER else NO_GITLEAKS)
     head = git(root, "rev-parse", "HEAD").strip()
     cmd = [tool, "git", "--no-banner", "--redact", "--exit-code", "1", f"--log-opts={mb}..{head}"]
     return ran_step([*cmd, "."], root)
@@ -888,7 +919,7 @@ def main(argv: list[str] | None = None) -> int:
         ("pr-body", lambda: pr_body(root, body)),
         ("lint", lambda: lint(root)),
         ("governance", lambda: governance(root, base, body)),
-        ("secret-scan", lambda: secret_scan(root, mb)),
+        ("secret-scan", lambda: secret_scan(root, mb, body)),
         ("tests", lambda: tests(root, mb, options["quick"], options["lock"])),
     ]
     not_run: list[str] = []
@@ -911,7 +942,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(result.text)
             print(f"prepush: stopped at {name}; nothing after it ran")
             return finish(record, record_path, not_run, "failed", 1)
-        if result.outcome == "ok" and name == "tests" and result.text:
+        if result.outcome == "ok" and name in ("tests", "secret-scan") and result.text:
             print(result.text)
     if not_run:
         print(f"prepush: passed; not run: {', '.join(not_run)}")
