@@ -49,20 +49,26 @@ the run folders of ADR-0299, which this requirement retires.
 6. The run folders of ADR-0299 are retired: build (f) makes the three `[testing]` keys inert with a
    deprecation line and marks ADR-0299 `Superseded`; build (g) removes them in the release after
    (SPEC-0046 rule 11).
-7. Where no CI runs (local mode, `execution = "local"`, personal mode), one person-started run,
-   `failures.py run`, stands in for the two CI runs; it runs `project_tests.py`'s full command on a
-   clean default-branch or release head and is refused inside an agent session. Its screenshots and
-   traces stay in one private folder per open failure under `AGK_HOME`, never in the repository.
-   With GitHub reachable it writes issues as on CI; with no GitHub access the failure and the fix
-   record are one text file each in the git-ignored `.agk/failures/` (the sidecar in personal
-   mode), not committed. The signature and the data guard are the same in every mode
-   (SPEC-0046 rules 12 to 14).
+7. GitHub is always there (the owner's ruling, quoted as data from the conductor's `Correction:` on
+   pull request #627, conductor chat, 2026-11-06: "we will have GitHub in any case , what we don't
+   have is CI runs when it is local. So issue we create in any situation , only evidence is the
+   issue until it is fixed , evidence we can keep in repo folder as suggested small text files or
+   screenshots , so which can be cleaned on passed. Then it will work for local, solo, team, CI
+   etc"). So in every mode a failure opens or updates a `found-bug` issue, which holds the cleaned
+   text evidence and, after the fix, the record. Where no CI runs (local mode, `execution =
+   "local"`), one person-started run, `failures.py run`, stands in for the two CI runs; it runs
+   `project_tests.py`'s full command on a clean default-branch or release head, writes issues
+   through `gh`, and is refused inside an agent session, in a personal-mode sidecar and when the
+   repository GET does not answer 200. Screenshots and traces go in one git-ignored folder per
+   open failure inside the repository (`.agk-failures/<signature>/`), never committed, deleted
+   when the fix passes; in CI the same folder is uploaded as the 7-day artifact. The signature and
+   the data guard are the same in every mode (SPEC-0046 rules 6 and 12 to 14).
 8. Per plan #542, this is the one ADR of REQ-053 for the builds of SPEC-0046 rule 15 other than
    (e). The builds will change these protected path classes: `scripts/agk/` (`failures.py`,
    `config.py`, `check_pr_body.py`, `proof.py`, `prepush.py`, `impact.py`, `doctor.py`, builds (b),
-   (c), (d), (f), (g), (h) and (i)), `tests/kit/` (their tests), `kit/` (the `.agk/` line of
-   `kit/templates/gitignore`, build (i)), `agk.toml` (the `[[testing.map]]` entries,
-   builds (b) and (d)) and `config/` (`config/session-rules.md`, the `Fixes-failure:` form, build
+   (c), (d), (f), (g), (h) and (i)), `tests/kit/` (their tests), `kit/` (the `.agk-failures/` line
+   of `kit/templates/gitignore`, build (h); this repository's `.gitignore` is not protected),
+   `agk.toml` (the `[[testing.map]]` entries, builds (b) and (d)) and `config/` (`config/session-rules.md`, the `Fixes-failure:` form, build
    (c)). A build that changes a class named here and no other may cite this ADR with
    `Covered-by: ADR-0303` once it is Accepted (session rule 36). Build (e) changes
    `.github/workflows/governance.yml` and `agk.toml`, so it writes its own ADR, as session rule 36
@@ -74,7 +80,7 @@ the run folders of ADR-0299, which this requirement retires.
 ## Consequences
 
 The requirement is listed as planned and the spec and this ADR wait for approval. Nothing that
-runs changes in this pull request; until build (e) lands no CI run opens an issue, until build (h)
+runs changes in this pull request; until build (e) lands no CI run opens an issue, until build (i)
 lands no run where CI is off reports, and the run folders work as today until build (f).
 
 ## Residual
