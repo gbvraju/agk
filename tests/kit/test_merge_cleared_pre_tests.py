@@ -4,12 +4,12 @@ ADR-0320, amendment 132 of SPEC-0039 rule 6, REQ-046. Twice on 2026-11-06 (#657,
 requests, each green alone, made the default branch red once both had merged: the rule budget
 test reads the whole tree, and governance, the one run of the check before the merge, does not
 run it. Now, after governance passes on the would-be merge, the command runs the test files of
-`[testing] pre_merge_tests` (agk.toml on the default branch; without the key, the budget, testing
-map and manifest tests in the kit repository, none in a project) with `AGK_KIT_TESTS=1 python3
--m pytest -q -c tests/kit/pytest.ini <files>` in the same detached worktree, under the heavy lock
-and `env -i`; a failure holds with `held: the merge with the default branch fails pre-merge tests
-(<file>::<test>)`, exit 3, nothing merged. Every test runs on a checkout in `tmp_path` whose
-origin is a local bare repository, a fake `gh` answering from saved responses and a fake `make`;
+`[testing] pre_merge_tests` (agk.toml on the default branch; without the key, none; this
+repository lists the budget, testing map and manifest tests) with `AGK_KIT_TESTS=1 python3 -m
+pytest -q <files>` in the same detached worktree, under the heavy lock and `env -i`; a failure
+holds with `held: the merge with the default branch fails pre-merge tests (<file>::<test>)`,
+exit 3, nothing merged. Every test runs on a checkout in `tmp_path` whose origin is a local bare
+repository, a fake `gh` answering from saved responses and a fake `make`;
 the pre-merge tests are real pytest runs of a small invented budget test. No network.
 """
 
@@ -207,9 +207,9 @@ def test_a_bad_setting_on_the_default_branch_is_refused_naming_it(tmp_path, valu
     assert merges(made) == [] and ran == []
 
 
-def test_without_the_key_a_project_runs_no_pre_merge_test(tmp_path):
-    """REQ-046: brief #667 answer 2 (absent: the default list, which runs only where the kit's
-    tests are, `kit/agk-kit.mk`; the would-be merge here has none, so the red budget is not run)."""
+def test_without_the_key_no_pre_merge_test_runs(tmp_path):
+    """REQ-046: brief #667 answer 2 (absent: none, as before; Q-667-1), so the red budget of the
+    would-be merge is not run."""
     proc, made, _, _, _ = budget_run(tmp_path, LOWER, WIDER, setting="")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert len(merges(made)) == 1
@@ -242,31 +242,26 @@ def test_a_name_that_is_not_a_file_is_refused_naming_the_setting(tmp_path):
     assert BUDGET_TEST not in str(err.value), "never the value"
 
 
-def test_without_the_key_the_default_list_runs_in_the_kit_repository(tmp_path):
-    """REQ-046: brief #667 answer 2 (the default list; in a project, none)."""
-    kit = write_toml(tmp_path / "kit-repo", "[testing]\n", ("kit/agk-kit.mk",))
-    assert impact.pre_merge_tests(kit) == list(impact.PRE_MERGE_TESTS)
-    project = write_toml(tmp_path / "project", "[testing]\n")
-    assert impact.pre_merge_tests(project) == []
+def test_without_the_key_no_test_runs(tmp_path):
+    """REQ-046: brief #667 answer 2 (absent, with or without the table: none; Q-667-1)."""
+    assert impact.pre_merge_tests(write_toml(tmp_path / "table", "[testing]\n")) == []
     assert impact.pre_merge_tests(write_toml(tmp_path / "bare", "")) == []
 
 
-def test_the_default_list_names_files_of_this_repository():
-    """REQ-046: brief #667 (each default name exists on the default branch, followed from the
-    code: the testing map test is tests/kit_dev/test_intelligent_testing.py)."""
+def test_this_repository_lists_the_brief_s_three_files():
+    """REQ-046: brief #667 (the brief's list, each name verified on the default branch and
+    followed from the code: the testing map test is tests/kit_dev/test_intelligent_testing.py)."""
     root = SCRIPTS.parents[1]
-    assert impact.PRE_MERGE_TESTS == (
+    assert impact.pre_merge_tests(root) == [
         "tests/kit/test_rule_budget.py",
         "tests/kit_dev/test_intelligent_testing.py",
         "tests/kit_dev/test_kit_manifest.py",
-    )
-    for name in impact.PRE_MERGE_TESTS:
-        assert (root / name).is_file(), name
-    assert impact.pre_merge_tests(root) == list(impact.PRE_MERGE_TESTS)
+    ]
 
 
 def test_the_test_run_is_one_bounded_argument_list():
-    """REQ-046: brief #667 answer 1 (the heavy lock, `env -i`, the brief's pytest command)."""
+    """REQ-046: brief #667 answer 1 (the heavy lock, `env -i`, the brief's pytest command, rooted
+    at the worktree; installed code names no kit test file, so pytest finds its configuration)."""
     tree, home = Path("/scratch/tree"), Path("/scratch/home")
     argv = merge_cleared.tests_argv(tree, home, [BUDGET_TEST], 60.0)
     assert argv[2:5] == ["run", "--name", "heavy"]
@@ -276,8 +271,8 @@ def test_the_test_run_is_one_bounded_argument_list():
     assert not any(a.startswith("GH_") or a.startswith("GITHUB_") for a in argv)
     tail = argv[argv.index("pytest") - 1 :]
     assert tail[:3] == ["-m", "pytest", "-q"]
-    at = tail.index("-c")
-    assert tail[at : at + 2] == ["-c", str(tree / "tests/kit/pytest.ini")]
+    at = tail.index("--rootdir")
+    assert tail[at : at + 2] == ["--rootdir", str(tree)] and "-c" not in tail
     assert tail[-1] == str(tree / BUDGET_TEST)
 
 

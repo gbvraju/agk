@@ -81,11 +81,10 @@ from `refs/pull/<n>/head` only when missing); anything unreadable holds as `spec
 Brief #667 (ADR-0320, amendment 132 of SPEC-0039 rule 6) adds the kit tests that read the whole
 tree to the check before the merge. After governance passes on the would-be merge, in the same
 worktree, the command runs the test files of `[testing] pre_merge_tests` (agk.toml on the default
-branch; without the key `impact.PRE_MERGE_TESTS` where the merge holds `kit/agk-kit.mk`, else
-none) under the heavy lock: `lock.py run --name heavy ... -- env -i PATH=<PATH> HOME=<scratch>
-AGK_KIT_TESTS=1 PYTHONDONTWRITEBYTECODE=1 <python> -m pytest -q -c <worktree>/tests/kit/pytest.ini
---rootdir <worktree> ... <worktree>/<file>...`. A failure, or a listed name that is not a file of
-the merge, holds with
+branch; without the key, none) under the heavy lock: `lock.py run --name heavy ... -- env -i
+PATH=<PATH> HOME=<scratch> AGK_KIT_TESTS=1 PYTHONDONTWRITEBYTECODE=1 <python> -m pytest -q
+--rootdir <worktree> ... <worktree>/<file>...`; pytest reads the configuration file it finds
+above the listed files. A failure, or a listed name that is not a file of the merge, holds with
 
     merge-cleared #<n> <sha12>: held: the merge with the default branch fails pre-merge tests
         (<file>::<test>)                                          (one line)
@@ -851,8 +850,6 @@ def tests_argv(tree: Path, home: Path, names: list[str], wait: float) -> list[st
         "no:cacheprovider",
         "--rootdir",
         str(tree),
-        "-c",
-        str(tree / "tests" / "kit" / "pytest.ini"),
         *(str(tree / name) for name in names),
     ]
 

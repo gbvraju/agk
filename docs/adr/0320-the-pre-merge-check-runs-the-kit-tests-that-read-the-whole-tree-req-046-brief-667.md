@@ -23,19 +23,22 @@ failure. The ADR number and amendment 132 of SPEC-0039 were reserved for brief #
    command runs the test files of `[testing] pre_merge_tests` in the same detached worktree. The
    setting is read from `agk.toml` on the default branch. The run uses the heavy lock with the
    same timeout and `env -i` with `PATH`, `HOME`, `AGK_KIT_TESTS=1` and
-   `PYTHONDONTWRITEBYTECODE=1` only, then `<python> -m pytest -q -c <worktree>/tests/kit/pytest.ini
-   --rootdir <worktree> <the files>`. A failure holds with `held: the merge with the default
-   branch fails pre-merge tests (<file>::<test>)`, exit 3, and nothing is merged, recorded or
-   filed. The hold names the first failing test, or `heavy lock` or `pytest` when no test is
-   named. The run after the merge is unchanged.
+   `PYTHONDONTWRITEBYTECODE=1` only, then `<python> -m pytest -q --rootdir <worktree> <the
+   files>`. pytest reads the configuration file it finds above the files. The brief's
+   `-c tests/kit/pytest.ini` is left out: installed code names no kit test path (lean install,
+   ADR-0052). A failure holds with `held: the merge with the default branch fails pre-merge
+   tests (<file>::<test>)`, exit 3, and nothing is merged, recorded or filed. The hold names
+   the first failing test, or `heavy lock` or `pytest` when no test is named. The run after the
+   merge is unchanged.
 2. **The setting.** `pre_merge_tests` is a non-empty list of file paths inside the repository,
-   with no globs. When the key is absent, the default list `tests/kit/test_rule_budget.py`,
-   `tests/kit_dev/test_intelligent_testing.py` and `tests/kit_dev/test_kit_manifest.py` runs
-   where the merge holds `kit/agk-kit.mk` (the kit repository, where those tests are), and none
-   runs in an installed project. A malformed value is refused before anything runs, naming
-   `testing.pre_merge_tests`. A listed name that is not a file of the merge holds, naming the same
-   setting. `impact.testing_table` accepts the key and refuses a listed name that is not a file
-   of the checkout. This repository's `agk.toml` sets the key to the default list.
+   with no globs. When the key is absent, no test runs, as before. This repository's `agk.toml`
+   sets it to the brief's list: `tests/kit/test_rule_budget.py`,
+   `tests/kit_dev/test_intelligent_testing.py` and `tests/kit_dev/test_kit_manifest.py`. The
+   kit's tests are not installed in a project, and installed code names no kit test path (lean
+   install, ADR-0052), so the list lives in the setting and not in the code. A malformed value
+   is refused before anything runs, naming `testing.pre_merge_tests`. A listed name that is not
+   a file of the merge holds, naming the same setting. `impact.testing_table` accepts the key and refuses a listed name that is not a file
+   of the checkout.
 3. **Fail-closed.** Any exit other than 0 holds, including a missing pytest, no test collected or
    an interrupt. `governance not finished` still covers an exception during the check.
 
@@ -43,12 +46,12 @@ failure. The ADR number and amendment 132 of SPEC-0039 were reserved for brief #
 
 A merge that is green alone and red together on the rule budget, the testing map or the manifest
 is held before it merges. The conductor's next pass merges it once the head is updated. The three
-default files take about 2.5 s on a merge of this repository (53 tests), so the `merge-cleared`
-lock is held about that much longer. With `auto_merge` off nothing changes.
+files take about 2.5 s on a merge of this repository (53 tests), so the `merge-cleared` lock is
+held about that much longer. With `auto_merge` off nothing changes.
 
 ## Residual
 
-- 2026-11-06: an installed project gets no pre-merge test unless it sets the key. Its tests then
-  need `tests/kit/pytest.ini` in the merge, as the brief's command reads it (due 2026-12-31).
+- 2026-11-06: an installed project gets no pre-merge test unless it sets the key (Q-667-1, due
+  2026-12-31).
 - 2026-11-06: a test that reads the whole tree and is not on the list is still unseen before the
   merge; the run after the merge (ADR-0273) and CI still catch it (due 2026-12-31).

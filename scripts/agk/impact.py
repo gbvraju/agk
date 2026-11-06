@@ -29,7 +29,7 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
   gives the one line `prepush.py` and `doctor.py` print when one is set; build (g) removes them;
 - `pre_merge_tests`: the test files (paths, no globs) that `merge_cleared.py` runs on the would-be
   merge after governance passes (brief #667, ADR-0320, amendment 132 of SPEC-0039 rule 6), each a
-  file; without the key, `PRE_MERGE_TESTS` where the kit's tests are (`kit/agk-kit.mk`), else none.
+  file; without the key, none.
 
 For the change base..head `impact` gives the existing test files of the head (`test_dirs`,
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
@@ -102,13 +102,6 @@ JUNIT_MISSING = (
     "(setting: testing.junit)"
 )
 PRE_MERGE = "pre_merge_tests"
-# The kit tests that read the whole tree (brief #667): rule budget, testing map, manifest.
-PRE_MERGE_TESTS = (
-    "tests/kit/test_rule_budget.py",
-    "tests/kit_dev/test_intelligent_testing.py",
-    "tests/kit_dev/test_kit_manifest.py",
-)
-KIT_MARK = "kit/agk-kit.mk"  # the kit repository, where its own tests are (agk.mk)
 PRE_MERGE_BAD = (
     "pre_merge_tests must be a non-empty list of test file paths inside the repository "
     "(setting: testing.pre_merge_tests)"
@@ -297,13 +290,13 @@ def check_pre_merge_tests(value: object) -> list[str]:
 def pre_merge_names(table: dict | None, tree: Path) -> list[str]:
     """The pre-merge test files of TABLE (a `[testing]` table, None without one) for the tree
     TREE: the key's names, each a file of TREE, else refused naming the setting; without the
-    key, `PRE_MERGE_TESTS` when TREE holds `kit/agk-kit.mk`, else none (brief #667)."""
+    key, none (brief #667)."""
     if table is not None and PRE_MERGE in table:
         names = check_pre_merge_tests(table[PRE_MERGE])
         if not all((tree / name).is_file() for name in names):
             raise CheckError(PRE_MERGE_MISSING)
         return names
-    return list(PRE_MERGE_TESTS) if (tree / KIT_MARK).is_file() else []
+    return []
 
 
 def pre_merge_tests(root: Path) -> list[str]:
