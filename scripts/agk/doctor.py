@@ -25,6 +25,11 @@ that cannot be read prints one line naming the option. Neither changes the exit 
 SPEC-0046 rule 11 (build (f)): when `[testing]` sets one of the retired run-folder keys of ADR-0299
 (`results_dir`, `keep_passed`, `keep_runs`), it prints `deprecated: testing.results_dir (ADR-0303)`
 before the summary; the exit code is unchanged.
+SPEC-0038 rule 5 (brief #650, ADR-0312): one line says which playbook applies, before the tidy,
+test and deprecation lines: `work type: none (no playbook)` with no `[delivery] work_type`,
+`work type: <work type> (playbook config/playbooks/<work type>.toml)`, or `FAIL work type:
+<problem>`, naming the setting and never its value, which makes the exit code 1; the JSON report
+carries it as `work_type`.
 """
 
 from __future__ import annotations
@@ -48,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import impact  # noqa: E402
 import merge_cleared  # noqa: E402
 import minutes  # noqa: E402
+import playbook_format  # noqa: E402
 from common import (  # noqa: E402
     PAUSED_LINE,
     ROUTER_WORKFLOW,
@@ -1318,12 +1324,27 @@ def deprecation_lines(root: Path) -> list[str]:
     return [line] if line else []
 
 
+def work_type_line(root: Path) -> tuple[str, bool]:
+    """SPEC-0038 rule 5: the one work-type line and whether it fails; reads only agk.toml and the
+    presence of the declared playbook."""
+    value, problems = playbook_format.declaration(root)
+    if problems:
+        return f"FAIL work type: {problems[0]}", True
+    if value is None:
+        return "work type: none (no playbook)", False
+    return f"work type: {value} (playbook {playbook_format.FOLDER}/{value}.toml)", False
+
+
 def summary(report: list[dict]) -> dict[str, int]:
     return {s: sum(1 for c in report if c["status"] == s) for s in ("ok", "fail", "cannot-check")}
 
 
 def render_text(
-    report: list[dict], version: str, tidy: str | None = None, extra: list[str] | None = None
+    report: list[dict],
+    version: str,
+    tidy: str | None = None,
+    extra: list[str] | None = None,
+    work: str | None = None,
 ) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
@@ -1334,6 +1355,7 @@ def render_text(
         elif c["status"] == "cannot-check":
             lines.append(f"  to check: {HINTS.get(c['reason'], HINTS['bad-response'])}")
     s = summary(report)
+    lines += [work] if work else []
     lines += [tidy] if tidy else []
     lines += extra or []
     lines.append(f"summary: {s['ok']} ok, {s['fail']} fail, {s['cannot-check']} cannot-check")
@@ -1341,9 +1363,15 @@ def render_text(
 
 
 def render_json(
-    report: list[dict], version: str, tidy: str | None = None, extra: list[str] | None = None
+    report: list[dict],
+    version: str,
+    tidy: str | None = None,
+    extra: list[str] | None = None,
+    work: str | None = None,
 ) -> str:
-    data = {"doctor": version, "checks": report, "summary": summary(report)}
+    data: dict[str, Any] = {"doctor": version, "checks": report, "summary": summary(report)}
+    if work:
+        data["work_type"] = work
     if tidy:
         data["tidy"] = tidy
     if extra:
@@ -1420,6 +1448,7 @@ def main(argv: list[str] | None = None) -> int:
         tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
         extra = suite_lines(root.resolve(), Path(options["record"])) if options["record"] else []
         extra += deprecation_lines(root.resolve())
+        work, work_failed = work_type_line(root.resolve())
     except Refusal as exc:
         print(f"refused: {exc}")
         return exc.code
@@ -1427,11 +1456,11 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version, tidy, extra)
+        render_json(report, version, tidy, extra, work)
         if options["json"]
-        else render_text(report, version, tidy, extra)
+        else render_text(report, version, tidy, extra, work)
     )
-    return exit_code(report)
+    return 1 if work_failed else exit_code(report)
 
 
 if __name__ == "__main__":

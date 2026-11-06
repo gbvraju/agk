@@ -14,6 +14,13 @@ setting of `agk.toml` named as a setting (a backticked token, `<setting> =` or `
 principle or a session rule named to set aside, in any value, and a gate whose text names signing,
 an apply of infrastructure, a release or a secret with `owner_only = false`. Files only: no network,
 nothing written.
+
+The declaration (SPEC-0038 rule 5; REQ-045 AC2; brief #650, ADR-0312): `declaration(root)` reads
+the one line `work_type = "<work type>"` of the `[delivery]` table of `agk.toml` and returns the
+work type and the problems of the declaration, each naming rule 5, `agk.toml` and the setting, never
+a value; `selected(root)` is the path of the declared playbook, or None. With no `agk.toml`, no
+`[delivery]` table or no `work_type` in it there is no declaration and no problem, and nothing
+reads a playbook.
 """
 
 from __future__ import annotations
@@ -37,6 +44,9 @@ WORK_TYPES = (
 )
 FOLDER = "config/playbooks"
 RUNS = "docs/runs/"
+CONFIG = "agk.toml"
+DELIVERY = "delivery"
+WORK_TYPE = "work_type"
 
 GATE_KINDS = ("check", "judgement")
 SHAPES = ("per-brief", "per-phase", "per-batch")
@@ -319,3 +329,50 @@ def playbooks(root: Path) -> list[Path]:
     """The playbook files of a repository, sorted."""
     folder = Path(root) / FOLDER
     return sorted(folder.glob("*.toml")) if folder.is_dir() else []
+
+
+def _declared(root: Path) -> tuple[str | None, str | None]:
+    """The declared work type and the problem of the declaration (one at most); (None, None) when
+    nothing is declared."""
+    where = f"rule 5: {CONFIG}:"
+    path = Path(root) / CONFIG
+    if not path.is_file():
+        return None, None
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return None, f"{where} the file is not TOML (setting: {WORK_TYPE})"
+    if DELIVERY not in data:
+        return None, None
+    table = data[DELIVERY]
+    if not isinstance(table, dict):
+        return None, f"{where} `[{DELIVERY}]` is not a table (setting: {DELIVERY})"
+    if any(key != WORK_TYPE for key in table):
+        return None, f"{where} `[{DELIVERY}]` holds another key (setting: {DELIVERY})"
+    if WORK_TYPE not in table:
+        return None, None
+    value = table[WORK_TYPE]
+    if not isinstance(value, str):
+        # Q-S0038-1: one work type per project; a list of two is refused like any other type.
+        return None, f"{where} `{WORK_TYPE}` is not one work type (setting: {WORK_TYPE})"
+    if value not in WORK_TYPES:
+        return None, f"{where} `{WORK_TYPE}` is not one of the work types (setting: {WORK_TYPE})"
+    if not (Path(root) / FOLDER / f"{value}.toml").is_file():
+        return None, (
+            f"{where} `{WORK_TYPE}` names a work type whose playbook is missing under {FOLDER}/ "
+            f"(setting: {WORK_TYPE})"
+        )
+    return value, None
+
+
+def declaration(root: Path) -> tuple[str | None, list[str]]:
+    """SPEC-0038 rule 5: the declared work type (None when there is none or it is refused) and the
+    problems of the declaration, each naming the rule, the file and the setting, never a value."""
+    value, problem = _declared(root)
+    return value, [problem] if problem else []
+
+
+def selected(root: Path) -> Path | None:
+    """The playbook the declaration selects, `config/playbooks/<work type>.toml`, or None."""
+    value, _ = _declared(root)
+    return Path(root) / FOLDER / f"{value}.toml" if value else None
