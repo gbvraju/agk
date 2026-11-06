@@ -69,14 +69,33 @@ def test_the_catch_log_exists_and_parses_with_the_columns_of_the_brief():
     assert numbers == list(range(1, len(numbers) + 1))
 
 
-def test_the_first_log_holds_the_twelve_seeded_incidents_and_the_two_of_the_fix_list():
+def test_the_first_log_holds_the_seeded_incidents_and_the_rows_of_2026_11_06():
     _, body = table(LOGS[0])
-    assert len(body) == 14
+    assert len(body) == 22  # 12 seeded and 2 of the fix list (brief #604), 8 of brief #695
     by_number = {r["#"]: r for r in rows()}
     assert by_number["13"]["Kind"] == "watch"
     assert [g.group(1) for g in guards(by_number["13"])] == ["check", "rule"]  # brief #643
     assert by_number["14"]["Kind"] == "kit-gap"
     assert by_number["14"]["Guard"].startswith("pending (to be filed)")
+
+
+def test_the_rows_of_brief_695_carry_their_kinds_and_guards():
+    by_number = {r["#"]: r for r in rows()}
+    expected = {
+        "15": ("parallel-merge", "pending #667"),
+        "16": ("parallel-merge", "pending #667"),
+        "17": ("watch", "check `scripts/agk/conductor.py`"),
+        "18": ("false-red", "pending (to be filed)"),
+        "19": ("false-red", "pending (to be filed)"),
+        "20": ("kit-gap", "check `scripts/agk/prepush.py`"),
+        "21": ("history", "pending (to be filed)"),
+        "22": ("unread-result", "pending #643"),
+    }
+    for number, (kind, guard) in expected.items():
+        row = by_number[number]
+        assert row["Date"].startswith("2026-11-06"), number
+        assert row["Kind"] == kind, number
+        assert row["Guard"].startswith(guard), number
 
 
 def test_each_row_has_a_date_a_kind_a_cost_a_cause_and_a_guard_of_the_four_forms():
