@@ -39,11 +39,14 @@ the default branch its base is.
 3. `[flow] shared_indexes` (default `kit/manifest.json`, `agk.toml`, `config/rule-budget.txt`,
    `docs/requirements.md`, `docs/build-state.md`) never refuses a take and always triggers the
    re-prove; the exemption lands only with the hold of decision 5 (SPEC-0050 rule 3).
-4. The sweep prints `overlap:` and `re-prove:` lines from GET reads only; the conductor gives no
+4. The sweep prints `overlap:`, `re-prove:` and, as information, `BEHIND #<pr> <n>` lines from GET reads only; the conductor gives no
    clearing verdict on a head in the re-prove state (SPEC-0050 rules 5 to 7).
-5. `merge_cleared.py` holds a head in the re-prove state and one more than
-   `[flow] max_behind_merges` (default 3) first-parent merges behind the default branch, naming
-   the rule or the setting only (SPEC-0050 rule 8).
+5. `merge_cleared.py` holds a head in the re-prove state and, only where a project sets the
+   opt-in `[flow] max_behind_merges`, one more than that many first-parent merges behind the
+   default branch; absent, there is no behind hold, because at 26 merges a day a default of 3
+   would hold nearly every pull request and double the CI cycles per merge for no new proof
+   (the conductor's fix list on #677). Each hold names the rule or the setting only (SPEC-0050
+   rule 8).
 6. This is the one ADR of REQ-057 for the builds of SPEC-0050 rule 10. The builds will change
    these protected path classes: `scripts/agk/` (`session_plan.py`, `session.py`,
    `merge_cleared.py`, `conductor.py`, builds (b), (c) and (d)), `tests/kit/` (their tests),
@@ -61,7 +64,7 @@ the default branch its base is.
 ## Consequences
 
 The requirement is listed as planned and the spec and this ADR wait for approval. Nothing that
-runs changes in this pull request; until build (b) lands no merge is held for a stale base, and
+runs changes in this pull request; until build (b) lands no merge is held for a re-prove (and after it, for a stale base only where a project sets `max_behind_merges`), and
 until build (c) lands the shared indexes still refuse a take, as today.
 
 ## Residual
