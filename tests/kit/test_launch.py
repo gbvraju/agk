@@ -413,3 +413,208 @@ def test_the_resume_adapter_is_capped_by_max_builders_and_needs_no_slots(tmp_pat
     assert out.returncode == 0, out.stderr
     assert [c["session"] for c in calls(tmp_path)] == ["builder-a"]
     assert "not started: builder-b #7 (max_builders is 1)" in out.stdout
+
+
+# --- the free-memory floor (brief #612, ADR-0298) -----------------------------------------------
+# `[flow] min_free_memory_mb`: with an adapter, below the floor the launcher starts nothing and says
+# so in one line naming the setting; a reading that fails never blocks work. Each platform reader
+# is replaced in the test; no test reads the real machine's memory or uses the network.
+
+MIB = 1024**2
+FLOOR_LINE = "launch: not started: free memory below [flow] min_free_memory_mb"
+
+
+def floor_project(tmp_path: Path, monkeypatch, floor: object = None) -> Path:
+    """A folder with an agk.toml (with the floor when given) as the working directory."""
+    text = 'default_branch = "main"\n'
+    if floor is not None:
+        text += f"[flow]\nmin_free_memory_mb = {floor}\n"
+    (tmp_path / "agk.toml").write_text(text, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ADAPTER_LOG", str(tmp_path / "calls.log"))
+    return tmp_path
+
+
+def free_memory(monkeypatch, mib: int | None) -> None:
+    import launch as launch_module
+
+    monkeypatch.setattr(launch_module, "available_memory", lambda: None if mib is None else mib * MIB)
+
+
+def start_in_process(tmp_path: Path, adapter: Path, doc: dict, *extra: str) -> int:
+    import launch as launch_module
+
+    path = tmp_path / "plan.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    words = f"{sys.executable} {adapter}"
+    return launch_module.main(["prompts", "--plan", str(path), *extra, "--adapter", words])
+
+
+@pytest.fixture
+def launch_import():
+    sys.path.insert(0, str(SCRIPT.parent))
+    yield
+    sys.path.remove(str(SCRIPT.parent))
+
+
+def test_below_the_floor_the_adapter_starts_nothing_and_says_so_naming_the_setting(
+    tmp_path, adapter, monkeypatch, capsys, launch_import
+):
+    """REQ-037: brief #612 answers 1 to 3 (below the floor nothing starts; one line, no value)."""
+    floor_project(tmp_path, monkeypatch, 4096)
+    free_memory(monkeypatch, 1000)
+    code = start_in_process(tmp_path, adapter, plan(("builder-a", 5, "t"), ("builder-b", 7, "u")))
+    out = capsys.readouterr()
+    assert code == 1
+    assert calls(tmp_path) == []
+    lines = (out.out + out.err).splitlines()
+    assert lines == [FLOOR_LINE]
+    assert "4096" not in out.out + out.err and "1000" not in out.out + out.err
+
+
+def test_at_or_above_the_floor_the_adapter_starts_as_today(
+    tmp_path, adapter, monkeypatch, capsys, launch_import
+):
+    """REQ-037: brief #612 answer 3 (above the floor, today's behaviour)."""
+    floor_project(tmp_path, monkeypatch, 4096)
+    for free in (4096, 8192):
+        (tmp_path / "calls.log").unlink(missing_ok=True)
+        free_memory(monkeypatch, free)
+        code = start_in_process(tmp_path, adapter, plan(("builder-a", 5, "t")))
+        out = capsys.readouterr()
+        assert code == 0, out.err
+        assert [c["session"] for c in calls(tmp_path)] == ["builder-a"]
+        assert "min_free_memory_mb" not in out.out + out.err
+
+
+def test_without_the_setting_memory_is_not_read_and_the_adapter_starts_as_today(
+    tmp_path, adapter, monkeypatch, capsys, launch_import
+):
+    """REQ-037: brief #612 answer 1 (unset means today's behaviour)."""
+    import launch as launch_module
+
+    floor_project(tmp_path, monkeypatch)
+
+    def never():
+        raise AssertionError("memory read without the setting")
+
+    monkeypatch.setattr(launch_module, "available_memory", never)
+    code = start_in_process(tmp_path, adapter, plan(("builder-a", 5, "t")))
+    out = capsys.readouterr()
+    assert code == 0, out.err
+    assert [c["session"] for c in calls(tmp_path)] == ["builder-a"]
+    assert "memory" not in out.out + out.err
+
+
+def test_an_unreadable_memory_starts_the_session_with_one_note_naming_the_setting(
+    tmp_path, adapter, monkeypatch, capsys, launch_import
+):
+    """REQ-037: brief #612 answer 4 (a missing reading never blocks work)."""
+    floor_project(tmp_path, monkeypatch, 4096)
+    free_memory(monkeypatch, None)
+    code = start_in_process(tmp_path, adapter, plan(("builder-a", 5, "t"), ("builder-b", 7, "u")))
+    out = capsys.readouterr()
+    assert code == 0, out.err
+    assert [c["session"] for c in calls(tmp_path)] == ["builder-a", "builder-b"]
+    notes = [x for x in (out.out + out.err).splitlines() if "min_free_memory_mb" in x]
+    assert len(notes) == 1 and notes[0].startswith("launch: note:")
+    assert "4096" not in notes[0]
+
+
+def test_the_floor_also_holds_when_the_adapter_resumes_running_sessions(
+    tmp_path, adapter, monkeypatch, capsys, launch_import
+):
+    """REQ-037: brief #612 answer 2 (before it starts a session, a resumed one included)."""
+    floor_project(tmp_path, monkeypatch, 2048)
+    free_memory(monkeypatch, 100)
+    doc = {"start": [], "running": [{"session": "builder-a", "brief": 5, "pull_request": 41}]}
+    code = start_in_process(tmp_path, adapter, doc, "--resume")
+    out = capsys.readouterr()
+    assert code == 1 and calls(tmp_path) == []
+    assert (out.out + out.err).splitlines() == [FLOOR_LINE]
+
+
+def test_printing_the_prompts_starts_nothing_so_the_floor_does_not_apply(
+    tmp_path, monkeypatch, capsys, launch_import
+):
+    """REQ-037: brief #612 answer 2 (only a start is refused; Q-612-1, the conservative reading)."""
+    import launch as launch_module
+
+    floor_project(tmp_path, monkeypatch, 4096)
+    free_memory(monkeypatch, 10)
+    path = tmp_path / "plan.json"
+    path.write_text(json.dumps(plan(("builder-a", 5, "t"))), encoding="utf-8")
+    assert launch_module.main(["prompts", "--plan", str(path)]) == 0
+    out = capsys.readouterr()
+    assert "session builder-a" in out.out and "min_free_memory_mb" not in out.out + out.err
+
+
+@pytest.mark.parametrize("value", ['"4096-secretvalue"', "0", "-5", "true", "1.5"])
+def test_a_floor_that_is_not_a_whole_number_is_refused_naming_the_setting_never_its_value(
+    tmp_path, adapter, monkeypatch, capsys, launch_import, value
+):
+    """REQ-037: brief #612 answers 1 and 3 (refusals name the setting, never a value)."""
+    floor_project(tmp_path, monkeypatch, value)
+    free_memory(monkeypatch, 1)
+    code = start_in_process(tmp_path, adapter, plan(("builder-a", 5, "t")))
+    out = capsys.readouterr()
+    assert code == 2 and calls(tmp_path) == []
+    assert "min_free_memory_mb" in out.err and "secretvalue" not in out.err + out.out
+
+
+# each platform reader replaced (answer 5): the launcher reads through common.available_memory
+
+
+def test_linux_reads_memavailable_of_proc_meminfo(tmp_path, monkeypatch, launch_import):
+    """REQ-037: brief #612 answers 2 and 5 (Linux: `/proc/meminfo` `MemAvailable`)."""
+    import common
+    import launch as launch_module
+
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemTotal: 16000000 kB\nMemAvailable:   2048 kB\n", encoding="utf-8")
+    monkeypatch.setattr(common.sys, "platform", "linux")
+    monkeypatch.setattr(common, "MEMINFO", meminfo)
+    assert launch_module.available_memory() == 2048 * 1024
+    meminfo.write_text("MemTotal: 16000000 kB\n", encoding="utf-8")
+    assert launch_module.available_memory() is None
+
+
+def test_macos_reads_the_page_size_and_the_free_pages(monkeypatch, launch_import):
+    """REQ-037: brief #612 answers 2 and 5 (macOS: the kit's reader, `sysctl`; see the ADR)."""
+    import common
+    import launch as launch_module
+
+    class Done:
+        returncode = 0
+        stdout = "16384\n1000\n"
+
+    monkeypatch.setattr(common.sys, "platform", "darwin")
+    monkeypatch.setattr(common.subprocess, "run", lambda *a, **k: Done())
+    assert launch_module.available_memory() == 16384 * 1000
+    Done.stdout = "not a number\n"
+    assert launch_module.available_memory() is None
+
+
+def test_windows_reads_global_memory_status_ex(monkeypatch, launch_import):
+    """REQ-037: brief #612 answers 2 and 5 (Windows: `GlobalMemoryStatusEx` through ctypes)."""
+    import common
+    import launch as launch_module
+
+    monkeypatch.setattr(common.sys, "platform", "win32")
+    monkeypatch.setattr(common, "windows_available", lambda: 3 * 1024**3)
+    assert launch_module.available_memory() == 3 * 1024**3
+
+    def broken():
+        raise OSError("no kernel32")
+
+    monkeypatch.setattr(common, "windows_available", broken)
+    assert launch_module.available_memory() is None
+
+
+def test_another_platform_has_no_reading_and_so_never_blocks(monkeypatch, launch_import):
+    """REQ-037: brief #612 answer 4 (no reader is no reading)."""
+    import common
+    import launch as launch_module
+
+    monkeypatch.setattr(common.sys, "platform", "plan9")
+    assert launch_module.available_memory() is None
