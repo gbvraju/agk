@@ -264,6 +264,15 @@ the counts per kind only. It opens no socket, writes no file and keeps the value
 with `patterns` in the `[guard]` table of `agk.toml`, which can only add to the built-in detectors; a refused table, a bad
 option or a file it cannot read exits 2 naming the setting or option. See SPEC-0042 rules 10 and 11 and ADR-0268.
 
+## The guard ladder
+
+    python3 scripts/agk/lessons.py ladder [--root DIR] [--today YYYY-MM-DD]
+
+Reads the catch logs (`docs/runs/*-catches-*.md`) and prints each row's guard level (`lesson`, `rule`, `test`, `check`,
+`workflow`), every row due to climb and the rule it meets, every guard whose file is missing or has no line citing its row,
+every malformed guard, and one count line. It reads files only; it exits 1 on a missing line or file or a malformed guard,
+and the due list never blocks. See [guard-ladder.md](guard-ladder.md) and ADR-0309.
+
 ## Flake ledger
 
     python3 scripts/agk/flakes.py [--today YYYY-MM-DD] [--json]

@@ -68,6 +68,7 @@
     "scripts/agk/heavy_queue.py",
     "scripts/agk/impact.py",
     "scripts/agk/launch.py",
+    "scripts/agk/lessons.py",
     "scripts/agk/local_mode.py",
     "scripts/agk/lock.py",
     "scripts/agk/merge_cleared.py",
