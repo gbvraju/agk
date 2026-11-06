@@ -17,7 +17,8 @@ ARCHITECT_LOGS = sorted(RUNS.glob("architect-catches-*.md"))
 CONDUCTOR = KIT_ROOT / ".claude" / "agents" / "conductor.md"
 COLUMNS = ["#", "Date", "Kind", "What happened", "Cost", "Cause", "Guard"]
 GUARD = re.compile(
-    r"^(?:(check|test|rule) `([^`]+)`|pending #(\d+))(?: \([^()]*(?:\([^()]*\)[^()]*)*\))?$"
+    r"^(?:(check|test|rule) `([^`]+)`|pending #(\d+)|pending \(to be filed\))"
+    r"(?: \([^()]*(?:\([^()]*\)[^()]*)*\))?$"
 )
 COST = re.compile(r"^(?:\d+(?:\.\d+)? (?:h|min|merges?)\b|\(unknown\))")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}\b")
@@ -68,9 +69,14 @@ def test_the_catch_log_exists_and_parses_with_the_columns_of_the_brief():
     assert numbers == list(range(1, len(numbers) + 1))
 
 
-def test_the_first_log_holds_the_twelve_seeded_incidents():
+def test_the_first_log_holds_the_twelve_seeded_incidents_and_the_two_of_the_fix_list():
     _, body = table(LOGS[0])
-    assert len(body) == 12
+    assert len(body) == 14
+    by_number = {r["#"]: r for r in rows()}
+    assert by_number["13"]["Kind"] == "watch"
+    assert [g.group(1) for g in guards(by_number["13"])] == ["rule"]
+    assert by_number["14"]["Kind"] == "kit-gap"
+    assert by_number["14"]["Guard"].startswith("pending (to be filed)")
 
 
 def test_each_row_has_a_date_a_kind_a_cost_a_cause_and_a_guard_of_the_four_forms():
@@ -127,9 +133,11 @@ def test_every_lesson_line_cites_a_rule_row_of_the_log():
 
 
 def test_a_pending_guard_names_an_issue_number():
-    pending = [g for r in rows() for g in guards(r) if g.group(3)]
+    pending = [g for r in rows() for g in guards(r) if g.group(0).startswith("pending")]
     assert pending
-    assert all(int(g.group(3)) > 0 for g in pending)
+    for found in pending:
+        assert found.group(3) is None or int(found.group(3)) > 0, found.group(0)
+    assert any(g.group(3) for g in pending)
 
 
 def test_the_section_states_the_logging_rule_the_order_of_guards_and_the_monthly_revisit():
@@ -143,7 +151,9 @@ def test_the_section_states_the_logging_rule_the_order_of_guards_and_the_monthly
 def test_the_guard_form_and_the_cost_form_refuse_a_bad_cell():
     assert GUARD.match("check `scripts/agk/x.py` (in force)")
     assert GUARD.match("pending #601")
+    assert GUARD.match("pending (to be filed)")
     assert not GUARD.match("pending 601")
+    assert not GUARD.match("pending (later)")
     assert not GUARD.match("guess `x`")
     assert not GUARD.match("rule conductor.md")
     assert COST.match("25 min") and COST.match("(unknown): overnight")
