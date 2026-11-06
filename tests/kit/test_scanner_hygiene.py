@@ -7,6 +7,7 @@ installs bandit with its other tooling, so the bandit test runs in CI (brief #33
 from __future__ import annotations
 
 import ast
+import importlib.metadata
 import importlib.util
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
@@ -17,6 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 GOVERNANCE = ROOT / ".github" / "workflows" / "governance.yml"
+MYPY_BASELINE = ROOT / "config" / "mypy-baseline.txt"
 KIT_SOURCE = ("scripts/agk", ".claude/hooks", "tests/kit")
 SPAWNERS = {"run", "Popen", "call", "check_call", "check_output"}
 # Built from parts so that this file carries no suppression comment of its own.
@@ -112,9 +114,117 @@ def test_bandit_finds_only_asserts_in_kit_source():
     assert proc.returncode == 0, proc.stdout[-800:]
 
 
+# --- the type check ratchet (brief #633, ADR-0307) ------------------------------------------------
+
+SAMPLE = """\
+scripts/agk/a.py:3: error: Value of type "int | str" is not indexable  [index]
+scripts/agk/a.py:9: note: Right operand is of type "int | None"
+scripts/agk/a.py:12: error: Item "None" of "str | None" has no attribute "x"  [union-attr]
+scripts/agk/a.py:40: error: Item "None" of "str | None" has no attribute "y"  [union-attr]
+scripts/agk/b.py:7:5: error: Need type annotation for "found"  [var-annotated]
+Found 4 errors in 2 files (checked 3 source files)
+"""
+
+
+def test_mypy_counts_errors_by_file_and_code_without_line_numbers():
+    """REQ-016: brief #633 answer 1. Notes are not errors; lines and columns are dropped."""
+    assert mypy_counts(SAMPLE) == {
+        ("scripts/agk/a.py", "index"): 1,
+        ("scripts/agk/a.py", "union-attr"): 2,
+        ("scripts/agk/b.py", "var-annotated"): 1,
+    }
+    assert mypy_counts("Success: no issues found in 3 source files\n") == {}
+
+
+def test_mypy_counts_refuses_output_it_cannot_read_whole():
+    """REQ-016: brief #633 answer 1. An error line it cannot parse is never silently dropped."""
+    no_code = "scripts/agk/a.py:3: error: Something\nFound 1 error in 1 file (checked 1 source file)\n"
+    with pytest.raises(ValueError, match="error code"):
+        mypy_counts(no_code)
+    short = SAMPLE.replace("Found 4 errors", "Found 5 errors")
+    with pytest.raises(ValueError, match="summary"):
+        mypy_counts(short)
+    with pytest.raises(ValueError, match="summary"):
+        mypy_counts("scripts/agk/a.py:3: error: X  [index]\n")
+
+
+BASELINE = """\
+# comment lines and blank lines are ignored
+
+mypy 2.3.1
+scripts/agk/a.py index 1
+scripts/agk/a.py union-attr 2
+"""
+
+
+def test_read_baseline_returns_the_pinned_version_and_the_counts():
+    """REQ-016: brief #633 answers 1 and 2. One `mypy` line pins the version; one line per code."""
+    version, counts = read_baseline(BASELINE)
+    assert version == "2.3.1"
+    assert counts == {("scripts/agk/a.py", "index"): 1, ("scripts/agk/a.py", "union-attr"): 2}
+
+
+@pytest.mark.parametrize(
+    "text, words",
+    [
+        ("scripts/agk/a.py index 1\n", "mypy"),
+        ("mypy 2.3\nscripts/agk/a.py index 1\n", "exact"),
+        ("mypy >=2.3.1\n", "exact"),
+        ("mypy 2.3.1\nmypy 2.3.1\n", "mypy"),
+        ("mypy 2.3.1\nscripts/agk/a.py index 0\n", "count"),
+        ("mypy 2.3.1\nscripts/agk/a.py index x\n", "count"),
+        ("mypy 2.3.1\nscripts/agk/a.py:3 index 1\n", "line"),
+        ("mypy 2.3.1\nscripts/agk/a.py index\n", "line"),
+        ("mypy 2.3.1\na.py index 1\na.py index 2\n", "twice"),
+    ],
+)
+def test_read_baseline_refuses_a_malformed_file(text, words):
+    """REQ-016: brief #633 answers 1 and 2. A baseline it cannot read exactly fails, naming why."""
+    with pytest.raises(ValueError, match=words):
+        read_baseline(text)
+
+
+def test_ratchet_fails_when_a_file_gains_an_error_of_a_code():
+    """REQ-016: brief #633 answer 1. More errors of a code in a file than its baseline fails."""
+    _, baseline = read_baseline(BASELINE)
+    more = dict(baseline) | {("scripts/agk/a.py", "union-attr"): 3}
+    new_code = dict(baseline) | {("scripts/agk/a.py", "arg-type"): 1}
+    new_file = dict(baseline) | {("scripts/agk/c.py", "index"): 1}
+    for current in (more, new_code, new_file):
+        problems = ratchet_problems(current, baseline)
+        assert len(problems) == 1 and "added" in problems[0], problems
+
+
+def test_ratchet_fails_when_the_baseline_lists_errors_that_are_gone():
+    """REQ-016: brief #633 answer 1. The baseline only shrinks, in the same pull request."""
+    _, baseline = read_baseline(BASELINE)
+    fewer = dict(baseline) | {("scripts/agk/a.py", "union-attr"): 1}
+    gone = {("scripts/agk/a.py", "union-attr"): 2}
+    assert ["lower" in p for p in ratchet_problems(fewer, baseline)] == [True]
+    assert ["lower" in p for p in ratchet_problems(gone, baseline)] == [True]
+    assert ratchet_problems(dict(baseline), baseline) == []
+
+
+def test_baseline_text_reads_back_to_the_same_counts():
+    """REQ-016: brief #633 answer 1. The text a failure prints is a baseline the reader accepts."""
+    counts = mypy_counts(SAMPLE)
+    assert read_baseline(baseline_text("2.3.1", counts)) == ("2.3.1", counts)
+
+
+def test_the_baseline_pins_mypy_and_names_only_files_that_exist():
+    """REQ-016: brief #633 answer 2. Runs without mypy too, so CI reads the baseline file."""
+    version, counts = read_baseline(MYPY_BASELINE.read_text(encoding="utf-8"))
+    assert re.fullmatch(r"\d+\.\d+\.\d+", version)
+    missing = sorted({f for f, _ in counts if not (ROOT / f).is_file()})
+    assert not missing, f"the baseline names files that are gone: {missing}"
+
+
 @pytest.mark.skipif(not installed("mypy"), reason="mypy is not installed")
-def test_mypy_is_clean_on_scripts():
-    """REQ-010: ADR-0010 decision 2. The four findings are fixed in the code."""
+def test_mypy_errors_on_scripts_match_the_baseline():
+    """REQ-016: brief #633 answers 1 and 2 (was REQ-010, ADR-0010 decision 2: mypy clean)."""
+    version, baseline = read_baseline(MYPY_BASELINE.read_text(encoding="utf-8"))
+    if importlib.metadata.version("mypy") != version:
+        pytest.skip("installed mypy is not the version the mypy line of the baseline pins")
     proc = subprocess.run(  # nosec B603 - fixed argument list from sys.executable, no shell
         [sys.executable, "-m", "mypy", "scripts/agk"],
         cwd=ROOT,
@@ -122,7 +232,12 @@ def test_mypy_is_clean_on_scripts():
         text=True,
         check=False,
     )
-    assert proc.returncode == 0, proc.stdout[-800:]
+    current = mypy_counts(proc.stdout)
+    problems = ratchet_problems(current, baseline)
+    rel = MYPY_BASELINE.relative_to(ROOT)
+    assert not problems, "\n".join(problems) + f"\n\n{rel} now reads:\n" + baseline_text(
+        version, current
+    )
 
 
 # --- governance installs bandit (brief #338, ADR-0192) --------------------------------------------
