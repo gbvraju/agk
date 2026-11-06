@@ -1,0 +1,1 @@
+- A project can turn on failure issues with an optional `[failures]` table of `agk.toml` (off by default, refused naming the setting, never the value), and `failures.py` prints a failure's signature, its cleaned evidence and its issue body without writing anything (SPEC-0046 build (b), brief #634, ADR-0303)

@@ -1,4 +1,4 @@
-"""The failure signature, the cleaned evidence and the `[failures]` setting (SPEC-0046 rules 2, 3, 5).
+"""The failure signature, the cleaned evidence and the `[failures]` setting (SPEC-0046 2, 3, 5).
 
 REQ-053 AC1 and AC2, brief #634 (build (b) of SPEC-0046, ADR-0303). `config.failures_settings`
 reads the optional `[failures]` table; `failures.py signature`, `evidence` and `issue-body` read
@@ -10,10 +10,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import failures
 import pytest
 
 import config
-import failures
 
 ODD = "zz-odd-zz"  # an invented value that a refusal must never echo
 JUNIT = """<?xml version="1.0"?><testsuites><testsuite name="pytest">
@@ -44,7 +44,11 @@ def write(tmp_path: Path, name: str, text: str) -> str:
 def test_no_table_is_off(tmp_path, monkeypatch):
     """REQ-053 AC1: rule 2, without the table nothing is on."""
     root = project(tmp_path, 'default_branch = "main"\n', monkeypatch)
-    assert config.failures_settings(root) == {"issues": False, "artifacts": False, "artifact_paths": []}
+    assert config.failures_settings(root) == {
+        "issues": False,
+        "artifacts": False,
+        "artifact_paths": [],
+    }
 
 
 def test_a_full_table_is_read(tmp_path, monkeypatch):
@@ -52,7 +56,9 @@ def test_a_full_table_is_read(tmp_path, monkeypatch):
     text = '[failures]\nissues = true\nartifacts = true\nartifact_paths = ["shots/*.png"]\n'
     root = project(tmp_path, text, monkeypatch)
     assert config.failures_settings(root) == {
-        "issues": True, "artifacts": True, "artifact_paths": ["shots/*.png"]
+        "issues": True,
+        "artifacts": True,
+        "artifact_paths": ["shots/*.png"],
     }
 
 
@@ -64,7 +70,7 @@ def test_a_full_table_is_read(tmp_path, monkeypatch):
         (f'artifact_paths = "{ODD}"', "failures.artifact_paths"),
         (f'artifact_paths = ["/{ODD}"]', "failures.artifact_paths"),
         (f'artifact_paths = ["../{ODD}"]', "failures.artifact_paths"),
-        (f'{ODD.replace("-", "_")} = true', "failures"),
+        (f"{ODD.replace('-', '_')} = true", "failures"),
     ],
 )
 def test_a_malformed_table_is_refused_naming_the_setting(tmp_path, monkeypatch, body, setting):
@@ -130,7 +136,9 @@ def saved(tmp_path: Path, issues: list[dict]) -> str:
 
 def issue(number: int, state: str, sig: str) -> dict:
     return {
-        "number": number, "state": state, "labels": [{"name": "found-bug"}],
+        "number": number,
+        "state": state,
+        "labels": [{"name": "found-bug"}],
         "body": f"Failure-signature: {sig}\nTest: t::a\n",
     }
 
@@ -140,7 +148,9 @@ def test_an_open_issue_gets_a_comment_and_no_second_issue(tmp_path, monkeypatch,
     project(tmp_path, "[failures]\nissues = true\n", monkeypatch)
     sig = "a1" * 6
     path = saved(tmp_path, [issue(9, "closed", sig), issue(12, "open", sig)])
-    assert failures.main(["issue-body", "--signature", sig, "--test", "t::a", "--issues", path]) == 0
+    assert (
+        failures.main(["issue-body", "--signature", sig, "--test", "t::a", "--issues", path]) == 0
+    )
     assert capsys.readouterr().out == "action: comment #12\n"
 
 
@@ -149,7 +159,9 @@ def test_a_closed_issue_gives_a_new_issue_naming_it(tmp_path, monkeypatch, capsy
     project(tmp_path, "[failures]\nissues = true\n", monkeypatch)
     sig = "b2" * 6
     path = saved(tmp_path, [issue(5, "closed", sig), issue(8, "closed", "c3" * 6)])
-    assert failures.main(["issue-body", "--signature", sig, "--test", "t::a", "--issues", path]) == 0
+    assert (
+        failures.main(["issue-body", "--signature", sig, "--test", "t::a", "--issues", path]) == 0
+    )
     assert capsys.readouterr().out == (
         f"action: open\nFailure-signature: {sig}\nTest: t::a\nseen before: #5\n"
     )
