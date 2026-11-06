@@ -75,6 +75,7 @@ def test_the_first_log_holds_the_seeded_incidents_and_the_rows_of_2026_11_06():
     by_number = {r["#"]: r for r in rows()}
     assert by_number["13"]["Kind"] == "watch"
     assert [g.group(1) for g in guards(by_number["13"])] == ["check", "rule"]  # brief #643
+    assert by_number["3"]["Guard"].startswith("check `scripts/agk/conductor.py`")  # build (b)
     assert by_number["14"]["Kind"] == "kit-gap"
     assert by_number["14"]["Guard"].startswith("pending (to be filed)")
 
@@ -89,7 +90,7 @@ def test_the_rows_of_brief_695_carry_their_kinds_and_guards():
         "19": ("false-red", "pending (to be filed)"),
         "20": ("kit-gap", "check `scripts/agk/prepush.py`"),
         "21": ("history", "pending (to be filed)"),
-        "22": ("unread-result", "pending #643"),
+        "22": ("unread-result", "check `scripts/agk/conductor.py`"),  # brief #643 build (b)
     }
     for number, (kind, guard) in expected.items():
         row = by_number[number]
@@ -177,3 +178,8 @@ def test_the_guard_form_and_the_cost_form_refuse_a_bad_cell():
     assert not GUARD.match("rule conductor.md")
     assert COST.match("25 min") and COST.match("(unknown): overnight")
     assert not COST.match("a lot")
+
+
+def test_the_lesson_of_row_3_names_the_merge_queue():
+    """Brief #643 build (b), ADR-0329: the rule line of row 3 names the kit command."""
+    assert re.search(r"(?m)^- .*`conductor\.py merge-queue`.*\(row 3\)$", lessons())
