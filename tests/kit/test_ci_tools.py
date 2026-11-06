@@ -50,7 +50,7 @@ def run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedPr
 
 
 def project(tmp_path: Path, text: str) -> Path:
-    (tmp_path / "config").mkdir()
+    (tmp_path / "config").mkdir(parents=True)
     (tmp_path / "config" / "ci-tools.txt").write_text(text, encoding="utf-8")
     return tmp_path
 

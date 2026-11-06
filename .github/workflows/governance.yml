@@ -141,12 +141,14 @@ jobs:
       - name: Install tooling
         if: ${{ github.event.action != 'edited' && steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
         run: |
-          # bandit runs the kit's scanner hygiene test (brief #338, ADR-0192); unpinned, like pytest and ruff. A tool that
-          # cannot be installed fails this step by name: the checks that need it are never skipped.
-          python -m pip install pytest ruff bandit || echo "Install tooling: pip reported an error; checking each tool"
+          # The tools are pinned in config/ci-tools.txt (brief #698, ADR-0328): bandit runs the scanner hygiene test (ADR-0192),
+          # pytest-xdist the full suite in workers (`[testing] workers`). A tool that cannot be installed fails this step by
+          # name: the checks that need it are never skipped. An update changes the pin file only.
+          python -m pip install -r config/ci-tools.txt || echo "Install tooling: pip reported an error; checking each tool"
           for tool in pytest ruff bandit; do
             python -m "$tool" --version > /dev/null 2>&1 || { echo "Install tooling: $tool could not be installed"; exit 1; }
           done
+          python -c "import xdist" > /dev/null 2>&1 || { echo "Install tooling: pytest-xdist could not be installed"; exit 1; }
       - name: PR body file
         # Written unless the run is cancelled (brief #349): after a failed `Latest full run` the body steps still read it.
         if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}

@@ -52,5 +52,6 @@ locally edited on upgrade, as with any other verbatim file.
   `==` pins of `pyproject.toml`; the brief says the scorecard's `pins_behind` reads these pins.
   `ci_tools.py` prints the numbers, and widening the spec's set to `config/ci-tools.txt` is left
   to the scorecard's build (c) and its spec owners (due 2027-01-31).
-- 2026-11-06: the package index's JSON shape is read as `info.version` and
-  `releases.<version>[].upload_time_iso_8601` `(verify)`; an answer of another shape is `unknown`.
+- 2026-11-06: the package index's JSON is read as `info.version` and
+  `releases.<version>[].upload_time_iso_8601`, as one read of it showed that day; an answer of
+  another shape is `unknown`, so a change of shape is seen, never counted as current.
