@@ -49,7 +49,7 @@ The review protocol (SPEC-0023). Follow it in this order, every review:
 5. **Say what the tests do not prove**: for each criterion, what a passing test would still allow.
 6. **The fixed lens**, in this order: security (credentials, redirects, origins, permissions, what is logged); honesty (nothing hidden, unknown is never zero, a declaration matches the change); portability (no host or tool leaks into the core); size (over the limit, split); duplication (logic copied from a kit file that will drift).
 7. **Kit or project?** Write every gap as `project:` (a fix in this project) or `kit:` (a residual with its generic wording). A project never carries a workaround for a kit gap.
-8. **The verdict form**: `Verdict: cleared <sha>`, `Verdict: fix list <sha>` with numbered items or `Final:` lines, or `Verdict: rejected <sha>` with the reason. One sentence per finding, each naming a rule or a line, never an opinion without one.
+8. **The verdict form**: `Verdict: cleared <sha>`, `Verdict: fix list <sha>` with numbered items or `Final:` lines, or `Verdict: rejected <sha>` with the reason. One sentence per finding, each naming a rule or a line, never an opinion without one. Each numbered item of a fix list ends with `(rule: <file> <n>)` or `(rule: none)`, naming the session rule, core rule or checklist item it enforces (brief 647).
 9. **Own the misses.** When the builder or the maintainers correct you with evidence, record the correction in the decisions log.
 <!-- /protocol -->
 
