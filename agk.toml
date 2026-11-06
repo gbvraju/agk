@@ -426,6 +426,9 @@ tests = [
   "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_make_once.py",
 ]
 [[testing.map]]
+code = "scripts/agk/req_status.py"
+tests = ["tests/kit/test_req_status.py"]
+[[testing.map]]
 code = "scripts/agk/review_context.py"
 tests = [
   "tests/kit/test_check_kit_tests.py", "tests/kit/test_review_context.py",

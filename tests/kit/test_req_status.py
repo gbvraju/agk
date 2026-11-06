@@ -113,12 +113,23 @@ def test_ac4_a_requirement_with_an_unmarked_criterion_has_no_proof_mapped(repo):
 
 def test_ac4_without_a_proof_table_or_area_no_proof_is_mapped(repo):
     """REQ-003 AC4: a test file no `[proof]` area runs cannot be proof on its own."""
-    setup(repo, requirement("@010", "planned"), {"tests/test_a.py": "# @010 AC1\n# @010 AC2\n"}, area=False)
+    setup(
+        repo,
+        requirement("@010", "planned"),
+        {"tests/test_a.py": "# @010 AC1\n# @010 AC2\n"},
+        area=False,
+    )
     proc = report(repo)
     assert proc.returncode == 0, shown(proc)
     assert "@010: no proof mapped" in shown(proc)
     other = AREA.replace('dirs = ["tests"]', 'dirs = ["tests/unit"]')
-    setup(repo, requirement("@010", "planned"), {"tests/test_a.py": "# @010 AC1\n# @010 AC2\n"}, False, other)
+    setup(
+        repo,
+        requirement("@010", "planned"),
+        {"tests/test_a.py": "# @010 AC1\n# @010 AC2\n"},
+        False,
+        other,
+    )
     proc = report(repo)
     assert "@010: no proof mapped" in shown(proc)
     assert runs(repo) == []
@@ -176,8 +187,13 @@ def test_ac4_json_lists_each_requirement_with_its_outcome(repo):
     """REQ-003 AC4: `--json` is one object for the conductor to read."""
     setup(
         repo,
-        requirement("@010", "planned") + requirement("@011", "done") + requirement("@012", "planned"),
-        {"tests/test_a.py": "# @010 AC1\n# @010 AC2\n", "tests/test_b.py": "# @011 AC1\n# @011 AC2\nBROKEN\n"},
+        requirement("@010", "planned")
+        + requirement("@011", "done")
+        + requirement("@012", "planned"),
+        {
+            "tests/test_a.py": "# @010 AC1\n# @010 AC2\n",
+            "tests/test_b.py": "# @011 AC1\n# @011 AC2\nBROKEN\n",
+        },
     )
     proc = report(repo, "--json")
     assert proc.returncode == 1, shown(proc)
@@ -195,7 +211,10 @@ def test_ac4_req_limits_the_run_to_the_named_requirements(repo):
     setup(
         repo,
         requirement("@010", "planned") + requirement("@011", "planned"),
-        {"tests/test_a.py": "# @010 AC1\n# @010 AC2\n", "tests/test_b.py": "# @011 AC1\n# @011 AC2\n"},
+        {
+            "tests/test_a.py": "# @010 AC1\n# @010 AC2\n",
+            "tests/test_b.py": "# @011 AC1\n# @011 AC2\n",
+        },
     )
     proc = report(repo, "--req", real("@011"))
     assert proc.returncode == 0, shown(proc)
