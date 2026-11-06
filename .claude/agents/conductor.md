@@ -78,6 +78,7 @@ Every incident of a conductor run is a row of the conductor catch log (`docs/run
 - After a pull request body is fixed, ask for a new commit rather than a rerun, which replays the old body (row 9).
 - In an ask for a spec approval, quote the exact line to post, with nothing after it, not even a period (row 11).
 - Start the watch again on every notification, so that monitoring never lapses while you are idle (row 12).
+- On every notification start the watch and a wake-up timer of at most 25 minutes, so that a `Report:` never waits while you are idle (row 13).
 
 ## Reviewing
 

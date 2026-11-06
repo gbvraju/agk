@@ -18,9 +18,9 @@ session's notes.
 
 1. **A conductor catch log**, `docs/runs/conductor-catches-1.md`, in the shape of the architect catch logs: per row the date,
    the kind (its own fixed list, none shared with the architect kinds), what happened (counts and timings only), the cost, the
-   cause and the guard, seeded with the twelve incidents of 2026-11-04 to 2026-11-06.
+   cause and the guard, seeded with the twelve incidents of 2026-11-04 to 2026-11-06 and two of 2026-11-06 that the conductor's fix list added.
 2. **A guard per row**, of four forms: `check <path>`, `test <path>`, `rule <path>` (a line of the conductor role file) or
-   `pending #n`; several per row, strongest first.
+   `pending #n` (`pending (to be filed)` while its brief is not filed); several per row, strongest first.
 3. **`.claude/agents/conductor.md` gains "Operating lessons"**: one line per `rule` row, citing it; an incident is logged before
    the conductor reports it; the strongest guard first (a check before a test before a rule line); each `rule` row is revisited
    monthly. The conductor writes no file, so it puts the row in the brief it files or in its report for a person to add.
@@ -31,7 +31,7 @@ session's notes.
 
 ## Consequences
 
-A lesson of a conductor run lands as a row and its guard in one pull request. Seven of the twelve rows are guarded by a rule
+A lesson of a conductor run lands as a row and its guard in one pull request. Eight of the fourteen rows are guarded by a rule
 line only, which holds only as far as the conductor reads it; the monthly revisit is the path to a check.
 
 ## Residual
