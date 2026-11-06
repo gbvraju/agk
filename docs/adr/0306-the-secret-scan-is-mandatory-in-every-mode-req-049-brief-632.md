@@ -6,7 +6,7 @@
 - Related: ADR-0186, ADR-0158, ADR-0208, ADR-0233, ADR-0280
 - Requirements: REQ-049
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `config/`
 
 ## Context
 
@@ -53,7 +53,8 @@ pass. The personal-mode floor of SPEC-0041 rule 18 already fails without gitleak
 
 ## Residual
 
-- 2026-11-06: session rule 31 (`config/session-rules.md`) still describes `secret scan: not run` for a missing
-  gitleaks; the session rules are the maintainers' text, so their wording is left to them (`Q-632-1`).
+- 2026-11-06: session rule 31 (`config/session-rules.md`) now says a missing gitleaks fails the run; the conductor ruled
+  `Q-632-1` that a build may correct a rule sentence the build makes false. SPEC-0006 rule 11 gains the `secret_scan`
+  key by `docs/runs/proposed-spec-amendments-127.md` (`Q-632-3`), which needs the owner's `Approve: SPEC-0006`.
 - 2026-11-06: the doctor line is information only; whether a missing gitleaks should be a failing doctor check is left
   open (`Q-632-2`).
