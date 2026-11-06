@@ -35,16 +35,20 @@ needs one record issue (the open local-mode record issue, else the one open issu
 posts one comment `Auto merge: #<n> <merge sha> <UTC time> <verdict link>` there, then fetches the
 default branch, adds a detached worktree of the merge commit in a temporary folder outside the
 checkout and runs `lock.py run --name heavy --session merge-cleared -- env -i PATH=<PATH>
-HOME=<scratch> AGK_PR_BODY=<scratch>/pr-body.md make -C <worktree> governance AGK_BASE=<parent of
-the merge commit>`, the body file holding the pull request body read before the merge (brief #576,
-so that a `Covered-by:` build is not reported red), and removes the worktree in every case. A red
+HOME=<scratch> AGK_PR_BODY=<scratch>/pr-body.md AGK_RECORD_COMMENTS=<scratch>/record-comments.json
+make -C <worktree> governance AGK_BASE=<parent of the merge commit>`, the body file holding the pull
+request body read before the merge (brief #576, so that a `Covered-by:` build is not reported red)
+and the comments file the Final comment of each rule 3a record in the merge commit's history, one
+GET each as the workflow's `Record comments` step makes them, an unreadable one left out
+(amendment 122, brief #601, so that a `Covered-by:` of an ADR a Final accepted is not reported
+red), and removes the worktree in every case. A red
 run (or a fetch or worktree that fails) opens or updates the red-branch issue through
 `route.write_red`, prints
 
     merge-cleared: stopped: default branch red after #<n>         exit 1
 
 and that open issue holds every later run. It never reverts, pushes nothing and writes no file
-but that body file, which goes with the temporary folder.
+but those two files, which go with the temporary folder.
 The heavy-lock wait is bounded by `[flow] after_merge_timeout` (minutes, 30 by default; lock.py's
 exit 3 is the step `heavy lock`), and any exception, interrupt or SIGTERM after the merge is the
 step `governance not finished`: the red-branch issue is still opened (the fix list on #556).
@@ -54,6 +58,20 @@ GraphQL, which this command never calls (`Q-S0039-12`), so in CI mode it reads t
 and its commit status over REST and, while a required check is still queued or in progress, merges
 nothing, turns nothing on and prints `merge-cleared #<n> <sha12>: held: checks pending` (exit 3);
 the conductor's next review pass merges once they are green. A red check holds as before.
+
+Brief #610 (ADR-0297, amendment 123 of SPEC-0039 rules 5 and 6) adds the check before the merge.
+After every other hold passes, the command fetches the default branch and the head
+(`refs/pull/<n>/head`), builds their merge with `git merge-tree --write-tree` as one commit on the
+fetched default branch (`git commit-tree`: an object only, the shape of the squash merge), and runs
+the same governance run on it in a detached worktree in a temporary folder outside the checkout,
+with `AGK_BASE=<the fetched default branch>`. Green merges; red holds with
+
+    merge-cleared #<n> <sha12>: held: the merge with the default branch fails governance (<step>)
+
+(exit 3), and a conflict holds as `conflict (rule 5)`. While the default branch is red, the one
+pull request whose first `Brief:` line names the one open red-branch issue is not held for it, and
+when its run after the merge is green the command comments on that issue, naming the merge commit,
+and closes it; every other pull request stays held.
 """
 
 from __future__ import annotations
@@ -89,6 +107,7 @@ from common import (  # noqa: E402
     CheckError,
     covered_fix_list,
     final_accepts,
+    final_records,
     show,
 )
 from reviewers import CONFIG, approval_shas, approvers_of, conductors_of, parse  # noqa: E402
@@ -119,6 +138,11 @@ EVIDENCE = re.compile(r"Evidence check: (agrees|differs), head ([0-9a-f]{12})(?!
 ACCEPT = "Maintainer answer: accept {}"  # the one accepted first line (SPEC-0039 rule 4)
 APPROVAL = re.compile(r"Approval: (SPEC-\d{4})(?![0-9])")
 DEPENDS = re.compile(r"Depends-on: #(\d+)")
+BRIEF = re.compile(r"Brief: #(\d+)")  # the line that names the red-branch issue (brief #610)
+FAILS = "the merge with the default branch fails governance"  # the hold of the check (#610)
+CHECK_PREFIX = "agk-merge-check-"  # the temporary folder of the check before the merge (#610)
+AFTER_PREFIX = "agk-merge-cleared-"  # the temporary folder of the run after the merge (#551)
+NAME = ("-c", "user.name=merge-cleared", "-c", "user.email=merge-cleared@example.com")
 RELEASE = {  # a release changes the kit's version (SPEC-0039 rule 5)
     "agk.toml": re.compile(r"[+-]\s*version\s*="),
     "kit/manifest.json": re.compile(r'[+-]\s*"kit_version"\s*:'),
@@ -673,11 +697,15 @@ def post_record(repo: str, issue: int, number: int, merged: str, verdict: dict) 
 # --- rule 6: governance after the merge, and the red-branch stop -------------------------------
 
 
+RECORD_COMMENTS = "record-comments.json"  # in the run's home (amendment 122, brief #601)
+
+
 def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) -> list[str]:
     """The governance run of SPEC-0039 rule 6 as one argument list: the project's own lock.py,
-    the heavy lock waited for at most WAIT seconds, and `env -i` so that only PATH, HOME and
-    AGK_PR_BODY (the file BODY holding the merged pull request's body, brief #576) reach the
-    merged code."""
+    the heavy lock waited for at most WAIT seconds, and `env -i` so that only PATH, HOME,
+    AGK_PR_BODY (the file BODY holding the merged pull request's body, brief #576) and
+    AGK_RECORD_COMMENTS (HOME's file of the records' Final comments, amendment 122, brief #601)
+    reach the merged code."""
     lock_py = Path(__file__).resolve().parent / "lock.py"
     return [
         sys.executable,
@@ -695,6 +723,7 @@ def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) 
         f"PATH={os.environ.get('PATH', '')}",
         f"HOME={home}",
         f"AGK_PR_BODY={body}",
+        f"AGK_RECORD_COMMENTS={home / RECORD_COMMENTS}",
         "make",
         "-C",
         str(tree),
@@ -740,11 +769,29 @@ def end_child(child: subprocess.Popen) -> None:
         child.wait()
 
 
-def governance(root: Path, branch: str, merged: str, wait: float, text: str) -> str | None:
+def record_comments(repo: str, root: Path, merged: str) -> list[dict]:
+    """The Final comment of each SPEC-0021 rule 3a record in the history of the merge commit
+    MERGED (the ids `check_adrs.py --record-ids` prints there, read here by the command's own
+    `common.final_records`), one GET each, the GETs of the workflow's `Record comments` step; a
+    comment that cannot be read is left out, so its record counts for nothing (amendment 122,
+    brief #601)."""
+    found: list[dict] = []
+    for cid in sorted({record[1] for record in final_records(root, merged).values()}):
+        try:
+            found.append(read_json(f"repos/{repo}/issues/comments/{cid}", dict, "a Final comment"))
+        except Unreadable:
+            continue
+    return found
+
+
+def governance(
+    root: Path, branch: str, merged: str, wait: float, text: str, repo: str = ""
+) -> str | None:
     """Fetch the default branch, run governance on the merge commit in a temporary worktree
-    outside the checkout, with TEXT (the pull request body read before the merge) in a file of the
-    run's temporary home, and remove both in every case. None when green, else the failing step
-    (`fetch`, `worktree`, `heavy lock` or `make governance`)."""
+    outside the checkout, with TEXT (the pull request body read before the merge) and the Final
+    comments of the merge commit's records (read from REPO) in files of the run's temporary home,
+    and remove all of them in every case. None when green, else the failing step (`fetch`,
+    `worktree`, `heavy lock` or `make governance`)."""
     code, _ = git_out(root, "fetch", "-q", "origin", branch)
     if code != 0:
         return "fetch"
@@ -752,20 +799,73 @@ def governance(root: Path, branch: str, merged: str, wait: float, text: str) -> 
     parent_code, parent = git_out(root, "rev-parse", "--verify", "-q", f"{merged}^1")
     if code != 0 or parent_code != 0 or not SHA.fullmatch(parent):
         return "fetch"
-    scratch = Path(tempfile.mkdtemp(prefix="agk-merge-cleared-"))
+    return in_worktree(root, merged, parent, wait, text, AFTER_PREFIX, repo)
+
+
+def in_worktree(
+    root: Path, commit: str, base: str, wait: float, text: str, prefix: str, repo: str = ""
+) -> str | None:
+    """The governance run on COMMIT against BASE in a detached worktree of a new temporary folder
+    outside the checkout (named with PREFIX), with TEXT in the body file of its temporary home and
+    the Final comments of COMMIT's records (read from REPO, amendment 122) in its record-comments
+    file; both are removed in every case. The one run of rule 6, after the merge and before it
+    (brief #610). None when green, else the failing step."""
+    scratch = Path(tempfile.mkdtemp(prefix=prefix))
     tree, home = scratch / "tree", scratch / "home"
     body = home / "pr-body.md"
     try:
         home.mkdir()
         body.write_text(text, encoding="utf-8")
-        code, _ = git_out(root, "worktree", "add", "--detach", "-q", str(tree), merged)
+        found = record_comments(repo, root, commit) if repo else []
+        (home / RECORD_COMMENTS).write_text(json.dumps(found), encoding="utf-8")
+        code, _ = git_out(root, "worktree", "add", "--detach", "-q", str(tree), commit)
         if code != 0:
             return "worktree"
-        return run_governance(root, tree, home, body, parent, wait)
+        return run_governance(root, tree, home, body, base, wait)
     finally:
         git_out(root, "worktree", "remove", "--force", str(tree))
         shutil.rmtree(scratch, ignore_errors=True)
         git_out(root, "worktree", "prune")
+
+
+def would_be_merge(root: Path, branch: str, number: int, sha: str) -> tuple[str | None, str]:
+    """Fetch the default branch and the pull request's head, and make their merge one commit on
+    the fetched default branch, as the squash merge will be: (the commit, the default branch's
+    commit), or (None, the failing step). A conflict holds, as rule 5 holds one (brief #610)."""
+    code, _ = git_out(root, "fetch", "-q", "origin", branch, f"refs/pull/{number}/head")
+    base_code, base = git_out(root, "rev-parse", "--verify", "-q", f"{REMOTE}{branch}^{{commit}}")
+    head_code, _ = git_out(root, "cat-file", "-e", f"{sha}^{{commit}}")
+    if code != 0 or base_code != 0 or head_code != 0 or not SHA.fullmatch(base):
+        return None, "fetch"
+    code, out = git_out(root, "merge-tree", "--write-tree", "--no-messages", base, sha)
+    if code == 1:
+        raise Held("conflict (rule 5)")
+    tree = out.splitlines()[0] if out else ""
+    if code != 0 or not SHA.fullmatch(tree):
+        return None, "merge-tree"
+    message = f"merge-cleared: the would-be merge of #{number}"
+    code, commit = git_out(root, *NAME, "commit-tree", tree, "-p", base, "-m", message)
+    if code != 0 or not SHA.fullmatch(commit):
+        return None, "merge-tree"
+    return commit, base
+
+
+def merge_check(
+    root: Path, branch: str, number: int, sha: str, wait: float, text: str, repo: str = ""
+) -> str | None:
+    """Governance on the would-be merge of SHA with the default branch, before the merge (brief
+    #610, amendment 123): the run of rule 6 on it. None when green, else the failing step; any
+    exception, interrupt or termination is `governance not finished`, nothing having merged."""
+    with after_merge_signals():
+        try:
+            commit, base = would_be_merge(root, branch, number, sha)
+            if commit is None:
+                return base
+            return in_worktree(root, commit, base, wait, text, CHECK_PREFIX, repo)
+        except Held:
+            raise
+        except BaseException:  # a run that cannot finish is not green; nothing has merged
+            return NOT_FINISHED
 
 
 def commit_url(repo: str, sha: str) -> str:
@@ -786,6 +886,38 @@ def file_red(repo: str, step: str, merged: str) -> bool:
     except Exception:  # any failure to write it is said on the stop line (fix list, #556)
         return False
     return True
+
+
+def red_issues(issues: list[dict]) -> list[dict]:
+    """The open issues titled exactly `The default branch is red`, whoever wrote them."""
+    return [i for i in issues if "pull_request" not in i and i.get("title") == RED_TITLE]
+
+
+def red_fix(pull: dict, reds: list[dict]) -> int | None:
+    """The number of the one open red-branch issue that the first `Brief:` line of the pull
+    request's body names exactly (`Brief: #<n>`), else None (brief #610, amendment 123)."""
+    if len(reds) != 1 or not isinstance(reds[0].get("number"), int):
+        return None
+    lines = [x.rstrip() for x in str(pull.get("body") or "").splitlines()]
+    first = next((x for x in lines if x.startswith("Brief:")), "")
+    found = BRIEF.fullmatch(first)
+    return reds[0]["number"] if found and int(found.group(1)) == reds[0]["number"] else None
+
+
+def close_red(repo: str, issue: int, number: int, merged: str) -> bool:
+    """After a green run after the merge of the red-branch fix: one comment on ISSUE naming the
+    merge commit, then the issue closed as completed (brief #610); whether both were written."""
+    line = (
+        f"The default branch is green again: governance passed on the merge commit {merged} "
+        f"of #{number} ({commit_url(repo, merged)}), merged by merge_cleared.py."
+    )
+    endpoint = f"repos/{repo}/issues/{issue}"
+    code, _, _ = write_once(["--method", "POST", f"{endpoint}/comments", "-f", f"body={line}"])
+    if code != 0:
+        return False
+    args = ["--method", "PATCH", endpoint, "-f", "state=closed", "-f", "state_reason=completed"]
+    code, _, _ = write_once(args)
+    return code == 0
 
 
 def on_signal(signum: int, frame: object) -> None:
@@ -817,17 +949,20 @@ def after_merge(
     verdict: dict,
     data: dict,
     text: str,
-) -> bool:
+    fixing: int | None = None,
+) -> tuple[bool, bool]:
     """Everything after the merge (SPEC-0039 rules 6 and 7): the record line, then governance.
     Any exception, interrupt or termination counts as red (`governance not finished`): the
-    red-branch issue is opened or updated and Stopped is raised. Whether the record was posted."""
+    red-branch issue is opened or updated and Stopped is raised. When green and the merge was the
+    fix of the red-branch issue FIXING, that issue is closed (brief #610). Whether the record was
+    posted, and whether the issue to close was closed."""
     wait = after_merge_seconds(data)
     recorded = False
     with after_merge_signals():
         try:
             recorded = post_record(repo, record, number, merged, verdict)
             branch = str(data.get("default_branch", "main"))
-            step = governance(root, branch, merged, wait, text)
+            step = governance(root, branch, merged, wait, text, repo)
         except BaseException:  # the merge stands; the run cannot show green (fix list, #556)
             step = NOT_FINISHED
         if step is not None:
@@ -836,7 +971,8 @@ def after_merge(
             except BaseException:  # an interrupt while it is written: said on the stop line
                 filed = False
             raise Stopped(number, filed)
-    return recorded
+    closed = fixing is None or close_red(repo, fixing, number, merged)
+    return recorded, closed
 
 
 # --- rule 9: the lock ---------------------------------------------------------------------------
@@ -908,7 +1044,9 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
         verdict = latest_verdict(comments) or {}
         accepted = acceptance_lines(repo, sha, verdict)
         issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
-        if titled(issues, RED_TITLE, exact=True):
+        reds = red_issues(issues)
+        fixing = red_fix(pull, reds) if reds else None
+        if reds and fixing is None:  # only the red-branch fix may merge (brief #610)
             raise Held("the default branch is red (rule 5)")
         record = record_issue(issues)
         if record is None:
@@ -918,11 +1056,23 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
         else:
             ci_evidence(repo, sha, required)
         hold_list(repo, number, pull, comments, approvers, accepted_adrs(verdict, sha) or [])
-        merged = merge_pull(repo, number, sha, accepted)
         text = str(pull.get("body") or "")  # the body read above, for governance (brief #576)
-        recorded = after_merge(root, repo, number, merged, record, verdict, data, text)
+        branch = str(data.get("default_branch", "main"))
+        step = merge_check(root, branch, number, sha, after_merge_seconds(data), text, repo)
+        if step is not None:
+            raise Held(f"{FAILS} ({step})")
+        merged = merge_pull(repo, number, sha, accepted)
+        recorded, closed = after_merge(
+            root, repo, number, merged, record, verdict, data, text, fixing
+        )
     if not recorded:
         return f"merged {merged[:12]}", "the record line cannot be posted (rule 7)", EXIT_REFUSED
+    if not closed:
+        return (
+            f"merged {merged[:12]}",
+            "the red-branch issue cannot be closed (rule 6)",
+            EXIT_REFUSED,
+        )
     return f"merged {merged[:12]}", "", EXIT_CLEARED
 
 

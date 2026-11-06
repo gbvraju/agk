@@ -62,3 +62,8 @@ changes what it says, and no safety rule weakens: each item adds the personal-mo
    rule 8 keeps its first sentence and gains the personal-mode sentence and the two table rows, and that no
    personal-mode command commits outside the sidecar. Build (n): a test reads the two
    guides for the new sentences. Their marker is `REQ-048`.
+
+Applied (2026-11-05, from `date -u`): items 3, 4 and 6 to `docs/specs/0005-distribution.md` by build (c) of SPEC-0041
+(brief #584): the sentence of item 3 at the end of rule 1, that of item 4 at the end of rule 2, and the sentence and
+the two table rows of item 6 in rule 8, word for word; `tests/kit_dev/test_distribution.py` pins them. Items 5, 7 and
+8 stay for builds (i) and (n).
