@@ -14,10 +14,18 @@ user's temp folder or `lock_dir` of agk.toml. Taking, clearing and releasing are
 short mutex beside it (`.agk-lock-NAME.mutex`, made with mkdir), so a lock is removed only after it
 is checked under the mutex. While another run holds it, `run` waits and
 prints one line at once and then one a minute, naming the holder and its age; `--timeout S` gives
-up after S seconds (exit 3). A lock whose process no longer runs on this machine, or that is older
-than `lock_stale_minutes` (agk.toml, 120 by default), is cleared with a line saying so; it counts
-as held while either `lock.py` or its command still runs. `status` prints the holder, or `free`,
-and changes nothing.
+up after S seconds (exit 3). A lock whose process no longer runs on this machine is cleared with a
+line saying so; it counts as held while either `lock.py` or its command still runs. `status` prints
+the holder, or `free`, and changes nothing.
+
+Brief #607 (ADR-0295, changing the age rule of ADR-0191 and ADR-0231): a lock whose holder still
+runs on this machine is never cleared, whatever its age, also after the machine slept. The holder
+writes a heartbeat, `beat` in `owner.json`, when it takes the lock and then about once a minute
+while it runs. A lock of another host, or one whose process ids cannot be read, is stale only when
+its heartbeat (its start, for an owner file without one) is older than `lock_stale_minutes`
+(agk.toml, 120 by default), and the line that clears it names the host. `status` and the waiting
+lines print the holder, its age and the heartbeat's age. The queue runner's slots follow the same
+rules and carry the same heartbeat.
 
 Brief #426 (ADR-0231): `lock_slots` (agk.toml, 1 by default) lets that many runs hold the lock at
 once; slot 1 is the folder `agk-lock-NAME` as before, slot k is `agk-lock-NAME.k`, and `status`
@@ -118,6 +126,7 @@ BRIEF_LINE = re.compile(r"Brief: #([1-9][0-9]*)")
 FULL_SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 STALE_MINUTES = 120
+HEARTBEAT = 60  # seconds between two heartbeats of a holder (brief #607)
 POLL = 0.5  # seconds between two tries
 ANNOUNCE = 60  # seconds between two waiting lines
 STILL_ACTIVE = 259  # GetExitCodeProcess: the process has not ended
@@ -334,37 +343,65 @@ def read_owner(held: Path) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
-def age_minutes(owner: dict) -> float | None:
+def minutes_since(owner: dict, key: str, now: datetime | None = None) -> float | None:
+    """Minutes since the owner file's time `key` (`started` or `beat`), or None when unreadable."""
     try:
-        started = datetime.strptime(str(owner["started"]), "%Y-%m-%dT%H:%M:%SZ")
+        then = datetime.strptime(str(owner[key]), "%Y-%m-%dT%H:%M:%SZ")
     except (KeyError, ValueError):
         return None
-    return (datetime.now(UTC) - started.replace(tzinfo=UTC)).total_seconds() / 60
+    now = now or datetime.now(UTC)
+    return (now - then.replace(tzinfo=UTC)).total_seconds() / 60
 
 
-def stale_reason(owner: dict | None, held: Path, limit: int) -> str | None:
-    """Why a lock may be cleared, or None while its owner may still hold it."""
+def age_minutes(owner: dict, now: datetime | None = None) -> float | None:
+    return minutes_since(owner, "started", now)
+
+
+def beat_minutes(owner: dict, now: datetime | None = None) -> float | None:
+    """Minutes since the holder's last heartbeat; an owner file without one (an older kit) has
+    its start as its last sign of life."""
+    if "beat" in owner:
+        return minutes_since(owner, "beat", now)
+    return age_minutes(owner, now)
+
+
+def stale_reason(
+    owner: dict | None, held: Path, limit: int, now: datetime | None = None
+) -> str | None:
+    """Why a lock may be cleared, or None while its owner may still hold it (brief #607): a holder
+    of this machine whose process ids can be read is judged by them alone, never by age; any
+    other holder by the age of its heartbeat."""
     if owner is None:
         # Taken in one rename with its owner file, so a folder without one is a leftover; it is
         # cleared only once it is older than the limit, by the folder's own time.
         try:
-            minutes = (time.time() - held.stat().st_mtime) / 60
+            stamp = now.timestamp() if now is not None else time.time()
+            minutes = (stamp - held.stat().st_mtime) / 60
         except OSError:
             return None
         return f"it has no owner file and is older than {limit} min" if minutes > limit else None
-    minutes = age_minutes(owner)
-    if owner.get("host") == socket.gethostname() and not holder_alive(owner):
-        return DEAD
+    host = owner.get("host")
+    if host == socket.gethostname() and holder_pids(owner):
+        return None if holder_alive(owner) else DEAD
+    minutes = beat_minutes(owner, now)
     if minutes is None or minutes > limit:
-        return f"older than {limit} min, setting: lock_stale_minutes"
+        return (
+            f"its heartbeat from host {host or 'unknown'} is older than {limit} min,"
+            " setting: lock_stale_minutes"
+        )
     return None
+
+
+def holder_pids(owner: dict) -> list[int]:
+    """The process ids of the holder (`lock.py`) and of its command, as far as they can be read."""
+    pids = [owner.get("pid"), owner.get("child")]
+    return [p for p in pids if isinstance(p, int) and not isinstance(p, bool) and p > 0]
 
 
 def holder_alive(owner: dict) -> bool:
     """The lock is held while `lock.py` or the command it started still runs: a holder killed
     with SIGKILL leaves its command running, and that command still holds the machine."""
-    pids = [owner.get("pid"), owner.get("child")]
-    return any(pid_alive(int(p)) for p in pids if isinstance(p, int) and p > 0)
+    return any(pid_alive(p) for p in holder_pids(owner))
 
 
 @contextmanager
@@ -400,15 +437,18 @@ def mutex(held: Path):
             pass
 
 
-def describe(owner: dict | None) -> str:
+def describe(owner: dict | None, now: datetime | None = None) -> str:
+    """The holder, its age and the heartbeat's age (brief #607 answer 4)."""
     if owner is None:
         return "held by an unknown owner"
-    minutes = age_minutes(owner)
+    minutes = age_minutes(owner, now)
     age = f"for {int(minutes)} min" if minutes is not None else "since an unknown time"
+    beat = minutes_since(owner, "beat", now) if "beat" in owner else None
+    pulse = f"heartbeat {max(0, int(beat))} min ago" if beat is not None else "no heartbeat"
     child = f", command pid {owner['child']}" if owner.get("child") else ""
     return (
         f"held by {owner.get('session') or 'an unknown session'} "
-        f"(pid {owner.get('pid')}{child}, host {owner.get('host')}) {age}"
+        f"(pid {owner.get('pid')}{child}, host {owner.get('host')}) {age}; {pulse}"
     )
 
 
@@ -542,16 +582,53 @@ def clear_if_same(held: Path, token: str | None) -> bool:
         return not held.exists()
 
 
-def record_child(held: Path, token: str, child: int) -> None:
-    """Add the command's process id to this run's owner file, under the mutex."""
+def update_owner(held: Path, token: str, **fields) -> None:
+    """Set `fields` in this run's owner file, under the mutex; a lock taken again by another run
+    (another token) is never written."""
     with mutex(held):
         owner = read_owner(held)
         if (owner or {}).get("token") != token:
             return
-        owner["child"] = child
+        owner.update(fields)
         staged = held / "owner.json.new"
         staged.write_text(json.dumps(owner), encoding="utf-8")
         os.replace(staged, held / "owner.json")
+
+
+def record_child(held: Path, token: str, child: int) -> None:
+    """Add the command's process id to this run's owner file, under the mutex."""
+    update_owner(held, token, child=child)
+
+
+def beat(held: Path, token: str, now: datetime) -> None:
+    """One heartbeat: `beat` in this run's owner file is `now` (brief #607 answer 2)."""
+    update_owner(held, token, beat=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+
+def heartbeat_loop(held: Path, token: str, clock, wait) -> None:
+    """Beat after each `wait(HEARTBEAT)` that runs out, until `wait` says the run ended. A machine
+    that slept resumes here when it wakes; a failed write is tried again at the next beat."""
+    while not wait(HEARTBEAT):
+        try:
+            beat(held, token, clock())
+        except OSError:
+            pass
+
+
+@contextmanager
+def heartbeat(held: Path, token: str, clock=None):
+    """Keep this run's heartbeat going in a daemon thread while the block runs."""
+    clock = clock or (lambda: datetime.now(UTC))
+    done = threading.Event()
+    thread = threading.Thread(
+        target=heartbeat_loop, args=(held, token, clock, done.wait), daemon=True
+    )
+    thread.start()
+    try:
+        yield
+    finally:
+        done.set()
+        thread.join(timeout=5)
 
 
 def take(
@@ -601,7 +678,12 @@ def take(
 
 
 def clear_stale(
-    folders: list[Path], name: str, limit: int, cleanup: str, root: Path | None
+    folders: list[Path],
+    name: str,
+    limit: int,
+    cleanup: str,
+    root: Path | None,
+    now: datetime | None = None,
 ) -> bool:
     """Clear each stale slot, each once (a lock taken again since it was judged is kept), and run
     the cleanup after each dead run cleared here. Whether any slot was cleared."""
@@ -610,7 +692,7 @@ def clear_stale(
         if not folder.exists():
             continue
         current = read_owner(folder)
-        reason = stale_reason(current, folder, limit)
+        reason = stale_reason(current, folder, limit, now)
         if reason is None:
             continue
         who = (current or {}).get("session") or "an unknown session"
@@ -941,6 +1023,7 @@ def execute(root: Path, held: Path, name: str, job: dict, setup: dict, children:
         "started": heavy_queue.stamp(clock()),
         "token": token,
     }
+    owner["beat"] = owner["started"]
     slot = take(
         held, name, owner, setup["limit"], None, setup["slots"], PRIORITY, setup["cleanup"], root
     )
@@ -970,7 +1053,8 @@ def execute(root: Path, held: Path, name: str, job: dict, setup: dict, children:
                 return "failed (the command cannot be started)", 127, began
             children[job["ticket"]] = child
             record_child(slot, token, child.pid)
-            code = child.wait()
+            with heartbeat(slot, token, clock):
+                code = child.wait()
     finally:
         children.pop(job["ticket"], None)
         clear_if_same(slot, token)
@@ -1145,7 +1229,8 @@ def run_held(command: list[str], held: Path, token: str, session: str = "", name
         return 127
     try:
         record_child(held, token, child.pid)
-        code = child.wait()
+        with heartbeat(held, token):
+            code = child.wait()
         return 128 - code if code < 0 else code  # killed by signal n: 128 + n, as a shell says
     except KeyboardInterrupt:
         stop(child)
@@ -1226,6 +1311,7 @@ def main(argv: list[str] | None = None) -> int:
         "started": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "token": token,
     }
+    owner["beat"] = owner["started"]
     for signum in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None)):
         if signum is not None:
             signal.signal(signum, on_signal)
