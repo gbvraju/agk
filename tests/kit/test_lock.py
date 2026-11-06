@@ -5,7 +5,8 @@ atomically, holding the owner's session, process id, host and start time), runs 
 without a shell, and releases the lock when the command ends, also on failure or interrupt. A
 second run waits its turn, printing who holds the lock; `--timeout S` gives up. A lock whose
 process no longer runs on this machine is cleared with a line saying so; a lock of another host
-is cleared when its heartbeat is older than `lock_stale_minutes` (brief #607, ADR-0295). `lock.py status` prints the holder or `free`.
+is cleared when its heartbeat is older than `lock_stale_minutes` (brief #607, ADR-0295).
+`lock.py status` prints the holder or `free`.
 
 Every test points `lock_dir` (agk.toml) at its own folder, so no test touches the real temp lock.
 """

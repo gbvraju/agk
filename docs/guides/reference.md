@@ -171,8 +171,10 @@ Several sessions on one machine take turns on heavy steps (governance, the tests
 --name heavy --session <id> -- <command...>`: it waits its turn, printing the holder once a minute (`--timeout S` gives up with
 exit 3), runs the command without a shell and releases the lock when it ends, also on failure or interrupt, with the command's exit
 code. A lock left by a session that died is cleared with a line saying so: when neither its process nor its command runs on this
-machine, or when it is older than `lock_stale_minutes` (120 by default). The lock is a folder in the user's temp folder, or
-`lock_dir` in `agk.toml`. `python3 scripts/agk/lock.py status --name heavy` prints the holder or `free` (ADR-0191).
+machine. A holder that still runs on this machine is never cleared by age; a lock of another host is cleared only when its
+heartbeat, written about once a minute, is older than `lock_stale_minutes` (120 by default, ADR-0295). The lock is a folder in the
+user's temp folder, or `lock_dir` in `agk.toml`. `python3 scripts/agk/lock.py status --name heavy` prints the holder, its age and
+the heartbeat's age, or `free` (ADR-0191).
 
 When several pull requests are ready, `python3 scripts/agk/batch.py PR [PR...] [--command CMD] [--json] [--record FILE]` merges
 their heads in a scratch worktree and runs the heavy command (`make -f agk.mk agk-project-test` by default) once under the

@@ -141,9 +141,7 @@ def test_a_remote_holder_with_a_stale_heartbeat_is_cleared_saying_so(tmp_path, c
         started=NOW - timedelta(minutes=150),
         beat=NOW - timedelta(minutes=121),
     )
-    want = (
-        f"its heartbeat from host {ELSEWHERE} is older than 120 min, setting: lock_stale_minutes"
-    )
+    want = f"its heartbeat from host {ELSEWHERE} is older than 120 min, setting: lock_stale_minutes"
     assert reason(held) == want
     assert clear(held) is True
     assert not held.exists()
@@ -176,7 +174,9 @@ def test_a_holder_here_whose_liveness_cannot_be_read_is_judged_by_its_heartbeat(
     folder = tmp_path / "a"
     fresh = plant(folder, pid=0, started=NOW - timedelta(hours=5), beat=NOW)
     assert reason(fresh) is None
-    stale = plant(tmp_path / "b", pid=0, started=NOW - timedelta(hours=5), beat=NOW - timedelta(hours=3))
+    stale = plant(
+        tmp_path / "b", pid=0, started=NOW - timedelta(hours=5), beat=NOW - timedelta(hours=3)
+    )
     assert "heartbeat" in (reason(stale) or "")
 
 
@@ -290,9 +290,7 @@ def test_the_runner_writes_a_heartbeat_into_its_jobs_slot(repo, tmp_path):
     text = f"lock_dir = '{folder.as_posix()}'\n[locks]\nqueue = true\n"
     repo.commit({"agk.toml": text}, "settings")
     seen = folder / "seen.json"
-    probe = (
-        "import shutil,sys; shutil.copy(sys.argv[1], sys.argv[2])"
-    )
+    probe = "import shutil,sys; shutil.copy(sys.argv[1], sys.argv[2])"
     command = [PY, "-c", probe, str(folder / "agk-lock-heavy" / "owner.json"), str(seen)]
     head = repo.git("rev-parse", "HEAD").strip()
     job = heavy_queue.new_job(
