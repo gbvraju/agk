@@ -20,7 +20,9 @@ The brief is issue #626. The owner's decisions, quoted as data from the brief (c
 learnings should help AGK in the project , how to fix different issues reproduct and fix fast
 instead of wasting tokens and time . This makes sense to have feature", "Yes , take the intake",
 and, on the run folders: "why you need folders , unnecessary disk space and junk". It is a ruled
-exception to plan #542's requirement freeze, like REQ-052.
+exception to plan #542's requirement freeze, like REQ-052. The owner then asked, quoted as data from the conductor's field
+note on the brief (2026-11-06): "how about local mode and solo, flow - when there is no GitHub CI
+run"; decision 7 answers it.
 
 What exists and is reused: the data guard's redacting log reader and `guard.scan_text`
 (SPEC-0042 rules 10, 11 and 13), the `found-bug` label of session rule 34, the JUnit setting
@@ -47,10 +49,19 @@ the run folders of ADR-0299, which this requirement retires.
 6. The run folders of ADR-0299 are retired: build (f) makes the three `[testing]` keys inert with a
    deprecation line and marks ADR-0299 `Superseded`; build (g) removes them in the release after
    (SPEC-0046 rule 11).
-7. Per plan #542, this is the one ADR of REQ-053 for the builds of SPEC-0046 rule 12 other than
+7. Where no CI runs (local mode, `execution = "local"`, personal mode), one person-started run,
+   `failures.py run`, stands in for the two CI runs; it runs `project_tests.py`'s full command on a
+   clean default-branch or release head and is refused inside an agent session. Its screenshots and
+   traces stay in one private folder per open failure under `AGK_HOME`, never in the repository.
+   With GitHub reachable it writes issues as on CI; with no GitHub access the failure and the fix
+   record are one text file each in the git-ignored `.agk/failures/` (the sidecar in personal
+   mode), not committed. The signature and the data guard are the same in every mode
+   (SPEC-0046 rules 12 to 14).
+8. Per plan #542, this is the one ADR of REQ-053 for the builds of SPEC-0046 rule 15 other than
    (e). The builds will change these protected path classes: `scripts/agk/` (`failures.py`,
    `config.py`, `check_pr_body.py`, `proof.py`, `prepush.py`, `impact.py`, `doctor.py`, builds (b),
-   (c), (d), (f) and (g)), `tests/kit/` (their tests), `agk.toml` (the `[[testing.map]]` entries,
+   (c), (d), (f), (g), (h) and (i)), `tests/kit/` (their tests), `kit/` (the `.agk/` line of
+   `kit/templates/gitignore`, build (i)), `agk.toml` (the `[[testing.map]]` entries,
    builds (b) and (d)) and `config/` (`config/session-rules.md`, the `Fixes-failure:` form, build
    (c)). A build that changes a class named here and no other may cite this ADR with
    `Covered-by: ADR-0303` once it is Accepted (session rule 36). Build (e) changes
@@ -63,8 +74,8 @@ the run folders of ADR-0299, which this requirement retires.
 ## Consequences
 
 The requirement is listed as planned and the spec and this ADR wait for approval. Nothing that
-runs changes in this pull request; until build (e) lands no run opens an issue, and the run
-folders work as today until build (f).
+runs changes in this pull request; until build (e) lands no CI run opens an issue, until build (h)
+lands no run where CI is off reports, and the run folders work as today until build (f).
 
 ## Residual
 
