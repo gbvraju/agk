@@ -276,7 +276,8 @@ def test_the_test_run_is_one_bounded_argument_list():
     assert not any(a.startswith("GH_") or a.startswith("GITHUB_") for a in argv)
     tail = argv[argv.index("pytest") - 1 :]
     assert tail[:3] == ["-m", "pytest", "-q"]
-    assert ["-c", str(tree / "tests/kit/pytest.ini")] == tail[tail.index("-c") : tail.index("-c") + 2]
+    at = tail.index("-c")
+    assert tail[at : at + 2] == ["-c", str(tree / "tests/kit/pytest.ini")]
     assert tail[-1] == str(tree / BUDGET_TEST)
 
 
@@ -284,10 +285,11 @@ def test_the_test_run_is_one_bounded_argument_list():
     ("out", "found"),
     [
         (f"FAILED {BUDGET_ID} - assert 5 <= 3\n1 failed", BUDGET_ID),
+        (f"FAILED ../temp/agk-merge-check-x/tree/{BUDGET_ID}\n", BUDGET_ID),
         (f"ERROR {BUDGET_TEST} - ImportError\n", BUDGET_TEST),
         ("1 failed in 0.1s\n", "pytest"),
     ],
 )
 def test_the_hold_names_the_first_failing_test(out, found):
     """REQ-046: brief #667 answer 1 (`(<file>::<test>)`; with no test named, the step)."""
-    assert merge_cleared.first_failure(out, Path("/scratch/tree")) == found
+    assert merge_cleared.first_failure(out, [BUDGET_TEST]) == found

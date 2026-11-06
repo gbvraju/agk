@@ -70,6 +70,8 @@ auto_merge_method = "squash"
 [testing]
 profile = "balanced"
 pr_tests = "selected"
+# merge_cleared.py runs these on the would-be merge after governance (brief #667, ADR-0320)
+pre_merge_tests = ["tests/kit/test_rule_budget.py", "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_kit_manifest.py"]
 always_full = [
   "scripts/agk/common.py", "kit/agk-kit.mk", "Makefile", "agk.mk", ".github/workflows/**", "tests/kit/conftest.py",
   "tests/kit/pytest.ini", "tests/kit_dev/conftest.py",

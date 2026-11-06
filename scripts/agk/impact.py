@@ -26,7 +26,10 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
 - `slow_suite_seconds`: above it a single-process full run gets doctor's line (rule 7; 600);
 - `results_dir`, `keep_passed`, `keep_runs`: the retired run folders of ADR-0299 (SPEC-0046 rule
   11, build (f)): still accepted with their checks, they do nothing, and `run_folder_deprecation`
-  gives the one line `prepush.py` and `doctor.py` print when one is set; build (g) removes them.
+  gives the one line `prepush.py` and `doctor.py` print when one is set; build (g) removes them;
+- `pre_merge_tests`: the test files (paths, no globs) that `merge_cleared.py` runs on the would-be
+  merge after governance passes (brief #667, ADR-0320, amendment 132 of SPEC-0039 rule 6), each a
+  file; without the key, `PRE_MERGE_TESTS` where the kit's tests are (`kit/agk-kit.mk`), else none.
 
 For the change base..head `impact` gives the existing test files of the head (`test_dirs`,
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
@@ -74,6 +77,7 @@ KEYS = {
     "results_dir",
     "keep_passed",
     "keep_runs",
+    "pre_merge_tests",
 }
 DEFAULT_SLOW = 600
 DEFAULT_KEEP_RUNS = 20
@@ -97,6 +101,19 @@ JUNIT_MISSING = (
     "tests: no JUnit report was written by this run; per-file timing unknown "
     "(setting: testing.junit)"
 )
+PRE_MERGE = "pre_merge_tests"
+# The kit tests that read the whole tree (brief #667): rule budget, testing map, manifest.
+PRE_MERGE_TESTS = (
+    "tests/kit/test_rule_budget.py",
+    "tests/kit_dev/test_intelligent_testing.py",
+    "tests/kit_dev/test_kit_manifest.py",
+)
+KIT_MARK = "kit/agk-kit.mk"  # the kit repository, where its own tests are (agk.mk)
+PRE_MERGE_BAD = (
+    "pre_merge_tests must be a non-empty list of test file paths inside the repository "
+    "(setting: testing.pre_merge_tests)"
+)
+PRE_MERGE_MISSING = "a pre-merge test is not a file (setting: testing.pre_merge_tests)"
 UNKNOWN_TIMING = {"source": "unknown", "total_seconds": None, "files": []}
 
 
@@ -256,12 +273,44 @@ def testing_table(root: Path) -> dict | None:
     keep = table.get("keep_runs", DEFAULT_KEEP_RUNS)
     if isinstance(keep, bool) or not isinstance(keep, int) or keep < 1:
         raise CheckError("keep_runs must be a whole number above 0 (setting: testing.keep_runs)")
+    if PRE_MERGE in table:
+        pre_merge_names(table, root)
     return {
         "profile": profile,
         "always_full": list(always_full),
         "map": mapped,
         "budget_seconds": budget,
     }
+
+
+def check_pre_merge_tests(value: object) -> list[str]:
+    """The `pre_merge_tests` names: a non-empty list of relative file paths inside the repository,
+    no globs; a bad one is refused (CheckError) naming the setting, never its value."""
+    if not isinstance(value, list) or not value:
+        raise CheckError(PRE_MERGE_BAD)
+    for name in value:
+        if not isinstance(name, str) or not _glob_ok(name) or any(c in name for c in "*?[]"):
+            raise CheckError(PRE_MERGE_BAD)
+    return list(value)
+
+
+def pre_merge_names(table: dict | None, tree: Path) -> list[str]:
+    """The pre-merge test files of TABLE (a `[testing]` table, None without one) for the tree
+    TREE: the key's names, each a file of TREE, else refused naming the setting; without the
+    key, `PRE_MERGE_TESTS` when TREE holds `kit/agk-kit.mk`, else none (brief #667)."""
+    if table is not None and PRE_MERGE in table:
+        names = check_pre_merge_tests(table[PRE_MERGE])
+        if not all((tree / name).is_file() for name in names):
+            raise CheckError(PRE_MERGE_MISSING)
+        return names
+    return list(PRE_MERGE_TESTS) if (tree / KIT_MARK).is_file() else []
+
+
+def pre_merge_tests(root: Path) -> list[str]:
+    """`[testing] pre_merge_tests` of ROOT (the whole table checked first, a bad setting refused),
+    or the default of `pre_merge_names`."""
+    found = testing_table(root)
+    return pre_merge_names(None if found is None else config_source(root)["testing"], root)
 
 
 def check_excluded(value: object) -> list[str]:

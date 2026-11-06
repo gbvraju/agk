@@ -71,8 +71,11 @@ def test_the_catch_log_exists_and_parses_with_the_columns_of_the_brief():
 
 def test_the_first_log_holds_the_twelve_seeded_incidents_and_the_two_of_the_fix_list():
     _, body = table(LOGS[0])
-    assert len(body) == 14
+    assert len(body) == 16  # rows 15 and 16: the two red default branches of brief #667
     by_number = {r["#"]: r for r in rows()}
+    for number in ("15", "16"):
+        assert by_number[number]["Kind"] == "parallel-merge"
+        assert [g.group(1) for g in guards(by_number[number])] == ["check", "test"]
     assert by_number["13"]["Kind"] == "watch"
     assert [g.group(1) for g in guards(by_number["13"])] == ["check", "rule"]  # brief #643
     assert by_number["14"]["Kind"] == "kit-gap"
