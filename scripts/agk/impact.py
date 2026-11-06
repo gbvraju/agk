@@ -161,7 +161,7 @@ def _glob_ok(value: object) -> bool:
 def _folder_ok(value: object) -> bool:
     """A folder inside the repository and below its root: a path as `_glob_ok` takes it, with no
     empty, `.` or wildcard part (`.` would make the repository's root the results root)."""
-    if not _glob_ok(value) or any(c in value for c in "*?["):
+    if not isinstance(value, str) or not _glob_ok(value) or any(c in value for c in "*?["):
         return False
     return all(part not in ("", ".") for part in value.rstrip("/").split("/"))
 
