@@ -58,6 +58,7 @@
     "scripts/agk/evidence.py",
     "scripts/agk/execution.py",
     "scripts/agk/facts.py",
+    "scripts/agk/failures.py",
     "scripts/agk/flakes.py",
     "scripts/agk/full_run.py",
     "scripts/agk/guard.py",
