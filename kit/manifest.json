@@ -27,6 +27,7 @@
     "Makefile",
     "agk.mk",
     "config/core-rules.md",
+    "config/playbooks/web-app.toml",
     "config/review-checklist.md",
     "config/session-rules.md",
     "constitution/principles.md",

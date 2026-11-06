@@ -1,0 +1,1 @@
+- The first delivery playbook, `config/playbooks/web-app.toml`, is installed: contract, then mocks, then front end and back end in two lanes, then joins by demo value, with the four web-app gates and only `expected` speed claims; nothing reads it until a project declares a work type (brief #651, SPEC-0038 build (c), ADR-0313)
