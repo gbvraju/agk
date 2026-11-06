@@ -118,8 +118,11 @@ open pull request, and prints `<number> <first line>` for each; `--once` reads o
 `sweep` prints `#<n> <head7> <state> <age>` per open pull request (`draft`, `ready: no verdict`, `fix list on <head7>`,
 `cleared on <head7>`, `cleared, head moved`, `waiting: Approve SPEC-nnnn at <head7>`, `blocked: Question Q-n unanswered <age>`,
 `checks pending`, `red`), then the latest run of the default branch and any open red-branch issue; a `Question:` or `Report:`
-that no listed verdict author answered within `conductor_late_minutes` (30 by default) is marked `LATE`. The poll interval is
-`conductor_poll_seconds` (60 by default), both of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
+that no listed verdict author answered within `conductor_late_minutes` (30 by default) is marked `LATE`. Then a taken brief with no
+branch `claude/brief-<n>`, no pull request and no `Progress:`, `Report:` or `Question:` after its take, older than
+`silent_minutes` (30 by default), is listed as `SILENT <brief> <session> <minutes>` with the line to re-fire it; a brief with a
+`Report: ... escalate` never is (brief #669, ADR-0322). The poll interval is
+`conductor_poll_seconds` (60 by default), all of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
 nothing; the conductor guard allows exactly these forms.
 
 ## Pausing the kit
