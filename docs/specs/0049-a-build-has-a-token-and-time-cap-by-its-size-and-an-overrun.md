@@ -1,6 +1,6 @@
 # SPEC-0049: A build has a token and time cap by its size, and an overrun stops it
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-056
 
