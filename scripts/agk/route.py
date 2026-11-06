@@ -94,8 +94,12 @@ COLORS = {
     "agk:approve": "5319e7",
     "agk:ready": "0e8a16",
     "agk-brief": "1d76db",
+    "agk:parked": "c5def5",
 }
-DESCRIPTIONS = {"agk-brief": "AGK: a brief a builder session can take"}
+DESCRIPTIONS = {
+    "agk-brief": "AGK: a brief a builder session can take",
+    "agk:parked": "AGK: a brief `next` does not offer",
+}
 FAILED_RUN = {"failure", "timed_out", "cancelled", "action_required", "startup_failure", "stale"}
 FAILED_STATUS = {"failure", "error"}
 ASKED = re.compile(
