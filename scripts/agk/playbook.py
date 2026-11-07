@@ -8,6 +8,7 @@ Usage:
     python3 playbook.py architect [--root DIR]
     python3 playbook.py brief --kind overnight|day --branch-prefix PREFIX [--repo O/R]
                               [--ref REF] [--date D] [--root DIR]
+    python3 playbook.py split [--goal TEXT] [--kind KIND] [--root DIR]
 
 Kit-only (never installed). `start-ids`, `check-start` and `next-steps` serve `/agk:start`
 (rules 2 to 5): the next free ADR number and the branch name, the deterministic checks of the two
@@ -19,8 +20,14 @@ how to start the role and checks, read-only, that `agk.toml` is present, that `g
 and which branch is the default. `brief` prints a brief skeleton from `kit/templates/playbook/`
 in which the next requirement, ADR and spec numbers are read from `origin/<default branch>`
 (`common.next_free_ids`), the repository and the default branch come from `origin` and
-`agk.toml`, and no pull request number is written in advance.
-Nothing is written.
+`agk.toml`, and no pull request number is written in advance. `split` serves `/agk:brief`
+(SPEC-0038 rule 7, brief #664, ADR-0317): with a declared work type it prints the brief kinds of
+the playbook's `brief_order`, each with its `Kind:` line, one `Depends-on:` line per `depends_on`
+pair and its lane, after the work type and the milestone shape, through the installed reader
+`playbook_format.split` (ADR-0259); `--goal` names the goal in the titles and `--kind` prints one
+kind's block alone. With no declaration it prints nothing; a declaration or a playbook with a
+problem, or a kind outside `brief_order`, is refused naming the rule, the file and the key, never
+a value. Nothing is written.
 """
 
 from __future__ import annotations
@@ -34,6 +41,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import playbook_format
 from check_adrs import validate as validate_adr
 from common import (
     CheckError,
@@ -55,7 +63,8 @@ KIT = Path(__file__).resolve().parents[2]
 TEMPLATES = KIT / "kit" / "templates" / "playbook"
 USAGE = (
     "usage: playbook.py architect [--root DIR] | brief --kind overnight|day --branch-prefix P "
-    "[--repo O/R] [--ref REF] [--date D] [--root DIR]"
+    "[--repo O/R] [--ref REF] [--date D] [--root DIR] | split [--goal TEXT] [--kind KIND] "
+    "[--root DIR]"
 )
 PREFIX = re.compile(r"^[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$")
 FLAGS = (
@@ -69,6 +78,7 @@ FLAGS = (
     "--base",
     "--brief",
     "--issues",
+    "--goal",
 )
 MAX_STATEMENT = 1500
 VISION = "constitution/vision.md"
@@ -348,9 +358,19 @@ def cmd_next_steps(root: Path, opts: dict[str, str]) -> int:
     return 0
 
 
+def cmd_split(root: Path, opts: dict[str, str]) -> int:
+    """SPEC-0038 rule 7: print the playbook's proposal for the briefs of a goal; nothing written."""
+    lines, problems = playbook_format.split(root, opts.get("goal", ""), opts.get("kind"))
+    for problem in problems:
+        print(f"FAIL playbook: {problem}")
+    for line in lines:
+        print(line)
+    return 1 if problems else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    commands = ("architect", "brief", "start-ids", "check-start", "next-steps")
+    commands = ("architect", "brief", "start-ids", "check-start", "next-steps", "split")
     if not args or args[0] not in commands:
         print(USAGE, file=sys.stderr)
         return 2
@@ -372,6 +392,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_check_start(root, opts)
         if args[0] == "next-steps":
             return cmd_next_steps(root, opts)
+        if args[0] == "split":
+            return cmd_split(root, opts)
         return cmd_brief(root, opts)
     except CheckError as exc:
         print(f"FAIL playbook: {exc}")
