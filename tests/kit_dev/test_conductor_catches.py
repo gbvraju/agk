@@ -71,12 +71,10 @@ def test_the_catch_log_exists_and_parses_with_the_columns_of_the_brief():
 
 def test_the_first_log_holds_the_seeded_incidents_and_the_rows_of_2026_11_06():
     _, body = table(LOGS[0])
-    # 12 seeded and 2 of the fix list (brief #604), 8 of brief #695, and rows 23 and 24: the two
-    # red default branches of brief #667 as its pull request measured them
-    assert len(body) == 24
+    assert len(body) == 22  # 12 seeded and 2 of the fix list (brief #604), 8 of brief #695
     by_number = {r["#"]: r for r in rows()}
-    for number in ("23", "24"):
-        assert by_number[number]["Kind"] == "parallel-merge"
+    for number in ("15", "16"):  # the pre-merge tests of brief #667 guard both
+        assert by_number[number]["Guard"].startswith("check `scripts/agk/merge_cleared.py`")
         assert [g.group(1) for g in guards(by_number[number])] == ["check", "test"]
     assert by_number["13"]["Kind"] == "watch"
     assert [g.group(1) for g in guards(by_number["13"])] == ["check", "rule"]  # brief #643
@@ -88,8 +86,8 @@ def test_the_first_log_holds_the_seeded_incidents_and_the_rows_of_2026_11_06():
 def test_the_rows_of_brief_695_carry_their_kinds_and_guards():
     by_number = {r["#"]: r for r in rows()}
     expected = {
-        "15": ("parallel-merge", "pending #667"),
-        "16": ("parallel-merge", "pending #667"),
+        "15": ("parallel-merge", "check `scripts/agk/merge_cleared.py`"),  # brief #667
+        "16": ("parallel-merge", "check `scripts/agk/merge_cleared.py`"),  # brief #667
         "17": ("watch", "check `scripts/agk/conductor.py`"),
         "18": ("false-red", "pending (to be filed)"),
         "19": ("false-red", "pending (to be filed)"),

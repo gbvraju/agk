@@ -8,8 +8,7 @@ strongest guard that prevents it, so that no lesson lives only in one session's 
 
 Rows 1 to 12 are the incidents of 2026-11-04 to 2026-11-06 that the owner's brief #604 lists; rows 13 and 14 are the two that
 the conductor's fix list on the first head of its pull request added. Rows 15 to 22 are the incidents of 2026-11-06 that brief #695 lists:
-its issue and pull request numbers (#643, #657, #659, #667, #669, #684) were read on GitHub; its timings rest on the brief. Rows 23 and 24 are
-the two red default branches of brief #667, the incidents of rows 15 and 16 as the pull request of brief #667 measured them. Each pull request and issue number was
+its issue and pull request numbers (#643, #657, #659, #667, #669, #684) were read on GitHub; its timings rest on the brief. Each pull request and issue number was
 read on GitHub (GET only). A detail that the record of this repository does not show (a time that lives only in a session) is
 marked `(unverified)`; a cost that was not measured is `(unknown)`, never zero. Rows hold counts, timings and numbers only.
 
@@ -42,30 +41,28 @@ merged pull request that builds the guard), `pending (to be filed)` (a guard who
 | 12 | 2026-11-05 (unverified) | watch | monitoring lapsed while the conductor was idle | 7 h (unverified) | the watch was not started again after a notification | check `scripts/agk/conductor.py` (watch and sweep, brief #643); rule `.claude/agents/conductor.md` |
 | 13 | 2026-11-06 | watch | a builder's `Report:` on #616 at 07:43 UTC was seen at 09:15 UTC (the verdict on it at 09:16 UTC) because the watch had ended and was not started again | 1.5 h of a ready pull request waiting | no wake-up while idle | check `scripts/agk/conductor.py` (watch and sweep, brief #643); rule `.claude/agents/conductor.md` |
 | 14 | 2026-11-06 | kit-gap | an owner's `Approve: SPEC-nnnn` without a sha counts for CI but not for `merge_cleared.py`, and a merge of the default branch after it needed a new sha approval though the spec text did not change (#592, #603, #616) | (unknown): 3 extra owner approval lines | the merge script reads only a sha approval of the current head | pending (to be filed) |
-| 15 | 2026-11-06 | parallel-merge | #657 and #659 (two red-branch issues of the governance check): two pull requests, each green alone, were red together on the rule budget; merges were held (first of two) | 2 h of held merges (unverified; shared with row 16) | each pull request ran the budget test against the default branch without the other | pending #667 (the pre-merge check runs the kit's budget and map tests) |
-| 16 | 2026-11-06 | parallel-merge | the same failure again on #659, after #657 | 2 h of held merges (unverified; the same 2 h as row 15) | the pre-merge check did not run the kit's budget test | pending #667 (the pre-merge check runs the kit's budget and map tests) |
+| 15 | 2026-11-06 | parallel-merge | #657 and #659 (two red-branch issues of the governance check): two pull requests, each green alone, were red together on the rule budget; merges were held (first of two) | 2 h of held merges (unverified; shared with row 16) | each pull request ran the budget test against the default branch without the other | check `scripts/agk/merge_cleared.py` (the pre-merge tests, brief #667); test `tests/kit/test_merge_cleared_pre_tests.py` |
+| 16 | 2026-11-06 | parallel-merge | the same failure again on #659, after #657 | 2 h of held merges (unverified; the same 2 h as row 15) | the pre-merge check did not run the kit's budget test | check `scripts/agk/merge_cleared.py` (the pre-merge tests, brief #667); test `tests/kit/test_merge_cleared_pre_tests.py` |
 | 17 | 2026-11-06 | watch | two builders (b649, b654) died before pushing and were noticed hours later | (unknown): hours (unverified) | no evidence of a live builder was read; the conductor waited | check `scripts/agk/conductor.py` (`SILENT` in the sweep, brief #669, closed) |
 | 18 | 2026-11-06 | false-red | proof runs were cancelled by a push right after a pull request was marked ready | (unknown) | the new push cancels the runs of the head before it | pending (to be filed) (the conductor's rerun_cancelled outside the kit, later a kit command) |
 | 19 | 2026-11-06 | false-red | a push to a ready pull request left only skipped runs | (unknown) | the runs of a push to a ready pull request are skipped | pending (to be filed) (draft, push, then ready, later a kit command) |
 | 20 | 2026-11-06 | kit-gap | the builders' sandbox refused the secret scanner's download, so prepush could not pass | 1.5 h (unverified) | prepush required the scanner in a session that cannot install it | check `scripts/agk/prepush.py` (the deferral, ADR-0327, #684, merged) |
 | 21 | 2026-11-06 | history | the conductor amended a pushed commit and attempted a force-push on `claude/brief-683` before its pull request existed; an ordinary push superseded it | (unknown) | a pushed commit was amended in the conductor's own checkout | pending (to be filed) (no amend after a push, own builds in a worktree) |
 | 22 | 2026-11-06 | unread-result | the conductor's merge script read one page of check runs and waited on a green default branch | 40 min (unverified) | one page of check runs was read as all of them | check `scripts/agk/conductor.py` (merge-queue merges through `merge_cleared.py`, which reads every page of the check runs, brief #643 build (b)) |
-| 23 | 2026-11-06 | parallel-merge | the incident of row 15 with its measured numbers: #638 and #648, each green alone, made the default branch red once both had merged (#657): `config/session-rules.md` 3523 words against the 3469-word budget line, the budget test 1 failed | 25 min of a red default branch (13:22 to 13:46 UTC); 1 fix pull request (#658) | the check before the merge ran governance only, not the kit test that reads the whole tree | check `scripts/agk/merge_cleared.py` (the pre-merge tests, brief #667); test `tests/kit/test_merge_cleared_pre_tests.py` |
-| 24 | 2026-11-06 | parallel-merge | the incident of row 16 with its measured numbers: #644 and #648, each green alone, made the default branch red once both had merged (#659): `.claude/agents/conductor.md` 4570 words against the 4541-word budget line, the budget test 1 failed | 33 min of a red default branch (14:23 to 14:55 UTC); 1 fix pull request (#660) | the same as row 23, the second time on one day | check `scripts/agk/merge_cleared.py` (the pre-merge tests, brief #667); test `tests/kit/test_merge_cleared_pre_tests.py` |
 
 ## What this shows
 
-Counted from the table and nothing else. 24 rows; 7 with their numbers verified on GitHub in full (rows 4, 5, 10, 13, 14, 23 and 24), 1 in part
+Counted from the table and nothing else. 22 rows; 5 with their numbers verified on GitHub in full (rows 4, 5, 10, 13 and 14), 1 in part
 (row 6: the issue and the merges, not the time), 8 that rest on the owner's account (`(unverified)`), and 8 of brief #695 (rows 15 to
 22) whose numbers were read on GitHub and whose timings rest on the brief.
 
-- **By kind:** `watch` 5 (rows 1, 2, 12, 13, 17); `kit-gap` 4 (rows 6, 11, 14, 20); `parallel-merge` 5 (rows 4, 15, 16, 23, 24); `false-red` 3
+- **By kind:** `watch` 5 (rows 1, 2, 12, 13, 17); `kit-gap` 4 (rows 6, 11, 14, 20); `parallel-merge` 3 (rows 4, 15, 16); `false-red` 3
   (rows 5, 18, 19); `unread-result` 2 (rows 3, 22); `history` 2 (rows 7, 21); `sequence` 1 (row 8); `stale-input` 1 (row 9);
   `conflict` 1 (row 10).
-- **By the strongest guard:** a check 12 (rows 1, 3, 4, 5, 10, 12, 13, 17, 20, 22, 23, 24, of which rows 1, 3, 4, 12 and 13 also carry a rule
-  line; rows 1, 3, 12, 13 and 22 by `conductor.py`, brief #643; row 17 by `conductor.py`, brief #669; row 20 by `prepush.py`, #684;
-  rows 23 and 24 by `merge_cleared.py`, brief #667); pending 7 (row 6, #601; rows 15 and 16, #667; rows 14, 18, 19 and 21, to be filed);
-  a rule line only 5 (rows 2, 7, 8, 9, 11). No row has a test as its strongest guard; rows 23 and 24 carry one after their check.
+- **By the strongest guard:** a check 12 (rows 1, 3, 4, 5, 10, 12, 13, 15, 16, 17, 20, 22, of which rows 1, 3, 4, 12 and 13 also carry a rule
+  line; rows 1, 3, 12, 13 and 22 by `conductor.py`, brief #643; rows 15 and 16 by `merge_cleared.py`, brief #667; row 17 by `conductor.py`,
+  brief #669; row 20 by `prepush.py`, #684); pending 5 (row 6, #601; rows 14, 18, 19 and 21, to be filed); a rule line only 5 (rows 2, 7,
+  8, 9, 11). No row has a test as its strongest guard; rows 15 and 16 carry one after their check.
 - **Corrections of the given list:** row 1 named `pending #601` beside its rule; #601 builds the rule 3a gaps of row 6 and nothing
   about the watch, so row 1 keeps its rule line only. Brief #695 gives rows 18, 19 and 21 a practice as the guard; a `rule` guard
   needs a line of `.claude/agents/conductor.md`, which the brief does not touch, so they are `pending (to be filed)`.
