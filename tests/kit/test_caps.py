@@ -17,7 +17,8 @@ from decimal import Decimal
 
 import caps
 import pytest
-from test_conductor_commands import ago, pr, proj, serve_pr, stub, sweep  # noqa: F401
+import test_conductor_commands as tcc
+from test_conductor_commands import ago, pr, run, serve_pr, sweep
 from test_session import REPO, SHA, comment
 
 import config
@@ -30,6 +31,13 @@ FULL = (
 )
 ODD = 987654321  # a value that a refusal must never print
 NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
+TABLE = {
+    "S": {"tokens": 1, "hours": 1},
+    "M": {"tokens": 2, "hours": 2},
+    "L": {"tokens": 3, "hours": 3},
+}
+stub = tcc.stub  # the fixtures of the sweep tests, shared
+proj = tcc.proj
 
 
 def root_with(tmp_path, text: str):
@@ -100,16 +108,16 @@ def test_a_malformed_caps_table_is_refused_naming_the_setting(tmp_path, text, se
 
 def test_the_cap_is_the_size_of_the_brief():
     """REQ-056 AC3: rule 3, the brief's Size: line chooses the cap."""
-    table = {"S": {"tokens": 1, "hours": 1}, "M": {"tokens": 2, "hours": 2}, "L": {"tokens": 3, "hours": 3}}
-    assert caps.cap_of(table, brief_body("S")) == ("S", {"tokens": 1, "hours": 1})
-    assert caps.cap_of(table, brief_body("M")) == ("M", {"tokens": 2, "hours": 2})
+    assert caps.cap_of(TABLE, brief_body("S")) == ("S", {"tokens": 1, "hours": 1})
+    assert caps.cap_of(TABLE, brief_body("M")) == ("M", {"tokens": 2, "hours": 2})
 
 
-@pytest.mark.parametrize("body", [brief_body(None), brief_body("M") + "Size: S\n", "Size: XL", None])
+@pytest.mark.parametrize(
+    "body", [brief_body(None), brief_body("M") + "Size: S\n", "Size: XL", None]
+)
 def test_a_brief_whose_size_cannot_be_read_gets_the_l_cap(body):
     """REQ-056 AC3: rule 3, a missing, repeated or unreadable Size gives L, `size unknown`."""
-    table = {"S": {"tokens": 1, "hours": 1}, "M": {"tokens": 2, "hours": 2}, "L": {"tokens": 3, "hours": 3}}
-    assert caps.cap_of(table, body) == (None, {"tokens": 3, "hours": 3})
+    assert caps.cap_of(TABLE, body) == (None, {"tokens": 3, "hours": 3})
 
 
 # --- rule 5: the tokens used --------------------------------------------------------------------
@@ -130,7 +138,8 @@ def test_a_progress_figure_edited_after_the_newest_report_is_added():
     """REQ-056 AC3: rule 5, the progress line's figure counts when edited after the newest
     Report:, and not when the newest Report: came after it."""
     report = comment(1, "builder", "Report: abc1234 merge of main; Usage: 300 tokens", at(2))
-    progress = comment(2, "builder", "Progress: abc1234 done 2/4; next: 3; Usage: 700 tokens", at(1))
+    line = "Progress: abc1234 done 2/4; next: 3; Usage: 700 tokens"
+    progress = comment(2, "builder", line, at(1))
     progress["updated_at"] = at(3)
     assert caps.tokens_used([report, progress], "builder") == 1000
     progress["updated_at"] = at(1.5)
@@ -261,7 +270,8 @@ def test_sweep_marks_a_build_past_its_token_cap(proj, stub):
 def test_sweep_marks_a_build_past_its_hours_cap(proj, stub):
     """REQ-056 AC3: rule 7, the hours cap, with the hours given to one decimal."""
     proj.write("agk.toml", FULL)
-    progress = comment(2, "builder", "Progress: abc1234 done 1/4; next: 2; Usage: 10 tokens", ago(5))
+    line = "Progress: abc1234 done 1/4; next: 2; Usage: 10 tokens"
+    progress = comment(2, "builder", line, ago(5))
     open_build(stub, "Brief: #9\n", [progress], [take_hours_ago(5)])
     lines = sweep(proj, stub)
     assert lines[1] == "OVER #9 5.0/4 hours #7"
@@ -329,8 +339,6 @@ def test_sweep_a_malformed_caps_table_is_refused_naming_the_setting(proj, stub):
     """REQ-056 AC1: rule 2, the sweep stops on a malformed table, naming the setting."""
     proj.write("agk.toml", FULL.replace("hours = 2", f"hours = {ODD}"))
     open_build(stub, "Brief: #9\n", [], [take_hours_ago(2)])
-    from test_conductor_commands import run
-
     out = run(proj, stub, "sweep")
     assert out.returncode != 0
     assert "setting: caps.M" in out.stdout + out.stderr
