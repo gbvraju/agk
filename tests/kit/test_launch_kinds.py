@@ -19,7 +19,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 import session_plan
 
 KIT = Path(__file__).resolve().parents[2]
@@ -65,7 +64,11 @@ def only(out) -> str:
 
 @pytest.mark.parametrize(
     ("kind", "tier", "effort"),
-    [(None, "strongest", "high"), ("design", "strongest", "high"), ("build", "strongest", "medium")],
+    [
+        (None, "strongest", "high"),
+        ("design", "strongest", "high"),
+        ("build", "strongest", "medium"),
+    ],
 )
 def test_a_full_prompt_names_its_kind_and_keeps_todays_reading_line(tmp_path, kind, tier, effort):
     """REQ-052 AC5: rule 7, a `build` or `design` prompt reads as today; no kind is `design`."""
@@ -76,7 +79,7 @@ def test_a_full_prompt_names_its_kind_and_keeps_todays_reading_line(tmp_path, ki
 
 
 def test_a_small_prompt_names_only_the_lean_files(tmp_path):
-    """REQ-052 AC5: rule 7, a `small` session reads the lean list and still runs its two commands."""
+    """REQ-052 AC5: rule 7, a `small` session reads the lean list, still running its commands."""
     text = only(launch(tmp_path, start("small")))
     assert "Kind: small; tier: mid; effort: low." in text
     assert FULL not in text and "config/session-rules.md first" not in text
@@ -106,16 +109,25 @@ def test_a_kind_outside_the_list_is_refused_naming_the_field_never_the_value(tmp
 
 def test_the_projects_table_sets_the_tier_and_a_malformed_one_is_refused(tmp_path):
     """REQ-052 AC1 and AC5: rule 2, the `[models]` table of the checkout decides the tier."""
-    text = only(launch(tmp_path, start("small"), toml='[models]\nsmall = { tier = "fast", effort = "low" }\n'))
+    text = only(
+        launch(
+            tmp_path, start("small"), toml='[models]\nsmall = { tier = "fast", effort = "low" }\n'
+        )
+    )
     assert "Kind: small; tier: fast; effort: low." in text
-    out = launch(tmp_path, start("small"), toml=f'[models]\nsmall = {{ tier = "{ODD}", effort = "low" }}\n')
+    out = launch(
+        tmp_path, start("small"), toml=f'[models]\nsmall = {{ tier = "{ODD}", effort = "low" }}\n'
+    )
     assert out.returncode == 2 and "setting: models.small" in out.stderr
     assert ODD not in out.stderr and out.stdout == ""
 
 
 def test_a_model_name_is_named_only_from_the_projects_names_table(tmp_path):
     """REQ-052 AC1: rule 3, the tier's model name comes from `[models.names]` alone."""
-    toml = '[models]\nsmall = { tier = "fast", effort = "low" }\n[models.names]\nfast = "example-fast-1"\n'
+    toml = (
+        '[models]\nsmall = { tier = "fast", effort = "low" }\n'
+        '[models.names]\nfast = "example-fast-1"\n'
+    )
     assert "model: example-fast-1" in only(launch(tmp_path, start("small"), toml=toml))
     assert "model:" not in only(launch(tmp_path, start("small"), toml=""))
 
@@ -148,7 +160,12 @@ def test_the_adapter_gets_the_kind_tier_effort_and_the_projects_model_name(tmp_p
     )
     assert out.returncode == 0, out.stderr
     (got,) = [json.loads(x) for x in log.read_text().splitlines()]
-    assert got == {"AGK_KIND": "small", "AGK_TIER": "mid", "AGK_EFFORT": "low", "AGK_MODEL": "example-mid-1"}
+    assert got == {
+        "AGK_KIND": "small",
+        "AGK_TIER": "mid",
+        "AGK_EFFORT": "low",
+        "AGK_MODEL": "example-mid-1",
+    }
 
 
 @pytest.mark.parametrize(
@@ -161,9 +178,13 @@ def test_the_adapter_gets_the_kind_tier_effort_and_the_projects_model_name(tmp_p
         ("design", "mid", "strongest", "high"),  # never below the kind's own effort
     ],
 )
-def test_an_escalation_restarts_one_tier_up_on_the_same_pull_request(tmp_path, kind, was, tier, effort):
+def test_an_escalation_restarts_one_tier_up_on_the_same_pull_request(
+    tmp_path, kind, was, tier, effort
+):
     """REQ-052 AC3: rule 5, one tier up, at least `build`'s effort, same branch and pull request."""
-    text = only(launch(tmp_path, resume(kind=kind, pull_request=41, escalated_from=was), "--resume"))
+    text = only(
+        launch(tmp_path, resume(kind=kind, pull_request=41, escalated_from=was), "--resume")
+    )
     assert f"tier: {tier}; effort: {effort}." in text
     assert "resume --pr 41" in text and "never open a second one" in text
 
@@ -187,13 +208,22 @@ def test_a_prompt_below_strongest_names_the_escalation_stop_and_one_on_strongest
 
 
 def test_the_plan_writes_each_briefs_kind_from_its_size_and_touches():
-    """REQ-052 AC2: rule 4, `session.py plan --json` names the kind; the conductor may only raise it."""
+    """REQ-052 AC2: rule 4, `session.py plan --json` names the kind; it is only raised."""
     protected = ["scripts/agk/", "tests/kit/", "agk.toml"]
     small = {"number": 5, "title": "t", "body": "Size: S\nTouches: tests/kit/test_x.py\n"}
-    build = {"number": 6, "title": "u", "body": "Size: M\nTouches: scripts/agk/x.py\n", "build": "b"}
+    build = {
+        "number": 6,
+        "title": "u",
+        "body": "Size: M\nTouches: scripts/agk/x.py\n",
+        "build": "b",
+    }
     unread = {"number": 7, "title": "v", "body": None}
     assert session_plan.start_entry("b1", small, protected) == {
-        "session": "b1", "brief": 5, "title": "t", "kind": "small"}
+        "session": "b1",
+        "brief": 5,
+        "title": "t",
+        "kind": "small",
+    }
     assert session_plan.start_entry("b2", build, protected)["kind"] == "design"  # may match a guard
     assert session_plan.start_entry("b2", build, protected)["build"] == "b"
     assert session_plan.start_entry("b3", unread, protected)["kind"] == "design"
@@ -210,7 +240,11 @@ def read(rel: str) -> str:
 
 def test_the_session_rules_name_the_escalation_stop():
     """REQ-052 AC3: rule 5 in session rule 21, the three stops, one tier up, `Question:` on top."""
-    rule = next(x for x in (KIT / "config/session-rules.md").read_text().splitlines() if x.startswith("21. "))
+    rule = next(
+        x
+        for x in (KIT / "config/session-rules.md").read_text().splitlines()
+        if x.startswith("21. ")
+    )
     for words in (
         "below `strongest`",
         "the same check fails in two runs in a row",
@@ -259,7 +293,13 @@ def test_the_conductor_reads_the_kind_escalates_and_names_the_re_review_diff():
 
 def test_no_gate_reads_the_kind():
     """REQ-052 AC4: rule 1, no check, test list or gate differs between kinds."""
-    for name in ("prepush.py", "test_plan.py", "check_pr_body.py", "governance.py", "merge_cleared.py"):
+    for name in (
+        "prepush.py",
+        "test_plan.py",
+        "check_pr_body.py",
+        "governance.py",
+        "merge_cleared.py",
+    ):
         path = KIT / "scripts" / "agk" / name
         if path.is_file():
             body = path.read_text(encoding="utf-8")
