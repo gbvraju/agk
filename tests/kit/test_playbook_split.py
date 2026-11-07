@@ -183,6 +183,23 @@ def test_ac3_per_brief_shape_says_one_pull_request_per_brief_as_today(tmp_path):
     assert lines[2].strip() == "one pull request per brief, as today"
 
 
+def test_ac3_per_phase_shape_says_a_phase_is_one_milestone_that_never_merges(tmp_path):
+    """REQ-045 AC3: rule 7 (`per-phase`), on a copy of the shipped rag-app playbook."""
+    root = project(tmp_path / "proj", work_type="rag-app", playbook="rag-app")
+    path = root / "config" / "playbooks" / "rag-app.toml"
+    text = path.read_text(encoding="utf-8")
+    assert 'shape = "per-brief"' in text
+    path.write_text(text.replace('shape = "per-brief"', 'shape = "per-phase"'), encoding="utf-8")
+    proc = split(root)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = proc.stdout.splitlines()
+    assert lines[1].startswith("milestone shape: per-phase")
+    assert lines[2].strip() == (
+        "the briefs of a phase are numbered as one milestone in their titles; "
+        "one pull request per brief, and a milestone groups pull requests and never merges them"
+    )
+
+
 def test_ac3_one_kind_prints_only_that_brief(tmp_path):
     """REQ-045 AC3: rule 7 (`--kind` for the session filling one brief)."""
     proc = split(project(tmp_path / "proj"), "--goal", GOAL, "--kind", "join")
