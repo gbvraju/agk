@@ -41,11 +41,11 @@ WITH_LINES = (
     "Checklist: 1 yes\n"
     "Playbook evidence: the contract test output (step contract-tests); "
     "the mock parity output (step mock-parity); "
-    "the e2e smoke run record of the merge batch (docs/runs/e2e-smoke-2026-11-07.md); "
+    "the e2e smoke run record of the merge batch (docs/runs/e2e-smoke-batch-3.md); "
     "the accessibility review (not applicable: the brief adds no screen)\n\n"
     "No findings.\n"
 )
-WITH_A_COMMENT = WITH_LINES.replace("(docs/runs/e2e-smoke-2026-11-07.md)", "(comment 6688900001)")
+WITH_A_COMMENT = WITH_LINES.replace("(docs/runs/e2e-smoke-batch-3.md)", "(comment 6688900001)")
 WITHOUT_LINES = WITH_LINES.replace(
     WITH_LINES[WITH_LINES.index(LINE) : WITH_LINES.index("\n\nNo findings.")],
     "Local evidence: none",
@@ -97,7 +97,7 @@ def test_ac3_the_role_file_names_the_playbook_evidence_line_in_one_paragraph():
         "`judgement`",
         "`check`",
         "fix item, never a clearing verdict",
-        "`work_type`",
+        "`[delivery] work_type`",
     ):
         assert phrase in flat_paragraph, phrase
     assert not re.match(r"^\s*(\d+\.|[-*])\s", paragraphs[0]), "prose, not a rule line"
@@ -138,9 +138,10 @@ def test_ac3_the_guides_example_line_has_the_documented_shape():
     """REQ-045 AC3: the example of the guide reads by the same shape as the fixture."""
     section = GUIDE.read_text(encoding="utf-8").split("## Playbook evidence", 1)[1]
     examples = [ln.strip() for ln in section.splitlines() if ln.strip().startswith(LINE)]
-    assert examples, "the guide shows the line"
-    items = evidence_items(examples[0])
-    assert items and all(where for _item, where in items)
+    assert len(examples) == 2, "the guide shows the line's template and one example"
+    items = evidence_items(examples[1])
+    assert items and [item for item, _where in items] == playbook_evidence()
+    assert all(where for _item, where in items)
 
 
 def test_ac3_the_fixture_with_the_gate_lines_names_every_evidence_item_of_the_playbook():
@@ -159,7 +160,7 @@ def test_ac3_the_fixture_with_the_gate_lines_names_every_evidence_item_of_the_pl
             [
                 "step contract-tests",
                 "step mock-parity",
-                "docs/runs/e2e-smoke-2026-11-07.md",
+                "docs/runs/e2e-smoke-batch-3.md",
                 "not applicable: the brief adds no screen",
             ],
         ),
@@ -215,4 +216,4 @@ def test_ac3_the_role_file_stays_within_its_rule_budget():
     role_line = ".claude/agents/conductor.md "
     listed = [ln.split() for ln in budget.splitlines() if ln.startswith(role_line)]
     assert listed and (words, rules) == (int(listed[0][1]), int(listed[0][2]))
-    assert words <= 4538 and rules <= 37, "the budget only goes down (brief #666)"
+    assert words < 4538 and rules <= 37, "the budget only goes down (brief #666)"
