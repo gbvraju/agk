@@ -381,3 +381,196 @@ def test_ac2_the_script_refuses_a_bad_table_without_the_value(repo, tmp_path):
     assert proc.returncode == 1
     assert "setting: scorecard.red_hours" in proc.stdout and "-7" not in proc.stdout
     assert rows(proc.stdout) == {}
+
+
+# --- the freshness readers (rules 1 and 8, brief #719, build (c)) -------------------------------
+
+FRESH = (
+    "verify_marks verify_oldest_days residuals_past_due pins_behind pins_oldest_gap_days "
+    "kit_releases_behind stale_guides"
+).split()
+SHA = "0123456789abcdef0123456789abcdef01234567"
+WORKFLOW = f"""jobs:
+  one:
+    steps:
+      - uses: acme/alpha@{SHA}   # v1.0.0
+      - uses: acme/alpha/sub@{SHA} # v1.0.0
+      - uses: acme/beta@{SHA}  # v2.0.0
+      - uses: acme/gamma@{SHA}  # v3.0.0
+      - uses: acme/delta@v1
+      - uses: ./local-action
+"""
+
+
+def release(tag: str, day: str, **extra) -> dict:
+    return {"tag_name": tag, "published_at": f"{day}T12:00:00Z", **extra}
+
+
+RELEASES = {
+    "releases-acme-alpha": [
+        release("v1.3.0-rc1", "2026-07-15", prerelease=True),
+        release("v1.2.0", "2026-06-30"),
+        release("v1.1.0", "2026-03-01"),
+        release("v1.0.0", "2026-01-01"),
+    ],
+    "releases-acme-beta": [release("v2.0.0", "2026-05-01")],
+    "kit-releases": [
+        release("v0.8.0", "2026-11-01", draft=True),
+        release("v0.7.0", "2026-10-20"),
+        release("v0.6.0", "2026-10-10"),
+        release("v0.5.0", "2026-10-01"),
+        release("v0.4.0", "2026-09-01"),
+    ],
+}  # acme/gamma has no saved response: its upstream answers 404
+
+
+def dated(repo, files: dict[str, str], day: str) -> None:
+    for rel, text in files.items():
+        repo.write(rel, text)
+    repo.git("add", "-A")
+    repo.git("commit", "-q", "-m", "change", "--date", f"{day}T12:00:00Z")
+
+
+def fresh_project(repo, plugin: bool = True) -> None:
+    project(repo, 'default_branch = "main"\nversion = "0.5.0"\n')
+    approved = (
+        "# SPEC-0001: a\n\n- Status: Approved\n\nThe route (verify).\n\n## Residual\n\n"
+        "- 2026-01-01: a thing (due 2026-02-01).\n- 2026-01-01: later (due 2027-02-01).\n"
+    )
+    files = {
+        "docs/specs/0001-a.md": approved,
+        "docs/specs/0002-b.md": "# SPEC-0002: b\n\n- Status: Draft\n\nA guess (verify).\n",
+        ".github/workflows/ci.yml": WORKFLOW,
+        "pyproject.toml": '[project]\nname = "x"\ndependencies = ["examplepkg==1.0.0", "o>=2"]\n',
+        "scripts/agk/tool.py": "# one\n",
+        "docs/guides/old.md": "Run `python3 scripts/agk/tool.py --x` and `missing.py`.\n",
+        "docs/runs/residuals.md": "# Register\n\n## Open\n\n"
+        "- docs/adr/0001-a.md 2026-01-01 | a line | (due 2026-03-01) | open\n",
+    }
+    if plugin:
+        files[".claude-plugin/plugin.json"] = json.dumps(
+            {"repository": "https://github.com/kit-owner/kit"}
+        )
+    dated(repo, files, "2026-08-09")
+    spec = approved.replace("The route (verify).", "The route (verify).\nA fact (verify: why).")
+    dated(repo, {"docs/specs/0001-a.md": spec, "scripts/agk/tool.py": "# two\n"}, "2026-10-08")
+    dated(repo, {"docs/guides/new.md": "See `tool.py`.\n"}, "2026-10-09")
+
+
+def fresh_rows(stdout: str) -> dict[str, tuple[str, str]]:
+    found = {}
+    for line in stdout.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) == 3 and cells[0] in FRESH:
+            found[cells[0]] = (cells[1], cells[2])
+    return found
+
+
+def test_ac5_saved_releases_give_each_freshness_metric(repo, tmp_path):
+    """REQ-054 AC5: rules 1 and 8, every freshness metric, in order after the level ones."""
+    fresh_project(repo)
+    proc = repo.run(
+        "scorecard.py", "--today", TODAY, "--api-dir", str(saved(tmp_path, {**WEEK, **RELEASES}))
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    got = fresh_rows(proc.stdout)
+    assert list(got) == FRESH
+    assert {k: v for k, (v, _) in got.items()} == {
+        "verify_marks": "2",  # the Draft spec's mark is not counted
+        "verify_oldest_days": "90",  # 2026-08-09 to 2026-11-07, by git blame
+        "residuals_past_due": "2",  # one residual bullet and one register line
+        "pins_behind": "1",  # alpha two releases behind; beta at the newest; gamma unknown
+        "pins_oldest_gap_days": "180",  # 2026-01-01 to 2026-06-30, the prerelease skipped
+        "kit_releases_behind": "2",  # v0.6.0 and v0.7.0; the draft skipped
+        "stale_guides": "1",  # old.md is older than tool.py; new.md is newer
+    }
+    assert got["verify_oldest_days"][1] == "90" and got["pins_behind"][1] == "-"
+    assert "pins unknown: 2" in proc.stdout  # gamma's 404 and the Python package (verify)
+    table = [line.split("|")[1].strip() for line in proc.stdout.splitlines() if "|" in line]
+    assert table[2:] == LEVEL + FRESH
+
+
+def test_ac5_unreadable_upstreams_are_unknown_never_zero(repo, tmp_path):
+    """REQ-054 AC5: rule 8, no readable upstream and no kit repository give `unknown`, never 0."""
+    fresh_project(repo, plugin=False)
+    proc = repo.run("scorecard.py", "--today", TODAY, "--api-dir", str(saved(tmp_path, WEEK)))
+    got = fresh_rows(proc.stdout)
+    for metric in ("pins_behind", "pins_oldest_gap_days", "kit_releases_behind"):
+        assert got[metric][0] == "unknown", metric
+    assert got["verify_marks"][0] == "2" and got["stale_guides"][0] == "1"
+
+
+def test_ac5_no_default_branch_ref_makes_the_git_readers_unknown(tmp_path):
+    """REQ-054 AC5: rule 1, outside a repository the blame and log readers give `unknown`."""
+    assert scorecard.default_ref(tmp_path, "main") is None
+    assert scorecard.verify_metrics(tmp_path, None, scorecard.date(2026, 11, 7)) == (
+        "unknown",
+        "unknown",
+    )
+    assert scorecard.stale_guides(tmp_path, None) == "unknown"
+
+
+def test_ac5_the_pins_are_the_sha_pinned_uses_lines_and_the_exact_python_pins(repo):
+    """REQ-054 AC5: Q-S0047-11, only SHA-pinned `uses:` lines and `==` pins are pins."""
+    fresh_project(repo)
+    assert scorecard.action_pins(repo.root) == [
+        ("acme/alpha", "v1.0.0"),
+        ("acme/beta", "v2.0.0"),
+    ] + [("acme/gamma", "v3.0.0")]
+    assert scorecard.python_pins(repo.root) == ["examplepkg"]
+
+
+RELEASE_STUB = """#!{python}
+import json, sys
+with open({log!r}, "a", encoding="utf-8") as out:
+    out.write(" ".join(sys.argv[1:]) + "\\n")
+endpoint = sys.argv[-1]
+saved = {saved!r}
+for name, data in saved.items():
+    if endpoint.startswith(name):
+        print(json.dumps(data))
+        sys.exit(0)
+if "/releases" in endpoint:
+    sys.exit(1)  # a 404
+if "actions/runs" in endpoint and "/jobs" not in endpoint:
+    print(json.dumps({{"total_count": 0, "workflow_runs": []}}))
+elif endpoint.rstrip("/").count("/") == 2:
+    print(json.dumps({{"private": True}}))
+else:
+    print("[]")
+"""
+
+
+def test_ac5_ac7_live_reads_are_one_get_per_upstream_and_nowhere_else(repo, tmp_path_factory):
+    """REQ-054 AC5 and AC7: rules 8 and 10, at most one GET per pin, only the project's own
+    repository and the upstream release lists are read, and no file changes."""
+    fresh_project(repo)
+    outside = tmp_path_factory.mktemp("stub")
+    bin_dir, log = outside / "bin", outside / "gh.log"
+    bin_dir.mkdir()
+    answers = {
+        "repos/acme/alpha/releases": RELEASES["releases-acme-alpha"],
+        "repos/acme/beta/releases": RELEASES["releases-acme-beta"],
+        "repos/kit-owner/kit/releases": RELEASES["kit-releases"],
+    }
+    stub = bin_dir / "gh"
+    stub.write_text(
+        RELEASE_STUB.format(python=sys.executable, log=str(log), saved=answers), encoding="utf-8"
+    )
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    before = snapshot(repo.root)
+    path = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
+    proc = repo.run("scorecard.py", "--today", TODAY, "--repo", "owner/name", PATH=path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert snapshot(repo.root) == before
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert all(c.startswith("api --method GET repos/") for c in calls), calls
+    upstream = [c for c in calls if "owner/name" not in c]
+    assert sorted(c.split()[3].split("?")[0] for c in upstream) == [
+        "repos/acme/alpha/releases",
+        "repos/acme/beta/releases",
+        "repos/acme/gamma/releases",
+        "repos/kit-owner/kit/releases",
+    ]
+    got = fresh_rows(proc.stdout)
+    assert got["pins_behind"][0] == "1" and got["kit_releases_behind"][0] == "2"
