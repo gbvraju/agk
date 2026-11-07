@@ -72,12 +72,13 @@ def _literal(glob: str) -> str:
 
 def touches_ui(touches: list[str], globs: list[str]) -> bool:
     """A `Touches:` glob and a `ui_paths` glob meet: either read as a path against the other with
-    `fnmatch`, or the literal part of one starting with the other's."""
+    `fnmatch`, or the non-empty literal part of one starting with the other's."""
     for a in (t for t in touches if t):
         for b in globs:
             if fnmatch.fnmatchcase(a, b) or fnmatch.fnmatchcase(b, a):
                 return True
-            if _literal(a).startswith(_literal(b)) or _literal(b).startswith(_literal(a)):
+            la, lb = _literal(a), _literal(b)
+            if la and lb and (la.startswith(lb) or lb.startswith(la)):
                 return True
     return False
 
@@ -123,7 +124,7 @@ def screens_problems(body: str, root: Path) -> list[str]:
     globs = ui_paths(root)
     if not globs or not touches_ui(touches_of(body), globs):
         return []
-    lines = [ln for ln in body.splitlines() if ln.startswith("Screens")]
+    lines = [ln for ln in body.splitlines() if ln.startswith("Screens:")]
     if not lines:
         return [NO_LINE]
     if len(lines) != 1:

@@ -152,6 +152,16 @@ def test_ac5_two_screens_lines_are_refused(tmp_path):
     assert out.returncode == 1 and "rule 10: " in out.stdout
 
 
+def test_ac5_a_screenshots_line_is_not_a_screens_line(tmp_path):
+    """REQ-044 AC5: SPEC-0037 rule 10 (only a line that starts `Screens:` is read)."""
+    root = project(tmp_path)
+    out = run_check(root, brief("web/**", "Screenshots: see the issue"))
+    assert out.returncode == 1
+    assert "rule 10: a brief that touches ui_paths has no Screens line" in out.stdout
+    body = brief("web/**", "Screens: v1 books/empty\nScreenshots: see the issue")
+    assert run_check(root, body).returncode == 0, run_check(root, body).stdout
+
+
 def test_ac5_a_star_expands_to_every_state_of_the_screen_in_the_version(tmp_path):
     """REQ-044 AC5: SPEC-0037 rule 10 (`*` is every state of the screen)."""
     root = project(tmp_path)
@@ -174,6 +184,12 @@ def test_ac5_a_star_expands_to_every_state_of_the_screen_in_the_version(tmp_path
         ("docs/**, web/x.js", ["web/*.js"], True),  # one glob of several
         ("scripts/agk/check.py", ["web/**"], False),
         ("docs/guides/*.md", ["web/**", "app/ui/**"], False),
+        ("web/app/list.tsx", ["**/*.tsx"], True),  # a leading wildcard still matches by fnmatch
+        ("src/theme.css", ["*.css"], True),
+        ("docs/guides/x.md", ["**/*.tsx"], False),  # an empty literal part meets nothing
+        ("scripts/agk/check.py", ["*.css"], False),
+        ("*.md", ["web/**"], False),
+        ("**", ["*.css"], True),  # a brief that touches every path touches the UI
     ],
 )
 def test_ac5_a_brief_is_a_ui_brief_only_when_a_touches_glob_meets_a_ui_glob(touches, ui, is_ui):

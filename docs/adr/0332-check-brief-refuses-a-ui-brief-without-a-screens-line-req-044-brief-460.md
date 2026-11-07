@@ -25,7 +25,9 @@ counts only an ADR added in the same pull request, so this build adds its own, c
 2. **A UI brief.** With `--root DIR`, `check_brief.py` reads `ui_paths` through
    `common.config_source`. A brief is a UI brief when a glob of its `Touches:` line and a glob of
    `ui_paths` meet: either read as a path against the other with `fnmatch`, or the literal part of
-   one (before its first `*`, `?` or `[`) starting with the other's. No table or an empty list means
+   one (before its first `*`, `?` or `[`) starting with the other's when neither part is empty (a
+   glob that starts with a wildcard meets only by `fnmatch`). Only a line that starts `Screens:` is
+   read as the line. No table or an empty list means
    no UI briefs; a value that is not a list of strings is refused naming `ui_paths`.
 3. **The line.** A UI brief needs exactly one line `Screens: v<n> <screen>/<state>, ...`, where
    `<state>` may be `*`. The function `screens_problems(body, root)` refuses, naming rule 10 and
