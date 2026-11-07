@@ -294,6 +294,62 @@ def test_ac2_the_writer_refuses_an_answer_without_where_it_was_given(tmp_path):
     assert proc.returncode == 1 and "rule 5" in proc.stdout and "`runs`" in proc.stdout
 
 
+MULTI = 'Line one says "fast".\n\tTwo, after a tab,  with two spaces.\n- users: not an id\n'
+
+
+def written_with(tmp_path: Path, text) -> Path:
+    ans = answers(tmp_path)
+    data = json.loads(ans.read_text(encoding="utf-8"))
+    data["answers"][1]["answer"] = text
+    ans.write_text(json.dumps(data), encoding="utf-8")
+    return run(
+        tmp_path,
+        "discovery-write",
+        "--issue",
+        str(issue(tmp_path, f"Problem: {WORDS}")),
+        "--answers",
+        str(ans),
+    )
+
+
+def test_ac2_a_multi_line_answer_with_quotes_is_written_unchanged_and_passes(tmp_path):
+    """REQ-055 AC2: SPEC-0048 rule 5 (each answer quoted as data, unchanged, with its digest)."""
+    proc = written_with(tmp_path, MULTI)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    doc = tmp_path / "docs" / "discovery" / "orders-are-lost.md"
+    text = doc.read_text(encoding="utf-8")
+    digest = hashlib.sha256(MULTI.encode("utf-8")).hexdigest()
+    start = f"<!-- agk:answer sha256={digest} -->\n"
+    assert f"- existing: (given: {LINK}#issuecomment-101)\n{start}" in text
+    quoted = text.split(start, 1)[1].split("\n<!-- agk:answer-end -->", 1)[0]
+    assert quoted == MULTI
+    ok = run(tmp_path, "check-discovery")
+    assert ok.returncode == 0, ok.stdout
+    mutate(doc, "two spaces", "two  spaces")
+    bad = run(tmp_path, "check-discovery")
+    assert bad.returncode == 1 and "`existing` differs from its digest" in bad.stdout
+    assert "two" not in bad.stdout
+    mutate(doc, start, "")
+    cut = run(tmp_path, "check-discovery")
+    assert cut.returncode == 1 and "`existing` is not quoted between the two markers" in cut.stdout
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Ends here.\n<!-- agk:answer-end -->\nmore", "marker"),
+        (7, "not text"),
+    ],
+    ids=["marker", "not-text"],
+)
+def test_ac2_an_answer_holding_a_marker_or_not_text_is_refused(tmp_path, text, expected):
+    """REQ-055 AC2: SPEC-0048 rules 5 and 15 (refused naming the id, never the value)."""
+    proc = written_with(tmp_path, text)
+    assert proc.returncode == 1 and "rule 5" in proc.stdout and "`existing`" in proc.stdout
+    assert expected in proc.stdout and "Ends here" not in proc.stdout
+    assert not (tmp_path / "docs").exists()
+
+
 def mutate(doc: Path, old: str, new: str, count: int = 1) -> None:
     text = doc.read_text(encoding="utf-8")
     assert old in text

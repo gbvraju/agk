@@ -31,11 +31,10 @@ ADR, proposed for the person's ruling, and the build is not under `Covered-by: A
 1. Build (b) adds one `[[testing.map]]` entry to `agk.toml`, in sorted place: `code =
    "scripts/agk/front_door.py"`, `tests = ["tests/kit/test_front_door_entry.py"]`. No other line of
    `agk.toml` changes: no setting, no table, no value.
-2. ADR-0314 decision 8's "no build changes `agk.toml`" is read as the settings of `agk.toml` (the tables a
-   person declares, `[delivery]` among them), not as the mechanical `[[testing.map]]` entry that REQ-016
-   requires for every new installed script. Build (b) is the only build of SPEC-0048 rule 20 that adds a
-   script, so no later build needs this reading; a later build that changes `agk.toml` for any other reason
-   writes its own ADR, as session rule 36 says.
+2. The entry of decision 1 is this ADR's own exception, scoped to that one entry for `front_door.py`
+   in build (b). This ADR says nothing of what ADR-0314 decision 8 means or covers: that reading is the
+   maintainers' (Q-685-2, asked on the pull request), and this ADR holds only for the entry it names. Any
+   other change of `agk.toml` by a build of SPEC-0048 writes its own ADR, as session rule 36 says.
 3. This ADR names every protected path class build (b) changes, the classes of ADR-0314 decision 8 that the
    build touches (`scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`, `.github/`, the issue form and not
    a workflow) and `agk.toml`; the pull request therefore carries no `Covered-by:` line (`check_protected_changes.py`
@@ -47,11 +46,12 @@ ADR, proposed for the person's ruling, and the build is not under `Covered-by: A
 ## Consequences
 
 `front_door.py` is mapped, so `test_plan.py` selects its tests when it changes and the REQ-016 test passes.
-A person rules Q-685-2 by accepting or rejecting this ADR with the pull request; a rejection removes the
-entry and the script stays unmapped until ADR-0314 is amended.
+The maintainers rule Q-685-2 on the pull request, and after their ruling the next verdict carries or
+withholds the `Final:` line for this ADR; a withheld line removes the entry, and the script stays unmapped
+until ADR-0314 is amended.
 
 ## Residual
 
-The reading in decision 2 is this ADR's and not ADR-0314's own words; if the maintainers mean decision 8 to
-cover the testing map too, the fix is one amendment of ADR-0314 and the removal of this entry, and
-`always_full` would then be the only other place to cover the script (due 2026-12-31).
+Whether ADR-0314 decision 8 covers the testing map is Q-685-2, a maintainers' question this ADR does not
+answer. If they rule that it does, the fix is one amendment of ADR-0314 and the removal of this entry,
+and `always_full` would then be the only other place to cover the script (due 2026-12-31).

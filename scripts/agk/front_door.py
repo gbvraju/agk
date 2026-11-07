@@ -16,7 +16,9 @@ Standard library only, files only, no network: every input is a saved file.
 The answers file: `{"screens": "yes|no|open", "work_type": "<work type>", "answers": [{"id":
 "<id>", "answer": "<words>", "where": "<comment link>|in session YYYY-MM-DD"} or {"id": "<id>",
 "open": true}], "points": [{"text": "<words>", "where": "..."}]}`; `screens` defaults to `open`
-and `work_type` to the issue's `Kind:` line, else `pilot`. Every refusal names the rule and the
+and `work_type` to the issue's `Kind:` line, else `pilot`. Each answer is written as given, line
+endings made `\n`, between `<!-- agk:answer sha256=… -->` and `<!-- agk:answer-end -->` under its
+bullet `- <id>: (given: <where>)`, as the problem is under its digest. Every refusal names the rule and the
 file or the setting, never a value, a problem's words or an answer (rule 15). Exit 0 ok, 1 refused,
 2 usage.
 """
@@ -66,7 +68,10 @@ SCREENS = ("yes", "no", "open")
 START = re.compile(r"^<!-- agk:problem sha256=([0-9a-f]{64}) -->$")
 END = "<!-- agk:problem-end -->"
 WHERE = re.compile(r"^(?:https://\S+|in session \d{4}-\d{2}-\d{2})$")
-ANSWER = re.compile(r'^- ([a-z0-9-]+): (?:(open)|"(.*)" \(given: (.+)\))$')
+ANSWER = re.compile(r"^- ([a-z0-9-]+): (?:(open)|\(given: (.+)\))$")
+ANSWER_START = re.compile(r"^<!-- agk:answer sha256=([0-9a-f]{64}) -->$")
+ANSWER_END = "<!-- agk:answer-end -->"
+MARK = "<!-- agk:"
 ANSWER_ID = re.compile(r"^- ([a-z0-9-]+):")
 OPEN_POINT = re.compile(r"^- D-\d+: `([a-z0-9-]+)` is open$")
 
@@ -196,10 +201,21 @@ def answer_lines(rel: str, rows: list) -> tuple[list[str], list[str], list[str]]
             lines.append(f"- {qid}: open")
             open_ids.append(qid)
             continue
-        where = one_line(row.get("where", ""))
-        if not WHERE.match(where):
+        where = row.get("where")
+        if not isinstance(where, str) or not WHERE.fullmatch(where):
             problems.append(f"rule 5: {rel}: `{qid}` is not marked with where it was given")
-        lines.append(f'- {qid}: "{one_line(row["answer"])}" (given: {where})')
+            where = ""
+        words = row["answer"]
+        if not isinstance(words, str):
+            problems.append(f"rule 5: {rel}: `{qid}` is not text")
+            continue
+        words = words.replace("\r\n", "\n").replace("\r", "\n")
+        if MARK in words:
+            problems.append(f"rule 5: {rel}: `{qid}` holds a marker of the document")
+            continue
+        # The answer as given, between two markers with its digest, as the problem is (rule 5).
+        start = f"<!-- agk:answer sha256={digest(words)} -->"
+        lines += [f"- {qid}: (given: {where})", start, words, ANSWER_END]
     return lines, open_ids, problems
 
 
@@ -323,20 +339,35 @@ def document_problems(rel: str, text: str) -> list[str]:
             out.append(f"rule 5: {rel}: the `## {need}` section is missing")
     seen: list[str] = []
     open_ids = []
-    for ln in sections.get("Answers", []):
+    rows = sections.get("Answers", [])
+    i = 0
+    while i < len(rows):
+        ln = rows[i]
+        i += 1
         m = ANSWER_ID.match(ln)
         if not m:
             continue
         qid = m.group(1)
+        quote = ANSWER_START.match(rows[i]) if i < len(rows) else None
+        if quote:
+            end = rows.index(ANSWER_END, i + 1) if ANSWER_END in rows[i + 1 :] else -1
+            if end < 0:
+                out.append(f"rule 5: {rel}: `{qid}` is not quoted between the two markers")
+                break
+            if digest("\n".join(rows[i + 1 : end])) != quote.group(1):
+                out.append(f"rule 5: {rel}: `{qid}` differs from its digest")
+            i = end + 1
         if qid in seen:
             out.append(f"rule 5: {rel}: `{qid}` is repeated")
             continue
         seen.append(qid)
         full = ANSWER.match(ln)
-        if full and full.group(2):
+        if full and full.group(2) and not quote:
             open_ids.append(qid)
-        elif not full or not WHERE.match(full.group(4)):
+        elif not full or full.group(2) or not WHERE.match(full.group(3)):
             out.append(f"rule 5: {rel}: `{qid}` is not marked with where it was given")
+        elif not quote:
+            out.append(f"rule 5: {rel}: `{qid}` is not quoted between the two markers")
     for qid in ORDER:
         if qid not in seen:
             out.append(f"rule 5: {rel}: `{qid}` is left out")
