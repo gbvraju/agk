@@ -30,6 +30,15 @@ or the stack ADR's Residual declines it with a reason and a date. With an accept
 also prints, before that line, whether `[testing]` in `agk.toml` matches the profile and the
 `always_full` paths of the chosen option's part of the `test selection` practice (brief #450):
 `matches`, `differs` naming the setting, or `not compared` with the reason; never a failure.
+
+The declared work type (SPEC-0038 rule 6; brief #663, ADR-0316): with `[delivery] work_type` in
+`agk.toml`, `stack-write` reads the shipped playbook through `playbook_format.py` and writes into
+the skeleton one Practices bullet per gate, `- <id>: check (step: <step>)` or `- <id>: judgement`,
+each marked `(playbook <work type>)`, and the playbook's `[testing]` profile, `always_full` and
+`map` suggestions into the parenthesis of the `test selection` practice for each option. They are
+proposals: the architect chooses as today, and nothing writes `agk.toml`. Without a declaration the
+skeleton is the template as before. A declaration with a problem, or a declared playbook that fails
+the playbook check, is refused before anything is written, naming the setting and never a value.
 """
 
 from __future__ import annotations
@@ -39,6 +48,7 @@ import json
 import re
 import subprocess  # nosec B404 - a fixed argument list, no shell
 import sys
+import tomllib
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -59,6 +69,8 @@ from common import (
 from impact import KEYS as TESTING_KEYS
 from impact import NO_TABLE, PROFILES, testing_table
 from intake import Refusal, check_sentence, section
+from playbook_format import declaration, selected
+from playbook_format import problems as playbook_problems
 from pr_body import brief_option, prepare, print_body
 
 KIT = Path(__file__).resolve().parents[2]
@@ -135,6 +147,11 @@ OPTION_MARK = re.compile(r"\bOption ([A-Z])\b")
 PROFILE_WORD = re.compile(r"\b(" + "|".join(PROFILES) + r")\b")
 BACKTICKED = re.compile(r"`([^`\n]+)`")
 NOT_A_PATH = {*PROFILES, *TESTING_KEYS, "[testing]"}
+# Brief #663 (ADR-0316): the playbook's practices in the skeleton. A map suggestion is one
+# backticked `<code> -> <tests>` pair; the arrow tells it from an `always_full` path.
+MAP_ARROW = " -> "
+PRACTICES_TODO = "   - TODO(architect): check (step: "
+SELECTION_LINE = re.compile(r"^(\s*-\s+test selection:\s+(?:check|judgement))\s+\(.*\)\s*$")
 
 
 def idea_of(text: str) -> tuple[str, str] | None:
@@ -256,12 +273,60 @@ def cmd_stack_write(root: Path, opts: dict[str, str]) -> int:
     branch = load_config(root)["default_branch"]
     adr = next_free_ids(root, opts.get("ref") or f"origin/{branch}")["adr"]
     today = opts.get("date") or datetime.now(UTC).date().isoformat()
+    playbook = playbook_practices(root)
     text = (TEMPLATES / "stack-adr.md").read_text(encoding="utf-8")
     text = text.replace("{{adr}}", adr).replace("{{date}}", today)
+    if playbook is not None:
+        text = with_playbook(text, *playbook)
     path = root / "docs" / "adr" / f"{adr}-stack-options.md"
     path.write_text(text, encoding="utf-8")
     print(f"wrote docs/adr/{path.name}")
     return 0
+
+
+def playbook_practices(root: Path) -> tuple[list[str], str] | None:
+    """SPEC-0038 rule 6: the gate bullets and the `test selection` proposal of the declared
+    playbook; None without a declaration. A declaration with a problem (rule 5), or a declared
+    playbook that fails the playbook check, is refused naming the setting and never a value."""
+    work_type, found = declaration(root)
+    if found:
+        raise CheckError(found[0])
+    if work_type is None:
+        return None
+    path = selected(root)
+    if path is None or playbook_problems(path, root):
+        raise CheckError(
+            "rule 6: the declared playbook fails check_playbooks.py (setting: work_type)"
+        )
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    mark = f"(playbook {work_type})"
+    bullets = []
+    for gate in data["gates"]:
+        if gate["kind"] == "check":
+            bullets.append(f"   - {gate['id']}: check (step: {gate['step']}) {mark}\n")
+        else:
+            bullets.append(f"   - {gate['id']}: judgement {mark}\n")
+    testing = data["testing"]
+    always = ", ".join(f"`{p}`" for p in testing["always_full"]) or "none"
+    entries = ", ".join(f"`{e['code']}{MAP_ARROW}{e['tests']}`" for e in testing["map"]) or "none"
+    proposal = f"profile {testing['profile']}, always_full {always}, map {entries} {mark}"
+    return bullets, proposal
+
+
+def with_playbook(text: str, bullets: list[str], proposal: str) -> str:
+    """The skeleton with the gate bullets after the template's `TODO(architect)` practice and the
+    proposal in the `test selection` parenthesis, once per option; nothing else changes."""
+    letters = [m.group(1) for m in map(OPTION.match, text.splitlines()) if m]
+    inside = "; ".join(f"Option {x}: {proposal}" for x in letters) or proposal
+    out: list[str] = []
+    for line in text.splitlines(keepends=True):
+        m = SELECTION_LINE.match(line)
+        if m:
+            line = f"{m.group(1)} ({inside})\n"
+        out.append(line)
+        if line.startswith(PRACTICES_TODO):
+            out += bullets
+    return "".join(out)
 
 
 def practice_names(option_text: str) -> list[str]:
@@ -516,7 +581,7 @@ def testing_match(root: Path, text: str, letter: str) -> str:
     if len(profiles) != 1:
         many = "more than one profile" if profiles else "no profile"
         return f"not compared: the test selection practice names {many} for option {letter}"
-    paths = [p for p in BACKTICKED.findall(part) if p not in NOT_A_PATH]
+    paths = [p for p in BACKTICKED.findall(part) if p not in NOT_A_PATH and MAP_ARROW not in p]
     try:
         table = testing_table(root)
     except CheckError as exc:

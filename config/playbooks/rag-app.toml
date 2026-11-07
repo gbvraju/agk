@@ -1,0 +1,110 @@
+format = 1
+work_type = "rag-app"
+title = "Corpus with its privacy review, then the evaluation set, then retrieval, answers and joins, each run against the set"
+heavy_steps = ["evaluation run"]
+evidence = [
+  "the evaluation set's version line",
+  "the declared quality bars for retrieval and for answers",
+  "the evaluation run record against both quality bars",
+  "the pin file of the prompt and model versions",
+  "the privacy review of the corpus",
+]
+
+[[phases]]
+name = "corpus"
+order = 1
+after = []
+
+[[phases]]
+name = "evaluation-set"
+order = 2
+after = ["corpus"]
+
+[[phases]]
+name = "retrieval"
+order = 3
+after = ["evaluation-set"]
+
+[[phases]]
+name = "answers"
+order = 4
+after = ["retrieval"]
+
+[[phases]]
+name = "joins"
+order = 5
+after = ["answers"]
+
+[split]
+brief_order = ["corpus", "evaluation-set", "retrieval", "answer", "join"]
+depends_on = [
+  ["evaluation-set", "corpus"],
+  ["retrieval", "evaluation-set"],
+  ["answer", "evaluation-set"],
+  ["answer", "retrieval"],
+  ["join", "retrieval"],
+  ["join", "answer"],
+]
+
+[[lanes]]
+name = "retrieval"
+kinds = ["retrieval"]
+
+[[lanes]]
+name = "answers"
+kinds = ["answer"]
+
+[testing]
+profile = "balanced"
+always_full = ["evaluation/**"]
+map = [
+  { code = "corpus/**", tests = "tests/corpus/**" },
+  { code = "evaluation/**", tests = "tests/evaluation/**" },
+  { code = "retrieval/**", tests = "tests/retrieval/**" },
+  { code = "answers/**", tests = "tests/answers/**" },
+]
+
+[[gates]]
+id = "evaluation-set"
+kind = "check"
+text = "A versioned evaluation set: the set's file has a version line and invented data only."
+step = "evaluation-set"
+owner_only = false
+
+[[gates]]
+id = "quality-bars"
+kind = "check"
+text = "Quality bars: a bar for retrieval and a bar for answers are declared as numbers."
+step = "quality-bars"
+owner_only = false
+
+[[gates]]
+id = "quality-bars-met"
+kind = "judgement"
+text = "The recorded evaluation run meets both quality bars; its run record is the evidence."
+owner_only = false
+
+[[gates]]
+id = "version-pinning"
+kind = "check"
+text = "Prompt and model version pinning: the pin file names exact versions and no floating alias."
+step = "version-pinning"
+owner_only = false
+
+[[gates]]
+id = "privacy-review"
+kind = "judgement"
+text = "A privacy review of the corpus, recorded in the corpus phase before any retrieval or answer brief."
+owner_only = false
+
+[milestones]
+shape = "per-brief"
+batch_by = "not batched: one pull request per brief, as today"
+
+[[claims]]
+text = "The evaluation set is fixed before any retrieval or answer brief, so a change in retrieval or answer quality is expected to show in the next evaluation run instead of in a demo."
+basis = "expected"
+
+[[claims]]
+text = "Pinned prompt and model versions keep each evaluation run comparable with the one before it, so fewer fix briefs are expected to chase a change that a version drift caused."
+basis = "expected"

@@ -46,6 +46,7 @@ SINGLES = {
     "docs/briefs/TEMPLATE.md",
     "config/ci-tools.txt",
     "config/core-rules.md",
+    "config/playbooks/rag-app.toml",
     "config/playbooks/web-app.toml",
     "config/review-checklist.md",
     "config/session-rules.md",
