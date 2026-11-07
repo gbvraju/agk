@@ -1,0 +1,13 @@
+# The kit disciplines that reach no project (brief #680, ADR-0326): one line `<path> <reason>`.
+# `python3 scripts/agk/parity.py check` reads it; tests/kit/test_parity.py holds the count as a ceiling
+# that may only go down. A `gap:` line is a move a follow-up brief makes; its question names it.
+config/kit-only.txt this list: it is read only where kit/manifest.json is, in the kit repository
+config/mypy-baseline.txt the type check baseline of the kit's own scripts, read by a kit test
+scripts/agk/check_tag.py checks the kit's own release tags, run by the kit's tag workflow
+scripts/agk/kit_hashes.py builds the kit's own release table kit/hashes.json
+config/rule-budget.txt gap: Q-680-2, the rule budget is not installed in a project
+scripts/agk/rules.py gap: Q-680-3, the rule budget command is not installed in a project
+docs/runs/conductor-catches-*.md gap: Q-680-4, the conductor's catch log is not a project file
+scripts/agk/shadow_count.py gap: Q-680-5, the shadow record totals are not installed with the shadow agent
+scripts/agk/core_audit.py gap: Q-680-6, the audit of which checks fired is not offered to a project
+scripts/agk/personal_state.py gap: Q-680-7, personal mode's state command is neither installed nor run by a skill
