@@ -67,11 +67,12 @@ cleared|fix list|rejected <sha>`; exit 1 on a problem. It reads nothing on GitHu
 `lease` is the active-conductor marker, so that the hourly run and a live conductor never merge at
 once: one comment on the plan issue that `plan_issue` of the `[flow]` table names (absent: the
 lease is off, said as such), whose first line is `Conductor: active <time> <name>`, valid 50
-minutes from `<time>`, counted only when its author is in `verdict_authors`; `--take NAME` posts it, or edits the newest `Conductor:` comment in place,
-unless another name holds a valid lease (exit 3, naming the setting), and keeps NAME in the git
-directory as this checkout's name; `--release NAME` edits it to `Conductor: released <time>
-<name>` for the holder; `--show` prints `held by <name> until <time>` or `free`. `merge-queue`
-refuses to run (`held`, exit 3) while a name other than this checkout's holds a valid lease.
+minutes from `<time>`, counted only when its author is in `verdict_authors`; `--take NAME` posts
+it, or edits the newest counted `Conductor:` comment in place, unless another name holds a valid
+lease (exit 3, naming the setting), and keeps NAME in the git directory as this checkout's name;
+`--release NAME` edits it to `Conductor: released <time> <name>` for the holder; `--show` prints
+`held by <name> until <time>` or `free`. `merge-queue` refuses to run (`held`, exit 3) while a
+name other than this checkout's holds a valid lease.
 """
 
 from __future__ import annotations
