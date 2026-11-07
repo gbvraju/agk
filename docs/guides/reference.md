@@ -112,6 +112,10 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]
     python3 scripts/agk/conductor.py sweep
     python3 scripts/agk/conductor.py merge-queue [--dry-run] [--max-batch N]
+    python3 scripts/agk/conductor.py rerun --pr N [--apply]
+    python3 scripts/agk/conductor.py check-verdict FILE
+    python3 scripts/agk/conductor.py lease (--show | --take NAME | --release NAME)
+    python3 scripts/agk/session.py prompt --brief N [--session ID] [--follow-up TEXT]
 
 The conductor's watch and sweep (brief #643, ADR-0308). `watch` ends on the first poll that finds a comment created after
 `--since` (default: the start) whose first line starts `Question:` or `Report:`, on an open issue labelled `agk-brief` or an
@@ -137,6 +141,22 @@ waits once for the default branch's run on the last merge (`full_run.covered`, p
 `stopped: <branch> red at <sha12> after the batch #a #b` (exit 1); in local mode there is no run to wait for. `--dry-run` prints
 the order and merges nothing. It posts nothing; the guard allows the dry run always and a run that merges only with `auto_merge`
 on in the checkout and on the default branch, and builders are asked first (`.claude/settings.json`).
+
+The last private routines (brief #700, ADR-0330). `rerun --pr N` reads the pull request and the `pull_request` runs of its head and
+prints one line per cancelled run; `--apply` reruns them (catch log row 18). When every run of the head skipped (a push to a ready
+pull request, row 19) it prints the one step that starts them, converting the pull request to a draft and back through the
+runtime's `ccr/convert_to_draft` and `ccr/ready_for_review` routes `(verify)`, and takes it only with `--apply`; a draft is left
+alone. `check-verdict FILE` prints `ok`, or the problem of the verdict's `Final:` lines by the router's own reading
+(`common.verdict_problem`), or that its first line is not `Verdict: cleared|fix list|rejected <sha>`; exit 1 on a problem, nothing
+read on GitHub. `lease` is the active-conductor marker: one comment `Conductor: active <time> <name>` on the plan issue that
+`plan_issue` of the `[flow]` table names (absent: the lease is off), valid 50 minutes; `--take NAME` posts or edits it in place
+unless another name holds a valid lease (exit 3, naming the setting) and keeps the name in the git directory, `--release NAME`
+marks it released, `--show` prints `held by <name> until <time>` or `free`; `merge-queue` refuses to run while another name holds a
+valid lease. `session.py prompt --brief N` prints the builder's standing prompt from the kit's files, GET only: the item line with
+the brief's reserved numbers (its `Reserved:` lines and the `reserves` of its takes) and the session name when given, the files to
+read first, the secret-scan deferral line of `prepush.py`, the body lines of CLAUDE.md item 7 read from `config/core-rules.md`, and
+the session rules that bind a builder quoted from `config/session-rules.md`; `--follow-up TEXT` (one line, never a verdict)
+replaces the stop on an existing pull request with the follow-up for it. The guard allows exactly these forms.
 
 ## Playbook evidence
 

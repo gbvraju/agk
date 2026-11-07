@@ -145,3 +145,52 @@ def test_builders_are_asked_before_the_merge_queue_and_no_deny_or_allow_is_added
     assert "Bash(*conductor.py*merge-queue*)" in data["permissions"]["ask"]
     for kind in ("deny", "allow"):
         assert not any("merge-queue" in e for e in data["permissions"][kind])
+
+
+# --- rerun, check-verdict and lease (brief #700, ADR-0330) -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"python3 {SCRIPT} rerun --pr 7",
+        f"python3 {SCRIPT} rerun --pr 7 --apply",
+        f"python3 {SCRIPT} check-verdict /tmp/scratch/verdict.md",
+        f"python3 {SCRIPT} check-verdict verdict.md",
+        f"python3 {SCRIPT} lease --show",
+        f"python3 {SCRIPT} lease --take c1",
+        f"python3 {SCRIPT} lease --release c1",
+    ],
+)
+def test_the_routines_of_brief_700_are_allowed(project, command):
+    result = run_hook(command, project)
+    assert result.returncode == 0 and result.stdout == "", result.stdout
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"python3 {SCRIPT} rerun",
+        f"python3 {SCRIPT} rerun --pr x",
+        f"python3 {SCRIPT} rerun --pr 7 --force",
+        f"python3 {SCRIPT} rerun --apply --pr 7",
+        f"python3 {SCRIPT} check-verdict",
+        f"python3 {SCRIPT} check-verdict --all",
+        f"python3 {SCRIPT} check-verdict a b",
+        f"python3 {SCRIPT} lease",
+        f"python3 {SCRIPT} lease --take",
+        f"python3 {SCRIPT} lease --take c1 --show",
+        f"python3 {SCRIPT} lease --hold c1",
+        f"python3 {SCRIPT} lease --show; gh pr merge 7",
+        f"python {SCRIPT} lease --show",
+        "python3 /elsewhere/scripts/agk/conductor.py lease --show",
+    ],
+)
+def test_every_other_form_of_the_new_routines_is_denied(project, command):
+    assert reason(run_hook(command, project).stdout) is not None
+
+
+def test_the_shadow_reviewer_runs_none_of_the_new_routines(project):
+    for command in (f"python3 {SCRIPT} lease --show", f"python3 {SCRIPT} rerun --pr 7"):
+        result = run_hook(command, project, shadow=True)
+        assert reason(result.stdout) is not None, command
