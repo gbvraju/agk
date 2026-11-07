@@ -145,6 +145,20 @@ def test_ac3_the_test_selection_parenthesis_carries_the_testing_suggestion_per_o
         assert f"`{entry['code']} -> {entry['tests']}`" in TEST_SELECTION
 
 
+def test_ac3_an_empty_map_and_always_full_are_written_as_none(started):
+    """REQ-045 AC3: SPEC-0038 rule 6 (a `[testing]` table with an empty `always_full` and `map`
+    proposes `none` for each, never an empty segment)."""
+    shipped = WEB_APP.read_text(encoding="utf-8")
+    start = shipped.index('always_full = ["contracts/**"]')
+    end = shipped.index("]\n\n[[gates]]") + 2
+    declare(started, playbook=shipped[:start] + "always_full = []\nmap = []\n" + shipped[end:])
+    proc = stack_write(started)
+    assert proc.returncode == 0, proc.stdout
+    block = practices((started / ADR).read_text(encoding="utf-8"))
+    proposal = "profile balanced, always_full none, map none (playbook web-app)"
+    assert f"   - test selection: judgement (Option A: {proposal}; Option B: {proposal})\n" in block
+
+
 def test_ac3_nothing_else_of_the_adr_changes(started):
     """REQ-045 AC3: brief #663 answer 2 (the Practices item gains the blocks; the rest is the
     template)."""
