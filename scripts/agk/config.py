@@ -21,6 +21,10 @@ gate or reading list reads either in this build (rule 1).
 `issues` and `artifacts` (booleans, false) and `artifact_paths` (relative path patterns, empty).
 An unknown key or a value of the wrong kind is refused, naming `setting: failures.<key>` and never
 the value.
+
+`scorecard_settings(root)` reads the optional `[scorecard]` table (SPEC-0047 rule 3, brief #713):
+a line per metric and the windows `trend_weeks` and `close_weeks`, else the kit defaults. An
+unknown key, a non-number or a negative number is refused, naming `setting: scorecard.<key>`.
 """
 
 from __future__ import annotations
@@ -247,6 +251,62 @@ def failures_settings(root: Path) -> dict:
     if not isinstance(paths, list) or not all(_relative(p) for p in paths):
         raise _refuse_failures("failures.artifact_paths")
     return {**FAILURES_DEFAULTS, **table, "artifact_paths": list(paths)}
+
+
+# --- the [scorecard] table (SPEC-0047 rule 3, brief #713) ------------------------------------
+
+# The kit's lines, all guesses until build (f) measures four weeks (verify). None: no line (a
+# count reported and judged by its trend), or, for the rule counts, the totals of the budget file.
+SCORECARD_LINES: dict[str, float | None] = {
+    "full_check_minutes": 20,
+    "prepush_seconds": 300,  # the [testing] budget_seconds default
+    "red_hours": 4,
+    "flaky_rate": 2,
+    "fix_list_rate": 50,
+    "lead_time_hours": 48,
+    "restore_hours": 4,
+    "ci_minutes_per_merge": 30,
+    "rule_words": None,
+    "rule_lines": None,
+    "old_failure_issues": 0,
+    "verify_marks": None,
+    "verify_oldest_days": 90,
+    "residuals_past_due": 0,
+    "pins_behind": None,
+    "pins_oldest_gap_days": 180,
+    "kit_releases_behind": 3,
+    "stale_guides": 0,
+}
+SCORECARD_WINDOWS = {"trend_weeks": 4, "close_weeks": 2}  # (verify)
+
+
+class ScorecardSettingError(CheckError):
+    """The `[scorecard]` table is refused, naming the setting and never the value."""
+
+
+def _refuse_scorecard(setting: str) -> ScorecardSettingError:
+    return ScorecardSettingError(f"the [scorecard] table is refused (setting: {setting})")
+
+
+def scorecard_settings(root: Path) -> dict:
+    """`lines` (metric to number or None) and the two windows: the table's or the default. A
+    window is a whole number of weeks, at least 1."""
+    try:
+        table = config_source(root).get("scorecard", {})
+    except (OSError, ValueError):
+        raise _refuse_scorecard("scorecard") from None
+    if not isinstance(table, dict) or any(
+        k not in SCORECARD_LINES and k not in SCORECARD_WINDOWS for k in table
+    ):
+        raise _refuse_scorecard("scorecard")
+    for key, value in table.items():
+        number = isinstance(value, int | float) and not isinstance(value, bool) and value >= 0
+        if key in SCORECARD_WINDOWS:
+            number = number and isinstance(value, int) and value >= 1
+        if not number:
+            raise _refuse_scorecard(f"scorecard.{key}")
+    lines = {k: table.get(k, v) for k, v in SCORECARD_LINES.items()}
+    return {"lines": lines, **{k: table.get(k, v) for k, v in SCORECARD_WINDOWS.items()}}
 
 
 def main(argv: list[str] | None = None) -> int:

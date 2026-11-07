@@ -466,6 +466,9 @@ tests = [
   "tests/kit_dev/test_pilot_gaps_plans.py", "tests/kit_dev/test_ruleset.py",
 ]
 [[testing.map]]
+code = "scripts/agk/scorecard.py"
+tests = ["tests/kit/test_scorecard.py"]
+[[testing.map]]
 code = "scripts/agk/shadow_count.py"
 tests = ["tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_shadow_count.py"]
 [[testing.map]]

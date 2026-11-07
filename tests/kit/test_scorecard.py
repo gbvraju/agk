@@ -280,10 +280,11 @@ else:
 """
 
 
-def test_ac1_live_reads_are_get_only_and_write_no_file(repo, tmp_path):
+def test_ac1_live_reads_are_get_only_and_write_no_file(repo, tmp_path_factory):
     """REQ-054 AC1: rule 2, through a `gh` stub every call is a GET and no file changes."""
     project(repo)
-    bin_dir, log = tmp_path / "bin", tmp_path / "gh.log"
+    outside = tmp_path_factory.mktemp("stub")
+    bin_dir, log = outside / "bin", outside / "gh.log"
     bin_dir.mkdir()
     stub = bin_dir / "gh"
     stub.write_text(STUB.format(python=sys.executable, log=str(log)), encoding="utf-8")

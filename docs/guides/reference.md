@@ -355,6 +355,14 @@ of that test's output, or only `evidence withheld: ...`. `issue-body` prints whe
 or a comment on an open one, from a saved issue list; with `[failures] issues` off (the default) it prints `action: none`.
 It reads files, prints and writes nothing. See SPEC-0046 rules 2, 3 and 5 and ADR-0303.
 
+## Scorecard
+
+    python3 scripts/agk/scorecard.py [--today YYYY-MM-DD] [--repo OWNER/REPO] [--api-dir DIR]
+
+Prints one table of the week before the run date: each level metric of SPEC-0047 rule 1, its value and its line (the
+`[scorecard]` table of `agk.toml`, else the kit default). A value that cannot be read is `unknown`, never 0. It reads
+with `gh api` GET only, or saved responses, and writes nothing; no check runs it. See SPEC-0047 rules 1 to 3 and ADR-0311.
+
 ## Parity
 
     python3 scripts/agk/parity.py report [--root DIR]
