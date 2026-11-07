@@ -19,6 +19,7 @@ Next free numbers, read from `origin/{{default_branch}}` when this skeleton was 
 - Advances: (a requirement id)
 - Do: (what to build)
 - Done means: (what the reviewer will check)
+- Screens: v<n> <screen>/<state>, <screen>/<state> (only when the item touches a glob of `ui_paths` in `[design]` of `agk.toml`: the signed-off prototype version and the screens and states it builds; `*` as the state means every state of the screen)
 - Size: S|M|L
 - Expected: <low>-<high> hours
 

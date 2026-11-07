@@ -392,10 +392,14 @@ tests = [
   "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_origin_message.py",
   "tests/kit_dev/test_pilot_gaps_first_pr.py", "tests/kit_dev/test_playbook.py",
   "tests/kit_dev/test_pr_bodies_kit.py", "tests/kit_dev/test_start_discovery.py",
+  "tests/kit/test_playbook_split.py",
 ]
 [[testing.map]]
 code = "scripts/agk/playbook_format.py"
-tests = ["tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py"]
+tests = [
+  "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py",
+  "tests/kit/test_playbook_split.py",
+]
 [[testing.map]]
 code = "scripts/agk/pr_body.py"
 tests = [
@@ -467,6 +471,9 @@ tests = [
   "tests/kit/test_merge_cleared_run.py", "tests/kit_dev/test_guide_fixes.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit_dev/test_pilot_gaps_plans.py", "tests/kit_dev/test_ruleset.py",
 ]
+[[testing.map]]
+code = "scripts/agk/scorecard.py"
+tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"
 tests = ["tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_shadow_count.py"]

@@ -337,6 +337,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "docs/guides/project-ci.md to use fewer, and local mode in docs/guides/local-mode.md for "
         "when they run out",
     ),
+    "design-ui-paths": (  # SPEC-0037 rule 10 (brief #460): information, never a failure
+        "warn",
+        "ui_paths in [design] of agk.toml: ",
+        "ui_paths in [design] of agk.toml cannot be read",
+        "set ui_paths in the [design] table of agk.toml to the globs of the project's UI files, so "
+        "that check_brief.py asks a UI brief for its Screens line (agk.toml is a protected path)",
+    ),
     "engines-keys": (
         "warn",
         "[engines] in agk.toml has only the keys vision, stack, design and review",
@@ -865,6 +872,20 @@ def auto_merge_result(config: dict) -> Result:
     return Result("ok", message="on, method squash" if state == "on" else "off")
 
 
+def design_ui_result(root: Path, config: dict) -> Result:
+    """`ui_paths` of the `[design]` table (SPEC-0037 rule 10): `absent` when a prototype folder
+    exists and the list is unset or empty; always ok, and never a glob in the message."""
+    design = config.get("design")
+    globs = design.get("ui_paths") if isinstance(design, dict) else None
+    if isinstance(globs, list) and globs:
+        return Result("ok", message="set")
+    if (root / "docs" / "design" / "prototype").is_dir():
+        return Result(
+            "ok", message="absent; docs/design/prototype/ exists, so no brief is a UI brief"
+        )
+    return Result("ok", message="not needed (no docs/design/prototype/)")
+
+
 def placeholder_result(path: Path) -> Result:
     try:
         text = path.read_text(encoding="utf-8")
@@ -1244,6 +1265,7 @@ def run_checks(
     results.update(engine_results(root, kit_root, config))
     results["actions-minutes"] = minutes_result(root, reads)
     results["auto-merge-setting"] = auto_merge_result(config)
+    results["design-ui-paths"] = design_ui_result(root, config)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]
