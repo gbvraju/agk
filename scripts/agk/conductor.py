@@ -45,6 +45,33 @@ red at <sha12> after the batch #a #b` (exit 1). In local mode there is no run to
 Before the holds of each open pull request that is not a draft, and before each merge after the
 first, the pull request is read again until GitHub has computed its mergeable state. `--dry-run`
 prints the order and merges nothing. It posts nothing and merges only through merge_cleared.py.
+
+Brief #700 (ADR-0330, catch log rows 18 and 19): the last private routines, as commands.
+
+    python3 conductor.py rerun --pr N [--apply]
+    python3 conductor.py check-verdict FILE
+    python3 conductor.py lease (--show | --take NAME | --release NAME)
+
+`rerun` reads the pull request and the `pull_request` runs of its head (one GET each, GET by
+default) and prints one line `rerun: #<n> <sha12>: run <id> (<name>) cancelled; ...` per cancelled
+run, rerun only with `--apply` (`POST actions/runs/<id>/rerun`, row 18). When every run of the
+head is skipped (a push to a ready pull request, row 19) it says so and prints the one step that
+starts them, converting the pull request to a draft and back (`POST
+repos/{owner}/{repo}/pulls/<n>/ccr/convert_to_draft`, then `.../ccr/ready_for_review`, the routes
+of the runtime that session rule 7 names `(verify: the draft route is the ready route's twin, not
+read from the runtime's documentation)`), and does it only with `--apply`; a draft's runs skip by
+design and are left alone. Otherwise `nothing to rerun` or `no run of the head`.
+`check-verdict FILE` prints `ok`, or the problem of the verdict's `Final:` lines by
+`common.verdict_problem` (the reading `route.py` applies), or that its first line is not `Verdict:
+cleared|fix list|rejected <sha>`; exit 1 on a problem. It reads nothing on GitHub.
+`lease` is the active-conductor marker, so that the hourly run and a live conductor never merge at
+once: one comment on the plan issue that `plan_issue` of the `[flow]` table names (absent: the
+lease is off, said as such), whose first line is `Conductor: active <time> <name>`, valid 50
+minutes from `<time>`; `--take NAME` posts it, or edits the newest `Conductor:` comment in place,
+unless another name holds a valid lease (exit 3, naming the setting), and keeps NAME in the git
+directory as this checkout's name; `--release NAME` edits it to `Conductor: released <time>
+<name>` for the holder; `--show` prints `held by <name> until <time>` or `free`. `merge-queue`
+refuses to run (`held`, exit 3) while a name other than this checkout's holds a valid lease.
 """
 
 from __future__ import annotations
@@ -53,20 +80,22 @@ import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import merge_cleared
 import session
-from common import CheckError, repo_root
+from common import CheckError, repo_root, verdict_problem
 from full_run import contained_in, covered
 from reviewers import approval_shas, authors_of, spec_approvers, verdict_authors
 
 USAGE = (
     "usage: conductor.py watch [--since ISO] [--once] | conductor.py sweep | "
-    "conductor.py merge-queue [--dry-run] [--max-batch N]"
+    "conductor.py merge-queue [--dry-run] [--max-batch N] | "
+    "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE | "
+    "conductor.py lease (--show | --take NAME | --release NAME)"
 )
 TRIGGERS = ("Question:", "Report:")
 QUESTION_ID = re.compile(r"Question: (Q-\S+)")
@@ -372,6 +401,12 @@ def batch_run(root, repo: str, branch: str, sha: str, minutes: int) -> str:
 def merge_queue(root, dry: bool, limit: int) -> int:
     rules = merge_cleared.ruled(root)
     repo = merge_cleared.repo_of(root)
+    if (issue := plan_issue(root)) is not None:
+        holder = lease_holder(plan_comments(repo, issue), datetime.now(UTC))
+        if holder and holder[0] != own_name(root):
+            raise merge_cleared.Held(
+                f"another conductor holds the lease until {stamp_of(holder[1])} {LEASE_SETTING}"
+            )
     order, kept_out = queued(root, repo, rules)
     if kept_out:
         print("\n".join(kept_out))
@@ -427,6 +462,204 @@ def merge_queue(root, dry: bool, limit: int) -> int:
     return code or 3
 
 
+# --- rerun (rows 18 and 19), check-verdict and lease (brief #700, ADR-0330) --------------------
+
+PR_NUMBER = re.compile(r"[1-9][0-9]{0,9}")
+NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")  # a conductor's name, never an option
+HEAD_RUNS = "repos/{}/actions/runs?event=pull_request&head_sha={}&per_page=100"
+DRAFT_STEP = ("ccr/convert_to_draft", "ccr/ready_for_review")  # the runtime's routes (verify)
+VERDICT_SHAPE = "the first line is not `Verdict: cleared|fix list|rejected <sha>` (session rule 1)"
+PLAN_ISSUE = "plan_issue"
+LEASE_SETTING = f"(setting: {PLAN_ISSUE} in the flow table of agk.toml)"
+LEASE_OFF = f"lease: off {LEASE_SETTING}"
+LEASE_MINUTES = 50
+LEASE_LINE = re.compile(r"Conductor: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+)")
+TIME = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def read_one(endpoint: str, what: str) -> dict:
+    found = session.gh(endpoint)
+    if not isinstance(found, dict):
+        raise CheckError(f"{what} cannot be read")
+    return found
+
+
+def post(endpoint: str, what: str, *extra: str, method: str = "POST") -> None:
+    if session.gh(endpoint, *extra, method=method) is None:
+        raise CheckError(what)
+
+
+def rerun(root, number: int, apply: bool) -> int:
+    repo = session.repo_name(root)
+    pull = read_one(f"repos/{repo}/pulls/{number}", "the pull request")
+    head = str((pull.get("head") or {}).get("sha") or "")
+    data = read_one(HEAD_RUNS.format(repo, head), "the runs of the head")
+    listed = data.get("workflow_runs")
+    if not isinstance(listed, list):
+        raise CheckError("the runs of the head cannot be read")
+    runs = [r for r in listed if isinstance(r, dict) and r.get("event") == "pull_request"]
+    lead = f"rerun: #{number} {head[:12]}:"
+    cancelled = [r for r in runs if r.get("conclusion") == "cancelled"]
+    for run in cancelled:
+        rid, name = run.get("id"), run.get("name")
+        if apply:
+            post(f"repos/{repo}/actions/runs/{rid}/rerun", f"run {rid} cannot be rerun")
+        print(f"{lead} run {rid} ({name}) cancelled; {'rerun' if apply else 'add --apply to rerun it'}")
+    if cancelled:
+        return 0
+    if runs and all(r.get("conclusion") == "skipped" for r in runs):
+        if pull.get("draft"):
+            print(
+                f"{lead} every run of the head skipped; the pull request is a draft, whose runs "
+                "skip until it is marked ready"
+            )
+            return 0
+        steps = [f"POST repos/{repo}/pulls/{number}/{route}" for route in DRAFT_STEP]
+        print(
+            f"{lead} every run of the head skipped (a push to a ready pull request); the step: "
+            f"{steps[0]}, then {steps[1]}" + ("" if apply else "; add --apply to do it")
+        )
+        if apply:
+            for route in DRAFT_STEP:
+                post(f"repos/{repo}/pulls/{number}/{route}", f"the step {route} was refused")
+            print(f"{lead} converted to draft and back; its runs start")
+        return 0
+    print(f"{lead} {'nothing to rerun' if runs else 'no run of the head'}")
+    return 0
+
+
+def check_verdict(path: str) -> int:
+    try:
+        body = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CheckError("the verdict file cannot be read") from exc
+    lines = body.splitlines()
+    first = lines[0].strip() if lines else ""
+    problem = VERDICT_SHAPE if not session.VERDICT.fullmatch(first) else verdict_problem(body)
+    print("ok" if problem is None else problem)
+    return 0 if problem is None else 1
+
+
+def plan_issue(root) -> int | None:
+    """The plan issue of `[flow] plan_issue`, None when the lease is off."""
+    value = session.flow_value(root, PLAN_ISSUE, None, 0)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CheckError(f"{PLAN_ISSUE} of the flow table must be an issue number, 1 or more")
+    return value
+
+
+def plan_comments(repo: str, issue: int) -> list:
+    return read(f"repos/{repo}/issues/{issue}/comments", f"the comments of #{issue}")
+
+
+def lease_comment(comments: list) -> tuple[dict, re.Match] | None:
+    """The newest `Conductor:` marker and its reading, else None."""
+    found = None
+    for c in sorted(comments, key=lambda c: (str(c.get("created_at") or ""), c.get("id") or 0)):
+        if match := LEASE_LINE.fullmatch(session.first_line(c)):
+            found = (c, match)
+    return found
+
+
+def lease_holder(comments: list, now: datetime) -> tuple[str, datetime] | None:
+    """(name, end) of a valid active lease, else None (no marker, released or expired)."""
+    found = lease_comment(comments)
+    if found is None or found[1].group(1) != "active":
+        return None
+    start = when(found[1].group(2))
+    if start is None:
+        return None
+    end = start + timedelta(minutes=LEASE_MINUTES)
+    return (found[1].group(3), end) if now < end else None
+
+
+def stamp_of(moment: datetime) -> str:
+    return moment.strftime(TIME)
+
+
+def lease_mark(root) -> Path | None:
+    """The file of the git directory that holds this checkout's conductor name (never tracked)."""
+    code, found = merge_cleared.git_out(root, "rev-parse", "--git-dir")
+    if code != 0 or not found:
+        return None
+    base = Path(found) if Path(found).is_absolute() else Path(root) / found
+    return base / "agk" / "lease"
+
+
+def own_name(root) -> str | None:
+    mark = lease_mark(root)
+    try:
+        return mark.read_text(encoding="utf-8").strip() or None if mark else None
+    except OSError:
+        return None
+
+
+def write_marker(repo: str, issue: int, found, text: str) -> None:
+    """Edit the marker comment in place, or post the first one."""
+    if found is None:
+        post(f"repos/{repo}/issues/{issue}/comments", "the lease cannot be written", "-f", text)
+    else:
+        post(
+            f"repos/{repo}/issues/comments/{found[0].get('id')}",
+            "the lease cannot be written",
+            "-f",
+            text,
+            method="PATCH",
+        )
+
+
+def lease(root, mode: str, name: str | None) -> int:
+    issue = plan_issue(root)
+    if issue is None:
+        print(LEASE_OFF)
+        return 0 if mode == "--show" else 1
+    repo = session.repo_name(root)
+    comments = plan_comments(repo, issue)
+    now = datetime.now(UTC)
+    holder = lease_holder(comments, now)
+    if mode == "--show":
+        print(f"lease: held by {holder[0]} until {stamp_of(holder[1])}" if holder else "lease: free")
+        return 0
+    if holder and holder[0] != name:
+        print(f"lease: held by {holder[0]} until {stamp_of(holder[1])} {LEASE_SETTING}")
+        return merge_cleared.EXIT_HELD
+    found = lease_comment(comments)
+    mark = lease_mark(root)
+    if mode == "--take":
+        write_marker(repo, issue, found, f"body=Conductor: active {stamp_of(now)} {name}")
+        if mark is not None:
+            mark.parent.mkdir(parents=True, exist_ok=True)
+            mark.write_text(f"{name}\n", encoding="utf-8")
+        print(f"lease: taken by {name} until {stamp_of(now + timedelta(minutes=LEASE_MINUTES))}")
+        return 0
+    if holder:  # --release by the holder
+        write_marker(repo, issue, found, f"body=Conductor: released {stamp_of(now)} {name}")
+        print(f"lease: released by {name}")
+    else:
+        print("lease: free")
+    if mark is not None and mark.exists():
+        mark.unlink()
+    return 0
+
+
+def routine_args(args: list[str]) -> tuple | None:
+    """(`rerun`, number, apply), (`check-verdict`, path) or (`lease`, mode, name) for the forms
+    of brief #700; None for any other form."""
+    if args[:2] == ["rerun", "--pr"] and len(args) in (3, 4) and PR_NUMBER.fullmatch(args[2]):
+        if args[3:] in ([], ["--apply"]):
+            return ("rerun", int(args[2]), args[3:] == ["--apply"])
+    if args[:1] == ["check-verdict"] and len(args) == 2 and args[1] and not args[1].startswith("-"):
+        return ("check-verdict", args[1])
+    if args[:1] == ["lease"]:
+        if args[1:] == ["--show"]:
+            return ("lease", "--show", None)
+        if len(args) == 3 and args[1] in ("--take", "--release") and NAME.fullmatch(args[2]):
+            return ("lease", args[1], args[2])
+    return None
+
+
 def queue_args(args: list[str]) -> tuple[bool, int] | None:
     """(`--dry-run` given, the batch size) for `merge-queue [--dry-run] [--max-batch N]`; None
     for any other form."""
@@ -450,18 +683,25 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
             return 2
         since, args = parsed, ["watch", *args[3:]]
     queue = queue_args(args) if args[:1] == ["merge-queue"] else None
-    if queue is None and args not in (["sweep"], ["watch"], ["watch", "--once"]):
+    routine = routine_args(args)
+    if queue is None and routine is None and args not in (["sweep"], ["watch"], ["watch", "--once"]):
         print(USAGE, file=sys.stderr)
         return 2
     try:
         root = repo_root() if root is None else root
         if queue is not None:
             return merge_queue(root, *queue)
+        if routine is not None:
+            if routine[0] == "rerun":
+                return rerun(root, routine[1], routine[2])
+            if routine[0] == "check-verdict":
+                return check_verdict(routine[1])
+            return lease(root, routine[1], routine[2])
         if args == ["sweep"]:
             return sweep(root)
         return watch(root, since, args[1:] == ["--once"])
     except merge_cleared.Held as exc:
-        print(f"merge-queue: held: {exc}")
+        print(f"{args[0]}: held: {exc}")
         return merge_cleared.EXIT_HELD
     except merge_cleared.Unreadable as exc:
         print(f"FAIL conductor: GitHub cannot be read ({exc})", file=sys.stderr)

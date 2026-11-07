@@ -100,6 +100,16 @@ requirements, specs, ADRs, constitution, `.github/`, the reviewers file, the hoo
 or a guard file, Q-S0045-4); `small` for `Size: S` whose every glob may match no protected class of
 `config/protected-paths.txt` but the test folders; `build` otherwise. Never `review` or
 `mechanical`.
+Brief #700 (ADR-0330): `prompt --brief N [--session ID] [--follow-up TEXT]` (GET only, two reads:
+the brief and its comments) prints the builder's standing prompt from the kit's files, so that a
+project's scheduled builder and the conductor's re-fire use one text and nothing is kept by hand:
+the item line with the brief's reserved numbers (its `Reserved:` lines and the `reserves` of its
+takes; `none` without any) and the session name when given, the files to read first, the
+secret-scan deferral line of `prepush.py`, the session rules that bind a builder quoted from
+`config/session-rules.md` (`BUILDER_RULES`; a number the project's file lacks is a note on stderr),
+and the body lines of CLAUDE.md item 7 read from `config/core-rules.md` (a file without the item
+fails). `--follow-up TEXT` (one line, never a verdict) replaces the stop on an existing pull
+request with the follow-up for it. The title of a brief never goes into the prompt.
 """
 
 from __future__ import annotations
@@ -157,6 +167,7 @@ USAGE = (
     "       session.py inbox --session ID\n"
     "       session.py mine --session ID (--pr N | --brief N)\n"
     "       session.py kind --brief N\n"
+    "       session.py prompt --brief N [--session ID] [--follow-up TEXT]\n"
     "       session.py tidy [--apply] [--json]"
 )
 COMMANDS = (
@@ -175,6 +186,7 @@ COMMANDS = (
     "inbox",
     "mine",
     "kind",
+    "prompt",
     "tidy",
 )
 PAGE = 100
@@ -2278,6 +2290,149 @@ def progress_of(comments: list, login: str) -> tuple[dict | None, list[str]]:
 # --- the command line -------------------------------------------------------------------------
 
 
+# --- the builder's standing prompt (brief #700, ADR-0330) -------------------------------------
+
+BUILDER_RULES = (2, 3, 7, 8, 17, 21, 27, 28, 31, 33, 34, 36)  # the session rules a builder works by
+CORE_RULES_FILE = "config/core-rules.md"
+RESERVED_LINE = re.compile(r"Reserved: (.+)")
+NUMBER_RE = re.compile(NUMBER)
+RULE_START = re.compile(r"(\d+)\. (\S.*)")
+BODY_LINE = re.compile(r"`[A-Z][A-Za-z -]*:[^`]*`")
+PROMPT_HEAD = (
+    "You are an AGK builder session. Repository: {repo} (clone it if it is not present).\n"
+    "\n"
+    "{item}\n"
+    "\n"
+    "Before acting, read in this order: CLAUDE.md, constitution/principles.md, "
+    "config/core-rules.md, config/session-rules.md, the brief with every comment "
+    "(`gh api repos/{repo}/issues/{brief}` and `/comments`), the spec and ADRs it names, "
+    "docs/runs/decisions/ (one file per entry), and every file it names. Verify every name the "
+    "brief cites; where it is wrong, follow the code and say so under `Decisions taken:`.\n"
+    "\n"
+    "The secret scan (ADR-0306, ADR-0327): when your session cannot install the scanner, every "
+    "pull request body you write carries, as its own line, exactly `{defer}`, and you run "
+    "`python3 scripts/agk/prepush.py --body <body file>` so the scan is deferred to the "
+    "governance run, which scans your commits before any merge. Keep the line through every "
+    "edit.\n"
+    "\n"
+    "Branch from origin/<default branch>: `claude/brief-{brief}`; one pull request for this brief "
+    "only. Tests first: write the brief's tests, record the failing count, then implement. "
+    "Decisions are the reviewers': a build of an Approved spec that changes no decision writes no "
+    "ADR and puts `Covered-by: ADR-nnnn` in the body; otherwise write the reserved ADR with status "
+    "Proposed and never mark it Accepted yourself. The pull request body carries `Brief: #{brief}`, "
+    "{lines} and `Summary:` (one plain sentence of at most 120 characters), and the last pull "
+    "request of the brief `Finishes: #{brief}` and `Closes #{brief}`.\n"
+    "\n"
+    "The session rules that bind every step, quoted from config/session-rules.md:\n"
+    "\n"
+)
+PROMPT_TAIL = (
+    "\n"
+    "When the pull request is ready, post `Report: <head> ready for review` on it and end your "
+    "session; a blocked session posts `Question: Q-{brief}-n ...` and waits there.\n"
+)
+STOP_LINE = (
+    "Your item, your session name and any reserved numbers are in the line above. If an open "
+    "pull request from branch `claude/brief-{brief}` already exists and this is not a follow-up "
+    "for it, stop and say so."
+)
+FOLLOW_UP_LINE = "Follow-up for the open pull request of branch `claude/brief-{brief}`: {text}"
+
+
+def reserved_numbers(body: str, comments: list) -> list[str]:
+    """The numbers the brief reserved: its `Reserved:` lines and the `reserves` of its takes, in
+    the order REQ, SPEC, ADR, each once."""
+    found: list[str] = []
+    for line in body.splitlines():
+        if match := RESERVED_LINE.fullmatch(line.strip()):
+            found += NUMBER_RE.findall(match.group(1))
+    for take_row in all_takes(comments):
+        found += list(take_row[4])
+    order = {"REQ": 0, "SPEC": 1, "ADR": 2}
+    return sorted(set(found), key=lambda x: (order[x.split("-")[0]], x))
+
+
+def rule_texts(root, numbers: tuple[int, ...]) -> list[str]:
+    """The numbered rules of config/session-rules.md, each as one line `<n>. <text>` with its
+    continuation lines joined; a number the file lacks is a note on stderr."""
+    try:
+        text = (root / RULES_FILE).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CheckError(f"{RULES_FILE} cannot be read") from exc
+    rules: dict[int, str] = {}
+    current: int | None = None
+    for line in text.splitlines():
+        if match := RULE_START.fullmatch(line):
+            current = int(match.group(1))
+            rules[current] = match.group(2).strip()
+        elif current is not None and line.startswith(" ") and line.strip():
+            rules[current] += " " + line.strip()
+        else:
+            current = None
+    for n in numbers:
+        if n not in rules:
+            print(f"note: session rule {n} is not in {RULES_FILE}", file=sys.stderr)
+    return [f"{n}. {rules[n]}" for n in numbers if n in rules]
+
+
+def body_lines(root) -> list[str]:
+    """The body lines of CLAUDE.md item 7 (`Advances:`, `Build-state row:`, ...), read from
+    config/core-rules.md as they are written there, in backticks."""
+    try:
+        text = (root / CORE_RULES_FILE).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CheckError(f"{CORE_RULES_FILE} cannot be read") from exc
+    item, inside = "", False
+    for line in text.splitlines():
+        if match := RULE_START.fullmatch(line):
+            inside = match.group(1) == "7" and not item
+            item += match.group(2) if inside else ""
+        elif inside and line.startswith(" "):
+            item += " " + line.strip()
+        else:
+            inside = False
+    found = BODY_LINE.findall(item)
+    if not found:
+        raise CheckError(f"CLAUDE.md item 7 (the body lines) cannot be read from {CORE_RULES_FILE}")
+    return found
+
+
+def follow_up_problem(text: str) -> str | None:
+    if not text.strip() or text.splitlines() != [text]:
+        return "prompt: the follow-up is one line"
+    if TELL_REFUSED.match(ZERO_WIDTH.sub("", text)):
+        return "prompt: a follow-up never starts with Approve:, Confirmed: or Verdict:"
+    return None
+
+
+def prompt(root, number: int, me: str | None, follow_up: str | None) -> int:
+    """`prompt --brief N`: the builder's standing prompt from the kit's files (GET only)."""
+    from prepush import DEFER_LINE  # the one secret-scan deferral line (ADR-0327)
+
+    if follow_up is not None and (problem := follow_up_problem(follow_up)):
+        raise CheckError(problem)
+    repo = repo_name(root)
+    brief = gh(f"repos/{repo}/issues/{number}")
+    if not isinstance(brief, dict) or not isinstance(brief.get("body"), str):
+        raise CheckError(f"the brief #{number} cannot be read")
+    comments = pages(f"repos/{repo}/issues/{number}/comments")
+    if comments is None:
+        raise CheckError(f"the comments of #{number} cannot be read")
+    rules = rule_texts(root, BUILDER_RULES)
+    lines = ", ".join(body_lines(root))
+    reserved = ", ".join(reserved_numbers(brief["body"], comments)) or "none"
+    item = (f"Session name: {me}. " if me else "") + f"Item: brief #{number}. Reserved: {reserved}."
+    item += "\n" + (
+        FOLLOW_UP_LINE.format(brief=number, text=follow_up)
+        if follow_up is not None
+        else STOP_LINE.format(brief=number)
+    )
+    text = PROMPT_HEAD.format(repo=repo, item=item, brief=number, defer=DEFER_LINE, lines=lines)
+    text += "\n".join(rules) + "\n" + PROMPT_TAIL.format(brief=number)
+    print(text, end="")
+    return 0
+
+
 def number_of(text: str | None) -> bool:
     return bool(text) and text.isdigit() and int(text) > 0
 
@@ -2356,6 +2511,7 @@ def main(argv: list[str] | None = None) -> int:
         "inbox": {"--session"},
         "mine": {"--session", "--pr", "--brief"},
         "kind": {"--brief"},
+        "prompt": {"--brief", "--session", "--follow-up"},
     }
     if not set(opts) <= allowed[cmd] or len(opts) != len(args[1::2]):
         print(USAGE)
@@ -2392,6 +2548,10 @@ def main(argv: list[str] | None = None) -> int:
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and "--text" in opts
     elif cmd == "kind":
         ok = number_of(opts.get("--brief"))
+    elif cmd == "prompt":
+        ok = number_of(opts.get("--brief")) and bool(
+            SESSION_ID.fullmatch(opts.get("--session", "x"))
+        )
     elif cmd == "mine":
         targets = [k for k in ("--pr", "--brief") if k in opts]
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and len(targets) == 1
@@ -2430,6 +2590,10 @@ def main(argv: list[str] | None = None) -> int:
             return inbox(root, opts["--session"])
         if cmd == "kind":
             return brief_kind(root, int(opts["--brief"]))
+        if cmd == "prompt":
+            return prompt(
+                root, int(opts["--brief"]), opts.get("--session"), opts.get("--follow-up")
+            )
         if cmd == "mine":
             number = {k: int(v) for k, v in opts.items() if k in ("--pr", "--brief")}
             return mine(root, opts["--session"], number.get("--pr"), number.get("--brief"))

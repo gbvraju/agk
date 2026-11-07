@@ -433,7 +433,7 @@ def test_rerun_a_run_of_another_event_is_not_a_run_of_the_head(proj, stub):
     other = {**run_of(1, "cancelled"), "event": "push"}
     serve_runs(stub, pr(7), [other])
     out = run(proj, stub, "rerun", "--pr", "7", "--apply")
-    assert out.stdout.splitlines() == [f"rerun: #7 {SHA12}: nothing to rerun"]
+    assert out.stdout.splitlines() == [f"rerun: #7 {SHA12}: no run of the head"]
     assert posts(stub) == []
 
 
