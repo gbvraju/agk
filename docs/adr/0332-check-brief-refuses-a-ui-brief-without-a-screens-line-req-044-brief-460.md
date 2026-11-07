@@ -6,7 +6,7 @@
 - Related: ADR-0204, SPEC-0037, ADR-0170
 - Requirements: REQ-044
 
-Protected classes: `scripts/agk/`, `.claude/`, `kit/`, `tests/kit_dev/`
+Protected classes: `scripts/agk/`, `.claude/`, `kit/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -40,6 +40,7 @@ counts only an ADR added in the same pull request, so this build adds its own, c
    when it is set, `not needed` without a prototype. It never fails and never prints a glob.
 6. **The day brief template.** `kit/templates/playbook/brief-day.md` names the line, when it is
    needed and that `*` means every state.
+7. **The doctor counts.** The tests of `tests/kit/` that count the doctor's entries count one more.
 
 ## Consequences
 
