@@ -128,8 +128,9 @@ try:  # the one reading of a brief, `check_brief.py`'s (brief 276)
 
     BRIEF_PROBLEMS = check_brief.brief_problems
     ABSENT_REQUIREMENTS = check_brief.absent_requirements
+    SCREENS_PROBLEMS = check_brief.screens_problems  # SPEC-0037 rule 10 (brief #460)
 except ImportError:  # without the check no brief is filed
-    BRIEF_PROBLEMS = ABSENT_REQUIREMENTS = None
+    BRIEF_PROBLEMS = ABSENT_REQUIREMENTS = SCREENS_PROBLEMS = None
 try:  # the one reading of `auto_start` and `launch_adapter`, launch.py's (brief #331)
     import launch
 
@@ -373,12 +374,15 @@ def brief_text(path: str) -> str | None:
 
 
 def brief_checked(text: str) -> bool:
-    """`check_brief.py FILE --root <project>` accepts the text: the shape and the requirements."""
-    if BRIEF_PROBLEMS is None or ABSENT_REQUIREMENTS is None or BRIEF_PROBLEMS(text):
+    """`check_brief.py FILE --root <project>` accepts the text: the shape, the requirements and
+    the `Screens:` line of a UI brief (SPEC-0037 rule 10, brief #460)."""
+    checks = (BRIEF_PROBLEMS, ABSENT_REQUIREMENTS, SCREENS_PROBLEMS)
+    if any(c is None for c in checks) or BRIEF_PROBLEMS(text):
         return False
+    root = Path(project_root())
     try:
-        return not ABSENT_REQUIREMENTS(text, Path(project_root()))
-    except check_brief.CheckError:  # an unreadable requirements file files nothing
+        return not ABSENT_REQUIREMENTS(text, root) and not SCREENS_PROBLEMS(text, root)
+    except check_brief.CheckError:  # an unreadable requirements file or setting files nothing
         return False
 
 
