@@ -61,12 +61,14 @@ from session import (
     flow_value,
     gh,
     glob_regex,
+    kind_of,
     literal,
     live_takes,
     moment,
     pages,
     plain,
     priority_of,
+    protected_entries,
     pull_files,
     repo_name,
     shared_patterns,
@@ -736,15 +738,12 @@ def build(root) -> dict:
             behind.append({"pr": pr["number"], "behind_by": far})
         if far is None or far <= behind_limit:
             updating.append(pr)
+    protected = protected_entries(Path(root))
     conflicts = sorted(
         p["number"] for p in s.prs if p.get("state") == "open" and "agk:conflict" in label_names(p)
     )
     return {
-        "start": [
-            {"session": names[i], "brief": b["number"], "title": b.get("title")}
-            | ({"build": b["build"]} if b.get("build") else {})
-            for i, b in enumerate(chosen[:count])
-        ],
+        "start": [start_entry(names[i], b, protected) for i, b in enumerate(chosen[:count])],
         "running": running_sessions(s),
         "waits": waits,
         "skipped": [{"brief": n, "why": why} for n, why in [*s.skipped, *build_skips, *unplanned]],
@@ -773,6 +772,15 @@ def build(root) -> dict:
         "default_branch": default,
         "stale_commits": behind_limit,
     }
+
+
+def start_entry(name: str, brief: dict, protected: list[str] | None) -> dict:
+    """One entry of the plan's `start` list, with the brief's kind by SPEC-0045 rule 4 (brief
+    709): a body that cannot be read gives `design`, the highest; the conductor only raises it."""
+    body = brief.get("body")
+    kind = kind_of(body, protected) if isinstance(body, str) else "design"
+    entry = {"session": name, "brief": brief["number"], "title": brief.get("title"), "kind": kind}
+    return entry | ({"build": brief["build"]} if brief.get("build") else {})
 
 
 def memory_capacity(root, running: int) -> dict:

@@ -362,7 +362,7 @@ tests = [
 code = "scripts/agk/launch.py"
 tests = [
   "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_launch.py", "tests/kit/test_launch_auto_start.py",
-  "tests/kit/test_route_finishes.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_review_pass_skill.py",
+  "tests/kit/test_launch_kinds.py", "tests/kit/test_route_finishes.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_review_pass_skill.py",
 ]
 [[testing.map]]
 code = "scripts/agk/lessons.py"
