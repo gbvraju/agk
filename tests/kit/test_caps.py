@@ -323,15 +323,22 @@ def test_sweep_a_pull_request_with_no_brief_line_is_never_capped(proj, stub):
     assert not [x for x in sweep(proj, stub) if x.startswith(("OVER", "UNKNOWN"))]
 
 
+def files(root) -> list:
+    """Every file of the project, with its text, the stub's own folders and git left out."""
+    skip = {".git", "stub", "bin"}
+    found = [p for p in root.rglob("*") if not skip & set(p.relative_to(root).parts)]
+    found = [p for p in found if p.is_file()]
+    return sorted((str(p.relative_to(root)), p.read_bytes()) for p in found)
+
+
 def test_sweep_with_caps_makes_get_calls_only_and_writes_no_file(proj, stub):
     """REQ-056 AC3: rule 7, Q-S0049-8, GET only (checked by `sweep`) and no file written."""
     proj.write("agk.toml", FULL)
     report = comment(2, "builder", "Report: abc1234 ready for review; Usage: 6200 tokens", ago(10))
     open_build(stub, "Brief: #9\n", [report], [take_hours_ago(9)])
-    before = sorted(p.relative_to(proj.root) for p in proj.root.rglob("*") if ".git" not in p.parts)
+    before = files(proj.root)
     lines = sweep(proj, stub)
-    after = sorted(p.relative_to(proj.root) for p in proj.root.rglob("*") if ".git" not in p.parts)
-    assert before == after
+    assert files(proj.root) == before
     assert lines[1:3] == ["OVER #9 6200/5000 tokens #7", "OVER #9 8.8/4 hours #7"]
 
 
