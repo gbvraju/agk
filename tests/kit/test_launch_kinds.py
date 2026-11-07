@@ -224,7 +224,9 @@ def test_the_plan_writes_each_briefs_kind_from_its_size_and_touches():
         "title": "t",
         "kind": "small",
     }
-    assert session_plan.start_entry("b2", build, protected)["kind"] == "design"  # may match a guard
+    assert session_plan.start_entry("b2", build, protected)["kind"] == "build"
+    wide = {"number": 9, "title": "z", "body": "Size: S\nTouches: scripts/agk/*.py\n"}
+    assert session_plan.start_entry("b5", wide, protected)["kind"] == "design"  # may match a guard
     assert session_plan.start_entry("b2", build, protected)["build"] == "b"
     assert session_plan.start_entry("b3", unread, protected)["kind"] == "design"
     flat = {"number": 8, "title": "w", "body": "Size: M\nTouches: tests/kit/test_y.py\n"}
