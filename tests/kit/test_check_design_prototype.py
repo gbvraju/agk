@@ -25,12 +25,8 @@ KIT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = KIT_ROOT / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
 
+import design_prototype_check  # noqa: E402
 import design_standard  # noqa: E402
-
-try:  # the module is new: before it exists every test fails rather than the collection
-    import design_prototype_check  # noqa: E402
-except ImportError:  # pragma: no cover - only before the build
-    design_prototype_check = None  # type: ignore[assignment]
 
 CHECK = SCRIPTS / "check_design.py"
 DESIGN = SCRIPTS / "design.py"

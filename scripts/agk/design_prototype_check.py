@@ -309,7 +309,9 @@ def script_problems(where: str, text: str, page: Page) -> list[str]:
 def link_problems(folder: Path, where: str, page: Page) -> list[str]:
     out: list[str] = []
     sheets = [attrs for tag, attrs in page.tags if tag == "link"]
-    allowed = [{"rel": "stylesheet", "href": name} for name in STYLESHEETS]
+    allowed: list[dict[str, str | None]] = [
+        {"rel": "stylesheet", "href": name} for name in STYLESHEETS
+    ]
     if any(attrs not in allowed for attrs in sheets) or any(sheets.count(a) > 1 for a in allowed):
         out.append(f"rule 5: {where}: a link element other than the folder's two stylesheets")
     if any(tag in EXTERNAL_ELEMENTS for tag, _ in page.tags):
