@@ -72,6 +72,8 @@ auto_merge_method = "squash"
 # files. The map was built from the code: each test file under tests/kit/ and tests/kit_dev/ that imports a script or names it
 # as `<script>.py`, closed over the scripts' own imports. A change of any of this needs an ADR (agk.toml is protected).
 [testing]
+# merge_cleared.py runs these on the would-be merge after governance (brief #667, ADR-0320)
+pre_merge_tests = ["tests/kit/test_rule_budget.py", "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_kit_manifest.py"]
 profile = "balanced"
 pr_tests = "selected"
 # The full suite in parallel workers where the interpreter imports xdist (brief #631, ADR-0305).
