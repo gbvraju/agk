@@ -8,9 +8,8 @@ and never writes `agk.toml`. Without a declaration it prints nothing, so `/agk:b
 writes exactly what it printed and wrote before. A declaration or a playbook with a problem, and a
 `--kind` outside `brief_order`, are refused naming the rule, the file and the key, never the value.
 The logic is `playbook_format.split`, so the kit-only command reads the playbook through the
-installed module (ADR-0259 decision 1). Both shipped playbook shapes are read: a copy of the shipped
-`web-app.toml` and a rag-app fixture with the phases and kinds of rule 11. Fixtures in `tmp_path`
-only: invented data, no network.
+installed module (ADR-0259 decision 1). Both shipped playbook shapes are read: copies of the shipped
+`web-app.toml` and `rag-app.toml` (rule 11). Fixtures in `tmp_path` only: invented data, no network.
 """
 
 from __future__ import annotations
@@ -28,87 +27,11 @@ KIT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = KIT_ROOT / "scripts" / "agk"
 PLAYBOOK = SCRIPTS / "playbook.py"
 NEW_SPEC = SCRIPTS / "new_spec.py"
-WEB_APP = KIT_ROOT / "config" / "playbooks" / "web-app.toml"
+PLAYBOOKS = KIT_ROOT / "config" / "playbooks"
+WEB_APP = PLAYBOOKS / "web-app.toml"
 BASE_TOML = 'mode = "init"\nversion = "9.9.9"\ninstalled = "2020-01-02"\ndefault_branch = "main"\n'
 GOAL = "Invoice viewer for example.com"
 UNKNOWN = "zz-unknown-kind"
-
-RAG_APP = """format = 1
-work_type = "rag-app"
-title = "Corpus and its privacy review, the evaluation set, then retrieval and answers, then joins"
-heavy_steps = ["evaluation run"]
-evidence = ["the evaluation run record", "the privacy review"]
-
-[[phases]]
-name = "corpus"
-order = 1
-after = []
-
-[[phases]]
-name = "evaluation set"
-order = 2
-after = ["corpus"]
-
-[[phases]]
-name = "retrieval"
-order = 3
-after = ["evaluation set"]
-
-[[phases]]
-name = "answers"
-order = 3
-after = ["evaluation set"]
-
-[[phases]]
-name = "joins"
-order = 4
-after = ["retrieval", "answers"]
-
-[split]
-brief_order = ["corpus", "evaluation-set", "retrieval", "answers", "join"]
-depends_on = [
-  ["evaluation-set", "corpus"],
-  ["retrieval", "evaluation-set"],
-  ["answers", "evaluation-set"],
-  ["join", "retrieval"],
-  ["join", "answers"],
-]
-
-[[lanes]]
-name = "retrieval"
-kinds = ["retrieval"]
-
-[[lanes]]
-name = "answers"
-kinds = ["answers"]
-
-[testing]
-profile = "balanced"
-always_full = ["evaluation/**"]
-map = [{ code = "retrieval/**", tests = "tests/retrieval/**" }]
-
-[[gates]]
-id = "evaluation-set"
-kind = "check"
-text = "A versioned evaluation set with invented data only."
-step = "evaluation-set"
-owner_only = false
-
-[[gates]]
-id = "privacy-review"
-kind = "judgement"
-text = "A privacy review of the corpus."
-owner_only = false
-
-[milestones]
-shape = "per-phase"
-batch_by = "the phase"
-
-[[claims]]
-text = "The evaluation set before any retrieval brief is expected to find a weak retriever earlier."
-basis = "expected"
-"""
-
 
 def clean_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")}
@@ -124,8 +47,7 @@ def project(
     if playbook:
         path = root / "config" / "playbooks" / f"{playbook}.toml"
         path.parent.mkdir(parents=True, exist_ok=True)
-        text = WEB_APP.read_text(encoding="utf-8") if playbook == "web-app" else RAG_APP
-        path.write_text(text, encoding="utf-8")
+        shutil.copyfile(PLAYBOOKS / f"{playbook}.toml", path)
     return root
 
 
@@ -220,26 +142,31 @@ def test_ac3_the_milestone_shape_is_printed_with_its_meaning(tmp_path):
     assert "one pull request per brief" in lines[2]
 
 
-def test_ac3_the_rag_app_shape_puts_the_evaluation_set_before_retrieval_and_answers(tmp_path):
-    """REQ-045 AC3: rule 7 reads the rag-app shape of rule 11 (both playbooks read)."""
+def test_ac3_the_shipped_rag_app_playbook_puts_the_evaluation_set_before_retrieval_and_answers(
+    tmp_path,
+):
+    """REQ-045 AC3: rule 7 reads the shipped rag-app playbook of rule 11 (both playbooks read)."""
     root = project(tmp_path / "proj", work_type="rag-app", playbook="rag-app")
     proc = split(root, "--goal", GOAL)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     lines = proc.stdout.splitlines()
     assert lines[0] == "work type: rag-app (playbook config/playbooks/rag-app.toml)"
-    assert lines[1] == "milestone shape: per-phase (batch_by: the phase)"
-    assert "the briefs of a phase are numbered as one milestone in their titles" in lines[2]
+    assert lines[1].startswith("milestone shape: per-brief")
+    assert lines[2].strip() == "one pull request per brief, as today"
     by_kind = blocks(lines)
-    assert list(by_kind) == ["corpus", "evaluation-set", "retrieval", "answers", "join"]
+    assert list(by_kind) == ["corpus", "evaluation-set", "retrieval", "answer", "join"]
     assert depends(by_kind["evaluation-set"]) == ["Depends-on: #<corpus brief>"]
     assert depends(by_kind["retrieval"]) == ["Depends-on: #<evaluation-set brief>"]
-    assert depends(by_kind["answers"]) == ["Depends-on: #<evaluation-set brief>"]
+    assert depends(by_kind["answer"]) == [
+        "Depends-on: #<evaluation-set brief>",
+        "Depends-on: #<retrieval brief>",
+    ]
     assert depends(by_kind["join"]) == [
         "Depends-on: #<retrieval brief>",
-        "Depends-on: #<answers brief>",
+        "Depends-on: #<answer brief>",
     ]
     assert lane(by_kind["retrieval"]) == "retrieval"
-    assert lane(by_kind["answers"]) == "answers"
+    assert lane(by_kind["answer"]) == "answers"
     assert lane(by_kind["corpus"]) == lane(by_kind["evaluation-set"]) == "none"
 
 
