@@ -130,3 +130,10 @@ review_mode = "team"
 # deny_commands = ["tail-prod"]
 # allowed_hosts = ["db.internal.example.com"]
 # allow_paths = [{ path = "docs/logs/README.md", reason = "a guide about logs, not a log" }]
+# The work type (SPEC-0038 rule 5, REQ-045): one line that selects the delivery playbook of this project, config/playbooks/<work type>.toml,
+# one of web-app, mobile, cloud-migration, rag-app, mcp-server, multi-agent, voice-agent and pilot, whose playbook must be present. Absent
+# by default: with no [delivery] table nothing reads a playbook and `agk doctor` prints `work type: none (no playbook)`. One value only;
+# an unknown one, or one whose playbook is missing, is refused naming the setting. The owner chooses it: a session may propose a work
+# type and never writes, changes or removes the line. A change needs an ADR in the same pull request (agk.toml is a protected path).
+# [delivery]
+# work_type = "web-app"

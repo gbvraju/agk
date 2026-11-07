@@ -60,6 +60,10 @@ auto_merge_method = "squash"
 # queue = false
 # queue_order = "fifo"
 # queue_max_wait = 120
+# The work type (SPEC-0038 rule 5, REQ-045): `[delivery] work_type` selects a delivery playbook. This repository declares no work
+# type (SPEC-0038 rule 12 (b)); declaring one is the owner's change, by an ADR in the same pull request, and a session never writes it.
+# [delivery]
+# work_type = "web-app"
 # Intelligent testing (brief #578, ADR-0285; the owner's decision of 2026-11-05): a builder's prepush runs a change's own tests
 # and the tests its change can affect, while a push to main and a release run the full suite. `balanced`: a changed file that no
 # entry covers makes the selection full. `pr_tests = "selected"` is the owner's setting; this repository's `Project tests` step
@@ -153,7 +157,7 @@ code = "scripts/agk/check_numbers.py"
 tests = ["tests/kit/test_check_numbers_amendments.py", "tests/kit/test_numbers.py"]
 [[testing.map]]
 code = "scripts/agk/check_playbooks.py"
-tests = ["tests/kit/test_check_playbooks.py"]
+tests = ["tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py"]
 [[testing.map]]
 code = "scripts/agk/check_pr_mode.py"
 tests = ["tests/kit/test_pr_mode.py", "tests/kit/test_pr_mode_briefs.py", "tests/kit/test_session_rules.py"]
@@ -259,8 +263,9 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/doctor.py"
 tests = [
-  "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py", "tests/kit/test_doctor.py",
-  "tests/kit/test_doctor_ci.py", "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py",
+  "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
+  "tests/kit/test_delivery_declaration.py", "tests/kit/test_doctor.py", "tests/kit/test_doctor_ci.py",
+  "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py",
   "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_run.py", "tests/kit/test_merge_cleared_verdict.py",
   "tests/kit/test_pause.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_route_triggers.py",
   "tests/kit/test_run_folders.py", "tests/kit/test_session_rules.py", "tests/kit/test_session_tidy.py",
@@ -388,7 +393,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/playbook_format.py"
-tests = ["tests/kit/test_check_playbooks.py"]
+tests = ["tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py"]
 [[testing.map]]
 code = "scripts/agk/pr_body.py"
 tests = [
