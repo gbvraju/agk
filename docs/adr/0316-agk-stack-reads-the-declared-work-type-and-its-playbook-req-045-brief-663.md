@@ -6,7 +6,7 @@
 - Related: ADR-0251, ADR-0259, ADR-0312, ADR-0313, ADR-0241, SPEC-0038
 - Requirements: REQ-045
 
-Protected classes: `scripts/agk/`, `skills/`, `agk.toml`, `tests/kit_dev/`
+Protected classes: `scripts/agk/`, `skills/`, `tests/kit_dev/`
 
 ## Context
 
@@ -55,10 +55,13 @@ conductor.
    and the proposal are proposals and never a vendor choice, that a project adds a gate of its own
    as one more practice bullet and never by editing the playbook, and that a missing or failing
    playbook is refused naming the setting; step 2 keeps or amends the proposals.
-6. `tests/kit_dev/test_stack_playbook.py` (new) reads the shipped `web-app` playbook as its fixture;
-   `agk.toml`'s test map names it for `engines.py` and `playbook_format.py`. No installed file
-   changes (`engines.py` is kit-only, the skill is not in `kit/manifest.json`), so there is no
-   changelog fragment, no manifest change and no version bump; `kit/hashes.json` is not edited.
+6. `tests/kit_dev/test_stack_playbook.py` (new) reads the shipped `web-app` playbook as its fixture.
+   `agk.toml` is not changed: the brief's `Touches:` line does not name it, and whether its test
+   map names the new file for `engines.py` and `playbook_format.py` is asked (Q-663-4); until then
+   CI's full suite runs it, and a prepush that changes `engines.py` runs the files the map names
+   today. No installed file changes (`engines.py` is kit-only, the skill is not in
+   `kit/manifest.json`), so there is no changelog fragment, no manifest change and no version bump;
+   `kit/hashes.json` is not edited.
 
 ## Consequences
 
@@ -75,3 +78,5 @@ other practice.
   person rules the bullet is rule 6's form (due 2026-12-31).
 - 2026-11-07: a project's own playbook problems are reported by `check_playbooks.py`; `stack-write`
   only says that the check fails (Q-663-2, due 2026-12-31).
+- 2026-11-07: the test map of `agk.toml` does not name `tests/kit_dev/test_stack_playbook.py` yet
+  (Q-663-4; a map change is the maintainers' and makes the prepush selection full, due 2026-12-31).

@@ -286,7 +286,7 @@ tests = [
   "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_origin_message.py",
   "tests/kit_dev/test_pilot_gaps_first_pr.py", "tests/kit_dev/test_playbook.py",
   "tests/kit_dev/test_pr_bodies_kit.py", "tests/kit_dev/test_stack_adr_testing.py",
-  "tests/kit_dev/test_stack_playbook.py", "tests/kit_dev/test_start_discovery.py",
+  "tests/kit_dev/test_start_discovery.py",
 ]
 [[testing.map]]
 code = "scripts/agk/evidence.py"
@@ -393,10 +393,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/playbook_format.py"
-tests = [
-  "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py",
-  "tests/kit_dev/test_stack_playbook.py",
-]
+tests = ["tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py"]
 [[testing.map]]
 code = "scripts/agk/pr_body.py"
 tests = [
