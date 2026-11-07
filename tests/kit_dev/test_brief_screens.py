@@ -32,7 +32,7 @@ DOCTOR_FIXTURES = KIT_ROOT / "tests" / "kit" / "fixtures" / "doctor" / "ok"
 HEAD = "0123456789abcdef0123456789abcdef01234567"
 DIGEST = "ab" * 32
 LINK = "https://example.com/owner/project/pull/7#issuecomment-1"
-REQUIREMENTS = "# Requirements\n\n### REQ-001 — A reader keeps a list of books\n\n- Status: planned\n"
+REQUIREMENTS = "# Requirements\n\n### REQ-001 — A reader keeps a list\n\n- Status: planned\n"
 PAGES = ("index.html", "books--default.html", "books--empty.html", "books--error.html",
          "account--default.html")  # fmt: skip
 SECRET_SCREEN = "zz-hidden-screen"  # an invented value that a refusal must never print
