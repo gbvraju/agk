@@ -37,7 +37,8 @@ reserved for brief #665 by the conductor.
    entry per ready brief in the plan's order, where the lane is the first `[[lanes]]` entry whose
    `kinds` hold the brief's kind, and `none` for a brief without a `Kind:` line, with a kind that
    no lane holds (`contract` in `web-app.toml`), or with a kind the playbook does not know; none of
-   these is an error. `--json` gains one key `playbook` with `work_type`, `lanes` (one
+   these is an error; with no ready brief the line reads `no ready brief`. `--json` gains one key
+   `playbook` with `work_type`, `lanes` (one
    `{brief, kind, lane}` per ready brief, in the same order) and `heavy_steps`; every other key is
    as before.
 3. **The order.** With a declaration the ready briefs are ordered by priority, then by phase, then

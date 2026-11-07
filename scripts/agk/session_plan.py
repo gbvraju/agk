@@ -594,15 +594,18 @@ def playbook_of(root) -> dict | None:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
         return None
+    tables = data.get("lanes")
     lanes = [
         (str(lane["name"]), _strs(lane.get("kinds")))
-        for lane in (data.get("lanes") if isinstance(data.get("lanes"), list) else [])
+        for lane in (tables if isinstance(tables, list) else [])
         if isinstance(lane, dict) and isinstance(lane.get("name"), str)
     ]
-    split = data.get("split") if isinstance(data.get("split"), dict) else {}
+    found = data.get("split")
+    split: dict = found if isinstance(found, dict) else {}
+    listed = split.get("depends_on")
     pairs = [
         (str(p[0]), str(p[1]))
-        for p in (split.get("depends_on") if isinstance(split.get("depends_on"), list) else [])
+        for p in (listed if isinstance(listed, list) else [])
         if isinstance(p, list) and len(p) == 2
     ]
     return {
