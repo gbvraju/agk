@@ -18,9 +18,9 @@ The answers file: `{"screens": "yes|no|open", "work_type": "<work type>", "answe
 "open": true}], "points": [{"text": "<words>", "where": "..."}]}`; `screens` defaults to `open`
 and `work_type` to the issue's `Kind:` line, else `pilot`. Each answer is written as given, line
 endings made `\n`, between `<!-- agk:answer sha256=… -->` and `<!-- agk:answer-end -->` under its
-bullet `- <id>: (given: <where>)`, as the problem is under its digest. Every refusal names the rule and the
-file or the setting, never a value, a problem's words or an answer (rule 15). Exit 0 ok, 1 refused,
-2 usage.
+bullet `- <id>: (given: <where>)`, as the problem is under its digest. Every refusal names the rule
+and the file or the setting, never a value, a problem's words or an answer (rule 15). Exit 0 ok,
+1 refused, 2 usage.
 """
 
 from __future__ import annotations
