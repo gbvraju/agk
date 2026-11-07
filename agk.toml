@@ -304,6 +304,9 @@ tests = ["tests/kit/test_failures.py"]
 code = "scripts/agk/flakes.py"
 tests = ["tests/kit/test_flakes.py", "tests/kit/test_rerun_alone.py"]
 [[testing.map]]
+code = "scripts/agk/front_door.py"
+tests = ["tests/kit/test_front_door_entry.py"]
+[[testing.map]]
 code = "scripts/agk/full_run.py"
 tests = [
   "tests/kit/test_full_run.py", "tests/kit/test_full_run_body_steps.py", "tests/kit/test_full_run_post_steps.py",
