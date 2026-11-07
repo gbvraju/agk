@@ -37,6 +37,14 @@ Brief 612 (ADR-0298): with `[flow] min_free_memory_mb` set (a whole number of Mi
 prints `launch: not started: free memory below [flow] min_free_memory_mb` and exits 1; when the
 memory cannot be read it prints one note naming the setting and starts as before. Unset, the
 memory is not read. Printing the prompts starts nothing, so the floor does not apply there.
+
+Brief 709 (SPEC-0045 rules 5 to 7, ADR-0289): each entry's `kind` (`design`, `build` or `small`,
+which `session.py plan --json` writes from the brief; a running entry may also be `mechanical`;
+none is `design`, the highest) is mapped by `config.model_settings` to a tier and an effort, which
+every prompt names with the tier's model name from `[models.names]` when the project has one, and
+the adapter gets as `AGK_KIND`, `AGK_TIER`, `AGK_EFFORT` and `AGK_MODEL`. A `small` or `mechanical`
+prompt names the lean reading list instead of today's line. A running entry's `escalated_from`
+(the tier it stopped on, never `strongest`) resumes it one tier up, at least at `build`'s effort.
 """
 
 from __future__ import annotations
@@ -54,15 +62,38 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from common import CheckError, available_memory
 
+import config
+
 NAME = "launch"
 USAGE = "usage: launch.py prompts --plan FILE|- [--resume] [--adapter COMMAND]"
 SEPARATOR = "-" * 72
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
 LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")  # a GitHub login (its letters, at most 39)
 
+FULL_READING = "Read CLAUDE.md and config/session-rules.md first and follow them in full."
+LEAN_READING = (
+    "Read only CLAUDE.md, constitution/principles.md, config/core-rules.md, the brief or the "
+    "follow-up message and the files they name (a lean session, SPEC-0045 rule 7); still run "
+    "`doctor.py --paused` (session rule 33) and `prepush.py` (session rule 31) as they say."
+)
+KINDS = ("design", "build", "small")  # a brief's kinds (rule 4); `mechanical` is a follow-up's
+FOLLOW_UP_KINDS = (*KINDS, "mechanical")
+LEAN_KINDS = ("small", "mechanical")
+TIERS = config.MODEL_TIERS  # strongest first
+EFFORTS = config.MODEL_EFFORTS  # lowest first
+KIND_LINE = "Kind: {kind}; tier: {tier}; effort: {effort}{model}. {stop}"
+STOP_BELOW = (
+    "You run below `strongest`: when the same check fails in two runs in a row, a conflict cannot "
+    "be resolved or a change would touch a protected class the brief's `Touches:` does not name, "
+    "stop, push nothing more and post `Report: <head> escalate <reason>` (session rule 21)."
+)
+STOP_TOP = "You never escalate: when blocked, ask with `Question:` (session rule 21)."
+Run = tuple[str, str, str, str | None]  # kind, tier, effort, the project's model name or None
+DESIGN: Run = ("design", *config.MODEL_DEFAULTS["design"], None)  # type: ignore[assignment]
+
 PROMPT = """\
 You are session {session}, a builder of this repository. You work through pull requests only.
-Read CLAUDE.md and config/session-rules.md first and follow them in full.
+{reading}
 Your work is {work}: take it with
     python3 scripts/agk/session.py claim --session {session} --brief {brief}{flag}
 If that prints a skip, stop and say why. Otherwise read the brief on GitHub (its issue), build it
@@ -72,15 +103,16 @@ of its last build) also carries `Finishes: #{brief}`, so the brief closes when i
 work is done, run
     python3 scripts/agk/session.py after --session {session}
 and do what it says. Report on your pull request; ask on it; never merge.
+{kind_line}
 """
 
 
 RESUME = (
     "You are session {session}, a builder of this repository, and you resume your work: {work}, "
-    "{where}. Read CLAUDE.md and config/session-rules.md first and follow them in full. Then run "
+    "{where}. {reading} Then run "
     "`python3 scripts/agk/session.py queue --role builder{author}; "
     "python3 scripts/agk/session.py inbox --session {session}` (session rule 11) and carry on "
-    "from what they and GitHub show: {carry} When your work is done, run "
+    "from what they and GitHub show: {carry} {kind_line} When your work is done, run "
     "`python3 scripts/agk/session.py after --session {session}` and do what it says. "
     "Report on your pull request; ask on it; never merge.\n"
 )
@@ -287,7 +319,47 @@ def running_sessions(plan: dict) -> list[Running]:
     return found
 
 
-def resume_for(session: str, brief: int, build: str | None, pr: int | None, author: str | None):
+def reading_of(run: Run) -> str:
+    return LEAN_READING if run[0] in LEAN_KINDS else FULL_READING
+
+
+def kind_line(run: Run) -> str:
+    kind, tier, effort, model = run
+    stop = STOP_TOP if tier == TIERS[0] else STOP_BELOW
+    shown = f"; model: {model}" if model else ""
+    return KIND_LINE.format(kind=kind, tier=tier, effort=effort, model=shown, stop=stop)
+
+
+def runs_of(items: list, kinds: tuple[str, ...], what: str) -> list[Run]:
+    """The kind, tier, effort and model name of each entry (brief 709): no kind is `design`; an
+    `escalated_from` (running entries only) is one tier up, never below the kind's own tier, at
+    least at `build`'s effort; the table and names come from the checkout's agk.toml."""
+    settings = config.model_settings(Path.cwd())
+    names = config.model_names(Path.cwd())
+    found: list[Run] = []
+    for item in items:
+        kind = item.get("kind", "design")
+        if not isinstance(kind, str) or kind not in kinds:
+            raise CheckError(f"{what} has no valid kind (field kind)")
+        tier, effort = settings[kind]["tier"], settings[kind]["effort"]
+        if "escalated_from" in item:
+            was = item["escalated_from"]
+            if kinds is KINDS or not isinstance(was, str) or was not in TIERS[1:]:
+                raise CheckError(f"{what} has no valid escalation (field escalated_from)")
+            tier = TIERS[min(TIERS.index(tier), TIERS.index(was) - 1)]
+            effort = EFFORTS[max(EFFORTS.index(effort), EFFORTS.index(settings["build"]["effort"]))]
+        found.append((kind, tier, effort, names.get(tier)))
+    return found
+
+
+def resume_for(
+    session: str,
+    brief: int,
+    build: str | None,
+    pr: int | None,
+    author: str | None,
+    run: Run = DESIGN,
+):
     """The one-line prompt that resumes a running session from GitHub alone (brief 402)."""
     work = f"build ({build}) of brief #{brief}" if build else f"brief #{brief}"
     where = f"pull request #{pr}" if pr else "no pull request yet"
@@ -298,13 +370,22 @@ def resume_for(session: str, brief: int, build: str | None, pr: int | None, auth
         where=where,
         author=f" --author {author}" if author else "",
         carry=carry,
+        reading=reading_of(run),
+        kind_line=kind_line(run),
     )
 
 
-def prompt_for(session: str, brief: int, build: str | None = None) -> str:
+def prompt_for(session: str, brief: int, build: str | None = None, run: Run = DESIGN) -> str:
     work = f"build ({build}) of brief #{brief}" if build else f"brief #{brief}"
     flag = f" --build {build}" if build else ""
-    return PROMPT.format(session=session, brief=brief, work=work, flag=flag)
+    return PROMPT.format(
+        session=session,
+        brief=brief,
+        work=work,
+        flag=flag,
+        reading=reading_of(run),
+        kind_line=kind_line(run),
+    )
 
 
 def work_text(session: str, brief: int, build: str | None) -> str:
@@ -318,10 +399,14 @@ def not_started(rest: list[tuple[str, int, str | None]]) -> None:
 
 
 def start_with(
-    adapter: str, found: list[tuple[str, int, str | None]], prompts: list[str] | None = None
+    adapter: str,
+    found: list[tuple[str, int, str | None]],
+    prompts: list[str] | None = None,
+    runs: list[Run] | None = None,
 ) -> int:
     """Call the adapter once for each session; stop at the first one that fails. PROMPTS, when
-    given, are the prompts of the sessions in order (the resume prompts of brief 402)."""
+    given, are the prompts of the sessions in order (the resume prompts of brief 402); RUNS are
+    their kinds, tiers, efforts and model names (brief 709), `design` when not given."""
     words = shlex.split(adapter)
     if not words:
         raise CheckError("the adapter is empty (option --adapter)")
@@ -329,10 +414,15 @@ def start_with(
         env = {**os.environ, "AGK_SESSION": session, "AGK_BRIEF": str(brief)}
         if build:
             env["AGK_BUILD"] = build
+        run = runs[index] if runs else DESIGN
+        kind, tier, effort, model = run
+        env.update({"AGK_KIND": kind, "AGK_TIER": tier, "AGK_EFFORT": effort})
+        if model:
+            env["AGK_MODEL"] = model
         try:
             done = subprocess.run(  # nosec B603 - the person's own command, split, no shell
                 words,
-                input=prompts[index] if prompts else prompt_for(session, brief, build),
+                input=prompts[index] if prompts else prompt_for(session, brief, build, run),
                 text=True,
                 encoding="utf-8",
                 env=env,
@@ -375,13 +465,15 @@ def main(argv: list[str] | None = None) -> int:
         if not found:
             print("no session to start")
             return 0
+        runs = runs_of(plan["start"][:limit], KINDS, "a session to start")
         found, beyond = found[:limit], found[limit:]
         if "--adapter" in opts and not memory_allows(Path.cwd()):
             return 1
         if "--adapter" in opts:
-            code = start_with(opts["--adapter"], found)
+            code = start_with(opts["--adapter"], found, runs=runs)
         else:
-            print((SEPARATOR + "\n").join(prompt_for(s, b, x) for s, b, x in found), end="")
+            texts = (prompt_for(s, b, x, r) for (s, b, x), r in zip(found, runs, strict=True))
+            print((SEPARATOR + "\n").join(texts), end="")
             code = 0
     except CheckError as exc:
         print(f"FAIL {NAME}: {exc}", file=sys.stderr)
@@ -400,12 +492,13 @@ def resume_main(opts: dict) -> int:
         limit = max_builders(Path.cwd())
         if not found:
             return 0
+        runs = runs_of(plan["running"][:limit], FOLLOW_UP_KINDS, "a running session")
         found, beyond = found[:limit], found[limit:]
-        prompts = [resume_for(*item) for item in found]
+        prompts = [resume_for(*item, run) for item, run in zip(found, runs, strict=True)]
         if "--adapter" in opts and not memory_allows(Path.cwd()):
             return 1
         if "--adapter" in opts:
-            code = start_with(opts["--adapter"], [item[:3] for item in found], prompts)
+            code = start_with(opts["--adapter"], [item[:3] for item in found], prompts, runs)
         else:
             print((SEPARATOR + "\n").join(prompts), end="")
             code = 0

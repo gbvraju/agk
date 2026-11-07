@@ -194,7 +194,7 @@ def test_the_script_imports_no_network_module_and_holds_no_credential():
         elif isinstance(node, ast.ImportFrom) and node.module:
             names.add(node.module.split(".")[0])
     assert not names & {"socket", "urllib", "http", "ftplib", "smtplib", "requests", "ssl"}
-    assert names <= set(sys.stdlib_module_names) | {"common"}
+    assert names <= set(sys.stdlib_module_names) | {"common", "config"}  # config: brief 709
     for word in ("token", "secret", "password", "api_key", "crontab"):
         assert word not in text.lower(), word
 

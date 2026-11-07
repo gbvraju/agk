@@ -454,7 +454,8 @@ def test_the_next_free_build_is_named_in_the_plan_and_the_words(proj, stub):
     listing(stub, [issue(5, parts())])
     free(stub, 5)
     got = data(proj, stub)
-    assert got["start"] == [{"session": "builder-a", "brief": 5, "title": "t5", "build": "a"}]
+    start = {"session": "builder-a", "brief": 5, "title": "t5", "kind": "build", "build": "a"}
+    assert got["start"] == [start]  # the kind by SPEC-0045 rule 4 (brief 709)
     assert plan(proj, stub).stdout.splitlines()[0] == "Start 1: builder-a takes #5 build (a)."
 
 

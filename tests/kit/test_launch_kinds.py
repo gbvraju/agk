@@ -310,4 +310,4 @@ def test_launch_holds_no_model_name():
     """REQ-052 AC1: rule 3, the kit's script names tiers, never a model."""
     body = SCRIPT.read_text(encoding="utf-8")
     assert "strongest" in body and "[models.names]" in body
-    assert not re.search(r'"[a-z]+-\d', body)
+    assert not re.search(r'"(?!utf-)[a-z]+-\d', body)
