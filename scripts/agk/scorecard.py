@@ -102,9 +102,11 @@ def listed(data: Any) -> list[dict] | None:
 def run_metrics(src: Any, runs: Any, branch: str, start: datetime, end: datetime) -> dict:
     """full_check_minutes, prepush_seconds, flaky_rate (Q-S0047-12) and ci_minutes_per_merge's
     minutes, from one list of the week's runs."""
-    values = dict.fromkeys(("full_check_minutes", "prepush_seconds", "flaky_rate"), UNKNOWN)
-    found = runs.get("workflow_runs") if isinstance(runs, dict) else None
-    if listed(found) is None:
+    values: dict[str, Any] = dict.fromkeys(
+        ("full_check_minutes", "prepush_seconds", "flaky_rate"), UNKNOWN
+    )
+    found = listed(runs.get("workflow_runs") if isinstance(runs, dict) else None)
+    if found is None:
         return {**values, "minutes": None}
     week = [r for r in found if inside(r, "created_at", start, end)]
     gov = [r for r in week if metrics.is_governance(r) and r.get("conclusion")]
@@ -119,8 +121,9 @@ def run_metrics(src: Any, runs: Any, branch: str, start: datetime, end: datetime
         {"started_at": r.get("run_started_at"), "completed_at": r.get("updated_at")} for r in full
     ]
     taken = [metrics.seconds_of(span) for span in spans]  # the run's span (verify)
-    if full and None not in taken:
-        values["full_check_minutes"] = tenth(median(Decimal(t) / 60 for t in taken))
+    known = [t for t in taken if t is not None]
+    if full and len(known) == len(taken):
+        values["full_check_minutes"] = tenth(median(Decimal(t) / 60 for t in known))
     seconds = [metrics.project_test_seconds(src, [r]) for r in full]
     if seconds and UNKNOWN not in seconds:
         values["prepush_seconds"] = str(
