@@ -36,7 +36,9 @@ runs) are the incidents the first command guards. The ADR number was reserved by
    nothing on GitHub and posts nothing; the message names the rule and the shape, never the body.
 3. **`conductor.py lease (--show | --take NAME | --release NAME)`.** The active-conductor marker is one comment on
    the plan issue that `plan_issue` of the `[flow]` table of agk.toml names, whose first line is `Conductor: active
-   <time> <name>` (`<time>` as `YYYY-MM-DDTHH:MM:SSZ`), valid 50 minutes from `<time>`. Without the setting the
+   <time> <name>` (`<time>` as `YYYY-MM-DDTHH:MM:SSZ`), valid 50 minutes from `<time>`. A marker counts only when
+   its author is in `verdict_authors` of `config/reviewers.yaml`, as `sweep` reads verdicts, so an unlisted account
+   neither holds the lease nor has its comment edited by `--take`. Without the setting the
    lease is off: `--show` says so (exit 0) and `--take` and `--release` refuse (exit 1), naming the setting; a
    setting that is not an issue number is refused the same way. `--take NAME` edits the newest `Conductor:` comment
    in place, or posts the first one, so that the issue holds one marker (as the `Progress:` comment of session rule

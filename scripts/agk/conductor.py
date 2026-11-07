@@ -67,7 +67,7 @@ cleared|fix list|rejected <sha>`; exit 1 on a problem. It reads nothing on GitHu
 `lease` is the active-conductor marker, so that the hourly run and a live conductor never merge at
 once: one comment on the plan issue that `plan_issue` of the `[flow]` table names (absent: the
 lease is off, said as such), whose first line is `Conductor: active <time> <name>`, valid 50
-minutes from `<time>`; `--take NAME` posts it, or edits the newest `Conductor:` comment in place,
+minutes from `<time>`, counted only when its author is in `verdict_authors`; `--take NAME` posts it, or edits the newest `Conductor:` comment in place,
 unless another name holds a valid lease (exit 3, naming the setting), and keeps NAME in the git
 directory as this checkout's name; `--release NAME` edits it to `Conductor: released <time>
 <name>` for the holder; `--show` prints `held by <name> until <time>` or `free`. `merge-queue`
@@ -402,7 +402,8 @@ def merge_queue(root, dry: bool, limit: int) -> int:
     rules = merge_cleared.ruled(root)
     repo = merge_cleared.repo_of(root)
     if (issue := plan_issue(root)) is not None:
-        holder = lease_holder(plan_comments(repo, issue), datetime.now(UTC))
+        comments = plan_comments(repo, issue)
+        holder = lease_holder(comments, authors_of(rules.people), datetime.now(UTC))
         if holder and holder[0] != own_name(root):
             raise merge_cleared.Held(
                 f"another conductor holds the lease until {stamp_of(holder[1])} {LEASE_SETTING}"
@@ -557,18 +558,21 @@ def plan_comments(repo: str, issue: int) -> list:
     return read(f"repos/{repo}/issues/{issue}/comments", f"the comments of #{issue}")
 
 
-def lease_comment(comments: list) -> tuple[dict, re.Match] | None:
-    """The newest `Conductor:` marker and its reading, else None."""
+def lease_comment(comments: list, authors: list[str]) -> tuple[dict, re.Match] | None:
+    """The newest `Conductor:` marker by a listed verdict author and its reading, else None."""
+    listed = {a.lstrip("@").lower() for a in authors}
     found = None
     for c in sorted(comments, key=lambda c: (str(c.get("created_at") or ""), c.get("id") or 0)):
+        if merge_cleared.login(c) not in listed:
+            continue
         if match := LEASE_LINE.fullmatch(session.first_line(c)):
             found = (c, match)
     return found
 
 
-def lease_holder(comments: list, now: datetime) -> tuple[str, datetime] | None:
+def lease_holder(comments: list, authors: list[str], now: datetime) -> tuple[str, datetime] | None:
     """(name, end) of a valid active lease, else None (no marker, released or expired)."""
-    found = lease_comment(comments)
+    found = lease_comment(comments, authors)
     if found is None or found[1].group(1) != "active":
         return None
     start = when(found[1].group(2))
@@ -619,9 +623,9 @@ def lease(root, mode: str, name: str | None) -> int:
         print(LEASE_OFF)
         return 0 if mode == "--show" else 1
     repo = session.repo_name(root)
-    comments = plan_comments(repo, issue)
+    comments, authors = plan_comments(repo, issue), verdict_authors(root)
     now = datetime.now(UTC)
-    holder = lease_holder(comments, now)
+    holder = lease_holder(comments, authors, now)
     if mode == "--show":
         if holder:
             print(f"lease: held by {holder[0]} until {stamp_of(holder[1])}")
@@ -631,7 +635,7 @@ def lease(root, mode: str, name: str | None) -> int:
     if holder and holder[0] != name:
         print(f"lease: held by {holder[0]} until {stamp_of(holder[1])} {LEASE_SETTING}")
         return merge_cleared.EXIT_HELD
-    found = lease_comment(comments)
+    found = lease_comment(comments, authors)
     mark = lease_mark(root)
     if mode == "--take":
         write_marker(repo, issue, found, f"body=Conductor: active {stamp_of(now)} {name}")

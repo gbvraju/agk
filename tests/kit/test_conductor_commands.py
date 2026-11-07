@@ -633,6 +633,32 @@ def test_lease_release_by_another_name_is_refused_and_a_free_lease_needs_no_writ
     assert out.returncode == 0 and out.stdout.strip() == "lease: free" and posts(stub) == []
 
 
+def stranger(minutes: int, who: str = "x9", cid: int = 7) -> dict:
+    """A marker posted by an account that is not a listed verdict author."""
+    return comment(cid, "stranger", f"Conductor: active {ago(minutes)} {who}", ago(minutes))
+
+
+def test_lease_a_marker_by_an_unlisted_account_holds_nothing(proj, stub):
+    with_plan(proj, stub, [stranger(10)])
+    out = run(proj, stub, "lease", "--show")
+    assert out.returncode == 0 and out.stdout.strip() == "lease: free"
+
+
+def test_lease_take_never_edits_a_marker_of_an_unlisted_account(proj, stub):
+    with_plan(proj, stub, [active(55), stranger(10)])
+    stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
+    out = run(proj, stub, "lease", "--take", "c2")
+    assert out.returncode == 0, out.stderr
+    assert [c[:2] for c in posts(stub)] == [["PATCH", f"repos/{REPO}/issues/comments/5"]]
+
+
+def test_lease_take_posts_its_own_marker_when_only_an_unlisted_one_exists(proj, stub):
+    with_plan(proj, stub, [stranger(10)])
+    out = run(proj, stub, "lease", "--take", "c2")
+    assert out.returncode == 0, out.stderr
+    assert [c[:2] for c in posts(stub)] == [["POST", PLAN]]
+
+
 def test_lease_fails_when_the_plan_issue_cannot_be_read_or_written(proj, stub):
     with_plan(proj, stub, [])
     stub.serve(PLAN, "FAIL")

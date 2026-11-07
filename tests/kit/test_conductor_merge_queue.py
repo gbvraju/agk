@@ -592,6 +592,15 @@ def test_the_queue_runs_when_the_lease_is_free(queue, capsys, monkeypatch, found
     assert lines(capsys) == [f"merge-queue: 1. #7 {head(7)[:12]}"]
 
 
+def test_a_marker_by_an_unlisted_account_does_not_hold_the_queue(queue, capsys, monkeypatch):
+    found = marker(10, "x9")
+    found["user"] = {"login": "stranger"}
+    with_lease(queue, monkeypatch, [found])
+    queue.add(7, at=10)
+    assert queue.run("--dry-run") == 0
+    assert lines(capsys) == [f"merge-queue: 1. #7 {head(7)[:12]}"]
+
+
 def test_the_queue_runs_for_the_holder_of_the_lease(queue, capsys, monkeypatch):
     with_lease(queue, monkeypatch, [marker(10, "c1")])
     (queue.root / ".git" / "agk").mkdir(parents=True)
