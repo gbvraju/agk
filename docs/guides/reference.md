@@ -158,6 +158,26 @@ read first, the secret-scan deferral line of `prepush.py`, the body lines of CLA
 the session rules that bind a builder quoted from `config/session-rules.md`; `--follow-up TEXT` (one line, never a verdict)
 replaces the stop on an existing pull request with the follow-up for it. The guard allows exactly these forms.
 
+## Playbook evidence
+
+With a declared work type (`[delivery] work_type` in `agk.toml`, SPEC-0038 rule 5), a clearing verdict on a pull request of the
+project carries one `Playbook evidence:` line, after `Checklist:` and before the findings, with one item per entry of `evidence` in
+`config/playbooks/<work type>.toml`, in the playbook's order and in its words (SPEC-0038 rule 9, ADR-0319; brief #666):
+
+    Playbook evidence: <item> (<where>); <item> (<where>); <item> (not applicable: <reason>)
+
+`<where>` is where the conductor read the item. For a `judgement` gate it is a person's line, `comment <id>` (a comment on the
+pull request or on the brief), or a run record, `docs/runs/<file>` of the repository; for a `check` gate it is the governance
+step, `step <name>`, green on the reviewed head; an item that does not apply to the brief reads `not applicable: <reason>`. The
+form of `<where>` says which kind of gate the item evidences; the shipped playbooks list their evidence in their gates' order.
+For example, on a `web-app` project whose brief adds no screen:
+
+    Playbook evidence: the contract test output (step contract-tests); the mock parity output (step mock-parity); the e2e smoke run record of the merge batch (docs/runs/e2e-smoke-batch-3.md); the accessibility review (not applicable: the brief adds no screen)
+
+The line is read by the conductor and by a person, never by a check: `check_pr_body.py`, `proof.py` and the proof job do not
+read it (Q-S0038-10). A missing item, or a missing line, on a project with a declared work type is a fix item, never a clearing
+verdict, so nothing merges on a missing line; without a declaration no verdict carries the line and nothing changes.
+
 ## Pausing the kit
 
     python3 scripts/agk/doctor.py --paused [--ref REF] [ROOT]
