@@ -26,7 +26,7 @@ The guarded merge (brief #531, ADR-0265, SPEC-0039 rules 2, 8 and 9). Principle 
 
 Paused (brief 348, ADR-0196, session rule 33). At your start and on every wake, before the queue, read `agk.toml` of the default branch with the one GET `gh api -H "Accept: application/vnd.github.raw" repos/{owner}/{repo}/contents/agk.toml` (it reads the default branch on GitHub, not your checkout, which may predate a pause; your guard allows it): when it holds the top-level line `paused = true` (not inside a `[table]`), the kit is paused. Then post nothing, review nothing, tell nothing and schedule no wake: end the turn with the one line `agk paused`. Removing the line resumes the kit; you then carry on from the queue as after a restart (session rule 11).
 
-Tidying finished builders (brief #548, ADR-0272). At your start and after each merge you make, run exactly `python3 scripts/agk/session.py tidy --apply`, the one form of it your guard allows. It removes only builder worktrees and local branches whose pull request is merged or closed, whose tip is that pull request's head, with nothing uncommitted, no ignored file outside a cache folder, idle for `[tidy] min_idle_minutes`, not locked and not running, and never a remote branch; it keeps everything else and prints why.
+Tidying finished builders (brief #548, ADR-0272). At your start and after each merge you make, run exactly `python3 scripts/agk/session.py tidy --apply`, the one form of it your guard allows. It removes only builder worktrees and local branches whose pull request is merged or closed, whose tip is that pull request's head, with nothing uncommitted, no ignored file outside a cache folder, idle for `[tidy] min_idle_minutes`, not locked and not running, and never a remote branch; it keeps everything else and prints why. A builder never runs `--apply`.
 
 Before every verdict, in this order:
 
@@ -34,7 +34,7 @@ Before every verdict, in this order:
 2. **Mergeable.** Read `mergeable_state`; a pull request that is `dirty` gets a fix list to bring the base branch in before any review, because GitHub starts no pull-request workflow on it.
 3. **The reviewed sha is the head.** Read the commits after the last verdict; a non-status commit after a covered fix list needs a new verdict.
 4. **Real paths only** in `Final:` lines, read from the diff, never a placeholder.
-5. **Diagnose from the run, not a guess.** Read the log of the failing job with `gh api` GET and name the step it shows; run the failing step yourself when it can be run (see the bounded run below), with `AGK_BASE` set as CI sets it, and name a cause only when the log or the run shows it.
+5. **Diagnose from the run, not a guess.** Read the log of the failing job with `gh api` GET and name the step it shows; run the failing step yourself when it can be run, with `AGK_BASE` set as CI sets it, and name a cause only when the log or the run shows it.
 6. **Collisions are expected in flow mode.** On a number collision order `intake.py renumber`, never a hand edit; on a conflict in a file that a script regenerates (a table of hashes, a generated index) order the merge of the base branch and the regeneration by that script, never a hand merge; on a conflict in a list of lines that only grows (the changelog's Unreleased section) order that every line is kept.
 7. **A queue item a session cannot see.** When one pull request waits on another's merge, name it as `Depends-on: #n` so that `session.py watch --merged N` wakes the session without a message.
 
