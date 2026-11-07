@@ -22,9 +22,19 @@ SPEC-0044 rule 7 (brief #583): `--record FILE` reads that one prepush record, an
 another; when its `full` regression run took longer than `[testing] slow_suite_seconds` (600) while
 `workers` is 1, it prints one information line naming `testing.workers` before the summary. A record
 that cannot be read prints one line naming the option. Neither changes the exit code.
+Brief #632 (ADR-0306): one information line after the checks (before `tidy:` and the summary),
+and the same text as `secret_scan` in `--json`, says whether gitleaks is on PATH and which version
+`gitleaks version` prints (that one fixed argument list, no shell), naming the governance
+workflow's pin when the version is another, or, when gitleaks is missing, that prepush fails until
+it is installed and how. It changes no exit code.
 SPEC-0046 rule 11 (build (f)): when `[testing]` sets one of the retired run-folder keys of ADR-0299
 (`results_dir`, `keep_passed`, `keep_runs`), it prints `deprecated: testing.results_dir (ADR-0303)`
 before the summary; the exit code is unchanged.
+SPEC-0038 rule 5 (brief #650, ADR-0312): one line says which playbook applies, before the tidy,
+test and deprecation lines: `work type: none (no playbook)` with no `[delivery] work_type`,
+`work type: <work type> (playbook config/playbooks/<work type>.toml)`, or `FAIL work type:
+<problem>`, naming the setting and never its value, which makes the exit code 1; the JSON report
+carries it as `work_type`.
 """
 
 from __future__ import annotations
@@ -32,6 +42,7 @@ from __future__ import annotations
 import datetime
 import json
 import re
+import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
@@ -48,7 +59,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import impact  # noqa: E402
 import merge_cleared  # noqa: E402
 import minutes  # noqa: E402
+import playbook_format  # noqa: E402
 from common import (  # noqa: E402
+    GITLEAKS_INSTALL,
+    GITLEAKS_PIN,
     PAUSED_LINE,
     ROUTER_WORKFLOW,
     CheckError,
@@ -1308,6 +1322,34 @@ def suite_lines(root: Path, path: Path) -> list[str]:
     ]
 
 
+def secret_scan_line() -> str:
+    """Whether gitleaks is on PATH and at which version (brief #632, ADR-0306)."""
+    tool = shutil.which("gitleaks")
+    if tool is None:
+        return (
+            "secret scan: gitleaks is not installed; prepush fails until it is (tool: gitleaks); "
+            + GITLEAKS_INSTALL
+        )
+    try:
+        proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
+            [tool, "version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
+        out = proc.stdout.strip().splitlines() if proc.returncode == 0 else []
+    except (OSError, subprocess.SubprocessError):
+        out = []
+    version = out[0].strip().removeprefix("v") if out and out[0].strip() else "unknown"
+    line = f"secret scan: gitleaks {version} is installed"
+    if version != GITLEAKS_PIN:
+        line += f"; the governance workflow pins {GITLEAKS_PIN}"
+    return line
+
+
 def deprecation_lines(root: Path) -> list[str]:
     """SPEC-0046 rule 11: the deprecation line of the retired run-folder keys, or none. A malformed
     `[testing]` table gives none here; the commands that read it refuse it naming the setting."""
@@ -1318,12 +1360,29 @@ def deprecation_lines(root: Path) -> list[str]:
     return [line] if line else []
 
 
+def work_type_line(root: Path) -> tuple[str, bool]:
+    """SPEC-0038 rule 5: the one work-type line and whether it fails; reads only agk.toml and the
+    presence of the declared playbook."""
+    value, problems = playbook_format.declaration(root)
+    if problems:
+        return f"FAIL work type: {problems[0]}", True
+    if value is None:
+        return "work type: none (no playbook)", False
+    return f"work type: {value} (playbook {playbook_format.FOLDER}/{value}.toml)", False
+
+
 def summary(report: list[dict]) -> dict[str, int]:
     return {s: sum(1 for c in report if c["status"] == s) for s in ("ok", "fail", "cannot-check")}
 
 
 def render_text(
-    report: list[dict], version: str, tidy: str | None = None, extra: list[str] | None = None
+    report: list[dict],
+    version: str,
+    tidy: str | None = None,
+    extra: list[str] | None = None,
+    scan: str | None = None,
+    work: str | None = None,
+    deprecation: list[str] | None = None,
 ) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
@@ -1334,20 +1393,36 @@ def render_text(
         elif c["status"] == "cannot-check":
             lines.append(f"  to check: {HINTS.get(c['reason'], HINTS['bad-response'])}")
     s = summary(report)
+    # The information lines before the summary, in the order deprecation (SPEC-0046 rule 11),
+    # secret scan (ADR-0306) and work type (SPEC-0038 rule 5); the suite lines of SPEC-0044
+    # (`extra`) stay last, right before the summary (its rule 7's test).
     lines += [tidy] if tidy else []
+    lines += deprecation or []
+    lines += [scan] if scan else []
+    lines += [work] if work else []
     lines += extra or []
     lines.append(f"summary: {s['ok']} ok, {s['fail']} fail, {s['cannot-check']} cannot-check")
     return "\n".join(lines) + "\n"
 
 
 def render_json(
-    report: list[dict], version: str, tidy: str | None = None, extra: list[str] | None = None
+    report: list[dict],
+    version: str,
+    tidy: str | None = None,
+    extra: list[str] | None = None,
+    scan: str | None = None,
+    work: str | None = None,
+    deprecation: list[str] | None = None,
 ) -> str:
-    data = {"doctor": version, "checks": report, "summary": summary(report)}
+    data: dict[str, Any] = {"doctor": version, "checks": report, "summary": summary(report)}
+    if scan:
+        data["secret_scan"] = scan
+    if work:
+        data["work_type"] = work
     if tidy:
         data["tidy"] = tidy
-    if extra:
-        data["tests"] = extra
+    if extra or deprecation:  # `tests` carries the suite and deprecation lines, as before
+        data["tests"] = (extra or []) + (deprecation or [])
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 
@@ -1419,7 +1494,9 @@ def main(argv: list[str] | None = None) -> int:
         api = Path(options["api"]) if options["api"] else None
         tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
         extra = suite_lines(root.resolve(), Path(options["record"])) if options["record"] else []
-        extra += deprecation_lines(root.resolve())
+        deprecation = deprecation_lines(root.resolve())
+        scan = secret_scan_line()
+        work, work_failed = work_type_line(root.resolve())
     except Refusal as exc:
         print(f"refused: {exc}")
         return exc.code
@@ -1427,11 +1504,11 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version, tidy, extra)
+        render_json(report, version, tidy, extra, scan, work, deprecation)
         if options["json"]
-        else render_text(report, version, tidy, extra)
+        else render_text(report, version, tidy, extra, scan, work, deprecation)
     )
-    return exit_code(report)
+    return 1 if work_failed else exit_code(report)
 
 
 if __name__ == "__main__":

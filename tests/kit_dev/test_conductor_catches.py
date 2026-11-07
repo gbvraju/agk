@@ -69,17 +69,39 @@ def test_the_catch_log_exists_and_parses_with_the_columns_of_the_brief():
     assert numbers == list(range(1, len(numbers) + 1))
 
 
-def test_the_first_log_holds_the_twelve_seeded_incidents_and_the_two_of_the_fix_list():
+def test_the_first_log_holds_the_seeded_incidents_and_the_rows_of_2026_11_06():
     _, body = table(LOGS[0])
-    assert len(body) == 16  # rows 15 and 16: the two red default branches of brief #667
+    # 12 seeded and 2 of the fix list (brief #604), 8 of brief #695, and rows 23 and 24: the two
+    # red default branches of brief #667 as its pull request measured them
+    assert len(body) == 24
     by_number = {r["#"]: r for r in rows()}
-    for number in ("15", "16"):
+    for number in ("23", "24"):
         assert by_number[number]["Kind"] == "parallel-merge"
         assert [g.group(1) for g in guards(by_number[number])] == ["check", "test"]
     assert by_number["13"]["Kind"] == "watch"
     assert [g.group(1) for g in guards(by_number["13"])] == ["check", "rule"]  # brief #643
+    assert by_number["3"]["Guard"].startswith("check `scripts/agk/conductor.py`")  # build (b)
     assert by_number["14"]["Kind"] == "kit-gap"
     assert by_number["14"]["Guard"].startswith("pending (to be filed)")
+
+
+def test_the_rows_of_brief_695_carry_their_kinds_and_guards():
+    by_number = {r["#"]: r for r in rows()}
+    expected = {
+        "15": ("parallel-merge", "pending #667"),
+        "16": ("parallel-merge", "pending #667"),
+        "17": ("watch", "check `scripts/agk/conductor.py`"),
+        "18": ("false-red", "pending (to be filed)"),
+        "19": ("false-red", "pending (to be filed)"),
+        "20": ("kit-gap", "check `scripts/agk/prepush.py`"),
+        "21": ("history", "pending (to be filed)"),
+        "22": ("unread-result", "check `scripts/agk/conductor.py`"),  # brief #643 build (b)
+    }
+    for number, (kind, guard) in expected.items():
+        row = by_number[number]
+        assert row["Date"].startswith("2026-11-06"), number
+        assert row["Kind"] == kind, number
+        assert row["Guard"].startswith(guard), number
 
 
 def test_each_row_has_a_date_a_kind_a_cost_a_cause_and_a_guard_of_the_four_forms():
@@ -161,3 +183,8 @@ def test_the_guard_form_and_the_cost_form_refuse_a_bad_cell():
     assert not GUARD.match("rule conductor.md")
     assert COST.match("25 min") and COST.match("(unknown): overnight")
     assert not COST.match("a lot")
+
+
+def test_the_lesson_of_row_3_names_the_merge_queue():
+    """Brief #643 build (b), ADR-0329: the rule line of row 3 names the kit command."""
+    assert re.search(r"(?m)^- .*`conductor\.py merge-queue`.*\(row 3\)", lessons())

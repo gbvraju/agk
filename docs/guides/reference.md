@@ -18,7 +18,8 @@ Set `AGK_BASE=<ref>` (or pass `--base`) to compare against another base. In CI t
 Before a push, `python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock]` runs the fast checks CI would
 fail on first, in order, and stops at the first failure with its message: the pull request body check (on `FILE`), `make lint`
 where the Makefile has the target, `make -f agk.mk agk-governance` (no network; `not run` without `make`), the secret scan over
-the branch's commits when `gitleaks` is installed (else `secret scan: not run`), and the tests that `test_plan.py` selects
+the branch's commits (a missing `gitleaks` fails the run, naming the tool and the pinned version, also with `--quick`;
+ADR-0306), and the tests that `test_plan.py` selects
 (`--quick` skips them). It prints `prepush: <step> ok|FAIL|skipped (<s>s)` per step and exits 0 when no step failed, 1 when one
 did, 2 on a usage error (session rule 31, ADR-0186). `--no-lock` leaves the heavy-step lock (`lock.py`, name `heavy`) of the
 tests step out, for CI. The optional hook `kit/templates/pre-push` calls it; see [getting-started.md](getting-started.md).
@@ -110,6 +111,7 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
 
     python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]
     python3 scripts/agk/conductor.py sweep
+    python3 scripts/agk/conductor.py merge-queue [--dry-run] [--max-batch N]
 
 The conductor's watch and sweep (brief #643, ADR-0308). `watch` ends on the first poll that finds a comment created after
 `--since` (default: the start) whose first line starts `Question:` or `Report:`, on an open issue labelled `agk-brief` or an
@@ -117,9 +119,24 @@ open pull request, and prints `<number> <first line>` for each; `--once` reads o
 `sweep` prints `#<n> <head7> <state> <age>` per open pull request (`draft`, `ready: no verdict`, `fix list on <head7>`,
 `cleared on <head7>`, `cleared, head moved`, `waiting: Approve SPEC-nnnn at <head7>`, `blocked: Question Q-n unanswered <age>`,
 `checks pending`, `red`), then the latest run of the default branch and any open red-branch issue; a `Question:` or `Report:`
-that no listed verdict author answered within `conductor_late_minutes` (30 by default) is marked `LATE`. The poll interval is
-`conductor_poll_seconds` (60 by default), both of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
+that no listed verdict author answered within `conductor_late_minutes` (30 by default) is marked `LATE`. Then a taken brief with no
+branch `claude/brief-<n>`, no pull request and no `Progress:`, `Report:` or `Question:` after its take, older than
+`silent_minutes` (30 by default), is listed as `SILENT <brief> <session> <minutes>` with the line to re-fire it; a brief with a
+`Report: ... escalate` never is (brief #669, ADR-0322). The poll interval is
+`conductor_poll_seconds` (60 by default), all of the `[flow]` table of agk.toml. Both read with `gh api` (GET only) and write
 nothing; the conductor guard allows exactly these forms.
+
+`merge-queue` (brief #643 build (b), ADR-0329) is the batched merge: with `auto_merge` on, it judges every open pull request by
+`merge_cleared.py`'s own holds (a cleared head, green required checks, every hold of SPEC-0039 rule 5, the clearing verdict by a
+listed verdict author), prints `not queued: #<n> <sha12>: <reason>` for a cleared one that is held, and merges the rest in the
+order of their verdicts, at most `--max-batch N` of them (5 by default), each through
+`python3 scripts/agk/merge_cleared.py --pr <n> --sha <head>` with its line printed in full and no wait for the default branch's
+run in between. It stops at the first run that is not a merge (`merge-queue: stopped at #<n> (exit <code>); merged: ...`), then
+waits once for the default branch's run on the last merge (`full_run.covered`, polled every `conductor_poll_seconds` for at most
+`merge_queue_wait_minutes`, 60 by default) and prints `<branch> green at <sha12> after the batch #a #b`, or
+`stopped: <branch> red at <sha12> after the batch #a #b` (exit 1); in local mode there is no run to wait for. `--dry-run` prints
+the order and merges nothing. It posts nothing; the guard allows the dry run always and a run that merges only with `auto_merge`
+on in the checkout and on the default branch, and builders are asked first (`.claude/settings.json`).
 
 ## Pausing the kit
 
@@ -243,6 +260,16 @@ With `pool` or `hybrid` set and no repository variable `AGK_HEAVY_RUNNER`, a sec
 [self-hosted-runner.md](self-hosted-runner.md). It reads through `minutes.py` (GET only), changes no workflow and writes
 nothing (ADR-0237).
 
+## CI tools
+
+    python3 scripts/agk/ci_tools.py check [--upstream] [--responses DIR]
+
+The governance workflow's `Install tooling` step installs the CI test tools from `config/ci-tools.txt`, one exact
+`<name>==<version>` pin per line in name order, so a tool update changes that file only. `check` prints the pins and fails,
+naming the path, on a line that is not an exact pin, a repeated tool or a tool out of order; it makes no network call. With
+`--upstream` it reads the package index's JSON once per pin and prints which pins are behind, the gap in days and `unknown`
+for an upstream it cannot read; a person opens the update pull request from that output (ADR-0328).
+
 ## Test plan
 
     python3 scripts/agk/test_plan.py [--base REF] [--head REF] [--json] [ROOT]
@@ -252,6 +279,20 @@ changed test files, the command line with `{files}` filled in and its folder, th
 files in no area as "not run by proof"; without the table it prints `project_tests` and the files it selects. It reads git and
 files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0185.
+
+## Requirement status
+
+    python3 scripts/agk/req_status.py report [--json] [--req REQ-nnn ...] [ROOT]
+    python3 scripts/agk/req_status.py apply [--req REQ-nnn ...] [ROOT]
+
+`report` prints each requirement whose status disagrees with its proof: `REQ-nnn planned -> done (proof: <n> tests pass)`,
+`REQ-nnn done but proof fails (<test file>)`, `REQ-nnn proof unknown (<test file> timed out)` and `REQ-nnn: no proof
+mapped`, then a summary line, and changes nothing. The proof is SPEC-0010 rule 1 (a `REQ-nnn ACn` marker for every
+criterion); it passes when each test file holding those markers passes when its `[proof]` area's command runs it alone.
+It runs every proving test file once, so a whole report is a heavy step. `apply` sets only the `- Status:` lines of the
+`-> done` requirements to `done`, in the one pull request the conductor opens for it. Exit 1 on a `done` whose proof
+fails, 4 on an unknown proof. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
+and ADR-0321.
 
 ## Reading a log
 
@@ -293,6 +334,18 @@ readable, else the `FAILED <id>` lines; `step:NAME` when there is no test id). `
 of that test's output, or only `evidence withheld: ...`. `issue-body` prints whether a failure needs a new `found-bug` issue
 or a comment on an open one, from a saved issue list; with `[failures] issues` off (the default) it prints `action: none`.
 It reads files, prints and writes nothing. See SPEC-0046 rules 2, 3 and 5 and ADR-0303.
+
+## Parity
+
+    python3 scripts/agk/parity.py report [--root DIR]
+    python3 scripts/agk/parity.py check [--root DIR]
+
+Lists every discipline the kit applies to itself (each `scripts/agk/*.py`, each `.claude/agents/*.md`, each file directly
+under `config/` and each `docs/runs/` log an agent file names) with how a project gets it: `installed` (`kit/manifest.json`),
+`plugin` (a skill runs it from the plugin root, or a script the plugin runs imports it) or `kit-only (<reason>)` from
+`config/kit-only.txt`. `check` exits 1 naming each discipline in none of the three and each stale, unreasoned, repeated or
+empty line of the list; the list may only shrink (`tests/kit/test_parity.py`). A tree without `kit/manifest.json` has nothing
+to check. It reads files only. See ADR-0326.
 
 ## Core audit
 

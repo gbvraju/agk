@@ -334,11 +334,14 @@ def governance_step(name: str) -> str:
 
 
 def test_governance_installs_bandit_with_its_other_tooling():
-    """REQ-001: brief #338 answer 2. The step that installs pytest and ruff installs bandit too."""
+    """REQ-001: brief #338 answer 2. The step that installs pytest and ruff installs bandit too;
+    since brief #698 (ADR-0328) it installs them from the pin file, which pins all three."""
     run = governance_step("Install tooling").split("run:", 1)[1]
-    install = re.search(r"python -m pip install ([^\n|]+)", run)
+    install = re.search(r"python -m pip install -r (\S+)", run)
     assert install, "Install tooling has no pip install line"
-    assert {"pytest", "ruff", "bandit"} <= set(install.group(1).split())
+    pins = (ROOT / install.group(1)).read_text(encoding="utf-8").splitlines()
+    names = {ln.split("==", 1)[0] for ln in pins if "==" in ln and not ln.startswith("#")}
+    assert {"pytest", "ruff", "bandit"} <= names
 
 
 def test_governance_fails_naming_a_tool_it_could_not_install():

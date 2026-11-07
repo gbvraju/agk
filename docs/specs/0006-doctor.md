@@ -104,7 +104,9 @@ and the JSON keep it.
     and names what is needed, such as `gh auth login` or admin rights). The last line is
     `summary: <n> ok, <n> fail, <n> cannot-check`. The same inputs give a byte-identical report.
 11. **`--json`.** One JSON object on stdout with `doctor` (the version), `checks` (an array, in order, of `id`,
-    `severity`, `status`, `reason` for `cannot-check`, `message`, `fix`) and `summary`; keys sorted, no timestamp. The
+    `severity`, `status`, `reason` for `cannot-check`, `message`, `fix`), `summary`, `secret_scan` (the doctor's
+    secret scan line, brief #632) and `work_type` (the doctor's work type line, SPEC-0038 rule 5, brief #650); keys
+    sorted, no timestamp. The
     reason for the option: `/agk:doctor` hands the result to a model to explain, and the fixture tests assert on ids
     and statuses, so both read the structure instead of parsing text; the text report is rendered from the same
     structure. The two outputs carry the same findings (a test compares them).

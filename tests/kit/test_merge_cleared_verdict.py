@@ -244,6 +244,10 @@ elif method != 'GET':
     fail(405)
 elif parts[0] == 'pulls' and len(parts) == 2 and parts[1] == '7':
     out = data['pull']
+elif parts == ['pulls']:  # the open pull requests, as the merge queue lists them (brief #643)
+    out = [data['pull']] if page == 1 else []
+elif parts[:2] == ['actions', 'workflows'] and parts[3:] == ['runs']:  # the default branch's runs
+    out = {'workflow_runs': data.get('branch_runs', [])}
 elif parts[0] == 'pulls' and parts[2:] == ['files']:
     out = paged(data['files'][:3000])  # GitHub lists at most 3,000 files
 elif parts[0] == 'pulls' and parts[2:] == ['commits']:

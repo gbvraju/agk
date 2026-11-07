@@ -4,7 +4,10 @@ lists it in `verbatim`, with the module it imports, `playbook_format.py`.
 Checks every `config/playbooks/*.toml` of the repository with `playbook_format.problems` and
 prints `ok playbooks (<n> playbooks)`, `ok playbooks (none)` when there is no playbook, or one
 `FAIL playbooks:` line per problem, naming the rule and the file and never a value, and exits 1.
-A step of `agk-governance` after `check_design.py`. Files only: no network, nothing written.
+It checks the declaration of rule 5 as well (`playbook_format.declaration`, brief #650, ADR-0312):
+an unknown `work_type`, or one whose playbook is missing, is one more `FAIL playbooks:` line naming
+the setting; with no declaration, or a sound one, the output is unchanged. A step of
+`agk-governance` after `check_design.py`. Files only: no network, nothing written.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ NAME = "playbooks"
 def cmd_check(root: Path) -> int:
     files = playbook_format.playbooks(root)
     found = [line for path in files for line in playbook_format.problems(path, root)]
+    found += playbook_format.declaration(root)[1]
     for line in found:
         print(f"FAIL {NAME}: {line}")
     if found:

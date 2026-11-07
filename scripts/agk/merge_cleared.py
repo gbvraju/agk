@@ -90,6 +90,11 @@ above the listed files. A failure, or a listed name that is not a file of the me
         (<file>::<test>)                                          (one line)
 
 (exit 3), nothing merged; a bad setting is refused before anything runs, naming the setting.
+
+Brief #643 build (b) (ADR-0329) changes no behaviour: the settings read before any GitHub read are
+`ruled`, the holds that merge nothing are `holds` (a verdict that does not clear the head raises
+`NotCleared`, a `Held`) and local mode is `local_mode`, so that `conductor.py merge-queue` judges
+each open pull request with the same functions and copies no rule.
 """
 
 from __future__ import annotations
@@ -112,7 +117,7 @@ import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
@@ -195,6 +200,22 @@ class Refused(CheckError):
 
 class Held(Exception):
     """A hold of SPEC-0039 rules 3 to 5: the reason, named by rule; exit 3."""
+
+
+class NotCleared(Held):
+    """The hold of rule 3 alone: the latest verdict does not clear this head. The merge queue
+    (`conductor.py merge-queue`, brief #643, ADR-0329) leaves such a pull request out silently."""
+
+
+class Rules(NamedTuple):
+    """What a run reads from the default branch before any GitHub read (`ruled`)."""
+
+    data: dict  # agk.toml
+    people: dict  # config/reviewers.yaml
+    allowed: list[str]  # conductor_accounts
+    approvers: list[str]  # spec_approvers
+    required: list[str]  # required_checks
+    pre: dict | None = None  # [testing] pre_merge_tests, checked (brief #667)
 
 
 class Stopped(Exception):
@@ -1225,7 +1246,11 @@ def parse_args(argv: list[str]) -> tuple[int, str] | None:
     return int(argv[1]), argv[3]
 
 
-def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
+def ruled(root: Path) -> Rules:
+    """The settings of the default branch of the remote as last fetched, refused or held before
+    any GitHub read (SPEC-0039 rules 1, 3 and 5): auto-merge on, not paused, the reviewers file,
+    `conductor_accounts`, `spec_approvers`, `required_checks` and `after_merge_timeout`. The merge
+    queue reads them the same way (brief #643, ADR-0329)."""
     base, data = default_ref(root)
     setting_on(data)
     if data.get("paused") is True:
@@ -1236,39 +1261,63 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
     required = required_of(data)
     after_merge_seconds(data)  # a bad setting is refused before anything is merged
     pre = pre_merge_setting(data)  # likewise the pre-merge tests (brief #667)
+    return Rules(data, people, allowed, approvers, required, pre)
+
+
+def local_mode(data: dict, issues: list[dict]) -> bool:
+    """Local mode (SPEC-0039 rule 4): `execution = "local"` on the default branch, or the one open
+    local-mode record issue (docs/guides/local-mode.md)."""
+    return data.get("execution") == "local" or titled(issues, RECORD_TITLE)
+
+
+def holds(
+    root: Path, repo: str, number: int, sha: str, rules: Rules
+) -> tuple[dict, dict, list[str], int, int | None]:
+    """Every hold of SPEC-0039 rules 3, 4, 5 and 7 that reads GitHub and merges nothing, in the
+    order of a run: (the pull request, its clearing verdict, the acceptance lines of rule 3a, the
+    record issue, the red-branch issue the pull request fixes or None). A verdict that does not
+    clear the head raises NotCleared; any other hold raises Held, a moved head Refused (exit 3).
+    The merge queue judges each open pull request with it (brief #643, ADR-0329)."""
+    pull = read_json(f"repos/{repo}/pulls/{number}", dict, "the pull request")
+    head = pull.get("head")
+    head_sha = head.get("sha") if isinstance(head, dict) else None
+    if not isinstance(head_sha, str) or not SHA.fullmatch(head_sha):
+        raise Unreadable("the pull request")
+    if head_sha != sha:
+        raise Refused("head moved (rule 3: --sha is not the pull request's head)", EXIT_HELD)
+    comments = read_comments(repo, number)
+    state, reason = judge(comments, sha, rules.allowed)
+    if state != "cleared":
+        raise NotCleared(reason)
+    verdict = latest_verdict(comments) or {}
+    accepted = acceptance_lines(repo, sha, verdict)
+    issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
+    reds = red_issues(issues)
+    fixing = red_fix(pull, reds) if reds else None
+    if reds and fixing is None:  # only the red-branch fix may merge (brief #610)
+        raise Held("the default branch is red (rule 5)")
+    record = record_issue(issues)
+    if record is None:
+        raise Held("no record issue (rule 7)")
+    if local_mode(rules.data, issues):
+        local_evidence(verdict, comments, sha, rules.approvers)
+    else:
+        ci_evidence(repo, sha, rules.required)
+    accepts = accepted_adrs(verdict, sha) or []
+    hold_list(repo, number, pull, comments, rules.approvers, accepts, root)
+    return pull, verdict, accepted, record, fixing
+
+
+def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
+    rules = ruled(root)
+    data = rules.data
     repo = repo_of(root)
     with merge_lock(root):
-        pull = read_json(f"repos/{repo}/pulls/{number}", dict, "the pull request")
-        head = pull.get("head")
-        head_sha = head.get("sha") if isinstance(head, dict) else None
-        if not isinstance(head_sha, str) or not SHA.fullmatch(head_sha):
-            raise Unreadable("the pull request")
-        if head_sha != sha:
-            raise Refused("head moved (rule 3: --sha is not the pull request's head)", EXIT_HELD)
-        comments = read_comments(repo, number)
-        state, reason = judge(comments, sha, allowed)
-        if state != "cleared":
-            return "held", reason, EXIT_HELD
-        verdict = latest_verdict(comments) or {}
-        accepted = acceptance_lines(repo, sha, verdict)
-        issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
-        reds = red_issues(issues)
-        fixing = red_fix(pull, reds) if reds else None
-        if reds and fixing is None:  # only the red-branch fix may merge (brief #610)
-            raise Held("the default branch is red (rule 5)")
-        record = record_issue(issues)
-        if record is None:
-            raise Held("no record issue (rule 7)")
-        if data.get("execution") == "local" or titled(issues, RECORD_TITLE):
-            local_evidence(verdict, comments, sha, approvers)
-        else:
-            ci_evidence(repo, sha, required)
-        accepts = accepted_adrs(verdict, sha) or []
-        hold_list(repo, number, pull, comments, approvers, accepts, root)
+        pull, verdict, accepted, record, fixing = holds(root, repo, number, sha, rules)
         text = str(pull.get("body") or "")  # the body read above, for governance (brief #576)
         branch = str(data.get("default_branch", "main"))
         wait = after_merge_seconds(data)
-        step = merge_check(root, branch, number, sha, wait, text, repo, pre)
+        step = merge_check(root, branch, number, sha, wait, text, repo, rules.pre)
         if step is not None:
             raise Held(f"{FAILS} ({step})")
         merged = merge_pull(repo, number, sha, accepted)

@@ -60,6 +60,10 @@ auto_merge_method = "squash"
 # queue = false
 # queue_order = "fifo"
 # queue_max_wait = 120
+# The work type (SPEC-0038 rule 5, REQ-045): `[delivery] work_type` selects a delivery playbook. This repository declares no work
+# type (SPEC-0038 rule 12 (b)); declaring one is the owner's change, by an ADR in the same pull request, and a session never writes it.
+# [delivery]
+# work_type = "web-app"
 # Intelligent testing (brief #578, ADR-0285; the owner's decision of 2026-11-05): a builder's prepush runs a change's own tests
 # and the tests its change can affect, while a push to main and a release run the full suite. `balanced`: a changed file that no
 # entry covers makes the selection full. `pr_tests = "selected"` is the owner's setting; this repository's `Project tests` step
@@ -155,7 +159,7 @@ code = "scripts/agk/check_numbers.py"
 tests = ["tests/kit/test_check_numbers_amendments.py", "tests/kit/test_numbers.py"]
 [[testing.map]]
 code = "scripts/agk/check_playbooks.py"
-tests = ["tests/kit/test_check_playbooks.py"]
+tests = ["tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py"]
 [[testing.map]]
 code = "scripts/agk/check_pr_mode.py"
 tests = ["tests/kit/test_pr_mode.py", "tests/kit/test_pr_mode_briefs.py", "tests/kit/test_session_rules.py"]
@@ -202,8 +206,14 @@ tests = [
 code = "scripts/agk/check_tag.py"
 tests = ["tests/kit/test_agk_mk.py", "tests/kit_dev/test_check_tag.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/ci_tools.py"
+tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
+[[testing.map]]
 code = "scripts/agk/conductor.py"
-tests = ["tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py"]
+tests = [
+  "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
+  "tests/kit/test_conductor_merge_queue.py",
+]
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
@@ -255,8 +265,9 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/doctor.py"
 tests = [
-  "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py", "tests/kit/test_doctor.py",
-  "tests/kit/test_doctor_ci.py", "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py",
+  "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
+  "tests/kit/test_delivery_declaration.py", "tests/kit/test_doctor.py", "tests/kit/test_doctor_ci.py",
+  "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py",
   "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_run.py", "tests/kit/test_merge_cleared_verdict.py",
   "tests/kit/test_pause.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_route_triggers.py",
   "tests/kit/test_run_folders.py", "tests/kit/test_session_rules.py", "tests/kit/test_session_tidy.py",
@@ -293,7 +304,7 @@ code = "scripts/agk/failures.py"
 tests = ["tests/kit/test_failures.py"]
 [[testing.map]]
 code = "scripts/agk/flakes.py"
-tests = ["tests/kit/test_flakes.py"]
+tests = ["tests/kit/test_flakes.py", "tests/kit/test_rerun_alone.py"]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
 tests = [
@@ -368,6 +379,9 @@ tests = [
   "tests/kit_dev/test_project_req_ids.py",
 ]
 [[testing.map]]
+code = "scripts/agk/parity.py"
+tests = ["tests/kit/test_parity.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/personal_state.py"
 tests = ["tests/kit/test_personal_state.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
@@ -381,7 +395,7 @@ tests = [
 ]
 [[testing.map]]
 code = "scripts/agk/playbook_format.py"
-tests = ["tests/kit/test_check_playbooks.py"]
+tests = ["tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py"]
 [[testing.map]]
 code = "scripts/agk/pr_body.py"
 tests = [
@@ -429,9 +443,12 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/project_tests.py"
 tests = [
-  "tests/kit/test_project_test_selection.py", "tests/kit_dev/test_init.py",
+  "tests/kit/test_project_test_selection.py", "tests/kit/test_rerun_alone.py", "tests/kit_dev/test_init.py",
   "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_make_once.py",
 ]
+[[testing.map]]
+code = "scripts/agk/req_status.py"
+tests = ["tests/kit/test_req_status.py"]
 [[testing.map]]
 code = "scripts/agk/review_context.py"
 tests = [

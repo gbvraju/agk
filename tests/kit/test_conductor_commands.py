@@ -3,7 +3,9 @@
 REQ-037. `watch` ends on any builder `Question:` or `Report:` on an open brief or an open pull
 request (conductor catch log row 1); `sweep` prints every open pull request by what it waits for,
 an unanswered question or report older than `conductor_late_minutes` marked `LATE` (row 13). A
-`gh` stub serves saved copies of the GitHub responses; no network, GET only, nothing written."""
+`gh` stub serves saved copies of the GitHub responses; no network, GET only, nothing written.
+REQ-041 (brief #669, ADR-0322): `sweep` lists a taken brief with no branch, no pull request and
+no post after its take, older than `silent_minutes`, as `SILENT`."""
 
 from __future__ import annotations
 
@@ -225,3 +227,101 @@ def test_watch_refuses_a_bad_since(proj, stub):
     out = run(proj, stub, "watch", "--since", "yesterday")
     assert out.returncode == 2
     assert "--since" in out.stderr
+
+
+# --- sweep: a silent builder (brief #669, ADR-0322) -------------------------------------------
+
+
+def taken_brief(stub, comments: list, branch: bool = False, number: int = 9) -> None:
+    stub.serve(f"repos/{REPO}/issues", [brief(number)])
+    stub.serve(f"repos/{REPO}/issues/{number}/comments", comments)
+    refs = [{"ref": f"refs/heads/claude/brief-{number}"}] if branch else []
+    stub.serve(f"repos/{REPO}/git/matching-refs/heads/claude/brief-{number}", refs)
+
+
+def take(minutes: int, who: str = "b9", cid: int = 1) -> dict:
+    return comment(cid, "builder", f"taken: {who} 2026-11-06", ago(minutes))
+
+
+SILENT = "SILENT 9 b9 45; re-fire: Session name: b9. Item: brief #9."
+
+
+def test_sweep_marks_a_silent_builder(proj, stub):
+    taken_brief(stub, [take(45)])
+    assert sweep(proj, stub)[-1] == SILENT
+
+
+def test_sweep_a_fresh_take_is_not_silent(proj, stub):
+    taken_brief(stub, [take(10)])
+    assert not [x for x in sweep(proj, stub) if x.startswith("SILENT")]
+
+
+def test_sweep_the_silent_threshold_is_a_setting(proj, stub):
+    proj.write("agk.toml", "[flow]\nsilent_minutes = 60\n")
+    taken_brief(stub, [take(45)])
+    assert not [x for x in sweep(proj, stub) if x.startswith("SILENT")]
+
+
+@pytest.mark.parametrize(
+    "later",
+    [
+        f"Progress: {SHORT} done 1/3; next: tests",
+        f"Report: {SHORT} pushed the tests",
+        "Question: Q-9-1 which spec?",
+    ],
+)
+def test_sweep_a_post_after_the_take_is_not_silent(proj, stub, later):
+    taken_brief(stub, [take(45), comment(2, "builder", later, ago(30))])
+    assert not [x for x in sweep(proj, stub) if x.startswith("SILENT")]
+
+
+def test_sweep_a_post_before_the_take_does_not_count(proj, stub):
+    taken_brief(stub, [comment(1, "builder", "Report: an older run", ago(90)), take(45, cid=2)])
+    assert sweep(proj, stub)[-1] == SILENT
+
+
+def test_sweep_an_escalated_brief_is_never_silent(proj, stub):
+    escalate = comment(1, "builder", f"Report: {SHORT} escalate: a conflict", ago(90))
+    taken_brief(stub, [escalate, take(45, cid=2)])
+    assert not [x for x in sweep(proj, stub) if x.startswith("SILENT")]
+
+
+def test_sweep_a_pushed_branch_is_not_silent(proj, stub):
+    taken_brief(stub, [take(45)], branch=True)
+    assert not [x for x in sweep(proj, stub) if x.startswith("SILENT")]
+
+
+def test_sweep_an_open_pull_request_is_not_silent(proj, stub):
+    taken_brief(stub, [take(45)])
+    serve_pr(stub, pr(7, draft=True), [])
+    lines = sweep(proj, stub)
+    assert lines[0] == f"#7 {SHORT} draft 1h"
+    assert not [x for x in lines if x.startswith("SILENT")]
+
+
+def test_sweep_a_pull_request_merged_after_the_take_is_not_silent(proj, stub):
+    taken_brief(stub, [take(45)])
+    merged = {**pr(8), "state": "closed", "created_at": ago(40), "merged_at": ago(5)}
+    stub.serve(f"repos/{REPO}/pulls", [merged], nth=2)  # the second read is state=all
+    assert not [x for x in sweep(proj, stub) if x.startswith("SILENT")]
+
+
+def test_sweep_a_released_take_is_not_silent(proj, stub):
+    taken_brief(stub, [take(45), comment(2, "builder", "released: b9", ago(40))])
+    assert not [x for x in sweep(proj, stub) if x.startswith("SILENT")]
+
+
+def test_sweep_names_the_newest_take(proj, stub):
+    old = comment(1, "builder", "taken: b8 2026-11-06", ago(200))
+    late = comment(2, "builder", "released: b8", ago(100))
+    taken_brief(stub, [old, late, take(45, cid=3)])
+    assert sweep(proj, stub)[-1] == SILENT
+
+
+def test_sweep_fails_when_a_branch_cannot_be_read(proj, stub):
+    taken_brief(stub, [take(45)])
+    stub.serve(f"repos/{REPO}/git/matching-refs/heads/claude/brief-9", "FAIL")
+    out = run(proj, stub, "sweep")
+    assert out.returncode == 1
+    assert "cannot be read" in out.stderr
+    assert "SILENT" not in out.stdout

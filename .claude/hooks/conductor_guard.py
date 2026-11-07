@@ -67,7 +67,11 @@ adapter.
 Without `--shadow` the conductor may also run its read-only routines (brief #643, ADR-0308):
 exactly `python3 scripts/agk/conductor.py sweep` and `python3 scripts/agk/conductor.py watch`,
 with `--since <YYYY-MM-DDTHH:MM:SSZ>`, then `--once`, or both in that order, the project's own
-regular file; every other form, such as `merge-queue`, stays denied.
+regular file; and its merge queue (brief #643 build (b), ADR-0329): exactly
+`python3 scripts/agk/conductor.py merge-queue`, with `--dry-run`, then `--max-batch <1 to 99>`, or
+both in that order, the dry run always and a run that merges only when `[flow] auto_merge` reads
+`on` in both places, as `merge_cleared.py` below; for that one the hook prints the same explicit
+`allow` decision. Every other form stays denied.
 Without `--shadow` the conductor may also merge a pull request it cleared (brief #531, ADR-0265,
 SPEC-0039 rule 8, the one exception to principle 2 and session rule 2): exactly
 `python3 scripts/agk/merge_cleared.py --pr <n> --sha <40 lower-case hex>` (or `python`), the
@@ -162,6 +166,7 @@ CONDUCTOR_SCRIPT = os.path.join("scripts", "agk", "conductor.py")
 ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 MERGE_PR = re.compile(r"[1-9][0-9]{0,9}")
 MERGE_SHA = re.compile(r"[0-9a-f]{40}")
+BATCH = re.compile(r"[1-9][0-9]?")  # `--max-batch` of the merge queue (brief #643 build (b))
 ALLOW_RULE = "conductor guard rule 6: the guarded merge of SPEC-0039 rule 8"
 QUEUE_FORMS = (  # the read-only commands of the conductor's queue (brief 284), exactly these
     ["review-queue"],
@@ -455,14 +460,32 @@ def queue_allowed(words: list[str], cwd: object) -> bool:
     return own_script(words[1], cwd, SESSION_SCRIPT)
 
 
+def queue_form(rest: list[str]) -> bool | None:
+    """For `merge-queue [--dry-run] [--max-batch <1 to 99>]` (brief #643 build (b), ADR-0329):
+    True when it is the dry run, False when it merges; None for any other form."""
+    if rest[:1] != ["merge-queue"]:
+        return None
+    rest = rest[1:]
+    dry = rest[:1] == ["--dry-run"]
+    rest = rest[1:] if dry else rest
+    if rest and not (len(rest) == 2 and rest[0] == "--max-batch" and BATCH.fullmatch(rest[1])):
+        return None
+    return dry
+
+
 def routine_allowed(words: list[str], cwd: object) -> bool:
     """`python3 scripts/agk/conductor.py sweep` or `... watch [--since <ISO>] [--once]` (brief
-    #643), the project's own regular file; both only read GitHub."""
+    #643), the project's own regular file; both only read GitHub. `... merge-queue [--dry-run]
+    [--max-batch N]` (build (b)): the dry run reads only; a run that merges needs `auto_merge` on
+    in both places, as `merge_allowed` does, because it merges through merge_cleared.py."""
     if len(words) < 3 or words[0] != "python3":
         return False
     rest = words[2:]
     if rest[:2] == ["watch", "--since"] and len(rest) >= 3 and ISO_TIME.fullmatch(rest[2]):
         rest = ["watch", *rest[3:]]
+    queue = queue_form(rest)
+    if queue is not None:
+        return own_script(words[1], cwd, CONDUCTOR_SCRIPT) and (queue or auto_merge_on_both())
     if rest not in (["sweep"], ["watch"], ["watch", "--once"]):
         return False
     return own_script(words[1], cwd, CONDUCTOR_SCRIPT)
@@ -528,13 +551,18 @@ def merge_allowed(words: list[str], cwd: object) -> bool:
 
 
 def guarded_merge(payload: object) -> bool:
-    """The tool call is the one guarded merge command that the conductor may run."""
+    """The tool call is the one guarded merge command that the conductor may run, or its merge
+    queue (brief #643 build (b)), which merges only through it."""
     if not isinstance(payload, dict) or payload.get("tool_name") != "Bash":
         return False
     data = payload.get("tool_input")
     command = data.get("command") if isinstance(data, dict) else None
     words = tokens_of(command) if isinstance(command, str) else None
-    return bool(words) and merge_allowed(words, payload.get("cwd"))
+    if not words:
+        return False
+    if merge_allowed(words, payload.get("cwd")):
+        return True
+    return queue_form(words[2:]) is not None and routine_allowed(words, payload.get("cwd"))
 
 
 def body_path_not_absolute(command: object) -> bool:
