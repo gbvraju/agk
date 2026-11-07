@@ -20,9 +20,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import SCRIPTS
 
-KIT_ROOT = SCRIPTS.parents[1]
+KIT_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = KIT_ROOT / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
 
 import design_standard  # noqa: E402
@@ -55,12 +55,8 @@ NA = "n/a: the invented product has no such state"
 
 
 def screen_section(name: str, links: str, yes: tuple[str, ...]) -> str:
-    states = "".join(
-        f"- State {s}: {'yes' if s in yes else NA}\n" for s in design_standard.STATES
-    )
-    return (
-        f"### {name}\n\n- Flow: Reading\n- Pattern: detail\n- Links to: {links}\n{states}"
-    )
+    states = "".join(f"- State {s}: {'yes' if s in yes else NA}\n" for s in design_standard.STATES)
+    return f"### {name}\n\n- Flow: Reading\n- Pattern: detail\n- Links to: {links}\n{states}"
 
 
 INVENTORY = f"""# Design inventory
@@ -105,7 +101,8 @@ PAGE = """<!doctype html>
 <main id="main" class="stack">
 <h1>{title}</h1>
 <h2>Find a book</h2>
-<div class="field"><label for="q">Search for</label><input class="input" id="q" name="q" type="search"></div>
+<div class="field"><label for="q">Search for</label>
+<input class="input" id="q" name="q" type="search"></div>
 <p>Ask ada.fenwick@example.com or call +1 202 555 0143.</p>
 <p><a href="{other}#demo">The Quiet Orchard</a></p>
 </main>
@@ -124,9 +121,7 @@ INDEX = PAGE.format(
 
 
 def page(screen: str, state: str, states: tuple[str, ...], other: str) -> str:
-    bar = "\n".join(
-        f'<a class="nav-link" href="{screen}--{s}.html">{s}</a>' for s in states
-    )
+    bar = "\n".join(f'<a class="nav-link" href="{screen}--{s}.html">{s}</a>' for s in states)
     return PAGE.format(title=f"{screen}, {state}", bar=bar, other=other)
 
 
@@ -137,9 +132,7 @@ PAGES = {
     "book-list--empty": page(
         "book-list", "empty", ("default", "empty"), "book-detail--default.html"
     ),
-    "book-detail--default": page(
-        "book-detail", "default", ("default",), "book-list--default.html"
-    ),
+    "book-detail--default": page("book-detail", "default", ("default",), "book-list--default.html"),
 }
 
 
@@ -237,6 +230,14 @@ def test_ac4_a_version_the_kit_writes_passes(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
+def test_ac4_an_empty_version_folder_is_not_checked(tmp_path):
+    """REQ-044 AC4: Q-458-3 (an empty `v<n>/`, as a theme's evidence target, holds no version)."""
+    (tmp_path / REL).mkdir(parents=True)
+    assert design_prototype_check.versions(tmp_path) == []
+    version(tmp_path / "other")
+    assert design_prototype_check.versions(tmp_path / "other") == [VERSION]
+
+
 # --- rule 7: states and pages ------------------------------------------------------------------
 
 
@@ -312,7 +313,9 @@ def test_ac4_another_script_file_fails(tmp_path):
     folder = version(tmp_path)
     put(tmp_path, f"{REL}/shelf.js", "// invented\n")
     edit(folder, "book-list--default.html", 'src="agk-prototype.js"', 'src="shelf.js"')
-    fails(tmp_path, 5, "book-list--default", value="shelf.js")
+    out = fails(tmp_path, 5, "book-list--default")
+    assert "the page loads a script other than the kit's runtime" in out
+    assert f"rule 5: {REL}/shelf.js: a script file other than the kit's runtime" in out
 
 
 def test_ac4_the_runtime_not_at_the_end_fails(tmp_path):
@@ -462,7 +465,7 @@ def test_ac4_a_control_inside_its_label_passes(tmp_path):
     edit(
         folder,
         "book-list--default.html",
-        '<label for="q">Search for</label><input class="input" id="q" name="q" type="search">',
+        '<label for="q">Search for</label>\n<input class="input" id="q" name="q" type="search">',
         '<label>Search for <input class="input" name="q" type="search"></label>',
     )
     assert problems(tmp_path) == []
@@ -528,7 +531,12 @@ def test_ac4_no_viewport_line_fails(tmp_path):
 def test_ac4_a_fixed_width_fails(tmp_path):
     """REQ-044 AC4: SPEC-0037 rule 7 (a fixed width over 360 px outside a media query)."""
     folder = version(tmp_path)
-    edit(folder, "book-list--default.html", "</head>", "<style>.shelf { width: 812px; }</style>\n</head>")
+    edit(
+        folder,
+        "book-list--default.html",
+        "</head>",
+        "<style>.shelf { width: 812px; }</style>\n</head>",
+    )
     out = fails(tmp_path, 7, "book-list--default", value="812")
     assert "360 px" in out
 
@@ -550,7 +558,12 @@ def test_ac4_a_fixed_width_inside_a_media_query_passes(tmp_path):
 
 def reflow(folder: Path, result_of) -> None:
     entries = [
-        {"page": f"{name}.html", "breakpoint": width, "mode": mode, "result": result_of(name, width)}
+        {
+            "page": f"{name}.html",
+            "breakpoint": width,
+            "mode": mode,
+            "result": result_of(name, width),
+        }
         for name in PAGES
         for width in design_standard.BREAKPOINTS
         for mode in ("light", "dark")
@@ -561,7 +574,10 @@ def reflow(folder: Path, result_of) -> None:
 def test_ac4_a_sideways_entry_fails_naming_the_breakpoint(tmp_path):
     """REQ-044 AC4: SPEC-0037 rule 8 (a page that scrolls sideways at a breakpoint)."""
     folder = version(tmp_path)
-    reflow(folder, lambda name, width: "sideways" if (name, width) == ("book-list--empty", 360) else "ok")
+    reflow(
+        folder,
+        lambda name, width: "sideways" if (name, width) == ("book-list--empty", 360) else "ok",
+    )
     found = problems(tmp_path)
     line = f"rule 8: {VERSION}/book-list--empty: the page scrolls sideways at 360 px"
     assert line in found, found
@@ -581,7 +597,7 @@ def test_ac4_all_ok_reflow_prints_no_not_run(tmp_path):
 
 
 def test_ac4_no_reflow_file_reads_not_run(tmp_path):
-    """REQ-044 AC4: SPEC-0037 rule 8 (no `reflow.json` reads not run, never ok, and fails nothing)."""
+    """REQ-044 AC4: SPEC-0037 rule 8 (no `reflow.json` reads not run, never ok, fails nothing)."""
     version(tmp_path)
     proc = check(tmp_path)
     assert proc.returncode == 0, proc.stdout
@@ -676,7 +692,11 @@ def test_ac4_the_fixture_constants_equal_the_kits_fixture_set():
     """REQ-044 AC4: SPEC-0037 rule 6 and Q-457-3 (the installed check embeds `fixtures.json`)."""
     known = strings(json.loads(FIXTURES.read_text(encoding="utf-8")))
     emails = {e.lower() for v in known for e in re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", v)}
-    hosts = {h.lower() for v in known for h in re.findall(r"(?i)\b[a-z][a-z0-9+.-]*://([^/\s\"'<>:]+)", v)}
+    hosts = {
+        h.lower()
+        for v in known
+        for h in re.findall(r"(?i)\b[a-z][a-z0-9+.-]*://([^/\s\"'<>:]+)", v)
+    }
     phones = {p for v in known for p in re.findall(r"\+\d[\d ()-]{6,}\d", v)}
     assert emails and hosts and phones
     assert set(design_prototype_check.FIXTURE_EMAILS) == emails
