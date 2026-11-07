@@ -86,8 +86,8 @@ def test_the_rows_of_brief_695_carry_their_kinds_and_guards():
         "15": ("parallel-merge", "pending #667"),
         "16": ("parallel-merge", "pending #667"),
         "17": ("watch", "check `scripts/agk/conductor.py`"),
-        "18": ("false-red", "pending (to be filed)"),
-        "19": ("false-red", "pending (to be filed)"),
+        "18": ("false-red", "check `scripts/agk/conductor.py`"),  # brief #700, rerun
+        "19": ("false-red", "check `scripts/agk/conductor.py`"),  # brief #700, rerun
         "20": ("kit-gap", "check `scripts/agk/prepush.py`"),
         "21": ("history", "pending (to be filed)"),
         "22": ("unread-result", "check `scripts/agk/conductor.py`"),  # brief #643 build (b)

@@ -44,8 +44,8 @@ merged pull request that builds the guard), `pending (to be filed)` (a guard who
 | 15 | 2026-11-06 | parallel-merge | #657 and #659 (two red-branch issues of the governance check): two pull requests, each green alone, were red together on the rule budget; merges were held (first of two) | 2 h of held merges (unverified; shared with row 16) | each pull request ran the budget test against the default branch without the other | pending #667 (the pre-merge check runs the kit's budget and map tests) |
 | 16 | 2026-11-06 | parallel-merge | the same failure again on #659, after #657 | 2 h of held merges (unverified; the same 2 h as row 15) | the pre-merge check did not run the kit's budget test | pending #667 (the pre-merge check runs the kit's budget and map tests) |
 | 17 | 2026-11-06 | watch | two builders (b649, b654) died before pushing and were noticed hours later | (unknown): hours (unverified) | no evidence of a live builder was read; the conductor waited | check `scripts/agk/conductor.py` (`SILENT` in the sweep, brief #669, closed) |
-| 18 | 2026-11-06 | false-red | proof runs were cancelled by a push right after a pull request was marked ready | (unknown) | the new push cancels the runs of the head before it | pending (to be filed) (the conductor's rerun_cancelled outside the kit, later a kit command) |
-| 19 | 2026-11-06 | false-red | a push to a ready pull request left only skipped runs | (unknown) | the runs of a push to a ready pull request are skipped | pending (to be filed) (draft, push, then ready, later a kit command) |
+| 18 | 2026-11-06 | false-red | proof runs were cancelled by a push right after a pull request was marked ready | (unknown) | the new push cancels the runs of the head before it | check `scripts/agk/conductor.py` (rerun reruns each cancelled run of a head, brief #700) |
+| 19 | 2026-11-06 | false-red | a push to a ready pull request left only skipped runs | (unknown) | the runs of a push to a ready pull request are skipped | check `scripts/agk/conductor.py` (rerun prints and, with --apply, takes the draft-and-back step for a head whose runs all skipped, brief #700) |
 | 20 | 2026-11-06 | kit-gap | the builders' sandbox refused the secret scanner's download, so prepush could not pass | 1.5 h (unverified) | prepush required the scanner in a session that cannot install it | check `scripts/agk/prepush.py` (the deferral, ADR-0327, #684, merged) |
 | 21 | 2026-11-06 | history | the conductor amended a pushed commit and attempted a force-push on `claude/brief-683` before its pull request existed; an ordinary push superseded it | (unknown) | a pushed commit was amended in the conductor's own checkout | pending (to be filed) (no amend after a push, own builds in a worktree) |
 | 22 | 2026-11-06 | unread-result | the conductor's merge script read one page of check runs and waited on a green default branch | 40 min (unverified) | one page of check runs was read as all of them | check `scripts/agk/conductor.py` (merge-queue merges through `merge_cleared.py`, which reads every page of the check runs, brief #643 build (b)) |
@@ -59,10 +59,12 @@ Counted from the table and nothing else. 22 rows; 5 with their numbers verified 
 - **By kind:** `watch` 5 (rows 1, 2, 12, 13, 17); `kit-gap` 4 (rows 6, 11, 14, 20); `parallel-merge` 3 (rows 4, 15, 16); `false-red` 3
   (rows 5, 18, 19); `unread-result` 2 (rows 3, 22); `history` 2 (rows 7, 21); `sequence` 1 (row 8); `stale-input` 1 (row 9);
   `conflict` 1 (row 10).
-- **By the strongest guard:** a check 10 (rows 1, 3, 4, 5, 10, 12, 13, 17, 20, 22, of which rows 1, 3, 4, 12 and 13 also carry a rule
-  line; rows 1, 3, 12, 13 and 22 by `conductor.py`, brief #643; row 17 by `conductor.py`, brief #669; row 20 by `prepush.py`, #684);
-  pending 7 (row 6, #601; rows 15 and 16, #667; rows 14, 18, 19 and 21, to be filed); a rule line only 5 (rows 2, 7, 8, 9, 11).
+- **By the strongest guard:** a check 12 (rows 1, 3, 4, 5, 10, 12, 13, 17, 18, 19, 20, 22, of which rows 1, 3, 4, 12 and 13 also
+  carry a rule line; rows 1, 3, 12, 13 and 22 by `conductor.py`, brief #643; row 17 by `conductor.py`, brief #669; rows 18 and 19 by
+  `conductor.py`, brief #700; row 20 by `prepush.py`, #684); pending 5 (row 6, #601; rows 15 and 16, #667; rows 14 and 21, to be
+  filed); a rule line only 5 (rows 2, 7, 8, 9, 11).
   No row has a test as its strongest guard.
 - **Corrections of the given list:** row 1 named `pending #601` beside its rule; #601 builds the rule 3a gaps of row 6 and nothing
   about the watch, so row 1 keeps its rule line only. Brief #695 gives rows 18, 19 and 21 a practice as the guard; a `rule` guard
-  needs a line of `.claude/agents/conductor.md`, which the brief does not touch, so they are `pending (to be filed)`.
+  needs a line of `.claude/agents/conductor.md`, which the brief does not touch, so they were `pending (to be filed)`; brief #700
+  makes rows 18 and 19 a check (`conductor.py rerun`), and row 21 stays pending.

@@ -42,8 +42,8 @@ CORE = """# Core rules
 ## CLAUDE.md items
 
 1. You implement; you never decide.
-7. PR body: `Advances: REQ-…`, `Build-state row:` (you never edit `docs/build-state.md` in a feature PR),
-   `Decisions taken:`, `Questions:`, `Verified:` (commands and verbatim counts).
+7. PR body: `Advances: REQ-…`, `Build-state row:` (you never edit `docs/build-state.md` in a
+   feature PR), `Decisions taken:`, `Questions:`, `Verified:` (commands and verbatim counts).
 8. No token listed in config/neutrality.txt appears in tracked files.
 """
 BRIEF = {
@@ -111,7 +111,8 @@ def test_the_prompt_carries_the_secret_scan_line_of_prepush(proj, stub):
 
 def test_the_prompt_quotes_the_builder_rules_from_the_session_rules_file(proj, stub):
     text = prompt(proj, stub, "--brief", "9")
-    assert "7. A builder commits a `checkpoint:` at every step and pushes at the milestones." in text
+    seven = "7. A builder commits a `checkpoint:` at every step and pushes at the milestones."
+    assert seven in text
     for n in (2, 3, 8, 17, 21, 27, 28, 31, 33, 34, 36):
         assert f"\n{n}. " in text, n
     assert "1. A session acts only on a verdict." not in text

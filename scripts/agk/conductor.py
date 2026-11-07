@@ -473,7 +473,9 @@ PLAN_ISSUE = "plan_issue"
 LEASE_SETTING = f"(setting: {PLAN_ISSUE} in the flow table of agk.toml)"
 LEASE_OFF = f"lease: off {LEASE_SETTING}"
 LEASE_MINUTES = 50
-LEASE_LINE = re.compile(r"Conductor: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+)")
+LEASE_LINE = re.compile(
+    r"Conductor: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+)"
+)
 TIME = "%Y-%m-%dT%H:%M:%SZ"
 
 
@@ -504,7 +506,8 @@ def rerun(root, number: int, apply: bool) -> int:
         rid, name = run.get("id"), run.get("name")
         if apply:
             post(f"repos/{repo}/actions/runs/{rid}/rerun", f"run {rid} cannot be rerun")
-        print(f"{lead} run {rid} ({name}) cancelled; {'rerun' if apply else 'add --apply to rerun it'}")
+        done = "rerun" if apply else "add --apply to rerun it"
+        print(f"{lead} run {rid} ({name}) cancelled; {done}")
     if cancelled:
         return 0
     if runs and all(r.get("conclusion") == "skipped" for r in runs):
@@ -620,7 +623,10 @@ def lease(root, mode: str, name: str | None) -> int:
     now = datetime.now(UTC)
     holder = lease_holder(comments, now)
     if mode == "--show":
-        print(f"lease: held by {holder[0]} until {stamp_of(holder[1])}" if holder else "lease: free")
+        if holder:
+            print(f"lease: held by {holder[0]} until {stamp_of(holder[1])}")
+        else:
+            print("lease: free")
         return 0
     if holder and holder[0] != name:
         print(f"lease: held by {holder[0]} until {stamp_of(holder[1])} {LEASE_SETTING}")
@@ -684,7 +690,8 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
         since, args = parsed, ["watch", *args[3:]]
     queue = queue_args(args) if args[:1] == ["merge-queue"] else None
     routine = routine_args(args)
-    if queue is None and routine is None and args not in (["sweep"], ["watch"], ["watch", "--once"]):
+    plain = args in (["sweep"], ["watch"], ["watch", "--once"])
+    if queue is None and routine is None and not plain:
         print(USAGE, file=sys.stderr)
         return 2
     try:

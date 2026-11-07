@@ -486,7 +486,8 @@ def check(proj, stub, text: str):
 
 
 def test_check_verdict_prints_ok_for_a_well_formed_verdict(proj, stub):
-    for text in (GOOD, f"Verdict: cleared {SHA}\n\nAll fine.\n", f"Verdict: rejected {SHA[:7]}\nwhy\n"):
+    cleared = f"Verdict: cleared {SHA}\n\nAll fine.\n"
+    for text in (GOOD, cleared, f"Verdict: rejected {SHA[:7]}\nwhy\n"):
         out = check(proj, stub, text)
         assert out.returncode == 0 and out.stdout.strip() == "ok", text
     assert stub.calls() == []
