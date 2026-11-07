@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from test_session import REPO, SCRIPTS, SHA, Stub, clean_env, comment, iso
@@ -325,3 +325,355 @@ def test_sweep_fails_when_a_branch_cannot_be_read(proj, stub):
     assert out.returncode == 1
     assert "cannot be read" in out.stderr
     assert "SILENT" not in out.stdout
+
+
+# --- rerun, check-verdict and lease (brief #700, ADR-0330) -------------------------------------
+
+SHA12 = SHA[:12]
+RUNS = f"repos/{REPO}/actions/runs"
+
+
+def run_of(rid: int, conclusion: str | None, name: str = "proof") -> dict:
+    return {
+        "id": rid, "name": name, "event": "pull_request", "head_sha": SHA,
+        "status": "completed" if conclusion else "in_progress", "conclusion": conclusion,
+    }  # fmt: skip
+
+
+def serve_runs(stub, item: dict, runs: list) -> None:
+    stub.serve(f"repos/{REPO}/pulls/{item['number']}", item)
+    stub.serve(RUNS, {"workflow_runs": runs})
+
+
+def posts(stub) -> list[list]:
+    return [c for c in stub.calls() if c[0] != "GET"]
+
+
+def test_rerun_lists_each_cancelled_run_and_reruns_nothing_without_apply(proj, stub):
+    serve_runs(stub, pr(7), [run_of(1, "cancelled"), run_of(2, "success", "governance")])
+    out = run(proj, stub, "rerun", "--pr", "7")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.splitlines() == [
+        f"rerun: #7 {SHA12}: run 1 (proof) cancelled; add --apply to rerun it",
+    ]
+    assert posts(stub) == []
+
+
+def test_rerun_with_apply_reruns_each_cancelled_run(proj, stub):
+    serve_runs(stub, pr(7), [run_of(1, "cancelled"), run_of(3, "cancelled", "governance")])
+    out = run(proj, stub, "rerun", "--pr", "7", "--apply")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.splitlines() == [
+        f"rerun: #7 {SHA12}: run 1 (proof) cancelled; rerun",
+        f"rerun: #7 {SHA12}: run 3 (governance) cancelled; rerun",
+    ]
+    assert [c[:2] for c in posts(stub)] == [
+        ["POST", f"{RUNS}/1/rerun"],
+        ["POST", f"{RUNS}/3/rerun"],
+    ]
+
+
+def test_rerun_reads_the_runs_of_the_head_by_pull_request_event(proj, stub):
+    serve_runs(stub, pr(7), [])
+    run(proj, stub, "rerun", "--pr", "7")
+    asked = [c[1] for c in stub.calls() if c[1].startswith(RUNS)]
+    assert asked == [f"{RUNS}?event=pull_request&head_sha={SHA}&per_page=100"]
+
+
+def test_rerun_with_only_skipped_runs_prints_the_step_and_does_it_only_with_apply(proj, stub):
+    serve_runs(stub, pr(7), [run_of(1, "skipped"), run_of(2, "skipped", "governance")])
+    out = run(proj, stub, "rerun", "--pr", "7")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.splitlines() == [
+        f"rerun: #7 {SHA12}: every run of the head skipped (a push to a ready pull request); "
+        f"the step: POST repos/{REPO}/pulls/7/ccr/convert_to_draft, then "
+        f"POST repos/{REPO}/pulls/7/ccr/ready_for_review; add --apply to do it",
+    ]
+    assert posts(stub) == []
+    out = run(proj, stub, "rerun", "--pr", "7", "--apply")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.splitlines()[-1] == (
+        f"rerun: #7 {SHA12}: converted to draft and back; its runs start"
+    )
+    assert [c[:2] for c in posts(stub)] == [
+        ["POST", f"repos/{REPO}/pulls/7/ccr/convert_to_draft"],
+        ["POST", f"repos/{REPO}/pulls/7/ccr/ready_for_review"],
+    ]
+
+
+def test_rerun_leaves_a_draft_alone_whose_runs_skip_by_design(proj, stub):
+    serve_runs(stub, pr(7, draft=True), [run_of(1, "skipped")])
+    out = run(proj, stub, "rerun", "--pr", "7", "--apply")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.splitlines() == [
+        f"rerun: #7 {SHA12}: every run of the head skipped; the pull request is a draft, "
+        "whose runs skip until it is marked ready",
+    ]
+    assert posts(stub) == []
+
+
+@pytest.mark.parametrize(
+    ("runs", "line"),
+    [
+        ([], "no run of the head"),
+        ([run_of(1, "success"), run_of(2, "skipped", "governance")], "nothing to rerun"),
+        ([run_of(1, "failure")], "nothing to rerun"),
+        ([run_of(1, None)], "nothing to rerun"),
+    ],
+)
+def test_rerun_with_nothing_cancelled_says_so(proj, stub, runs, line):
+    serve_runs(stub, pr(7), runs)
+    out = run(proj, stub, "rerun", "--pr", "7", "--apply")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.splitlines() == [f"rerun: #7 {SHA12}: {line}"]
+    assert posts(stub) == []
+
+
+def test_rerun_a_run_of_another_event_is_not_a_run_of_the_head(proj, stub):
+    other = {**run_of(1, "cancelled"), "event": "push"}
+    serve_runs(stub, pr(7), [other])
+    out = run(proj, stub, "rerun", "--pr", "7", "--apply")
+    assert out.stdout.splitlines() == [f"rerun: #7 {SHA12}: nothing to rerun"]
+    assert posts(stub) == []
+
+
+def test_rerun_fails_when_the_pull_request_or_its_runs_cannot_be_read(proj, stub):
+    stub.serve(f"repos/{REPO}/pulls/7", "FAIL")
+    out = run(proj, stub, "rerun", "--pr", "7")
+    assert out.returncode == 1 and "cannot be read" in out.stderr
+    serve_runs(stub, pr(7), [])
+    stub.serve(RUNS, "FAIL")
+    out = run(proj, stub, "rerun", "--pr", "7")
+    assert out.returncode == 1 and "cannot be read" in out.stderr
+
+
+def test_rerun_fails_when_a_rerun_is_refused(proj, stub):
+    serve_runs(stub, pr(7), [run_of(1, "cancelled")])
+    stub.serve(f"{RUNS}/1/rerun", "FAIL", method="POST")
+    out = run(proj, stub, "rerun", "--pr", "7", "--apply")
+    assert out.returncode == 1
+    assert "cannot be rerun" in out.stderr
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["rerun"],
+        ["rerun", "--pr"],
+        ["rerun", "--pr", "x"],
+        ["rerun", "--pr", "0"],
+        ["rerun", "--apply", "--pr", "7"],
+        ["rerun", "--pr", "7", "--apply", "--apply"],
+        ["rerun", "--pr", "7", "--force"],
+    ],
+)
+def test_rerun_any_other_form_is_a_usage_error(proj, stub, args):
+    out = run(proj, stub, *args)
+    assert out.returncode == 2
+    assert "rerun --pr N [--apply]" in out.stderr
+    assert stub.calls() == []
+
+
+# --- check-verdict ----------------------------------------------------------------------------
+
+GOOD = f"Verdict: fix list {SHA}\n\nFinal: docs/adr/0001-the-adr.md Proposed -> Accepted\n"
+
+
+def check(proj, stub, text: str):
+    path = proj.root / "verdict.md"
+    path.write_text(text, encoding="utf-8")
+    return run(proj, stub, "check-verdict", str(path))
+
+
+def test_check_verdict_prints_ok_for_a_well_formed_verdict(proj, stub):
+    for text in (GOOD, f"Verdict: cleared {SHA}\n\nAll fine.\n", f"Verdict: rejected {SHA[:7]}\nwhy\n"):
+        out = check(proj, stub, text)
+        assert out.returncode == 0 and out.stdout.strip() == "ok", text
+    assert stub.calls() == []
+
+
+def test_check_verdict_prints_the_problem_of_a_final_line_and_exits_1(proj, stub):
+    out = check(proj, stub, f"Verdict: cleared {SHA}\nFinal: flip ADR-0146 to Accepted\n")
+    assert out.returncode == 1
+    assert out.stdout.strip().startswith("SPEC-0021 rule 1:")
+    assert "ADR-0146" not in out.stdout  # the rule and the shape, never the body
+
+
+def test_check_verdict_a_first_line_that_names_no_head_is_a_problem(proj, stub):
+    for text in ("Verdict: cleared\n", "Report: done\n", "", "Verdict: fix list main\n"):
+        out = check(proj, stub, text)
+        assert out.returncode == 1, text
+        assert out.stdout.strip() == (
+            "the first line is not `Verdict: cleared|fix list|rejected <sha>` (session rule 1)"
+        )
+
+
+def test_check_verdict_fails_when_the_file_cannot_be_read(proj, stub):
+    out = run(proj, stub, "check-verdict", str(proj.root / "missing.md"))
+    assert out.returncode == 1
+    assert "cannot be read" in out.stderr
+    assert run(proj, stub, "check-verdict").returncode == 2
+    assert run(proj, stub, "check-verdict", "a", "b").returncode == 2
+
+
+# --- lease ------------------------------------------------------------------------------------
+
+PLAN = f"repos/{REPO}/issues/61/comments"
+OFF = "lease: off (setting: plan_issue in the flow table of agk.toml)"
+
+
+def with_plan(proj, stub, comments: list) -> None:
+    proj.write("agk.toml", "[flow]\nconductor_poll_seconds = 1\nplan_issue = 61\n")
+    stub.serve(PLAN, comments)
+
+
+def active(minutes: int, who: str = "c1", cid: int = 5, kind: str = "active") -> dict:
+    return comment(cid, "boss", f"Conductor: {kind} {ago(minutes)} {who}", ago(minutes))
+
+
+def until(marker: dict) -> str:
+    """The end of the lease the marker holds: its time plus 50 minutes."""
+    start = datetime.strptime(marker["body"].split()[2], "%Y-%m-%dT%H:%M:%SZ")
+    return (start + timedelta(minutes=50)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_lease_is_off_without_the_setting(proj, stub):
+    out = run(proj, stub, "lease", "--show")
+    assert out.returncode == 0 and out.stdout.strip() == OFF
+    for args in (["--take", "c1"], ["--release", "c1"]):
+        out = run(proj, stub, "lease", *args)
+        assert out.returncode == 1 and out.stdout.strip() == OFF
+    assert stub.calls() == []
+
+
+def test_lease_show_prints_free_without_a_marker(proj, stub):
+    with_plan(proj, stub, [comment(1, "builder", "Request: b1 new")])
+    out = run(proj, stub, "lease", "--show")
+    assert out.returncode == 0 and out.stdout.strip() == "lease: free"
+    assert all(c[0] == "GET" for c in stub.calls())
+
+
+def test_lease_show_names_a_valid_holder_and_its_end(proj, stub):
+    marker = active(10)
+    with_plan(proj, stub, [marker])
+    out = run(proj, stub, "lease", "--show")
+    assert out.returncode == 0
+    assert out.stdout.strip() == f"lease: held by c1 until {until(marker)}"
+
+
+@pytest.mark.parametrize("marker", [active(55), active(10, kind="released")])
+def test_lease_show_an_expired_or_released_marker_is_free(proj, stub, marker):
+    with_plan(proj, stub, [marker])
+    out = run(proj, stub, "lease", "--show")
+    assert out.stdout.strip() == "lease: free"
+
+
+def test_lease_take_posts_the_marker_when_there_is_none(proj, stub):
+    with_plan(proj, stub, [])
+    out = run(proj, stub, "lease", "--take", "c2")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip().startswith("lease: taken by c2 until ")
+    made = posts(stub)
+    assert len(made) == 1 and made[0][:2] == ["POST", PLAN]
+    body = made[0][2][made[0][2].index("-f") + 1]
+    assert body.startswith("body=Conductor: active 20") and body.endswith(" c2")
+    assert body.split()[2].endswith("Z")
+
+
+def test_lease_take_edits_the_marker_in_place_when_it_is_free(proj, stub):
+    with_plan(proj, stub, [active(55), comment(6, "builder", "Request: b1 new")])
+    stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
+    out = run(proj, stub, "lease", "--take", "c2")
+    assert out.returncode == 0, out.stderr
+    made = posts(stub)
+    assert len(made) == 1 and made[0][:2] == ["PATCH", f"repos/{REPO}/issues/comments/5"]
+    assert "Conductor: active" in made[0][2][made[0][2].index("-f") + 1]
+
+
+def test_lease_take_by_the_holder_renews_it(proj, stub):
+    with_plan(proj, stub, [active(30)])
+    stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
+    out = run(proj, stub, "lease", "--take", "c1")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip().startswith("lease: taken by c1 until ")
+    assert [c[:2] for c in posts(stub)] == [["PATCH", f"repos/{REPO}/issues/comments/5"]]
+
+
+def test_lease_take_is_refused_while_another_name_holds_a_valid_lease(proj, stub):
+    marker = active(10)
+    with_plan(proj, stub, [marker])
+    out = run(proj, stub, "lease", "--take", "c2")
+    assert out.returncode == 3
+    assert out.stdout.strip() == (
+        f"lease: held by c1 until {until(marker)} "
+        "(setting: plan_issue in the flow table of agk.toml)"
+    )
+    assert posts(stub) == []
+
+
+def test_lease_release_by_the_holder_marks_the_comment_released(proj, stub):
+    with_plan(proj, stub, [active(10)])
+    stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
+    out = run(proj, stub, "lease", "--release", "c1")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "lease: released by c1"
+    made = posts(stub)
+    assert made[0][:2] == ["PATCH", f"repos/{REPO}/issues/comments/5"]
+    body = made[0][2][made[0][2].index("-f") + 1]
+    assert body.startswith("body=Conductor: released 20") and body.endswith(" c1")
+
+
+def test_lease_release_by_another_name_is_refused_and_a_free_lease_needs_no_write(proj, stub):
+    with_plan(proj, stub, [active(10)])
+    out = run(proj, stub, "lease", "--release", "c2")
+    assert out.returncode == 3 and posts(stub) == []
+    with_plan(proj, stub, [active(55)])
+    out = run(proj, stub, "lease", "--release", "c2")
+    assert out.returncode == 0 and out.stdout.strip() == "lease: free" and posts(stub) == []
+
+
+def test_lease_fails_when_the_plan_issue_cannot_be_read_or_written(proj, stub):
+    with_plan(proj, stub, [])
+    stub.serve(PLAN, "FAIL")
+    out = run(proj, stub, "lease", "--show")
+    assert out.returncode == 1 and "cannot be read" in out.stderr
+    with_plan(proj, stub, [])
+    stub.serve(PLAN, "FAIL", method="POST")
+    out = run(proj, stub, "lease", "--take", "c2")
+    assert out.returncode == 1 and "cannot be written" in out.stderr
+
+
+def test_lease_a_plan_issue_that_is_no_number_names_the_setting(proj, stub):
+    proj.write("agk.toml", '[flow]\nplan_issue = "sixty-one"\n')
+    out = run(proj, stub, "lease", "--show")
+    assert out.returncode == 1 and "plan_issue" in out.stderr and "sixty" not in out.stderr
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["lease"],
+        ["lease", "--take"],
+        ["lease", "--take", "--show"],
+        ["lease", "--show", "c1"],
+        ["lease", "--take", "c1", "--release", "c1"],
+        ["lease", "--hold", "c1"],
+        ["lease", "--take", "a b"],
+    ],
+)
+def test_lease_any_other_form_is_a_usage_error(proj, stub, args):
+    out = run(proj, stub, *args)
+    assert out.returncode == 2
+    assert "lease (--show | --take NAME | --release NAME)" in out.stderr
+    assert stub.calls() == []
+
+
+def test_the_lease_take_leaves_a_local_mark_that_release_removes(proj, stub):
+    with_plan(proj, stub, [])
+    assert run(proj, stub, "lease", "--take", "c2").returncode == 0
+    mark = proj.root / ".git" / "agk" / "lease"
+    assert mark.read_text(encoding="utf-8").strip() == "c2"
+    with_plan(proj, stub, [active(1, who="c2")])
+    stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
+    assert run(proj, stub, "lease", "--release", "c2").returncode == 0
+    assert not mark.exists()
