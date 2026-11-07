@@ -323,6 +323,18 @@ quarantine past its expiry (`expired`), each test with two strikes or more and n
 with its line number. Exit 0 when nothing is listed, 1 otherwise. It is not a governance step and blocks nothing. See
 [testing.md](testing.md#the-flake-ledger) and ADR-0234.
 
+## Front door
+
+    python3 scripts/agk/front_door.py check-issue --issue FILE
+    python3 scripts/agk/front_door.py discovery-write (--issue FILE | --vision FILE) --answers FILE [--root DIR]
+    python3 scripts/agk/front_door.py check-discovery [FILE ...] [--root DIR]
+
+`check-issue` reads a saved problem issue (the JSON of one GET) and refuses one without the `agk-problem` label, without a
+first line `Problem: <words>`, with an empty problem or one over 1,500 characters, or with anything the data guard finds.
+`discovery-write` writes `docs/discovery/<slug>.md` from the problem and a JSON file of the person's answers, never over an
+existing one; `check-discovery` checks each such document. Files only, no network; every refusal names the rule and the
+file, never a value. See SPEC-0048 rules 3 and 5.
+
 ## Failure signature and evidence
 
     python3 scripts/agk/failures.py signature --output FILE [--step NAME]
