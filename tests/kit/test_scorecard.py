@@ -16,9 +16,10 @@ import stat
 import sys
 from pathlib import Path
 
-import config
 import pytest
 import scorecard
+
+import config
 
 KIT = Path(__file__).resolve().parents[2]
 TODAY = "2026-11-07"  # the week is 2026-10-31T00:00Z to 2026-11-07T00:00Z
@@ -143,8 +144,20 @@ WEEK = {
     "comments-11": [comment("reviewer", "Verdict: cleared 9abc1234")],
     "issues-open": [
         issue(20, RED, "2026-11-06T00:00:00Z"),
-        issue(21, "a failure", "2026-10-01T00:00:00Z", labels=["found-bug"], body="Failure-signature: ab12"),
-        issue(22, "a failure", "2026-11-05T00:00:00Z", labels=["found-bug"], body="Failure-signature: cd34"),
+        issue(
+            21,
+            "a failure",
+            "2026-10-01T00:00:00Z",
+            labels=["found-bug"],
+            body="Failure-signature: ab12",
+        ),
+        issue(
+            22,
+            "a failure",
+            "2026-11-05T00:00:00Z",
+            labels=["found-bug"],
+            body="Failure-signature: cd34",
+        ),
         issue(23, "a bug", "2026-10-01T00:00:00Z", labels=["found-bug"], body="no signature"),
         issue(24, RED, "2026-11-01T00:00:00Z", pull_request={"url": "https://example.com/p"}),
     ],
@@ -342,7 +355,7 @@ def test_ac2_the_table_line_reaches_the_printed_table(repo, tmp_path):
     ("toml", "setting"),
     [
         (f'scorecard = "{ODD}"\n', "scorecard"),
-        (f'[scorecard]\n{ODD.replace("-", "_")} = 1\n', "scorecard"),
+        (f"[scorecard]\n{ODD.replace('-', '_')} = 1\n", "scorecard"),
         (f'[scorecard]\nred_hours = "{ODD}"\n', "scorecard.red_hours"),
         ("[scorecard]\nred_hours = -7\n", "scorecard.red_hours"),
         ("[scorecard]\nflaky_rate = true\n", "scorecard.flaky_rate"),
