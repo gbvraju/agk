@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from test_session import ISSUES, REPO, Stub, issue, listing, posts
+from test_session import REPO, Stub, issue, listing, posts
 from test_session_flow import brief
 from test_session_plan import data, free, plan
 
@@ -90,7 +90,10 @@ text = "Both sides are built in parallel, so a feature is expected to finish soo
 basis = "expected"
 """
 DECLARED = '[delivery]\nwork_type = "web-app"\n'
-RATE = "Your merge rate is unknown (no pull request merged in the last 14 days): the merge queue limit does not apply."
+RATE = (
+    "Your merge rate is unknown (no pull request merged in the last 14 days): "
+    "the merge queue limit does not apply."
+)
 TODAY_KEYS = {
     "start",
     "running",
@@ -182,7 +185,8 @@ def test_a_refused_declaration_plans_as_today_and_reads_no_playbook(proj, stub):
     proj.write("agk.toml", '[delivery]\nwork_type = "zz-unknown-type"\n')
     three(stub)
     out = plan(proj, stub)
-    assert lines_of(out)[0] == "Start 3: builder-a takes #5, builder-b takes #6, builder-c takes #7."
+    start = "Start 3: builder-a takes #5, builder-b takes #6, builder-c takes #7."
+    assert lines_of(out)[0] == start
     assert "zz-unknown-type" not in out.stdout and "lane" not in out.stdout
     assert "playbook" not in data(proj, stub)
 
@@ -321,7 +325,7 @@ def test_two_overlapping_briefs_in_different_lanes_still_wait(proj, stub):
     assert got["waits"] == [{"brief": 6, "waits_for": 5, "why": "both touch shared/api.py"}]
 
 
-# --- rule 8: the heavy steps, printed once ----------------------------------------------------------
+# --- rule 8: the heavy steps, printed once --------------------------------------------------------
 
 
 def test_the_heavy_steps_are_printed_once_as_the_steps_run_under_the_lock(proj, stub):
