@@ -97,9 +97,10 @@ def screens_named(line: str, root: Path) -> list[tuple[str, str]]:
     """The pairs a `Screens:` line names, `*` expanded to every state of the screen in the
     version, in the line's order; refused naming rule 10 and never a value."""
     match = SCREENS.fullmatch(line.rstrip())
-    items = [i.strip() for i in match.group(2).split(",")] if match else []
-    pairs = [PAIR.fullmatch(i) for i in items]
-    if not items or not all(pairs):
+    if match is None:
+        raise CheckError(SHAPE)
+    pairs = [PAIR.fullmatch(i.strip()) for i in match.group(2).split(",")]
+    if not all(pairs):
         raise CheckError(SHAPE)
     version = match.group(1)
     signed = {r["version"] for r in design_signoff.rows(root) if r["kind"] == "design"}
@@ -107,7 +108,7 @@ def screens_named(line: str, root: Path) -> list[tuple[str, str]]:
         raise CheckError(NOT_SIGNED)
     pages = version_pages(root, version)
     found: list[tuple[str, str]] = []
-    for pair in pairs:
+    for pair in filter(None, pairs):
         screen, state = pair.group(1), pair.group(2)
         named = [p for p in pages if p[0] == screen and state in ("*", p[1])]
         if not named:
