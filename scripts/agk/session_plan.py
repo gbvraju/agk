@@ -37,6 +37,16 @@ The plan, in the order it is decided:
    with those that change a protected path marked.
 6. **Drift.** A ready pull request more than `stale_commits` behind the default branch, and a
    pull request that conflicts, are listed for their builder to update.
+7. **The lanes** (SPEC-0038 rule 8; brief #665, ADR-0318). With a declared work type
+   (`[delivery] work_type` of `agk.toml`, read through `playbook_format.selected`) the plan names
+   each ready brief's lane, the lane whose `kinds` hold the brief's `Kind:` line, or `lane: none`
+   for a brief without one or whose kind no lane holds, never an error; it orders the ready briefs
+   within a priority by phase (a kind's depth in the split's `depends_on`), then one per lane in
+   turn, so that parallel builders are offered briefs from different lanes first; and it prints the
+   playbook's `heavy_steps` once, as the steps a builder runs under `lock.py run --name heavy`. The
+   waves, the capacity, the merge queue and the safe merge set are decided as above, so a lane never
+   lets two overlapping briefs run together; no lock setting changes. Without a declaration the plan
+   prints exactly what it printed before.
 """
 
 from __future__ import annotations
@@ -45,12 +55,14 @@ import json
 import re
 import string
 import sys
+import tomllib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import common
+import playbook_format
 from common import matches, read_list
 from session import (
     RELEASED,
@@ -76,6 +88,8 @@ from session import (
 
 BUILDS_LINE = re.compile(r"Builds: (.+)")
 BUILD_ITEM = re.compile(r"\(([A-Za-z0-9._-]+)\)\s*(.*)")
+KIND_LINE = re.compile(r"Kind: (.+)")  # SPEC-0038 rule 8, Q-S0038-8: one kind of `brief_order`
+HEAVY_LOCK = "a builder runs each under lock.py run --name heavy"
 INDEPENDENT = "independent:"
 MERGED_ALL = "every build is merged; the conductor closes it"
 RULE = 15
@@ -551,6 +565,140 @@ def candidates(
     return found, waits, skips
 
 
+# --- the lanes (SPEC-0038 rule 8; brief #665, ADR-0318) -------------------------------------------
+
+
+def kind_of(body: str) -> str | None:
+    """The brief's one `Kind:` line (Q-S0038-8), or None."""
+    for line in str(body or "").splitlines():
+        if found := KIND_LINE.fullmatch(line.rstrip()):
+            return found.group(1).strip() or None
+    return None
+
+
+def _strs(value: object) -> list[str]:
+    return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
+
+
+def playbook_of(root) -> dict | None:
+    """The declared playbook's lanes, kinds and heavy steps, or None.
+
+    `playbook_format.selected` reads the declaration (ADR-0312): with none, or with one that
+    `doctor.py` and `check_playbooks.py` refuse, nothing is read and the plan is as before. Only the
+    parts the plan uses are taken, each as far as its type is right; the format check is
+    `check_playbooks.py`'s, not the plan's."""
+    path = playbook_format.selected(root)
+    if path is None:
+        return None
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return None
+    tables = data.get("lanes")
+    lanes = [
+        (str(lane["name"]), _strs(lane.get("kinds")))
+        for lane in (tables if isinstance(tables, list) else [])
+        if isinstance(lane, dict) and isinstance(lane.get("name"), str)
+    ]
+    found = data.get("split")
+    split: dict = found if isinstance(found, dict) else {}
+    listed = split.get("depends_on")
+    pairs = [
+        (str(p[0]), str(p[1]))
+        for p in (listed if isinstance(listed, list) else [])
+        if isinstance(p, list) and len(p) == 2
+    ]
+    return {
+        "work_type": str(data.get("work_type") or path.stem),
+        "lanes": lanes,
+        "ranks": phase_ranks(_strs(split.get("brief_order")), pairs),
+        "heavy_steps": _strs(data.get("heavy_steps")),
+    }
+
+
+def phase_ranks(order: list[str], pairs: list[tuple[str, str]]) -> dict[str, int]:
+    """A kind's phase rank: its depth in the split's `depends_on` (Q-665-1). A kind that depends
+    on no kind is 0; each later kind is one deeper than the deepest kind it depends on. A cycle,
+    which the format check refuses, is cut at the kind's place in `brief_order`."""
+    earlier: dict[str, list[str]] = {k: [] for k in order}
+    for later, before in pairs:
+        if later in earlier and before in earlier:
+            earlier[later].append(before)
+    ranks: dict[str, int] = {}
+
+    def depth(kind: str, seen: tuple[str, ...]) -> int:
+        if kind in ranks:
+            return ranks[kind]
+        if kind in seen:
+            return order.index(kind)
+        found = max((depth(b, (*seen, kind)) + 1 for b in earlier[kind]), default=0)
+        ranks[kind] = found
+        return found
+
+    for kind in order:
+        depth(kind, ())
+    return ranks
+
+
+def lane_of(pb: dict, kind: str | None) -> str | None:
+    """The first lane whose kinds hold the kind, else None (`lane: none`)."""
+    if kind is None:
+        return None
+    return next((name for name, kinds in pb["lanes"] if kind in kinds), None)
+
+
+def lane_order(pb: dict | None, ready: list[dict]) -> list[dict]:
+    """The ready briefs in the lane order (ADR-0318 decision 3): priority, then phase rank, then one
+    brief per lane in turn (the playbook's lane order, then none), then number. A brief without a
+    kind, or with a kind the playbook does not know, belongs to no phase and follows the kinded
+    briefs of its priority (Q-665-2). Without a playbook the order is as given."""
+    if pb is None:
+        return ready
+    last = len(pb["ranks"])
+    lanes = [name for name, _ in pb["lanes"]]
+
+    def group(brief: dict) -> tuple[int, int]:
+        kind = kind_of(brief["body"])
+        return priority_of(brief["body"]), pb["ranks"].get(kind, last) if kind else last
+
+    def lane_index(brief: dict) -> int:
+        lane = lane_of(pb, kind_of(brief["body"]))
+        return lanes.index(lane) if lane in lanes else len(lanes)
+
+    out: list[dict] = []
+    for key in sorted({group(b) for b in ready}):
+        queues: dict[int, list[dict]] = {}
+        for brief in sorted((b for b in ready if group(b) == key), key=lambda b: b["number"]):
+            queues.setdefault(lane_index(brief), []).append(brief)
+        while any(queues.values()):
+            for index in sorted(queues):
+                if queues[index]:
+                    out.append(queues[index].pop(0))
+    return out
+
+
+def lanes_of(pb: dict, ready: list[dict]) -> list[dict]:
+    """One `{brief, kind, lane}` per ready brief, in the plan's order."""
+    out = []
+    for brief in ready:
+        kind = kind_of(brief["body"])
+        out.append({"brief": brief["number"], "kind": kind, "lane": lane_of(pb, kind)})
+    return out
+
+
+def playbook_lines(plan: dict) -> list[str]:
+    """The two lines of a declared playbook: the lanes of the ready briefs and the heavy steps."""
+    pb = plan.get("playbook")
+    if not pb:
+        return []
+    kind = pb["work_type"]
+    lanes = "; ".join(f"#{x['brief']} lane: {x['lane'] or 'none'}" for x in pb["lanes"])
+    lanes = lanes or "no ready brief"
+    steps = "; ".join(pb["heavy_steps"])
+    heavy = f"{steps}; {HEAVY_LOCK}." if steps else "none."
+    return [f"Lanes ({kind}): {lanes}.", f"Heavy steps ({kind}): {heavy}"]
+
+
 def waves(root, s: Survey, ready: list[dict]) -> tuple[list[dict], list[dict]]:
     """(the briefs that can start together, the briefs that wait and for what)."""
     shared = [glob_regex(p) for p in shared_patterns(root)]
@@ -703,6 +851,8 @@ def build(root) -> dict:
     s.held = [h for h in s.held if h[0] not in freed]
     s.skipped = skipped
     ready, build_waits, build_skips = candidates(s, freed)
+    pb = playbook_of(root)
+    ready = lane_order(pb, ready)
     chosen, waits = waves(root, s, ready)
     waits = build_waits + waits
     running = len(s.builders) + len(s.held)
@@ -739,6 +889,17 @@ def build(root) -> dict:
     conflicts = sorted(
         p["number"] for p in s.prs if p.get("state") == "open" and "agk:conflict" in label_names(p)
     )
+    playbook = (
+        {
+            "playbook": {
+                "work_type": pb["work_type"],
+                "lanes": lanes_of(pb, ready),
+                "heavy_steps": pb["heavy_steps"],
+            }
+        }
+        if pb
+        else {}
+    )
     return {
         "start": [
             {"session": names[i], "brief": b["number"], "title": b.get("title")}
@@ -772,7 +933,7 @@ def build(root) -> dict:
         "conflicts": conflicts,
         "default_branch": default,
         "stale_commits": behind_limit,
-    }
+    } | playbook
 
 
 def memory_capacity(root, running: int) -> dict:
@@ -854,6 +1015,7 @@ def words(plan: dict) -> str:
         lines.append(f"Start 0: {reason(plan)}.")
     if line := capacity_line(plan["capacity"]):
         lines.append(line)
+    lines += playbook_lines(plan)
     for w in plan["waits"]:
         lines.append(f"#{w['brief']} {wait_text(w)}.")
     if plan["stale_claims"]:
