@@ -89,7 +89,12 @@ STOP_BELOW = (
 )
 STOP_TOP = "You never escalate: when blocked, ask with `Question:` (session rule 21)."
 Run = tuple[str, str, str, str | None]  # kind, tier, effort, the project's model name or None
-DESIGN: Run = ("design", *config.MODEL_DEFAULTS["design"], None)  # type: ignore[assignment]
+DESIGN: Run = (
+    "design",
+    config.MODEL_DEFAULTS["design"][0],
+    config.MODEL_DEFAULTS["design"][1],
+    None,
+)
 
 PROMPT = """\
 You are session {session}, a builder of this repository. You work through pull requests only.
