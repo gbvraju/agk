@@ -260,6 +260,16 @@ With `pool` or `hybrid` set and no repository variable `AGK_HEAVY_RUNNER`, a sec
 [self-hosted-runner.md](self-hosted-runner.md). It reads through `minutes.py` (GET only), changes no workflow and writes
 nothing (ADR-0237).
 
+## CI tools
+
+    python3 scripts/agk/ci_tools.py check [--upstream] [--responses DIR]
+
+The governance workflow's `Install tooling` step installs the CI test tools from `config/ci-tools.txt`, one exact
+`<name>==<version>` pin per line in name order, so a tool update changes that file only. `check` prints the pins and fails,
+naming the path, on a line that is not an exact pin, a repeated tool or a tool out of order; it makes no network call. With
+`--upstream` it reads the package index's JSON once per pin and prints which pins are behind, the gap in days and `unknown`
+for an upstream it cannot read; a person opens the update pull request from that output (ADR-0328).
+
 ## Test plan
 
     python3 scripts/agk/test_plan.py [--base REF] [--head REF] [--json] [ROOT]
