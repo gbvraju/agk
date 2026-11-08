@@ -1,4 +1,4 @@
-"""The front door's entry, discovery, research and design (SPEC-0048 builds (b) and (d)).
+"""The front door's entry, discovery, research, design and phase (SPEC-0048 builds (b), (d), (e)).
 
 Standard library only, files only, no network: every input is a saved file.
 
@@ -22,7 +22,16 @@ Standard library only, files only, no network: every input is a saved file.
         checks each architecture file (by default every `docs/design/architecture/*.md`): a
         fenced text or Mermaid diagram, no image, and exactly one line
         `Research: docs/research/<its slug>.md` naming a record that passes rule 6 and is fresh
-        (rule 7)
+        (rule 7), and its review artifact, chosen by the `- Screens:` line of
+        `docs/discovery/<its slug>.md` (`open`, or no such line or document, is read as `yes`):
+        with `no`, exactly one line `Demo: docs/runs/<file>` naming a file that exists, which is
+        never opened or run; with `yes`, a prototype version folder `docs/design/prototype/v<n>/`
+        (checked by `check_design.py`). A `Walkthrough: <where it is kept>` line is judgement: it
+        is noted, never opened, never printed and never the artifact (rule 8)
+    front_door.py status --date YYYY-MM-DD [SLUG ...] [--root DIR]
+        prints one line per problem (by default each `docs/discovery/*.md`), the phase of rule 1
+        it is in and what it waits for, from the files only, and writes nothing; past the design
+        it prints `waits for the go`, which is read from saved comments (rule 9; build (f))
 
 The answers file: `{"screens": "yes|no|open", "work_type": "<work type>", "answers": [{"id":
 "<id>", "answer": "<words>", "where": "<comment link>|in session YYYY-MM-DD"} or {"id": "<id>",
@@ -53,6 +62,7 @@ USAGE = (
     "usage: front_door.py check-issue --issue FILE | discovery-write (--issue FILE | --vision FILE)"
     " --answers FILE [--root DIR] | check-discovery [FILE ...] [--root DIR]"
     " | (check-research | check-design) --date YYYY-MM-DD [FILE ...] [--root DIR]"
+    " | status --date YYYY-MM-DD [SLUG ...] [--root DIR]"
 )
 LABEL = "agk-problem"
 PREFIX = "Problem: "
@@ -622,6 +632,73 @@ def design_problems(rel: str, text: str, root: Path, today: datetime.date) -> li
     return out
 
 
+# --- the review artifact (rule 8) and the phase (rules 1 and 9) ----------------------------------
+
+RUNS = "docs/runs"
+PROTOTYPE = "docs/design/prototype"
+DEMO = re.compile(r"^Demo:(.*)$")
+WALKTHROUGH = re.compile(r"^Walkthrough:(.*)$")
+RUN_RECORD = re.compile(rf"^{RUNS}/[A-Za-z0-9_-][A-Za-z0-9._-]*$")
+VERSION = re.compile(r"^v[1-9]\d*$")
+SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def screens_of(root: Path, name: str) -> str:
+    """The `- Screens:` line of the problem's discovery document; `open` when there is none."""
+    try:
+        lines = (root / DIR / f"{name}.md").read_text(encoding="utf-8").split("\n")
+    except (OSError, UnicodeDecodeError):
+        return "open"
+    quoted = False
+    for ln in lines:
+        if START.match(ln) or ANSWER_START.match(ln):
+            quoted = True
+        elif ln in (END, ANSWER_END):
+            quoted = False
+        elif ln.startswith("## "):
+            break
+        elif not quoted and (m := re.match(r"^- Screens: (yes|no|open)$", ln)):
+            return m.group(1)
+    return "open"
+
+
+def artifact_problems(rel: str, text: str, root: Path) -> tuple[list[str], list[str]]:
+    """Rule 8's problems and notes for one design; nothing named is opened or run."""
+    lines = text.split("\n")
+    out, notes = [], []
+    demos = [m.group(1).strip() for ln in lines if (m := DEMO.match(ln))]
+    walks = [m.group(1).strip() for ln in lines if (m := WALKTHROUGH.match(ln))]
+    for where in walks:
+        if where:
+            notes.append(
+                f"rule 8: {rel}: a `Walkthrough:` line is judgement, read by the conductor and"
+                " the owner; no check opens it and it is never committed"
+            )
+        else:
+            out.append(f"rule 8: {rel}: a `Walkthrough:` line names no place")
+    if len(demos) > 1:
+        out.append(f"rule 8: {rel}: the design names more than one `Demo:` line")
+    for demo in demos[:1]:
+        if not RUN_RECORD.match(demo) or ".." in demo:
+            out.append(f"rule 8: {rel}: the `Demo:` line is not a run record under `{RUNS}/`")
+        elif not (root / demo).is_file():
+            out.append(f"rule 8: {rel}: the run record its `Demo:` line names does not exist")
+    if screens_of(root, Path(rel).stem) == "no":
+        if not demos:
+            out.append(
+                f"rule 8: {rel}: work without screens has no `Demo:` line naming its run record"
+            )
+        return out, notes
+    folder = root / PROTOTYPE
+    entries = list(folder.iterdir()) if folder.is_dir() else []
+    if not any(p.is_dir() and VERSION.match(p.name) for p in entries):
+        out.append(
+            f"rule 8: {rel}: work with screens (or `Screens: open`) has no prototype version"
+            f" under `{PROTOTYPE}/`"
+        )
+    return out, notes
+
+
 def check_design(files: list[str], root: Path, today: datetime.date) -> int:
     problems: list[str] = []
     paths, designs = read_files(files, root, DESIGN, 7, problems)
@@ -630,9 +707,49 @@ def check_design(files: list[str], root: Path, today: datetime.date) -> int:
         return 0
     for rel, text in designs:
         problems += design_problems(rel, text, root, today)
+        found, notes = artifact_problems(rel, text, root)
+        problems += found
+        for note in notes:
+            print(f"note {NAME}: {note}")
     if problems:
         raise Refusal(problems)
     print(f"ok {NAME}: check-design ({len(paths)} designs)")
+    return 0
+
+
+def phase_of(root: Path, name: str, today: datetime.date) -> str:
+    """Rule 1's phase from the records on disk: each starts when the one before has its record."""
+    paths = {k: f"{folder}/{name}.md" for k, folder in (("d", DIR), ("r", RESEARCH), ("a", DESIGN))}
+    texts: dict[str, str | None] = {}
+    for key, rel in paths.items():
+        try:
+            texts[key] = (root / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            texts[key] = None
+    if texts["d"] is None:
+        return f"phase 2 discovery; waits for {paths['d']}"
+    if document_problems(paths["d"], texts["d"]):
+        return "phase 2 discovery; waits for the discovery document to pass check-discovery"
+    if texts["r"] is None:
+        return f"phase 3 research; waits for {paths['r']}"
+    found, dates = research_problems(paths["r"], texts["r"])
+    if found or stale(dates, today):
+        return "phase 3 research; waits for the research record to pass check-research, fresh"
+    if texts["a"] is None:
+        return f"phase 4 design; waits for {paths['a']}"
+    if design_problems(paths["a"], texts["a"], root, today):
+        return "phase 4 design; waits for the design to pass check-design (rule 7)"
+    if artifact_problems(paths["a"], texts["a"], root)[0]:
+        return "phase 4 design; waits for its review artifact (rule 8)"
+    return "phase 5 the go; waits for the go"
+
+
+def status(names: list[str], root: Path, today: datetime.date) -> int:
+    names = names or sorted(p.stem for p in (root / DIR).glob("*.md"))
+    if not names:
+        print(f"ok {NAME}: no discovery document")
+    for name in names:
+        print(f"{name}: {phase_of(root, name, today)}")
     return 0
 
 
@@ -642,6 +759,7 @@ COMMANDS = (
     "check-discovery",
     "check-research",
     "check-design",
+    "status",
 )
 
 
@@ -680,8 +798,10 @@ def main(argv: list[str] | None = None) -> int:
     elif cmd == "check-discovery":
         ok = set(opts) <= {"--root"}
     else:
-        today = iso_date(opts.get("--date", ""))
-        ok = set(opts) <= {"--root", "--date"} and today is not None
+        ok = set(opts) <= {"--root", "--date"} and iso_date(opts.get("--date", "")) is not None
+        if cmd == "status":
+            ok = ok and all(SLUG.match(name) for name in rest)
+    today = iso_date(opts.get("--date", "")) or datetime.date.min
     if not ok:
         print(USAGE, file=sys.stderr)
         return 2
@@ -694,6 +814,8 @@ def main(argv: list[str] | None = None) -> int:
             return check_discovery(rest, root)
         if cmd == "check-research":
             return check_research(rest, root, today)
+        if cmd == "status":
+            return status(rest, root, today)
         return check_design(rest, root, today)
     except Refusal as refusal:
         for problem in refusal.problems:
