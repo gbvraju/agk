@@ -487,7 +487,7 @@ def test_ac1_two_playbooks_are_counted(tmp_path):
 # --- where the reader lives and how governance runs it (rulings on Q-513-1 and Q-513-2) ----------
 
 MODULE = KIT_ROOT / "scripts" / "agk" / "playbook_format.py"
-EIGHT = (
+NINE = (
     "web-app",
     "mobile",
     "cloud-migration",
@@ -496,6 +496,7 @@ EIGHT = (
     "multi-agent",
     "voice-agent",
     "pilot",
+    "data-pipeline",
 )
 
 
@@ -510,9 +511,9 @@ def load_module():
 
 
 def test_ac1_the_format_module_holds_the_work_types_and_the_format():
-    """REQ-045 AC1: SPEC-0038 rules 1 and 2 (one constant of the eight work types, `FORMAT = 1`)."""
+    """REQ-045 AC1: SPEC-0038 rules 1 and 2 (one constant of the nine work types, `FORMAT = 1`)."""
     module = load_module()
-    assert tuple(module.WORK_TYPES) == EIGHT
+    assert tuple(module.WORK_TYPES) == NINE
     assert module.FORMAT == 1
 
 
@@ -528,8 +529,8 @@ def test_ac1_problems_reads_one_playbook(tmp_path):
 
 
 def test_ac1_every_shipped_work_type_is_a_valid_file_name(tmp_path):
-    """REQ-045 AC1: SPEC-0038 rule 1 (each of the eight work types passes as its own file)."""
-    for work_type in EIGHT:
+    """REQ-045 AC1: SPEC-0038 rule 1 (each of the nine work types passes as its own file)."""
+    for work_type in NINE:
         write(
             tmp_path,
             replace('work_type = "web-app"', f'work_type = "{work_type}"'),
@@ -537,7 +538,7 @@ def test_ac1_every_shipped_work_type_is_a_valid_file_name(tmp_path):
         )
     result = check(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.strip() == "ok playbooks (8 playbooks)"
+    assert result.stdout.strip() == "ok playbooks (9 playbooks)"
 
 
 def test_ac1_both_scripts_are_installed_and_the_start_helper_stays_kit_only():
