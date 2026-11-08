@@ -606,3 +606,239 @@ def test_ac5_a_shallow_clone_dates_nothing(repo, tmp_path_factory):
     assert ref == "origin/main"
     assert scorecard.verify_metrics(clone, ref, scorecard.date(2026, 11, 7)) == ("2", "unknown")
     assert scorecard.stale_guides(clone, ref) == "unknown"
+
+
+# --- findings, trends and the issue writer (rules 4, 5 and 7, brief #723, build (d)) -----------
+
+D = scorecard.Decimal
+WEEKS_START, WEEKS_END = "<!-- scorecard weeks -->", "<!-- /scorecard weeks -->"
+
+
+def previous_body(columns: list[str], values: dict[str, list[str]]) -> str:
+    """An audit body whose scorecard section holds the earlier weeks (rule 7)."""
+    head = "| metric | line | " + " | ".join(columns) + " |"
+    rule = "| --- | --- | " + " | ".join("---" for _ in columns) + " |"
+    body = [f"| {m} | 3 | " + " | ".join(v) + " |" for m, v in values.items()]
+    return "\n".join(["# Drift audit", "", WEEKS_START, head, rule, *body, WEEKS_END, ""])
+
+
+WRITE_STUB = """#!{python}
+import json, sys
+with open({log!r}, "a", encoding="utf-8") as out:
+    out.write(json.dumps(sys.argv[1:]) + "\\n")
+if "POST" in sys.argv:
+    print(json.dumps({{"number": 900}}))
+else:
+    print(json.dumps({{"name": "agk-scorecard"}}))
+"""
+
+
+def quiet_week(scorecard_issues: list[dict]) -> dict:
+    """A week with nothing past the kit lines: rule_words 3 at its budget line 3."""
+    return {"issues-open": [], "issues-closed": [], "issues-scorecard": scorecard_issues}
+
+
+def writer(repo, tmp_path_factory, *args: str, toml: str = "", issues=(), previous=None):
+    """Run `scorecard.py issues` over saved reads with a `gh` stub that logs every call."""
+    project(repo, 'default_branch = "main"\n' + toml)
+    outside = tmp_path_factory.mktemp("stub")
+    bin_dir, log = outside / "bin", outside / "gh.log"
+    bin_dir.mkdir()
+    stub = bin_dir / "gh"
+    stub.write_text(WRITE_STUB.format(python=sys.executable, log=str(log)), encoding="utf-8")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    api = outside / "api"
+    api.mkdir()
+    for name, data in quiet_week(list(issues)).items():
+        (api / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+    extra = []
+    if previous is not None:
+        (outside / "previous.md").write_text(previous, encoding="utf-8")
+        extra = ["--previous", str(outside / "previous.md")]
+    before = snapshot(repo.root)
+    path = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
+    proc = repo.run(
+        "scorecard.py",
+        *args,
+        "--today",
+        TODAY,
+        "--repo",
+        "owner/name",
+        "--api-dir",
+        str(api),
+        *extra,
+        PATH=path,
+    )
+    assert snapshot(repo.root) == before  # no tracked or untracked file changes
+    calls = (
+        [json.loads(c) for c in log.read_text(encoding="utf-8").splitlines()]
+        if log.exists()
+        else []
+    )
+    return proc, calls
+
+
+def writes(calls: list[list[str]]) -> list[list[str]]:
+    return [c for c in calls if "GET" not in c]
+
+
+def field(call: list[str], key: str) -> str:
+    return next(a.split("=", 1)[1] for a in call if a.startswith(key + "="))
+
+
+def test_ac3_a_level_finding_is_above_the_line_and_a_trend_is_three_rising_weeks():
+    """REQ-054 AC3: rule 4, a level finding above the line; three rising weeks below it are a
+    trend finding; an `unknown` week breaks the run; fewer than three known weeks give none."""
+    assert scorecard.judge(["5", "25"], D("20")) == "level"
+    assert scorecard.judge(["20"], D("20")) is None  # at the line is inside it
+    assert scorecard.judge(["1", "2", "3"], D("10")) == "trend"
+    assert scorecard.judge(["9", "1", "2", "3"], None) == "trend"  # no line: trend only
+    assert scorecard.judge(["1", "unknown", "3"], D("10")) is None
+    assert scorecard.judge(["1", "2", "unknown"], D("10")) is None
+    assert scorecard.judge(["2", "3"], D("10")) is None
+    assert scorecard.judge(["1", "2", "2"], D("10")) is None  # level, not rising
+    assert (
+        scorecard.judge(["unknown"], D("0")) is None
+        and scorecard.judge(["not applicable"], D("0")) is None
+    )
+    assert scorecard.judge(["1", "2", "3"], D("10"), trend_weeks=2) is None  # outside the window
+
+
+def test_ac3_two_weeks_inside_the_line_close_and_an_unknown_week_resets_nothing():
+    """REQ-054 AC3: rule 5, `close_weeks` known weeks with no finding close the issue."""
+    assert scorecard.closable(["30", "5", "6"], D("20"), 2)
+    assert not scorecard.closable(["30", "5"], D("20"), 2)
+    assert scorecard.closable(["30", "5", "unknown", "6"], D("20"), 2)
+    assert scorecard.closable(["5", "6", "unknown"], D("20"), 2)
+    assert not scorecard.closable(["1", "2", "3"], D("20"), 2)  # still a trend finding
+    assert not scorecard.closable(["unknown", "unknown"], D("20"), 2)
+
+
+def test_ac3_the_issue_decision_is_one_issue_per_metric():
+    """REQ-054 AC3: rule 5, as `drift_audit.choose_action` keeps the decision in the script."""
+    assert scorecard.choose_issue([], finding=True, close=False) == "create"
+    assert scorecard.choose_issue([44, 41], finding=True, close=False) == "comment 41"
+    assert scorecard.choose_issue([41], finding=False, close=True) == "close 41"
+    assert scorecard.choose_issue([41], finding=False, close=False) == "none"
+    assert scorecard.choose_issue([], finding=False, close=True) == "none"
+
+
+def test_ac3_a_level_finding_opens_one_labelled_issue_of_numbers(repo, tmp_path_factory):
+    """REQ-054 AC3: rules 4 and 5, a value above its line opens one `agk-scorecard` issue."""
+    proc, calls = writer(repo, tmp_path_factory, "issues", toml="[scorecard]\nrule_words = 2\n")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    made = writes(calls)
+    issues = [c for c in made if "repos/owner/name/issues" in c]
+    assert len(issues) == 1, made
+    assert field(issues[0], "title") == "scorecard: rule_words"
+    assert field(issues[0], "labels[]") == "agk-scorecard"
+    body = field(issues[0], "body")
+    assert "kind: level" in body and "value: 3" in body and "scorecard.rule_words" in body
+    assert "builder" not in body and "reviewer" not in body and "@" not in body
+    assert "POST" in issues[0] and "issue: create rule_words" in proc.stdout
+
+
+def test_ac3_a_second_week_comments_and_opens_no_second_issue(repo, tmp_path_factory):
+    """REQ-054 AC3: rule 5, an open issue of the metric gets one comment, never a twin."""
+    open_one = [
+        {"number": 41, "title": "scorecard: rule_words", "labels": [{"name": "agk-scorecard"}]}
+    ]
+    proc, calls = writer(
+        repo, tmp_path_factory, "issues", toml="[scorecard]\nrule_words = 2\n", issues=open_one
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    made = writes(calls)
+    assert [c for c in made if "repos/owner/name/issues/41/comments" in c] and len(made) == 1, made
+    assert "issue: comment 41 rule_words" in proc.stdout
+
+
+def test_ac3_ac6_a_trend_below_the_line_is_read_from_the_previous_body(repo, tmp_path_factory):
+    """REQ-054 AC3 and AC6: rule 7, two earlier weeks from the audit body and this week rise."""
+    previous = previous_body(["2026-10-24", "2026-10-31"], {"rule_words": ["1", "2"]})
+    proc, calls = writer(repo, tmp_path_factory, "issues", previous=previous)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    created = [c for c in writes(calls) if "repos/owner/name/issues" in c]
+    assert len(created) == 1 and "kind: trend" in field(created[0], "body")
+
+
+def test_ac3_two_quiet_weeks_close_the_open_issue(repo, tmp_path_factory):
+    """REQ-054 AC3: rule 5, two weeks inside the line close the metric's issue as completed."""
+    open_one = [
+        {"number": 41, "title": "scorecard: rule_words", "labels": [{"name": "agk-scorecard"}]}
+    ]
+    previous = previous_body(["2026-10-31"], {"rule_words": ["3"]})
+    proc, calls = writer(repo, tmp_path_factory, "issues", issues=open_one, previous=previous)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    made = writes(calls)
+    assert len(made) == 1 and "PATCH" in made[0] and "repos/owner/name/issues/41" in made[0], made
+    assert field(made[0], "state") == "closed" and field(made[0], "state_reason") == "completed"
+
+
+def test_ac3_a_planted_token_is_withheld_with_counts_only():
+    """REQ-054 AC3: rule 5, the guard scan withholds a text that holds anything but numbers."""
+    plain = "scorecard: rule_words\nkind: level\nvalue: 3\n"
+    assert scorecard.guarded(plain) == (plain, "")
+    text, note = scorecard.guarded(plain + "planted someone@corp.invalid\n")
+    assert text is None and note == "withheld: EMAIL 1"
+    assert "someone" not in note
+
+
+def test_ac3_a_previous_body_gives_numbers_only(tmp_path):
+    """REQ-054 AC3 and AC6: rule 5, a cell of the previous body that is not a number is
+    `unknown`, so no text of the body reaches an issue."""
+    previous = previous_body(["2026-10-31"], {"rule_words": ["someone@corp.invalid"]})
+    got = scorecard.history(previous, scorecard.date(2026, 11, 7), 4)
+    assert got["rule_words"] == ["unknown", "unknown", "unknown"]
+
+
+def test_ac4_a_clean_week_writes_nothing(repo, tmp_path_factory):
+    """REQ-054 AC4: rules 4 and 5, every metric inside its line and no run of three: no
+    finding, no writing call of the stub and no file."""
+    proc, calls = writer(repo, tmp_path_factory, "issues")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert writes(calls) == []
+    assert "findings: 0" in proc.stdout
+
+
+def test_ac4_findings_prints_and_calls_nothing(repo, tmp_path_factory):
+    """REQ-054 AC4: `findings` prints the section and the findings and runs no `gh` at all."""
+    proc, calls = writer(repo, tmp_path_factory, "findings", toml="[scorecard]\nrule_words = 2\n")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert calls == []
+    assert (
+        "findings: 1" in proc.stdout and "finding: rule_words level value 3 line 2" in proc.stdout
+    )
+
+
+def test_ac6_the_new_section_keeps_four_weeks_and_drops_the_oldest(tmp_path):
+    """REQ-054 AC6: rule 7, a previous body with four weeks gives a section of the last four."""
+    columns = ["2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
+    previous = previous_body(columns, {"rule_words": ["9", "1", "2", "3"]})
+    today = scorecard.date(2026, 11, 7)
+    earlier = scorecard.history(previous, today, 4)
+    assert earlier["rule_words"] == ["1", "2", "3"]
+    assert earlier["full_check_minutes"] == ["unknown"] * 3  # a row that is missing
+    section = scorecard.weeks_section(
+        today, {"rule_words": "3"}, {"rule_words": [*earlier["rule_words"], "4"]}
+    )
+    lines = section.splitlines()
+    assert lines[0] == WEEKS_START and lines[-1] == WEEKS_END
+    assert lines[1] == "| metric | line | 2026-10-17 | 2026-10-24 | 2026-10-31 | 2026-11-07 |"
+    assert "| rule_words | 3 | 1 | 2 | 3 | 4 |" in lines
+    again = scorecard.history(section, scorecard.date(2026, 11, 14), 4)
+    assert again["rule_words"] == ["2", "3", "4"]  # the next week drops 2026-10-17
+
+
+def test_ac6_a_missing_previous_body_gives_unknown_weeks_and_no_trend():
+    """REQ-054 AC6: rule 7, no previous body: every earlier week is `unknown`."""
+    got = scorecard.history(None, scorecard.date(2026, 11, 7), 4)
+    assert set(map(tuple, got.values())) == {("unknown",) * 3}
+    assert scorecard.judge([*got["rule_words"], "3"], D("10")) is None
+
+
+def test_ac7_the_writer_calls_only_the_project_repository(repo, tmp_path_factory):
+    """REQ-054 AC7: rule 10, every call of the writer names the project's own repository."""
+    proc, calls = writer(repo, tmp_path_factory, "issues", toml="[scorecard]\nrule_words = 2\n")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    endpoints = [next(a for a in c if a.startswith("repos/")) for c in calls]
+    assert endpoints and all(e.startswith("repos/owner/name/") for e in endpoints), endpoints
