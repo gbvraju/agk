@@ -56,3 +56,23 @@ batch_by = "not batched: one pull request per brief, as today"
 [[claims]]
 text = "An offline state listed for every screen of the inventory finds a missing offline path while the screen is built, so fewer fix briefs are expected to chase one later."
 basis = "expected"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the work: a deadline, a budget, a team's skills, or store rules it must follow?"
+
+[[discovery]]
+id = "success"
+text = "Which results on the device show that the work succeeded, and how will each be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the data the app keeps on the device and sends on?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments must it run in, from a simulator to the devices of its users?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of start time, battery use, offline use and security must it meet?"

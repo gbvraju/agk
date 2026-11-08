@@ -60,6 +60,7 @@
     "scripts/agk/conductor.py",
     "scripts/agk/config.py",
     "scripts/agk/design_inventory.py",
+    "scripts/agk/design_prototype_check.py",
     "scripts/agk/design_signoff.py",
     "scripts/agk/design_standard.py",
     "scripts/agk/doctor.py",

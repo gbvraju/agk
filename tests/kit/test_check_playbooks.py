@@ -92,6 +92,26 @@ owner_only = true
 shape = "per-batch"
 batch_by = "demo value"
 
+[[discovery]]
+id = "constraints"
+text = "Which limits of time, budget or skills does the work have?"
+
+[[discovery]]
+id = "success"
+text = "How will we know the work succeeded?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the data it reads or keeps?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments does it run in, from a laptop to production?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of speed, uptime or security must it meet?"
+
 [[claims]]
 text = "The critical path is shorter than one flow for every kind"
 basis = "expected"
