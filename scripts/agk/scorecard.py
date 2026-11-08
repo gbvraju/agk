@@ -19,7 +19,6 @@ issues are builds (d) and (e).
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 import tomllib
 from datetime import UTC, date, datetime, timedelta
@@ -31,7 +30,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import metrics
-from common import CheckError, installed_version, load_config, repo_root, run
+from common import CheckError, git, installed_version, load_config, repo_root, run
 from doctor import kit_repo, version_numbers
 from drift_audit import d4_documents, d4_register
 from full_run import FULL
@@ -258,10 +257,11 @@ def budget_lines(root: Path) -> tuple[int | None, int | None]:
 
 
 def git_out(root: Path, *args: str) -> str | None:
-    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8"
-    )
-    return proc.stdout if proc.returncode == 0 else None
+    """`common.git`'s output, or None when the command fails."""
+    try:
+        return git(root, *args)
+    except CheckError:
+        return None
 
 
 def default_ref(root: Path, branch: str) -> str | None:
@@ -332,7 +332,8 @@ def python_pins(root: Path) -> list[str]:
         data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
-    project = data.get("project") if isinstance(data.get("project"), dict) else {}
+    found_project = data.get("project")
+    project: dict = found_project if isinstance(found_project, dict) else {}
     groups = [project.get("dependencies")]
     for table in (project.get("optional-dependencies"), data.get("dependency-groups")):
         groups += list(table.values()) if isinstance(table, dict) else []
