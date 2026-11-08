@@ -86,6 +86,8 @@ def record(tmp_path: Path, text: str | None = None, slug: str = SLUG) -> Path:
 
 def design(tmp_path: Path, text: str | None = None, slug: str = SLUG) -> Path:
     rel = f"docs/design/architecture/{slug}.md"
+    # No discovery document gives `Screens:`, so rule 8 reads `open` as `yes`: a prototype version.
+    (tmp_path / "docs" / "design" / "prototype" / "v1").mkdir(parents=True, exist_ok=True)
     return write(tmp_path, rel, design_text() if text is None else text)
 
 
