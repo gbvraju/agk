@@ -95,6 +95,21 @@ Brief #643 build (b) (ADR-0329) changes no behaviour: the settings read before a
 `ruled`, the holds that merge nothing are `holds` (a verdict that does not clear the head raises
 `NotCleared`, a `Held`) and local mode is `local_mode`, so that `conductor.py merge-queue` judges
 each open pull request with the same functions and copies no rule.
+
+SPEC-0050 build (b) (brief #727, ADR-0339, rules 6 and 8) adds two holds after every hold above
+passes and before the governance run of the check before the merge: once the would-be merge is
+built (so a fetch that fails and a conflict hold as before), it reads the fetched default branch
+and the head with local `git` only (`session_plan.reprove_files`, `behind_merges`):
+
+    merge-cleared #<n> <sha12>: held: re-prove (rule 6 of SPEC-0050)
+    merge-cleared #<n> <sha12>: held: behind the default branch (setting flow.max_behind_merges)
+    merge-cleared #<n> <sha12>: held: re-prove (unknown)
+
+(exit 3, nothing merged, recorded or filed): the first when a file the head changes since its
+merge base was also changed on the default branch after it; the second only when `[flow]
+max_behind_merges` (opt-in, an integer of at least 0; anything else refused naming the setting)
+is set and the first-parent commits of the default branch after the merge base are above it; the
+third when either read fails. A line names the rule or the setting, never a file, count or sha.
 """
 
 from __future__ import annotations
@@ -123,6 +138,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import impact  # noqa: E402
 import lock  # noqa: E402
+import session_plan  # noqa: E402
 from common import (  # noqa: E402
     DEFAULT_CONFIG,
     FINAL_ACCEPT,
@@ -165,6 +181,10 @@ APPROVAL = re.compile(r"Approval: (SPEC-\d{4})(?![0-9])")
 DEPENDS = re.compile(r"Depends-on: #(\d+)")
 BRIEF = re.compile(r"Brief: #(\d+)")  # the line that names the red-branch issue (brief #610)
 FAILS = "the merge with the default branch fails governance"  # the hold of the check (#610)
+REPROVE = "re-prove (rule 6 of SPEC-0050)"  # brief #727, SPEC-0050 rule 8
+REPROVE_UNKNOWN = "re-prove (unknown)"
+BEHIND_SETTING = "max_behind_merges"
+BEHIND = f"behind the default branch (setting flow.{BEHIND_SETTING})"
 TESTS_FAIL = "the merge with the default branch fails pre-merge tests"  # brief #667
 FAILED_LINE = re.compile(r"^(?:FAILED|ERROR) (\S+?)(?: - .*)?$")  # pytest's short summary line
 CHECK_PREFIX = "agk-merge-check-"  # the temporary folder of the check before the merge (#610)
@@ -216,6 +236,7 @@ class Rules(NamedTuple):
     approvers: list[str]  # spec_approvers
     required: list[str]  # required_checks
     pre: dict | None = None  # [testing] pre_merge_tests, checked (brief #667)
+    behind: int | None = None  # [flow] max_behind_merges, checked (brief #727)
 
 
 class Stopped(Exception):
@@ -310,6 +331,21 @@ def after_merge_seconds(data: dict) -> float:
             f"({SETTING.format(WAIT_SETTING)})"
         )
     return value * MINUTE
+
+
+def max_behind_setting(data: dict) -> int | None:
+    """`[flow] max_behind_merges` of the default branch (SPEC-0050 rule 8): None when absent, else
+    an integer of at least 0; anything else is refused before any read, naming the setting."""
+    flow = data.get("flow", {})
+    if not isinstance(flow, dict) or BEHIND_SETTING not in flow:
+        return None
+    value = flow[BEHIND_SETTING]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise Refused(
+            f"{BEHIND_SETTING} must be a whole number of at least 0 "
+            f"({SETTING.format(BEHIND_SETTING)})"
+        )
+    return value
 
 
 def setting_on(data: dict) -> None:
@@ -1070,6 +1106,26 @@ def would_be_merge(root: Path, branch: str, number: int, sha: str) -> tuple[str 
     return commit, base
 
 
+def reprove_check(root: Path, base: str, sha: str, limit: int | None) -> None:
+    """The holds of SPEC-0050 rule 8 (brief #727) on the fetched default branch BASE and the head
+    SHA, read with local git, before the governance run of the check before the merge: hold when
+    the head is in the re-prove state of rule 6, or, with LIMIT set, more first-parent commits
+    behind BASE than LIMIT. A read that fails holds as unknown. Each hold names the rule or the
+    setting only."""
+    files = session_plan.reprove_files(root, base, sha)
+    if files is None:
+        raise Held(REPROVE_UNKNOWN)
+    if files:
+        raise Held(REPROVE)
+    if limit is None:
+        return
+    count = session_plan.behind_merges(root, base, sha)
+    if count is None:
+        raise Held(REPROVE_UNKNOWN)
+    if count > limit:
+        raise Held(BEHIND)
+
+
 def merge_check(
     root: Path,
     branch: str,
@@ -1079,16 +1135,20 @@ def merge_check(
     text: str,
     repo: str = "",
     pre: dict | None = None,
+    limit: int | None = None,
 ) -> str | None:
     """Governance on the would-be merge of SHA with the default branch, before the merge (brief
     #610, amendment 123): the run of rule 6 on it, then the pre-merge tests of PRE (the default
-    branch's `[testing]` table, brief #667). None when green, else the failing step; any
-    exception, interrupt or termination is `governance not finished`, nothing having merged."""
+    branch's `[testing]` table, brief #667). Between the would-be merge and the run, the holds of
+    SPEC-0050 rule 8 with LIMIT, `[flow] max_behind_merges` (brief #727). None when green, else
+    the failing step; any exception, interrupt or termination is `governance not finished`,
+    nothing having merged."""
     with after_merge_signals():
         try:
             commit, base = would_be_merge(root, branch, number, sha)
             if commit is None:
                 return base
+            reprove_check(root, base, sha, limit)
             return in_worktree(root, commit, base, wait, text, CHECK_PREFIX, repo, pre)
         except Held:
             raise
@@ -1261,7 +1321,8 @@ def ruled(root: Path) -> Rules:
     required = required_of(data)
     after_merge_seconds(data)  # a bad setting is refused before anything is merged
     pre = pre_merge_setting(data)  # likewise the pre-merge tests (brief #667)
-    return Rules(data, people, allowed, approvers, required, pre)
+    behind = max_behind_setting(data)  # and the behind limit (brief #727)
+    return Rules(data, people, allowed, approvers, required, pre, behind)
 
 
 def local_mode(data: dict, issues: list[dict]) -> bool:
@@ -1317,7 +1378,7 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
         text = str(pull.get("body") or "")  # the body read above, for governance (brief #576)
         branch = str(data.get("default_branch", "main"))
         wait = after_merge_seconds(data)
-        step = merge_check(root, branch, number, sha, wait, text, repo, rules.pre)
+        step = merge_check(root, branch, number, sha, wait, text, repo, rules.pre, rules.behind)
         if step is not None:
             raise Held(f"{FAILS} ({step})")
         merged = merge_pull(repo, number, sha, accepted)

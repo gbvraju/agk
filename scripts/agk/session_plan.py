@@ -47,6 +47,13 @@ The plan, in the order it is decided:
    waves, the capacity, the merge queue and the safe merge set are decided as above, so a lane never
    lets two overlapping briefs run together; no lock setting changes. Without a declaration the plan
    prints exactly what it printed before.
+
+The re-prove state (SPEC-0050 rule 6, build (b), brief #727, ADR-0339): `reprove_files` names, from
+local git only, the files a pull request's head changes since its merge base with the default
+branch that the default branch also changed after that merge base (added, modified, removed, or
+renamed from or to; no exemption), sorted, or None when git cannot read them; `behind_merges`
+counts the first-parent commits of the default branch after the merge base. `merge_cleared.py`
+holds on both (rule 8).
 """
 
 from __future__ import annotations
@@ -54,6 +61,7 @@ from __future__ import annotations
 import json
 import re
 import string
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
 from datetime import UTC, datetime, timedelta
@@ -748,6 +756,46 @@ def behind_by(repo: str, default: str, pr: dict) -> int | None:
     found = gh(f"repos/{repo}/compare/{default}...{sha}") if sha else None
     value = found.get("behind_by") if isinstance(found, dict) else None
     return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _git(root, *args: str) -> str | None:
+    """The output of `git ARGS` in ROOT, or None when git fails."""
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8"
+    )
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def _merge_base(root, default: str, head: str) -> str | None:
+    out = _git(root, "merge-base", default, head)
+    return (out or "").strip() or None
+
+
+def _changed(root, start: str, end: str) -> set[str] | None:
+    out = _git(root, "diff", "--name-only", "--no-renames", "-z", f"{start}..{end}")
+    return None if out is None else {name for name in out.split("\0") if name}
+
+
+def reprove_files(root, default: str, head: str) -> list[str] | None:
+    """The files that put HEAD in the re-prove state against DEFAULT (SPEC-0050 rule 6): changed
+    by HEAD since its merge base with DEFAULT and by DEFAULT after it, sorted; `--no-renames`
+    names a rename by both paths. None when any read fails, never a clean empty list."""
+    base = _merge_base(root, default, head)
+    mine = _changed(root, base, head) if base else None
+    theirs = _changed(root, base, default) if base else None
+    if mine is None or theirs is None:
+        return None
+    return sorted(mine & theirs)
+
+
+def behind_merges(root, default: str, head: str) -> int | None:
+    """The first-parent commits of DEFAULT after its merge base with HEAD (SPEC-0050 rule 8), or
+    None when git cannot read them."""
+    base = _merge_base(root, default, head)
+    if base is None:
+        return None
+    out = _git(root, "rev-list", "--count", "--first-parent", f"{base}..{default}")
+    return int(out) if out is not None and out.strip().isdigit() else None
 
 
 def session_names(busy: set[str], count: int) -> list[str]:
