@@ -1,6 +1,6 @@
 # SPEC-0055: The right tests for each stack, run at the right time by a map that learns
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-062
 
