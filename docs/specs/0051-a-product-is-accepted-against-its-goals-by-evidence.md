@@ -1,6 +1,6 @@
 # SPEC-0051: A product is accepted against its goals by evidence
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-058
 
