@@ -627,7 +627,7 @@ def test_ac1_failing_project_test_makes_the_ci_steps_fail(shared_copy, kit_suite
     (shared_copy / "tests" / "test_p.py").write_text("def test_p():\n    assert False\n")
     codes = run_ci(shared_copy, kit_suite.direct)
     assert codes[-1] != 0
-    assert codes[:-1] == [0] * 16
+    assert codes[:-1] == [0] * 17
 
 
 def test_ac1_agk_toml_of_an_init_repo_has_project_tests_with_exit_5_handling(installed):
