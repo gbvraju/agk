@@ -1,0 +1,1 @@
+- AGK's own pull requests run only the tests their change selects in `Tests of the checks`, and the full suite runs on the default branch; the governance workflow passes `EVENT` to that step, which a project's notice-only `agk-test` ignores (brief #749, ADR-0348 Proposed)
