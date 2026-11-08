@@ -3,6 +3,7 @@
 Usage:
     python3 design.py prototype [--root DIR]
     python3 design.py screenshots --folder FOLDER [--root DIR]
+    python3 design.py screenshots --version v<n> [--root DIR]
     python3 design.py inventory [--root DIR]
     python3 design.py write ...   (refused: SPEC-0037 rule 12)
 
@@ -14,6 +15,10 @@ Kit-only (never installed). `prototype` writes the next version folder
 existing folders of `docs/design/mockups/` are only read and checked. `screenshots` takes four
 pictures (360 and 1280 px wide, light and dark) of an existing mockup folder with a headless
 browser found on PATH and runs nothing else; with none it says so and succeeds (SPEC-0029 rule 6).
+`screenshots --version v<n>` (SPEC-0037 rule 8, `design_render.py`) opens each page of a prototype
+version, offline, at each breakpoint of the standard in light and dark, and writes one screenshot
+of each and `screenshots/reflow.json` (`ok` or `sideways`); with no browser it says
+`design: no headless browser found; reflow not run`, writes every entry as `not run` and succeeds.
 `inventory` writes the skeleton of `docs/design/inventory.md` from
 `kit/templates/design-inventory.md` (SPEC-0037 rule 3): one section for each requirement of
 `docs/requirements.md`, its `- Specs:` filled from the `Requirements:` lines of `docs/specs/*.md`
@@ -38,10 +43,13 @@ from common import CheckError, parse_requirements
 
 KIT = Path(__file__).resolve().parents[2]
 TEMPLATES = KIT / "kit" / "templates"
-USAGE = "usage: design.py prototype | screenshots --folder FOLDER | inventory  [--root DIR]"
+USAGE = (
+    "usage: design.py prototype | screenshots --folder FOLDER | screenshots --version v<n>"
+    " | inventory  [--root DIR]"
+)
 COMMANDS = ("prototype", "write", "screenshots", "inventory")
 WRITE_REFUSAL = "rule 12: a new mockup folder is not written; use /agk:design prototype"
-FLAGS = ("--root", "--name", "--date", "--theme-file", "--folder")
+FLAGS = ("--root", "--name", "--date", "--theme-file", "--folder", "--version")
 FOLDER = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*$")
 MOCKUPS = "docs/design/mockups"
 THEME = "docs/design/theme.md"
@@ -89,6 +97,12 @@ def find_browser() -> str | None:
 
 
 def cmd_screenshots(root: Path, opts: dict[str, str]) -> int:
+    if "version" in opts:
+        if "folder" in opts:
+            raise UsageError("screenshots takes --folder or --version, not both")
+        import design_render  # it imports this module: imported here, when it is needed
+
+        return design_render.reflow(root, opts["version"])
     name = opts.get("folder", "")
     folder = root / MOCKUPS / name
     if not FOLDER.match(name) or not (folder / "index.html").is_file():
