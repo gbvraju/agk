@@ -372,7 +372,7 @@ def jobs_started(github: dict) -> dict[str, int]:
         ("ready push", pr_event("synchronize", False), 5),
         ("ready edit", pr_event("edited", False), 2),
         ("ready_for_review", pr_event("ready_for_review", False), 4),
-        ("verdict comment", comment_event("Verdict: cleared abc1234"), 3),  # merger, its wake (#765)
+        ("verdict comment", comment_event("Verdict: cleared abc1234"), 3),  # merger + wake, #765
     ],
 )
 def test_the_jobs_each_event_starts(label, github, total):
