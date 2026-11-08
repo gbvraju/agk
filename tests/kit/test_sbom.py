@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 import sbom
-from conftest import Repo
 
 SHA = "a1" * 20
 OTHER_SHA = "b2" * 20
@@ -76,20 +75,16 @@ REFS = {
 
 
 @pytest.fixture
-def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
-    root = tmp_path / "repo"
-    root.mkdir()
-    fixture = Repo(root)
-    fixture.git("init", "-q", "-b", "main")
-    fixture.git("config", "user.email", "dev@example.com")
-    fixture.git("config", "user.name", "dev")
-    fixture.commit(dict(FILES))
-    monkeypatch.chdir(root)
-    return fixture
+def repo(repo, monkeypatch: pytest.MonkeyPatch):
+    """The kit's fixture repository with the bill's files committed, as the working directory."""
+    repo.commit(dict(FILES))
+    monkeypatch.chdir(repo.root)
+    return repo
 
 
 def make(tmp_path: Path, *extra: str) -> tuple[int, Path]:
-    out = tmp_path / "bill.json"
+    out = tmp_path / "out" / "bill.json"  # the fixture's root; `out/` is ignored there
+    out.parent.mkdir(exist_ok=True)
     return sbom.main(["make", *extra, "--out", str(out)]), out
 
 
@@ -107,7 +102,7 @@ def props(component: dict) -> dict:
     return {p["name"]: p["value"] for p in component["properties"]}
 
 
-def test_bill_lists_exactly_the_declared_components(repo: Repo, tmp_path: Path) -> None:
+def test_bill_lists_exactly_the_declared_components(repo, tmp_path: Path) -> None:
     """REQ-061 AC1: one CycloneDX document, every class, its pins, digests and package URLs."""
     doc, _ = bill(tmp_path)
     assert {c["bom-ref"] for c in doc["components"]} == REFS
@@ -131,7 +126,7 @@ def test_bill_lists_exactly_the_declared_components(repo: Repo, tmp_path: Path) 
 
 
 @pytest.mark.parametrize("ref", ["python:beta", "python:setuptools", "action:example/tool"])
-def test_a_pin_that_is_not_exact_is_unpinned(repo: Repo, tmp_path: Path, ref: str) -> None:
+def test_a_pin_that_is_not_exact_is_unpinned(repo, tmp_path: Path, ref: str) -> None:
     """REQ-061 AC1: a range or an unpinned `uses:` has `agk:pin` and never a version."""
     doc, _ = bill(tmp_path)
     component = by_ref(doc, ref)
@@ -139,7 +134,7 @@ def test_a_pin_that_is_not_exact_is_unpinned(repo: Repo, tmp_path: Path, ref: st
     assert "version" not in component and "purl" not in component
 
 
-def test_same_commit_same_bytes_and_read_at_the_commit(repo: Repo, tmp_path: Path) -> None:
+def test_same_commit_same_bytes_and_read_at_the_commit(repo, tmp_path: Path) -> None:
     """REQ-061 AC1: the document depends only on the commit, not on the working tree."""
     _, out = bill(tmp_path)
     first = out.read_bytes()
@@ -152,7 +147,7 @@ def test_same_commit_same_bytes_and_read_at_the_commit(repo: Repo, tmp_path: Pat
 
 
 def test_make_and_check_open_no_socket(
-    repo: Repo, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    repo, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """REQ-061 AC1: `make` and `check` run with sockets made to raise."""
 
@@ -164,7 +159,7 @@ def test_make_and_check_open_no_socket(
     assert code == 0 and sbom.main(["check", str(out)]) == 0
 
 
-def test_check_passes_a_true_bill(repo: Repo, tmp_path: Path, capsys) -> None:
+def test_check_passes_a_true_bill(repo, tmp_path: Path, capsys) -> None:
     """REQ-061 AC2: the bill of the commit prints `ok bom`."""
     _, out = bill(tmp_path)
     capsys.readouterr()
@@ -221,9 +216,7 @@ def _odd_property(doc: dict) -> None:
         (_odd_property, "python"),
     ],
 )
-def test_check_gives_one_line_per_problem(
-    repo: Repo, tmp_path: Path, capsys, change, kind: str
-) -> None:
+def test_check_gives_one_line_per_problem(repo, tmp_path: Path, capsys, change, kind: str) -> None:
     """REQ-061 AC2: one `FAIL bom:` line naming the class, holding no name or version."""
     doc, out = bill(tmp_path)
     change(doc)
@@ -240,9 +233,7 @@ def test_check_gives_one_line_per_problem(
     ("key", "value"),
     [("specVersion", "9.9"), ("bomFormat", "Other"), ("extra", "zz9"), ("serialNumber", "urn:x")],
 )
-def test_check_refuses_another_form(
-    repo: Repo, tmp_path: Path, capsys, key: str, value: str
-) -> None:
+def test_check_refuses_another_form(repo, tmp_path: Path, capsys, key: str, value: str) -> None:
     """REQ-061 AC2: another format or version, an extra field or another commit's identity."""
     doc, out = bill(tmp_path)
     doc[key] = value
@@ -254,7 +245,7 @@ def test_check_refuses_another_form(
     assert value not in lines[0]
 
 
-def test_check_refuses_what_is_not_json(repo: Repo, tmp_path: Path, capsys) -> None:
+def test_check_refuses_what_is_not_json(repo, tmp_path: Path, capsys) -> None:
     """REQ-061 AC2: a file that is not JSON is one line, never a traceback."""
     bad = tmp_path / "bad.json"
     bad.write_text("not json", encoding="utf-8")
@@ -262,12 +253,12 @@ def test_check_refuses_what_is_not_json(repo: Repo, tmp_path: Path, capsys) -> N
     assert capsys.readouterr().out.startswith("FAIL bom: document ")
 
 
-def test_an_out_inside_the_repository_is_refused(repo: Repo, capsys) -> None:
+def test_an_out_inside_the_repository_is_refused(repo, capsys) -> None:
     """REQ-061 AC2: a tracked or unignored `--out` is refused; an ignored one is written."""
     assert sbom.main(["make", "--out", "bill.json"]) == 1
     assert "repository" in capsys.readouterr().out
     assert not (repo.root / "bill.json").exists()
-    (repo.root / "out").mkdir()
+    (repo.root / "out").mkdir(exist_ok=True)
     assert sbom.main(["make", "--out", "out/bill.json"]) == 0
     assert (repo.root / "out/bill.json").is_file()
 
@@ -287,7 +278,7 @@ def test_an_out_inside_the_repository_is_refused(repo: Repo, capsys) -> None:
     ],
 )
 def test_an_unreadable_file_is_refused(
-    repo: Repo, tmp_path: Path, capsys, path: str, text: str | None, named: str
+    repo, tmp_path: Path, capsys, path: str, text: str | None, named: str
 ) -> None:
     """REQ-061 AC2: named by its path class, and no bill is written."""
     repo.commit({path: text})
@@ -296,7 +287,7 @@ def test_an_unreadable_file_is_refused(
     assert named in capsys.readouterr().out
 
 
-def test_a_project_has_no_kit_files(repo: Repo, tmp_path: Path, capsys) -> None:
+def test_a_project_has_no_kit_files(repo, tmp_path: Path, capsys) -> None:
     """REQ-061 AC2: without `kit/manifest.json` the bill has no `kit-file` and passes."""
     repo.commit({"kit/manifest.json": None})
     doc, out = bill(tmp_path)
@@ -305,7 +296,7 @@ def test_a_project_has_no_kit_files(repo: Repo, tmp_path: Path, capsys) -> None:
     assert sbom.main(["check", str(out)]) == 0
 
 
-def test_a_ref_that_does_not_resolve_names_the_option(repo: Repo, tmp_path: Path, capsys) -> None:
+def test_a_ref_that_does_not_resolve_names_the_option(repo, tmp_path: Path, capsys) -> None:
     """REQ-061 AC2: refused naming the setting, never its value."""
     code, _ = make(tmp_path, "--ref", "no-such-ref")
     text = capsys.readouterr().out
