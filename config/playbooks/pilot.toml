@@ -1,0 +1,176 @@
+format = 1
+work_type = "pilot"
+title = "A time-boxed customer capability demo: research, the owner's choice, a contract and mocks, a build in three lanes, a scripted demo and a report"
+heavy_steps = ["demo smoke run"]
+evidence = [
+  "the research record with its sources and its recommendation marked as a proposal",
+  "the owner's recorded choice of the tool or service",
+  "the demo script with the mock path it falls back to",
+  "the demo smoke run record",
+  "the pilot report with its measured numbers and its cost estimate",
+]
+
+[[phases]]
+name = "intake"
+order = 1
+after = []
+
+[[phases]]
+name = "research"
+order = 2
+after = ["intake"]
+
+[[phases]]
+name = "choice"
+order = 3
+after = ["research"]
+
+[[phases]]
+name = "contract"
+order = 4
+after = ["choice"]
+
+[[phases]]
+name = "build"
+order = 5
+after = ["contract"]
+
+[[phases]]
+name = "demo"
+order = 6
+after = ["build"]
+
+[[phases]]
+name = "report"
+order = 7
+after = ["demo"]
+
+[split]
+brief_order = ["intake", "research", "choice", "contract", "integration", "demo-surface", "evaluation", "demo", "report"]
+depends_on = [
+  ["research", "intake"],
+  ["choice", "research"],
+  ["contract", "choice"],
+  ["integration", "contract"],
+  ["demo-surface", "contract"],
+  ["evaluation", "contract"],
+  ["demo", "integration"],
+  ["demo", "demo-surface"],
+  ["demo", "evaluation"],
+  ["report", "demo"],
+]
+
+[[lanes]]
+name = "integration"
+kinds = ["integration"]
+
+[[lanes]]
+name = "demo-surface"
+kinds = ["demo-surface"]
+
+[[lanes]]
+name = "evaluation"
+kinds = ["evaluation"]
+
+[testing]
+profile = "balanced"
+always_full = []
+map = []
+
+[[gates]]
+id = "research-record"
+kind = "check"
+text = "A research record: a file under docs/research/ for the pilot holds at least two options; a criteria table that covers capability fit to the success criteria, cost, licence, data handling and residency, maturity, integration effort and lock-in; for every option at least one source line with a URL and an access date; and a recommendation marked as a proposal."
+step = "research-record"
+owner_only = false
+
+[[gates]]
+id = "research-findings"
+kind = "judgement"
+text = "The truth of the research record's findings; the record's sources are the evidence."
+owner_only = false
+
+[[gates]]
+id = "tool-choice"
+kind = "judgement"
+text = "The choice of the tool or service is made by the owner or the customer and recorded; a session never chooses, never signs up for a service and never accepts its terms."
+owner_only = true
+
+[[gates]]
+id = "credentials"
+kind = "judgement"
+text = "API keys and accounts for any service are the owner's; a session never handles them, and the build reads them only from the environment the owner sets."
+owner_only = true
+
+[[gates]]
+id = "customer-data"
+kind = "check"
+text = "Customer data: fixtures and demo data use invented values only, at example.com, and real customer data stays out of the repository."
+step = "customer-data"
+owner_only = false
+
+[[gates]]
+id = "time-box"
+kind = "check"
+text = "A time box: the intake declares it as a number of days."
+step = "time-box"
+owner_only = false
+
+[[gates]]
+id = "demo-fallback"
+kind = "check"
+text = "A demo fallback: the demo script names the mock path that runs when the live service is unavailable."
+step = "demo-fallback"
+owner_only = false
+
+[[gates]]
+id = "cost-estimate"
+kind = "check"
+text = "A cost estimate is declared."
+step = "cost-estimate"
+owner_only = false
+
+[[gates]]
+id = "cost-estimate-holds"
+kind = "judgement"
+text = "The cost estimate holds; the pilot report's measured numbers are the evidence."
+owner_only = false
+
+[[gates]]
+id = "pilot-report"
+kind = "check"
+text = "A pilot report: docs/runs/pilot-report.md exists with the sections what worked, the measured numbers, a cost estimate, risks and the path to production as a later project of another work type."
+step = "pilot-report"
+owner_only = false
+
+[milestones]
+shape = "per-phase"
+batch_by = "phase: each phase of the pilot is one milestone"
+
+[[claims]]
+text = "Research and the owner's choice come before the contract, so a time-boxed demo is expected to change direction less often than when the tool is chosen during the build."
+basis = "expected"
+
+[[claims]]
+text = "The three lanes are built in parallel against the contract and its mocks, and the mocks stay as the demo's fallback, so the demo is expected to be ready sooner and to survive a failure of the live service."
+basis = "expected"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the pilot: its time box in days, a budget, a team's skills, or systems that must stay as they are?"
+
+[[discovery]]
+id = "success"
+text = "Which results in the demo show that the capability works for the customer, and how will each be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the customer's data and to what the candidate tools or services may read, keep or pass on?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments must it run in, from a developer's machine to the place of the demo?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of response time, availability during the demo, security and cost must it meet?"
