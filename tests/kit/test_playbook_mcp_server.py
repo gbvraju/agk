@@ -1,7 +1,7 @@
 """Tests of the shipped mcp-server playbook (SPEC-0038 rules 1, 10 and 12 build (k)).
 
 REQ-045 AC6. `config/playbooks/mcp-server.toml` passes the playbook check, and
-`check_playbooks.py` passes with seven playbooks. It holds exactly the mcp-server gates of rule 10:
+`check_playbooks.py` passes with eight playbooks. It holds exactly the mcp-server gates of rule 10:
 tool schema contract tests, `check` (the testing map names a test glob for every schema file);
 permission scopes, `check` (every tool declares its scopes and none is a wildcard); and a
 prompt-injection test set, `check` (the set exists and the map names its tests). Each check gate
@@ -43,7 +43,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_seven_playbooks() -> None:
+def test_check_playbooks_passes_with_eight_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -51,7 +51,7 @@ def test_check_playbooks_passes_with_seven_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (7 playbooks)\n"
+    assert out.stdout == "ok playbooks (8 playbooks)\n"
 
 
 def test_exactly_the_mcp_server_gates_of_rule_10() -> None:
