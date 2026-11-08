@@ -149,6 +149,8 @@ from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
 from reviewers import verdict_authors
 
+from config import caps_settings
+
 NAME = "session"
 USAGE = (
     "usage: session.py watch (--pr N [--since ID] [--session ID] | --merged N | --assign ID)\n"
@@ -247,7 +249,11 @@ BUILDER_LABELS = frozenset({"agk:fix", "agk:conflict", "agk:ci-red"})
 WAITING_LABELS = frozenset({"agk:ready", "agk:approve"})
 STALL_HOURS = 4
 SAFE_REF = re.compile(r"[A-Za-z0-9._/-]+")
-PROGRESS = re.compile(r"Progress: ([0-9a-f]{7,40}) done (\d+)/(\d+); next: (\S.*)")
+PROGRESS = re.compile(  # the step, then the usage ending of session rule 8 (SPEC-0049 rule 4)
+    r"Progress: ([0-9a-f]{7,40}) done (\d+)/(\d+); next: (\S.*?)"
+    r"(?:; Usage: (?:\d+ tokens|not shown))?"
+)
+OVER_CAP = re.compile(r"Report: \S+ over cap (\d+(?:\.\d+)?)/\d+ (tokens|hours)\b.*")
 
 
 LAST_ERROR = ""  # what `gh` said about the last failed call (empty after a good one)
@@ -2146,6 +2152,32 @@ def takeover_lost(comments: list, since: datetime, me: str) -> str | None:
     return found[0][2] if found and found[0][2] != me else None
 
 
+def parked(root, repo: str, pr: dict, comments: list | None) -> bool:
+    """SPEC-0049 rule 10: the newest `Report:` of the author is an `over cap` report, and no ruling
+    since puts the build under its cap: the cap of the brief's `Size:` now (a person raised it) is
+    at or above the figure the report gives. Without the `[caps]` table, or when the brief or the
+    table cannot be read, the pull request stays parked. GET only."""
+    me = str((pr.get("user") or {}).get("login") or "").lower()
+    mine = [c for c in comments or [] if author_of(c) == me]
+    reports = [c for c in mine if first_line(c).startswith("Report:")]
+    newest = max(reports, key=lambda c: (moment(c.get("created_at")), c.get("id", 0)), default=None)
+    found = OVER_CAP.fullmatch(first_line(newest)) if newest else None
+    if not found:
+        return False
+    import caps  # here, not at the top: caps imports this module
+
+    brief = brief_number(pr)
+    issue = gh(f"repos/{repo}/issues/{brief}") if brief is not None else None
+    try:
+        table = caps_settings(root)
+    except CheckError:
+        table = None
+    if table is None or not isinstance(issue, dict) or "body" not in issue:
+        return True
+    _, cap = caps.cap_of(table, issue.get("body"))
+    return float(found.group(1)) > cap[found.group(2)]
+
+
 def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
     """Offer the first stalled pull request and, with `taking`, take it over; None when there is
     none. Without `taking` it posts nothing and prints the command that takes it over (Q-440-1)."""
@@ -2163,7 +2195,7 @@ def offer_stalled(root, repo: str, me: str, taking: bool = True) -> int | None:
         changed = last_change(repo, pr, comments) if comments is not None else None
         if changed is None or datetime.now(UTC) - changed < timedelta(hours=hours):
             continue
-        if waits_for_a_person(root, pr, comments):
+        if waits_for_a_person(root, pr, comments) or parked(root, repo, pr, comments):
             continue
         if not taking:
             print(f"stalled #{number}\ntitle: {pr.get('title')}\naddress: {pr.get('html_url')}\n")
