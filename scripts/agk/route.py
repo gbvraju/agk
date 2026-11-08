@@ -4,6 +4,7 @@
     python3 route.py --pr N [--dry-run]      route one pull request (a person or a test)
     python3 route.py --all [--dry-run]       route every open pull request
     python3 route.py --branch [--dry-run]    route the default branch: its red-branch brief
+    python3 route.py --health [--dry-run]    the health issues alone (local mode has no job)
 
 It runs in the workflow `agk-route.yml` on `pull_request`, `issue_comment`, `workflow_run` and
 `push` to the default branch, with the job's `GITHUB_TOKEN`, from a checkout of the default
@@ -26,11 +27,15 @@ another event does not leave a green pull request at `agk:ci-running`.
 No review, no merge, and one comment only: the reply `Correction needed:` to a verdict whose
 `Final:` line it cannot read (brief 238). When a pull request merges (`pull_request` closed, the
 job runs only for a merge), the brief its body finishes with `Finishes: #n` beside `Brief: #n` is
-closed as completed, with one comment that names the merge commit (brief 302, ADR-0178); that is
-the only other issue it closes. Messages name the rule, never a value.
+closed as completed, with one comment that names the merge commit (brief 302, ADR-0178); apart
+from the health issues below, that is the only other issue it closes. Messages name the rule,
+never a value.
 A covered fix list on the full head whose every `Final:` line accepts an ADR the pull request
 changes (SPEC-0021 rule 3a) clears the head for the label, as `merge_cleared.py` clears it, so a
 pull request merged on it ends with `agk:ready` (brief #601, ADR-0293).
+With `builder_start = "assign"` every run of the job also reads the conductor lease and the slot
+leases and opens, updates or closes the plain issues `No live conductor` and `Builder pool down`,
+labelled `agk-health` (brief #776 answer 5, ADR-0368); with `start` it reads none of them.
 While the checkout's agk.toml sets `paused = true` (brief #348, ADR-0196) it prints `agk paused`
 and reads and writes nothing, whatever it was asked to route.
 """
@@ -79,7 +84,7 @@ from reviewers import (
 from session import RED_TITLE, gh, is_red, pages, repo_name
 
 NAME = "route"
-USAGE = "usage: route.py [--pr N | --all | --branch] [--dry-run]"
+USAGE = "usage: route.py [--pr N | --all | --branch | --health] [--dry-run]"
 ROUTER_JOB = "agk-route"
 LABELS = (
     "agk:ci-running",
@@ -99,11 +104,13 @@ COLORS = {
     "agk:approve": "5319e7",
     "agk:ready": "0e8a16",
     "agk-brief": "1d76db",
+    "agk-health": "b60205",
     "agk:parked": "c5def5",
 }
 DESCRIPTIONS = {
     "agk-brief": "AGK: a brief a builder session can take",
     "agk:parked": "AGK: a brief `next` does not offer",
+    "agk-health": "AGK: the conductor or the builder pool has no valid lease",
 }
 FAILED_RUN = {"failure", "timed_out", "cancelled", "action_required", "startup_failure", "stale"}
 FAILED_STATUS = {"failure", "error"}
@@ -682,6 +689,44 @@ def write_red(repo: str, open_red: list[dict], body: str, labels: Labels) -> Non
         write(issues, *args, method="POST", what="rule 7: the issue")
 
 
+def route_health(root: Path, repo: str, labels: Labels, dry: bool) -> None:
+    """Open, update or close the issues `No live conductor` and `Builder pool down` from the
+    leases (brief #776 answer 5, ADR-0368). A lease that cannot be read says so and writes
+    nothing: unknown is never dead, and it fails no routing."""
+    import conductor  # conductor imports merge_cleared, which imports this file
+
+    try:
+        rows = conductor.pool_state(root, repo)
+        found = pages(f"repos/{repo}/issues?state=open&labels=agk-health") if rows else []
+    except CheckError as exc:
+        print(f"health: skipped: {exc}")
+        return
+    if found is None:
+        print("health: skipped: the open health issues cannot be read")
+        return
+    issues = f"repos/{repo}/issues"
+    for title, down, waits, text in rows:
+        same = sorted(
+            (i for i in found if i.get("title") == title and "pull_request" not in i),
+            key=lambda i: i["number"],
+        )
+        print(f"health: {title}: {'down' if down else 'ok'}{', work waits' if waits else ''}")
+        if dry:
+            continue
+        if not down:
+            for item in same:
+                ended = ("-f", "state=closed", "-f", "state_reason=completed")
+                target = f"{issues}/{item['number']}"
+                write(target, *ended, method="PATCH", what="health: the issue")
+        elif waits and not same:
+            labels.ensure("agk-health")
+            args = ("-f", f"title={title}", "-f", f"body={text}", "-f", "labels[]=agk-health")
+            write(issues, *args, method="POST", what="health: the issue")
+        elif waits and str(same[0].get("body") or "") != text:
+            target = f"{issues}/{same[0]['number']}"
+            write(target, "-f", f"body={text}", method="PATCH", what="health: the issue")
+
+
 # --- which pull requests an event names (rule 1) ----------------------------------------------
 
 
@@ -811,7 +856,7 @@ def main(argv: list[str] | None = None) -> int:
     dry = "--dry-run" in args
     rest = [a for a in args if a != "--dry-run"]
     by_number = len(rest) == 2 and rest[0] == "--pr" and rest[1].isdigit()
-    if rest not in ([], ["--all"], ["--branch"]) and not by_number:
+    if rest not in ([], ["--all"], ["--branch"], ["--health"]) and not by_number:
         print(USAGE, file=sys.stderr)
         return 2
     root = repo_root()
@@ -834,7 +879,7 @@ def main(argv: list[str] | None = None) -> int:
     name = os.environ.get("GITHUB_EVENT_NAME", "")
     if rest == ["--all"]:
         numbers = open_numbers(repo)
-    elif rest == ["--branch"]:
+    elif rest in (["--branch"], ["--health"]):
         numbers = []
     elif rest:
         numbers = [int(rest[1])]
@@ -879,6 +924,11 @@ def main(argv: list[str] | None = None) -> int:
             except CheckError as exc:
                 print(f"FAIL {NAME}: {exc}")
                 failed = True
+        if not rest or rest == ["--health"]:  # every event of the job (brief #776 answer 5)
+            try:
+                route_health(root, repo, labels, dry)
+            except CheckError as exc:
+                print(f"health: skipped: {exc}")
     except ReadOnly:
         print("skipped (read-only token)")
         failed = False

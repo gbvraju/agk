@@ -150,12 +150,13 @@ runtime's `ccr/convert_to_draft` and `ccr/ready_for_review` routes `(verify)`, a
 alone. `check-verdict FILE` prints `ok`, or the problem of the verdict's `Final:` lines by the router's own reading
 (`common.verdict_problem`), or that its first line is not `Verdict: cleared|fix list|rejected <sha>`; exit 1 on a problem, nothing
 read on GitHub. `lease` is the active-conductor marker: one comment `Conductor: active <time> <name>` on the plan issue that
-`plan_issue` of the `[flow]` table names (absent: the lease is off), valid 50 minutes; `--take NAME` posts or edits it in place
+`plan_issue` of the `[flow]` table names (absent: the lease is off), valid 10 minutes, renewed at every `watch` pass (`watch` returns within 5 minutes with `nothing new`; ADR-0368); `--take NAME` posts or edits it in place
 unless another name holds a valid lease (exit 3, naming the setting) and keeps the name in the git directory, `--release NAME`
 marks it released, `--show` prints `held by <name> until <time>` or `free`; `merge-queue` refuses to run while another name holds a
 valid lease. `session.py slot` runs a builder slot when `[flow] builder_start = "assign"` (brief #776, ADR-0362): `--take`, `--renew` and
-`--release` keep the slot's 50-minute lease on the assignments issue (a held slot exits 3), and `--next` renews it and prints one
-next step. `session.py prompt --brief N` prints the builder's standing prompt from the kit's files, GET only: the item line with
+`--release` keep the slot's 10-minute lease on the assignments issue (a held slot exits 3), and `--next` renews it and prints one
+next step; `watch --assign <slot>` renews it too and returns within 5 minutes with `no event` (ADR-0368). With `assign`, every router run keeps the plain issues
+`No live conductor` and `Builder pool down` (label `agk-health`) in step with the leases; `route.py --health [--dry-run]` is that check alone, for local mode. `session.py prompt --brief N` prints the builder's standing prompt from the kit's files, GET only: the item line with
 the brief's reserved numbers (its `Reserved:` lines and the `reserves` of its takes) and the session name when given, the files to
 read first, the secret-scan deferral line of `prepush.py`, the body lines of CLAUDE.md item 7 read from `config/core-rules.md`, and
 the session rules that bind a builder quoted from `config/session-rules.md`; `--follow-up TEXT` (one line, never a verdict)
