@@ -15,7 +15,8 @@ also changed after its merge base is in the re-prove state, and that `merge_clea
 Its build (b) is brief #727. The requirement's ADR, ADR-0325, is still `Proposed`, so this build
 cannot use a `Covered-by:` line (session rule 36) and writes its own ADR with the number the brief
 reserved. The build changes the behaviour SPEC-0039 rule 6 and ADR-0297 state for the check before
-the merge: it adds two holds to it.
+the merge: it adds two holds to it, proposed in `docs/runs/proposed-spec-amendments-137.md` with the
+number the conductor reserved for brief #727 (answer to Q-727-1).
 
 ## Decision
 
@@ -44,7 +45,5 @@ sweep lines are build (d). Nothing changes for a project with `auto_merge` off.
 
 ## Residual
 
-- 2026-11-08: the amendment to SPEC-0039 rule 6 that SPEC-0050 rule 10 names for this build is not
-  written, because brief #727 reserves no amendment number (Q-727-1, due 2026-12-31).
 - 2026-11-08: `conductor.py merge-queue` does not yet show the re-prove hold; it reads the holds
   that read GitHub (`holds`), and this one reads git (due 2026-12-31).
