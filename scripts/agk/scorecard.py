@@ -1,7 +1,8 @@
 """The weekly scorecard: one table of this repository's level numbers (SPEC-0047 rules 1 to 3,
 brief #713, build (b), ADR-0311).
 
-    python3 scripts/agk/scorecard.py [--today YYYY-MM-DD] [--repo OWNER/REPO] [--api-dir DIR]
+    python3 scripts/agk/scorecard.py [findings | issues] [--today YYYY-MM-DD] [--repo OWNER/REPO]
+        [--api-dir DIR] [--previous FILE]
 
 The week is the seven days before the run date (`--today`, default `date -u`). Each row is a
 level metric of rule 1, its value and its line (the `[scorecard]` table of agk.toml or the kit
@@ -12,13 +13,18 @@ comments, issues and CI runs, with `gh api --method GET` only, or saved response
 A value whose inputs cannot be read, or that has nothing to count, is `unknown`, never 0. It
 prints and writes nothing; no check, `make governance` or `prepush.py` step runs it (rule 2).
 The freshness rows (rule 8, brief #719, build (c)) read the default branch with `git` and one GET
-of each upstream's releases (`releases-<owner>-<name>`, `kit-releases`). Findings, trends and
-issues are builds (d) and (e).
+of each upstream's releases (`releases-<owner>-<name>`, `kit-releases`).
+`findings` (rules 4 and 7, brief #723, build (d)) also reads the earlier weeks from the previous
+audit body (`--previous FILE`), prints the section of the last `trend_weeks` weeks and the
+findings, and writes nothing. `issues` (rule 5) then reads the open `agk-scorecard` issues
+(`issues-scorecard`) and opens, comments on or closes one issue per metric with `gh api`; the
+weekly wiring is build (e).
 """
 
 from __future__ import annotations
 
 import re
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
 from datetime import UTC, date, datetime, timedelta
@@ -34,13 +40,22 @@ from common import CheckError, git, installed_version, load_config, repo_root, r
 from doctor import kit_repo, version_numbers
 from drift_audit import d4_documents, d4_register
 from full_run import FULL
+from guard import scan_text
 from minutes import estimate
 from reviewers import verdict_authors
 
 from config import scorecard_settings
 
 NAME = "scorecard"
-USAGE = "usage: scorecard.py [--today YYYY-MM-DD] [--repo OWNER/REPO] [--api-dir DIR]"
+USAGE = (
+    "usage: scorecard.py [findings | issues] [--today YYYY-MM-DD] [--repo OWNER/REPO] "
+    "[--api-dir DIR] [--previous FILE]"
+)
+COMMANDS = ("findings", "issues")
+LABEL = "agk-scorecard"  # never agk-brief or found-bug (Q-S0047-4)
+WEEKS_START, WEEKS_END = "<!-- scorecard weeks -->", "<!-- /scorecard weeks -->"
+NUMBER = re.compile(r"^\d+(?:\.\d+)?$")
+DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 UNKNOWN = metrics.UNKNOWN
 NOT_APPLICABLE = "not applicable"
 RED_TITLE = "The default branch is red"  # session.RED_TITLE (SPEC-0032 rule 7)
@@ -498,11 +513,198 @@ def render(rows: list[tuple[str, str, str]], today: date, notes: list[str] | Non
     return "\n".join(out)
 
 
+# --- findings, trends and the issue writer (rules 4, 5 and 7) --------------------------------
+
+
+def number(value: str) -> Decimal | None:
+    return Decimal(value) if NUMBER.match(value) else None
+
+
+def judge(values: list[str], line: Decimal | None, trend_weeks: int = 4) -> str | None:
+    """The finding of the newest of VALUES (oldest first): `level` above the line, `trend` when
+    the last three weeks inside the window are known and each is higher than the one before."""
+    now = number(values[-1]) if values else None
+    if now is None:
+        return None
+    if line is not None and now > line:
+        return "level"
+    last = [number(v) for v in values[-3:]] if trend_weeks >= 3 and len(values) >= 3 else []
+    if len(last) == 3 and all(v is not None for v in last):
+        a, b, c = (v or Decimal(0) for v in last)
+        if a < b < c:
+            return "trend"
+    return None
+
+
+def closable(
+    values: list[str], line: Decimal | None, close_weeks: int, trend_weeks: int = 4
+) -> bool:
+    """True when the last `close_weeks` known weeks were neither finding; an unknown week counts as
+    neither inside nor outside and resets nothing (Q-S0047-16)."""
+    quiet = []
+    for i in range(len(values) - 1, -1, -1):
+        if number(values[i]) is None:
+            continue
+        quiet.append(judge(values[: i + 1], line, trend_weeks) is None)
+        if len(quiet) == close_weeks:
+            return all(quiet)
+    return False
+
+
+def choose_issue(open_numbers: list[int], finding: bool, close: bool) -> str:
+    """`create`, `comment N`, `close N` (N the lowest open one) or `none`."""
+    if finding:
+        return f"comment {min(open_numbers)}" if open_numbers else "create"
+    return f"close {min(open_numbers)}" if open_numbers and close else "none"
+
+
+def week_days(today: date, weeks: int) -> list[date]:
+    return [today - timedelta(days=7 * k) for k in range(weeks - 1, -1, -1)]
+
+
+def history(previous: str | None, today: date, weeks: int) -> dict[str, list[str]]:
+    """Each metric's values of the `weeks - 1` weeks before TODAY, oldest first, read from the
+    previous body's section; a missing week or a cell that is not a number is unknown."""
+    cells: dict[str, dict[str, str]] = {}
+    text = previous or ""
+    if WEEKS_START in text and WEEKS_END in text:
+        table = text.split(WEEKS_START, 1)[1].split(WEEKS_END, 1)[0].strip().splitlines()
+        head = [c.strip() for c in table[0].strip().strip("|").split("|")] if table else []
+        for row in table[2:]:
+            got = [c.strip() for c in row.strip().strip("|").split("|")]
+            if len(got) == len(head) and got[0] in LEVEL + FRESH:
+                cells[got[0]] = {
+                    d: v for d, v in zip(head[2:], got[2:], strict=True) if DAY.match(d)
+                }
+    earlier = [str(d) for d in week_days(today, weeks)[:-1]]
+    out = {}
+    for metric in LEVEL + FRESH:
+        found = cells.get(metric, {})
+        out[metric] = [
+            v if NUMBER.match(v := found.get(d, "")) or v == NOT_APPLICABLE else UNKNOWN
+            for d in earlier
+        ]
+    return out
+
+
+def weeks_section(today: date, lines: dict[str, str], table: dict[str, list[str]]) -> str:
+    """The audit body's section of the last weeks (rule 7), one column per run date."""
+    days = week_days(today, len(next(iter(table.values()))) if table else 1)
+    out = [WEEKS_START, "| metric | line | " + " | ".join(map(str, days)) + " |"]
+    out.append("| --- | --- | " + " | ".join("---" for _ in days) + " |")
+    out += [f"| {m} | {lines.get(m, '-')} | " + " | ".join(v) + " |" for m, v in table.items()]
+    return "\n".join([*out, WEEKS_END])
+
+
+def guarded(text: str) -> tuple[str | None, str]:
+    """TEXT, or None and `withheld: <kind> <count>` when the guard scan finds anything."""
+    found = scan_text(text)
+    if not found:
+        return text, ""
+    kinds: dict[str, int] = {}
+    for f in found:
+        kinds[f.kind] = kinds.get(f.kind, 0) + 1
+    return None, "withheld: " + ", ".join(f"{k} {n}" for k, n in sorted(kinds.items()))
+
+
+def issue_text(metric: str, kind: str, values: list[str], line: str, today: date) -> str:
+    first = today - timedelta(days=7 * (len(values) - 1))
+    return (
+        f"scorecard: {metric}\nkind: {kind}\nvalue: {values[-1]}\n"
+        f"line: {'none (trend only)' if line == '-' else line} (setting: scorecard.{metric})\n"
+        f"weeks: {', '.join(values)} ({first} to {today})\n"
+    )
+
+
+def gh_write(method: str, endpoint: str, *fields: str) -> None:
+    args = [a for f in fields for a in ("-f", f)]
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["gh", "api", "--method", method, endpoint, *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if proc.returncode != 0:
+        raise CheckError(f"rule 5: the {LABEL} issue cannot be written")
+
+
+def ensure_label(repo: str) -> None:
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["gh", "api", "--method", "GET", f"repos/{repo}/labels/{LABEL}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if proc.returncode != 0:
+        gh_write("POST", f"repos/{repo}/labels", f"name={LABEL}", "color=c5def5")
+
+
+def findings(root: Path, src: Any, today: date, previous: str | None) -> tuple[str, list, dict]:
+    """The section, the findings (metric, kind, values, line) and each metric's closable flag."""
+    settings = scorecard_settings(root)
+    weeks, close_weeks = settings["trend_weeks"], settings["close_weeks"]
+    rows, _ = scorecard(root, src, today)
+    earlier = history(previous, today, weeks)
+    table = {m: [*earlier[m], v] for m, v, _ in rows}
+    lines = {m: line for m, _, line in rows}
+    found, close = [], {}
+    for metric, values in table.items():
+        line = number(lines[metric])
+        kind = judge(values, line, weeks)
+        if kind:
+            found.append((metric, kind, values, lines[metric]))
+        close[metric] = closable(values, line, close_weeks, weeks)
+    return weeks_section(today, lines, table), found, close
+
+
+def write_issues(src: Any, repo: str, today: date, found: list, close: dict) -> list[str]:
+    """Open, comment on or close one `agk-scorecard` issue per metric (rule 5)."""
+    listing = listed(
+        src.get("issues-scorecard", f"repos/{{repo}}/issues?state=open&labels={LABEL}")
+    )
+    if listing is None:
+        raise CheckError(f"rule 5: the open {LABEL} issues cannot be read")
+    numbers: dict[str, list[int]] = {}
+    for item in listing:
+        title, n = str(item.get("title") or ""), item.get("number")
+        if "pull_request" not in item and title.startswith("scorecard: ") and isinstance(n, int):
+            numbers.setdefault(title.removeprefix("scorecard: "), []).append(n)
+    by_metric = {f[0]: f for f in found}
+    done = []
+    for metric in LEVEL + FRESH:
+        action = choose_issue(
+            numbers.get(metric, []), metric in by_metric, close.get(metric, False)
+        )
+        if action == "none":
+            continue
+        verb, _, n = action.partition(" ")
+        if verb == "close":
+            gh_write("PATCH", f"repos/{repo}/issues/{n}", "state=closed", "state_reason=completed")
+            done.append(f"issue: close {n} {metric}")
+            continue
+        _, kind, values, line = by_metric[metric]
+        text, note = guarded(issue_text(metric, kind, values, line, today))
+        if text is None:
+            done.append(note)
+        elif verb == "create":
+            ensure_label(repo)
+            title = f"title=scorecard: {metric}"
+            gh_write("POST", f"repos/{repo}/issues", title, f"body={text}", f"labels[]={LABEL}")
+            done.append(f"issue: create {metric}")
+        else:
+            gh_write("POST", f"repos/{repo}/issues/{n}/comments", f"body={text}")
+            done.append(f"issue: comment {n} {metric}")
+    return done
+
+
 def parse_args(args: list[str]) -> dict | None:
     opts: dict[str, str] = {}
+    if args and args[0] in COMMANDS:
+        opts["command"] = args.pop(0)
+    flags = ("--today", "--repo", "--api-dir") + (("--previous",) if "command" in opts else ())
     while args:
         flag = args.pop(0)
-        if flag not in ("--today", "--repo", "--api-dir") or not args or flag[2:] in opts:
+        if flag not in flags or not args or flag[2:] in opts:
             return None
         opts[flag[2:]] = args.pop(0)
     return opts
@@ -518,12 +720,25 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError:
         raise CheckError("--today is not a date (setting: --today)") from None
     root = repo_root()
-    if "api-dir" in opts:
-        src: Any = metrics.ApiDir(Path(opts["api-dir"]))
-    else:
-        src = Live(opts.get("repo") or metrics.origin_repo())
-    rows, notes = scorecard(root, src, today)
-    print(render(rows, today, notes))
+    live = "api-dir" not in opts or opts.get("command") == "issues"
+    repo = opts.get("repo") or (metrics.origin_repo() if live else "")
+    src: Any = metrics.ApiDir(Path(opts["api-dir"])) if "api-dir" in opts else Live(repo)
+    if "command" not in opts:
+        rows, notes = scorecard(root, src, today)
+        print(render(rows, today, notes))
+        return 0
+    previous = None
+    if "previous" in opts:
+        try:
+            previous = Path(opts["previous"]).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            previous = None  # every earlier week is unknown (rule 7)
+    section, found, close = findings(root, src, today, previous)
+    out = [section, "", f"findings: {len(found)}"]
+    out += [f"finding: {m} {k} value {v[-1]} line {line}" for m, k, v, line in found]
+    if opts["command"] == "issues":
+        out += write_issues(src, repo, today, found, close)
+    print("\n".join(out))
     return 0
 
 
