@@ -17,6 +17,7 @@ import pytest
 from test_session import REPO, SCRIPTS, SHA, Stub, clean_env, comment, iso
 
 OTHER = "b" * 40
+MAIN = "d" * 40  # the default branch's head (brief #736)
 SHORT = SHA[:7]
 GREEN = [{"id": 1, "name": "proof", "status": "completed", "conclusion": "success"}]
 RUNNING = [{"id": 1, "name": "proof", "status": "in_progress", "conclusion": None}]
@@ -37,7 +38,9 @@ def proj(repo, stub):
     )
     repo.write("agk.toml", "[flow]\nconductor_poll_seconds = 1\n")
     stub.serve(f"repos/{REPO}", {"default_branch": "main"})
-    stub.serve(f"repos/{REPO}/actions/runs", {"workflow_runs": []})
+    stub.serve(f"repos/{REPO}/branches/main", {"commit": {"sha": MAIN}})
+    stub.serve(f"repos/{REPO}/commits/{MAIN}/check-runs", {"total_count": 0, "check_runs": []})
+    stub.serve(f"repos/{REPO}/commits/{MAIN}/status", {"state": "", "statuses": []})
     stub.serve(f"repos/{REPO}/issues", [])
     stub.serve(f"repos/{REPO}/pulls", [])
     return repo
@@ -154,17 +157,15 @@ def test_sweep_the_late_threshold_is_a_setting(proj, stub):
 
 
 def test_sweep_reports_the_default_branch_and_a_red_issue(proj, stub):
-    stub.serve(
-        f"repos/{REPO}/actions/runs",
-        {"workflow_runs": [{"head_sha": OTHER, "status": "completed", "conclusion": "failure"}]},
-    )
+    failed = [{"id": 1, "name": "governance", "status": "completed", "conclusion": "failure"}]
+    stub.serve(f"repos/{REPO}/commits/{MAIN}/check-runs", {"total_count": 1, "check_runs": failed})
     red = {
         "number": 50, "title": "The default branch is red",
         "user": {"login": "github-actions[bot]"}, "body": "Advances: none\nPriority: 0\n",
     }  # fmt: skip
     stub.serve(f"repos/{REPO}/issues", [red])
     lines = sweep(proj, stub)
-    assert lines == ["no open pull request", "main: failure at bbbbbbb", "red-branch issue: #50"]
+    assert lines == ["no open pull request", "main: failure at ddddddd", "red-branch issue: #50"]
 
 
 def test_sweep_fails_when_github_cannot_be_read(proj, stub):

@@ -1,9 +1,10 @@
 # Core rules
 
 The page a session reads first (ADR-0247). It names the core rules by number and file, each with one plain sentence that
-adds nothing. The numbered rules win over the summaries: read a rule in its file before acting on it. Everything else
-is reference. `principle N` is rule N of `constitution/principles.md`, `session rule N` is rule N of
-`config/session-rules.md`, and `CLAUDE.md item N` is item N of the last section of this page.
+adds nothing. The numbered rules win over the summaries: read a rule in its file before acting on it. A `small` or
+`mechanical` session reads only `CLAUDE.md`, this page, `constitution/principles.md`, its brief or message and what
+they name, and escalates by `session rule 21` (SPEC-0045 rule 7). `principle N` is rule N of `constitution/principles.md`,
+`session rule N` is rule N of `config/session-rules.md`, and `CLAUDE.md item N` is item N of the last section.
 
 ## The constitution
 
@@ -12,12 +13,12 @@ All of `constitution/principles.md`, principles 1 to 12, is core; it is short, s
 ## Safety rules
 
 - `session rule 2`: a session never merges, tags, enables auto-merge, posts a verdict or touches a secret.
-- `session rule 14`: the shared-mechanical files are the maintainers' list, and a build never edits `kit/hashes.json`.
-- `session rule 15`: a session resolves only a mechanical conflict, and any other conflict ends the work.
+- `session rule 14`: the maintainers own the shared-mechanical list, and a build never edits `kit/hashes.json`.
+- `session rule 15`: a session resolves only a mechanical conflict and stops at any other.
 - `session rule 22`: a session pushes only the branch its runtime gives it.
-- `session rule 29`: a session never posts a `Confirmed:` comment, which is the person's own.
-- `session rule 30`: when GitHub Actions is blocked a session follows the local-mode guide and leaves workflows to a person.
-- `session rule 33`: a session checks the default branch for a pause first and on every wake, and stops when paused.
+- `session rule 29`: a session never posts a `Confirmed:` comment, the person's own.
+- `session rule 30`: with GitHub Actions blocked a session follows the local-mode guide and leaves workflows to a person.
+- `session rule 33`: a session checks the default branch for a pause at start and each wake, and stops when paused.
 - `session rule 37`: in personal mode a session never pushes to the customer, never confirms and never strips attribution.
 - `CLAUDE.md item 3`: a protected path changes only with an ADR in the same pull request that names its class.
 - `CLAUDE.md item 5`: no secrets, no network calls in checks and no new scanner ignore entries.
@@ -26,17 +27,17 @@ All of `constitution/principles.md`, principles 1 to 12, is core; it is short, s
 ## Working rules
 
 - `session rule 1`: a session acts only on a verdict that names its head, a merge of its pull request or a correction.
-- `session rule 3`: a session has one open pull request, and a dependence is declared with `Depends-on: #n`.
-- `session rule 7`: a builder commits checkpoints and pushes only at the milestones the rule lists.
+- `session rule 3`: a session has one open pull request and declares a dependence with `Depends-on: #n`.
+- `session rule 7`: a builder pushes only at the milestones the rule lists.
 - `session rule 17`: each kind of comment lives in one place, and a builder never ends silently.
 - `session rule 18`: after its merge a builder takes the brief's next build or runs `session.py after`.
 - `session rule 21`: a blocked session asks with `Question:` on GitHub and waits there.
-- `session rule 31`: a builder runs `prepush.py` before each push and pushes only after it passes.
+- `session rule 31`: a builder pushes only after `prepush.py` passes.
 
 ## CLAUDE.md items
 
-The numbered list that `CLAUDE.md` carried before ADR-0247, with its numbers and its exact text, except
-`CLAUDE.md item 2` and `CLAUDE.md item 10`, which stay in `CLAUDE.md` itself.
+The list `CLAUDE.md` carried before ADR-0247, with its numbers and exact text, except `CLAUDE.md item 2` and
+`CLAUDE.md item 10`, kept there.
 
 1. You implement; you never decide. Decisions are ADRs or requirement statuses written by the reviewers. Where a
    brief leaves something open, record it as a `Q-…` question and choose the most conservative reading.

@@ -1,0 +1,1 @@
+- `.claude/settings.json` allows exactly `python3 scripts/agk/merge_cleared.py`, so a scheduled conductor session, which cannot answer an `ask`, merges a pull request another session cleared; every other form of the command and `conductor.py merge-queue` stay on `ask` (SPEC-0039 amendment 136, ADR-0345)

@@ -4,12 +4,12 @@
 # pull request. Print the counts with `python3 scripts/agk/rules.py budget`; tests/kit/test_rule_budget.py compares them.
 CLAUDE.md 229 2
 constitution/principles.md 210 12
-config/core-rules.md 661 26
-config/session-rules.md 3449 37
-.claude/agents/architect-review.md 721 13
-.claude/agents/architect.md 864 17
-.claude/agents/conductor.md 4533 37
+config/core-rules.md 660 26
+config/session-rules.md 3448 37
+.claude/agents/architect-review.md 720 13
+.claude/agents/architect.md 863 17
+.claude/agents/conductor.md 4526 37
 .claude/agents/drift-auditor.md 140 4
-.claude/agents/reviewer.md 580 12
-.claude/agents/shadow.md 1281 15
+.claude/agents/reviewer.md 579 12
+.claude/agents/shadow.md 1280 15
 config/review-checklist.md 306 12

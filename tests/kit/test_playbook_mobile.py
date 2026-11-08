@@ -1,6 +1,6 @@
 """Tests of the shipped mobile playbook (SPEC-0038 rules 1, 10 and 12 build (i); REQ-045 AC6).
 
-`config/playbooks/mobile.toml` passes the playbook check, and `check_playbooks.py` passes with three
+`config/playbooks/mobile.toml` passes the playbook check, and `check_playbooks.py` passes with four
 playbooks. It holds exactly the mobile gates of rule 10: a device and simulator matrix, `check` that
 the matrix file lists the playbook's minimum entries, with its results `judgement`; offline states,
 `check` that each screen of the inventory lists an `offline` state; and store signing, `judgement`
@@ -41,7 +41,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_three_playbooks() -> None:
+def test_check_playbooks_passes_with_four_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -49,7 +49,7 @@ def test_check_playbooks_passes_with_three_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (3 playbooks)\n"
+    assert out.stdout == "ok playbooks (4 playbooks)\n"
 
 
 def test_exactly_the_mobile_gates_of_rule_10() -> None:
