@@ -758,7 +758,7 @@ def test_ac6_every_absent_skill_blocks_nothing(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("place", ["project", "user"])
 def test_ac6_the_lookup_is_the_one_of_the_engines(tmp_path, monkeypatch, place):
-    """REQ-055 AC6: SPEC-0048 rule 12 (the project's and the user's skills, as `[engines]` reads)."""
+    """REQ-055 AC6: SPEC-0048 rule 12 (the project's and the user's skills, as `[engines]`)."""
     dirs = skills_target(tmp_path, monkeypatch, f'["{PLAYBOOK_NAME_ONE}"]')
     base = dirs["root"] if place == "project" else tmp_path / "home"
     skill_file(base / ".claude" / "skills", PLAYBOOK_NAME_ONE)
@@ -816,7 +816,7 @@ def test_ac6_a_refused_name_is_never_printed(tmp_path, monkeypatch):
 
 
 def test_ac6_the_doctor_installs_no_skill(tmp_path, monkeypatch):
-    """REQ-055 AC6: SPEC-0048 rules 12 and 17 (the report writes nothing, so it installs nothing)."""
+    """REQ-055 AC6: SPEC-0048 rules 12 and 17 (the report writes nothing, so installs nothing)."""
     dirs = skills_target(tmp_path, monkeypatch, TWO_NAMES)
     before = tree_hash(dirs["root"])
     run_skills(dirs, tmp_path)

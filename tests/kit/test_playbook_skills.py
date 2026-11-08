@@ -85,7 +85,7 @@ def test_ac6_the_pattern_is_the_one_doctor_uses():
 
 @pytest.mark.parametrize("token", ["zzvendor", "ZZVENDOR"])
 def test_ac6_a_name_with_a_neutrality_token_is_refused(tmp_path, token):
-    """REQ-055 AC6: Q-S0048-16 (`config/neutrality.txt` applies; case-insensitive, no value shown)."""
+    """REQ-055 AC6: Q-S0048-16 (`config/neutrality.txt` applies, in any case, no value shown)."""
     write(tmp_path, with_skills('["zzvendor-design"]'))
     neutrality(tmp_path, f"# a comment\n\n{token}\n")
     out = assert_fails(tmp_path, 12, "zzvendor")
