@@ -54,6 +54,7 @@ SINGLES = {
     "config/playbooks/mcp-server.toml",
     "config/playbooks/mobile.toml",
     "config/playbooks/multi-agent.toml",
+    "config/playbooks/pilot.toml",
     "config/playbooks/rag-app.toml",
     "config/playbooks/voice-agent.toml",
     "config/playbooks/web-app.toml",
