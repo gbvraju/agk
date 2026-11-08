@@ -29,6 +29,11 @@ of the declared playbook's `brief_order` in that order, each with its `Kind:` li
 the work type and the milestone shape; and the problems that refuse the split, each naming the rule,
 the file and the key, never a value. With no declaration there is nothing to print and no problem.
 Nothing is written.
+
+The discovery questions (SPEC-0048 rule 4, SPEC-0038 rule 2 as amendment 130 widens it; REQ-055
+AC2; brief #686): every playbook holds `[[discovery]]` entries (`id`, a lower-case slug, and `text`,
+one plain question) with at least the five ids of `DISCOVERY_IDS`, each id once; `discovery(path)`
+returns the `(id, text)` pairs of a playbook in its order.
 """
 
 from __future__ import annotations
@@ -85,6 +90,9 @@ OWNER_ACTION = re.compile(
 )
 
 STR, INT, BOOL, STRS, PAIRS, TABLES = "str", "int", "bool", "strs", "pairs", "tables"
+# SPEC-0048 rule 4: the ids every playbook's `[[discovery]]` holds (amendment 130, item 2).
+DISCOVERY_IDS = ("constraints", "success", "data-rules", "environments", "non-functional")
+SLUG = re.compile(r"^[a-z][a-z0-9-]*$")
 
 TOP: dict[str, str] = {
     "format": INT,
@@ -99,6 +107,7 @@ TOP: dict[str, str] = {
     "gates": TABLES,
     "milestones": "table",
     "claims": TABLES,
+    "discovery": TABLES,
 }
 # section -> (required keys, optional keys), each key with its type
 SECTIONS: dict[str, tuple[dict[str, str], dict[str, str]]] = {
@@ -110,6 +119,7 @@ SECTIONS: dict[str, tuple[dict[str, str], dict[str, str]]] = {
     "milestones": ({"shape": STR, "batch_by": STR}, {}),
     # `basis` is required by rule 3 and `record` by rule 3 for a measured claim
     "claims": ({"text": STR}, {"basis": STR, "record": STR}),
+    "discovery": ({"id": STR, "text": STR}, {}),
 }
 MAP_KEYS = {"code": STR, "tests": STR}
 
@@ -268,6 +278,29 @@ def _claims(rel: str, claims: list[dict], root: Path) -> list[str]:
     return out
 
 
+def _discovery(rel: str, entries: list[dict]) -> list[str]:
+    """SPEC-0048 rule 4: slug ids, each once, the five required ids, one plain question each."""
+    out = []
+    found = [e["id"] for e in entries if isinstance(e.get("id"), str)]
+    if any(not SLUG.match(i) for i in found):
+        out.append(f"rule 2: {rel}: a `[[discovery]]` id is not a lower-case slug")
+    if len(set(found)) != len(found):
+        out.append(f"rule 2: {rel}: a `[[discovery]]` id appears twice")
+    if any(i not in found for i in DISCOVERY_IDS):
+        out.append(f"rule 2: {rel}: `[[discovery]]` is missing a required id (SPEC-0048 rule 4)")
+    texts = [e["text"] for e in entries if isinstance(e.get("text"), str)]
+    if any(not s.strip() or "\n" in s or "\r" in s for s in texts):
+        out.append(f"rule 2: {rel}: a `[[discovery]]` text is not one plain question")
+    return out
+
+
+def discovery(path: Path) -> list[tuple[str, str]]:
+    """The `(id, text)` pairs of a playbook's `[[discovery]]`, in its order; call on a playbook that
+    `problems` passes."""
+    data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    return [(entry["id"], entry["text"]) for entry in data["discovery"]]
+
+
 def _named(rel: str, data: dict) -> list[str]:
     strings = _strings(data)
     out = []
@@ -329,6 +362,8 @@ def problems(path: Path, root: Path) -> list[str]:
             out.append(f"rule 2: {rel}: `[milestones] shape` is not a known shape")
     if _is(data.get("claims"), TABLES):
         out += _claims(rel, data["claims"], root)
+    if _is(data.get("discovery"), TABLES):
+        out += _discovery(rel, data["discovery"])
     out += _named(rel, data)
     return out
 

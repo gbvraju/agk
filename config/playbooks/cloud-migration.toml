@@ -69,3 +69,23 @@ batch_by = "not batched: one pull request per brief, as today"
 [[claims]]
 text = "Each cut-over brief waits for its wave plan, which waits for the inventory, so fewer cut-overs are expected to stop on a part that no one listed."
 basis = "expected"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the work: a deadline, a budget, a team's skills, or parts that must stay where they are?"
+
+[[discovery]]
+id = "success"
+text = "Which results after each wave show that the migration succeeded, and how will each be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the data that moves, where it may be kept, and for how long?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments does it move from and to, from a test copy to production?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of downtime, speed, uptime and security must each wave meet?"

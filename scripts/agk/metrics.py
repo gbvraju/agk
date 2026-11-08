@@ -44,7 +44,9 @@ from reviewers import confirmed_comments, solo_person, verdict_authors
 NAME = "metrics"
 USAGE = (
     "usage: metrics.py [--today YYYY-MM-DD] [--repo OWNER/REPO] [--api-dir DIR] [--issues FILE] "
-    "[--print-action | --print-title | --print-body]"
+    "[--print-action | --print-title | --print-body]\n"
+    "       metrics.py --usage-by-kind FACTS [--before YYYY-MM-DD] [--after YYYY-MM-DD] "
+    "[--repo OWNER/REPO] [--api-dir DIR]"
 )
 UNKNOWN = "unknown"
 NONE = "-"
@@ -469,6 +471,105 @@ def usage_of(comments: Any, login: str) -> int | str:
         if match and author_of(c) == me:
             found.append(int(match.group(1)))
     return sum(found) if found else "not-reported"
+
+
+# --- the sums by kind (SPEC-0045 rules 8 and 9, brief #710, ADR-0289) --------------------------
+
+BRIEF_KINDS = ("design", "build", "small", "none")  # rule 4's kinds; `none` has no `Brief:` line
+WEEK = timedelta(days=7)
+
+
+def kind_of_pull(src: Any, root: Path, record: dict, seen: dict) -> str:
+    """Rule 4's kind of the pull request's brief, read with one GET per brief; a body that could
+    not be read, or a brief that cannot be read, gives `design`, never a lower kind."""
+    from session import kind_of, protected_entries  # session imports this module
+
+    number = record.get("brief")
+    if number is None:
+        return "none"
+    if not isinstance(number, int) or isinstance(number, bool):
+        return "design"
+    if number not in seen:
+        issue = src.get(f"issue-{number}", f"repos/{{repo}}/issues/{number}")
+        body = issue.get("body") if isinstance(issue, dict) else None
+        seen[number] = kind_of(body, protected_entries(root)) if isinstance(body, str) else "design"
+    return seen[number]
+
+
+def kind_line(records: list[dict]) -> str:
+    """One kind: the merged pull requests, the tokens (a missing figure is `not reported`, never
+    0), the mean lead time from open to merge and the fix-list verdicts per merged pull request."""
+    if not records:
+        return "0 merged"
+    figures = [r["usage"] for r in records if type(r.get("usage")) is int]
+    missing = len(records) - len(figures)
+    if figures:
+        per = (Decimal(sum(figures)) / len(figures)).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+        tokens = f"tokens {sum(figures)} ({per} per reported pull request; {missing} not reported)"
+    else:
+        tokens = f"tokens not reported ({missing} not reported)"
+    hours = [hours_between(r.get("created_at"), r.get("merged_at")) for r in records]
+    lead = (
+        "unknown"
+        if UNKNOWN in hours
+        else f"{tenths(sum((Decimal(h) for h in hours), Decimal(0)) / len(hours))} hours"
+    )
+    verdict_lists = [r.get("verdicts") for r in records]
+    lists = [v for v in verdict_lists if isinstance(v, list)]
+    if len(lists) == len(records):
+        fixes = len([x for v in lists for x in v if isinstance(x, dict) and x.get("kind") == "fix"])
+        rework = f"{Decimal(fixes) / len(records):.2f} per merged pull request"
+    else:
+        rework = "unknown"
+    return f"{len(records)} merged; {tokens}; lead time {lead}; fix-list verdicts {rework}"
+
+
+def usage_by_kind(src: Any, root: Path, document: Any, windows: list[tuple]) -> str:
+    """The text of `--usage-by-kind`: per window, one line per kind. It reads, prints and blocks
+    nothing (SPEC-0045 rule 9)."""
+    pulls = document.get("pull_requests") if isinstance(document, dict) else None
+    if not isinstance(pulls, list):
+        return "".join(
+            f"{label}: unknown (the pull requests of the facts cannot be read)\n"
+            for label, *_ in windows
+        )
+    seen: dict = {}
+    out = []
+    for label, start, end in windows:
+        span = (
+            "every pull request of the facts"
+            if start is None
+            else f"{start} to {end - timedelta(days=1)}"
+        )
+        out.append(f"{label}: {span}")
+        chosen: dict[str, list] = {kind: [] for kind in BRIEF_KINDS}
+        for record in pulls:
+            if not isinstance(record, dict) or record.get("state") != "merged":
+                continue
+            when = stamp(record.get("merged_at"))
+            if start is not None and (when is None or not start_of(start) <= when < start_of(end)):
+                continue
+            chosen[kind_of_pull(src, root, record, seen)].append(record)
+        for kind in BRIEF_KINDS:
+            if kind != "none" or chosen[kind]:
+                out.append(f"{kind}: {kind_line(chosen[kind])}")
+    return "\n".join(out) + "\n"
+
+
+def usage_main(options: dict) -> int:
+    try:
+        document = json.loads(Path(options["usage"]).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise CheckError("the facts file is not readable JSON (path class: facts file)") from None
+    windows = []
+    if options["before"]:
+        windows.append(("before", options["before"] - WEEK, options["before"]))
+    if options["after"]:
+        windows.append(("after", options["after"], options["after"] + WEEK))
+    src = ApiDir(Path(options["api"])) if options["api"] else Gh(options["repo"] or origin_repo())
+    text = usage_by_kind(src, repo_root(), document, windows or [("all", None, None)])
+    sys.stdout.write(text)
+    return 0
 
 
 # --- minutes, waits and re-runs (brief 376, ADR-0209) ------------------------------------------
@@ -1027,10 +1128,20 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
 
 def parse_args(args: list[str]) -> dict | None:
     options: dict = {"today": None, "repo": None, "api": None, "issues": None, "mode": "body"}
+    options |= {"usage": None, "before": None, "after": None}
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in ("--today", "--repo", "--api-dir", "--issues") and i + 1 < len(args):
+        if arg in ("--usage-by-kind", "--before", "--after") and i + 1 < len(args):
+            if arg != "--usage-by-kind" and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args[i + 1]):
+                return None
+            try:
+                value = date.fromisoformat(args[i + 1]) if arg != "--usage-by-kind" else args[i + 1]
+            except ValueError:
+                return None
+            options[arg[2:].split("-")[0]] = value
+            i += 2
+        elif arg in ("--today", "--repo", "--api-dir", "--issues") and i + 1 < len(args):
             value = args[i + 1]
             if arg == "--today":
                 if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
@@ -1050,6 +1161,10 @@ def parse_args(args: list[str]) -> dict | None:
             i += 1
         else:
             return None
+    if (options["before"] or options["after"]) and not options["usage"]:
+        return None
+    if options["usage"] and (options["issues"] or options["today"] or options.get("mode_set")):
+        return None
     return options
 
 
@@ -1070,6 +1185,8 @@ def main(argv: list[str] | None = None) -> int:
     if options is None:
         print(USAGE, file=sys.stderr)
         return 2
+    if options["usage"]:
+        return usage_main(options)
     today = options["today"] or datetime.now(UTC).date()
     start, _ = window(today)
     week = week_label(start)
