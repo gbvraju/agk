@@ -1,5 +1,7 @@
 # Testing: which tests guard which code
 
+AGK itself has one area (`[proof.kit]`), one language, one runner (pytest), a curated map (the `[[testing.map]]` entries of `agk.toml`, written by hand) and tests of its own checks. A project has many stacks and test levels, a map that must be generated and must learn, and test costs that depend on the environment.
+
 A one-line change should not have to run every test of the project, and it should never run too few. The optional
 `[testing]` table of `agk.toml` says, by rule, which tests guard which code, and the test plan shows, before anything runs,
 the regression tests that a change selects and the rule that chose each. The rules belong to the project, not to the agent:

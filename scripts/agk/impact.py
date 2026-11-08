@@ -63,7 +63,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, config_source, git, load_config
+from common import CheckError, area_levels, config_source, git, load_config
 
 PROFILES = ("fast", "balanced", "thorough")
 KEYS = {
@@ -83,7 +83,10 @@ KEYS = {
     "keep_runs",
     "pre_merge_tests",
     "rerun_alone",
+    "map_source",
 }
+MAP_SOURCES = ("curated", "generated")  # SPEC-0055 rule 1: data, never a code path
+TEST_ENV = "AGK_TEST_ENV"  # what a machine has (SPEC-0055 rule 4)
 DEFAULT_SLOW = 600
 DEFAULT_KEEP_RUNS = 20
 RUN_FOLDER_KEYS = ("results_dir", "keep_passed", "keep_runs")  # retired (SPEC-0046 rule 11)
@@ -135,9 +138,12 @@ class Impact:
     unmapped: list[str] = field(default_factory=list)
     docs_only: bool = False  # the change is only documentation, so nothing is selected
     named: dict[str, int] = field(default_factory=dict)  # uncovered path -> tests that name it
+    map_source: str | None = None  # the `[testing] map_source`, None where it is not set
 
     def data(self) -> dict:
+        source = {} if self.map_source is None else {"map_source": self.map_source}
         return {
+            **source,
             "table": self.table,
             "profile": self.profile,
             "full": self.full,
@@ -202,7 +208,7 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
             "proof_regression, pr_tests, junit, workers, parallel_command, "
-            "slow_suite_seconds, results_dir, keep_passed, keep_runs and rerun_alone "
+            "slow_suite_seconds, results_dir, keep_passed, keep_runs, rerun_alone and map_source "
             "(setting: testing)"
         )
     profile = table.get("profile", "balanced")
@@ -279,11 +285,15 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError("rerun_alone must be true or false (setting: testing.rerun_alone)")
     if PRE_MERGE in table:
         pre_merge_names(table, root)
+    source = table.get("map_source", MAP_SOURCES[0])
+    if not isinstance(source, str) or source not in MAP_SOURCES:
+        raise CheckError("map_source is curated or generated (setting: testing.map_source)")
     return {
         "profile": profile,
         "always_full": list(always_full),
         "map": mapped,
         "budget_seconds": budget,
+        **({"map_source": source} if "map_source" in table else {}),
     }
 
 
@@ -593,6 +603,13 @@ def uncovered(root: Path, head: str = "HEAD") -> list[str]:
 
 
 def impact(root: Path, base: str, head: str) -> Impact:
+    """The regression selection of base..head, with the map's source where it is set."""
+    found = select(root, base, head)
+    found.map_source = (testing_table(root) or {}).get("map_source")
+    return found
+
+
+def select(root: Path, base: str, head: str) -> Impact:
     """The regression selection of base..head (git and files only, nothing run)."""
     table = testing_table(root)
     if table is None:
@@ -658,7 +675,49 @@ def text(found: Impact) -> list[str]:
             else f"  file: {s.test} ({s.changed} matches code {s.code}, tests {', '.join(s.tests)})"
             for s in found.selected
         )
-    return lines + unmapped_lines(found)
+    return map_lines(found) + lines + unmapped_lines(found)
+
+
+def map_lines(found: Impact) -> list[str]:
+    """The line that leads a selection in a repository that sets `map_source` (SPEC-0055 rule 1)."""
+    return [] if found.map_source is None else [f"tests: map {found.map_source}"]
+
+
+def machine_env() -> str:
+    """The environments this machine has: the text of `AGK_TEST_ENV` (SPEC-0055 rule 4)."""
+    return os.environ.get(TEST_ENV, "")
+
+
+def level_groups(
+    area: dict, paths: list[str], event: str, env: str
+) -> tuple[list[dict], list[str]]:
+    """PATHS of AREA by level for EVENT: the groups to run (`label`, `level`, `files`) and the lines
+    of what does not run. A file belongs to the first level that matches it (SPEC-0055 rule 3); one
+    in no level is refused naming the setting; ENV is the comma-separated `AGK_TEST_ENV`."""
+    have = {name.strip() for name in env.split(",") if name.strip()}
+    levels = area_levels(area)
+    placed: dict[str, list[str]] = {}
+    for path in paths:
+        level = next((x for x in levels if is_test_file(path, x["dirs"], x["patterns"])), None)
+        if level is None:
+            raise CheckError(
+                f"a test file of an area is in no level (setting: proof.{area['name']}.levels)"
+            )
+        placed.setdefault(level["name"], []).append(path)
+    groups: list[dict] = []
+    notes: list[str] = []
+    for level in levels:
+        if level["name"] not in placed:
+            continue
+        label = f"{area['name']}:{level['name']}"
+        absent = next((name for name in level["env"] if name not in have), None)
+        if event not in level["when"]:
+            notes.append(f"tests: {label} runs on {', '.join(level['when'])}")
+        elif absent is not None:
+            notes.append(f"not run: {label} (env {absent})")
+        else:
+            groups.append({"label": label, "level": level, "files": placed[level["name"]]})
+    return groups, notes
 
 
 def unmapped_lines(found: Impact) -> list[str]:
