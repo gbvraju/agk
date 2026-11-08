@@ -332,6 +332,104 @@ def test_ac8_two_problems_are_two_lines(repo_pack):
     assert done.returncode == 1 and len(done.stdout.splitlines()) == 2, done.stdout
 
 
+def planted_key() -> str:
+    return "ghp_" + "a1B2c3D4" * 5  # built at run time, invented
+
+
+def fails(done: subprocess.CompletedProcess, part: str, count: int) -> list[str]:
+    """The reasons of the `FAIL pack:` lines, each naming `part`, and that there are `count`."""
+    lines = done.stdout.splitlines()
+    assert done.returncode == 1 and len(lines) == count, done.stdout
+    assert all(line.startswith(f"FAIL pack: {part} ") for line in lines), done.stdout
+    return [line.removeprefix(f"FAIL pack: {part} ") for line in lines]
+
+
+def test_ac8_a_form_problem_does_not_hide_a_guard_finding_in_the_same_part(repo_pack):
+    """REQ-059 AC8: rule 10 (one line each; the form line explains the digest, not the guard's)."""
+    root, pack = repo_pack
+    planted = planted_key()
+
+    def change(data):
+        data["schema"] = 2
+        data["checks"][0]["name"] = planted
+
+    edit(pack, "tests.json", change)
+    done = check(root, pack)
+    assert fails(done, "tests.json", 2) == [
+        "has a schema other than 1",
+        "holds data the guard refuses",
+    ]
+    assert planted not in done.stdout
+
+
+def test_ac8_a_digest_and_a_guard_finding_are_two_lines(repo_pack):
+    """REQ-059 AC8: rule 10 (a part of its form still has its digest line and the guard's)."""
+    root, pack = repo_pack
+    edit(pack, "tests.json", lambda d: d["checks"][0].update({"name": planted_key()}))
+    assert fails(check(root, pack), "tests.json", 2) == [
+        "does not match its digest in the index",
+        "holds data the guard refuses",
+    ]
+
+
+def test_ac8_two_form_problems_in_one_part_are_two_lines(repo_pack):
+    """REQ-059 AC8: rule 10 (per problem, not per part)."""
+    root, pack = repo_pack
+
+    def change(data):
+        data["schema"] = 2
+        data.pop("date")
+
+    edit(pack, "coverage.json", change)
+    assert sorted(fails(check(root, pack), "coverage.json", 2)) == [
+        "has a missing or extra field",
+        "has a schema other than 1",
+    ]
+
+
+def test_ac8_a_part_that_is_not_json_is_still_read_by_the_guard(repo_pack):
+    """REQ-059 AC8: rule 10 (the guard reads the bytes, whatever their form)."""
+    root, pack = repo_pack
+    planted = planted_key()
+    (pack / "tests.json").write_bytes(b"\xff not json " + planted.encode("ascii") + b"\n")
+    done = check(root, pack)
+    assert fails(done, "tests.json", 2) == ["is not JSON", "holds data the guard refuses"]
+    assert planted not in done.stdout
+
+
+def test_ac8_two_problems_of_the_index_are_two_lines(repo_pack):
+    """REQ-059 AC8: rule 10 (the index is collected as a part is)."""
+    root, pack = repo_pack
+    edit(pack, "pack.json", lambda d: d.update({"tag": "v1.0.0", "commit": "0" * 40}))
+    assert fails(check(root, pack), "pack.json", 2) == [
+        "names another tag",
+        "names another commit",
+    ]
+
+
+def test_ac8_a_guard_finding_in_the_index_beside_a_form_problem_is_its_own_line(repo_pack):
+    """REQ-059 AC8: rule 10 (the guard's line of the index is always printed)."""
+    root, pack = repo_pack
+    planted = planted_key()
+    edit(pack, "pack.json", lambda d: d.update({"schema": 2, "date": planted}))
+    done = check(root, pack)
+    assert fails(done, "pack.json", 2) == [
+        "has a schema other than 1",
+        "holds data the guard refuses",
+    ]
+    assert planted not in done.stdout
+
+
+def test_ac8_two_stray_files_are_two_lines(repo_pack):
+    """REQ-059 AC8: rule 10 (each file that is not one of the six is a problem)."""
+    root, pack = repo_pack
+    (pack / "odd-one.json").write_text("{}\n", encoding="utf-8")
+    (pack / "odd-two.json").write_text("{}\n", encoding="utf-8")
+    done = check(root, pack)
+    fails(done, "folder", 2)
+    assert "odd" not in done.stdout
+
+
 def test_ac8_a_part_that_is_a_link_is_refused(repo_pack, tmp_path):
     """REQ-059 AC8: rule 10 (a part that is not a file of the folder is not read)."""
     root, pack = repo_pack

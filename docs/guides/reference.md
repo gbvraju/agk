@@ -84,7 +84,7 @@ request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
 
 Checks one release's evidence pack: a folder named by its tag with exactly `tests.json`, `scans.json`, `coverage.json`,
 `bom.json`, `decisions.json` and the index `pack.json`. It reads the folder and git only, with no network, and prints
-`ok pack`, or one `FAIL pack: <part> <reason>` line per part and exits 1, naming the part and never a value. A failed or unknown
+`ok pack`, or one `FAIL pack: <part> <reason>` line per problem and exits 1, naming the part and never a value. A failed or unknown
 check or scan is a `warn pack:` line and passes. A tag that is not a release, or a repository with no release test, is one
 `refused:` line. No governance step runs it. See `docs/specs/0052-every-release-carries-one-evidence-pack-named-by-its-tag.md`.
 

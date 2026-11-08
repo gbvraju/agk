@@ -5,8 +5,8 @@
 A pack is one folder named by a release tag with exactly six files: the five parts `tests.json`,
 `scans.json`, `coverage.json`, `bom.json`, `decisions.json` and the index `pack.json` (rule 2).
 `check` reads the folder and the repository's git only, with no network call, and prints `ok pack`,
-or one `FAIL pack: <part> <reason>` line for each part with a problem (its first problem) and exits
-1, naming the part and never a value (rule 10). A required check `failure` or `unknown`, or a scan
+or one `FAIL pack: <part> <reason>` line per problem and exits 1, naming the part and never a value
+(rule 10); a digest line is left out only when a form line already explains it. A required check `failure` or `unknown`, or a scan
 `failed` or `unknown`, is one `warn pack:` line and does not fail: the pack records the release, it
 does not judge it.
 
@@ -39,6 +39,8 @@ INDEX = "pack.json"
 UNKNOWN = "unknown"
 NO_RELEASE_TEST = "refused: this repository has no release test (path class kit/)"
 NOT_RELEASE = "refused: the tag is not a release ({})"
+FIELD = "has a missing or extra field"
+SCHEMA = "has a schema other than 1"
 RELEASE_FILES = ("kit/manifest.json", "scripts/agk/check_tag.py")
 # Each part's fields beside `schema`: None is one value, a type a list of it, a tuple a list of
 # objects with exactly those fields.
@@ -89,21 +91,20 @@ def shaped(value: object, form: Any) -> bool:
     )
 
 
-def form_problem(name: str, data: object) -> str | None:
-    """Why a part is not of its form, naming no field or value; None when it is."""
+def form_problems(name: str, data: object) -> list[str]:
+    """Why a part is not of its form, one entry per problem, naming no field or value."""
     if not isinstance(data, dict):
-        return "is not JSON of its form"
+        return ["is not JSON of its form"]
     form = FORMS[name]
-    if set(data) != {"schema", *form}:
-        return "has a missing or extra field"
-    if not is_one(data["schema"]):
-        return "has a schema other than 1"
+    found = [FIELD] * len(set(data) ^ {"schema", *form})
+    if "schema" in data and not is_one(data["schema"]):
+        found.append(SCHEMA)
     for key, shape in form.items():
-        if key == "scorecard_week" and data[key] == UNKNOWN:
+        if key not in data or (key == "scorecard_week" and data[key] == UNKNOWN):
             continue
         if not shaped(data[key], shape):
-            return "has a field that is not of its form"
-    return None
+            found.append("has a field that is not of its form")
+    return found
 
 
 def read(path: Path) -> tuple[bytes | None, object, str | None]:
@@ -122,24 +123,27 @@ def read(path: Path) -> tuple[bytes | None, object, str | None]:
         return raw, None, "is not JSON"
 
 
-def data_problem(raw: bytes) -> str | None:
-    found = guard.scan_text(raw.decode("utf-8"))
-    return "holds data the guard refuses" if found else None
+def guard_problems(raw: bytes | None) -> list[str]:
+    """The guard's line for bytes that could be read, whatever their form."""
+    if raw is None or not guard.scan_text(raw.decode("utf-8", errors="replace")):
+        return []
+    return ["holds data the guard refuses"]
 
 
-def index_problem(data: object, tag: str, commit: str) -> str | None:
-    if not isinstance(data, dict) or set(data) != INDEX_FIELDS:
-        return "has a missing or extra field"
-    if not is_one(data["schema"]):
-        return "has a schema other than 1"
-    if data["tag"] != tag:
-        return "names another tag"
-    if data["commit"] != commit:
-        return "names another commit"
-    parts = data["parts"]
-    if not isinstance(parts, dict) or set(parts) != set(FORMS):
-        return "does not list the five parts"
-    return None
+def index_problems(data: object, tag: str, commit: str) -> list[str]:
+    """Why the index is not of its form, one entry per problem."""
+    if not isinstance(data, dict):
+        return [FIELD]
+    found = [FIELD] * len(set(data) ^ INDEX_FIELDS)
+    if "schema" in data and not is_one(data["schema"]):
+        found.append(SCHEMA)
+    if "tag" in data and data["tag"] != tag:
+        found.append("names another tag")
+    if "commit" in data and data["commit"] != commit:
+        found.append("names another commit")
+    if "parts" in data and not digests_of(data):
+        found.append("does not list the five parts")
+    return found
 
 
 def digests_of(index: object) -> dict[str, object]:
@@ -148,14 +152,14 @@ def digests_of(index: object) -> dict[str, object]:
     return parts if isinstance(parts, dict) and set(parts) == set(FORMS) else {}
 
 
-def part_problem(path: Path, name: str, digests: dict[str, object]) -> tuple[object, str | None]:
+def part_problems(path: Path, name: str, digests: dict[str, object]) -> tuple[object, list[str]]:
+    """(parsed JSON, problems) of one part; a form line already explains a digest that differs."""
     raw, data, problem = read(path)
-    if problem or raw is None:
-        return None, problem
-    problem = form_problem(name, data)
-    if problem is None and digests and hashlib.sha256(raw).hexdigest() != digests.get(name):
-        problem = "does not match its digest in the index"
-    return data, problem or data_problem(raw)
+    found = [problem] if problem else form_problems(name, data)
+    if raw is not None and not found and digests:
+        if hashlib.sha256(raw).hexdigest() != digests.get(name):
+            found.append("does not match its digest in the index")
+    return data, found + guard_problems(raw)
 
 
 def warnings(name: str, data: object) -> list[str]:
@@ -168,20 +172,16 @@ def warnings(name: str, data: object) -> list[str]:
 
 def check_folder(pack: Path, tag: str, commit: str) -> list[str]:
     """The `warn pack:` and `FAIL pack:` lines of the folder, in the order of its files."""
-    lines = []
-    if any(item.name not in {*FORMS, INDEX} for item in pack.iterdir()):
-        lines.append("FAIL pack: folder holds a file that is not one of the six")
+    six = {*FORMS, INDEX}
+    stray = "FAIL pack: folder holds a file that is not one of the six"
+    lines = [stray for item in pack.iterdir() if item.name not in six]
     raw, index, problem = read(pack / INDEX)
-    if problem is None:
-        problem = index_problem(index, tag, commit)
-    if problem is None and raw is not None:
-        problem = data_problem(raw)
-    if problem:
-        lines.append(f"FAIL pack: {INDEX} {problem}")
+    found = [problem] if problem else index_problems(index, tag, commit)
+    lines += [f"FAIL pack: {INDEX} {reason}" for reason in found + guard_problems(raw)]
     digests = digests_of(index)
     for name in FORMS:
-        data, problem = part_problem(pack / name, name, digests)
-        lines += [f"FAIL pack: {name} {problem}"] if problem else warnings(name, data)
+        data, found = part_problems(pack / name, name, digests)
+        lines += [f"FAIL pack: {name} {reason}" for reason in found] or warnings(name, data)
     return lines
 
 
