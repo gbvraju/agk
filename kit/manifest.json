@@ -98,6 +98,7 @@
     "scripts/agk/product_report.py",
     "scripts/agk/project_tests.py",
     "scripts/agk/proof.py",
+    "scripts/agk/release_pack.py",
     "scripts/agk/req_status.py",
     "scripts/agk/reviewers.py",
     "scripts/agk/route.py",
