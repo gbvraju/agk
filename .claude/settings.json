@@ -17,7 +17,8 @@
       "Bash(git log:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push -u origin HEAD)"
+      "Bash(git push -u origin HEAD)",
+      "Bash(python3 scripts/agk/merge_cleared.py*)"
     ],
     "ask": [
       "Edit(/constitution/**)",
@@ -36,9 +37,7 @@
       "Edit(/tests/kit_dev/**)",
       "Edit(/.claude-plugin/**)",
       "Edit(/skills/**)",
-      "Bash(python3 scripts/agk/merge_cleared.py*)",
       "Bash(python scripts/agk/merge_cleared.py*)",
-      "Bash(*merge_cleared.py*)",
       "Bash(*conductor.py*merge-queue*)"
     ],
     "deny": [
