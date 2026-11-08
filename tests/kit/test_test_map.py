@@ -244,6 +244,16 @@ def test_a_path_impact_would_refuse_is_left_out_and_quotes_stay_toml(tmp_path):
     }
 
 
+def test_the_installed_ignore_block_keeps_the_map_out_of_git(tmp_path):
+    """REQ-062 AC3: brief #812 answer 3, the installed template ignores the map (ADR-0379)."""
+    root = repo(tmp_path, PY, {"a.py": "x = 1\n"})
+    template = KIT_ROOT / "kit" / "templates" / "gitignore"
+    (root / ".gitignore").write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
+    (root / OUT).write_text("# tree example\n", encoding="utf-8")
+    assert git(root, "status", "--porcelain", "--", OUT) == ""
+    git(root, "check-ignore", "-q", OUT)
+
+
 def test_outside_a_repository_and_a_bad_call_are_refused(tmp_path):
     """REQ-062 AC3: rule 5, a tree that cannot be read fails with one line; usage is exit 2."""
     done = run(tmp_path, "build", "--root", str(tmp_path))
