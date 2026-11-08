@@ -78,6 +78,19 @@ Brief #628 (ADR-0304, amendment 124 of SPEC-0039 rule 5) keeps a spec approval o
 apart from the status flip from `Draft` to `Approved`, read with local `git` (the head fetched
 from `refs/pull/<n>/head` only when missing); anything unreadable holds as `spec approval`.
 
+Brief #667 (ADR-0320, amendment 132 of SPEC-0039 rule 6) adds the kit tests that read the whole
+tree to the check before the merge. After governance passes on the would-be merge, in the same
+worktree, the command runs the test files of `[testing] pre_merge_tests` (agk.toml on the default
+branch; without the key, none) under the heavy lock: `lock.py run --name heavy ... -- env -i
+PATH=<PATH> HOME=<scratch> AGK_KIT_TESTS=1 PYTHONDONTWRITEBYTECODE=1 <python> -m pytest -q
+--rootdir <worktree> ... <worktree>/<file>...`; pytest reads the configuration file it finds
+above the listed files. A failure, or a listed name that is not a file of the merge, holds with
+
+    merge-cleared #<n> <sha12>: held: the merge with the default branch fails pre-merge tests
+        (<file>::<test>)                                          (one line)
+
+(exit 3), nothing merged; a bad setting is refused before anything runs, naming the setting.
+
 Brief #643 build (b) (ADR-0329) changes no behaviour: the settings read before any GitHub read are
 `ruled`, the holds that merge nothing are `holds` (a verdict that does not clear the head raises
 `NotCleared`, a `Held`) and local mode is `local_mode`, so that `conductor.py merge-queue` judges
@@ -108,6 +121,7 @@ from typing import Any, NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import impact  # noqa: E402
 import lock  # noqa: E402
 from common import (  # noqa: E402
     DEFAULT_CONFIG,
@@ -151,6 +165,8 @@ APPROVAL = re.compile(r"Approval: (SPEC-\d{4})(?![0-9])")
 DEPENDS = re.compile(r"Depends-on: #(\d+)")
 BRIEF = re.compile(r"Brief: #(\d+)")  # the line that names the red-branch issue (brief #610)
 FAILS = "the merge with the default branch fails governance"  # the hold of the check (#610)
+TESTS_FAIL = "the merge with the default branch fails pre-merge tests"  # brief #667
+FAILED_LINE = re.compile(r"^(?:FAILED|ERROR) (\S+?)(?: - .*)?$")  # pytest's short summary line
 CHECK_PREFIX = "agk-merge-check-"  # the temporary folder of the check before the merge (#610)
 AFTER_PREFIX = "agk-merge-cleared-"  # the temporary folder of the run after the merge (#551)
 NAME = ("-c", "user.name=merge-cleared", "-c", "user.email=merge-cleared@example.com")
@@ -199,6 +215,7 @@ class Rules(NamedTuple):
     allowed: list[str]  # conductor_accounts
     approvers: list[str]  # spec_approvers
     required: list[str]  # required_checks
+    pre: dict | None = None  # [testing] pre_merge_tests, checked (brief #667)
 
 
 class Stopped(Exception):
@@ -823,6 +840,99 @@ def governance_argv(tree: Path, home: Path, body: Path, base: str, wait: float) 
     ]
 
 
+def tests_argv(tree: Path, home: Path, names: list[str], wait: float) -> list[str]:
+    """The pre-merge test run of brief #667 as one argument list: the heavy lock as governance
+    takes it, `env -i` with PATH, HOME and AGK_KIT_TESTS=1 only, and pytest on the files NAMES of
+    TREE, rooted at TREE, so that no token reaches the merged code and nothing is cached."""
+    lock_py = Path(__file__).resolve().parent / "lock.py"
+    return [
+        sys.executable,
+        str(lock_py),
+        "run",
+        "--name",
+        HEAVY,
+        "--session",
+        LOCK,
+        "--timeout",
+        f"{wait:g}",
+        "--",
+        "env",
+        "-i",
+        f"PATH={os.environ.get('PATH', '')}",
+        f"HOME={home}",
+        "AGK_KIT_TESTS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        "-rfE",
+        "-p",
+        "no:cacheprovider",
+        "--rootdir",
+        str(tree),
+        *(str(tree / name) for name in names),
+    ]
+
+
+def first_failure(out: str, names: list[str]) -> str:
+    """The first `<file>::<test>` (or `<file>`) that pytest's short summary names as failed or
+    in error, its file given as the listed name of NAMES that it ends with (pytest prints it
+    relative to where it ran); `pytest` when it names none."""
+    for line in out.splitlines():
+        found = FAILED_LINE.match(line.strip())
+        if found:
+            file, sep, test = found.group(1).partition("::")
+            file = file.replace("\\", "/")
+            listed = [n for n in names if file == n or file.endswith(f"/{n}")]
+            return f"{listed[0] if listed else file}{sep}{test}"
+    return "pytest"
+
+
+def run_tests(root: Path, tree: Path, home: Path, names: list[str], wait: float) -> str | None:
+    """Run the pre-merge tests NAMES once in TREE (brief #667); output to standard error. None
+    when they passed, else what failed: the first failing test, `heavy lock` when lock.py did not
+    take the lock in WAIT seconds and pytest named no test, or `pytest`. An interrupt ends
+    lock.py and is raised again."""
+    child = subprocess.Popen(  # nosec B603 - fixed argument list, no shell
+        tests_argv(tree, home, names, wait),
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    try:
+        out, _ = child.communicate()
+    except BaseException:
+        end_child(child)
+        raise
+    sys.stderr.write(out or "")
+    if child.returncode == 0:
+        return None
+    failed = first_failure(out or "", names)
+    if failed == "pytest" and child.returncode == LOCK_TIMEOUT:
+        return "heavy lock"
+    return failed
+
+
+def pre_merge_setting(data: dict) -> dict | None:
+    """The `[testing]` table of the default branch for the pre-merge tests (brief #667), its
+    `pre_merge_tests` checked here so that a bad setting is refused before anything runs."""
+    table = data.get("testing")
+    if table is None:
+        return None
+    if not isinstance(table, dict):
+        raise Refused("[testing] must be a table (setting: testing)")
+    if impact.PRE_MERGE in table:
+        try:
+            impact.check_pre_merge_tests(table[impact.PRE_MERGE])
+        except CheckError as err:
+            raise Refused(str(err)) from None
+    return table
+
+
 def run_governance(
     root: Path, tree: Path, home: Path, body: Path, base: str, wait: float
 ) -> str | None:
@@ -894,13 +1004,22 @@ def governance(
 
 
 def in_worktree(
-    root: Path, commit: str, base: str, wait: float, text: str, prefix: str, repo: str = ""
+    root: Path,
+    commit: str,
+    base: str,
+    wait: float,
+    text: str,
+    prefix: str,
+    repo: str = "",
+    pre: dict | None | bool = False,
 ) -> str | None:
     """The governance run on COMMIT against BASE in a detached worktree of a new temporary folder
     outside the checkout (named with PREFIX), with TEXT in the body file of its temporary home and
     the Final comments of COMMIT's records (read from REPO, amendment 122) in its record-comments
     file; both are removed in every case. The one run of rule 6, after the merge and before it
-    (brief #610). None when green, else the failing step."""
+    (brief #610). None when green, else the failing step. With PRE (the default branch's
+    `[testing]` table, None without one; False after the merge), the pre-merge tests run after a
+    green governance and a failure raises Held (brief #667)."""
     scratch = Path(tempfile.mkdtemp(prefix=prefix))
     tree, home = scratch / "tree", scratch / "home"
     body = home / "pr-body.md"
@@ -912,7 +1031,17 @@ def in_worktree(
         code, _ = git_out(root, "worktree", "add", "--detach", "-q", str(tree), commit)
         if code != 0:
             return "worktree"
-        return run_governance(root, tree, home, body, base, wait)
+        step = run_governance(root, tree, home, body, base, wait)
+        if step is not None or pre is False:
+            return step
+        try:
+            names = impact.pre_merge_names(pre if isinstance(pre, dict) else None, tree)
+        except CheckError:
+            raise Held(f"{TESTS_FAIL} (setting: testing.{impact.PRE_MERGE})") from None
+        failed = run_tests(root, tree, home, names, wait) if names else None
+        if failed is not None:
+            raise Held(f"{TESTS_FAIL} ({failed})")
+        return None
     finally:
         git_out(root, "worktree", "remove", "--force", str(tree))
         shutil.rmtree(scratch, ignore_errors=True)
@@ -942,17 +1071,25 @@ def would_be_merge(root: Path, branch: str, number: int, sha: str) -> tuple[str 
 
 
 def merge_check(
-    root: Path, branch: str, number: int, sha: str, wait: float, text: str, repo: str = ""
+    root: Path,
+    branch: str,
+    number: int,
+    sha: str,
+    wait: float,
+    text: str,
+    repo: str = "",
+    pre: dict | None = None,
 ) -> str | None:
     """Governance on the would-be merge of SHA with the default branch, before the merge (brief
-    #610, amendment 123): the run of rule 6 on it. None when green, else the failing step; any
+    #610, amendment 123): the run of rule 6 on it, then the pre-merge tests of PRE (the default
+    branch's `[testing]` table, brief #667). None when green, else the failing step; any
     exception, interrupt or termination is `governance not finished`, nothing having merged."""
     with after_merge_signals():
         try:
             commit, base = would_be_merge(root, branch, number, sha)
             if commit is None:
                 return base
-            return in_worktree(root, commit, base, wait, text, CHECK_PREFIX, repo)
+            return in_worktree(root, commit, base, wait, text, CHECK_PREFIX, repo, pre)
         except Held:
             raise
         except BaseException:  # a run that cannot finish is not green; nothing has merged
@@ -1123,7 +1260,8 @@ def ruled(root: Path) -> Rules:
     approvers = approvers_of(people)
     required = required_of(data)
     after_merge_seconds(data)  # a bad setting is refused before anything is merged
-    return Rules(data, people, allowed, approvers, required)
+    pre = pre_merge_setting(data)  # likewise the pre-merge tests (brief #667)
+    return Rules(data, people, allowed, approvers, required, pre)
 
 
 def local_mode(data: dict, issues: list[dict]) -> bool:
@@ -1178,7 +1316,8 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
         pull, verdict, accepted, record, fixing = holds(root, repo, number, sha, rules)
         text = str(pull.get("body") or "")  # the body read above, for governance (brief #576)
         branch = str(data.get("default_branch", "main"))
-        step = merge_check(root, branch, number, sha, after_merge_seconds(data), text, repo)
+        wait = after_merge_seconds(data)
+        step = merge_check(root, branch, number, sha, wait, text, repo, rules.pre)
         if step is not None:
             raise Held(f"{FAILS} ({step})")
         merged = merge_pull(repo, number, sha, accepted)

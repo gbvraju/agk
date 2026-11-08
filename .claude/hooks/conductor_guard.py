@@ -71,7 +71,9 @@ regular file; and its merge queue (brief #643 build (b), ADR-0329): exactly
 `python3 scripts/agk/conductor.py merge-queue`, with `--dry-run`, then `--max-batch <1 to 99>`, or
 both in that order, the dry run always and a run that merges only when `[flow] auto_merge` reads
 `on` in both places, as `merge_cleared.py` below; for that one the hook prints the same explicit
-`allow` decision. Every other form stays denied.
+`allow` decision. Brief #700 (ADR-0330): exactly `... rerun --pr <n>`, with `--apply` after it,
+`... check-verdict <path>` and `... lease --show`, `... lease --take <name>` or `... lease
+--release <name>` too, the same regular file. Every other form stays denied.
 Without `--shadow` the conductor may also merge a pull request it cleared (brief #531, ADR-0265,
 SPEC-0039 rule 8, the one exception to principle 2 and session rule 2): exactly
 `python3 scripts/agk/merge_cleared.py --pr <n> --sha <40 lower-case hex>` (or `python`), the
@@ -128,8 +130,9 @@ try:  # the one reading of a brief, `check_brief.py`'s (brief 276)
 
     BRIEF_PROBLEMS = check_brief.brief_problems
     ABSENT_REQUIREMENTS = check_brief.absent_requirements
+    SCREENS_PROBLEMS = check_brief.screens_problems  # SPEC-0037 rule 10 (brief #460)
 except ImportError:  # without the check no brief is filed
-    BRIEF_PROBLEMS = ABSENT_REQUIREMENTS = None
+    BRIEF_PROBLEMS = ABSENT_REQUIREMENTS = SCREENS_PROBLEMS = None
 try:  # the one reading of `auto_start` and `launch_adapter`, launch.py's (brief #331)
     import launch
 
@@ -373,12 +376,15 @@ def brief_text(path: str) -> str | None:
 
 
 def brief_checked(text: str) -> bool:
-    """`check_brief.py FILE --root <project>` accepts the text: the shape and the requirements."""
-    if BRIEF_PROBLEMS is None or ABSENT_REQUIREMENTS is None or BRIEF_PROBLEMS(text):
+    """`check_brief.py FILE --root <project>` accepts the text: the shape, the requirements and
+    the `Screens:` line of a UI brief (SPEC-0037 rule 10, brief #460)."""
+    checks = (BRIEF_PROBLEMS, ABSENT_REQUIREMENTS, SCREENS_PROBLEMS)
+    if any(c is None for c in checks) or BRIEF_PROBLEMS(text):
         return False
+    root = Path(project_root())
     try:
-        return not ABSENT_REQUIREMENTS(text, Path(project_root()))
-    except check_brief.CheckError:  # an unreadable requirements file files nothing
+        return not ABSENT_REQUIREMENTS(text, root) and not SCREENS_PROBLEMS(text, root)
+    except check_brief.CheckError:  # an unreadable requirements file or setting files nothing
         return False
 
 
@@ -486,9 +492,25 @@ def routine_allowed(words: list[str], cwd: object) -> bool:
     queue = queue_form(rest)
     if queue is not None:
         return own_script(words[1], cwd, CONDUCTOR_SCRIPT) and (queue or auto_merge_on_both())
-    if rest not in (["sweep"], ["watch"], ["watch", "--once"]):
+    if rest not in (["sweep"], ["watch"], ["watch", "--once"]) and not routine_form(rest):
         return False
     return own_script(words[1], cwd, CONDUCTOR_SCRIPT)
+
+
+def routine_form(rest: list[str]) -> bool:
+    """The routines of brief #700 (ADR-0330): `rerun --pr <n> [--apply]`, `check-verdict <path>`
+    and `lease (--show | --take <name> | --release <name>)`, exactly these forms."""
+    if rest[:2] == ["rerun", "--pr"] and len(rest) in (3, 4) and MERGE_PR.fullmatch(rest[2]):
+        return rest[3:] in ([], ["--apply"])
+    if rest[:1] == ["check-verdict"]:
+        return len(rest) == 2 and bool(rest[1]) and not rest[1].startswith("-")
+    if rest[:1] == ["lease"]:
+        if rest[1:] == ["--show"]:
+            return True
+        return len(rest) == 3 and rest[1] in ("--take", "--release") and bool(
+            SESSION_NAME.fullmatch(rest[2])
+        )
+    return False
 
 
 def configured_adapter() -> str | None:
