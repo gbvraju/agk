@@ -21,7 +21,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-PROTECTED = "constitution/\nconfig/\n.claude/\n.github/\ndocs/requirements.md\nscripts/agk/\ntests/kit/\n"
+PROTECTED = (
+    "constitution/\nconfig/\n.claude/\n.github/\ndocs/requirements.md\nscripts/agk/\ntests/kit/\n"
+)
 
 
 def brief(size: str, touches: str) -> dict:
@@ -144,7 +146,9 @@ def test_ac7_an_unreadable_brief_gives_design_never_a_lower_kind(setup):
     repo, api, facts = setup
     (api / "issue-12.json").unlink()
     kinds = by_kind(run(repo, str(facts), "--api-dir", str(api)).stdout)
-    assert kinds["design"].startswith("2 merged; tokens 3000 (3000 per reported pull request; 1 not")
+    assert kinds["design"].startswith(
+        "2 merged; tokens 3000 (3000 per reported pull request; 1 not"
+    )
     assert kinds["build"] == "0 merged"
 
 
@@ -155,7 +159,8 @@ def test_ac7_the_facts_and_the_report_are_unchanged(setup):
 
     assert facts.SCHEMA == 1 and product_report.REPORT_SCHEMA == 7
     schema = json.loads((ROOT / "kit" / "facts-schema.json").read_text(encoding="utf-8"))
-    assert '"kind"' not in json.dumps(schema.get("properties", {}).get("pull_requests", {}))
+    item = schema["properties"]["pull_requests"]["oneOf"][0]["items"]["properties"]
+    assert "kind" not in item and "usage" in item  # the kind is read from the brief, not stored
 
 
 def test_ac7_a_facts_file_that_is_not_json_is_refused_naming_the_path_class(setup, tmp_path):
@@ -183,7 +188,9 @@ def test_ac7_unread_pull_requests_print_unknown_and_exit_0(setup, tmp_path):
 def test_ac8_the_weeks_before_and_after_print_lead_time_and_rework_per_kind(setup):
     """REQ-052 AC8: rule 9."""
     repo, api, facts = setup
-    proc = run(repo, str(facts), "--api-dir", str(api), "--before", "2026-10-26", "--after", "2026-11-02")
+    proc = run(
+        repo, str(facts), "--api-dir", str(api), "--before", "2026-10-26", "--after", "2026-11-02"
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     before, after = proc.stdout.split("after:", 1)
     assert "before: 2026-10-19 to 2026-10-25" in before and "2026-11-02 to 2026-11-08" in after
@@ -243,7 +250,9 @@ def test_ac8_the_command_writes_no_file_and_reads_with_get_only(setup, tmp_path_
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert by_kind(proc.stdout)["build"].startswith("1 merged; tokens 3000")
     lines = calls.read_text(encoding="utf-8").splitlines()
-    assert lines and all(x.startswith("api --method GET repos/example/widgets/issues/") for x in lines)
+    assert lines and all(
+        x.startswith("api --method GET repos/example/widgets/issues/") for x in lines
+    )
     assert len(lines) == len(set(lines)) == 3  # one read per brief
     after = sorted(p.relative_to(repo.root) for p in repo.root.rglob("*") if ".git" not in p.parts)
     assert before == after
