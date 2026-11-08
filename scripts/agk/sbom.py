@@ -141,6 +141,8 @@ def python_components(data: dict) -> list[dict]:
             *data.get("dependency-groups", {}).values(),
             data.get("build-system", {}).get("requires", []),
         ]
+        if not all(isinstance(group, list) for group in groups):
+            raise TypeError
         items = [i for g in groups for i in g if not (isinstance(i, dict) and "include-group" in i)]
     except (AttributeError, KeyError, TypeError):
         raise not_parsed(PYPROJECT) from None
@@ -233,7 +235,8 @@ def resolve(root: Path, ref: str) -> str:
 def build(root: Path, commit: str) -> dict:
     pyproject = read_toml(root, commit, PYPROJECT)
     version = read_toml(root, commit, AGK_TOML).get("version")
-    name = pyproject.get("project", {}).get("name")
+    project = pyproject.get("project")
+    name = project.get("name") if isinstance(project, dict) else None
     if not isinstance(version, str):
         raise not_parsed(AGK_TOML)
     if not isinstance(name, str):
@@ -279,7 +282,7 @@ def well_formed(item: dict) -> bool:
         and all(isinstance(h, dict) and set(h) == {"alg", "content"} for h in hashes)
         and isinstance(properties, list)
         and all(isinstance(p, dict) and set(p) == {"name", "value"} for p in properties)
-        and {p["name"] for p in properties} <= {"agk:class", "agk:pin"}
+        and all(p["name"] in ("agk:class", "agk:pin") for p in properties)
     )
 
 
@@ -361,7 +364,7 @@ def make(root: Path, ref: str, out: str) -> None:
 def check(root: Path, ref: str, path: str) -> list[tuple[str, str]]:
     try:
         doc = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, RecursionError, ValueError):
         return [("document", "not JSON of rule 3's form (rule 4)")]
     return document_problems(doc, build(root, resolve(root, ref)))
 

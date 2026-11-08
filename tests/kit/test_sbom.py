@@ -204,6 +204,10 @@ def _unpinned_version(doc: dict) -> None:
     by_ref(doc, "python:beta")["version"] = "2.0"
 
 
+def _odd_property(doc: dict) -> None:
+    by_ref(doc, "python:delta@4.0")["properties"].append({"name": ["odd"], "value": "1"})
+
+
 @pytest.mark.parametrize(
     ("change", "kind"),
     [
@@ -214,6 +218,7 @@ def _unpinned_version(doc: dict) -> None:
         (_digest, "kit-file"),
         (_field, "python"),
         (_unpinned_version, "python"),
+        (_odd_property, "python"),
     ],
 )
 def test_check_gives_one_line_per_problem(
@@ -273,6 +278,8 @@ def test_an_out_inside_the_repository_is_refused(repo: Repo, capsys) -> None:
         ("pyproject.toml", "not toml [", "pyproject.toml"),
         ("pyproject.toml", None, "pyproject.toml"),
         ("pyproject.toml", '[project]\ndependencies = ["=bad"]\nname = "x"\n', "pyproject.toml"),
+        ("pyproject.toml", '[project]\nname = "x"\ndependencies = "abc"\n', "pyproject.toml"),
+        ("pyproject.toml", "project = 1\n", "pyproject.toml"),
         ("config/ci-tools.txt", "ruff>=1\n", "config/ci-tools.txt"),
         ("agk.toml", "nothing = 1\n", "agk.toml"),
         ("kit/manifest.json", "{", "kit/manifest.json"),
