@@ -14,13 +14,12 @@ import re
 from pathlib import Path
 
 import pytest
+from metrics import usage_of
 from test_session import ISSUES, PR, PR_COMMENTS, comment, listing, posts, pull, session, watching
 from test_session import proj as session_proj  # noqa: F401  (the fixtures of test_session)
 from test_session import stub as session_stub  # noqa: F401
 from test_session_resume import OLD, PRS, label, nxt, offered, pr_object, serve_list, serve_resume
-from test_session_tell import CONDUCTOR, CONDUCTOR_ISSUE, COMMENTS, told
-
-from metrics import usage_of
+from test_session_tell import COMMENTS, CONDUCTOR, CONDUCTOR_ISSUE, told
 
 ROOT = Path(__file__).resolve().parents[2]
 RULES = (ROOT / "config" / "session-rules.md").read_text(encoding="utf-8")
