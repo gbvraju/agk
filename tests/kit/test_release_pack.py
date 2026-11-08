@@ -1,5 +1,5 @@
 """The evidence pack's form, its release test and its offline check (SPEC-0052 build (b),
-brief #769, rules 2, 4 and 10, ADR-0343).
+brief #769, rules 2, 4 and 10, ADR-0343), and `make` from git (build (c), brief #820, rules 3, 8, 9).
 
 REQ-059 AC2 and AC8. `release_pack.py check <out>/<tag>` reads the folder and the repository's
 git only and prints `ok pack`, one `FAIL pack:` line per problem or one `refused:` line. Fixtures
@@ -29,6 +29,16 @@ PARTS = ("tests.json", "scans.json", "coverage.json", "bom.json", "decisions.jso
 NO_KIT = "refused: this repository has no release test (path class kit/)\n"
 DIGEST = hashlib.sha256(b"an invented installed file\n").hexdigest()
 ACTION_SHA = hashlib.sha1(b"an invented action", usedforsecurity=False).hexdigest()
+WORKFLOW = (
+    "jobs:\n  g:\n    steps:\n"
+    f"      - uses: acme/build@{ACTION_SHA} # v4.1.0\n"
+    "      - uses: acme/loose@v1\n"
+    "        env:\n          GITLEAKS_VERSION: 8.30.1\n"
+)
+PYPROJECT = (
+    '[project]\nname = "x"\ndependencies = ["rich==13.0.0", "loose>=1"]\n'
+    '[dependency-groups]\ndev = ["pytest[cov]==9.0.0 ; python_version > \'3\'"]\n'
+)
 
 
 def git(root: Path, *args: str) -> str:
@@ -49,10 +59,10 @@ def put(root: Path, rel: str, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def write_manifest(root: Path, version: str, text: str) -> None:
+def write_manifest(root: Path, version: str, text: str, listed=()) -> None:
     manifest = {
         "kit_version": version,
-        "verbatim": ["a.txt"],
+        "verbatim": ["a.txt", *listed],
         "templates": {},
         "rendered": [],
         "adopt": {"skip": [], "blocks": {}, "templates": {}},
@@ -70,7 +80,23 @@ def commit(root: Path, message: str) -> None:
     git(root, "commit", "-q", "-m", message)
 
 
-def kit_repo(tmp_path: Path, *, toml="1.1.0", fragment=False, tag=TAG, annotated=False) -> Path:
+def put_bill(root: Path) -> None:
+    """The files the bill of materials and the decisions part read."""
+    put(root, "config/ci-tools.txt", "# the pins\nbandit==1.2.3\n")
+    put(root, "pyproject.toml", PYPROJECT)
+    put(root, ".github/workflows/governance.yml", WORKFLOW)
+    put(root, "docs/adr/0001-one.md", "# ADR-0001\n\n- Status: Proposed\n")
+    put(root, "docs/adr/0002-two.md", "# ADR-0002\n\n- Status: Accepted\n")
+    put(root, "docs/requirements.md", requirements("planned", "done"))
+
+
+def requirements(first: str, second: str) -> str:
+    return f"### REQ-001 — one\n\n- Status: {first}\n\n### REQ-002 — two\n\n- Status: {second}\n"
+
+
+def kit_repo(
+    tmp_path: Path, *, toml="1.1.0", fragment=False, tag=TAG, annotated=False, bill=False, listed=()
+) -> Path:
     """A kit released at 1.0.0, then one commit that releases 1.1.0, tagged."""
     root = tmp_path / "repo"
     root.mkdir()
@@ -83,7 +109,9 @@ def kit_repo(tmp_path: Path, *, toml="1.1.0", fragment=False, tag=TAG, annotated
     commit(root, "kit 1.0.0")
     table(root)
     commit(root, "table")
-    write_manifest(root, "1.1.0", "a one-one\n")
+    write_manifest(root, "1.1.0", "a one-one\n", listed)
+    if bill:
+        put_bill(root)
     put(root, "agk.toml", f'version = "{toml}"\npr_mode = "flow"\n')
     put(root, ".claude-plugin/plugin.json", json.dumps({"name": "agk", "version": "1.1.0"}))
     put(root, "CHANGELOG.md", CHANGELOG)
@@ -575,9 +603,12 @@ def test_ac8_a_missing_folder_is_one_line(tmp_path):
     assert "out-odd" not in done.stdout
 
 
-@pytest.mark.parametrize("args", [[], ["check"], ["make"], ["check", "a", "b"], ["odd"]])
+@pytest.mark.parametrize(
+    "args",
+    [[], ["check"], ["make"], ["check", "a", "b"], ["odd"], ["make", "--tag", TAG, "--out"]],
+)
 def test_ac8_a_bad_command_prints_the_usage_and_exits_2(tmp_path, args):
-    """REQ-059 AC8: rule 10 (this build has `check` only; `make` is build (c))."""
+    """REQ-059 AC8: rule 10 (a command that is neither `check` nor a whole `make`)."""
     root = kit_repo(tmp_path)
     done = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(SCRIPT), *args], cwd=root, capture_output=True, text=True, env=env()
@@ -621,3 +652,269 @@ def test_ac8_the_script_is_installed_and_mapped_to_its_tests():
     data = tomllib.loads((KIT / "agk.toml").read_text(encoding="utf-8"))
     entries = [e for e in data["testing"]["map"] if e["code"] == "scripts/agk/release_pack.py"]
     assert len(entries) == 1 and "tests/kit/test_release_pack.py" in entries[0]["tests"]
+
+
+# Build (c): `make` from git (rules 3, 8 and 9). A pack is whole only after build (d).
+
+
+def make(root: Path, out, tag=TAG) -> subprocess.CompletedProcess:
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPT), "make", "--tag", tag, "--out", str(out)],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        env=env(),
+    )
+
+
+def part(out: Path, name: str, tag=TAG) -> dict:
+    return json.loads((out / tag / name).read_text(encoding="utf-8"))
+
+
+def release(root: Path, version: str, *, tag: str | None = None) -> None:
+    """One more release commit, tagged; a tag other than its version is not a release."""
+    write_manifest(root, version, f"a {version}\n")
+    put(root, "agk.toml", f'version = "{version}"\npr_mode = "flow"\n')
+    plugin = {"name": "agk", "version": version}
+    put(root, ".claude-plugin/plugin.json", json.dumps(plugin))
+    log = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    put(root, "CHANGELOG.md", f"{log}\n## {version} (2026-10-26)\n\n- #6 a change\n")
+    table(root)
+    commit(root, f"release {version}")
+    git(root, "tag", tag or f"v{version}")
+
+
+def state(root: Path) -> tuple[str, str, str, str]:
+    return (
+        git(root, "status", "--porcelain", "--ignored"),
+        git(root, "show-ref"),
+        git(root, "worktree", "list"),
+        git(root, "rev-parse", "HEAD"),
+    )
+
+
+@pytest.fixture
+def billed(tmp_path):
+    return kit_repo(tmp_path, bill=True), tmp_path / "out"
+
+
+def test_ac1_make_writes_this_builds_parts_in_the_tags_folder_and_changes_nothing(billed):
+    """REQ-059 AC1: rules 2 and 3 (only `<out>/<tag>/`; the repository is left as it was)."""
+    root, out = billed
+    before = state(root)
+    done = make(root, out)
+    assert done.returncode == 0, done.stdout
+    assert sorted(p.name for p in (out / TAG).iterdir()) == ["bom.json", "decisions.json"]
+    assert [p.name for p in out.iterdir()] == [TAG]
+    assert state(root) == before
+
+
+def test_ac1_a_part_of_this_build_is_only_what_build_d_leaves_short_of_a_pack(billed):
+    """REQ-059 AC8: rule 10 (until build (d) the check says the pack is not whole)."""
+    root, out = billed
+    make(root, out)
+    done = check(root, out / TAG)
+    assert done.returncode == 1 and "FAIL pack: tests.json is missing" in done.stdout
+    assert "FAIL pack: bom.json" not in done.stdout
+
+
+def test_ac6_the_bill_names_files_pins_and_actions_at_the_tag(billed):
+    """REQ-059 AC6: rule 8 (the installed files, the pinned tools and the SHA-pinned actions)."""
+    root, out = billed
+    make(root, out)
+    assert part(out, "bom.json") == {
+        "schema": 1,
+        "kit_version": "1.1.0",
+        "files": [{"path": "a.txt", "sha256": hashlib.sha256(b"a one-one\n").hexdigest()}],
+        "tools": [
+            {"name": "bandit", "pin": "1.2.3"},
+            {"name": "gitleaks", "pin": "8.30.1"},
+            {"name": "pytest", "pin": "9.0.0"},
+            {"name": "rich", "pin": "13.0.0"},
+        ],
+        "actions": [{"name": "acme/build", "tag": "v4.1.0", "sha": ACTION_SHA}],
+    }
+
+
+def test_ac6_the_pins_are_the_ones_the_scorecard_reads(billed):
+    """REQ-059 AC6: rule 8 (`as scorecard.action_pins and python_pins read them`)."""
+    import scorecard  # noqa: PLC0415 - imported here as the other tests import the script
+
+    root, out = billed
+    make(root, out)
+    bill = part(out, "bom.json")
+    assert [(a["name"], a["tag"]) for a in bill["actions"]] == scorecard.action_pins(root)
+    names = {t["name"] for t in bill["tools"]}
+    assert set(scorecard.python_pins(root)) == names - {"bandit", "gitleaks"}
+
+
+def test_ac6_a_file_changed_after_the_tag_gives_its_content_at_the_tag(billed):
+    """REQ-059 AC6: rule 8 (read with `git show`, whatever the work tree holds)."""
+    root, out = billed
+    put(root, "a.txt", "changed and committed\n")
+    commit(root, "after the tag")
+    put(root, "a.txt", "changed and left in the work tree\n")
+    make(root, out)
+    digest = hashlib.sha256(b"a one-one\n").hexdigest()
+    assert part(out, "bom.json")["files"][0]["sha256"] == digest
+
+
+def test_ac6_a_file_the_manifest_names_that_is_missing_at_the_tag_is_refused(tmp_path):
+    """REQ-059 AC6: rule 8 (naming the path class, with no pack written)."""
+    root = kit_repo(tmp_path, bill=True, listed=("gone-away.txt",))
+    done = make(root, tmp_path / "out")
+    assert done.returncode == 1
+    assert done.stdout == "refused: a file the bill names cannot be read (path class kit/)\n"
+    assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize(
+    ("rel", "name"), [("config/ci-tools.txt", "config/"), ("pyproject.toml", "pyproject.toml")]
+)
+def test_ac6_a_pin_file_missing_at_the_tag_is_refused(tmp_path, rel, name):
+    """REQ-059 AC6: rule 8 (Q-820-2: a file the bill names includes the pin files)."""
+    root = kit_repo(tmp_path, bill=True, tag="v9.9.9")
+    (root / rel).unlink()
+    commit(root, "no pin file")
+    git(root, "tag", TAG)
+    done = make(root, tmp_path / "out")
+    assert done.stdout == f"refused: a file the bill names cannot be read (path class {name})\n"
+    assert not (tmp_path / "out").exists()
+
+
+def test_ac6_no_scanner_pin_is_no_tool_and_no_refusal(tmp_path):
+    """REQ-059 AC6: rules 6 and 8 (a scan nothing configures is build (d)'s `not run`)."""
+    root = kit_repo(tmp_path, bill=True, tag="v9.9.9")
+    (root / ".github/workflows/governance.yml").unlink()
+    commit(root, "no workflow")
+    git(root, "tag", TAG)
+    out = tmp_path / "out"
+    assert make(root, out).returncode == 0
+    assert "gitleaks" not in {t["name"] for t in part(out, "bom.json")["tools"]}
+
+
+def test_ac7_the_decisions_between_two_releases_skip_a_tag_that_is_not_one(billed):
+    """REQ-059 AC7: rule 9 (exactly what changed, and the skipped tag by name)."""
+    root, out = billed
+    put(root, "note.txt", "not a release\n")
+    commit(root, "a commit")
+    git(root, "tag", "v1.1.5")
+    put(root, "docs/adr/0001-one.md", "# ADR-0001\n\n- Status: Accepted\n")
+    put(root, "docs/adr/0003-three.md", "# ADR-0003\n\n- Status: Proposed\n")
+    put(root, "docs/requirements.md", requirements("done", "done"))
+    release(root, "1.2.0")
+    assert make(root, out, "v1.2.0").returncode == 0, "make failed"
+    assert part(out, "decisions.json", "v1.2.0") == {
+        "schema": 1,
+        "adrs": [1],
+        "requirements": [{"id": "REQ-001", "from": "planned", "to": "done"}],
+        "skipped_tags": ["v1.1.5"],
+    }
+
+
+def test_ac7_with_no_earlier_release_the_range_starts_at_the_first_commit(billed):
+    """REQ-059 AC7: rule 9 (none means the repository's first commit; Q-820-3 for `from`)."""
+    root, out = billed
+    make(root, out)
+    assert part(out, "decisions.json") == {
+        "schema": 1,
+        "adrs": [2],
+        "requirements": [
+            {"id": "REQ-001", "from": "none", "to": "planned"},
+            {"id": "REQ-002", "from": "none", "to": "done"},
+        ],
+        "skipped_tags": [],
+    }
+
+
+def test_ac1_an_out_inside_the_repository_that_git_does_not_ignore_is_refused(billed):
+    """REQ-059 AC1: rule 2 (principle 5: naming the path class, and nothing written)."""
+    root, _ = billed
+    before = state(root)
+    done = make(root, root / "packs")
+    assert done.returncode == 1
+    assert done.stdout == "refused: the folder is inside the repository (path class <out>)\n"
+    assert not (root / "packs").exists() and state(root) == before
+
+
+def test_ac1_an_out_inside_the_git_folder_is_refused(billed):
+    """REQ-059 AC1: rules 2 and 3 (the command changes no file of the repository)."""
+    root, _ = billed
+    assert make(root, root / ".git" / "packs").returncode == 1
+    assert not (root / ".git" / "packs").exists()
+
+
+def test_ac1_an_ignored_out_inside_the_repository_is_written(billed):
+    """REQ-059 AC1: rule 2 (`or git-ignored`, Q-S0052-2), for a folder that does not exist yet."""
+    root, _ = billed
+    put(root, ".gitignore", "packs/\n")
+    commit(root, "ignore")
+    assert make(root, root / "packs").returncode == 0
+    assert (root / "packs" / TAG / "bom.json").is_file()
+
+
+@pytest.mark.parametrize("kind", ["folder", "link"])
+def test_ac1_an_existing_tag_folder_is_refused_and_left_as_it_is(billed, tmp_path, kind):
+    """REQ-059 AC1: rule 3 (Q-S0052-4: never replaced)."""
+    root, out = billed
+    out.mkdir()
+    if kind == "folder":
+        (out / TAG).mkdir()
+        (out / TAG / "old.txt").write_text("old\n", encoding="utf-8")
+    else:
+        (out / TAG).symlink_to(tmp_path / "elsewhere")
+    done = make(root, out)
+    assert done.returncode == 1
+    assert done.stdout == "refused: the folder exists already (path class <out>/<tag>)\n"
+    assert not (tmp_path / "elsewhere").exists()
+    if kind == "folder":
+        assert [p.name for p in (out / TAG).iterdir()] == ["old.txt"]
+
+
+def test_ac1_an_out_that_cannot_be_made_is_one_line(billed, tmp_path):
+    """REQ-059 AC1: rule 3 (a file where the folder would go; names the path class)."""
+    root, _ = billed
+    (tmp_path / "a-file").write_text("x\n", encoding="utf-8")
+    done = make(root, tmp_path / "a-file")
+    assert done.returncode == 1
+    assert done.stdout == "refused: the folder cannot be written (path class <out>)\n"
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "line"),
+    [
+        ({"toml": "1.0.9"}, "refused: the tag is not a release (agk.toml states a version other"),
+        ({"fragment": True}, "refused: the tag is not a release (a fragment is left under"),
+    ],
+)
+def test_ac2_make_refuses_a_tag_that_is_not_a_release_and_writes_nothing(tmp_path, kwargs, line):
+    """REQ-059 AC2: rule 4 (the release test comes first; the line holds no version)."""
+    root = kit_repo(tmp_path, bill=True, **kwargs)
+    done = make(root, tmp_path / "out")
+    assert done.returncode == 1 and done.stdout.startswith(line), done.stdout
+    assert "1.0.9" not in done.stdout and not (tmp_path / "out").exists()
+
+
+def test_ac2_make_refuses_a_repository_without_the_release_files(tmp_path):
+    """REQ-059 AC2: rule 4 (`refused:` naming the path class; nothing written)."""
+    root = project_repo(tmp_path)
+    done = make(root, tmp_path / "out")
+    assert done.returncode == 1 and done.stdout == NO_KIT
+    assert not (tmp_path / "out").exists()
+
+
+def test_ac6_make_opens_no_socket(billed, monkeypatch, capsys):
+    """REQ-059 AC6: rule 8 (no network: a socket raises, and `make` still passes)."""
+    import release_pack  # noqa: PLC0415 - the tests were written before the script
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("a socket was opened")
+
+    root, out = billed
+    monkeypatch.setattr(socket, "socket", refuse)
+    monkeypatch.chdir(root)
+    for name in ("GITHUB_BASE_REF", "AGK_BASE", "CI"):
+        monkeypatch.delenv(name, raising=False)
+    assert release_pack.main(["make", "--tag", TAG, "--out", str(out)]) == 0
+    assert (out / TAG / "bom.json").is_file()
+    capsys.readouterr()
