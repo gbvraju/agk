@@ -205,6 +205,13 @@ HOLD_LABEL = "agk:hold"
 APPROVE_LABEL = "agk:approve"
 CONFLICT = ("dirty", "unknown")
 HTTP = re.compile(r"HTTP (\d{3})")
+RULESET = "rule violation"  # GitHub's words for a merge its ruleset refuses (brief #765, verify)
+WORKFLOW = "governance.yml"  # the workflow the merger job dispatches after a merge (brief #765)
+JOB_LINE = re.compile(
+    r"merge-cleared #([1-9][0-9]{0,9}) ([0-9a-f]{12}): (merged|held|refused)(?:\s|:)"
+)
+EVENTS = ("issue_comment", "workflow_run")  # the merger job's starts (brief #765, ADR-0354)
+JOB_PREFIX = "merger: "  # the one comment of a hold or a refusal (brief #765)
 PENDING = "checks pending"  # SPEC-0039 rule 10, exactly (brief #569)
 RED = ("failure", "error")  # a commit status that failed
 ENDED = ("success", *RED)  # a commit status that is no longer `pending`
@@ -290,13 +297,19 @@ def git_out(root: Path, *args: str) -> tuple[int, str]:
     return proc.returncode, proc.stdout.strip()
 
 
+def default_branch(root: Path) -> str:
+    """The name of the remote's default branch: the one `refs/remotes/origin/HEAD` points to,
+    else `main`."""
+    code, target = git_out(root, "symbolic-ref", "-q", "refs/remotes/origin/HEAD")
+    return target[len(REMOTE) :] if code == 0 and target.startswith(REMOTE) else "main"
+
+
 def default_ref(root: Path) -> tuple[str, dict]:
     """The commit of the remote's default branch as last fetched, and its parsed agk.toml.
 
     The branch is the one `refs/remotes/origin/HEAD` points to, else `main`; agk.toml there must
     name the same `default_branch` (`main` when unset). Nothing is read from the work tree."""
-    code, target = git_out(root, "symbolic-ref", "-q", "refs/remotes/origin/HEAD")
-    branch = target[len(REMOTE) :] if code == 0 and target.startswith(REMOTE) else "main"
+    branch = default_branch(root)
     ref = REMOTE + branch
     code, sha = git_out(root, "rev-parse", "--verify", "-q", f"{ref}^{{commit}}")
     if code != 0 or not SHA.fullmatch(sha):
@@ -790,6 +803,8 @@ def merge_pull(repo: str, number: int, sha: str, message: list[str] | None = Non
         status = int(found.group(1)) if found else 0
         if status == 409:
             raise Refused("head moved (rule 6: GitHub refused the pinned sha)", EXIT_HELD)
+        if status == 405 and RULESET in err.lower():  # the default branch's ruleset (brief #765)
+            raise Held("merge refused by the ruleset (rule 6)")
         if status == 405:
             if current_head(repo, number) != sha:
                 raise Refused("head moved (rule 6: GitHub refused the pinned sha)", EXIT_HELD)
@@ -1298,6 +1313,139 @@ def merge_lock(root: Path) -> Iterator[None]:
 # --- the command --------------------------------------------------------------------------------
 
 
+# --- the merger job of GitHub mode (brief #765, ADR-0354, amendment 138) ------------------------
+
+
+class Nothing(Exception):
+    """The merger job has nothing to try: the message is its one line on stderr."""
+
+
+def github_mode(data: dict) -> None:
+    """Nothing unless `auto_merge` is on (squash), `execution` is not `local` and `forge` is not
+    `files`, all in agk.toml of the default branch: local mode keeps the conductor's run and
+    personal mode never merges (SPEC-0039 rule 4, SPEC-0041 rule 9)."""
+    try:
+        state = auto_merge_setting(data)
+    except CheckError as err:
+        raise Nothing(str(err)) from None
+    if state != "on":
+        raise Nothing(f"auto-merge is off ({SETTING.format('auto_merge')})")
+    if data.get("execution") == "local":
+        raise Nothing("local mode: the conductor merges (setting: execution in agk.toml)")
+    if data.get("forge") == "files":
+        raise Nothing("personal mode merges nothing (setting: forge in agk.toml)")
+
+
+def event_target(name: str, payload: dict) -> tuple[int, str | None] | None:
+    """(the pull request, its head sha or None) that event NAME's PAYLOAD may clear, or None: a
+    `Verdict:` or `Approve:` comment on a pull request, or a green `governance` run of a pull
+    request's head. Nothing here reads GitHub."""
+    if name == "issue_comment":
+        issue = payload.get("issue")
+        note = payload.get("comment")
+        if not (isinstance(issue, dict) and isinstance(note, dict) and issue.get("pull_request")):
+            return None
+        if not first_line(note).startswith(("Verdict:", "Approve:")):
+            return None
+        number = issue.get("number")
+        return (number, None) if isinstance(number, int) and number > 0 else None
+    if name == "workflow_run":
+        done = payload.get("workflow_run")
+        if not isinstance(done, dict) or done.get("event") != "pull_request":
+            return None
+        if done.get("conclusion") != "success":
+            return None
+        pulls = done.get("pull_requests")
+        sha = done.get("head_sha")
+        if not (isinstance(pulls, list) and len(pulls) == 1 and isinstance(pulls[0], dict)):
+            return None
+        number = pulls[0].get("number")
+        if not (isinstance(number, int) and number > 0 and isinstance(sha, str)):
+            return None
+        return (number, sha) if SHA.fullmatch(sha) else None
+    return None
+
+
+def event_main(path: str, name: str, root: Path) -> int:
+    """`--event FILE --event-name NAME`: print `<n> <sha>` when the job should run the command of
+    rule 2 on that pull request and head, else one line on stderr and nothing on stdout."""
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        payload = None
+    if not isinstance(payload, dict):
+        print("merger: refused: the event payload cannot be read (input: --event)", file=sys.stderr)
+        return 2
+    try:
+        target = event_target(name, payload)
+        if target is None:
+            raise Nothing(f"not a verdict, an approval or a green run of a head (event {name})")
+        _, data = default_ref(root)
+        github_mode(data)
+        repo = repo_of(root)
+        number, sha = target
+        if sha is None:
+            sha = current_head(repo, number)
+        if not SHA.fullmatch(sha):
+            raise Unreadable("the pull request")
+        issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
+        if titled(issues, RECORD_TITLE):
+            raise Nothing("local mode: the conductor merges (the local-mode record issue is open)")
+        state, reason = judge(read_comments(repo, number), sha, [])
+        if state != "cleared":
+            raise Nothing(f"#{number} not cleared: {reason}")
+    except Nothing as err:
+        print(f"merger: nothing to do: {err}", file=sys.stderr)
+        return EXIT_CLEARED
+    except Refused as err:
+        print(f"merger: nothing to do: {err}", file=sys.stderr)
+        return EXIT_CLEARED
+    except Unreadable as err:
+        print(f"merger: nothing to do: GitHub cannot be read ({err})", file=sys.stderr)
+        return EXIT_CLEARED
+    print(f"{number} {sha}")
+    return EXIT_CLEARED
+
+
+def report_main(number: int, sha: str, line: str, root: Path) -> int:
+    """`--report --pr N --sha SHA --line LINE`: after LINE, the command's own line for N and SHA,
+    dispatch the default branch's governance run on a merge, else post one comment `merger:
+    <line>` on the pull request unless the same comment is there already. Exit 0, or 2 for a line
+    that is not the command's own."""
+    found = JOB_LINE.match(line)
+    if not found or int(found.group(1)) != number or found.group(2) != sha[:12]:
+        print("merger: refused: the line is not merge_cleared.py's own (input: --line)")
+        return 2
+    try:
+        repo = repo_of(root)
+        if found.group(3) == "merged":
+            branch = default_branch(root)
+            endpoint = f"repos/{repo}/actions/workflows/{WORKFLOW}/dispatches"
+            code, _, _ = write_once(["--method", "POST", endpoint, "-f", f"ref={branch}"])
+            print("merger: dispatched governance" if code == 0 else "merger: dispatch failed")
+            return EXIT_CLEARED
+        body = JOB_PREFIX + line
+        if any(first_line(c) == body for c in read_comments(repo, number)):
+            print("merger: already said")
+            return EXIT_CLEARED
+        endpoint = f"repos/{repo}/issues/{number}/comments"
+        code, _, _ = write_once(["--method", "POST", endpoint, "-f", f"body={body}"])
+        print("merger: commented" if code == 0 else "merger: the comment cannot be posted")
+    except (Refused, Unreadable) as err:
+        print(f"merger: nothing posted: {err}")
+    return EXIT_CLEARED
+
+
+def job_args(argv: list[str]) -> tuple[str, list[str]] | None:
+    """The merger job's two modes: (`event`, [file, name]) or (`report`, [n, sha, line])."""
+    if len(argv) == 4 and argv[0] == "--event" and argv[2] == "--event-name":
+        return "event", [argv[1], argv[3]]
+    if len(argv) == 7 and argv[0] == "--report" and argv[1] == "--pr" and argv[3] == "--sha":
+        if argv[5] == "--line" and NUMBER.fullmatch(argv[2]) and SHA.fullmatch(argv[4]):
+            return "report", [argv[2], argv[4], argv[6]]
+    return None
+
+
 def parse_args(argv: list[str]) -> tuple[int, str] | None:
     if len(argv) != 4 or argv[0] != "--pr" or argv[2] != "--sha":
         return None
@@ -1397,7 +1545,14 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
 
 
 def main(argv: list[str] | None = None, root: Path | None = None) -> int:
-    args = parse_args(sys.argv[1:] if argv is None else argv)
+    argv = sys.argv[1:] if argv is None else argv
+    job = job_args(argv)
+    if job is not None:  # the merger job of GitHub mode (brief #765)
+        here = Path.cwd() if root is None else root
+        if job[0] == "event":
+            return event_main(job[1][0], job[1][1], here)
+        return report_main(int(job[1][0]), job[1][1], job[1][2], here)
+    args = parse_args(argv)
     if args is None:
         print(f"merge-cleared #? ?: refused: {USAGE}")
         return EXIT_REFUSED

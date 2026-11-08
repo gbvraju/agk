@@ -242,8 +242,10 @@ def workflow(name: str) -> str:
 
 
 def step_blocks(text: str) -> list[tuple[str, str]]:
-    """(name or `uses`, block) of each step of the one job, in order."""
+    """(name or `uses`, block) of each step of the first job, in order (the merger job of
+    governance.yml follows it and runs on other events, brief #765)."""
     out = []
+    text = text.split("\n  merger:\n", 1)[0]
     for block in re.split(r"(?m)^      - ", text.split("    steps:\n", 1)[1])[1:]:
         named = re.search(r"(?m)^(?:\s*)name: (.+)$", block)
         uses = re.match(r"uses: (\S+)", block)

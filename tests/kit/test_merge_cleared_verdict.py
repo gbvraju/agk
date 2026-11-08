@@ -225,7 +225,7 @@ if method == 'PUT' and parts[0] == 'pulls' and parts[2:] == ['merge']:
     answer = data['merge']
     if 'http' in answer:
         if answer.get('message'):  # GitHub's own words, as gh prints them (brief #765)
-            sys.stderr.write('gh: %s (HTTP %d)\n' % (answer['message'], answer['http']))
+            sys.stderr.write('gh: %s (HTTP %d)\\n' % (answer['message'], answer['http']))
             sys.exit(1)
         fail(answer['http'])
     out = answer
@@ -865,8 +865,14 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     (c) adds the one record line, a POST of a comment, SPEC-0039 rule 7; brief #576 adds the one
     body file, written only in the governance run's temporary home; brief #601 adds the one record
     comments file there, amendment 122; brief #610 adds the close of the red-branch issue, one
-    comment and one PATCH, in `close_red` alone)."""
+    comment and one PATCH, in `close_red` alone; brief #765 adds the merger job's report, one
+    dispatch of the governance workflow and one comment, in `report_main` alone)."""
     text = SCRIPT.read_text(encoding="utf-8")
+    report = text.split("\ndef report_main(", 1)[1].split("\ndef ", 1)[0]
+    assert report.count('"POST"') == 2
+    assert '"POST", endpoint, "-f", f"ref={branch}"' in report
+    assert '"POST", endpoint, "-f", f"body={body}"' in report
+    text = text.replace(report, "")
     close = text.split("\ndef close_red(", 1)[1].split("\ndef ", 1)[0]
     assert text.count('"POST"') == 2 and close.count('"POST"') == 1
     assert '"POST", f"repos/{repo}/issues/{issue}/comments"' in text

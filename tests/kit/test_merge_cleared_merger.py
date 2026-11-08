@@ -306,10 +306,11 @@ def test_the_workflow_starts_on_comments_runs_and_dispatch():
 
 def test_the_governance_job_never_runs_for_the_merger_events():
     """REQ-046: brief #765 answer 1 (the required check is not run by a comment or a run)."""
-    gate = re.search(r"\n  governance:\n    if: \$\{\{ (.*?) \}\}\n", text()).group(1)
-    assert "issue_comment" not in gate and "workflow_run" not in gate
+    gate = re.search(r"\n  governance:\n(?:    #.*\n)*    if: \$\{\{ (.*?) \}\}\n", text()).group(1)
+    assert gate.startswith(
+        "github.event_name != 'issue_comment' && github.event_name != 'workflow_run' && ("
+    ), gate
     assert "github.event_name == 'pull_request'" in gate
-    assert "workflow_dispatch" in gate and "push" in gate
 
 
 def test_the_merger_job_runs_exactly_the_guarded_command_from_the_default_branch():

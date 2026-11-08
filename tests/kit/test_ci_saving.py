@@ -24,7 +24,9 @@ def workflow(name: str) -> str:
 
 
 def steps(text: str) -> dict[str, str]:
+    """The steps of the `governance` job; the merger job after it runs on other events (#765)."""
     found: dict[str, str] = {}
+    text = text.split("\n  merger:\n", 1)[0]
     for block in re.split(r"(?m)^      - ", text)[1:]:
         name = re.search(r"(?m)^(?:name: )?(.+)$", block.split("\n", 1)[0] + "\n")
         title = re.search(r"(?m)^\s*name: (.+)$", block) if not block.startswith("name:") else None
@@ -370,7 +372,7 @@ def jobs_started(github: dict) -> dict[str, int]:
         ("ready push", pr_event("synchronize", False), 5),
         ("ready edit", pr_event("edited", False), 2),
         ("ready_for_review", pr_event("ready_for_review", False), 4),
-        ("verdict comment", comment_event("Verdict: cleared abc1234"), 1),
+        ("verdict comment", comment_event("Verdict: cleared abc1234"), 3),  # merger, its wake (#765)
     ],
 )
 def test_the_jobs_each_event_starts(label, github, total):

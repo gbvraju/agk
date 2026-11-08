@@ -100,7 +100,10 @@ def test_install_tooling_installs_the_pin_file_and_nothing_else():
     installs = re.findall(r"pip install ([^\n|]+)", run_text)
     assert [i.strip() for i in installs] == ["-r config/ci-tools.txt"]
     whole = GOVERNANCE.read_text(encoding="utf-8")
-    assert len(re.findall(r"pip install", whole)) == 1, "a tool is installed outside the pin file"
+    job, merger = whole.split("\n  merger:\n", 1)  # the merger job installs its own (brief #765)
+    assert len(re.findall(r"pip install", job)) == 1, "a tool is installed outside the pin file"
+    found = re.findall(r"pip install ([^\n|]+)", merger)
+    assert [i.strip() for i in found] == ["-q -r config/ci-tools.txt"], "the merger's one install"
 
 
 def test_the_workflow_reads_the_pin_file_that_exists():
