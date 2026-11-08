@@ -2152,13 +2152,14 @@ def takeover_lost(comments: list, since: datetime, me: str) -> str | None:
     return found[0][2] if found and found[0][2] != me else None
 
 
-def parked(root, repo: str, pr: dict, comments: list) -> bool:
+def parked(root, repo: str, pr: dict, comments: list | None) -> bool:
     """SPEC-0049 rule 10: the newest `Report:` of the author is an `over cap` report, and no ruling
     since puts the build under its cap: the cap of the brief's `Size:` now (a person raised it) is
     at or above the figure the report gives. Without the `[caps]` table, or when the brief or the
     table cannot be read, the pull request stays parked. GET only."""
     me = str((pr.get("user") or {}).get("login") or "").lower()
-    reports = [c for c in comments if author_of(c) == me and first_line(c).startswith("Report:")]
+    mine = [c for c in comments or [] if author_of(c) == me]
+    reports = [c for c in mine if first_line(c).startswith("Report:")]
     newest = max(reports, key=lambda c: (moment(c.get("created_at")), c.get("id", 0)), default=None)
     found = OVER_CAP.fullmatch(first_line(newest)) if newest else None
     if not found:

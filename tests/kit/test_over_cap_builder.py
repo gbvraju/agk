@@ -22,7 +22,7 @@ from test_session_resume import OLD, PRS, label, nxt, offered, pr_object, serve_
 from test_session_tell import COMMENTS, CONDUCTOR, CONDUCTOR_ISSUE, told
 
 ROOT = Path(__file__).resolve().parents[2]
-RULES = (ROOT / "config" / "session-rules.md").read_text(encoding="utf-8")
+RULES = ROOT / "config" / "session-rules.md"
 SCRIPTS = ROOT / "scripts" / "agk"
 CAPS = (
     "[caps]\n"
@@ -44,7 +44,8 @@ def proj(request):
 
 
 def rule(number: int) -> str:
-    found = re.search(rf"^{number}\. (.*)$", RULES, re.MULTILINE)
+    text = RULES.read_text(encoding="utf-8")
+    found = re.search(rf"^{number}\. (.*)$", text, re.MULTILINE)
     assert found, number
     return found.group(1)
 
@@ -90,8 +91,7 @@ def test_ac4_session_rule_32_lets_a_builder_act_on_the_stop_line():
     assert "`Tell: <id> stop: over cap <used>/<cap> <unit>`" in text
     for step in (
         "`checkpoint:`",
-        "`session.py push-check`",
-        "`prepush.py`",
+        "pushes only as rule 31 allows",
         "`Report: <head> over cap <used>/<cap> <unit>; Usage: <n> tokens`",
         "`released:`",
         "`watch`",
