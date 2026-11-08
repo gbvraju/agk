@@ -52,6 +52,7 @@ SINGLES = {
     "config/playbooks/data-pipeline.toml",
     "config/playbooks/mcp-server.toml",
     "config/playbooks/mobile.toml",
+    "config/playbooks/multi-agent.toml",
     "config/playbooks/rag-app.toml",
     "config/playbooks/web-app.toml",
     "config/review-checklist.md",
