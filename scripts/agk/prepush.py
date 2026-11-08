@@ -121,13 +121,18 @@ from common import (
     temp_env,
 )
 from impact import (
+    NAMED,
     Impact,
     Selected,
     impact,
     junit_setting,
+    level_groups,
+    machine_env,
+    map_lines,
     parallel_command,
     run_folder_deprecation,
     run_timing,
+    unmapped_lines,
     workers_setting,
 )
 from proof import area_command, execute, is_test_file, timeout_note
@@ -439,9 +444,14 @@ def secret_scan(root: Path, mb: str, body: Path | None = None) -> Step:
     tool = shutil.which("gitleaks")
     if tool is None:  # never skipped, in any mode (brief #632, ADR-0306): deferred to CI, or FAIL
         reason = deferred(root, body)
-        if reason is None and body is not None and DEFER_LINE in [
-            ln.strip() for ln in body.read_text(encoding="utf-8", errors="replace").splitlines()
-        ]:
+        if (
+            reason is None
+            and body is not None
+            and DEFER_LINE
+            in [
+                ln.strip() for ln in body.read_text(encoding="utf-8", errors="replace").splitlines()
+            ]
+        ):
             return Step("ok", DEFERRED)
         return Step("FAIL", (reason or "") + NO_GITLEAKS if reason == NOT_BUILDER else NO_GITLEAKS)
     head = git(root, "rev-parse", "HEAD").strip()
@@ -462,12 +472,18 @@ def tests(root: Path, mb: str, quick: bool, use_lock: bool = True) -> Step:
         return Step("FAIL", out, ran=ran)
     shown = json.loads(out)
     table = (shown.get("regression") or {}).get("table")
+    own = shown.get("level_runs", shown["runs"])  # a level's own command (SPEC-0055 rule 3)
+    notes = shown.get("level_notes", [])
     if not table:
-        return proof_runs(root, shown["runs"], ran)  # as before (brief #417 answer 4)
-    return regression_step(root, mb, shown, ran, use_lock)
+        if shown.get("level_env"):  # a level with `env` is a heavy step (SPEC-0055 rule 4)
+            return locked(root, ran, use_lock, lambda: proof_runs(root, own, ran, notes))
+        return proof_runs(root, own, ran, notes)  # as before (brief #417 answer 4)
+    return regression_step(root, mb, own, notes, ran, use_lock)
 
 
-def regression_step(root: Path, mb: str, shown: dict, ran: Ran, use_lock: bool) -> Step:
+def regression_step(
+    root: Path, mb: str, own: list[dict], own_notes: list[str], ran: Ran, use_lock: bool
+) -> Step:
     """The tests step with a `[testing]` table: the lock, proof's runs, the regression set."""
     try:
         limit = proof_timeout(root)
@@ -475,6 +491,11 @@ def regression_step(root: Path, mb: str, shown: dict, ran: Ran, use_lock: bool) 
         areas = proof_areas(root)
     except CheckError as exc:
         return Step("FAIL", str(exc), ran=ran)
+    return locked(root, ran, use_lock, lambda: gate(root, own, found, areas, limit, ran, own_notes))
+
+
+def locked(root: Path, ran: Ran, use_lock: bool, work: Callable[[], Step]) -> Step:
+    """WORK under the heavy-step lock, released however it ends."""
     try:
         taken = take_lock(root) if use_lock else None
     except (heavy_lock.Usage, HeldBySession) as exc:
@@ -483,7 +504,7 @@ def regression_step(root: Path, mb: str, shown: dict, ran: Ran, use_lock: bool) 
         return Step("FAIL", f"lock {LOCK}: the lock folder cannot be written (setting: lock_dir)")
     previous = {sig: signal.signal(sig, heavy_lock.on_signal) for sig in stop_signals()}
     try:
-        return gate(root, shown["runs"], found, areas, limit, ran)
+        return work()
     except heavy_lock.Stopped as exc:
         raise SystemExit(exc.code) from None
     finally:
@@ -493,10 +514,13 @@ def regression_step(root: Path, mb: str, shown: dict, ran: Ran, use_lock: bool) 
             heavy_lock.clear_if_same(*taken)
 
 
-def proof_runs(root: Path, runs: list[dict], ran: Ran) -> Step:
+def proof_runs(root: Path, runs: list[dict], ran: Ran, notes: list[str] | None = None) -> Step:
     """The tests step without a `[testing]` table: proof's plan alone, as brief #326 made it."""
+    say(notes or [])
+    not_run = any("not run" in n for n in notes or [])
     if not runs:
-        return Step("ok", "tests: nothing to run (the test plan selects no test file)", ran=ran)
+        text = "tests: nothing to run (the test plan selects no test file)"
+        return Step("ok", text, not_run=not_run, ran=ran)
     try:
         limit = proof_timeout(root)
     except CheckError as exc:
@@ -523,7 +547,7 @@ def proof_runs(root: Path, runs: list[dict], ran: Ran) -> Step:
             return Step("FAIL", "\n".join([*lines, timeout_note(limit)]), ran=ran, runs=made)
         if run_code != 0:
             return Step("FAIL", "\n".join([*lines, run_out.rstrip("\n")]), ran=ran, runs=made)
-    return Step("ok", "\n".join(lines), ran=ran, runs=made)
+    return Step("ok", "\n".join(lines), not_run=not_run, ran=ran, runs=made)
 
 
 def stop_signals() -> list[int]:
@@ -597,6 +621,8 @@ def take_lock(root: Path) -> tuple[Path, str] | None:
 
 
 def rule(item: Selected) -> str:
+    if item.code == NAMED:
+        return f"a test names {item.changed}"
     return f"{item.changed} matches code {item.code}, tests {', '.join(item.tests)}"
 
 
@@ -656,8 +682,16 @@ def full_command(root: Path, command: str, folder: Path) -> tuple[str, str | Non
 def regression_sets(
     root: Path, found: Impact, areas: list[dict] | None
 ) -> tuple[list[tuple[str, str, str, str]], list[str]]:
+    """The regression runs and the lines of what is not run, led by `tests: map` where it is set."""
+    sets, notes = selection_sets(root, found, areas)
+    return sets, map_lines(found) + notes
+
+
+def selection_sets(
+    root: Path, found: Impact, areas: list[dict] | None
+) -> tuple[list[tuple[str, str, str, str]], list[str]]:
     """The regression runs (name, command, folder, reason) and the lines of what is not run."""
-    notes = [f"tests: unmapped (no [testing] map entry covers it): {p}" for p in found.unmapped]
+    notes = [f"tests: {line}" for line in unmapped_lines(found)]
     project = str(load_config(root)["project_tests"] or "").strip()
     if found.full or (found.selected and areas is None):
         reason = found.reason or (
@@ -676,7 +710,23 @@ def regression_sets(
     placed: set[str] = set()
     for area in areas or []:
         mine = [s for s in found.selected if is_test_file(s.test, area["dirs"], area["patterns"])]
-        if mine:
+        if mine and area.get("levels"):
+            placed.update(s.test for s in mine)
+            of = {s.test: s for s in mine}
+            groups, said = level_groups(area, list(of), "pr", machine_env())
+            notes.extend(said)
+            for group in groups:
+                level = group["level"]
+                command = area_command(level, group["files"])
+                sets.append(
+                    (
+                        group["label"],
+                        command,
+                        level["cwd"],
+                        reasons([of[f] for f in group["files"]]),
+                    )
+                )
+        elif mine:
             command = area_command(area, [s.test for s in mine])
             sets.append((area["name"], command, area["cwd"], reasons(mine)))
             placed.update(s.test for s in mine)
@@ -710,12 +760,14 @@ def gate(
     areas: list[dict] | None,
     limit: int,
     ran: Ran,
+    own_notes: tuple[str, ...] | list[str] = (),
 ) -> Step:
     """Proof's runs, then the regression set (brief #417 answers 1 and 2), each run with its line
     printed when it ends; what is not run is printed before the regression runs."""
     made: list[dict] = []
     warnings: list[str] = []
     sets, notes = regression_sets(root, found, areas)
+    notes = list(dict.fromkeys([*notes, *own_notes]))
     junit = junit_setting(root)
     planned = [(r["name"], r["command"], r["cwd"], OWN, "proof") for r in runs]
     planned.extend((*item, "regression") for item in sets)

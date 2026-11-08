@@ -35,8 +35,11 @@ For the change base..head `impact` gives the existing test files of the head (`t
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
 each with that file and the entry; `full`, with its reason, when a changed file matches
 `always_full` or the profile is `thorough`; and `unmapped`, the changed files outside the test
-folders that no entry covers. Under `balanced` an unmapped file makes the selection full (when
-unsure, run more); under `fast` it is only listed. A change of only `*.md` files and files under
+folders that no entry covers. Under `balanced` a file that no entry covers selects the test files
+of the head that name its path or its folder, and the selection is full only when no test names
+it (SPEC-0055 rule 6, brief #773, ADR-0359; `unmapped: <path> -> <k> tests that name it`); a
+covered file whose entries select no existing test stays full. Under `fast` an unmapped file is
+only listed. A change of only `*.md` files and files under
 `docs/` selects nothing under every profile, and such a file is never unmapped. Without the table
 the selection is full ("no [testing] table"), which is what governance runs today. `test_plan.py`
 shows the selection; `prepush.py` runs the selected regression tests (brief #417), and `proof.py`
@@ -52,6 +55,7 @@ import fnmatch
 import math
 import os
 import re
+import subprocess  # nosec B404 - fixed argument list only, no shell
 import sys
 import xml.parsers.expat
 from dataclasses import dataclass, field
@@ -59,7 +63,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, config_source, git, load_config
+from common import CheckError, area_levels, config_source, git, load_config
 
 PROFILES = ("fast", "balanced", "thorough")
 KEYS = {
@@ -79,7 +83,10 @@ KEYS = {
     "keep_runs",
     "pre_merge_tests",
     "rerun_alone",
+    "map_source",
 }
+MAP_SOURCES = ("curated", "generated")  # SPEC-0055 rule 1: data, never a code path
+TEST_ENV = "AGK_TEST_ENV"  # what a machine has (SPEC-0055 rule 4)
 DEFAULT_SLOW = 600
 DEFAULT_KEEP_RUNS = 20
 RUN_FOLDER_KEYS = ("results_dir", "keep_passed", "keep_runs")  # retired (SPEC-0046 rule 11)
@@ -109,6 +116,8 @@ PRE_MERGE_BAD = (
 )
 PRE_MERGE_MISSING = "a pre-merge test is not a file (setting: testing.pre_merge_tests)"
 UNKNOWN_TIMING = {"source": "unknown", "total_seconds": None, "files": []}
+NAME_WORD = re.compile(r"[\w./-]+")  # a path-like word of a test file (SPEC-0055 rule 6)
+NAMED = "(names it)"  # the `code` of a test selected because it names the changed file
 
 
 @dataclass
@@ -128,9 +137,13 @@ class Impact:
     selected: list[Selected] = field(default_factory=list)  # in test-file order
     unmapped: list[str] = field(default_factory=list)
     docs_only: bool = False  # the change is only documentation, so nothing is selected
+    named: dict[str, int] = field(default_factory=dict)  # uncovered path -> tests that name it
+    map_source: str | None = None  # the `[testing] map_source`, None where it is not set
 
     def data(self) -> dict:
+        source = {} if self.map_source is None else {"map_source": self.map_source}
         return {
+            **source,
             "table": self.table,
             "profile": self.profile,
             "full": self.full,
@@ -195,7 +208,7 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
             "proof_regression, pr_tests, junit, workers, parallel_command, "
-            "slow_suite_seconds, results_dir, keep_passed, keep_runs and rerun_alone "
+            "slow_suite_seconds, results_dir, keep_passed, keep_runs, rerun_alone and map_source "
             "(setting: testing)"
         )
     profile = table.get("profile", "balanced")
@@ -272,11 +285,15 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError("rerun_alone must be true or false (setting: testing.rerun_alone)")
     if PRE_MERGE in table:
         pre_merge_names(table, root)
+    source = table.get("map_source", MAP_SOURCES[0])
+    if not isinstance(source, str) or source not in MAP_SOURCES:
+        raise CheckError("map_source is curated or generated (setting: testing.map_source)")
     return {
         "profile": profile,
         "always_full": list(always_full),
         "map": mapped,
         "budget_seconds": budget,
+        **({"map_source": source} if "map_source" in table else {}),
     }
 
 
@@ -515,7 +532,84 @@ def is_test_file(path: str, dirs: list[str], patterns: list[str]) -> bool:
     return in_test_dirs(path, dirs) and any(fnmatch.fnmatchcase(name, p) for p in patterns)
 
 
+def _blobs(root: Path, head: str, paths: list[str]) -> list[tuple[str, str]]:
+    """(path, text) of each of PATHS at HEAD, by one `git cat-file --batch`."""
+    asked = [p for p in paths if "\n" not in p]
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "cat-file", "--batch"],
+        cwd=root,
+        input="".join(f"{head}:{p}\n" for p in asked).encode("utf-8"),
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise CheckError("git cat-file failed")
+    out, at, found = proc.stdout, 0, []
+    for path in asked:
+        end = out.index(b"\n", at)
+        fields = out[at:end].split(b" ")
+        at = end + 1
+        if len(fields) == 3 and fields[1] == b"blob":
+            size = int(fields[2])
+            found.append((path, out[at : at + size].decode("utf-8", "replace")))
+            at += size + 1
+    return found
+
+
+def name_index(root: Path, head: str, tests: list[str]) -> dict[str, set[str]]:
+    """Each path-like word of the test files at HEAD, and each folder it holds as `<folder>/`,
+    with the test files that hold it."""
+    index: dict[str, set[str]] = {}
+    for test, source in _blobs(root, head, tests):
+        for word in set(NAME_WORD.findall(source)):
+            word = word.removeprefix("./").rstrip(".")
+            index.setdefault(word, set()).add(test)
+            parts = word.split("/")
+            for n in range(1, len(parts)):
+                index.setdefault("/".join(parts[:n]) + "/", set()).add(test)
+    return index
+
+
+def tests_naming(path: str, index: dict[str, set[str]]) -> list[str]:
+    """The test files that name PATH or its folder. A folder of one part is named only with its
+    slash, because the bare word (`kit`, `config`) is ordinary prose."""
+    folder = path.rpartition("/")[0]
+    hits = set(index.get(path, ()))
+    if folder:
+        hits |= index.get(folder + "/", set())
+        if "/" in folder:
+            hits |= index.get(folder, set())
+    return sorted(hits)
+
+
+def uncovered(root: Path, head: str = "HEAD") -> list[str]:
+    """The tracked files that would make a `balanced` selection full: no entry covers them, no
+    test names them and they are neither documentation, a test file nor `always_full`."""
+    table = testing_table(root)
+    if table is None:
+        return []
+    cfg = load_config(root)
+    dirs, patterns = list(cfg["test_dirs"]), list(cfg["test_patterns"])
+    files = head_files(root, head)
+    index = name_index(root, head, [p for p in files if is_test_file(p, dirs, patterns)])
+    globs = [e["code"] for e in table["map"]] + table["always_full"]
+    return [
+        p
+        for p in files
+        if not is_doc(p)
+        and not is_test_file(p, dirs, patterns)
+        and not any(matches(p, g) for g in globs)
+        and not tests_naming(p, index)
+    ]
+
+
 def impact(root: Path, base: str, head: str) -> Impact:
+    """The regression selection of base..head, with the map's source where it is set."""
+    found = select(root, base, head)
+    found.map_source = (testing_table(root) or {}).get("map_source")
+    return found
+
+
+def select(root: Path, base: str, head: str) -> Impact:
     """The regression selection of base..head (git and files only, nothing run)."""
     table = testing_table(root)
     if table is None:
@@ -530,9 +624,12 @@ def impact(root: Path, base: str, head: str) -> Impact:
     tests = [p for p in head_files(root, head) if is_test_file(p, dirs, patterns)]
     chosen: dict[str, Selected] = {}
     unmapped: list[str] = []
+    named: dict[str, int] = {}
+    index: dict[str, set[str]] | None = None
     for path in changed:
         guarded = False
-        for entry in (e for e in table["map"] if matches(path, e["code"])):
+        covering = [e for e in table["map"] if matches(path, e["code"])]
+        for entry in covering:
             for test in tests:
                 if any(matches(test, g) for g in entry["tests"]):
                     guarded = True
@@ -542,16 +639,22 @@ def impact(root: Path, base: str, head: str) -> Impact:
         # unmapped; only a real test file (the change's own test) and documentation are not.
         if not guarded and not is_doc(path) and not is_test_file(path, dirs, patterns):
             unmapped.append(path)
+            if profile == "balanced" and not hit and not covering:  # SPEC-0055 rule 6
+                index = name_index(root, head, tests) if index is None else index
+                naming = tests_naming(path, index)
+                named[path] = len(naming)
+                for test in naming:
+                    chosen.setdefault(test, Selected(test, path, NAMED, []))
     selected = [chosen[t] for t in sorted(chosen)]
     reason = None
     if hit:
         reason = f"always_full {hit[0]} matches {hit[1]}"
     elif profile == "thorough":
         reason = "profile thorough"
-    elif profile == "balanced" and unmapped:
-        noun = "file" if len(unmapped) == 1 else "files"
-        reason = f"profile balanced: {len(unmapped)} unmapped {noun}"
-    return Impact(True, profile, reason is not None, reason, selected, unmapped)
+    elif profile == "balanced" and any(not named.get(p) for p in unmapped):
+        count = sum(1 for p in unmapped if not named.get(p))
+        reason = f"profile balanced: {count} unmapped {'file' if count == 1 else 'files'}"
+    return Impact(True, profile, reason is not None, reason, selected, unmapped, named=named)
 
 
 def text(found: Impact) -> list[str]:
@@ -567,8 +670,62 @@ def text(found: Impact) -> list[str]:
         noun = "test file" if count == 1 else "test files"
         lines = [f"regression: {count} {noun} selected"]
         lines.extend(
-            f"  file: {s.test} ({s.changed} matches code {s.code}, tests {', '.join(s.tests)})"
+            f"  file: {s.test} (names {s.changed})"
+            if s.code == NAMED
+            else f"  file: {s.test} ({s.changed} matches code {s.code}, tests {', '.join(s.tests)})"
             for s in found.selected
         )
-    lines.extend(f"unmapped (no [testing] map entry covers it): {p}" for p in found.unmapped)
-    return lines
+    return map_lines(found) + lines + unmapped_lines(found)
+
+
+def map_lines(found: Impact) -> list[str]:
+    """The line that leads a selection in a repository that sets `map_source` (SPEC-0055 rule 1)."""
+    return [] if found.map_source is None else [f"tests: map {found.map_source}"]
+
+
+def machine_env() -> str:
+    """The environments this machine has: the text of `AGK_TEST_ENV` (SPEC-0055 rule 4)."""
+    return os.environ.get(TEST_ENV, "")
+
+
+def level_groups(
+    area: dict, paths: list[str], event: str, env: str
+) -> tuple[list[dict], list[str]]:
+    """PATHS of AREA by level for EVENT: the groups to run (`label`, `level`, `files`) and the lines
+    of what does not run. A file belongs to the first level that matches it (SPEC-0055 rule 3); one
+    in no level is refused naming the setting; ENV is the comma-separated `AGK_TEST_ENV`."""
+    have = {name.strip() for name in env.split(",") if name.strip()}
+    levels = area_levels(area)
+    placed: dict[str, list[str]] = {}
+    for path in paths:
+        level = next((x for x in levels if is_test_file(path, x["dirs"], x["patterns"])), None)
+        if level is None:
+            raise CheckError(
+                f"a test file of an area is in no level (setting: proof.{area['name']}.levels)"
+            )
+        placed.setdefault(level["name"], []).append(path)
+    groups: list[dict] = []
+    notes: list[str] = []
+    for level in levels:
+        if level["name"] not in placed:
+            continue
+        label = f"{area['name']}:{level['name']}"
+        absent = next((name for name in level["env"] if name not in have), None)
+        if event not in level["when"]:
+            notes.append(f"tests: {label} runs on {', '.join(level['when'])}")
+        elif absent is not None:
+            notes.append(f"not run: {label} (env {absent})")
+        else:
+            groups.append({"label": label, "level": level, "files": placed[level["name"]]})
+    return groups, notes
+
+
+def unmapped_lines(found: Impact) -> list[str]:
+    """One line per unmapped file: with the count of the tests that name it where that was
+    looked up (SPEC-0055 rule 6), else the line of a file that is only listed."""
+    return [
+        f"unmapped: {p} -> {found.named[p]} tests that name it"
+        if p in found.named
+        else f"unmapped (no [testing] map entry covers it): {p}"
+        for p in found.unmapped
+    ]

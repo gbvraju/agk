@@ -157,7 +157,7 @@ def test_an_unmapped_file_makes_balanced_full(repo):
     assert found.full is True and found.reason == "profile balanced: 1 unmapped file"
     out = plan(repo).stdout
     assert "regression: full (profile balanced: 1 unmapped file)\n" in out
-    assert "unmapped (no [testing] map entry covers it): app/other.py\n" in out
+    assert "unmapped: app/other.py -> 0 tests that name it\n" in out
 
 
 def test_an_unmapped_file_under_fast_is_only_listed(repo):
