@@ -99,3 +99,23 @@ basis = "expected"
 [[claims]]
 text = "Contract tests and mock parity find a mismatch between the two sides before the joins, so fewer join briefs are expected to need a fix."
 basis = "expected"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the work: a deadline, a budget, a team's skills, or parts that must stay as they are?"
+
+[[discovery]]
+id = "success"
+text = "Which results in the browser show that the work succeeded, and how will each be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the data the pages and the back end read, keep or send on?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments must it run in, from a developer's machine to production?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of page speed, uptime, security and accessibility must it meet?"
