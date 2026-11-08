@@ -78,6 +78,7 @@ from reviewers import (
     person_approvals,
     solo_person,
     spec_approvers,
+    specs_named_approved,
     verdict_authors,
     via_agent,
 )
@@ -290,7 +291,11 @@ def decide(f: dict) -> str:
         return "agk:fix"
     covered = covered_head(Held(f.get("commit") or {}), head, comments, authors) == "yes"
     if (names_head and kind == "cleared") or accepted or covered:
-        waiting = flipped - people
+        # brief #797 answer 4: an approval given while the spec on the head still reads Draft
+        drafts = set(f.get("draft_specs") or ()) & specs_named_approved(
+            comments, f.get("approvers") or []
+        )
+        waiting = (flipped - people) | drafts
         return "agk:approve" if waiting else "agk:ready"
     return "agk:review"
 
@@ -313,6 +318,29 @@ def listing(endpoint: str, key: str | None = None) -> list | None:
         if len(chunk[key]) < 100 or len(found) >= int(chunk.get("total_count") or 0):
             return found
         page += 1
+
+
+def spec_reads_draft(repo: str, path: str, head: str) -> bool:
+    """Whether the spec file at the head reads `Draft`; False when it cannot be read: the label
+    only, the merge guard fails closed (brief #797 answer 4)."""
+    record = gh(f"repos/{repo}/contents/{quote(path)}?ref={head}")
+    try:
+        text = base64.b64decode(record["content"]).decode("utf-8")
+    except (KeyError, TypeError, ValueError):
+        return False
+    return "- Status: Draft" in text.splitlines()
+
+
+def draft_specs_of(repo: str, files: list[dict], head: str) -> set[str]:
+    """The specs the pull request adds or changes that still read `Draft` on the head."""
+    found = set()
+    for item in files:
+        name = str(item.get("filename") or "")
+        match = SPEC_FILE.fullmatch(name)
+        if match and item.get("status") in ("added", "modified") and head:
+            if spec_reads_draft(repo, name, head):
+                found.add(f"SPEC-{match.group(1)}")
+    return found
 
 
 def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
@@ -343,6 +371,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "solo_person": solo_person(root),
         "author": (pr.get("user") or {}).get("login"),
         "files": files,
+        "draft_specs": draft_specs_of(repo, files, head),
         "commit": commit if isinstance(commit, dict) else {},
     }
 

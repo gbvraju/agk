@@ -30,9 +30,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import CheckError, git
-from impact import Impact, impact
+from impact import Impact, head_files, impact, is_test_file, level_groups, machine_env
 from impact import text as regression_text
-from proof import Failure, Plan, plan, resolve_range
+from proof import Failure, Plan, Run, area_command, plan, resolve_range
 
 NAME = "test-plan"
 USAGE = "usage: test_plan.py [--base REF] [--head REF] [--json] [ROOT]"
@@ -64,8 +64,54 @@ def parse_args(args: list[str]) -> dict:
     return options
 
 
-def data(shown: Plan, base: str, head: str, found: Impact) -> dict:
+EVENT = "pr"  # a plan is the selection of a pull request (SPEC-0055 rule 3)
+
+
+def level_plan(root: Path, head: str, shown: Plan) -> tuple[list[Run], list[str], bool] | None:
+    """What the levels make of proof's plan on a pull request, or None with no area that has
+    levels: the runs, the lines of what does not run, and whether a run needs an environment. Any
+    test file of the head in no level is refused (Q-S0055-3), changed or not."""
+    areas = {a["name"]: a for a in shown.areas or [] if a.get("levels")}
+    if not areas:
+        return None
+    tracked = head_files(root, head)
+    for area in areas.values():
+        files = [p for p in tracked if is_test_file(p, area["dirs"], area["patterns"])]
+        level_groups(area, files, EVENT, "")
+    runs: list[Run] = []
+    notes: list[str] = []
+    needs_env = False
+    for run in shown.runs:
+        if run.name not in areas:
+            runs.append(run)
+            continue
+        groups, said = level_groups(areas[run.name], run.files, EVENT, machine_env())
+        notes.extend(said)
+        for group in groups:
+            level = group["level"]
+            command = area_command(level, group["files"])
+            runs.append(Run(group["label"], group["files"], command, level["cwd"]))
+            needs_env = needs_env or bool(level["env"])
+    return runs, notes, needs_env
+
+
+def level_data(levels: tuple[list[Run], list[str], bool] | None) -> dict:
+    """The JSON keys of `level_plan`, none in a repository whose areas have no levels."""
+    if levels is None:
+        return {}
+    runs, notes, needs_env = levels
     return {
+        "level_runs": [
+            {"name": r.name, "files": r.files, "command": r.command, "cwd": r.cwd} for r in runs
+        ],
+        "level_notes": notes,
+        "level_env": needs_env,
+    }
+
+
+def data(shown: Plan, base: str, head: str, found: Impact, levels=None) -> dict:
+    return {
+        **level_data(levels),
         "regression": found.data(),
         "base": base,
         "head": head,
@@ -95,7 +141,19 @@ def why(shown: Plan, name: str) -> str:
     return f"they match dirs {', '.join(area['dirs'])} and patterns {', '.join(area['patterns'])}"
 
 
-def text(shown: Plan, base: str, head: str, found: Impact) -> list[str]:
+def level_text(levels: tuple[list[Run], list[str], bool] | None) -> list[str]:
+    lines: list[str] = []
+    runs, notes, _ = levels or ([], [], False)
+    for run in runs:
+        noun = "test file" if len(run.files) == 1 else "test files"
+        lines.append(f"{run.name}: runs {len(run.files)} {noun} (on a pull request)")
+        lines.append(f"  folder: {run.cwd}")
+        lines.append(f"  command: {run.command}")
+        lines.extend(f"  file: {p}" for p in run.files)
+    return lines + notes
+
+
+def text(shown: Plan, base: str, head: str, found: Impact, levels=None) -> list[str]:
     lines = [f"test plan: base {base[:12]}, head {head[:12]}"]
     if not shown.table:
         lines.append("no [proof] table: proof runs project_tests once, on the base and on the head")
@@ -125,6 +183,7 @@ def text(shown: Plan, base: str, head: str, found: Impact) -> list[str]:
         for p, s in sorted(shown.files.items())
         if s == "D"
     )
+    lines.extend(level_text(levels))
     lines.extend(regression_text(found))
     return lines
 
@@ -138,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         base, head = resolve_range(root, options["base"], options["head"])
         shown = plan(root, base, head)
         found = impact(root, base, head)
+        levels = level_plan(root, head, shown)
     except Usage as exc:
         print(exc, file=sys.stderr)
         return 2
@@ -151,9 +211,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL {NAME}: an input or output error (path class: root)")
         return 3
     if options["json"]:
-        print(json.dumps(data(shown, base, head, found), sort_keys=True))
+        print(json.dumps(data(shown, base, head, found, levels), sort_keys=True))
     else:
-        print("\n".join(text(shown, base, head, found)))
+        print("\n".join(text(shown, base, head, found, levels)))
     return 0
 
 

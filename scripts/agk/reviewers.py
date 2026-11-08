@@ -255,6 +255,24 @@ def head_before_comment(runs: list[dict], comment: dict) -> str | None:
     return best[1] if best else None
 
 
+def specs_named_approved(comments: list[dict], approvers: list[str]) -> set[str]:
+    """The specs a first line `Approve: [<sha> ]SPEC-<n>` of a comment by an account in APPROVERS
+    names, at any sha (brief #797 answer 4): an approval was given, whichever text it pinned."""
+    allowed = {a.lstrip("@").lower() for a in approvers}
+    found = set()
+    for item in comments:
+        if login_of(item) not in allowed:
+            continue
+        line = first_line(item)
+        match = APPROVE.fullmatch(line)
+        short = APPROVE_SHORT.fullmatch(line)
+        if match:
+            found.add(match.group(2))
+        elif short:
+            found.add(short.group(1))
+    return found
+
+
 def approval_shas(
     comments: list[dict],
     reviews: list[dict],
