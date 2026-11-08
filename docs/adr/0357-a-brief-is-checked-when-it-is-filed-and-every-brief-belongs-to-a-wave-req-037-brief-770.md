@@ -13,7 +13,7 @@ clause in its `Skipped:` line that nobody acted on. The check ran only inside th
 else was never checked; a refused brief became no action for anyone; and nothing on GitHub checked a brief when it was opened
 or edited. Ten open briefs also belonged to no wave of the plan (owner direction 2026-11-08, quoted in brief #770).
 
-This build changes the protected path classes `scripts/agk/`, `tests/kit/`, `kit/` (the manifest's `verbatim` list and the installed `.gitattributes` template), `.github/` (the new workflow), `.claude/` (the conductor's report line) and `config/` (the rule budget's lowered line).
+This build changes the protected path classes `scripts/agk/`, `tests/kit/`, `tests/kit_dev/` (the catch log's row count), `kit/` (the manifest's `verbatim` list and the installed `.gitattributes` template), `.github/` (the new workflow), `.claude/` (the conductor's report line) and `config/` (the rule budget's lowered line).
 
 ## Decision
 

@@ -200,7 +200,8 @@ def event_result(payload: dict, root: Path | None, waves: set[int] | None) -> di
         or BRIEF_LABEL not in names
     ):
         return {"action": "ignore"}
-    body = issue.get("body") if isinstance(issue.get("body"), str) else ""
+    raw = issue.get("body")
+    body = raw if isinstance(raw, str) else ""
     number, problems = issue.get("number"), body_problems(body, root, waves)
     if problems:
         return {
