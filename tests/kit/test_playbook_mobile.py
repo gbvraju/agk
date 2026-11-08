@@ -54,7 +54,12 @@ def test_check_playbooks_passes_with_three_playbooks() -> None:
 
 def test_exactly_the_mobile_gates_of_rule_10() -> None:
     by_id = gates()
-    assert set(by_id) == {"device-matrix", "device-matrix-results", "offline-states", "store-signing"}
+    assert set(by_id) == {
+        "device-matrix",
+        "device-matrix-results",
+        "offline-states",
+        "store-signing",
+    }
     # a device and simulator matrix: check (the matrix file lists the minimum entries)
     matrix = by_id["device-matrix"]
     assert matrix["kind"] == "check"
