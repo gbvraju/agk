@@ -1,13 +1,13 @@
-"""Tests of the shipped cloud-migration playbook (SPEC-0038 rules 1, 10 and 12 build (j); REQ-045 AC6).
+"""Tests of the shipped cloud-migration playbook (SPEC-0038 rules 1, 10 and 12 build (j)).
 
-`config/playbooks/cloud-migration.toml` passes the playbook check, and `check_playbooks.py` passes
-with four playbooks. It holds exactly the cloud-migration gates of rule 10: inventory, then wave plan,
-then cut-over, `check` that each cut-over brief depends on its wave plan brief, which depends on the
-inventory brief; a rollback rehearsal as evidence, `judgement`; plan diffs as evidence, `judgement`,
-a committed plan output with no credential in it; and any apply, `judgement` and `owner_only`. Every
-speed claim is `expected`, since no run has measured it. It names the shape of the work and its gates,
-never a vendor, a cloud, a region, an account or a tool (brief #724 answer 1). It is shipped verbatim.
-Reads committed files only: no network.
+REQ-045 AC6. `config/playbooks/cloud-migration.toml` passes the playbook check, and
+`check_playbooks.py` passes with four playbooks. It holds exactly the cloud-migration gates of rule
+10: inventory, then wave plan, then cut-over, `check` that each cut-over brief depends on its wave
+plan brief, which depends on the inventory brief; a rollback rehearsal as evidence, `judgement`;
+plan diffs as evidence, `judgement`, a committed plan output with no credential in it; and any
+apply, `judgement` and `owner_only`. Every speed claim is `expected`, since no run has measured it.
+It names the shape of the work and its gates, never a vendor, a cloud, a region, an account or a
+tool (brief #724 answer 1). It is shipped verbatim. Reads committed files only: no network.
 """
 
 from __future__ import annotations
