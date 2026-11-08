@@ -154,8 +154,9 @@ def test_ac5_the_numbers_of_the_depends_on_lines_are_listed_for_the_workflow(rep
 
 
 def test_ac8_the_workflow_keeps_three_read_permissions_and_fetches_with_get_only():
-    """REQ-032 AC8: rule 7 (the new fetches are GET steps that write files)."""
-    text = WORKFLOW.read_text(encoding="utf-8")
+    """REQ-032 AC8: rule 7 (the new fetches are GET steps that write files), in the `governance`
+    job; the merger job after it has its own permissions (brief #765)."""
+    text = WORKFLOW.read_text(encoding="utf-8").split("\n  merger:\n", 1)[0]
     assert re.search(
         r"^permissions:\n  contents: read\n  pull-requests: read\n  issues: read\n", text, re.M
     )
