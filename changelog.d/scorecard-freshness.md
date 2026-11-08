@@ -1,0 +1,1 @@
+- `scripts/agk/scorecard.py` also prints the freshness rows: the `(verify)` marks of Approved specs and the oldest one's age, the residuals past their due date, the pinned actions behind their newest upstream release and the largest gap, the kit releases behind and the stale guides, each `unknown` when it cannot be read (brief #719, SPEC-0047, ADR-0311)

@@ -11,12 +11,17 @@ comments, issues and CI runs, with `gh api --method GET` only, or saved response
 `runs-week`, `run-jobs-<id>`, `repo`, `pulls`, `comments-<n>`, `issues-open`, `issues-closed`).
 A value whose inputs cannot be read, or that has nothing to count, is `unknown`, never 0. It
 prints and writes nothing; no check, `make governance` or `prepush.py` step runs it (rule 2).
-The freshness metrics, findings, trends and issues are builds (c) to (e).
+The freshness rows (rule 8, brief #719, build (c)) read the default branch with `git` and one GET
+of each upstream's releases (`releases-<owner>-<name>`, `kit-releases`). Findings, trends and
+issues are builds (d) and (e).
 """
 
 from __future__ import annotations
 
+import re
+import subprocess
 import sys
+import tomllib
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -26,7 +31,9 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import metrics
-from common import CheckError, load_config, repo_root, run
+from common import CheckError, installed_version, load_config, repo_root, run
+from doctor import kit_repo, version_numbers
+from drift_audit import d4_documents, d4_register
 from full_run import FULL
 from minutes import estimate
 from reviewers import verdict_authors
@@ -44,6 +51,18 @@ LEVEL = (
     "full_check_minutes prepush_seconds red_hours flaky_rate fix_list_rate lead_time_hours "
     "restore_hours ci_minutes_per_merge rule_words rule_lines old_failure_issues"
 ).split()
+FRESH = (
+    "verify_marks verify_oldest_days residuals_past_due pins_behind pins_oldest_gap_days "
+    "kit_releases_behind stale_guides"
+).split()
+MARK = re.compile(r"\(verify[):]")
+APPROVED = re.compile(r"^- Status: Approved\s*$", re.MULTILINE)
+PIN = re.compile(
+    r"^\s*(?:-\s+)?uses:\s*([\w.-]+/[\w.-]+)(?:/\S*)?@[0-9a-f]{40}\s+#\s*(\S+)", re.MULTILINE
+)
+EXACT = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*==(?!=)")
+SPAN = re.compile(r"`([^`\n]+)`")
+NAMED = re.compile(r"\b(?:scripts/agk/)?([a-z0-9_]+\.py)\b")
 RULES_READER = Path(__file__).resolve().parent / "rules.py"  # kit-only (Q-S0047-14)
 
 
@@ -235,14 +254,213 @@ def budget_lines(root: Path) -> tuple[int | None, int | None]:
     return sum(w for w, _ in baseline.values()), sum(r for _, r in baseline.values())
 
 
-def scorecard(root: Path, src: Any, today: date) -> list[tuple[str, str, str]]:
-    """(metric, value, line) for every level metric, in rule 1's order."""
+# --- the freshness metrics of rules 1 and 8 ---------------------------------------------------
+
+
+def git_out(root: Path, *args: str) -> str | None:
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8"
+    )
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def default_ref(root: Path, branch: str) -> str | None:
+    """`origin/<branch>`, else `<branch>`: the default branch as this checkout knows it."""
+    for ref in (f"origin/{branch}", branch):
+        if git_out(root, "rev-parse", "--verify", "-q", f"{ref}^{{commit}}"):
+            return ref
+    return None
+
+
+def shallow(root: Path) -> bool:
+    """A shallow history dates every older line at its cut, so it dates nothing (unknown)."""
+    return (git_out(root, "rev-parse", "--is-shallow-repository") or "true").strip() != "false"
+
+
+def tracked(root: Path, ref: str, folder: str) -> list[str]:
+    listing = git_out(root, "ls-tree", "-r", "--name-only", ref, "--", folder) or ""
+    return sorted(p for p in listing.splitlines() if p.endswith(".md"))
+
+
+def verify_metrics(root: Path, ref: str | None, today: date) -> tuple[str, str]:
+    """verify_marks and verify_oldest_days: the marks of Approved specs, each dated by the
+    author time `git blame` of the default branch gives its line (Q-S0047-18)."""
+    if ref is None:
+        return UNKNOWN, UNKNOWN
+    marks, oldest = 0, None
+    for rel in tracked(root, ref, "docs/specs"):
+        text = git_out(root, "show", f"{ref}:{rel}")
+        if text is None:
+            return UNKNOWN, UNKNOWN
+        if not APPROVED.search(text) or not MARK.search(text):
+            continue
+        blame = git_out(root, "blame", "--line-porcelain", ref, "--", rel)
+        if blame is None:
+            return UNKNOWN, UNKNOWN
+        when = None
+        for line in blame.splitlines():
+            if line.startswith("author-time "):
+                when = int(line.split()[1])
+            elif line.startswith("\t") and (found := len(MARK.findall(line))):
+                marks += found
+                if when is not None and (oldest is None or when < oldest):
+                    oldest = when
+    if not marks:
+        return "0", UNKNOWN  # no mark: nothing has an age
+    if oldest is None or shallow(root):
+        return str(marks), UNKNOWN
+    return str(marks), str((today - datetime.fromtimestamp(oldest, UTC).date()).days)
+
+
+def residuals_past_due(root: Path, today: date) -> str:
+    """The overdue residual bullets and register lines, by the drift audit's D4."""
+    found = d4_documents(root, today)[0] + d4_register(root, today)
+    return str(sum(1 for f in found if "overdue since" in f.sentence))
+
+
+def action_pins(root: Path) -> list[tuple[str, str]]:
+    """(owner/name, release tag) of each SHA-pinned `uses:` line of the workflows, once each."""
+    pins = set()
+    for path in sorted((root / ".github/workflows").glob("*.yml")):
+        pins |= set(PIN.findall(path.read_text(encoding="utf-8")))
+    return sorted(pins)
+
+
+def python_pins(root: Path) -> list[str]:
+    """The packages that `pyproject.toml` pins with `==` (Q-S0047-11)."""
+    try:
+        data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    project = data.get("project") if isinstance(data.get("project"), dict) else {}
+    groups = [project.get("dependencies")]
+    for table in (project.get("optional-dependencies"), data.get("dependency-groups")):
+        groups += list(table.values()) if isinstance(table, dict) else []
+    found = {
+        m.group(1)
+        for group in groups
+        if isinstance(group, list)
+        for item in group
+        if isinstance(item, str) and (m := EXACT.match(item))
+    }
+    return sorted(found)
+
+
+def published(item: dict) -> date | None:
+    moment = metrics.stamp(item.get("published_at"))
+    return moment.date() if moment else None
+
+
+def releases(src: Any, repo: str, name: str) -> list[dict] | None:
+    """One GET of a repository's release list; None when it cannot be read."""
+    found = listed(src.get(name, f"repos/{repo}/releases?per_page=100"))
+    if found is None:
+        return None
+    return [r for r in found if not r.get("draft")]
+
+
+def pin_gap(found: list[dict] | None, tag: str) -> int | None:
+    """Days the pinned release is behind the newest one (0 at the newest), or None (unknown)."""
+    final = [r for r in found or [] if not r.get("prerelease") and published(r)]
+    pinned = [r for r in found or [] if r.get("tag_name") == tag and published(r)]
+    if not final or not pinned:
+        return None
+    newest = max(final, key=lambda r: published(r) or date.min)
+    gap = ((published(newest) or date.min) - (published(pinned[0]) or date.min)).days
+    return max(gap, 0) if newest.get("tag_name") != tag else 0
+
+
+def pin_metrics(root: Path, src: Any) -> tuple[str, str, int]:
+    """pins_behind, pins_oldest_gap_days and the pins whose upstream cannot be read. A Python
+    package's index is a source the spec marks `(verify)`: it is not read, so its pin is unknown
+    (Q-719-1)."""
+    upstream: dict[str, list[dict] | None] = {}
+    gaps = []
+    for repo, tag in action_pins(root):
+        if repo not in upstream:
+            upstream[repo] = releases(src, repo, "releases-" + repo.replace("/", "-"))
+        gaps.append(pin_gap(upstream[repo], tag))
+    known = [g for g in gaps if g is not None]
+    unknown = len(gaps) - len(known) + len(python_pins(root))
+    if not known:
+        return UNKNOWN, UNKNOWN, unknown
+    return str(sum(1 for g in known if g > 0)), str(max(known)), unknown
+
+
+def kit_releases_behind(root: Path, src: Any, installed: object) -> str:
+    """The kit releases newer than the installed `version`; unknown when the kit's repository
+    cannot be resolved from the installed copy (Q-S0047-10)."""
+    repo, _ = kit_repo(root)
+    mine = version_numbers(installed)
+    found = releases(src, repo, "kit-releases") if repo else None
+    if mine is None or found is None:
+        return UNKNOWN
+
+    def padded(numbers: tuple[int, ...]) -> tuple[int, ...]:
+        return numbers + (0,) * (8 - len(numbers))
+
+    newer = [
+        r
+        for r in found
+        if not r.get("prerelease")
+        and (v := version_numbers(r.get("tag_name"))) is not None
+        and padded(v) > padded(mine)
+    ]
+    return str(len(newer))
+
+
+def stale_guides(root: Path, ref: str | None) -> str:
+    """The guides whose last change on the default branch is older than a script they name in
+    backticks (Q-S0047-19)."""
+    if ref is None or shallow(root):
+        return UNKNOWN
+    scripts = {
+        Path(p).name
+        for p in (git_out(root, "ls-tree", "--name-only", ref, "scripts/agk/") or "").split()
+    }
+    seen: dict[str, int | None] = {}
+
+    def changed(rel: str) -> int | None:
+        if rel not in seen:
+            out = (git_out(root, "log", "-1", "--format=%at", ref, "--", rel) or "").strip()
+            seen[rel] = int(out) if out.isdigit() else None
+        return seen[rel]
+
+    stale = 0
+    for rel in tracked(root, ref, "docs/guides"):
+        text = git_out(root, "show", f"{ref}:{rel}")
+        guide = changed(rel)
+        if text is None or guide is None:
+            return UNKNOWN
+        named = {n for span in SPAN.findall(text) for n in NAMED.findall(span) if n in scripts}
+        times = [changed(f"scripts/agk/{n}") for n in sorted(named)]
+        if any(t is None for t in times):
+            return UNKNOWN
+        stale += any((t or 0) > guide for t in times)
+    return str(stale)
+
+
+def freshness(root: Path, src: Any, today: date, config: dict) -> dict:
+    ref = default_ref(root, config["default_branch"])
+    values: dict[str, Any] = {}
+    values["verify_marks"], values["verify_oldest_days"] = verify_metrics(root, ref, today)
+    values["residuals_past_due"] = residuals_past_due(root, today)
+    behind, gap, values["pins_unknown"] = pin_metrics(root, src)
+    values["pins_behind"], values["pins_oldest_gap_days"] = behind, gap
+    values["kit_releases_behind"] = kit_releases_behind(root, src, installed_version(root))
+    values["stale_guides"] = stale_guides(root, ref)
+    return values
+
+
+def scorecard(root: Path, src: Any, today: date) -> tuple[list[tuple[str, str, str]], list[str]]:
+    """(metric, value, line) for every metric, in rule 1's order, and the notes under the table."""
     settings = scorecard_settings(root)
+    config = load_config(root)
     end = metrics.start_of(today)
     start = end - timedelta(days=7)
     first, last = (start - timedelta(days=1)).date(), (end - timedelta(days=1)).date()
     runs = src.get("runs-week", f"repos/{{repo}}/actions/runs?created={first}..{last}")
-    values = run_metrics(src, runs, load_config(root)["default_branch"], start, end)
+    values = run_metrics(src, runs, config["default_branch"], start, end)
     pulls, merged = pull_metrics(src, root, start, end)
     values.update(pulls)
     values.update(issue_metrics(src, start, end))
@@ -255,10 +473,13 @@ def scorecard(root: Path, src: Any, today: date) -> list[tuple[str, str, str]]:
     budget = budget_lines(root)
     for key, total in zip(("rule_words", "rule_lines"), budget, strict=True):
         lines[key] = lines[key] if lines[key] is not None else total
-    return [(m, values[m], "-" if lines[m] is None else f"{lines[m]:g}") for m in LEVEL]
+    values.update(freshness(root, src, today, config))
+    notes = [f"pins unknown: {values['pins_unknown']}"]
+    shown = [(m, values[m], "-" if lines[m] is None else f"{lines[m]:g}") for m in LEVEL + FRESH]
+    return shown, notes
 
 
-def render(rows: list[tuple[str, str, str]], today: date) -> str:
+def render(rows: list[tuple[str, str, str]], today: date, notes: list[str] | None = None) -> str:
     end = metrics.start_of(today)
     start, last = (end - timedelta(days=7)).date(), (end - timedelta(days=1)).date()
     out = [
@@ -268,6 +489,7 @@ def render(rows: list[tuple[str, str, str]], today: date) -> str:
     ]
     out.append("| --- | --- | --- |")
     out += [f"| {m} | {v} | {line} |" for m, v, line in rows]
+    out += ["", *notes] if notes else []
     return "\n".join(out)
 
 
@@ -295,7 +517,8 @@ def main(argv: list[str] | None = None) -> int:
         src: Any = metrics.ApiDir(Path(opts["api-dir"]))
     else:
         src = Live(opts.get("repo") or metrics.origin_repo())
-    print(render(scorecard(root, src, today), today))
+    rows, notes = scorecard(root, src, today)
+    print(render(rows, today, notes))
     return 0
 
 

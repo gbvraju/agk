@@ -574,3 +574,14 @@ def test_ac5_ac7_live_reads_are_one_get_per_upstream_and_nowhere_else(repo, tmp_
     ]
     got = fresh_rows(proc.stdout)
     assert got["pins_behind"][0] == "1" and got["kit_releases_behind"][0] == "2"
+
+
+def test_ac5_a_shallow_clone_dates_nothing(repo, tmp_path_factory):
+    """REQ-054 AC5: rule 2, a shallow history cannot date a line, so the ages are `unknown`."""
+    fresh_project(repo)
+    clone = tmp_path_factory.mktemp("shallow") / "c"
+    repo.git("clone", "-q", "--depth", "1", f"file://{repo.root}", str(clone))
+    ref = scorecard.default_ref(clone, "main")
+    assert ref == "origin/main"
+    assert scorecard.verify_metrics(clone, ref, scorecard.date(2026, 11, 7)) == ("2", "unknown")
+    assert scorecard.stale_guides(clone, ref) == "unknown"
