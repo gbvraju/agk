@@ -387,7 +387,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          target="$(python3 scripts/agk/merge_cleared.py --event "$GITHUB_EVENT_PATH" --event-name "$EVENT_NAME")"
+          # A default branch whose merge_cleared.py predates the merger mode refuses `--event`: nothing to do.
+          target="$(python3 scripts/agk/merge_cleared.py --event "$GITHUB_EVENT_PATH" --event-name "$EVENT_NAME")" \
+            || { echo "merger: the default branch has no merger mode yet"; exit 0; }
           [ -n "$target" ] || exit 0
           # The pre-merge tests of `[testing] pre_merge_tests` need the pinned test tools (config/ci-tools.txt).
           python -m pip install -q -r config/ci-tools.txt

@@ -338,6 +338,8 @@ def test_the_merger_job_runs_exactly_the_guarded_command_from_the_default_branch
     """REQ-046: brief #765 answer 2 (exactly the command, the job's token, the default branch)."""
     job_text = merger_job()
     assert 'python3 scripts/agk/merge_cleared.py --pr "$1" --sha "$2"' in job_text
+    # the default branch before this change refuses `--event` (exit 1): the job ends green
+    assert '|| { echo "merger: the default branch has no merger mode yet"; exit 0; }' in job_text
     assert "ref: ${{ github.event.repository.default_branch }}" in job_text
     assert "GH_TOKEN: ${{ github.token }}" in job_text
     for grant in ("contents: write", "pull-requests: write", "issues: write", "actions: write"):
