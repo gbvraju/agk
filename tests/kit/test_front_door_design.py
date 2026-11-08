@@ -334,6 +334,7 @@ def test_ac4_status_lists_every_discovery_document_by_default(tmp_path):
         " check-discovery",
         f"{SLUG}: phase 4 design; waits for {DESIGN}",
     ]
+    (tmp_path / "empty").mkdir()
     assert status(tmp_path / "empty").stdout == "ok front-door: no discovery document\n"
 
 
