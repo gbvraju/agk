@@ -42,7 +42,7 @@ def test_an_added_file_nothing_covers_fails_naming_file_and_rule(repo):
     proc = check(repo)
     assert proc.returncode == 1
     assert "config/new.txt" in proc.stdout and "SPEC-0055 rule 6" in proc.stdout
-    assert "(setting: testing.map)" in proc.stdout
+    assert "setting: testing.map" in proc.stdout
 
 
 def test_an_entry_covers_it(repo):

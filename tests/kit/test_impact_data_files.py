@@ -25,7 +25,7 @@ FILES = {
     "app/billing/pay.py": "# pay\n",
     "app/stale/old.py": "# old\n",
     "data/prices.json": "{}\n",
-    "data/alone.json": "{}\n",
+    "lone/alone.json": "{}\n",
     "kit/new.json": "{}\n",
     "tests/test_pay.py": "# pay\n",
     "tests/test_prices.py": 'FILE = "data/prices.json"\n',
@@ -106,15 +106,15 @@ def test_a_longer_path_does_not_name_the_file_or_its_folder(repo):
 def test_no_test_names_it_and_the_selection_is_full(repo):
     """REQ-062 AC3: SPEC-0055 rule 6 (full only when no test names it, and the line says 0)."""
     start(repo)
-    found = change(repo, "data/alone.json")
+    found = change(repo, "lone/alone.json")
     assert found.full is True and found.reason == "profile balanced: 1 unmapped file"
-    assert "unmapped: data/alone.json -> 0 tests that name it" in impact.text(found)
+    assert "unmapped: lone/alone.json -> 0 tests that name it" in impact.text(found)
 
 
 def test_the_reason_counts_only_the_files_no_test_names(repo):
     """REQ-062 AC3: SPEC-0055 rule 6 (one named and one not: full, and the count is of the one)."""
     start(repo)
-    found = change(repo, "data/prices.json", "data/alone.json")
+    found = change(repo, "data/prices.json", "lone/alone.json")
     assert found.full is True and found.reason == "profile balanced: 1 unmapped file"
 
 
@@ -204,13 +204,14 @@ def test_doctor_lists_only_the_files_that_would_run_everything(repo):
     """REQ-062 AC3: brief #773 answer 5 (doctor lists a file no entry covers and no test names)."""
     start(repo, extra='always_full = ["data/guarded.json"]\n', files={"data/guarded.json": "{}\n"})
     assert doctor.unmapped_lines(repo.root) == [
-        "tests: unmapped: data/alone.json (no entry, no test names it)"
+        f"tests: unmapped: {p} (no entry, no test names it)"
+        for p in ("agk.toml", "kit/new.json", "lone/alone.json")
     ]
 
 
 def test_doctor_says_nothing_without_a_table_or_with_a_bad_one(repo):
     """REQ-062 AC1: SPEC-0055 rule 2 (no `[testing]` table, no line; a bad one, none here)."""
-    repo.commit({"agk.toml": BASE, "data/alone.json": "{}\n"}, "base")
+    repo.commit({"agk.toml": BASE, "lone/alone.json": "{}\n"}, "base")
     assert doctor.unmapped_lines(repo.root) == []
     repo.commit({"agk.toml": BASE + '[testing]\nprofile = "nope"\n'}, "bad")
     assert doctor.unmapped_lines(repo.root) == []
@@ -218,10 +219,10 @@ def test_doctor_says_nothing_without_a_table_or_with_a_bad_one(repo):
 
 def test_doctor_shortens_a_long_list(repo):
     """REQ-062 AC3: brief #773 answer 5 (the list is capped and says how many more)."""
-    many = {f"data/n{i:02d}.json": "{}\n" for i in range(25)}
+    many = {f"lone/n{i:02d}.json": "{}\n" for i in range(25)}
     start(repo, files=many)
     lines = doctor.unmapped_lines(repo.root)
-    assert len(lines) == 21 and lines[-1] == "tests: unmapped: and 6 more"
+    assert len(lines) == 21 and lines[-1] == "tests: unmapped: and 8 more"
 
 
 DATA_FILES = (

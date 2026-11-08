@@ -108,17 +108,22 @@ class Gh:
         self.repo = repo
         self.seen: dict[tuple[str, str], Any] = {}
 
-    def one(self, endpoint: str) -> Any:
+    def raw(self, endpoint: str) -> str | None:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
             ["gh", "api", "--method", "GET", endpoint],
             capture_output=True,
             text=True,
             encoding="utf-8",
+            errors="replace",
         )
-        if proc.returncode != 0:
+        return proc.stdout if proc.returncode == 0 else None
+
+    def one(self, endpoint: str) -> Any:
+        out = self.raw(endpoint)
+        if out is None:
             return None
         try:
-            return json.loads(proc.stdout)
+            return json.loads(out)
         except ValueError:
             return None
 
@@ -137,6 +142,8 @@ class Gh:
             return self.keyed(endpoint, "workflow_runs")
         if name.startswith("run-jobs-"):
             return self.keyed(endpoint, "jobs")
+        if name.startswith("job-log-"):
+            return self.raw(endpoint)
         return self.one(endpoint)
 
     def keyed(self, endpoint: str, key: str) -> Any:
@@ -674,6 +681,15 @@ def ci_totals(records: list[dict[str, str]]) -> str:
 
 
 TESTS_STEP = "Project tests"
+KIT_TESTS_STEP = "Tests of the checks"  # the kit's own step, which `tests: mode ...` is printed by
+LOG_STAMP = re.compile(r"^\ufeff?\d{4}-\d{2}-\d{2}T[\d:.]+Z ")
+KIT_MODE = re.compile(r"tests: mode (?:selected\b.*|full \((?P<reason>.*)\))")
+PROJECT_FULL = re.compile(r"project tests: full \((?P<reason>.*)\)")
+PROJECT_SELECTED = "project tests: pr_tests selected"
+LISTED = re.compile(r"unmapped \(no \[testing\] map entry covers it\): (?P<path>.+)")
+UNNAMED = re.compile(r"unmapped: (?P<path>.+) -> 0 tests that name it")
+FULL_KINDS = ("always_full", "unmapped", "thorough", "other")
+FULL_PATHS_SHOWN = 5
 RAN = ("success", "failure")  # a step or job that ran to its end; skipped and cancelled did not
 PASSED_OVER = ("skipped", "cancelled")
 FAILED = ("failure", "timed_out")
@@ -942,6 +958,114 @@ def over_budget_line(ctx: Context, details: list[dict]) -> str:
     return f"over budget (budget_seconds {budget}): {found}; unknown: {unknown}"
 
 
+def pr_test_step(jobs: list[dict]) -> tuple[str, int | None, dict | None]:
+    """The step that ran a run's tests: `Project tests`, else the kit's own: (`ran`, its seconds
+    or None, its job), (`not-run`, None, None) or (`unknown`, None, None)."""
+    for name in (TESTS_STEP, KIT_TESTS_STEP):
+        pairs = [
+            (j, s)
+            for j in jobs
+            for s in (j.get("steps") if isinstance(j.get("steps"), list) else [])
+            if isinstance(s, dict) and s.get("name") == name
+        ]
+        state, found = latest_ran([s for _, s in pairs])
+        if state == UNKNOWN:
+            return UNKNOWN, None, None
+        if found is not None:
+            return "ran", seconds_of(found), next(j for j, s in pairs if s is found)
+    return "not-run", None, None
+
+
+def run_mode(log: Any) -> tuple[str, str | None, list[str]]:
+    """(mode, the reason of a full run, the paths that made it full) from a job's log: `selected`,
+    `full`, or `unknown` when the log is missing or states no mode."""
+    if not isinstance(log, str):
+        return UNKNOWN, None, []
+    lines = [LOG_STAMP.sub("", ln) for ln in log.splitlines()]
+    mode, reason = UNKNOWN, None
+    for ln in lines:
+        found = KIT_MODE.fullmatch(ln)
+        if found:
+            mode, reason = ("full" if found["reason"] is not None else "selected"), found["reason"]
+            break
+    else:
+        full = next((m for m in map(PROJECT_FULL.fullmatch, lines) if m), None)
+        if full:
+            mode, reason = "full", full["reason"]
+        elif any(ln.startswith(PROJECT_SELECTED) for ln in lines):
+            mode = "selected"
+    if mode != "full" or reason is None:
+        return mode, None, []
+    if reason.startswith("always_full ") and " matches " in reason:
+        return mode, reason, [reason.rsplit(" matches ", 1)[1]]
+    if not reason.startswith("profile balanced:"):
+        return mode, reason, []
+    named = (m["path"] for ln in lines for m in (LISTED.fullmatch(ln), UNNAMED.fullmatch(ln)) if m)
+    return mode, reason, sorted(set(named))
+
+
+def full_kind(reason: str | None) -> str:
+    """Why a run was full, by the reason that `impact.py` gave."""
+    text = reason or ""
+    if text.startswith("always_full "):
+        return "always_full"
+    if text.startswith("profile balanced:"):
+        return "unmapped"
+    return "thorough" if text == "profile thorough" else "other"
+
+
+def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, str]:
+    """Brief #773 answer 4: of each governance run of a pull request's commits, the mode of its
+    tests, the minutes of its test step, the reason of a full run and the paths behind it."""
+    selected, seconds, unknown = 0, 0, 0
+    kinds = dict.fromkeys(FULL_KINDS, 0)
+    paths: dict[str, int] = {}
+    seen: set[Any] = set()
+    for d in details:
+        commits = ctx.src.get(
+            f"commits-{d['number']}", f"repos/{{repo}}/pulls/{d['number']}/commits"
+        )
+        for commit in commits if isinstance(commits, list) else []:
+            for run_ in (
+                runs_of(ctx.src, commit.get("sha") if isinstance(commit, dict) else None) or []
+            ):
+                if not is_governance(run_) or run_.get("event") != "pull_request":
+                    continue
+                if run_.get("id") in seen:
+                    continue
+                seen.add(run_.get("id"))
+                jobs = jobs_of(ctx.src, run_.get("id"))
+                state, took, job = pr_test_step(jobs) if jobs is not None else (UNKNOWN, None, None)
+                if state == "not-run":
+                    continue
+                jid = job.get("id") if job else None
+                log = (
+                    ctx.src.get(f"job-log-{jid}", f"repos/{{repo}}/actions/jobs/{jid}/logs")
+                    if jid
+                    else None
+                )
+                mode, reason, named = run_mode(log)
+                if state == UNKNOWN or mode == UNKNOWN or took is None:
+                    unknown += 1
+                    continue
+                seconds += took
+                if mode == "selected":
+                    selected += 1
+                    continue
+                kinds[full_kind(reason)] += 1
+                for path in named:
+                    paths[path] = paths.get(path, 0) + 1
+    runs = selected + sum(kinds.values())
+    share = f"{round(100 * selected / runs)}%" if runs else NONE
+    fulls = ", ".join(f"{k} {v}" for k, v in kinds.items())
+    top = sorted(paths.items(), key=lambda kv: (-kv[1], kv[0]))[:FULL_PATHS_SHOWN]
+    return (
+        f"pr tests: {runs} runs; selected {selected} of {runs} ({share}); "
+        f"test step {tenths(Decimal(seconds) / 60)} minutes; full: {fulls}; unknown: {unknown}",
+        f"pr tests full most often: {', '.join(f'{p} ({n})' for p, n in top) or 'none'}",
+    )
+
+
 def merged_head_cleared(src: Any, head: str, comments: Any, authors: list[str] | None) -> str:
     """`yes`, `no` or `unknown` for a merged pull request (SPEC-0007 rule 8, SPEC-0021 rule 7)."""
     listed = verdicts(comments if isinstance(comments, list) else None, authors)
@@ -1110,7 +1234,11 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
             records.append(build_record(ctx, detail))
             details.append(detail)
     details.sort(key=lambda d: int(d["number"]))
-    testing = (escapes_line(details, ctx.src), over_budget_line(ctx, details))
+    testing = (
+        escapes_line(details, ctx.src),
+        over_budget_line(ctx, details),
+        *pr_tests_lines(ctx, details),
+    )
     records.sort(key=lambda r: int(r["number"]))
     flags = []
     duplicates = matching(issues, week)

@@ -121,6 +121,7 @@ from common import (
     temp_env,
 )
 from impact import (
+    NAMED,
     Impact,
     Selected,
     impact,
@@ -128,6 +129,7 @@ from impact import (
     parallel_command,
     run_folder_deprecation,
     run_timing,
+    unmapped_lines,
     workers_setting,
 )
 from proof import area_command, execute, is_test_file, timeout_note
@@ -597,6 +599,8 @@ def take_lock(root: Path) -> tuple[Path, str] | None:
 
 
 def rule(item: Selected) -> str:
+    if item.code == NAMED:
+        return f"a test names {item.changed}"
     return f"{item.changed} matches code {item.code}, tests {', '.join(item.tests)}"
 
 
@@ -657,7 +661,7 @@ def regression_sets(
     root: Path, found: Impact, areas: list[dict] | None
 ) -> tuple[list[tuple[str, str, str, str]], list[str]]:
     """The regression runs (name, command, folder, reason) and the lines of what is not run."""
-    notes = [f"tests: unmapped (no [testing] map entry covers it): {p}" for p in found.unmapped]
+    notes = [f"tests: {line}" for line in unmapped_lines(found)]
     project = str(load_config(root)["project_tests"] or "").strip()
     if found.full or (found.selected and areas is None):
         reason = found.reason or (
