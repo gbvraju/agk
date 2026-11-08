@@ -73,7 +73,6 @@ from session import (
     flow_value,
     gh,
     glob_regex,
-    kind_of,
     literal,
     live_takes,
     moment,
@@ -87,6 +86,7 @@ from session import (
     survey,
     touches_of,
 )
+from session import kind_of as task_kind  # SPEC-0045 rule 4; kind_of below is the lane's
 
 BUILDS_LINE = re.compile(r"Builds: (.+)")
 BUILD_ITEM = re.compile(r"\(([A-Za-z0-9._-]+)\)\s*(.*)")
@@ -939,7 +939,7 @@ def start_entry(name: str, brief: dict, protected: list[str] | None) -> dict:
     """One entry of the plan's `start` list, with the brief's kind by SPEC-0045 rule 4 (brief
     709): a body that cannot be read gives `design`, the highest; the conductor only raises it."""
     body = brief.get("body")
-    kind = kind_of(body, protected) if isinstance(body, str) else "design"
+    kind = task_kind(body, protected) if isinstance(body, str) else "design"
     entry = {"session": name, "brief": brief["number"], "title": brief.get("title"), "kind": kind}
     return entry | ({"build": brief["build"]} if brief.get("build") else {})
 
