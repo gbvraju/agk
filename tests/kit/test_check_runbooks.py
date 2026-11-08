@@ -370,6 +370,18 @@ def test_the_check_is_wired() -> None:
     assert entry and "tests/kit/test_check_runbooks.py" in entry[0]["tests"]
 
 
+def test_the_workflow_runs_the_check_as_its_own_step() -> None:
+    """REQ-063 AC2: the ruling on Q-802-1 (ADR-0375), one step after `check_playbooks`."""
+    text = (KIT_ROOT / ".github" / "workflows" / "governance.yml").read_text(encoding="utf-8")
+    assert text.count("      - name: check_runbooks\n") == 1
+    after = text.split("      - name: check_playbooks\n", 1)[1].split("\n      - ", 2)
+    step = after[1]
+    assert step.startswith("name: check_runbooks\n")
+    assert "run: python scripts/agk/check_runbooks.py" in step
+    assert "github.event.action != 'edited'" in step
+    assert "steps.paused.outputs.paused != 'true'" in step
+
+
 def test_the_kit_itself_passes() -> None:
     """REQ-063 AC2: rule 15 (a), `skipped` on the kit until build (b) adds the pages."""
     pages = (KIT_ROOT / "docs" / "runbooks").is_dir()
