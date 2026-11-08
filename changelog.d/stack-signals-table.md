@@ -1,0 +1,1 @@
+- `config/stack-signals.toml` is a new installed table of the files and dependencies that suggest a work type or stack, and `front_door.py check-signals` checks its form against `config/playbooks/`, naming the setting and never a value; nothing reads a repository yet (brief #814, SPEC-0057 build (a), ADR-0371)
