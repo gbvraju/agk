@@ -96,6 +96,32 @@ def test_ac6_a_changed_token_reads_drift_tokens(tmp_path):
     assert proc.stdout == "home/default drift: tokens; pixels: not run\n"
 
 
+def test_ac6_the_version_copy_of_the_kit_standard_adds_no_tokens(tmp_path):
+    """REQ-044 AC6: SPEC-0037 rule 11 (tokens used are the page's own; `standard.css` is the
+    kit's standard unchanged, as `design.py prototype` writes it, and is not counted)."""
+    project(tmp_path)
+    folder = tmp_path / "docs" / "design" / "prototype" / VERSION
+    kit_standard = KIT_ROOT / "kit" / "templates" / "design-standard.css"
+    (folder / "standard.css").write_text(kit_standard.read_text(encoding="utf-8"), "utf-8")
+    proc = compare(tmp_path, "--version", VERSION, "--screens", "home/default")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout == "home/default match; pixels: not run\n"
+
+
+def test_ac6_a_page_own_linked_stylesheet_is_still_counted(tmp_path):
+    """REQ-044 AC6: SPEC-0037 rule 11 (a stylesheet of the page's own, beside it, is counted)."""
+    project(tmp_path)
+    folder = tmp_path / "docs" / "design" / "prototype" / VERSION
+    (folder / "screens.css").write_text(".x { color: var(--color-muted); }\n", "utf-8")
+    page = folder / "home--default.html"
+    text = page.read_text(encoding="utf-8")
+    own = 'href="standard.css">\n<link rel="stylesheet" href="screens.css">'
+    page.write_text(text.replace('href="standard.css">', own), "utf-8")
+    proc = compare(tmp_path, "--version", VERSION, "--screens", "home/default")
+    assert proc.returncode == 0
+    assert proc.stdout == "home/default drift: tokens; pixels: not run\n"
+
+
 def test_ac6_several_kinds_are_named_comma_separated(tmp_path):
     """REQ-044 AC6: SPEC-0037 rule 11 (several kinds may be named)."""
     project(tmp_path, heading="Welcome", token="--color-muted")

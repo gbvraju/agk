@@ -13,7 +13,8 @@ run in the root) with `AGK_DESIGN_SCREEN`, `AGK_DESIGN_STATE` and `AGK_DESIGN_OU
 `docs/design/prototype/<version>/`: the structure (the landmarks, the heading outline, the controls
 with their labels and the text of the links in order; the prototype's own state bar, demo bar,
 link to `index.html` and runtime are left out), the tokens used (the standard's custom properties
-referenced by `var()` in the page and in the stylesheets it links in its folder) and, with a
+referenced by `var()` in the page and in the stylesheets it links in its folder, except the
+version's copy of the standard, `standard.css`, whose own references are not the page's) and, with a
 headless browser (`design_render.py`), the share of differing pixels at each breakpoint and mode
 against `pixel_tolerance` (default 0.01).
 
@@ -45,6 +46,7 @@ from common import CheckError, config_source
 
 KIT = Path(__file__).resolve().parents[2]
 STANDARD = KIT / "kit" / "templates" / "design-standard.css"
+STANDARD_COPY = "standard.css"  # the kit's standard as `design.py prototype` copies it
 USAGE = 'usage: design_compare.py --version v<n> --screens "<screen>/<state>, ..." [--root DIR]'
 FLAGS = ("--version", "--screens", "--root")
 DEFAULT_TOLERANCE = 0.01
@@ -179,7 +181,7 @@ def read_page(path: Path) -> tuple[list[tuple], set[str]]:
     folder = path.parent.resolve()
     for href in parser.stylesheets:
         sheet = (folder / href).resolve()
-        if sheet.is_file() and sheet.parent == folder:
+        if sheet.is_file() and sheet.parent == folder and sheet.name != STANDARD_COPY:
             css.append(sheet.read_text(encoding="utf-8"))
     used = set(USED.findall("\n".join(css))) & standard_tokens()
     return parser.structure(), used
