@@ -1,6 +1,6 @@
 # SPEC-0053: Work falls back to another provider of its own tier, never to a weaker model
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-060
 
