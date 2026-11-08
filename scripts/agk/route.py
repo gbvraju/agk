@@ -27,8 +27,9 @@ another event does not leave a green pull request at `agk:ci-running`.
 No review, no merge, and one comment only: the reply `Correction needed:` to a verdict whose
 `Final:` line it cannot read (brief 238). When a pull request merges (`pull_request` closed, the
 job runs only for a merge), the brief its body finishes with `Finishes: #n` beside `Brief: #n` is
-closed as completed, with one comment that names the merge commit (brief 302, ADR-0178); that is
-the only other issue it closes. Messages name the rule, never a value.
+closed as completed, with one comment that names the merge commit (brief 302, ADR-0178); apart
+from the health issues below, that is the only other issue it closes. Messages name the rule,
+never a value.
 A covered fix list on the full head whose every `Final:` line accepts an ADR the pull request
 changes (SPEC-0021 rule 3a) clears the head for the label, as `merge_cleared.py` clears it, so a
 pull request merged on it ends with `agk:ready` (brief #601, ADR-0293).
@@ -696,7 +697,7 @@ def route_health(root: Path, repo: str, labels: Labels, dry: bool) -> None:
 
     try:
         rows = conductor.pool_state(root, repo)
-        found = pages(f"repos/{repo}/issues?state=open&labels=agk-health")
+        found = pages(f"repos/{repo}/issues?state=open&labels=agk-health") if rows else []
     except CheckError as exc:
         print(f"health: skipped: {exc}")
         return
@@ -714,8 +715,9 @@ def route_health(root: Path, repo: str, labels: Labels, dry: bool) -> None:
             continue
         if not down:
             for item in same:
-                args = ("-f", "state=closed", "-f", "state_reason=completed")
-                write(f"{issues}/{item['number']}", *args, method="PATCH", what="health: the issue")
+                ended = ("-f", "state=closed", "-f", "state_reason=completed")
+                target = f"{issues}/{item['number']}"
+                write(target, *ended, method="PATCH", what="health: the issue")
         elif waits and not same:
             labels.ensure("agk-health")
             args = ("-f", f"title={title}", "-f", f"body={text}", "-f", "labels[]=agk-health")

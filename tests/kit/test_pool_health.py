@@ -121,7 +121,8 @@ def proj(tmp_path: Path) -> Path:
         "version: 1\nverdict_authors: [boss]\nspec_approvers: [owner]\n", encoding="utf-8"
     )
     (root / "agk.toml").write_text(ON, encoding="utf-8")
-    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)  # nosec B603 B607
+    git = ["git", "init", "-q", "-b", "main"]
+    subprocess.run(git, cwd=root, check=True)  # nosec B603 - fixed argument list, no shell
     return root
 
 
