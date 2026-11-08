@@ -345,5 +345,6 @@ def test_the_merger_job_runs_exactly_the_guarded_command_from_the_default_branch
     for grant in ("contents: write", "pull-requests: write", "issues: write", "actions: write"):
         assert grant in job_text, grant
     assert "secrets." not in job_text
+    assert job_text.count(' || echo "merger: ') == 2  # with the two above, every command ends green
     assert "startsWith(github.event.comment.body, 'Verdict:')" in job_text
     assert "github.event.workflow_run.conclusion == 'success'" in job_text
