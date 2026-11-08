@@ -32,6 +32,9 @@ Standard library only, files only, no network: every input is a saved file.
         prints one line per problem (by default each `docs/discovery/*.md`), the phase of rule 1
         it is in and what it waits for, from the files only, and writes nothing; past the design
         it prints `waits for the go`, which is read from saved comments (rule 9; build (f))
+    front_door.py check-signals
+        checks the form of the signal table `config/stack-signals.toml` against `config/playbooks/`,
+        both read from this script's own root and never from a repository (SPEC-0057 rule 5)
 
 The answers file: `{"screens": "yes|no|open", "work_type": "<work type>", "answers": [{"id":
 "<id>", "answer": "<words>", "where": "<comment link>|in session YYYY-MM-DD"} or {"id": "<id>",
@@ -50,6 +53,7 @@ import hashlib
 import json
 import re
 import sys
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -62,7 +66,7 @@ USAGE = (
     "usage: front_door.py check-issue --issue FILE | discovery-write (--issue FILE | --vision FILE)"
     " --answers FILE [--root DIR] | check-discovery [FILE ...] [--root DIR]"
     " | (check-research | check-design) --date YYYY-MM-DD [FILE ...] [--root DIR]"
-    " | status --date YYYY-MM-DD [SLUG ...] [--root DIR]"
+    " | status --date YYYY-MM-DD [SLUG ...] [--root DIR] | check-signals"
 )
 LABEL = "agk-problem"
 PREFIX = "Problem: "
@@ -753,6 +757,99 @@ def status(names: list[str], root: Path, today: datetime.date) -> int:
     return 0
 
 
+SIGNALS = "config/stack-signals.toml"
+PLAYBOOKS = "config/playbooks"
+SIGNAL_SLUG = re.compile(r"^[a-z0-9-]+$")
+SIGNAL_ROWS = {
+    "stack": ("name", "manifests", "locks"),
+    "work_type": ("name", "signal", "file", "contains"),
+}
+
+
+def is_word(value: object) -> bool:
+    return isinstance(value, str) and bool(value) and not re.search(r"\s", value)
+
+
+def is_words(value: object) -> bool:
+    return isinstance(value, list) and all(is_word(item) for item in value)
+
+
+SIGNAL_FORM = {
+    "name": is_word,
+    "manifests": lambda v: is_words(v) and bool(v),
+    "locks": is_words,
+    "signal": lambda v: isinstance(v, str) and bool(SIGNAL_SLUG.match(v)),
+    "file": is_word,
+    "contains": is_word,
+}
+
+
+def signal_row_problems(kind: str, rows: object) -> list[str]:
+    """The form of each `[[stack]]` or `[[work_type]]` row, and what no row may be named."""
+    if not isinstance(rows, list) or not rows:
+        return [f"rule 5: {SIGNALS}: [[{kind}]] has no row"]
+    found: list[str] = []
+    for number, row in enumerate(rows, 1):
+        where = f"rule 5: {SIGNALS}: [[{kind}]] row {number}"
+        if not isinstance(row, dict):
+            found.append(f"{where} is not a table")
+            continue
+        if set(row) - set(SIGNAL_ROWS[kind]):
+            found.append(f"{where} has an unknown key")
+        for key in SIGNAL_ROWS[kind]:
+            if not SIGNAL_FORM[key](row.get(key)):
+                found.append(f"{where} `{key}` is missing or malformed")
+        if row.get("name") == "default":
+            found.append(f"{where} `name` holds the base playbook")
+        if row.get("name") == "pilot":
+            found.append(f"{where} `name` holds the kind never proposed")
+    return found
+
+
+def signal_problems(root: Path) -> list[str]:
+    """Rule 5's form check of the table, naming the setting and never a value."""
+    try:
+        table = tomllib.loads((root / SIGNALS).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return [f"rule 5: {SIGNALS} cannot be read"]
+    head = f"rule 5: {SIGNALS}:"
+    found = [] if set(table) <= {*SIGNAL_ROWS, "no_signal", "ignore"} else [
+        f"{head} an unknown top-level key"
+    ]
+    for kind in SIGNAL_ROWS:
+        found += signal_row_problems(kind, table.get(kind))
+    for key in ("no_signal", "ignore"):
+        if not is_words(table.get(key)):
+            found.append(f"{head} `{key}` is not a list of names")
+    if found:
+        return found
+    held = set(table["no_signal"])
+    named = {row["name"] for row in table["work_type"]}
+    files = {path.stem for path in (root / PLAYBOOKS).glob("*.toml")}
+    for number, row in enumerate(table["work_type"], 1):
+        if row["name"] not in files:
+            found.append(f"{head} [[work_type]] row {number} `name` has no file in {PLAYBOOKS}/")
+    if "default" in held:
+        found.append(f"{head} `no_signal` holds the base playbook")
+    if "pilot" not in held:
+        found.append(f"{head} `no_signal` lacks the kind never proposed")
+    if held - files - {"pilot"}:
+        found.append(f"{head} `no_signal` holds a name with no file in {PLAYBOOKS}/")
+    if files - named - held - {"default"}:
+        found.append(f"{head} a playbook has no row and is not in `no_signal`")
+    if named & held:
+        found.append(f"{head} `no_signal` holds a name that has rows")
+    return found
+
+
+def check_signals(root: Path) -> int:
+    found = signal_problems(root)
+    if found:
+        raise Refusal(found)
+    print(f"ok {NAME}: {SIGNALS}")
+    return 0
+
+
 COMMANDS = (
     "check-issue",
     "discovery-write",
@@ -760,6 +857,7 @@ COMMANDS = (
     "check-research",
     "check-design",
     "status",
+    "check-signals",
 )
 
 
@@ -797,6 +895,8 @@ def main(argv: list[str] | None = None) -> int:
         ok = "--answers" in opts and doors == 1 and not rest and "--date" not in opts
     elif cmd == "check-discovery":
         ok = set(opts) <= {"--root"}
+    elif cmd == "check-signals":
+        ok = not opts and not rest
     else:
         ok = set(opts) <= {"--root", "--date"} and iso_date(opts.get("--date", "")) is not None
         if cmd == "status":
@@ -806,6 +906,8 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE, file=sys.stderr)
         return 2
     try:
+        if cmd == "check-signals":
+            return check_signals(Path(__file__).resolve().parents[2])
         if cmd == "check-issue":
             return check_issue(Path(opts["--issue"]))
         if cmd == "discovery-write":

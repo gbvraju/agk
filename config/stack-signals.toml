@@ -1,0 +1,174 @@
+# The signal table (SPEC-0057 rule 5, ADR-0371): the only place that names the files and dependencies that suggest a
+# work type or stack. It is read from the kit's own root, never from the repository being read. A signal is a proposal
+# for a person to confirm. `python3 scripts/agk/front_door.py check-signals` checks its form against config/playbooks/.
+# A stack is a language and its package tool (Q-S0057-1). A work type row is one manifest file and one word (rule 5).
+# `no_signal`: kinds that are an intention a tree cannot show (Q-S0057-6). `ignore`: folders whose files give no signal.
+
+no_signal = ["cloud-migration", "pilot"]
+ignore = [".venv", "examples", "fixtures", "node_modules", "testdata", "third_party", "vendor", "venv"]
+
+[[stack]]
+name = "python-pyproject"
+manifests = ["pyproject.toml"]
+locks = ["pdm.lock", "poetry.lock", "uv.lock"]
+
+[[stack]]
+name = "python-pip"
+manifests = ["requirements.txt", "setup.cfg", "setup.py"]
+locks = []
+
+[[stack]]
+name = "node"
+manifests = ["package.json"]
+locks = ["bun.lock", "npm-shrinkwrap.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"]
+
+[[stack]]
+name = "go-modules"
+manifests = ["go.mod"]
+locks = ["go.sum"]
+
+[[stack]]
+name = "rust-cargo"
+manifests = ["Cargo.toml"]
+locks = ["Cargo.lock"]
+
+[[stack]]
+name = "java-maven"
+manifests = ["pom.xml"]
+locks = []
+
+[[stack]]
+name = "java-gradle"
+manifests = ["build.gradle", "build.gradle.kts"]
+locks = ["gradle.lockfile"]
+
+[[stack]]
+name = "dart-pub"
+manifests = ["pubspec.yaml"]
+locks = ["pubspec.lock"]
+
+[[work_type]]
+name = "web-app"
+signal = "react-dom"
+file = "package.json"
+contains = "react-dom"
+
+[[work_type]]
+name = "web-app"
+signal = "angular"
+file = "package.json"
+contains = "@angular/core"
+
+[[work_type]]
+name = "web-app"
+signal = "vue"
+file = "package.json"
+contains = "vue"
+
+[[work_type]]
+name = "web-app"
+signal = "django"
+file = "pyproject.toml"
+contains = "django"
+
+[[work_type]]
+name = "web-app"
+signal = "django"
+file = "requirements.txt"
+contains = "django"
+
+[[work_type]]
+name = "mobile"
+signal = "react-native"
+file = "package.json"
+contains = "react-native"
+
+[[work_type]]
+name = "mobile"
+signal = "flutter"
+file = "pubspec.yaml"
+contains = "flutter"
+
+[[work_type]]
+name = "data-pipeline"
+signal = "airflow"
+file = "pyproject.toml"
+contains = "apache-airflow"
+
+[[work_type]]
+name = "data-pipeline"
+signal = "airflow"
+file = "requirements.txt"
+contains = "apache-airflow"
+
+[[work_type]]
+name = "data-pipeline"
+signal = "dbt"
+file = "pyproject.toml"
+contains = "dbt-core"
+
+[[work_type]]
+name = "data-pipeline"
+signal = "dbt"
+file = "requirements.txt"
+contains = "dbt-core"
+
+[[work_type]]
+name = "rag-app"
+signal = "llama-index"
+file = "pyproject.toml"
+contains = "llama-index"
+
+[[work_type]]
+name = "rag-app"
+signal = "llama-index"
+file = "requirements.txt"
+contains = "llama-index"
+
+[[work_type]]
+name = "rag-app"
+signal = "chromadb"
+file = "requirements.txt"
+contains = "chromadb"
+
+[[work_type]]
+name = "voice-agent"
+signal = "livekit-agents"
+file = "pyproject.toml"
+contains = "livekit-agents"
+
+[[work_type]]
+name = "voice-agent"
+signal = "livekit-agents"
+file = "requirements.txt"
+contains = "livekit-agents"
+
+[[work_type]]
+name = "mcp-server"
+signal = "mcp-sdk"
+file = "package.json"
+contains = "@modelcontextprotocol/sdk"
+
+[[work_type]]
+name = "mcp-server"
+signal = "mcp-sdk"
+file = "pyproject.toml"
+contains = "mcp"
+
+[[work_type]]
+name = "mcp-server"
+signal = "mcp-sdk"
+file = "requirements.txt"
+contains = "mcp"
+
+[[work_type]]
+name = "multi-agent"
+signal = "langgraph"
+file = "pyproject.toml"
+contains = "langgraph"
+
+[[work_type]]
+name = "multi-agent"
+signal = "langgraph"
+file = "requirements.txt"
+contains = "langgraph"

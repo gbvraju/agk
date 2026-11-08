@@ -39,6 +39,7 @@ config/core-rules.md text eol=lf
 config/playbooks/** text eol=lf
 config/review-checklist.md text eol=lf
 config/session-rules.md text eol=lf
+config/stack-signals.toml text eol=lf
 constitution/principles.md text eol=lf
 docs/adr/TEMPLATE.md text eol=lf
 docs/briefs/TEMPLATE.md text eol=lf
