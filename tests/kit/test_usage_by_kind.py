@@ -158,9 +158,15 @@ def test_ac7_the_facts_and_the_report_are_unchanged(setup):
     import product_report
 
     assert facts.SCHEMA == 1 and product_report.REPORT_SCHEMA == 7
-    schema = json.loads((ROOT / "kit" / "facts-schema.json").read_text(encoding="utf-8"))
-    item = schema["properties"]["pull_requests"]["oneOf"][0]["items"]["properties"]
-    assert "kind" not in item and "usage" in item  # the kind is read from the brief, not stored
+
+    class Src:
+        def get(self, name, endpoint, until=None):
+            return [] if name.startswith(("comments-", "files-", "commits-")) else None
+
+    item = {"number": 7, "head": {"sha": "d" * 40}, "created_at": "2026-10-06T09:00:00Z"}
+    item |= {"state": "open", "title": "t", "body": "", "merged_at": None, "user": {"login": "b"}}
+    record = facts.pull_record(Src(), item, ["reviewer"])
+    assert "kind" not in record and "usage" in record  # the kind is read from the brief, not stored
 
 
 def test_ac7_a_facts_file_that_is_not_json_is_refused_naming_the_path_class(setup, tmp_path):
