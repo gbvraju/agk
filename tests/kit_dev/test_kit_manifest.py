@@ -26,6 +26,8 @@ KIT_ONLY = {
     "scripts/agk/engines.py",
     "scripts/agk/design.py",
     "scripts/agk/design_prototype.py",
+    "scripts/agk/design_render.py",
+    "scripts/agk/design_compare.py",
     "scripts/agk/shadow_count.py",
     "scripts/agk/pr_body.py",
     "scripts/agk/core_audit.py",

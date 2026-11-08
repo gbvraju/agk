@@ -42,7 +42,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" prototype
    phone number, email address and link on a page comes from the kit's invented fixture set, never from `private/`,
    `reference/` or a real record. Fill the brand record from what the owner gave, and from nothing else; a value still
    unknown stays in brackets and is reported as at risk.
-3. `screenshots/` in a version folder is written only by `design.py screenshots`, never by hand.
+3. `screenshots/` in a version folder is written only by `design.py screenshots`, never by hand. Where a headless
+   browser is found, `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" screenshots --version v<n>` writes one
+   screenshot of each page at each breakpoint, in light and dark, and `screenshots/reflow.json` (`ok` or `sideways`);
+   without one it says so and every entry reads `not run`, never passed.
 4. Check, and correct the theme on a failure, at most three rounds, then stop and report:
 
 ```
@@ -63,6 +66,21 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" design-next-steps --req R
 ```
 
 Do not commit or push, and do not open a pull request: the person or their session does.
+
+## A UI build against its signed-off version
+
+The builder of a UI brief (one with a `Screens:` line) compares each named screen and state with the signed-off version
+before it marks its pull request ready (SPEC-0037 rule 11). It needs `render` in the `[design]` table of `agk.toml`, the
+project's command that writes the built page of a screen and state into `AGK_DESIGN_OUT`:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design_compare.py" --version v<n> --screens "<screen>/<state>, ..."
+```
+
+It prints `<screen>/<state> match` or `<screen>/<state> drift: structure, tokens, pixels` (the kinds found), ending
+`; pixels: not run` without a headless browser, and exits 0 on drift: put each line in the pull request body as a
+`Design match:` line and leave the judgement to the conductor. A build that changes no screen named by a `Screens:` line
+runs none.
 
 ## /agk:design inventory
 
