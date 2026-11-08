@@ -116,6 +116,7 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/conductor.py check-verdict FILE
     python3 scripts/agk/conductor.py lease (--show | --take NAME | --release NAME)
     python3 scripts/agk/session.py prompt --brief N [--session ID] [--follow-up TEXT]
+    python3 scripts/agk/session.py slot (--take | --renew | --release | --next) SLOT
 
 The conductor's watch and sweep (brief #643, ADR-0308). `watch` ends on the first poll that finds a comment created after
 `--since` (default: the start) whose first line starts `Question:` or `Report:`, on an open issue labelled `agk-brief` or an
@@ -152,7 +153,9 @@ read on GitHub. `lease` is the active-conductor marker: one comment `Conductor: 
 `plan_issue` of the `[flow]` table names (absent: the lease is off), valid 50 minutes; `--take NAME` posts or edits it in place
 unless another name holds a valid lease (exit 3, naming the setting) and keeps the name in the git directory, `--release NAME`
 marks it released, `--show` prints `held by <name> until <time>` or `free`; `merge-queue` refuses to run while another name holds a
-valid lease. `session.py prompt --brief N` prints the builder's standing prompt from the kit's files, GET only: the item line with
+valid lease. `session.py slot` runs a builder slot when `[flow] builder_start = "assign"` (brief #776, ADR-0362): `--take`, `--renew` and
+`--release` keep the slot's 50-minute lease on the assignments issue (a held slot exits 3), and `--next` renews it and prints one
+next step. `session.py prompt --brief N` prints the builder's standing prompt from the kit's files, GET only: the item line with
 the brief's reserved numbers (its `Reserved:` lines and the `reserves` of its takes) and the session name when given, the files to
 read first, the secret-scan deferral line of `prepush.py`, the body lines of CLAUDE.md item 7 read from `config/core-rules.md`, and
 the session rules that bind a builder quoted from `config/session-rules.md`; `--follow-up TEXT` (one line, never a verdict)
