@@ -1,4 +1,6 @@
-"""Tests of the shipped data-pipeline playbook (SPEC-0048 rule 18 build (g); SPEC-0038 rules 1 and 10).
+"""Tests of the shipped data-pipeline playbook (SPEC-0048 rule 18, build (g)).
+
+SPEC-0038 rules 1 and 10 as amendment 130 widens them.
 
 REQ-055 AC8. `config/playbooks/data-pipeline.toml` passes the playbook check, and
 `check_playbooks.py` passes with six playbooks. It holds exactly the data-pipeline gates of rule 18
