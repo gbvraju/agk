@@ -1002,9 +1002,10 @@ def reservation(root, s: Survey, brief: dict) -> list[str]:
     return ids
 
 
-def take(s: Survey, brief: dict, reserve, build: str | None = None) -> str | None:
+def take(s: Survey, brief: dict, reserve, build: str | None = None, gate=None) -> str | None:
     """Post the take unless this session already holds one; the reason it was lost, or None.
-    A take of a build conflicts with a take of the same build and with a take of the whole brief."""
+    A take of a build conflicts with a take of the same build and with a take of the whole brief.
+    `gate`, when given (`claim`), is asked just before the post and refuses it with its reason."""
     from session_plan import holding  # the plan's reading of a take (brief #345, ADR-0195)
 
     number, me, comments = brief["number"], s.me, s.comments[brief["number"]]
@@ -1018,6 +1019,8 @@ def take(s: Survey, brief: dict, reserve, build: str | None = None) -> str | Non
             other := [t for t in rivals(live_takes(comments, number, s.prs, s.hours)) if t[2] != me]
         ):
             return f"taken by {other[0][2]}"
+        if gate is not None and (why := gate()):
+            return why
         day = datetime.now(UTC).strftime("%Y-%m-%d")
         body = f"body=taken: {me} {day}" + (f" build ({build})" if build else "")
         if any(not t[5] for t in all_takes(comments)):
@@ -1173,6 +1176,34 @@ def claim_reservation(root, s: Survey, number: int) -> list[str]:
     return reservation(root, seen, brief)
 
 
+def claim_overlap(root, s: Survey, number: int, seen: dict) -> str | None:
+    """Why the brief waits for running work, by the judgement `next` and `plan` share (SPEC-0050
+    rules 2 to 4), or None. It reads the open briefs and pull requests as `next` does; a read that
+    fails stops the claim (CheckError) and never passes as no overlap. The survey is kept in `seen`
+    for the reservation, so that the briefs are read once."""
+    from session_plan import exempt, read_gone, running_conflict, settle_takes, wait_text
+
+    shared = exempt(root)
+    issues = pages(f"repos/{s.repo}/issues?state=open&labels={LABEL}")
+    if issues is None:
+        raise CheckError("rule 3: the open briefs cannot be read")
+    briefs = [i for i in issues if "pull_request" not in i]
+    brief = next((i for i in briefs if i.get("number") == number), None)
+    brief = brief or gh(f"repos/{s.repo}/issues/{number}")
+    if not isinstance(brief, dict) or not isinstance(brief.get("body"), str):
+        raise CheckError("rule 3: the brief cannot be read")
+    view = survey(root, s.repo, s.me, [i for i in briefs if i.get("number") != number])
+    view.prs = s.prs  # the red-branch survey reads none; the overlap needs every open one
+    view.builders = [p for p in s.prs if p.get("state") == "open" and brief_number(p) is not None]
+    view.briefs[number], view.comments[number] = brief, s.comments[number]
+    read_gone(root, view)
+    freed, _ = settle_takes(view)
+    view.held = [h for h in view.held if h[0] not in freed]
+    seen["survey"], seen["brief"] = view, brief
+    found = running_conflict(root, view, {**brief, "number": number}, shared)
+    return wait_text(found) if found else None
+
+
 def claim(root, me: str, number: int, build: str | None) -> int:
     repo = repo_name(root)
     comments = pages(f"repos/{repo}/issues/{number}/comments")
@@ -1183,8 +1214,19 @@ def claim(root, me: str, number: int, build: str | None) -> int:
     s = Survey(repo, me, 0, hours, prs, [], {number: comments})
     if any(t[2] != me for t in live_takes(comments, number, prs, hours)):
         stale_view(root, s, number)
-    reserve = list if build is not None else (lambda: claim_reservation(root, s, number))
-    if why := take(s, {"number": number}, reserve, build):
+    seen: dict = {}
+
+    def reserve() -> list[str]:
+        if build is not None:
+            return []
+        if "survey" in seen:  # the survey of the overlap judgement, read once
+            return reservation(root, seen["survey"], seen["brief"])
+        return claim_reservation(root, s, number)
+
+    def gate() -> str | None:
+        return claim_overlap(root, s, number, seen)
+
+    if why := take(s, {"number": number}, reserve, build, gate):
         print(f"skip #{number}: {why}")
         return 1
     print(f"claimed #{number}" + (f" build ({build})" if build else ""))
@@ -1417,14 +1459,14 @@ def next_brief(root, me: str, taking: bool = False) -> int:
         return 1
     # The plan's rules decide (brief #345, ADR-0195): a stale claim holds nothing, overlap is
     # judged by files, and a skip names the plan's reason.
-    from session_plan import read_gone, running_conflict, settle_takes, wait_text
+    from session_plan import exempt, read_gone, running_conflict, settle_takes, wait_text
 
+    shared = exempt(root)  # SPEC-0050 rules 2 and 3: the one list `plan` and `claim` judge with
     read_gone(root, s)
     freed, s.skipped = settle_takes(s)
     s.held = [h for h in s.held if h[0] not in freed]
     for number, why in s.skipped:
         print(f"skip #{number}: {why}")
-    shared = [glob_regex(p) for p in shared_patterns(root)]
     ready = [*s.free, *(s.briefs[n] for n in sorted(freed))]
     for brief in sorted(ready, key=lambda b: (priority_of(b["body"]), b["number"])):
         found = running_conflict(root, s, brief, shared)
