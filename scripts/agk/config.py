@@ -25,6 +25,10 @@ the value.
 `scorecard_settings(root)` reads the optional `[scorecard]` table (SPEC-0047 rule 3, brief #713):
 a line per metric and the windows `trend_weeks` and `close_weeks`, else the kit defaults. An
 unknown key, a non-number or a negative number is refused, naming `setting: scorecard.<key>`.
+
+`caps_settings(root)` reads the optional `[caps]` table (SPEC-0049 rule 2, brief #714): `S`, `M`
+and `L`, each `{ tokens = <n>, hours = <h> }`, whole numbers above zero, a larger size never below
+a smaller one; None without the table. Any other shape is refused, naming `setting: caps.<key>`.
 """
 
 from __future__ import annotations
@@ -307,6 +311,46 @@ def scorecard_settings(root: Path) -> dict:
             raise _refuse_scorecard(f"scorecard.{key}")
     lines = {k: table.get(k, v) for k, v in SCORECARD_LINES.items()}
     return {"lines": lines, **{k: table.get(k, v) for k, v in SCORECARD_WINDOWS.items()}}
+
+
+# --- the [caps] table (SPEC-0049 rule 2, brief #714) -----------------------------------------
+
+CAP_SIZES = ("S", "M", "L")  # smallest first: a larger size is never below a smaller one
+CAP_KEYS = ("tokens", "hours")
+
+
+class CapsSettingError(CheckError):
+    """The `[caps]` table is refused, naming the setting and never the value."""
+
+
+def _refuse_caps(setting: str) -> CapsSettingError:
+    return CapsSettingError(f"the [caps] table is refused (setting: {setting})")
+
+
+def caps_settings(root: Path) -> dict | None:
+    """Each size's `{tokens, hours}` cap, or None without the table (nothing is capped)."""
+    try:
+        source = config_source(root)
+    except (OSError, ValueError):
+        raise _refuse_caps("caps") from None
+    if "caps" not in source:
+        return None
+    table = source["caps"]
+    if not isinstance(table, dict):
+        raise _refuse_caps("caps")
+    for size in [*table, *CAP_SIZES]:
+        entry = table.get(size)
+        if (
+            size not in CAP_SIZES
+            or not isinstance(entry, dict)
+            or set(entry) != set(CAP_KEYS)
+            or not all(type(entry[k]) is int and entry[k] > 0 for k in CAP_KEYS)
+        ):
+            raise _refuse_caps(f"caps.{size}")
+    for smaller, larger in zip(CAP_SIZES, CAP_SIZES[1:], strict=False):
+        if any(table[larger][k] < table[smaller][k] for k in CAP_KEYS):
+            raise _refuse_caps(f"caps.{larger}")
+    return {size: dict(table[size]) for size in CAP_SIZES}
 
 
 def main(argv: list[str] | None = None) -> int:

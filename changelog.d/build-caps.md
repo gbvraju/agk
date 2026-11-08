@@ -1,0 +1,1 @@
+- `conductor.py sweep` prints `OVER #<brief> <used>/<cap> tokens|hours #<pr>` for a builder pull request past the cap of its brief's size, and `UNKNOWN #<brief> tokens #<pr>` when no token figure was reported, from the new optional `[caps]` table of `agk.toml` and the new read-only `scripts/agk/caps.py`; without the table nothing is marked (brief #714, SPEC-0049, ADR-0324)
