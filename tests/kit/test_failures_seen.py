@@ -145,7 +145,10 @@ def test_req_053_ac6_an_issue_without_a_fix_record_is_skipped(gh, capsys):
 
 def test_req_053_ac6_a_similar_but_different_signature_is_not_matched(gh, capsys):
     gh.serve(
-        [issue(12, NEAR, test="tests/test_shop.py::test_cart_total"), issue(14, SIG[:-1], test="tests/test_shop.py::test_cart[2]")],
+        [
+            issue(12, NEAR, test="tests/test_shop.py::test_cart_total"),
+            issue(14, SIG[:-1], test="tests/test_shop.py::test_cart[2]"),
+        ],
         [pull(13, 12), pull(15, 14)],
     )
     code, lines = seen(capsys)
