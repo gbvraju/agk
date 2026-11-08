@@ -20,7 +20,8 @@ from test_prepush_regression import MAP, RUN_LINE, prepush, project, ran
 from test_prepush_regression import toml as old_toml
 
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = next((ROOT / "docs" / "specs").glob("0055-*.md"))
+SPECS = sorted((ROOT / "docs" / "specs").glob("0055-*.md"))
+OWN_REPOSITORY = pytest.mark.skipif(not SPECS, reason="reads files only this repository has")
 BASE = 'default_branch = "main"\ntest_dirs = ["tests"]\ntest_patterns = ["test_*.py"]\n'
 AREA = '[proof.web]\ndirs = ["tests"]\npatterns = ["test_*.py"]\ncommand = "echo area {files}"\n'
 UNIT = '[proof.web.levels.unit]\ncommand = "echo unit {files}"\nwhen = ["pr", "main"]\n'
@@ -114,6 +115,7 @@ def test_a_malformed_map_source_is_refused_naming_the_setting(tmp_path, value):
     assert "learned" not in str(caught.value)
 
 
+@OWN_REPOSITORY
 def test_this_repository_sets_curated_and_keeps_its_entries():
     """REQ-062 AC1: SPEC-0055 rule 1 (AGK itself is `curated`, by data and not by a code path)."""
     table = impact.testing_table(ROOT)
@@ -121,9 +123,10 @@ def test_this_repository_sets_curated_and_keeps_its_entries():
     assert len(table["map"]) > 0
 
 
+@OWN_REPOSITORY
 def test_the_guide_opens_with_the_two_sentences():
     """REQ-062 AC1: SPEC-0055 rule 1 (the third place the difference is remembered)."""
-    spec = SPEC.read_text(encoding="utf-8")
+    spec = SPECS[0].read_text(encoding="utf-8")
     start = spec.index("AGK itself has one area")
     end = spec.index("depend on the environment.", start) + len("depend on the environment.")
     guide = (ROOT / "docs" / "guides" / "testing.md").read_text(encoding="utf-8")
@@ -472,9 +475,10 @@ def test_a_level_without_env_takes_no_new_lock_without_a_testing_table(repo, out
 # --- the spec itself ------------------------------------------------------------------------------
 
 
+@OWN_REPOSITORY
 def test_every_rule_states_the_four_places():
     """REQ-062 AC1: SPEC-0055 Tests (rules 1 to 14 state AGK itself, GitHub, local and personal)."""
-    text = SPEC.read_text(encoding="utf-8")
+    text = SPECS[0].read_text(encoding="utf-8")
     rules = text[text.index("## Rules") : text.index("## Tests")]
     parts = re.split(r"^(\d+)\. ", rules, flags=re.M)
     found = {int(parts[i]): parts[i + 1] for i in range(1, len(parts) - 1, 2)}

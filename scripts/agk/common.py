@@ -1319,7 +1319,7 @@ def _level(name: str, spec: object, area: dict, setting: str) -> dict:
     command = spec.get("command")
     if not isinstance(command, str) or not command.strip():
         raise CheckError(f"the command of a level must be a text (setting: {where}.command)")
-    when = spec.get("when")
+    when = spec.get("when", [])
     if not _texts(when) or set(when) - set(EVENTS):
         raise CheckError(f"when is a list of pr, main, nightly and release (setting: {where}.when)")
     if set(when) == {"pr"}:  # it would never have a full run (Q-S0055-2)
