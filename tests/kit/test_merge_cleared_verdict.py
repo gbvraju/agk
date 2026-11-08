@@ -202,10 +202,14 @@ def world(**saved: object) -> dict:
 
 
 FAKE_GH = """
-import json, sys
+import json, os, sys
 args = sys.argv[1:]
 with open(LOG, 'a', encoding='utf-8') as fh:
     fh.write(json.dumps(args) + '\\n')
+with open(LOG + '.token', 'a', encoding='utf-8') as fh:  # which GH_TOKEN each call ran with (#765)
+    verb = args[args.index('--method') + 1] if '--method' in args else 'GET'
+    target = next((a for a in args if a.startswith('repos/')), '')
+    fh.write(json.dumps([verb, target, os.environ.get('GH_TOKEN')]) + '\\n')
 if FAIL:
     sys.stderr.write('HTTP 502: Bad Gateway\\n'); sys.exit(1)
 data = json.load(open(SAVED, encoding='utf-8'))
@@ -866,13 +870,16 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     body file, written only in the governance run's temporary home; brief #601 adds the one record
     comments file there, amendment 122; brief #610 adds the close of the red-branch issue, one
     comment and one PATCH, in `close_red` alone; brief #765 adds the merger job's report, one
-    dispatch of the governance workflow and one comment, in `report_main` alone)."""
+    dispatch of the governance workflow in `report_main` and one comment in `post_once`)."""
     text = SCRIPT.read_text(encoding="utf-8")
     report = text.split("\ndef report_main(", 1)[1].split("\ndef ", 1)[0]
-    assert report.count('"POST"') == 2
+    assert report.count('"POST"') == 1
     assert '"POST", endpoint, "-f", f"ref={branch}"' in report
-    assert '"POST", endpoint, "-f", f"body={body}"' in report
     text = text.replace(report, "")
+    post = text.split("\ndef post_once(", 1)[1].split("\ndef ", 1)[0]
+    assert post.count('"POST"') == 1
+    assert '"POST", endpoint, "-f", f"body={body}"' in post
+    text = text.replace(post, "")
     close = text.split("\ndef close_red(", 1)[1].split("\ndef ", 1)[0]
     assert text.count('"POST"') == 2 and close.count('"POST"') == 1
     assert '"POST", f"repos/{repo}/issues/{issue}/comments"' in text

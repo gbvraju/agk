@@ -355,7 +355,8 @@ def test_the_secret_scan_needs_no_licence_key_no_secret_and_no_new_permission():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "gitleaks-action" not in text
     assert "GITLEAKS_LICENSE" not in text
-    assert "secrets." not in text
+    assert "secrets." not in text.split("\n  merger:\n", 1)[0]  # the merger's own step (#765)
+    assert set(re.findall(r"secrets\.\w+", text)) == {"secrets.AGK_MERGE_TOKEN"}
     assert re.search(
         r"^permissions:\n  contents: read\n  pull-requests: read\n  issues: read\n"
         r"  actions: read\n\n",

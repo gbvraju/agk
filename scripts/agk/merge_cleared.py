@@ -212,6 +212,8 @@ JOB_LINE = re.compile(
 )
 EVENTS = ("issue_comment", "workflow_run")  # the merger job's starts (brief #765, ADR-0354)
 JOB_PREFIX = "merger: "  # the one comment of a hold or a refusal (brief #765)
+MERGE_ENV = "AGK_MERGE_TOKEN"  # the one variable the merge call reads; only the job sets it
+NO_MERGE_LINE = f"merge needs {MERGE_ENV} or the owner's tap"  # the `Correction:` on brief #765
 PENDING = "checks pending"  # SPEC-0039 rule 10, exactly (brief #569)
 RED = ("failure", "error")  # a commit status that failed
 ENDED = ("success", *RED)  # a commit status that is no longer `pending`
@@ -373,10 +375,10 @@ def setting_on(data: dict) -> None:
 # --- reads --------------------------------------------------------------------------------------
 
 
-def gh_api(args: list[str]) -> subprocess.CompletedProcess:
+def gh_api(args: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     """`gh api ARGS`: the one way this command calls GitHub, an argument list with no shell."""
     return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["gh", "api", *args], capture_output=True, text=True, encoding="utf-8"
+        ["gh", "api", *args], capture_output=True, text=True, encoding="utf-8", env=env
     )
 
 
@@ -778,10 +780,17 @@ def hold_list(
 # --- rule 6: the pinned merge -------------------------------------------------------------------
 
 
-def write_once(args: list[str]) -> tuple[int, str, str]:
+def write_once(args: list[str], env: dict[str, str] | None = None) -> tuple[int, str, str]:
     """One `gh` call that writes: never retried (SPEC-0039 rule 6)."""
-    proc = gh_api(args)
+    proc = gh_api(args, env)
     return proc.returncode, proc.stdout, proc.stderr
+
+
+def merge_env() -> dict[str, str] | None:
+    """The environment of the one merge call: with `AGK_MERGE_TOKEN` set (the merger job), `gh`
+    authenticates with it for this call alone; else None, the caller's own login (brief #765)."""
+    value = os.environ.get(MERGE_ENV)
+    return {**os.environ, "GH_TOKEN": value} if value else None
 
 
 def current_head(repo: str, number: int) -> str:
@@ -797,7 +806,7 @@ def merge_pull(repo: str, number: int, sha: str, message: list[str] | None = Non
     args = ["--method", "PUT", f"repos/{repo}/pulls/{number}/merge"]
     args += ["-f", f"sha={sha}", "-f", f"merge_method={METHOD}"]
     args += ["-f", "commit_message=" + "\n".join(message or [MERGED_BY])]
-    code, out, err = write_once(args)
+    code, out, err = write_once(args, merge_env())
     if code != 0:
         found = HTTP.search(err)
         status = int(found.group(1)) if found else 0
@@ -1313,7 +1322,7 @@ def merge_lock(root: Path) -> Iterator[None]:
 # --- the command --------------------------------------------------------------------------------
 
 
-# --- the merger job of GitHub mode (brief #765, ADR-0354, amendment 138) ------------------------
+# --- the merger job of GitHub mode (brief #765, ADR-0354, amendment 139) ------------------------
 
 
 class Nothing(Exception):
@@ -1418,11 +1427,31 @@ def event_main(path: str, name: str, root: Path) -> int:
     return EXIT_CLEARED
 
 
+def post_once(repo: str, number: int, body: str) -> None:
+    """One comment BODY on the pull request, unless the same first line is there already."""
+    if any(first_line(c) == body for c in read_comments(repo, number)):
+        print("merger: already said")
+        return
+    endpoint = f"repos/{repo}/issues/{number}/comments"
+    code, _, _ = write_once(["--method", "POST", endpoint, "-f", f"body={body}"])
+    print("merger: commented" if code == 0 else "merger: the comment cannot be posted")
+
+
+def no_secret_main(number: int, root: Path) -> int:
+    """`--report --pr N --no-secret`: the job has no merge secret, so one line and nothing else."""
+    try:
+        post_once(repo_of(root), number, NO_MERGE_LINE)
+    except (Refused, Unreadable) as err:
+        print(f"merger: nothing posted: {err}")
+    return EXIT_CLEARED
+
+
 def report_main(number: int, sha: str, line: str, root: Path) -> int:
     """`--report --pr N --sha SHA --line LINE`: after LINE, the command's own line for N and SHA,
-    dispatch the default branch's governance run on a merge, else post one comment `merger:
-    <line>` on the pull request unless the same comment is there already. Exit 0, or 2 for a line
-    that is not the command's own."""
+    on a merge dispatch the default branch's governance run unless the merge secret made that
+    merge (its push starts the run by itself, verify), else post one comment `merger: <line>` on
+    the pull request unless the same comment is there already. Exit 0, or 2 for a line that is
+    not the command's own."""
     found = JOB_LINE.match(line)
     if not found or int(found.group(1)) != number or found.group(2) != sha[:12]:
         print("merger: refused: the line is not merge_cleared.py's own (input: --line)")
@@ -1430,6 +1459,9 @@ def report_main(number: int, sha: str, line: str, root: Path) -> int:
     try:
         repo = repo_of(root)
         if found.group(3) == "merged":
+            if os.environ.get(MERGE_ENV):
+                print("merger: the merge's own push starts governance")
+                return EXIT_CLEARED
             branch = default_branch(root)
             endpoint = f"repos/{repo}/actions/workflows/{WORKFLOW}/dispatches"
             code, _, _ = write_once(["--method", "POST", endpoint, "-f", f"ref={branch}"])
@@ -1438,22 +1470,19 @@ def report_main(number: int, sha: str, line: str, root: Path) -> int:
         if line.endswith(f": held: {PENDING}"):  # the other required run ends and tries again
             print("merger: checks pending; nothing posted")
             return EXIT_CLEARED
-        body = JOB_PREFIX + line
-        if any(first_line(c) == body for c in read_comments(repo, number)):
-            print("merger: already said")
-            return EXIT_CLEARED
-        endpoint = f"repos/{repo}/issues/{number}/comments"
-        code, _, _ = write_once(["--method", "POST", endpoint, "-f", f"body={body}"])
-        print("merger: commented" if code == 0 else "merger: the comment cannot be posted")
+        post_once(repo, number, JOB_PREFIX + line)
     except (Refused, Unreadable) as err:
         print(f"merger: nothing posted: {err}")
     return EXIT_CLEARED
 
 
 def job_args(argv: list[str]) -> tuple[str, list[str]] | None:
-    """The merger job's two modes: (`event`, [file, name]) or (`report`, [n, sha, line])."""
+    """The merger job's modes: (`event`, [file, name]), (`report`, [n, sha, line]) or
+    (`no-secret`, [n])."""
     if len(argv) == 4 and argv[0] == "--event" and argv[2] == "--event-name":
         return "event", [argv[1], argv[3]]
+    if len(argv) == 4 and argv[:2] == ["--report", "--pr"] and argv[3] == "--no-secret":
+        return ("no-secret", [argv[2]]) if NUMBER.fullmatch(argv[2]) else None
     if len(argv) == 7 and argv[0] == "--report" and argv[1] == "--pr" and argv[3] == "--sha":
         if argv[5] == "--line" and NUMBER.fullmatch(argv[2]) and SHA.fullmatch(argv[4]):
             return "report", [argv[2], argv[4], argv[6]]
@@ -1565,6 +1594,8 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
         here = Path.cwd() if root is None else root
         if job[0] == "event":
             return event_main(job[1][0], job[1][1], here)
+        if job[0] == "no-secret":
+            return no_secret_main(int(job[1][0]), here)
         return report_main(int(job[1][0]), job[1][1], job[1][2], here)
     args = parse_args(argv)
     if args is None:

@@ -11,9 +11,12 @@ Protected classes: `.github/`, `scripts/agk/`, `tests/kit/`
 ## Context
 
 SPEC-0039 rule 2 has the conductor run `merge_cleared.py --pr <n> --sha <head>` when it clears a pull request. In
-a scheduled conductor session that merge was refused by the `Main` ruleset (`[Merge Without Review]`, 2026-11-08
-05:19Z, #732 and #746, merged later by hand, as the brief measures), so cleared work waited for a person. The owner
-said yes to one workflow change for it (brief #765, quoted there as data, 2026-11-08). Rule 10 said the CI path adds no
+a scheduled conductor session that merge was refused by the session's own permission check (`[Merge Without Review]`,
+2026-11-08 05:19Z, #732 and #746, merged later by hand, as the brief's `Measured:` line records it), so cleared work
+waited for a person. The `Main` ruleset requires one approving review and lets only the admin role bypass it, and the
+bypass list of a personal-account repository does not offer GitHub Actions (the `Correction:` on the brief,
+2026-11-08), so the job's own token cannot merge either. The owner said yes to one workflow change for it (brief #765,
+quoted there as data, 2026-11-08). Rule 10 said the CI path adds no
 workflow job; this decision changes that, for GitHub mode only.
 
 ## Decision
@@ -26,27 +29,36 @@ workflow job; this decision changes that, for GitHub mode only.
    `governance` job never runs on the comment or `workflow_run` events, so the required check is unchanged;
    `workflow_dispatch` is added so the default branch's run can be started after a merge.
 2. The job checks out the default branch (never the pull request's head) and runs three commands with its own token
-   (`contents`, `pull-requests`, `issues` and `actions` write; `checks` and `statuses` read), no secret:
+   (`contents`, `pull-requests`, `issues` and `actions` write; `checks` and `statuses` read):
    `merge_cleared.py --event <payload> --event-name <event>` prints `<n> <sha>` or nothing; then exactly
    `python3 scripts/agk/merge_cleared.py --pr <n> --sha <sha>`, whose re-checks are unchanged; then
-   `merge_cleared.py --report --pr <n> --sha <sha> --line <its line>`.
+   `merge_cleared.py --report --pr <n> --sha <sha> --line <its line>`. The secret `AGK_MERGE_TOKEN`, a fine-grained
+   token the owner creates for this one repository (Contents and Pull requests, read and write) and stores as an
+   Actions secret, reaches only the second step, and the command uses it for its one merge call alone, so the merge
+   runs under the owner's existing admin bypass and the ruleset stays as it is. The job reads it only from
+   `secrets.AGK_MERGE_TOKEN`; no session handles it, and the tests of the merged code run under `env -i`. Without the
+   secret the job posts one line `merge needs AGK_MERGE_TOKEN or the owner's tap`, once per pull request, and does
+   nothing else.
 3. `--event` does nothing, and reads nothing from GitHub, unless `[flow] auto_merge = true` with `squash`, `execution`
    is not `local` and `forge` is not `files`, all on the default branch as checked out. It then names a pull request
    only when the open local-mode record issue is absent and the latest `Verdict:` comment reads
    `Verdict: cleared <head>`; otherwise it prints one line on stderr and nothing else.
-4. `--report` dispatches the default branch's `governance` run after a merge (a merge by the job's token starts no
-   workflow by itself) and posts one comment `merger: <line>` for a hold or a refusal, never the same line twice on
+4. `--report` dispatches the default branch's `governance` run only after a merge made with the job's own token,
+   which starts no workflow by itself; a merge made with `AGK_MERGE_TOKEN` starts the push run by itself `(verify)`, so
+   a dispatch there would be a second full run. It posts one comment `merger: <line>` for a hold or a refusal, never the same line twice on
    one pull request; `held: checks pending` posts nothing, since the other required run's end is the next try. There
    is no retry loop.
 5. `merge_cleared.py` names a merge that GitHub refuses for a ruleset violation `held: merge refused by the ruleset
-   (rule 6)`, exit 3, so the owner sees it once until the GitHub Actions app is a bypass actor of `Main`.
+   (rule 6)`, exit 3, so the owner sees it once if the token cannot pass the ruleset.
 6. Local mode (the conductor merges on the person's machine), personal mode (no merges) and `auto_merge = false` are
    unchanged; no extra account or seat.
 
 ## Consequences
 
-- With the owner's bypass in place, a cleared head merges within minutes of its verdict or its green run, with no
-  session; until then the job says once that the ruleset refused it, and the owner merges.
+- With the owner's secret in place, a cleared head merges within minutes of its verdict or its green run, with no
+  session; until then the job says once that the merge needs the secret or the owner's tap, and the owner merges.
+- As the job is written its own token never merges: with the secret the secret merges, and without it nothing does.
+  The dispatch is reached only by `--report` with no secret in its environment (`Q-765-4`).
 - The conductor's own run of the command stays; the sha-pinned merge stops a head merging twice, and the second run
   is refused or held.
 - Every project with the installed workflow starts the job (one billed minute or less) on a `Verdict:` or `Approve:`
@@ -60,4 +72,7 @@ workflow job; this decision changes that, for GitHub mode only.
 - 2026-11-08: principle 2 and session rule 2 name the conductor as the one runner of the command; whether they gain
   words for the job is the maintainers' (`Q-765-1`).
 - 2026-11-08: the measurements of brief #765 answer 6 (minutes per run, time from verdict to merge on three pull
-  requests) can be taken only after merge and the owner's bypass; they go in a later report.
+  requests) can be taken only after merge and the owner's secret; they go in a later report.
+- 2026-11-08: a `pull_request` run takes its workflow file from the head, so a pull request from a branch of this
+  repository that edits the merge step could read `AGK_MERGE_TOKEN`; that needs write access to the repository, the
+  file is a protected path and no check stops the run before it starts. The owner holds the token's scope and expiry.
