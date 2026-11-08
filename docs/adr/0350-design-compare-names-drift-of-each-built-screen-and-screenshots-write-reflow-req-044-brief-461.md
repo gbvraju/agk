@@ -69,7 +69,7 @@ this ADR changes; no rule of the spec changes.
    exits non-zero or writes no page (nothing compared is never a match, `Q-461-2`).
 5. **The conductor and the skill.** `skills/design/SKILL.md` gains the section that runs
    `design_compare.py` from the plugin root, so the command reaches a project (`parity.py`).
-   **The conductor.** `.claude/agents/conductor.md` gains: for every pull request of a UI brief,
+   `.claude/agents/conductor.md` gains: for every pull request of a UI brief,
    read its `Design match:` lines, ask for them by a fix list when they are missing, judge every
    drift, and the verdict names every screen and state that drifted with a fix item or a reason to
    accept it. Words are cut elsewhere in the file so that its rule budget does not grow.
