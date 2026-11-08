@@ -22,6 +22,7 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -400,13 +401,29 @@ def test_the_locked_command_gets_its_session(repo, where):
     assert "SESSION=builder-x" in proc.stdout
 
 
+# The listing of the lock folder, made from inside the locked command. `run` records the
+# command's process id under the shared mutex just after starting it (`record_child`), so a
+# listing taken earlier may hold the mutex `.agk-lock-heavy.mutex` beside the slot (brief #729).
+# The probe waits until the owner file names it and that mutex section has ended (at most 15 s;
+# no other section follows for a minute, until the first heartbeat), then lists: a mutex that
+# is never released still shows, and the test still fails on it.
+LISTING = (
+    "import json,os,pathlib,sys,time; d = pathlib.Path(sys.argv[1]); end = time.monotonic() + 15\n"
+    "def named():\n"
+    "    try: return 'child' in json.loads((d / 'agk-lock-heavy' / 'owner.json').read_text())\n"
+    "    except (OSError, ValueError): return False\n"
+    "gate = d / '.agk-lock-heavy.mutex'\n"
+    "while not (named() and not gate.exists()) and time.monotonic() < end: time.sleep(0.02)\n"
+    "print(sorted(os.listdir(d)))"
+)
+
+
 @pytest.mark.parametrize("extra", ["", "lock_slots = 1\n"])
 def test_one_slot_is_unchanged(repo, tmp_path, extra):
     """REQ-040: brief #426 answers 1 and 4 (with one slot nothing changes, the folder included)."""
     folder = tmp_path / "locks"
     settings(repo, folder, extra)
-    probe = "import os,sys; print(sorted(os.listdir(sys.argv[1])))"
-    proc = repo.run("lock.py", "run", "--name", "heavy", "--", PY, "-c", probe, str(folder))
+    proc = repo.run("lock.py", "run", "--name", "heavy", "--", PY, "-c", LISTING, str(folder))
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "['agk-lock-heavy']" in proc.stdout
     assert repo.run("lock.py", "status", "--name", "heavy").stdout == "lock heavy: free\n"
@@ -564,3 +581,28 @@ def test_prepush_without_a_caller_takes_the_free_slot_2_and_releases_it(repo, tm
 
 def ticket_leftovers(folder: Path) -> list[str]:
     return [p.name for p in folder.iterdir() if p.name.startswith(".")]
+
+
+def test_the_one_slot_listing_holds_even_when_the_parent_is_slow(
+    repo, tmp_path, monkeypatch, capfd
+):
+    """REQ-040: brief #729 (governance on 4bf7e60 listed `['.agk-lock-heavy.mutex',
+    'agk-lock-heavy']`: the command listed the folder while `run` still held the mutex of
+    `record_child`). Each mutex section is held half a second here, as a runner that is slow
+    to schedule the parent holds it, and the listing still names the slot alone."""
+    folder = tmp_path / "locks"
+    settings(repo, folder)
+    plain = lock.mutex
+
+    @contextmanager
+    def slow(held):
+        with plain(held):
+            time.sleep(0.5)
+            yield
+
+    monkeypatch.setattr(lock, "mutex", slow)
+    monkeypatch.chdir(repo.root)
+    code = lock.main(["run", "--name", "heavy", "--", PY, "-c", LISTING, str(folder)])
+    out = capfd.readouterr().out
+    assert code == 0, out
+    assert "['agk-lock-heavy']" in out
