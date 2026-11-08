@@ -574,7 +574,7 @@ def with_lease(queue, monkeypatch, comments: list) -> None:
 
 
 def test_the_queue_is_refused_while_another_name_holds_a_valid_lease(queue, capsys, monkeypatch):
-    with_lease(queue, monkeypatch, [marker(10, "c1")])
+    with_lease(queue, monkeypatch, [marker(5, "c1")])
     queue.add(7, at=10)
     for args in ([], ["--dry-run"]):
         assert queue.run(*args) == merge_cleared.EXIT_HELD

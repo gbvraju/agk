@@ -1,0 +1,77 @@
+format = 1
+work_type = "default"
+title = "The base every kind of work carries: tests first, a contract first, evidence per gate, a rollback and a definition of done"
+heavy_steps = []
+evidence = [
+  "the tests of each brief, in a commit before its code",
+  "the contract or interface file, with the test glob the map names for it",
+  "the evidence item each verdict cites for each gate",
+  "the recorded rollback or undo path of each change that is applied",
+  "the acceptance criteria of each brief and the tests that carry them",
+]
+phases = []
+lanes = []
+claims = []
+
+[split]
+brief_order = []
+depends_on = []
+
+[testing]
+profile = "balanced"
+always_full = []
+map = []
+
+[[gates]]
+id = "tests-first"
+kind = "judgement"
+text = "The tests of a brief land before its code."
+owner_only = false
+
+[[gates]]
+id = "contract-first"
+kind = "judgement"
+text = "A contract or interface file exists before the build that uses it, and the testing map names a test glob for it."
+owner_only = false
+
+[[gates]]
+id = "evidence-per-gate"
+kind = "judgement"
+text = "Every gate names the evidence item a verdict cites."
+owner_only = false
+
+[[gates]]
+id = "rollback"
+kind = "judgement"
+text = "Every change that is applied has a rollback or undo path, recorded."
+owner_only = false
+
+[[gates]]
+id = "definition-of-done"
+kind = "judgement"
+text = "Every brief has acceptance criteria that its tests carry."
+owner_only = false
+
+[milestones]
+shape = "per-brief"
+batch_by = "not batched: one pull request per brief, as today"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the work: a deadline, a budget, a team's skills, or systems that must stay as they are?"
+
+[[discovery]]
+id = "success"
+text = "Which results show that the work succeeded, and how will each be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the data the work reads, changes, keeps or sends on, and where may each copy live?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments must it run in, from a developer's machine to production?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of speed, scale, uptime, security and recovery must it meet?"
