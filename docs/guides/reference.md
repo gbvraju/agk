@@ -324,6 +324,18 @@ naming the path, on a line that is not an exact pin, a repeated tool or a tool o
 `--upstream` it reads the package index's JSON once per pin and prints which pins are behind, the gap in days and `unknown`
 for an upstream it cannot read; a person opens the update pull request from that output (ADR-0328).
 
+## Bill of materials
+
+    python3 scripts/agk/sbom.py make [--ref REF] --out FILE
+    python3 scripts/agk/sbom.py check FILE [--ref REF]
+
+`make` writes one CycloneDX JSON bill of what the repository's files declare at the commit (default `HEAD`): the Python
+requirements, the CI tools, the pinned scanners, the actions and, in the kit, the installed files. It reads the commit with
+local `git` only, and the same commit gives the same bytes. A requirement or `uses:` that is not pinned exactly is listed
+as `unpinned` with no version. `FILE` inside the repository must be ignored by git, because a bill is never committed.
+`check` prints `ok bom`, or one `FAIL bom: <class> <reason>` line per problem and exits 1, naming the component class and
+never a value. No governance step runs it (SPEC-0054, ADR-0370).
+
 ## Test plan
 
     python3 scripts/agk/test_plan.py [--base REF] [--head REF] [--json] [ROOT]
