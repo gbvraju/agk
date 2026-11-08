@@ -1,7 +1,7 @@
 """Tests of the shipped multi-agent playbook (SPEC-0038 rules 1, 10 and 12 build (l)).
 
 REQ-045 AC6. `config/playbooks/multi-agent.toml` passes the playbook check, and
-`check_playbooks.py` passes with seven playbooks. It holds exactly the multi-agent gates of rule
+`check_playbooks.py` passes with eight playbooks. It holds exactly the multi-agent gates of rule
 10: role and handoff contracts, `check` (a contract file for each role and handoff, with tests
 mapped); trace-based evaluation, `judgement`; and cost and latency budgets, `check` that they are
 declared as numbers and `judgement` that a recorded run meets them. Each check gate names the step
@@ -44,7 +44,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_seven_playbooks() -> None:
+def test_check_playbooks_passes_with_eight_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -52,7 +52,7 @@ def test_check_playbooks_passes_with_seven_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (7 playbooks)\n"
+    assert out.stdout == "ok playbooks (8 playbooks)\n"
 
 
 def test_exactly_the_multi_agent_gates_of_rule_10() -> None:
