@@ -330,7 +330,7 @@ def _skill_problem(name: str, tokens: list[str]) -> str | None:
 
 def _skills(rel: str, names: list[str], root: Path) -> list[str]:
     tokens = _tokens(root)
-    found = {_skill_problem(name, tokens) for name in names} - {None}
+    found = {why for name in names if (why := _skill_problem(name, tokens))}
     return [f"rule 12: {rel}: {why} (SPEC-0048 rule 12; key: skills)" for why in sorted(found)]
 
 
@@ -341,7 +341,7 @@ def skills(path: Path, root: Path) -> list[str]:
         data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
         return []
-    names = data.get("skills")
+    names = data.get("skills", [])
     if not _is(names, STRS):
         return []
     tokens = _tokens(root)
