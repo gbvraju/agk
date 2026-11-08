@@ -266,8 +266,10 @@ def specs_named_approved(comments: list[dict], approvers: list[str]) -> set[str]
         line = first_line(item)
         match = APPROVE.fullmatch(line)
         short = APPROVE_SHORT.fullmatch(line)
-        if match or short:
-            found.add(match.group(2) if match else short.group(1))
+        if match:
+            found.add(match.group(2))
+        elif short:
+            found.add(short.group(1))
     return found
 
 
