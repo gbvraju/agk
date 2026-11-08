@@ -319,7 +319,7 @@ code = "scripts/agk/execution.py"
 tests = ["tests/kit/test_execution.py"]
 [[testing.map]]
 code = "scripts/agk/failures.py"
-tests = ["tests/kit/test_failures.py"]
+tests = ["tests/kit/test_failures.py", "tests/kit/test_failures_seen.py"]
 [[testing.map]]
 code = "scripts/agk/flakes.py"
 tests = ["tests/kit/test_flakes.py", "tests/kit/test_rerun_alone.py"]
