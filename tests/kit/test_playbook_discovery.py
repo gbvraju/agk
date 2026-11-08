@@ -98,7 +98,7 @@ def test_ac2_discovery_as_a_table_not_a_list_fails(tmp_path):
     assert_fails(tmp_path, 2)
 
 
-@pytest.mark.parametrize("name", ["web-app", "rag-app", "mobile"])
+@pytest.mark.parametrize("name", ["web-app", "rag-app", "mobile", "cloud-migration"])
 def test_ac2_each_shipped_playbook_carries_the_five_ids_once(name):
     """REQ-055 AC2: SPEC-0048 rule 4 (the shipped playbooks gain the five; data only)."""
     path = KIT_ROOT / "config" / "playbooks" / f"{name}.toml"
