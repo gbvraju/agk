@@ -130,6 +130,7 @@ from impact import (
     machine_env,
     map_lines,
     parallel_command,
+    report_of,
     run_folder_deprecation,
     run_timing,
     unmapped_lines,
@@ -539,7 +540,7 @@ def proof_runs(root: Path, runs: list[dict], ran: Ran, notes: list[str] | None =
                 "exit": run_code,
                 "seconds": round(time.monotonic() - started, 3),
                 **digest(run_out),
-                "timing": run_timing(run_out, folder, None, since)[0],
+                "timing": run_timing(run_out, folder, own_report(root, item["name"]), since)[0],
             }
         )
         lines.append(f"tests: {item['name']} ({len(item['files'])} test files) in {item['cwd']}")
@@ -548,6 +549,11 @@ def proof_runs(root: Path, runs: list[dict], ran: Ran, notes: list[str] | None =
         if run_code != 0:
             return Step("FAIL", "\n".join([*lines, run_out.rstrip("\n")]), ran=ran, runs=made)
     return Step("ok", "\n".join(lines), not_run=not_run, ran=ran, runs=made)
+
+
+def own_report(root: Path, name: str) -> str | None:
+    """The report of a level's run where there is no `[testing] junit` to fall back on."""
+    return report_of(proof_areas(root), name, None)
 
 
 def stop_signals() -> list[int]:
@@ -780,7 +786,7 @@ def gate(
         started, since = time.monotonic(), wall_clock()
         code, out, _ = execute(command, folder, limit, env=temp_env())
         seconds = time.monotonic() - started
-        timing, timing_note = run_timing(out, folder, junit, since)
+        timing, timing_note = run_timing(out, folder, report_of(areas, name, junit), since)
         if timing_note:
             print(timing_note, flush=True)
         made.append(

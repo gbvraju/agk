@@ -1,0 +1,1 @@
+- A level's own JUnit report (a path or a glob) feeds timing, failed-test ids and flake strikes, and its `rerun` command reruns a failed test alone for any runner (brief #806, SPEC-0055 build (f), ADR-0360)

@@ -37,6 +37,11 @@ add` (owner `AGK_SESSION`, else `unassigned`) with its failure signature and the
 exits 0 only when every failed test passed alone; with no test id found, more than ten failed
 tests or a command that is not pytest, it exits as today. Without the setting nothing changes.
 
+Under the same setting a selected run of a level with `rerun`, a command with `{id}`, reruns a
+failed test alone for any runner, in the level's `cwd` and under the same limit (SPEC-0055 rule 9,
+brief #806). Its ids come only from the reports this run wrote (the level's `junit`, else
+`[testing] junit`); with no report there is no rerun and no strike, and it exits as it did.
+
 `check_release.py` is kit-only (never installed), so `toml_version` restates its reading of
 `version`; a kit test pins the two equal (Q-453-7).
 """
@@ -49,12 +54,22 @@ import subprocess  # nosec B404 - the project's own test command, run as the cal
 import sys
 import time
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import CheckError, git, load_config, merge_base, proof_areas, repo_root, resolve_base
-from impact import impact, junit_setting, pr_tests, rerun_alone, text
+from impact import (
+    impact,
+    junit_setting,
+    level_of,
+    pr_tests,
+    report_files,
+    report_of,
+    rerun_alone,
+    text,
+)
 from prepush import full_command, pytest_interpreter, regression_sets
 
 NOTICE = "agk: no project_tests configured; the project runs its own tests"
@@ -116,15 +131,44 @@ def alone_command(command: str, test_id: str) -> str | None:
 def rerun_failed(root: Path, project: str, output: str, code: int) -> int:
     """Rerun each failed test alone, once; a pass is a strike (brief #670). The exit code."""
     import failures  # the failure signature and issue action (SPEC-0046)
+
+    junit = junit_setting(root)
+    reports = report_files(root, junit) if junit else None
+    found = dict(failures.failed_tests(output, reports, pytest=True))
+    if alone_command(project, "x") is None:
+        say(["project tests: rerun alone needs a pytest command (setting: testing.rerun_alone)"])
+        return code
+    return rerun_each(root, found, lambda test: alone_command(project, test) or "", root, code)
+
+
+def level_run(root: Path, name: str, command: str, folder: Path, rerun: bool) -> int:
+    """A selected run; with RERUN and its level's `rerun`, failed tests alone (SPEC-0055 rule 9)."""
+    areas = proof_areas(root) if rerun else None
+    template = (level_of(areas, name) or {}).get("rerun")
+    if not template:
+        return shell(command, folder)
+    import failures  # the ids of the reports (SPEC-0046)
+
+    since = time.time()
+    code, _ = captured(command, folder)
+    if code == 0:
+        return 0
+    junit = report_of(areas, name, junit_setting(root))
+    reports = report_files(folder, junit, since) if junit else []
+    found = dict(failures.failed_tests("", reports))  # never the output: a level reads its report
+    # An id comes from a report: quoted, so that it reaches the command as one word.
+    return rerun_each(root, found, lambda t: template.replace("{id}", shlex.quote(t)), folder, code)
+
+
+def rerun_each(
+    root: Path, found: dict[str, str], alone: Callable[[str], str], folder: Path, code: int
+) -> int:
+    """Run ALONE of each failed test in FOLDER; a pass is one strike in ROOT's ledger."""
+    import failures
     import flakes
 
     from config import failures_settings
 
-    junit = junit_setting(root)
-    found = dict(failures.failed_tests(output, root / junit if junit else None))
-    if alone_command(project, "x") is None:
-        say(["project tests: rerun alone needs a pytest command (setting: testing.rerun_alone)"])
-        return code
     if not found:
         say(["project tests: rerun alone: no failed test id was found"])
         return code
@@ -137,8 +181,7 @@ def rerun_failed(root: Path, project: str, output: str, code: int) -> int:
     issues = failures_settings(root)["issues"]
     green = True
     for test, first in found.items():
-        alone = alone_command(project, test) or ""
-        if shell(alone, root) != 0:
+        if shell(alone(test), folder) != 0:
             say([f"project tests: rerun alone: {test} failed again"])
             green = False
             continue
@@ -267,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
         if name == "full":
             code = full_run(root, project, command, rerun)
         else:
-            code = shell(command, root / cwd)
+            code = level_run(root, name, command, root / cwd, rerun)
         word = "ok" if code == 0 else "FAIL"
         say([f"project tests: {name} {word} ({time.monotonic() - started:.1f}s): {reason}"])
         if code != 0:

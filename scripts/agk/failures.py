@@ -6,9 +6,11 @@ Usage: python3 scripts/agk/failures.py signature --output FILE [--step NAME]
        python3 scripts/agk/failures.py seen --signature SIG --test ID
 
 Brief #634, build (b) of SPEC-0046 (ADR-0303). `signature` prints `<sig> <test id>` for each
-failed test of a run: the ids come from the JUnit report at `[testing] junit` (relative to the
-current folder, the run's folder) when it is set and readable, else from the runner's
-`FAILED <id>` lines; a run with neither gets `step:<NAME>`. The signature is the first 12
+failed test of a run: the ids come from the JUnit reports at `[testing] junit`, a path or a glob
+(relative to the current folder, the run's folder) when it is set and readable, else from the
+runner's `FAILED <id>` lines; a run with neither gets `step:<NAME>`. An id keeps pytest's form in
+a report of pytest (a suite named `pytest`) and is `<classname>::<name>` in any other (SPEC-0055
+rule 8). The signature is the first 12
 hexadecimal characters of the SHA-256 of the test id and the normalised first error line, joined by
 one newline. `evidence` prints the last 200 lines of that test's section of the output, redacted
 by the data guard's log reader and scanned again (`guard.scan_text`); a finding left, or more than
@@ -46,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import guard_logs
 from common import CheckError
 from guard import scan_text
-from impact import junit_setting
+from impact import junit_setting, report_files
 
 import config
 
@@ -106,20 +108,30 @@ def junit_id(attrs: dict[str, str]) -> str:
     return "::".join([path, *parts[cut + 1 :], attrs.get("name", "")])
 
 
-def junit_failures(data: bytes) -> list[tuple[str, str]]:
+def junit_failures(data: bytes, pytest: bool = False) -> list[tuple[str, str]]:
+    """(test id, first error line) of each failure of a report. PYTEST gives pytest's id whatever
+    the suite is called, for a caller that knows the command was pytest."""
     found: list[tuple[str, str]] = []
     case: dict[str, str] = {}
+    of_pytest = pytest
 
     def refuse(*_args) -> None:
         raise ValueError
 
     def start(name: str, attrs: dict[str, str]) -> None:
-        nonlocal case
-        if name == "testcase":
+        nonlocal case, of_pytest
+        if name == "testsuite":
+            of_pytest = pytest or attrs.get("name") == "pytest"
+        elif name == "testcase":
             case = attrs
         elif name in ("failure", "error") and case:
             first = (attrs.get("message") or "").splitlines()
-            found.append((junit_id(case), first[0] if first else ""))
+            test = (
+                junit_id(case)
+                if of_pytest
+                else f"{case.get('classname', '')}::{case.get('name', '')}"
+            )
+            found.append((test, first[0] if first else ""))
             case = {}
 
     parser = xml.parsers.expat.ParserCreate()
@@ -131,12 +143,15 @@ def junit_failures(data: bytes) -> list[tuple[str, str]]:
     return found
 
 
-def failed_tests(output: str, junit: Path | None) -> list[tuple[str, str]]:
-    """(test id, first error line) of each failure: the JUnit report when readable, else the
-    runner's `FAILED <id>` lines."""
-    if junit is not None:
+def failed_tests(
+    output: str, junit: Path | list[Path] | None, pytest: bool = False
+) -> list[tuple[str, str]]:
+    """(test id, first error line) of each failure: the JUnit report or reports when all are
+    readable, else the runner's `FAILED <id>` lines."""
+    reports = [junit] if isinstance(junit, Path) else junit or []
+    if reports:
         try:
-            return junit_failures(junit.read_bytes())
+            return [f for r in reports for f in junit_failures(r.read_bytes(), pytest)]
         except (OSError, ValueError, xml.parsers.expat.ExpatError):
             pass
     return [(m.group(1), m.group(2) or "") for m in FAILED.finditer(output)]
@@ -336,7 +351,7 @@ def command(args: list[str]) -> str:
         opts = options(rest, {"--output", "--step"})
         output = read(opts, "--output")
         junit = junit_setting(root)
-        found = failed_tests(output, root / junit if junit else None)
+        found = failed_tests(output, report_files(root, junit) if junit else None)
         if not found:
             if "--step" not in opts:
                 raise Usage("no test id was found (option: --step)")
