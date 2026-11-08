@@ -18,6 +18,7 @@ import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
+from itertools import pairwise
 from pathlib import Path
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
@@ -75,7 +76,7 @@ def test_the_phases_run_in_the_order_of_rule_11() -> None:
     assert list(by_name) == PHASES
     assert [by_name[name]["order"] for name in PHASES] == list(range(1, 8))
     assert by_name["intake"]["after"] == []
-    for earlier, later in zip(PHASES, PHASES[1:]):
+    for earlier, later in pairwise(PHASES):
         assert by_name[later]["after"] == [earlier], later
 
 
