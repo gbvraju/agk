@@ -165,7 +165,7 @@ def test_the_checks_that_take_the_body_are_in_the_kept_set():
 
 # --- the router on comments (answer 5) -----------------------------------------------------------
 
-PREFIXES = ("Verdict:", "Approve:", "Approval:", "Correction:")
+PREFIXES = ("Verdict:", "Approve:", "Approval:", "Correction:", "Assign:", "Request:")
 
 
 def router_condition() -> str:

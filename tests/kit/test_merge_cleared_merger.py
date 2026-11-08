@@ -369,7 +369,13 @@ def test_the_workflow_starts_only_on_comments_and_on_the_two_required_runs():
     """REQ-046: verdict on f3acd19 item 1 (no pull request's run can start this file)."""
     head = text().split("\njobs:", 1)[0]
     block = re.search(r"\non:\n(.*?)\n(?=[a-z])", head, re.S).group(1)
-    assert re.findall(r"^  ([a-z_]+):", block, re.M) == ["issue_comment", "workflow_run"]
+    # brief #797 answer 3 (ADR-0373): the sweep's two starts, neither from a pull request's run
+    assert re.findall(r"^  ([a-z_]+):", block, re.M) == [
+        "issue_comment",
+        "workflow_run",
+        "schedule",
+        "workflow_dispatch",
+    ]
     assert re.search(r"\n  issue_comment:\n    types: \[created\]", head)
     assert re.search(
         r"\n  workflow_run:\n    workflows: \[governance, proof\]\n    types: \[completed\]", head

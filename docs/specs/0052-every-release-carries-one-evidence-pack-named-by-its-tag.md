@@ -1,6 +1,6 @@
 # SPEC-0052: Every release carries one evidence pack, named by its tag
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-059
 

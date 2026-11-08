@@ -14,6 +14,10 @@ one, with a status string (`Status: Proposed`, or `Proposed` alone) and no strin
 `Accepted`: the status-only `Final:` commit makes that ADR Accepted, and the test would then turn
 the default branch red. ADRs already on the base and test files the pull request does not touch
 are not read; without a base outside CI the rule is skipped.
+
+Brief #773 (ADR-0359, SPEC-0055 rule 6): with a `[testing]` table and a base, a file the pull
+request adds under `config/`, `kit/`, `skills/` or `.claude/` must be covered by a map entry or
+named, as a whole path, by a test file; the folder counts for the selection only.
 """
 
 from __future__ import annotations
@@ -26,10 +30,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import impact as selection
 from common import (
     CheckError,
     base_arg,
     changed_files,
+    load_config,
     merge_base,
     repo_root,
     resolve_base,
@@ -45,6 +51,7 @@ TEST_FILE = re.compile(r"(?:.*/)?test_[^/]*\.py")
 PROPOSED = re.compile(r"Status:\s*Proposed\b")
 BARE_PROPOSED = re.compile(r"\s*Proposed\s*")
 ACCEPTED = re.compile(r"\bAccepted\b")
+MAP_ROOTS = ("config/", "kit/", "skills/", ".claude/")
 
 
 def references(source: str, stem: str) -> bool:
@@ -175,6 +182,35 @@ def own_adr_problems(root: Path, argv: list[str] | None) -> list[str]:
     return problems
 
 
+def map_problems(root: Path, argv: list[str] | None) -> list[str]:
+    """Brief #773 answer 3: files added under MAP_ROOTS that no entry covers and no test names."""
+    table = selection.testing_table(root)
+    base = resolve_base(root, base_arg(argv)) if table is not None else None
+    if table is None or base is None:
+        return []
+    added = [
+        path
+        for path, status in sorted(changed_files(root, merge_base(root, base)).items())
+        if status == "A"
+        and path.startswith(MAP_ROOTS)
+        and not any(selection.matches(path, e["code"]) for e in table["map"])
+    ]
+    if not added:
+        return []
+    cfg = load_config(root)
+    dirs, patterns = list(cfg["test_dirs"]), list(cfg["test_patterns"])
+    tests = [
+        p for p in selection.head_files(root, "HEAD") if selection.is_test_file(p, dirs, patterns)
+    ]
+    index = selection.name_index(root, "HEAD", tests)
+    return [
+        f"{path} is added, no [testing] map entry covers it and no test names it "
+        "(SPEC-0055 rule 6, setting: testing.map)"
+        for path in added
+        if path not in index
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     root = repo_root()
     path = root / MANIFEST
@@ -207,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"{check} has no test file in the {TESTS_KEY} folder that imports or runs it"
             )
     problems += own_adr_problems(root, argv)
+    problems += map_problems(root, argv)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     if not problems:

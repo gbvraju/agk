@@ -11,7 +11,7 @@ person's `Approve: SPEC-0034`; no session posts it. Items 1 to 3 are built by bu
    setting, never the value. With `start` nothing changes and `session.py slot` exits 3 without a call.
 2. **The slot lease.** `session.py slot --take|--renew|--release <slot>` keeps one marker per slot on the one open
    `agk-conductor` issue, first line `Slot: active|released <time> <slot> <run>`, by a listed verdict author, edited in
-   place, valid 50 minutes. A run that finds its slot held exits 3 and writes nothing. The oldest marker of a slot decides, and a take
+   place, valid 10 minutes (item 6). A run that finds its slot held exits 3 and writes nothing. The oldest marker of a slot decides, and a take
    reads it back.
 3. **The slot's loop.** `session.py slot --next <slot>` renews the lease and prints one step: `stop` on `Pool: stop` by
    a spec approver; `follow-up pr #n <why>` for a conflict or an unanswered fix list on a pull request the slot owns, or
@@ -22,3 +22,9 @@ person's `Approve: SPEC-0034`; no session posts it. Items 1 to 3 are built by bu
 4. **The POSTs (rule 12).** Rule 12's list of POSTs gains the slot marker of item 2.
 5. **Tests.** Rule 14's list gains: assignment to a slot; a held slot ends the run; follow-ups before new work;
    `next --take` only after 10 idle minutes; `builder_start = "start"` unchanged.
+6. **The shorter leases (ADR-0368, build (b)).** Item 2's 50 minutes is 10, and the conductor's lease is 10 too. A slot's
+   `watch --assign` and `conductor.py watch` renew at every pass and return within 5 minutes with no event. A run
+   releases its lease on every exit path.
+7. **Health (ADR-0368, build (b)).** The router job reads both leases on every event and opens, updates or closes the plain
+   issues `No live conductor` and `Builder pool down` (label `agk-health`); `route.py --health` is the same check with no
+   job. `sweep` lists each slot as working, idle or dead since when. With `builder_start = "start"` none of this runs.

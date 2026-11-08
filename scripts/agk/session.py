@@ -115,7 +115,9 @@ request with the follow-up for it. The title of a brief never goes into the prom
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import os
 import re
@@ -1277,6 +1279,14 @@ def spent(repo: str, me: str, line: dict) -> bool | None:
 
 
 def watch_assign(root, me: str, args: dict[str, str]) -> int:
+    """`wait_assign`; a slot's run that ends because GitHub cannot be read releases its lease."""
+    code = wait_assign(root, me, args)
+    if code == EXIT_UNREADABLE and is_slot(root, me) and slot_run(root, me):
+        release_slot(root, me)
+    return code
+
+
+def wait_assign(root, me: str, args: dict[str, str]) -> int:
     """End on the first `Assign: <me> ...` by a listed author after this session's `Request:`, or on
     the newest one posted between its previous `Request:` and that one and not yet taken (brief
     #252: the conductor may assign while the session is finishing, and need not post it twice)."""
@@ -1285,7 +1295,12 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
     path = f"repos/{repo}/issues/{issue}/comments"
     interval = float(args.get("--interval", 60))
     limit = float(args.get("--timeout", flow_int(root, "claim_hours", CLAIM_HOURS, 1) * 3600))
+    slotted = is_slot(root, me)  # a slot returns within the bound, so that it renews in time
+    limit = min(limit, WATCH_BOUND - interval) if slotted else limit
+    held = slotted and bool(slot_run(root, me))
     started = time.monotonic()
+    renewed: float | None = None
+    renew_reads = Reads(root)  # its own count, as `take_reads` below
     reads = Reads(root)
     while (comments := pages(path)) is None:  # an unread baseline would make an old line look new
         if reads.failed(f"the comments of #{issue}"):
@@ -1308,6 +1323,18 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
     take_reads = Reads(root)  # its own count: a readable conductor issue never resets it
     told: set[int] = set()  # the `Tell:` lines already printed (brief #327 answer 2)
     while True:
+        if held and (renewed is None or time.monotonic() - renewed >= RENEW_EVERY):
+            try:
+                code, said = quietly(slot_lease, root, "--renew", me)
+            except CheckError:
+                if renew_reads.failed("the slot's lease"):
+                    return EXIT_UNREADABLE
+            else:
+                renew_reads.good()
+                if code:
+                    print(said, flush=True)
+                    return code
+                renewed = time.monotonic()
         if found is None:
             if reads.failed(f"the comments of #{issue}"):
                 return EXIT_UNREADABLE
@@ -1335,7 +1362,7 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
                 print(f"assign {early[1].group(2)}")
                 return 0
         if time.monotonic() - started >= limit:
-            print("assign-timeout")
+            print("no event" if slotted else "assign-timeout")
             return 0
         time.sleep(interval)
         found = pages(path)
@@ -1350,7 +1377,9 @@ SLOT_LINE = re.compile(
     r"Slot: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+) (\S+)"
 )
 POOL_STOP = re.compile(r"Pool: stop(?: .*)?")
-SLOT_MINUTES = 50
+SLOT_MINUTES = 10  # ADR-0368: a dead holder is replaced by the next staggered start
+WATCH_BOUND = 300  # seconds: a slot's `watch --assign` returns by then with no event (ADR-0368)
+RENEW_EVERY = 240  # seconds between renewals during one watch
 SLOT_IDLE_MINUTES = 10
 SLOT_ENDS = 3  # the exit of a run that must end: no slots, or its slot is another run's
 
@@ -1386,9 +1415,20 @@ def slot_holder(found: tuple[dict, re.Match] | None, now: datetime) -> tuple[str
     return (found[1].group(4), end.strftime("%Y-%m-%dT%H:%M:%SZ")) if now < end else None
 
 
+def slot_mark(root, name: str) -> Path:
+    """The file in the git directory that holds this checkout's run name for a slot."""
+    return inbox_mark(root, name).with_name(f"slot-{name}")
+
+
+def slot_run(root, name: str) -> str:
+    """This checkout's run name for the slot, empty when it has taken none."""
+    mark = slot_mark(root, name)
+    return mark.read_text(encoding="utf-8").strip() if mark.exists() else ""
+
+
 def slot_lease(root, mode: str, name: str) -> int:
     """Take, renew or release a slot's lease: one marker comment per slot on the one open
-    `agk-conductor` issue, edited in place, valid 50 minutes; this checkout's run name is kept in
+    `agk-conductor` issue, edited in place, valid 10 minutes; this checkout's run name is kept in
     the git directory. A run that finds the slot another's exits 3 and writes nothing."""
     repo = repo_name(root)
     issue = conductor_issue(repo)
@@ -1400,8 +1440,8 @@ def slot_lease(root, mode: str, name: str) -> int:
     now = datetime.now(UTC)
     found = slot_marker(comments, name, allowed)
     holder = slot_holder(found, now)
-    mark = inbox_mark(root, name).with_name(f"slot-{name}")
-    run = mark.read_text(encoding="utf-8").strip() if mark.exists() else ""
+    mark = slot_mark(root, name)
+    run = slot_run(root, name)
     if holder and holder[0] != run:
         print(f"slot: {name} held by {holder[0]} until {holder[1]} {SLOT_SETTING}")
         return SLOT_ENDS
@@ -1507,6 +1547,7 @@ def slot_next(root, name: str) -> int:
     allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None) or []}
     approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
     if any(POOL_STOP.fullmatch(first_line(c)) and author_of(c) in approvers for c in comments):
+        release_slot(root, name)  # every exit of a run releases its lease (ADR-0368)
         print("stop")
         return 0
     owned = owned_pulls(root, repo, name)
@@ -1540,6 +1581,25 @@ def slot_next(root, name: str) -> int:
     else:
         print("wait")
     return 0
+
+
+def quietly(act, *args) -> tuple[int, str]:
+    """The exit of a lease action and what it printed, kept off a watch's own output."""
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = act(*args)
+    return code, out.getvalue().strip()
+
+
+def release_slot(root, name: str) -> None:
+    """Release the slot on a run's way out; a release that cannot be written is left to expire."""
+    with contextlib.suppress(CheckError):
+        quietly(slot_lease, root, "--release", name)
+
+
+def is_slot(root, me: str) -> bool:
+    """Whether this session is a slot of the pool (`builder_start = "assign"`, the name `s<n>`)."""
+    return bool(SLOT_NAME.fullmatch(me)) and builder_start(root) == "assign"
 
 
 def slot(root, mode: str, name: str) -> int:
