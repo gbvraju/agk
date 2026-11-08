@@ -6,7 +6,7 @@
 - Related: SPEC-0055, ADR-0360, ADR-0220, ADR-0285, ADR-0348, plan #661
 - Requirements: REQ-051, REQ-062
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `agk.toml`
+Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `agk.toml`
 
 ## Context
 

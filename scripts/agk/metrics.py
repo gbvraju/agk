@@ -958,6 +958,11 @@ def over_budget_line(ctx: Context, details: list[dict]) -> str:
     return f"over budget (budget_seconds {budget}): {found}; unknown: {unknown}"
 
 
+def steps_of(job: dict) -> list:
+    steps = job.get("steps")
+    return steps if isinstance(steps, list) else []
+
+
 def pr_test_step(jobs: list[dict]) -> tuple[str, int | None, dict | None]:
     """The step that ran a run's tests: `Project tests`, else the kit's own: (`ran`, its seconds
     or None, its job), (`not-run`, None, None) or (`unknown`, None, None)."""
@@ -965,7 +970,7 @@ def pr_test_step(jobs: list[dict]) -> tuple[str, int | None, dict | None]:
         pairs = [
             (j, s)
             for j in jobs
-            for s in (j.get("steps") if isinstance(j.get("steps"), list) else [])
+            for s in steps_of(j)
             if isinstance(s, dict) and s.get("name") == name
         ]
         state, found = latest_ran([s for _, s in pairs])

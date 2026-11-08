@@ -59,10 +59,12 @@ For a change, the selection is worked out from git and files only, with no netwo
   `tests` globs match. Only test files count: files under `test_dirs` whose names match `test_patterns`, as for proof. Each
   selected file is shown with the changed file and the entry that chose it.
 - **Full suite.** The selection is the full suite, with its reason, when a changed file matches `always_full`, when the profile
-  is `thorough`, or, under `balanced`, when a changed file is unmapped.
+  is `thorough`, or, under `balanced`, when a changed file is unmapped and no test names it.
 - **Unmapped files.** A changed file that no entry covers, or whose entries select no existing test file (a typo in `tests`,
   a renamed folder), is unmapped, and it is always listed. Only the change's own test files and documentation are never
-  unmapped; a helper such as `tests/conftest.py` is. A change is never silently given fewer tests than it needs.
+  unmapped; a helper such as `tests/conftest.py` is. Under `balanced` a file that no entry covers selects the test files that name
+  its path or its folder, printed as `unmapped: <path> -> <k> tests that name it` (SPEC-0055 rule 6), and it makes the selection
+  full only when no test names it; a covered file whose entries select no existing test stays full.
 - **Documentation.** A change of only `*.md` files and files under `docs/` selects nothing, under every profile, unless one of
   them matches `always_full`. Such a file is never unmapped.
 - **No table.** Without a `[testing]` table the selection is the full suite, which is what governance runs today.
