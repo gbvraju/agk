@@ -79,12 +79,14 @@ from session import (
     pages,
     plain,
     priority_of,
+    protected_entries,
     pull_files,
     repo_name,
     shared_patterns,
     survey,
     touches_of,
 )
+from session import kind_of as task_kind  # SPEC-0045 rule 4; kind_of below is the lane's
 
 BUILDS_LINE = re.compile(r"Builds: (.+)")
 BUILD_ITEM = re.compile(r"\(([A-Za-z0-9._-]+)\)\s*(.*)")
@@ -886,6 +888,7 @@ def build(root) -> dict:
             behind.append({"pr": pr["number"], "behind_by": far})
         if far is None or far <= behind_limit:
             updating.append(pr)
+    protected = protected_entries(Path(root))
     conflicts = sorted(
         p["number"] for p in s.prs if p.get("state") == "open" and "agk:conflict" in label_names(p)
     )
@@ -901,11 +904,7 @@ def build(root) -> dict:
         else {}
     )
     return {
-        "start": [
-            {"session": names[i], "brief": b["number"], "title": b.get("title")}
-            | ({"build": b["build"]} if b.get("build") else {})
-            for i, b in enumerate(chosen[:count])
-        ],
+        "start": [start_entry(names[i], b, protected) for i, b in enumerate(chosen[:count])],
         "running": running_sessions(s),
         "waits": waits,
         "skipped": [{"brief": n, "why": why} for n, why in [*s.skipped, *build_skips, *unplanned]],
@@ -934,6 +933,15 @@ def build(root) -> dict:
         "default_branch": default,
         "stale_commits": behind_limit,
     } | playbook
+
+
+def start_entry(name: str, brief: dict, protected: list[str] | None) -> dict:
+    """One entry of the plan's `start` list, with the brief's kind by SPEC-0045 rule 4 (brief
+    709): a body that cannot be read gives `design`, the highest; the conductor only raises it."""
+    body = brief.get("body")
+    kind = task_kind(body, protected) if isinstance(body, str) else "design"
+    entry = {"session": name, "brief": brief["number"], "title": brief.get("title"), "kind": kind}
+    return entry | ({"build": brief["build"]} if brief.get("build") else {})
 
 
 def memory_capacity(root, running: int) -> dict:
