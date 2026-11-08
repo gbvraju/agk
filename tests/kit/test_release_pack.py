@@ -1,5 +1,6 @@
 """The evidence pack's form, its release test and its offline check (SPEC-0052 build (b),
-brief #769, rules 2, 4 and 10, ADR-0343), and `make` from git (build (c), brief #820, rules 3, 8, 9).
+brief #769, rules 2, 4 and 10, ADR-0343), and `make` from git (build (c), brief #820, rules 3, 8
+and 9).
 
 REQ-059 AC2 and AC8. `release_pack.py check <out>/<tag>` reads the folder and the repository's
 git only and prints `ok pack`, one `FAIL pack:` line per problem or one `refused:` line. Fixtures
