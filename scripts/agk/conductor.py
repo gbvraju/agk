@@ -10,8 +10,8 @@ and exits 0 printing one line `<number> <first line>` for each comment created a
 `--once` reads once, printing `nothing new` when there is none. The poll interval is
 `conductor_poll_seconds` of the `[flow]` table of agk.toml (60 by default); a read that fails is
 printed and retried. `sweep` prints one line `#<n> <head7> <state> <age>` per open pull request,
-then the latest run of the default branch and any open red-branch issue. A `Question:` or
-`Report:` with no comment by a listed verdict author after it, older than
+then the default branch line (its required checks, brief #736) and any open red-branch issue.
+A `Question:` or `Report:` with no comment by a listed verdict author after it, older than
 `conductor_late_minutes` (30 by default), is marked `LATE` (row 13). The rules it reads are
 `session.py`'s and `merge_cleared.py`'s own functions, never a copy.
 
@@ -269,6 +269,42 @@ def silent_line(root, repo: str, issue: dict, pulls: list, every, wait: int, now
     return f"SILENT {number} {who} {minutes}; re-fire: Session name: {who}. Item: brief #{number}."
 
 
+def branch_line(root, repo: str, branch: str) -> str:
+    """`<branch>: <state> at <sha7>` of the default branch's head, from the newest run of each
+    check of `required_checks` (brief #736): `failure` when one failed, `pending` while one has not
+    finished, `success` when all that reported passed, `no run` when none reported. The runs are
+    judged by the router's own `judged` with no wait for a name that never runs on the branch; a
+    run of another workflow (a skipped `agk-route`) never sets it."""
+    from route import FAILED_RUN, FAILED_STATUS, judged, listing  # route imports session
+
+    info = session.gh(f"repos/{repo}/branches/{branch}")
+    commit = info.get("commit") if isinstance(info, dict) else None
+    head = str(commit.get("sha") or "") if isinstance(commit, dict) else ""
+    if not head:
+        raise CheckError("the head of the default branch cannot be read")
+    checks = listing(f"repos/{repo}/commits/{head}/check-runs", "check_runs")
+    status = session.gh(f"repos/{repo}/commits/{head}/status")
+    if checks is None or not isinstance(status, dict):
+        raise CheckError("the checks of the default branch cannot be read")
+    runs, statuses, _ = judged(
+        checks, status.get("statuses") or [], session.required_checks(root), wait=False
+    )
+    runs = [r for r in runs if r.get("conclusion") != "skipped"]  # a skipped run reported nothing
+    if not runs and not statuses:
+        state = "no run"
+    elif any(r.get("conclusion") in FAILED_RUN for r in runs) or any(
+        s.get("state") in FAILED_STATUS for s in statuses
+    ):
+        state = "failure"
+    elif any(r.get("status") != "completed" for r in runs) or any(
+        s.get("state") == "pending" for s in statuses
+    ):
+        state = "pending"
+    else:
+        state = "success"
+    return f"{branch}: {state} at {head[:7]}"
+
+
 def sweep(root) -> int:
     repo = session.repo_name(root)
     authors, approvers = verdict_authors(root), spec_approvers(root)
@@ -282,15 +318,9 @@ def sweep(root) -> int:
     lines += caps.over_lines(root, repo, pulls, {a.lower() for a in authors}, now)
     info = session.gh(f"repos/{repo}")
     branch = info.get("default_branch") if isinstance(info, dict) else None
-    runs = session.gh(f"repos/{repo}/actions/runs?branch={branch}&per_page=1") if branch else None
-    if not isinstance(runs, dict):
-        raise CheckError("the runs of the default branch cannot be read")
-    latest = (runs.get("workflow_runs") or [None])[0]
-    if latest:
-        state = latest.get("conclusion") or latest.get("status")
-        lines.append(f"{branch}: {state} at {str(latest.get('head_sha'))[:7]}")
-    else:
-        lines.append(f"{branch}: no run")
+    if not branch:
+        raise CheckError("the default branch cannot be read")
+    lines.append(branch_line(root, repo, branch))
     issues = read(f"repos/{repo}/issues?state=open", "the open issues")
     lines += [f"red-branch issue: #{i['number']}" for i in issues if session.is_red(i)]
     wait = session.flow_int(root, SILENT[0], SILENT[1], 0)

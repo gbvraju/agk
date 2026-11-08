@@ -215,7 +215,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 code = "scripts/agk/conductor.py"
 tests = [
   "tests/kit/test_caps.py", "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
-  "tests/kit/test_conductor_merge_queue.py",
+  "tests/kit/test_conductor_merge_queue.py", "tests/kit/test_conductor_sweep_branch.py",
 ]
 [[testing.map]]
 code = "scripts/agk/config.py"

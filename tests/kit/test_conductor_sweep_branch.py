@@ -21,7 +21,10 @@ def check(cid: int, name: str, status: str, conclusion: str | None) -> dict:
 
 def serve_head(stub, checks: list, statuses: list | None = None) -> None:  # noqa: F811
     stub.serve(f"repos/{REPO}/branches/main", {"name": "main", "commit": {"sha": HEAD}})
-    stub.serve(f"repos/{REPO}/commits/{HEAD}/check-runs", {"total_count": len(checks), "check_runs": checks})
+    stub.serve(
+        f"repos/{REPO}/commits/{HEAD}/check-runs",
+        {"total_count": len(checks), "check_runs": checks},
+    )
     stub.serve(f"repos/{REPO}/commits/{HEAD}/status", {"state": "", "statuses": statuses or []})
     # the read the sweep made before the fix: its newest run is a skipped router run
     stub.serve(
@@ -41,7 +44,10 @@ def branch_line(proj, stub) -> str:  # noqa: F811
 def test_a_skipped_router_run_over_a_failed_governance_run_is_failure(proj, stub):  # noqa: F811
     serve_head(
         stub,
-        [check(9, "agk-route", "completed", "skipped"), check(5, "governance", "completed", "failure")],
+        [
+            check(9, "agk-route", "completed", "skipped"),
+            check(5, "governance", "completed", "failure"),
+        ],
     )
     assert branch_line(proj, stub) == LINE.format("failure")
 
@@ -76,7 +82,10 @@ def test_a_failed_required_status_is_failure(proj, stub):  # noqa: F811
 def test_a_newer_rerun_that_passed_replaces_an_older_failure(proj, stub):  # noqa: F811
     serve_head(
         stub,
-        [check(4, "governance", "completed", "failure"), check(8, "governance", "completed", "success")],
+        [
+            check(4, "governance", "completed", "failure"),
+            check(8, "governance", "completed", "success"),
+        ],
     )
     assert branch_line(proj, stub) == LINE.format("success")
 
