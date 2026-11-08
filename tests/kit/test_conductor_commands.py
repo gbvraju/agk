@@ -214,7 +214,7 @@ def main_changed(stub, head: str, files: list[dict], ahead: int = 2, by: tuple =
     stub.serve(f"repos/{REPO}/commits", [{"sha": s} for s, _ in reversed(by)])
 
 
-def extra(lines: list[str]) -> list[str]:
+def proof_of(lines: list[str]) -> list[str]:
     return [x for x in lines if x.startswith(("overlap:", "re-prove:", "BEHIND"))]
 
 
@@ -225,7 +225,7 @@ def test_sweep_prints_an_overlap_of_two_briefs_once_naming_the_first_file(proj, 
     builders(stub, b, a)
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("scripts/agk/example.py", "docs/x.md"))
     stub.serve(f"repos/{REPO}/pulls/8/files", changed("scripts/agk/example.py", "docs/x.md"))
-    assert extra(sweep(proj, stub)) == ["overlap: #7 #8 docs/x.md"]
+    assert proof_of(sweep(proj, stub)) == ["overlap: #7 #8 docs/x.md"]
 
 
 def test_sweep_overlap_counts_an_added_file_and_a_renamed_old_name(proj, stub):
@@ -235,7 +235,7 @@ def test_sweep_overlap_counts_an_added_file_and_a_renamed_old_name(proj, stub):
     moved = [{"filename": "docs/new.md", "status": "renamed", "previous_filename": "docs/old.md"}]
     stub.serve(f"repos/{REPO}/pulls/7/files", moved)
     stub.serve(f"repos/{REPO}/pulls/8/files", changed("docs/old.md", status="removed"))
-    assert extra(sweep(proj, stub)) == ["overlap: #7 #8 docs/old.md"]
+    assert proof_of(sweep(proj, stub)) == ["overlap: #7 #8 docs/old.md"]
 
 
 def test_sweep_no_overlap_for_one_brief_or_shared_mechanical_files(proj, stub):
@@ -250,14 +250,14 @@ def test_sweep_no_overlap_for_one_brief_or_shared_mechanical_files(proj, stub):
     shared = changed("changelog.d/one.md", "docs/runs/log.md")
     stub.serve(f"repos/{REPO}/pulls/11/files", shared)
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("scripts/agk/example.py") + shared)
-    assert extra(sweep(proj, stub)) == []
+    assert proof_of(sweep(proj, stub)) == []
 
 
 def test_sweep_a_pull_request_with_no_brief_line_is_never_read(proj, stub):
     """REQ-057 AC3: rule 5, only builder pull requests (a `Brief: #n` line) are judged."""
     serve_pr(stub, pr(7, body="A person's change.\n"), [])
     stub.serve(f"repos/{REPO}/pulls/7/files", "FAIL")
-    assert extra(sweep(proj, stub)) == []
+    assert proof_of(sweep(proj, stub)) == []
     assert not [c for c in stub.calls() if "/files" in c[1] or "/compare/" in c[1]]
 
 
@@ -268,7 +268,7 @@ def test_sweep_prints_a_re_prove_naming_the_earliest_merged_change(proj, stub):
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml", "scripts/agk/example.py"))
     by = ((OLD, "Intake: a requirement (#41)\n\nbody"), (NEW, "A later change (#42)"))
     main_changed(stub, SHA, changed("agk.toml", "docs/y.md"), by=by)
-    assert extra(sweep(proj, stub)) == ["re-prove: #7 agk.toml (changed by #41)", "BEHIND #7 2"]
+    assert proof_of(sweep(proj, stub)) == ["re-prove: #7 agk.toml (changed by #41)", "BEHIND #7 2"]
 
 
 def test_sweep_re_prove_names_the_first_shared_file_sorted(proj, stub):
@@ -276,7 +276,7 @@ def test_sweep_re_prove_names_the_first_shared_file_sorted(proj, stub):
     builders(stub, pr(7))
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("docs/z.md", "agk.toml"))
     main_changed(stub, SHA, changed("docs/z.md", "agk.toml"), ahead=1, by=((OLD, "A (#41)"),))
-    assert extra(sweep(proj, stub))[0] == "re-prove: #7 agk.toml (changed by #41)"
+    assert proof_of(sweep(proj, stub))[0] == "re-prove: #7 agk.toml (changed by #41)"
 
 
 def test_sweep_after_a_merge_of_main_or_for_another_file_prints_no_re_prove(proj, stub):
@@ -288,7 +288,7 @@ def test_sweep_after_a_merge_of_main_or_for_another_file_prints_no_re_prove(proj
     stub.serve(f"repos/{REPO}/pulls/8/files", changed("scripts/agk/example.py"))
     main_changed(stub, SHA, [], ahead=0)
     main_changed(stub, OTHER, changed("agk.toml"), ahead=1, by=((OLD, "A (#41)"),))
-    assert extra(sweep(proj, stub)) == ["BEHIND #8 1"]
+    assert proof_of(sweep(proj, stub)) == ["BEHIND #8 1"]
 
 
 def test_sweep_a_rename_on_main_re_proves_by_its_old_name(proj, stub):
@@ -297,7 +297,8 @@ def test_sweep_a_rename_on_main_re_proves_by_its_old_name(proj, stub):
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("docs/old.md"))
     moved = [{"filename": "docs/new.md", "status": "renamed", "previous_filename": "docs/old.md"}]
     main_changed(stub, SHA, moved, ahead=1, by=((OLD, "Rename (#41)"),))
-    assert extra(sweep(proj, stub)) == ["re-prove: #7 docs/old.md (changed by #41)", "BEHIND #7 1"]
+    expected = ["re-prove: #7 docs/old.md (changed by #41)", "BEHIND #7 1"]
+    assert proof_of(sweep(proj, stub)) == expected
 
 
 @pytest.mark.parametrize("failing", ["pulls/7/files", "compare/{}...main", "commits"])
@@ -307,7 +308,7 @@ def test_sweep_a_read_that_fails_is_printed_as_unknown(proj, stub, failing):
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml"))
     main_changed(stub, SHA, changed("agk.toml"), ahead=3, by=((OLD, "A (#41)"),))
     stub.serve(f"repos/{REPO}/{failing.format(SHA)}", "FAIL")
-    assert extra(sweep(proj, stub))[0] == "re-prove: #7 unknown (cannot be read)"
+    assert proof_of(sweep(proj, stub))[0] == "re-prove: #7 unknown (cannot be read)"
     assert "re-prove: #7 agk.toml (changed by #41)" not in sweep(proj, stub)
 
 
@@ -317,7 +318,7 @@ def test_sweep_a_change_on_main_with_no_pull_request_number_is_unknown(proj, stu
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml"))
     main_changed(stub, SHA, changed("agk.toml"), ahead=1, by=((OLD, "A direct commit"),))
     stub.serve(f"repos/{REPO}/commits/{OLD}/pulls", [])
-    assert extra(sweep(proj, stub))[0] == "re-prove: #7 unknown (cannot be read)"
+    assert proof_of(sweep(proj, stub))[0] == "re-prove: #7 unknown (cannot be read)"
 
 
 def test_sweep_names_the_pull_request_of_a_commit_without_a_number(proj, stub):
@@ -326,7 +327,7 @@ def test_sweep_names_the_pull_request_of_a_commit_without_a_number(proj, stub):
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml"))
     main_changed(stub, SHA, changed("agk.toml"), ahead=1, by=((OLD, "Merge branch x"),))
     stub.serve(f"repos/{REPO}/commits/{OLD}/pulls", [{"number": 43, "merged_at": ago(60)}])
-    assert extra(sweep(proj, stub))[0] == "re-prove: #7 agk.toml (changed by #43)"
+    assert proof_of(sweep(proj, stub))[0] == "re-prove: #7 agk.toml (changed by #43)"
 
 
 @pytest.mark.parametrize("setting", ["", "max_behind_merges = 3\n"])
@@ -339,7 +340,7 @@ def test_sweep_prints_behind_with_or_without_the_setting(proj, stub, setting):
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("scripts/agk/a.py"))
     stub.serve(f"repos/{REPO}/pulls/8/files", changed("scripts/agk/b.py"))
     main_changed(stub, SHA, changed("docs/y.md"), ahead=4, by=((OLD, "A (#41)"),))
-    assert extra(sweep(proj, stub)) == ["BEHIND #7 4"]
+    assert proof_of(sweep(proj, stub)) == ["BEHIND #7 4"]
 
 
 def test_sweep_the_new_lines_follow_the_pull_request_lines(proj, stub):
