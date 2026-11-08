@@ -54,3 +54,7 @@ writes its own ADR (session rule 36). The brief names no number for it; 0368 is 
 - 2026-12-31: with no event at all (no push, no comment) nothing wakes the router, so a repository fully at rest reports
   nothing; a schedule would close that and would bill a minute per run (Q-776-6).
 - 2026-12-31: the exits the kit cannot see (a killed session) rely on the 10-minute expiry, which is what it is for.
+- 2026-12-31: a run that releases its lease at the end of its window leaves a gap until the next staggered start; with
+  `assign`, any event in that gap opens `No live conductor`, which notifies the owner, and the next event closes it.
+- 2026-12-31: the router's concurrency group is per issue or pull request, so two events at once can each find no open
+  health issue and open two, which decision 5's "one plain issue per kind" does not allow for.

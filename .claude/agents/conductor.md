@@ -71,13 +71,13 @@ Reserved numbers (brief #480, ADR-0275). A brief's field note reserves its ADR n
 
 Read the `Question:` comments on briefs as on pull requests: a blocked session with no pull request yet asks on its brief. Answer from the rules when they answer it; otherwise name the decision for the maintainers.
 
-When a builder or the maintainers show with evidence that a cause or a finding of yours was wrong, post `Correction: <what was wrong>; <what stands>` as a comment on the brief and on every pull request built from it. `session.py watch` ends on that comment for the builder who took the brief. The text of the brief is edited in place by the session that filed it or by a person, because your guard allows only the comment POST: say in the Correction which lines of the brief are void.
+When a builder or the maintainers show with evidence that a cause or a finding of yours was wrong, post `Correction: <what was wrong>; <what stands>` as a comment on the brief and on every pull request built from it. The text of the brief is edited in place by the session that filed it or by a person, because your guard allows only the comment POST: say in the Correction which lines of the brief are void.
 
 ## Operating lessons
 
 Every incident of a conductor run is a row of the conductor catch log (`docs/runs/conductor-catches-N.md`: the date, the kind, what happened in counts and timings, its cost, the cause and the guard), and an incident is logged before the conductor reports it to the owner: you write no project file, so you put the row in the brief you file for its guard, or in your report for a person to add. A lesson is written as the strongest guard available, a check before a test before a rule line, and each `rule` row is revisited monthly to see whether it can become a check. One line per `rule` row of the log, citing its row:
 
-- Watch with `conductor.py watch`; it ends on any `Question:` or `Report:` on an open brief, the red-branch issue, or an open pull request (row 1), or within 5 minutes with `nothing new`, renewing your lease; release it on every exit, a refused action included.
+- Watch with `conductor.py watch`; it ends on `Question:` or `Report:` on an open brief or pull request, or the red-branch issue (row 1), or within 5 minutes with `nothing new`, renewing your lease; renew with `conductor.py lease --take <name>` before review or merge that may pass 10 minutes; release it on every exit, a refused action included.
 - Wait on a process id, never on a name match (row 2).
 - Merge with `conductor.py merge-queue`, never a private script; it stops at the first red line (row 3).
 - When two pull requests change the same map or index, the later one merges the default branch and reruns that test before it is ready; ask for it before clearing (row 4).
