@@ -282,6 +282,10 @@ jobs:
         run: make -f agk.mk agk-lint
       - name: Tests of the checks
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
+        env:
+          # With `[testing] pr_tests = "selected"` a pull request of the kit runs only its selected tests, by the plan of
+          # `Project tests` against AGK_BASE (set above); a push and a release run the full suite (brief #749, ADR-0348).
+          EVENT: ${{ github.event_name }}
         run: make -f agk.mk agk-test
       # The kit repository runs its own suite as "Tests of the checks" and its `project_tests` is that same suite
       # (the proof job runs it); there the step is skipped. In a project kit/agk-kit.mk is absent and the step runs.

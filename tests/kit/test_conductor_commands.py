@@ -72,8 +72,15 @@ def pr(n: int, head: str = SHA, draft: bool = False, body: str = "Brief: #9\n") 
 
 def serve_pr(stub, item: dict, comments: list, checks: list | None = None) -> None:
     stub.serve(f"repos/{REPO}/pulls", [item])
+    serve_one(stub, item, comments, checks)
+
+
+def serve_one(stub, item: dict, comments: list, checks: list | None = None) -> None:
+    """One open pull request's reads; a builder's files and compare are quiet (brief #755)."""
     stub.serve(f"repos/{REPO}/issues/{item['number']}/comments", comments)
     head = item["head"]["sha"]
+    stub.serve(f"repos/{REPO}/pulls/{item['number']}/files", [])
+    stub.serve(f"repos/{REPO}/compare/{head}...main", {"ahead_by": 0, "files": [], "commits": []})
     runs = GREEN if checks is None else checks
     stub.serve(f"repos/{REPO}/commits/{head}/check-runs", {"check_runs": runs})
     stub.serve(f"repos/{REPO}/commits/{head}/status", {"state": "success", "statuses": []})
@@ -173,6 +180,193 @@ def test_sweep_fails_when_github_cannot_be_read(proj, stub):
     out = run(proj, stub, "sweep")
     assert out.returncode == 1
     assert "cannot be read" in out.stderr
+
+
+# --- sweep: overlap, re-prove and BEHIND lines (SPEC-0050 rule 5, brief #755) ------------------
+
+THIRD = "c" * 40
+OLD, NEW = "1" * 40, "2" * 40  # commits of the default branch after a merge base
+
+
+def changed(*names: str, status: str = "modified") -> list[dict]:
+    return [{"filename": n, "status": status} for n in names]
+
+
+def builders(stub, *items: dict) -> None:
+    stub.serve(f"repos/{REPO}/pulls", list(items))
+    for item in items:
+        serve_one(stub, item, [])
+
+
+def main_changed(stub, head: str, files: list[dict], ahead: int = 2, by: tuple = ()) -> None:
+    """The compare of HEAD with main: FILES changed after the merge base, by the commits BY (pairs
+    of sha and subject, oldest first); every one of them is listed as changing each file."""
+    commits = [{"sha": s, "commit": {"message": m}} for s, m in by]
+    stub.serve(
+        f"repos/{REPO}/compare/{head}...main",
+        {
+            "ahead_by": ahead,
+            "files": files,
+            "commits": commits,
+            "merge_base_commit": {"commit": {"committer": {"date": ago(600)}}},
+        },
+    )
+    stub.serve(f"repos/{REPO}/commits", [{"sha": s} for s, _ in reversed(by)])
+
+
+def proof_of(lines: list[str]) -> list[str]:
+    return [x for x in lines if x.startswith(("overlap:", "re-prove:", "BEHIND"))]
+
+
+def test_sweep_prints_an_overlap_of_two_briefs_once_naming_the_first_file(proj, stub):
+    """REQ-057 AC3: rule 5, two builder pull requests of different briefs that both modify a file
+    give one `overlap:` line, the smaller number first and the first shared file in sorted order."""
+    a, b = pr(7, body="Brief: #9\n"), pr(8, head=OTHER, body="Brief: #10\n")
+    builders(stub, b, a)
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("scripts/agk/example.py", "docs/x.md"))
+    stub.serve(f"repos/{REPO}/pulls/8/files", changed("scripts/agk/example.py", "docs/x.md"))
+    assert proof_of(sweep(proj, stub)) == ["overlap: #7 #8 docs/x.md"]
+
+
+def test_sweep_overlap_counts_an_added_file_and_a_renamed_old_name(proj, stub):
+    """REQ-057 AC3: rule 5, a file both add, or one renames from, is a file both change."""
+    a, b = pr(7, body="Brief: #9\n"), pr(8, head=OTHER, body="Brief: #10\n")
+    builders(stub, a, b)
+    moved = [{"filename": "docs/new.md", "status": "renamed", "previous_filename": "docs/old.md"}]
+    stub.serve(f"repos/{REPO}/pulls/7/files", moved)
+    stub.serve(f"repos/{REPO}/pulls/8/files", changed("docs/old.md", status="removed"))
+    assert proof_of(sweep(proj, stub)) == ["overlap: #7 #8 docs/old.md"]
+
+
+def test_sweep_no_overlap_for_one_brief_or_shared_mechanical_files(proj, stub):
+    """REQ-057 AC3: rules 1 and 5, two builds of one brief are not rivals, and the shared-mechanical
+    files (`changelog.d/`, the `merge=union` lines of `.gitattributes`) never overlap."""
+    proj.write(".gitattributes", "docs/runs/log.md merge=union\n")
+    a, b = pr(7, body="Brief: #9\n"), pr(8, head=OTHER, body="Brief: #9\n")
+    c = pr(11, head=THIRD, body="Brief: #12\n")
+    builders(stub, a, b, c)
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("scripts/agk/example.py"))
+    stub.serve(f"repos/{REPO}/pulls/8/files", changed("scripts/agk/example.py"))
+    shared = changed("changelog.d/one.md", "docs/runs/log.md")
+    stub.serve(f"repos/{REPO}/pulls/11/files", shared)
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("scripts/agk/example.py") + shared)
+    assert proof_of(sweep(proj, stub)) == []
+
+
+def test_sweep_a_pull_request_with_no_brief_line_is_never_read(proj, stub):
+    """REQ-057 AC3: rule 5, only builder pull requests (a `Brief: #n` line) are judged."""
+    serve_pr(stub, pr(7, body="A person's change.\n"), [])
+    stub.serve(f"repos/{REPO}/pulls/7/files", "FAIL")
+    assert proof_of(sweep(proj, stub)) == []
+    assert not [c for c in stub.calls() if "/files" in c[1] or "/compare/" in c[1]]
+
+
+def test_sweep_prints_a_re_prove_naming_the_earliest_merged_change(proj, stub):
+    """REQ-057 AC4: rules 5 and 6, a pull request changing `agk.toml` after merged pull requests
+    changed it since its merge base gives one `re-prove:` line naming the earliest of them."""
+    builders(stub, pr(7))
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml", "scripts/agk/example.py"))
+    by = ((OLD, "Intake: a requirement (#41)\n\nbody"), (NEW, "A later change (#42)"))
+    main_changed(stub, SHA, changed("agk.toml", "docs/y.md"), by=by)
+    assert proof_of(sweep(proj, stub)) == ["re-prove: #7 agk.toml (changed by #41)", "BEHIND #7 2"]
+
+
+def test_sweep_re_prove_names_the_first_shared_file_sorted(proj, stub):
+    """REQ-057 AC4: rule 5, of several files in the re-prove state the first in sorted order."""
+    builders(stub, pr(7))
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("docs/z.md", "agk.toml"))
+    main_changed(stub, SHA, changed("docs/z.md", "agk.toml"), ahead=1, by=((OLD, "A (#41)"),))
+    assert proof_of(sweep(proj, stub))[0] == "re-prove: #7 agk.toml (changed by #41)"
+
+
+def test_sweep_after_a_merge_of_main_or_for_another_file_prints_no_re_prove(proj, stub):
+    """REQ-057 AC4: rule 6, a branch that merged main has no later change; an unrelated pull
+    request shares no file with main's changes; neither gives a `re-prove:` line."""
+    a, b = pr(7, body="Brief: #9\n"), pr(8, head=OTHER, body="Brief: #10\n")
+    builders(stub, a, b)
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml"))
+    stub.serve(f"repos/{REPO}/pulls/8/files", changed("scripts/agk/example.py"))
+    main_changed(stub, SHA, [], ahead=0)
+    main_changed(stub, OTHER, changed("agk.toml"), ahead=1, by=((OLD, "A (#41)"),))
+    assert proof_of(sweep(proj, stub)) == ["BEHIND #8 1"]
+
+
+def test_sweep_a_rename_on_main_re_proves_by_its_old_name(proj, stub):
+    """REQ-057 AC4: rule 6, a file renamed from or to on main is a file main changed."""
+    builders(stub, pr(7))
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("docs/old.md"))
+    moved = [{"filename": "docs/new.md", "status": "renamed", "previous_filename": "docs/old.md"}]
+    main_changed(stub, SHA, moved, ahead=1, by=((OLD, "Rename (#41)"),))
+    expected = ["re-prove: #7 docs/old.md (changed by #41)", "BEHIND #7 1"]
+    assert proof_of(sweep(proj, stub)) == expected
+
+
+@pytest.mark.parametrize("failing", ["pulls/7/files", "compare/{}...main", "commits"])
+def test_sweep_a_read_that_fails_is_printed_as_unknown(proj, stub, failing):
+    """REQ-057 AC4: rule 5, Q-S0050-5, a failed read is `unknown`, never a clean pull request."""
+    builders(stub, pr(7))
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml"))
+    main_changed(stub, SHA, changed("agk.toml"), ahead=3, by=((OLD, "A (#41)"),))
+    stub.serve(f"repos/{REPO}/{failing.format(SHA)}", "FAIL")
+    assert proof_of(sweep(proj, stub))[0] == "re-prove: #7 unknown (cannot be read)"
+    assert "re-prove: #7 agk.toml (changed by #41)" not in sweep(proj, stub)
+
+
+def test_sweep_a_change_on_main_with_no_pull_request_number_is_unknown(proj, stub):
+    """REQ-057 AC4: rule 5, a change whose pull request cannot be named is never printed clean."""
+    builders(stub, pr(7))
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml"))
+    main_changed(stub, SHA, changed("agk.toml"), ahead=1, by=((OLD, "A direct commit"),))
+    stub.serve(f"repos/{REPO}/commits/{OLD}/pulls", [])
+    assert proof_of(sweep(proj, stub))[0] == "re-prove: #7 unknown (cannot be read)"
+
+
+def test_sweep_names_the_pull_request_of_a_commit_without_a_number(proj, stub):
+    """REQ-057 AC4: rule 5, a merge commit's pull request is read when its subject has none."""
+    builders(stub, pr(7))
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml"))
+    main_changed(stub, SHA, changed("agk.toml"), ahead=1, by=((OLD, "Merge branch x"),))
+    stub.serve(f"repos/{REPO}/commits/{OLD}/pulls", [{"number": 43, "merged_at": ago(60)}])
+    assert proof_of(sweep(proj, stub))[0] == "re-prove: #7 agk.toml (changed by #43)"
+
+
+@pytest.mark.parametrize("setting", ["", "max_behind_merges = 3\n"])
+def test_sweep_prints_behind_with_or_without_the_setting(proj, stub, setting):
+    """REQ-057 AC3: rule 5, `BEHIND #<pr> <n>` is the compare's `ahead_by`, printed whether or not
+    `[flow] max_behind_merges` is set; a pull request level with main gives none."""
+    proj.write("agk.toml", f"[flow]\nconductor_poll_seconds = 1\n{setting}")
+    a, b = pr(7, body="Brief: #9\n"), pr(8, head=OTHER, body="Brief: #10\n")
+    builders(stub, a, b)
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("scripts/agk/a.py"))
+    stub.serve(f"repos/{REPO}/pulls/8/files", changed("scripts/agk/b.py"))
+    main_changed(stub, SHA, changed("docs/y.md"), ahead=4, by=((OLD, "A (#41)"),))
+    assert proof_of(sweep(proj, stub)) == ["BEHIND #7 4"]
+
+
+def test_sweep_the_new_lines_follow_the_pull_request_lines(proj, stub):
+    """REQ-057 AC3: rule 5, the lines come after the per-pull-request lines, overlaps first."""
+    a, b = pr(7, body="Brief: #9\n"), pr(8, head=OTHER, body="Brief: #10\n")
+    builders(stub, a, b)
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml"))
+    stub.serve(f"repos/{REPO}/pulls/8/files", changed("agk.toml"))
+    main_changed(stub, SHA, changed("agk.toml"), ahead=1, by=((OLD, "A (#41)"),))
+    assert sweep(proj, stub) == [
+        f"#7 {SHORT} ready: no verdict 1h",
+        f"#8 {OTHER[:7]} ready: no verdict 1h",
+        "overlap: #7 #8 agk.toml",
+        "re-prove: #7 agk.toml (changed by #41)",
+        "BEHIND #7 1",
+        "main: no run at ddddddd",
+    ]
+
+
+def test_a_quiet_sweep_is_unchanged_byte_for_byte(proj, stub):
+    """REQ-057 AC7: rule 5, with no overlap, no re-prove and nothing behind, nothing more."""
+    serve_pr(stub, pr(7), [verdict("cleared")])
+    out = run(proj, stub, "sweep")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout == f"#7 {SHORT} cleared on {SHORT} 1h\nmain: no run at ddddddd\n"
+    assert all(c[0] == "GET" for c in stub.calls())
 
 
 # --- watch ------------------------------------------------------------------------------------

@@ -47,6 +47,7 @@ SINGLES = {
     "config/ci-tools.txt",
     "config/core-rules.md",
     "config/playbooks/cloud-migration.toml",
+    "config/playbooks/mcp-server.toml",
     "config/playbooks/mobile.toml",
     "config/playbooks/rag-app.toml",
     "config/playbooks/web-app.toml",
