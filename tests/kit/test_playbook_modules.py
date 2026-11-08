@@ -32,7 +32,7 @@ DISCOVERY = "".join(
 BASE_GATE = ("base-gate", "check", True)
 MODULE_GATE = ("module-gate", "judgement", True)
 OWN_GATE = ("own-gate", "judgement", False)
-SECRET_ID = "zz-invented-gate-id"
+PLANTED_GATE_ID = "zz-invented-gate-id"
 
 
 def gate(gate_id: str, kind: str, owner: bool) -> str:
@@ -263,12 +263,12 @@ def test_a_playbook_that_names_itself_fails(tmp_path: Path) -> None:
 
 def test_no_failure_prints_a_value(tmp_path: Path) -> None:
     files = base_files(
-        playbook("mobile", ((SECRET_ID, "judgement", False),), 'modules = ["rag-app"]')
+        playbook("mobile", ((PLANTED_GATE_ID, "judgement", False),), 'modules = ["rag-app"]')
     )
-    files["default"] = playbook("default", ((SECRET_ID, "check", True),))
+    files["default"] = playbook("default", ((PLANTED_GATE_ID, "check", True),))
     done = run(project(tmp_path, files))
     assert done.returncode == 1
-    assert SECRET_ID not in done.stdout and "rag-app" not in done.stdout
+    assert PLANTED_GATE_ID not in done.stdout and "rag-app" not in done.stdout
 
 
 def test_a_module_that_is_not_toml_does_not_stop_the_check(tmp_path: Path) -> None:
