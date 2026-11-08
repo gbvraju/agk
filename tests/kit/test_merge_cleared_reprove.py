@@ -44,7 +44,10 @@ REPROVE = "held: re-prove (rule 6 of SPEC-0050)"
 UNKNOWN = "held: re-prove (unknown)"
 BEHIND = "held: behind the default branch (setting flow.max_behind_merges)"
 SHARED = "scripts/agk/example.py"
-BASE_FILES = {SHARED: "one\n", "docs/example.md": "a\n", "agk.toml": "# example\n"}
+LINES = "".join(f"# line {i}\n" for i in range(1, 6))
+BASE_FILES = {SHARED: LINES, "docs/example.md": "a\n", "agk.toml": LINES}
+FIRST = LINES.replace("line 1", "the branch")  # each side changes its own line: a clean merge
+LAST = LINES.replace("line 5", "main")
 
 
 def merge_commit(bare: Path, first: str, second: str, tree_of: str) -> str:
@@ -110,7 +113,7 @@ def checked(ran: list[dict]) -> bool:
 def test_a_file_both_changed_holds_with_the_re_prove_line_and_merges_nothing(tmp_path):
     """REQ-057 AC6: the branch and the default branch each change agk.toml; held, exit 3."""
     proc, made, ran, head = reprove_run(
-        tmp_path, {"agk.toml": "# the branch\n"}, [{"agk.toml": "# main\n"}]
+        tmp_path, {"agk.toml": FIRST}, [{"agk.toml": LAST}]
     )
     assert one_line(proc) == f"merge-cleared #7 {head[:12]}: {REPROVE}"
     assert proc.returncode == 3, proc.stdout + proc.stderr
@@ -120,46 +123,57 @@ def test_a_file_both_changed_holds_with_the_re_prove_line_and_merges_nothing(tmp
 
 def test_a_shared_file_of_the_code_holds_too(tmp_path):
     """REQ-057 AC6: no exemption in the re-prove state (Q-S0050-7)."""
-    proc, made, _, head = reprove_run(tmp_path, {SHARED: "two\n"}, [{SHARED: "three\n"}])
+    proc, made, _, head = reprove_run(tmp_path, {SHARED: FIRST}, [{SHARED: LAST}])
     assert one_line(proc) == f"merge-cleared #7 {head[:12]}: {REPROVE}"
     assert merges(made) == []
 
 
-def test_a_file_the_branch_removes_and_main_changes_holds(tmp_path):
-    """REQ-057 AC6: removed counts as changed (rule 6)."""
-    root, head = reprove_world(tmp_path, {}, [{SHARED: "three\n"}])
-    bare = bare_of(root)
-    env = {**os.environ, **GIT_ENV, "GIT_INDEX_FILE": str(bare / "index-rm")}
-    g = dict(cwd=bare, capture_output=True, text=True, check=True, env=env)
-    subprocess.run(["git", "read-tree", head], **g)  # nosec B603 B607 - fixed argument list
-    subprocess.run(["git", "update-index", "--remove", SHARED], **g)  # nosec B603 B607
-    tree = subprocess.run(["git", "write-tree"], **g).stdout.strip()  # nosec B603 B607
-    gone = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-        ["git", "commit-tree", tree, "-p", head, "-m", "rm"], **g
-    ).stdout.strip()
-    git(bare, "update-ref", "refs/pull/7/head", gone)
-    proc, made, _, _ = one_run(tmp_path, root, gone)
-    assert one_line(proc) == f"merge-cleared #7 {gone[:12]}: {REPROVE}"
-    assert merges(made) == []
+def test_a_conflict_and_a_fetch_that_fails_still_hold_as_before(tmp_path):
+    """REQ-057 AC7: the would-be merge is built first, so its holds are as today (rule 8)."""
+    proc, made, ran, head = reprove_run(tmp_path, {SHARED: "two\n"}, [{SHARED: "three\n"}])
+    assert one_line(proc) == f"merge-cleared #7 {head[:12]}: held: conflict (rule 5)"
+    assert merges(made) == [] and ran == []
 
 
 def test_after_a_merge_of_the_default_branch_it_does_not_hold(tmp_path):
     """REQ-057 AC4, AC7: the merge base moved past the commit, so the state is left (rule 6)."""
     proc, made, ran, _ = reprove_run(
-        tmp_path, {"agk.toml": "# the branch\n"}, [{"agk.toml": "# main\n"}], merged=True
+        tmp_path, {"agk.toml": FIRST}, [{"agk.toml": LAST}], merged=True
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert one_line(proc).endswith(f"merged {MERGE[:12]}")
     assert checked(ran) and len(merges(made)) == 1
 
 
-def test_a_head_that_cannot_be_read_holds_as_unknown(tmp_path):
-    """REQ-057 AC6: a read that fails holds as unknown, never as a pass."""
+def test_a_head_the_fetch_cannot_bring_never_passes(tmp_path):
+    """REQ-057 AC6: a fetch that fails holds before any re-prove read, as today."""
     root, head = reprove_world(tmp_path, {"docs/example.md": "b\n"}, [{SHARED: "two\n"}])
     git(bare_of(root), "update-ref", "-d", "refs/pull/7/head")
     proc, made, ran, _ = one_run(tmp_path, root, head)
-    assert one_line(proc) == f"merge-cleared #7 {head[:12]}: {UNKNOWN}"
+    assert one_line(proc).endswith("fails governance (fetch)")
     assert proc.returncode == 3 and merges(made) == [] and ran == []
+
+
+@pytest.mark.parametrize("which", ["reprove_files", "behind_merges"])
+def test_a_re_prove_read_that_fails_holds_as_unknown(tmp_path, monkeypatch, which):
+    """REQ-057 AC6: a read that fails holds as `re-prove (unknown)`, never as a pass."""
+    monkeypatch.setattr(session_plan, "reprove_files", lambda *a: [])
+    monkeypatch.setattr(session_plan, "behind_merges", lambda *a: 0)
+    monkeypatch.setattr(session_plan, which, lambda *a: None)
+    with pytest.raises(merge_cleared.Held) as err:
+        merge_cleared.reprove_check(tmp_path, "a" * 40, "b" * 40, 3)
+    assert f"held: {err.value}" == UNKNOWN
+
+
+def test_the_check_order_of_the_holds(tmp_path, monkeypatch):
+    """REQ-057 AC6: re-prove before the count; no limit, no count read (Q-S0050-8)."""
+    monkeypatch.setattr(session_plan, "reprove_files", lambda *a: ["agk.toml"])
+    monkeypatch.setattr(session_plan, "behind_merges", lambda *a: 9)
+    with pytest.raises(merge_cleared.Held, match=r"^re-prove \(rule 6 of SPEC-0050\)$"):
+        merge_cleared.reprove_check(tmp_path, "a" * 40, "b" * 40, 3)
+    monkeypatch.setattr(session_plan, "reprove_files", lambda *a: [])
+    monkeypatch.setattr(session_plan, "behind_merges", lambda *a: None)
+    assert merge_cleared.reprove_check(tmp_path, "a" * 40, "b" * 40, None) is None
 
 
 # --- rule 8: the behind hold -------------------------------------------------------------------
@@ -272,6 +286,16 @@ def test_the_function_names_the_files_both_changed_sorted(tmp_path):
     git(root, "checkout", "-q", "main")
     main = change(root, {SHARED: "m\n", "agk.toml": "# m\n", "docs/other.md": "o\n"}, "main")
     assert session_plan.reprove_files(root, main, head) == ["agk.toml", SHARED]
+
+
+def test_a_removal_counts(tmp_path):
+    """REQ-057 AC4: rule 6 (removed)."""
+    root = local(tmp_path)
+    git(root, "checkout", "-q", "-b", "feature")
+    head = change(root, {}, "head", remove=(SHARED,))
+    git(root, "checkout", "-q", "main")
+    main = change(root, {SHARED: "m\n"}, "main")
+    assert session_plan.reprove_files(root, main, head) == [SHARED]
 
 
 def test_a_rename_counts_from_and_to(tmp_path):
