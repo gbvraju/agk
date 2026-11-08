@@ -44,11 +44,11 @@ The base playbook (SPEC-0048 rule 21; REQ-055 AC8; brief #692): `BASE` is a play
 a work type. `config/playbooks/default.toml` alone may carry it, and `declaration` refuses it as it
 refuses any name outside `WORK_TYPES`.
 
-The modules a playbook names (SPEC-0048 rule 23; REQ-055 AC8; brief #693): the optional key `modules`
-is a list of shipped playbooks, each a name of `WORK_TYPES` whose file is under `config/playbooks/`;
-one that is not shipped is a problem naming the rule, the file and the key, never the value.
-`modules(path, root)` returns the shipped names in their order, for `check_playbooks.py`, which
-composes the gates.
+The modules a playbook names (SPEC-0048 rule 23; REQ-055 AC8; brief #693): the optional key
+`modules` is a list of shipped playbooks, each a name of `WORK_TYPES` whose file is under
+`config/playbooks/`; one that is not shipped is a problem naming the rule, the file and the key,
+never the value. `modules(path, root)` returns the shipped names in their order, for
+`check_playbooks.py`, which composes the gates.
 """
 
 from __future__ import annotations
@@ -372,8 +372,8 @@ def _modules(rel: str, names: list[str], root: Path) -> list[str]:
 
 
 def modules(path: Path, root: Path) -> list[str]:
-    """SPEC-0048 rule 23: the shipped names of a playbook's `modules`, in its order; none from a file
-    that is not TOML or has no such list. One that is not shipped is left out."""
+    """SPEC-0048 rule 23: the shipped names of a playbook's `modules`, in its order; none from a
+    file that is not TOML or has no such list. One that is not shipped is left out."""
     try:
         data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):

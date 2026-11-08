@@ -9,12 +9,13 @@ an unknown `work_type`, or one whose playbook is missing, is one more `FAIL play
 the setting; with no declaration, or a sound one, the output is unchanged. A step of
 `agk-governance` after `check_design.py`. Files only: no network, nothing written.
 
-The composed gates (SPEC-0048 rules 21 and 23; REQ-055 AC8; brief #693): `composed(path, root)` gives
-a playbook's gates and evidence, `default`, then each module it names, then its own, each id or item
-once at its first place, and the problems of the composition. A gate restated with the same or a
-stronger kind and `owner_only` replaces the one held; a restatement as `judgement` of a `check`, or
-one that turns `owner_only` from `true` to `false`, keeps the gate held and is one `FAIL playbooks:`
-line naming the rule and the key, never a value, as is a module that names modules of its own.
+The composed gates (SPEC-0048 rules 21 and 23; REQ-055 AC8; brief #693): `composed(path, root)`
+gives a playbook's gates and evidence, `default`, then each module it names, then its own, each id
+or item once at its first place, and the problems of the composition. A gate restated with the
+same or a stronger kind and `owner_only` replaces the one held; a restatement as `judgement` of a
+`check`, or one that turns `owner_only` from `true` to `false`, keeps the gate held and is one
+`FAIL playbooks:` line naming the rule and the key, never a value, as is a module that names
+modules of its own.
 """
 
 from __future__ import annotations
