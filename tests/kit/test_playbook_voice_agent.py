@@ -115,7 +115,7 @@ def test_the_evidence_names_the_gates_records() -> None:
     assert any("declared" in item and "latency budget" in item for item in evidence)
     assert any("recorded run" in item and "latency budget" in item for item in evidence)
     assert any("evaluation set" in item and "version line" in item for item in evidence)
-    assert any("barge-in" in item and "fallback" in item and "test glob" in item for item in evidence)
+    assert any("barge-in" in i and "fallback" in i and "test glob" in i for i in evidence)
 
 
 def test_every_claim_is_expected() -> None:
