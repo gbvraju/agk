@@ -65,3 +65,6 @@ declares no work type runs exactly as today. Build (j), the cloud-migration play
   no lanes, `per-brief`) until an amendment gives it one (`Q-721-1`, due 2026-12-31).
 - 2026-11-08: the claim is `expected`; no run of this playbook has been measured (SPEC-0038 rule
   11, due 2026-12-31).
+- 2026-11-08: the `device-matrix` gate and rule 10 point at minimum entries this playbook does not
+  list (the format has no place for them and rule 1 forbids device names), so the gate is read as
+  judgement until an amendment says where the entries live (`Q-721-3`, due 2026-12-31).
