@@ -211,6 +211,9 @@ tests = [
   "tests/kit_dev/test_experimental_reviewer.py", "tests/kit_dev/test_reviewer_wiring.py",
 ]
 [[testing.map]]
+code = "scripts/agk/check_runbooks.py"
+tests = ["tests/kit/test_check_runbooks.py"]
+[[testing.map]]
 code = "scripts/agk/check_tag.py"
 tests = ["tests/kit/test_agk_mk.py", "tests/kit_dev/test_check_tag.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
