@@ -1,6 +1,6 @@
 # SPEC-0056: Runbooks for a red default branch, blocked Actions and a leaked secret
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-063
 
