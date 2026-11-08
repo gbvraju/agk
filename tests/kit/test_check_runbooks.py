@@ -174,6 +174,12 @@ def test_ac2_sections_out_of_order_are_refused(tree: Path) -> None:
     refused(tree, swapped.replace("## TEMP", "## When this applies"), 4)
 
 
+def test_ac2_the_title_comes_first(tree: Path) -> None:
+    """REQ-063 AC2: rule 4, one title, then the sections."""
+    moved = GOOD.replace(f"# {MARK} page\n\n", "", 1)
+    refused(tree, moved.replace("## Over when", f"# {MARK} page\n\n## Over when", 1), 4)
+
+
 def test_ac2_the_limits(tree: Path) -> None:
     """REQ-063 AC2: rule 4, at most 60 lines and 500 words, each limit on its own."""
     lines = len(GOOD.splitlines())
@@ -289,6 +295,7 @@ def test_ac3_a_reference_link_and_an_anchor(tree: Path) -> None:
 def test_ac3_a_skill_is_not_named(tree: Path) -> None:
     """REQ-063 AC3: rule 6, the plugin is not in a project's tree."""
     refused(tree, GOOD.replace("signs at", "signs /agk:launch at", 1), 6, "launch")
+    refused(tree, with_command("date /agk:launch"), 6, "launch")
 
 
 @pytest.mark.parametrize(

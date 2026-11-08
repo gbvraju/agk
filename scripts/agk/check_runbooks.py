@@ -109,8 +109,9 @@ def steps_problem(body: list[Line]) -> str | None:
 def form_problems(text: str, prose: list[Line]) -> Iterator[str]:
     """Rule 4: the title, the five sections in order, the list, the bullets and the limits."""
     titles, before, found = sections(prose)
-    if len(titles) != 1:
-        yield "title-not-one"
+    first = next((number for number, line in prose if line.startswith("## ")), None)
+    if len(titles) != 1 or (first is not None and titles[0][0] > first):
+        yield "title-not-one-and-first"
     if before:
         yield f"text-before-sections (line {before[0][0]})"
     names = [name for name, _ in found]
@@ -258,7 +259,7 @@ def link_broken(target: str, page: Path, root: Path) -> bool:
 
 
 def prose_problems(prose: list[Line], page: Path, root: Path) -> Iterator[str]:
-    """Rule 6 outside the fences: a command in an inline span, a broken link and a named skill."""
+    """Rule 6 outside the fences: a command in an inline span and a broken link."""
     for number, block in blocks(prose):
         if any((m[2].split() or [""])[0] in PROGRAMS for m in SPAN.finditer(block)):
             yield f"inline-command (line {number})"
@@ -268,8 +269,6 @@ def prose_problems(prose: list[Line], page: Path, root: Path) -> Iterator[str]:
         links = [*INLINE_LINK.findall(bare), *(reference.groups() if reference else ())]
         if any(link_broken(link, page, root) for link in links):
             yield f"link-broken (line {number})"
-        if "/agk:" in line:
-            yield f"skill-named (line {number})"
 
 
 def page_problems(
@@ -288,6 +287,9 @@ def page_problems(
         if found:
             yield f"rule {found[0]}: {found[1]} (line {number})"
     yield from (f"rule 6: {problem}" for problem in prose_problems(prose, page, root))
+    for number, line in enumerate(text.splitlines(), 1):
+        if "/agk:" in line:
+            yield f"rule 6: skill-named (line {number})"
     yield from (f"rule 7: scan-finding (line {f.line})" for f in guard.scan_text(text))
 
 
