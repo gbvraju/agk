@@ -44,7 +44,7 @@ DISPATCH = f"repos/{REPO}/actions/workflows/governance.yml/dispatches"
 MERGE_ENV = "AGK_MERGE_TOKEN"
 MERGE_VALUE = "example-merge-value"
 JOB_VALUE = "example-job-value"
-NO_SECRET = "merge needs AGK_MERGE_TOKEN or the owner's tap"
+NEEDS_KEY = "merge needs AGK_MERGE_TOKEN or the owner's tap"
 
 
 def comment_event(body: str, on_pull: bool = True) -> dict:
@@ -268,13 +268,13 @@ def test_no_secret_posts_the_one_line_once(tmp_path):
     proc = run(root, bin_dir, "--report", "--pr", "7", "--no-secret")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert writes(calls(log)) == [
-        ["api", "--method", "POST", f"repos/{REPO}/issues/7/comments", "-f", f"body={NO_SECRET}"]
+        ["api", "--method", "POST", f"repos/{REPO}/issues/7/comments", "-f", f"body={NEEDS_KEY}"]
     ]
 
 
 def test_no_secret_says_it_never_twice(tmp_path):
     """REQ-046: the `Correction:` on brief #765 (one line, and nothing else)."""
-    root, bin_dir, log = setup(tmp_path, comments=[cleared(), comment(NO_SECRET, at=7)])
+    root, bin_dir, log = setup(tmp_path, comments=[cleared(), comment(NEEDS_KEY, at=7)])
     proc = run(root, bin_dir, "--report", "--pr", "7", "--no-secret")
     assert proc.returncode == 0
     assert writes(calls(log)) == []
@@ -470,7 +470,7 @@ def test_the_step_with_no_secret_posts_the_one_line_and_never_merges(tmp_path):
     proc, made = merge_step(tmp_path, "", comments=[cleared()])
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert writes(made) == [
-        ["api", "--method", "POST", f"repos/{REPO}/issues/7/comments", "-f", f"body={NO_SECRET}"]
+        ["api", "--method", "POST", f"repos/{REPO}/issues/7/comments", "-f", f"body={NEEDS_KEY}"]
     ]
 
 
