@@ -70,7 +70,7 @@ plan_issue = 661
 # work_type = "web-app"
 # Intelligent testing (brief #578, ADR-0285; the owner's decision of 2026-11-05): a builder's prepush runs a change's own tests
 # and the tests its change can affect, while a push to main and a release run the full suite. `balanced`: a changed file that no
-# entry covers makes the selection full. `pr_tests = "selected"` is the owner's setting; this repository's `Project tests` step
+# entry covers selects the tests that name it, and makes the selection full only when no test names it (SPEC-0055 rule 6). `pr_tests = "selected"` is the owner's setting; this repository's `Project tests` step
 # stays skipped (kit/agk-kit.mk), so its pull requests' CI still runs the full suite as "Tests of the checks". `always_full` is
 # the shared core: the files the brief names, and every script whose import closure reaches more than 100 of the kit's test
 # files. The map was built from the code: each test file under tests/kit/ and tests/kit_dev/ that imports a script or names it
@@ -537,6 +537,130 @@ tests = [
   "tests/kit_dev/test_upgrade.py", "tests/kit_dev/test_upgrade_opt_in.py",
   "tests/kit_dev/test_upgrade_opt_in_several.py", "tests/kit_dev/test_upgrade_project_lines.py",
   "tests/kit_dev/test_upgrade_route_triggers.py", "tests/kit_dev/test_windows_line_endings.py",
+]
+[[testing.map]]
+code = "kit/manifest.json"
+tests = [
+  "tests/kit/test_check_kit_tests.py", "tests/kit/test_core_parallel_specs.py", "tests/kit/test_design_standard.py",
+  "tests/kit/test_engines.py", "tests/kit/test_facts.py", "tests/kit/test_impact_data_files.py",
+  "tests/kit/test_installed_version.py", "tests/kit/test_kit_tests_own_adr_status.py",
+  "tests/kit/test_merge_cleared_run.py", "tests/kit/test_parity.py", "tests/kit/test_review_context.py",
+  "tests/kit/test_session_claim_overlap.py", "tests/kit/test_test_map_whole.py",
+  "tests/kit_dev/test_changelog_fragments.py", "tests/kit_dev/test_drift_audit_release.py",
+  "tests/kit_dev/test_intake_version.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_kit_tests_check_wiring.py", "tests/kit_dev/test_release_check.py",
+  "tests/kit_dev/test_release_protected.py", "tests/kit_dev/test_windows_line_endings.py",
+]
+[[testing.map]]
+code = "kit/hashes.json"
+tests = [
+  "tests/kit/test_core_release_specs.py", "tests/kit/test_flow_rules.py", "tests/kit/test_impact_data_files.py",
+  "tests/kit/test_session_rules.py", "tests/kit_dev/test_adopt_from_release.py",
+  "tests/kit_dev/test_changelog_flow.py", "tests/kit_dev/test_changelog_fragments.py",
+  "tests/kit_dev/test_check_tag.py", "tests/kit_dev/test_conductor_role.py",
+  "tests/kit_dev/test_drift_audit_release.py", "tests/kit_dev/test_install_from_release.py",
+  "tests/kit_dev/test_kit_hashes.py", "tests/kit_dev/test_merge_ref_base.py", "tests/kit_dev/test_release_check.py",
+  "tests/kit_dev/test_release_protected.py", "tests/kit_dev/test_upgrade.py",
+]
+[[testing.map]]
+code = "config/playbooks/*.toml"
+tests = [
+  "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py",
+  "tests/kit/test_impact_data_files.py", "tests/kit/test_playbook_cloud_migration.py",
+  "tests/kit/test_playbook_data_pipeline.py", "tests/kit/test_playbook_discovery.py",
+  "tests/kit/test_playbook_mcp_server.py", "tests/kit/test_playbook_mobile.py",
+  "tests/kit/test_playbook_multi_agent.py", "tests/kit/test_playbook_rag_app.py", "tests/kit/test_playbook_split.py",
+  "tests/kit/test_playbook_web_app.py", "tests/kit/test_session_plan_lanes.py",
+  "tests/kit_dev/test_engines_discovery.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_stack_playbook.py",
+]
+[[testing.map]]
+code = "config/core-rules.md"
+tests = [
+  "tests/kit/test_core_rules_page.py", "tests/kit/test_launch_kinds.py", "tests/kit/test_personal_state.py",
+  "tests/kit/test_rule_budget.py", "tests/kit/test_session_prompt.py", "tests/kit_dev/test_init.py",
+  "tests/kit_dev/test_kit_manifest.py",
+]
+[[testing.map]]
+code = "config/review-checklist.md"
+tests = [
+  "tests/kit/test_personal_state.py", "tests/kit/test_rule_budget.py", "tests/kit_dev/test_architect_review.py",
+  "tests/kit_dev/test_kit_manifest.py",
+]
+[[testing.map]]
+code = "config/session-rules.md"
+tests = [
+  "tests/kit/test_conductor_guard_issue.py", "tests/kit/test_core_audit.py", "tests/kit/test_core_rules_page.py",
+  "tests/kit/test_fix_list_tags.py", "tests/kit/test_launch.py", "tests/kit/test_launch_kinds.py",
+  "tests/kit/test_merge_cleared_run.py", "tests/kit/test_personal_state.py", "tests/kit/test_pr_summary.py",
+  "tests/kit/test_rule_budget.py", "tests/kit/test_rules_dropped.py", "tests/kit/test_session_flow.py",
+  "tests/kit/test_session_plan.py", "tests/kit/test_session_prompt.py", "tests/kit/test_session_rules.py",
+  "tests/kit/test_solo_mode.py", "tests/kit_dev/test_conductor_role.py", "tests/kit_dev/test_guide_loop.py",
+  "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_local_mode_guide.py",
+  "tests/kit_dev/test_shadow_role.py", "tests/kit_dev/test_uninstall.py",
+]
+[[testing.map]]
+code = "config/ci-tools.txt"
+tests = [
+  "tests/kit/test_ci_tools.py", "tests/kit_dev/test_kit_manifest.py",
+]
+[[testing.map]]
+code = "config/kit-only.txt"
+tests = [
+  "tests/kit/test_parity.py",
+]
+[[testing.map]]
+code = "config/mypy-baseline.txt"
+tests = [
+  "tests/kit/test_scanner_hygiene.py",
+]
+[[testing.map]]
+code = "config/neutrality.txt"
+tests = [
+  "tests/kit/test_check_neutrality.py", "tests/kit/test_core_rules_page.py", "tests/kit/test_playbook_skills.py",
+  "tests/kit/test_session_prompt.py", "tests/kit_dev/test_adopt.py", "tests/kit_dev/test_uninstall.py",
+]
+[[testing.map]]
+code = "config/protected-paths.txt"
+tests = [
+  "tests/kit/test_check_protected_changes.py", "tests/kit/test_core_rules_page.py", "tests/kit/test_drift_audit.py",
+  "tests/kit/test_engines.py", "tests/kit/test_metrics.py", "tests/kit/test_protected_changes_covered_by.py",
+  "tests/kit/test_reviewers.py", "tests/kit/test_reviewers_approvers_install.py",
+  "tests/kit/test_rule3a_covered_and_label.py", "tests/kit/test_session_kind.py",
+  "tests/kit/test_session_next_plan.py", "tests/kit/test_session_plan.py", "tests/kit/test_session_plan_lanes.py",
+  "tests/kit/test_session_plan_overlap.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
+  "tests/kit/test_usage_by_kind.py", "tests/kit/test_verdict_authors.py", "tests/kit_dev/test_adopt_from_release.py",
+  "tests/kit_dev/test_drift_audit_release.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_merge_ref_base.py", "tests/kit_dev/test_pyproject_installs_as_nothing.py",
+  "tests/kit_dev/test_release_check.py", "tests/kit_dev/test_release_protected.py",
+  "tests/kit_dev/test_uninstall.py", "tests/kit_dev/test_upgrade.py",
+]
+[[testing.map]]
+code = "config/rule-budget.txt"
+tests = [
+  "tests/kit/test_rule_budget.py", "tests/kit/test_scorecard.py", "tests/kit/test_session_claim_overlap.py",
+]
+[[testing.map]]
+code = "skills/**"
+tests = [
+  "tests/kit/test_impact_data_files.py", "tests/kit/test_parity.py", "tests/kit/test_playbook_skills.py",
+  "tests/kit/test_playbook_split.py", "tests/kit/test_session_kind.py", "tests/kit/test_test_map_whole.py",
+  "tests/kit_dev/test_confirm_skill.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_docs.py",
+  "tests/kit_dev/test_engines_discovery.py", "tests/kit_dev/test_kit_manifest.py",
+]
+[[testing.map]]
+code = ".claude/agents/*.md"
+tests = [
+  "tests/kit/test_check_numbers_amendments.py", "tests/kit/test_conductor_guard_issue.py",
+  "tests/kit/test_conductor_playbook_evidence.py", "tests/kit/test_decision_files.py",
+  "tests/kit/test_final_clearance.py", "tests/kit/test_impact_data_files.py", "tests/kit/test_launch_kinds.py",
+  "tests/kit/test_parity.py", "tests/kit/test_pr_summary.py", "tests/kit/test_reviewer_definition.py",
+  "tests/kit/test_rule_budget.py", "tests/kit/test_session_rules.py", "tests/kit/test_shadow_rules.py",
+  "tests/kit/test_solo_mode.py", "tests/kit/test_test_map_whole.py", "tests/kit_dev/test_architect_review.py",
+  "tests/kit_dev/test_conductor_catches.py", "tests/kit_dev/test_conductor_role.py",
+  "tests/kit_dev/test_experimental_reviewer.py", "tests/kit_dev/test_init.py",
+  "tests/kit_dev/test_local_mode_guide.py", "tests/kit_dev/test_reviewer_wiring.py",
+  "tests/kit_dev/test_shadow_role.py",
 ]
 # One proof area for the kit's tests, so that prepush (and proof) run single test files instead of the whole `project_tests`
 # command (prepush.regression_sets runs `project_tests` once when no [proof] table can take the selected files).

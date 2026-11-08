@@ -90,6 +90,7 @@ RESUME = (
     "to resume"
 )
 NO_KIT = "no kit installed"
+UNMAPPED_SHOWN = 20
 NO_KIT_TEXT = "agk.toml and the kit's files are gone; nothing to check"
 # Files any install of the kit holds; one of them left without agk.toml is a broken install.
 KIT_TRACES = (
@@ -1389,6 +1390,19 @@ def deprecation_lines(root: Path) -> list[str]:
     return [line] if line else []
 
 
+def unmapped_lines(root: Path) -> list[str]:
+    """Brief #773 answer 5: the tracked files that would make a `balanced` selection full, at most
+    UNMAPPED_SHOWN. A malformed `[testing]` table gives none here; the commands that read it refuse
+    it naming the setting."""
+    try:
+        found = impact.uncovered(root)
+    except CheckError:
+        return []
+    lines = [f"tests: unmapped: {p} (no entry, no test names it)" for p in found[:UNMAPPED_SHOWN]]
+    more = len(found) - UNMAPPED_SHOWN
+    return lines + ([f"tests: unmapped: and {more} more"] if more > 0 else [])
+
+
 def work_type_line(root: Path) -> tuple[str, bool]:
     """SPEC-0038 rule 5: the one work-type line and whether it fails; reads only agk.toml and the
     presence of the declared playbook."""
@@ -1542,6 +1556,7 @@ def main(argv: list[str] | None = None) -> int:
         api = Path(options["api"]) if options["api"] else None
         tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
         extra = suite_lines(root.resolve(), Path(options["record"])) if options["record"] else []
+        extra = extra + unmapped_lines(root.resolve())
         deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()
         work, work_failed = work_type_line(root.resolve())
