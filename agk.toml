@@ -54,6 +54,8 @@ assign = "conductor"
 # owner's choice, ADR-0266; turning it off is again the owner's change, by an ADR in the same pull request.
 auto_merge = true
 auto_merge_method = "squash"
+# The builder capacity (SPEC-0034 rule 1): nine builder sessions at once, by the owner's choice on 2026-11-08 (plan #661, ADR-0341).
+max_builders = 9
 # The heavy-run queue (SPEC-0040 rule 1, brief #529): off by default and when absent. This repository keeps it off; turning it on is the
 # owner's change, by an ADR in the same pull request.
 # [locks]
@@ -72,6 +74,8 @@ auto_merge_method = "squash"
 # files. The map was built from the code: each test file under tests/kit/ and tests/kit_dev/ that imports a script or names it
 # as `<script>.py`, closed over the scripts' own imports. A change of any of this needs an ADR (agk.toml is protected).
 [testing]
+# merge_cleared.py runs these on the would-be merge after governance (brief #667, ADR-0320)
+pre_merge_tests = ["tests/kit/test_rule_budget.py", "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_kit_manifest.py"]
 profile = "balanced"
 pr_tests = "selected"
 # The full suite in parallel workers where the interpreter imports xdist (brief #631, ADR-0305).
@@ -103,6 +107,9 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/batch.py"
 tests = ["tests/kit/test_batch.py"]
+[[testing.map]]
+code = "scripts/agk/caps.py"
+tests = ["tests/kit/test_caps.py"]
 [[testing.map]]
 code = "scripts/agk/changelog_fragments.py"
 tests = [
@@ -210,14 +217,14 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
-  "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
+  "tests/kit/test_caps.py", "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py",
 ]
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
-  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_failures.py",
-  "tests/kit/test_models_table.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_caps.py",
+  "tests/kit/test_failures.py", "tests/kit/test_models_table.py", "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
 code = "scripts/agk/core_audit.py"
@@ -315,6 +322,9 @@ tests = ["tests/kit/test_failures.py"]
 code = "scripts/agk/flakes.py"
 tests = ["tests/kit/test_flakes.py", "tests/kit/test_rerun_alone.py"]
 [[testing.map]]
+code = "scripts/agk/front_door.py"
+tests = ["tests/kit/test_front_door_entry.py"]
+[[testing.map]]
 code = "scripts/agk/full_run.py"
 tests = [
   "tests/kit/test_full_run.py", "tests/kit/test_full_run_body_steps.py", "tests/kit/test_full_run_post_steps.py",
@@ -373,7 +383,7 @@ tests = [
 code = "scripts/agk/launch.py"
 tests = [
   "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_launch.py", "tests/kit/test_launch_auto_start.py",
-  "tests/kit/test_route_finishes.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_review_pass_skill.py",
+  "tests/kit/test_launch_kinds.py", "tests/kit/test_route_finishes.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_review_pass_skill.py",
 ]
 [[testing.map]]
 code = "scripts/agk/lessons.py"
@@ -401,10 +411,14 @@ tests = [
   "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_origin_message.py",
   "tests/kit_dev/test_pilot_gaps_first_pr.py", "tests/kit_dev/test_playbook.py",
   "tests/kit_dev/test_pr_bodies_kit.py", "tests/kit_dev/test_start_discovery.py",
+  "tests/kit/test_playbook_split.py",
 ]
 [[testing.map]]
 code = "scripts/agk/playbook_format.py"
-tests = ["tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py"]
+tests = [
+  "tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py",
+  "tests/kit/test_playbook_split.py",
+]
 [[testing.map]]
 code = "scripts/agk/pr_body.py"
 tests = [
@@ -476,6 +490,9 @@ tests = [
   "tests/kit/test_merge_cleared_run.py", "tests/kit_dev/test_guide_fixes.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit_dev/test_pilot_gaps_plans.py", "tests/kit_dev/test_ruleset.py",
 ]
+[[testing.map]]
+code = "scripts/agk/scorecard.py"
+tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"
 tests = ["tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_shadow_count.py"]

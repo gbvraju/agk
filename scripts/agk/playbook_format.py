@@ -21,6 +21,14 @@ work type and the problems of the declaration, each naming rule 5, `agk.toml` an
 a value; `selected(root)` is the path of the declared playbook, or None. With no `agk.toml`, no
 `[delivery]` table or no `work_type` in it there is no declaration and no problem, and nothing
 reads a playbook.
+
+The split (SPEC-0038 rule 7; REQ-045 AC3; brief #664, ADR-0317): `split(root, goal, kind)` gives
+the lines `playbook.py split` prints for the owner and the session filling briefs, the brief kinds
+of the declared playbook's `brief_order` in that order, each with its `Kind:` line, one
+`Depends-on:` line per `depends_on` pair and its lane (`lane: none` for a kind no lane holds), after
+the work type and the milestone shape; and the problems that refuse the split, each naming the rule,
+the file and the key, never a value. With no declaration there is nothing to print and no problem.
+Nothing is written.
 """
 
 from __future__ import annotations
@@ -376,3 +384,63 @@ def selected(root: Path) -> Path | None:
     """The playbook the declaration selects, `config/playbooks/<work type>.toml`, or None."""
     value, _ = _declared(root)
     return Path(root) / FOLDER / f"{value}.toml" if value else None
+
+
+# SPEC-0038 rule 7: the meaning of each milestone shape, in the rule's words.
+SHAPE_MEANING = {
+    "per-brief": "one pull request per brief, as today",
+    "per-phase": (
+        "the briefs of a phase are numbered as one milestone in their titles; "
+        "one pull request per brief, and a milestone groups pull requests and never merges them"
+    ),
+    "per-batch": (
+        "the briefs of a batch are numbered as one milestone in their titles; "
+        "one pull request per brief, and a milestone groups pull requests and never merges them"
+    ),
+}
+
+
+def _blocks(data: dict, goal: str, only: str | None) -> list[str]:
+    """One numbered block per kind of `brief_order` (or the one kind `only`): its title, `Kind:`,
+    its `Depends-on:` lines ordered by `brief_order`, and its lane."""
+    order: list[str] = data["split"]["brief_order"]
+    pairs: list[list[str]] = data["split"]["depends_on"]
+    lanes = {kind: lane["name"] for lane in data["lanes"] for kind in lane["kinds"]}
+    out = []
+    for number, kind in enumerate(order, start=1):
+        if only is not None and kind != only:
+            continue
+        out.append(f"{number}. {goal}: {kind}" if goal else f"{number}. {kind}")
+        out.append(f"   Kind: {kind}")
+        earlier = sorted({e for later, e in pairs if later == kind}, key=order.index)
+        out += [f"   Depends-on: #<{e} brief>" for e in earlier]
+        out.append(f"   lane: {lanes.get(kind, 'none')}")
+    return out
+
+
+def split(root: Path, goal: str = "", kind: str | None = None) -> tuple[list[str], list[str]]:
+    """SPEC-0038 rule 7: the lines `playbook.py split` prints and the problems that refuse it.
+
+    With no declaration both are empty. A declaration or a playbook with a problem gives those
+    problems and no lines; a `kind` outside `brief_order` gives one problem naming the key."""
+    root = Path(root)
+    work_type, problems_found = declaration(root)
+    if problems_found:
+        return [], problems_found
+    if work_type is None:
+        return [], []
+    path = root / FOLDER / f"{work_type}.toml"
+    rel = f"{FOLDER}/{work_type}.toml"
+    found = problems(path, root)
+    if found:
+        return [], found
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    if kind is not None and kind not in data["split"]["brief_order"]:
+        return [], [f"rule 7: {rel}: the kind is not in `brief_order` (key: brief_order)"]
+    shape = data["milestones"]["shape"]
+    lines = [
+        f"work type: {work_type} (playbook {rel})",
+        f"milestone shape: {shape} (batch_by: {data['milestones']['batch_by']})",
+        f"   {SHAPE_MEANING[shape]}",
+    ]
+    return lines + _blocks(data, goal.strip(), kind), []

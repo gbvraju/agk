@@ -112,6 +112,10 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/conductor.py watch [--since 2026-11-06T10:00:00Z] [--once]
     python3 scripts/agk/conductor.py sweep
     python3 scripts/agk/conductor.py merge-queue [--dry-run] [--max-batch N]
+    python3 scripts/agk/conductor.py rerun --pr N [--apply]
+    python3 scripts/agk/conductor.py check-verdict FILE
+    python3 scripts/agk/conductor.py lease (--show | --take NAME | --release NAME)
+    python3 scripts/agk/session.py prompt --brief N [--session ID] [--follow-up TEXT]
 
 The conductor's watch and sweep (brief #643, ADR-0308). `watch` ends on the first poll that finds a comment created after
 `--since` (default: the start) whose first line starts `Question:` or `Report:`, on an open issue labelled `agk-brief` or an
@@ -137,6 +141,22 @@ waits once for the default branch's run on the last merge (`full_run.covered`, p
 `stopped: <branch> red at <sha12> after the batch #a #b` (exit 1); in local mode there is no run to wait for. `--dry-run` prints
 the order and merges nothing. It posts nothing; the guard allows the dry run always and a run that merges only with `auto_merge`
 on in the checkout and on the default branch, and builders are asked first (`.claude/settings.json`).
+
+The last private routines (brief #700, ADR-0330). `rerun --pr N` reads the pull request and the `pull_request` runs of its head and
+prints one line per cancelled run; `--apply` reruns them (catch log row 18). When every run of the head skipped (a push to a ready
+pull request, row 19) it prints the one step that starts them, converting the pull request to a draft and back through the
+runtime's `ccr/convert_to_draft` and `ccr/ready_for_review` routes `(verify)`, and takes it only with `--apply`; a draft is left
+alone. `check-verdict FILE` prints `ok`, or the problem of the verdict's `Final:` lines by the router's own reading
+(`common.verdict_problem`), or that its first line is not `Verdict: cleared|fix list|rejected <sha>`; exit 1 on a problem, nothing
+read on GitHub. `lease` is the active-conductor marker: one comment `Conductor: active <time> <name>` on the plan issue that
+`plan_issue` of the `[flow]` table names (absent: the lease is off), valid 50 minutes; `--take NAME` posts or edits it in place
+unless another name holds a valid lease (exit 3, naming the setting) and keeps the name in the git directory, `--release NAME`
+marks it released, `--show` prints `held by <name> until <time>` or `free`; `merge-queue` refuses to run while another name holds a
+valid lease. `session.py prompt --brief N` prints the builder's standing prompt from the kit's files, GET only: the item line with
+the brief's reserved numbers (its `Reserved:` lines and the `reserves` of its takes) and the session name when given, the files to
+read first, the secret-scan deferral line of `prepush.py`, the body lines of CLAUDE.md item 7 read from `config/core-rules.md`, and
+the session rules that bind a builder quoted from `config/session-rules.md`; `--follow-up TEXT` (one line, never a verdict)
+replaces the stop on an existing pull request with the follow-up for it. The guard allows exactly these forms.
 
 ## Playbook evidence
 
@@ -343,6 +363,29 @@ quarantine past its expiry (`expired`), each test with two strikes or more and n
 with its line number. Exit 0 when nothing is listed, 1 otherwise. It is not a governance step and blocks nothing. See
 [testing.md](testing.md#the-flake-ledger) and ADR-0234.
 
+## Front door
+
+    python3 scripts/agk/front_door.py check-issue --issue FILE
+    python3 scripts/agk/front_door.py discovery-write (--issue FILE | --vision FILE) --answers FILE [--root DIR]
+    python3 scripts/agk/front_door.py check-discovery [FILE ...] [--root DIR]
+    python3 scripts/agk/front_door.py check-research --date YYYY-MM-DD [FILE ...] [--root DIR]
+    python3 scripts/agk/front_door.py check-design --date YYYY-MM-DD [FILE ...] [--root DIR]
+
+`check-issue` reads a saved problem issue (the JSON of one GET) and refuses one without the `agk-problem` label, without a
+first line `Problem: <words>`, with an empty problem or one over 1,500 characters, or with anything the data guard finds.
+`discovery-write` writes `docs/discovery/<slug>.md` from the problem and a JSON file of the person's answers, never over an
+existing one; `check-discovery` checks each such document. Files only, no network; every refusal names the rule and the
+file, never a value. See SPEC-0048 rules 3 and 5.
+
+`check-research` checks each `docs/research/<slug>.md`: at least two `## Option: <name>` sections, each with a source line
+`- Source: <URL> (accessed YYYY-MM-DD)`, a `## Criteria` table with a row for capability fit, cost, licence, data handling
+and residency, maturity, integration effort and lock-in, and a `## Recommendation` marked `(proposal)`. A record that a
+design cites fails when any source was accessed more than 180 days before `--date` (pass `date -u +%F`); reading the
+sources again and changing their access dates makes it fresh. `check-design` checks each
+`docs/design/architecture/<slug>.md`: a fenced plain-text or Mermaid diagram, no image, and exactly one line
+`Research: docs/research/<slug>.md` naming a record of the same slug that passes and is fresh. See SPEC-0048 rules 6
+and 7.
+
 ## Failure signature and evidence
 
     python3 scripts/agk/failures.py signature --output FILE [--step NAME]
@@ -354,6 +397,14 @@ readable, else the `FAILED <id>` lines; `step:NAME` when there is no test id). `
 of that test's output, or only `evidence withheld: ...`. `issue-body` prints whether a failure needs a new `found-bug` issue
 or a comment on an open one, from a saved issue list; with `[failures] issues` off (the default) it prints `action: none`.
 It reads files, prints and writes nothing. See SPEC-0046 rules 2, 3 and 5 and ADR-0303.
+
+## Scorecard
+
+    python3 scripts/agk/scorecard.py [--today YYYY-MM-DD] [--repo OWNER/REPO] [--api-dir DIR]
+
+Prints one table of the week before the run date: each level metric of SPEC-0047 rule 1, its value and its line (the
+`[scorecard]` table of `agk.toml`, else the kit default). A value that cannot be read is `unknown`, never 0. It reads
+with `gh api` GET only, or saved responses, and writes nothing; no check runs it. See SPEC-0047 rules 1 to 3 and ADR-0311.
 
 ## Parity
 
