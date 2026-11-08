@@ -206,11 +206,9 @@ APPROVE_LABEL = "agk:approve"
 CONFLICT = ("dirty", "unknown")
 HTTP = re.compile(r"HTTP (\d{3})")
 RULESET = "rule violation"  # GitHub's words for a merge its ruleset refuses (brief #765, verify)
-WORKFLOW = "governance.yml"  # the workflow the merger job dispatches after a merge (brief #765)
 JOB_LINE = re.compile(
     r"merge-cleared #([1-9][0-9]{0,9}) ([0-9a-f]{12}): (merged|held|refused)(?:\s|:)"
 )
-EVENTS = ("issue_comment", "workflow_run")  # the merger job's starts (brief #765, ADR-0354)
 JOB_PREFIX = "merger: "  # the one comment of a hold or a refusal (brief #765)
 MERGE_ENV = "AGK_MERGE_TOKEN"  # the one variable the merge call reads; only the job sets it
 NO_MERGE_LINE = f"merge needs {MERGE_ENV} or the owner's tap"  # the `Correction:` on brief #765
@@ -1347,9 +1345,9 @@ def github_mode(data: dict) -> None:
 
 def event_target(name: str, payload: dict) -> tuple[int, str | None] | None:
     """(the pull request, its head sha or None) that event NAME's PAYLOAD may clear, or None: a
-    `Verdict:` or `Approve:` comment on a pull request, the `pull_request` run of a ready pull
-    request whose `governance` job passed, or a green proof run of a pull request's head.
-    Nothing here reads GitHub."""
+    `Verdict:` or `Approve:` comment on a pull request, or a green run of `governance` or `proof`
+    on a pull request's head (the workflow's `workflow_run` start names which). Nothing here reads
+    GitHub."""
     if name == "issue_comment":
         issue = payload.get("issue")
         note = payload.get("comment")
@@ -1359,16 +1357,6 @@ def event_target(name: str, payload: dict) -> tuple[int, str | None] | None:
             return None
         number = issue.get("number")
         return (number, None) if isinstance(number, int) and number > 0 else None
-    if name == "pull_request":  # the green `governance` job of a ready pull request (`needs`)
-        pull = payload.get("pull_request")
-        if payload.get("action") == "edited" or not isinstance(pull, dict) or pull.get("draft"):
-            return None
-        head = pull.get("head")
-        sha = head.get("sha") if isinstance(head, dict) else None
-        number = pull.get("number")
-        if not (isinstance(number, int) and number > 0 and isinstance(sha, str)):
-            return None
-        return (number, sha) if SHA.fullmatch(sha) else None
     if name == "workflow_run":
         done = payload.get("workflow_run")
         if not isinstance(done, dict) or done.get("event") != "pull_request":
@@ -1448,10 +1436,9 @@ def no_secret_main(number: int, root: Path) -> int:
 
 def report_main(number: int, sha: str, line: str, root: Path) -> int:
     """`--report --pr N --sha SHA --line LINE`: after LINE, the command's own line for N and SHA,
-    on a merge dispatch the default branch's governance run unless the merge secret made that
-    merge (its push starts the run by itself, verify), else post one comment `merger: <line>` on
-    the pull request unless the same comment is there already. Exit 0, or 2 for a line that is
-    not the command's own."""
+    nothing on a merge (the merge's push starts the default branch's run, verify), else post one
+    comment `merger: <line>` on the pull request unless the same comment is there already. Exit
+    0, or 2 for a line that is not the command's own."""
     found = JOB_LINE.match(line)
     if not found or int(found.group(1)) != number or found.group(2) != sha[:12]:
         print("merger: refused: the line is not merge_cleared.py's own (input: --line)")
@@ -1459,13 +1446,7 @@ def report_main(number: int, sha: str, line: str, root: Path) -> int:
     try:
         repo = repo_of(root)
         if found.group(3) == "merged":
-            if os.environ.get(MERGE_ENV):
-                print("merger: the merge's own push starts governance")
-                return EXIT_CLEARED
-            branch = default_branch(root)
-            endpoint = f"repos/{repo}/actions/workflows/{WORKFLOW}/dispatches"
-            code, _, _ = write_once(["--method", "POST", endpoint, "-f", f"ref={branch}"])
-            print("merger: dispatched governance" if code == 0 else "merger: dispatch failed")
+            print("merger: the merge's own push starts governance")
             return EXIT_CLEARED
         if line.endswith(f": held: {PENDING}"):  # the other required run ends and tries again
             print("merger: checks pending; nothing posted")

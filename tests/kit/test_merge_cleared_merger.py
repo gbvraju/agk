@@ -1,12 +1,12 @@
 """merge_cleared.py and the merger job: GitHub mode merges a cleared head with no session.
 
 Brief #765, ADR-0354, amendment 139, REQ-046 (SPEC-0039 rule 2, its GitHub-mode runner). The job
-of `.github/workflows/governance.yml` runs three commands: `merge_cleared.py --event <payload>`
-names the pull request and head to try (or nothing), then exactly `merge_cleared.py --pr <n> --sha
-<head>`, its one merge call under the secret `AGK_MERGE_TOKEN`, then `merge_cleared.py --report --pr
-<n> --sha <head> --line <its line>`, which posts one comment for a hold or a refusal and starts the
-default branch's governance run only after a merge by the job's own token. With no secret
-the job posts `merge needs AGK_MERGE_TOKEN or the owner's tap` once and does nothing else.
+of `.github/workflows/merger.yml`, started only from the default branch, runs three commands:
+`merge_cleared.py --event <payload>` names the pull request and head to try (or nothing), then
+exactly `merge_cleared.py --pr <n> --sha <head>`, its one merge call under the secret
+`AGK_MERGE_TOKEN` of the `merge` environment, then `merge_cleared.py --report --pr <n> --sha <head>
+--line <its line>`, which posts one comment for a hold or a refusal. With no secret the job posts
+`merge needs AGK_MERGE_TOKEN or the owner's tap` once and does nothing else.
 Every test runs on a git repository in `tmp_path`, saved event payloads and a fake `gh` that
 answers from saved responses and records its argument lists. No network; invented logins,
 addresses at example.com.
@@ -39,8 +39,8 @@ from test_merge_cleared_verdict import (
     world,
 )
 
-WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "governance.yml"
-DISPATCH = f"repos/{REPO}/actions/workflows/governance.yml/dispatches"
+WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
+WORKFLOW = WORKFLOWS / "merger.yml"
 MERGE_ENV = "AGK_MERGE_TOKEN"
 MERGE_VALUE = "example-merge-value"
 JOB_VALUE = "example-job-value"
@@ -55,12 +55,14 @@ def comment_event(body: str, on_pull: bool = True) -> dict:
     return {"action": "created", "issue": issue, "comment": {"id": 2001, "body": body}}
 
 
-def run_event(conclusion: str = "success", event: str = "pull_request", pulls=None) -> dict:
-    """A saved `workflow_run` payload (invented): proof completed on the head of #7."""
+def run_event(
+    conclusion: str = "success", event: str = "pull_request", pulls=None, name: str = "proof"
+) -> dict:
+    """A saved `workflow_run` payload (invented): a required run completed on the head of #7."""
     return {
         "action": "completed",
         "workflow_run": {
-            "name": "proof",
+            "name": name,
             "event": event,
             "conclusion": conclusion,
             "head_sha": HEAD,
@@ -69,10 +71,9 @@ def run_event(conclusion: str = "success", event: str = "pull_request", pulls=No
     }
 
 
-def pull_event(action: str = "synchronize", draft: bool = False) -> dict:
-    """A saved `pull_request` payload (invented): the run whose `governance` job passed."""
-    pull = {"number": 7, "draft": draft, "head": {"sha": HEAD}}
-    return {"action": action, "pull_request": pull}
+def pull_event() -> dict:
+    """A saved `pull_request` payload (invented): an event that never starts the job."""
+    return {"action": "synchronize", "pull_request": {"number": 7, "head": {"sha": HEAD}}}
 
 
 def setup(tmp_path: Path, main: str = toml(ON), **saved):
@@ -113,16 +114,11 @@ def test_an_approve_comment_names_the_head_too(tmp_path):
     assert writes(made) == []
 
 
-def test_a_green_governance_job_of_a_ready_pull_request_names_it(tmp_path):
-    """REQ-046: brief #765 answer 1 (the `governance` job's completion, through `needs`)."""
-    proc, made = event(tmp_path, pull_event(), "pull_request", comments=[cleared()])
-    assert proc.stdout.strip() == f"7 {HEAD}", proc.stdout + proc.stderr
-    assert writes(made) == []
-
-
-def test_a_green_proof_run_of_a_pull_request_head_names_it(tmp_path):
-    """REQ-046: brief #765 answer 1 (`workflow_run` completion of the other required run)."""
-    proc, made = event(tmp_path, run_event(), "workflow_run", comments=[cleared()])
+@pytest.mark.parametrize("workflow", ["governance", "proof"])
+def test_a_green_required_run_of_a_pull_request_head_names_it(tmp_path, workflow):
+    """REQ-046: brief #765 answer 1 (`workflow_run` completion of either required run)."""
+    payload = run_event(name=workflow)
+    proc, made = event(tmp_path, payload, "workflow_run", comments=[cleared()])
     assert proc.stdout.strip() == f"7 {HEAD}", proc.stdout + proc.stderr
     assert writes(made) == []
 
@@ -183,8 +179,7 @@ def test_the_open_local_mode_record_issue_does_nothing(tmp_path):
             "issue_comment",
         ),
         ("a red run", run_event("failure"), "workflow_run"),
-        ("a draft", pull_event(draft=True), "pull_request"),
-        ("an edited description", pull_event("edited"), "pull_request"),
+        ("a pull request's own run", pull_event(), "pull_request"),
         ("a run of a push", run_event(event="push"), "workflow_run"),
         ("a run with no pull request", run_event(pulls=[]), "workflow_run"),
         ("another event", {"ref": "refs/heads/main"}, "push"),
@@ -209,7 +204,7 @@ def test_a_malformed_payload_is_refused_naming_the_input(tmp_path):
     assert calls(log) == []
 
 
-# --- the report: dispatch after a merge, one comment for a hold ---------------------------------
+# --- the report: one comment for a hold, nothing after a merge ----------------------------------
 
 
 def report(tmp_path, line: str, **saved):
@@ -218,24 +213,16 @@ def report(tmp_path, line: str, **saved):
     return proc, calls(log)
 
 
-def test_a_merge_made_with_the_jobs_own_token_dispatches_the_default_branch_run(
-    tmp_path, monkeypatch
-):
-    """REQ-046: brief #765 answer 3 (a merge by the job's token starts no workflow by itself)."""
-    monkeypatch.delenv(MERGE_ENV, raising=False)
-    proc, made = report(tmp_path, f"merge-cleared #7 {SHA12}: merged {MERGE12}")
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert writes(made) == [["api", "--method", "POST", DISPATCH, "-f", "ref=main"]]
-    assert "dispatched" in proc.stdout
-
-
-def test_a_merge_made_with_the_merge_secret_dispatches_nothing(tmp_path, monkeypatch):
-    """REQ-046: fix list 2 of #766 (that merge starts the push run by itself, verify)."""
-    monkeypatch.setenv(MERGE_ENV, MERGE_VALUE)
+@pytest.mark.parametrize("secret", [True, False])
+def test_a_merge_posts_nothing_and_starts_no_run(tmp_path, monkeypatch, secret):
+    """REQ-046: verdict on f3acd19 item 2 (the merge's own push starts the default branch's run)."""
+    if secret:
+        monkeypatch.setenv(MERGE_ENV, MERGE_VALUE)
+    else:
+        monkeypatch.delenv(MERGE_ENV, raising=False)
     proc, made = report(tmp_path, f"merge-cleared #7 {SHA12}: merged {MERGE12}")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert writes(made) == []
-    assert "dispatched" not in proc.stdout
 
 
 def test_a_hold_gets_one_comment_with_the_reason(tmp_path):
@@ -305,25 +292,12 @@ def job(tmp_path, payload: dict, name: str, **saved):
     return merge, last, calls(log)
 
 
-def test_a_cleared_head_merged_by_the_jobs_own_token_runs_main_again(tmp_path, monkeypatch):
-    """REQ-046: brief #765 answers 2, 3 and 5 (no merge secret in the environment)."""
-    monkeypatch.delenv(MERGE_ENV, raising=False)
-    merge, last, made = job(tmp_path, run_event(), "workflow_run", comments=[cleared()])
-    assert merge.stdout.strip() == f"merge-cleared #7 {SHA12}: merged {MERGE12}"
-    put = [c for c in made if "PUT" in c]
-    assert len(put) == 1 and f"sha={HEAD}" in put[0]
-    assert [c for c in made if DISPATCH in c] == [
-        ["api", "--method", "POST", DISPATCH, "-f", "ref=main"]
-    ]
-
-
 def test_a_held_head_merges_nothing_and_comments_once(tmp_path):
     """REQ-046: brief #765 answer 5 (a held head does nothing but one comment)."""
     red = [{"id": 12, "name": "governance", "status": "completed", "conclusion": "failure"}]
     merge, last, made = job(tmp_path, run_event(), "workflow_run", comments=[cleared()], runs=red)
     assert ": held: " in merge.stdout, merge.stdout
     assert [c for c in made if "PUT" in c] == []
-    assert [c for c in made if DISPATCH in c] == []
     posted = [c for c in made if f"repos/{REPO}/issues/7/comments" in c and "POST" in c]
     assert len(posted) == 1
 
@@ -344,7 +318,7 @@ def test_the_merge_call_alone_runs_under_the_merge_secret(tmp_path, monkeypatch)
     merges = [c for c in seen if c[0] == "PUT"]
     assert merges == [["PUT", f"repos/{REPO}/pulls/7/merge", MERGE_VALUE]]
     assert all(c[2] == JOB_VALUE for c in seen if c[0] != "PUT"), seen
-    assert [c for c in made if DISPATCH in c] == []  # fix list 2 of #766
+    assert [c for c in writes(made) if c[3].startswith(f"repos/{REPO}/actions/")] == []
 
 
 def test_without_the_merge_secret_the_command_keeps_the_callers_login(tmp_path, monkeypatch):
@@ -391,39 +365,63 @@ def merger_job() -> str:
     return found.group(1)
 
 
-def test_the_workflow_starts_on_comments_runs_and_dispatch():
-    """REQ-046: brief #765 answers 1 and 3 (the triggers of the one job)."""
+def test_the_workflow_starts_only_on_comments_and_on_the_two_required_runs():
+    """REQ-046: verdict on f3acd19 item 1 (no pull request's run can start this file)."""
     head = text().split("\njobs:", 1)[0]
+    block = re.search(r"\non:\n(.*?)\n(?=[a-z])", head, re.S).group(1)
+    assert re.findall(r"^  ([a-z_]+):", block, re.M) == ["issue_comment", "workflow_run"]
     assert re.search(r"\n  issue_comment:\n    types: \[created\]", head)
-    assert re.search(r"\n  workflow_run:\n    workflows: \[proof\]\n    types: \[completed\]", head)
-    assert "needs: governance" in merger_job()
-    assert "needs.governance.result == 'success'" in merger_job()
-    assert "\n  workflow_dispatch:" in head
+    assert re.search(
+        r"\n  workflow_run:\n    workflows: \[governance, proof\]\n    types: \[completed\]", head
+    )
+    assert "needs:" not in merger_job()
 
 
-def test_the_governance_job_never_runs_for_the_merger_events():
-    """REQ-046: brief #765 answer 1 (the required check is not run by a comment or a run)."""
-    gate = re.search(r"\n  governance:\n(?:    #.*\n)*    if: \$\{\{ (.*?) \}\}\n", text()).group(1)
-    assert gate.startswith(
-        "github.event_name != 'issue_comment' && github.event_name != 'workflow_run' && ("
-    ), gate
-    assert "github.event_name == 'pull_request'" in gate
+def test_the_secret_comes_from_the_merge_environment():
+    """REQ-046: verdict on f3acd19 item 1 (an environment limited to the default branch)."""
+    assert re.search(r"^    environment: merge$", merger_job(), re.M)
+
+
+def test_the_governance_workflow_knows_nothing_of_the_merger():
+    """REQ-046: verdict on f3acd19 items 1 and 2 (no start or secret in a governance run)."""
+    governance = (WORKFLOWS / "governance.yml").read_text(encoding="utf-8")
+    for word in ("merger", MERGE_ENV, "issue_comment:", "workflow_run:", "workflow_dispatch:"):
+        assert word not in governance, word
+
+
+def test_the_merger_is_the_only_workflow_that_names_the_secret():
+    """REQ-046: the `Correction:` on brief #765 (the job reads it, nothing else)."""
+    named = [p.name for p in sorted(WORKFLOWS.glob("*.yml")) if MERGE_ENV in p.read_text("utf-8")]
+    assert named == ["merger.yml"]
+
+
+def test_the_job_token_may_write_only_comments():
+    """REQ-046: verdict on f3acd19 item 2 (`issues: write` alone; every merge is the secret's)."""
+    head = text().split("\njobs:", 1)[0]
+    block = re.search(r"\npermissions:\n((?:  [a-z-]+: [a-z]+\n)+)", head).group(1)
+    assert sorted(block.split("\n")[:-1]) == [
+        "  actions: read",
+        "  checks: read",
+        "  contents: read",
+        "  issues: write",
+        "  pull-requests: read",
+        "  statuses: read",
+    ]
+    assert "permissions:" not in merger_job()
 
 
 def test_the_merger_job_runs_exactly_the_guarded_command_from_the_default_branch():
-    """REQ-046: brief #765 answer 2 (exactly the command, the job's token, the default branch)."""
+    """REQ-046: brief #765 answer 2 (exactly the command, the default branch)."""
     job_text = merger_job()
     assert 'python3 scripts/agk/merge_cleared.py --pr "$1" --sha "$2"' in job_text
-    # the default branch before this change refuses `--event` (exit 1): the job ends green
-    assert '|| { echo "merger: the default branch has no merger mode yet"; exit 0; }' in job_text
+    assert '|| { echo "merger: no target could be read"; exit 0; }' in job_text
     assert "ref: ${{ github.event.repository.default_branch }}" in job_text
     assert "GH_TOKEN: ${{ github.token }}" in job_text
     assert set(re.findall(r"secrets\.\w+", job_text)) == {"secrets.AGK_MERGE_TOKEN"}
-    for grant in ("contents: write", "pull-requests: write", "issues: write", "actions: write"):
-        assert grant in job_text, grant
-    assert job_text.count(' || echo "merger: ') == 3  # with the two above, every command ends green
+    assert job_text.count(' || echo "merger: ') == 3  # with the one above, every command ends green
     assert "startsWith(github.event.comment.body, 'Verdict:')" in job_text
     assert "github.event.workflow_run.conclusion == 'success'" in job_text
+    assert "github.event.workflow_run.event == 'pull_request'" in job_text
 
 
 def step_block(name: str) -> str:
@@ -475,10 +473,9 @@ def test_the_step_with_no_secret_posts_the_one_line_and_never_merges(tmp_path):
 
 
 def test_the_step_with_the_secret_merges_the_named_head(tmp_path):
-    """REQ-046: the `Correction:` on brief #765 and fix list 2 of #766 (no dispatch)."""
+    """REQ-046: the `Correction:` on brief #765 (one merge, under the secret)."""
     proc, made = merge_step(tmp_path, MERGE_VALUE, comments=[cleared()])
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert f"merge-cleared #7 {SHA12}: merged {MERGE12}" in proc.stdout, proc.stdout + proc.stderr
     assert len([c for c in made if "PUT" in c]) == 1
-    assert [c for c in made if DISPATCH in c] == []
     assert [c[2] for c in tokens(tmp_path) if c[0] == "PUT"] == [MERGE_VALUE]

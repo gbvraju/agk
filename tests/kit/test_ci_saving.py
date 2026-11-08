@@ -24,9 +24,7 @@ def workflow(name: str) -> str:
 
 
 def steps(text: str) -> dict[str, str]:
-    """The steps of the `governance` job; the merger job after it runs on other events (#765)."""
     found: dict[str, str] = {}
-    text = text.split("\n  merger:\n", 1)[0]
     for block in re.split(r"(?m)^      - ", text)[1:]:
         name = re.search(r"(?m)^(?:name: )?(.+)$", block.split("\n", 1)[0] + "\n")
         title = re.search(r"(?m)^\s*name: (.+)$", block) if not block.startswith("name:") else None
@@ -273,8 +271,7 @@ def holds(condition: str, github: dict) -> bool:
     expr = re.sub(r"!(?!=)", " not ", expr)
     expr = re.sub(r"\btrue\b", "True", re.sub(r"\bfalse\b", "False", expr))
     expr = expr.replace("startsWith(", "starts_with(")
-    names = {"github": Ctx(github), "starts_with": starts_with, "cancelled": lambda: False}
-    names["needs"] = Ctx({"governance": {"result": "success"}})  # the merger's `needs` (#765)
+    names = {"github": Ctx(github), "starts_with": starts_with}
     return bool(eval(expr, {"__builtins__": {}}, names))  # nosec B307 - the kit's own workflow text
 
 
@@ -370,10 +367,10 @@ def jobs_started(github: dict) -> dict[str, int]:
     [
         ("draft push", pr_event("synchronize", True), 2),
         ("draft edit", pr_event("edited", True), 2),
-        ("ready push", pr_event("synchronize", False), 6),  # the merger, #765
+        ("ready push", pr_event("synchronize", False), 5),
         ("ready edit", pr_event("edited", False), 2),
-        ("ready_for_review", pr_event("ready_for_review", False), 5),
-        ("verdict comment", comment_event("Verdict: cleared abc1234"), 3),  # merger + wake, #765
+        ("ready_for_review", pr_event("ready_for_review", False), 4),
+        ("verdict comment", comment_event("Verdict: cleared abc1234"), 1),
     ],
 )
 def test_the_jobs_each_event_starts(label, github, total):
@@ -391,12 +388,11 @@ def test_a_draft_push_starts_governance_and_its_one_router_wake():
 
 
 def test_a_ready_pull_request_keeps_every_job():
-    """REQ-039: brief #369 answer 3 (a ready push: governance, proof, the router and two wakes;
-    brief #765 adds the merger job after the governance job)."""
+    """REQ-039: brief #369 answer 3 (a ready push: governance, proof, the router and two wakes)."""
     count = jobs_started(pr_event("synchronize", False))
-    assert count == {"governance.yml": 2, "proof.yml": 1, "agk-route.yml": 1, "agk-route wake": 2}
+    assert count == {"governance.yml": 1, "proof.yml": 1, "agk-route.yml": 1, "agk-route wake": 2}
     ready = jobs_started(pr_event("ready_for_review", False))
-    assert ready == {"governance.yml": 2, "proof.yml": 1, "agk-route.yml": 0, "agk-route wake": 2}
+    assert ready == {"governance.yml": 1, "proof.yml": 1, "agk-route.yml": 0, "agk-route wake": 2}
 
 
 def test_proof_skips_a_draft_at_job_level():

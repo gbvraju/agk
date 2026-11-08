@@ -233,8 +233,6 @@ if method == 'PUT' and parts[0] == 'pulls' and parts[2:] == ['merge']:
             sys.exit(1)
         fail(answer['http'])
     out = answer
-elif method == 'POST' and parts[:2] == ['actions', 'workflows'] and parts[3:] == ['dispatches']:
-    out = {}  # a workflow_dispatch (brief #765); GitHub answers 204 with no body
 elif method == 'POST' and parts[0] == 'issues' and parts[2:] == ['comments']:
     if data.get('comment_fails'):
         fail(422)
@@ -870,12 +868,8 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     body file, written only in the governance run's temporary home; brief #601 adds the one record
     comments file there, amendment 122; brief #610 adds the close of the red-branch issue, one
     comment and one PATCH, in `close_red` alone; brief #765 adds the merger job's report, one
-    dispatch of the governance workflow in `report_main` and one comment in `post_once`)."""
+    comment in `post_once`)."""
     text = SCRIPT.read_text(encoding="utf-8")
-    report = text.split("\ndef report_main(", 1)[1].split("\ndef ", 1)[0]
-    assert report.count('"POST"') == 1
-    assert '"POST", endpoint, "-f", f"ref={branch}"' in report
-    text = text.replace(report, "")
     post = text.split("\ndef post_once(", 1)[1].split("\ndef ", 1)[0]
     assert post.count('"POST"') == 1
     assert '"POST", endpoint, "-f", f"body={body}"' in post

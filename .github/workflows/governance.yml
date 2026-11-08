@@ -12,15 +12,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
   push:
-  # The merger job (brief #765, ADR-0354): a `Verdict:` or `Approve:` comment, the green `governance` job of a ready pull
-  # request (`needs`) or a green proof run of its head starts it (a workflow cannot start itself by `workflow_run`); after a
-  # merge by the job's own token it dispatches the default branch's run, which that merge cannot start.
-  issue_comment:
-    types: [created]
-  workflow_run:
-    workflows: [proof]
-    types: [completed]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -41,13 +32,12 @@ permissions:
 # most one waiting run per group and replaces an older waiting run with the newer one, which checks the newest commit and so every
 # change before it. A commit whose waiting run was replaced is covered by the next completed full run that contains it.
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && format('governance-{0}-code', github.ref_name) || github.event_name == 'workflow_dispatch' && github.ref_name == github.event.repository.default_branch && format('governance-{0}-code', github.ref_name) || (github.event_name == 'issue_comment' || github.event_name == 'workflow_run') && format('governance-merger-{0}', github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.sha) || format('governance-{0}-{1}', github.event.pull_request.number || github.sha, github.event.action == 'edited' && 'edited' || 'code') }}
+  group: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && format('governance-{0}-code', github.ref_name) || format('governance-{0}-{1}', github.event.pull_request.number || github.sha, github.event.action == 'edited' && 'edited' || 'code') }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   governance:
-    # Never on the merger job's events (brief #765): the required check runs on pull requests, pushes and a dispatch.
-    if: ${{ github.event_name != 'issue_comment' && github.event_name != 'workflow_run' && (github.event_name == 'pull_request' || github.ref_name == github.event.repository.default_branch) }}
+    if: ${{ github.event_name == 'pull_request' || github.ref_name == github.event.repository.default_branch }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
@@ -357,58 +347,3 @@ jobs:
           fi
           echo "scanning $range"
           "$RUNNER_TEMP/gitleaks" git --no-banner --redact --exit-code 1 --log-opts="$range" .
-
-  # The merger job of GitHub mode (brief #765, ADR-0354, amendment 139 to SPEC-0039): it checks out the default branch,
-  # never a pull request's head, and runs merge_cleared.py with the job's own token; its one merge call runs under the
-  # secret `AGK_MERGE_TOKEN`, which only the second step receives (without it: one line, and nothing else). `--event`
-  # prints `<n> <sha>` only when `[flow] auto_merge = true`, the project is not in local or personal mode and the latest
-  # verdict clears that head; then the guarded command runs exactly, with every re-check its own, and `--report` posts
-  # one comment for a hold or a refusal. No retry loop.
-  merger:
-    needs: governance
-    if: ${{ !cancelled() && ((github.event_name == 'issue_comment' && github.event.issue.pull_request && (startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:'))) || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'pull_request' && github.event.action != 'edited' && !github.event.pull_request.draft && needs.governance.result == 'success')) }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      actions: write
-      checks: read
-      statuses: read
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5.6.0
-        with:
-          python-version: "3.12"
-      - name: Find a cleared pull request
-        id: find
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          # A default branch whose merge_cleared.py predates the merger mode refuses `--event`: nothing to do.
-          target="$(python3 scripts/agk/merge_cleared.py --event "$GITHUB_EVENT_PATH" --event-name "$EVENT_NAME")" \
-            || { echo "merger: the default branch has no merger mode yet"; exit 0; }
-          [ -n "$target" ] || exit 0
-          # The pre-merge tests of `[testing] pre_merge_tests` need the pinned test tools (config/ci-tools.txt).
-          # Every command here ends green: a red merger would turn the run that `Latest full run` reads red.
-          python -m pip install -q -r config/ci-tools.txt || echo "merger: the test tools could not be installed"
-          echo "target=$target" >> "$GITHUB_OUTPUT"
-      - name: Merge a cleared pull request
-        if: ${{ steps.find.outputs.target != '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          AGK_MERGE_TOKEN: ${{ secrets.AGK_MERGE_TOKEN }}
-          TARGET: ${{ steps.find.outputs.target }}
-        run: |
-          set -- $TARGET
-          if [ -z "$AGK_MERGE_TOKEN" ]; then
-            python3 scripts/agk/merge_cleared.py --report --pr "$1" --no-secret || echo "merger: no report"
-            exit 0
-          fi
-          line="$(python3 scripts/agk/merge_cleared.py --pr "$1" --sha "$2")" || true
-          echo "$line"
-          python3 scripts/agk/merge_cleared.py --report --pr "$1" --sha "$2" --line "$line" || echo "merger: no report"

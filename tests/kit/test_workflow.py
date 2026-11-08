@@ -50,8 +50,8 @@ def test_ac2_workflow_has_no_branch_name_and_gates_on_the_default_branch():
 
 
 def step_blocks(text: str) -> dict[str, str]:
-    """Step name -> its block of lines, of the `governance` job (the merger job follows, #765)."""
-    parts = re.split(r"^      - ", text.split("\n  merger:\n", 1)[0], flags=re.M)[1:]
+    """Step name -> its block of lines."""
+    parts = re.split(r"^      - ", text, flags=re.M)[1:]
     out = {}
     for part in parts:
         match = re.match(r"name:\s*(.+)", part)
@@ -204,7 +204,7 @@ def test_ac1_proof_runs_on_pull_request_events_with_read_only_contents_and_no_se
         "ready_for_review",
     }  # brief #216: an edited description cannot change a test; brief #283: a draft made ready
     assert re.search(r"^permissions:\n  contents: read\n  checks: read\n", text, flags=re.M)
-    assert text.split("\n  merger:\n", 1)[0].count("permissions:") == 1  # the merger's own (#765)
+    assert text.count("permissions:") == 1
     assert "pull_request_target" not in text.replace("never pull_request_target", "")
     assert "secrets." not in text and "GITHUB_TOKEN" not in text
     assert "fetch-depth: 0" in text
@@ -355,15 +355,14 @@ def test_the_secret_scan_needs_no_licence_key_no_secret_and_no_new_permission():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "gitleaks-action" not in text
     assert "GITLEAKS_LICENSE" not in text
-    assert "secrets." not in text.split("\n  merger:\n", 1)[0]  # the merger's own step (#765)
-    assert set(re.findall(r"secrets\.\w+", text)) == {"secrets.AGK_MERGE_TOKEN"}
+    assert "secrets." not in text
     assert re.search(
         r"^permissions:\n  contents: read\n  pull-requests: read\n  issues: read\n"
         r"  actions: read\n\n",
         text,
         flags=re.M,
     )
-    assert text.split("\n  merger:\n", 1)[0].count("permissions:") == 1  # the merger's own (#765)
+    assert text.count("permissions:") == 1
 
 
 def test_the_secret_scan_keeps_its_name_its_place_and_its_condition():
