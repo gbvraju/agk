@@ -12,6 +12,8 @@ person's `Approve: SPEC-0030`; no session posts it.
 2. **Rule 4, the check on GitHub.** A brief is checked when it is filed or edited, not only by the conductor's guard:
    `check_brief.py --event PAYLOAD` decides, for one saved `issues` event of an issue labelled `agk-brief`, whether it gets
    the label `agk-brief-invalid` and one comment naming each failing rule, or loses both and has its milestone set to its
-   wave. The workflow that runs it needs the owner's yes (`Q-770-1`).
+   wave. `.github/workflows/agk-brief.yml` runs it (the owner's yes is quoted in brief #770), and this repository only.
 3. **Rule 3, the report.** `session.py plan` prints each brief refused for a brief-check rule on its own line
    `MALFORMED: #<n> <rule> (fix: <filer>)`, and the conductor's report carries those lines under `Needs a fix`.
+4. **SPEC-0006 rule 5.** A new row after `brief-finished`: `brief-invalid-label` | warn | the brief-check workflow is in the
+   tree and the repository has no label `agk-brief-invalid`; one more GET, only where that workflow is present.

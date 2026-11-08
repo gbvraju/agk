@@ -13,7 +13,7 @@ clause in its `Skipped:` line that nobody acted on. The check ran only inside th
 else was never checked; a refused brief became no action for anyone; and nothing on GitHub checked a brief when it was opened
 or edited. Ten open briefs also belonged to no wave of the plan (owner direction 2026-11-08, quoted in brief #770).
 
-This build changes the protected path classes `scripts/agk/`, `tests/kit/`, `.claude/` (the conductor's report line) and `config/` (the rule budget's lowered line).
+This build changes the protected path classes `scripts/agk/`, `tests/kit/`, `tests/kit_dev/` (the repository-only list), `.github/` (the new workflow), `.claude/` (the conductor's report line) and `config/` (the rule budget's lowered line).
 
 ## Decision
 
@@ -26,8 +26,13 @@ This build changes the protected path classes `scripts/agk/`, `tests/kit/`, `.cl
 3. `check_brief.py --event PAYLOAD` decides what a job does for one saved `issues` event: `ignore`, `fail` with the label
    `agk-brief-invalid` and a comment naming each failing rule, or `pass` with the wave for the milestone. It posts nothing.
 
-The workflow `.github/workflows/agk-brief.yml` that runs the decision on GitHub, and the `doctor.py` check of its label, are
-not in this change: a workflow change needs the owner's yes in the brief, and brief #770 quotes none (`Q-770-1`).
+4. `.github/workflows/agk-brief.yml` (the owner's yes is quoted in brief #770) runs that decision on `issues` `opened`, `edited`
+   and `labeled` events of an issue labelled `agk-brief`, from a checkout of the default branch, on the saved event file, so the
+   issue's text never reaches a command. It has `contents: read` and `issues: write`. It sets or clears the label and its one
+   comment, and on a pass sets the issue's milestone to its wave. It also reads the milestones, for the waves. The workflow is
+   this repository's and is not installed in a project: nothing in a project's `Touches:` asked for it.
+5. `doctor.py` gains the warning `brief-invalid-label`: where that workflow is in the tree and the label is missing, the owner
+   creates it. A project without the workflow is asked nothing.
 
 ## Consequences
 
@@ -36,6 +41,7 @@ fix it. Every open brief needs a `Wave:` line once this merges, so the repair of
 
 ## Residual
 
-- 2026-11-08: until the owner's yes lands the workflow (`Q-770-1`), a brief filed on GitHub is checked only when the plan runs.
+- 2026-11-08: the workflow runs only from the default branch, so it first acts on the first event after this merges; a brief that
+  has no later event is reported by `session.py plan` alone.
 - 2026-11-08: the conductor's guard (`.claude/hooks/conductor_guard.py`, outside the brief's `Touches:`) does not yet check the
   `Wave:` line when it files a brief; the plan refuses such a brief on its next run.
