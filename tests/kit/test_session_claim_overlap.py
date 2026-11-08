@@ -183,14 +183,16 @@ def test_a_set_list_replaces_the_default(proj, stub):
     assert got["waits"] == [{"brief": 6, "waits_for": 5, "why": "both touch agk.toml"}]
     taken_by_other(stub, 5)
     out = claim(proj, stub)
-    assert out.returncode == 1 and out.stdout.strip() == "skip #6: waits for #5 (both touch agk.toml)"
+    assert out.returncode == 1
+    assert out.stdout.strip() == "skip #6: waits for #5 (both touch agk.toml)"
     assert claim(proj, stub, 7).returncode == 0
 
 
 def test_an_empty_list_exempts_no_index(proj, stub):
     """REQ-057 AC2: a set list replaces the default, so an empty one exempts nothing."""
     flow(proj, "shared_indexes = []")
-    listing(stub, [issue(5, brief("docs/requirements.md")), issue(6, brief("docs/requirements.md"))])
+    same = brief("docs/requirements.md")
+    listing(stub, [issue(5, same), issue(6, same)])
     stub.serve(PULLS, [])
     free(stub, 5, 6)
     assert [w["brief"] for w in data(proj, stub)["waits"]] == [6]

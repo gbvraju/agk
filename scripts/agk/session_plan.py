@@ -56,10 +56,10 @@ counts the first-parent commits of the default branch after the merge base. `mer
 holds on both (rule 8).
 
 The overlap rule (SPEC-0050 rules 2 to 4, build (c), brief #751): `next`, `plan` and `claim` judge
-overlap with `running_conflict` and `clash` over the paths that `exempt` leaves, the shared-mechanical
-files and the shared indexes of `[flow] shared_indexes` (exact paths, default `SHARED_INDEXES`; a
-set list replaces it, a bad value is refused naming the setting). A shared index never makes an
-overlap; it still counts for the re-prove above, which `reprove_files` reads without any exemption.
+overlap with `running_conflict` and `clash`, leaving out the paths that `exempt` lists: the
+shared-mechanical files and the shared indexes of `[flow] shared_indexes` (exact paths, default
+`SHARED_INDEXES`; a set list replaces it, a bad value is refused naming the setting). A shared
+index never makes an overlap; it still counts for the re-prove above, which has no exemption.
 """
 
 from __future__ import annotations

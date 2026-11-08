@@ -65,7 +65,7 @@ def took(cid: int, who: str, build: str | None = None, login: str = "someone") -
 
 def claim(proj, stub, build: str | None = "b", who: str = "s-me"):
     if not (stub.dir / f"{ISSUES.replace('/', '__')}.GET.json").exists():
-        stub.serve(ISSUES, [issue(5, FREE)])  # claim judges overlap over the open briefs (SPEC-0050)
+        stub.serve(ISSUES, [issue(5, FREE)])  # claim judges overlap over the open briefs
     extra = ("--build", build) if build else ()
     return session(proj, stub, "claim", "--session", who, "--brief", "5", *extra)
 
