@@ -261,7 +261,7 @@ def test_a_sweep_never_cancels_and_never_shares_a_group_with_a_pull_request():
 
 
 def yaml_reader():
-    # PyYAML comes with the pinned bandit of config/ci-tools.txt, so governance runs these two tests.
+    # PyYAML comes with the pinned bandit of config/ci-tools.txt: governance runs these two.
     # The proof job installs only pytest and ruff; the parser-free test below still runs there.
     return pytest.importorskip("yaml")
 
@@ -294,7 +294,7 @@ def test_the_loader_refuses_a_plain_run_value_that_holds_a_colon(tmp_path):
 
 
 def test_no_plain_run_value_holds_a_colon_and_a_space():
-    """REQ-046: verdict on 3c17a36 item 1 (the fault itself, read with no parser, for the proof job)."""
+    """REQ-046: verdict on 3c17a36 item 1 (the fault, read with no parser, for proof)."""
     plain = re.findall(r"^\s*(?:- )?run: (?![|>\"'])(.*)$", text(), re.M)
     assert plain, "the file has plain run values"
     assert [value for value in plain if ": " in value or value.endswith(":")] == []
