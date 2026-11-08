@@ -125,6 +125,62 @@ def test_bill_lists_exactly_the_declared_components(repo, tmp_path: Path) -> Non
     assert len(kit_file["hashes"][0]["content"]) == 64
 
 
+V = "SCANTOOL_VERSION: 8.30.1"
+D = f"SCANTOOL_SHA256: {SCANNER_DIGEST}"
+W = "SCANTOOL_VERSION: 9.0.0"
+E = "SCANTOOL_SHA256: " + "e5" * 32
+
+
+def scanner_refs(repo, tmp_path: Path, lines: list[str]) -> list[tuple[str, str]]:
+    """The scanner components, as (version, digest), of a workflow stating these lines."""
+    body = "".join(f"      - env:\n          {line}\n" for line in lines)
+    repo.commit({".github/workflows/ci.yml": f"name: ci\njobs:\n  a:\n    steps:\n{body}"})
+    doc, _ = bill(tmp_path)
+    found = [c for c in doc["components"] if props(c)["agk:class"] == "scanner"]
+    return [(c["version"], c["hashes"][0]["content"]) for c in found]
+
+
+@pytest.mark.parametrize(
+    ("lines", "expected"),
+    [
+        ([V, D], [("8.30.1", SCANNER_DIGEST)]),
+        ([D, V], [("8.30.1", SCANNER_DIGEST)]),
+        ([D, V, D, V], [("8.30.1", SCANNER_DIGEST)]),
+        ([V, D, D, V], [("8.30.1", SCANNER_DIGEST)]),
+        ([E, W, D, V], [("8.30.1", SCANNER_DIGEST), ("9.0.0", "e5" * 32)]),
+        ([V, D, E, W], [("8.30.1", SCANNER_DIGEST), ("9.0.0", "e5" * 32)]),
+    ],
+)
+def test_a_scanner_is_listed_in_either_order(
+    repo, tmp_path: Path, capsys, lines: list[str], expected: list[tuple[str, str]]
+) -> None:
+    """REQ-061 AC1: the order of a scanner's two lines does not decide whether it is listed."""
+    assert scanner_refs(repo, tmp_path, lines) == expected
+    capsys.readouterr()
+    assert sbom.main(["check", str(tmp_path / "out" / "bill.json")]) == 0
+    assert capsys.readouterr().out.strip() == "ok bom"
+
+
+@pytest.mark.parametrize("lines", [[V], [D], [D, D]])
+def test_a_scanner_missing_a_line_is_not_a_pinned_scanner(
+    repo, tmp_path: Path, lines: list[str]
+) -> None:
+    """REQ-061 AC1: no pair, no component; a version or digest is never borrowed or invented."""
+    assert scanner_refs(repo, tmp_path, lines) == []
+
+
+@pytest.mark.parametrize("lines", [[V, D, E], [D, V, E], [E, D, V], [V, E, D]])
+def test_one_version_with_two_digests_is_refused_in_any_order(
+    repo, tmp_path: Path, capsys, lines: list[str]
+) -> None:
+    """REQ-061 AC1: the second digest of one version is never dropped silently."""
+    body = "".join(f"      - env:\n          {line}\n" for line in lines)
+    repo.commit({".github/workflows/ci.yml": f"name: ci\njobs:\n  a:\n    steps:\n{body}"})
+    code, out = make(tmp_path)
+    assert code == 1 and not out.exists()
+    assert ".github/workflows/" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize("ref", ["python:beta", "python:setuptools", "action:example/tool"])
 def test_a_pin_that_is_not_exact_is_unpinned(repo, tmp_path: Path, ref: str) -> None:
     """REQ-061 AC1: a range or an unpinned `uses:` has `agk:pin` and never a version."""

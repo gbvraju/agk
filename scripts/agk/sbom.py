@@ -173,15 +173,37 @@ def action_component(target: str, tag: str | None) -> dict:
 
 
 def scanner_components(text: str) -> list[dict]:
-    """Each `<NAME>_VERSION` followed by its `<NAME>_SHA256`: pinned by version and digest."""
-    versions: dict[str, str] = {}
+    """Each `<NAME>_VERSION` with its `<NAME>_SHA256`, either first: pinned by version and digest.
+
+    A digest no version follows takes the version last stated, so one version with two digests
+    gives two components that `build` refuses, and neither digest is dropped.
+    """
+    version: dict[str, str] = {}
+    unpaired: set[str] = set()
+    digests: dict[str, list[str]] = {}
     items = []
+
+    def pair(name: str, digest: str) -> None:
+        tool = name.lower().replace("_", "-")
+        items.append(entry("scanner", tool, version[name], digest=digest))
+
     for name, field, value in SCANNER_PIN.findall(text):
         if field == "VERSION":
-            versions[name] = value
-        elif name in versions and SHA256.fullmatch(value):
-            tool = name.lower().replace("_", "-")
-            items.append(entry("scanner", tool, versions[name], digest=value))
+            version[name] = value
+            waiting = digests.pop(name, [])
+            for digest in waiting:
+                pair(name, digest)
+            if not waiting:
+                unpaired.add(name)
+        elif SHA256.fullmatch(value):
+            if name in unpaired:
+                unpaired.remove(name)
+                pair(name, value)
+            else:
+                digests.setdefault(name, []).append(value)
+    for name, waiting in digests.items():
+        for digest in waiting if name in version else []:
+            pair(name, digest)
     return items
 
 

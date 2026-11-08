@@ -25,8 +25,8 @@ of ADR-0349 or SPEC-0054.
    release's (session rule 14).
 3. Where the spec leaves a form open, the build reads it as follows. An action's `version` is its release tag comment
    and its SHA is in the package URL, or the SHA is the version when there is no comment. An unpinned component has no
-   package URL, since the spec's forms all hold a version. A `scanner` is any `<NAME>_VERSION` followed by its
-   `<NAME>_SHA256` in a workflow. Python and CI tool names are normalized as package URLs need. The `kit-file`
+   package URL, since the spec's forms all hold a version. A `scanner` is any `<NAME>_VERSION` stated with its
+   `<NAME>_SHA256` in a workflow, whichever comes first. Python and CI tool names are normalized as package URLs need. The `kit-file`
    components are the files `kit_hashes.py` lists as written by an installer, templates by their source path. A
    repository with no `pyproject.toml` or `[project] name` is refused, because rule 2 refuses a file that cannot be read
    and only `kit/manifest.json` is conditional there.
