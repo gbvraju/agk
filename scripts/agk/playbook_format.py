@@ -34,6 +34,11 @@ The discovery questions (SPEC-0048 rule 4, SPEC-0038 rule 2 as amendment 130 wid
 AC2; brief #686): every playbook holds `[[discovery]]` entries (`id`, a lower-case slug, and `text`,
 one plain question) with at least the five ids of `DISCOVERY_IDS`, each id once; `discovery(path)`
 returns the `(id, text)` pairs of a playbook in its order.
+
+The skills a playbook names (SPEC-0048 rule 12; REQ-055 AC6; brief #691): the optional key `skills`
+is a list of names, each matching doctor's `ENGINE_NAME`, and none holds a token of
+`config/neutrality.txt` (Q-S0048-16); a problem names the rule, the file and the key, never the
+value. `skills(path, root)` returns the allowed names of a playbook in its order, for doctor.
 """
 
 from __future__ import annotations
@@ -94,6 +99,7 @@ STR, INT, BOOL, STRS, PAIRS, TABLES = "str", "int", "bool", "strs", "pairs", "ta
 # SPEC-0048 rule 4: the ids every playbook's `[[discovery]]` holds (amendment 130, item 2).
 DISCOVERY_IDS = ("constraints", "success", "data-rules", "environments", "non-functional")
 SLUG = re.compile(r"^[a-z][a-z0-9-]*$")
+NEUTRALITY = "config/neutrality.txt"  # SPEC-0048 rule 12, Q-S0048-16
 
 TOP: dict[str, str] = {
     "format": INT,
@@ -110,6 +116,7 @@ TOP: dict[str, str] = {
     "claims": TABLES,
     "discovery": TABLES,
 }
+OPTIONAL_TOP: dict[str, str] = {"skills": STRS}  # SPEC-0048 rule 12: a playbook may name skills
 # section -> (required keys, optional keys), each key with its type
 SECTIONS: dict[str, tuple[dict[str, str], dict[str, str]]] = {
     "phases": ({"name": STR, "order": INT, "after": STRS}, {}),
@@ -302,6 +309,45 @@ def discovery(path: Path) -> list[tuple[str, str]]:
     return [(entry["id"], entry["text"]) for entry in data["discovery"]]
 
 
+def _tokens(root: Path) -> list[str]:
+    """The lower-case tokens of the project's neutrality list; none when it has no list."""
+    try:
+        text = (Path(root) / NEUTRALITY).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    lines = (line.strip() for line in text.splitlines())
+    return [line.lower() for line in lines if line and not line.startswith("#")]
+
+
+def _skill_problem(name: str, tokens: list[str]) -> str | None:
+    """Why SPEC-0048 rule 12 refuses a skill name, naming the rule and never the value."""
+    if not SLUG.fullmatch(name):
+        return "a `skills` name is not a lower-case slug"
+    if any(token in name for token in tokens):
+        return f"a `skills` name holds a token of {NEUTRALITY}"
+    return None
+
+
+def _skills(rel: str, names: list[str], root: Path) -> list[str]:
+    tokens = _tokens(root)
+    found = {_skill_problem(name, tokens) for name in names} - {None}
+    return [f"rule 12: {rel}: {why} (SPEC-0048 rule 12; key: skills)" for why in sorted(found)]
+
+
+def skills(path: Path, root: Path) -> list[str]:
+    """SPEC-0048 rule 12: the allowed names of a playbook's `skills`, in its order; none from a file
+    that is not TOML or has no such list. A refused name is left out, so no reader prints it."""
+    try:
+        data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return []
+    names = data.get("skills")
+    if not _is(names, STRS):
+        return []
+    tokens = _tokens(root)
+    return [name for name in names if _skill_problem(name, tokens) is None]
+
+
 def _named(rel: str, data: dict) -> list[str]:
     strings = _strings(data)
     out = []
@@ -333,12 +379,15 @@ def problems(path: Path, root: Path) -> list[str]:
     for key in data:
         if key == "pr_tests":
             out.append(f"rule 4: {rel}: the playbook has a `pr_tests` key")
-        elif key not in TOP:
+        elif key not in TOP and key not in OPTIONAL_TOP:
             out.append(f"rule 2 and rule 4: {rel}: the playbook has a key outside the format")
     for key, kind in TOP.items():
         if key not in data:
             out.append(f"rule 2: {rel}: the playbook is missing `{key}`")
         elif not _is(data[key], kind):
+            out.append(f"rule 2: {rel}: `{key}` has the wrong type")
+    for key, kind in OPTIONAL_TOP.items():
+        if key in data and not _is(data[key], kind):
             out.append(f"rule 2: {rel}: `{key}` has the wrong type")
     if _is(data.get("format"), INT) and data["format"] != FORMAT:
         out.append(f"rule 2: {rel}: `format` is not {FORMAT}")
@@ -365,6 +414,8 @@ def problems(path: Path, root: Path) -> list[str]:
         out += _claims(rel, data["claims"], root)
     if _is(data.get("discovery"), TABLES):
         out += _discovery(rel, data["discovery"])
+    if _is(data.get("skills"), STRS):
+        out += _skills(rel, data["skills"], root)
     out += _named(rel, data)
     return out
 
