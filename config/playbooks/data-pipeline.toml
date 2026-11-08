@@ -1,0 +1,112 @@
+format = 1
+work_type = "data-pipeline"
+title = "Build, then rollback, then cut-over, with a data contract, reconciliation, a dry run on a sample and the owner's production runs"
+heavy_steps = []
+evidence = [
+  "the data contract file, with the test glob the map names for it",
+  "the reconciliation declared for each table or stream and the record of a run that matches",
+  "the dry run record, on invented or anonymised data",
+  "the rollback and cut-over briefs with their Depends-on lines, and the rollback rehearsal record",
+  "the owner's record of each run against production data",
+]
+lanes = []
+
+[[phases]]
+name = "build"
+order = 1
+after = []
+
+[[phases]]
+name = "rollback"
+order = 2
+after = ["build"]
+
+[[phases]]
+name = "cut-over"
+order = 3
+after = ["rollback"]
+
+[split]
+brief_order = ["build", "rollback", "cut-over"]
+depends_on = [
+  ["rollback", "build"],
+  ["cut-over", "rollback"],
+]
+
+[testing]
+profile = "balanced"
+always_full = []
+map = []
+
+[[gates]]
+id = "data-contract"
+kind = "check"
+text = "A data contract: a contract file names each source and target field with its type, and the testing map names a test glob for it."
+step = "data-contract"
+owner_only = false
+
+[[gates]]
+id = "reconciliation-declared"
+kind = "check"
+text = "Row-count and checksum reconciliation: one is declared for every table or stream the contract names."
+step = "reconciliation-declared"
+owner_only = false
+
+[[gates]]
+id = "reconciliation-matches"
+kind = "judgement"
+text = "A recorded reconciliation run matches the row counts and checksums; its run record is the evidence."
+owner_only = false
+
+[[gates]]
+id = "dry-run-on-sample"
+kind = "judgement"
+text = "A dry run on a sample; its run record, on invented or anonymised data, is the evidence."
+owner_only = false
+
+[[gates]]
+id = "rollback-order"
+kind = "check"
+text = "A rollback: the split puts a rollback brief before every cut-over brief."
+step = "rollback-order"
+owner_only = false
+
+[[gates]]
+id = "rollback-rehearsal"
+kind = "judgement"
+text = "A rollback rehearsal; its rehearsal record is the evidence."
+owner_only = false
+
+[[gates]]
+id = "production-run"
+kind = "judgement"
+text = "Any run against production data, done and recorded by the owner alone; a session prepares the run and stops."
+owner_only = true
+
+[milestones]
+shape = "per-brief"
+batch_by = "not batched: one pull request per brief, as today"
+
+[[claims]]
+text = "Each cut-over waits for its rollback brief and every table is reconciled against the contract, so fewer cut-overs are expected to stop on data that no one checked."
+basis = "expected"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the work: a deadline, a budget, a team's skills, or sources and targets that must stay as they are?"
+
+[[discovery]]
+id = "success"
+text = "Which counts and checks after each run show that the data arrived whole and correct, and how will each be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the data the pipeline reads, changes, keeps or sends on, and where may each copy live?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments must it run in, from a developer's machine with sample data to production?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of volume, run time, freshness, uptime and recovery must it meet?"
