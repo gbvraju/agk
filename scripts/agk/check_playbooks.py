@@ -99,14 +99,20 @@ def composed(path: Path, root: Path) -> tuple[list[dict[str, Any]], list[str], l
     return list(gates.values()), list(evidence), problems
 
 
-def cmd_check(root: Path) -> int:
-    files = playbook_format.playbooks(root)
+def findings(root: Path, files: list[Path] | None = None) -> list[str]:
+    """The problems of the check: the given playbooks, or all of them, and the declaration."""
+    paths = playbook_format.playbooks(root) if files is None else files
     found = [
         line
-        for path in files
+        for path in paths
         for line in playbook_format.problems(path, root) + composed(path, root)[2]
     ]
-    found += playbook_format.declaration(root)[1]
+    return found + playbook_format.declaration(root)[1]
+
+
+def cmd_check(root: Path) -> int:
+    files = playbook_format.playbooks(root)
+    found = findings(root, files)
     for line in found:
         print(f"FAIL {NAME}: {line}")
     if found:

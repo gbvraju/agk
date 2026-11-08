@@ -44,6 +44,11 @@ The base playbook (SPEC-0048 rule 21; REQ-055 AC8; brief #692): `BASE` is a play
 a work type. `config/playbooks/default.toml` alone may carry it, and `declaration` refuses it as it
 refuses any name outside `WORK_TYPES`.
 
+A derived playbook (SPEC-0048 rule 22; REQ-055 AC8; brief #694): a name outside `WORK_TYPES` is
+derived only when it is the slug of a research record, `docs/research/<slug>.md`; each gate of its
+own carries `source`, `<URL> (accessed YYYY-MM-DD)`, or `basis = "expected"`, and a gate of a
+shipped playbook carries neither. Any other unknown name stays refused by rule 1.
+
 The modules a playbook names (SPEC-0048 rule 23; REQ-055 AC8; brief #693): the optional key
 `modules` is a list of shipped playbooks, each a name of `WORK_TYPES` whose file is under
 `config/playbooks/`; one that is not shipped is a problem naming the rule, the file and the key,
@@ -53,6 +58,7 @@ never the value. `modules(path, root)` returns the shipped names in their order,
 
 from __future__ import annotations
 
+import datetime
 import re
 import tomllib
 from pathlib import Path, PurePosixPath
@@ -81,6 +87,11 @@ WORK_TYPE = "work_type"
 GATE_KINDS = ("check", "judgement")
 SHAPES = ("per-brief", "per-phase", "per-batch")
 BASES = ("measured", "expected")
+# SPEC-0048 rule 22: a project's derived playbook, named by the slug of its research record.
+RESEARCH = "docs/research"
+DERIVED_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+GATE_SOURCE = re.compile(r"^https?://\S+ \(accessed (\d{4}-\d{2}-\d{2})\)$")
+DERIVED_GATE_KEYS: dict[str, str] = {"source": "str", "basis": "str"}
 PROFILES = ("balanced", "thorough")  # `fast` is refused by rule 4; impact.py's other profiles
 LOWERING_PROFILES = ("fast",)
 # SPEC-0038 rule 4: the settings of agk.toml that govern a gate.
@@ -257,9 +268,57 @@ def _testing(rel: str, testing: dict) -> list[str]:
     return out
 
 
-def _gates(rel: str, gates: list[dict]) -> list[str]:
+def is_derived(name: str, root: Path) -> bool:
+    """SPEC-0048 rule 22: a name outside the list that is the slug of a research record of `root`,
+    so a mistyped work type with no record stays an unknown one (rule 1)."""
+    return (
+        name not in WORK_TYPES
+        and name != BASE
+        and DERIVED_NAME.match(name) is not None
+        and (Path(root) / RESEARCH / f"{name}.md").is_file()
+    )
+
+
+def source_date(value: Any) -> datetime.date | None:
+    """The access date of a gate's `source`, `<URL> (accessed YYYY-MM-DD)`, or None."""
+    found = GATE_SOURCE.match(value) if isinstance(value, str) else None
+    try:
+        return datetime.date.fromisoformat(found.group(1)) if found else None
+    except ValueError:
+        return None
+
+
+def source_dates(path: Path) -> list[datetime.date]:
+    """SPEC-0048 rule 25: the access dates of the playbook's own gate sources; a file that cannot
+    be read has none, and `problems` reports it."""
+    try:
+        data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return []
+    gates = data.get("gates")
+    if not isinstance(gates, list):
+        return []
+    dates = [source_date(g.get("source")) for g in gates if isinstance(g, dict)]
+    return [when for when in dates if when is not None]
+
+
+def _sourced(rel: str, gate: dict) -> list[str]:
+    """SPEC-0048 rule 22: a gate of a derived playbook carries a dated source or `expected`."""
+    if "source" not in gate and "basis" not in gate:
+        return [f'rule 22: {rel}: a gate has neither `source` nor `basis = "expected"`']
+    out = []
+    if "source" in gate and source_date(gate["source"]) is None:
+        out.append(f"rule 22: {rel}: a gate `source` is not a URL and an access date")
+    if "basis" in gate and gate["basis"] != "expected":
+        out.append(f"rule 22: {rel}: a gate `basis` is not expected")
+    return out
+
+
+def _gates(rel: str, gates: list[dict], derived: bool = False) -> list[str]:
     out = []
     for gate in gates:
+        if derived:
+            out += _sourced(rel, gate)
         kind = gate.get("kind")
         if isinstance(kind, str) and kind not in GATE_KINDS:
             out.append(f"rule 2: {rel}: a gate `kind` is not check or judgement")
@@ -407,8 +466,9 @@ def problems(path: Path, root: Path) -> list[str]:
         return [f"rule 1: {rel}: the file is not TOML"]
     out: list[str] = []
     work_type = data.get("work_type")
+    derived = isinstance(work_type, str) and is_derived(work_type, root)
     if isinstance(work_type, str):
-        if work_type not in WORK_TYPES and work_type != BASE:
+        if work_type not in WORK_TYPES and work_type != BASE and not derived:
             out.append(f"rule 1: {rel}: `work_type` is not one of the work types")
         elif work_type != path.stem:
             out.append(f"rule 1: {rel}: `work_type` is not the file's name")
@@ -431,6 +491,8 @@ def problems(path: Path, root: Path) -> list[str]:
         value = data.get(section)
         if not _is(value, TOP[section]):
             continue
+        if section == "gates" and derived:
+            optional = {**optional, **DERIVED_GATE_KEYS}
         tables = value if isinstance(value, list) else [value]
         where = f"[{section}]" if isinstance(value, dict) else f"a [[{section}]] entry"
         for table in tables:
@@ -441,7 +503,7 @@ def problems(path: Path, root: Path) -> list[str]:
     if _is(data.get("testing"), "table"):
         out += _testing(rel, data["testing"])
     if _is(data.get("gates"), TABLES):
-        out += _gates(rel, data["gates"])
+        out += _gates(rel, data["gates"], derived)
     milestones = data.get("milestones")
     if isinstance(milestones, dict) and isinstance(milestones.get("shape"), str):
         if milestones["shape"] not in SHAPES:

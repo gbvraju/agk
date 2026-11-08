@@ -102,9 +102,7 @@ def check(root: Path, date: str = TODAY) -> subprocess.CompletedProcess:
 
 
 def tree(root: Path) -> dict[str, bytes]:
-    return {
-        p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()
-    }
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
 
 
 GATE = """
