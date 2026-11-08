@@ -573,7 +573,9 @@ def ticket_leftovers(folder: Path) -> list[str]:
     return [p.name for p in folder.iterdir() if p.name.startswith(".")]
 
 
-def test_the_one_slot_listing_holds_even_when_the_parent_is_slow(repo, tmp_path, monkeypatch, capfd):
+def test_the_one_slot_listing_holds_even_when_the_parent_is_slow(
+    repo, tmp_path, monkeypatch, capfd
+):
     """REQ-040: brief #729 (governance on 4bf7e60 listed `['.agk-lock-heavy.mutex',
     'agk-lock-heavy']`: the command listed the folder while `run` still held the mutex of
     `record_child`). Each mutex section is held half a second here, as a runner that is slow
