@@ -13,7 +13,7 @@ import hashlib
 import json
 import os
 import socket
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
 from pathlib import Path
@@ -32,7 +32,9 @@ ACTION_SHA = hashlib.sha1(b"an invented action", usedforsecurity=False).hexdiges
 
 
 def git(root: Path, *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True)
+    done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *args], cwd=root, capture_output=True, text=True, check=True
+    )
     return done.stdout.strip()
 
 
@@ -174,7 +176,7 @@ def make_pack(tmp_path: Path, root: Path, tag=TAG) -> Path:
 
 
 def check(root: Path, pack: Path) -> subprocess.CompletedProcess:
-    return subprocess.run(
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(SCRIPT), "check", str(pack)],
         cwd=root,
         capture_output=True,
@@ -479,7 +481,7 @@ def test_ac8_a_missing_folder_is_one_line(tmp_path):
 def test_ac8_a_bad_command_prints_the_usage_and_exits_2(tmp_path, args):
     """REQ-059 AC8: rule 10 (this build has `check` only; `make` is build (c))."""
     root = kit_repo(tmp_path)
-    done = subprocess.run(
+    done = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(SCRIPT), *args], cwd=root, capture_output=True, text=True, env=env()
     )
     assert done.returncode == 2 and done.stdout.startswith("usage:"), done.stdout
