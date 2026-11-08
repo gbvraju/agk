@@ -1,0 +1,80 @@
+format = 1
+work_type = "voice-agent"
+title = "The voice-agent gates on the usual flow: a latency budget, an ASR/TTS evaluation set and barge-in and fallback scenarios"
+heavy_steps = []
+evidence = [
+  "the declared latency budget",
+  "the recorded run measured against the latency budget",
+  "the ASR/TTS evaluation set with its version line",
+  "the list of barge-in and fallback scenarios, with the test glob the map names for each",
+]
+lanes = []
+
+[[phases]]
+name = "build"
+order = 1
+after = []
+
+[split]
+brief_order = ["build"]
+depends_on = []
+
+[testing]
+profile = "balanced"
+always_full = []
+map = []
+
+[[gates]]
+id = "latency-budget"
+kind = "check"
+text = "Latency budget: the latency budget is declared."
+step = "latency-budget"
+owner_only = false
+
+[[gates]]
+id = "latency-budget-met"
+kind = "judgement"
+text = "A recorded run meets the latency budget; its run record is the evidence."
+owner_only = false
+
+[[gates]]
+id = "asr-tts-evaluation-set"
+kind = "check"
+text = "ASR/TTS evaluation set: the set exists with a version line."
+step = "asr-tts-evaluation-set"
+owner_only = false
+
+[[gates]]
+id = "barge-in-fallback-scenarios"
+kind = "check"
+text = "Barge-in and fallback scenarios: each scenario is listed and the map names its tests."
+step = "barge-in-fallback-scenarios"
+owner_only = false
+
+[milestones]
+shape = "per-brief"
+batch_by = "not batched: one pull request per brief, as today"
+
+[[claims]]
+text = "The latency budget and the barge-in and fallback scenarios are written down while the work is built, so fewer fix briefs are expected to chase a late miss or an unhandled interruption."
+basis = "expected"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the work: a deadline, a budget, a team's skills, or languages, phone lines and systems that must stay as they are?"
+
+[[discovery]]
+id = "success"
+text = "Which outcomes of a spoken conversation show that the work succeeded, and how will each be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the speech and transcripts the agent hears, keeps or passes on, and to consent to record them?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments must it run in, from a developer's machine to production?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of response time, uptime, security and speech accuracy must it meet?"
