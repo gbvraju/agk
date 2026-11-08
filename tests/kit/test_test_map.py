@@ -1,7 +1,8 @@
 """Tests of `test_map.py build` (SPEC-0055 rule 5, build (c); REQ-062 AC3).
 
-The map comes from the Python imports and the JavaScript or TypeScript import graph of the tree at
-the head, folder conventions are the fallback, and the same tree gives the same bytes. Fixtures in
+The map comes from the Python imports, the JavaScript or TypeScript import graph, Gradle modules,
+Xcode targets and Go packages (build (d)) of the tree at the head, folder conventions are the
+fallback, and the same tree gives the same bytes. Fixtures in
 `tmp_path` only: invented data (`example.com`), no network, no install.
 """
 
@@ -283,3 +284,242 @@ def test_installed_standard_library_only_and_mapped():
     }
     entries = tomllib.loads((KIT_ROOT / "agk.toml").read_text(encoding="utf-8"))["testing"]["map"]
     assert any(e["code"] == "scripts/agk/test_map.py" for e in entries)
+
+
+STACKS = 'test_dirs = ["."]\ntest_patterns = ["*Test.kt", "*_test.go", "*Tests.swift"]\n'
+APP_TEST = "app/src/test/x/AppTest.kt"
+CORE_TEST = "lib/core/src/test/CoreTest.kt"
+
+
+def test_gradle_modules_reach_what_their_project_dependencies_reach(tmp_path):
+    """REQ-062 AC3: rule 5, `settings.gradle` and `project(...)`, at module granularity."""
+    settings = (
+        "rootProject.name = 'shop'\n// include ':dead'\ninclude ':app',\n        ':lib:core'\n"
+        "include(\":lib:base\", ':other', ':dead2')\nincludeBuild 'build-logic'\n"
+    )
+    app = "dependencies {\n  implementation project(':lib:core')\n  // project(':other')\n}\n"
+    files = {
+        "settings.gradle": settings,
+        "gradle.properties": "a=b\n",
+        "app/build.gradle": app,
+        "app/src/main/x/App.kt": "",
+        APP_TEST: "",
+        "lib/core/build.gradle.kts": 'dependencies { api(project(path = ":lib:base")) }\n',
+        "lib/core/src/main/Core.kt": "",
+        CORE_TEST: "",
+        "lib/base/build.gradle": "",
+        "lib/base/src/main/Base.kt": "",
+        "other/src/main/O.kt": "",
+        "other/src/test/OTest.kt": "",
+        "build-logic/src/main/P.kt": "",
+    }
+    both = [APP_TEST, CORE_TEST]
+    assert built(repo(tmp_path, STACKS, files)) == {
+        "app/build.gradle": [APP_TEST],
+        "app/src/main/x/App.kt": [APP_TEST],
+        "lib/base/build.gradle": both,
+        "lib/base/src/main/Base.kt": both,
+        "lib/core/build.gradle.kts": both,
+        "lib/core/src/main/Core.kt": both,
+        "other/src/main/O.kt": ["other/src/test/OTest.kt"],
+    }
+
+
+def test_gradle_kotlin_settings_in_a_folder_with_project_dirs(tmp_path):
+    """REQ-062 AC3: rule 5, a build below the root, `projectDir` and a relative `project(...)`."""
+    settings = (
+        'include(":feature")\ninclude(":feature:api")\n'
+        'project(":feature").projectDir = file("modules/feature")\n'
+        'project(":feature:api").projectDir = File(rootDir, "modules/api")\n'
+    )
+    test = "android/modules/feature/src/test/FTest.kt"
+    files = {
+        "android/settings.gradle.kts": settings,
+        "android/modules/feature/build.gradle.kts": 'dependencies { api(project("api")) }\n',
+        "android/modules/feature/src/main/F.kt": "",
+        test: "",
+        "android/modules/api/src/main/A.kt": "",
+        "android/tools/T.kt": "",
+    }
+    assert built(repo(tmp_path, STACKS, files)) == {
+        "android/modules/api/src/main/A.kt": [test],
+        "android/modules/feature/build.gradle.kts": [test],
+        "android/modules/feature/src/main/F.kt": [test],
+    }
+
+
+def test_gradle_single_project_maps_only_its_source_folder(tmp_path):
+    """REQ-062 AC3: rule 5, the root project owns `src/`; other root files stay unmapped."""
+    files = {
+        "settings.gradle": "rootProject.name = 'x'\n",
+        "build.gradle": "",
+        "src/main/a/A.kt": "",
+        "src/test/a/BTest.kt": "",
+        "tools/T.kt": "",
+    }
+    assert built(repo(tmp_path, STACKS, files)) == {"src/main/a/A.kt": ["src/test/a/BTest.kt"]}
+
+
+def test_gradle_settings_too_large_to_read_leave_the_folder_convention(tmp_path):
+    """REQ-062 AC3: rule 5, a stack that cannot be read adds nothing; the convention remains."""
+    files = {
+        "settings.gradle": "include ':m'\n" + "//" * (2 * 1024 * 1024),
+        "m/src/main/x/Foo.kt": "",
+        "m/src/main/x/Bar.kt": "",
+        "m/src/test/x/FooTest.kt": "",
+    }
+    assert built(repo(tmp_path, STACKS, files)) == {
+        "m/src/main/x/Foo.kt": ["m/src/test/x/FooTest.kt"]
+    }
+
+
+def test_go_packages_follow_the_import_lines_and_go_mod(tmp_path):
+    """REQ-062 AC3: rule 5, import forms, comments and strings, `replace`, a nested module."""
+    cart = (
+        'package cart // one\n\n/* import "example.com/shop/dead" */\nimport (\n'
+        '\tp "example.com/shop/price"\n\t_ `example.com/pad`\n\t// "example.com/shop/dead"\n'
+        '\t"example.com/shop/sub"\n\t"fmt"\n)\n\nconst s = `\nimport "example.com/shop/dead"\n`\n'
+    )
+    files = {
+        "go.mod": "module example.com/shop // the shop\n\nreplace example.com/pad => ./third/pad\n",
+        "third/pad/go.mod": "module example.com/forked\n",
+        "third/pad/pad.go": "package pad\n",
+        "sub/go.mod": "module example.com/other\n",
+        "sub/sub.go": "package sub\n",
+        "cart/cart.go": cart,
+        "cart/more.go": "package cart\n",
+        "cart/cart_test.go": "package cart\n",
+        "price/price.go": 'package price\nimport ()\nimport "example.com/shop/rate"\n',
+        "price/extra.go": "package price\n",
+        "price/price_test.go": 'package price\n\nimport h "example.com/shop/helper"\n',
+        "rate/rate.go": "package rate\n",
+        "helper/helper.go": "package helper\n",
+        "dead/dead.go": "package dead\n",
+        "alone/alone.go": "package alone\n",
+    }
+    one, two = ["cart/cart_test.go"], ["cart/cart_test.go", "price/price_test.go"]
+    assert built(repo(tmp_path, STACKS, files)) == {
+        "cart/cart.go": one,
+        "cart/more.go": one,
+        "helper/helper.go": ["price/price_test.go"],
+        "price/extra.go": two,
+        "price/price.go": two,
+        "rate/rate.go": two,
+        "third/pad/pad.go": one,
+    }
+
+
+def test_go_with_no_readable_go_mod_adds_only_the_convention(tmp_path):
+    """REQ-062 AC3: rule 5, no `go.mod`, or none that names a module, adds no package entries."""
+    code = 'package a\nimport "example.com/x/b"\n'
+    files = {"a.go": code, "o.go": "package a\n", "b/b.go": "package b\n", "a_test.go": code}
+    for name, extra in (("none", {}), ("bad", {"go.mod": "go 1.22\n"})):
+        (tmp_path / name).mkdir()
+        assert built(repo(tmp_path / name, STACKS, {**files, **extra})) == {"a.go": ["a_test.go"]}
+
+
+PBX = """// !$*UTF8*$!
+{
+  archiveVersion = 1;
+  objects = {
+    F1 /* Cart.swift in Sources */ = {isa = PBXBuildFile; fileRef = R1 /* Cart.swift */; };
+    F2 = {isa = PBXBuildFile; fileRef = R2; };
+    F3 = {isa = PBXBuildFile; fileRef = R3; };
+    F4 = {isa = PBXBuildFile; fileRef = R4; };
+    F5 = {isa = PBXBuildFile; fileRef = V1; };
+    F6 = {isa = PBXBuildFile; fileRef = R9; };
+    R1 /* Cart.swift */ = {isa = PBXFileReference; path = Cart.swift; sourceTree = "<group>"; };
+    R2 = {isa = PBXFileReference; path = "My Lib/Price.swift"; sourceTree = SOURCE_ROOT; };
+    R3 = {isa = PBXFileReference; path = CartTests.swift; sourceTree = "<group>"; };
+    R4 = {isa = PBXFileReference; path = Other.swift; sourceTree = "<group>"; };
+    R5 = {isa = PBXFileReference; path = en.lproj/Main.strings; sourceTree = "<group>"; };
+    R9 = {isa = PBXFileReference; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
+    V1 = {isa = PBXVariantGroup; children = (R5,); name = Main.strings; sourceTree = "<group>"; };
+    G0 = {isa = PBXGroup; children = (G1, G2, G3, R2, R9,); sourceTree = "<group>"; };
+    G1 = {isa = PBXGroup; children = (R1, V1,); path = App; sourceTree = "<group>"; };
+    G2 = {isa = PBXGroup; children = (R3,); path = AppTests; sourceTree = "<group>"; };
+    G3 = {isa = PBXGroup; children = (R4,); name = Virtual; sourceTree = "<group>"; };
+    S1 = {isa = PBXSourcesBuildPhase; files = (F1 /* Cart.swift in Sources */, F2,); };
+    S2 = {isa = PBXSourcesBuildPhase; files = (F3,); };
+    S3 = {isa = PBXSourcesBuildPhase; files = (F4,); };
+    S4 = {isa = PBXResourcesBuildPhase; files = (F5, F6,); };
+    D1 = {isa = PBXTargetDependency; target = T1 /* App */; };
+    T1 = {isa = PBXNativeTarget; buildPhases = (S1, S4,); dependencies = (); name = App; };
+    T2 = {isa = PBXNativeTarget; buildPhases = (S2,); dependencies = (D1,); name = AppTests; };
+    T3 = {isa = PBXNativeTarget; buildPhases = (S3,); dependencies = (); name = Other; };
+    P1 = {isa = PBXProject; mainGroup = G0; projectDirPath = ""; targets = (T1, T2, T3,); };
+  };
+  rootObject = P1;
+}
+"""
+PBX_FILE = "ios/Shop.xcodeproj/project.pbxproj"
+XCODE_TREE = {
+    "ios/App/Cart.swift": "",
+    "ios/App/en.lproj/Main.strings": "",
+    "ios/My Lib/Price.swift": "",
+    "ios/AppTests/CartTests.swift": "",
+    "ios/Other.swift": "",
+}
+
+
+def test_xcode_targets_reach_their_files_and_their_dependencies(tmp_path):
+    """REQ-062 AC3: rule 5, build phases, groups, a variant group and target dependencies."""
+    test = ["ios/AppTests/CartTests.swift"]
+    assert built(repo(tmp_path, STACKS, {PBX_FILE: PBX, **XCODE_TREE})) == {
+        "ios/App/Cart.swift": test,
+        "ios/App/en.lproj/Main.strings": test,
+        "ios/My Lib/Price.swift": test,
+    }
+
+
+def test_xcode_synchronized_folders_belong_to_their_target(tmp_path):
+    """REQ-062 AC3: rule 5, a folder synchronized with a target gives that target its files."""
+    project = """{ objects = {
+      Y1 = {isa = PBXFileSystemSynchronizedRootGroup; path = App; sourceTree = "<group>"; };
+      Y2 = {isa = PBXFileSystemSynchronizedRootGroup; path = AppTests; sourceTree = "<group>"; };
+      G0 = {isa = PBXGroup; children = (Y1, Y2,); sourceTree = "<group>"; };
+      D1 = {isa = PBXTargetDependency; target = T1; };
+      T1 = {isa = PBXNativeTarget; buildPhases = (); dependencies = ();
+            fileSystemSynchronizedGroups = (Y1,); };
+      T2 = {isa = PBXNativeTarget; buildPhases = (); dependencies = (D1,);
+            fileSystemSynchronizedGroups = (Y2,); };
+      P1 = {isa = PBXProject; mainGroup = G0; targets = (T1, T2,); };
+    }; rootObject = P1; }"""
+    files = {
+        "A.xcodeproj/project.pbxproj": project,
+        "App/x/Cart.swift": "",
+        "AppTests/CartTests.swift": "",
+        "Apps/Far.swift": "",
+    }
+    assert built(repo(tmp_path, STACKS, files)) == {
+        "App/x/Cart.swift": ["AppTests/CartTests.swift"]
+    }
+
+
+def test_a_broken_xcode_project_adds_no_entries(tmp_path):
+    """REQ-062 AC3: rule 5, a project file that cannot be parsed leaves its files unmapped."""
+    for name, broken in (("cut", PBX[:400]), ("eq", PBX.replace("rootObject =", "rootObject"))):
+        (tmp_path / name).mkdir()
+        assert built(repo(tmp_path / name, STACKS, {PBX_FILE: broken, **XCODE_TREE})) == {}
+
+
+def test_the_three_stacks_give_the_same_bytes_from_the_head(tmp_path):
+    """REQ-062 AC3: rule 5, two commits with one tree give the same bytes for these stacks too."""
+    files = {
+        PBX_FILE: PBX,
+        **XCODE_TREE,
+        "go.mod": "module example.com/z\n",
+        "g/g.go": "package g\n",
+        "g/g_test.go": "package g\n",
+        "settings.gradle": "include ':m'\n",
+        "m/M.kt": "",
+        "m/MTest.kt": "",
+    }
+    root = repo(tmp_path, STACKS, files)
+    built(root)
+    first = (root / OUT).read_bytes()
+    assert b'code = "m/M.kt"' in first and b'code = "g/g.go"' in first
+    git(root, "commit", "-q", "--allow-empty", "-m", "two")
+    (root / "go.mod").write_text("", encoding="utf-8")
+    built(root)
+    assert (root / OUT).read_bytes() == first
