@@ -36,11 +36,7 @@ KIT_ONLY = {
     "scripts/agk/rules.py",
 }
 # Files under the law roots that belong to this repository only and are not installed in targets.
-REPO_ONLY = {
-    ".github/ISSUE_TEMPLATE/stuck.md",
-    ".github/workflows/agk-brief.yml",
-    ".github/workflows/agk-tag.yml",
-}
+REPO_ONLY = {".github/ISSUE_TEMPLATE/stuck.md", ".github/workflows/agk-tag.yml"}
 RENDERED = {".github/CODEOWNERS"}
 SINGLES = {
     "CLAUDE.md",

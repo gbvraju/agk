@@ -4,7 +4,7 @@
 # rule, never a value; on a pass both go and the issue's milestone is set to its wave. It reads the issue, its comments and the
 # milestones, and fetches nothing else. A label set with the job's token starts no workflow, so it cannot loop. The owner creates the
 # label when `doctor.py` reports it missing (`brief-invalid-label`).
-# The script reads this repository's plan, so this workflow is kit-only and is not installed in a project.
+# Installed in projects (`verbatim` of kit/manifest.json, the owner's ruling Q-770-4). A project with no milestone `Wave <n>` gets the shape check only.
 name: agk-brief
 
 on:

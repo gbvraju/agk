@@ -123,8 +123,8 @@ def test_a_saved_brief_file_is_checked_for_the_wave_too(tmp_path):
 # --- the job on GitHub (answer 2) and the doctor's label check -----------------------------------
 
 WORKFLOW = SCRIPT.parents[2] / ".github" / "workflows" / "agk-brief.yml"
-# Kit-only: a copy of the kit tests in a project has no such workflow.
-needs_workflow = pytest.mark.skipif(not WORKFLOW.is_file(), reason="not installed in a project")
+# Installed in projects (Q-770-4); a project that deletes it leaves these tests nothing to read.
+needs_workflow = pytest.mark.skipif(not WORKFLOW.is_file(), reason="the workflow is absent")
 REPO = "example-owner/example-repo"
 ISSUE = f"repos/{REPO}/issues/12"
 

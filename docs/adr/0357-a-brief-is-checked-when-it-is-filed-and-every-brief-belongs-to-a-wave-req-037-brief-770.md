@@ -13,7 +13,7 @@ clause in its `Skipped:` line that nobody acted on. The check ran only inside th
 else was never checked; a refused brief became no action for anyone; and nothing on GitHub checked a brief when it was opened
 or edited. Ten open briefs also belonged to no wave of the plan (owner direction 2026-11-08, quoted in brief #770).
 
-This build changes the protected path classes `scripts/agk/`, `tests/kit/`, `tests/kit_dev/` (the repository-only list), `.github/` (the new workflow), `.claude/` (the conductor's report line) and `config/` (the rule budget's lowered line).
+This build changes the protected path classes `scripts/agk/`, `tests/kit/`, `kit/` (the manifest's `verbatim` list and the installed `.gitattributes` template), `.github/` (the new workflow), `.claude/` (the conductor's report line) and `config/` (the rule budget's lowered line).
 
 ## Decision
 
@@ -30,14 +30,17 @@ This build changes the protected path classes `scripts/agk/`, `tests/kit/`, `tes
    and `labeled` events of an issue labelled `agk-brief`, from a checkout of the default branch, on the saved event file, so the
    issue's text never reaches a command. It has `contents: read` and `issues: write`. It sets or clears the label and its one
    comment, and on a pass sets the issue's milestone to its wave. It also reads the milestones, for the waves. The workflow is
-   this repository's and is not installed in a project: nothing in a project's `Touches:` asked for it.
+   installed in projects, in `verbatim` of `kit/manifest.json` (the owner's ruling Q-770-4); this names the classes `kit/` and
+   `.github/`. With no milestone `Wave <n>` in a project, the `Wave:` line is checked for its shape only.
 5. `doctor.py` gains the warning `brief-invalid-label`: where that workflow is in the tree and the label is missing, the owner
-   creates it. A project without the workflow is asked nothing.
+   creates it. A project that has deleted the workflow is asked nothing.
 
 ## Consequences
 
 A brief refused for its shape, or for having no wave, is named on its own line each time the plan runs, with the person who can
 fix it. Every open brief needs a `Wave:` line once this merges, so the repair of brief #770 answers 1 and 5 goes first.
+Every project gets, on install or upgrade, one more job with `issues: write`, and its owner creates the label `agk-brief-invalid`
+when `doctor.py` reports it missing.
 
 ## Residual
 

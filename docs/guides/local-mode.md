@@ -42,6 +42,7 @@ A person with admin on the repository does this once, in a terminal on their own
    `--write` refuses to run inside an agent session, and the kit's settings deny it to a session. For a person without the
    kit, disable each workflow with one command (`gh workflow disable` takes the file name):
 
+       gh workflow disable agk-brief.yml
        gh workflow disable agk-route.yml
        gh workflow disable governance.yml
        gh workflow disable proof.yml
@@ -196,6 +197,7 @@ When Actions runs again (minutes renewed, billing fixed, the outage over):
    that does not answer is printed as `unknown`, never as 0, and the command exits 4. For a person without the kit, enable
    each workflow with one command, and the project's own the same way:
 
+       gh workflow enable agk-brief.yml
        gh workflow enable agk-route.yml
        gh workflow enable governance.yml
        gh workflow enable proof.yml
