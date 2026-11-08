@@ -114,3 +114,19 @@ def test_ac6_ac7_the_role_forbids_a_cause_without_a_measured_line_and_states_the
     assert "`Measured:`" in text and "never name a cause" in text
     assert "`Correction: <what was wrong>; <what stands>`" in text
     assert "edited in place" in text and "allows only the comment POST" in text
+
+
+def test_ac6_the_verdict_of_a_ui_brief_names_every_drift():
+    """REQ-044 AC6: SPEC-0037 rule 11 (brief #461): the conductor reads the `Design match:` lines of
+    every UI brief's pull request, asks for them by a fix list when missing, judges every drift and
+    names every screen and state that drifted, with a fix item or a reason to accept it."""
+    _, body = split()
+    text = " ".join(body.split())
+    for phrase in (
+        "`Design match:` lines",
+        "a fix list when they are missing",
+        "judge every drift",
+        "names every screen and state that drifted, with a fix item or a reason to accept it",
+        "`design_compare.py`",
+    ):
+        assert phrase in text, phrase
