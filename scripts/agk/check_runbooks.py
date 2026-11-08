@@ -60,8 +60,8 @@ def split_page(text: str) -> tuple[list[Line], list[Line]]:
     for number, line in enumerate(text.splitlines(), 1):
         found = FENCE.match(line)
         if fence:
-            closes = found and found[1][0] == fence[0] and len(found[1]) >= len(fence)
-            if closes and not found[2].strip():
+            same = found is not None and found[1][0] == fence[0] and len(found[1]) >= len(fence)
+            if same and found is not None and not found[2].strip():
                 fence = ""
             elif line.strip():
                 code.append((number, line.strip()))
@@ -235,7 +235,8 @@ def command_problem(
 
 def blocks(prose: list[Line]) -> Iterator[Line]:
     """Each paragraph, heading or list item as (first line number, text): a span stays in one."""
-    number, lines = 0, []
+    number = 0
+    lines: list[str] = []
     for at, line in prose:
         fence_or_blank = FENCE.match(line) or not line.strip()
         if lines and (fence_or_blank or BLOCK_START.match(line)):
