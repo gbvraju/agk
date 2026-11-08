@@ -1556,7 +1556,7 @@ def sweep_main(root: Path) -> int:
 
 
 def sweep_gate_main(root: Path) -> int:
-    """`--sweep-gate`: `on` when this project gets the sweep job, else `off` (brief #797 answer 6)."""
+    """`--sweep-gate`: `on` when this project gets the sweep job, else `off` (brief #797)."""
     try:
         _, data = default_ref(root)
         github_mode(data)

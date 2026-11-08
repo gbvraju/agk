@@ -104,7 +104,8 @@ def test_the_approved_specs_are_read_from_the_two_comment_forms():
 
 
 def labelled(draft: set[str], *extra: dict, kind: str = "cleared") -> str:
-    notes = [said(1, "boss", f"Verdict: {kind} {ROUTE_HEAD}\n\n1. a finding (rule: none)\n"), *extra]
+    verdict = f"Verdict: {kind} {ROUTE_HEAD}\n\n1. a finding (rule: none)\n"
+    notes = [said(1, "boss", verdict), *extra]
     return route.decide(facts(comments=notes, files=[spec_file()], draft_specs=draft))
 
 

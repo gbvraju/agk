@@ -77,8 +77,8 @@ from reviewers import (
     login_of,
     person_approvals,
     solo_person,
-    specs_named_approved,
     spec_approvers,
+    specs_named_approved,
     verdict_authors,
     via_agent,
 )

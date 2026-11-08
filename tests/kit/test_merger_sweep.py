@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_merge_cleared_verdict import HEAD, ON, comment, repo, toml
+from test_merge_cleared_verdict import ON, comment, repo, toml
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
