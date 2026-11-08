@@ -224,8 +224,12 @@ def fail(code):
 if method == 'PUT' and parts[0] == 'pulls' and parts[2:] == ['merge']:
     answer = data['merge']
     if 'http' in answer:
+        if answer.get('message'):  # GitHub's own words, as gh prints them (brief #765)
+            sys.stderr.write('gh: %s (HTTP %d)\n' % (answer['message'], answer['http'])); sys.exit(1)
         fail(answer['http'])
     out = answer
+elif method == 'POST' and parts[:2] == ['actions', 'workflows'] and parts[3:] == ['dispatches']:
+    out = {}  # a workflow_dispatch (brief #765); GitHub answers 204 with no body
 elif method == 'POST' and parts[0] == 'issues' and parts[2:] == ['comments']:
     if data.get('comment_fails'):
         fail(422)
