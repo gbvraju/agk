@@ -26,6 +26,8 @@ named builder that a schedule can restart, and a way to know one is alive.
    conductor's lease (ADR-0330). The run name is minted at the first take and kept in the git directory. A run that
    finds its slot held by another run exits 3 and writes nothing. Two takes at once are settled by reading the marker
    back: the oldest marker decides, and the loser exits 3.
+   This marker is a fourth POST of `session.py` beside the take, the takeover and `tell` (SPEC-0034 rule 12's list; the
+   pinned count in `tests/kit/test_session.py` moves from 3 to 4 by this ADR).
 3. `session.py slot --next <slot>` is one pass of the slot's loop: it renews the lease (exit 3 when the run no longer
    holds it) and prints the one next step as its last line, reading only GitHub. In this order: `stop` when `Pool: stop`
    is posted on the assignments issue by an account in `spec_approvers`; `follow-up pr #n conflict|fix list` for an

@@ -19,5 +19,6 @@ person's `Approve: SPEC-0034`; no session posts it. Items 1 to 3 are built by bu
    the newest unspent `Assign:`; `wait pr #n` while it has an open pull request (rule 3 stands); `take` (`next --take`)
    when the conductor has assigned nothing for 10 minutes, counted from the newest `Request:` or `Assign:` of the slot;
    `wait`; or `request` with neither. A slot ends when its window ends or on `stop`.
-4. **Tests.** Rule 14's list gains: assignment to a slot; a held slot ends the run; follow-ups before new work;
+4. **The POSTs (rule 12).** Rule 12's list of POSTs gains the slot marker of item 2.
+5. **Tests.** Rule 14's list gains: assignment to a slot; a held slot ends the run; follow-ups before new work;
    `next --take` only after 10 idle minutes; `builder_start = "start"` unchanged.
