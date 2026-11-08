@@ -15,8 +15,9 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
 - `pr_tests`: `full` (the default) or `selected`; with `selected`, a pull request's CI step
   `Project tests` runs only the selection, while a push and a release run the full suite
   (`project_tests.py`, brief #453, ADR-0242);
-- `junit`: the path of the JUnit XML report that the project's own test command writes, relative
-  to the run's folder (SPEC-0044 rule 2, brief #560). `run_timing` reads it, or else the durations
+- `junit`: the path or glob of the JUnit XML reports that the project's own test command writes,
+  relative to the run's folder (SPEC-0044 rule 2, brief #560); a level's own `junit` comes first
+  (SPEC-0055 rule 8). `run_timing` reads it, or else the durations
   table that pytest prints when the project's command passes `--durations=0`, for the per-file
   timing of a run; the kit adds no flag to the command, and with neither the timing is `unknown`;
 - `workers`: `1` (the default), `"auto"` (the CPU count, at least 1) or a positive whole number,
@@ -468,26 +469,61 @@ def junit_sums(data: bytes) -> dict[str, float]:
     return sums
 
 
+def report_files(folder: Path, junit: str, since: float | None = None) -> list[Path]:
+    """The reports at `junit` in `folder`, sorted: one path, or every file a glob matches (Gradle
+    writes a folder of them, SPEC-0055 rule 8). With `since`, only those written at or after it (a
+    file older than the run is not this run's report)."""
+    try:
+        found = sorted(folder.glob(junit)) if any(c in junit for c in "*?[") else [folder / junit]
+    except (OSError, ValueError):
+        return []
+    kept = []
+    for report in found:
+        try:
+            if report.is_file() and (
+                since is None or report.stat().st_mtime >= since - MTIME_SLACK
+            ):
+                kept.append(report)
+        except OSError:
+            continue
+    return kept
+
+
+def report_of(areas: list[dict] | None, run: str, default: str | None) -> str | None:
+    """The report of the run named `<area>:<level>`: the level's `junit`, else DEFAULT, the
+    `[testing] junit` (SPEC-0055 rule 8). A run with any other name has DEFAULT."""
+    level = level_of(areas, run)
+    return (level or {}).get("junit") or default
+
+
+def level_of(areas: list[dict] | None, run: str) -> dict | None:
+    """The level of the run named `<area>:<level>`, None for a run with any other name."""
+    area_name, _, level_name = run.partition(":")
+    for area in areas or []:
+        if area["name"] == area_name:
+            return next((x for x in area.get("levels", []) if x["name"] == level_name), None)
+    return None
+
+
 def measure(
     output: str, folder: Path, junit: str | None, since: float
 ) -> tuple[str, dict[str, float] | None, str | None]:
     """(source, seconds by file or None, the one line to print or None) of one test run: the
-    JUnit report at `junit` in `folder` when it was written at or after `since` (a file older than
-    the run is not this run's report), else the durations table of `output`, else `unknown`."""
+    JUnit reports at `junit` in `folder` written at or after `since`, else the durations table of
+    `output`, else `unknown`."""
     if junit is not None:
-        report = folder / junit
-        try:
-            fresh = report.is_file() and report.stat().st_mtime >= since - MTIME_SLACK
-            data = report.read_bytes() if fresh and report.stat().st_size <= JUNIT_LIMIT else None
-        except OSError:
-            return "unknown", None, JUNIT_UNREADABLE
-        if fresh:
+        reports = report_files(folder, junit, since)
+        if reports:
+            sums: dict[str, float] = {}
             try:
-                if data is None:
+                if sum(r.stat().st_size for r in reports) > JUNIT_LIMIT:
                     raise Unreadable
-                return "junit", junit_sums(data), None
-            except Unreadable:
+                for report in reports:
+                    for key, seconds in junit_sums(report.read_bytes()).items():
+                        sums[key] = sums.get(key, 0.0) + seconds
+            except (OSError, Unreadable):
                 return "unknown", None, JUNIT_UNREADABLE
+            return "junit", sums, None
     sums = durations_sums(output)
     if sums is not None:
         return "durations", sums, None

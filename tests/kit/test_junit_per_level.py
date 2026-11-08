@@ -273,7 +273,7 @@ def ledger(root: Path) -> str:
 
 
 def test_a_level_s_rerun_passes_alone_and_writes_one_strike(tmp_path):
-    """REQ-062 AC5: SPEC-0055 rule 9 (a pass alone is one strike, for a runner that is not pytest)."""
+    """REQ-062 AC5: SPEC-0055 rule 9 (a pass alone is one strike, with no pytest)."""
     root = level_project(tmp_path, {"a.xml": report("shop.Cart", "adds")})
     proc = run_tests(root)
     assert proc.returncode == 0, proc.stdout
