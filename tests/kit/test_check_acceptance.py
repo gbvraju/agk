@@ -8,6 +8,7 @@ exists; a refusal names the rule and the file and never a quote, a value or an a
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -81,8 +82,6 @@ def discovery(root: Path, answer: str | None, title: str = "Example signup") -> 
 
 
 def digest_of(words: str) -> str:
-    import hashlib
-
     return hashlib.sha256(words.encode("utf-8")).hexdigest()
 
 
@@ -259,7 +258,8 @@ def test_ac1_a_form_problem_fails_naming_rule_3(project: Path, name: str):
 
 def test_ac1_a_file_name_that_is_no_slug_fails(project: Path):
     """REQ-058 AC1: rule 3, a record is `docs/acceptance/<slug>.md`."""
-    write(project, record(discovery(project, ANSWER)), "docs/acceptance/Not_A_Slug.md")
+    text = record(discovery(project, ANSWER)).replace(SLUG, "Not_A_Slug")
+    write(project, text, "docs/acceptance/Not_A_Slug.md")
     refused(run(project), 3, "docs/acceptance/Not_A_Slug.md")
 
 
@@ -344,7 +344,7 @@ def test_ac1_a_nested_or_helper_function_is_no_test_function(project: Path):
 def test_ac1_a_test_file_that_cannot_be_read_as_python_fails(
     project: Path, file: str, source: str
 ):
-    """REQ-058 AC1: rule 4, the conservative reading of Q-762-1 for another language."""
+    """REQ-058 AC1: rule 4, the conservative reading of Q-762-3 for another language."""
     write(project, source, file)
     goals = [f'- G-1: "{Q1}" -> test {file}::test_signup', f'- G-2: "{Q2}" -> not met']
     write(project, record(discovery(project, ANSWER), goals))
@@ -371,10 +371,10 @@ def test_ac3_an_accepted_record_fails_until_the_yes_can_be_read(project: Path):
 def test_ac7_a_secret_like_value_fails_naming_the_kind_and_the_position(project: Path):
     """REQ-058 AC7: rules 5 and 10, the guard scan of the record, never the value."""
     value = "10.1.2.3"  # an invented private address the data guard finds (kind IP)
-    write(project, record(discovery(project, ANSWER)) + f"\nNote {value}\n")
+    write(project, record(discovery(project, ANSWER)) + f"\n## Notes\n\nNote {value}\n")
     result = run(project)
     refused(result, 5)
-    assert "IP" in result.stdout and "line 13" in result.stdout
+    assert "IP" in result.stdout and "line 14 column 6" in result.stdout
     assert value not in result.stdout
 
 
