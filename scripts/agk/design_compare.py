@@ -215,7 +215,11 @@ def pairs(root: Path, version: str, screens: str) -> list[tuple[str, str]]:
         raise CheckError(NOT_SIGNED)
     if screens.strip() == "*":
         folder = root / design_signoff.PROTOTYPE / version
-        return [tuple(p[:-5].rsplit("--", 1)) for p in design_render.pages(folder)]
+        found = []
+        for page in design_render.pages(folder):
+            screen, _, state = page[:-5].rpartition("--")
+            found.append((screen, state))
+        return found
     try:
         return check_brief.screens_named(f"Screens: {version} {screens.strip()}", root)
     except CheckError as exc:
@@ -229,7 +233,14 @@ def render(root: Path, command: list[str], screen: str, state: str, out: Path) -
     env.update(AGK_DESIGN_SCREEN=screen, AGK_DESIGN_STATE=state, AGK_DESIGN_OUT=str(out))
     try:
         proc = subprocess.run(  # nosec B603 - the project's own command, no shell
-            command, cwd=root, env=env, capture_output=True, text=True, timeout=600
+            command,
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=600,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise CheckError(RENDER_FAILED) from None
