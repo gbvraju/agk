@@ -1,12 +1,13 @@
 """merge_cleared.py and the merger job: GitHub mode merges a cleared head with no session.
 
-Brief #765, ADR-0354, amendment 138, REQ-046 (SPEC-0039 rule 2, its GitHub-mode runner). The job of
-`.github/workflows/governance.yml` runs three commands: `merge_cleared.py --event <payload>` names the
-pull request and head to try (or nothing), then exactly `merge_cleared.py --pr <n> --sha <head>`, then
-`merge_cleared.py --report --pr <n> --sha <head> --line <its line>`, which dispatches the default
-branch's governance run after a merge and posts one comment for a hold or a refusal. Every test runs
-on a git repository in `tmp_path`, saved event payloads and a fake `gh` that answers from saved
-responses and records its argument lists. No network; invented logins, addresses at example.com.
+Brief #765, ADR-0354, amendment 138, REQ-046 (SPEC-0039 rule 2, its GitHub-mode runner). The job
+of `.github/workflows/governance.yml` runs three commands: `merge_cleared.py --event <payload>`
+names the pull request and head to try (or nothing), then exactly `merge_cleared.py --pr <n> --sha
+<head>`, then `merge_cleared.py --report --pr <n> --sha <head> --line <its line>`, which dispatches
+the default branch's governance run after a merge and posts one comment for a hold or a refusal.
+Every test runs on a git repository in `tmp_path`, saved event payloads and a fake `gh` that
+answers from saved responses and records its argument lists. No network; invented logins,
+addresses at example.com.
 """
 
 from __future__ import annotations
@@ -154,7 +155,11 @@ def test_the_open_local_mode_record_issue_does_nothing(tmp_path):
     ("name", "payload", "kind"),
     [
         ("a builder's report", comment_event(f"Report: {HEAD} ready for review"), "issue_comment"),
-        ("a comment on an issue", comment_event(f"Verdict: cleared {HEAD}", False), "issue_comment"),
+        (
+            "a comment on an issue",
+            comment_event(f"Verdict: cleared {HEAD}", False),
+            "issue_comment",
+        ),
         ("a red run", run_event("failure"), "workflow_run"),
         ("a run of a push", run_event(event="push"), "workflow_run"),
         ("a run with no pull request", run_event(pulls=[]), "workflow_run"),
@@ -246,7 +251,9 @@ def test_a_cleared_head_merges_and_main_runs_again(tmp_path):
     assert merge.stdout.strip() == f"merge-cleared #7 {SHA12}: merged {MERGE12}"
     put = [c for c in made if "PUT" in c]
     assert len(put) == 1 and f"sha={HEAD}" in put[0]
-    assert [c for c in made if DISPATCH in c] == [["api", "--method", "POST", DISPATCH, "-f", "ref=main"]]
+    assert [c for c in made if DISPATCH in c] == [
+        ["api", "--method", "POST", DISPATCH, "-f", "ref=main"]
+    ]
 
 
 def test_a_held_head_merges_nothing_and_comments_once(tmp_path):
@@ -266,7 +273,10 @@ def test_a_merge_the_ruleset_refuses_says_so_once(tmp_path):
     merge, last, made = job(
         tmp_path, run_event(), "workflow_run", comments=[cleared()], merge=refusal
     )
-    assert merge.stdout.strip() == f"merge-cleared #7 {SHA12}: held: merge refused by the ruleset (rule 6)"
+    assert (
+        merge.stdout.strip()
+        == f"merge-cleared #7 {SHA12}: held: merge refused by the ruleset (rule 6)"
+    )
     posted = [c for c in made if f"repos/{REPO}/issues/7/comments" in c and "POST" in c]
     assert len(posted) == 1 and "merge refused by the ruleset" in posted[0][-1]
 
@@ -288,7 +298,9 @@ def test_the_workflow_starts_on_comments_runs_and_dispatch():
     """REQ-046: brief #765 answers 1 and 3 (the triggers of the one job)."""
     head = text().split("\njobs:", 1)[0]
     assert re.search(r"\n  issue_comment:\n    types: \[created\]", head)
-    assert re.search(r"\n  workflow_run:\n    workflows: \[governance\]\n    types: \[completed\]", head)
+    assert re.search(
+        r"\n  workflow_run:\n    workflows: \[governance\]\n    types: \[completed\]", head
+    )
     assert "\n  workflow_dispatch:" in head
 
 

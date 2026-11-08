@@ -225,7 +225,8 @@ if method == 'PUT' and parts[0] == 'pulls' and parts[2:] == ['merge']:
     answer = data['merge']
     if 'http' in answer:
         if answer.get('message'):  # GitHub's own words, as gh prints them (brief #765)
-            sys.stderr.write('gh: %s (HTTP %d)\n' % (answer['message'], answer['http'])); sys.exit(1)
+            sys.stderr.write('gh: %s (HTTP %d)\n' % (answer['message'], answer['http']))
+            sys.exit(1)
         fail(answer['http'])
     out = answer
 elif method == 'POST' and parts[:2] == ['actions', 'workflows'] and parts[3:] == ['dispatches']:
