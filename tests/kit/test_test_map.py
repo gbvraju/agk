@@ -368,18 +368,20 @@ def test_gradle_settings_too_large_to_read_leave_the_folder_convention(tmp_path)
         "m/src/main/x/Bar.kt": "",
         "m/src/test/x/FooTest.kt": "",
     }
-    assert built(repo(tmp_path, STACKS, files)) == {"m/src/main/x/Foo.kt": ["m/src/test/x/FooTest.kt"]}
+    assert built(repo(tmp_path, STACKS, files)) == {
+        "m/src/main/x/Foo.kt": ["m/src/test/x/FooTest.kt"]
+    }
 
 
 def test_go_packages_follow_the_import_lines_and_go_mod(tmp_path):
-    """REQ-062 AC3: rule 5, grouped and named imports, comments and strings, `replace`, a nested module."""
+    """REQ-062 AC3: rule 5, import forms, comments and strings, `replace`, a nested module."""
     cart = (
         'package cart // one\n\n/* import "example.com/shop/dead" */\nimport (\n'
         '\tp "example.com/shop/price"\n\t_ `example.com/pad`\n\t// "example.com/shop/dead"\n'
         '\t"example.com/shop/sub"\n\t"fmt"\n)\n\nconst s = `\nimport "example.com/shop/dead"\n`\n'
     )
     files = {
-        "go.mod": "module example.com/shop // the shop\n\ngo 1.22\n\nreplace example.com/pad => ./third/pad\n",
+        "go.mod": "module example.com/shop // the shop\n\nreplace example.com/pad => ./third/pad\n",
         "third/pad/go.mod": "module example.com/forked\n",
         "third/pad/pad.go": "package pad\n",
         "sub/go.mod": "module example.com/other\n",
@@ -387,7 +389,7 @@ def test_go_packages_follow_the_import_lines_and_go_mod(tmp_path):
         "cart/cart.go": cart,
         "cart/more.go": "package cart\n",
         "cart/cart_test.go": "package cart\n",
-        "price/price.go": 'package price\nimport "example.com/shop/rate"\n',
+        "price/price.go": 'package price\nimport ()\nimport "example.com/shop/rate"\n',
         "price/extra.go": "package price\n",
         "price/price_test.go": 'package price\n\nimport h "example.com/shop/helper"\n',
         "rate/rate.go": "package rate\n",
@@ -427,7 +429,7 @@ PBX = """// !$*UTF8*$!
     F5 = {isa = PBXBuildFile; fileRef = V1; };
     F6 = {isa = PBXBuildFile; fileRef = R9; };
     R1 /* Cart.swift */ = {isa = PBXFileReference; path = Cart.swift; sourceTree = "<group>"; };
-    R2 = {isa = PBXFileReference; name = Price; path = "My Lib/Price.swift"; sourceTree = SOURCE_ROOT; };
+    R2 = {isa = PBXFileReference; path = "My Lib/Price.swift"; sourceTree = SOURCE_ROOT; };
     R3 = {isa = PBXFileReference; path = CartTests.swift; sourceTree = "<group>"; };
     R4 = {isa = PBXFileReference; path = Other.swift; sourceTree = "<group>"; };
     R5 = {isa = PBXFileReference; path = en.lproj/Main.strings; sourceTree = "<group>"; };
@@ -489,7 +491,9 @@ def test_xcode_synchronized_folders_belong_to_their_target(tmp_path):
         "AppTests/CartTests.swift": "",
         "Apps/Far.swift": "",
     }
-    assert built(repo(tmp_path, STACKS, files)) == {"App/x/Cart.swift": ["AppTests/CartTests.swift"]}
+    assert built(repo(tmp_path, STACKS, files)) == {
+        "App/x/Cart.swift": ["AppTests/CartTests.swift"]
+    }
 
 
 def test_a_broken_xcode_project_adds_no_entries(tmp_path):

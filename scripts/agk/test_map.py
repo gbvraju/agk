@@ -10,7 +10,10 @@ date or commit id, so one tree gives the same bytes. A test file is what `impact
 
 A test depends on what its imports reach, followed through the files they import: Python by `ast`,
 JavaScript or TypeScript by import and require lines read as text, with the `paths` and `baseUrl`
-of the nearest `tsconfig.json` and its `extends`. Where several files could be meant, each counts,
+of the nearest `tsconfig.json` and its `extends`, Go by the import lines and `go.mod` at package
+granularity. A test in a Gradle module (`settings.gradle`, the `project(...)` dependencies) or an
+Xcode target (`project.pbxproj`, read as text) depends on every file of that module or target and
+of those it depends on. Where several files could be meant, each counts,
 because an entry only adds tests. A file no import reaches falls back on the folder conventions: a
 test beside it, in `__tests__/`, or in a module's `src/test/` for its `src/main/`. A file that
 cannot be read adds no entries, so what only it reaches stays unmapped. Files and git only.
@@ -48,6 +51,37 @@ SUBJECT = re.compile(r"(?:test_)?(.+?)(?:[._-](?:test|spec)|Tests?|Spec)?")
 STRING = r'"(?:\\.|[^"\\])*"'
 COMMENT = re.compile(STRING + r"|//[^\n]*|/\*.*?\*/", re.S)
 TRAILING_COMMA = re.compile(STRING + r"|,(?=\s*[}\]])")
+STACK_FILES = (
+    "go.mod",
+    "settings.gradle",
+    "settings.gradle.kts",
+    "build.gradle",
+    "build.gradle.kts",
+    "project.pbxproj",
+)
+SOURCE_COMMENT = re.compile(
+    r"""\"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`[^`]*`|//[^\n]*|/\*.*?\*/""", re.S
+)
+QUOTED = re.compile(r"""["']([^"'\n]+)["']""")
+GRADLE_INCLUDE = re.compile(r"""(?<![\w.])include\s*\(?\s*((?:["'][^"'\n]+["']\s*,?\s*)+)""")
+GRADLE_PROJECT = re.compile(r"""\bproject\s*\(\s*(?:path\s*[:=]\s*)?["']([^"'\n]+)["']""")
+GRADLE_DIR = re.compile(
+    r"""\bproject\s*\(\s*["'](:[^"'\n]+)["']\s*\)\s*\.\s*projectDir\s*=\s*(?:new\s+)?[fF]ile\s*\("""
+    r"""\s*(?:\w+\s*,\s*)?["']([^"'\n]+)["']"""
+)
+GO_STRING = r"""(?:"[^"\n]*"|`[^`]*`)"""
+GO_PACKAGE = re.compile(r"\s*package\s+\w+\s*;?")
+GO_IMPORT = re.compile(
+    rf"""\s*import\s*(?:\(((?:[^()"`]|{GO_STRING})*)\)|((?:[\w.]+\s*)?{GO_STRING}))\s*;?"""
+)
+GO_PATH = re.compile(r"""["`]([^"`\n]+)["`]""")
+GO_MODULE = re.compile(r"""^\s*module\s+\(?\s*"?([^\s"()]+)""", re.M)
+GO_REPLACE = re.compile(
+    r"""^[ \t]*(?:replace[ \t]+)?"?([^\s"]+)"?(?:[ \t]+v\S+)?[ \t]*=>[ \t]*"""
+    r""""?(\.\.?(?:/[^\s"]*)?)"?[ \t]*$""",
+    re.M,
+)
+PLIST_TOKEN = re.compile(r"""/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|[{}()=;,]|[^\s{}()=;,"]+""", re.S)
 UNREADABLE = "test_map: a tsconfig cannot be read and adds nothing (setting: compilerOptions.paths)"
 
 
@@ -220,6 +254,200 @@ def js_edges(path: str, text: str, files: set[str], configs: TsConfigs) -> set[s
     return found
 
 
+def code_only(text: str) -> str:
+    """TEXT with its comments blanked and its strings kept."""
+    return SOURCE_COMMENT.sub(lambda m: m[0] if m[0][0] in "\"'`" else " ", text)
+
+
+def go_imports(text: str) -> list[str]:
+    """The import paths of a Go file: only its import declarations, right after its package line."""
+    text = code_only(text)
+    head, found = GO_PACKAGE.match(text), []
+    at = head.end() if head else len(text)
+    while head and (decl := GO_IMPORT.match(text, at)):
+        found += GO_PATH.findall(decl[1] or decl[2] or "")
+        at = decl.end()
+    return found
+
+
+class GoModules:
+    """The `go.mod` files of the head, and the non-test files of each Go package (a folder)."""
+
+    def __init__(self, tree: dict[str, tuple[str, int]], texts: dict[str, str]) -> None:
+        self.readable: dict[str, bool] = {}
+        self.named: list[tuple[str, str]] = []
+        self.packages: dict[str, set[str]] = {}
+        for path in tree:
+            folder, name = posixpath.split(path)
+            if path.endswith(".go") and not path.endswith("_test.go"):
+                self.packages.setdefault(folder, set()).add(path)
+            if name != "go.mod":
+                continue
+            text = code_only(texts.get(path, ""))
+            module = GO_MODULE.search(text)
+            self.readable[folder] = module is not None
+            if module:
+                self.named.append((module[1], folder))
+                for old, target in GO_REPLACE.findall(text):
+                    place = inside(posixpath.join(folder, target))
+                    self.named += [] if place is None else [(old, place)]
+
+    def owner(self, folder: str) -> str | None:
+        """The folder of the `go.mod` that FOLDER belongs to, or None when it cannot be read."""
+        while folder not in self.readable and folder:
+            folder = posixpath.dirname(folder)
+        return folder if self.readable.get(folder) else None
+
+    def edges(self, path: str, text: str) -> set[str]:
+        folder = posixpath.dirname(path)
+        if self.owner(folder) is None:
+            return set()
+        found = set(self.packages.get(folder, ())) if path.endswith("_test.go") else set()
+        for spec in go_imports(text):
+            for module, place in self.named:
+                if spec == module or spec.startswith(f"{module}/"):
+                    target = inside(posixpath.join(place, spec[len(module) + 1 :]))
+                    if target is not None and self.owner(target) == place:
+                        found |= self.packages.get(target, set())
+        return found
+
+
+Units = dict[str, set[str]]
+
+
+def gradle_units(settings: str, texts: dict[str, str], files: set[str], units: Units, needs: Units):
+    """Add the modules of one Gradle build. The root project owns only its `src/`: the other files
+    at the root (the wrapper, the settings) concern every module, so they stay unmapped."""
+    base, text = posixpath.dirname(settings), code_only(texts[settings])
+    dirs: dict[str, str | None] = {":": base}
+    for group in GRADLE_INCLUDE.findall(text):
+        for name in QUOTED.findall(group):
+            dirs[":" + name.strip(":")] = inside(posixpath.join(base, *name.strip(":").split(":")))
+    for name, where in GRADLE_DIR.findall(text):
+        if name in dirs:
+            dirs[name] = inside(posixpath.join(base, where))
+    owner = {folder: name for name, folder in dirs.items() if folder is not None}
+    for name in owner.values():
+        units[settings + name], needs[settings + name] = set(), set()
+    for path in files:
+        folder = posixpath.dirname(path)
+        while folder not in owner and folder:
+            folder = posixpath.dirname(folder)
+        name = owner.get(folder)
+        if name and (name != ":" or path.startswith(posixpath.join(base, "src/"))):
+            units[settings + name].add(path)
+    for folder, name in owner.items():
+        for build in ("build.gradle", "build.gradle.kts"):
+            for dep in GRADLE_PROJECT.findall(
+                code_only(texts.get(posixpath.join(folder, build), ""))
+            ):
+                full = dep if dep.startswith(":") else f"{name.rstrip(':')}:{dep}"
+                needs[settings + name].add(settings + full)
+
+
+def unquoted(token: str) -> str:
+    return re.sub(r"\\(.)", r"\1", token[1:-1], flags=re.S) if token[0] == '"' else token
+
+
+def plist(tokens: list[str], at: int) -> tuple[object, int]:
+    """The old-style property list value at token AT, and the position after it."""
+    if tokens[at] == "{":
+        table, at = {}, at + 1
+        while tokens[at] != "}":
+            if tokens[at + 1] != "=":
+                raise ValueError
+            key = unquoted(tokens[at])
+            table[key], at = plist(tokens, at + 2)
+            if tokens[at] != ";":
+                raise ValueError
+            at += 1
+        return table, at + 1
+    if tokens[at] == "(":
+        items, at = [], at + 1
+        while tokens[at] != ")":
+            value, at = plist(tokens, at)
+            items.append(value)
+            if tokens[at] not in (",", ")"):
+                raise ValueError
+            at += tokens[at] == ","
+        return items, at + 1
+    if tokens[at] in tuple("{}()=;,"):
+        raise ValueError
+    return unquoted(tokens[at]), at + 1
+
+
+def xcode_targets(path: str, text: str, files: set[str]) -> tuple[Units, Units]:
+    """The files of each target of a `project.pbxproj`, and the targets each depends on."""
+    tokens = [t for t in PLIST_TOKEN.findall(text) if not t.startswith(("/*", "//"))]
+    data = plist(tokens, 0)[0]
+    objects, project = data["objects"], data["objects"][data["rootObject"]]
+    base = inside(
+        posixpath.join(
+            posixpath.dirname(posixpath.dirname(path)), project.get("projectDirPath", "")
+        )
+    )
+    if base is None:
+        return {}, {}
+    found: dict[str, list[str]] = {}
+
+    def walk(oid: str, folder: str) -> list[str]:
+        if oid not in found:
+            found[oid] = []
+            node = objects.get(oid, {})
+            start = {"<group>": folder, "SOURCE_ROOT": base}.get(node.get("sourceTree", "<group>"))
+            place = None if start is None else inside(posixpath.join(start, node.get("path", "")))
+            if place is not None:
+                kids = node.get("children")
+                found[oid] = [place] if kids is None else [p for k in kids for p in walk(k, place)]
+        return found[oid]
+
+    walk(project["mainGroup"], base)
+    units: Units = {}
+    needs: Units = {}
+    for target in project["targets"]:
+        node, members = objects.get(target, {}), set()
+        for phase in node.get("buildPhases", []):
+            for built_file in objects.get(phase, {}).get("files", []):
+                members.update(found.get(objects.get(built_file, {}).get("fileRef"), []))
+        for group in node.get("fileSystemSynchronizedGroups", []):  # Xcode 16: a whole folder
+            for folder in found.get(group, []):
+                members.update(f for f in files if folder and f.startswith(f"{folder}/"))
+        units[f"{path}#{target}"] = members & files
+        wanted = [objects.get(d, {}).get("target") for d in node.get("dependencies", [])]
+        needs[f"{path}#{target}"] = {f"{path}#{t}" for t in wanted}
+    return units, needs
+
+
+def unit_edges(
+    files: set[str], tests: set[str], texts: dict[str, str], deps: dict[str, set[str]]
+) -> None:
+    """Add to DEPS, for each test of a Gradle module or Xcode target, what that unit reaches."""
+    units: Units = {}
+    needs: Units = {}
+    for path, text in texts.items():
+        name = posixpath.basename(path)
+        if name in ("settings.gradle", "settings.gradle.kts"):
+            gradle_units(path, texts, files, units, needs)
+        elif name == "project.pbxproj" and posixpath.dirname(path).endswith(".xcodeproj"):
+            try:
+                found, wanted = xcode_targets(path, text, files)
+            except (ValueError, IndexError, KeyError, TypeError, AttributeError, RecursionError):
+                continue  # a stack that cannot be read adds no entries
+            units.update(found)
+            needs.update(wanted)
+    for unit, members in units.items():
+        if members & tests:
+            reach, stack = {unit}, [unit]
+            while stack:
+                for other in needs.get(stack.pop(), ()):
+                    if other in units and other not in reach:
+                        reach.add(other)
+                        stack.append(other)
+            code = set().union(*(units[u] for u in reach)) - tests
+            for test in members & tests:
+                deps.setdefault(test, set()).update(code)
+
+
 def subject(test: str) -> tuple[str, str]:
     """(folder, stem) of the file that a test is named for, by the folder conventions."""
     folder, name = posixpath.split(test)
@@ -248,15 +476,24 @@ def entries(root: Path, tree: dict[str, tuple[str, int]]) -> tuple[dict[str, set
     files, configs = set(tree), TsConfigs(root, tree)
     usable = {p for p in files if p.strip() and not NOT_A_GLOB.search(p)}
     tests = sorted(p for p in usable if is_test_file(p, dirs, patterns))
-    read = [p for p, v in tree.items() if v[1] <= READ_LIMIT and p.endswith((".py", *JS_SOURCES))]
-    texts = blobs(root, [tree[p][0] for p in read])
+    read = [
+        p
+        for p, v in tree.items()
+        if v[1] <= READ_LIMIT
+        and (p.endswith((".py", ".go", *JS_SOURCES)) or posixpath.basename(p) in STACK_FILES)
+    ]
+    found = blobs(root, [tree[p][0] for p in read])
+    texts = {p: found[tree[p][0]] for p in read}
     deps: dict[str, set[str]] = {}
-    for path in read:
-        text = texts[tree[path][0]]
-        python = path.endswith(".py")
-        deps[path] = (
-            python_edges(path, text, files) if python else js_edges(path, text, files, configs)
-        )
+    go = GoModules(tree, texts)
+    for path, text in texts.items():
+        if path.endswith(".py"):
+            deps[path] = python_edges(path, text, files)
+        elif path.endswith(".go"):
+            deps[path] = go.edges(path, text)
+        elif path.endswith(JS_SOURCES):
+            deps[path] = js_edges(path, text, files, configs)
+    unit_edges(files, set(tests), texts, deps)
     for test in (t for t in tests if t.endswith(".py")):  # pytest loads each conftest above a test
         above = package_roots(posixpath.dirname(test))[::2]
         deps.setdefault(test, set()).update(
