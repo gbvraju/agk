@@ -35,13 +35,15 @@ new.
    `[testing] map_source`, and no script has a path of its own for the kit (SPEC-0055 rule 1).
 3. A generated map is never committed (principle 5); only learned entries, which cannot be derived,
    are committed, to `docs/runs/test-links.toml`, and they only ever add tests (SPEC-0055 rules 5
-   and 12).
+   and 12). The one narrowing is rule 6: on a pull request, under `balanced`, a file no entry covers
+   selects the tests that name it instead of making the run full, in every repository and with no
+   setting; the default branch and a release still run everything (SPEC-0055 rule 2).
 4. The full suite stays where it is in GitHub mode; local and personal mode run it before the merge
    and once a day, so a project without CI still has a full run (SPEC-0055 rule 10).
 5. This is the one ADR of REQ-062 for the builds of SPEC-0055 rule 15, except build (b), which is
    brief #773 with ADR-0359. They will change these protected path classes: `scripts/agk/`,
-   `tests/kit/`, `kit/` (the new script's entry in `kit/manifest.json` and the ignore line of
-   `kit/templates/gitignore`) and `agk.toml` (the `map_source` line and one `[[testing.map]]` entry
+   `tests/kit/`, `kit/` (the new script's entry in `kit/manifest.json`, the ignore line of
+   `kit/templates/gitignore` and, for build (h), the `agk-test` target of `kit/agk-kit.mk`) and `agk.toml` (the `map_source` line and one `[[testing.map]]` entry
    per new script). A build that changes a class named here and no other may cite this ADR with
    `Covered-by: ADR-0360` once it is Accepted (session rule 36). A workflow file (`.github/`) is out
    of scope: a build that needs one writes its own ADR with the owner's yes quoted in its brief. No
