@@ -360,15 +360,19 @@ def releases(src: Any, repo: str, name: str) -> list[dict] | None:
     return [r for r in found if not r.get("draft")]
 
 
-def pin_gap(found: list[dict] | None, tag: str) -> int | None:
-    """Days the pinned release is behind the newest one (0 at the newest), or None (unknown)."""
+def pin_gap(found: list[dict] | None, tag: str) -> tuple[bool, int] | None:
+    """Whether the pinned release is behind the newest one (on the tag) and by how many days
+    (0 on the same day), or None (unknown)."""
     final = [r for r in found or [] if not r.get("prerelease") and published(r)]
     pinned = [r for r in found or [] if r.get("tag_name") == tag and published(r)]
     if not final or not pinned:
         return None
-    newest = max(final, key=lambda r: published(r) or date.min)
+    first = datetime.min.replace(tzinfo=UTC)
+    newest = max(final, key=lambda r: metrics.stamp(r.get("published_at")) or first)
+    if newest.get("tag_name") == tag:
+        return False, 0
     gap = ((published(newest) or date.min) - (published(pinned[0]) or date.min)).days
-    return max(gap, 0) if newest.get("tag_name") != tag else 0
+    return True, max(gap, 0)
 
 
 def pin_metrics(root: Path, src: Any) -> tuple[str, str, int]:
@@ -385,7 +389,7 @@ def pin_metrics(root: Path, src: Any) -> tuple[str, str, int]:
     unknown = len(gaps) - len(known) + len(python_pins(root))
     if not known:
         return UNKNOWN, UNKNOWN, unknown
-    return str(sum(1 for g in known if g > 0)), str(max(known)), unknown
+    return str(sum(1 for behind, _ in known if behind)), str(max(d for _, d in known)), unknown
 
 
 def kit_releases_behind(root: Path, src: Any, installed: object) -> str:

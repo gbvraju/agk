@@ -490,6 +490,27 @@ def test_ac5_saved_releases_give_each_freshness_metric(repo, tmp_path):
     assert table[2:] == LEVEL + FRESH
 
 
+def test_ac5_a_newer_release_of_the_same_day_counts_the_pin_as_behind(repo, tmp_path):
+    """REQ-054 AC5: rule 8, a pin is behind on its tag; a gap of 0 days is still behind."""
+    fresh_project(repo)
+    same_day = {
+        **RELEASES,
+        "releases-acme-beta": [
+            {"tag_name": "v2.0.1", "published_at": "2026-05-01T18:00:00Z"},
+            release("v2.0.0", "2026-05-01"),
+        ],
+    }
+    proc = repo.run(
+        "scorecard.py", "--today", TODAY, "--api-dir", str(saved(tmp_path, {**WEEK, **same_day}))
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    got = fresh_rows(proc.stdout)
+    assert got["pins_behind"][0] == "2"  # alpha by 180 days, beta by v2.0.1 of the same day
+    assert got["pins_oldest_gap_days"][0] == "180"
+    assert scorecard.pin_gap(same_day["releases-acme-beta"], "v2.0.0") == (True, 0)
+    assert scorecard.pin_gap(same_day["releases-acme-beta"], "v2.0.1") == (False, 0)
+
+
 def test_ac5_unreadable_upstreams_are_unknown_never_zero(repo, tmp_path):
     """REQ-054 AC5: rule 8, no readable upstream and no kit repository give `unknown`, never 0."""
     fresh_project(repo, plugin=False)
