@@ -47,17 +47,23 @@ def comment_event(body: str, on_pull: bool = True) -> dict:
 
 
 def run_event(conclusion: str = "success", event: str = "pull_request", pulls=None) -> dict:
-    """A saved `workflow_run` payload (invented): governance completed on the head of #7."""
+    """A saved `workflow_run` payload (invented): proof completed on the head of #7."""
     return {
         "action": "completed",
         "workflow_run": {
-            "name": "governance",
+            "name": "proof",
             "event": event,
             "conclusion": conclusion,
             "head_sha": HEAD,
             "pull_requests": [{"number": 7}] if pulls is None else pulls,
         },
     }
+
+
+def pull_event(action: str = "synchronize", draft: bool = False) -> dict:
+    """A saved `pull_request` payload (invented): the run whose `governance` job passed."""
+    pull = {"number": 7, "draft": draft, "head": {"sha": HEAD}}
+    return {"action": action, "pull_request": pull}
 
 
 def setup(tmp_path: Path, main: str = toml(ON), **saved):
@@ -98,8 +104,15 @@ def test_an_approve_comment_names_the_head_too(tmp_path):
     assert writes(made) == []
 
 
-def test_a_green_governance_run_of_a_pull_request_head_names_it(tmp_path):
-    """REQ-046: brief #765 answer 1 (`workflow_run` completion of governance on the head)."""
+def test_a_green_governance_job_of_a_ready_pull_request_names_it(tmp_path):
+    """REQ-046: brief #765 answer 1 (the `governance` job's completion, through `needs`)."""
+    proc, made = event(tmp_path, pull_event(), "pull_request", comments=[cleared()])
+    assert proc.stdout.strip() == f"7 {HEAD}", proc.stdout + proc.stderr
+    assert writes(made) == []
+
+
+def test_a_green_proof_run_of_a_pull_request_head_names_it(tmp_path):
+    """REQ-046: brief #765 answer 1 (`workflow_run` completion of the other required run)."""
     proc, made = event(tmp_path, run_event(), "workflow_run", comments=[cleared()])
     assert proc.stdout.strip() == f"7 {HEAD}", proc.stdout + proc.stderr
     assert writes(made) == []
@@ -161,6 +174,8 @@ def test_the_open_local_mode_record_issue_does_nothing(tmp_path):
             "issue_comment",
         ),
         ("a red run", run_event("failure"), "workflow_run"),
+        ("a draft", pull_event(draft=True), "pull_request"),
+        ("an edited description", pull_event("edited"), "pull_request"),
         ("a run of a push", run_event(event="push"), "workflow_run"),
         ("a run with no pull request", run_event(pulls=[]), "workflow_run"),
         ("another event", {"ref": "refs/heads/main"}, "push"),
@@ -204,7 +219,7 @@ def test_a_merge_dispatches_the_default_branch_governance_run(tmp_path):
 
 def test_a_hold_gets_one_comment_with_the_reason(tmp_path):
     """REQ-046: brief #765 answer 2 (a held pull request gets one comment and nothing else)."""
-    line = f"merge-cleared #7 {SHA12}: held: checks pending"
+    line = f"merge-cleared #7 {SHA12}: held: the default branch is red (rule 5)"
     proc, made = report(tmp_path, line)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     posted = writes(made)
@@ -212,9 +227,15 @@ def test_a_hold_gets_one_comment_with_the_reason(tmp_path):
     assert posted[0][5] == f"body=merger: {line}"
 
 
+def test_checks_pending_posts_nothing(tmp_path):
+    """REQ-046: brief #765 answer 2 (the other required run's end is the next try)."""
+    proc, made = report(tmp_path, f"merge-cleared #7 {SHA12}: held: checks pending")
+    assert proc.returncode == 0 and writes(made) == []
+
+
 def test_the_same_reason_is_never_posted_twice(tmp_path):
     """REQ-046: brief #765 answer 2 (no retry loop and no repeated comment)."""
-    line = f"merge-cleared #7 {SHA12}: held: checks pending"
+    line = f"merge-cleared #7 {SHA12}: held: the default branch is red (rule 5)"
     proc, made = report(tmp_path, line, comments=[cleared(), comment(f"merger: {line}", at=7)])
     assert proc.returncode == 0
     assert writes(made) == []
@@ -298,9 +319,9 @@ def test_the_workflow_starts_on_comments_runs_and_dispatch():
     """REQ-046: brief #765 answers 1 and 3 (the triggers of the one job)."""
     head = text().split("\njobs:", 1)[0]
     assert re.search(r"\n  issue_comment:\n    types: \[created\]", head)
-    assert re.search(
-        r"\n  workflow_run:\n    workflows: \[governance\]\n    types: \[completed\]", head
-    )
+    assert re.search(r"\n  workflow_run:\n    workflows: \[proof\]\n    types: \[completed\]", head)
+    assert "needs: governance" in merger_job()
+    assert "needs.governance.result == 'success'" in merger_job()
     assert "\n  workflow_dispatch:" in head
 
 

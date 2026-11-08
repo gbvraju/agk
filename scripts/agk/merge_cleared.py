@@ -1338,8 +1338,9 @@ def github_mode(data: dict) -> None:
 
 def event_target(name: str, payload: dict) -> tuple[int, str | None] | None:
     """(the pull request, its head sha or None) that event NAME's PAYLOAD may clear, or None: a
-    `Verdict:` or `Approve:` comment on a pull request, or a green `governance` run of a pull
-    request's head. Nothing here reads GitHub."""
+    `Verdict:` or `Approve:` comment on a pull request, the `pull_request` run of a ready pull
+    request whose `governance` job passed, or a green proof run of a pull request's head.
+    Nothing here reads GitHub."""
     if name == "issue_comment":
         issue = payload.get("issue")
         note = payload.get("comment")
@@ -1349,6 +1350,16 @@ def event_target(name: str, payload: dict) -> tuple[int, str | None] | None:
             return None
         number = issue.get("number")
         return (number, None) if isinstance(number, int) and number > 0 else None
+    if name == "pull_request":  # the green `governance` job of a ready pull request (`needs`)
+        pull = payload.get("pull_request")
+        if payload.get("action") == "edited" or not isinstance(pull, dict) or pull.get("draft"):
+            return None
+        head = pull.get("head")
+        sha = head.get("sha") if isinstance(head, dict) else None
+        number = pull.get("number")
+        if not (isinstance(number, int) and number > 0 and isinstance(sha, str)):
+            return None
+        return (number, sha) if SHA.fullmatch(sha) else None
     if name == "workflow_run":
         done = payload.get("workflow_run")
         if not isinstance(done, dict) or done.get("event") != "pull_request":
@@ -1423,6 +1434,9 @@ def report_main(number: int, sha: str, line: str, root: Path) -> int:
             endpoint = f"repos/{repo}/actions/workflows/{WORKFLOW}/dispatches"
             code, _, _ = write_once(["--method", "POST", endpoint, "-f", f"ref={branch}"])
             print("merger: dispatched governance" if code == 0 else "merger: dispatch failed")
+            return EXIT_CLEARED
+        if line.endswith(f": held: {PENDING}"):  # the other required run ends and tries again
+            print("merger: checks pending; nothing posted")
             return EXIT_CLEARED
         body = JOB_PREFIX + line
         if any(first_line(c) == body for c in read_comments(repo, number)):

@@ -8,14 +8,14 @@ it needs a person's `Approve: SPEC-0039`; no session posts it.
 
 1. **The GitHub-mode runner (rule 2).** Rule 2 gains: in GitHub mode (`execution` not `local`, `forge` not `files`)
    with `auto_merge = true`, the `merger` job of the governance workflow is the runner of the command, beside the
-   conductor. It starts on a `Verdict:` or `Approve:` comment on a pull request and on a green `governance` run of a
-   pull request head, checks out the default branch, and runs exactly `python3 scripts/agk/merge_cleared.py --pr <n>
+   conductor. It starts on a `Verdict:` or `Approve:` comment on a pull request, after the green `governance` job of a
+   ready pull request and on a green `proof` run of a pull request head, checks out the default branch, and runs exactly `python3 scripts/agk/merge_cleared.py --pr <n>
    --sha <head>` with the job's own token, after `merge_cleared.py --event` named that pull request and head (the
    latest verdict clears it; otherwise nothing runs and nothing is posted). Every re-check stays in the command.
 2. **After the job's run (rules 6 and 9).** `merge_cleared.py --report` dispatches the default branch's `governance`
    run after a merge, since a merge by the job's token starts no workflow, and posts one comment `merger: <line>` for a
-   hold or a refusal, never the same line twice on a pull request; the next comment or green run is the next try, with
-   no loop. A merge GitHub refuses for a ruleset violation holds as `merge refused by the ruleset (rule 6)`, exit 3.
+   hold or a refusal, never the same line twice on a pull request, and nothing for `checks pending`; the next comment
+   or green run is the next try, with no loop. A merge GitHub refuses for a ruleset violation holds as `merge refused by the ruleset (rule 6)`, exit 3.
 3. **Rule 10.** "The CI path adds no workflow job, no secret and no ruleset change" reads "The CI path adds one
    workflow job (1 above), no secret and no ruleset change of its own; the owner adds the GitHub Actions app as a
    bypass actor of the default branch's ruleset for the job's token to merge."

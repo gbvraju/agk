@@ -12,12 +12,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
   push:
-  # The merger job (brief #765, ADR-0354): a `Verdict:` or `Approve:` comment, or a green governance run of a pull
-  # request head, starts it; after a merge it dispatches the default branch's run, which a merge by its token cannot start.
+  # The merger job (brief #765, ADR-0354): a `Verdict:` or `Approve:` comment, the green `governance` job of a ready pull
+  # request (`needs`) or a green proof run of its head starts it (a workflow cannot start itself by `workflow_run`); after a
+  # merge it dispatches the default branch's run, which a merge by its token cannot start.
   issue_comment:
     types: [created]
   workflow_run:
-    workflows: [governance]
+    workflows: [proof]
     types: [completed]
   workflow_dispatch:
 
@@ -363,7 +364,8 @@ jobs:
   # clears that head; then the guarded command runs exactly, with every re-check its own, and `--report` dispatches
   # the default branch's governance run after a merge or posts one comment for a hold or a refusal. No retry loop.
   merger:
-    if: ${{ (github.event_name == 'issue_comment' && github.event.issue.pull_request && (startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:'))) || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success') }}
+    needs: governance
+    if: ${{ !cancelled() && ((github.event_name == 'issue_comment' && github.event.issue.pull_request && (startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:'))) || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'pull_request' && github.event.action != 'edited' && !github.event.pull_request.draft && needs.governance.result == 'success')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
