@@ -29,6 +29,15 @@ before the default branch line, `sweep` prints `OVER #<brief> <used>/<cap> token
 for each cap a builder pull request is past and `UNKNOWN #<brief> tokens #<pr>` for one with no
 token figure (`caps.over_lines`); it marks only, and stops or changes nothing.
 
+Brief #755 (SPEC-0050 rule 5, ADR-0325): right after the pull request lines `sweep` prints, for the
+open builder pull requests (a `Brief: #n` line), `overlap: #<a> #<b> <file>` for two of different
+briefs that change one file that is not shared-mechanical (a < b, the first such file sorted),
+`re-prove: #<n> <file> (changed by #<m>)` for one that changes a file the default branch changed
+after its merge base (the earliest merged pull request that changed it), and `BEHIND #<pr> <n>`
+with the compare's `ahead_by`. It reads `GET pulls/N/files`, one `GET compare/<head>...<default>`
+and, for a re-prove, `GET commits?path=`; a read that fails prints `re-prove: #<n> unknown (cannot
+be read)`. With none of them nothing more is printed.
+
 Build (b) of brief #643 (ADR-0329, catch log rows 3 and 22):
 
     python3 conductor.py merge-queue [--dry-run] [--max-batch N]
@@ -88,6 +97,7 @@ import sys
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
@@ -111,6 +121,7 @@ LATE = ("conductor_late_minutes", 30)
 SILENT = ("silent_minutes", 30)
 ALIVE = ("Progress:", "Report:", "Question:")
 ESCALATE = re.compile(r"Report: .*\bescalate\b")
+SQUASHED = re.compile(r"\(#(\d+)\)\s*$")  # the `(#m)` that ends a merged pull request's subject
 
 
 def when(text: str) -> datetime | None:
@@ -305,6 +316,81 @@ def branch_line(root, repo: str, branch: str) -> str:
     return f"{branch}: {state} at {head[:7]}"
 
 
+def paths_of(files: list) -> set[str]:
+    """The paths a list of changed files names: each file, and a renamed file's old name."""
+    found: set[str] = set()
+    for item in files:
+        if isinstance(item, dict):
+            found.add(str(item.get("filename")))
+            if item.get("status") == "renamed" and item.get("previous_filename"):
+                found.add(str(item["previous_filename"]))
+    return found
+
+
+def changed_by(repo: str, branch: str, path: str, compare: dict) -> int | None:
+    """The earliest merged pull request of the default branch after the merge base that changed
+    PATH: the oldest commit of the compare that `commits?path=` lists, numbered by its subject's
+    `(#m)` or by `commits/<sha>/pulls`; None when it cannot be read or named."""
+    since = ((compare.get("merge_base_commit") or {}).get("commit") or {}).get("committer") or {}
+    query = f"sha={quote(branch)}&path={quote(path)}"
+    if since.get("date"):
+        query += f"&since={quote(str(since['date']))}"
+    touched = session.pages(f"repos/{repo}/commits?{query}")
+    if touched is None:
+        return None
+    shas = {str(c.get("sha")) for c in touched if isinstance(c, dict)}
+    for commit in compare.get("commits") or []:
+        sha = str(commit.get("sha"))
+        if sha not in shas:
+            continue
+        subject = str((commit.get("commit") or {}).get("message") or "").partition("\n")[0]
+        if found := SQUASHED.search(subject):
+            return int(found.group(1))
+        pulls = session.gh(f"repos/{repo}/commits/{sha}/pulls")
+        merged = [p for p in pulls or [] if isinstance(p, dict) and p.get("merged_at")]
+        return int(merged[0]["number"]) if merged else None
+    return None
+
+
+def proof_lines(root, repo: str, pulls: list, branch: str) -> list[str]:
+    """SPEC-0050 rule 5 (brief #755): `overlap:`, `re-prove:` and `BEHIND` lines of the open builder
+    pull requests, from `GET pulls/N/files` and one `GET compare/<head>...<branch>` each."""
+    shared = [session.glob_regex(p) for p in session.shared_patterns(root)]
+    mine: dict[int, set[str]] = {}
+    brief: dict[int, int] = {}
+    reprove: list[str] = []
+    behind: list[str] = []
+    for pull in sorted(pulls, key=lambda p: p["number"]):
+        number = session.brief_number(pull)
+        if number is None:
+            continue
+        n, head = pull["number"], str(pull["head"]["sha"])
+        files = session.pages(f"repos/{repo}/pulls/{n}/files")
+        compare = session.gh(f"repos/{repo}/compare/{head}...{branch}")
+        if files is None or not isinstance(compare, dict):
+            reprove.append(f"re-prove: #{n} unknown (cannot be read)")
+            continue
+        mine[n], brief[n] = paths_of(files), number
+        both = sorted(mine[n] & paths_of(compare.get("files") or []))
+        if both:
+            by = changed_by(repo, branch, both[0], compare)
+            reprove.append(
+                f"re-prove: #{n} {both[0]} (changed by #{by})"
+                if by
+                else f"re-prove: #{n} unknown (cannot be read)"
+            )
+        ahead = compare.get("ahead_by")
+        if isinstance(ahead, int) and not isinstance(ahead, bool) and ahead > 0:
+            behind.append(f"BEHIND #{n} {ahead}")
+    overlap = []
+    for a in sorted(mine):
+        for b in sorted(x for x in mine if x > a and brief[x] != brief[a]):
+            both = sorted(p for p in mine[a] & mine[b] if not any(r.fullmatch(p) for r in shared))
+            if both:
+                overlap.append(f"overlap: #{a} #{b} {both[0]}")
+    return overlap + reprove + behind
+
+
 def sweep(root) -> int:
     repo = session.repo_name(root)
     authors, approvers = verdict_authors(root), spec_approvers(root)
@@ -315,11 +401,12 @@ def sweep(root) -> int:
         pull_line(root, repo, p, authors, approvers, late, now)
         for p in sorted(pulls, key=lambda p: p["number"])
     ] or ["no open pull request"]
-    lines += caps.over_lines(root, repo, pulls, {a.lower() for a in authors}, now)
     info = session.gh(f"repos/{repo}")
     branch = info.get("default_branch") if isinstance(info, dict) else None
     if not branch:
         raise CheckError("the default branch cannot be read")
+    lines += proof_lines(root, repo, pulls, branch)
+    lines += caps.over_lines(root, repo, pulls, {a.lower() for a in authors}, now)
     lines.append(branch_line(root, repo, branch))
     issues = read(f"repos/{repo}/issues?state=open", "the open issues")
     lines += [f"red-branch issue: #{i['number']}" for i in issues if session.is_red(i)]

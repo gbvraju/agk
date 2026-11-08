@@ -146,9 +146,10 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/check_design.py"
 tests = [
-  "tests/kit/test_check_design.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_design_inventory_check.py",
-  "tests/kit/test_design_standard.py", "tests/kit_dev/test_design_inventory.py",
-  "tests/kit_dev/test_design_prototype.py", "tests/kit_dev/test_design_write.py",
+  "tests/kit/test_check_design.py", "tests/kit/test_check_design_prototype.py", "tests/kit/test_check_playbooks.py",
+  "tests/kit/test_design_inventory_check.py", "tests/kit/test_design_standard.py",
+  "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
+  "tests/kit_dev/test_design_write.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_kit_tests.py"
@@ -234,38 +235,48 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/design.py"
 tests = [
-  "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
-  "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
+  "tests/kit/test_check_design_prototype.py", "tests/kit_dev/test_design_inventory.py",
+  "tests/kit_dev/test_design_prototype.py", "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_pr_bodies_kit.py",
 ]
 [[testing.map]]
 code = "scripts/agk/design_inventory.py"
 tests = [
-  "tests/kit/test_check_design.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_design_inventory_check.py",
-  "tests/kit/test_design_standard.py", "tests/kit_dev/test_design_inventory.py",
-  "tests/kit_dev/test_design_prototype.py", "tests/kit_dev/test_design_write.py",
-  "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
+  "tests/kit/test_check_design.py", "tests/kit/test_check_design_prototype.py", "tests/kit/test_check_playbooks.py",
+  "tests/kit/test_design_inventory_check.py", "tests/kit/test_design_standard.py",
+  "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
+  "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
 ]
 [[testing.map]]
 code = "scripts/agk/design_prototype.py"
 tests = [
+  "tests/kit/test_check_design_prototype.py", "tests/kit_dev/test_design_inventory.py",
+  "tests/kit_dev/test_design_prototype.py", "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_pr_bodies_kit.py",
+]
+[[testing.map]]
+code = "scripts/agk/design_prototype_check.py"
+tests = [
+  "tests/kit/test_check_design.py", "tests/kit/test_check_design_prototype.py", "tests/kit/test_check_playbooks.py",
+  "tests/kit/test_design_inventory_check.py", "tests/kit/test_design_standard.py",
   "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
   "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
 ]
 [[testing.map]]
 code = "scripts/agk/design_signoff.py"
 tests = [
-  "tests/kit/test_design_signoff_digest.py", "tests/kit_dev/test_design_inventory.py",
-  "tests/kit_dev/test_design_prototype.py", "tests/kit_dev/test_design_write.py",
-  "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
+  "tests/kit/test_check_design_prototype.py", "tests/kit/test_design_signoff_digest.py",
+  "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
+  "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
   "tests/kit_dev/test_reference_commands.py",
 ]
 [[testing.map]]
 code = "scripts/agk/design_standard.py"
 tests = [
-  "tests/kit/test_check_design.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_design_inventory_check.py",
-  "tests/kit/test_design_standard.py", "tests/kit_dev/test_design_inventory.py",
-  "tests/kit_dev/test_design_prototype.py", "tests/kit_dev/test_design_write.py",
-  "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
+  "tests/kit/test_check_design.py", "tests/kit/test_check_design_prototype.py", "tests/kit/test_check_playbooks.py",
+  "tests/kit/test_design_inventory_check.py", "tests/kit/test_design_standard.py",
+  "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
+  "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
 ]
 [[testing.map]]
 code = "scripts/agk/doctor.py"
