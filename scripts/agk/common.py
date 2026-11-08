@@ -1277,7 +1277,10 @@ def proof_timeout(root: Path) -> int:
 # are relative to.
 
 AREA_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
-AREA_KEYS = {"dirs", "patterns", "command", "cwd"}
+AREA_KEYS = {"dirs", "patterns", "command", "cwd", "levels"}
+# A level of an area (SPEC-0055 rule 3): `[proof.<area>.levels.<level>]`.
+LEVEL_KEYS = {"command", "when", "env", "dirs", "patterns", "cwd", "junit", "rerun"}
+EVENTS = ("pr", "main", "nightly", "release")
 
 
 def _texts(value: object) -> bool:
@@ -1286,6 +1289,77 @@ def _texts(value: object) -> bool:
         and bool(value)
         and all(isinstance(v, str) and v.strip() for v in value)
     )
+
+
+def _inside(value: object) -> bool:
+    """A relative path that stays inside the repository."""
+    parts = value.replace("\\", "/").split("/") if isinstance(value, str) else []
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and not value.startswith(("/", "\\"))
+        and ":" not in value
+        and ".." not in parts
+    )
+
+
+def _level(name: str, spec: object, area: dict, setting: str) -> dict:
+    """One level of an area, its `dirs`, `patterns` and `cwd` defaulting to the area's (a refusal
+    names the setting, never the value)."""
+    if not AREA_NAME.fullmatch(name):
+        raise CheckError(
+            f"a level is named with letters, digits, - and _ only (setting: {setting})"
+        )
+    where = f"{setting}.{name}"
+    if not isinstance(spec, dict) or set(spec) - LEVEL_KEYS:
+        raise CheckError(
+            "a level is a table of command, when, env, dirs, patterns, cwd, junit and rerun "
+            f"(setting: {where})"
+        )
+    command = spec.get("command")
+    if not isinstance(command, str) or not command.strip():
+        raise CheckError(f"the command of a level must be a text (setting: {where}.command)")
+    when = spec.get("when")
+    if not _texts(when) or set(when) - set(EVENTS):
+        raise CheckError(f"when is a list of pr, main, nightly and release (setting: {where}.when)")
+    if set(when) == {"pr"}:  # it would never have a full run (Q-S0055-2)
+        raise CheckError(f"a level cannot run only on pr (setting: {where}.when)")
+    env = spec.get("env", [])
+    if not isinstance(env, list) or not all(
+        isinstance(n, str) and AREA_NAME.fullmatch(n) for n in env
+    ):
+        raise CheckError(f"env is a list of names (setting: {where}.env)")
+    for key in ("dirs", "patterns"):
+        if key in spec and not _texts(spec[key]):
+            raise CheckError(f"the {key} of a level must be a list (setting: {where}.{key})")
+    cwd = spec.get("cwd", area["cwd"])
+    if not _inside(cwd):
+        raise CheckError(f"the cwd of a level must be inside the repository (setting: {where}.cwd)")
+    if "junit" in spec and not _inside(spec["junit"]):
+        raise CheckError(f"junit must be a path relative to the level (setting: {where}.junit)")
+    rerun = spec.get("rerun")
+    if rerun is not None and (not isinstance(rerun, str) or "{id}" not in rerun):
+        raise CheckError(f"rerun must be a command with {{id}} (setting: {where}.rerun)")
+    return {
+        "name": name,
+        "command": command,
+        "when": list(when),
+        "env": list(env),
+        "dirs": list(spec.get("dirs", area["dirs"])),
+        "patterns": list(spec.get("patterns", area["patterns"])),
+        "cwd": cwd.strip("/") or ".",
+        "junit": spec.get("junit"),
+        "rerun": rerun,
+    }
+
+
+def area_levels(area: dict) -> list[dict]:
+    """The levels of an area in table order; an area without levels is one `unit` level whose
+    `when` is every event (SPEC-0055 rule 3)."""
+    if area.get("levels"):
+        return area["levels"]
+    keys = {k: area[k] for k in ("command", "dirs", "patterns", "cwd")}
+    return [{"name": "unit", "when": list(EVENTS), "env": [], "junit": None, "rerun": None, **keys}]
 
 
 def proof_areas(root: Path) -> list[dict] | None:
@@ -1304,7 +1378,8 @@ def proof_areas(root: Path) -> list[dict] | None:
         setting = f"proof.{name}"
         if not isinstance(spec, dict) or set(spec) - AREA_KEYS:
             raise CheckError(
-                f"a proof area is a table of dirs, patterns, command and cwd (setting: {setting})"
+                f"a proof area is a table of dirs, patterns, command, cwd and levels "
+                f"(setting: {setting})"
             )
         for key, what in (("dirs", "folders"), ("patterns", "file name patterns")):
             if not _texts(spec.get(key)):
@@ -1322,27 +1397,24 @@ def proof_areas(root: Path) -> list[dict] | None:
                 f"the command of a proof area has no {{files}} (setting: {setting}.command)"
             )
         cwd = spec.get("cwd", ".")
-        parts = cwd.replace("\\", "/").split("/") if isinstance(cwd, str) else []
-        if (
-            not isinstance(cwd, str)
-            or not cwd.strip()
-            or cwd.startswith(("/", "\\"))
-            or ":" in cwd
-            or ".." in parts
-        ):
+        if not _inside(cwd):
             raise CheckError(
                 f"the cwd of a proof area must be a folder inside the repository "
                 f"(setting: {setting}.cwd)"
             )
-        areas.append(
-            {
-                "name": name,
-                "dirs": list(spec["dirs"]),
-                "patterns": list(spec["patterns"]),
-                "command": command,
-                "cwd": cwd.strip("/") or ".",
-            }
-        )
+        area = {
+            "name": name,
+            "dirs": list(spec["dirs"]),
+            "patterns": list(spec["patterns"]),
+            "command": command,
+            "cwd": cwd.strip("/") or ".",
+        }
+        if "levels" in spec:
+            levels = spec["levels"]
+            if not isinstance(levels, dict) or not levels:
+                raise CheckError(f"levels is a table of levels (setting: {setting}.levels)")
+            area["levels"] = [_level(n, s, area, f"{setting}.levels") for n, s in levels.items()]
+        areas.append(area)
     return areas
 
 
