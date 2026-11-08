@@ -363,6 +363,29 @@ quarantine past its expiry (`expired`), each test with two strikes or more and n
 with its line number. Exit 0 when nothing is listed, 1 otherwise. It is not a governance step and blocks nothing. See
 [testing.md](testing.md#the-flake-ledger) and ADR-0234.
 
+## Front door
+
+    python3 scripts/agk/front_door.py check-issue --issue FILE
+    python3 scripts/agk/front_door.py discovery-write (--issue FILE | --vision FILE) --answers FILE [--root DIR]
+    python3 scripts/agk/front_door.py check-discovery [FILE ...] [--root DIR]
+    python3 scripts/agk/front_door.py check-research --date YYYY-MM-DD [FILE ...] [--root DIR]
+    python3 scripts/agk/front_door.py check-design --date YYYY-MM-DD [FILE ...] [--root DIR]
+
+`check-issue` reads a saved problem issue (the JSON of one GET) and refuses one without the `agk-problem` label, without a
+first line `Problem: <words>`, with an empty problem or one over 1,500 characters, or with anything the data guard finds.
+`discovery-write` writes `docs/discovery/<slug>.md` from the problem and a JSON file of the person's answers, never over an
+existing one; `check-discovery` checks each such document. Files only, no network; every refusal names the rule and the
+file, never a value. See SPEC-0048 rules 3 and 5.
+
+`check-research` checks each `docs/research/<slug>.md`: at least two `## Option: <name>` sections, each with a source line
+`- Source: <URL> (accessed YYYY-MM-DD)`, a `## Criteria` table with a row for capability fit, cost, licence, data handling
+and residency, maturity, integration effort and lock-in, and a `## Recommendation` marked `(proposal)`. A record that a
+design cites fails when any source was accessed more than 180 days before `--date` (pass `date -u +%F`); reading the
+sources again and changing their access dates makes it fresh. `check-design` checks each
+`docs/design/architecture/<slug>.md`: a fenced plain-text or Mermaid diagram, no image, and exactly one line
+`Research: docs/research/<slug>.md` naming a record of the same slug that passes and is fresh. See SPEC-0048 rules 6
+and 7.
+
 ## Failure signature and evidence
 
     python3 scripts/agk/failures.py signature --output FILE [--step NAME]

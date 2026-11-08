@@ -54,6 +54,8 @@ assign = "conductor"
 # owner's choice, ADR-0266; turning it off is again the owner's change, by an ADR in the same pull request.
 auto_merge = true
 auto_merge_method = "squash"
+# The builder capacity (SPEC-0034 rule 1): nine builder sessions at once, by the owner's choice on 2026-11-08 (plan #661, ADR-0341).
+max_builders = 9
 # The heavy-run queue (SPEC-0040 rule 1, brief #529): off by default and when absent. This repository keeps it off; turning it on is the
 # owner's change, by an ADR in the same pull request.
 # [locks]
@@ -320,6 +322,9 @@ tests = ["tests/kit/test_failures.py"]
 code = "scripts/agk/flakes.py"
 tests = ["tests/kit/test_flakes.py", "tests/kit/test_rerun_alone.py"]
 [[testing.map]]
+code = "scripts/agk/front_door.py"
+tests = ["tests/kit/test_front_door_entry.py"]
+[[testing.map]]
 code = "scripts/agk/full_run.py"
 tests = [
   "tests/kit/test_full_run.py", "tests/kit/test_full_run_body_steps.py", "tests/kit/test_full_run_post_steps.py",
@@ -378,7 +383,7 @@ tests = [
 code = "scripts/agk/launch.py"
 tests = [
   "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_launch.py", "tests/kit/test_launch_auto_start.py",
-  "tests/kit/test_route_finishes.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_review_pass_skill.py",
+  "tests/kit/test_launch_kinds.py", "tests/kit/test_route_finishes.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_review_pass_skill.py",
 ]
 [[testing.map]]
 code = "scripts/agk/lessons.py"

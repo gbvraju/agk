@@ -43,7 +43,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_two_playbooks() -> None:
+def test_check_playbooks_passes_with_four_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -52,7 +52,7 @@ def test_check_playbooks_passes_with_two_playbooks() -> None:
     )
     assert out.returncode == 0, out.stdout
     assert WEB_APP.is_file(), "the web-app playbook of build (c) is on the default branch"
-    assert out.stdout == "ok playbooks (2 playbooks)\n"
+    assert out.stdout == "ok playbooks (4 playbooks)\n"
 
 
 def test_phases_corpus_evaluation_set_retrieval_answers_joins() -> None:
