@@ -65,10 +65,10 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_eight_playbooks() -> None:
+def test_check_playbooks_passes_with_nine_playbooks() -> None:
     out = check(KIT_ROOT)
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (8 playbooks)\n"
+    assert out.stdout == "ok playbooks (9 playbooks)\n"
 
 
 def test_exactly_the_five_gates_of_rule_21_in_its_order() -> None:

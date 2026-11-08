@@ -1,7 +1,7 @@
 """Tests of the shipped voice-agent playbook (SPEC-0038 rules 1, 10 and 12 build (m)).
 
 REQ-045 AC6. `config/playbooks/voice-agent.toml` passes the playbook check, and
-`check_playbooks.py` passes with eight playbooks. It holds exactly the voice-agent gates of rule
+`check_playbooks.py` passes with nine playbooks. It holds exactly the voice-agent gates of rule
 10: a latency budget, `check` that it is declared and `judgement` that a recorded run meets it; an
 ASR/TTS evaluation set, `check` (the set exists with a version line); and barge-in and fallback
 scenarios, `check` (each scenario is listed and the map names its tests). Each check gate names
@@ -44,7 +44,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_eight_playbooks() -> None:
+def test_check_playbooks_passes_with_nine_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -52,7 +52,7 @@ def test_check_playbooks_passes_with_eight_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (8 playbooks)\n"
+    assert out.stdout == "ok playbooks (9 playbooks)\n"
 
 
 def test_exactly_the_voice_agent_gates_of_rule_10() -> None:
@@ -81,12 +81,12 @@ def test_every_check_gate_names_its_step_and_no_judgement_gate_does() -> None:
 
 
 def test_no_gate_is_owner_only() -> None:
-    # rule 10 marks no multi-agent gate as the owner's action
+    # rule 10 marks no voice-agent gate as the owner's action
     assert all(g["owner_only"] is False for g in gates().values())
 
 
 def test_no_governance_step_is_added_for_the_check_gates() -> None:
-    # until a build adds each step, the gate is read as judgement (Q-651-2, brief #780 answer 2)
+    # until a build adds each step, the gate is read as judgement (Q-651-2, brief #786 answer 2)
     mk = (KIT_ROOT / "agk.mk").read_text(encoding="utf-8")
     for gid in CHECKS:
         assert gid not in mk, gid

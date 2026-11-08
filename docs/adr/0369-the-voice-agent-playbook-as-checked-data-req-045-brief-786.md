@@ -47,15 +47,16 @@ reserved for it by the conductor.
    one speed claim is `expected` with no `record`, since no run has measured it. No `reviewed` key
    is added (`Q-651-1`, amendment 129 is its own item).
 5. `tests/kit_dev/test_kit_manifest.py` lists the playbook among the installed files outside the
-   law roots, and the count lines of the rag-app, data-pipeline, mobile, cloud-migration, mcp-server
-   and multi-agent playbook tests read eight playbooks; the LF pin of `kit/templates/gitattributes`
+   law roots, and the count lines of the default, rag-app, data-pipeline, mobile, cloud-migration,
+   mcp-server and multi-agent playbook tests read nine playbooks; the LF pin of
+   `kit/templates/gitattributes`
    (`config/playbooks/**`, ADR-0313 decision 5) already covers the file. `kit/hashes.json` is not
    edited; no version is bumped.
 
 ## Consequences
 
 Every project that installs or upgrades the kit receives the voice-agent playbook unchanged, and
-`check_playbooks.py` prints `ok playbooks (8 playbooks)` there. Nothing reads the file until a
+`check_playbooks.py` prints `ok playbooks (9 playbooks)` there. Nothing reads the file until a
 project declares `work_type = "voice-agent"` by its own ADR (rule 5, ADR-0312), so a project that
 declares no work type runs exactly as today. A project that declares it gets the four gates as
 practices of its stack ADR (rule 6) and one brief kind, as today.

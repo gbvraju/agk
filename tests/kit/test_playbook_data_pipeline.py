@@ -3,7 +3,7 @@
 SPEC-0038 rules 1 and 10 as amendment 130 widens them.
 
 REQ-055 AC8. `config/playbooks/data-pipeline.toml` passes the playbook check, and
-`check_playbooks.py` passes with eight playbooks. It holds the exact data-pipeline gates of rule 18
+`check_playbooks.py` passes with nine playbooks. It holds the exact data-pipeline gates of rule 18
 (SPEC-0038 rule 10 as amendment 130 widens it): a data contract, `check` (a contract file names each
 source and target field with its type, and the testing map names a test glob for it); row-count and
 checksum reconciliation, `check` that one is declared for every table or stream the contract names
@@ -57,7 +57,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_eight_playbooks() -> None:
+def test_check_playbooks_passes_with_nine_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -65,7 +65,7 @@ def test_check_playbooks_passes_with_eight_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (8 playbooks)\n"
+    assert out.stdout == "ok playbooks (9 playbooks)\n"
 
 
 def test_exactly_the_data_pipeline_gates_of_rule_18() -> None:
