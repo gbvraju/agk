@@ -476,7 +476,7 @@ has no line `Approved by <name> on <YYYY-MM-DD>`, and `at risk design: placehold
 Two kit-only commands of SPEC-0037 rules 8 and 11 (brief #461, ADR-0350), never run by CI. `design.py screenshots --version`
 opens each `<screen>--<state>.html` page of a prototype version from the files, offline, at each breakpoint of the standard
 (360, 600, 900, 1200 and 1440 px) in light and dark, with a headless browser found on PATH, and writes one screenshot of each
-into the version's `screenshots/` folder and `screenshots/reflow.json`, one entry per page, breakpoint and mode, `ok` or
+into the version's `screenshots/` folder and `screenshots/reflow.json`, one entry per page, breakpoint and mode (which `check_design.py` reads), `ok` or
 `sideways` (the page is wider than the viewport). Without a browser it prints `design: no headless browser found; reflow not run`,
 writes every entry as `not run` and succeeds. `screenshots/` is written only by this command and is outside the signed-off
 digest. `--folder FOLDER` still takes the four pictures of an old mockup folder.

@@ -37,8 +37,8 @@ this ADR changes; no rule of the spec changes.
    together are a usage error), it writes, for each `<screen>--<state>.html` of the version (not
    `index.html`, which is no screen), at each of `design_standard.BREAKPOINTS` and in light and
    dark, `screenshots/<screen>--<state>-<width>-<mode>.png` and one `screenshots/reflow.json`:
-   `{"version": "v<n>", "entries": [{"page", "width", "mode", "reflow"}]}` with `reflow` one of
-   `ok`, `sideways` or `not run`. Without a browser it prints
+   `{"version": "v<n>", "entries": [{"page", "breakpoint", "mode", "result"}]}` with `result` one
+   of `ok`, `sideways` or `not run`, the shape that `design_prototype_check.py` (#458) reads. Without a browser it prints
    `design: no headless browser found; reflow not run`, writes every entry as `not run` and exits 0.
    The docstring of `design.py` and `skills/design/SKILL.md` say that `screenshots/` is written only
    by `design.py screenshots`, never by hand.
@@ -67,7 +67,9 @@ this ADR changes; no rule of the spec changes.
    `render`, a `pixel_tolerance` that is not a share, a version without a `design` row in
    `docs/design/signoffs.md`, a screen or state the version has no page for, and a `render` that
    exits non-zero or writes no page (nothing compared is never a match, `Q-461-2`).
-5. **The conductor.** `.claude/agents/conductor.md` gains: for every pull request of a UI brief,
+5. **The conductor and the skill.** `skills/design/SKILL.md` gains the section that runs
+   `design_compare.py` from the plugin root, so the command reaches a project (`parity.py`).
+   **The conductor.** `.claude/agents/conductor.md` gains: for every pull request of a UI brief,
    read its `Design match:` lines, ask for them by a fix list when they are missing, judge every
    drift, and the verdict names every screen and state that drifted with a fix item or a reason to
    accept it. Words are cut elsewhere in the file so that its rule budget does not grow.
@@ -76,7 +78,7 @@ this ADR changes; no rule of the spec changes.
    `design_compare.py` and the `[design]` settings; `docs/guides/getting-started.md` adds the
    builder's step.
 7. **`agk.toml`.** Two `[[testing.map]]` entries, one for each new script, so that the test plan
-   selects their tests. This changes ADR-0204 decision 3 for these two entries only; no other line
+   selects their tests; the entry of `design.py` stays as it is on the default branch. This changes ADR-0204 decision 3 for these two entries only; no other line
    of `agk.toml` changes.
 
 ## Consequences
@@ -93,4 +95,4 @@ naming the setting when it runs the comparison, and nothing else changes for it.
   stylesheets, not which rules of a stylesheet apply to the page, so a page that links the whole
   standard lists every token it references (due 2026-12-31).
 - 2026-11-08: the pixel decode is pure Python; on a wide page a comparison takes seconds per
-  screenshot. `check_design.py` does not read `reflow.json` yet (brief #458 does).
+  screenshot.

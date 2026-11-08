@@ -62,8 +62,8 @@ def test_ac6_without_a_browser_every_reflow_entry_reads_not_run(tmp_path):
         for width in design_standard.BREAKPOINTS
         for mode in ("light", "dark")
     ]
-    assert [(e["page"], e["width"], e["mode"]) for e in data["entries"]] == want
-    assert {e["reflow"] for e in data["entries"]} == {"not run"}
+    assert [(e["page"], e["breakpoint"], e["mode"]) for e in data["entries"]] == want
+    assert {e["result"] for e in data["entries"]} == {"not run"}
     assert sorted(p.name for p in (folder / "screenshots").iterdir()) == ["reflow.json"]
 
 
@@ -78,7 +78,7 @@ def test_ac6_a_browser_writes_every_screenshot_and_measures_a_sideways_page(tmp_
     data = entries(folder)["entries"]
     assert len(data) == len(PAGES) * len(design_standard.BREAKPOINTS) * 2
     for e in data:
-        assert e["reflow"] == ("sideways" if e["width"] == 360 else "ok"), e
+        assert e["result"] == ("sideways" if e["breakpoint"] == 360 else "ok"), e
     names = sorted(p.name for p in (folder / "screenshots").iterdir() if p.suffix == ".png")
     want = sorted(
         f"{page[:-5]}-{width}-{mode}.png"
@@ -139,3 +139,21 @@ def test_ac6_the_design_text_says_screenshots_are_written_only_by_the_command():
     for text in (doc, skill):
         assert "written only by `design.py screenshots`, never by hand" in text
         assert "screenshots --version" in " ".join(text.split())
+
+
+def test_ac6_the_record_is_read_by_the_prototype_check(tmp_path):
+    """REQ-044 AC6: SPEC-0037 rule 8: `check_design.py`'s reader takes `reflow.json` as written."""
+    import design_prototype_check
+
+    folder = frozen_version(tmp_path)
+    design(tmp_path, "screenshots", "--version", VERSION, path=empty_path(tmp_path))
+    read = design_prototype_check.reflow_entries(folder)
+    assert len(read) == len(PAGES) * len(design_standard.BREAKPOINTS) * 2
+    assert {r[3] for r in read} == {"not run"}
+    shot = png(tmp_path.parent / (tmp_path.name + "-shot.png"), [[WHITE]])
+    log = fake_browser(tmp_path.parent / (tmp_path.name + "-bin"), shot)
+    design(tmp_path, "screenshots", "--version", VERSION, path=f"{log.parent}{os.pathsep}/bin")
+    problems = design_prototype_check.reflow_problems(tmp_path, VERSION)
+    assert problems == [
+        f"rule 8: {VERSION}/{page[:-5]}: the page scrolls sideways at 360 px" for page in PAGES
+    ]

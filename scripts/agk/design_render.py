@@ -10,8 +10,9 @@ its viewport (a sideways scroll). `shoot(browser, page, width, mode, target)` wr
 share of pixels that differ (1.0 when the sizes differ). `reflow(root, version)` is the
 `screenshots --version` command: at each breakpoint of the standard, in light and dark, it writes
 `docs/design/prototype/<version>/screenshots/<screen>--<state>-<width>-<mode>.png` and
-`screenshots/reflow.json` (`{"version": ..., "entries": [{"page", "width", "mode", "reflow"}]}`,
-`reflow` being `ok`, `sideways` or `not run`); without a browser every entry reads `not run`.
+`screenshots/reflow.json`, `{"version": ..., "entries": [{"page", "breakpoint", "mode",
+"result"}]}` with `result` one of `ok`, `sideways` or `not run`, as `design_prototype_check.py`
+reads it; without a browser every entry reads `not run`.
 `screenshots/` is written only by `design.py screenshots`, never by hand. The browser runs with
 `--host-resolver-rules=MAP * ~NOTFOUND`, so no request leaves the machine. Messages name the
 rule, never a value.
@@ -212,7 +213,7 @@ def reflow(root: Path, version: str) -> int:
                     result = "sideways" if measure(browser, folder / name, width, mode) else "ok"
                     if result == "sideways":
                         sideways.append(f"{name[:-5]} {width} {mode}")
-                entries.append({"page": name, "width": width, "mode": mode, "reflow": result})
+                entries.append({"page": name, "breakpoint": width, "mode": mode, "result": result})
     out.mkdir(exist_ok=True)
     text = json.dumps({"version": version, "entries": entries}, indent=2) + "\n"
     (out / REFLOW).write_text(text, encoding="utf-8")
