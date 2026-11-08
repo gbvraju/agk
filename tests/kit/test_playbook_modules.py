@@ -52,7 +52,8 @@ def playbook(
     listed = ", ".join(f'"{e}"' for e in evidence)
     return (
         f'format = 1\nwork_type = "{name}"\ntitle = "An invented playbook"\n'
-        f"{modules}\nheavy_steps = []\nevidence = [{listed}]\nphases = []\nlanes = []\nclaims = []\n"
+        f"{modules}\nheavy_steps = []\nevidence = [{listed}]\n"
+        "phases = []\nlanes = []\nclaims = []\n"
         "\n[split]\nbrief_order = []\ndepends_on = []\n"
         '\n[testing]\nprofile = "balanced"\nalways_full = []\nmap = []\n'
         '\n[milestones]\nshape = "per-brief"\nbatch_by = "not batched"\n'
