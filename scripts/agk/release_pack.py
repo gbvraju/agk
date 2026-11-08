@@ -6,9 +6,9 @@ A pack is one folder named by a release tag with exactly six files: the five par
 `scans.json`, `coverage.json`, `bom.json`, `decisions.json` and the index `pack.json` (rule 2).
 `check` reads the folder and the repository's git only, with no network call, and prints `ok pack`,
 or one `FAIL pack: <part> <reason>` line per problem and exits 1, naming the part and never a value
-(rule 10); a digest line is left out only when a form line already explains it. A required check `failure` or `unknown`, or a scan
-`failed` or `unknown`, is one `warn pack:` line and does not fail: the pack records the release, it
-does not judge it.
+(rule 10); a digest line is left out only when a form line already explains it. A required check
+`failure` or `unknown`, or a scan `failed` or `unknown`, is one `warn pack:` line and does not fail:
+the pack records the release, it does not judge it.
 
 The release test (rule 4) is `check_tag.failure` on the tagged commit, in a throwaway clone that
 shares the repository's objects, so the work tree, refs and worktree list stay as they are. A tag
