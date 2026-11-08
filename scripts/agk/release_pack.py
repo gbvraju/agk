@@ -69,7 +69,7 @@ NO_FOLDER = "refused: the folder cannot be written (path class <out>)"
 GOVERNANCE = ".github/workflows/governance.yml"
 ABSENT = "none"  # a requirement's status where the requirement does not exist (Q-820-3)
 RELEASE_TAG = re.compile(r"v(\d+)\.(\d+)\.(\d+)")
-# scorecard.PIN and scorecard.EXACT with the groups the bill needs beside theirs (a test binds them).
+# scorecard.PIN and scorecard.EXACT with the groups the bill needs too (a test binds them).
 ACTION = re.compile(
     r"^\s*(?:-\s+)?uses:\s*([\w.-]+/[\w.-]+)(?:/\S*)?@([0-9a-f]{40})\s+#\s*(\S+)", re.MULTILINE
 )
