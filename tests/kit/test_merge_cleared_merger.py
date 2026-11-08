@@ -1,6 +1,6 @@
 """merge_cleared.py and the merger job: GitHub mode merges a cleared head with no session.
 
-Brief #765, ADR-0354, amendment 138, REQ-046 (SPEC-0039 rule 2, its GitHub-mode runner). The job
+Brief #765, ADR-0354, amendment 139, REQ-046 (SPEC-0039 rule 2, its GitHub-mode runner). The job
 of `.github/workflows/governance.yml` runs three commands: `merge_cleared.py --event <payload>`
 names the pull request and head to try (or nothing), then exactly `merge_cleared.py --pr <n> --sha
 <head>`, then `merge_cleared.py --report --pr <n> --sha <head> --line <its line>`, which dispatches

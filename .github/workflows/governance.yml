@@ -353,7 +353,7 @@ jobs:
           echo "scanning $range"
           "$RUNNER_TEMP/gitleaks" git --no-banner --redact --exit-code 1 --log-opts="$range" .
 
-  # The merger job of GitHub mode (brief #765, ADR-0354, amendment 138 to SPEC-0039): it checks out the default branch,
+  # The merger job of GitHub mode (brief #765, ADR-0354, amendment 139 to SPEC-0039): it checks out the default branch,
   # never a pull request's head, and runs merge_cleared.py with the job's own token and no secret. `--event` prints
   # `<n> <sha>` only when `[flow] auto_merge = true`, the project is not in local or personal mode and the latest verdict
   # clears that head; then the guarded command runs exactly, with every re-check its own, and `--report` dispatches

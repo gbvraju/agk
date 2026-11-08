@@ -1,9 +1,9 @@
-# Proposed spec amendments 138 (SPEC-0039; REQ-046)
+# Proposed spec amendments 139 (SPEC-0039; REQ-046)
 
 Date: 2026-11-08 (from `date -u`). Approved specs change only through a proposal like this one (principle 6). Written for
 ADR-0354 (brief #765), which stays `Proposed` for the maintainers' decision. The path:
-`docs/specs/0039-the-conductor-merges-a-cleared-pull-request-through-one-guarded-command.md`. The number 138 is the one
-reserved for brief #765. This amendment is not applied to the spec text in this pull request; the owner decides it, and
+`docs/specs/0039-the-conductor-merges-a-cleared-pull-request-through-one-guarded-command.md`. The number 139 is the next free
+one: 138, reserved for brief #765, was taken on the default branch by brief #751 first. This amendment is not applied to the spec text in this pull request; the owner decides it, and
 it needs a person's `Approve: SPEC-0039`; no session posts it.
 
 1. **The GitHub-mode runner (rule 2).** Rule 2 gains: in GitHub mode (`execution` not `local`, `forge` not `files`)

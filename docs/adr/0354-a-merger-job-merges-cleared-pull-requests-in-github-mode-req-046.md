@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-08
 - Deciders: maintainers
-- Related: ADR-0261, ADR-0265, ADR-0345, SPEC-0039, amendment 138, brief #765, plan #661
+- Related: ADR-0261, ADR-0265, ADR-0345, SPEC-0039, amendment 139, brief #765, plan #661
 - Requirements: REQ-046
 
 Protected classes: `.github/`, `scripts/agk/`, `tests/kit/`
