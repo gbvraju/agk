@@ -27,6 +27,7 @@ import playbook_format  # noqa: E402
 FIVE = ("constraints", "success", "data-rules", "environments", "non-functional")
 SUCCESS = '[[discovery]]\nid = "success"\ntext = "How will we know the work succeeded?"\n\n'
 
+
 def test_ac2_a_playbook_with_the_five_ids_passes(tmp_path):
     """REQ-055 AC2: SPEC-0048 rule 4 (the five ids, each once, pass the check)."""
     write(tmp_path)

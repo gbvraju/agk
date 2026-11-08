@@ -157,7 +157,7 @@ def test_ac2_a_declaration_with_a_problem_is_refused_without_the_flag(tmp_path):
 def test_ac2_the_vision_skill_reads_the_questions_three_per_round():
     """REQ-055 AC2: brief #686 answer 2 (`skills/vision/SKILL.md` reads them)."""
     text = (KIT_ROOT / "skills" / "vision" / "SKILL.md").read_text(encoding="utf-8")
-    assert "engines.py\" questions --work-type" in text or "questions [--work-type" in text
+    assert 'engines.py" questions --work-type' in text or "questions [--work-type" in text
     assert "at most three per round" in text
     for fixed in FIVE:
         assert f"`{fixed}`" in text
