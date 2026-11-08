@@ -51,7 +51,7 @@ def project(tmp_path, render=True, tolerance=None, heading="Home", token="--colo
         (built / f"home--{state}.html").write_text(page, encoding="utf-8")
     lines = ["[design]"]
     if render:
-        lines.append(f"render = \"{sys.executable} {tmp_path / 'render.py'}\"")
+        lines.append(f'render = "{sys.executable} {tmp_path / "render.py"}"')
     if tolerance is not None:
         lines.append(f"pixel_tolerance = {tolerance}")
     (tmp_path / "agk.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")

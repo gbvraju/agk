@@ -16,7 +16,8 @@ FROZEN = """<!doctype html>
 </head>
 <body>
 <div class="page stack">
-<nav class="cluster" aria-label="States of home" id="states"><a href="home--default.html">default</a></nav>
+<nav class="cluster" aria-label="States of home" id="states">
+<a href="home--default.html">default</a></nav>
 <header><p>Example Org</p></header>
 <main id="main" class="stack">
 <h1>Home</h1>
@@ -24,7 +25,8 @@ FROZEN = """<!doctype html>
 <form><label for="q">Search orders</label><input id="q" type="search"><button>Find</button></form>
 <a href="orders--default.html">All orders</a>
 </main>
-<nav class="cluster" aria-label="Demo: orders" data-demo="Start here."><a href="x">Next step</a></nav>
+<nav class="cluster" aria-label="Demo: orders" data-demo="Start here.">
+<a href="x">Next step</a></nav>
 <p><a href="index.html">All flows</a></p>
 </div>
 <script src="agk-prototype.js"></script>
@@ -33,7 +35,8 @@ FROZEN = """<!doctype html>
 """
 STANDARD = ":root {\n  --color-text: #111111;\n  --color-muted: #555555;\n}\n"
 SIGNOFFS = (
-    "# Sign-offs\n\n| kind | version | digest | head | date | comment |\n| --- | --- | --- | --- | --- | --- |\n"
+    "# Sign-offs\n\n| kind | version | digest | head | date | comment |\n"
+    "| --- | --- | --- | --- | --- | --- |\n"
     "| design | v1 | " + "a" * 64 + " | " + "b" * 40 + " | 2026-11-01 | "
     "https://example.com/comment/1 |\n"
 )
