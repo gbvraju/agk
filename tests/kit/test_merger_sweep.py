@@ -255,3 +255,46 @@ def test_a_sweep_never_cancels_and_never_shares_a_group_with_a_pull_request():
     """REQ-046: brief #797 answer 3 (one sweep at a time; a run that may be merging is kept)."""
     assert "'sweep'" in text().split("\njobs:", 1)[0]
     assert "cancel-in-progress: false" in text()
+
+
+# --- the file itself: GitHub starts no job from a workflow that does not load -------------------
+
+
+def yaml_reader():
+    # PyYAML comes with the pinned bandit of config/ci-tools.txt, so governance runs these two tests.
+    # The proof job installs only pytest and ruff; the parser-free test below still runs there.
+    return pytest.importorskip("yaml")
+
+
+def load_workflow(path: Path) -> dict:
+    return yaml_reader().safe_load(path.read_text(encoding="utf-8"))
+
+
+def test_the_workflow_file_loads_with_a_yaml_parser():
+    """REQ-046: verdict on 3c17a36 item 2 (the shape tests read the file as text)."""
+    tree = load_workflow(WORKFLOW)
+    # YAML 1.1 reads the key `on` as true.
+    assert {"issue_comment", "workflow_run", "schedule", "workflow_dispatch"} <= set(tree[True])
+    assert {"merger", "sweep-gate", "sweep"} <= set(tree["jobs"])
+    runs = [step.get("run", "") for step in tree["jobs"]["sweep"]["steps"]]
+    assert any("merge_cleared.py --sweep ||" in run for run in runs)
+
+
+def test_the_loader_refuses_a_plain_run_value_that_holds_a_colon(tmp_path):
+    """REQ-046: verdict on 3c17a36 item 2 (the test fails on a file that does not load)."""
+    yaml = yaml_reader()
+    broken = tmp_path / "merger.yml"
+    broken.write_text(
+        "jobs:\n  sweep:\n    steps:\n"
+        '      - run: python3 sweep.py || echo "merger: the sweep ended early"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(yaml.YAMLError):
+        load_workflow(broken)
+
+
+def test_no_plain_run_value_holds_a_colon_and_a_space():
+    """REQ-046: verdict on 3c17a36 item 1 (the fault itself, read with no parser, for the proof job)."""
+    plain = re.findall(r"^\s*(?:- )?run: (?![|>\"'])(.*)$", text(), re.M)
+    assert plain, "the file has plain run values"
+    assert [value for value in plain if ": " in value or value.endswith(":")] == []
