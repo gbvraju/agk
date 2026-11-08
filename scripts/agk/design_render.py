@@ -219,10 +219,8 @@ def reflow(root: Path, version: str) -> int:
     if browser is None:
         print(NO_BROWSER)
         return 0
-    shots = len(entries)
-    print(
-        f"wrote {shots} screenshots and {REFLOW} in {design_signoff.PROTOTYPE}/{version}/screenshots/"
-    )
+    where = f"{design_signoff.PROTOTYPE}/{version}/{design_signoff.SCREENSHOTS}/"
+    print(f"wrote {len(entries)} screenshots and {REFLOW} in {where}")
     for line in sideways:
         print(f"sideways: {line}")
     return 0
