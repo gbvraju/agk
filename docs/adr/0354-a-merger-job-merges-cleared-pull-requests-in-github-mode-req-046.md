@@ -35,16 +35,19 @@ workflow job; this decision changes that, for GitHub mode only.
    token the owner creates for this one repository (Contents and Pull requests, read and write), is stored as a secret
    of the GitHub environment `merge`, whose deployment branches are the default branch alone, and never as a repository
    secret. GitHub matches that rule against the run's `GITHUB_REF` and gives an environment's secrets only to a job that
-   names it, so a run of any other ref cannot read it. It reaches only the second step, and the command uses it for its
-   one merge call alone, so the merge runs under the owner's existing admin bypass and the ruleset stays as it is. The
-   job reads it only from `secrets.AGK_MERGE_TOKEN`; no session handles it, and the tests of the merged code run under
-   `env -i`. Without the secret the job posts one line `merge needs AGK_MERGE_TOKEN or the owner's tap`, once per pull
+   names it, so a pull request's own run, like a run of any other ref, cannot read it. It reaches only the second step,
+   and the command gives it to `gh` for its one merge call alone, so the merge runs under the owner's existing admin
+   bypass and the ruleset stays as it is. The job reads it only from `secrets.AGK_MERGE_TOKEN` and no session handles
+   it. That step also runs the cleared head's own code (`make governance` and the pre-merge tests on the would-be merge)
+   under `env -i`, which empties only that code's own environment and does not keep the secret from it (Residual).
+   Without the secret the job posts one line `merge needs AGK_MERGE_TOKEN or the owner's tap`, once per pull
    request, and does nothing else. Owner step: create the environment `merge`, set its deployment branches to the default
    branch alone, and store the token there.
 3. `--event` does nothing, and reads nothing from GitHub, unless `[flow] auto_merge = true` with `squash`, `execution`
    is not `local` and `forge` is not `files`, all on the default branch as checked out. It then names a pull request
    only when the open local-mode record issue is absent and the latest `Verdict:` comment reads
-   `Verdict: cleared <head>`; otherwise it prints one line on stderr and nothing else.
+   `Verdict: cleared <head>` or is a fix list on that head whose every `Final:` line accepts an ADR (SPEC-0021 rule 3a);
+   otherwise it prints one line on stderr and nothing else.
 4. `--report` writes nothing after a merge: the merge is made with `AGK_MERGE_TOKEN`, and its push starts the default
    branch's `governance` run by itself `(verify)`. It posts one comment `merger: <line>` for a hold or a refusal, never
    the same line twice on one pull request; `held: checks pending` posts nothing, since the other required run's end is
@@ -81,3 +84,10 @@ workflow job; this decision changes that, for GitHub mode only.
   would be readable by any run. Nothing here can check the owner's settings. Whoever can change the default branch's
   files can still change the job, under the ruleset and the protected class `.github/`; the owner holds the token's scope
   and expiry.
+- 2026-11-08: the step that holds `AGK_MERGE_TOKEN` also runs the cleared head's own code (`make governance` and the
+  pre-merge tests on the would-be merge). `env -i` empties only that code's own environment, so the code can read the
+  secret from its parent process (measured on this pull request: a child under `env -i` read the variable from
+  `/proc/<parent>/environ`). The environment rule keeps the secret from a pull request's own runs, not from a cleared
+  head in this step: a head that passes review could take the token, which bypasses the ruleset. Nothing here changes
+  that; the owner decides at approval whether to accept it or to ask for a build that keeps the merged code out of that
+  step.
