@@ -1,4 +1,4 @@
-"""The front door's entry and discovery document (SPEC-0048 build (b), rules 3, 5, 14 and 15).
+"""The front door's entry, discovery, research and design (SPEC-0048 builds (b) and (d)).
 
 Standard library only, files only, no network: every input is a saved file.
 
@@ -12,6 +12,17 @@ Standard library only, files only, no network: every input is a saved file.
         and 14)
     front_door.py check-discovery [FILE ...] [--root DIR]
         checks each discovery document (by default every `docs/discovery/*.md`) (rules 5 and 14)
+    front_door.py check-research --date YYYY-MM-DD [FILE ...] [--root DIR]
+        checks each research record (by default every `docs/research/*.md`): at least two
+        `## Option: <name>` sections each with a `- Source: <URL> (accessed YYYY-MM-DD)` line, a
+        `## Criteria` table with a row for each of the seven criteria, and a `## Recommendation`
+        marked `(proposal)`; a record a design cites is stale when any source was accessed more
+        than 180 days before `--date` (rules 6 and 14)
+    front_door.py check-design --date YYYY-MM-DD [FILE ...] [--root DIR]
+        checks each architecture file (by default every `docs/design/architecture/*.md`): a
+        fenced text or Mermaid diagram, no image, and exactly one line
+        `Research: docs/research/<its slug>.md` naming a record that passes rule 6 and is fresh
+        (rule 7)
 
 The answers file: `{"screens": "yes|no|open", "work_type": "<work type>", "answers": [{"id":
 "<id>", "answer": "<words>", "where": "<comment link>|in session YYYY-MM-DD"} or {"id": "<id>",
@@ -25,6 +36,7 @@ and the file or the setting, never a value, a problem's words or an answer (rule
 
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import re
@@ -40,6 +52,7 @@ NAME = "front-door"
 USAGE = (
     "usage: front_door.py check-issue --issue FILE | discovery-write (--issue FILE | --vision FILE)"
     " --answers FILE [--root DIR] | check-discovery [FILE ...] [--root DIR]"
+    " | (check-research | check-design) --date YYYY-MM-DD [FILE ...] [--root DIR]"
 )
 LABEL = "agk-problem"
 PREFIX = "Problem: "
@@ -408,14 +421,238 @@ def check_discovery(files: list[str], root: Path) -> int:
     return 0
 
 
+# --- the research record (rule 6) and the design (rule 7) ----------------------------------------
+
+RESEARCH = "docs/research"
+DESIGN = "docs/design/architecture"
+FRESH_DAYS = 180
+# The seven criteria of SPEC-0038 rule 10, as SPEC-0048 rule 6 names them.
+CRITERIA = (
+    "capability fit",
+    "cost",
+    "licence",
+    "data handling and residency",
+    "maturity",
+    "integration effort",
+    "lock-in",
+)
+SOURCE = re.compile(r"^- Source: https?://\S+ \(accessed (\d{4}-\d{2}-\d{2})\)$")
+ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+CITES = re.compile(r"^Research:(.*)$")
+FENCE = re.compile(r"^```\s*(mermaid|text|txt|plain)?\s*$")
+IMAGE = re.compile(r"!\[[^\]]*\]\(|<img\b", re.IGNORECASE)
+
+
+def iso_date(text: str) -> datetime.date | None:
+    if not ISO.match(text):
+        return None
+    try:
+        return datetime.date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def sections_of(lines: list[str]) -> list[tuple[str, list[str]]]:
+    out: list[tuple[str, list[str]]] = []
+    for ln in lines:
+        if ln.startswith("## "):
+            out.append((ln[3:].strip(), []))
+        elif out:
+            out[-1][1].append(ln)
+    return out
+
+
+def research_problems(rel: str, text: str) -> tuple[list[str], list[datetime.date]]:
+    """Rule 6's form of one record, and the access dates of its source lines."""
+    lines = text.split("\n")
+    out = guard_problems(14, rel, text)
+    if not re.match(r"^# Research: \S", lines[0]):
+        out.append(f"rule 6: {rel}: the first line is not `# Research: <title>`")
+    dates = []
+    for n, ln in enumerate(lines, 1):
+        if not ln.startswith("- Source:"):
+            continue
+        m = SOURCE.match(ln)
+        when = iso_date(m.group(1)) if m else None
+        if when is None:
+            out.append(
+                f"rule 6: {rel}: line {n} is a source line without an access date"
+                " (`- Source: <URL> (accessed YYYY-MM-DD)`)"
+            )
+        else:
+            dates.append(when)
+    sections = sections_of(lines)
+    options = [body for head, body in sections if re.match(r"^Option: \S", head)]
+    if len(options) < 2:
+        out.append(f"rule 6: {rel}: the record has fewer than at least two options (`## Option:`)")
+    for n, body in enumerate(options, 1):
+        if not any((m := SOURCE.match(ln)) and iso_date(m.group(1)) for ln in body):
+            out.append(f"rule 6: {rel}: option {n} has no source line with an access date")
+    named = dict(sections)
+    if "Criteria" not in named:
+        out.append(f"rule 6: {rel}: the `## Criteria` section is missing")
+    else:
+        rows = {
+            ln.strip().strip("|").split("|")[0].strip().lower()
+            for ln in named["Criteria"]
+            if ln.strip().startswith("|")
+        }
+        for need in CRITERIA:
+            if need not in rows:
+                out.append(f"rule 6: {rel}: the criteria table has no `{need}` row")
+    if "Recommendation" not in named:
+        out.append(f"rule 6: {rel}: the `## Recommendation` section is missing")
+    elif not any("(proposal)" in ln for ln in named["Recommendation"]):
+        out.append(f"rule 6: {rel}: the recommendation is not marked `(proposal)`")
+    return out, dates
+
+
+def stale(dates: list[datetime.date], today: datetime.date) -> bool:
+    return any((today - when).days > FRESH_DAYS for when in dates)
+
+
+def rel_of(path: Path, root: Path) -> str:
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return path.name
+
+
+def read_files(files: list[str], root: Path, folder: str, rule: int, problems: list[str]):
+    """(rel, text) of each named file, or of every `<folder>/*.md` when none is named."""
+    paths = [Path(f) for f in files] or sorted((root / folder).glob("*.md"))
+    out = []
+    for path in paths:
+        full = path if path.is_absolute() else root / path
+        rel = rel_of(full, root)
+        try:
+            out.append((rel, full.read_text(encoding="utf-8")))
+        except (OSError, UnicodeDecodeError):
+            problems.append(f"rule {rule}: {rel}: not readable")
+    return paths, out
+
+
+def cited_records(root: Path) -> set[str]:
+    """The records every design under `docs/design/architecture/` names on a `Research:` line."""
+    cited = set()
+    for path in sorted((root / DESIGN).glob("*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        cited |= {m.group(1).strip() for ln in text.split("\n") if (m := CITES.match(ln))}
+    return cited
+
+
+def check_research(files: list[str], root: Path, today: datetime.date) -> int:
+    problems: list[str] = []
+    paths, records = read_files(files, root, RESEARCH, 6, problems)
+    if not paths:
+        print(f"ok {NAME}: no research record")
+        return 0
+    cited = cited_records(root)
+    for rel, text in records:
+        found, dates = research_problems(rel, text)
+        problems += found
+        if not stale(dates, today):
+            continue
+        if rel in cited:
+            problems.append(
+                f"rule 6: {rel}: a source was accessed more than {FRESH_DAYS} days before the date"
+                " given and a design cites the record; read its sources again and change their"
+                " access dates"
+            )
+        else:
+            print(
+                f"note {NAME}: rule 6: {rel}: a source was accessed more than {FRESH_DAYS} days"
+                " before the date given; no design cites it, so it is not stale yet"
+            )
+    if problems:
+        raise Refusal(problems)
+    print(f"ok {NAME}: check-research ({len(paths)} records)")
+    return 0
+
+
+def diagram_of(lines: list[str]) -> bool:
+    """True when a fenced plain-text or Mermaid block holds at least one non-blank line."""
+    i = 0
+    while i < len(lines):
+        if FENCE.match(lines[i].strip()):
+            end = next((j for j in range(i + 1, len(lines)) if lines[j].strip() == "```"), None)
+            if end is None:
+                return False
+            if any(ln.strip() for ln in lines[i + 1 : end]):
+                return True
+            i = end
+        i += 1
+    return False
+
+
+def design_problems(rel: str, text: str, root: Path, today: datetime.date) -> list[str]:
+    lines = text.split("\n")
+    out = []
+    if not diagram_of(lines):
+        out.append(
+            f"rule 7: {rel}: the design has no text diagram (a fenced Mermaid or plain-text block)"
+        )
+    if any(IMAGE.search(ln) for ln in lines):
+        out.append(f"rule 7: {rel}: the design holds an image; the diagram is text only")
+    cites = [m.group(1).strip() for ln in lines if (m := CITES.match(ln))]
+    if len(cites) != 1:
+        return out + [f"rule 7: {rel}: the design needs exactly one `Research:` line"]
+    want = f"{RESEARCH}/{Path(rel).stem}.md"
+    if cites[0] != want:
+        why = "the `Research:` line does not name the record of its own slug"
+        return out + [f"rule 7: {rel}: {why}"]
+    target = root / want
+    try:
+        record = target.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        why = "the research record it names does not exist or is unreadable"
+        return out + [f"rule 7: {rel}: {why}"]
+    found, dates = research_problems(want, record)
+    if found:
+        out.append(f"rule 7: {rel}: its research record fails rule 6")
+        out += found
+    elif stale(dates, today):
+        out.append(
+            f"rule 7: {rel}: its research record is stale (rule 6: a source accessed more than"
+            f" {FRESH_DAYS} days before the date given)"
+        )
+    return out
+
+
+def check_design(files: list[str], root: Path, today: datetime.date) -> int:
+    problems: list[str] = []
+    paths, designs = read_files(files, root, DESIGN, 7, problems)
+    if not paths:
+        print(f"ok {NAME}: no design")
+        return 0
+    for rel, text in designs:
+        problems += design_problems(rel, text, root, today)
+    if problems:
+        raise Refusal(problems)
+    print(f"ok {NAME}: check-design ({len(paths)} designs)")
+    return 0
+
+
+COMMANDS = (
+    "check-issue",
+    "discovery-write",
+    "check-discovery",
+    "check-research",
+    "check-design",
+)
+
+
 def parse(argv: list[str]) -> tuple[str, dict[str, str], list[str]] | None:
-    if not argv or argv[0] not in ("check-issue", "discovery-write", "check-discovery"):
+    if not argv or argv[0] not in COMMANDS:
         return None
     opts: dict[str, str] = {}
     rest: list[str] = []
     i = 1
     while i < len(argv):
-        if argv[i] in ("--issue", "--vision", "--answers", "--root"):
+        if argv[i] in ("--issue", "--vision", "--answers", "--root", "--date"):
             if i + 1 >= len(argv) or argv[i] in opts:
                 return None
             opts[argv[i]] = argv[i + 1]
@@ -439,9 +676,12 @@ def main(argv: list[str] | None = None) -> int:
         ok = set(opts) <= {"--issue", "--root"} and "--issue" in opts and not rest
     elif cmd == "discovery-write":
         doors = ("--issue" in opts) + ("--vision" in opts)
-        ok = "--answers" in opts and doors == 1 and not rest
-    else:
+        ok = "--answers" in opts and doors == 1 and not rest and "--date" not in opts
+    elif cmd == "check-discovery":
         ok = set(opts) <= {"--root"}
+    else:
+        today = iso_date(opts.get("--date", ""))
+        ok = set(opts) <= {"--root", "--date"} and today is not None
     if not ok:
         print(USAGE, file=sys.stderr)
         return 2
@@ -450,7 +690,11 @@ def main(argv: list[str] | None = None) -> int:
             return check_issue(Path(opts["--issue"]))
         if cmd == "discovery-write":
             return discovery_write(opts, root)
-        return check_discovery(rest, root)
+        if cmd == "check-discovery":
+            return check_discovery(rest, root)
+        if cmd == "check-research":
+            return check_research(rest, root, today)
+        return check_design(rest, root, today)
     except Refusal as refusal:
         for problem in refusal.problems:
             print(f"FAIL {NAME}: {problem}")
