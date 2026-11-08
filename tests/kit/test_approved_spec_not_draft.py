@@ -38,7 +38,7 @@ APPROVER = "owner-three"
 MAINTAINER = "maintainer"
 
 
-YAML = 'version: 1\nspec_approvers: ["@owner-three"]\nconductor_accounts: ["@owner-three"]\n'
+YAML = 'version: 1\nspec_approvers: ["@owner-three"]\nconductor_accounts: ["@conductor-two"]\n'
 
 
 def spec_file(status: str = "modified") -> dict:
@@ -54,7 +54,7 @@ def contents(word: str) -> dict:
 
 
 def guarded(tmp_path, approve: str | None, word: str = "Draft", login: str = APPROVER):
-    notes = [cleared()]
+    notes = [cleared(login="conductor-two")]
     if approve is not None:
         notes.append(comment(approve, login=login, at=6))
     root = repo(tmp_path, toml(ON), reviewers_yaml=YAML)
