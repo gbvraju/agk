@@ -554,17 +554,15 @@ def test_the_shadow_reviewer_never_runs_the_merge(tmp_path):
 
 
 def test_builders_are_never_allowed_the_command_and_no_project_wide_deny_is_added():
-    """REQ-046 AC5: SPEC-0039 rule 8 and Q-S0039-15 (the builders' settings ask, never allow)."""
+    """REQ-046 AC5: SPEC-0039 rule 8, Q-S0039-15 and amendment 136 (the one exact form is allowed
+    so an unattended conductor can merge; every other form stays on ask; nothing is denied)."""
     data = json.loads((REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    ask = data["permissions"]["ask"]
-    for entry in (
-        "Bash(python3 scripts/agk/merge_cleared.py*)",
-        "Bash(python scripts/agk/merge_cleared.py*)",
-        "Bash(*merge_cleared.py*)",
-    ):
-        assert entry in ask, entry
+    ask, allow = data["permissions"]["ask"], data["permissions"]["allow"]
+    exact = "Bash(python3 scripts/agk/merge_cleared.py*)"
+    assert exact in allow
+    assert "Bash(python scripts/agk/merge_cleared.py*)" in ask
+    assert [e for e in allow if "merge_cleared" in e] == [exact]
     assert not any("merge_cleared" in e for e in data["permissions"]["deny"])
-    assert not any("merge_cleared" in e for e in data["permissions"]["allow"])
 
 
 def numbered(path: Path, number: int) -> str:
