@@ -54,6 +54,12 @@ branch that the default branch also changed after that merge base (added, modifi
 renamed from or to; no exemption), sorted, or None when git cannot read them; `behind_merges`
 counts the first-parent commits of the default branch after the merge base. `merge_cleared.py`
 holds on both (rule 8).
+
+The overlap rule (SPEC-0050 rules 2 to 4, build (c), brief #751): `next`, `plan` and `claim` judge
+overlap with `running_conflict` and `clash`, leaving out the paths that `exempt` lists: the
+shared-mechanical files and the shared indexes of `[flow] shared_indexes` (exact paths, default
+`SHARED_INDEXES`; a set list replaces it, a bad value is refused naming the setting). A shared
+index never makes an overlap; it still counts for the re-prove above, which has no exemption.
 """
 
 from __future__ import annotations
@@ -71,7 +77,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import common
 import playbook_format
-from common import matches, read_list
+from common import CheckError, matches, read_list
 from session import (
     RELEASED,
     Survey,
@@ -111,6 +117,33 @@ DEFAULTS = {
     "stale_commits": 20,
     "claim_stale_hours": 24,
 }
+SHARED_INDEXES = (
+    "kit/manifest.json",
+    "agk.toml",
+    "config/rule-budget.txt",
+    "docs/requirements.md",
+    "docs/build-state.md",
+)
+INDEXES_REFUSED = "setting: flow.shared_indexes must be a list of exact repository paths"
+
+
+def shared_indexes(root) -> list[str]:
+    """The shared indexes of SPEC-0050 rule 3: `[flow] shared_indexes`, else the default; a value
+    that is not a list of non-empty exact paths (no wildcard, no folder) is refused by its name."""
+    value = flow_value(root, "shared_indexes", list(SHARED_INDEXES), RULE)
+    if not isinstance(value, list) or not all(
+        isinstance(v, str) and v.strip() and not has_wildcard(v) and not v.endswith("/")
+        for v in value
+    ):
+        raise CheckError(INDEXES_REFUSED)
+    return list(value)
+
+
+def exempt(root) -> list[re.Pattern]:
+    """The paths that never make an overlap (SPEC-0050 rule 2): the shared-mechanical files and the
+    shared indexes. The one list `next`, `plan` and `claim` judge with."""
+    found = [glob_regex(p) for p in shared_patterns(root)]
+    return found + [re.compile(re.escape(p)) for p in shared_indexes(root)]
 
 
 def label_names(pr: dict) -> set[str]:
@@ -711,7 +744,7 @@ def playbook_lines(plan: dict) -> list[str]:
 
 def waves(root, s: Survey, ready: list[dict]) -> tuple[list[dict], list[dict]]:
     """(the briefs that can start together, the briefs that wait and for what)."""
-    shared = [glob_regex(p) for p in shared_patterns(root)]
+    shared = exempt(root)
     chosen: list[dict] = []
     waits: list[dict] = []
     for brief in ready:
