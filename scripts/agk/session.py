@@ -1346,7 +1346,9 @@ def watch_assign(root, me: str, args: dict[str, str]) -> int:
 BUILDER_STARTS = ("start", "assign")
 SLOT_SETTING = "(setting: builder_start in the flow table of agk.toml)"
 SLOT_NAME = re.compile(r"s([1-9]\d*)")
-SLOT_LINE = re.compile(r"Slot: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+) (\S+)")
+SLOT_LINE = re.compile(
+    r"Slot: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+) (\S+)"
+)
 POOL_STOP = re.compile(r"Pool: stop(?: .*)?")
 SLOT_MINUTES = 50
 SLOT_IDLE_MINUTES = 10
@@ -1494,7 +1496,7 @@ def follow_up_owed(repo: str, pull: dict, allowed: set[str]) -> str | None:
 def slot_next(root, name: str) -> int:
     """One pass of a slot's loop: renew the lease, then print its one next step as the last line:
     `stop`, `follow-up pr #n <why>`, `assign #b [build (x)]`, `wait pr #n`, `take` (`next --take`,
-    after 10 minutes without an `Assign:`), `wait`, or `request` (no `Request:` or `Assign:` yet)."""
+    after 10 minutes with no `Assign:`), `wait`, or `request` (no `Request:` or `Assign:` yet)."""
     if code := slot_lease(root, "--renew", name):
         return code
     repo = repo_name(root)

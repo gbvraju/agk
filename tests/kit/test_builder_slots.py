@@ -1,4 +1,4 @@
-"""Builder slots: `[flow] builder_start`, the slot lease and the slot's next step (brief #776 build (a); REQ-041).
+"""Builder slots: the setting, the slot lease and the next step (brief #776 build (a); REQ-041).
 
 Saved comments through a `gh` stub on `PATH`, invented names, no network.
 """
@@ -150,7 +150,9 @@ def test_take_posts_one_marker_on_the_assignments_issue(proj, stub):
     assert out.returncode == 0, out.stdout
     done = posts(stub)
     assert len(done) == 1 and done[0][1] == COMMENTS
-    assert done[0][2][1].startswith(f"body=Slot: active {DAY}") and done[0][2][1].endswith(" s1 mine")
+    assert done[0][2][1].startswith(f"body=Slot: active {DAY}") and done[0][2][1].endswith(
+        " s1 mine"
+    )
 
 
 def test_a_take_mints_a_run_name_kept_in_the_git_directory(proj, stub):
@@ -297,7 +299,9 @@ def test_a_follow_up_assign_names_the_pull_request(proj, stub):
 def test_a_follow_up_assign_with_a_later_report_is_spent(proj, stub):
     """REQ-041"""
     held(proj, stub, comment(2, "boss", "Assign: s1 #5 pr #7 fix list", ago(1)))
-    stub.serve(f"{ISSUES}/7/comments", [comment(90, "boss", f"Report: {'b' * 12} fix list applied")])
+    stub.serve(
+        f"{ISSUES}/7/comments", [comment(90, "boss", f"Report: {'b' * 12} fix list applied")]
+    )
     assert last(slot(proj, stub, "--next")) == "wait"
 
 
@@ -334,9 +338,7 @@ def test_an_open_pull_request_waits_before_a_new_assign(proj, stub):
     assert last(slot(proj, stub, "--next")) == "wait pr #7"
 
 
-@pytest.mark.parametrize(
-    ("minutes", "want"), [(5, "wait"), (9.5, "wait"), (11, "take")]
-)
+@pytest.mark.parametrize(("minutes", "want"), [(5, "wait"), (9.5, "wait"), (11, "take")])
 def test_next_take_only_after_ten_idle_minutes(proj, stub, minutes, want):
     """REQ-041"""
     held(proj, stub, comment(2, "boss", "Request: s1 finished #5", ago(minutes)))
