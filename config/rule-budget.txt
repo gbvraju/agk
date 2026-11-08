@@ -5,7 +5,7 @@
 CLAUDE.md 229 2
 constitution/principles.md 210 12
 config/core-rules.md 660 26
-config/session-rules.md 3449 37
+config/session-rules.md 3448 37
 .claude/agents/architect-review.md 720 13
 .claude/agents/architect.md 863 17
 .claude/agents/conductor.md 4526 37
