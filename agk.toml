@@ -56,7 +56,7 @@ auto_merge = true
 auto_merge_method = "squash"
 # The builder capacity (SPEC-0034 rule 1): nine builder sessions at once, by the owner's choice on 2026-11-08 (plan #661, ADR-0341).
 max_builders = 9
-# The conductor lease (ADR-0330): one live conductor at a time, marked on the plan issue; only the holder merges (ADR-0353).
+# The conductor lease (ADR-0330): one live conductor at a time, marked on the plan issue; merge-queue refuses while another holds it (ADR-0353).
 plan_issue = 661
 # The heavy-run queue (SPEC-0040 rule 1, brief #529): off by default and when absent. This repository keeps it off; turning it on is the
 # owner's change, by an ADR in the same pull request.
