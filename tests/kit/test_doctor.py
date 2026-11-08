@@ -686,3 +686,140 @@ def test_rule9_the_label_present_is_ok_and_read_with_get_only(tmp_path):
         c == "api --method GET repos/example-owner/example-repo/labels/agk-brief" for c in calls
     )
     assert all("--method GET" in c for c in calls)
+
+
+# --- the skills a playbook names (SPEC-0048 rule 12, brief #691) --------------------------------
+
+PLAYBOOK_NAME_ONE, PLAYBOOK_NAME_TWO = "front-end-design", "a11y-review"
+
+
+def skills_target(tmp_path: Path, monkeypatch, skills: str | None) -> dict[str, Path]:
+    """The `ok` fixture declaring web-app, with an empty home so no real user skill is seen."""
+    from test_check_playbooks import FULL  # the full fixture playbook
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    dirs = prepare("ok", tmp_path)
+    with (dirs["root"] / "agk.toml").open("a", encoding="utf-8") as handle:
+        handle.write('\n[delivery]\nwork_type = "web-app"\n')
+    head, rest = FULL.split("\n", 1)
+    text = f"{head}\nskills = {skills}\n{rest}" if skills is not None else FULL
+    path = dirs["root"] / "config" / "playbooks" / "web-app.toml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return dirs
+
+
+def skill_file(folder: Path, name: str) -> None:
+    path = folder / name / "SKILL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# an invented skill\n", encoding="utf-8")
+
+
+def run_skills(dirs: dict[str, Path], tmp_path: Path, *extra: str, kit: bool = True):
+    stub = tmp_path / "bin"
+    stub_gh(stub)
+    args = ["--api-dir", str(dirs["api"]), "--repo", "example-owner/example-repo", *extra]
+    if kit:
+        args += ["--kit-root", str(dirs["kit"])]
+    return doctor(*args, str(dirs["root"]), path=f"{stub}{os.pathsep}{os.environ['PATH']}")
+
+
+def skill_lines(stdout: str) -> list[str]:
+    return [line for line in stdout.splitlines() if line.startswith("skill:")]
+
+
+TWO_NAMES = f'["{PLAYBOOK_NAME_ONE}", "{PLAYBOOK_NAME_TWO}"]'
+
+
+def test_ac6_one_present_and_one_absent_exit_0(tmp_path, monkeypatch):
+    """REQ-055 AC6: SPEC-0048 rule 12's test (a fixture plugin folder; one line each; exit 0)."""
+    dirs = skills_target(tmp_path, monkeypatch, TWO_NAMES)
+    skill_file(dirs["kit"] / "skills", PLAYBOOK_NAME_ONE)
+    proc = run_skills(dirs, tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert skill_lines(proc.stdout) == [
+        f"skill: {PLAYBOOK_NAME_ONE} present",
+        f"skill: {PLAYBOOK_NAME_TWO} absent",
+    ]
+
+
+def test_ac6_every_absent_skill_blocks_nothing(tmp_path, monkeypatch):
+    """REQ-055 AC6: SPEC-0048 rule 12 (an absent skill fails no check and changes no exit code)."""
+    dirs = skills_target(tmp_path, monkeypatch, TWO_NAMES)
+    proc = run_skills(dirs, tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert skill_lines(proc.stdout) == [
+        f"skill: {PLAYBOOK_NAME_ONE} absent",
+        f"skill: {PLAYBOOK_NAME_TWO} absent",
+    ]
+    assert "FAIL" not in proc.stdout
+
+
+@pytest.mark.parametrize("place", ["project", "user"])
+def test_ac6_the_lookup_is_the_one_of_the_engines(tmp_path, monkeypatch, place):
+    """REQ-055 AC6: SPEC-0048 rule 12 (the project's and the user's skills, as `[engines]` reads)."""
+    dirs = skills_target(tmp_path, monkeypatch, f'["{PLAYBOOK_NAME_ONE}"]')
+    base = dirs["root"] if place == "project" else tmp_path / "home"
+    skill_file(base / ".claude" / "skills", PLAYBOOK_NAME_ONE)
+    proc = run_skills(dirs, tmp_path)
+    assert skill_lines(proc.stdout) == [f"skill: {PLAYBOOK_NAME_ONE} present"]
+
+
+def test_ac6_without_a_kit_root_only_the_plugin_folder_is_unread(tmp_path, monkeypatch):
+    """REQ-055 AC6: SPEC-0048 rule 12 (still present or absent by name; Q-691-1)."""
+    dirs = skills_target(tmp_path, monkeypatch, TWO_NAMES)
+    skill_file(dirs["root"] / ".claude" / "skills", PLAYBOOK_NAME_ONE)
+    skill_file(dirs["kit"] / "skills", PLAYBOOK_NAME_TWO)
+    proc = run_skills(dirs, tmp_path, kit=False)
+    assert skill_lines(proc.stdout) == [
+        f"skill: {PLAYBOOK_NAME_ONE} present",
+        f"skill: {PLAYBOOK_NAME_TWO} absent",
+    ]
+
+
+def test_ac6_the_json_report_carries_the_same_lines(tmp_path, monkeypatch):
+    """REQ-055 AC6: SPEC-0048 rule 12 (text and JSON agree, as for the work-type line)."""
+    dirs = skills_target(tmp_path, monkeypatch, TWO_NAMES)
+    skill_file(dirs["kit"] / "skills", PLAYBOOK_NAME_ONE)
+    text = run_skills(dirs, tmp_path)
+    data = json.loads(run_skills(dirs, tmp_path, "--json").stdout)
+    assert data["skills"] == skill_lines(text.stdout)
+
+
+def test_ac6_a_playbook_without_the_key_adds_nothing(tmp_path, monkeypatch):
+    """REQ-055 AC6: SPEC-0048 rule 12 (no named skill, no line and no JSON key)."""
+    dirs = skills_target(tmp_path, monkeypatch, None)
+    proc = run_skills(dirs, tmp_path)
+    assert skill_lines(proc.stdout) == []
+    assert "skills" not in json.loads(run_skills(dirs, tmp_path, "--json").stdout)
+
+
+def test_ac6_no_declaration_reads_no_playbook_skill(tmp_path, monkeypatch):
+    """REQ-055 AC6: SPEC-0048 rule 12 (only the declared work type's playbook is read)."""
+    dirs = skills_target(tmp_path, monkeypatch, TWO_NAMES)
+    config = dirs["root"] / "agk.toml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace('\n[delivery]\nwork_type = "web-app"\n', ""),
+        encoding="utf-8",
+    )
+    assert skill_lines(run_skills(dirs, tmp_path).stdout) == []
+
+
+def test_ac6_a_refused_name_is_never_printed(tmp_path, monkeypatch):
+    """REQ-055 AC6: principle 8 (`check_playbooks.py` refuses it; doctor never shows the value)."""
+    dirs = skills_target(tmp_path, monkeypatch, f'["Zz-Upper", "{PLAYBOOK_NAME_ONE}"]')
+    proc = run_skills(dirs, tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "Zz-Upper" not in proc.stdout
+    assert skill_lines(proc.stdout) == [f"skill: {PLAYBOOK_NAME_ONE} absent"]
+
+
+def test_ac6_the_doctor_installs_no_skill(tmp_path, monkeypatch):
+    """REQ-055 AC6: SPEC-0048 rules 12 and 17 (the report writes nothing, so it installs nothing)."""
+    dirs = skills_target(tmp_path, monkeypatch, TWO_NAMES)
+    before = tree_hash(dirs["root"])
+    run_skills(dirs, tmp_path)
+    assert tree_hash(dirs["root"]) == before
+    assert not (dirs["root"] / ".claude" / "skills").exists()
+    assert not (tmp_path / "home" / ".claude" / "skills").exists()
