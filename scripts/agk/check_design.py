@@ -1,5 +1,6 @@
 """The design check (SPEC-0029 rule 7; SPEC-0037 rules 2, 3). Installed: `kit/manifest.json` lists
-it in `verbatim`, with the modules it imports, `design_standard.py` and `design_inventory.py`.
+it in `verbatim`, with the modules it imports, `design_standard.py`, `design_inventory.py` and
+`design_prototype_check.py`.
 
 Reads `docs/design/theme.md` and the folders of `docs/design/mockups/` and fails, naming the rule
 and the path and never a value, on: a script or an event handler in a mockup, an external request
@@ -8,7 +9,12 @@ a dark set, a contrast under 4.5:1 (computed from the tokens, in both modes), a 
 source, an evidence line that points to no mockup or prototype folder. When
 `docs/design/inventory.md` exists, `design_inventory.py` checks it (SPEC-0037 rule 3): an empty
 slot, a requirement or a screen left out, a pattern that is not the standard's, a link to no screen
-or a missing state fails naming the rule and the screen. A theme with the line
+or a missing state fails naming the rule and the screen. Each prototype version folder
+`docs/design/prototype/v<n>/` is checked by `design_prototype_check.py` (SPEC-0037 rules 5, 7 and
+8): its pages against the inventory, its links, the kit's hashed runtime as its one script, its two
+stylesheets, its colours and contrast, placeholders, fixture data, the accessibility and layout
+basics, and the reflow record, which reads `design: reflow not run (<version>)` when it is absent
+or incomplete, information and never `ok`. A theme with the line
 `Standard: agk design standard <n>` is on the kit's standard (SPEC-0037 rule 2): it may set only its
 theme block and its layout block, and its contrast is computed on the standard's colour roles after
 its overrides, in light and dark; a theme without the line is checked as before. Two things are
@@ -26,6 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import design_inventory
+import design_prototype_check
 import design_standard
 from common import repo_root, run
 
@@ -253,7 +260,8 @@ def cmd_check(root: Path) -> int:
     theme = root / THEME
     folders = sorted(p for p in (root / MOCKUPS).glob("*") if p.is_dir())
     inventory = (root / INVENTORY).is_file()
-    if not theme.is_file() and not folders and not inventory:
+    versions = design_prototype_check.versions(root)
+    if not theme.is_file() and not folders and not inventory and not versions:
         print("ok design (no design record)")
         return 0
     problems: list[str] = []
@@ -272,6 +280,10 @@ def cmd_check(root: Path) -> int:
         problems += mockup_problems(root, folder, pairs)
     if inventory:
         problems += design_inventory.inventory_problems(root)
+    for version in versions:
+        problems += design_prototype_check.version_problems(root, version)
+        if design_prototype_check.reflow_not_run(root, version):
+            print(f"design: reflow not run ({version})")
     for line in notes if not problems else []:
         print(line)
     for problem in problems:
