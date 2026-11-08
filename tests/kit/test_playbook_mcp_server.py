@@ -58,13 +58,13 @@ def test_exactly_the_mcp_server_gates_of_rule_10() -> None:
     by_id = gates()
     assert set(by_id) == GATES
     assert all(g["kind"] == "check" for g in by_id.values())
-    schema = by_id["tool-schema-contract-tests"]["text"]
+    schema = by_id["tool-schema-contract-tests"]["text"].lower()
     for word in ("tool schema", "contract tests", "testing map", "test glob", "every schema file"):
         assert word in schema, word
-    scopes = by_id["permission-scopes"]["text"]
+    scopes = by_id["permission-scopes"]["text"].lower()
     for word in ("permission scopes", "every tool declares its scopes", "wildcard"):
         assert word in scopes, word
-    injection = by_id["prompt-injection-set"]["text"]
+    injection = by_id["prompt-injection-set"]["text"].lower()
     for word in ("prompt-injection test set", "exists", "map names its tests"):
         assert word in injection, word
 

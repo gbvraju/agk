@@ -1,0 +1,53 @@
+format = 1
+work_type = "mcp-server"
+title = "The mcp-server gates on the usual flow: tool schema contract tests, declared permission scopes and a prompt-injection test set"
+heavy_steps = []
+evidence = [
+  "the tool schema contract test output, with the test glob the map names for each schema file",
+  "the permission scopes each tool declares",
+  "the prompt-injection test set and the output of the tests the map names for it",
+]
+lanes = []
+
+[[phases]]
+name = "build"
+order = 1
+after = []
+
+[split]
+brief_order = ["build"]
+depends_on = []
+
+[testing]
+profile = "balanced"
+always_full = []
+map = []
+
+[[gates]]
+id = "tool-schema-contract-tests"
+kind = "check"
+text = "Tool schema contract tests: the testing map names a test glob for every schema file."
+step = "tool-schema-contract-tests"
+owner_only = false
+
+[[gates]]
+id = "permission-scopes"
+kind = "check"
+text = "Permission scopes: every tool declares its scopes and none is a wildcard."
+step = "permission-scopes"
+owner_only = false
+
+[[gates]]
+id = "prompt-injection-set"
+kind = "check"
+text = "A prompt-injection test set: the set exists and the testing map names its tests."
+step = "prompt-injection-set"
+owner_only = false
+
+[milestones]
+shape = "per-brief"
+batch_by = "not batched: one pull request per brief, as today"
+
+[[claims]]
+text = "Every tool declares its scopes and is tested against a prompt-injection set while it is built, so fewer fix briefs are expected to chase an over-broad tool later."
+basis = "expected"
