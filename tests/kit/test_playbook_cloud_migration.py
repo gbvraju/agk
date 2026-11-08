@@ -1,7 +1,7 @@
 """Tests of the shipped cloud-migration playbook (SPEC-0038 rules 1, 10 and 12 build (j)).
 
 REQ-045 AC6. `config/playbooks/cloud-migration.toml` passes the playbook check, and
-`check_playbooks.py` passes with nine playbooks. It holds exactly the cloud-migration gates of rule
+`check_playbooks.py` passes with ten playbooks. It holds exactly the cloud-migration gates of rule
 10: inventory, then wave plan, then cut-over, `check` that each cut-over brief depends on its wave
 plan brief, which depends on the inventory brief; a rollback rehearsal as evidence, `judgement`;
 plan diffs as evidence, `judgement`, a committed plan output with no credential in it; and any
@@ -43,7 +43,7 @@ def test_the_playbook_passes_the_check() -> None:
     assert data()["format"] == playbook_format.FORMAT
 
 
-def test_check_playbooks_passes_with_nine_playbooks() -> None:
+def test_check_playbooks_passes_with_ten_playbooks() -> None:
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(SCRIPTS / "check_playbooks.py"), "--root", str(KIT_ROOT)],
         capture_output=True,
@@ -51,7 +51,7 @@ def test_check_playbooks_passes_with_nine_playbooks() -> None:
         encoding="utf-8",
     )
     assert out.returncode == 0, out.stdout
-    assert out.stdout == "ok playbooks (9 playbooks)\n"
+    assert out.stdout == "ok playbooks (10 playbooks)\n"
 
 
 def test_phases_inventory_then_wave_plan_then_cut_over() -> None:
