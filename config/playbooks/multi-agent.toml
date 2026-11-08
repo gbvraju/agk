@@ -1,0 +1,79 @@
+format = 1
+work_type = "multi-agent"
+title = "The multi-agent gates on the usual flow: role and handoff contracts, trace-based evaluation and declared cost and latency budgets"
+heavy_steps = []
+evidence = [
+  "the contract file for each role and handoff, with the test glob the map names for it",
+  "the record of the trace-based evaluation",
+  "the declared cost and latency budgets",
+  "the recorded run measured against the cost and latency budgets",
+]
+lanes = []
+
+[[phases]]
+name = "build"
+order = 1
+after = []
+
+[split]
+brief_order = ["build"]
+depends_on = []
+
+[testing]
+profile = "balanced"
+always_full = []
+map = []
+
+[[gates]]
+id = "role-handoff-contracts"
+kind = "check"
+text = "Role and handoff contracts: a contract file for each role and each handoff, with tests mapped."
+step = "role-handoff-contracts"
+owner_only = false
+
+[[gates]]
+id = "trace-based-evaluation"
+kind = "judgement"
+text = "Trace-based evaluation: the traces of a recorded run are evaluated; the record is the evidence."
+owner_only = false
+
+[[gates]]
+id = "cost-latency-budgets"
+kind = "check"
+text = "Cost and latency budgets: both budgets are declared as numbers."
+step = "cost-latency-budgets"
+owner_only = false
+
+[[gates]]
+id = "cost-latency-budgets-met"
+kind = "judgement"
+text = "A recorded run meets the cost and latency budgets; its run record is the evidence."
+owner_only = false
+
+[milestones]
+shape = "per-brief"
+batch_by = "not batched: one pull request per brief, as today"
+
+[[claims]]
+text = "Every role and handoff has a contract and its tests while it is built, so fewer fix briefs are expected to chase a broken handoff later."
+basis = "expected"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the work: a deadline, a budget, a team's skills, or systems and roles that must stay as they are?"
+
+[[discovery]]
+id = "success"
+text = "Which outcomes of a whole run show that the work succeeded, and how will each be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the data an agent reads, passes on in a handoff or keeps in a trace?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments must it run in, from a developer's machine to production?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of cost per run, response time, uptime and security must it meet?"
