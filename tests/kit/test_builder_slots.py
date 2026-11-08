@@ -1,0 +1,395 @@
+"""Builder slots: the setting, the slot lease and the next step (brief #776 build (a); REQ-041).
+
+Saved comments through a `gh` stub on `PATH`, invented names, no network.
+"""
+
+from __future__ import annotations
+
+from datetime import timedelta
+from pathlib import Path
+
+import pytest
+from test_session import (
+    ISSUES,
+    REPO,
+    comment,
+    iso,
+    posts,
+    session,
+)
+from test_session import (
+    proj as session_proj,  # noqa: F401  (the fixtures of test_session)
+)
+from test_session import (
+    stub as session_stub,  # noqa: F401
+)
+
+COMMENTS = f"{ISSUES}/204/comments"
+PULLS = f"repos/{REPO}/pulls"
+ALL = f"{ISSUES}/comments"
+ON = '[flow]\nbuilder_start = "assign"\nbuilder_slots = 2\n'
+REVIEWERS = "version: 1\nverdict_authors: [boss, second]\nspec_approvers: [owner]\n"
+DAY = iso()[:10]
+
+
+@pytest.fixture
+def stub(request):
+    found = request.getfixturevalue("session_stub")
+    found.serve(ISSUES, [{"number": 204, "title": "Conductor: assignments"}])
+    found.serve(PULLS, [])
+    found.serve(ALL, [])
+    found.serve(COMMENTS, [])
+    return found
+
+
+@pytest.fixture
+def proj(request):
+    found = request.getfixturevalue("session_proj")
+    found.write("config/reviewers.yaml", REVIEWERS)
+    found.write("agk.toml", ON)
+    return found
+
+
+def ago(minutes: float) -> str:
+    return iso(timedelta(minutes=-minutes))
+
+
+def marker(cid, run="other", minutes=1, state="active", slot="s1", login="boss") -> dict:
+    return comment(cid, login, f"Slot: {state} {ago(minutes)} {slot} {run}")
+
+
+def mark(proj, run: str = "mine", slot: str = "s1") -> Path:
+    path = Path(proj.root) / ".git" / "agk" / f"slot-{slot}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"{run}\n", encoding="utf-8")
+    return path
+
+
+def slot(proj, stub, flag: str, name: str = "s1"):
+    return session(proj, stub, "slot", flag, name)
+
+
+def writes(stub) -> list[list]:
+    return [c for c in stub.calls() if c[0] in ("POST", "PATCH")]
+
+
+def last(out) -> str:
+    return out.stdout.strip().splitlines()[-1]
+
+
+def held(proj, stub, *others: dict) -> None:
+    """This checkout holds s1, with the other comments of the assignments issue."""
+    mark(proj)
+    stub.serve(COMMENTS, [marker(1, "mine"), *others])
+    stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
+
+
+def owned(stub, number: int = 7, brief: int = 5, state: str = "clean", said=()) -> None:
+    """Pull request `number`, of a brief this slot has taken, with the comments `said`."""
+    pull = {"number": number, "state": "open", "body": f"Brief: #{brief}"}
+    stub.serve(PULLS, [pull])
+    stub.serve(f"{PULLS}/{number}", {**pull, "mergeable_state": state, "head": {"sha": "a" * 40}})
+    stub.serve(f"{ISSUES}/{brief}/comments", [comment(50, "boss", f"taken: s1 {DAY}")])
+    stub.serve(f"{ISSUES}/{number}/comments", list(said))
+
+
+# --- the setting -----------------------------------------------------------------------------
+
+
+def test_builder_start_defaults_to_start_and_no_slot_exists(proj, stub):
+    """REQ-041"""
+    proj.write("agk.toml", "[flow]\nmax_builders = 2\n")
+    out = slot(proj, stub, "--take")
+    assert out.returncode == 3
+    assert "slot: off" in out.stdout and "builder_start" in out.stdout
+    assert stub.calls() == []
+
+
+def test_a_bad_builder_start_is_refused_naming_the_setting_only(proj, stub):
+    """REQ-041"""
+    proj.write("agk.toml", '[flow]\nbuilder_start = "launch-it"\n')
+    out = slot(proj, stub, "--take")
+    assert out.returncode == 2
+    assert "builder_start" in out.stdout and "launch-it" not in out.stdout
+
+
+@pytest.mark.parametrize("value", ["0", "true", '"2"'])
+def test_a_bad_builder_slots_is_refused_naming_the_setting_only(proj, stub, value):
+    """REQ-041"""
+    proj.write("agk.toml", f'[flow]\nbuilder_start = "assign"\nbuilder_slots = {value}\n')
+    out = slot(proj, stub, "--take")
+    assert out.returncode == 2 and "builder_slots" in out.stdout
+
+
+@pytest.mark.parametrize("name", ["s3", "s0", "builder-a", "s01"])
+def test_a_name_outside_the_slots_is_refused(proj, stub, name):
+    """REQ-041"""
+    out = slot(proj, stub, "--take", name)
+    assert out.returncode == 2 and "builder_slots" in out.stdout
+    assert name not in out.stdout and stub.calls() == []
+
+
+def test_builder_slots_defaults_to_max_builders(proj, stub):
+    """REQ-041"""
+    proj.write("agk.toml", '[flow]\nbuilder_start = "assign"\nmax_builders = 3\n')
+    assert slot(proj, stub, "--take", "s4").returncode == 2
+    mark(proj, slot="s3")
+    stub.serve(COMMENTS, [marker(1, "mine", slot="s3")])
+    stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
+    assert slot(proj, stub, "--take", "s3").returncode == 0
+
+
+# --- the lease -------------------------------------------------------------------------------
+
+
+def test_take_posts_one_marker_on_the_assignments_issue(proj, stub):
+    """REQ-041"""
+    mark(proj)
+    stub.serve(COMMENTS, [marker(9, "mine")], nth=2)
+    out = slot(proj, stub, "--take")
+    assert out.returncode == 0, out.stdout
+    done = posts(stub)
+    assert len(done) == 1 and done[0][1] == COMMENTS
+    assert done[0][2][1].startswith(f"body=Slot: active {DAY}") and done[0][2][1].endswith(
+        " s1 mine"
+    )
+
+
+def test_a_take_mints_a_run_name_kept_in_the_git_directory(proj, stub):
+    """REQ-041"""
+    # The read-back sees a marker of another run, so this run keeps nothing and ends.
+    stub.serve(COMMENTS, [marker(9, "other")], nth=2)
+    out = slot(proj, stub, "--take")
+    assert out.returncode == 3
+    run = posts(stub)[0][2][1].rsplit(" ", 1)[1]
+    assert len(run) >= 8
+    assert not (Path(proj.root) / ".git" / "agk" / "slot-s1").exists()
+
+
+def test_a_held_slot_ends_the_run_and_writes_nothing(proj, stub):
+    """REQ-041"""
+    stub.serve(COMMENTS, [marker(1, "other", minutes=49)])
+    out = slot(proj, stub, "--take")
+    assert out.returncode == 3
+    assert "held" in out.stdout and "builder_slots" not in out.stdout
+    assert writes(stub) == []
+
+
+def test_an_expired_lease_is_taken_by_editing_its_marker(proj, stub):
+    """REQ-041"""
+    mark(proj)
+    old = marker(1, "other", minutes=51)
+    stub.serve(COMMENTS, [old], nth=1)
+    stub.serve(COMMENTS, [marker(1, "mine")], nth=2)
+    stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
+    out = slot(proj, stub, "--take")
+    assert out.returncode == 0, out.stdout
+    assert [c[0] for c in writes(stub)] == ["PATCH"]
+
+
+def test_a_marker_by_an_unlisted_author_holds_nothing(proj, stub):
+    """REQ-041"""
+    mark(proj)
+    forged = marker(1, "other", login="stranger")
+    stub.serve(COMMENTS, [forged], nth=1)
+    stub.serve(COMMENTS, [forged, marker(9, "mine")], nth=2)
+    assert slot(proj, stub, "--take").returncode == 0
+    assert [c[0] for c in writes(stub)] == ["POST"]
+
+
+def test_two_takes_at_once_leave_the_oldest_marker_the_winner(proj, stub):
+    """REQ-041"""
+    path = mark(proj)
+    stub.serve(COMMENTS, [marker(8, "other"), marker(9, "mine")], nth=2)
+    out = slot(proj, stub, "--take")
+    assert out.returncode == 3 and "held" in out.stdout
+    assert not path.exists()
+
+
+def test_renew_edits_the_holders_marker(proj, stub):
+    """REQ-041"""
+    held(proj, stub)
+    out = slot(proj, stub, "--renew")
+    assert out.returncode == 0, out.stdout
+    assert [c[0] for c in writes(stub)] == ["PATCH"]
+    assert " s1 mine" in writes(stub)[0][2][1]
+
+
+def test_renew_by_another_run_ends_it(proj, stub):
+    """REQ-041"""
+    mark(proj, "stale")
+    stub.serve(COMMENTS, [marker(1, "other")])
+    assert slot(proj, stub, "--renew").returncode == 3
+    assert writes(stub) == []
+
+
+def test_release_marks_it_released_and_forgets_the_run(proj, stub):
+    """REQ-041"""
+    path = mark(proj)
+    held(proj, stub)
+    out = slot(proj, stub, "--release")
+    assert out.returncode == 0, out.stdout
+    assert "Slot: released" in writes(stub)[0][2][1]
+    assert not path.exists()
+
+
+def test_release_by_another_run_writes_nothing(proj, stub):
+    """REQ-041"""
+    stub.serve(COMMENTS, [marker(1, "other")])
+    assert slot(proj, stub, "--release").returncode == 3
+    assert writes(stub) == []
+
+
+# --- the slot's next step --------------------------------------------------------------------
+
+
+def test_next_ends_a_run_that_does_not_hold_the_slot(proj, stub):
+    """REQ-041"""
+    stub.serve(COMMENTS, [marker(1, "other")])
+    assert slot(proj, stub, "--next").returncode == 3
+
+
+def test_next_renews_on_every_pass(proj, stub):
+    """REQ-041"""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #12"))
+    assert slot(proj, stub, "--next").returncode == 0
+    assert [c[0] for c in writes(stub)] == ["PATCH"]
+
+
+def test_a_fix_list_comes_before_new_work(proj, stub):
+    """REQ-041"""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #12"))
+    owned(stub, said=[comment(60, "boss", f"Verdict: fix list {'a' * 40}")])
+    assert last(slot(proj, stub, "--next")) == "follow-up pr #7 fix list"
+
+
+def test_a_fix_list_with_a_report_after_it_is_answered(proj, stub):
+    """REQ-041"""
+    held(proj, stub)
+    said = [
+        comment(60, "boss", f"Verdict: fix list {'a' * 40}"),
+        comment(61, "boss", f"Report: {'b' * 12} fix list applied"),
+    ]
+    owned(stub, said=said)
+    assert last(slot(proj, stub, "--next")) == "wait pr #7"
+
+
+def test_a_conflict_comes_before_new_work(proj, stub):
+    """REQ-041"""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #12"))
+    owned(stub, state="dirty")
+    assert last(slot(proj, stub, "--next")) == "follow-up pr #7 conflict"
+
+
+def test_a_pull_request_of_another_slot_is_not_a_follow_up(proj, stub):
+    """REQ-041"""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #12"))
+    owned(stub, state="dirty")
+    stub.serve(f"{ISSUES}/5/comments", [comment(50, "boss", f"taken: s2 {DAY}")])
+    assert last(slot(proj, stub, "--next")) == "assign #12"
+
+
+def test_a_follow_up_assign_names_the_pull_request(proj, stub):
+    """REQ-041"""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #5 pr #7 merge of main"))
+    stub.serve(f"{ISSUES}/7/comments", [])
+    assert last(slot(proj, stub, "--next")) == "follow-up pr #7 merge of main"
+
+
+def test_a_follow_up_assign_with_a_later_report_is_spent(proj, stub):
+    """REQ-041"""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #5 pr #7 fix list", ago(1)))
+    stub.serve(
+        f"{ISSUES}/7/comments", [comment(90, "boss", f"Report: {'b' * 12} fix list applied")]
+    )
+    assert last(slot(proj, stub, "--next")) == "wait"
+
+
+def test_the_newest_assign_is_the_work(proj, stub):
+    """REQ-041"""
+    held(
+        proj,
+        stub,
+        comment(2, "boss", "Assign: s1 #11"),
+        comment(3, "boss", "Assign: s1 #12 build (b)"),
+        comment(4, "boss", "Assign: s2 #13"),
+    )
+    assert last(slot(proj, stub, "--next")) == "assign #12 build (b)"
+
+
+def test_an_assign_by_an_unlisted_author_is_not_work(proj, stub):
+    """REQ-041"""
+    held(proj, stub, comment(2, "stranger", "Assign: s1 #12"))
+    assert last(slot(proj, stub, "--next")) == "request"
+
+
+def test_a_spent_assign_is_not_taken_again(proj, stub):
+    """REQ-041"""
+    line = comment(2, "boss", "Assign: s1 #12", ago(30))
+    held(proj, stub, line)
+    stub.serve(ALL, [comment(70, "boss", f"taken: s1 {DAY}")])
+    assert last(slot(proj, stub, "--next")) == "take"
+
+
+def test_an_open_pull_request_waits_before_a_new_assign(proj, stub):
+    """REQ-041"""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #12"))
+    owned(stub)
+    assert last(slot(proj, stub, "--next")) == "wait pr #7"
+
+
+@pytest.mark.parametrize(("minutes", "want"), [(5, "wait"), (9.5, "wait"), (11, "take")])
+def test_next_take_only_after_ten_idle_minutes(proj, stub, minutes, want):
+    """REQ-041"""
+    held(proj, stub, comment(2, "boss", "Request: s1 finished #5", ago(minutes)))
+    assert last(slot(proj, stub, "--next")) == want
+
+
+def test_the_idle_clock_counts_from_the_newest_assign_or_request(proj, stub):
+    """REQ-041"""
+    held(
+        proj,
+        stub,
+        comment(2, "boss", "Request: s1 finished #5", ago(60)),
+        comment(3, "boss", "Assign: s1 none", ago(2)),
+    )
+    assert last(slot(proj, stub, "--next")) == "wait"
+
+
+def test_a_slot_with_no_clock_asks_first(proj, stub):
+    """REQ-041"""
+    held(proj, stub)
+    assert last(slot(proj, stub, "--next")) == "request"
+
+
+def test_pool_stop_by_an_approver_ends_the_loop(proj, stub):
+    """REQ-041"""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #12"), comment(3, "owner", "Pool: stop"))
+    assert last(slot(proj, stub, "--next")) == "stop"
+
+
+def test_pool_stop_by_anyone_else_is_ignored(proj, stub):
+    """REQ-041"""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #12"), comment(3, "boss", "Pool: stop"))
+    assert last(slot(proj, stub, "--next")) == "assign #12"
+
+
+def test_watch_assign_ends_on_a_follow_up_line(proj, stub):
+    """REQ-041"""
+    stub.serve(COMMENTS, [comment(1, "boss", "Request: s1 finished #5")], nth=1)
+    line = comment(2, "boss", "Assign: s1 #5 pr #7 fix list")
+    stub.serve(COMMENTS, [comment(1, "boss", "Request: s1 finished #5"), line])
+    out = session(proj, stub, "watch", "--assign", "s1", "--interval", "0", "--timeout", "30")
+    assert last(out) == "assign #5 pr #7 fix list"
+
+
+def test_a_paused_kit_takes_no_slot(proj, stub):
+    """REQ-041"""
+    proj.write(
+        "agk.toml", 'default_branch = "main"\npaused = true\n[flow]\nbuilder_start = "assign"\n'
+    )
+    proj.git("add", "-A")
+    proj.git("commit", "-qm", "x")
+    proj.git("update-ref", "refs/remotes/origin/main", "HEAD")
+    out = slot(proj, stub, "--take")
+    assert out.returncode == 5 and writes(stub) == []

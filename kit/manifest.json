@@ -20,6 +20,7 @@
     ".github/workflows/agk-route.yml",
     ".github/workflows/drift-audit.yml",
     ".github/workflows/governance.yml",
+    ".github/workflows/merger.yml",
     ".github/workflows/metrics.yml",
     ".github/workflows/product-report.yml",
     ".github/workflows/proof.yml",

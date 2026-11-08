@@ -35,6 +35,9 @@ test and deprecation lines: `work type: none (no playbook)` with no `[delivery] 
 `work type: <work type> (playbook config/playbooks/<work type>.toml)`, or `FAIL work type:
 <problem>`, naming the setting and never its value, which makes the exit code 1; the JSON report
 carries it as `work_type`.
+SPEC-0048 rule 12 (brief #691): after that line, one `skill: <name> present|absent` for each skill
+the declared work type's playbook names, by the lookup of `[engines]` (`SKILL.md` exists, nothing
+is read); the JSON report carries them as `skills`. An absent skill changes no exit code.
 """
 
 from __future__ import annotations
@@ -1108,7 +1111,11 @@ def seen_by_the_user(root: Path, name: str) -> bool:
         places.append(Path.home() / ".claude" / "skills")
     except (RuntimeError, KeyError):
         pass
-    return any((place / name / "SKILL.md").is_file() for place in places)
+    return any(in_skills_folder(place, name) for place in places)
+
+
+def in_skills_folder(folder: Path, name: str) -> bool:
+    return (folder / name / "SKILL.md").is_file()
 
 
 def engine_results(root: Path, kit_root: Path | None, config: dict) -> dict[str, Result]:
@@ -1144,7 +1151,7 @@ def engine_results(root: Path, kit_root: Path | None, config: dict) -> dict[str,
             out[f"engine-{key}"] = Result("ok", message=" (present)")
         elif kit_root is None:
             out[f"engine-{key}"] = Result("cannot-check", "no-kit-root")
-        elif (kit_root / "skills" / local / "SKILL.md").is_file():
+        elif in_skills_folder(kit_root / "skills", local):
             out[f"engine-{key}"] = Result("ok", message=" (present)")
         else:
             out[f"engine-{key}"] = Result("fail", message=" (missing)")
@@ -1393,6 +1400,20 @@ def work_type_line(root: Path) -> tuple[str, bool]:
     return f"work type: {value} (playbook {playbook_format.FOLDER}/{value}.toml)", False
 
 
+def skill_lines(root: Path, kit_root: Path | None) -> list[str]:
+    """SPEC-0048 rule 12: one line per skill the declared playbook names; none installs or fails."""
+    path = playbook_format.selected(root)
+    if path is None:
+        return []
+    out = []
+    for name in playbook_format.skills(path, root):
+        found = seen_by_the_user(root, name) or (
+            kit_root is not None and in_skills_folder(kit_root / "skills", name)
+        )
+        out.append(f"skill: {name} {'present' if found else 'absent'}")
+    return out
+
+
 def summary(report: list[dict]) -> dict[str, int]:
     return {s: sum(1 for c in report if c["status"] == s) for s in ("ok", "fail", "cannot-check")}
 
@@ -1405,6 +1426,7 @@ def render_text(
     scan: str | None = None,
     work: str | None = None,
     deprecation: list[str] | None = None,
+    skills: list[str] | None = None,
 ) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
@@ -1422,6 +1444,7 @@ def render_text(
     lines += deprecation or []
     lines += [scan] if scan else []
     lines += [work] if work else []
+    lines += skills or []
     lines += extra or []
     lines.append(f"summary: {s['ok']} ok, {s['fail']} fail, {s['cannot-check']} cannot-check")
     return "\n".join(lines) + "\n"
@@ -1435,12 +1458,15 @@ def render_json(
     scan: str | None = None,
     work: str | None = None,
     deprecation: list[str] | None = None,
+    skills: list[str] | None = None,
 ) -> str:
     data: dict[str, Any] = {"doctor": version, "checks": report, "summary": summary(report)}
     if scan:
         data["secret_scan"] = scan
     if work:
         data["work_type"] = work
+    if skills:
+        data["skills"] = skills
     if tidy:
         data["tidy"] = tidy
     if extra or deprecation:  # `tests` carries the suite and deprecation lines, as before
@@ -1519,6 +1545,7 @@ def main(argv: list[str] | None = None) -> int:
         deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()
         work, work_failed = work_type_line(root.resolve())
+        skills = skill_lines(root.resolve(), Path(options["kit"]) if options["kit"] else None)
     except Refusal as exc:
         print(f"refused: {exc}")
         return exc.code
@@ -1526,9 +1553,9 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version, tidy, extra, scan, work, deprecation)
+        render_json(report, version, tidy, extra, scan, work, deprecation, skills)
         if options["json"]
-        else render_text(report, version, tidy, extra, scan, work, deprecation)
+        else render_text(report, version, tidy, extra, scan, work, deprecation, skills)
     )
     return 1 if work_failed else exit_code(report)
 

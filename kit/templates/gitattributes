@@ -26,6 +26,7 @@ scripts/agk/** text eol=lf
 .github/workflows/agk-route.yml text eol=lf
 .github/workflows/drift-audit.yml text eol=lf
 .github/workflows/governance.yml text eol=lf
+.github/workflows/merger.yml text eol=lf
 .github/workflows/metrics.yml text eol=lf
 .github/workflows/product-report.yml text eol=lf
 .github/workflows/proof.yml text eol=lf
