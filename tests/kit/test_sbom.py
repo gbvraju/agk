@@ -603,9 +603,7 @@ def test_a_package_outside_the_bill_with_no_finding_changes_nothing(
     "text",
     ["not json", "[]", '{"bomFormat": "Other"}', '{"bomFormat": "CycloneDX", "components": []}'],
 )
-def test_a_bill_that_cannot_be_read_is_never_clean(
-    repo, tmp_path: Path, capsys, text: str
-) -> None:
+def test_a_bill_that_cannot_be_read_is_never_clean(repo, tmp_path: Path, capsys, text: str) -> None:
     """REQ-061 AC7: without the bill nothing can be matched, so one line and exit 1."""
     saved = tmp_path / "out" / "result.json"
     saved.parent.mkdir(exist_ok=True)

@@ -1,13 +1,18 @@
-"""The bill of materials of a commit and its offline check (SPEC-0054 rules 2 to 4, brief #787).
+"""The bill of materials of a commit, its offline check and its findings (SPEC-0054 rules 2 to 4, 7).
 
     python3 scripts/agk/sbom.py make [--ref REF] --out FILE
     python3 scripts/agk/sbom.py check FILE [--ref REF]
+    python3 scripts/agk/sbom.py findings RESULT --bom FILE
 
 `make` writes one CycloneDX JSON document of the components the repository's files declare at the
 commit (default `HEAD`), read with local `git` only: the same commit gives the same bytes. `check`
 compares a bill with its commit and prints `ok bom`, or one `FAIL bom: <class> <reason>` line per
 problem, naming the class and the rule and never a name, a version or a value. It posts nothing,
-opens no socket and starts no program other than `git`; no governance step runs it.
+opens no socket and starts no program other than `git`; no governance step runs it. `findings`
+reads a scanner's saved JSON result and the bill, and starts nothing: it prints the counts by
+severity, each finding's advisory ids with its component's class, name and pin, and every
+component the result does not name as `unknown`. Nothing else of the result is kept, and a result
+it cannot read is the one line `unknown: the scan result cannot be read` and exit 1.
 """
 
 from __future__ import annotations
@@ -29,7 +34,10 @@ from ci_tools import PIN_FILE
 from common import CheckError, git, repo_root
 
 NAME = "bom"
-USAGE = "usage: sbom.py make [--ref REF] --out FILE | sbom.py check FILE [--ref REF]"
+USAGE = (
+    "usage: sbom.py make [--ref REF] --out FILE | sbom.py check FILE [--ref REF]"
+    " | sbom.py findings RESULT --bom FILE"
+)
 SPEC_VERSION = "1.6"  # ruled in Q-S0054-1; the newest version when this was built is 1.7 (Q-787-2)
 PYPROJECT, AGK_TOML, MANIFEST, WORKFLOWS = (
     "pyproject.toml",
@@ -54,6 +62,20 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 TOP_FIELDS = {"bomFormat", "specVersion", "version", "serialNumber", "metadata", "components"}
 FIELDS = {"type", "bom-ref", "name", "version", "purl", "hashes", "properties"}
 REQUIRED = {"type", "bom-ref", "name", "properties"}
+SEVERITIES = ("critical", "high", "medium", "low", "unknown")
+SCORES = (("critical", 9.0), ("high", 7.0), ("medium", 4.0), ("low", 0.0))
+LABELS = {
+    "CRITICAL": "critical",
+    "HIGH": "high",
+    "MODERATE": "medium",
+    "MEDIUM": "medium",
+    "LOW": "low",
+}
+ADVISORY_ID = re.compile(r"[A-Za-z][A-Za-z0-9]*-[A-Za-z0-9][A-Za-z0-9._:-]*")
+SCORE = re.compile(r"[0-9]{1,2}(?:\.[0-9]+)?")
+RESULT_UNREADABLE = "unknown: the scan result cannot be read"
+BILL_UNREADABLE = "unknown: the bill cannot be read"
+NOT_OF_FORM = (AttributeError, KeyError, OSError, RecursionError, TypeError, ValueError)
 
 
 def show(root: Path, commit: str, path: str) -> bytes | None:
@@ -392,11 +414,140 @@ def check(root: Path, ref: str, path: str) -> list[tuple[str, str]]:
     return document_problems(doc, build(root, resolve(root, ref)))
 
 
+def need(condition: object) -> None:
+    if not condition:
+        raise ValueError
+
+
+def advisory_ids(value: object) -> list[str]:
+    """Ids as the result states them; only the form of an id can reach the printed body."""
+    need(isinstance(value, list))
+    need(all(isinstance(i, str) and ADVISORY_ID.fullmatch(i) for i in value))
+    return list(value)
+
+
+def worst(one: str, other: str) -> str:
+    return min(one, other, key=SEVERITIES.index)
+
+
+def score_severity(text: str) -> str | None:
+    """The severity of a stated score from 0.1 to 10; anything else states none."""
+    if SCORE.fullmatch(text) is None or not 0 < float(text) <= 10:
+        return None
+    return next(name for name, low in SCORES if float(text) >= low)
+
+
+def package_findings(found: dict) -> dict[frozenset[str], str]:
+    """A package's findings: each group of the scanner's, then each advisory in no group."""
+    vulnerabilities, groups = found["vulnerabilities"], found.get("groups") or []
+    need(isinstance(vulnerabilities, list) and isinstance(groups, list))
+    aliases: dict[str, list[str]] = {}
+    labels: dict[str, str] = {}
+    for vulnerability in vulnerabilities:
+        ident = advisory_ids([vulnerability["id"]])[0]
+        aliases[ident] = advisory_ids(vulnerability.get("aliases") or [])
+        specific = vulnerability.get("database_specific") or {}
+        need(isinstance(specific, dict))
+        labels[ident] = LABELS.get(str(specific.get("severity")).upper(), "unknown")
+    findings: dict[frozenset[str], str] = {}
+    grouped: set[str] = set()
+    for group in groups:
+        members = advisory_ids(group["ids"])
+        need(members)
+        score = group.get("max_severity", "")
+        need(isinstance(score, str))
+        stated = [labels.get(ident, "unknown") for ident in members]
+        ids = {*members, *advisory_ids(group.get("aliases") or [])}
+        ids.update(alias for ident in members for alias in aliases.get(ident, []))
+        findings[frozenset(ids)] = score_severity(score) or min(stated, key=SEVERITIES.index)
+        grouped.update(members)
+    for ident in set(labels) - grouped:
+        findings[frozenset({ident, *aliases[ident]})] = labels[ident]
+    return findings
+
+
+def scanned_packages(doc: dict) -> list[tuple[str, str, dict[frozenset[str], str]]]:
+    """(name, version, findings) of every package of a result; raises when not the form."""
+    packages = []
+    need(isinstance(doc["results"], list))
+    for source in doc["results"]:
+        need(isinstance(source["packages"], list))
+        for found in source["packages"]:
+            name, version = found["package"]["name"], found["package"]["version"]
+            need(isinstance(name, str) and isinstance(version, str))
+            packages.append((canonical(name), version, package_findings(found)))
+    return packages
+
+
+def match_keys(item: dict) -> list[tuple[str, str]]:
+    """What a result calls this component; nothing for a component with no pin to compare."""
+    version = item.get("version")
+    if version is None:
+        return []
+    keys = [(canonical(item["name"]), version)]
+    if kind_of(item) == "action":
+        path, _, sha = item["purl"].removeprefix("pkg:github/").rpartition("@")
+        keys += [(canonical(path), version), (canonical(path), sha), (canonical(item["name"]), sha)]
+    return keys
+
+
+def bill_components(path: str) -> list[dict]:
+    doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    need(isinstance(doc, dict) and set(doc) == TOP_FIELDS)
+    need((doc["bomFormat"], doc["specVersion"]) == ("CycloneDX", SPEC_VERSION))
+    need(isinstance(doc["components"], list))
+    need(all(kind_of(item) and well_formed(item) for item in doc["components"]))
+    return doc["components"]
+
+
+def component_label(item: dict) -> str:
+    version = f" {item['version']}" if "version" in item else ""
+    return f"{kind_of(item)} {item['name']}{version}"
+
+
+def findings_body(items: list[dict], doc: dict) -> str:
+    """Rule 7's body. A finding on a package the bill does not pin is a result of another bill."""
+    index: dict[tuple[str, str], list[dict]] = {}
+    for item in items:
+        for key in set(match_keys(item)):
+            index.setdefault(key, []).append(item)
+    named: dict[str, dict[frozenset[str], str]] = {}
+    for name, version, findings in scanned_packages(doc):
+        matched = index.get((name, version), [])
+        need(matched or not findings)
+        for item in matched:
+            slot = named.setdefault(item["bom-ref"], {})
+            for ids, severity in findings.items():
+                slot[ids] = worst(severity, slot.get(ids, "unknown"))
+    rows = sorted(
+        (SEVERITIES.index(severity), item["bom-ref"], sorted(ids), component_label(item))
+        for item in items
+        for ids, severity in named.get(item["bom-ref"], {}).items()
+    )
+    counts = {name: sum(1 for row in rows if row[0] == i) for i, name in enumerate(SEVERITIES)}
+    listed = [f"- {label} {SEVERITIES[rank]}: {', '.join(ids)}" for rank, _, ids, label in rows]
+    unknown = [f"- {component_label(i)}: unknown" for i in items if i["bom-ref"] not in named]
+    blocks = [", ".join(f"{name} {counts[name]}" for name in SEVERITIES)]
+    blocks += ["\n".join(lines) for lines in (listed, unknown) if lines]
+    return "\n\n".join(blocks)
+
+
+def findings(result: str, bom: str) -> tuple[int, str]:
+    try:
+        items = bill_components(bom)
+    except NOT_OF_FORM:
+        return 1, BILL_UNREADABLE
+    try:
+        return 0, findings_body(items, json.loads(Path(result).read_text(encoding="utf-8")))
+    except NOT_OF_FORM:
+        return 1, RESULT_UNREADABLE
+
+
 def options(args: list[str]) -> tuple[list[str], dict[str, str]] | None:
     positional, flags = [], {}
     while args:
         arg = args.pop(0)
-        if arg in ("--ref", "--out"):
+        if arg in ("--ref", "--out", "--bom"):
             if not args:
                 return None
             flags[arg] = args.pop(0)
@@ -410,8 +561,14 @@ def options(args: list[str]) -> tuple[list[str], dict[str, str]] | None:
 def main(argv: list[str] | None = None) -> int:
     parsed = options(list(sys.argv[1:] if argv is None else argv))
     words, flags = parsed if parsed else ([], {})
-    is_make = words == ["make"] and "--out" in flags
-    if not is_make and not (len(words) == 2 and words[0] == "check" and "--out" not in flags):
+    if len(words) == 2 and words[0] == "findings" and set(flags) == {"--bom"}:
+        code, text = findings(words[1], flags["--bom"])
+        print(text)
+        return code
+    is_make = words == ["make"] and "--out" in flags and "--bom" not in flags
+    if not is_make and not (
+        len(words) == 2 and words[0] == "check" and not {"--out", "--bom"} & set(flags)
+    ):
         print(USAGE)
         return 2
     ref = flags.get("--ref", "HEAD")
