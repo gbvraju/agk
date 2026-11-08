@@ -42,7 +42,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" prototype
    phone number, email address and link on a page comes from the kit's invented fixture set, never from `private/`,
    `reference/` or a real record. Fill the brand record from what the owner gave, and from nothing else; a value still
    unknown stays in brackets and is reported as at risk.
-3. `screenshots/` in a version folder is written only by `design.py screenshots`, never by hand.
+3. `screenshots/` in a version folder is written only by `design.py screenshots`, never by hand. Where a headless
+   browser is found, `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" screenshots --version v<n>` writes one
+   screenshot of each page at each breakpoint, in light and dark, and `screenshots/reflow.json` (`ok` or `sideways`);
+   without one it says so and every entry reads `not run`, never passed.
 4. Check, and correct the theme on a failure, at most three rounds, then stop and report:
 
 ```

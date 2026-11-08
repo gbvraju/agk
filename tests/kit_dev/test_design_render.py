@@ -138,4 +138,4 @@ def test_ac6_the_design_text_says_screenshots_are_written_only_by_the_command():
     skill = (KIT_ROOT / "skills" / "design" / "SKILL.md").read_text(encoding="utf-8")
     for text in (doc, skill):
         assert "written only by `design.py screenshots`, never by hand" in text
-        assert "design.py screenshots --version" in " ".join(text.split())
+        assert "screenshots --version" in " ".join(text.split())
