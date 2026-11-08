@@ -402,10 +402,20 @@ def test_the_locked_command_gets_its_session(repo, where):
 
 
 # The listing of the lock folder, made from inside the locked command. `run` records the
-# command's process id under the shared mutex just after starting it (`record_child`), so the
-# probe first waits until the owner file names it: a listing taken earlier may hold the mutex
-# `.agk-lock-heavy.mutex` beside the slot (brief #729).
-LISTING = "import os,sys; print(sorted(os.listdir(sys.argv[1])))"
+# command's process id under the shared mutex just after starting it (`record_child`), so a
+# listing taken earlier may hold the mutex `.agk-lock-heavy.mutex` beside the slot (brief #729).
+# The probe waits until the owner file names it and that mutex section has ended (at most 15 s;
+# no other section follows for a minute, until the first heartbeat), then lists: a mutex that
+# is never released still shows, and the test still fails on it.
+LISTING = (
+    "import json,os,pathlib,sys,time; d = pathlib.Path(sys.argv[1]); end = time.monotonic() + 15\n"
+    "def named():\n"
+    "    try: return 'child' in json.loads((d / 'agk-lock-heavy' / 'owner.json').read_text())\n"
+    "    except (OSError, ValueError): return False\n"
+    "gate = d / '.agk-lock-heavy.mutex'\n"
+    "while not (named() and not gate.exists()) and time.monotonic() < end: time.sleep(0.02)\n"
+    "print(sorted(os.listdir(d)))"
+)
 
 
 @pytest.mark.parametrize("extra", ["", "lock_slots = 1\n"])
