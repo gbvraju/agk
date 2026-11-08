@@ -24,6 +24,15 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-ids
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-write
 ```
 
+   With a declared work type (`work_type` in the `[delivery]` table of `agk.toml`, the owner's line), `stack-write` reads that
+   type's shipped playbook (`config/playbooks/<work type>.toml`) and writes into the skeleton one **Practices** bullet per gate
+   of the playbook, `- <id>: check (step: <step>)` or `- <id>: judgement`, each marked `(playbook <work type>)`, and the
+   playbook's `[testing]` profile, `always_full` paths and `map` suggestions into the parenthesis of `test selection`, once per
+   option. They are proposals, never a vendor choice: the architect chooses as today, and a project adds a gate of its own as
+   one more practice bullet, never by editing the playbook. `stack-write` refuses a declaration whose playbook is missing or
+   fails `check_playbooks.py`, naming the setting and never its value, and writes nothing. Without a declaration the skeleton
+   is the template as before.
+
 2. Fill the skeleton from the vision and the charter, and from nothing the owner did not give. In the Decision: **Options** has two or
    three bullets `- Option A — <name>. Trade-offs: <text>. External services: <service>, <service>. Practices: <practice>, <practice>.`,
    where `External services:` names, once and before `Practices:`, each service outside the product that the option relies on
@@ -32,8 +41,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" stack-write
    build adds>)` when a check can verify it (pinned actions, least privilege, security headers, a host-boundary test), or
    `- <practice>: judgement` when it is recorded judgement only, and keeps the template's `local profile` bullet; it keeps the
    template's `fast tests` and `test selection` bullets too, and writes in the parenthesis of `test selection`, for each option,
-   the `[testing]` profile and the `always_full` paths of `agk.toml` it proposes (`docs/guides/testing.md`); **Chosen** stays
-   `none yet`. Never set `Status: Accepted` and never name an option as chosen: that is the
+   the `[testing]` profile and the `always_full` paths of `agk.toml` it proposes (`docs/guides/testing.md`), keeping or
+   amending the playbook's proposals where the skeleton holds them; **Chosen** stays `none yet`. Never set `Status: Accepted` and never name an option as chosen: that is the
    architect's, in a later change.
 3. Check, and correct the file on a failure, at most three rounds, then stop and report:
 

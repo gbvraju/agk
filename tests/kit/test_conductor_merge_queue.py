@@ -553,3 +553,79 @@ def test_the_queue_waits_once_for_the_run_of_the_default_branch_on_the_last_merg
     assert len([c for c in made if any("actions/workflows" in a for a in c)]) == 1
     posts = [c for c in writes(made) if "PUT" not in c]
     assert all("Verdict:" not in a and "Approve:" not in a for c in posts for a in c)
+
+
+# --- the conductor lease (brief #700, ADR-0330) -------------------------------------------------
+
+LEASE_HELD = "merge-queue: held: another conductor holds the lease until "
+LEASE_SETTING = "(setting: plan_issue in the flow table of agk.toml)"
+
+
+def marker(minutes_ago: int, who: str, kind: str = "active") -> dict:
+    from datetime import UTC, datetime, timedelta
+
+    when = (datetime.now(UTC) - timedelta(minutes=minutes_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {"id": 5, "user": {"login": "boss"}, "body": f"Conductor: {kind} {when} {who}"}
+
+
+def with_lease(queue, monkeypatch, comments: list) -> None:
+    (queue.root / "agk.toml").write_text("[flow]\nplan_issue = 61\n", encoding="utf-8")
+    monkeypatch.setattr(conductor, "plan_comments", lambda repo_name, issue: comments)
+
+
+def test_the_queue_is_refused_while_another_name_holds_a_valid_lease(queue, capsys, monkeypatch):
+    with_lease(queue, monkeypatch, [marker(10, "c1")])
+    queue.add(7, at=10)
+    for args in ([], ["--dry-run"]):
+        assert queue.run(*args) == merge_cleared.EXIT_HELD
+        out = lines(capsys)
+        assert len(out) == 1 and out[0].startswith(LEASE_HELD) and out[0].endswith(LEASE_SETTING)
+        assert "c1" not in out[0]
+    assert queue.steps == []
+
+
+@pytest.mark.parametrize("found", [[], [marker(55, "c1")], [marker(5, "c1", "released")]])
+def test_the_queue_runs_when_the_lease_is_free(queue, capsys, monkeypatch, found):
+    with_lease(queue, monkeypatch, found)
+    queue.add(7, at=10)
+    assert queue.run("--dry-run") == 0
+    assert lines(capsys) == [f"merge-queue: 1. #7 {head(7)[:12]}"]
+
+
+def test_a_marker_by_an_unlisted_account_does_not_hold_the_queue(queue, capsys, monkeypatch):
+    found = marker(10, "x9")
+    found["user"] = {"login": "stranger"}
+    with_lease(queue, monkeypatch, [found])
+    queue.add(7, at=10)
+    assert queue.run("--dry-run") == 0
+    assert lines(capsys) == [f"merge-queue: 1. #7 {head(7)[:12]}"]
+
+
+def test_the_queue_runs_for_the_holder_of_the_lease(queue, capsys, monkeypatch):
+    with_lease(queue, monkeypatch, [marker(10, "c1")])
+    (queue.root / ".git" / "agk").mkdir(parents=True)
+    (queue.root / ".git" / "agk" / "lease").write_text("c1\n", encoding="utf-8")
+    monkeypatch.setattr(conductor, "lease_mark", lambda root: queue.root / ".git" / "agk" / "lease")
+    queue.add(7, at=10)
+    assert queue.run("--dry-run") == 0
+    assert lines(capsys) == [f"merge-queue: 1. #7 {head(7)[:12]}"]
+
+
+def test_without_the_setting_the_lease_is_off_and_nothing_is_read(queue, capsys, monkeypatch):
+    monkeypatch.setattr(
+        conductor, "plan_comments", lambda *a: pytest.fail("the plan issue was read")
+    )
+    queue.add(7, at=10)
+    assert queue.run("--dry-run") == 0
+
+
+def test_a_plan_issue_that_cannot_be_read_holds_the_queue(queue, capsys, monkeypatch):
+    def unreadable(repo_name, issue):
+        raise CheckError("the comments of #61 cannot be read")
+
+    (queue.root / "agk.toml").write_text("[flow]\nplan_issue = 61\n", encoding="utf-8")
+    monkeypatch.setattr(conductor, "plan_comments", unreadable)
+    queue.add(7, at=10)
+    assert queue.run() == 1
+    assert "cannot be read" in capsys.readouterr().err
+    assert queue.steps == []

@@ -73,6 +73,9 @@ def test_the_first_log_holds_the_seeded_incidents_and_the_rows_of_2026_11_06():
     _, body = table(LOGS[0])
     assert len(body) == 22  # 12 seeded and 2 of the fix list (brief #604), 8 of brief #695
     by_number = {r["#"]: r for r in rows()}
+    for number in ("15", "16"):  # the pre-merge tests of brief #667 guard both
+        assert by_number[number]["Guard"].startswith("check `scripts/agk/merge_cleared.py`")
+        assert [g.group(1) for g in guards(by_number[number])] == ["check", "test"]
     assert by_number["13"]["Kind"] == "watch"
     assert [g.group(1) for g in guards(by_number["13"])] == ["check", "rule"]  # brief #643
     assert by_number["3"]["Guard"].startswith("check `scripts/agk/conductor.py`")  # build (b)
@@ -83,11 +86,11 @@ def test_the_first_log_holds_the_seeded_incidents_and_the_rows_of_2026_11_06():
 def test_the_rows_of_brief_695_carry_their_kinds_and_guards():
     by_number = {r["#"]: r for r in rows()}
     expected = {
-        "15": ("parallel-merge", "pending #667"),
-        "16": ("parallel-merge", "pending #667"),
+        "15": ("parallel-merge", "check `scripts/agk/merge_cleared.py`"),  # brief #667
+        "16": ("parallel-merge", "check `scripts/agk/merge_cleared.py`"),  # brief #667
         "17": ("watch", "check `scripts/agk/conductor.py`"),
-        "18": ("false-red", "pending (to be filed)"),
-        "19": ("false-red", "pending (to be filed)"),
+        "18": ("false-red", "check `scripts/agk/conductor.py`"),  # brief #700, rerun
+        "19": ("false-red", "check `scripts/agk/conductor.py`"),  # brief #700, rerun
         "20": ("kit-gap", "check `scripts/agk/prepush.py`"),
         "21": ("history", "pending (to be filed)"),
         "22": ("unread-result", "check `scripts/agk/conductor.py`"),  # brief #643 build (b)

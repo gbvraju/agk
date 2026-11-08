@@ -92,3 +92,11 @@ review_mode = "team"
 # deny_commands = ["tail-prod"]
 # allowed_hosts = ["db.internal.example.com"]
 # allow_paths = [{ path = "docs/logs/README.md", reason = "a guide about logs, not a log" }]
+# The design settings (SPEC-0037 rules 10 and 11, REQ-044), off when absent. A change needs an ADR (agk.toml is a protected path).
+# [design]
+# Globs of the project's UI files; a brief whose Touches: meets one needs a Screens: line (check_brief.py --root). Empty: no UI briefs.
+# ui_paths = []
+# The project's command that writes a built page for a screen and state, which the design comparison renders.
+# render = ""
+# The share of a screenshot's pixels that may differ before the comparison reports pixel drift; it only reports, never fails.
+# pixel_tolerance = 0.01
