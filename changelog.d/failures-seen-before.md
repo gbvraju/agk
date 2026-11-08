@@ -1,0 +1,1 @@
+- `failures.py seen` prints up to three earlier fixed failures of the same signature or test, so a returning failure is named as seen before (SPEC-0046 build (d), brief #756)
