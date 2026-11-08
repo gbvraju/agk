@@ -68,7 +68,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-import check_playbooks
 import playbook_format
 from guard import scan_text
 from playbook_format import WORK_TYPES
@@ -929,6 +928,8 @@ def derive_write(opts: dict[str, str], root: Path) -> int:
         raise Refusal(found)
     modules = [m for m in opts.get("--modules", "").split(",") if m]
     base = tomllib.loads(base_path.read_text(encoding="utf-8"))
+    import check_playbooks  # here, so a load failure leaves every other command as it is
+
     target.write_text(skeleton(name, modules, base), encoding="utf-8")
     found = check_playbooks.findings(root, [target])
     if found:
@@ -955,6 +956,8 @@ def check_playbook(files: list[str], root: Path, today: datetime.date) -> int:
     missing = [rel_of(path, root) for path in named if not path.is_file()]
     if missing:
         raise Refusal([f"rule 25: {rel}: not readable" for rel in missing])
+    import check_playbooks  # here, so a load failure leaves every other command as it is
+
     paths = named or playbook_format.playbooks(root)
     found = check_playbooks.findings(root, paths)
     designs = design_text(root)
