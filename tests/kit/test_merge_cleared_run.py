@@ -541,7 +541,9 @@ def test_a_moved_head_at_the_merge_is_refused_with_exit_3(tmp_path):
 def test_a_405_with_the_head_moved_since_reads_head_moved(monkeypatch):
     """REQ-046 AC5: SPEC-0039 rule 6 (a 405 for a moved head)."""
     heads = iter([OLD])
-    monkeypatch.setattr(merge_cleared, "write_once", lambda argv: (1, "", "gh: x (HTTP 405)"))
+    monkeypatch.setattr(
+        merge_cleared, "write_once", lambda argv, env=None: (1, "", "gh: x (HTTP 405)")
+    )
     monkeypatch.setattr(merge_cleared, "current_head", lambda repo, number: next(heads))
     with pytest.raises(merge_cleared.Refused) as err:
         merge_cleared.merge_pull(REPO, 7, HEAD)
@@ -550,7 +552,9 @@ def test_a_405_with_the_head_moved_since_reads_head_moved(monkeypatch):
 
 def test_a_405_with_the_same_head_is_not_mergeable(monkeypatch):
     """REQ-046 AC5: SPEC-0039 rule 6 (a 405 that is not a moved head says so)."""
-    monkeypatch.setattr(merge_cleared, "write_once", lambda argv: (1, "", "gh: x (HTTP 405)"))
+    monkeypatch.setattr(
+        merge_cleared, "write_once", lambda argv, env=None: (1, "", "gh: x (HTTP 405)")
+    )
     monkeypatch.setattr(merge_cleared, "current_head", lambda repo, number: HEAD)
     with pytest.raises(merge_cleared.Refused) as err:
         merge_cleared.merge_pull(REPO, 7, HEAD)
