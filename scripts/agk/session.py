@@ -127,6 +127,7 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -236,6 +237,8 @@ TOUCHES = re.compile(r"Touches: (.+)")
 SENTENCE = re.compile(r'Sentence: "(.*)"')
 DEPENDS = re.compile(r"Depends-on: #(\d+)")
 SIZE = re.compile(r"Size: [SML]")
+WAVE = re.compile(r"Wave: ([1-9]\d*)")
+MILESTONE_WAVE = re.compile(r"Wave ([1-9]\d*)\b")
 NUMBERED = re.compile(r"(\d+)\.\s+\S")
 ADVANCES = re.compile(r"Advances: (new|REQ-\d{3}(?:, REQ-\d{3})*)")
 PRIORITY = re.compile(r"Priority: ([0123])")  # 0 is valid in a brief only with `Measured:`
@@ -691,6 +694,39 @@ def measured_problems(lines: list[str], pair: bool, priority: list[str]) -> list
     return problems
 
 
+def wave_problems(body: str | None, known: set[int] | None = None) -> list[str]:
+    """Amendment 140 of SPEC-0030 rule 4: the `Wave:` line of a brief of a repository with a plan
+    issue; `known` is the plan's waves, None when they cannot be read (the shape is then enough)."""
+    wave = wave_of(body)
+    if wave is None:
+        return ["rule 4: exactly one line Wave: n (setting: plan_issue)"]
+    if known and wave not in known:
+        return ["rule 4: the Wave line names a wave the plan does not have"]
+    return []
+
+
+def wave_of(body: str | None) -> int | None:
+    """The wave a brief's one good `Wave:` line names, None without one."""
+    lines = [x.rstrip() for x in (body or "").splitlines() if x.startswith("Wave:")]
+    found = WAVE.fullmatch(lines[0]) if len(lines) == 1 else None
+    return int(found.group(1)) if found else None
+
+
+def plan_issue_set(root) -> bool:
+    """`plan_issue` of the `[flow]` table is set, so every brief needs a wave of that plan."""
+    table = config_source(root).get("flow")
+    return isinstance(table, dict) and table.get("plan_issue") is not None
+
+
+def plan_waves(repo: str) -> set[int] | None:
+    """The waves of the plan: the milestones titled `Wave <n>`; None when they cannot be read."""
+    found = pages(f"repos/{repo}/milestones?state=all")
+    if found is None:
+        return None
+    titles = (MILESTONE_WAVE.match(str(m.get("title"))) for m in found if isinstance(m, dict))
+    return {int(t.group(1)) for t in titles if t} or None
+
+
 def advances_ids(body: str) -> list[str]:
     """The requirement ids a brief that passed `brief_problems` advances (empty for `new`)."""
     for line in body.splitlines():
@@ -828,13 +864,15 @@ def is_parked(brief: dict) -> bool:
     return PARKED_LABEL in labels or any(x.startswith(PARKED_PREFIX) for x in lines)
 
 
-def judge(repo: str, brief: dict, me: str, prs: list, hours: int) -> tuple[str | None, list]:
+def judge(
+    repo: str, brief: dict, me: str, prs: list, hours: int, shape: Callable = brief_problems
+) -> tuple[str | None, list]:
     """Why the brief is not for this session (or None when it is free), and its comments."""
     if is_stale(brief):
         return "stale", []
     if is_parked(brief):
         return "parked", []
-    problems = brief_problems(brief.get("body"))
+    problems = shape(brief.get("body"))
     if problems:
         return problems[0], []
     for dep in depends_on(brief["body"]):
@@ -866,6 +904,14 @@ def priority_of(body: str) -> int:
     return 2
 
 
+def brief_shape(root, repo: str) -> Callable:
+    """What this repository refuses in a brief body: rule 4, and the wave with a plan issue."""
+    if not plan_issue_set(root):
+        return brief_problems
+    known = plan_waves(repo)
+    return lambda body: brief_problems(body) + wave_problems(body, known)
+
+
 def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
     """Everything `next`, `demand` and `ids` read: the pull requests, the briefs and their takes.
 
@@ -885,8 +931,9 @@ def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
     found = Survey(repo, me, limit, hours, prs, builders)
     found.briefs = {i["number"]: i for i in issues if "pull_request" not in i}
     named = {brief_number(p) for p in prs if p.get("state") == "open"}
+    shape = brief_shape(root, repo)
     for brief in sorted((i for i in issues if "pull_request" not in i), key=lambda i: i["number"]):
-        why, comments = judge(repo, brief, me, prs, hours)
+        why, comments = judge(repo, brief, me, prs, hours, shape)
         found.comments[brief["number"]] = comments
         if why is None:
             found.free.append(brief)

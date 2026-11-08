@@ -16,12 +16,19 @@ section of `DIR/docs/requirements.md` also fails, and (SPEC-0037 rule 10) a UI b
 one line `Screens: v<n> <screen>/<state>, ...` (`*` is every state of the screen) whose version has
 a `design` row in `docs/design/signoffs.md` and a page `<screen>--<state>.html` for each pair in
 its frozen folder. No `ui_paths` means no UI briefs.
-Reads the file only: no network, no model. Messages name the rule, never the sentence.
+With `--root DIR` and `plan_issue` in the `[flow]` table of `DIR/agk.toml` a brief also needs one
+line `Wave: n` (amendment 140), a wave of `--waves` when that list is given.
+
+`--event PAYLOAD` reads a saved `issues` event and prints one JSON line, for the job that labels a
+brief filed on GitHub: `ignore`, `fail` with the label, the rules and the comment, or `pass` with
+the label to clear and the wave.
+Reads the files only: no network, no model. Messages name the rule, never the sentence.
 """
 
 from __future__ import annotations
 
 import fnmatch
+import json
 import re
 import sys
 from pathlib import Path
@@ -30,10 +37,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import design_signoff
 from common import REQ_HEADER, CheckError, config_source, run
-from session import advances_ids, brief_problems, touches_of
+from session import (
+    advances_ids,
+    brief_problems,
+    plan_issue_set,
+    touches_of,
+    wave_of,
+    wave_problems,
+)
 
 NAME = "brief"
-USAGE = "usage: check_brief.py FILE [--root DIR]"
+USAGE = "usage: check_brief.py (FILE | --event PAYLOAD) [--root DIR] [--waves N,N]"
 REQUIREMENTS = "docs/requirements.md"
 SCREENS = re.compile(r"Screens: (v[1-9]\d*) (\S.*)")
 PAIR = re.compile(r"([a-z0-9][a-z0-9-]*)/([a-z0-9][a-z0-9-]*|\*)")
@@ -41,6 +55,12 @@ NO_LINE = "rule 10: a brief that touches ui_paths has no Screens line"
 SHAPE = "rule 10: the Screens line is not one line Screens: v<n> <screen>/<state>, ..."
 NOT_SIGNED = f"rule 10: the Screens version is not signed off in {design_signoff.SIGNOFFS}"
 NOT_IN = "rule 10: a Screens screen or state is not in the version"
+BRIEF_LABEL = "agk-brief"
+INVALID_LABEL = "agk-brief-invalid"
+COMMENT_MARK = "<!-- agk-brief-check -->"
+EVENT_ACTIONS = ("opened", "edited", "labeled")
+FLAGS = ("--root", "--event", "--waves")
+WAVES = re.compile(r"[1-9]\d*(,[1-9]\d*)*")
 
 
 def absent_requirements(body: str, root: Path) -> list[str]:
@@ -136,27 +156,107 @@ def screens_problems(body: str, root: Path) -> list[str]:
     return []
 
 
-def check(path: Path, root: Path | None = None) -> int:
+def body_problems(body: str, root: Path | None, waves: set[int] | None) -> list[str]:
+    """Every rule the body breaks: the shape first, then what needs the root."""
+    problems = brief_problems(body)
+    if root is None or problems:
+        return problems
+    problems = absent_requirements(body, root) or screens_problems(body, root)
+    if not problems and plan_issue_set(root):
+        problems = wave_problems(body, waves)
+    return problems
+
+
+def check(path: Path, root: Path | None = None, waves: set[int] | None = None) -> int:
     try:
         body = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise CheckError("the brief file cannot be read") from exc
-    problems = brief_problems(body)
-    if root is not None and not problems:
-        problems = absent_requirements(body, root) or screens_problems(body, root)
+    problems = body_problems(body, root, waves)
     if problems:
         raise CheckError("; ".join(problems))
     print(f"ok {NAME}")
     return 0
 
 
+def event_comment(problems: list[str]) -> str:
+    items = "\n".join(f"- {p}" for p in problems)
+    return (
+        f"{COMMENT_MARK}\nThe brief check refuses this brief:\n{items}\n\nEdit the body to fix it."
+    )
+
+
+def event_result(payload: dict, root: Path | None, waves: set[int] | None) -> dict:
+    """What the job does for one saved `issues` event: the decision only, nothing is posted."""
+    issue = payload.get("issue")
+    labels = issue.get("labels") if isinstance(issue, dict) else None
+    names = (
+        {x.get("name") for x in labels if isinstance(x, dict)} if isinstance(labels, list) else ()
+    )
+    if (
+        not isinstance(issue, dict)
+        or payload.get("action") not in EVENT_ACTIONS
+        or "pull_request" in issue
+        or BRIEF_LABEL not in names
+    ):
+        return {"action": "ignore"}
+    body = issue.get("body") if isinstance(issue.get("body"), str) else ""
+    number, problems = issue.get("number"), body_problems(body, root, waves)
+    if problems:
+        return {
+            "action": "fail",
+            "issue": number,
+            "label": INVALID_LABEL,
+            "problems": problems,
+            "comment": event_comment(problems),
+        }
+    return {"action": "pass", "issue": number, "label": INVALID_LABEL, "wave": wave_of(body)}
+
+
+def run_event(path: Path, root: Path | None, waves: set[int] | None) -> int:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise CheckError("the event file cannot be read") from exc
+    print(json.dumps(event_result(payload if isinstance(payload, dict) else {}, root, waves)))
+    return 0
+
+
+def parsed(args: list[str]) -> tuple[dict[str, str], str | None] | None:
+    """(the flags and their values, the one saved brief file); None for a usage error."""
+    flags: dict[str, str] = {}
+    rest = list(args)
+    file = rest.pop(0) if rest and not rest[0].startswith("--") else None
+    while len(rest) >= 2 and rest[0] in FLAGS and rest[0] not in flags:
+        flags[rest[0]] = rest[1]
+        rest = rest[2:]
+    return (flags, file) if not rest and (file is None) == ("--event" in flags) else None
+
+
+def wave_list(text: str | None) -> set[int] | None:
+    if text is None:
+        return None
+    if not WAVES.fullmatch(text):
+        raise CheckError("rule 4: --waves is not a comma-separated list of wave numbers")
+    return {int(x) for x in text.split(",")}
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    root = Path(args[2]) if len(args) == 3 and args[1] == "--root" else None
-    if len(args) != 1 and root is None:
+    found = parsed(args)
+    if found is None:
         print(USAGE)
         return 2
-    return run(NAME, lambda: check(Path(args[0]), root))
+    flags, file = found
+    root = Path(flags["--root"]) if "--root" in flags else None
+
+    def act() -> int:
+        waves = wave_list(flags.get("--waves"))
+        if file is None:
+            return run_event(Path(flags["--event"]), root, waves)
+        return check(Path(file), root, waves)
+
+    return run(NAME, act)
 
 
 if __name__ == "__main__":
