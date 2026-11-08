@@ -1,6 +1,6 @@
 # SPEC-0057: The kit proposes a repository's work type and stack and a person confirms
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-064
 
