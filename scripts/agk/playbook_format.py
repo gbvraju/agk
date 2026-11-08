@@ -54,6 +54,7 @@ WORK_TYPES = (
     "multi-agent",
     "voice-agent",
     "pilot",
+    "data-pipeline",  # amendment 130, SPEC-0048 rule 18 build (g)
 )
 FOLDER = "config/playbooks"
 RUNS = "docs/runs/"
