@@ -110,6 +110,11 @@ merge base was also changed on the default branch after it; the second only when
 max_behind_merges` (opt-in, an integer of at least 0; anything else refused naming the setting)
 is set and the first-parent commits of the default branch after the merge base are above it; the
 third when either read fails. A line names the rule or the setting, never a file, count or sha.
+
+`--sweep` (brief #797, ADR-0373) is the merger's scheduled pass: the open, non-draft pull requests
+labelled `agk:ready`, oldest first, the guarded merge above on at most five cleared heads, one line
+each and `UNMERGED #<n> cleared <m> min <reason>` for a cleared one older than 20 minutes it could
+not merge (in local mode it only reports). `--sweep-gate` prints `on` or `off` for the workflow.
 """
 
 from __future__ import annotations
@@ -151,7 +156,14 @@ from common import (  # noqa: E402
     show,
     status_flip_only,
 )
-from reviewers import CONFIG, approval_shas, approvers_of, conductors_of, parse  # noqa: E402
+from reviewers import (  # noqa: E402
+    CONFIG,
+    approval_shas,
+    approvers_of,
+    conductors_of,
+    parse,
+    specs_named_approved,
+)
 
 EXIT_CLEARED, EXIT_REFUSED, EXIT_HELD, EXIT_UNREADABLE = 0, 1, 3, 4
 READS = 5  # reads in a row that GitHub cannot answer before the command ends (session rule 21)
@@ -209,6 +221,12 @@ RULESET = "rule violation"  # GitHub's words for a merge its ruleset refuses (br
 JOB_LINE = re.compile(
     r"merge-cleared #([1-9][0-9]{0,9}) ([0-9a-f]{12}): (merged|held|refused)(?:\s|:)"
 )
+READY_LABEL = "agk:ready"  # the sweep's list (brief #797 answer 3, ADR-0373)
+SWEEP_MAX = 5  # guarded merges a run (brief #797 answer 3)
+UNMERGED_MINUTES = 20  # brief #797 answer 5
+STOPPED = "merge-cleared: stopped:"
+SPEC_FILE = re.compile(r"docs/specs/(\d{4})-[^/]+\.md")
+DRAFT_HOLD = "an approved spec still reads Draft (rule 5)"  # brief #797 answer 4
 JOB_PREFIX = "merger: "  # the one comment of a hold or a refusal (brief #765)
 MERGE_ENV = "AGK_MERGE_TOKEN"  # the one variable the merge call reads; only the job sets it
 NO_MERGE_LINE = f"merge needs {MERGE_ENV} or the owner's tap"  # the `Correction:` on brief #765
@@ -479,10 +497,12 @@ def accepted_adrs(verdict: dict, sha: str) -> list[str] | None:
     return final_accepts(covered[1])
 
 
-def adr_status(repo: str, sha: str, path: str) -> str | None:
-    """The `- Status:` word of the ADR at PATH in the commit SHA, read with one GET; None when the
-    answer is not a base64 file or has no status line."""
-    item = read_json(f"repos/{repo}/contents/{path}?ref={sha}", dict, "an ADR a Final line names")
+def adr_status(
+    repo: str, sha: str, path: str, what: str = "an ADR a Final line names"
+) -> str | None:
+    """The `- Status:` word of the ADR (or spec) at PATH in the commit SHA, read with one GET; None
+    when the answer is not a base64 file or has no status line."""
+    item = read_json(f"repos/{repo}/contents/{path}?ref={sha}", dict, what)
     if item.get("type") != "file" or item.get("encoding") != "base64":
         return None
     try:
@@ -709,6 +729,24 @@ def unapproved(
     return False
 
 
+def approved_still_draft(
+    repo: str, files: list[dict], comments: list[dict], approvers: list[str], sha: str
+) -> bool:
+    """Brief #797 answer 4: whether the pull request adds or changes a spec a listed approver has
+    approved and that still reads `Draft` on the head; the status is read only for such a spec."""
+    approved = specs_named_approved(comments, approvers)
+    for item in files:
+        name = str(item.get("filename") or "")
+        match = SPEC_FILE.fullmatch(name)
+        if not match or item.get("status") not in ("added", "modified"):
+            continue
+        if f"SPEC-{match.group(1)}" not in approved:
+            continue
+        if adr_status(repo, sha, name, "a spec the pull request changes") == "Draft":
+            return True
+    return False
+
+
 def dependence_unmet(repo: str, pull: dict) -> bool:
     for number in dict.fromkeys(DEPENDS.findall(str(pull.get("body") or ""))):
         item = read_json(f"repos/{repo}/issues/{number}", dict, "a Depends-on issue")
@@ -762,6 +800,8 @@ def hold_list(
         raise Held("release (rule 5)")
     if unapproved(pull, comments, sha, approvers, root, number):
         raise Held("spec approval (rule 5)")
+    if approved_still_draft(repo, files, comments, approvers, sha):
+        raise Held(DRAFT_HOLD)
     if (klass := protected_class(files)) is not None:
         raise Held(f"protected class {klass} (rule 5)")
     if HOLD_LABEL in labels_of(pull):
@@ -1415,6 +1455,118 @@ def event_main(path: str, name: str, root: Path) -> int:
     return EXIT_CLEARED
 
 
+def clock() -> datetime:
+    return datetime.now(UTC)
+
+
+def sweep_allows(data: dict) -> bool:
+    """Brief #797 answers 3 and 6: True when a sweep may merge, False when it only reports (local
+    mode); Nothing when this project has no sweep (auto-merge off, personal mode, paused)."""
+    if data.get("paused") is True:
+        raise Nothing("paused (setting: paused in agk.toml on the default branch)")
+    if data.get("execution") == "local":
+        github_mode({**data, "execution": ""})  # the other settings still decide
+        return False
+    github_mode(data)
+    return True
+
+
+def sweep_list(pulls: list[dict]) -> list[dict]:
+    """The open, non-draft pull requests labelled `agk:ready`, oldest first."""
+    kept = [
+        p
+        for p in pulls
+        if p.get("state") == "open" and p.get("draft") is False and READY_LABEL in labels_of(p)
+    ]
+    return sorted(kept, key=lambda p: (str(p.get("created_at") or ""), p.get("number") or 0))
+
+
+def minutes_since(item: dict, now: datetime) -> int | None:
+    """Whole minutes from ITEM's `created_at` to NOW, or None when it cannot be read."""
+    try:
+        made = datetime.strptime(str(item.get("created_at")), "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None
+    return int((now - made.replace(tzinfo=UTC)).total_seconds() // 60)
+
+
+def report_unmerged(number: int, verdict: dict | None, reason: str) -> None:
+    """Brief #797 answer 5: one line for a cleared pull request left unmerged over 20 minutes."""
+    minutes = minutes_since(verdict or {}, clock())
+    if minutes is not None and minutes > UNMERGED_MINUTES:
+        print(f"UNMERGED #{number} cleared {minutes} min {reason}")
+
+
+def sweep_one(root: Path, repo: str, pull: dict, merging: bool, tried: int) -> tuple[int, bool]:
+    """One pull request of a sweep and its line: (the guarded merges so far, whether to stop)."""
+    number = int(pull.get("number") or 0)
+    head = pull.get("head")
+    sha = str(head.get("sha") if isinstance(head, dict) else "")
+    prefix = f"merge-cleared #{number} {sha[:12]}:"
+    try:
+        comments = read_comments(repo, number)
+        state, why = judge(comments, sha, [])
+    except Unreadable as err:
+        print(f"{prefix} not read: GitHub cannot be read ({err})")
+        return tried, False
+    if state != "cleared":
+        print(f"{prefix} not cleared: {why}")
+        return tried, False
+    verdict = latest_verdict(comments)
+    if not merging:
+        reason = "local mode: the conductor merges"
+    elif tried >= SWEEP_MAX:
+        reason = f"not tried: at most {SWEEP_MAX} a run"
+    else:
+        line, _ = guarded(root, number, sha)
+        print(line)
+        if line.startswith(STOPPED):
+            return tried + 1, True
+        if ": merged " not in line:
+            report_unmerged(number, verdict, line.split(": ", 1)[-1])
+        return tried + 1, False
+    print(f"{prefix} {reason}")
+    report_unmerged(number, verdict, reason)
+    return tried, False
+
+
+def sweep_main(root: Path) -> int:
+    """`--sweep` (brief #797 answers 3, 5 and 6): one line per open cleared pull request, oldest
+    first, the guarded merge on at most five; always exit 0, as every step of the job does."""
+    try:
+        _, data = default_ref(root)
+        merging = sweep_allows(data)
+        repo = repo_of(root)
+        issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
+        merging = merging and not titled(issues, RECORD_TITLE)
+        endpoint = f"repos/{repo}/pulls?state=open&sort=created&direction=asc"
+        pulls = sweep_list(read_pages(endpoint, "the open pull requests"))
+    except (Nothing, Refused) as err:
+        print(f"merger: nothing to do: {err}", file=sys.stderr)
+        return EXIT_CLEARED
+    except Unreadable as err:
+        print(f"merger: nothing to do: GitHub cannot be read ({err})", file=sys.stderr)
+        return EXIT_CLEARED
+    tried = 0
+    for pull in pulls:
+        tried, stop = sweep_one(root, repo, pull, merging, tried)
+        if stop:
+            break
+    return EXIT_CLEARED
+
+
+def sweep_gate_main(root: Path) -> int:
+    """`--sweep-gate`: `on` when this project gets the sweep job, else `off` (brief #797 answer 6)."""
+    try:
+        _, data = default_ref(root)
+        github_mode(data)
+    except (Nothing, Refused):
+        print("off")
+        return EXIT_CLEARED
+    print("on")
+    return EXIT_CLEARED
+
+
 def post_once(repo: str, number: int, body: str) -> None:
     """One comment BODY on the pull request, unless the same first line is there already."""
     if any(first_line(c) == body for c in read_comments(repo, number)):
@@ -1458,8 +1610,10 @@ def report_main(number: int, sha: str, line: str, root: Path) -> int:
 
 
 def job_args(argv: list[str]) -> tuple[str, list[str]] | None:
-    """The merger job's modes: (`event`, [file, name]), (`report`, [n, sha, line]) or
-    (`no-secret`, [n])."""
+    """The merger job's modes: (`event`, [file, name]), (`report`, [n, sha, line]),
+    (`no-secret`, [n]), (`sweep`, []) or (`sweep-gate`, [])."""
+    if argv in (["--sweep"], ["--sweep-gate"]):
+        return argv[0][2:], []
     if len(argv) == 4 and argv[0] == "--event" and argv[2] == "--event-name":
         return "event", [argv[1], argv[3]]
     if len(argv) == 4 and argv[:2] == ["--report", "--pr"] and argv[3] == "--no-secret":
@@ -1568,11 +1722,34 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
     return f"merged {merged[:12]}", "", EXIT_CLEARED
 
 
+def guarded(root: Path, number: int, sha: str) -> tuple[str, int]:
+    """The one guarded merge of pull request NUMBER at SHA: (its one line, its exit code)."""
+    prefix = f"merge-cleared #{number} {sha[:12]}:"
+    try:
+        word, reason, code = outcome(root, number, sha)
+    except Held as err:
+        return f"{prefix} held: {err}", EXIT_HELD
+    except Refused as err:
+        return f"{prefix} refused: {err}", err.code
+    except Unreadable as err:
+        return f"{prefix} refused: GitHub cannot be read ({err}, {READS} reads in a row)", (
+            EXIT_UNREADABLE
+        )
+    except Stopped as stop:
+        missing = "" if stop.filed else " (the red-branch issue cannot be written)"
+        return f"{STOPPED} default branch red after #{stop.number}{missing}", EXIT_REFUSED
+    return (f"{prefix} {word}: {reason}" if reason else f"{prefix} {word}"), code
+
+
 def main(argv: list[str] | None = None, root: Path | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     job = job_args(argv)
     if job is not None:  # the merger job of GitHub mode (brief #765)
         here = Path.cwd() if root is None else root
+        if job[0] == "sweep":
+            return sweep_main(here)
+        if job[0] == "sweep-gate":
+            return sweep_gate_main(here)
         if job[0] == "event":
             return event_main(job[1][0], job[1][1], here)
         if job[0] == "no-secret":
@@ -1582,24 +1759,8 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
     if args is None:
         print(f"merge-cleared #? ?: refused: {USAGE}")
         return EXIT_REFUSED
-    number, sha = args
-    prefix = f"merge-cleared #{number} {sha[:12]}:"
-    try:
-        word, reason, code = outcome(Path.cwd() if root is None else root, number, sha)
-    except Held as err:
-        print(f"{prefix} held: {err}")
-        return EXIT_HELD
-    except Refused as err:
-        print(f"{prefix} refused: {err}")
-        return err.code
-    except Unreadable as err:
-        print(f"{prefix} refused: GitHub cannot be read ({err}, {READS} reads in a row)")
-        return EXIT_UNREADABLE
-    except Stopped as stop:
-        missing = "" if stop.filed else " (the red-branch issue cannot be written)"
-        print(f"merge-cleared: stopped: default branch red after #{stop.number}{missing}")
-        return EXIT_REFUSED
-    print(f"{prefix} {word}: {reason}" if reason else f"{prefix} {word}")
+    line, code = guarded(Path.cwd() if root is None else root, *args)
+    print(line)
     return code
 
 
