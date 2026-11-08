@@ -514,16 +514,16 @@ def measure(
     if junit is not None:
         reports = report_files(folder, junit, since)
         if reports:
-            sums: dict[str, float] = {}
+            seconds_of: dict[str, float] = {}
             try:
                 if sum(r.stat().st_size for r in reports) > JUNIT_LIMIT:
                     raise Unreadable
                 for report in reports:
                     for key, seconds in junit_sums(report.read_bytes()).items():
-                        sums[key] = sums.get(key, 0.0) + seconds
+                        seconds_of[key] = seconds_of.get(key, 0.0) + seconds
             except (OSError, Unreadable):
                 return "unknown", None, JUNIT_UNREADABLE
-            return "junit", sums, None
+            return "junit", seconds_of, None
     sums = durations_sums(output)
     if sums is not None:
         return "durations", sums, None
