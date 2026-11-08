@@ -3,6 +3,7 @@
 Usage: python3 scripts/agk/failures.py signature --output FILE [--step NAME]
        python3 scripts/agk/failures.py evidence --output FILE [--test ID]
        python3 scripts/agk/failures.py issue-body --signature SIG --test ID [--issues FILE]
+       python3 scripts/agk/failures.py seen --signature SIG --test ID
 
 Brief #634, build (b) of SPEC-0046 (ADR-0303). `signature` prints `<sig> <test id>` for each
 failed test of a run: the ids come from the JUnit report at `[testing] junit` (relative to the
@@ -17,13 +18,25 @@ GitHub's issue JSON) holds an open issue with the signature, else `action: open`
 naming closed issues of the signature as seen before. It reads files, prints and writes nothing;
 it opens no socket and runs no program. A usage error or a refused setting exits 2, naming the
 option or the setting, never a value.
+
+Brief #756, build (d) (rule 9): `seen` is the one subcommand that calls GitHub, with `gh api` GETs
+of the project's own repository only (`GITHUB_REPOSITORY`, else the `origin` remote); it posts
+nothing and writes no file. It reads the closed `found-bug` issues whose body holds a fix record
+(the four lines of rule 7) and the merged pull requests whose body has the line
+`Fixes-failure: #<issue>`, and prints at most three lines
+`seen before: #<issue> <symptom>; fixed by #<pull request>`: the exact signature first, then the
+same test id, newest issue first within each; an issue that no merged pull request names is
+skipped, and nothing is matched by text similarity. No match prints nothing; a read that fails
+prints one line naming what could not be read and exits 4.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import xml.parsers.expat
 from pathlib import Path
@@ -58,8 +71,18 @@ NORMALISE = (  # rule 3, in this order, on the lower-cased line
 )
 
 
+RECORD = ("Symptom:", "Cause:", "Reproduce:", "Fixed-by:")  # rule 7
+SEEN_MAX = 3
+PAGE = 100
+ORIGIN = re.compile(r"github\.com[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$")
+
+
 class Usage(Exception):
     """A usage error, an unreadable file or a refused setting (exit 2)."""
+
+
+class Unreadable(Exception):
+    """A GitHub read that failed (exit 4); never printed as no match."""
 
 
 def normalise(line: str) -> str:
@@ -174,6 +197,121 @@ def issue_body(sig: str, test_id: str, issues: list) -> str:
     return "\n".join(lines + [f"seen before: #{n}" for n in closed])
 
 
+def own_repository(root: Path) -> str:
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if not repo:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "-C", str(root), "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+        )
+        match = ORIGIN.search(proc.stdout.strip())
+        repo = match.group(1) if match else ""
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        raise Unreadable("the repository cannot be read (the origin remote)")
+    return repo
+
+
+def gh_pages(endpoint: str, what: str) -> list:
+    """Every page of one GET list; any failure raises `Unreadable` naming `what`."""
+    found: list = []
+    page = 1
+    while True:
+        try:
+            proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+                ["gh", "api", "--method", "GET", f"{endpoint}&per_page={PAGE}&page={page}"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            chunk = json.loads(proc.stdout) if proc.returncode == 0 else None
+        except (OSError, ValueError):
+            chunk = None
+        if not isinstance(chunk, list):
+            raise Unreadable(f"{what} cannot be read")
+        found += chunk
+        if len(chunk) < PAGE:
+            return found
+        page += 1
+
+
+def body_lines(item: dict) -> list[str]:
+    return [ln.strip() for ln in str(item.get("body") or "").splitlines()]
+
+
+def field(lines: list[str], name: str) -> str | None:
+    values = [ln[len(name) :].strip() for ln in lines if ln.startswith(name)]
+    return values[0] if len(values) == 1 and values[0] else None
+
+
+def candidates(sig: str, test_id: str, issues: list) -> list[tuple[int, str]]:
+    """(issue, symptom) of the closed `found-bug` issues with a fix record, in rule 9's order:
+    the exact signature first, then the same test id, newest issue first within each."""
+    exact: list[tuple[int, str]] = []
+    same_test: list[tuple[int, str]] = []
+    for item in issues:
+        if (
+            not isinstance(item, dict)
+            or "pull_request" in item
+            or item.get("state") != "closed"
+            or not isinstance(item.get("number"), int)
+            or not any(
+                isinstance(lb, dict) and lb.get("name") == "found-bug"
+                for lb in item.get("labels", [])
+            )
+        ):
+            continue
+        lines = body_lines(item)
+        if any(field(lines, name) is None for name in RECORD):
+            continue
+        symptom = field(lines, "Symptom:") or ""
+        if scan_text(symptom):
+            symptom = "(symptom withheld)"
+        if field(lines, "Failure-signature:") == sig:
+            exact.append((item["number"], symptom))
+        elif field(lines, "Test:") == test_id:
+            same_test.append((item["number"], symptom))
+    return sorted(exact, reverse=True) + sorted(same_test, reverse=True)
+
+
+def fixed_by(pulls: list) -> dict[int, int]:
+    """Issue number -> the newest merged pull request whose body has `Fixes-failure: #<issue>`."""
+    newest: dict[int, tuple[str, int]] = {}
+    for pr in pulls:
+        if not isinstance(pr, dict) or not pr.get("merged_at"):
+            continue
+        if not isinstance(pr.get("number"), int):
+            continue
+        key = (str(pr["merged_at"]), pr["number"])
+        for ln in body_lines(pr):
+            match = re.fullmatch(r"Fixes-failure: #(\d+)", ln)
+            if match:
+                n = int(match.group(1))
+                newest[n] = max(newest.get(n, key), key)
+    return {n: key[1] for n, key in newest.items()}
+
+
+def seen_before(sig: str, test_id: str, issues: list, pulls: list) -> list[str]:
+    fixed = fixed_by(pulls)
+    found = [
+        f"seen before: #{n} {symptom}; fixed by #{fixed[n]}"
+        for n, symptom in candidates(sig, test_id, issues)
+        if n in fixed
+    ]
+    return found[:SEEN_MAX]
+
+
+def seen_command(root: Path, sig: str, test_id: str) -> str:
+    repo = own_repository(root)
+    issues = gh_pages(
+        f"repos/{repo}/issues?state=closed&labels=found-bug", "the closed found-bug issues"
+    )
+    if not candidates(sig, test_id, issues):
+        return ""
+    pulls = gh_pages(f"repos/{repo}/pulls?state=closed", "the merged pull requests")
+    return "\n".join(seen_before(sig, test_id, issues, pulls))
+
+
 def options(args: list[str], allowed: set[str]) -> dict[str, str]:
     opts: dict[str, str] = {}
     for i in range(0, len(args), 2):
@@ -223,15 +361,25 @@ def command(args: list[str]) -> str:
         return issue_body(
             opts["--signature"], opts["--test"], issues if isinstance(issues, list) else []
         )
-    raise Usage("usage: failures.py signature|evidence|issue-body ...")
+    if name == "seen":
+        opts = options(rest, {"--signature", "--test"})
+        if not re.fullmatch(r"[0-9a-f]{12}", opts.get("--signature", "")) or not opts.get("--test"):
+            raise Usage("a signature and a test id are needed (option: --signature)")
+        return seen_command(root, opts["--signature"], opts["--test"])
+    raise Usage("usage: failures.py signature|evidence|issue-body|seen ...")
 
 
 def main(argv: list[str] | None = None) -> int:
     try:
-        print(command(list(sys.argv[1:] if argv is None else argv)))
+        out = command(list(sys.argv[1:] if argv is None else argv))
+        if out:
+            print(out)
     except (Usage, CheckError) as exc:
         print(f"failures: {exc}")
         return 2
+    except Unreadable as exc:
+        print(f"failures: {exc}")
+        return 4
     return 0
 
 

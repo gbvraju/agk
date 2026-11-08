@@ -391,12 +391,16 @@ and 7.
     python3 scripts/agk/failures.py signature --output FILE [--step NAME]
     python3 scripts/agk/failures.py evidence --output FILE [--test ID]
     python3 scripts/agk/failures.py issue-body --signature SIG --test ID [--issues FILE]
+    python3 scripts/agk/failures.py seen --signature SIG --test ID
 
 `signature` prints `<signature> <test id>` for each failed test of a run's output (the `[testing] junit` report when it is
 readable, else the `FAILED <id>` lines; `step:NAME` when there is no test id). `evidence` prints the cleaned last 200 lines
 of that test's output, or only `evidence withheld: ...`. `issue-body` prints whether a failure needs a new `found-bug` issue
 or a comment on an open one, from a saved issue list; with `[failures] issues` off (the default) it prints `action: none`.
-It reads files, prints and writes nothing. See SPEC-0046 rules 2, 3 and 5 and ADR-0303.
+It reads files, prints and writes nothing. `seen` reads the project's own closed `found-bug` issues that hold a fix record
+and the merged pull requests that name them (GET only, writes nothing) and prints at most three lines
+`seen before: #<issue> <symptom>; fixed by #<pull request>`, the exact signature first, then the same test id, newest
+first; a read that fails says so in one line and exits 4. See SPEC-0046 rules 2, 3, 5 and 9 and ADR-0303.
 
 ## Scorecard
 
