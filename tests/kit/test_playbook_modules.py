@@ -53,7 +53,7 @@ def playbook(
     return (
         f'format = 1\nwork_type = "{name}"\ntitle = "An invented playbook"\n'
         f"{modules}\nheavy_steps = []\nevidence = [{listed}]\nphases = []\nlanes = []\nclaims = []\n"
-        '\n[split]\nbrief_order = []\ndepends_on = []\n'
+        "\n[split]\nbrief_order = []\ndepends_on = []\n"
         '\n[testing]\nprofile = "balanced"\nalways_full = []\nmap = []\n'
         '\n[milestones]\nshape = "per-brief"\nbatch_by = "not batched"\n'
         + "".join(gate(*g) for g in gates)
@@ -253,13 +253,17 @@ def test_a_module_that_names_modules_fails(tmp_path: Path) -> None:
 
 
 def test_a_playbook_that_names_itself_fails(tmp_path: Path) -> None:
-    done = run(project(tmp_path, base_files(playbook("mobile", (OWN_GATE,), 'modules = ["mobile"]'))))
+    done = run(
+        project(tmp_path, base_files(playbook("mobile", (OWN_GATE,), 'modules = ["mobile"]')))
+    )
     assert done.returncode == 1
     assert "key: modules" in done.stdout
 
 
 def test_no_failure_prints_a_value(tmp_path: Path) -> None:
-    files = base_files(playbook("mobile", ((SECRET_ID, "judgement", False),), 'modules = ["rag-app"]'))
+    files = base_files(
+        playbook("mobile", ((SECRET_ID, "judgement", False),), 'modules = ["rag-app"]')
+    )
     files["default"] = playbook("default", ((SECRET_ID, "check", True),))
     done = run(project(tmp_path, files))
     assert done.returncode == 1
