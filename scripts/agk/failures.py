@@ -204,6 +204,7 @@ def own_repository(root: Path) -> str:
             ["git", "-C", str(root), "remote", "get-url", "origin"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         match = ORIGIN.search(proc.stdout.strip())
         repo = match.group(1) if match else ""

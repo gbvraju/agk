@@ -79,7 +79,9 @@ def gh(tmp_path: Path, monkeypatch):
     exe.chmod(exe.stat().st_mode | stat.S_IXUSR)
     proj = tmp_path / "proj"
     proj.mkdir()
-    subprocess.run(["git", "init", "-q", str(proj)], check=True)  # nosec B603 B607
+    subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "init", "-q", str(proj)], check=True
+    )
     subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["git", "-C", str(proj), "remote", "add", "origin", f"https://github.com/{REPO}.git"],
         check=True,
