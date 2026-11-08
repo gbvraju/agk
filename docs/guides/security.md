@@ -34,12 +34,19 @@ AGK sends nothing anywhere itself.
 
 ## Credentials
 
-AGK asks for none, stores none and prints none.
+AGK asks for none, stores none and prints none. The one optional secret is yours, in your repository's settings: see the workflows below.
 
 - **Your logins.** The skills use your own `gh` login and your own Claude login. `/agk:ruleset` says so in its first paragraph
   (`skills/ruleset/SKILL.md`), and `agk doctor` holds no credential (`docs/guides/reference.md`, the Doctor section).
-- **The workflows** use only the workflow token that GitHub gives each run, `secrets.GITHUB_TOKEN`. No other secret is referenced in
-  `.github/workflows/`.
+- **The workflows** use the workflow token that GitHub gives each run, `secrets.GITHUB_TOKEN`. The one other secret referenced in
+  `.github/workflows/` is `AGK_MERGE_TOKEN`, optional, read only by the merge step of `merger.yml`: a fine-grained token you
+  create for this one repository (Contents and Pull requests, read and write). Create the GitHub environment `merge`, set its
+  deployment branches to your default branch alone, and store the token there, never as a repository secret: a run of any other
+  ref, a pull request's included, then cannot read it. The merge runs under your own account. No session handles it. The merge
+  step also runs the cleared head's own code (governance and the pre-merge tests on the would-be merge), and `env -i` does not
+  keep the secret from that code, which can read it from its parent process: a head that passes review could take the token and
+  bypass the ruleset (ADR-0354 Residual). Accept that, or ask for a build that keeps the merged code out of that step. Without it
+  the job posts one line, `merge needs AGK_MERGE_TOKEN or the owner's tap`, and does nothing else.
 - **Secrets in the repository.** The step `Secret scan` of the `governance` workflow (`.github/workflows/governance.yml`) downloads
   one pinned release of the open-source gitleaks command-line tool for linux x64 from the project's GitHub releases, checks its
   SHA-256 against the digest written in the workflow (a mismatch fails the step) and scans the commits of the change: on a pull
@@ -59,6 +66,7 @@ The permissions are the ones in each file; a workflow can do nothing its token d
 | Workflow | Token permissions | What it may write |
 | --- | --- | --- |
 | `governance.yml` | `contents: read`; `issues: read`, `pull-requests: read` and `actions: read` | nothing; it runs the checks and the secret scan, and reads the comments of the pull request with one `gh api` GET |
+| `merger.yml` | `issues: write`; `contents`, `pull-requests`, `actions`, `checks` and `statuses` read; for its one merge call the secret `AGK_MERGE_TOKEN` of the `merge` environment (brief #765) | started only from the default branch, by a `Verdict:` or `Approve:` comment or a green `governance` or `proof` run; it runs only `merge_cleared.py`, which runs the cleared head's governance and pre-merge tests in the step that holds the secret: with the secret, the merge of a cleared head, and a comment for a hold or a refusal and its record line |
 | `proof.yml` | `contents: read`; `checks: read` | nothing; it runs your tests on the base and on the head (event `pull_request`, never `pull_request_target`); with one read of the checks of the parent commit it skips the suite for a commit that changes only `- Status:` lines |
 | `metrics.yml` | read of contents, pull requests, checks and actions; `issues: write` | one issue a week with the label `agk-metrics`, and that label |
 | `product-report.yml` | read of contents, pull requests, checks and actions; `issues: write` | one issue a week with the label `agk-product-report`, and that label; then one workflow artifact, `agk-facts-<week>`, the facts file the report was rendered from and `report.json`, the same report as data, kept 90 days and readable by anyone who can read the repository's workflow runs (no anonymous download, no other place) |

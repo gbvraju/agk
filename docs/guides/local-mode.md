@@ -46,6 +46,7 @@ A person with admin on the repository does this once, in a terminal on their own
        gh workflow disable governance.yml
        gh workflow disable proof.yml
        gh workflow disable drift-audit.yml
+       gh workflow disable merger.yml
        gh workflow disable metrics.yml
        gh workflow disable product-report.yml
 
@@ -199,6 +200,7 @@ When Actions runs again (minutes renewed, billing fixed, the outage over):
        gh workflow enable governance.yml
        gh workflow enable proof.yml
        gh workflow enable drift-audit.yml
+       gh workflow enable merger.yml
        gh workflow enable metrics.yml
        gh workflow enable product-report.yml
 
