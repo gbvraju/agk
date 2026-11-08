@@ -1,0 +1,58 @@
+format = 1
+work_type = "mobile"
+title = "The mobile gates on the usual flow: a device and simulator matrix, an offline state for every screen and the owner's store signing"
+heavy_steps = []
+evidence = [
+  "the device and simulator matrix file and its results",
+  "the screen inventory with the offline state of each screen",
+  "the owner's record of the store signing",
+]
+lanes = []
+
+[[phases]]
+name = "build"
+order = 1
+after = []
+
+[split]
+brief_order = ["build"]
+depends_on = []
+
+[testing]
+profile = "balanced"
+always_full = []
+map = []
+
+[[gates]]
+id = "device-matrix"
+kind = "check"
+text = "A device and simulator matrix: the matrix file lists the minimum entries of this playbook."
+step = "device-matrix"
+owner_only = false
+
+[[gates]]
+id = "device-matrix-results"
+kind = "judgement"
+text = "The results of the device and simulator matrix, recorded per entry; the matrix results are the evidence."
+owner_only = false
+
+[[gates]]
+id = "offline-states"
+kind = "check"
+text = "Offline states: each screen of the inventory lists an offline state."
+step = "offline-states"
+owner_only = false
+
+[[gates]]
+id = "store-signing"
+kind = "judgement"
+text = "Store signing, done and recorded by the owner alone."
+owner_only = true
+
+[milestones]
+shape = "per-brief"
+batch_by = "not batched: one pull request per brief, as today"
+
+[[claims]]
+text = "An offline state listed for every screen of the inventory finds a missing offline path while the screen is built, so fewer fix briefs are expected to chase one later."
+basis = "expected"
