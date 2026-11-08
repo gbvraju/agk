@@ -39,6 +39,10 @@ The skills a playbook names (SPEC-0048 rule 12; REQ-055 AC6; brief #691): the op
 is a list of names, each matching doctor's `ENGINE_NAME`, and none holds a token of
 `config/neutrality.txt` (Q-S0048-16); a problem names the rule, the file and the key, never the
 value. `skills(path, root)` returns the allowed names of a playbook in its order, for doctor.
+
+The base playbook (SPEC-0048 rule 21; REQ-055 AC8; brief #692): `BASE` is a playbook name and never
+a work type. `config/playbooks/default.toml` alone may carry it, and `declaration` refuses it as it
+refuses any name outside `WORK_TYPES`.
 """
 
 from __future__ import annotations
@@ -61,6 +65,7 @@ WORK_TYPES = (
     "pilot",
     "data-pipeline",  # amendment 130, SPEC-0048 rule 18 build (g)
 )
+BASE = "default"  # SPEC-0048 rule 21: a playbook every kind of work carries, never declared
 FOLDER = "config/playbooks"
 RUNS = "docs/runs/"
 CONFIG = "agk.toml"
@@ -372,7 +377,7 @@ def problems(path: Path, root: Path) -> list[str]:
     out: list[str] = []
     work_type = data.get("work_type")
     if isinstance(work_type, str):
-        if work_type not in WORK_TYPES:
+        if work_type not in WORK_TYPES and work_type != BASE:
             out.append(f"rule 1: {rel}: `work_type` is not one of the work types")
         elif work_type != path.stem:
             out.append(f"rule 1: {rel}: `work_type` is not the file's name")
