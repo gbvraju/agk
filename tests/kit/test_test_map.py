@@ -27,7 +27,9 @@ JS = 'test_dirs = ["."]\ntest_patterns = ["*.test.ts", "*.test.js", "*Test.kt"]\
 
 def git(root: Path, *args: str) -> str:
     who = ["-c", "user.name=Example", "-c", "user.email=dev@example.com"]
-    done = subprocess.run(["git", *who, *args], cwd=root, capture_output=True, text=True)
+    done = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", *who, *args], cwd=root, capture_output=True, text=True
+    )
     assert done.returncode == 0, done.stderr
     return done.stdout.strip()
 
@@ -46,7 +48,9 @@ def repo(tmp_path: Path, config: str, files: dict[str, str]) -> Path:
 
 def run(root: Path, *args: str) -> subprocess.CompletedProcess:
     argv = [sys.executable, str(SCRIPT), *(args or ("build", "--root", str(root)))]
-    return subprocess.run(argv, capture_output=True, text=True)
+    return subprocess.run(  # nosec B603 - fixed argument list from sys.executable, no shell
+        argv, capture_output=True, text=True
+    )
 
 
 def built(root: Path) -> dict[str, list[str]]:
