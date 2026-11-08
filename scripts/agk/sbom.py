@@ -340,7 +340,8 @@ def document_problems(doc: object, wanted: dict) -> list[tuple[str, str]]:
     if not isinstance(items, list):
         return [*problems, ("document", "components not a list (rule 4)")]
     refs = [i.get("bom-ref") for i in items if isinstance(i, dict)]
-    if not all(isinstance(r, str) for r in refs) or refs != sorted(set(refs)):
+    named = [ref for ref in refs if isinstance(ref, str)]
+    if len(named) != len(refs) or named != sorted(set(named)):
         problems.append(("document", "components not sorted by bom-ref (rule 4)"))
     return problems + component_problems(items, wanted["components"])
 
