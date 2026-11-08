@@ -51,3 +51,23 @@ batch_by = "not batched: one pull request per brief, as today"
 [[claims]]
 text = "Every tool declares its scopes and is tested against a prompt-injection set while it is built, so fewer fix briefs are expected to chase an over-broad tool later."
 basis = "expected"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the work: a deadline, a budget, a team's skills, or clients and tools that must stay as they are?"
+
+[[discovery]]
+id = "success"
+text = "Which tool calls show that the work succeeded, and how will each be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the data a tool reads, returns or sends on, and to what a tool may do with it?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments must it run in, from a developer's machine to production?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of response time, uptime, security and permission scope must it meet?"
