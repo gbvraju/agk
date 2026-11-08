@@ -25,6 +25,6 @@ A cleared pull request is merged within one sweep of the event that was lost, an
 
 ## Residual
 
-- 2026-11-08: answers 1 and 2 of brief #797 are not built; the cause they name did not reproduce (`Q-797-1`). Until that is ruled, a `Verdict: fix list` with no findings stays `agk:fix` and is not cleared.
+- 2026-11-08: answers 1 and 2 of brief #797 were dropped on the ruling of `Q-797-1`: the cause they name did not reproduce, and `#783` needed only a `Verdict: cleared`. A `Verdict: fix list` with no findings stays `agk:fix` and is not cleared; widening that is the owner's ruling (SPEC-0039 rule 3).
 - 2026-11-08: five heads that stay held at the front of the list keep a sixth from being tried; it is reported by its `UNMERGED` line. Measure before raising the limit.
 - 2026-11-08: the conductor's sweep line for `UNMERGED` comes with brief #776 build (c).

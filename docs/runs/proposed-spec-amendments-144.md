@@ -15,5 +15,5 @@ needs a person's `Approve: SPEC-0039`; no session posts it.
 3. **Rule 5, a new hold.** After `spec approval`: a pull request that adds or changes a spec a listed spec approver has
    approved, while the spec on the head reads `Draft`, is held with `an approved spec still reads Draft (rule 5)`. The
    router keeps such a pull request at `agk:approve` (SPEC-0032 rule 2).
-4. **Not in this amendment.** The change to SPEC-0021 rule 1 that brief #797 reserved this number for is not proposed
-   here: its cause did not reproduce (`Q-797-1`).
+4. **Not in this amendment.** The change to SPEC-0021 rule 1 that brief #797 reserved this number for is dropped: its cause
+   did not reproduce, and the ruling of `Q-797-1` leaves `fix_items` unchanged.
