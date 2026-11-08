@@ -9,7 +9,8 @@ verifies it from committed files with no network; no step does for any of the fi
 `judgement` and none is left out. `default` is a playbook name and never a work type: a `[delivery]`
 line that names it is refused, naming `work_type` and never the value, and the commands that take a
 work type do not list it. The kit's `config/playbooks/` holds only `default` and kinds of SPEC-0038
-rule 1's list. It is shipped verbatim. Reads committed files and temporary fixtures only: no network.
+rule 1's list. It is shipped verbatim. Reads committed files and temporary fixtures only: no
+network.
 """
 
 from __future__ import annotations
@@ -156,10 +157,12 @@ def test_the_name_default_belongs_to_the_base_file_alone(tmp_path: Path, stem: s
 def test_any_other_unknown_work_type_is_still_refused(tmp_path: Path) -> None:
     (tmp_path / "config" / "playbooks").mkdir(parents=True)
     path = tmp_path / "config" / "playbooks" / "other.toml"
-    text = PLAYBOOK.read_text(encoding="utf-8").replace('work_type = "default"', 'work_type = "other"')
-    path.write_text(text, encoding="utf-8")
+    text = PLAYBOOK.read_text(encoding="utf-8")
+    path.write_text(text.replace('work_type = "default"', 'work_type = "other"'), encoding="utf-8")
     found = playbook_format.problems(path, tmp_path)
-    assert found == ["rule 1: config/playbooks/other.toml: `work_type` is not one of the work types"]
+    assert found == [
+        "rule 1: config/playbooks/other.toml: `work_type` is not one of the work types"
+    ]
 
 
 def test_the_kit_ships_only_default_and_kinds_of_the_list() -> None:
