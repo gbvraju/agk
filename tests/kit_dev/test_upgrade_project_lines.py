@@ -220,7 +220,8 @@ def test_a_real_install_of_the_last_release_with_a_project_line_upgrades(tmp_pat
     table = json.loads((KIT_ROOT / "kit" / "hashes.json").read_text(encoding="utf-8"))
     released = BARE_GITIGNORE_RELEASE
     assert released in table["releases"], "the release with the bare file is in the table"
-    body = (KIT_ROOT / "kit/templates/gitignore").read_text(encoding="utf-8")
+    names = "__pycache__/ .pytest_cache/ .ruff_cache/ traceability*.md traceability*.txt *.whl"
+    body = "\n".join(names.split()) + "\n"
     assert (
         hashlib.sha256(body.encode()).hexdigest()
         in table["releases"][released]["verbatim"][".gitignore"]
@@ -233,5 +234,6 @@ def test_a_real_install_of_the_last_release_with_a_project_line_upgrades(tmp_pat
     plan = upgrade.build_plan(target, KIT_ROOT)
     item = next(i for i in plan.items if i.rel == ".gitignore")
     assert item.action == "replace", item
-    assert item.content.decode() == adopt.block_of("hash", body) + "private-src/\n"
+    template = (KIT_ROOT / "kit/templates/gitignore").read_text(encoding="utf-8")
+    assert item.content.decode() == adopt.block_of("hash", template) + "private-src/\n"
     assert manifest["extendable"]
