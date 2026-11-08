@@ -108,3 +108,23 @@ basis = "expected"
 [[claims]]
 text = "Pinned prompt and model versions keep each evaluation run comparable with the one before it, so fewer fix briefs are expected to chase a change that a version drift caused."
 basis = "expected"
+
+[[discovery]]
+id = "constraints"
+text = "What limits the work: a deadline, a budget, a team's skills, or sources that must stay where they are?"
+
+[[discovery]]
+id = "success"
+text = "Which answers show that the work succeeded, and how will their quality be measured?"
+
+[[discovery]]
+id = "data-rules"
+text = "Which rules apply to the documents it reads, the passages it keeps and what an answer may quote?"
+
+[[discovery]]
+id = "environments"
+text = "Which environments must it run in, from a developer's machine to production?"
+
+[[discovery]]
+id = "non-functional"
+text = "Which needs of answer time, cost per answer, uptime and security must it meet?"
