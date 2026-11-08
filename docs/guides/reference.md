@@ -346,6 +346,14 @@ files in no area as "not run by proof"; without the table it prints `project_tes
 files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0185.
 
+## Test map
+
+    python3 scripts/agk/test_map.py build [--root DIR]
+
+Writes the git-ignored file `.agk-test-map.toml` from the tree at the head: which tests cover which files, read from Python
+imports and the JavaScript or TypeScript import graph, with folder conventions as the fallback. The same tree gives the same
+bytes, and nothing reads the file yet. It reads git and files only and runs no test. See ADR-0379 and SPEC-0055 rule 5.
+
 ## Requirement status
 
     python3 scripts/agk/req_status.py report [--json] [--req REQ-nnn ...] [ROOT]
