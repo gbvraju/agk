@@ -346,3 +346,41 @@ def test_ac4_status_needs_the_date_and_a_slug_shape(tmp_path, args):
     else:
         proc = run(tmp_path, "status", date=None)
     assert proc.returncode == 2 and "usage" in proc.stderr
+
+
+# --- rule 8: the conductor's evidence rule and the reference guide -------------------------------
+
+
+def test_ac4_the_conductor_reads_the_artifact_as_evidence():
+    """REQ-055 AC4: SPEC-0048 rule 8 (a design without its artifact is a fix item)."""
+    role = KIT_ROOT / ".claude" / "agents" / "conductor.md"
+    if not role.is_file():
+        pytest.skip("the conductor role is not installed here")
+    paragraphs = [p for p in role.read_text(encoding="utf-8").split("\n\n") if "SPEC-0048" in p]
+    assert len(paragraphs) == 1, "one paragraph names the rule"
+    flat = " ".join(paragraphs[0].split())
+    for phrase in (
+        "SPEC-0048 rule 8",
+        "`Demo: docs/runs/<file>`",
+        "`Screens: no`",
+        "prototype version",
+        "`Walkthrough:` is judgement",
+        "fix item, never a clearing verdict",
+    ):
+        assert phrase in flat, phrase
+    assert not flat.startswith(("- ", "* ")) and not flat[0].isdigit(), "prose, not a rule line"
+
+
+def test_ac4_the_reference_guide_names_the_commands():
+    """REQ-055 AC4: SPEC-0048 rules 1 and 8 (the guide names `status` and the artifact lines)."""
+    guide = KIT_ROOT / "docs" / "guides" / "reference.md"
+    if not guide.is_file():
+        pytest.skip("the reference guide is not installed here")
+    section = guide.read_text(encoding="utf-8").split("## Front door", 1)[1].split("\n## ", 1)[0]
+    assert "front_door.py status --date YYYY-MM-DD [SLUG ...] [--root DIR]" in section
+    for phrase in (
+        "`Demo: docs/runs/<file>`",
+        "`Walkthrough: <where it is kept>`",
+        "waits for the go",
+    ):
+        assert phrase in section, phrase

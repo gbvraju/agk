@@ -370,6 +370,7 @@ with its line number. Exit 0 when nothing is listed, 1 otherwise. It is not a go
     python3 scripts/agk/front_door.py check-discovery [FILE ...] [--root DIR]
     python3 scripts/agk/front_door.py check-research --date YYYY-MM-DD [FILE ...] [--root DIR]
     python3 scripts/agk/front_door.py check-design --date YYYY-MM-DD [FILE ...] [--root DIR]
+    python3 scripts/agk/front_door.py status --date YYYY-MM-DD [SLUG ...] [--root DIR]
 
 `check-issue` reads a saved problem issue (the JSON of one GET) and refuses one without the `agk-problem` label, without a
 first line `Problem: <words>`, with an empty problem or one over 1,500 characters, or with anything the data guard finds.
@@ -385,6 +386,22 @@ sources again and changing their access dates makes it fresh. `check-design` che
 `docs/design/architecture/<slug>.md`: a fenced plain-text or Mermaid diagram, no image, and exactly one line
 `Research: docs/research/<slug>.md` naming a record of the same slug that passes and is fresh. See SPEC-0048 rules 6
 and 7.
+
+`check-design` also checks the design's one review artifact, chosen by the `- Screens:` line of
+`docs/discovery/<slug>.md` (SPEC-0048 rule 8). With `no` (a pipeline, a migration, an agent, a service) the design has
+exactly one line `Demo: docs/runs/<file>` naming the run record of a demo or a dry run on invented data; the check reads
+only that the file exists and never opens or runs it. With `yes`, and with `open` or no discovery document (read as
+`yes`, the artifact with more to review), a prototype version folder `docs/design/prototype/v<n>/` exists, which
+`check_design.py` checks (SPEC-0037). A `Walkthrough: <where it is kept>` line may name a recorded walkthrough: it is
+judgement, noted and never opened, never printed and never committed, and it never stands in for the artifact. The
+conductor reads the same rule: a design without its artifact is a fix item, never a clearing verdict.
+
+`status` prints one line per problem, `<slug>: phase <n> <name>; waits for <what>`, for the slugs named or else for each
+`docs/discovery/*.md`, from the files only, and writes nothing: phase 2 discovery until the discovery document passes
+`check-discovery`, phase 3 research until the record passes `check-research` and is fresh, phase 4 design until the
+design passes `check-design` with its artifact, then `phase 5 the go; waits for the go`. The entry and the go are lines
+on the problem issue and the pull request (`Approve:` by an account in `spec_approvers`, never a session's), which
+`status` does not read from files (SPEC-0048 rules 1 and 9).
 
 ## Failure signature and evidence
 
