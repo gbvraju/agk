@@ -40,7 +40,7 @@ def kit(root: Path, table: str | None, playbooks=PLAYBOOKS) -> Path:
 
 
 def check(script: Path, *extra: str, cwd: Path | None = None):
-    return subprocess.run(
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", str(script), "check-signals", *extra],
         capture_output=True,
         text=True,
