@@ -1,0 +1,71 @@
+format = 1
+work_type = "cloud-migration"
+title = "Inventory, then wave plan, then cut-over, with a rollback rehearsal, committed plan diffs and the owner's apply"
+heavy_steps = []
+evidence = [
+  "the inventory, wave plan and cut-over briefs with their Depends-on lines",
+  "the rollback rehearsal record",
+  "the committed plan output of each change",
+  "the owner's record of each apply",
+]
+lanes = []
+
+[[phases]]
+name = "inventory"
+order = 1
+after = []
+
+[[phases]]
+name = "wave-plan"
+order = 2
+after = ["inventory"]
+
+[[phases]]
+name = "cut-over"
+order = 3
+after = ["wave-plan"]
+
+[split]
+brief_order = ["inventory", "wave-plan", "cut-over"]
+depends_on = [
+  ["wave-plan", "inventory"],
+  ["cut-over", "wave-plan"],
+]
+
+[testing]
+profile = "balanced"
+always_full = []
+map = []
+
+[[gates]]
+id = "cut-over-order"
+kind = "check"
+text = "Inventory, then wave plan, then cut-over: each cut-over brief depends on its wave plan brief, which depends on the inventory brief."
+step = "cut-over-order"
+owner_only = false
+
+[[gates]]
+id = "rollback-rehearsal"
+kind = "judgement"
+text = "A rollback rehearsal; its rehearsal record is the evidence."
+owner_only = false
+
+[[gates]]
+id = "plan-diffs"
+kind = "judgement"
+text = "Plan diffs: a committed plan output, with no credential in it, is the evidence."
+owner_only = false
+
+[[gates]]
+id = "apply"
+kind = "judgement"
+text = "Any apply of infrastructure, done and recorded by the owner alone; a session prepares the plan and stops."
+owner_only = true
+
+[milestones]
+shape = "per-brief"
+batch_by = "not batched: one pull request per brief, as today"
+
+[[claims]]
+text = "Each cut-over brief waits for its wave plan, which waits for the inventory, so fewer cut-overs are expected to stop on a part that no one listed."
+basis = "expected"
