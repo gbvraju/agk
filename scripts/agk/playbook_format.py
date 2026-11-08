@@ -43,6 +43,12 @@ value. `skills(path, root)` returns the allowed names of a playbook in its order
 The base playbook (SPEC-0048 rule 21; REQ-055 AC8; brief #692): `BASE` is a playbook name and never
 a work type. `config/playbooks/default.toml` alone may carry it, and `declaration` refuses it as it
 refuses any name outside `WORK_TYPES`.
+
+The modules a playbook names (SPEC-0048 rule 23; REQ-055 AC8; brief #693): the optional key `modules`
+is a list of shipped playbooks, each a name of `WORK_TYPES` whose file is under `config/playbooks/`;
+one that is not shipped is a problem naming the rule, the file and the key, never the value.
+`modules(path, root)` returns the shipped names in their order, for `check_playbooks.py`, which
+composes the gates.
 """
 
 from __future__ import annotations
@@ -121,7 +127,8 @@ TOP: dict[str, str] = {
     "claims": TABLES,
     "discovery": TABLES,
 }
-OPTIONAL_TOP: dict[str, str] = {"skills": STRS}  # SPEC-0048 rule 12: a playbook may name skills
+# SPEC-0048 rule 12: a playbook may name skills; rule 23: and shipped playbooks as modules
+OPTIONAL_TOP: dict[str, str] = {"skills": STRS, "modules": STRS}
 # section -> (required keys, optional keys), each key with its type
 SECTIONS: dict[str, tuple[dict[str, str], dict[str, str]]] = {
     "phases": ({"name": STR, "order": INT, "after": STRS}, {}),
@@ -353,6 +360,30 @@ def skills(path: Path, root: Path) -> list[str]:
     return [name for name in names if _skill_problem(name, tokens) is None]
 
 
+def _shipped(name: str, root: Path) -> bool:
+    """SPEC-0048 rule 23: a module is a work type of the list whose playbook is on disk."""
+    return name in WORK_TYPES and (Path(root) / FOLDER / f"{name}.toml").is_file()
+
+
+def _modules(rel: str, names: list[str], root: Path) -> list[str]:
+    if all(_shipped(name, root) for name in names):
+        return []
+    return [f"rule 23: {rel}: `modules` names a playbook that is not shipped (key: modules)"]
+
+
+def modules(path: Path, root: Path) -> list[str]:
+    """SPEC-0048 rule 23: the shipped names of a playbook's `modules`, in its order; none from a file
+    that is not TOML or has no such list. One that is not shipped is left out."""
+    try:
+        data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return []
+    names = data.get("modules", [])
+    if not _is(names, STRS):
+        return []
+    return [name for name in names if _shipped(name, root)]
+
+
 def _named(rel: str, data: dict) -> list[str]:
     strings = _strings(data)
     out = []
@@ -421,6 +452,8 @@ def problems(path: Path, root: Path) -> list[str]:
         out += _discovery(rel, data["discovery"])
     if _is(data.get("skills"), STRS):
         out += _skills(rel, data["skills"], root)
+    if _is(data.get("modules"), STRS):
+        out += _modules(rel, data["modules"], root)
     out += _named(rel, data)
     return out
 
