@@ -129,7 +129,8 @@ def test_ac6_with_a_browser_the_pixels_are_compared_against_the_tolerance(tmp_pa
         assert proc.returncode == 0, proc.stdout + proc.stderr
         assert proc.stdout == f"home/default {want}\n"
         calls = log.read_text(encoding="utf-8").splitlines()
-        assert len(calls) == 2 * 2 * 5  # frozen and built, light and dark, five breakpoints
+        # frozen and built, light and dark, five breakpoints; drift stops at the first that differs
+        assert len(calls) == (2 if want.startswith("drift") else 2 * 2 * 5)
 
 
 def test_ac6_an_unset_render_is_refused_naming_the_setting(tmp_path):

@@ -235,8 +235,12 @@ tests = [
 code = "scripts/agk/design.py"
 tests = [
   "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
-  "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
+  "tests/kit_dev/test_design_render.py", "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_pr_bodies_kit.py",
 ]
+[[testing.map]]
+code = "scripts/agk/design_compare.py"
+tests = ["tests/kit_dev/test_design_compare.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/design_inventory.py"
 tests = [
@@ -250,6 +254,11 @@ code = "scripts/agk/design_prototype.py"
 tests = [
   "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
   "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
+]
+[[testing.map]]
+code = "scripts/agk/design_render.py"
+tests = [
+  "tests/kit_dev/test_design_compare.py", "tests/kit_dev/test_design_render.py", "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
 code = "scripts/agk/design_signoff.py"

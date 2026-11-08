@@ -3,6 +3,7 @@ frozen version, a PNG writer and a fake headless browser. Files only; invented d
 
 from __future__ import annotations
 
+import shutil
 import struct
 import zlib
 from pathlib import Path
@@ -90,6 +91,7 @@ def fake_browser(directory: Path, frozen_png: Path, built_png: Path | None = Non
     directory.mkdir(parents=True, exist_ok=True)
     log = directory / "calls"
     built = built_png or frozen_png
+    cp = shutil.which("cp")  # by its full path: the tests may run with a PATH without it
     script = directory / "chromium"
     script.write_text(
         "#!/bin/sh\n"
@@ -99,8 +101,8 @@ def fake_browser(directory: Path, frozen_png: Path, built_png: Path | None = Non
         '  case "$*" in *--window-size=360,*) echo \'<pre id="agk-reflow">sideways</pre>\';;\n'
         "  *) echo '<pre id=\"agk-reflow\">ok</pre>';; esac; exit 0;; esac\n"
         'for a in "$@"; do case "$a" in --screenshot=*)\n'
-        f'  case "$last" in */prototype/*) cp "{frozen_png}" "${{a#--screenshot=}}";;\n'
-        f'  *) cp "{built}" "${{a#--screenshot=}}";; esac;; esac; done\n',
+        f'  case "$last" in */prototype/*) {cp} "{frozen_png}" "${{a#--screenshot=}}";;\n'
+        f'  *) {cp} "{built}" "${{a#--screenshot=}}";; esac;; esac; done\n',
         encoding="utf-8",
     )
     script.chmod(0o755)

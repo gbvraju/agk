@@ -468,6 +468,34 @@ points to no mockup folder. Two things it prints without failing: `design: the t
 has no line `Approved by <name> on <YYYY-MM-DD>`, and `at risk design: placeholder brand` when a brand value is still a `[bracketed]` placeholder
 (SPEC-0029 rule 7). The files it reads are written by `/agk:design` (the theme from the engine named by `design` in `[engines]` or from the kit's template, a mockup folder with `Approved: not yet` in its `README.md`, and four screenshots, 360 and 1280 px wide, light and dark, when a headless browser is found) or by hand. The approval line is the owner's: the session never writes `Approved by`. With no `docs/design/` it prints `ok design (no design record)`.
 
+## Design screenshots and comparison
+
+    python3 scripts/agk/design.py screenshots --version v<n> [--root DIR]
+    python3 scripts/agk/design_compare.py --version v<n> --screens "<screen>/<state>, ..." [--root DIR]
+
+Two kit-only commands of SPEC-0037 rules 8 and 11 (brief #461, ADR-0350), never run by CI. `design.py screenshots --version`
+opens each `<screen>--<state>.html` page of a prototype version from the files, offline, at each breakpoint of the standard
+(360, 600, 900, 1200 and 1440 px) in light and dark, with a headless browser found on PATH, and writes one screenshot of each
+into the version's `screenshots/` folder and `screenshots/reflow.json`, one entry per page, breakpoint and mode, `ok` or
+`sideways` (the page is wider than the viewport). Without a browser it prints `design: no headless browser found; reflow not run`,
+writes every entry as `not run` and succeeds. `screenshots/` is written only by this command and is outside the signed-off
+digest. `--folder FOLDER` still takes the four pictures of an old mockup folder.
+
+`design_compare.py` is the builder's step before a UI build is marked ready: for each screen and state of the brief's `Screens:`
+line (`<screen>/*` is every state, a bare `*` every page of the version) it runs the project's `render` command with
+`AGK_DESIGN_SCREEN`, `AGK_DESIGN_STATE` and `AGK_DESIGN_OUT` set, reads `<out>/<screen>--<state>.html` and compares it with
+the frozen page: the structure (landmarks, heading outline, controls with their labels, link texts in order; the prototype's
+state bar, demo bar and runtime are left out), the standard's tokens it uses, and, with a browser, the share of differing
+pixels at each breakpoint and mode. It prints `<screen>/<state> match` or `<screen>/<state> drift: structure, tokens, pixels`
+(the kinds found), ending `; pixels: not run` without a browser, and exits 0 on drift; the conductor judges each drift. It
+exits 1 only on a usage error, an unset or failing `render`, a bad `pixel_tolerance`, a version without a `design` row in
+`docs/design/signoffs.md` or a screen the version lacks, naming the setting or the rule.
+
+The `[design]` table of `agk.toml` (off when absent): `ui_paths`, the globs of the project's UI files (a brief whose
+`Touches:` meets one needs a `Screens:` line); `render`, the project's command that writes the built
+page of a screen and state into `AGK_DESIGN_OUT`; and `pixel_tolerance`, the share of a screenshot's pixels that may differ
+before pixels are reported as drift (0.01 by default; it only reports, never fails).
+
 ## Upgrade
 
     python3 scripts/agk/upgrade.py TARGET [--dry-run]
