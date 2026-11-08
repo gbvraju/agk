@@ -80,8 +80,10 @@ design and are left alone. Otherwise `nothing to rerun` or `no run of the head`.
 cleared|fix list|rejected <sha>`; exit 1 on a problem. It reads nothing on GitHub.
 `lease` is the active-conductor marker, so that the hourly run and a live conductor never merge at
 once: one comment on the plan issue that `plan_issue` of the `[flow]` table names (absent: the
-lease is off, said as such), whose first line is `Conductor: active <time> <name>`, valid 50
-minutes from `<time>`, counted only when its author is in `verdict_authors`; `--take NAME` posts
+lease is off, said as such), whose first line is `Conductor: active <time> <name>`, valid 10
+minutes from `<time>` (ADR-0368; `watch` renews this checkout's at every pass, exit 3 when another
+name holds it, and returns within 5 minutes with `nothing new`), counted only when its author is
+in `verdict_authors`; `--take NAME` posts
 it, or edits the newest counted `Conductor:` comment in place, unless another name holds a valid
 lease (exit 3, naming the setting), and keeps NAME in the git directory as this checkout's name;
 `--release NAME` edits it to `Conductor: released <time> <name>` for the holder; `--show` prints
@@ -91,6 +93,8 @@ name other than this checkout's holds a valid lease.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -163,19 +167,37 @@ def new_lines(repo: str, since: datetime) -> list[str]:
     return lines
 
 
+def renew_lease(root) -> int:
+    """Renew this checkout's lease, if it took one; nonzero when another name holds it."""
+    name = own_name(root)
+    if name is None or plan_issue(root) is None:
+        return 0
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = lease(root, "--take", name)
+    if code:
+        print(out.getvalue().strip(), flush=True)
+    return code
+
+
 def watch(root, since: datetime, once: bool) -> int:
     repo = session.repo_name(root)
     interval = session.flow_int(root, POLL[0], POLL[1], 0)
+    started = time.monotonic()
+    renewed: float | None = None
     while True:
+        lines: list[str] = []
         try:
+            if renewed is None or time.monotonic() - renewed >= RENEW_EVERY:
+                if code := renew_lease(root):
+                    return code
+                renewed = time.monotonic()
             lines = new_lines(repo, since)
         except CheckError as exc:
             if once:
                 raise
             print(f"error: {exc}; retrying", file=sys.stderr, flush=True)
-            time.sleep(interval)
-            continue
-        if lines or once:
+        if lines or once or time.monotonic() - started + interval >= WATCH_BOUND:
             print("\n".join(lines) if lines else "nothing new")
             return 0
         time.sleep(interval)
@@ -421,8 +443,90 @@ def sweep(root) -> int:
     for issue in sorted(session.labelled(issues, session.LABEL), key=lambda i: i["number"]):
         if found := silent_line(root, repo, issue, pulls, every, wait, now):
             lines.append(found)
+    lines += slot_lines(root, repo, issues, every, now)
     print("\n".join(lines))
     return 0
+
+
+# --- the pool: every slot in the report, the health issues (brief #776 answer 5, ADR-0368) --------
+
+
+def slot_state(comments: list, name: str, allowed: set[str], now: datetime) -> tuple[bool, str]:
+    """(whether the slot has a valid lease, the time it died or `no lease yet`)."""
+    found = session.slot_marker(comments, name, allowed)
+    if found is None:
+        return False, "no lease yet"
+    if session.slot_holder(found, now):
+        return True, ""
+    stamp = when(found[1].group(2)) or now
+    if found[1].group(1) == "active":
+        stamp += timedelta(minutes=session.SLOT_MINUTES)
+    return False, stamp_of(stamp)
+
+
+def assignments(root, repo: str) -> tuple[list, set[str], list[str]]:
+    """The comments of the assignments issue, the listed authors and the names of the slots."""
+    issue = session.conductor_issue(repo)
+    comments = read(f"repos/{repo}/issues/{issue}/comments", f"the comments of #{issue}")
+    allowed = {a.lstrip("@").lower() for a in verdict_authors(root)}
+    return comments, allowed, [f"s{n + 1}" for n in range(session.builder_slots(root))]
+
+
+def slot_lines(root, repo: str, issues: list, every, now: datetime) -> list[str]:
+    """One line per slot: working (brief), idle, or dead since when; none with `start`."""
+    if session.builder_start(root) != "assign":
+        return []
+    comments, allowed, names = assignments(root, repo)
+    hours = session.flow_int(root, "claim_hours", session.CLAIM_HOURS, 1)
+    takes: dict[str, int] = {}
+    for item in sorted(session.labelled(issues, session.LABEL), key=lambda i: i["number"]):
+        number = item["number"]
+        said = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+        for take in session.live_takes(said, number, every(), hours):
+            takes.setdefault(take[2], number)
+    lines = []
+    for name in names:
+        alive, since = slot_state(comments, name, allowed, now)
+        if not alive:
+            state = "dead (no lease yet)" if since == "no lease yet" else f"dead since {since}"
+        else:
+            state = f"working (#{takes[name]})" if name in takes else "idle"
+        lines.append(f"slot {name}: {state}")
+    return lines
+
+
+NO_CONDUCTOR, POOL_DOWN = "No live conductor", "Builder pool down"
+
+
+def pool_state(root, repo: str) -> list[tuple[str, bool, bool, str]]:
+    """(title, whether the leases are down, whether work waits, the issue's text) of each health
+    issue; none with `builder_start = "start"`, and no conductor row while its lease is off."""
+    if session.builder_start(root) != "assign":
+        return []
+    now = datetime.now(UTC)
+    briefs = session.labelled(
+        read(f"repos/{repo}/issues?state=open&labels={session.LABEL}", "the open briefs"),
+        session.LABEL,
+    )
+    ready = [p for p in read(f"repos/{repo}/pulls?state=open", "the open pull requests")
+             if not p.get("draft")]  # fmt: skip
+    rows = []
+    issue = plan_issue(root)
+    if issue is not None:
+        down = lease_holder(plan_comments(repo, issue), verdict_authors(root), now) is None
+        text = (
+            f"No conductor holds a valid lease on #{issue} (setting: {PLAN_ISSUE} in the flow "
+            "table of agk.toml) while work waits. This issue closes when the lease is back."
+        )
+        rows.append((NO_CONDUCTOR, down, bool(briefs or ready), text))
+    comments, allowed, names = assignments(root, repo)
+    dead = [n for n in names if not slot_state(comments, n, allowed, now)[0]]
+    text = (
+        f"Slots with no valid lease: {', '.join(dead) or 'none'}, of {len(names)} (setting: "
+        "builder_slots in the flow table of agk.toml). This issue closes when the leases are back."
+    )
+    rows.append((POOL_DOWN, len(dead) * 3 > len(names), bool(briefs), text))
+    return rows
 
 
 # --- merge-queue (rows 3 and 22; brief #643 build (b), ADR-0329) ------------------------------
@@ -598,7 +702,9 @@ VERDICT_SHAPE = "the first line is not `Verdict: cleared|fix list|rejected <sha>
 PLAN_ISSUE = "plan_issue"
 LEASE_SETTING = f"(setting: {PLAN_ISSUE} in the flow table of agk.toml)"
 LEASE_OFF = f"lease: off {LEASE_SETTING}"
-LEASE_MINUTES = 50
+LEASE_MINUTES = 10  # ADR-0368: a dead holder is replaced by the next staggered start
+WATCH_BOUND = 300  # seconds: `watch` returns by then with `nothing new` (ADR-0368)
+RENEW_EVERY = 240  # seconds between renewals during one watch
 LEASE_LINE = re.compile(
     r"Conductor: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+)"
 )

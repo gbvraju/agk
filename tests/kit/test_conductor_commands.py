@@ -728,9 +728,9 @@ def active(minutes: int, who: str = "c1", cid: int = 5, kind: str = "active") ->
 
 
 def until(marker: dict) -> str:
-    """The end of the lease the marker holds: its time plus 50 minutes."""
+    """The end of the lease the marker holds: its time plus 10 minutes."""
     start = datetime.strptime(marker["body"].split()[2], "%Y-%m-%dT%H:%M:%SZ")
-    return (start + timedelta(minutes=50)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return (start + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def test_lease_is_off_without_the_setting(proj, stub):
@@ -750,14 +750,14 @@ def test_lease_show_prints_free_without_a_marker(proj, stub):
 
 
 def test_lease_show_names_a_valid_holder_and_its_end(proj, stub):
-    marker = active(10)
+    marker = active(5)
     with_plan(proj, stub, [marker])
     out = run(proj, stub, "lease", "--show")
     assert out.returncode == 0
     assert out.stdout.strip() == f"lease: held by c1 until {until(marker)}"
 
 
-@pytest.mark.parametrize("marker", [active(55), active(10, kind="released")])
+@pytest.mark.parametrize("marker", [active(11), active(10, kind="released")])
 def test_lease_show_an_expired_or_released_marker_is_free(proj, stub, marker):
     with_plan(proj, stub, [marker])
     out = run(proj, stub, "lease", "--show")
@@ -787,7 +787,7 @@ def test_lease_take_edits_the_marker_in_place_when_it_is_free(proj, stub):
 
 
 def test_lease_take_by_the_holder_renews_it(proj, stub):
-    with_plan(proj, stub, [active(30)])
+    with_plan(proj, stub, [active(5)])
     stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
     out = run(proj, stub, "lease", "--take", "c1")
     assert out.returncode == 0, out.stderr
@@ -796,7 +796,7 @@ def test_lease_take_by_the_holder_renews_it(proj, stub):
 
 
 def test_lease_take_is_refused_while_another_name_holds_a_valid_lease(proj, stub):
-    marker = active(10)
+    marker = active(5)
     with_plan(proj, stub, [marker])
     out = run(proj, stub, "lease", "--take", "c2")
     assert out.returncode == 3
@@ -808,7 +808,7 @@ def test_lease_take_is_refused_while_another_name_holds_a_valid_lease(proj, stub
 
 
 def test_lease_release_by_the_holder_marks_the_comment_released(proj, stub):
-    with_plan(proj, stub, [active(10)])
+    with_plan(proj, stub, [active(5)])
     stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
     out = run(proj, stub, "lease", "--release", "c1")
     assert out.returncode == 0, out.stderr
@@ -820,7 +820,7 @@ def test_lease_release_by_the_holder_marks_the_comment_released(proj, stub):
 
 
 def test_lease_release_by_another_name_is_refused_and_a_free_lease_needs_no_write(proj, stub):
-    with_plan(proj, stub, [active(10)])
+    with_plan(proj, stub, [active(5)])
     out = run(proj, stub, "lease", "--release", "c2")
     assert out.returncode == 3 and posts(stub) == []
     with_plan(proj, stub, [active(55)])
@@ -899,3 +899,100 @@ def test_the_lease_take_leaves_a_local_mark_that_release_removes(proj, stub):
     stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
     assert run(proj, stub, "lease", "--release", "c2").returncode == 0
     assert not mark.exists()
+
+
+# --- the lease of 10 minutes, renewed at every watch pass (brief #776, the 09:36Z addition) -----
+
+
+def mine(proj, name: str = "c1") -> None:
+    """This checkout took the lease as `name`."""
+    mark = proj.root / ".git" / "agk" / "lease"
+    mark.parent.mkdir(parents=True, exist_ok=True)
+    mark.write_text(f"{name}\n", encoding="utf-8")
+
+
+def test_a_lease_not_renewed_for_ten_minutes_reads_free(proj, stub):
+    """REQ-041"""
+    with_plan(proj, stub, [active(9)])
+    assert run(proj, stub, "lease", "--show").stdout.startswith("lease: held by c1")
+    with_plan(proj, stub, [active(11)])
+    assert run(proj, stub, "lease", "--show").stdout.strip() == "lease: free"
+
+
+def test_a_watch_pass_renews_this_checkouts_lease(proj, stub):
+    """REQ-041"""
+    with_plan(proj, stub, [active(9)])
+    mine(proj)
+    stub.serve(f"repos/{REPO}/issues/comments/5", {}, method="PATCH")
+    out = run(proj, stub, "watch", "--once")
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "nothing new"
+    made = posts(stub)
+    assert len(made) == 1 and made[0][:2] == ["PATCH", f"repos/{REPO}/issues/comments/5"]
+    assert "Conductor: active" in made[0][2][made[0][2].index("-f") + 1]
+
+
+def test_a_watch_pass_writes_nothing_without_a_lease_of_its_own(proj, stub):
+    """REQ-041: no name in this checkout, or no plan issue: only reads."""
+    with_plan(proj, stub, [active(9)])
+    assert run(proj, stub, "watch", "--once").returncode == 0
+    assert posts(stub) == []
+    proj.write("agk.toml", "[flow]\nconductor_poll_seconds = 1\n")
+    mine(proj)
+    assert run(proj, stub, "watch", "--once").returncode == 0
+    assert posts(stub) == []
+
+
+def test_a_watch_pass_ends_when_another_conductor_holds_the_lease(proj, stub):
+    """REQ-041: exit 3 and nothing written, so that this run ends."""
+    with_plan(proj, stub, [active(1, who="c2")])
+    mine(proj)
+    out = run(proj, stub, "watch", "--once")
+    assert out.returncode == 3 and "held by c2" in out.stdout
+    assert posts(stub) == []
+
+
+# --- the conductor's report lists every slot (brief #776 answer 5) ------------------------------
+
+
+def pool(proj, stub, markers: list) -> None:
+    proj.write("agk.toml", '[flow]\nbuilder_start = "assign"\nbuilder_slots = 3\n')
+    stub.serve(f"repos/{REPO}/issues", [{"number": 204, "title": "Assignments"}])
+    stub.serve(f"repos/{REPO}/issues/204/comments", markers)
+
+
+def slot_marker(name: str, cid: int, minutes: int, state: str = "active") -> dict:
+    return comment(cid, "boss", f"Slot: {state} {ago(minutes)} {name} r{cid}", ago(minutes))
+
+
+def test_the_report_lists_every_slot_working_idle_or_dead(proj, stub):
+    """REQ-041"""
+    brief = {
+        "number": 9,
+        "title": "A brief",
+        "labels": [{"name": "agk-brief"}],
+        "state": "open",
+        "created_at": ago(90),
+    }
+    assignments = {"number": 204, "title": "Assignments", "labels": [{"name": "agk-conductor"}]}
+    pool(proj, stub, [slot_marker("s1", 1, 2), slot_marker("s2", 2, 3), slot_marker("s3", 3, 40)])
+    stub.serve(f"repos/{REPO}/issues", [brief, assignments], nth=1)  # sweep's list of open issues
+    stub.serve(f"repos/{REPO}/issues/9/comments", [comment(50, "boss", f"taken: s1 {iso()[:10]}")])
+    lines = sweep(proj, stub)
+    assert "slot s1: working (#9)" in lines
+    assert "slot s2: idle" in lines
+    dead = [x for x in lines if x.startswith("slot s3:")]
+    assert len(dead) == 1 and dead[0].startswith("slot s3: dead since 20")
+
+
+def test_the_report_says_a_slot_never_taken_is_dead(proj, stub):
+    """REQ-041: unknown time, never a made-up one."""
+    pool(proj, stub, [])
+    lines = sweep(proj, stub)
+    assert "slot s1: dead (no lease yet)" in lines
+
+
+def test_the_report_has_no_slot_line_with_builder_start_start(proj, stub):
+    """REQ-041"""
+    lines = sweep(proj, stub)
+    assert not [x for x in lines if x.startswith("slot ")]
