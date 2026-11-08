@@ -1,4 +1,4 @@
-"""The bill of materials of a commit, its offline check and its findings (SPEC-0054 rules 2 to 4, 7).
+"""The bill of materials of a commit, its offline check and its findings (SPEC-0054 rules 2-4, 7).
 
     python3 scripts/agk/sbom.py make [--ref REF] --out FILE
     python3 scripts/agk/sbom.py check FILE [--ref REF]
