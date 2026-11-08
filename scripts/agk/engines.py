@@ -1,7 +1,7 @@
 """agk engines: the idea in the vision, the discovery questions and the stack ADR (SPEC-0029).
 
 Usage:
-    python3 engines.py questions
+    python3 engines.py questions [--work-type KIND] [--root DIR]
     python3 engines.py vision-write --idea-file F [--draft-file D] [--root DIR]
     python3 engines.py vision-check [--root DIR]
     python3 engines.py stack-ids [--ref REF] [--root DIR]
@@ -39,6 +39,12 @@ each marked `(playbook <work type>)`, and the playbook's `[testing]` profile, `a
 proposals: the architect chooses as today, and nothing writes `agk.toml`. Without a declaration the
 skeleton is the template as before. A declaration with a problem, or a declared playbook that fails
 the playbook check, is refused before anything is written, naming the setting and never a value.
+
+The discovery questions (SPEC-0048 rule 4; brief #686): `questions` prints the ten common topics,
+then the `[[discovery]]` questions of `config/playbooks/<kind>.toml`, each once: the kind is
+`--work-type`, else the declared work type; with neither the output is the ten, as before. An
+unknown kind, a missing or failing playbook, a playbook id that repeats a common topic and a
+declaration with a problem are refused naming the rule and the setting, never a value.
 """
 
 from __future__ import annotations
@@ -69,14 +75,16 @@ from common import (
 from impact import KEYS as TESTING_KEYS
 from impact import NO_TABLE, PROFILES, testing_table
 from intake import Refusal, check_sentence, section
-from playbook_format import declaration, selected
+from playbook_format import FOLDER as PLAYBOOKS
+from playbook_format import WORK_TYPES, declaration, discovery, selected
 from playbook_format import problems as playbook_problems
 from pr_body import brief_option, prepare, print_body
 
 KIT = Path(__file__).resolve().parents[2]
 TEMPLATES = KIT / "kit" / "templates"
 USAGE = (
-    "usage: engines.py questions | vision-write --idea-file F [--draft-file D] | vision-check | "
+    "usage: engines.py questions [--work-type KIND] | "
+    "vision-write --idea-file F [--draft-file D] | vision-check | "
     "stack-ids [--ref REF] | stack-write [--ref REF] [--date D] | stack-check | "
     "stack-next-steps | design-next-steps --req REQ-nnn  [--root DIR]"
 )
@@ -90,6 +98,7 @@ FLAGS = (
     "--brief",
     "--issues",
     "--req",
+    "--work-type",
 )
 VISION = "constitution/vision.md"
 MAX_IDEA = 1500
@@ -193,8 +202,35 @@ def vision_problems(text: str) -> list[str]:
     return out
 
 
-def cmd_questions() -> int:
-    for topic, question in QUESTIONS:
+def playbook_questions(root: Path, kind: str | None) -> list[tuple[str, str]]:
+    """SPEC-0048 rule 4: the `[[discovery]]` questions of the playbook of `kind` (the flag), else of
+    the declared work type; none with neither. Every refusal names the rule and the setting."""
+    if kind is None:
+        kind, found = declaration(root)
+        if found:
+            raise CheckError(found[0])
+        if kind is None:
+            return []
+    elif kind not in WORK_TYPES:
+        raise CheckError("rule 4: the work type is not one of the work types (setting: work-type)")
+    path = root / PLAYBOOKS / f"{kind}.toml"
+    if not path.is_file():
+        raise CheckError(
+            f"rule 4: the work type has no playbook under {PLAYBOOKS}/ (setting: work-type)"
+        )
+    if playbook_problems(path, root):
+        raise CheckError("rule 4: the playbook fails check_playbooks.py (setting: work-type)")
+    pairs = discovery(path)
+    if any(qid in TOPICS for qid, _ in pairs):
+        raise CheckError(
+            "rule 4: a playbook `[[discovery]]` id repeats a common topic (setting: work-type)"
+        )
+    return pairs
+
+
+def cmd_questions(root: Path, opts: dict[str, str]) -> int:
+    extra = playbook_questions(root, opts.get("work-type"))
+    for topic, question in (*QUESTIONS, *extra):
         print(f"{topic}\t{question}")
     return 0
 
@@ -779,7 +815,7 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(opts.get("root", "."))
     try:
         if args[0] == "questions":
-            return cmd_questions()
+            return cmd_questions(root, opts)
         if args[0] == "vision-write":
             return cmd_vision_write(root, opts)
         if args[0] == "vision-check":
