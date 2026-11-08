@@ -212,6 +212,9 @@ tests = [
   "tests/kit_dev/test_experimental_reviewer.py", "tests/kit_dev/test_reviewer_wiring.py",
 ]
 [[testing.map]]
+code = "scripts/agk/check_runbooks.py"
+tests = ["tests/kit/test_check_runbooks.py"]
+[[testing.map]]
 code = "scripts/agk/check_tag.py"
 tests = ["tests/kit/test_agk_mk.py", "tests/kit_dev/test_check_tag.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
@@ -481,6 +484,9 @@ tests = [
   "tests/kit_dev/test_init.py", "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_make_once.py",
 ]
 [[testing.map]]
+code = "scripts/agk/release_pack.py"
+tests = ["tests/kit/test_release_pack.py"]
+[[testing.map]]
 code = "scripts/agk/req_status.py"
 tests = ["tests/kit/test_req_status.py"]
 [[testing.map]]
@@ -501,6 +507,9 @@ tests = [
   "tests/kit/test_merge_cleared_run.py", "tests/kit_dev/test_guide_fixes.py", "tests/kit_dev/test_kit_manifest.py",
   "tests/kit_dev/test_pilot_gaps_plans.py", "tests/kit_dev/test_ruleset.py",
 ]
+[[testing.map]]
+code = "scripts/agk/sbom.py"
+tests = ["tests/kit/test_sbom.py"]
 [[testing.map]]
 code = "scripts/agk/scorecard.py"
 tests = ["tests/kit/test_scorecard.py"]

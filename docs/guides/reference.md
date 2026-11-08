@@ -78,6 +78,16 @@ sha>`, `Verdict: fix list` or `Verdict: rejected`. The installed workflow `.gith
 Monday and files one issue per week labelled `agk-metrics` (it needs `issues: write`); a week with no closed pull
 request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
 
+## Release pack
+
+    python3 scripts/agk/release_pack.py check <out>/<tag>
+
+Checks one release's evidence pack: a folder named by its tag with exactly `tests.json`, `scans.json`, `coverage.json`,
+`bom.json`, `decisions.json` and the index `pack.json`. It reads the folder and git only, with no network, and prints
+`ok pack`, or one `FAIL pack: <part> <reason>` line per problem and exits 1, naming the part and never a value. A failed or unknown
+check or scan is a `warn pack:` line and passes. A tag that is not a release, or a repository with no release test, is one
+`refused:` line. No governance step runs it. See `docs/specs/0052-every-release-carries-one-evidence-pack-named-by-its-tag.md`.
+
 ## Doctor
 
     python3 scripts/agk/doctor.py [--kit-root PATH] [--repo OWNER/REPO] [--json] [ROOT]
@@ -313,6 +323,18 @@ The governance workflow's `Install tooling` step installs the CI test tools from
 naming the path, on a line that is not an exact pin, a repeated tool or a tool out of order; it makes no network call. With
 `--upstream` it reads the package index's JSON once per pin and prints which pins are behind, the gap in days and `unknown`
 for an upstream it cannot read; a person opens the update pull request from that output (ADR-0328).
+
+## Bill of materials
+
+    python3 scripts/agk/sbom.py make [--ref REF] --out FILE
+    python3 scripts/agk/sbom.py check FILE [--ref REF]
+
+`make` writes one CycloneDX JSON bill of what the repository's files declare at the commit (default `HEAD`): the Python
+requirements, the CI tools, the pinned scanners, the actions and, in the kit, the installed files. It reads the commit with
+local `git` only, and the same commit gives the same bytes. A requirement or `uses:` that is not pinned exactly is listed
+as `unpinned` with no version. `FILE` inside the repository must be ignored by git, because a bill is never committed.
+`check` prints `ok bom`, or one `FAIL bom: <class> <reason>` line per problem and exits 1, naming the component class and
+never a value. No governance step runs it (SPEC-0054, ADR-0370).
 
 ## Test plan
 
