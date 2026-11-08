@@ -168,7 +168,7 @@ def test_a_take_mints_a_run_name_kept_in_the_git_directory(proj, stub):
 
 def test_a_held_slot_ends_the_run_and_writes_nothing(proj, stub):
     """REQ-041"""
-    stub.serve(COMMENTS, [marker(1, "other", minutes=49)])
+    stub.serve(COMMENTS, [marker(1, "other", minutes=9)])
     out = slot(proj, stub, "--take")
     assert out.returncode == 3
     assert "held" in out.stdout and "builder_slots" not in out.stdout
@@ -178,7 +178,7 @@ def test_a_held_slot_ends_the_run_and_writes_nothing(proj, stub):
 def test_an_expired_lease_is_taken_by_editing_its_marker(proj, stub):
     """REQ-041"""
     mark(proj)
-    old = marker(1, "other", minutes=51)
+    old = marker(1, "other", minutes=11)
     stub.serve(COMMENTS, [old], nth=1)
     stub.serve(COMMENTS, [marker(1, "mine")], nth=2)
     stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
@@ -393,3 +393,37 @@ def test_a_paused_kit_takes_no_slot(proj, stub):
     proj.git("update-ref", "refs/remotes/origin/main", "HEAD")
     out = slot(proj, stub, "--take")
     assert out.returncode == 5 and writes(stub) == []
+
+
+# --- the lease of 10 minutes and the release (brief #776, the 09:36Z addition) ------------------
+
+
+def released(stub) -> list[str]:
+    return [c[2][1] for c in writes(stub) if c[0] == "PATCH" and "Slot: released" in c[2][1]]
+
+
+def test_a_slot_lease_not_renewed_for_ten_minutes_reads_free(proj, stub):
+    """REQ-041"""
+    stub.serve(COMMENTS, [marker(1, "other", minutes=11)], nth=1)
+    stub.serve(COMMENTS, [marker(1, "other", minutes=0)], nth=2)
+    stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
+    out = slot(proj, stub, "--take")
+    assert [c[0] for c in writes(stub)] == ["PATCH"], out.stdout
+
+
+def test_stop_releases_the_lease_of_the_run(proj, stub):
+    """REQ-041: every exit path releases."""
+    held(proj, stub, comment(3, "owner", "Pool: stop"))
+    out = slot(proj, stub, "--next")
+    assert last(out) == "stop"
+    assert len(released(stub)) == 1
+
+
+def test_a_slots_watch_renews_its_lease_before_it_waits(proj, stub):
+    """REQ-041: an event at once still renews first."""
+    asked = comment(2, "boss", "Request: s1 finished #3")
+    held(proj, stub, asked, comment(3, "boss", "Assign: s1 #12"))
+    out = session(proj, stub, "watch", "--assign", "s1", "--interval", "0", "--timeout", "30")
+    assert last(out) == "assign #12", out.stdout
+    assert [c[0] for c in writes(stub)] == ["PATCH"]
+    assert "Slot: active" in writes(stub)[0][2][1]
