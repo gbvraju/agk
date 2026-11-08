@@ -24,6 +24,11 @@ open pull request naming the brief, no pull request naming it created after the 
 escalate` comment is never SILENT. The sweep fires nothing; the conductor re-fires the session
 with the printed line.
 
+Brief #714 (SPEC-0049 rule 7, ADR-0324): with a `[caps]` table, after the pull request lines and
+before the default branch line, `sweep` prints `OVER #<brief> <used>/<cap> tokens|hours #<pr>`
+for each cap a builder pull request is past and `UNKNOWN #<brief> tokens #<pr>` for one with no
+token figure (`caps.over_lines`); it marks only, and stops or changes nothing.
+
 Build (b) of brief #643 (ADR-0329, catch log rows 3 and 22):
 
     python3 conductor.py merge-queue [--dry-run] [--max-batch N]
@@ -86,6 +91,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import caps
 import merge_cleared
 import session
 from common import CheckError, repo_root, verdict_problem
@@ -273,6 +279,7 @@ def sweep(root) -> int:
         pull_line(root, repo, p, authors, approvers, late, now)
         for p in sorted(pulls, key=lambda p: p["number"])
     ] or ["no open pull request"]
+    lines += caps.over_lines(root, repo, pulls, {a.lower() for a in authors}, now)
     info = session.gh(f"repos/{repo}")
     branch = info.get("default_branch") if isinstance(info, dict) else None
     runs = session.gh(f"repos/{repo}/actions/runs?branch={branch}&per_page=1") if branch else None

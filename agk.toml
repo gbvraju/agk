@@ -104,6 +104,9 @@ tests = [
 code = "scripts/agk/batch.py"
 tests = ["tests/kit/test_batch.py"]
 [[testing.map]]
+code = "scripts/agk/caps.py"
+tests = ["tests/kit/test_caps.py"]
+[[testing.map]]
 code = "scripts/agk/changelog_fragments.py"
 tests = [
   "tests/kit/test_agk_mk.py", "tests/kit/test_check_protected_changes.py", "tests/kit/test_core_parallel_specs.py",
@@ -209,14 +212,14 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
-  "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
+  "tests/kit/test_caps.py", "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py",
 ]
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
-  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_failures.py",
-  "tests/kit/test_models_table.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_caps.py",
+  "tests/kit/test_failures.py", "tests/kit/test_models_table.py", "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
 code = "scripts/agk/core_audit.py"
