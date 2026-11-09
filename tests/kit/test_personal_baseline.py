@@ -1,9 +1,10 @@
-"""SPEC-0041 build (h), first part: the baseline and the checks of the ten `[personal]` keys (brief #922).
+"""SPEC-0041 build (h), first part: the baseline and the ten `[personal]` keys (brief #922).
 
-`personal.py baseline` prints the test command it would run and runs it once only with `--approve`, on
-the head tree written into the sidecar's `cache/trees/`, recording the head, the command and the tests
-already failing in `records/baseline.json` (rule 16). `common.personal_table` checks each of the ten keys
-of rule 18 by its type and range and refuses naming the key, never the value. Invented data only.
+`personal.py baseline` prints the test command it would run and runs it once only with
+`--approve`, on the head tree written into the sidecar's `cache/trees/`, recording the head, the
+command and the tests already failing in `records/baseline.json` (rule 16).
+`common.personal_table` checks each of the ten keys of rule 18 by its type and range and refuses
+naming the key, never the value. Invented data only.
 """
 
 from __future__ import annotations
@@ -23,18 +24,25 @@ sys.path.insert(0, str(SCRIPTS))
 
 import common  # noqa: E402
 
-JUNIT_STUB = '''import pathlib, sys
+JUNIT_STUB = """import pathlib, sys
 pathlib.Path("ran.txt").write_text("ran", encoding="utf-8")
-cases = [("tests/test_shop.py", "test_cart_total", True), ("tests/test_shop.py", "test_login", False),
-         ("tests/test_mail.py", "test_send_to_example_com", True)]
+cases = [
+    ("tests/test_shop.py", "test_cart_total", True),
+    ("tests/test_shop.py", "test_login", False),
+    ("tests/test_mail.py", "test_send_to_example_com", True),
+]
 rows = []
 for file, name, ok in cases:
     body = "" if ok else '<failure message="assert 1 == 2"/>'
     rows.append(f'<testcase classname="x" file="{file}" name="{name}">{body}</testcase>')
-pathlib.Path(sys.argv[1]).write_text("<testsuite>" + "".join(rows) + "</testsuite>", encoding="utf-8")
+text = "<testsuite>" + "".join(rows) + "</testsuite>"
+pathlib.Path(sys.argv[1]).write_text(text, encoding="utf-8")
 sys.exit(1)
-'''
-WHOLE_STUB = 'import pathlib, sys\npathlib.Path("ran.txt").write_text("ran", encoding="utf-8")\nsys.exit(1)\n'
+"""
+WHOLE_STUB = """import pathlib, sys
+pathlib.Path("ran.txt").write_text("ran", encoding="utf-8")
+sys.exit(1)
+"""
 GREEN_STUB = "import sys\nsys.exit(0)\n"
 
 
@@ -48,7 +56,11 @@ def run_git(root: Path, *args: str) -> str:
 def make_clone(path: Path) -> Path:
     path.mkdir(parents=True)
     run_git(path, "init", "-q", "-b", "main")
-    for key, value in (("user.email", "t@example.com"), ("user.name", "t"), ("commit.gpgsign", "false")):
+    for key, value in (
+        ("user.email", "t@example.com"),
+        ("user.name", "t"),
+        ("commit.gpgsign", "false"),
+    ):
         run_git(path, "config", key, value)
     (path / "junit_stub.py").write_text(JUNIT_STUB, encoding="utf-8")
     (path / "whole_stub.py").write_text(WHOLE_STUB, encoding="utf-8")
@@ -71,7 +83,8 @@ def command_of(stub: str, junit: bool) -> str:
 
 
 def baseline(clone: Path, sidecar: Path, *extra: str):
-    env = {k: v for k, v in os.environ.items() if k != "AGK_HOME"}
+    skip = ("AGK_HOME", "AGK_BASE", "GITHUB_BASE_REF", "CI")
+    env = {k: v for k, v in os.environ.items() if k not in skip}
     cmd = [sys.executable, str(SCRIPTS / "personal.py"), "baseline", "--clone", str(clone)]
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [*cmd, "--sidecar", str(sidecar), *extra], capture_output=True, text=True, env=env
@@ -161,7 +174,9 @@ def test_rule16_no_single_test_command_refuses_naming_the_setting(tmp_path, comm
     sidecar = make_sidecar(tmp_path / "side", None)
     if commands is not None:
         (sidecar / "cache").mkdir()
-        rows = [{"path": f"m{i}/package.json", "test_commands": [c]} for i, c in enumerate(commands)]
+        rows = [
+            {"path": f"m{i}/package.json", "test_commands": [c]} for i, c in enumerate(commands)
+        ]
         (sidecar / "cache" / "inventory.json").write_text(
             json.dumps({"manifests": rows}), encoding="utf-8"
         )
@@ -174,7 +189,7 @@ def test_rule16_no_single_test_command_refuses_naming_the_setting(tmp_path, comm
 
 
 def test_rule4_the_clone_and_its_git_folder_are_unchanged_by_a_run(tmp_path):
-    """REQ-048 AC5: rules 4 and 16 (the tree is archived into the sidecar; the clone is untouched)."""
+    """REQ-048 AC5: rules 4 and 16 (the tree is archived in the sidecar; the clone is untouched)."""
     clone = make_clone(tmp_path / "clone")
     sidecar = make_sidecar(tmp_path / "side", command_of("junit_stub.py", junit=True))
     before = snapshot(clone)
