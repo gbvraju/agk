@@ -35,6 +35,16 @@ Standard library only, files only, no network: every input is a saved file.
     front_door.py check-signals
         checks the form of the signal table `config/stack-signals.toml` against `config/playbooks/`,
         both read from this script's own root and never from a repository (SPEC-0057 rule 5)
+    front_door.py derive-write --slug SLUG [--modules NAME,NAME] [--root DIR]
+        writes one engagement's skeleton `config/playbooks/<slug>.toml` from `default`, the named
+        shipped modules and the slug of `docs/research/<slug>.md`, which must pass rule 6; never
+        over a file, never in the kit, and only that file: no `agk.toml`, nothing under `kit/`
+        (rule 22)
+    front_door.py check-playbook --date YYYY-MM-DD [FILE ...] [--root DIR]
+        the check of `check_playbooks.py` on each playbook (by default every one), then freshness
+        from the gate sources: more than 180 days before `--date` is a `flag` line and exit 0, and
+        a failure when a design under `docs/design/architecture/` names the playbook's path. The
+        `reviewed` key of amendment 129 (verify) stays refused until it is approved (rule 25)
 
 The answers file: `{"screens": "yes|no|open", "work_type": "<work type>", "answers": [{"id":
 "<id>", "answer": "<words>", "where": "<comment link>|in session YYYY-MM-DD"} or {"id": "<id>",
@@ -58,6 +68,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import playbook_format
 from guard import scan_text
 from playbook_format import WORK_TYPES
 
@@ -67,6 +78,8 @@ USAGE = (
     " --answers FILE [--root DIR] | check-discovery [FILE ...] [--root DIR]"
     " | (check-research | check-design) --date YYYY-MM-DD [FILE ...] [--root DIR]"
     " | status --date YYYY-MM-DD [SLUG ...] [--root DIR] | check-signals"
+    " | derive-write --slug SLUG [--modules NAME,NAME] [--root DIR]"
+    " | check-playbook --date YYYY-MM-DD [FILE ...] [--root DIR]"
 )
 LABEL = "agk-problem"
 PREFIX = "Problem: "
@@ -813,9 +826,11 @@ def signal_problems(root: Path) -> list[str]:
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         return [f"rule 5: {SIGNALS} cannot be read"]
     head = f"rule 5: {SIGNALS}:"
-    found = [] if set(table) <= {*SIGNAL_ROWS, "no_signal", "ignore"} else [
-        f"{head} an unknown top-level key"
-    ]
+    found = (
+        []
+        if set(table) <= {*SIGNAL_ROWS, "no_signal", "ignore"}
+        else [f"{head} an unknown top-level key"]
+    )
     for kind in SIGNAL_ROWS:
         found += signal_row_problems(kind, table.get(kind))
     for key in ("no_signal", "ignore"):
@@ -850,6 +865,117 @@ def check_signals(root: Path) -> int:
     return 0
 
 
+def _toml(value: object) -> str:
+    """A string or a list of strings as TOML: JSON's escapes are TOML's."""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def skeleton(name: str, modules: list[str], base: dict) -> str:
+    """The derived playbook's text: `default`'s discovery, testing profile and milestones, and
+    the modules; its gates and evidence come by composition, so they have one home (rule 23)."""
+    lines = [
+        "# The derived playbook of one engagement. The architect fills its phases, lanes, evidence",
+        "# and gates in the design's pull request. Replace `gates = []` with [[gates]] tables,",
+        '# each with `source = "<URL> (accessed YYYY-MM-DD)"` or `basis = "expected"`.',
+        "format = 1",
+        f"work_type = {_toml(name)}",
+        'title = "A derived playbook, written for one engagement"',
+        "heavy_steps = []",
+        "evidence = []",
+        "phases = []",
+        "lanes = []",
+        "claims = []",
+        "gates = []",
+    ]
+    if modules:
+        lines.append(f"modules = {_toml(modules)}")
+    lines += ["", "[split]", "brief_order = []", "depends_on = []", "", "[testing]"]
+    lines += [f"profile = {_toml(base['testing']['profile'])}", "always_full = []", "map = []"]
+    milestones = base["milestones"]
+    lines += ["", "[milestones]", f"shape = {_toml(milestones['shape'])}"]
+    lines.append(f"batch_by = {_toml(milestones['batch_by'])}")
+    for row in base["discovery"]:
+        lines += ["", "[[discovery]]", f"id = {_toml(row['id'])}", f"text = {_toml(row['text'])}"]
+    return "\n".join(lines) + "\n"
+
+
+def derive_write(opts: dict[str, str], root: Path) -> int:
+    """Rule 22: writes the skeleton, or refuses and leaves nothing behind."""
+    name = opts["--slug"]
+    if not SLUG.match(name):
+        raise Refusal(["rule 22: `--slug` is not a slug of rule 5"])
+    if name in WORK_TYPES or name == playbook_format.BASE:
+        raise Refusal(["rule 22: `--slug` names a shipped playbook"])
+    if (root / "kit" / "manifest.json").is_file():
+        raise Refusal(["rule 22: a derived playbook is the project's, never the kit's (kit/)"])
+    rel = f"{playbook_format.FOLDER}/{name}.toml"
+    target = root / rel
+    if target.exists():
+        raise Refusal([f"rule 22: {rel}: the file exists and is never overwritten"])
+    base_path = root / playbook_format.FOLDER / f"{playbook_format.BASE}.toml"
+    if not base_path.is_file() or playbook_format.problems(base_path, root):
+        raise Refusal([f"rule 22: {playbook_format.FOLDER}/default.toml: missing or not sound"])
+    record = root / RESEARCH / f"{name}.md"
+    record_rel = f"{RESEARCH}/{name}.md"
+    if not record.is_file():
+        raise Refusal([f"rule 22: {record_rel}: the research record is missing"])
+    try:
+        text = record.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise Refusal([f"rule 6: {record_rel}: not readable"]) from None
+    found, _ = research_problems(record_rel, text)
+    if found:
+        raise Refusal(found)
+    modules = [m for m in opts.get("--modules", "").split(",") if m]
+    base = tomllib.loads(base_path.read_text(encoding="utf-8"))
+    import check_playbooks  # here, so a load failure leaves every other command as it is
+
+    target.write_text(skeleton(name, modules, base), encoding="utf-8")
+    found = check_playbooks.findings(root, [target])
+    if found:
+        target.unlink()
+        raise Refusal(found)
+    print(f"ok {NAME}: wrote {rel}")
+    return 0
+
+
+def design_text(root: Path) -> str:
+    """Every design's text, to find which playbooks a design names (rule 25)."""
+    texts = []
+    for path in sorted((root / DESIGN).glob("*.md")):
+        try:
+            texts.append(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+    return "\n".join(texts)
+
+
+def check_playbook(files: list[str], root: Path, today: datetime.date) -> int:
+    """Rule 25: the check of `check_playbooks.py`, then the freshness of the gate sources."""
+    named = [Path(f) if Path(f).is_absolute() else root / f for f in files]
+    missing = [rel_of(path, root) for path in named if not path.is_file()]
+    if missing:
+        raise Refusal([f"rule 25: {rel}: not readable" for rel in missing])
+    import check_playbooks  # here, so a load failure leaves every other command as it is
+
+    paths = named or playbook_format.playbooks(root)
+    found = check_playbooks.findings(root, paths)
+    designs = design_text(root)
+    for path in paths:
+        if not stale(playbook_format.source_dates(path), today):
+            continue
+        rel = rel_of(path, root)
+        line = f"rule 25: {rel}: a gate source is more than {FRESH_DAYS} days old"
+        if rel in designs:
+            found.append(f"{line} and a design names the playbook")
+        else:
+            print(f"flag {NAME}: {line}")
+    if found:
+        raise Refusal(found)
+    print(f"ok {NAME}: {len(paths)} playbooks")
+    return 0
+
+
 COMMANDS = (
     "check-issue",
     "discovery-write",
@@ -858,6 +984,8 @@ COMMANDS = (
     "check-design",
     "status",
     "check-signals",
+    "derive-write",
+    "check-playbook",
 )
 
 
@@ -868,7 +996,15 @@ def parse(argv: list[str]) -> tuple[str, dict[str, str], list[str]] | None:
     rest: list[str] = []
     i = 1
     while i < len(argv):
-        if argv[i] in ("--issue", "--vision", "--answers", "--root", "--date"):
+        if argv[i] in (
+            "--issue",
+            "--vision",
+            "--answers",
+            "--root",
+            "--date",
+            "--slug",
+            "--modules",
+        ):
             if i + 1 >= len(argv) or argv[i] in opts:
                 return None
             opts[argv[i]] = argv[i + 1]
@@ -897,6 +1033,8 @@ def main(argv: list[str] | None = None) -> int:
         ok = set(opts) <= {"--root"}
     elif cmd == "check-signals":
         ok = not opts and not rest
+    elif cmd == "derive-write":
+        ok = "--slug" in opts and set(opts) <= {"--slug", "--modules", "--root"} and not rest
     else:
         ok = set(opts) <= {"--root", "--date"} and iso_date(opts.get("--date", "")) is not None
         if cmd == "status":
@@ -918,6 +1056,10 @@ def main(argv: list[str] | None = None) -> int:
             return check_research(rest, root, today)
         if cmd == "status":
             return status(rest, root, today)
+        if cmd == "derive-write":
+            return derive_write(opts, root)
+        if cmd == "check-playbook":
+            return check_playbook(rest, root, today)
         return check_design(rest, root, today)
     except Refusal as refusal:
         for problem in refusal.problems:
