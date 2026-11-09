@@ -42,6 +42,11 @@ SPEC = """# SPEC-0001: A customer can empty the cart
 - Requirements: REQ-101
 
 Observed in code at example.com/cart.
+
+## Contexts
+
+- personal: the sidecar holds this spec
+- kit, github, local, stacks: not applicable: an invented fixture
 """
 ADR = """# ADR-0001: The cart empties in one step
 
@@ -75,6 +80,7 @@ Answers:
 Advances: {req}
 Size: S
 Touches: docs/requirements.md
+Contexts: personal (the sidecar); kit, github, local, stacks (not applicable: invented)
 """
 CHECKS = ("check_requirements", "check_specs", "check_adrs", "check_numbers")
 
