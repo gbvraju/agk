@@ -113,7 +113,7 @@ def test_ac5_the_line_is_read_from_the_files_with_no_network(repo, monkeypatch):
 
 
 def test_ac5_only_the_default_branch_counts(repo):
-    """REQ-058 AC5: rule 9, a record on another branch or uncommitted is not on the default branch."""
+    """REQ-058 AC5: rule 9, a record on another branch or uncommitted is not counted."""
     delivered(repo)
     repo.branch()
     repo.commit(dict([record_of(TWO_UNMET)]))
