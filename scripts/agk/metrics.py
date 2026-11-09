@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -38,7 +39,7 @@ from common import (
     test_dirs,
 )
 from full_run import contained_in, covered
-from impact import DEFAULT_BUDGET, testing_table
+from impact import DEFAULT_BUDGET, durations_sums, testing_table
 from reviewers import confirmed_comments, solo_person, verdict_authors
 
 NAME = "metrics"
@@ -693,6 +694,9 @@ LISTED = re.compile(r"unmapped \(no \[testing\] map entry covers it\): (?P<path>
 UNNAMED = re.compile(r"unmapped: (?P<path>.+) -> 0 tests that name it")
 FULL_KINDS = ("always_full", "unmapped", "thorough", "other")
 FULL_PATHS_SHOWN = 5
+SLOWEST_SHOWN = 10  # the weekly report's slowest test files (brief #878 answer 4)
+WORKERS_LINE = re.compile(r"(\d+) workers? \[\d+ items?\]")
+TIMED_LOGS = 5  # how many of the newest default branch runs are read for a durations table
 RAN = ("success", "failure")  # a step or job that ran to its end; skipped and cancelled did not
 PASSED_OVER = ("skipped", "cancelled")
 FAILED = ("failure", "timed_out")
@@ -1022,12 +1026,27 @@ def full_kind(reason: str | None) -> str:
     return "thorough" if text == "profile thorough" else "other"
 
 
-def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, str]:
+def reason_word(reason: str | None) -> str:
+    """The reason of a full run as the weekly report names it (brief #878 answer 5)."""
+    kind = full_kind(reason)
+    if kind == "always_full" and reason and " matches " in reason:
+        return reason.split(" matches ", 1)[0]
+    return kind
+
+
+def median_minutes(values: list[int]) -> str:
+    return f"{tenths(Decimal(str(median(values))) / 60)} minutes" if values else UNKNOWN
+
+
+def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, str, str, str]:
     """Brief #773 answer 4: of each governance run of a pull request's commits, the mode of its
-    tests, the minutes of its test step, the reason of a full run and the paths behind it."""
+    tests, the minutes of its test step, the reason of a full run and the paths behind it; brief
+    #878 answer 5: the median minutes of each mode and each full run's reason."""
     selected, seconds, unknown = 0, 0, 0
     kinds = dict.fromkeys(FULL_KINDS, 0)
     paths: dict[str, int] = {}
+    took_by_mode: dict[str, list[int]] = {"selected": [], "full": []}
+    reasons: dict[str, int] = {}
     seen: set[Any] = set()
     for d in details:
         commits = ctx.src.get(
@@ -1057,10 +1076,13 @@ def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, str]:
                     unknown += 1
                     continue
                 seconds += took
+                took_by_mode[mode].append(took)
                 if mode == "selected":
                     selected += 1
                     continue
                 kinds[full_kind(reason)] += 1
+                word = reason_word(reason)
+                reasons[word] = reasons.get(word, 0) + 1
                 for path in named:
                     paths[path] = paths.get(path, 0) + 1
     runs = selected + sum(kinds.values())
@@ -1071,6 +1093,91 @@ def pr_tests_lines(ctx: Context, details: list[dict]) -> tuple[str, str]:
         f"pr tests: {runs} runs; selected {selected} of {runs} ({share}); "
         f"test step {tenths(Decimal(seconds) / 60)} minutes; full: {fulls}; unknown: {unknown}",
         f"pr tests full most often: {', '.join(f'{p} ({n})' for p, n in top) or 'none'}",
+        "pr tests median: "
+        + "; ".join(
+            f"{mode} {median_minutes(took_by_mode[mode])} ({len(took_by_mode[mode])} runs)"
+            for mode in ("selected", "full")
+        ),
+        "pr tests full reasons: "
+        + (
+            ", ".join(
+                f"{w} ({n})" for w, n in sorted(reasons.items(), key=lambda kv: (-kv[1], kv[0]))
+            )
+            or "none"
+        ),
+    )
+
+
+def default_branch_runs(ctx: Context, details: list[dict]) -> tuple[list[tuple], int]:
+    """Each governance push run of a merge commit whose test step ran, newest first, as (created
+    at, its job's id, seconds), and how many could not be read (brief #878 answer 4)."""
+    found: list[tuple] = []
+    unknown = 0
+    seen: set[Any] = set()
+    for d in details:
+        sha = d.get("merge_commit_sha") if d.get("merged_at") else None
+        if not sha:
+            continue
+        runs = runs_of(ctx.src, sha)
+        if runs is None:
+            unknown += 1
+            continue
+        for run_ in runs:
+            if not is_governance(run_) or run_.get("event") != "push" or run_.get("id") in seen:
+                continue
+            seen.add(run_.get("id"))
+            jobs = jobs_of(ctx.src, run_.get("id"))
+            state, took, job = pr_test_step(jobs) if jobs is not None else (UNKNOWN, None, None)
+            if state == "not-run":
+                continue
+            if state == UNKNOWN or took is None or job is None:
+                unknown += 1
+                continue
+            found.append((str(run_.get("created_at")), job.get("id"), took))
+    return sorted(found, key=lambda r: r[0], reverse=True), unknown
+
+
+def timing_of_log(log: str, took: int) -> tuple[str, str] | None:
+    """(the slowest files, the workers and their balance) of a job log with a durations table, or
+    None without one. The balance is the tests' seconds over the workers' seconds of the step."""
+    lines = [LOG_STAMP.sub("", ln) for ln in log.splitlines()]
+    sums = durations_sums("\n".join(lines))
+    if not sums:
+        return None
+    top = sorted(sums.items(), key=lambda kv: (-kv[1], kv[0]))[:SLOWEST_SHOWN]
+    slowest = ", ".join(f"{p} {round(s)}s" for p, s in top)
+    found = next((m for m in map(WORKERS_LINE.search, lines) if m), None)
+    if found is None or not took:
+        return slowest, UNKNOWN
+    workers = int(found[1])
+    return slowest, f"{workers}, balance {round(100 * sum(sums.values()) / (workers * took))}%"
+
+
+def full_suite_line(ctx: Context, details: list[dict]) -> str:
+    """Brief #878 answer 4: the median of the full suite on the default branch against the budget,
+    its slowest files and the workers' balance. A report, never a failure."""
+    budget, refusal = budget_of(ctx.root)
+    if budget is None:
+        return f"full suite: unknown ({refusal})"
+    runs, unknown = default_branch_runs(ctx, details)
+    seconds = [took for _, _, took in runs]
+    middle = round(median(seconds)) if seconds else None
+    slowest, workers = UNKNOWN, UNKNOWN
+    for _, jid, took in runs[:TIMED_LOGS]:
+        log = ctx.src.get(f"job-log-{jid}", f"repos/{{repo}}/actions/jobs/{jid}/logs")
+        timing = timing_of_log(log, took) if isinstance(log, str) else None
+        if timing is not None:
+            slowest, workers = timing
+            break
+    over = (
+        "; over budget: one brief to split or speed up the slowest files, never to remove a test"
+        if middle is not None and middle > budget
+        else ""
+    )
+    shown = f"{middle}s" if middle is not None else UNKNOWN
+    return (
+        f"full suite: median {shown}; budget_seconds {budget}; {len(seconds)} runs; "
+        f"slowest: {slowest}; workers: {workers}; unknown: {unknown}{over}"
     )
 
 
@@ -1309,6 +1416,7 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
     testing = (
         escapes_line(details, ctx.src),
         over_budget_line(ctx, details),
+        full_suite_line(ctx, details),
         *pr_tests_lines(ctx, details),
         holds_line(ctx.root, start, end),
     )

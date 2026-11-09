@@ -239,7 +239,8 @@ def test_rule2_the_five_file_checks_pass_in_the_sidecar(tmp_path):
     brief = tmp_path / "brief.md"
     brief.write_text(
         'Sentence: "The demo app greets a visitor."\n\nAnswers:\n1. None.\n\n'
-        "Advances: REQ-001\nTouches: app.py\nSize: S\n",
+        "Advances: REQ-001\nTouches: app.py\nSize: S\n"
+        "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n",
         encoding="utf-8",
     )
     runs = [
