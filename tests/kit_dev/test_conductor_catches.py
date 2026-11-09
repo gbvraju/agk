@@ -92,7 +92,7 @@ def test_the_catch_log_exists_and_parses_with_the_columns_of_the_brief():
 
 def test_the_first_log_holds_the_seeded_incidents_and_the_rows_of_2026_11_06():
     _, body = table(LOGS[0])
-    assert len(body) == 25  # 12 seeded, 2 of the fix list (brief #604), 8 of #695, 1 of #770, 2 of #854
+    assert len(body) == 25  # 12 seeded, 2 of the fix list (#604), 8 of #695, 1 of #770, 2 of #854
     by_number = {r["#"]: r for r in rows()}
     for number in ("15", "16"):  # the pre-merge tests of brief #667 guard both
         assert by_number[number]["Guard"].startswith("check `scripts/agk/merge_cleared.py`")

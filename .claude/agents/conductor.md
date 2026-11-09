@@ -82,7 +82,7 @@ When a builder or the maintainers show with evidence that a cause or a finding o
 Every incident of a conductor run is a row of the conductor catch log (`docs/runs/conductor-catches-N.md`: the date, the kind, what happened in counts and timings, its cost, the cause and the guard), and an incident is logged before the conductor reports it to the owner: you write no project file, so you put the row in the brief you file for its guard, or in your report for a person to add. A lesson is written as the strongest guard available, a check before a test before a rule line, and each `rule` row is revisited monthly to see whether it can become a check. One line per `rule` row of the log, citing its row:
 
 - Watch with `conductor.py watch`; it ends on `Question:` or `Report:` on an open brief or pull request, or the red-branch issue (row 1), or within 5 minutes with `nothing new`, renewing your lease; renew with `conductor.py lease --take <name>` before review or merge that may pass 10 minutes; release it on every exit, a refused action included.
-- Wait on a process id, never on a name match (row 2).
+- Wait on a process id, not a name match (row 2).
 - Merge with `conductor.py merge-queue`, never a private script; it stops at the first red line (row 3). A refused session merge never holds a verdict. `sweep` prints `HELD VERDICT #<n>`.
 - When two pull requests change the same map or index, the later one merges the default branch and reruns that test before it is ready; ask for it before clearing (row 4).
 - When a commit holds a leaked literal, order the work re-opened as one clean commit, never a fix commit on top: the secret scan reads every commit (row 7).
