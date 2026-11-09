@@ -171,7 +171,7 @@ def detect_test_files(paths, manifests=()) -> list[dict]:
 
 def _git(clone: Path, *args: str, stdin: bytes | None = None) -> subprocess.CompletedProcess:
     cmd = ["git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", str(clone), *args]
-    return subprocess.run(  # nosec B603 B607 - fixed read-only argument list, no shell
+    return subprocess.run(  # nosec B603 - fixed read-only argument list, no shell
         cmd, input=stdin, capture_output=True, env={**os.environ, **GIT_ENV}
     )
 
@@ -203,7 +203,7 @@ def blob_sizes(clone: Path, blobs: list[str]) -> dict[str, int]:
 def read_blobs(clone: Path, blobs: list[str]):
     """Yield (blob, bytes), one request at a time so neither pipe can fill."""
     cmd = ["git", "--no-optional-locks", "-C", str(clone), "cat-file", "--batch"]
-    with subprocess.Popen(  # nosec B603 B607 - fixed read-only argument list, no shell
+    with subprocess.Popen(  # nosec B603 - fixed read-only argument list, no shell
         cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, env={**os.environ, **GIT_ENV}
     ) as proc:
         if proc.stdin is None or proc.stdout is None:
