@@ -417,7 +417,9 @@ NO_GITLEAKS = (
 )
 
 
-LEAK_RUNBOOK = "a finding: follow docs/runbooks/leaked-secret.md; never paste the value anywhere"
+LEAK_RUNBOOK = (
+    "if this is a finding: follow docs/runbooks/leaked-secret.md; never paste the value anywhere"
+)
 DEFER_LINE = "Secret-scan: deferred to CI"  # the one body line of a deferral (brief #683, ADR-0327)
 BUILDER_BRANCH = re.compile(r"^claude/brief-[1-9][0-9]*$")
 DEFERRED = (
@@ -461,7 +463,7 @@ def secret_scan(root: Path, mb: str, body: Path | None = None) -> Step:
     head = git(root, "rev-parse", "HEAD").strip()
     cmd = [tool, "git", "--no-banner", "--redact", "--exit-code", "1", f"--log-opts={mb}..{head}"]
     found = ran_step([*cmd, "."], root)
-    if found.outcome == "FAIL":  # a finding: the page, never a value (SPEC-0056 rule 13)
+    if found.outcome == "FAIL":  # the page, never a value (SPEC-0056 rule 13)
         found.text = f"{found.text.rstrip()}\n{LEAK_RUNBOOK}".lstrip()
     return found
 

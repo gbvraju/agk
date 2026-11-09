@@ -56,6 +56,14 @@ def test_a_scan_finding_names_the_leaked_page(repo, tmp_path):
     assert LEAKED in proc.stdout
 
 
+def test_a_scanner_that_errors_is_not_called_a_finding(repo, tmp_path):
+    """REQ-063 AC5: rule 13, a scanner that ran and errored names the page only conditionally."""
+    project(repo)
+    proc = prepush(repo, scan=scanner(tmp_path / "bin", 2))
+    assert steps(proc.stdout)["secret-scan"] == "FAIL"
+    assert f"if this is a finding: follow {LEAKED}" in proc.stdout
+
+
 def test_a_clean_scan_names_no_page(repo, tmp_path):
     """REQ-063 AC5: rule 13, only a failure points to the page."""
     project(repo)
