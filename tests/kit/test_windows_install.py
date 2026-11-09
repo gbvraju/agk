@@ -151,6 +151,20 @@ def test_every_kit_script_reads_and_writes_text_as_utf8():
     assert [hit for path in [*scripts, *hooks] for hit in unpinned(path)] == []
 
 
+def test_a_plain_open_without_an_encoding_is_still_reported(tmp_path):
+    """Brief #875 (REQ-048): correcting the two false findings leaves this true one."""
+    script = tmp_path / "plain_open.py"
+    script.write_text("handle = open(path)\n", encoding="utf-8")
+    assert unpinned(script) == ["plain_open.py:1 open"]
+
+
+def test_a_read_of_sys_stdin_is_still_reported(tmp_path):
+    """Brief #875 (REQ-048): correcting the two false findings leaves this true one."""
+    script = tmp_path / "reads_stdin.py"
+    script.write_text("import sys\ntext = sys.stdin.read()\n", encoding="utf-8")
+    assert unpinned(script) == ["reads_stdin.py:2 read"]
+
+
 PROBE = """
 import sys
 sys.path.insert(0, sys.argv[1])
