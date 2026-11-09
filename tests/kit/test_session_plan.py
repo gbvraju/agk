@@ -9,11 +9,15 @@ from __future__ import annotations
 import json
 import os
 import subprocess  # nosec B404 - the tests stub it, nothing is run
+import tomllib
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 from test_session import ISSUES, REPO, Stub, comment, iso, issue, listing, posts, session
-from test_session_flow import DAY, PULLS, brief, files, flow, merged, pr
+from test_session_flow import DAY, PULLS, SHA, brief, files, flow, merged, pr
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -211,6 +215,110 @@ def test_the_conductors_review_capacity_caps_the_start(proj, stub):
     flow(proj, "max_builders = 6\nreviews_in_flight = 2")
     out = plan(proj, stub)
     assert out.stdout.splitlines()[0].startswith("Start 0: the conductor has 2 pull requests")
+
+
+def _three_waiting_three_ready(stub):
+    listing(stub, [issue(n, brief(f"d{n}/")) for n in (5, 6, 7)])
+    stub.serve(PULLS, [labelled(n, n, "agk:review") for n in (10, 11, 12)])
+    for n in (10, 11, 12):
+        files(stub, n, f"z/{n}")
+    free(stub, 5, 6, 7)
+
+
+def test_an_unset_review_capacity_follows_max_builders(proj, stub):
+    """REQ-041: brief #842 answer 1 (unset, `reviews_in_flight` is `max_builders`; none held)."""
+    _three_waiting_three_ready(stub)
+    flow(proj, "max_builders = 9")
+    cap = data(proj, stub)
+    assert cap["capacity"]["reviews_in_flight"] == 9
+    assert len(cap["start"]) == 3 and cap["capacity"]["limit"] != "reviews"
+
+
+def test_an_unset_review_capacity_follows_the_default_of_max_builders(proj, stub):
+    """REQ-041: brief #842 answer 1 (neither set: the default of `max_builders`, as today)."""
+    _three_waiting_three_ready(stub)
+    got = data(proj, stub)
+    assert got["capacity"]["max_builders"] == got["capacity"]["reviews_in_flight"] == 3
+
+
+def test_a_review_capacity_set_by_hand_still_decides(proj, stub):
+    """REQ-041: brief #842 answer 1 (a team that lowers review on purpose keeps its number)."""
+    _three_waiting_three_ready(stub)
+    flow(proj, "max_builders = 9\nreviews_in_flight = 3")
+    out = plan(proj, stub)
+    assert out.stdout.splitlines()[0].startswith("Start 0: the conductor has 3 pull requests")
+
+
+def test_this_repository_sets_its_review_capacity():
+    """REQ-041: brief #842 answer 1 (this repository's `[flow]` table, on the default branch)."""
+    table = tomllib.loads((ROOT / "agk.toml").read_text(encoding="utf-8"))["flow"]
+    assert table["reviews_in_flight"] == 9
+
+
+READY = "Report: abc1234 ready for review"
+
+
+def _waiting(proj, stub, pull: dict, comments: list | str) -> int:
+    """`waiting_for_verdict` of a plan with one open builder pull request, number 20."""
+    listing(stub, [issue(5, brief("d5/"))])
+    stub.serve(PULLS, [pull])
+    files(stub, 20, "z/20")
+    free(stub, 5)
+    stub.serve(f"{ISSUES}/20/comments", comments)
+    flow(proj, "max_builders = 6")
+    return data(proj, stub)["capacity"]["waiting_for_verdict"]
+
+
+def test_a_draft_with_the_review_label_does_not_wait_for_a_verdict(proj, stub):
+    """REQ-041: brief #842 build (a), the verdict's item 1 (a saved draft carrying `agk:review`)."""
+    draft = {**labelled(20, 1, "agk:review"), "draft": True}
+    assert _waiting(proj, stub, draft, [comment(1, "b", READY)]) == 0
+
+
+@pytest.mark.parametrize(
+    "line",
+    [READY, "Report: abc1234 fix list applied", "Report: abc1234 merge of main; Usage: not shown"],
+)
+def test_a_reported_pull_request_waits_for_a_verdict(proj, stub, line):
+    """REQ-041: brief #842 build (a), the verdict's item 1 (each of the three reports)."""
+    assert _waiting(proj, stub, labelled(20, 1), [comment(1, "b", line)]) == 1
+
+
+def test_the_newest_report_of_the_author_decides(proj, stub):
+    """REQ-041: brief #842 build (a), the verdict's item 1 (newest, and the author's own)."""
+    older = comment(1, "b", READY)
+    over = comment(2, "b", "Report: abc1234 over cap 2/1 hours")
+    assert _waiting(proj, stub, labelled(20, 1, "agk:review"), [over, older]) == 0
+
+
+def test_a_report_by_someone_else_does_not_count(proj, stub):
+    """REQ-041: brief #842 build (a), the verdict's item 1 (no report of the author)."""
+    assert _waiting(proj, stub, labelled(20, 1, "agk:review"), [comment(1, "x", READY)]) == 0
+
+
+def test_no_report_does_not_wait_even_with_the_label(proj, stub):
+    """REQ-041: brief #842 build (a), the verdict's item 1 (the label alone is not enough)."""
+    assert _waiting(proj, stub, labelled(20, 1, "agk:review"), []) == 0
+
+
+def test_a_verdict_on_the_head_ends_the_wait(proj, stub):
+    """REQ-041: brief #842 build (a), the verdict's item 1 (a verdict that names the head)."""
+    said = [comment(1, "b", READY), comment(2, "boss", f"Verdict: fix list {SHA}")]
+    assert _waiting(proj, stub, labelled(20, 1), said) == 0
+
+
+def test_a_verdict_on_another_head_or_by_another_author_does_not_end_the_wait(proj, stub):
+    """REQ-041: brief #842 build (a), the verdict's item 1 (only a listed author on this head)."""
+    older = comment(2, "boss", f"Verdict: fix list {'0' * 40}")
+    stranger = comment(3, "x", f"Verdict: cleared {SHA}")
+    said = [comment(1, "b", READY), older, stranger]
+    assert _waiting(proj, stub, labelled(20, 1), said) == 1
+
+
+def test_unreadable_comments_keep_the_label_count(proj, stub):
+    """REQ-041: brief #842 build (a), the verdict's item 1 (a failed read frees no review slot)."""
+    assert _waiting(proj, stub, labelled(20, 1, "agk:review"), "FAIL") == 1
+    assert _waiting(proj, stub, labelled(20, 1), "FAIL") == 0
 
 
 def test_nothing_ready_says_so(proj, stub):

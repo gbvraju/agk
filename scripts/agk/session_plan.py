@@ -21,7 +21,10 @@ The plan, in the order it is decided:
    open pull request is stale: it holds nothing and is listed as `stale claim by <session>, <age>`.
 3. **Capacity.** The sessions to start are the smallest of the ready, non-overlapping briefs,
    `max_builders` less the running builders (open builder pull requests and claims with no pull
-   request yet) and `reviews_in_flight` less the pull requests waiting for a verdict. When
+   request yet) and `reviews_in_flight` (by default `max_builders`, brief #842, ADR-0384) less
+   the pull requests waiting for a verdict: not a draft, the author's newest `Report:` says
+   `ready for review`, `fix list applied` or `merge of main`, and no `Verdict:` by a listed
+   author names the head. When
    `builder_memory_gb` of the `[flow]` table is set (brief #409, ADR-0223), also the machine's
    available memory divided by it, rounded down, and never below 1 while no builder runs (with
    builders running it may be 0, the verdict on 43ada36); memory that cannot be read is
@@ -84,6 +87,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import common
 import playbook_format
 from common import CheckError, matches, read_list
+from metrics import author_of, counted_authors
+from reviewers import verdict_authors
 from session import (
     ADDS,
     BROAD,
@@ -92,6 +97,7 @@ from session import (
     Survey,
     all_takes,
     brief_number,
+    first_line,
     flow_int,
     flow_value,
     gh,
@@ -110,6 +116,7 @@ from session import (
     shared_patterns,
     survey,
     touches_of,
+    verdict_line,
 )
 from session import kind_of as task_kind  # SPEC-0045 rule 4; kind_of below is the lane's
 
@@ -120,10 +127,10 @@ HEAVY_LOCK = "a builder runs each under lock.py run --name heavy"
 INDEPENDENT = "independent:"
 MERGED_ALL = "every build is merged; the conductor closes it"
 RULE = 15
+WAITING_REPORT = re.compile(r"Report: \S+ (?:ready for review|fix list applied|merge of main)\b")
 GIB = 1024**3  # builder_memory_gb counts in GiB, the lower reading of a GB (Q-409-2)
 WINDOW_DAYS = 14
 DEFAULTS = {
-    "reviews_in_flight": 3,
     "merge_hours": 1,
     "stale_commits": 20,
     "claim_stale_hours": 24,
@@ -1056,12 +1063,35 @@ def pr_login(pr: dict) -> str:
     return login if isinstance(login, str) else ""
 
 
+def waiting_for_verdict(s: Survey, pr: dict, authors: list[str] | None) -> bool:
+    """Whether the conductor owes this pull request a verdict (brief #842, ADR-0384); one read of
+    its comments, and comments that cannot be read keep the router's label as the answer."""
+    if pr.get("draft"):
+        return False
+    comments = pages(f"repos/{s.repo}/issues/{pr['number']}/comments")
+    if comments is None:
+        return "agk:review" in label_names(pr)
+    me = pr_login(pr).lstrip("@").lower()
+    counted = counted_authors(authors, me)
+    reports = [c for c in comments if author_of(c) == me and first_line(c).startswith("Report:")]
+    if not reports or not WAITING_REPORT.match(first_line(max(reports, key=comment_id))):
+        return False
+    head = pr.get("head")
+    sha = head.get("sha") if isinstance(head, dict) else None
+    return verdict_line(comments, 0, sha if isinstance(sha, str) else "", counted) is None
+
+
+def comment_id(comment: dict) -> int:
+    number = comment.get("id")
+    return number if isinstance(number, int) else 0
+
+
 def build(root) -> dict:
     repo = repo_name(root)
-    reviews = flow_int(root, "reviews_in_flight", DEFAULTS["reviews_in_flight"], RULE)
     hours = flow_int(root, "merge_hours", DEFAULTS["merge_hours"], RULE)
     behind_limit = flow_int(root, "stale_commits", DEFAULTS["stale_commits"], RULE)
     s = survey(root, repo, "")
+    reviews = flow_int(root, "reviews_in_flight", s.max_builders, RULE)
     default = _default_branch(root)
     now = datetime.now(UTC)
     read_gone(root, s, now)
@@ -1078,7 +1108,8 @@ def build(root) -> dict:
     chosen, waits = waves(root, s, ready)
     waits = build_waits + waits
     running = len(s.builders) + len(s.held)
-    waiting_review = sum(1 for p in s.builders if "agk:review" in label_names(p))
+    authors = verdict_authors(root)
+    waiting_review = sum(1 for p in s.builders if waiting_for_verdict(s, p, authors))
     limits = [("max_builders", s.max_builders - running), ("reviews", reviews - waiting_review)]
     memory = memory_capacity(root, running)
     if isinstance(memory.get("memory"), dict):
