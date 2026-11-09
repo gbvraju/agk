@@ -54,6 +54,8 @@ product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `.
 exist, to `CLAUDE.md`, `.github/CODEOWNERS` and `.github/PULL_REQUEST_TEMPLATE.md`, and refuses rather than overwrite.
 The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/specs/0002-agk-adopt.md`.
 
+`python3 scripts/agk/survey.py [--clone DIR] [--sidecar DIR] [--today YYYY-MM-DD]` lists a codebase for personal mode and never runs it (ADR-0386).
+
 ## Drift audit
 
     python3 scripts/agk/drift_audit.py [--today YYYY-MM-DD]
