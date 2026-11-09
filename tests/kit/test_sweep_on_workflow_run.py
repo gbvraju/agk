@@ -10,7 +10,17 @@ import re
 from pathlib import Path
 
 import pytest
-from test_conductor_commands import REPO, SHA, ago, comment, pr, proj, run, serve_pr, stub  # noqa: F401
+from test_conductor_commands import (  # noqa: F401
+    REPO,
+    SHA,
+    ago,
+    comment,
+    pr,
+    proj,
+    run,
+    serve_pr,
+    stub,
+)
 from test_merge_cleared_merger import run_event
 from test_merger_sweep import World, a_pull, clearing, sha_of, sweep
 
@@ -72,7 +82,7 @@ def test_the_sweep_runs_after_the_event_job_whatever_it_did():
 
 
 def test_the_sweep_job_is_not_skipped_with_the_event_job():
-    """REQ-046: brief #836 answer 3 (a skipped ancestor skips a job unless its `if` says otherwise)."""
+    """REQ-046: brief #836 answer 3 (a skipped ancestor skips a job unless its `if` overrides)."""
     line = next(ln for ln in job("sweep").splitlines() if ln.strip().startswith("if:"))
     assert "!cancelled()" in line
     assert "needs.sweep-gate.outputs.sweep == 'on'" in line
@@ -143,7 +153,7 @@ def test_a_draft_cleared_is_not_counted(proj, stub):  # noqa: F811
     "other", [a_run("issue_comment", 1), a_run("schedule", 1, conclusion="cancelled")]
 )
 def test_a_run_that_did_not_sweep_does_not_count(proj, stub, other):  # noqa: F811
-    """REQ-046: brief #836 answer 4 (the newest sweep run, a comment's run and a cancelled one are not)."""
+    """REQ-046: brief #836 answer 4 (a comment's run and a cancelled run are not sweeps)."""
     turn_on(proj)
     serve_runs(stub, other, a_run("schedule", 47))
     serve_pr(stub, pr(7), [cleared()])
@@ -167,7 +177,7 @@ def test_without_auto_merge_the_watch_reads_no_sweep_run(proj, stub):  # noqa: F
 
 
 def test_a_late_sweep_never_ends_the_watch_early(proj, stub):  # noqa: F811
-    """REQ-046: brief #836 answer 4 (the line goes with what the pass prints; a real event leads)."""
+    """REQ-046: brief #836 answer 4 (the line goes with what the pass prints)."""
     turn_on(proj)
     serve_runs(stub, a_run("schedule", 47))
     serve_pr(stub, pr(7), [cleared(), comment(6, "builder", "Report: done", ago(0))])

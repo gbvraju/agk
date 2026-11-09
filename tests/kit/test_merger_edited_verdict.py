@@ -1,4 +1,4 @@
-"""An edited verdict starts the merger and the router (brief #836 answer 1, ADR-0383, amendment 148).
+"""An edited verdict starts the merger and the router (brief #836 answer 1, ADR-0383).
 
 REQ-046 (SPEC-0039 rule 2): a verdict corrected in place used to start neither workflow, so a
 cleared head waited for a person. Saved event payloads and the workflow files only; no network.
@@ -52,7 +52,7 @@ def test_an_edit_that_does_not_clear_the_head_starts_nothing(tmp_path):
 
 
 def test_a_new_final_comment_stays_outside_the_event_job(tmp_path):
-    """REQ-046: brief #836 answer 1 (`Final:` is added for an edit; a created comment is as today)."""
+    """REQ-046: brief #836 answer 1 (`Final:` counts for an edit; a created one is as today)."""
     payload = comment_event("Final: docs/adr/x.md a -> b")
     proc, made = event(tmp_path, payload, "issue_comment", comments=[cleared()])
     assert proc.stdout.strip() == ""
@@ -78,7 +78,8 @@ def test_both_workflows_start_on_an_edited_comment(name):
 def test_an_edit_starts_a_job_only_for_the_three_first_lines(name, job):
     """REQ-046: brief #836 answer 1 (an edited `Final:` starts it; a created `Final:` does not)."""
     line = condition(name, job)
-    assert "github.event.action == 'edited' && startsWith(github.event.comment.body, 'Final:')" in line
+    edit = "github.event.action == 'edited' && startsWith(github.event.comment.body, 'Final:')"
+    assert edit in line
     assert "startsWith(github.event.comment.body, 'Verdict:')" in line
     assert "startsWith(github.event.comment.body, 'Approve:')" in line
 
