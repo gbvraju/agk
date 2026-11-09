@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "agk" / "parity.py"
 
 # The exception list may only shrink: lower this number in the pull request that removes a line.
-KIT_ONLY_CEILING = 10
+KIT_ONLY_CEILING = 9
 
 
 def write(root: Path, rel: str, text: str) -> None:

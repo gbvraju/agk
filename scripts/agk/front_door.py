@@ -78,6 +78,7 @@ import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -1323,25 +1324,25 @@ def stack_rows(table: dict, texts: dict[str, str]) -> list[dict[str, str | None]
     return [found[key] for key in sorted(found)]
 
 
-def tests_fact(root: Path, tree: list[tuple[str, str, str]]) -> dict:
-    """Rule 8: `adopt.detect_tests`, loaded only here; its answer counts only for the head tree."""
-    source = "adopt.detect_tests"
+def tests_fact(tree: list[tuple[str, str, str]], ignore: list[str]) -> dict:
+    """Rule 8: the survey's detector over the head tree, loaded only here."""
+    source = "survey.detect_test_files"
     sys.dont_write_bytecode = True  # rule 7: this read leaves no file, in the kit's tree either
+    paths = [
+        path
+        for path, mode, _ in tree
+        if mode not in NOT_FILES and not set(path.split("/")[:-1]) & set(ignore)
+    ]
     try:
-        import adopt
+        import survey
 
-        folders, patterns = adopt.detect_tests(root)
+        found = survey.detect_test_files(paths)
     except Exception:  # any failure to load is "not read", never "no signal"
         return {"folders": [], "source": source, "state": "not read"}
-    paths = [path for path, mode, _ in tree if mode not in NOT_FILES]
-    rows = []
-    for folder in sorted(folders):
-        under = [p for p in paths if folder == "." or p.startswith(f"{folder}/")]
-        held = sorted({g for g in patterns for p in under if fnmatch.fnmatchcase(base_of(p), g)})
-        if held:
-            rows.append({"folder": folder, "patterns": held})
+    counts = Counter((folder_of(row["path"]), row["language"]) for row in found)
+    rows = [{"files": n, "folder": f, "language": lang} for (f, lang), n in sorted(counts.items())]
     state = "found" if rows else "no signal"
-    return {"folders": rows, "source": f"{source}, work tree", "state": state}
+    return {"folders": rows, "source": f"{source}, head tree", "state": state}
 
 
 def detect_facts(root: Path, kit: Path) -> dict:
@@ -1367,7 +1368,7 @@ def detect_facts(root: Path, kit: Path) -> dict:
             "rows": stacks,
             "state": "mixed" if len(stack_names) > 1 else "proposed" if stacks else "no signal",
         },
-        "tests": tests_fact(root, tree),
+        "tests": tests_fact(tree, table["ignore"]),
         "work_type": {
             "candidates": hits,
             "state": "mixed" if len(kinds) > 1 else "proposed" if kinds else "default",
@@ -1407,7 +1408,7 @@ def detect_lines(facts: dict) -> list[str]:
     elif tests["state"] == "no signal":
         out.append("tests: no signal")
     out += [
-        f"tests: {quoted(row['folder'])} patterns {','.join(row['patterns'])}"
+        f"tests: {quoted(row['folder'])} language {row['language']} files {row['files']}"
         f" (from {tests['source']})"
         for row in tests["folders"]
     ]
