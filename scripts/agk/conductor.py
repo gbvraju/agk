@@ -214,7 +214,7 @@ def sweep_late(root, repo: str) -> list[str]:
         minutes = SWEEP_LATE if newest is None else int((now - newest).total_seconds() // 60)
         if minutes < SWEEP_LATE or not cleared_open(repo):
             return []
-    except (merge_cleared.Nothing, merge_cleared.Unreadable, CheckError):
+    except (merge_cleared.Nothing, merge_cleared.Unreadable, CheckError, OSError):
         return []
     return [f"SWEEP late {minutes} min"]
 
