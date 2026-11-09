@@ -1471,7 +1471,7 @@ def build(root, record: bool = False) -> dict:
     malformed_rows = [row for row in s.skipped if row[1].startswith("rule ")]
     held, ignored_holds = holds_of(root, s)
     held_rows = [row for row in s.skipped if row[1].startswith(HELD_PREFIX)]
-    return {
+    found = {
         "start": [start_entry(names[i], b, protected) for i, b in enumerate(chosen[:count])],
         "running": running_sessions(s),
         "waits": waits,
@@ -1481,8 +1481,6 @@ def build(root, record: bool = False) -> dict:
             for n, why in [*s.skipped, *build_skips, *unplanned]
             if (n, why) not in malformed_rows and (n, why) not in held_rows
         ],
-        "held": held,
-        "ignored_holds": ignored_holds,
         "malformed": [
             {"brief": n, "why": why, "filer": filer_of(s, n)} for n, why in malformed_rows
         ],
@@ -1511,6 +1509,11 @@ def build(root, record: bool = False) -> dict:
         "default_branch": default,
         "stale_commits": behind_limit,
     } | playbook
+    if held:
+        found["held"] = held
+    if ignored_holds:
+        found["ignored_holds"] = ignored_holds
+    return found
 
 
 def holds_of(root, s: Survey) -> tuple[list[dict], list[dict]]:
@@ -1631,8 +1634,8 @@ def words(plan: dict) -> str:
         f"MALFORMED: #{m['brief']} {m['why']}" + (f" (fix: {m['filer']})" if m["filer"] else "")
         for m in plan["malformed"]
     ]
-    lines += [f"HELD: #{h['brief']} {HELD_PREFIX}{h['reason']}" for h in plan["held"]]
-    lines += [f"HOLD IGNORED: #{h['brief']} by {h['by']}" for h in plan["ignored_holds"]]
+    lines += [f"HELD: #{h['brief']} {HELD_PREFIX}{h['reason']}" for h in plan.get("held", [])]
+    lines += [f"HOLD IGNORED: #{h['brief']} by {h['by']}" for h in plan.get("ignored_holds", [])]
     if plan["skipped"]:
         lines.append(
             "Skipped: " + ", ".join(f"#{s['brief']} ({s['why']})" for s in plan["skipped"]) + "."

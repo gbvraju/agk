@@ -99,7 +99,7 @@ def test_ac3_a_release_by_an_approver_ends_the_hold(proj, stub):
         comment(2, OWNER, "Release: #5", ago(10)),
     )
     got = data(proj, stub)
-    assert got["held"] == [] and started(got) == [5]
+    assert got.get("held", []) == [] and started(got) == [5]
 
 
 def test_ac3_a_hold_after_a_release_holds_again(proj, stub):
@@ -117,7 +117,7 @@ def test_ac3_a_hold_by_someone_else_does_not_hold_and_is_named(proj, stub):
     """REQ-037 AC3"""
     brief_with(stub, comment(1, OTHER, HOLD))
     got = data(proj, stub)
-    assert got["held"] == [] and started(got) == [5]
+    assert got.get("held", []) == [] and started(got) == [5]
     assert got["ignored_holds"] == [{"brief": 5, "by": OTHER}]
     assert f"HOLD IGNORED: #5 by {OTHER}" in plan(proj, stub).stdout
 
@@ -126,7 +126,7 @@ def test_ac3_a_verdict_author_who_is_not_an_approver_cannot_hold(proj, stub):
     """REQ-037 AC3: the list is `spec_approvers`, not `verdict_authors`."""
     brief_with(stub, comment(1, "boss", HOLD))
     got = data(proj, stub)
-    assert got["held"] == [] and got["ignored_holds"] == [{"brief": 5, "by": "boss"}]
+    assert got.get("held", []) == [] and got["ignored_holds"] == [{"brief": 5, "by": "boss"}]
 
 
 def test_ac3_a_release_by_someone_else_does_not_end_the_hold(proj, stub):
@@ -152,8 +152,8 @@ def test_ac3_only_a_first_line_naming_this_brief_with_a_reason_holds(proj, stub,
     """REQ-037 AC3"""
     brief_with(stub, comment(1, OWNER, text))
     got = data(proj, stub)
-    assert got["held"] == [] and started(got) == [5]
-    assert got["ignored_holds"] == []
+    assert got.get("held", []) == [] and started(got) == [5]
+    assert got.get("ignored_holds", []) == []
 
 
 def test_ac3_a_held_brief_with_a_stale_take_is_not_freed(proj, stub):
