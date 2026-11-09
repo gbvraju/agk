@@ -1,5 +1,5 @@
 {
-  "schema": 7,
+  "schema": 8,
   "week": "2026-W41",
   "opening": {
     "first": "2026-10-05",
@@ -49,7 +49,58 @@
         ]
       }
     ],
-    "cost": [],
+    "cost": [
+      {
+        "kind": "restore",
+        "of": "red default branch",
+        "closed": "unknown",
+        "median_hours": "unknown",
+        "open": "unknown",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/issues"
+          }
+        ]
+      },
+      {
+        "kind": "restore",
+        "of": "actions blocked",
+        "closed": "unknown",
+        "median_hours": "unknown",
+        "open": "unknown",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/issues"
+          }
+        ]
+      },
+      {
+        "kind": "restore",
+        "of": "leaked secret",
+        "closed": "unknown",
+        "median_hours": "unknown",
+        "open": "unknown",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/issues"
+          }
+        ]
+      },
+      {
+        "kind": "run-minutes",
+        "minutes": "unknown",
+        "per_merged": "unknown",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/actions"
+          }
+        ]
+      }
+    ],
     "flow": [
       {
         "kind": "flow-figures",
