@@ -243,7 +243,8 @@ def test_warning_past_the_default_threshold(repo, tmp_path):
     warning = [ln for ln in proc.stdout.splitlines() if ln.startswith("warning:")]
     assert warning == [
         "warning: 1700 of 2000 included minutes used (85%), past minutes_warn (80%); "
-        "when they run out, see local mode in docs/guides/project-ci.md"
+        "when they run out, see local mode in docs/guides/project-ci.md; "
+        "steps in docs/runbooks/actions-blocked.md"
     ]
 
 
@@ -646,7 +647,8 @@ def test_the_line_with_billing(repo, tmp_path):
     assert proc.returncode == 3  # past minutes_warn, as without --line
     assert proc.stdout == (
         "actions minutes: 1900 of 2000 used (95%), level 95%; runs out about 2026-10-20; "
-        "at this level, see local mode in docs/guides/local-mode.md\n"
+        "at this level, see local mode in docs/guides/local-mode.md; "
+        "steps in docs/runbooks/actions-blocked.md\n"
     )
     proc = minutes(repo, billed(tmp_path / "b", 100), "--line", today="2026-10-19")
     assert proc.returncode == 0
