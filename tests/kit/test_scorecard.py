@@ -495,7 +495,7 @@ def test_ac5_saved_releases_give_each_freshness_metric(repo, tmp_path):
     assert got["verify_oldest_days"][1] == "90" and got["pins_behind"][1] == "-"
     assert "pins unknown: 2" in proc.stdout  # gamma's 404 and the Python package (verify)
     table = [line.split("|")[1].strip() for line in proc.stdout.splitlines() if "|" in line]
-    assert table[2:] == LEVEL + FRESH
+    assert table[2:] == [*LEVEL, *FRESH, "goals_not_met"]
 
 
 def test_ac5_a_newer_release_of_the_same_day_counts_the_pin_as_behind(repo, tmp_path):
