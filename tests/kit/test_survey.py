@@ -151,8 +151,10 @@ def test_rule10_a_file_over_1mb_is_listed_and_not_read(tmp_path):
 
 def test_rule10_the_inventory_holds_what_the_rule_lists(tmp_path):
     """REQ-048 AC3: rule 10 (languages, manifests and commands, entry points, CI files)."""
-    pkg = '{\n "main": "lib/start.js",\n "scripts": {\n  "test": "jest --ci",\n  "build": "x"\n }\n}\n'
-    pyproject = '[project.scripts]\nrun-it = "app.cli:main"\n[tool.taskipy.tasks]\ntest = "pytest -q"\n'
+    pkg = '{\n "main": "lib/start.js",\n "scripts": {\n  "test": "jest --ci"\n }\n}\n'
+    pyproject = (
+        '[project.scripts]\nrun-it = "app.cli:main"\n[tool.taskipy.tasks]\ntest = "pytest -q"\n'
+    )
     data = survey_of(
         tmp_path,
         {
@@ -359,7 +361,7 @@ def test_rule10_the_sidecar_comes_from_the_registry(tmp_path):
 
 def test_rule10_refusals_name_the_option_and_nothing_else(tmp_path):
     """REQ-048 AC3: rule 10 (no state, a bad date, not a repository: refused, nothing written)."""
-    clone = clone_of(tmp_path / "x" if (tmp_path / "x").mkdir() else tmp_path, {"a.py": "\n"})
+    clone = clone_of(tmp_path, {"a.py": "\n"})
     home = tmp_path / "empty"
     done = run(clone, None, AGK_HOME=str(home))
     assert done.returncode == 1 and "attached" in done.stdout
@@ -383,9 +385,17 @@ def test_rule10_a_clone_with_no_commit_is_surveyed(tmp_path):
 def test_rule10_the_script_imports_no_network_module_and_no_runner():
     """REQ-048 AC3: rule 10 (standard library only; nothing that imports or runs product code)."""
     tree = ast.parse((SCRIPTS / "survey.py").read_text(encoding="utf-8"))
-    names = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
-    names |= {(n.module or "").split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
+    names = {
+        a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names
+    }
+    names |= {
+        (n.module or "").split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)
+    }
     assert not names & {"socket", "urllib", "http", "requests", "importlib", "runpy", "ast"}
     assert names <= set(sys.stdlib_module_names) | {"common", "personal_state"}
-    calls = {n.func.id for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    calls = {
+        n.func.id
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+    }
     assert not calls & {"exec", "eval", "compile", "__import__"}
