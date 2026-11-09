@@ -778,6 +778,8 @@ def config_source(root: Path) -> dict:
 
 # Personal mode (SPEC-0041 rule 1): a sidecar is a root whose agk.toml has a `[personal]` table.
 PERSONAL_TABLE = "personal"
+TEST_MAP_FILE = "test-map.toml"
+TEST_MAP_KEY = re.compile(r"(REQ-\d{3}) (AC\d+)")
 FORGE_SETTING = "forge"
 FORGE_FILES = "files"
 PERSONAL_KEYS = (
@@ -894,6 +896,40 @@ def _marker_files(
     return found
 
 
+def _test_map_refusal(problem: str) -> CheckError:
+    return CheckError(f"{TEST_MAP_FILE}: {problem} (SPEC-0041 rule 16)")
+
+
+def read_test_map(root: Path) -> set[tuple[str, str, str]] | None:
+    """A sidecar's map as (REQ id, `ACm`, test file) entries; None for a root that is no sidecar.
+
+    `"REQ-nnn ACm" = ["path::name", ...]`; the file is the part of an id before its first `::`.
+    A sidecar with no map file has no entry. Refusals name the file and the rule, never a value.
+    """
+    if personal_table(root) is None:
+        return None
+    path = root / TEST_MAP_FILE
+    if not path.is_file():
+        return set()
+    try:
+        table = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError):
+        raise _test_map_refusal("cannot be read as TOML, or repeats a key") from None
+    entries: set[tuple[str, str, str]] = set()
+    for key, ids in table.items():
+        match = TEST_MAP_KEY.fullmatch(key)
+        if match is None:
+            raise _test_map_refusal("a key is not `REQ-nnn ACm`")
+        if not isinstance(ids, list) or not ids:
+            raise _test_map_refusal("an entry is not a list of one or more test ids")
+        for test_id in ids:
+            file, _, name = test_id.partition("::") if isinstance(test_id, str) else ("", "", "")
+            if not file or not name:
+                raise _test_map_refusal("a test id is not `path::name`")
+            entries.add((match.group(1), match.group(2), file))
+    return entries
+
+
 def find_markers(
     root: Path,
     dirs: Sequence[str],
@@ -903,8 +939,14 @@ def find_markers(
     """REQ id -> sorted files (relative) matching patterns under dirs that contain the marker.
 
     Files under an excluded directory are skipped unless a listed dir is inside that directory.
+    In a sidecar the private test map answers instead and no file is scanned (SPEC-0041 rule 16).
     """
     found: dict[str, set[str]] = {}
+    entries = read_test_map(root)
+    if entries is not None:
+        for req, _, file in sorted(entries):
+            found.setdefault(req, set()).add(file)
+        return {k: sorted(v) for k, v in found.items()}
     for rel, text in _marker_files(root, dirs, patterns, exclude, ("__pycache__",)):
         for req in set(REQ_ID.findall(text)):
             found.setdefault(req, set()).add(rel)
@@ -921,9 +963,14 @@ def find_ac_markers(
 
     A marker is a run of `REQ-nnn` tokens separated by spaces, commas or `/` followed by a space and
     `AC<digits>` (the `ACn` attaches to every REQ of the run), or a `REQ-nnn` token alone.
+    In a sidecar the private test map answers instead, with `line` 0 (SPEC-0041 rule 16).
     """
-    found: set[tuple[str, int, str, str | None]] = set()
-    for rel, text in _marker_files(root, dirs, patterns, exclude, sorted(MARKER_SKIP_PARTS)):
+    entries = read_test_map(root)
+    found: set[tuple[str, int, str, str | None]] = {
+        (file, 0, req, ac) for req, ac, file in entries or ()
+    }
+    skip = sorted(MARKER_SKIP_PARTS)
+    for rel, text in _marker_files(root, dirs, patterns, exclude, skip) if entries is None else []:
         for number, line in enumerate(text.splitlines(), 1):
             for run_ in MARKER_RUN.finditer(line):
                 ac = f"AC{run_.group(2)}" if run_.group(2) else None

@@ -16,16 +16,21 @@ The freshness rows (rule 8, brief #719, build (c)) read the default branch with 
 of each upstream's releases (`releases-<owner>-<name>`, `kit-releases`).
 `findings` (rules 4 and 7, brief #723, build (d)) also reads the earlier weeks from the previous
 audit body (`--previous FILE`), prints the section of the last `trend_weeks` weeks and the
-findings, and writes nothing. `issues` (rule 5) then reads the open `agk-scorecard` issues
-(`issues-scorecard`) and opens, comments on or closes one issue per metric with `gh api`; the
-weekly wiring is build (e).
+findings, and writes nothing. `goals_not_met` and the `acceptance:` line (SPEC-0051 rule 9, brief
+#903) read the records of the default branch with `check_acceptance.py`'s reader, from a temporary
+copy of that branch, or the checkout when it has no default branch. `issues` (rule 5) then reads
+the open `agk-scorecard` issues (`issues-scorecard`) and opens, comments on or closes one issue per
+metric with `gh api`; the weekly wiring is build (e).
 """
 
 from __future__ import annotations
 
+import io
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tarfile
+import tempfile
 import tomllib
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -35,6 +40,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import check_acceptance
 import metrics
 from common import CheckError, git, installed_version, load_config, repo_root, run
 from doctor import kit_repo, version_numbers
@@ -69,6 +75,9 @@ FRESH = (
     "verify_marks verify_oldest_days residuals_past_due pins_behind pins_oldest_gap_days "
     "kit_releases_behind stale_guides"
 ).split()
+GOALS = "goals_not_met"  # SPEC-0051 rule 9, by amendment 156
+METRICS = [*LEVEL, *FRESH, GOALS]
+ACCEPTANCE_UNKNOWN = "acceptance: unknown"
 MARK = re.compile(r"\(verify[):]")
 APPROVED = re.compile(r"^- Status: Approved\s*$", re.MULTILINE)
 PIN = re.compile(
@@ -472,6 +481,52 @@ def freshness(root: Path, src: Any, today: date, config: dict) -> dict:
     return values
 
 
+# --- the goals of accepted products (SPEC-0051 rule 9) ----------------------------------------
+
+
+def goal_counts(tree: Path) -> tuple[str, str]:
+    """`goals_not_met` and the information line of the records of TREE: a record counts only in
+    state `accepted` or `accepted with <n> not met` of rule 7, so a stale or proposed one counts in
+    neither number."""
+    paths = check_acceptance.records(tree)
+    if not paths:
+        return "0", "acceptance: no record"
+    total, unmet, counted = 0, 0, 0
+    for path in paths:
+        if not check_acceptance.inspect(tree, path)[1].startswith("accepted"):
+            continue
+        lines = path.read_text(encoding="utf-8").split("\n")
+        goals = check_acceptance.form_of(path.name, path.stem, lines)[1]
+        counted += 1
+        total += len(goals)
+        unmet += sum(1 for _, _, evidence in goals if evidence == check_acceptance.NOT_MET)
+    return str(unmet), f"acceptance: {total - unmet} of {total} goals met in {counted} records"
+
+
+def acceptance(root: Path, ref: str | None) -> tuple[str, str]:
+    """`goal_counts` of the default branch REF, whose whole tree is copied because a record's
+    evidence may be any file; of the checkout when REF is None; `unknown` when REF is unreadable."""
+    if ref is None:
+        return goal_counts(root)
+    listing = git_out(root, "ls-tree", "--name-only", ref, f"{check_acceptance.FOLDER}/")
+    if listing is None:
+        return UNKNOWN, ACCEPTANCE_UNKNOWN
+    if not listing.strip():
+        return "0", "acceptance: no record"
+    tree = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "archive", ref], cwd=root, capture_output=True
+    )
+    if tree.returncode != 0:
+        return UNKNOWN, ACCEPTANCE_UNKNOWN
+    with tempfile.TemporaryDirectory() as folder:
+        try:
+            with tarfile.open(fileobj=io.BytesIO(tree.stdout)) as archive:
+                archive.extractall(folder, filter="data")
+        except (OSError, tarfile.TarError):
+            return UNKNOWN, ACCEPTANCE_UNKNOWN
+        return goal_counts(Path(folder))
+
+
 def scorecard(root: Path, src: Any, today: date) -> tuple[list[tuple[str, str, str]], list[str]]:
     """(metric, value, line) for every metric, in rule 1's order, and the notes under the table."""
     settings = scorecard_settings(root)
@@ -494,8 +549,9 @@ def scorecard(root: Path, src: Any, today: date) -> tuple[list[tuple[str, str, s
     for key, total in zip(("rule_words", "rule_lines"), budget, strict=True):
         lines[key] = lines[key] if lines[key] is not None else total
     values.update(freshness(root, src, today, config))
-    notes = [f"pins unknown: {values['pins_unknown']}"]
-    shown = [(m, values[m], "-" if lines[m] is None else f"{lines[m]:g}") for m in LEVEL + FRESH]
+    values[GOALS], information = acceptance(root, default_ref(root, config["default_branch"]))
+    notes = [f"pins unknown: {values['pins_unknown']}", information]
+    shown = [(m, values[m], "-" if lines[m] is None else f"{lines[m]:g}") for m in METRICS]
     return shown, notes
 
 
@@ -572,13 +628,13 @@ def history(previous: str | None, today: date, weeks: int) -> dict[str, list[str
         head = [c.strip() for c in table[0].strip().strip("|").split("|")] if table else []
         for row in table[2:]:
             got = [c.strip() for c in row.strip().strip("|").split("|")]
-            if len(got) == len(head) and got[0] in LEVEL + FRESH:
+            if len(got) == len(head) and got[0] in METRICS:
                 cells[got[0]] = {
                     d: v for d, v in zip(head[2:], got[2:], strict=True) if DAY.match(d)
                 }
     earlier = [str(d) for d in week_days(today, weeks)[:-1]]
     out = {}
-    for metric in LEVEL + FRESH:
+    for metric in METRICS:
         found = cells.get(metric, {})
         out[metric] = [
             v if NUMBER.match(v := found.get(d, "")) or v == NOT_APPLICABLE else UNKNOWN
@@ -643,7 +699,7 @@ def findings(root: Path, src: Any, today: date, previous: str | None) -> tuple[s
     """The section, the findings (metric, kind, values, line) and each metric's closable flag."""
     settings = scorecard_settings(root)
     weeks, close_weeks = settings["trend_weeks"], settings["close_weeks"]
-    rows, _ = scorecard(root, src, today)
+    rows, notes = scorecard(root, src, today)
     earlier = history(previous, today, weeks)
     table = {m: [*earlier[m], v] for m, v, _ in rows}
     lines = {m: line for m, _, line in rows}
@@ -654,7 +710,7 @@ def findings(root: Path, src: Any, today: date, previous: str | None) -> tuple[s
         if kind:
             found.append((metric, kind, values, lines[metric]))
         close[metric] = closable(values, line, close_weeks, weeks)
-    return weeks_section(today, lines, table), found, close
+    return f"{weeks_section(today, lines, table)}\n\n{notes[-1]}", found, close
 
 
 def write_issues(src: Any, repo: str, today: date, found: list, close: dict) -> list[str]:
@@ -671,7 +727,7 @@ def write_issues(src: Any, repo: str, today: date, found: list, close: dict) -> 
             numbers.setdefault(title.removeprefix("scorecard: "), []).append(n)
     by_metric = {f[0]: f for f in found}
     done = []
-    for metric in LEVEL + FRESH:
+    for metric in METRICS:
         action = choose_issue(
             numbers.get(metric, []), metric in by_metric, close.get(metric, False)
         )
