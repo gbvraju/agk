@@ -26,7 +26,8 @@ SMOKE = (
     'always_full = ["web/vite.config.ts"]\n'
     "smoke = [\n"
     '  { kind = "frontend", code = ["web/**"], command = "echo frontend-smoke" },\n'
-    '  { kind = "contract", code = ["contracts/**", "mocks/**"], command = "echo contract-smoke" },\n'
+    '  { kind = "contract", code = ["contracts/**", "mocks/**"],\n'
+    '    command = "echo contract-smoke" },\n'
     "]\n"
 )
 
@@ -219,9 +220,7 @@ def test_run_takes_the_heavy_lock(tmp_path, monkeypatch, capsys):
 def test_run_returns_the_command_exit_code(tmp_path, monkeypatch, capsys):
     """REQ-051 AC4: SPEC-0044 rule 8 (`--run` ends with the chosen command's exit code)."""
     locks = tmp_path / "locks"
-    testing = (
-        '[testing]\nsmoke = [{ kind = "frontend", code = ["web/**"], command = "exit 3" }]\n'
-    )
+    testing = '[testing]\nsmoke = [{ kind = "frontend", code = ["web/**"], command = "exit 3" }]\n'
     root = project(tmp_path, testing=testing, extra=f"lock_dir = '{locks.as_posix()}'\n")
     base = merge(root, "web/src/App.tsx")
     code, _ = choose(root, monkeypatch, capsys, "--base", base, "--head", "HEAD", "--run")
