@@ -520,7 +520,7 @@ def acceptance(root: Path, ref: str | None) -> tuple[str, str]:
         return UNKNOWN, ACCEPTANCE_UNKNOWN
     with tempfile.TemporaryDirectory() as folder:
         try:
-            with tarfile.open(fileobj=io.BytesIO(tree.stdout)) as archive:
+            with tarfile.TarFile(fileobj=io.BytesIO(tree.stdout)) as archive:
                 archive.extractall(folder, filter="data")
         except (OSError, tarfile.TarError):
             return UNKNOWN, ACCEPTANCE_UNKNOWN
