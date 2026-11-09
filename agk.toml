@@ -517,7 +517,7 @@ code = "scripts/agk/sbom.py"
 tests = ["tests/kit/test_sbom.py"]
 [[testing.map]]
 code = "scripts/agk/scorecard.py"
-tests = ["tests/kit/test_scorecard.py", "tests/kit/test_scorecard_goals.py"]
+tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"
 tests = ["tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_shadow_count.py"]
