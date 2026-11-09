@@ -46,9 +46,11 @@ INDEX_NAMES = ("__init__", "index", "mod")  # a file that stands for its folder
 TAIL_MATCH = ("Go", "PHP")  # an import path longer than the tracked path: try its tails
 FOLDER_PACKAGES = ("Go", "C#")  # an import that names a folder names each file in it
 JVM, JS = ("Java", "Kotlin"), ("JavaScript", "TypeScript")
-MANIFESTS = {
-    "pyproject.toml": ("Python",), "setup.cfg": ("Python",), "setup.py": ("Python",),
-    "package.json": JS, "composer.json": ("PHP",), "go.mod": ("Go",), "pom.xml": JVM,
+SIGNALS = "config/stack-signals.toml"  # the manifest names, read from the kit's own root
+OUTSIDE_TABLE = ("*.csproj", "Gemfile", "composer.json")  # Q-879-1: SPEC-0041 rule 10 keeps them
+MANIFESTS = {  # the language of each manifest; the names come from `manifest_names`
+    "pyproject.toml": ("Python",), "requirements.txt": ("Python",), "setup.cfg": ("Python",),
+    "setup.py": ("Python",), "pubspec.yaml": ("Dart",), "package.json": JS, "composer.json": ("PHP",), "go.mod": ("Go",), "pom.xml": JVM,
     "build.gradle": JVM, "build.gradle.kts": JVM, "Cargo.toml": ("Rust",), "*.csproj": ("C#",),
     "Gemfile": ("Ruby",),
 }  # fmt: skip
@@ -316,6 +318,17 @@ def read_ledger(sidecar: Path) -> dict[str, str]:
     return ledger
 
 
+def manifest_names() -> tuple[str, ...]:
+    """SPEC-0057 rule 8: the table's manifest names, from the kit's root and never the clone's."""
+    try:
+        with open(Path(__file__).resolve().parents[2] / SIGNALS, "rb") as handle:
+            rows = tomllib.load(handle)["stack"]
+        names = {name for row in rows for name in row["manifests"]}
+    except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError) as exc:
+        raise CheckError(f"the signal table cannot be read (path: {SIGNALS})") from exc
+    return tuple(sorted(names | set(OUTSIDE_TABLE)))
+
+
 def _manifest_row(path: str, text: str) -> dict:
     name = posixpath.basename(path)
     kind = "*.csproj" if name.endswith(".csproj") else name
@@ -324,7 +337,7 @@ def _manifest_row(path: str, text: str) -> dict:
         "path": path,
         "test_commands": pattern.findall(text) if pattern else [],
         "folder": posixpath.dirname(path),
-        "languages": MANIFESTS[kind],
+        "languages": MANIFESTS.get(kind, ()),
         "text": text,
     }
 
@@ -342,6 +355,7 @@ def _entry_points(paths, manifests) -> list[dict]:
 
 def build(clone: Path, ledger: dict[str, str], budget: int, today: str | None) -> dict:
     """The inventory of rule 10, from the index and the object store alone."""
+    names = manifest_names()
     entries = tracked(clone)
     skipped: dict[str, list[str]] = {"binary": [], "large": [], "submodule": [], "symlink": []}
     regular = {}
@@ -374,7 +388,7 @@ def build(clone: Path, ledger: dict[str, str], budget: int, today: str | None) -
             found = [references(language, line) for line in text.splitlines()]
             refs[path] = [ref for row in found for ref in row]
             measured[path] = {"blob": blob, "lines": lines, "imports": sum(map(bool, found))}
-            if any(fnmatch.fnmatch(posixpath.basename(path), m) for m in MANIFESTS):
+            if any(fnmatch.fnmatch(posixpath.basename(path), m) for m in names):
                 manifests.append(_manifest_row(path, text))
     manifests.sort(key=lambda m: m["path"])
     fans, commits = fan_in(refs, languages), churn(clone)

@@ -362,7 +362,9 @@ def test_one_list_table_manifests_new_to_the_survey_are_listed(tmp_path):
     files = {"requirements.txt": "pytest\n", "app/pubspec.yaml": "name: x\n", "test_a.py": "\n"}
     data = survey_of(tmp_path, files)
     assert {m["path"] for m in data["manifests"]} == {"app/pubspec.yaml", "requirements.txt"}
-    assert data["test_files"] == [{"path": "test_a.py", "language": "Python", "framework": "pytest"}]
+    assert data["test_files"] == [
+        {"path": "test_a.py", "language": "Python", "framework": "pytest"}
+    ]
 
 
 def test_one_list_the_table_is_the_kits_and_never_the_repositorys(tmp_path):
