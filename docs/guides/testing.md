@@ -18,7 +18,7 @@ tests, while the default branch and every release pull request run them all (see
 ```toml
 [testing]
 profile = "balanced"
-always_full = ["app/auth/**", "migrations/**"]
+always_full = ["tests/conftest.py", "pytest.ini", "pyproject.toml"]
 map = [
   { code = "app/billing/**", tests = ["tests/billing/**"] },
   { code = "app/shop/*.py", tests = ["tests/shop/test_*.py", "tests/test_smoke.py"] },
@@ -30,10 +30,17 @@ budget_seconds = 300
   - `fast`: a changed file that no entry covers is only listed.
   - `balanced` (the default): a changed file that no entry covers selects the full suite. When unsure, run more.
   - `thorough`: every change selects the full suite.
-- `always_full`: path globs. A changed file that matches one selects the full suite, whatever the profile. Use it for the code
-  that every test depends on, such as authentication or the database schema.
+- `always_full`: path globs. A changed file that matches one selects the full suite, whatever the profile. It names the files that
+  change how tests are found or run: test configuration, shared fixtures, the build and CI files and the test runner's own code
+  (Python `conftest.py`, `pytest.ini`, `pyproject.toml`; JavaScript and TypeScript `jest.config.*`, `vitest.config.*`,
+  `package.json`; Gradle, Xcode and Go their build files). Any other entry needs an adjacent `# full: <reason>` comment on its
+  line or the line above it; `check_kit_tests.py` and `doctor.py` refuse one without it, naming the entry's place (SPEC-0055 rule 6
+  as amendment 153 proposes, ADR-0393). A changed file that is ordinary code selects its map entries' tests and the tests of
+  every file that imports it, one level, and the plan prints `selected: <file> -> <k> tests (<j> by importers)`.
 - `map`: a list of entries. Each names a `code` glob and the `tests` globs of the tests that guard that code.
-- `budget_seconds`: the target time of the full project suite, 300 seconds if unset. The metrics read it later.
+- `budget_seconds`: the target time of the full project suite, 300 seconds if unset. It is reported, never enforced: the weekly report
+  gives the full suite's median on the default branch against it, the slowest ten test files and the workers' balance, and over
+  budget it says that one brief splits or speeds up the slowest files, never removing a test.
 - `excluded`: a list of `"<tag>: <reason>"` texts, the tests that the project's own command leaves out (brief #425, ADR-0230).
   Nothing in the selection interprets them; proof lists them in its manifest.
 - `proof_regression`: a boolean, false by default; with true and a `[proof]` table, proof also runs the selection on the head
