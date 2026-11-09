@@ -574,7 +574,7 @@ def gh_send(method: str, endpoint: str, data: dict | None, what: str) -> dict:
     """One write through `gh` with the person's credential; a failure raises `Unreadable`."""
     args = ["gh", "api", "--method", method, endpoint]
     try:
-        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
             [*args, "--input", "-"] if data is not None else args,
             input=json.dumps(data) if data is not None else None,
             capture_output=True,
