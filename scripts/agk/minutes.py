@@ -390,7 +390,8 @@ def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
         if top * 100 >= warn * included:
             warning = (
                 f"warning: {top} of {included} included minutes used ({top * 100 // included}%), "
-                f"past minutes_warn ({warn}%); when they run out, see local mode in {GUIDE}; steps in {RUNBOOK}"
+                f"past minutes_warn ({warn}%); when they run out, see local mode in {GUIDE}; "
+                f"steps in {RUNBOOK}"
             )
     return {
         "repository": repo_name or repo.get("full_name"),

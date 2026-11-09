@@ -1,8 +1,9 @@
-"""The three failure messages point to their runbook page (SPEC-0056 rule 13, build (c), brief #865).
+"""The three failure messages point to their runbook page (SPEC-0056 rule 13, brief #865).
 
-`route.py`'s red-branch issue, `minutes.py`'s warning and `95%` line and `prepush.py`'s `secret-scan`
-failure each name a page of `docs/runbooks/`: a path and never a value. No workflow changes (rule
-14). Saved responses and stand-in tools only, no network, invented data (`example.com`). REQ-063 AC5.
+`route.py`'s red-branch issue, `minutes.py`'s warning and `95%` line and `prepush.py`'s
+`secret-scan` failure each name a page of `docs/runbooks/`: a path and never a value. No workflow
+changes (rule 14). Saved responses and stand-in tools only, no network, invented data
+(`example.com`). REQ-063 AC5.
 """
 
 from __future__ import annotations
