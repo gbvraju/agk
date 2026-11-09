@@ -12,6 +12,7 @@ AMEND = "docs/runs/proposed-spec-amendments-1.md"
 def spec(status: str, body: str = "rules") -> str:
     return (
         f"# SPEC-0001: Thing\n\n- Status: {status}\n- Owner: maintainers\n\n## Rules\n\n1. {body}\n"
+        "\n## Contexts\n\nkit, github, local, personal and stacks: as written\n"
     )
 
 

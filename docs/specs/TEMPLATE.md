@@ -23,6 +23,14 @@ REQ-nnn ACn: *what the criterion proves.* Rule 1.
 
 - YYYY-MM-DD: what is left open (due YYYY-MM-DD), or `none`.
 
+## Contexts
+
+- kit:
+- github:
+- local:
+- personal:
+- stacks:
+
 ## Open questions
 
 none

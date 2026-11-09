@@ -191,6 +191,7 @@ def test_both_specs_stay_approved_and_their_other_sections_stay():
             assert heading in text.splitlines(), (rel, heading)
     old = old_text_at(BEFORE)
     if old is not None:  # SPEC-0025 changes only inside `## Rules`
+
         def outside(text: str) -> list[str]:
             kept, inside = [], False
             for line in text.splitlines():
@@ -215,7 +216,8 @@ def test_the_amendment_names_both_specs_and_check_specs_passes(repo):
         "base",
     )
     repo.branch()
-    repo.commit({SPEC_0025: read(SPEC_0025), SPEC_0034: read(SPEC_0034)})
+    section = "\n## Contexts\n\nkit, github, local, personal and stacks: as written\n"
+    repo.commit({SPEC_0025: read(SPEC_0025) + section, SPEC_0034: read(SPEC_0034) + section})
     assert repo.run("check_specs.py", "--base", "main").returncode == 1
     amendment = read(AMENDMENT)
     assert SPEC_0025 in amendment and SPEC_0034 in amendment

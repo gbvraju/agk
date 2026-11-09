@@ -22,7 +22,10 @@ from test_session_flow import brief, flow
 from test_session_plan import free, plan
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
-GOOD = 'Sentence: "A thing."\nAnswers:\n1. one\nSize: M\nAdvances: new\nTouches: src/a.py\n'
+GOOD = (
+    'Sentence: "A thing."\nAnswers:\n1. one\nSize: M\nAdvances: new\nTouches: src/a.py\n'
+    "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n"
+)
 OVER = "rule 4: Touches entry {} matches more than flow.max_touch_glob files"
 EXISTS = "rule 4: Adds entry {} names an existing file"
 
