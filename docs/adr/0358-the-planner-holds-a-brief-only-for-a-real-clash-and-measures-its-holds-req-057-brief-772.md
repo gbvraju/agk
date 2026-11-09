@@ -27,7 +27,8 @@ if `Q-772-10` is ruled so, its guard), `config/` (the session rules and the rule
    everything else. Only the last holds a brief. All four re-prove under SPEC-0050 rule 6, which does not change.
 3. `session.py plan` ranks the open pull requests by the briefs they hold; the conductor works in that order and reports a
    holder idle over `[flow] stall_minutes`.
-4. A reservation another open brief or pull request holds is refused, and the later brief gets the next free number.
+4. A reservation that another open brief, or a pull request of another brief, holds is refused, and the later brief gets
+   the next free number.
 5. `session.py plan --what-if DIR` shows how a wave would split before it is filed.
 6. Each hold is recorded and marked false when the two merged diffs change no common line; the weekly report gives the rate
    and the worst entry or class. The home of the record is the owner's (`Q-772-1`).

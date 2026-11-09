@@ -64,7 +64,8 @@ hold (`Q-772-3`); 6 briefs remain (#459, #647, #762, #763, #768, #837).
    that line once on the plan issue in the same pass, and again only after the pull request's head or state changes
    (`Q-772-8`).
 5. **SPEC-0050 rule 4, reservation clashes (answer 4).** Added: `session.py plan` refuses an open brief whose `Reserved:`
-   number an open pull request adds, or that another open brief reserves. Of two briefs the later issue is refused; a
+   number an open pull request other than the pull request of that brief (its `Brief: #n` line) adds, or that another
+   open brief reserves. Of two briefs the later issue is refused; a
    brief always yields to a pull request. The line is `MALFORMED: #<n> rule 4 of SPEC-0050: Reserved <number> is also
    held by #<m>`. A number is `ADR-nnnn`, `SPEC-nnnn`, `REQ-nnn` or `amendment n`, read only from the text of the line
    before its first `(` (`Q-772-9`). `check_numbers.py` gains an optional `--briefs FILE`, a saved list of open briefs,
@@ -102,11 +103,13 @@ hold (`Q-772-3`); 6 briefs remain (#459, #647, #762, #763, #768, #837).
     files, the shared indexes and the prose of `reprove_paths`". New acceptance lines, one for each of items 1 and 3 to 7:
     AC8 a broad entry is refused unless the brief says `Broad:`, and `Adds:` names only new files; AC9 two pieces of work
     on prose run at once and the later re-proves; AC10 `plan` ranks the holders and reports a stall; AC11 a reservation
-    that another open brief or pull request holds is refused naming both; AC12 `plan --what-if` names how many can start
+    that another open brief, or a pull request of another brief, holds is refused naming both; AC12 `plan --what-if` names how many can start
     and what holds the rest, and posts nothing; AC13 each hold is recorded and the false-hold rate is reported, `unknown`
     when there is no record.
-13. **The builds, three, each tests first and about 300 changed lines or fewer (answer 8).** (a) items 1, 2, 5, 9 and the
-    repair of answer 1; (b) items 3, 4 and 8; (c) items 6, 7 and 10. They are the builds of brief #772, not those of
+13. **The builds, three, each tests first and about 300 changed lines or fewer (answer 8).** (a) items 1, 2, 5, 9 and 12 and
+    the repair of answer 1; (b) items 3, 4 and 8; (c) items 6, 7 and 10. Item 12 is one change, in the first build, so
+    that each build's tests can cite their acceptance line and AC1 and AC3 are right before (b) exempts prose; it is
+    subject to `Q-772-10`, as `docs/requirements.md` is outside the brief's `Touches:`. They are the builds of brief #772, not those of
     SPEC-0050 rule 10. **The repair:** brief #634 is closed and needs none; #459, #647, #762, #763
     and #768 get exact `Touches:` and `Adds:` lines, one comment on each saying which lines changed, and #837 is reported
     (`Q-772-11`).
