@@ -376,7 +376,7 @@ def test_the_workflow_starts_only_on_comments_and_on_the_two_required_runs():
         "schedule",
         "workflow_dispatch",
     ]
-    assert re.search(r"\n  issue_comment:\n    types: \[created\]", head)
+    assert re.search(r"\n  issue_comment:\n    types: \[created, edited\]", head)  # brief #836
     assert re.search(
         r"\n  workflow_run:\n    workflows: \[governance, proof\]\n    types: \[completed\]", head
     )

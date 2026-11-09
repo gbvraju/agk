@@ -4,6 +4,9 @@ nothing and writes no file.
     python3 conductor.py watch [--since ISO] [--once]
     python3 conductor.py sweep
 
+Each `watch` also prints `SWEEP late <m> min`, after its other lines, when no sweep run finished in
+the last 30 minutes and a cleared pull request is open (brief #836 answer 4, ADR-0383).
+
 `watch` polls the comments of every open issue labelled `agk-brief` and every open pull request,
 and exits 0 printing one line `<number> <first line>` for each comment created after `--since`
 (default: the start) whose first line starts `Question:` or `Report:` (conductor catch log row 1);
@@ -120,6 +123,9 @@ USAGE = (
 )
 TRIGGERS = ("Question:", "Report:")
 QUESTION_ID = re.compile(r"Question: (Q-\S+)")
+SWEEP_LATE = 30  # minutes without a finished sweep run before `SWEEP late` (brief #836 answer 4)
+SWEEP_RUNS = "repos/{}/actions/workflows/merger.yml/runs?status=completed&per_page=100"
+SWEEP_EVENTS = ("schedule", "workflow_dispatch", "workflow_run")
 POLL = ("conductor_poll_seconds", 60)
 LATE = ("conductor_late_minutes", 30)
 SILENT = ("silent_minutes", 30)
@@ -180,6 +186,39 @@ def renew_lease(root) -> int:
     return code
 
 
+def cleared_open(repo: str) -> bool:
+    """True when an open, non-draft pull request's latest verdict clears its current head."""
+    for pull in read(f"repos/{repo}/pulls?state=open", "the open pull requests"):
+        if pull.get("draft") is not False:
+            continue
+        comments = read(f"repos/{repo}/issues/{pull['number']}/comments", "the comments")
+        if merge_cleared.judge(comments, str(pull["head"]["sha"]), [])[0] == "cleared":
+            return True
+    return False
+
+
+def sweep_late(root, repo: str) -> list[str]:
+    """`SWEEP late <m> min` when no sweep run finished in the last 30 minutes and a cleared pull
+    request is open (brief #836 answer 4), by the sweep's own gate; a failed read is silent."""
+    try:
+        merge_cleared.github_mode(merge_cleared.default_ref(root)[1])
+        found = read_one(SWEEP_RUNS.format(repo), "the sweep runs").get("workflow_runs")
+        ended = [
+            when(str(r.get("updated_at")))
+            for r in (found if isinstance(found, list) else [])
+            if r.get("event") in SWEEP_EVENTS
+            and r.get("conclusion") not in ("cancelled", "skipped")
+        ]
+        newest = max((t for t in ended if t), default=None)
+        now = datetime.now(UTC)
+        minutes = SWEEP_LATE if newest is None else int((now - newest).total_seconds() // 60)
+        if minutes < SWEEP_LATE or not cleared_open(repo):
+            return []
+    except (merge_cleared.Nothing, merge_cleared.Unreadable, CheckError, OSError):
+        return []
+    return [f"SWEEP late {minutes} min"]
+
+
 def watch(root, since: datetime, once: bool) -> int:
     repo = session.repo_name(root)
     interval = session.flow_int(root, POLL[0], POLL[1], 0)
@@ -198,7 +237,7 @@ def watch(root, since: datetime, once: bool) -> int:
                 raise
             print(f"error: {exc}; retrying", file=sys.stderr, flush=True)
         if lines or once or time.monotonic() - started + interval >= WATCH_BOUND:
-            print("\n".join(lines) if lines else "nothing new")
+            print("\n".join((lines or ["nothing new"]) + sweep_late(root, repo)))
             return 0
         time.sleep(interval)
 

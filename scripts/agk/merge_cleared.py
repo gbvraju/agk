@@ -111,10 +111,14 @@ max_behind_merges` (opt-in, an integer of at least 0; anything else refused nami
 is set and the first-parent commits of the default branch after the merge base are above it; the
 third when either read fails. A line names the rule or the setting, never a file, count or sha.
 
-`--sweep` (brief #797, ADR-0373) is the merger's scheduled pass: the open, non-draft pull requests
-labelled `agk:ready`, oldest first, the guarded merge above on at most five cleared heads, one line
-each and `UNMERGED #<n> cleared <m> min <reason>` for a cleared one older than 20 minutes it could
-not merge (in local mode it only reports). `--sweep-gate` prints `on` or `off` for the workflow.
+`--sweep` (brief #797, ADR-0373; brief #836, ADR-0383) is the merger's pass after every finished
+check and on its schedule: the open, non-draft pull requests, oldest first, the guarded merge above
+on at most five whose latest verdict clears the current head, one line each, `MERGED #<n> <m> min
+after cleared` for each it merged, and `UNMERGED #<n> cleared <m> min <reason>` for a cleared one
+older than 20 minutes it could not merge (in local mode it only reports). The label is never an
+input: a cleared pull request labelled `agk:fix` or `agk:review` prints `LABEL #<n> <label> but
+cleared`, and the router runs for it when it is left unmerged. `--sweep-gate` prints `on` or `off`
+for the workflow.
 """
 
 from __future__ import annotations
@@ -221,7 +225,9 @@ RULESET = "rule violation"  # GitHub's words for a merge its ruleset refuses (br
 JOB_LINE = re.compile(
     r"merge-cleared #([1-9][0-9]{0,9}) ([0-9a-f]{12}): (merged|held|refused)(?:\s|:)"
 )
-READY_LABEL = "agk:ready"  # the sweep's list (brief #797 answer 3, ADR-0373)
+CREATED_STARTS = ("Verdict:", "Approve:")  # first lines of a new comment that may clear a head
+EDITED_STARTS = (*CREATED_STARTS, "Final:")  # and of an edited one (brief #836 answer 1)
+STALE_LABELS = ("agk:fix", "agk:review")  # a cleared head's label contradicts these (brief #836)
 SWEEP_MAX = 5  # guarded merges a run (brief #797 answer 3)
 UNMERGED_MINUTES = 20  # brief #797 answer 5
 STOPPED = "merge-cleared: stopped:"
@@ -1385,15 +1391,16 @@ def github_mode(data: dict) -> None:
 
 def event_target(name: str, payload: dict) -> tuple[int, str | None] | None:
     """(the pull request, its head sha or None) that event NAME's PAYLOAD may clear, or None: a
-    `Verdict:` or `Approve:` comment on a pull request, or a green run of `governance` or `proof`
-    on a pull request's head (the workflow's `workflow_run` start names which). Nothing here reads
-    GitHub."""
+    `Verdict:` or `Approve:` comment on a pull request, one edited to start `Verdict:`, `Final:`
+    or `Approve:` (brief #836 answer 1), or a green run of `governance` or `proof` on a pull
+    request's head (the workflow's `workflow_run` start names which). Nothing here reads GitHub."""
     if name == "issue_comment":
         issue = payload.get("issue")
         note = payload.get("comment")
         if not (isinstance(issue, dict) and isinstance(note, dict) and issue.get("pull_request")):
             return None
-        if not first_line(note).startswith(("Verdict:", "Approve:")):
+        starts = EDITED_STARTS if payload.get("action") == "edited" else CREATED_STARTS
+        if not first_line(note).startswith(starts):
             return None
         number = issue.get("number")
         return (number, None) if isinstance(number, int) and number > 0 else None
@@ -1472,19 +1479,17 @@ def sweep_allows(data: dict) -> bool:
 
 
 def sweep_list(pulls: list[dict]) -> list[dict]:
-    """The open, non-draft pull requests labelled `agk:ready`, oldest first."""
-    kept = [
-        p
-        for p in pulls
-        if p.get("state") == "open" and p.get("draft") is False and READY_LABEL in labels_of(p)
-    ]
+    """The open, non-draft pull requests, oldest first; the label is never read (brief #836)."""
+    kept = [p for p in pulls if p.get("state") == "open" and p.get("draft") is False]
     return sorted(kept, key=lambda p: (str(p.get("created_at") or ""), p.get("number") or 0))
 
 
 def minutes_since(item: dict, now: datetime) -> int | None:
-    """Whole minutes from ITEM's `created_at` to NOW, or None when it cannot be read."""
+    """Whole minutes from ITEM's last edit (else its `created_at`) to NOW, or None when it cannot
+    be read: a verdict corrected in place cleared the head when it was edited (brief #836)."""
     try:
-        made = datetime.strptime(str(item.get("created_at")), "%Y-%m-%dT%H:%M:%SZ")
+        stamp = item.get("updated_at") or item.get("created_at")
+        made = datetime.strptime(str(stamp), "%Y-%m-%dT%H:%M:%SZ")
     except ValueError:
         return None
     return int((now - made.replace(tzinfo=UTC)).total_seconds() // 60)
@@ -1495,6 +1500,23 @@ def report_unmerged(number: int, verdict: dict | None, reason: str) -> None:
     minutes = minutes_since(verdict or {}, clock())
     if minutes is not None and minutes > UNMERGED_MINUTES:
         print(f"UNMERGED #{number} cleared {minutes} min {reason}")
+
+
+def report_merged(number: int, verdict: dict | None) -> None:
+    """Brief #836 `Measured:`: the minutes from the clearing verdict to this merge."""
+    minutes = minutes_since(verdict or {}, clock())
+    print(f"MERGED #{number} {'unknown' if minutes is None else minutes} min after cleared")
+
+
+def reroute(root: Path, repo: str, number: int) -> None:
+    """Brief #836 answer 2: the router's one pass over a pull request whose label is stale; a
+    failure ends nothing, as every step of the job ends green."""
+    import route  # route imports session; read only when a label is stale
+
+    try:
+        route.route_one(repo, number, root, route.Labels(repo), False)
+    except CheckError:
+        print(f"LABEL #{number} router not re-run")
 
 
 def sweep_one(root: Path, repo: str, pull: dict, merging: bool, tried: int) -> tuple[int, bool]:
@@ -1513,6 +1535,9 @@ def sweep_one(root: Path, repo: str, pull: dict, merging: bool, tried: int) -> t
         print(f"{prefix} not cleared: {why}")
         return tried, False
     verdict = latest_verdict(comments)
+    stale = next((name for name in STALE_LABELS if name in labels_of(pull)), None)
+    if stale:
+        print(f"LABEL #{number} {stale} but cleared")
     if not merging:
         reason = "local mode: the conductor merges"
     elif tried >= SWEEP_MAX:
@@ -1520,19 +1545,26 @@ def sweep_one(root: Path, repo: str, pull: dict, merging: bool, tried: int) -> t
     else:
         line, _ = guarded(root, number, sha)
         print(line)
+        tried += 1
         if line.startswith(STOPPED):
-            return tried + 1, True
-        if ": merged " not in line:
-            report_unmerged(number, verdict, line.split(": ", 1)[-1])
-        return tried + 1, False
+            return tried, True
+        if ": merged " in line:
+            report_merged(number, verdict)
+            return tried, False
+        report_unmerged(number, verdict, line.split(": ", 1)[-1])
+        if stale:
+            reroute(root, repo, number)
+        return tried, False
     print(f"{prefix} {reason}")
     report_unmerged(number, verdict, reason)
+    if stale and merging:
+        reroute(root, repo, number)
     return tried, False
 
 
 def sweep_main(root: Path) -> int:
-    """`--sweep` (brief #797 answers 3, 5 and 6): one line per open cleared pull request, oldest
-    first, the guarded merge on at most five; always exit 0, as every step of the job does."""
+    """`--sweep` (brief #797 answers 3, 5 and 6, brief #836): one line per open pull request, oldest
+    first, the guarded merge on at most five cleared heads; always exit 0, as every step does."""
     try:
         _, data = default_ref(root)
         merging = sweep_allows(data)
