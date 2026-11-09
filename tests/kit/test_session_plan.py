@@ -9,11 +9,15 @@ from __future__ import annotations
 import json
 import os
 import subprocess  # nosec B404 - the tests stub it, nothing is run
+import tomllib
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 from test_session import ISSUES, REPO, Stub, comment, iso, issue, listing, posts, session
 from test_session_flow import DAY, PULLS, brief, files, flow, merged, pr
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -211,6 +215,44 @@ def test_the_conductors_review_capacity_caps_the_start(proj, stub):
     flow(proj, "max_builders = 6\nreviews_in_flight = 2")
     out = plan(proj, stub)
     assert out.stdout.splitlines()[0].startswith("Start 0: the conductor has 2 pull requests")
+
+
+def _three_waiting_three_ready(stub):
+    listing(stub, [issue(n, brief(f"d{n}/")) for n in (5, 6, 7)])
+    stub.serve(PULLS, [labelled(n, n, "agk:review") for n in (10, 11, 12)])
+    for n in (10, 11, 12):
+        files(stub, n, f"z/{n}")
+    free(stub, 5, 6, 7)
+
+
+def test_an_unset_review_capacity_follows_max_builders(proj, stub):
+    """REQ-041: brief #842 answer 1 (unset, `reviews_in_flight` is `max_builders`; none held)."""
+    _three_waiting_three_ready(stub)
+    flow(proj, "max_builders = 9")
+    cap = data(proj, stub)
+    assert cap["capacity"]["reviews_in_flight"] == 9
+    assert len(cap["start"]) == 3 and cap["capacity"]["limit"] != "reviews"
+
+
+def test_an_unset_review_capacity_follows_the_default_of_max_builders(proj, stub):
+    """REQ-041: brief #842 answer 1 (neither set: the default of `max_builders`, as today)."""
+    _three_waiting_three_ready(stub)
+    got = data(proj, stub)
+    assert got["capacity"]["max_builders"] == got["capacity"]["reviews_in_flight"] == 3
+
+
+def test_a_review_capacity_set_by_hand_still_decides(proj, stub):
+    """REQ-041: brief #842 answer 1 (a team that lowers review on purpose keeps its number)."""
+    _three_waiting_three_ready(stub)
+    flow(proj, "max_builders = 9\nreviews_in_flight = 3")
+    out = plan(proj, stub)
+    assert out.stdout.splitlines()[0].startswith("Start 0: the conductor has 3 pull requests")
+
+
+def test_this_repository_sets_its_review_capacity():
+    """REQ-041: brief #842 answer 1 (this repository's `[flow]` table, on the default branch)."""
+    table = tomllib.loads((ROOT / "agk.toml").read_text(encoding="utf-8"))["flow"]
+    assert table["reviews_in_flight"] == 9
 
 
 def test_nothing_ready_says_so(proj, stub):
