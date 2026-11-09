@@ -25,6 +25,9 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
 - `parallel_command`: the full command of a non-pytest runner with more than one worker, `{workers}`
   filled with the number (rule 5);
 - `slow_suite_seconds`: above it a single-process full run gets doctor's line (rule 7; 600);
+- `smoke`: a list of `{ kind = "frontend" | "contract", code = [<glob>, ...], command = "..." }`,
+  one entry per kind, from which `smoke.py` chooses the after-merge smoke run (rule 8, brief #923);
+  it changes no selection here;
 - `results_dir`, `keep_passed`, `keep_runs`: the retired run folders of ADR-0299 (SPEC-0046 rule
   11, build (f)): still accepted with their checks, they do nothing, and `run_folder_deprecation`
   gives the one line `prepush.py` and `doctor.py` print when one is set; build (g) removes them;
@@ -103,6 +106,7 @@ KEYS = {
     "rerun_alone",
     "map_source",
     "links",
+    "smoke",
 }
 MAP_SOURCES = ("curated", "generated")  # SPEC-0055 rule 1: data, never a code path
 TEST_ENV = "AGK_TEST_ENV"  # what a machine has (SPEC-0055 rule 4)
@@ -111,6 +115,12 @@ DEFAULT_KEEP_RUNS = 20
 RUN_FOLDER_KEYS = ("results_dir", "keep_passed", "keep_runs")  # retired (SPEC-0046 rule 11)
 RUN_FOLDER_DEPRECATED = "deprecated: testing.results_dir (ADR-0303)"
 PR_TESTS = ("full", "selected")
+SMOKE_KINDS = ("frontend", "contract")  # SPEC-0044 rule 8
+SMOKE_KEYS = {"kind", "code", "command"}
+SMOKE_BAD = (
+    'smoke must be a list of { kind = "frontend" | "contract", code = [<glob>, ...], '
+    'command = "<command>" }, one entry per kind (setting: testing.smoke)'
+)
 EXCLUDED = re.compile(r"[^\s:]+: \S[^\n]*")
 ENTRY_KEYS = {"code", "tests"}
 LINK_KEYS = {"code", "run"}
@@ -290,10 +300,11 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
             "proof_regression, pr_tests, junit, workers, parallel_command, "
-            "slow_suite_seconds, results_dir, keep_passed, keep_runs, rerun_alone and map_source "
-            "(setting: testing)"
+            "slow_suite_seconds, results_dir, keep_passed, keep_runs, rerun_alone, map_source "
+            "and smoke (setting: testing)"
         )
     links = check_links(table.get("links", []), root)
+    check_smoke(table.get("smoke", []))
     profile = table.get("profile", "balanced")
     if profile not in PROFILES:
         raise CheckError("the profile is fast, balanced or thorough (setting: testing.profile)")
@@ -384,6 +395,36 @@ def check_map(entries: object) -> list[dict]:
             )
         mapped.append({"code": entry["code"], "tests": list(entry["tests"])})
     return mapped
+
+
+def check_smoke(value: object) -> list[dict]:
+    """`[testing] smoke` (SPEC-0044 rule 8): each entry a known kind, a non-empty list of path
+    globs and a command, one entry per kind; a bad one is refused naming the setting, never its
+    value."""
+    if not isinstance(value, list):
+        raise CheckError(SMOKE_BAD)
+    kinds: list[str] = []
+    for entry in value:
+        if (
+            not isinstance(entry, dict)
+            or set(entry) != SMOKE_KEYS
+            or entry["kind"] not in SMOKE_KINDS
+            or entry["kind"] in kinds
+            or not _globs(entry["code"], empty_ok=False)
+            or not isinstance(entry["command"], str)
+            or not entry["command"].strip()
+        ):
+            raise CheckError(SMOKE_BAD)
+        kinds.append(entry["kind"])
+    return [{"kind": e["kind"], "code": list(e["code"]), "command": e["command"]} for e in value]
+
+
+def smoke_entries(root: Path) -> list[dict] | None:
+    """`[testing] smoke`, None without the table or the key. The whole table is checked first, so
+    a bad setting is refused (CheckError) as everywhere else."""
+    if testing_table(root) is None or "smoke" not in config_source(root)["testing"]:
+        return None
+    return check_smoke(config_source(root)["testing"]["smoke"])
 
 
 def check_links(value: object, root: Path) -> list[dict]:

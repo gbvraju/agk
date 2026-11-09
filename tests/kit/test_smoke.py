@@ -26,8 +26,7 @@ SMOKE = (
     'always_full = ["web/vite.config.ts"]\n'
     "smoke = [\n"
     '  { kind = "frontend", code = ["web/**"], command = "echo frontend-smoke" },\n'
-    '  { kind = "contract", code = ["contracts/**", "mocks/**"],\n'
-    '    command = "echo contract-smoke" },\n'
+    '  { kind = "contract", code = ["contracts/**", "mocks/**"], command = "echo contract" },\n'
     "]\n"
 )
 
@@ -42,7 +41,7 @@ def git(root: Path, *args: str) -> str:
 def project(tmp_path: Path, testing: str | None = SMOKE, extra: str = "") -> Path:
     """An invented project on `main` with one commit; returns its root."""
     root = tmp_path / "proj"
-    root.mkdir()
+    root.mkdir(parents=True)
     text = 'default_branch = "main"\nproject_tests = "echo full-smoke"\n' + extra
     if testing is not None:
         text += testing
@@ -175,14 +174,15 @@ def test_a_good_smoke_list_is_accepted_by_the_testing_reader(tmp_path):
     assert [e["kind"] for e in impact.smoke_entries(root)] == ["frontend", "contract"]
 
 
-def test_the_full_selection_of_prepush_does_not_change(tmp_path):
-    """REQ-051 AC4: SPEC-0044 rules 1 and 8 (the smoke list changes no regression selection)."""
-    plain = project(tmp_path / "a", testing="[testing]\n")
-    listed = project(tmp_path / "b")
-    for root in (plain, listed):
-        base = merge(root, "web/src/App.tsx")
-        found = impact.select(root, base, "HEAD")
-        assert found.full is True
+def test_the_regression_selection_does_not_change(tmp_path):
+    """REQ-051 AC4: SPEC-0044 rules 1 and 8 (a smoke list changes no regression selection)."""
+    listed = '[testing]\nsmoke = [{ kind = "frontend", code = ["web/**"], command = "echo f" }]\n'
+    found = []
+    for name, testing in (("plain", "[testing]\n"), ("listed", listed)):
+        root = project(tmp_path / name, testing=testing)
+        base = merge(root, "web/src/App.tsx", "app/orders.py")
+        found.append(impact.select(root, base, "HEAD").data())
+    assert found[0] == found[1]
 
 
 def stub(tmp_path: Path) -> str:
