@@ -117,14 +117,14 @@ def test_a_brief_that_overlaps_running_work_waits_for_it(proj, stub):
 
 def test_a_file_a_pull_request_adds_blocks_only_on_an_exact_path(proj, stub):
     """Every build adds an ADR, a fragment and tests: an added file is no reason to wait."""
-    listing(stub, [issue(5, brief("docs/adr/**")), issue(6, brief("docs/guides/new.md"))])
+    listing(stub, [issue(5, brief("docs/adr/**")), issue(6, brief("docs/guides/new.txt"))])
     stub.serve(PULLS, [labelled(20, 1, "agk:review")])
-    changed(stub, 20, ("added", "docs/adr/0153-x.md"), ("added", "docs/guides/new.md"))
+    changed(stub, 20, ("added", "docs/adr/0153-x.md"), ("added", "docs/guides/new.txt"))
     free(stub, 5, 6)
     got = data(proj, stub)
     assert [s["brief"] for s in got["start"]] == [5]  # the added ADR does not block #5
     assert got["waits"] == [
-        {"brief": 6, "pull_request": 20, "why": "it adds docs/guides/new.md"}
+        {"brief": 6, "pull_request": 20, "why": "it adds docs/guides/new.txt"}
     ]  # an exact path does
 
 
