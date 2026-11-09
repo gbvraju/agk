@@ -504,8 +504,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/metrics.py"
 tests = [
-  "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py", "tests/kit/test_head_cleared.py",
-  "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_metrics.py",
+  "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py", "tests/kit/test_forge.py",
+  "tests/kit/test_head_cleared.py", "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_metrics.py",
   "tests/kit/test_metrics_minutes.py", "tests/kit/test_metrics_pr_tests.py", "tests/kit/test_metrics_testing.py",
   "tests/kit/test_over_cap_builder.py", "tests/kit/test_product_report.py", "tests/kit/test_runbook_measures.py",
   "tests/kit/test_self_clearance.py", "tests/kit/test_solo_mode.py", "tests/kit/test_usage_by_kind.py",
@@ -625,7 +625,7 @@ code = "scripts/agk/reviewers.py"
 tests = [
   "tests/kit/test_agent_apps.py", "tests/kit/test_agk_mk.py", "tests/kit/test_approve_short.py",
   "tests/kit/test_approved_spec_not_draft.py", "tests/kit/test_check_kit_tests.py",
-  "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_personal_state.py", "tests/kit/test_reviewers.py",
+  "tests/kit/test_forge.py", "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_personal_state.py", "tests/kit/test_reviewers.py",
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
   "tests/kit/test_verdict_authors.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
   "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
