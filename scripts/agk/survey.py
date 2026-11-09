@@ -50,7 +50,8 @@ SIGNALS = "config/stack-signals.toml"  # the manifest names, read from the kit's
 OUTSIDE_TABLE = ("*.csproj", "Gemfile", "composer.json")  # Q-879-1: SPEC-0041 rule 10 keeps them
 MANIFESTS = {  # the language of each manifest; the names come from `manifest_names`
     "pyproject.toml": ("Python",), "requirements.txt": ("Python",), "setup.cfg": ("Python",),
-    "setup.py": ("Python",), "pubspec.yaml": ("Dart",), "package.json": JS, "composer.json": ("PHP",), "go.mod": ("Go",), "pom.xml": JVM,
+    "setup.py": ("Python",), "pubspec.yaml": ("Dart",), "package.json": JS,
+    "composer.json": ("PHP",), "go.mod": ("Go",), "pom.xml": JVM,
     "build.gradle": JVM, "build.gradle.kts": JVM, "Cargo.toml": ("Rust",), "*.csproj": ("C#",),
     "Gemfile": ("Ruby",),
 }  # fmt: skip
