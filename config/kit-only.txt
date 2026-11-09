@@ -10,4 +10,3 @@ scripts/agk/rules.py gap: Q-680-3, the rule budget command is not installed in a
 docs/runs/conductor-catches-*.md gap: Q-680-4, the conductor's catch log is not a project file
 scripts/agk/shadow_count.py gap: Q-680-5, the shadow record totals are not installed with the shadow agent
 scripts/agk/core_audit.py gap: Q-680-6, the audit of which checks fired is not offered to a project
-scripts/agk/personal_state.py gap: Q-680-7, personal mode's state command is neither installed nor run by a skill
