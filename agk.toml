@@ -204,7 +204,7 @@ tests = ["tests/kit/test_pr_mode.py", "tests/kit/test_pr_mode_briefs.py", "tests
 [[testing.map]]
 code = "scripts/agk/check_protected_changes.py"
 tests = [
-  "tests/kit/test_check_protected_changes.py", "tests/kit/test_engines.py",
+  "tests/kit/test_caps_evidence.py", "tests/kit/test_check_protected_changes.py", "tests/kit/test_engines.py",
   "tests/kit/test_protected_changes_covered_by.py", "tests/kit/test_review_context.py",
   "tests/kit_dev/test_merge_ref_base.py", "tests/kit_dev/test_release_check.py",
   "tests/kit_dev/test_release_protected.py",

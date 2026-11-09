@@ -27,7 +27,7 @@ SECRET_FREE_VALUE = "700000"
 
 
 def make_base(repo, toml: str | None = BASE_TOML):
-    files = {"config/protected-paths.txt": "# c\nagk.toml\ndocs/adr/\n", "src/app.py": "x = 1\n"}
+    files = {"config/protected-paths.txt": "# c\nagk.toml\n", "src/app.py": "x = 1\n"}
     if toml is not None:
         files["agk.toml"] = toml
     repo.commit(files, "base")
