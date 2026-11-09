@@ -1,0 +1,1 @@
+- The weekly scorecard gains `goals_not_met` (line `0`, setting `scorecard.goals_not_met`) and one line `acceptance: <met> of <total> goals met in <k> records`, read from the accepted records of the default branch (brief #903, SPEC-0051 build (d), ADR-0340)
