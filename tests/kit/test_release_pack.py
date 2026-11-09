@@ -1080,10 +1080,12 @@ else:
 """,
         encoding="utf-8",
     )
-    stub.chmod(0o755)  # nosec B103 - a test's own stub in tmp_path
+    stub.chmod(0o700)
     run_env = {**env(), "PATH": f"{place}{os.pathsep}{os.environ['PATH']}"}
     argv = [sys.executable, str(SCRIPT), "make", "--tag", TAG, "--out", str(out), "--repo", "o/r"]
-    done = subprocess.run(argv, cwd=root, capture_output=True, text=True, env=run_env)  # nosec B603
+    done = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        argv, cwd=root, capture_output=True, text=True, env=run_env
+    )
     assert done.returncode == 0, done.stdout + done.stderr
     assert not (tmp_path / "written").exists()
     calls = [json.loads(ln) for ln in (tmp_path / "calls").read_text().splitlines()]
@@ -1321,6 +1323,8 @@ def test_ac1_make_with_a_bad_option_prints_the_usage(billed, extra):
     """REQ-059 AC1: rule 3 (only the flags the rule lists, each once)."""
     root, out = billed
     argv = [sys.executable, str(SCRIPT), "make", "--tag", TAG, "--out", str(out), *extra]
-    done = subprocess.run(argv, cwd=root, capture_output=True, text=True, env=env())  # nosec B603
+    done = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        argv, cwd=root, capture_output=True, text=True, env=env()
+    )
     assert done.returncode == 2 and done.stdout.startswith("usage:"), done.stdout
     assert not out.exists()

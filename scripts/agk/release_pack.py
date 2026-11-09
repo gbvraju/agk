@@ -422,12 +422,12 @@ def latest_run(runs: list[dict], name: str) -> dict | None:
     return max(named, key=lambda r: as_int(r.get("id")), default=None)
 
 
-def required_contexts(data: object) -> list[str] | None:
+def required_contexts(data: Any) -> list[str] | None:
     """The required checks of the branch's rules, or None when the response is not of that form."""
     try:
         names = [
             entry["context"]
-            for rule in data  # type: ignore[attr-defined]
+            for rule in data
             if rule["type"] == "required_status_checks"
             for entry in rule["parameters"]["required_status_checks"]
         ]
