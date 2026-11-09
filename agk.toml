@@ -220,6 +220,9 @@ tests = ["tests/kit/test_check_runbooks.py"]
 code = "scripts/agk/check_tag.py"
 tests = ["tests/kit/test_agk_mk.py", "tests/kit_dev/test_check_tag.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/checklist.py"
+tests = ["tests/kit/test_checklist.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/ci_tools.py"
 tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]

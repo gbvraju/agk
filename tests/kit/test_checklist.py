@@ -188,6 +188,13 @@ def test_conductor_share_yes_and_stalls_replaced_counted(tmp_path, capsys):
     assert "stalls replaced 1" in found[2][1]
 
 
+def test_a_takeover_counts_as_a_stall_replaced(tmp_path, capsys):
+    over = comment(21, "taken over: s9 2026-03-10", day(8))
+    document = saved(comments=[*takes(20), over, report(2)])
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "stalls replaced 1" in found[2][1]
+
+
 def test_conductor_share_no_when_it_started_none(tmp_path, capsys):
     document = saved(comments=[*takes(20), report(0)])
     assert lines_of(capsys, project(tmp_path, document), tmp_path)[2][0] == "no"
@@ -342,7 +349,9 @@ def test_idle_minutes_count_free_slots_while_a_brief_is_ready(tmp_path, capsys):
 
 
 def test_idle_is_zero_and_yes_with_no_ready_brief(tmp_path, capsys):
-    document = saved(briefs=[brief(30, day(1), day(2))], comments=[report(0)])
+    document = saved(
+        briefs=[brief(30, "2026-02-01T00:00:00Z", "2026-02-02T00:00:00Z")], comments=[report(0)]
+    )
     found = lines_of(capsys, project(tmp_path, document), tmp_path)
     assert found[8][0] == "yes"
     assert "idle builder-minutes 0" in found[8][1]
@@ -529,7 +538,7 @@ def api_dir(tmp_path: Path) -> Path:
             {"number": 3, "created_at": day(1), "closed_at": None, "body": "Depends-on: #2"},
             {"number": 4, "created_at": day(1), "closed_at": None, "pull_request": {}},
         ],
-        "checklist-metrics": [{"body": "x\n" + LINE_75 + "\ny\n"}],
+        "issues-checklist-metrics": [{"body": "x\n" + LINE_75 + "\ny\n"}],
         "checklist-open": [{"title": "Local mode since 2026-03-01"}],
     }
     for name, body in responses.items():
@@ -544,7 +553,7 @@ def test_the_save_step_writes_the_document_checklist_reads(tmp_path, monkeypatch
     monkeypatch.setattr(facts, "build", lambda *a, **k: {"pull_requests": [], "flow": {}})
     target = tmp_path / "saved.json"
     src = metrics.ApiDir(api_dir(tmp_path))
-    metrics.save_checklist(src, tmp_path, "o/r", 7, target, now=SAVED_AT)
+    metrics.save_checklist(src, tmp_path, "o/r", 7, target, SAVED_AT)
     document = json.loads(target.read_text(encoding="utf-8"))
     assert document["saved_at"] == SAVED_AT
     assert document["facts"] == {"pull_requests": [], "flow": {}}
@@ -562,7 +571,7 @@ def test_save_leaves_unread_parts_unknown_not_empty(tmp_path, monkeypatch):
     empty = tmp_path / "none"
     empty.mkdir()
     target = tmp_path / "saved.json"
-    metrics.save_checklist(metrics.ApiDir(empty), tmp_path, "o/r", 7, target, now=SAVED_AT)
+    metrics.save_checklist(metrics.ApiDir(empty), tmp_path, "o/r", 7, target, SAVED_AT)
     document = json.loads(target.read_text(encoding="utf-8"))
     assert document["comments"] is None and document["runs"] is None
     assert document["briefs"] is None and document["pr_tests"] is None
