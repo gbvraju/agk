@@ -28,7 +28,9 @@ OVER_WHAT = re.compile(
     r"^brief #\d+ pull request #\d+ size (?:S|M|L|unknown) "
     r"used (?:\d+(?:\.\d+)?|unknown)/\d+ (?:tokens|hours)(?: [a-z-]+ (?:\d+(?:\.\d+)?|unknown))*$"
 )
-OVER_COST = re.compile(r"^(?:[1-9]\d*(?:\.\d+)? (?:tokens|hours)|0\.\d*[1-9]\d* hours|\(unknown\))$")
+OVER_COST = re.compile(
+    r"^(?:[1-9]\d*(?:\.\d+)? (?:tokens|hours)|0\.\d*[1-9]\d* hours|\(unknown\))$"
+)
 
 
 def kinds(path) -> list[str]:

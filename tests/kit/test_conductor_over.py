@@ -101,7 +101,12 @@ def test_a_green_head_breaks_the_run_of_red_heads(proj, stub):
 
 def test_a_commit_with_no_run_or_only_skipped_runs_is_not_a_head(proj, stub):
     """REQ-056 AC5: rule 12, a checkpoint that was not a head does not break or lengthen a run."""
-    commits = [(RED, ["a.py"], 200), ([], ["b.py"], 170), (SKIPPED, ["c.py"], 150), (RED, ["d.py"], 100)]
+    commits = [
+        (RED, ["a.py"], 200),
+        ([], ["b.py"], 170),
+        (SKIPPED, ["c.py"], 150),
+        (RED, ["d.py"], 100),
+    ]
     serve(stub, commits)
     assert over(proj, stub)["loop-red-heads"] == "2"
 

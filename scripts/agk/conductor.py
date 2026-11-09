@@ -148,9 +148,17 @@ ALIVE = ("Progress:", "Report:", "Question:")
 ESCALATE = re.compile(r"Report: .*\bescalate\b")
 RED_RUN = ("failure", "timed_out")
 GREEN_RUN = ("success", "neutral")
-BLOCKED = re.compile(r"(?:Question|Report): .*(?:tool error|push\b.*\brefused|refused\b.*\bpush)", re.I)
+BLOCKED = re.compile(
+    r"(?:Question|Report): .*(?:tool error|push\b.*\brefused|refused\b.*\bpush)", re.I
+)
 OVER_REPORT = re.compile(r"Report: \S+ over cap\b")
-OVER_KEYS = ("loop-red-heads", "loop-file-commits", "wander-files", "counted-hours", "blocked-hours")
+OVER_KEYS = (
+    "loop-red-heads",
+    "loop-file-commits",
+    "wander-files",
+    "counted-hours",
+    "blocked-hours",
+)
 SQUASHED = re.compile(r"\(#(\d+)\)\s*$")  # the `(#m)` that ends a merged pull request's subject
 
 
@@ -563,7 +571,11 @@ def wander_files(repo: str, number: int, body: object) -> int | str:
 def build_end(comments: object, login: str, now: datetime) -> datetime:
     """The builder's `over cap` report ends the build: a person's time is not the builder's."""
     said = [c for c in comments or [] if session.author_of(c) == login.lower()]
-    ends = [session.moment(c.get("created_at")) for c in said if OVER_REPORT.match(session.first_line(c))]
+    ends = [
+        session.moment(c.get("created_at"))
+        for c in said
+        if OVER_REPORT.match(session.first_line(c))
+    ]
     return max(ends, default=now)
 
 
@@ -572,7 +584,11 @@ def blocked_spans(comments: list, login: str, pushes: list[datetime], end: datet
     spans: dict[datetime, datetime] = {}
     for c in comments:
         said = session.moment(c.get("created_at"))
-        if session.author_of(c) == login.lower() and said <= end and BLOCKED.match(session.first_line(c)):
+        if (
+            session.author_of(c) == login.lower()
+            and said <= end
+            and BLOCKED.match(session.first_line(c))
+        ):
             stop = min((p for p in pushes if p > said), default=end)
             spans[stop] = min(spans.get(stop, said), said)
     return spans
@@ -586,15 +602,24 @@ def hours_of(repo_data: tuple, login: str, allowed: set[str], opened: str, commi
     end = build_end(pull, login, now)
 
     def upto(moment: datetime) -> Decimal | str:  # caps.hours_used on what had happened by then
-        early = [[c for c in side if session.moment(c.get("created_at")) <= moment] for side in (brief, pull)]
+        early = [
+            [c for c in side if session.moment(c.get("created_at")) <= moment]
+            for side in (brief, pull)
+        ]
         return caps.hours_used(early[0], early[1], login, allowed, opened, moment)
 
     counted = upto(end)
-    dates = [when(str(((c.get("commit") or {}).get("committer") or {}).get("date"))) for c in commits or []]
+    dates = [
+        when(str(((c.get("commit") or {}).get("committer") or {}).get("date")))
+        for c in commits or []
+    ]
     if counted == caps.UNKNOWN or commits is None or None in dates:
         return counted, caps.UNKNOWN
     blocked = sum(
-        (upto(stop) - upto(start) for stop, start in blocked_spans(pull, login, dates, end).items()),
+        (
+            upto(stop) - upto(start)
+            for stop, start in blocked_spans(pull, login, dates, end).items()
+        ),
         Decimal("0.0"),
     )
     return counted, min(blocked, counted)
