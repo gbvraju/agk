@@ -42,6 +42,10 @@ failed test alone for any runner, in the level's `cwd` and under the same limit 
 brief #806). Its ids come only from the reports this run wrote (the level's `junit`, else
 `[testing] junit`); with no report there is no rerun and no strike, and it exits as it did.
 
+A pull request's links (SPEC-0055 rule 7, brief #828) run after the selection, and under `full`
+after the full command: a linked level need not be part of it. A linked level whose environment
+is absent is a failing run that names `testing.links`.
+
 `check_release.py` is kit-only (never installed), so `toml_version` restates its reading of
 `version`; a kit test pins the two equal (Q-453-7).
 """
@@ -61,6 +65,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from common import CheckError, git, load_config, merge_base, proof_areas, repo_root, resolve_base
 from impact import (
+    LINK_REASON,
     impact,
     junit_setting,
     level_of,
@@ -68,6 +73,7 @@ from impact import (
     report_files,
     report_of,
     rerun_alone,
+    testing_table,
     text,
 )
 from prepush import full_command, pytest_interpreter, regression_sets
@@ -275,6 +281,30 @@ def full_run(root: Path, project: str, command: str, rerun: bool) -> int:
     return code if code == 0 else rerun_failed(root, project, output, code)
 
 
+def linked_runs(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], list[str]]:
+    """Under `full`, what a pull request's links add to the full command (SPEC-0055 rule 7)."""
+    table = testing_table(root) or {}
+    if not table.get("links") and table.get("map_source") != "generated":
+        return [], []
+    runs, lines = plan(root, project)
+    return [r for r in runs if r[3].startswith(LINK_REASON)], lines
+
+
+def run_all(root: Path, project: str, runs: list, rerun: bool) -> int:
+    """Each run with its line; the first failure ends it, with exit 1."""
+    for name, command, cwd, reason in runs:
+        started = time.monotonic()
+        if name == "full":
+            code = full_run(root, project, command, rerun)
+        else:
+            code = level_run(root, name, command, root / cwd, rerun)
+        word = "ok" if code == 0 else "FAIL"
+        say([f"project tests: {name} {word} ({time.monotonic() - started:.1f}s): {reason}"])
+        if code != 0:
+            return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if len(args) > 1 or args[:1] not in ([], ["--rerun-alone"], ["--no-rerun-alone"]):
@@ -298,24 +328,19 @@ def main(argv: list[str] | None = None) -> int:
         command, single = full_command(root, project, root)
         if single:
             print(single, flush=True)
-        return full_run(root, project, command, rerun)
+        code = full_run(root, project, command, rerun)
+        if code != 0:
+            return code
+        links, lines = linked_runs(root, project)
+        say(lines if links else [])
+        return run_all(root, project, links, rerun)
     try:
         runs, lines = plan(root, project)
     except CheckError as exc:
         print(f"project tests: {exc}")
         return 1
     say(lines)
-    for name, command, cwd, reason in runs:
-        started = time.monotonic()
-        if name == "full":
-            code = full_run(root, project, command, rerun)
-        else:
-            code = level_run(root, name, command, root / cwd, rerun)
-        word = "ok" if code == 0 else "FAIL"
-        say([f"project tests: {name} {word} ({time.monotonic() - started:.1f}s): {reason}"])
-        if code != 0:
-            return 1
-    return 0
+    return run_all(root, project, runs, rerun)
 
 
 if __name__ == "__main__":

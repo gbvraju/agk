@@ -17,6 +17,11 @@ of those it depends on. Where several files could be meant, each counts,
 because an entry only adds tests. A file no import reaches falls back on the folder conventions: a
 test beside it, in `__tests__/`, or in a module's `src/test/` for its `src/main/`. A file that
 cannot be read adds no entries, so what only it reaches stays unmapped. Files and git only.
+
+It also writes one `[[testing.links]]` entry (SPEC-0055 rule 7) for a schema file (`.proto`,
+`.graphql`, `.graphqls`, `.gql`, or a YAML or JSON file whose root says `openapi` or `swagger`) that
+a file of another `[proof]` area names by a path, an import or a generator's input alike, naming
+that area's `contract` level; an area with none adds no link.
 """
 
 from __future__ import annotations
@@ -34,11 +39,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, git, load_config, repo_root, run
-from impact import is_doc, is_test_file
+from common import CheckError, area_levels, git, load_config, proof_areas, repo_root, run
+from impact import MAP_FILE, is_doc, is_test_file
 
 NAME = "test_map"
-OUT = ".agk-test-map.toml"
+OUT = MAP_FILE
 READ_LIMIT = 2 * 1024 * 1024  # a larger file is not read: generated, or minified
 JS_SOURCES = (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts")
 JS_TRIED = (".ts", ".tsx", ".mts", ".cts", ".d.ts", ".js", ".jsx", ".mjs", ".cjs", ".json")
@@ -82,6 +87,10 @@ GO_REPLACE = re.compile(
     re.M,
 )
 PLIST_TOKEN = re.compile(r"""/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|[{}()=;,]|[^\s{}()=;,"]+""", re.S)
+SCHEMA_SUFFIXES = (".proto", ".graphql", ".graphqls", ".gql")
+OPENAPI_SUFFIXES = (".yaml", ".yml", ".json")
+OPENAPI_ROOT = re.compile(r"""^\s*["']?(?:openapi|swagger)["']?\s*:\s*["']?[23]\.""", re.M)
+PATH_WORD = re.compile(r"[\w./-]+")
 UNREADABLE = "test_map: a tsconfig cannot be read and adds nothing (setting: compilerOptions.paths)"
 
 
@@ -456,18 +465,75 @@ def subject(test: str) -> tuple[str, str]:
     return folder, SUBJECT.fullmatch(posixpath.splitext(name)[0])[1]
 
 
-def head_settings(root: Path, tree: dict[str, tuple[str, int]]) -> tuple[list[str], list[str]]:
-    """`test_dirs` and `test_patterns` as the head's own config files give them."""
+def head_config(root: Path, tree: dict[str, tuple[str, int]], read):
+    """What READ makes of a folder holding the head's own config files."""
     named = [n for n in ("agk.toml", "pyproject.toml") if n in tree]
     texts = blobs(root, [tree[n][0] for n in named])
     with tempfile.TemporaryDirectory() as folder:
         for config in named:
             (Path(folder) / config).write_text(texts[tree[config][0]], encoding="utf-8")
-        try:
-            settings = load_config(Path(folder))
-        except ValueError:
-            raise CheckError("agk.toml cannot be read (setting: test_dirs)") from None
+        return read(Path(folder))
+
+
+def head_settings(root: Path, tree: dict[str, tuple[str, int]]) -> tuple[list[str], list[str]]:
+    """`test_dirs` and `test_patterns` as the head's own config files give them."""
+    try:
+        settings = head_config(root, tree, load_config)
+    except ValueError:
+        raise CheckError("agk.toml cannot be read (setting: test_dirs)") from None
     return list(settings["test_dirs"]), list(settings["test_patterns"])
+
+
+def area_folders(area: dict) -> list[str]:
+    """The folders that make a file part of AREA: its `cwd` and `dirs`, and its levels'."""
+    levels = area.get("levels", [])
+    named = [area["cwd"], *area["dirs"], *[d for x in levels for d in (x["cwd"], *x["dirs"])]]
+    return [d.strip("/") + "/" for d in named if d.strip("/") not in ("", ".")]
+
+
+def schema_links(root: Path, tree: dict[str, tuple[str, int]]) -> dict[str, set[str]]:
+    """Schema file -> the `contract` levels of the other areas with a file that names it."""
+    try:
+        areas = head_config(root, tree, proof_areas) or []
+    except (ValueError, CheckError):
+        return {}  # every other reader refuses a bad `[proof]`
+    folders = {a["name"]: tuple(area_folders(a)) for a in areas}
+    contract = {
+        a["name"]: f"{a['name']}:contract"
+        for a in areas
+        if any(x["name"] == "contract" for x in area_levels(a))
+    }
+    readable = [p for p, v in tree.items() if v[1] <= READ_LIMIT and not NOT_A_GLOB.search(p)]
+    importers = [p for p in readable if any(p.startswith(folders[a]) for a in contract)]
+    maybe = [p for p in readable if p.endswith(OPENAPI_SUFFIXES)]
+    found = blobs(root, sorted({tree[p][0] for p in [*importers, *maybe]}))
+    schemas = {p for p in readable if p.endswith(SCHEMA_SUFFIXES)}
+    schemas |= {p for p in maybe if OPENAPI_ROOT.search(found[tree[p][0]])}
+    by_end: dict[str, set[str]] = {}
+    for schema in schemas:
+        parts = schema.split("/")
+        for n in range(len(parts)):
+            if n == 0 or n < len(parts) - 1:  # never a bare file name of a deeper path
+                by_end.setdefault("/".join(parts[n:]), set()).add(schema)
+    links: dict[str, set[str]] = {}
+    for path in importers:
+        named: set[str] = set()
+        for word in set(PATH_WORD.findall(found[tree[path][0]])):
+            word = word.rstrip(".")
+            local = inside(posixpath.join(posixpath.dirname(path), word))
+            named |= {local} & schemas if local else set()
+            parts = word.split("/")
+            for n in range(len(parts) if "/" in word else 1):
+                if n == 0 or n < len(parts) - 1:
+                    named |= by_end.get("/".join(parts[n:]), set())
+        for schema in named - {path}:
+            own = {a for a, f in folders.items() if f and schema.startswith(f)}
+            links.setdefault(schema, set()).update(
+                level
+                for a, level in contract.items()
+                if path.startswith(folders[a]) and a not in own
+            )
+    return {s: levels for s, levels in links.items() if levels}
 
 
 def entries(root: Path, tree: dict[str, tuple[str, int]]) -> tuple[dict[str, set[str]], bool]:
@@ -528,10 +594,19 @@ def build(root: Path) -> int:
     if OUT in tree:
         raise CheckError(f"the generated map is committed; principle 5 forbids it (setting: {OUT})")
     covered, broken = entries(root, tree)
+    links = schema_links(root, tree)
     lines = [f"# tree {git(root, 'rev-parse', 'HEAD^{tree}').strip()}"]
     for code in sorted(covered):
         names = ", ".join(toml_string(t) for t in sorted(covered[code]))
         lines += ["", "[[testing.map]]", f"code = {toml_string(code)}", f"tests = [{names}]"]
+    for schema in sorted(links):
+        run_names = ", ".join(toml_string(r) for r in sorted(links[schema]))
+        lines += [
+            "",
+            "[[testing.links]]",
+            f"code = [{toml_string(schema)}]",
+            f"run = [{run_names}]",
+        ]
     temporary = root / f"{OUT}.{os.getpid()}"
     try:
         temporary.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))

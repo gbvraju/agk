@@ -44,7 +44,9 @@ command = "whole-e2e"
 when = ["nightly"]
 env = ["browser"]
 """
-TESTING = '[testing]\nprofile = "fast"\nmap = [{ code = "web/app/**", tests = ["web/tests/unit/**"] }]\n'
+TESTING = (
+    '[testing]\nprofile = "fast"\nmap = [{ code = "web/app/**", tests = ["web/tests/unit/**"] }]\n'
+)
 FILES = {
     "api/models.py": "# models\n",
     "api/schema/shop.proto": 'syntax = "proto3";\n',
@@ -132,8 +134,10 @@ def test_a_link_selects_a_level_off_the_pull_request_whole_when_none_is_selected
 def test_a_link_runs_the_selected_tests_of_its_level(repo):
     """REQ-062 AC4: brief #828 answer 2 (selected tests of the level, when there are some)."""
     start(repo, link("api/**", "web:contract"))
-    toml = (repo.root / "agk.toml").read_text().replace(
-        'tests = ["web/tests/unit/**"]', 'tests = ["web/tests/contract/test_a.py"]'
+    toml = (
+        (repo.root / "agk.toml")
+        .read_text()
+        .replace('tests = ["web/tests/unit/**"]', 'tests = ["web/tests/contract/test_a.py"]')
     )
     repo.commit({"agk.toml": toml, "web/app/cart.py": "# c\n", "api/models.py": "# m\n"}, "c")
     sets, notes = planned(repo)
@@ -194,6 +198,31 @@ def test_an_absent_environment_fails_in_ci_naming_the_setting(repo, monkeypatch)
     assert "browser" not in reason and "not run: web:e2e (env browser)" in notes
 
 
+@pytest.mark.parametrize("mode", ["full", "selected"])
+def test_the_test_step_runs_a_link_and_fails_without_its_environment(repo, mode):
+    """REQ-062 AC4: SPEC-0055 rule 7 (the CI step, under either `pr_tests`)."""
+    start(repo, link("api/**", "web:e2e"), f'pr_tests = "{mode}"\n')
+    change(repo, "api/models.py")
+    env = {"EVENT": "pull_request", "AGK_BASE": "main"}
+    bad = repo.run("project_tests.py", CI="true", **env)
+    assert bad.returncode == 1 and "setting: testing.links" in bad.stdout
+    (repo.root / "web").mkdir(exist_ok=True)
+    good = repo.run("project_tests.py", AGK_TEST_ENV="browser", **env)
+    assert "web:e2e" in good.stdout and "web:e2e FAIL" in good.stdout  # `whole-e2e` is no command
+
+
+def test_the_test_step_is_unchanged_without_a_link_or_on_a_push(repo):
+    """REQ-062 AC1: SPEC-0055 rule 2 (with no link, as today; a link is for a pull request)."""
+    start(repo, "", 'pr_tests = "full"\n')
+    change(repo, "api/models.py")
+    assert repo.run("project_tests.py", EVENT="pull_request", AGK_BASE="main").stdout == ""
+    repo.git("checkout", "-q", "main")
+    repo.commit(
+        {"agk.toml": HEAD + AREAS + TESTING + 'pr_tests = "full"\n' + link("api/**", "web:e2e")}
+    )
+    assert repo.run("project_tests.py", EVENT="push", CI="true").returncode == 0
+
+
 def test_the_plan_shows_a_linked_level(repo):
     """REQ-062 AC4: the plan shown is the plan run (test_plan.py)."""
     start(repo, link("api/**", "web:contract"))
@@ -222,10 +251,25 @@ def derived(path: str, level: str = "web:contract") -> str:
     ("schema", "text", "importer", "names"),
     [
         ("api/schema/shop.proto", 'syntax = "proto3";\n', "web/app/a.proto", BUF),
-        ("api/shop.graphql", "type Q { a: Int }\n", "web/codegen.yml", "schema: ../api/shop.graphql\n"),
+        (
+            "api/shop.graphql",
+            "type Q { a: Int }\n",
+            "web/codegen.yml",
+            "schema: ../api/shop.graphql\n",
+        ),
         ("api/shop.gql", "type Q { a: Int }\n", "web/app/q.ts", 'import "../../api/shop.gql";\n'),
-        ("api/open.yaml", "openapi: 3.1.0\n", "web/package.json", '"gen": "gen ../api/open.yaml"\n'),
-        ("api/old.json", '{\n  "swagger": "2.0"\n}\n', "web/gen.gradle", 'x "$rootDir/api/old.json"\n'),
+        (
+            "api/open.yaml",
+            "openapi: 3.1.0\n",
+            "web/package.json",
+            '"gen": "gen ../api/open.yaml"\n',
+        ),
+        (
+            "api/old.json",
+            '{\n  "swagger": "2.0"\n}\n',
+            "web/gen.gradle",
+            'x "$rootDir/api/old.json"\n',
+        ),
     ],
 )
 def test_a_schema_another_area_imports_or_generates_from_derives_a_link(
