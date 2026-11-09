@@ -134,7 +134,10 @@ def test_doctor_reads_nothing_with_start(tmp_path):
 
 def test_doctor_prints_the_schedule_and_passes_when_each_slot_has_run(tmp_path):
     """REQ-041: answer 4; slots times starts per hour, and one marker per slot in the last hour."""
-    markers = [said(1, f"Slot: active {stamp(2)} s1 r1"), said(2, f"Slot: released {stamp(9)} s2 r2")]
+    markers = [
+        said(1, f"Slot: active {stamp(2)} s1 r1"),
+        said(2, f"Slot: released {stamp(9)} s2 r2"),
+    ]
     result = doctor_script.slot_schedule_result(setting(tmp_path, ON), FakeReads(markers))
     assert result.status == "ok"
     assert "2 slots x 4 starts = 8 an hour" in result.message
@@ -439,9 +442,10 @@ def test_a_renewal_keeps_the_time_of_the_take(monkeypatch, tmp_path):
 
 
 def red_issue(number: int, opened: float, closed: float | None) -> dict:
+    shut = None if closed is None else stamp(closed)
     return {"number": number, "title": conductor.session.RED_TITLE,
             "body": "Sentence: red\nPriority: 0\n", "user": {"login": "x"},
-            "created_at": stamp(opened), "closed_at": None if closed is None else stamp(closed)}  # fmt: skip
+            "created_at": stamp(opened), "closed_at": shut}  # fmt: skip
 
 
 def greening(monkeypatch, tmp_path, issues, pulls, runs) -> Answers:

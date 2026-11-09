@@ -73,8 +73,9 @@ The holders (item 4): `holders` ranks the open builder pull requests by the brie
 brief held by two counts under each. `plan` prints `Holds <k>:`, and `Stall:` for a holder of two
 or more idle over `[flow] stall_minutes` (30 by default); it posts nothing, the conductor does.
 
-With `builder_start = "assign"` (brief #776 build (c), ADR-0402) nothing starts: `start` is empty and
-an `assign` list names the free slots, each row with its `Assign:` line; `launch.py` starts nothing.
+With `builder_start = "assign"` (brief #776 build (c), ADR-0402) nothing starts: `start` is empty
+and an `assign` list names the free slots, each row with its `Assign:` line; `launch.py` starts
+nothing.
 
 Plan before filing and every hold measured (amendment 141 items 6 and 7, brief #772 build (c)):
 `--what-if DIR` judges saved briefs with `waves` and posts and records nothing; `--record` appends
@@ -106,8 +107,6 @@ from common import CheckError, matches, read_list
 from metrics import HOLDS_FILE, author_of, counted_authors, hold_rows
 from reviewers import verdict_authors
 from session import (
-    builder_slots,
-    builder_start,
     ADDS,
     BROAD,
     HELD_PREFIX,
@@ -117,6 +116,8 @@ from session import (
     all_takes,
     brief_number,
     brief_shape,
+    builder_slots,
+    builder_start,
     first_line,
     flow_int,
     flow_value,

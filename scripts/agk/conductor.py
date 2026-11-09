@@ -299,12 +299,13 @@ def watch(root, since: datetime, once: bool) -> int:
         if lines or once or time.monotonic() - started + interval >= WATCH_BOUND:
             ticked = not lines and not once
             said = lines or ["tick" if ticked else "nothing new"]
-            print("\n".join(said + (stall_report(root, repo) if ticked else []) + sweep_late(root, repo)))
+            said += stall_report(root, repo) if ticked else []
+            print("\n".join(said + sweep_late(root, repo)))
             return 0
         time.sleep(interval)
 
 
-# --- ticks and stalls (brief #776 build (c), ADR-0402) ---------------------------------------------
+# --- ticks and stalls (brief #776 build (c), ADR-0402) ----------------------------------------
 
 
 def minutes_since(moment: datetime, now: datetime) -> int:
@@ -332,7 +333,7 @@ def taker(root, repo: str, brief: int, pulls: list) -> str:
     return max(takes, key=lambda t: t[:2])[2] if takes else "unknown"
 
 
-def stall_line(root, repo: str, pull: dict, pulls: list, limit: int, now: datetime) -> str | None:
+def stall_line(root, repo: str, pull: dict, pulls: list, limit: int, now) -> str | None:
     """The `STALL` line of a builder's draft, else None: a failed required check with no
     `Progress:` for 15 minutes, or no push and no builder comment for `stall_minutes`. A draft
     whose newest comment is a `Question:` waits for its answer; a head that cannot be read is
@@ -415,8 +416,10 @@ def lease_stall(root, repo: str, comments: list, authors: list[str], now) -> tup
     if holder is None or found is None:
         return None
     floor = when(found[1].group(4) or found[1].group(2))
-    spoken = session.pages(f"repos/{repo}/issues/comments?since={stamp_of(floor)}") if floor else None
-    if floor is None or spoken is None:
+    if floor is None:
+        return None
+    spoken = session.pages(f"repos/{repo}/issues/comments?since={stamp_of(floor)}")
+    if spoken is None:
         return None
     listed = {a.lstrip("@").lower() for a in authors}
     times = [
@@ -477,7 +480,8 @@ def green_lines(root, repo: str, since: datetime) -> list[str]:
                 who = taker(root, repo, brief, pulls) if brief is not None else "unknown"
                 named_pulls.append(f"#{pull['number']} ({who})")
         if named_pulls:
-            lines.append(f"MAIN GREEN after #{issue['number']}: merge of main {' '.join(named_pulls)}")
+            names = " ".join(named_pulls)
+            lines.append(f"MAIN GREEN after #{issue['number']}: merge of main {names}")
     return lines
 
 
