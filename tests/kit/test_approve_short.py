@@ -26,6 +26,7 @@ def spec(number: str, status: str, rule: str = "A rule.") -> str:
     return (
         f"# SPEC-{number}: Thing\n\n- Status: {status}\n- Owner: reviewers\n\n"
         f"## Rules\n\n1. {rule}\n"
+        "\n## Contexts\n\nkit, github, local, personal and stacks: as written\n"
     )
 
 

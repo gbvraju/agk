@@ -180,7 +180,8 @@ def spec_repo(repo, amendment: bool):
     log = "# Decisions log\n\n| Date | Decision |\n| --- | --- |\n"
     repo.commit({S28: before_28, S31: before_31, "docs/runs/decisions-log.md": log}, "base")
     repo.branch()
-    files: dict[str, str | None] = {S28: text(S28), S31: text(S31)}
+    section = "\n## Contexts\n\nkit, github, local, personal and stacks: as written\n"
+    files: dict[str, str | None] = {S28: text(S28) + section, S31: text(S31) + section}
     if amendment:
         files[AMENDMENT] = text(AMENDMENT)
     repo.commit(files, "fold")

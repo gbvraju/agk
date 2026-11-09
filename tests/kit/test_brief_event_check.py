@@ -21,6 +21,7 @@ GOOD = (
     f'Sentence: "{WORDS}"\n'
     "Answers:\n1. one\n2. two\n"
     "Size: S\nAdvances: new\nTouches: docs/**\nPriority: 1\n"
+    "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n"
 )
 WAVED = GOOD + "Wave: 2\n"
 LONG = GOOD.replace(WORDS, "x" * 301)
@@ -127,6 +128,7 @@ WORKFLOW = SCRIPT.parents[2] / ".github" / "workflows" / "agk-brief.yml"
 needs_workflow = pytest.mark.skipif(not WORKFLOW.is_file(), reason="the workflow is absent")
 REPO = "example-owner/example-repo"
 ISSUE = f"repos/{REPO}/issues/12"
+
 
 def job_script() -> str:
     """The `run:` text of the job's one script step, as GitHub would hand it to bash."""

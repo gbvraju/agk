@@ -52,7 +52,12 @@ def brief(touches: str, screens: str | None = None) -> str:
     ]
     if screens is not None:
         lines.append(screens)
-    lines += ["Priority: 2", "Size: S", ""]
+    lines += [
+        "Priority: 2",
+        "Size: S",
+        "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)",
+        "",
+    ]
     return "\n".join(lines)
 
 

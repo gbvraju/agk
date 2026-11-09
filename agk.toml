@@ -131,6 +131,9 @@ tests = [
   "tests/kit_dev/test_upgrade_route_triggers.py", "tests/kit_dev/test_windows_line_endings.py",
 ]
 [[testing.map]]
+code = "scripts/agk/check_acceptance.py"
+tests = ["tests/kit/test_agk_mk.py", "tests/kit/test_check_acceptance.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/check_adrs.py"
 tests = [
   "tests/kit/test_check_adrs.py", "tests/kit/test_conductor_guard.py", "tests/kit/test_core_audit.py",

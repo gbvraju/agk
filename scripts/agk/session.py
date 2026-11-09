@@ -136,6 +136,7 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+from check_specs import CONTEXTS, CONTEXTS_PREFIX, CONTEXTS_RULE, contexts_problems
 from common import (
     PAUSED_LINE,
     CheckError,
@@ -206,6 +207,9 @@ PAUSED_REFUSAL = (
     " lists and waits on nothing; remove the line `paused = true` to resume"
 )
 LABEL = "agk-brief"
+HOLD = re.compile(r"Hold: #(\d+) +(\S.*)")  # amendment 142: the owner's hold of a brief
+RELEASE = re.compile(r"Release: #(\d+)(?: .*)?")
+HELD_PREFIX = "held by the owner: "
 STALE_LABEL = "agk-stale"
 STALE_LINE = "Status: stale"
 PARKED_LABEL = "agk:parked"
@@ -655,6 +659,18 @@ def brief_problems(body: str | None) -> list[str]:
     return problems + line_problems(lines)
 
 
+def contexts_line_problems(body: str | None) -> list[str]:
+    """Amendment 142: the one `Contexts:` line of a brief; the router's red-branch brief, a fixed
+    repair of the default branch and no design, needs none (SPEC-0032 rule 7)."""
+    text = (body or "").splitlines()
+    if all(any(x.rstrip() == pair for x in text) for pair in ROUTER_PAIR):
+        return []
+    lines = [x for x in text if x.startswith(CONTEXTS_PREFIX)]
+    if len(lines) != 1:
+        return [f"{CONTEXTS_RULE}: exactly one line Contexts: listing {', '.join(CONTEXTS)}"]
+    return contexts_problems(lines[0][len(CONTEXTS_PREFIX) :])
+
+
 def line_problems(lines: list[str]) -> list[str]:
     """SPEC-0034 rule 2: the Advances, Touches and Priority lines (never the sentence)."""
     problems: list[str] = []
@@ -876,8 +892,36 @@ def is_parked(brief: dict) -> bool:
     return PARKED_LABEL in labels or any(x.startswith(PARKED_PREFIX) for x in lines)
 
 
+def hold_state(root, comments: list, number: int) -> tuple[str | None, list[str]]:
+    """Amendment 142: (the reason of the brief's live hold or None, the logins of a `Hold:` by
+    someone not in `spec_approvers`). The latest `Hold:` or `Release:` by an approver decides."""
+    lines = [
+        (moment(c.get("created_at")), c.get("id", 0), author_of(c), m)
+        for c in comments
+        if (m := HOLD.fullmatch(first_line(c)) or RELEASE.fullmatch(first_line(c)))
+        and int(m.group(1)) == number
+    ]
+    if not lines:
+        return None, []
+    approvers = set(spec_approvers(root))
+    latest: re.Match | None = None
+    ignored: list[str] = []
+    for _, _, login, found in sorted(lines, key=lambda x: x[:2]):
+        if login in approvers:
+            latest = found
+        elif found.re is HOLD and login not in ignored:
+            ignored.append(login)
+    return (latest.group(2) if latest is not None and latest.re is HOLD else None), ignored
+
+
 def judge(
-    repo: str, brief: dict, me: str, prs: list, hours: int, shape: Callable = brief_problems
+    repo: str,
+    brief: dict,
+    me: str,
+    prs: list,
+    hours: int,
+    shape: Callable = brief_problems,
+    root=None,
 ) -> tuple[str | None, list]:
     """Why the brief is not for this session (or None when it is free), and its comments."""
     if is_stale(brief):
@@ -896,6 +940,8 @@ def judge(
     comments = pages(f"repos/{repo}/issues/{brief['number']}/comments")
     if comments is None:
         return "its comments cannot be read", []
+    if root is not None and (reason := hold_state(root, comments, brief["number"])[0]):
+        return HELD_PREFIX + reason, comments
     takes = live_takes(comments, brief["number"], prs, hours)
     if takes and not any(t[2] == me for t in takes):
         return f"taken by {takes[0][2]}", comments
@@ -959,13 +1005,17 @@ def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
     named = {brief_number(p) for p in prs if p.get("state") == "open"}
     shape = brief_shape(root, repo)
     for brief in sorted((i for i in issues if "pull_request" not in i), key=lambda i: i["number"]):
-        why, comments = judge(repo, brief, me, prs, hours, shape)
+        why, comments = judge(repo, brief, me, prs, hours, shape, root)
         found.comments[brief["number"]] = comments
         if why is None:
             found.free.append(brief)
             continue
         found.skipped.append((brief["number"], why))
-        if why.startswith("taken by") and brief["number"] not in named:
+        running = why.startswith("taken by") or (
+            why.startswith(HELD_PREFIX)
+            and any(t[2] != me for t in live_takes(comments, brief["number"], prs, hours))
+        )
+        if running and brief["number"] not in named:
             found.held.append((brief["number"], touches_of(brief["body"])))
     found.free.sort(key=lambda b: (priority_of(b["body"]), b["number"]))
     return found
@@ -1297,6 +1347,9 @@ def claim(root, me: str, number: int, build: str | None) -> int:
     prs = pages(f"repos/{repo}/pulls?state=all")
     if comments is None or prs is None:
         raise CheckError("rule 5: the brief and the pull requests cannot be read")
+    if reason := hold_state(root, comments, number)[0]:
+        print(f"skip #{number}: {HELD_PREFIX}{reason}")
+        return 1
     hours = flow_int(root, "claim_hours", CLAIM_HOURS, 1)
     s = Survey(repo, me, 0, hours, prs, [], {number: comments})
     if any(t[2] != me for t in live_takes(comments, number, prs, hours)):
