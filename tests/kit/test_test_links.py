@@ -313,12 +313,11 @@ def test_declared_and_derived_links_are_a_union(repo):
     assert [x.run for x in found(repo).linked] == ["web:contract", "web:unit"]
 
 
-def test_a_curated_repository_never_reads_the_file(repo):
-    """REQ-062 AC1: SPEC-0055 rule 1 (one setting holds the difference)."""
-    start(repo, files={"web/app/s.proto": BUF})
+def test_no_built_map_adds_nothing_and_says_nothing(repo):
+    """REQ-062 AC1: SPEC-0055 rule 1 (no script asks which source it has; no file, no link)."""
+    start(repo, "", GENERATED, {"web/app/s.proto": BUF})
     change(repo, "api/schema/shop.proto")
-    built(repo)
-    assert found(repo).linked == []
+    assert found(repo).linked == [] and found(repo).link_notes == []
 
 
 def test_a_map_of_another_tree_adds_no_link_and_says_so(repo):

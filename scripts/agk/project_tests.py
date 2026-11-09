@@ -66,6 +66,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from common import CheckError, git, load_config, merge_base, proof_areas, repo_root, resolve_base
 from impact import (
     LINK_REASON,
+    MAP_FILE,
     impact,
     junit_setting,
     level_of,
@@ -284,7 +285,7 @@ def full_run(root: Path, project: str, command: str, rerun: bool) -> int:
 def linked_runs(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], list[str]]:
     """Under `full`, what a pull request's links add to the full command (SPEC-0055 rule 7)."""
     table = testing_table(root) or {}
-    if not table.get("links") and table.get("map_source") != "generated":
+    if not table.get("links") and not (root / MAP_FILE).is_file():
         return [], []
     runs, lines = plan(root, project)
     return [r for r in runs if r[3].startswith(LINK_REASON)], lines

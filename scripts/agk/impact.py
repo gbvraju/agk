@@ -33,10 +33,10 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
   file; without the key, none;
 - `links`: a list of `{ code = ["<glob>", ...], run = ["<area>:<level>", ...] }` (SPEC-0055 rule 7,
   brief #828): a changed file that matches a `code` glob selects each named level on a pull request,
-  even one whose `when` has no `pr`. A link only adds tests. With `map_source = "generated"` the
-  links of a current `.agk-test-map.toml` are added to them. A linked level whose environment is
-  absent fails the test step in CI (`CI` set, as `common.resolve_base` reads it) and is `not run`
-  on a developer's machine.
+  even one whose `when` has no `pr`. A link only adds tests. The links of a `.agk-test-map.toml`
+  built from the head's tree are added to them; one of another tree adds none and says so. A linked
+  level whose environment is absent fails the test step in CI (`CI` set, as `common.resolve_base`
+  reads it) and is `not run` on a developer's machine.
 
 For the change base..head `impact` gives the existing test files of the head (`test_dirs`,
 `test_patterns`) that a `tests` glob matches, in an entry whose `code` glob matches a changed file,
@@ -106,7 +106,7 @@ ENTRY_KEYS = {"code", "tests"}
 LINK_KEYS = {"code", "run"}
 MAP_FILE = ".agk-test-map.toml"  # written by test_map.py, git-ignored (SPEC-0055 rule 5)
 MAP_STALE = (
-    "tests: the generated map is missing or of another tree, so its links are not read "
+    "tests: the generated map is of another tree or unreadable, so its links are not read "
     "(setting: testing.links)"
 )
 LINK_REASON = "link: "  # how a run that a link added says why it runs
@@ -709,9 +709,8 @@ def impact(root: Path, base: str, head: str) -> Impact:
     table = testing_table(root) or {}
     found.map_source = table.get("map_source")
     links = list(table.get("links", []))
-    if found.map_source == "generated":
-        derived, found.link_notes = derived_links(root, head)
-        links += derived
+    derived, found.link_notes = derived_links(root, head)
+    links += derived
     if links:
         found.linked = linked_levels(links, changed_files(root, base, head))
         found.tracked = head_files(root, head) if found.linked else []
@@ -720,6 +719,8 @@ def impact(root: Path, base: str, head: str) -> Impact:
 
 def derived_links(root: Path, head: str) -> tuple[list[dict], list[str]]:
     """The links of the `.agk-test-map.toml` of HEAD's tree, or the line that says it is not."""
+    if not (root / MAP_FILE).is_file():
+        return [], []  # nobody built one: nothing to read, whichever the map's source
     try:
         text = (root / MAP_FILE).read_text(encoding="utf-8")
         table = tomllib.loads(text)
@@ -736,8 +737,9 @@ def linked_levels(links: list[dict], changed: list[str]) -> list[Linked]:
     for link in links:
         for path in changed:
             glob = next((g for g in link["code"] if matches(path, g)), None)
-            for name in link["run"] if glob else ():
-                found.setdefault(name, Linked(name, path, glob))
+            if glob is not None:
+                for name in link["run"]:
+                    found.setdefault(name, Linked(name, path, glob))
     return [found[name] for name in sorted(found)]
 
 

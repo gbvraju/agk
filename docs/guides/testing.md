@@ -43,7 +43,7 @@ budget_seconds = 300
   "Selected tests on pull requests"). Any other value is refused with `setting: pr_tests`.
 - `links`: `[[testing.links]]` entries, each `code` (path globs) and `run` (`<area>:<level>` names). A changed file that matches a
   `code` glob selects each named level on the pull request, even one whose `when` has no `pr`: the selected tests of that level,
-  or all of it when none is selected. A link only adds tests. With `map_source = "generated"`, `test_map.py build` adds one link
+  or all of it when none is selected. A link only adds tests. `test_map.py build` adds one link
   for a schema file (a `.proto`, `.graphql`, `.graphqls` or `.gql` file, or an OpenAPI or Swagger YAML or JSON file) that a file of
   another area names, naming that area's `contract` level when it has one. A linked level whose environment is absent fails the
   test step in CI, naming `testing.links`, and is `not run` on a developer's machine.
