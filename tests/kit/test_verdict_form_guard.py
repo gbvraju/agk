@@ -218,6 +218,7 @@ def test_the_router_reads_the_newest_line_with_the_same_check(monkeypatch):
     f = facts(head=HEAD, comments=[bad, good, other])
     assert route.unreadable_lines("o/r", 7, f) == [(bad, common.NOT_FIX_LIST)]
     assert route.newest_is_unreadable(f["comments"], f["authors"], route.unreadable_lines("o/r", 7, f)) is False
+    bad = said(4, "boss", bad["body"])
     f = facts(head=HEAD, comments=[good, bad])
     found = route.unreadable_lines("o/r", 7, f)
     assert route.newest_is_unreadable(f["comments"], f["authors"], found) is True
@@ -232,6 +233,7 @@ def test_the_live_check_reads_only_the_newest_verdict_on_the_head(monkeypatch):
     assert route.unreadable_lines("o/r", 7, f) == [(newest, conductor.NO_ITEMS)]
     assert len(calls) == 1
     calls.clear()
+    older = said(3, "boss", older["body"])
     f = facts(head=HEAD, comments=[newest, older])  # the newest names an older head: not read
     assert route.unreadable_lines("o/r", 7, f) == []
     assert calls == []

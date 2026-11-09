@@ -25,9 +25,10 @@ open pull request labelled `agk:ci-running` that the event did not name and rela
 required checks have all finished, by the same rules, writing the label only, so a wake lost to
 another event does not leave a green pull request at `agk:ci-running`.
 No review, no merge, and one comment only: the reply `Correction needed:` to a verdict whose
-`Final:` line it cannot read (brief 238). When a pull request merges (`pull_request` closed, the
-job runs only for a merge), the brief its body finishes with `Finishes: #n` beside `Brief: #n` is
-closed as completed, with one comment that names the merge commit (brief 302, ADR-0178); apart
+`Final:` line it cannot read (brief 238), and one comment `Unreadable: <rule>` for another
+conductor line it cannot read, which sets `agk:review` while it is the newest (brief #854). When a
+pull request merges (`pull_request` closed, the job runs only for a merge), the brief its body
+names with `Finishes: #n` or `Closes #n` beside `Brief: #n` is closed as completed, with one comment that names the merge commit (brief 302, ADR-0178); apart
 from the health issues below, that is the only other issue it closes. Messages name the rule,
 never a value.
 A covered fix list on the full head whose every `Final:` line accepts an ADR the pull request
@@ -55,12 +56,14 @@ from urllib.parse import quote
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import (
+    BRIEF_NUMBER,
     PAUSED_LINE,
     CheckError,
     agent_apps,
     covered_fix_list,
     final_accepts,
     finished_brief,
+    finishes_problem,
     load_config,
     paused,
     repo_root,
@@ -263,6 +266,8 @@ def decide(f: dict) -> str:
         s.get("state") in FAILED_STATUS for s in statuses
     ):
         return "agk:ci-red"
+    if f.get("unreadable"):  # brief #854 answer 2: the conductor sees it at its next pass
+        return "agk:review"
     head = str(f.get("head") or "")
     comments = f.get("comments") or []
     if f.get("solo_person"):  # brief 277: the person's confirmation is the verdict and approval
@@ -357,7 +362,7 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
     status = gh(f"repos/{repo}/commits/{head}/status")
     reviews = listing(f"repos/{repo}/pulls/{n}/reviews")
     commit = gh(f"repos/{repo}/commits/{head}")
-    return pr, {
+    facts = {
         "head": head,
         "mergeable_state": pr.get("mergeable_state"),
         "checks": checks,
@@ -374,6 +379,9 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "draft_specs": draft_specs_of(repo, files, head),
         "commit": commit if isinstance(commit, dict) else {},
     }
+    facts["found"] = unreadable_lines(repo, n, facts)
+    facts["unreadable"] = newest_is_unreadable(comments, facts["authors"], facts["found"])
+    return pr, facts
 
 
 class Labels:
@@ -420,7 +428,7 @@ def correct_verdicts(repo: str, n: int, comments: list[dict], authors: list[str]
     A `Verdict:` comment of a listed author with a problem (`verdict_problem`, brief 238) gets one
     reply that begins `Correction needed:`, gives the message and names the comment; a reply already
     there for that comment (found by its marker) means nothing new is posted. The reply is the last
-    write of a routing, and no label depends on it."""
+    write of a routing; the label comes from `unreadable_lines` (brief #854)."""
     allowed = {a.lstrip("@").lower() for a in authors or []}
     answered = {
         m.group(1)
@@ -506,6 +514,79 @@ def correct_approvals(
             )
 
 
+FORM_LINES = ("Verdict:", "Final:", "Correction:")
+UNREADABLE = "Unreadable:"
+
+
+def head_check(repo: str, n: int, body: str, head: str, files: list) -> str | None:
+    """`conductor.head_problem`, the check of the guard; a function so that a test can replace it."""
+    import conductor  # conductor imports merge_cleared, which imports this file
+
+    return conductor.head_problem(repo, n, body, head, files)
+
+
+def form_lines(comments: list[dict], authors: list[str] | None) -> list[dict]:
+    """The comments of a listed verdict author whose first line is a conductor line, oldest first."""
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    return [
+        c
+        for c in sorted(comments, key=lambda c: c.get("id") or 0)
+        if login_of(c) in allowed and first_line(c).startswith(FORM_LINES)
+    ]
+
+
+def unreadable_lines(repo: str, n: int, f: dict) -> list[tuple[dict, str]]:
+    """(comment, rule) for each conductor line AGK cannot read (brief #854 answer 2), by the check
+    the guard runs. A line is read as it stands now, so an edit counts. Only the newest line, when
+    it is a verdict on the current head, is read against the pull request; a read that fails flags
+    nothing, for the label alone depends on it and the merge guard fails closed."""
+    import conductor  # conductor imports merge_cleared, which imports this file
+
+    lines = form_lines(f.get("comments") or [], f.get("authors"))
+    head = str(f.get("head") or "")
+    found = []
+    for comment in lines:
+        body = str(comment.get("body") or "")
+        problem = conductor.line_problem(body)
+        if problem is None and comment is lines[-1] and first_line(comment).startswith("Verdict:"):
+            named = first_line(comment).split()[-1]
+            if head and head.startswith(named):
+                try:
+                    problem = head_check(repo, n, body, head, f.get("files") or [])
+                except CheckError:
+                    problem = None
+        if problem:
+            found.append((comment, problem))
+    return found
+
+
+def newest_is_unreadable(
+    comments: list[dict], authors: list[str] | None, found: list[tuple[dict, str]]
+) -> bool:
+    """Whether the newest conductor line is one AGK cannot read; a later good line replaces it."""
+    lines = form_lines(comments, authors)
+    return bool(lines) and any(c.get("id") == lines[-1].get("id") for c, _ in found)
+
+
+def report_unreadable(
+    repo: str, n: int, comments: list[dict], found: list[tuple[dict, str]]
+) -> None:
+    """One comment `Unreadable: <rule>` for each line and rule, found again by its text. A line
+    `correct_verdicts` already answers with `Correction needed:` gets no second comment."""
+    said = {str(c.get("body") or "") for c in comments}
+    for comment, problem in found:
+        body = f"{UNREADABLE} {problem} (comment {comment.get('id')})"
+        if body in said or verdict_problem(str(comment.get("body") or "").strip()):
+            continue
+        write(
+            f"repos/{repo}/issues/{n}/comments",
+            "-f",
+            f"body={body}",
+            method="POST",
+            what="rule 2: a correction",
+        )
+
+
 def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str | None:
     """Route pull request `n`; its label, or None when it is over; CheckError if unreadable."""
     got = read_facts(repo, n, root)
@@ -519,6 +600,7 @@ def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str |
     if not dry:
         apply(repo, n, current, wanted, labels)
         correct_verdicts(repo, n, facts.get("comments") or [], facts.get("authors"))
+        report_unreadable(repo, n, facts.get("comments") or [], facts.get("found") or [])
         correct_approvals(
             repo,
             n,
@@ -539,11 +621,30 @@ FINISHED = "Finished by #{pr} (merge commit {sha})."
 FINISHED_MARK = "Finished by #{pr} (merge commit "
 
 
+CLOSES = re.compile(r"Closes (#\d+)")
+
+
+def closing_brief(body: str | None) -> int | None:
+    """The brief a body closes: its valid `Finishes: #n`, else a line `Closes #n` beside `Brief: #n`
+    of the same number (brief #854 answer 3); a malformed `Finishes:` line closes nothing."""
+    if finishes_problem(body) is not None:
+        return None
+    if (found := finished_brief(body)) is not None:
+        return found
+    lines = [x.strip() for x in str(body or "").splitlines()]
+    brief = next((x[len("Brief:") :].strip() for x in lines if x.startswith("Brief:")), "")
+    named = BRIEF_NUMBER.fullmatch(brief)
+    if named and any((m := CLOSES.fullmatch(x)) and m.group(1) == brief for x in lines):
+        return int(named.group(1))
+    return None
+
+
 def finish_brief(repo: str, n: int, dry: bool) -> int | None:
     """Close the brief that merged pull request `n` finishes; its number, or None.
 
     The pull request is read again with GET: only one GitHub reports as merged, whose body has a
-    line `Finishes: #b` beside `Brief: #b` (the same number, `finished_brief`), closes issue #b,
+    line `Finishes: #b` or `Closes #b` beside `Brief: #b` (the same number, `closing_brief`),
+    closes issue #b,
     and only while #b is an open issue (not a pull request) labelled `agk-brief`. The router posts
     one comment on it that names the pull request and the merge commit, unless one for this pull
     request is there already, then closes it as completed. It touches no other issue."""
@@ -552,7 +653,7 @@ def finish_brief(repo: str, n: int, dry: bool) -> int | None:
         raise CheckError(f"rule 8: pull request #{n} cannot be read")
     if not (pr.get("merged") is True or pr.get("merged_at")):
         return None
-    brief = finished_brief(pr.get("body"))
+    brief = closing_brief(pr.get("body"))
     if brief is None:
         return None
     issue = gh(f"repos/{repo}/issues/{brief}")

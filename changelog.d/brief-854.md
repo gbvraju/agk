@@ -1,0 +1,1 @@
+- A conductor line in the wrong form is refused before it is posted and marked after it; a `taken:` line writes the brief's own `Reserved:` numbers; a `Closes #n` line closes its brief, and the red-branch issue is offered by the plan (brief #854, ADR-0388 Proposed)

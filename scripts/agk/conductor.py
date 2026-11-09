@@ -18,6 +18,10 @@ A `Question:` or `Report:` with no comment by a listed verdict author after it, 
 `conductor_late_minutes` (30 by default), is marked `LATE` (row 13). The rules it reads are
 `session.py`'s and `merge_cleared.py`'s own functions, never a copy.
 
+Brief #854 (ADR-0388): `sweep` prints `HELD VERDICT #<n>` for a pull request whose newest author
+`Report:` says ready, with green checks, no verdict on its head, and that report and the conductor's
+last comment both older than 15 minutes.
+
 Brief #669 (ADR-0322): after those lines `sweep` prints `SILENT <brief> <session> <minutes>;
 re-fire: Session name: <session>. Item: brief #<brief>.` for each open `agk-brief` issue whose
 newest live take (`session.live_takes`) is older than `silent_minutes` of `[flow]` (30 by
@@ -91,9 +95,14 @@ repos/{owner}/{repo}/pulls/<n>/ccr/convert_to_draft`, then `.../ccr/ready_for_re
 of the runtime that session rule 7 names `(verify: the draft route is the ready route's twin, not
 read from the runtime's documentation)`), and does it only with `--apply`; a draft's runs skip by
 design and are left alone. Otherwise `nothing to rerun` or `no run of the head`.
-`check-verdict FILE` prints `ok`, or the problem of the verdict's `Final:` lines by
-`common.verdict_problem` (the reading `route.py` applies), or that its first line is not `Verdict:
-cleared|fix list|rejected <sha>`; exit 1 on a problem. It reads nothing on GitHub.
+`check-verdict FILE [--pr N]` prints `ok` or the rule the line breaks, exit 1 on a problem (brief
+#854, ADR-0388): a first line that is not `Verdict: cleared|fix list|rejected <sha>` or `Correction:
+<text>` (a `Final:` first line is read by nothing), an `Approval:` line of another shape, and the
+problem of the `Final:` lines by `common.verdict_problem` (the reading `route.py` applies). Without
+`--pr` it reads nothing on GitHub. With `--pr N` it also refuses a verdict on another head, a
+`Final:` path the head does not have, and a fix list with no numbered item and no `Final:` line on
+a pull request with no Proposed ADR (it must be `cleared`); a read that fails is an error, never
+`ok`. `conductor_guard.py` runs the same check before the comment and `route.py` after it.
 `lease` is the active-conductor marker, so that the hourly run and a live conductor never merge at
 once: one comment on the plan issue that `plan_issue` of the `[flow]` table names (absent: the
 lease is off, said as such), whose first line is `Conductor: active <time> <name>`, valid 10
@@ -109,6 +118,7 @@ name other than this checkout's holds a valid lease.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import io
 import re
@@ -126,18 +136,26 @@ import caps
 import merge_cleared
 import session
 import session_plan
-from common import CheckError, repo_root, verdict_problem
+from common import (
+    FINAL_LINE,
+    NOT_FIX_LIST,
+    CheckError,
+    fix_items,
+    repo_root,
+    verdict_problem,
+)
 from full_run import contained_in, covered
 from reviewers import approval_shas, authors_of, spec_approvers, verdict_authors
 
 USAGE = (
     "usage: conductor.py watch [--since ISO] [--once] | conductor.py sweep | "
     "conductor.py merge-queue [--dry-run] [--max-batch N] | "
-    "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE | "
+    "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE [--pr N] | "
     "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N"
 )
 TRIGGERS = ("Question:", "Report:")
 QUESTION_ID = re.compile(r"Question: (Q-\S+)")
+HELD_MINUTES = 15  # a ready, green head with no verdict for this long (brief #854 answer 9)
 SWEEP_LATE = 30  # minutes without a finished sweep run before `SWEEP late` (brief #836 answer 4)
 SWEEP_RUNS = "repos/{}/actions/workflows/merger.yml/runs?status=completed&per_page=100"
 SWEEP_EVENTS = ("schedule", "workflow_dispatch", "workflow_run")
@@ -335,6 +353,38 @@ def pull_line(root, repo: str, pull: dict, authors, approvers, late: int, now) -
     return f"#{number} {head[:7]} {text}"
 
 
+def held_verdict_line(root, repo: str, pull: dict, authors, now) -> str | None:
+    """`HELD VERDICT #<n>` when a ready head waits with no verdict (brief #854 answer 9): the newest
+    `Report:` of the pull request's author says ready, its checks are green, no verdict names the
+    head, and that report and the conductor's last comment are older than HELD_MINUTES."""
+    if pull.get("draft"):
+        return None
+    number, head = pull["number"], str(pull["head"]["sha"])
+    comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+    me = str((pull.get("user") or {}).get("login") or "").lower()
+    reports = [
+        c
+        for c in comments
+        if session.author_of(c) == me and session.first_line(c).startswith("Report:")
+    ]
+    newest = max(reports, key=lambda c: c.get("id") or 0, default=None)
+    if newest is None or not session_plan.WAITING_REPORT.match(session.first_line(newest)):
+        return None
+    if session.verdict_line(comments, 0, head, session.counted_authors(authors, me)) is not None:
+        return None
+    allowed = {a.lstrip("@").lower() for a in authors}
+    spoken = [newest] + [
+        c
+        for c in comments
+        if session.author_of(c) in allowed and not session.first_line(c).startswith(ALIVE)
+    ]
+    if any(now - session.moment(c.get("created_at")) <= timedelta(minutes=HELD_MINUTES) for c in spoken):
+        return None
+    if session.check_state(repo, root, head)[0] != "green":
+        return None
+    return f"HELD VERDICT #{number}"
+
+
 def named(pull: dict, number: int) -> bool:
     ref = str((pull.get("head") or {}).get("ref") or "")
     return session.brief_number(pull) == number or ref == f"claude/brief-{number}"
@@ -497,6 +547,7 @@ def sweep(root) -> int:
         raise CheckError("the default branch cannot be read")
     lines += proof_lines(root, repo, pulls, branch)
     lines += caps.over_lines(root, repo, pulls, {a.lower() for a in authors}, now)
+    lines += [x for p in pulls if (x := held_verdict_line(root, repo, p, authors, now))]
     lines.append(branch_line(root, repo, branch))
     issues = read(f"repos/{repo}/issues?state=open", "the open issues")
     lines += [f"red-branch issue: #{i['number']}" for i in issues if session.is_red(i)]
@@ -922,6 +973,7 @@ PR_NUMBER = re.compile(r"[1-9][0-9]{0,9}")
 NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")  # a conductor's name, never an option
 HEAD_RUNS = "repos/{}/actions/runs?event=pull_request&head_sha={}&per_page=100"
 DRAFT_STEP = ("ccr/convert_to_draft", "ccr/ready_for_review")  # the runtime's routes (verify)
+ADR_FILE = re.compile(r"docs/adr/\d{4}-[^/]+\.md")
 VERDICT_SHAPE = "the first line is not `Verdict: cleared|fix list|rejected <sha>` (session rule 1)"
 CORRECTION_EMPTY = "a Correction: line needs its text: 'Correction: <what was wrong>; <what stands>'"
 APPROVAL_SHAPE = (
@@ -998,14 +1050,79 @@ def rerun(root, number: int, apply: bool) -> int:
     return 0
 
 
-def check_verdict(path: str) -> int:
+def line_problem(body: str) -> str | None:
+    """The rule a `Verdict:`, `Final:` or `Correction:` comment breaks, read from its text alone."""
+    from route import ASKED  # route imports merge_cleared, which this module imports
+
+    text = body.strip()
+    first = text.splitlines()[0].strip() if text else ""
+    if first.startswith("Final:"):
+        return NOT_FIX_LIST
+    if first.startswith("Correction:"):
+        return None if first[len("Correction:") :].strip() else CORRECTION_EMPTY
+    if not session.VERDICT.fullmatch(first):
+        return VERDICT_SHAPE
+    for line in text.splitlines():
+        if line.strip().startswith("Approval:") and not ASKED.fullmatch(line.strip()):
+            return APPROVAL_SHAPE
+    return verdict_problem(text)
+
+
+def adr_is_proposed(repo: str, path: str, head: str) -> bool:
+    record = read_one(f"repos/{repo}/contents/{quote(path)}?ref={head}", "the ADR on the head")
+    try:
+        text = base64.b64decode(record["content"]).decode("utf-8")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise CheckError("the ADR on the head cannot be read") from exc
+    return "- Status: Proposed" in text.splitlines()
+
+
+def head_problem(repo: str, number: int, body: str, head: str, files: list | None = None) -> str | None:
+    """The rule a verdict that names HEAD breaks against the pull request (brief #854 answer 1), or
+    None. It reads only what the verdict needs; a read that fails is a CheckError, never `ok`."""
+    text = body.strip()
+    finals = [m.group(1) for m in map(FINAL_LINE.fullmatch, text.splitlines()) if m]
+    if finals:
+        tree = read_one(f"repos/{repo}/git/trees/{head}?recursive=1", "the files of the head")
+        listed = tree.get("tree")
+        if not isinstance(listed, list) or tree.get("truncated"):
+            raise CheckError("the files of the head cannot be read")
+        have = {str(x.get("path")) for x in listed if isinstance(x, dict)}
+        return FINAL_PATH if any(path not in have for path in finals) else None
+    if not text.startswith("Verdict: fix list") or fix_items(text):
+        return None
+    if files is None:
+        files = read(f"repos/{repo}/pulls/{number}/files", "the files of the pull request")
+    adrs = [
+        str(f.get("filename"))
+        for f in files
+        if ADR_FILE.fullmatch(str(f.get("filename"))) and f.get("status") != "removed"
+    ]
+    return None if any(adr_is_proposed(repo, path, head) for path in adrs) else NO_ITEMS
+
+
+def full_problem(repo: str, number: int, body: str) -> str | None:
+    """`line_problem`, then for a verdict the reads of pull request NUMBER: the check that
+    `check-verdict --pr` and the guard run before a post. A read that fails is a CheckError."""
+    problem = line_problem(body)
+    if problem or not body.strip().startswith("Verdict:"):
+        return problem
+    pull = read_one(f"repos/{repo}/pulls/{number}", "the pull request")
+    head = str((pull.get("head") or {}).get("sha") or "")
+    if not head:
+        raise CheckError("the pull request cannot be read")
+    named = session.VERDICT.fullmatch(body.strip().splitlines()[0].strip())
+    if named is None or not head.startswith(named.group(2)):
+        return OTHER_HEAD
+    return head_problem(repo, number, body, head)
+
+
+def check_verdict(path: str, root=None, number: int | None = None) -> int:
     try:
         body = Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise CheckError("the verdict file cannot be read") from exc
-    lines = body.splitlines()
-    first = lines[0].strip() if lines else ""
-    problem = VERDICT_SHAPE if not session.VERDICT.fullmatch(first) else verdict_problem(body)
+    problem = line_problem(body) if number is None else full_problem(session.repo_name(root), number, body)
     print("ok" if problem is None else problem)
     return 0 if problem is None else 1
 
@@ -1126,8 +1243,11 @@ def routine_args(args: list[str]) -> tuple | None:
     if args[:2] == ["rerun", "--pr"] and len(args) in (3, 4) and PR_NUMBER.fullmatch(args[2]):
         if args[3:] in ([], ["--apply"]):
             return ("rerun", int(args[2]), args[3:] == ["--apply"])
-    if args[:1] == ["check-verdict"] and len(args) == 2 and args[1] and not args[1].startswith("-"):
-        return ("check-verdict", args[1])
+    if args[:1] == ["check-verdict"] and len(args) in (2, 4) and args[1] and args[1][0] != "-":
+        if len(args) == 2:
+            return ("check-verdict", args[1], None)
+        if args[2] == "--pr" and PR_NUMBER.fullmatch(args[3]):
+            return ("check-verdict", args[1], int(args[3]))
     if args[:1] == ["lease"]:
         if args[1:] == ["--show"]:
             return ("lease", "--show", None)
@@ -1174,7 +1294,7 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
             if routine[0] == "rerun":
                 return rerun(root, routine[1], routine[2])
             if routine[0] == "check-verdict":
-                return check_verdict(routine[1])
+                return check_verdict(routine[1], root, routine[2])
             if routine[0] == "over":
                 return over(root, routine[1])
             return lease(root, routine[1], routine[2])

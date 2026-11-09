@@ -69,12 +69,12 @@ def closed_event(n: int = 7) -> dict:
     return {"action": "closed", "pull_request": {"number": n, "merged": True}, "repository": REPO_INFO}
 
 
-def test_a_merged_pull_request_with_closes_closes_its_brief(route_proj, route_stub):  # noqa: F811
+def test_a_merged_pull_request_with_closes_closes_its_brief(route_proj, route_stub, tmp_path):  # noqa: F811
     proj, stub = route_proj, route_stub
     merged_pull(stub, 7, body(f"Brief: #{BRIEF}", f"Closes #{BRIEF}"))
     stub.serve(f"issues/{BRIEF}", {"number": BRIEF, "state": "open", "labels": [{"name": "agk-brief"}]})
     stub.fixtures.setdefault(f"repos/{ROUTE_REPO}/issues/{BRIEF}/comments", [])
-    run_router(proj, stub, "pull_request", closed_event())
+    run_router(proj, stub, tmp_path, "pull_request", closed_event())
     writes = [
         w for w in stub.writes() if re.fullmatch(rf"repos/{ROUTE_REPO}/issues/{BRIEF}(/comments)?", w[1])
     ]
@@ -96,7 +96,7 @@ def claim(proj_, stub_, number: int = 6):
 
 
 def taken(stub_) -> str:
-    return next(c for c in posts(stub_) if "taken:" in " ".join(map(str, c)))[-1]
+    return " ".join(map(str, next(c for c in posts(stub_) if "taken:" in str(c))))
 
 
 def setup_take(proj_, stub_, issues: list, pulls: list | None = None) -> None:
@@ -111,26 +111,26 @@ def test_a_claim_writes_the_briefs_own_reserved_numbers(proj, stub):
     setup_take(proj, stub, [issue(6, brief() + RESERVED)])
     out = claim(proj, stub)
     assert out.returncode == 0, out.stdout + out.stderr
-    assert taken(stub).endswith(" reserves ADR-0800")
+    assert " reserves ADR-0800" in taken(stub)
 
 
 def test_next_take_writes_the_briefs_own_reserved_numbers(proj, stub):
     setup_take(proj, stub, [issue(6, brief() + RESERVED)])
     out = session(proj, stub, "next", "--session", "s-me", "--take")
     assert out.returncode == 0, out.stdout + out.stderr
-    assert taken(stub).endswith(" reserves ADR-0800")
+    assert " reserves ADR-0800" in taken(stub)
 
 
 def test_a_brief_with_no_reserved_line_gets_the_next_free_number(proj, stub):
     setup_take(proj, stub, [issue(6, brief())])
     assert claim(proj, stub).returncode == 0
-    assert taken(stub).endswith(" reserves ADR-0004")
+    assert " reserves ADR-0004" in taken(stub)
 
 
 def test_the_next_free_number_skips_what_another_open_brief_reserves(proj, stub):
     setup_take(proj, stub, [issue(5, brief("other/**") + "Reserved: ADR-0004\n"), issue(6, brief())])
     assert claim(proj, stub).returncode == 0
-    assert taken(stub).endswith(" reserves ADR-0005")
+    assert " reserves ADR-0005" in taken(stub)
 
 
 def test_a_claim_is_refused_when_an_open_pull_request_adds_its_number(proj, stub):

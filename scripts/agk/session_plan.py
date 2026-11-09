@@ -1214,6 +1214,17 @@ def waves(root, s: Survey, ready: list[dict]) -> tuple[list[dict], list[dict]]:
     return chosen, waits
 
 
+def merged_list(s: Survey) -> list:
+    """The pull requests the merge rate counts: a red branch's survey reads none (brief #854
+    answer 8), and a read that fails is never `unknown`, which says that none merged."""
+    if s.prs:
+        return s.prs
+    found = pages(f"repos/{s.repo}/pulls?state=all")
+    if found is None:
+        raise CheckError("rule 1: the pull requests cannot be read")
+    return found
+
+
 def merge_rate(prs: list, now: datetime) -> tuple[bool, float | None]:
     """(known, merges an active hour) over the last 14 days; an active hour holds a merge."""
     buckets: list[int] = []
@@ -1429,7 +1440,7 @@ def build(root, record: bool = False) -> dict:
     limit, lowest = min(limits, key=lambda x: x[1])  # min keeps the first of a tie
     slots = max(0, lowest)
     ready_prs = [p for p in s.prs if p.get("state") == "open" and "agk:ready" in label_names(p)]
-    known, rate = merge_rate(s.prs, now)
+    known, rate = merge_rate(merged_list(s), now)
     hold = known and rate is not None and len(ready_prs) > hours * rate
     briefs = {b["number"]: b for b in s.free}
     busy = {
