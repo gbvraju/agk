@@ -52,6 +52,15 @@ the selection is full ("no [testing] table"), which is what governance runs toda
 shows the selection; `prepush.py` runs the selected regression tests (brief #417), and `proof.py`
 runs them on the head only with `proof_regression = true` (brief #442, off by default).
 
+A changed code file also selects the tests of every file that imports it, one level, read with
+`test_map.importers_of`: an importer's map entries, or the importer itself when it is a test file
+(brief #878, ADR-0393, amendment 153 of SPEC-0055 rule 6). Each file prints `selected: <file> -> <k>
+tests (<j> by importers)`. It only adds tests, under every profile; a full selection reads no
+imports. `always_full` names test infrastructure only (`is_test_infrastructure`, by stack): any
+other entry needs an adjacent `# full: <reason>` comment, on its line or the line above, and
+`always_full_problems` lists the entries without one by their place, never their value, for
+`check_kit_tests.py` and `doctor.py`.
+
 A glob is a path glob: `*` and `?` stay in one folder, `**` crosses folders, and `dir/` is
 `dir/**`. A bad setting is refused (CheckError), naming the setting.
 """
@@ -140,6 +149,41 @@ PRE_MERGE_MISSING = "a pre-merge test is not a file (setting: testing.pre_merge_
 UNKNOWN_TIMING = {"source": "unknown", "total_seconds": None, "files": []}
 NAME_WORD = re.compile(r"[\w./-]+")  # a path-like word of a test file (SPEC-0055 rule 6)
 NAMED = "(names it)"  # the `code` of a test selected because it names the changed file
+IMPORTER = "(imports it)"  # the `code` of a test selected through a file that imports the change
+FULL_REASON = re.compile(r"#\s*full:\s*\S")  # what an always_full entry that is not infra needs
+FULL_KEY = re.compile(r"\s*always_full\s*=")
+TESTING_HEADS = ("[testing]", "[tool.agk.testing]")
+FULL_RULE = "SPEC-0055 rule 6"
+# What `always_full` may name without a reason (brief #878 answer 1, ADR-0393): the test system of
+# each stack, by file name, and the runner's own code and the CI files, by path.
+INFRA_NAMES = (
+    "conftest.py",
+    "pytest.ini",
+    "pyproject.toml",
+    "setup.cfg",
+    "tox.ini",
+    "noxfile.py",
+    "jest.config.*",
+    "vitest.config.*",
+    "package.json",
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle",
+    "settings.gradle.kts",
+    "gradle.properties",
+    "project.pbxproj",
+    "*.xctestplan",
+    "go.mod",
+    "go.sum",
+    "Makefile",
+    "*.mk",
+)
+INFRA_PATHS = (
+    ".github/workflows/**",
+    ".github/workflows/*",
+    "scripts/agk/common.py",
+    "scripts/agk/impact.py",
+)
 
 
 @dataclass
@@ -172,6 +216,7 @@ class Impact:
     link_notes: list[str] = field(default_factory=list)
     map_notes: list[str] = field(default_factory=list)  # the generated map could not be used
     tracked: list[str] = field(default_factory=list)  # the head's files, read only for a link
+    counts: dict[str, tuple[int, int]] = field(default_factory=dict)  # file -> tests, by importers
 
     def data(self) -> dict:
         source = {} if self.map_source is None else {"map_source": self.map_source}
@@ -820,6 +865,9 @@ def select(root: Path, base: str, head: str) -> Impact:
                 named[path] = len(naming)
                 for test in naming:
                     chosen.setdefault(test, Selected(test, path, NAMED, []))
+    counts: dict[str, tuple[int, int]] = {}
+    if not hit and profile != "thorough":
+        counts = add_importers(root, head, changed, entries, tests, chosen, (dirs, patterns))
     selected = [chosen[t] for t in sorted(chosen)]
     reason = None
     if hit:
@@ -831,7 +879,122 @@ def select(root: Path, base: str, head: str) -> Impact:
         reason = f"profile balanced: {count} unmapped {'file' if count == 1 else 'files'}"
     found = Impact(True, profile, reason is not None, reason, selected, unmapped, named=named)
     found.map_notes = map_notes
+    found.counts = counts
     return found
+
+
+def add_importers(
+    root: Path,
+    head: str,
+    changed: list[str],
+    entries: list[dict],
+    tests: list[str],
+    chosen: dict[str, Selected],
+    where: tuple[list[str], list[str]],
+) -> dict[str, tuple[int, int]]:
+    """Add to CHOSEN the tests of each file that imports a changed code file, one level (brief #878
+    answer 2), and give each such file's (tests, tests by importers). Only adds."""
+    from test_map import importers_of  # test_map imports this module at its top
+
+    dirs, patterns = where
+    code = [p for p in changed if not is_doc(p) and not is_test_file(p, dirs, patterns)]
+    if not code:
+        return {}
+    found = importers_of(root, head, code)
+    counts: dict[str, tuple[int, int]] = {}
+    for path in code:
+        own = {t for e in entries if matches(path, e["code"]) for t in entry_tests(e, tests)}
+        by_importers: set[str] = set()
+        for importer in sorted(found.get(path, ())):
+            if is_test_file(importer, dirs, patterns):
+                brought = {importer}
+                why = IMPORTER
+            else:
+                brought = {
+                    t
+                    for e in entries
+                    if matches(importer, e["code"])
+                    for t in entry_tests(e, tests)
+                }
+                why = importer
+            for test in sorted(brought):
+                by_importers.add(test)
+                chosen.setdefault(test, Selected(test, path, IMPORTER, [why]))
+        counts[path] = (len(own | by_importers), len(by_importers - own))
+    return counts
+
+
+def entry_tests(entry: dict, tests: list[str]) -> list[str]:
+    return [t for t in tests if any(matches(t, g) for g in entry["tests"])]
+
+
+def is_test_infrastructure(entry: str) -> bool:
+    """Whether an `always_full` glob names the test system: by its path, or by its file name, which
+    must be a name of the list and not a wider wildcard (brief #878 answer 1)."""
+    if entry in INFRA_PATHS:
+        return True
+    name = entry.rstrip("/").rsplit("/", 1)[-1]
+    if name in ("", "*", "**") or entry.endswith("/"):
+        return False
+    return any(name == p or fnmatch.fnmatchcase(name, p) for p in INFRA_NAMES)
+
+
+def code_and_comment(line: str) -> tuple[str, str]:
+    """A TOML line split at the `#` that starts its comment, one inside a string being text."""
+    quote = ""
+    for at, char in enumerate(line):
+        if quote:
+            quote = "" if char == quote else quote
+        elif char in "\"'":
+            quote = char
+        elif char == "#":
+            return line[:at], line[at:]
+    return line, ""
+
+
+def full_reasons(text: str) -> list[bool]:
+    """For each entry of the `always_full` list of a config TEXT, in order, whether an adjacent
+    `# full: <reason>` comment stands on its line or on the comment line just above it."""
+    in_table, in_list, depth, carried, reasons = False, False, 0, False, []
+    for raw in text.splitlines():
+        code, comment = code_and_comment(raw)
+        head = code.strip()
+        if not in_list:
+            if head.startswith("["):
+                in_table = head in TESTING_HEADS
+                continue
+            if not in_table or FULL_KEY.match(code) is None:
+                continue
+            in_list, code = True, code.split("=", 1)[1]
+        named = re.findall(r"\"(?:[^\"\\]|\\.)*\"|'[^']*'", code)
+        has_reason = FULL_REASON.search(comment) is not None
+        if not named and not code.strip("[], \t") and comment:
+            carried = has_reason  # a comment line: it speaks for the next entry only
+        else:
+            reasons += [has_reason or carried] * len(named)
+            carried = False
+        without_strings = re.sub(r"\"(?:[^\"\\]|\\.)*\"|'[^']*'", "", code)
+        depth += without_strings.count("[") - without_strings.count("]")
+        if depth <= 0:
+            break
+    return reasons
+
+
+def always_full_problems(root: Path) -> list[str]:
+    """The `always_full` entries that are not test infrastructure and have no adjacent reason, each
+    by its place (brief #878 answer 3); none without the table. A bad table is refused."""
+    table = testing_table(root)
+    if table is None or not table["always_full"]:
+        return []
+    source = next((f for f in (root / "agk.toml", root / "pyproject.toml") if f.is_file()), None)
+    text = source.read_text(encoding="utf-8") if source is not None else ""
+    reasons = full_reasons(text)
+    return [
+        f"testing.always_full[{n}] is not test infrastructure and has no adjacent "
+        f'"# full: <reason>" comment ({FULL_RULE}, setting: testing.always_full)'
+        for n, entry in enumerate(table["always_full"], 1)
+        if not is_test_infrastructure(entry) and not (n <= len(reasons) and reasons[n - 1])
+    ]
 
 
 def text(found: Impact) -> list[str]:
@@ -846,14 +1009,28 @@ def text(found: Impact) -> list[str]:
         count = len(found.selected)
         noun = "test file" if count == 1 else "test files"
         lines = [f"regression: {count} {noun} selected"]
+        lines.extend(file_line(s) for s in found.selected)
         lines.extend(
-            f"  file: {s.test} (names {s.changed})"
-            if s.code == NAMED
-            else f"  file: {s.test} ({s.changed} matches code {s.code}, tests {', '.join(s.tests)})"
-            for s in found.selected
+            f"selected: {path} -> {k} tests ({j} by importers)"
+            for path, (k, j) in sorted(found.counts.items())
+            if k
         )
     links = [f"link: {k.run} ({k.changed} matches code {k.code})" for k in found.linked]
     return map_lines(found) + lines + links + unmapped_lines(found)
+
+
+def file_line(s: Selected) -> str:
+    """Why a test file of the selection runs."""
+    if s.code == NAMED:
+        return f"  file: {s.test} (names {s.changed})"
+    if s.code == IMPORTER:
+        through = s.tests[0]
+        return (
+            f"  file: {s.test} (imports {s.changed})"
+            if through == IMPORTER
+            else f"  file: {s.test} ({through} imports {s.changed})"
+        )
+    return f"  file: {s.test} ({s.changed} matches code {s.code}, tests {', '.join(s.tests)})"
 
 
 def map_lines(found: Impact) -> list[str]:
