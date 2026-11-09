@@ -457,9 +457,11 @@ def test_ac6_status_of_no_record_prints_nothing(tmp_path: Path):
     assert (result.returncode, result.stdout) == (0, "")
 
 
-@pytest.mark.parametrize("args", [["--comments", "file.json"], ["other"], ["--root"]])
+@pytest.mark.parametrize(
+    "args", [["--comments"], ["status", "--comments", "file.json"], ["other"], ["--root"]]
+)
 def test_ac1_a_wrong_command_line_is_a_usage_error(args: list[str]):
-    """REQ-058 AC1: rule 5, `--comments` is build (c)'s and is not accepted here."""
+    """REQ-058 AC1: rule 5, `--comments` takes a file and belongs to the check, not to `status`."""
     done = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(SCRIPT), *args],
         capture_output=True,
@@ -482,7 +484,15 @@ def test_ac7_the_check_reads_the_document_through_front_door():
         for alias in node.names
     }
     assert "front_door" in names
-    allowed = {"__future__", "front_door", "common", "impact"}
+    allowed = {
+        "__future__",
+        "front_door",
+        "common",
+        "impact",
+        "reviewers",
+        "check_final_clearance",
+        "check_specs",
+    }
     assert not {n for n in names - allowed if n not in sys.stdlib_module_names}
     assert not {"subprocess", "socket", "urllib", "http"} & names
     text = SCRIPT.read_text(encoding="utf-8")
@@ -503,3 +513,199 @@ def test_ac1_the_check_is_wired_in():
     entries = [e for e in table["testing"]["map"] if e["code"] == "scripts/agk/check_acceptance.py"]
     assert len(entries) == 1
     assert "tests/kit/test_check_acceptance.py" in entries[0]["tests"]
+
+
+OWNER = "example-owner"
+TEAM_TOML = ""
+SOLO_TOML = 'review_mode = "solo"\n'
+APP = {"slug": "claude"}
+AT = "2026-11-09T12:00:00Z"
+
+
+def git(root: Path, *args: str) -> str:
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "-c", "user.name=Example", "-c", "user.email=a@example.com", *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+        timeout=60,
+    ).stdout.strip()
+
+
+def commit(root: Path) -> str:
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-gpg-sign", "-m", "invented")
+    return git(root, "rev-parse", "HEAD")
+
+
+def people(root: Path, toml: str = TEAM_TOML) -> None:
+    roles = f"version: 1\nverdict_authors: [{OWNER}]\nspec_approvers: [{OWNER}]\n"
+    write(root, roles, "config/reviewers.yaml")
+    write(root, toml, "agk.toml")
+
+
+def proposed_then_accepted(root: Path, toml: str = TEAM_TOML) -> str:
+    """The record committed as `proposed` (the head a yes names), then its status-only commit."""
+    people(root, toml)
+    text = record(discovery(root, ANSWER))
+    write(root, text)
+    git(root, "init", "-q")
+    head = commit(root)
+    write(root, text.replace("- Status: proposed", "- Status: accepted"))
+    commit(root)
+    return head
+
+
+def yes(head: str, slug: str = SLUG) -> str:
+    return f"Approve: acceptance {slug} {head}"
+
+
+def saved(root: Path, *comments: dict) -> str:
+    path = root / "comments.json"
+    path.write_text(json.dumps(list(comments)), encoding="utf-8")
+    return str(path)
+
+
+def comment(body: str, login: str = OWNER, **more) -> dict:
+    return {"user": {"login": login}, "body": body, "created_at": AT, **more}
+
+
+def confirmed(head: str, *middle: str) -> str:
+    shown = ["Shown:", "1. what changes: x", "2. what it risks: y", "3. what stays: z"]
+    lines = [f"Confirmed: {head}", f"Verdict: cleared {head}", "", *middle, "", *shown]
+    return "\n".join([*lines, f"confirmed by {OWNER} in a session at {AT}"])
+
+
+def with_comments(root: Path, *comments: dict) -> subprocess.CompletedProcess:
+    return run(root, "--comments", saved(root, *comments))
+
+
+def test_ac3_a_listed_accounts_yes_passes(project: Path):
+    """REQ-058 AC3: rule 6, the one line by an account of `spec_approvers`."""
+    head = proposed_then_accepted(project)
+    result = with_comments(project, comment(yes(head)))
+    assert (result.returncode, result.stdout) == (0, "ok acceptance (1 records)\n")
+
+
+def test_ac3_the_yes_keeps_a_not_met_goal_not_met(project: Path):
+    """REQ-058 AC3: rule 6 (Q-S0051-7), the record is accepted as it stands."""
+    head = proposed_then_accepted(project)
+    assert with_comments(project, comment(yes(head))).returncode == 0
+    assert run(project, "status").stdout == f"{SLUG} accepted with 1 not met\n"
+
+
+@pytest.mark.parametrize(
+    "shape",
+    ["session", "unlisted", "other-slug", "short-head", "not-first-line", "unknown-head"],
+)
+def test_ac3_a_line_that_is_no_yes_fails(project: Path, shape: str):
+    """REQ-058 AC3: rule 6, an app's identical line, another account, slug or form is nothing."""
+    head = proposed_then_accepted(project)
+    item = {
+        "session": comment(yes(head), performed_via_github_app=APP),
+        "unlisted": comment(yes(head), login="someone-else"),
+        "other-slug": comment(yes(head, "another-slug")),
+        "short-head": comment(yes(head[:12])),
+        "not-first-line": comment(f"Looks good.\n{yes(head)}"),
+        "unknown-head": comment(yes("a" * 40)),
+    }[shape]
+    result = with_comments(project, item)
+    refused(result, 6)
+    assert head not in result.stdout
+
+
+def test_ac3_solo_a_yes_counts_inside_the_confirmation(project: Path):
+    """REQ-058 AC3: rule 6, solo mode, the person's `Confirmed:` comment holds the line."""
+    head = proposed_then_accepted(project, SOLO_TOML)
+    result = with_comments(project, comment(confirmed(head, yes(head))))
+    assert (result.returncode, result.stdout) == (0, "ok acceptance (1 records)\n")
+
+
+def test_ac3_solo_a_plain_line_counts_for_nothing(project: Path):
+    """REQ-058 AC3: rule 6, solo mode, the bare line is not the person's confirmation."""
+    head = proposed_then_accepted(project, SOLO_TOML)
+    refused(with_comments(project, comment(yes(head))), 6)
+
+
+def test_ac3_solo_a_session_cannot_post_the_confirmation(project: Path):
+    """REQ-058 AC3: rules 6 and session rule 29, a `Confirmed:` posted through an app is nothing."""
+    head = proposed_then_accepted(project, SOLO_TOML)
+    item = comment(confirmed(head, yes(head)), performed_via_github_app=APP)
+    refused(with_comments(project, item), 6)
+
+
+def test_ac3_solo_the_yes_names_the_confirmed_head(project: Path):
+    """REQ-058 AC3: rule 6, solo mode, a line for another head is not what was confirmed."""
+    head = proposed_then_accepted(project, SOLO_TOML)
+    later = git(project, "rev-parse", "HEAD")
+    refused(with_comments(project, comment(confirmed(later, yes(head)))), 6)
+
+
+def test_ac3_a_record_changed_after_the_yes_fails(project: Path):
+    """REQ-058 AC3: rule 6, evidence changed with no new yes."""
+    head = proposed_then_accepted(project)
+    path = project / REL
+    changed = path.read_text(encoding="utf-8").replace(DEFINED, "run docs/runs/run-1.md")
+    path.write_text(changed, encoding="utf-8")
+    commit(project)
+    refused(with_comments(project, comment(yes(head))), 6)
+
+
+def test_ac3_a_yes_at_a_head_where_the_record_differs_fails(project: Path):
+    """REQ-058 AC3: rule 6, the yes names a head where a goal was different."""
+    people(project)
+    digest = discovery(project, ANSWER)
+    goals = [f'- G-1: "{Q1}" -> run docs/runs/run-1.md', f'- G-2: "{Q2}" -> not met']
+    write(project, record(digest, goals))
+    git(project, "init", "-q")
+    early = commit(project)
+    write(project, record(digest, status="accepted"))
+    commit(project)
+    refused(with_comments(project, comment(yes(early))), 6)
+
+
+def test_ac3_a_yes_at_a_head_already_accepted_fails(project: Path):
+    """REQ-058 AC3: rule 6, the yes names a head where the record says `proposed`."""
+    head = proposed_then_accepted(project)
+    refused(with_comments(project, comment(yes(git(project, "rev-parse", "HEAD")))), 6)
+    assert with_comments(project, comment(yes(head))).returncode == 0
+
+
+def test_ac3_a_head_outside_the_history_fails(project: Path):
+    """REQ-058 AC3: rule 6, a commit the tree does not descend from says nothing about it."""
+    head = proposed_then_accepted(project)
+    proposed = (project / REL).read_text(encoding="utf-8")
+    branch = git(project, "rev-parse", "--abbrev-ref", "HEAD")
+    git(project, "checkout", "-q", "--orphan", "other")
+    write(project, proposed.replace("- Status: accepted", "- Status: proposed"))
+    write(project, "another line\n", "docs/runs/other.md")
+    other = commit(project)
+    git(project, "checkout", "-q", branch)
+    assert head != other
+    refused(with_comments(project, comment(yes(other))), 6)
+
+
+def test_ac3_no_comments_file_reads_as_before(project: Path):
+    """REQ-058 AC3: brief answer 2, without `--comments` an accepted record still fails."""
+    head = proposed_then_accepted(project)
+    assert head
+    refused(run(project), 6)
+
+
+def test_ac3_a_proposed_record_is_unaffected_by_the_comments(project: Path):
+    """REQ-058 AC3: brief answer 2, the file changes nothing for a `proposed` record."""
+    people(project)
+    write(project, record(discovery(project, ANSWER)))
+    result = with_comments(project, comment("Nothing here."))
+    assert (result.returncode, result.stdout) == (0, "ok acceptance (1 records)\n")
+
+
+def test_ac3_an_unreadable_comments_file_fails_naming_no_value(project: Path):
+    """REQ-058 AC3: rule 10, a refusal, no traceback, with the option named by the file's role."""
+    write(project, record(discovery(project, ANSWER)))
+    result = run(project, "--comments", str(project / "absent.json"))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stdout == "FAIL acceptance: the comments file cannot be read\n"
+    assert "Traceback" not in result.stderr

@@ -30,6 +30,9 @@ APPROVERS = "spec_approvers"
 CONDUCTORS = "conductor_accounts"  # SPEC-0039 rule 3: the optional second account (brief #528)
 APPROVE = re.compile(r"Approve: ([0-9a-f]{7,40}) (SPEC-\d{4})")
 APPROVE_SHORT = re.compile(r"Approve: (SPEC-\d{4})")  # SPEC-0032 rule 5: pinned by the runs
+APPROVE_ACCEPTANCE = re.compile(  # SPEC-0051 rule 6: the owner's yes on an acceptance record
+    r"Approve: acceptance ([a-z0-9]+(?:-[a-z0-9]+)*) ([0-9a-f]{40})"
+)
 CONFIRMED = re.compile(r"Confirmed: ([0-9a-f]{40})")  # brief 277: the full head ID
 CONFIRMED_VERDICT = re.compile(r"Verdict: (?:cleared|fix list|rejected) ([0-9a-f]{40})")
 CONFIRMED_BY = re.compile(
@@ -396,6 +399,41 @@ def confirmed_comments(
             approve = APPROVE_SHORT.fullmatch(line.strip())
             if approve:
                 found.append({**item, "body": f"Approve: {sha.group(1)} {approve.group(1)}"})
+    return found
+
+
+def acceptance_heads(
+    comments: list[dict],
+    approvers: list[str],
+    slug: str,
+    agent_apps: tuple[str, ...] | list[str] = (),
+    person: str | None = None,
+    solo: bool = False,
+) -> set[str]:
+    """The full head IDs at which an account of `approvers` accepted the record `slug` (SPEC-0051
+    rule 6). The first line `Approve: acceptance <slug> <full head ID>` of a comment counts, never
+    one posted through an app of `agent_apps`. With `solo` the line counts only inside a whole
+    `Confirmed:` comment of `person`, naming the confirmed head; without a person nothing does."""
+    allowed = {a.lstrip("@").lower() for a in approvers}
+    found: set[str] = set()
+    if not solo:
+        for item in comments:
+            named = APPROVE_ACCEPTANCE.fullmatch(first_line(item))
+            if named and named[1] == slug and login_of(item) in allowed:
+                if not via_agent(item, agent_apps):
+                    found.add(named[2])
+        return found
+    if not person:
+        return found
+    own = {id(c) for c in comments}
+    for item in confirmed_comments(comments, agent_apps, person):
+        confirmed = CONFIRMED_VERDICT.fullmatch(first_line(item))
+        if id(item) in own or not confirmed or login_of(item) not in allowed:
+            continue
+        for line in str(item.get("body")).splitlines():
+            named = APPROVE_ACCEPTANCE.fullmatch(line.strip())
+            if named and named[1] == slug and named[2] == confirmed[1]:
+                found.add(named[2])
     return found
 
 
