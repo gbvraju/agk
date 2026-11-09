@@ -12,7 +12,7 @@ The owner asks for the nine operations points by a word, `AGK-NINE-CHECKLIST` (b
 scripts, the merger runs and the comments took 30 minutes and three of the nine came out wrong. REQ-054 already makes a scorecard
 of numbers with lines; this is a second, shorter face of the same records, for a person who wants the state of the operation in
 nine lines. This decision is new (a new installed command, a new settings table and a new sentence of the conductor's role), so
-this build has its own ADR. It changes the protected path classes `scripts/agk/`, `tests/kit/`, `kit/`, `agk.toml` and `.claude/`.
+this build has its own ADR. It changes the protected path classes `scripts/agk/`, `tests/kit/`, `kit/`, `agk.toml`, `.claude/` and `config/` (the role's line of `config/rule-budget.txt`).
 
 ## Decision
 
