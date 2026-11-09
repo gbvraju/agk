@@ -130,14 +130,14 @@ def unpinned(path: Path) -> list[str]:
         keys = {k.arg for k in node.keywords}
         if name in ("read_text", "write_text"):
             bad = "encoding" not in keys and len(node.args) < (1 if name == "read_text" else 2)
-        elif name == "open":
+        elif name == "open" and ast.unparse(node.func) != "os.open":
             mode = node.args[1].value if len(node.args) > 1 else "r"
             bad = "encoding" not in keys and "b" not in str(mode)
         elif name in PROCESS:
             bad = bool({"text", "universal_newlines"} & keys) and "encoding" not in keys
         else:
             value = node.func.value if isinstance(node.func, ast.Attribute) else None
-            bad = isinstance(value, ast.Attribute) and value.attr == "stdin"
+            bad = value is not None and ast.unparse(value) == "sys.stdin"
         if bad:
             found.append(f"{path.name}:{node.lineno} {name}")
     return found
@@ -149,6 +149,20 @@ def test_every_kit_script_reads_and_writes_text_as_utf8():
     hooks = sorted((ROOT / ".claude" / "hooks").glob("*.py"))
     assert len(scripts) > 30 and hooks
     assert [hit for path in [*scripts, *hooks] for hit in unpinned(path)] == []
+
+
+def test_a_plain_open_without_an_encoding_is_still_reported(tmp_path):
+    """Brief #875 (REQ-048): correcting the two false findings leaves this true one."""
+    script = tmp_path / "plain_open.py"
+    script.write_text("handle = open(path)\n", encoding="utf-8")
+    assert unpinned(script) == ["plain_open.py:1 open"]
+
+
+def test_a_read_of_sys_stdin_is_still_reported(tmp_path):
+    """Brief #875 (REQ-048): correcting the two false findings leaves this true one."""
+    script = tmp_path / "reads_stdin.py"
+    script.write_text("import sys\ntext = sys.stdin.read()\n", encoding="utf-8")
+    assert unpinned(script) == ["reads_stdin.py:2 read"]
 
 
 PROBE = """

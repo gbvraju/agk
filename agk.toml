@@ -525,6 +525,9 @@ tests = ["tests/kit/test_stalls.py", "tests/kit_dev/test_intelligent_testing.py"
 code = "scripts/agk/status_only.py"
 tests = ["tests/kit/test_ci_saving.py", "tests/kit/test_status_only.py", "tests/kit/test_status_only_governance.py"]
 [[testing.map]]
+code = "scripts/agk/survey.py"
+tests = ["tests/kit/test_survey.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/test_map.py"
 tests = ["tests/kit/test_test_map.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
