@@ -383,7 +383,8 @@ tests = ["tests/kit/test_execution.py"]
 [[testing.map]]
 code = "scripts/agk/facts.py"
 tests = [
-  "tests/kit/test_architect_guard.py", "tests/kit/test_decision_files.py", "tests/kit/test_facts.py",
+  "tests/kit/test_architect_guard.py", "tests/kit/test_checklist.py", "tests/kit/test_decision_files.py",
+  "tests/kit/test_facts.py",
   "tests/kit/test_facts_done_on.py", "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py",
   "tests/kit/test_head_cleared.py", "tests/kit/test_product_report_facts_artifact.py",
   "tests/kit/test_product_report_workflow.py", "tests/kit/test_retired_requirements.py",
@@ -504,8 +505,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/metrics.py"
 tests = [
-  "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py", "tests/kit/test_head_cleared.py",
-  "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_metrics.py",
+  "tests/kit/test_checklist.py", "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py",
+  "tests/kit/test_head_cleared.py", "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_metrics.py",
   "tests/kit/test_metrics_minutes.py", "tests/kit/test_metrics_pr_tests.py", "tests/kit/test_metrics_testing.py",
   "tests/kit/test_over_cap_builder.py", "tests/kit/test_product_report.py", "tests/kit/test_runbook_measures.py",
   "tests/kit/test_self_clearance.py", "tests/kit/test_solo_mode.py", "tests/kit/test_usage_by_kind.py",
