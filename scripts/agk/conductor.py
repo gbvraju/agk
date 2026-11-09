@@ -534,7 +534,8 @@ def head_runs(repo: str, commits: list) -> list | None:
 
 def red_heads(runs: list) -> int:
     """The longest run of heads in a row on which one check failed; no finished run, no head."""
-    best, streak = 0, {}
+    best = 0
+    streak: dict[str, int] = {}
     for ran in filter(None, runs):
         red = {r.get("name") for r in ran if r.get("conclusion") in RED_RUN}
         streak = {name: streak.get(name, 0) + 1 for name in red}
@@ -544,7 +545,8 @@ def red_heads(runs: list) -> int:
 
 def file_commits(repo: str, commits: list, runs: list) -> int | str:
     """The most commits that changed one file with no green run between; merges change none."""
-    best, seen = 0, {}
+    best = 0
+    seen: dict[str, int] = {}
     for c, ran in zip(commits, runs, strict=True):
         if len(c.get("parents") or []) < 2:
             detail = session.gh(f"repos/{repo}/commits/{c.get('sha')}")
@@ -568,9 +570,9 @@ def wander_files(repo: str, number: int, body: object) -> int | str:
     return sum(not any(r.fullmatch(f.get("filename", "")) for r in rules) for f in files)
 
 
-def build_end(comments: object, login: str, now: datetime) -> datetime:
+def build_end(comments: list, login: str, now: datetime) -> datetime:
     """The builder's `over cap` report ends the build: a person's time is not the builder's."""
-    said = [c for c in comments or [] if session.author_of(c) == login.lower()]
+    said = [c for c in comments if session.author_of(c) == login.lower()]
     ends = [
         session.moment(c.get("created_at"))
         for c in said
@@ -609,19 +611,20 @@ def hours_of(repo_data: tuple, login: str, allowed: set[str], opened: str, commi
         return caps.hours_used(early[0], early[1], login, allowed, opened, moment)
 
     counted = upto(end)
-    dates = [
-        when(str(((c.get("commit") or {}).get("committer") or {}).get("date")))
-        for c in commits or []
-    ]
-    if counted == caps.UNKNOWN or commits is None or None in dates:
+    if commits is None or not isinstance(counted, Decimal):
         return counted, caps.UNKNOWN
-    blocked = sum(
-        (
-            upto(stop) - upto(start)
-            for stop, start in blocked_spans(pull, login, dates, end).items()
-        ),
-        Decimal("0.0"),
-    )
+    pushes = [
+        when(str(((c.get("commit") or {}).get("committer") or {}).get("date"))) for c in commits
+    ]
+    known = [p for p in pushes if p is not None]
+    if len(known) != len(pushes):
+        return counted, caps.UNKNOWN
+    blocked = Decimal("0.0")
+    for stop, start in blocked_spans(pull, login, known, end).items():
+        high, low = upto(stop), upto(start)
+        if not isinstance(high, Decimal) or not isinstance(low, Decimal):
+            return counted, caps.UNKNOWN
+        blocked += high - low
     return counted, min(blocked, counted)
 
 
@@ -647,7 +650,8 @@ def over(root, number: int) -> int:
     commits = session.pages(f"repos/{repo}/pulls/{number}/commits") if pull else None
     runs = head_runs(repo, commits) if commits is not None else None
     red = red_heads(runs) if runs is not None else caps.UNKNOWN
-    files = file_commits(repo, commits, runs) if runs is not None else caps.UNKNOWN
+    known = commits is not None and runs is not None
+    files = file_commits(repo, commits or [], runs or []) if known else caps.UNKNOWN
     issue = session.gh(f"repos/{repo}/issues/{brief}") if brief else None
     body = issue.get("body") if isinstance(issue, dict) else None
     wander = wander_files(repo, number, body) if pull else caps.UNKNOWN
