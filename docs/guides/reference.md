@@ -244,6 +244,11 @@ When GitHub Actions is blocked (minutes exhausted, billing blocked, an outage), 
 disable and re-enable the workflows with `gh workflow`, what a builder runs and pastes as its `Local evidence:` line, what the
 conductor runs instead of reading CI, what is lost, and the one issue that records every merge (session rule 30, ADR-0182).
 
+## Runbooks
+
+`docs/runbooks/` holds one short checked page each for a red default branch, blocked Actions and a leaked secret. A real
+secret-scan finding goes straight to [the leaked-secret page](../runbooks/leaked-secret.md): revoke first.
+
 A person enters local mode with `python3 scripts/agk/local_mode.py enter` and leaves it with `python3 scripts/agk/local_mode.py
 leave`: each lists the workflows and the one `gh api` call that disables (or enables) each, the kit's and the project's, as a dry
 run that changes nothing; `--write` makes the calls, one line per workflow, and reports a refused call while it makes the rest.
