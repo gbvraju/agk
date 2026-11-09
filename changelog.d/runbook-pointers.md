@@ -1,0 +1,1 @@
+- The three failure messages name their page of steps: the red-branch issue a `Runbook:` line, `minutes.py`'s warning and `95%` line `docs/runbooks/actions-blocked.md`, and a `secret-scan` finding in `prepush.py` `docs/runbooks/leaked-secret.md`; each names a path and never a value (brief #865, SPEC-0056 build (c), ADR-0372)

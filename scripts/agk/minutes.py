@@ -50,6 +50,7 @@ PAGE = 100
 RUN_CAP = 1000
 GUIDE = "docs/guides/project-ci.md"
 LOCAL_MODE = "docs/guides/local-mode.md"
+RUNBOOK = "docs/runbooks/actions-blocked.md"  # SPEC-0056 rule 13
 HALF, TOP = 50, 95  # the fixed levels around minutes_warn (brief #370)
 NOT_THIS_MONTH = "not this month"
 SELF_HOSTED = "self-hosted"
@@ -342,7 +343,7 @@ def line_of(
         f"{run_out_text(runs_out(used, included, today))}"
     )
     if level == f"{TOP}%":
-        text += f"; at this level, see local mode in {LOCAL_MODE}"
+        text += f"; at this level, see local mode in {LOCAL_MODE}; steps in {RUNBOOK}"
     return level, text
 
 
@@ -389,7 +390,7 @@ def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
         if top * 100 >= warn * included:
             warning = (
                 f"warning: {top} of {included} included minutes used ({top * 100 // included}%), "
-                f"past minutes_warn ({warn}%); when they run out, see local mode in {GUIDE}"
+                f"past minutes_warn ({warn}%); when they run out, see local mode in {GUIDE}; steps in {RUNBOOK}"
             )
     return {
         "repository": repo_name or repo.get("full_name"),
