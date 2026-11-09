@@ -12,6 +12,8 @@ import re
 import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -213,3 +215,69 @@ def test_req_048_a_root_without_the_personal_table_is_refused(tmp_path):
     (tmp_path / "agk.toml").write_text('default_branch = "main"\n', encoding="utf-8")
     with pytest.raises(CheckError, match="setting: personal"):
         FilesForge(tmp_path, env={})
+
+
+def hold_and_die(sidecar: Path) -> None:
+    """A real process takes the lock and ends without releasing it, as a killed one does."""
+    code = (
+        "import os, sys; from pathlib import Path\n"
+        f"sys.path.insert(0, {str(SCRIPTS)!r})\n"
+        "from forge import FilesForge\n"
+        f"held = FilesForge(Path({str(sidecar)!r}), env={{}}).locked()\n"
+        "held.__enter__()\n"
+        "os._exit(0)\n"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True)  # nosec B603 - fixed list, no shell
+
+
+def test_req_048_a_lock_left_by_a_dead_process_is_cleared(files, sidecar):
+    """REQ-048: rule 6 (ADR-0295: a holder that no longer runs blocks no later write)."""
+    hold_and_die(sidecar)
+    assert (sidecar / "cache/forge.lock").exists()
+    assert files.create_issue("After", "A", []) == 1
+    assert not (sidecar / "cache/forge.lock").exists()
+
+
+def test_req_048_a_lock_whose_holder_runs_is_kept(files, sidecar, monkeypatch):
+    """REQ-048: rule 6 (a live holder is never cleared; the refusal names the path class)."""
+    monkeypatch.setattr(forge_module, "LOCK_WAIT", 0.1)
+    with files.locked():
+        with pytest.raises(CheckError, match=r"path class: cache/forge\.lock"):
+            FilesForge(sidecar, env={}).create_issue("Second", "B", [])
+        assert (sidecar / "cache/forge.lock").exists()
+    assert files.numbers("issues") == []
+
+
+def test_req_048_two_writers_keep_both_numbers_and_comments(files, sidecar, monkeypatch):
+    """REQ-048: rule 6 (writers that overlap each keep their number and their comment)."""
+    number = pull(files)
+
+    def slowly(real):
+        def wrapped(*args):
+            answer = real(*args)
+            time.sleep(0.1)  # the gap in which a second writer would read the same state
+            return answer
+
+        return wrapped
+
+    monkeypatch.setattr(FilesForge, "next_number", slowly(FilesForge.next_number))
+    monkeypatch.setattr(FilesForge, "load", slowly(FilesForge.load))
+
+    def writer(text):
+        forge = FilesForge(sidecar, env={})
+        made = forge.create_issue(text, "B", [])
+        forge.comment(number, text)
+        return made
+
+    with ThreadPoolExecutor(2) as pool:
+        made = list(pool.map(writer, ("One", "Two")))
+    assert sorted(made) == [number + 1, number + 2]
+    assert sorted(c["body"] for c in files.get(f"comments-{number}", "x")) == ["One", "Two"]
+
+
+def test_req_048_a_bad_lock_setting_is_refused_naming_it(sidecar):
+    """REQ-048: rule 6 (a malformed setting is a refusal that names the setting)."""
+    path = sidecar / "agk.toml"
+    path.write_text("lock_stale_minutes = 0\n" + path.read_text("utf-8"), encoding="utf-8")
+    with pytest.raises(CheckError, match="setting: lock_stale_minutes"):
+        FilesForge(sidecar, env={}).create_issue("One", "A", [])
