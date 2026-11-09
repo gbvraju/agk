@@ -271,7 +271,7 @@ def plan(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], lis
     refresh(root)
     found = impact(root, mb, "HEAD")
     sets, notes = regression_sets(root, found, proof_areas(root))
-    lines = [*head, *text(found), *notes]
+    lines = [*head, *text(found), *[n for n in notes if n not in found.map_notes]]
     if any(n.startswith("tests: not run (in no [proof] area)") for n in notes):
         why = "a selected file is in no [proof] area"
         added = [s for s in sets if s[3].startswith(LINK_REASON)]  # a link only adds (rule 7)
