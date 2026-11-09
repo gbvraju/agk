@@ -47,7 +47,7 @@ TAIL_MATCH = ("Go", "PHP")  # an import path longer than the tracked path: try i
 FOLDER_PACKAGES = ("Go", "C#")  # an import that names a folder names each file in it
 JVM, JS = ("Java", "Kotlin"), ("JavaScript", "TypeScript")
 SIGNALS = "config/stack-signals.toml"  # the manifest names, read from the kit's own root
-OUTSIDE_TABLE = ("*.csproj", "Gemfile", "composer.json")  # Q-879-1: SPEC-0041 rule 10 keeps them
+OUTSIDE_TABLE = ("*.csproj", "Gemfile", "composer.json")  # amendment 154: SPEC-0041 rule 10 keeps them
 MANIFESTS = {  # the language of each manifest; the names come from `manifest_names`
     "pyproject.toml": ("Python",), "requirements.txt": ("Python",), "setup.cfg": ("Python",),
     "setup.py": ("Python",), "pubspec.yaml": ("Dart",), "package.json": JS,

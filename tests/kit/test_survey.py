@@ -345,7 +345,7 @@ def table_names() -> set[str]:
 
 
 def test_one_list_the_survey_reads_the_table():
-    """REQ-064 AC5: SPEC-0057 rule 8: only the names Q-879-1 asks about are outside the table."""
+    """REQ-064 AC5: SPEC-0057 rule 8: only the names of amendment 154 are outside the table."""
     assert set(survey.manifest_names()) - set(survey.OUTSIDE_TABLE) == table_names()
     assert set(survey.OUTSIDE_TABLE) == {"*.csproj", "Gemfile", "composer.json"}
     assert not set(survey.OUTSIDE_TABLE) & table_names()
