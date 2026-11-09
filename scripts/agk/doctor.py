@@ -339,6 +339,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "pr_mode in agk.toml is neither strict nor flow",
         "set pr_mode in agk.toml to strict or flow (a change needs an ADR)",
     ),
+    "ruleset-up-to-date": (
+        "warn",
+        "pull requests are up to date before merge, or it is not needed",
+        "ruleset: a pull request need not be up to date before merge with auto_merge on",
+        'turn on "Require branches to be up to date before merging" in the ruleset, or set '
+        "merge_queue in the flow table of agk.toml (brief #853, ADR-0387)",
+    ),
     "auto-merge-setting": (
         "error",
         "auto-merge: ",
@@ -595,7 +602,7 @@ def has_rule(rulesets: list[dict], kind: str) -> bool:
     return any(r.get("type") == kind for d in rulesets for r in (d.get("rules") or []))
 
 
-def ruleset_results(reads: Reads, repo_data: Any, branch: str) -> dict[str, Result]:
+def ruleset_results(reads: Reads, repo_data: Any, branch: str, config: dict) -> dict[str, Result]:
     out: dict[str, Result] = {}
 
     def cannot_all(reason: str, ids: list[str]) -> None:
@@ -656,6 +663,7 @@ def ruleset_results(reads: Reads, repo_data: Any, branch: str) -> dict[str, Resu
         if isinstance(c, dict)
     ]
     verdict("required-check-governance", "governance" in contexts)
+    out["ruleset-up-to-date"] = up_to_date_result(active, config)
     return out
 
 
@@ -711,9 +719,11 @@ def remote_results(
             "brief-label",
         ]:
             out[check] = Result("cannot-check", reason or "bad-response")
+        out["ruleset-up-to-date"] = up_to_date_result(None, config)
         return out
     branch = repo_data.get("default_branch") or config.get("default_branch", "main")
-    out.update(ruleset_results(reads, repo_data, branch))
+    out.update(ruleset_results(reads, repo_data, branch, config))
+    out.setdefault("ruleset-up-to-date", up_to_date_result(None, config))
     for check, key in (
         ("repo-auto-merge", "allow_auto_merge"),
         ("repo-delete-branch", "delete_branch_on_merge"),
@@ -906,6 +916,21 @@ def minutes_result(root: Path, reads: Reads, today: datetime.date | None = None)
     if line.startswith("actions minutes: unknown"):
         return Result("cannot-check", "minutes-unknown")
     return Result("ok" if level in ("ok", "unknown") else "fail", message=f" ({line})")
+
+
+def up_to_date_result(active: list[dict] | None, config: dict) -> Result:
+    """Brief #853 answer 3: with `[flow] auto_merge` on and no merge queue, the ruleset requires a
+    pull request to be up to date before it merges; ACTIVE is None when no ruleset was read."""
+    flow = config.get("flow")
+    if not isinstance(flow, dict) or flow.get("auto_merge") is not True:
+        return Result("ok", message=" (auto-merge off)")
+    if flow.get("merge_queue") is True:
+        return Result("ok", message=" (merge queue)")
+    if active is None:
+        return Result("cannot-check", "bad-response")
+    params = rule_params(active, "required_status_checks")
+    strict = any(p.get("strict_required_status_checks_policy") is True for p in params)
+    return Result("ok" if strict else "fail")
 
 
 def auto_merge_result(config: dict) -> Result:
