@@ -21,6 +21,7 @@ def spec(status: str = "Approved", reqs: str = "REQ-001", extra: str = "") -> st
     return (
         f"# SPEC-0001: Thing\n\n- Status: {status}\n- Owner: maintainers\n"
         f"- Requirements: {reqs}\n\n## Rules\n\n1. A rule.\n{extra}"
+        "\n## Contexts\n\nkit, github, local, personal and stacks: as written above\n"
     )
 
 

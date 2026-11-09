@@ -26,7 +26,10 @@ nothing this week
 
 ## Cost
 
-nothing this week
+- restore red default branch: unknown closed, median unknown hours, unknown open — https://github.com/demo-org/demo-repo/issues
+- restore actions blocked: unknown closed, median unknown hours, unknown open — https://github.com/demo-org/demo-repo/issues
+- restore leaked secret: unknown closed, median unknown hours, unknown open — https://github.com/demo-org/demo-repo/issues
+- run minutes: unknown this week, unknown per merged pull request — https://github.com/demo-org/demo-repo/actions
 
 ## Flow
 

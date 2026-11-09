@@ -86,6 +86,30 @@
       "req": "REQ-001"
     }
   ],
+  "measures": {
+    "restore": {
+      "actions blocked": {
+        "closed": 0,
+        "median_hours": "none",
+        "open": 0
+      },
+      "leaked secret": {
+        "closed": 0,
+        "median_hours": "none",
+        "open": 0
+      },
+      "red default branch": {
+        "closed": 0,
+        "median_hours": "none",
+        "open": 0
+      }
+    },
+    "run_minutes": {
+      "minutes": 0,
+      "per_merged": "0.0"
+    },
+    "week": "2026-W41"
+  },
   "pull_requests": [
     {
       "actual_hours": "24.0",

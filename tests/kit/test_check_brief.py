@@ -14,6 +14,7 @@ GOOD = (
     "Answers (the maintainers'):\n1. one\n   wrapped\n2. two\n"
     "Depends-on: #3\nDepends-on: #4\nSize: M\n"
     "Advances: REQ-001, REQ-002\nTouches: scripts/agk/*.py, docs/**\nPriority: 1\n"
+    "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n"
 )
 
 
@@ -37,7 +38,10 @@ def test_ac4_a_good_body_passes(tmp_path):
 
 def test_ac4_depends_on_lines_are_optional_and_answers_may_be_plain(tmp_path):
     """REQ-037 AC4"""
-    body = 'Sentence: "x"\nAnswers:\n1. a\nSize: S\nAdvances: new\nTouches: docs/x.md\n'
+    body = (
+        'Sentence: "x"\nAnswers:\n1. a\nSize: S\nAdvances: new\nTouches: docs/x.md\n'
+        "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n"
+    )
     assert check(tmp_path, body).stdout.strip() == "ok brief"
 
 

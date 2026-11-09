@@ -18,8 +18,10 @@ MARK = "conductor guard rule 6"
 POST = "gh api --method POST repos/o/r/issues/9/comments"
 
 
-def run_hook(payload: object, project: Path, *args: str, tmpdir: Path | None = None):
-    env = {"PATH": "/usr/bin:/bin", "CLAUDE_PROJECT_DIR": str(project)}
+def run_hook(
+    payload: object, project: Path, *args: str, tmpdir: Path | None = None, path: str = ""
+):
+    env = {"PATH": f"{path}/usr/bin:/bin", "CLAUDE_PROJECT_DIR": str(project)}
     if tmpdir is not None:
         env["TMPDIR"] = str(tmpdir)
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
@@ -96,10 +98,14 @@ def test_ac2_shadow_mode_refuses_every_other_write_naming_the_rule(project, comm
     assert command not in found["permissionDecisionReason"]
 
 
-def test_ac2_the_conductors_own_mode_is_unchanged(project):
-    """REQ-042 AC2: without `--shadow` any comment is still the conductor's one POST."""
+def test_ac2_the_conductors_own_mode_is_unchanged(project, tmp_path):
+    """REQ-042 AC2: without `--shadow` any comment is still the conductor's one POST; a verdict is
+    read against its pull request (brief #854), so a `gh` stub serves the head."""
+    gh = tmp_path / "gh"
+    gh.write_text("""#!/bin/sh\necho '{"head": {"sha": "abc1234ffff"}}'\n""", encoding="utf-8")
+    gh.chmod(0o755)
     for command in (f"{POST} -f body=hello", f"{POST} -f 'body=Verdict: cleared abc1234'"):
-        assert denial(run_hook(bash(command), project).stdout) is None, command
+        assert denial(run_hook(bash(command), project, path=f"{tmp_path}:").stdout) is None, command
 
 
 @pytest.mark.parametrize("tool", ["Edit", "Write", "MultiEdit", "NotebookEdit"])

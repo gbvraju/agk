@@ -105,6 +105,7 @@ from reviewers import verdict_authors
 from session import (
     ADDS,
     BROAD,
+    HELD_PREFIX,
     RELEASED,
     TOUCHES,
     Survey,
@@ -116,6 +117,7 @@ from session import (
     flow_value,
     gh,
     glob_regex,
+    hold_state,
     line_entries,
     literal,
     live_takes,
@@ -1214,6 +1216,17 @@ def waves(root, s: Survey, ready: list[dict]) -> tuple[list[dict], list[dict]]:
     return chosen, waits
 
 
+def merged_list(s: Survey) -> list:
+    """The pull requests the merge rate counts: a red branch's survey reads none (brief #854
+    answer 8), and a read that fails is never `unknown`, which says that none merged."""
+    if s.prs:
+        return s.prs
+    found = pages(f"repos/{s.repo}/pulls?state=all")
+    if found is None:
+        raise CheckError("rule 1: the pull requests cannot be read")
+    return found
+
+
 def merge_rate(prs: list, now: datetime) -> tuple[bool, float | None]:
     """(known, merges an active hour) over the last 14 days; an active hour holds a merge."""
     buckets: list[int] = []
@@ -1429,7 +1442,7 @@ def build(root, record: bool = False) -> dict:
     limit, lowest = min(limits, key=lambda x: x[1])  # min keeps the first of a tie
     slots = max(0, lowest)
     ready_prs = [p for p in s.prs if p.get("state") == "open" and "agk:ready" in label_names(p)]
-    known, rate = merge_rate(s.prs, now)
+    known, rate = merge_rate(merged_list(s), now)
     hold = known and rate is not None and len(ready_prs) > hours * rate
     briefs = {b["number"]: b for b in s.free}
     busy = {
@@ -1467,7 +1480,9 @@ def build(root, record: bool = False) -> dict:
         else {}
     )
     malformed_rows = [row for row in s.skipped if row[1].startswith("rule ")]
-    return {
+    held, ignored_holds = holds_of(root, s)
+    held_rows = [row for row in s.skipped if row[1].startswith(HELD_PREFIX)]
+    found = {
         "start": [start_entry(names[i], b, protected) for i, b in enumerate(chosen[:count])],
         "running": running_sessions(s),
         "waits": waits,
@@ -1475,7 +1490,7 @@ def build(root, record: bool = False) -> dict:
         "skipped": [
             {"brief": n, "why": why}
             for n, why in [*s.skipped, *build_skips, *unplanned]
-            if (n, why) not in malformed_rows
+            if (n, why) not in malformed_rows and (n, why) not in held_rows
         ],
         "malformed": [
             {"brief": n, "why": why, "filer": filer_of(s, n)} for n, why in malformed_rows
@@ -1505,6 +1520,23 @@ def build(root, record: bool = False) -> dict:
         "default_branch": default,
         "stale_commits": behind_limit,
     } | playbook
+    if held:
+        found["held"] = held
+    if ignored_holds:
+        found["ignored_holds"] = ignored_holds
+    return found
+
+
+def holds_of(root, s: Survey) -> tuple[list[dict], list[dict]]:
+    """Amendment 142: (every held brief with its reason, each `Hold:` by someone not listed)."""
+    held: list[dict] = []
+    ignored: list[dict] = []
+    for number, comments in sorted(s.comments.items()):
+        reason, logins = hold_state(root, comments, number)
+        if reason:
+            held.append({"brief": number, "reason": reason})
+        ignored += [{"brief": number, "by": login} for login in logins]
+    return held, ignored
 
 
 def start_entry(name: str, brief: dict, protected: list[str] | None) -> dict:
@@ -1613,6 +1645,8 @@ def words(plan: dict) -> str:
         f"MALFORMED: #{m['brief']} {m['why']}" + (f" (fix: {m['filer']})" if m["filer"] else "")
         for m in plan["malformed"]
     ]
+    lines += [f"HELD: #{h['brief']} {HELD_PREFIX}{h['reason']}" for h in plan.get("held", [])]
+    lines += [f"HOLD IGNORED: #{h['brief']} by {h['by']}" for h in plan.get("ignored_holds", [])]
     if plan["skipped"]:
         lines.append(
             "Skipped: " + ", ".join(f"#{s['brief']} ({s['why']})" for s in plan["skipped"]) + "."
