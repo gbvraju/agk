@@ -1,0 +1,1 @@
+- `scripts/agk/checklist.py` prints the owner's nine operations points as measured `yes`, `partly`, `no` or `unknown` lines from the file `metrics.py --save-checklist` writes, with optional thresholds in a `[checklist]` table of `agk.toml`, and the conductor's hourly report ends with them (brief #799, REQ-054, ADR-0374)
