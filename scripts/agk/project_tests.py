@@ -47,6 +47,9 @@ that a selected file in no area causes, and under `full` after the full command:
 need not be part of it. A linked level whose environment is absent is a failing run that names
 `testing.links`.
 
+Under `map_source = "generated"` a pull request's selection, and its links under `full`, first
+rebuild the test map when it is missing or of another tree (SPEC-0055 rule 5, brief #833).
+
 `check_release.py` is kit-only (never installed), so `toml_version` restates its reading of
 `version`; a kit test pins the two equal (Q-453-7).
 """
@@ -69,6 +72,7 @@ from impact import (
     LINK_REASON,
     MAP_FILE,
     MAP_STALE,
+    MAP_UNREAD,
     impact,
     junit_setting,
     level_of,
@@ -80,6 +84,7 @@ from impact import (
     text,
 )
 from prepush import full_command, pytest_interpreter, regression_sets
+from test_map import refresh
 
 NOTICE = "agk: no project_tests configured; the project runs its own tests"
 EVENT = "pull_request"
@@ -263,9 +268,10 @@ def plan(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], lis
     if version_at(root, base) != version_at(root, "HEAD"):
         why = "release: version raised in agk.toml"
         return [("full", project, ".", why)], [*head, f"project tests: full ({why})"]
+    refresh(root)
     found = impact(root, mb, "HEAD")
     sets, notes = regression_sets(root, found, proof_areas(root))
-    lines = [*head, *text(found), *notes]
+    lines = [*head, *text(found), *[n for n in notes if n not in found.map_notes]]
     if any(n.startswith("tests: not run (in no [proof] area)") for n in notes):
         why = "a selected file is in no [proof] area"
         added = [s for s in sets if s[3].startswith(LINK_REASON)]  # a link only adds (rule 7)
@@ -288,13 +294,14 @@ def full_run(root: Path, project: str, command: str, rerun: bool) -> int:
 def linked_runs(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], list[str]]:
     """Under `full`, what a pull request's links add to the full command (SPEC-0055 rule 7)."""
     table = testing_table(root) or {}
-    if not table.get("links") and not (root / MAP_FILE).is_file():
+    generated = table.get("map_source") == "generated"
+    if not table.get("links") and not generated and not (root / MAP_FILE).is_file():
         return [], []
     runs, lines = plan(root, project)
     added = [r for r in runs if r[3].startswith(LINK_REASON)]
     if added or any(line.startswith(LINK_REASON) for line in lines):
         return added, lines
-    return [], [line for line in lines if line == MAP_STALE]
+    return [], [line for line in lines if line in (MAP_STALE, MAP_UNREAD)]
 
 
 def run_all(root: Path, project: str, runs: list, rerun: bool) -> int:

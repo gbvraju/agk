@@ -67,6 +67,7 @@ import sys
 import tomllib
 import xml.parsers.expat
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -108,6 +109,10 @@ MAP_FILE = ".agk-test-map.toml"  # written by test_map.py, git-ignored (SPEC-005
 MAP_STALE = (
     "tests: the generated map is of another tree or unreadable, so its links are not read "
     "(setting: testing.links)"
+)
+MAP_UNREAD = (
+    "tests: the generated map cannot be built or read, so it adds no entries "
+    "(setting: testing.map_source)"
 )
 LINK_REASON = "link: "  # how a run that a link added says why it runs
 LINK_ABSENT = f"{LINK_REASON}a linked level's environment is absent (setting: testing.links)"
@@ -165,6 +170,7 @@ class Impact:
     map_source: str | None = None  # the `[testing] map_source`, None where it is not set
     linked: list[Linked] = field(default_factory=list)  # the levels links select (SPEC-0055 rule 7)
     link_notes: list[str] = field(default_factory=list)
+    map_notes: list[str] = field(default_factory=list)  # the generated map could not be used
     tracked: list[str] = field(default_factory=list)  # the head's files, read only for a link
 
     def data(self) -> dict:
@@ -173,6 +179,7 @@ class Impact:
         return {
             **source,
             **({"links": links} if links else {}),
+            **({"map_notes": list(self.map_notes)} if self.map_notes else {}),
             "table": self.table,
             "profile": self.profile,
             "full": self.full,
@@ -185,6 +192,7 @@ class Impact:
         }
 
 
+@cache  # a generated map has an entry per file, each matched per changed file
 def glob_regex(glob: str) -> re.Pattern:
     """A path glob: `*` and `?` stay in one folder, `**` crosses folders, `dir/` is `dir/**`."""
     glob = glob + "**" if glob.endswith("/") else glob
@@ -250,27 +258,7 @@ def testing_table(root: Path) -> dict | None:
             "always_full must be a list of path globs inside the repository "
             "(setting: testing.always_full)"
         )
-    entries = table.get("map", [])
-    if not isinstance(entries, list):
-        raise CheckError(
-            "map must be a list of { code = <glob>, tests = [<glob>, ...] } (setting: testing.map)"
-        )
-    mapped = []
-    for n, entry in enumerate(entries, 1):
-        setting = f"testing.map[{n}]"
-        if not isinstance(entry, dict) or set(entry) - ENTRY_KEYS:
-            raise CheckError(f"a map entry is a table of code and tests (setting: {setting})")
-        if not _glob_ok(entry.get("code")):
-            raise CheckError(
-                f"the code of a map entry must be a path glob inside the repository "
-                f"(setting: {setting}.code)"
-            )
-        if not _globs(entry.get("tests"), empty_ok=False):
-            raise CheckError(
-                f"the tests of a map entry must be a list of path globs inside the repository "
-                f"(setting: {setting}.tests)"
-            )
-        mapped.append({"code": entry["code"], "tests": list(entry["tests"])})
+    mapped = check_map(table.get("map", []))
     budget = table.get("budget_seconds", DEFAULT_BUDGET)
     if isinstance(budget, bool) or not isinstance(budget, int) or budget <= 0:
         raise CheckError(
@@ -326,6 +314,31 @@ def testing_table(root: Path) -> dict | None:
         **({"map_source": source} if "map_source" in table else {}),
         **({"links": links} if links else {}),
     }
+
+
+def check_map(entries: object) -> list[dict]:
+    """`[testing] map`, or the same shape in the generated file; a bad one is refused."""
+    if not isinstance(entries, list):
+        raise CheckError(
+            "map must be a list of { code = <glob>, tests = [<glob>, ...] } (setting: testing.map)"
+        )
+    mapped = []
+    for n, entry in enumerate(entries, 1):
+        setting = f"testing.map[{n}]"
+        if not isinstance(entry, dict) or set(entry) - ENTRY_KEYS:
+            raise CheckError(f"a map entry is a table of code and tests (setting: {setting})")
+        if not _glob_ok(entry.get("code")):
+            raise CheckError(
+                f"the code of a map entry must be a path glob inside the repository "
+                f"(setting: {setting}.code)"
+            )
+        if not _globs(entry.get("tests"), empty_ok=False):
+            raise CheckError(
+                f"the tests of a map entry must be a list of path globs inside the repository "
+                f"(setting: {setting}.tests)"
+            )
+        mapped.append({"code": entry["code"], "tests": list(entry["tests"])})
+    return mapped
 
 
 def check_links(value: object, root: Path) -> list[dict]:
@@ -692,7 +705,7 @@ def uncovered(root: Path, head: str = "HEAD") -> list[str]:
     dirs, patterns = list(cfg["test_dirs"]), list(cfg["test_patterns"])
     files = head_files(root, head)
     index = name_index(root, head, [p for p in files if is_test_file(p, dirs, patterns)])
-    globs = [e["code"] for e in table["map"]] + table["always_full"]
+    globs = [e["code"] for e in map_entries(root, head, table)[0]] + table["always_full"]
     return [
         p
         for p in files
@@ -717,16 +730,43 @@ def impact(root: Path, base: str, head: str) -> Impact:
     return found
 
 
-def derived_links(root: Path, head: str) -> tuple[list[dict], list[str]]:
-    """The links of the `.agk-test-map.toml` of HEAD's tree, or the line that says it is not."""
-    if not (root / MAP_FILE).is_file():
-        return [], []  # nobody built one: nothing to read, whichever the map's source
+def current_map(root: Path, head: str) -> dict | None:
+    """`.agk-test-map.toml` as data when its first line names HEAD's tree, else None."""
     try:
         text = (root / MAP_FILE).read_text(encoding="utf-8")
         table = tomllib.loads(text)
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
-        return [], [MAP_STALE]
-    if text.split("\n", 1)[0] != f"# tree {git(root, 'rev-parse', head + '^{tree}').strip()}":
+        return None
+    tree = git(root, "rev-parse", head + "^{tree}").strip()
+    return table if text.split("\n", 1)[0] == f"# tree {tree}" else None
+
+
+def generated_entries(root: Path, head: str) -> list[dict] | None:
+    """The `[[testing.map]]` entries of HEAD's map file, None when it has no usable file."""
+    table = current_map(root, head)
+    section = None if table is None else table.get("testing", {})
+    try:
+        return check_map(section.get("map", []) if isinstance(section, dict) else None)
+    except CheckError:
+        return None
+
+
+def map_entries(root: Path, head: str, table: dict) -> tuple[list[dict], list[str]]:
+    """The entries a selection reads (SPEC-0055 rule 5, a union), and what it could not use."""
+    if table.get("map_source") != "generated":
+        return table["map"], []
+    generated = generated_entries(root, head)
+    if generated is None:
+        return table["map"], [MAP_UNREAD]
+    return [*table["map"], *generated], []
+
+
+def derived_links(root: Path, head: str) -> tuple[list[dict], list[str]]:
+    """The links of the `.agk-test-map.toml` of HEAD's tree, or the line that says it is not."""
+    if not (root / MAP_FILE).is_file():
+        return [], []  # nobody built one: nothing to read, whichever the map's source
+    table = current_map(root, head)
+    if table is None:
         return [], [MAP_STALE]
     return check_links(table.get("testing", {}).get("links", []), root), []
 
@@ -756,13 +796,14 @@ def select(root: Path, base: str, head: str) -> Impact:
     cfg = load_config(root)
     dirs, patterns = list(cfg["test_dirs"]), list(cfg["test_patterns"])
     tests = [p for p in head_files(root, head) if is_test_file(p, dirs, patterns)]
+    entries, map_notes = map_entries(root, head, table)
     chosen: dict[str, Selected] = {}
     unmapped: list[str] = []
     named: dict[str, int] = {}
     index: dict[str, set[str]] | None = None
     for path in changed:
         guarded = False
-        covering = [e for e in table["map"] if matches(path, e["code"])]
+        covering = [e for e in entries if matches(path, e["code"])]
         for entry in covering:
             for test in tests:
                 if any(matches(test, g) for g in entry["tests"]):
@@ -788,7 +829,9 @@ def select(root: Path, base: str, head: str) -> Impact:
     elif profile == "balanced" and any(not named.get(p) for p in unmapped):
         count = sum(1 for p in unmapped if not named.get(p))
         reason = f"profile balanced: {count} unmapped {'file' if count == 1 else 'files'}"
-    return Impact(True, profile, reason is not None, reason, selected, unmapped, named=named)
+    found = Impact(True, profile, reason is not None, reason, selected, unmapped, named=named)
+    found.map_notes = map_notes
+    return found
 
 
 def text(found: Impact) -> list[str]:
@@ -815,7 +858,8 @@ def text(found: Impact) -> list[str]:
 
 def map_lines(found: Impact) -> list[str]:
     """The line that leads a selection in a repository that sets `map_source` (SPEC-0055 rule 1)."""
-    return [] if found.map_source is None else [f"tests: map {found.map_source}"]
+    source = [] if found.map_source is None else [f"tests: map {found.map_source}"]
+    return source + found.map_notes
 
 
 def machine_env() -> str:
