@@ -1,8 +1,8 @@
 """Every hold is measured (amendment 141 item 7, `Q-772-1` as read; SPEC-0007 by item 10).
 
 REQ-057 AC13. `session.py plan --record` appends one line per held brief and holder to
-`docs/runs/holds.jsonl`, kept out of git; after both merge one more line marks the hold; `metrics.py`
-reads the file and says `unknown` where it is absent. Local git fixtures and a `gh` stub; invented
+`docs/runs/holds.jsonl`, kept out of git; after both merge one more line marks the hold;
+`metrics.py` reads the file and says `unknown` where it is absent. Local git fixtures and a `gh` stub; invented
 data only; no network."""
 
 from __future__ import annotations
@@ -86,7 +86,13 @@ def test_ac13_the_output_of_a_recorded_pass_is_the_plan(proj, stub):
 
 def test_ac13_minutes_count_from_the_first_record_of_the_pair(proj, stub):
     """REQ-057 AC13: item 7, `minutes` since that pair was first recorded."""
-    first = {"at": iso(-timedelta(minutes=45)), "brief": 5, "holder": 20, "file": "a.py", "minutes": 0}
+    first = {
+        "at": iso(-timedelta(minutes=45)),
+        "brief": 5,
+        "holder": 20,
+        "file": "a.py",
+        "minutes": 0,
+    }
     seed(proj, first)
     held_by_pull(stub)
     plan(proj, stub, "--record")
@@ -118,7 +124,15 @@ def test_ac13_a_brief_with_two_holders_has_one_line_each(proj, stub):
 def test_ac13_a_taken_brief_and_an_earlier_ready_brief_are_holders(proj, stub):
     """REQ-057 AC13: item 7, every kind of hold the plan's waves make."""
     stub.serve(PULLS, [])
-    listing(stub, [issue(4, brief("t.py")), issue(5, brief("t.py")), issue(6, brief("u.py")), issue(7, brief("u.py"))])
+    listing(
+        stub,
+        [
+            issue(4, brief("t.py")),
+            issue(5, brief("t.py")),
+            issue(6, brief("u.py")),
+            issue(7, brief("u.py")),
+        ],
+    )
     stub.serve(f"{ISSUES}/4/comments", [comment(1, "other", f"taken: other {TODAY}")])
     free(stub, 5, 6, 7)
     plan(proj, stub, "--record")
@@ -190,7 +204,7 @@ def test_ac13_a_common_line_is_a_true_hold(repo, commits):
 
 
 def test_ac13_lines_are_mapped_back_over_the_commits_between(repo, commits):
-    """REQ-057 AC13: item 7, the later diff's lines mapped back: line 7 of the later diff was line 2."""
+    """REQ-057 AC13: item 7, mapped back: line 7 of the later diff was line 2."""
     first = commits.change(2)
     commits.insert(5)
     assert mark(repo, first, commits.change(7, text="y")) == "true"
@@ -281,7 +295,9 @@ def test_ac13_a_holder_brief_is_followed_to_its_pull_request(proj, stub, commits
     """REQ-057 AC13: item 7, a taken brief that held another is read through its `Brief:` line."""
     first, second = commits.change(2), commits.change(8)
     seed(proj, pair(holder=4))
-    found = marked(proj, stub, [merged_pull(30, 4, DAY, first), merged_pull(31, 5, DAY / 2, second)])
+    found = marked(
+        proj, stub, [merged_pull(30, 4, DAY, first), merged_pull(31, 5, DAY / 2, second)]
+    )
     assert [r["mark"] for r in found] == ["false"]
 
 
@@ -295,7 +311,11 @@ def test_ac13_a_brief_of_two_merged_builds_is_unknown(proj, stub, commits):
     """REQ-057 AC13: item 7, no single merged diff to map."""
     a, b, c = commits.change(2), commits.change(4), commits.change(8)
     seed(proj, pair())
-    pulls = [merged_pull(20, 90, DAY, a), merged_pull(21, 5, DAY / 2, b), merged_pull(22, 5, DAY / 4, c)]
+    pulls = [
+        merged_pull(20, 90, DAY, a),
+        merged_pull(21, 5, DAY / 2, b),
+        merged_pull(22, 5, DAY / 4, c),
+    ]
     assert [r["mark"] for r in marked(proj, stub, pulls)] == ["unknown"]
 
 
@@ -322,7 +342,12 @@ NEXT = date(2026, 10, 12)
 
 
 def stamped(day: int, hour: int = 12, **fields) -> dict:
-    return {"at": f"2026-10-{day:02d}T{hour:02d}:00:00Z", "brief": 5, "holder": 20, "file": "a.py"} | fields
+    return {
+        "at": f"2026-10-{day:02d}T{hour:02d}:00:00Z",
+        "brief": 5,
+        "holder": 20,
+        "file": "a.py",
+    } | fields
 
 
 def line(proj, *records: dict) -> str:

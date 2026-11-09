@@ -12,7 +12,7 @@ import pytest
 from test_conductor_guard_launch import SESSION, allowed, denied, run_hook, tmp  # noqa: F401
 from test_conductor_guard_launch import project as guarded  # noqa: F401 - the fixture
 from test_session import REPO, Stub, issue, listing
-from test_session_flow import PULLS, brief, flow, pr
+from test_session_flow import PULLS, brief, flow
 from test_session_plan import changed, free, labelled, plan, read_only
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -183,7 +183,9 @@ def test_ac12_the_guard_lets_the_conductor_run_it_on_a_scratch_folder(guarded, t
     assert denied(run_hook(f"python3 {SESSION} plan --what-if /etc", guarded, tmp))
     assert denied(run_hook(f"python3 {SESSION} plan --what-if {scratch} --json", guarded, tmp))
     assert denied(run_hook(f"python3 {SESSION} plan --record", guarded, tmp))
-    assert denied(run_hook(f"python3 {SESSION} plan --what-if {scratch}", guarded, tmp, shadow=True))
+    assert denied(
+        run_hook(f"python3 {SESSION} plan --what-if {scratch}", guarded, tmp, shadow=True)
+    )
 
 
 def test_ac12_the_conductor_files_a_wave_in_that_order():
