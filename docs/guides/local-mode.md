@@ -177,6 +177,10 @@ Say it plainly to everyone working on the project:
 - **Every merge is the person's call.** The required check is missing, so a merge rests on the local evidence of the builder and
   the conductor. The person who merges posts one comment on the record issue: `Local merge: #<n> <head sha> <evidence>`.
 
+With `auto_merge = true`, the conductor merges a cleared pull request itself through the guarded command, which in local mode
+needs the verdict's `Local evidence:` and `Evidence check: agrees` for the head and posts its `Auto merge:` line on this record
+issue in place of `Local merge:`. [The auto-merge guide](auto-merge.md) says how to set it up, what each line means and how to stop it.
+
 ## Leave local mode
 
 When Actions runs again (minutes renewed, billing fixed, the outage over):
