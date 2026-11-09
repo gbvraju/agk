@@ -1316,6 +1316,19 @@ def test_ac7_no_week_holds_the_tag_when_the_columns_miss_it(billed, tmp_path):
     assert data["scorecard_week"] == "unknown"
 
 
+def test_ac7_the_week_of_the_tag_is_the_seven_days_before_a_column(billed, tmp_path):
+    """REQ-059 AC7: rule 9 (a column dated D holds D-7 to D-1: D itself and D-8 do not)."""
+    root, _ = billed
+    day = tag_day(root)
+    head = "| metric | line | {} |\n| --- | --- | --- |\n| red_hours | 4 | 2 |\n"
+    results = []
+    for column in (day, day + timedelta(days=1), day + timedelta(days=7), day + timedelta(days=8)):
+        body = f"<!-- scorecard weeks -->\n{head.format(column)}<!-- /scorecard weeks -->\n"
+        results.append(release_pack.scorecard_week(body, day))
+    held = [{"metric": "red_hours", "value": "2"}]
+    assert results == ["unknown", held, held, "unknown"] and made(billed, tmp_path, "tests.json")
+
+
 def test_ac7_a_cell_is_a_number_or_not_applicable_and_an_empty_section_is_unknown(billed, tmp_path):
     """REQ-059 AC7: rule 9 (a cell is read as the scorecard reads it, never copied as it stands)."""
     root, _ = billed
