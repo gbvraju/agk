@@ -17,7 +17,9 @@ one line `Screens: v<n> <screen>/<state>, ...` (`*` is every state of the screen
 a `design` row in `docs/design/signoffs.md` and a page `<screen>--<state>.html` for each pair in
 its frozen folder. No `ui_paths` means no UI briefs.
 With `--root DIR` and `plan_issue` in the `[flow]` table of `DIR/agk.toml` a brief also needs one
-line `Wave: n` (amendment 140), a wave of `--waves` when that list is given.
+line `Wave: n` (amendment 140), a wave of `--waves` when that list is given. With `--root DIR` the
+`Touches:` and `Adds:` lines are also judged against the tree (amendment 141 item 1); an optional
+line `Adds:` lists the new files a brief creates and `Broad: <reason>` says that it is a sweep.
 
 `--event PAYLOAD` reads a saved `issues` event and prints one JSON line, for the job that labels a
 brief filed on GitHub: `ignore`, `fail` with the label, the rules and the comment, or `pass` with
@@ -45,6 +47,7 @@ from session import (
     wave_of,
     wave_problems,
 )
+from session_plan import touch_problems, touch_rules
 
 NAME = "brief"
 USAGE = "usage: check_brief.py (FILE | --event PAYLOAD) [--root DIR] [--waves N,N]"
@@ -161,7 +164,11 @@ def body_problems(body: str, root: Path | None, waves: set[int] | None) -> list[
     problems = brief_problems(body)
     if root is None or problems:
         return problems
-    problems = absent_requirements(body, root) or screens_problems(body, root)
+    problems = (
+        absent_requirements(body, root)
+        or screens_problems(body, root)
+        or touch_problems(body, touch_rules(root))
+    )
     if not problems and plan_issue_set(root):
         problems = wave_problems(body, waves)
     return problems

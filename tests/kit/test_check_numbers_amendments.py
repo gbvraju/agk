@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 AMEND = "docs/runs/proposed-spec-amendments-{}.md"
 REQS = "# Requirements\n\n### REQ-001 — One\n\n- Status: planned\n"
 
@@ -155,3 +157,70 @@ def test_ac1_a_reserved_amendment_number_is_named_in_the_conductor_and_the_brief
     for rel in (".claude/agents/conductor.md", "docs/briefs/TEMPLATE.md"):
         text = " ".join((root / rel).read_text(encoding="utf-8").split())
         assert "amendment number" in text and "field note" in text, rel
+
+
+# --- reservations of open briefs (amendment 141 item 5; REQ-057 AC11) ---------------------------
+
+
+def briefs_file(repo, *pairs) -> str:
+    path = repo.root.parent / "briefs.json"
+    path.write_text(
+        json.dumps([{"number": n, "body": f"Reserved: {r}\n"} for n, r in pairs]), encoding="utf-8"
+    )
+    return str(path)
+
+
+def on_branch(repo, **files):
+    repo.commit({"docs/requirements.md": "# R\n\n### REQ-001 — a\n"}, "base")
+    repo.git("branch", "-M", "main")
+    repo.branch()
+    repo.commit(files, "work")
+
+
+def run_numbers(repo, *args):
+    return repo.run("check_numbers.py", *args, AGK_BASE="main")
+
+
+def test_ac11_a_number_added_here_and_reserved_by_another_open_brief_fails(repo):
+    """REQ-057 AC11: naming both."""
+    on_branch(repo, **{"docs/adr/0900-a.md": "# ADR-0900: a\n"})
+    proc = run_numbers(repo, "--briefs", briefs_file(repo, (7, "ADR-0900")), "--brief", "5")
+    assert proc.returncode == 1
+    assert "ADR-0900" in proc.stdout and "#7" in proc.stdout and "#5" in proc.stdout
+
+
+def test_ac11_the_pull_request_s_own_brief_is_excepted(repo):
+    """REQ-057 AC11: reserved by its own brief passes."""
+    on_branch(repo, **{"docs/adr/0900-a.md": "# ADR-0900: a\n"})
+    proc = run_numbers(repo, "--briefs", briefs_file(repo, (5, "ADR-0900")), "--brief", "5")
+    assert (proc.returncode, proc.stdout) == (0, "ok numbers\n")
+
+
+def test_ac11_a_requirement_and_an_amendment_added_here_are_read(repo):
+    """REQ-057 AC11: `REQ-nnn` and `amendment n` count."""
+    on_branch(
+        repo,
+        **{
+            "docs/requirements.md": "# R\n\n### REQ-001 — a\n\n### REQ-900 — b\n",
+            "docs/runs/proposed-spec-amendments-139.md": "x\n",
+        },
+    )
+    proc = run_numbers(
+        repo, "--briefs", briefs_file(repo, (7, "REQ-900, amendment 139")), "--brief", "5"
+    )
+    assert proc.returncode == 1
+    assert "REQ-900" in proc.stdout and "amendment 139" in proc.stdout
+
+
+def test_ac11_without_briefs_the_check_is_unchanged(repo):
+    """REQ-057 AC11: the governance step passes no list, so no unrelated pull request turns red."""
+    on_branch(repo, **{"docs/adr/0900-a.md": "# ADR-0900: a\n"})
+    assert run_numbers(repo).returncode == 0
+
+
+@pytest.mark.parametrize(
+    "args", [("--briefs", "x"), ("--brief", "5"), ("--briefs", "x", "--brief", "y")]
+)
+def test_ac11_the_two_flags_come_together(repo, args):
+    """REQ-057 AC11: a usage error, exit 2."""
+    assert repo.run("check_numbers.py", *args).returncode == 2

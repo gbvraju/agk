@@ -40,7 +40,7 @@ GIT = [
 
 
 def git(root: Path, *args: str) -> None:
-    subprocess.run([*GIT, *args], cwd=root, check=True, capture_output=True)  # nosec B603
+    subprocess.run([*GIT, *args], cwd=root, check=True, capture_output=True)  # nosec B603 - fixed argument list, no shell
 
 
 def repo(root: Path, files: dict[str, str | bytes] | None = None, commit: bool = True) -> Path:
