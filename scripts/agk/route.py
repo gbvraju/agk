@@ -659,12 +659,17 @@ def one_line(text: str) -> str:
     return " ".join(str(text).split()) or "unnamed"
 
 
+RED_RUNBOOK = "docs/runbooks/red-default-branch.md"  # SPEC-0056 rule 13: a path, never a value
+
+
 def red_body(name: str, sha: str, url: str) -> str:
-    """The red-branch brief in the shape of a brief; it names the check, the sha and the run."""
+    """The red-branch brief in the shape of a brief; it names the check, the sha, the run and the
+    page of steps."""
     return (
         'Sentence: "The default branch is red: the required checks of its head fail."\n'
         f"Answers:\n1. Failing check: {one_line(name)}\n2. Head: {one_line(sha)}\n"
         f"3. Run: {one_line(url)}\n"
+        f"Runbook: {RED_RUNBOOK}\n"
         "Priority: 0\nAdvances: none\nTouches: **\nSize: S\n"
         "Broad: a red default branch can start in any file\n"
     )
