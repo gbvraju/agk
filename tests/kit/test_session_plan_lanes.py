@@ -99,6 +99,7 @@ TODAY_KEYS = {
     "running",
     "waits",
     "skipped",
+    "malformed",
     "stale_claims",
     "capacity",
     "merge",
