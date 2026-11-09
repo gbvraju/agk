@@ -81,13 +81,16 @@ def group(text: str, title: str) -> list[str]:
     return found
 
 
+MEASURE_LINES = ("- restore ", "- run minutes: ")  # SPEC-0056 rule 12, tested on their own
+
+
 def section(text: str, heading: str) -> list[str]:
     lines = text.splitlines()
     start = lines.index(heading) + 1
     end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), None)
     if end is None:
         end = lines.index("---")
-    return [ln for ln in lines[start:end] if ln]
+    return [ln for ln in lines[start:end] if ln and not ln.startswith(MEASURE_LINES)]
 
 
 # --- goldens ------------------------------------------------------------------------------------
@@ -154,8 +157,9 @@ def test_the_drift_line_without_an_open_issue_is_the_one_line_without_a_link(cap
 def test_a_quiet_week_prints_nothing_this_week(capsys):
     """REQ-018 AC2: rule 10 (an empty section says so)."""
     _, out, _ = render(REPORT / "quiet" / "facts.json", capsys=capsys)
-    for heading in ("## Delivered", "## Needs you", "## Cost"):
+    for heading in ("## Delivered", "## Needs you"):
         assert section(out, heading) == ["nothing this week"]
+    assert section(out, "## Cost") == []  # the lines of SPEC-0056 rule 12 are always printed
     _, inbox, _ = render(REPORT / "quiet" / "facts.json", "--inbox", capsys=capsys)
     assert "nothing waits for you" in inbox
 

@@ -101,6 +101,7 @@ def test_ac5_the_ending_is_on_the_same_line_before_the_link_in_a_busy_week(tmp_p
     lines = section(
         render_doc(declared(doc, {merged[0]: ("1-9", "5.0")}), tmp_path, capsys), "## Cost"
     )
+    lines = [ln for ln in lines if not ln.startswith(("- restore ", "- run minutes: "))]
     assert len(lines) == 1
     text, _, link = lines[0].partition(" — ")
     text = text.removesuffix("; shadow review: unknown")  # the facts say nothing of the shadow

@@ -134,6 +134,7 @@
       "req": "REQ-001"
     }
   ],
+  "measures": "unknown",
   "pull_requests": [
     {
       "actual_hours": "96.5",
