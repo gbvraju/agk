@@ -19,7 +19,15 @@ SKILL = KIT_ROOT / "skills" / "vision" / "SKILL.md"
 DETECT = '/scripts/agk/front_door.py" detect'
 QUESTIONS = '/scripts/agk/engines.py" questions'
 IDEA = "Our shop at example.com loses orders when the payment page times out\n"
-GIT = ["git", "-c", "user.name=Ada", "-c", "user.email=ada@example.com", "-c", "commit.gpgsign=false"]
+GIT = [
+    "git",
+    "-c",
+    "user.name=Ada",
+    "-c",
+    "user.email=ada@example.com",
+    "-c",
+    "commit.gpgsign=false",
+]
 
 
 def text() -> str:
@@ -47,7 +55,9 @@ def front_door(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 def react_repo(root: Path) -> Path:
     """A repository whose head proposes a stack, so that `detect` has something to say."""
-    (root / "package.json").write_text('{"dependencies": {"react-dom": "1.0.0"}}\n', encoding="utf-8")
+    (root / "package.json").write_text(
+        '{"dependencies": {"react-dom": "1.0.0"}}\n', encoding="utf-8"
+    )
     for args in (("init", "-q"), ("add", "."), ("commit", "-q", "-m", "first")):
         subprocess.run([*GIT, *args], cwd=root, check=True, capture_output=True)  # nosec B603 - fixed argument list, no shell
     return root
