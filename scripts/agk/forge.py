@@ -14,10 +14,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
 import time
+import uuid
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -28,13 +30,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from common import CheckError, agent_apps, personal_table  # noqa: E402
 from local_mode import SESSION_SETTING  # noqa: E402
+from lock import Usage, clear_if_same, stale_minutes, take  # noqa: E402
 from metrics import ApiDir, Gh  # noqa: E402
 from reviewers import solo_person  # noqa: E402
 
 AGENT_APP = "claude"
 NO_GITHUB_WRITE = "personal mode never writes to GitHub (setting: forge)"
 NUMBERED = re.compile(r"(pull|issue|comments|files|commits)-(\d+)")
-LOCK_TRIES = 100
+LOCK_WAIT = 10.0  # seconds a write waits for another write
 STATUS = dict(A="added", C="copied", D="removed", M="modified", R="renamed", T="changed")
 LOG_FIELDS = "%x00".join(("%H", "%P", "%an", "%ae", "%at", "%cn", "%ce", "%ct", "%B"))
 
@@ -246,22 +249,22 @@ class FilesForge:
 
     @contextmanager
     def locked(self) -> Iterator[None]:
-        """One writer at a time, so a number or a comment is never lost to a second session."""
-        lock = self.root / "cache" / "forge.lock"
-        lock.parent.mkdir(exist_ok=True)
-        for _ in range(LOCK_TRIES):
-            try:
-                handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-                break
-            except FileExistsError:
-                time.sleep(0.1)
-        else:
+        """One writer at a time, so a number or a comment is never lost to a second session; the
+        take and release of `lock.py`, so a holder that no longer runs is cleared (ADR-0295)."""
+        held = self.root / "cache" / "forge.lock"
+        token = uuid.uuid4().hex
+        host = socket.gethostname()
+        owner = dict(session="forge", pid=os.getpid(), host=host, started=self.now(), token=token)
+        try:
+            limit = stale_minutes(self.root)
+        except Usage as exc:
+            raise CheckError(str(exc)) from None
+        if take(held, "forge", owner, limit, LOCK_WAIT) is None:
             raise CheckError("another write holds the forge (path class: cache/forge.lock)")
         try:
             yield
         finally:
-            os.close(handle)
-            lock.unlink(missing_ok=True)
+            clear_if_same(held, token)
 
     def write(self, subject: str, records: dict[str, Any]) -> None:
         """Each record a temporary file and a rename, then one commit of exactly those files."""
