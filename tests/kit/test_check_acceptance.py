@@ -491,6 +491,7 @@ def test_ac7_the_check_reads_the_document_through_front_door():
         "impact",
         "reviewers",
         "check_final_clearance",
+        "check_specs",
     }
     assert not {n for n in names - allowed if n not in sys.stdlib_module_names}
     assert not {"subprocess", "socket", "urllib", "http"} & names
@@ -676,10 +677,12 @@ def test_ac3_a_head_outside_the_history_fails(project: Path):
     """REQ-058 AC3: rule 6, a commit the tree does not descend from says nothing about it."""
     head = proposed_then_accepted(project)
     proposed = (project / REL).read_text(encoding="utf-8")
+    branch = git(project, "rev-parse", "--abbrev-ref", "HEAD")
     git(project, "checkout", "-q", "--orphan", "other")
     write(project, proposed.replace("- Status: accepted", "- Status: proposed"))
+    write(project, "another line\n", "docs/runs/other.md")
     other = commit(project)
-    git(project, "checkout", "-q", "-")
+    git(project, "checkout", "-q", branch)
     assert head != other
     refused(with_comments(project, comment(yes(other))), 6)
 
