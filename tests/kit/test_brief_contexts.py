@@ -174,3 +174,12 @@ def test_ac4_an_approved_spec_is_not_refused_until_it_is_next_amended(repo):
     )
     out = specs(repo)
     assert out.returncode == 1 and "Contexts" in out.stdout
+
+
+def test_ac4_the_routers_red_branch_brief_needs_no_line(tmp_path):
+    """REQ-037 AC4: SPEC-0032 rule 7's brief is a fixed repair, not a design."""
+    body = (
+        'Sentence: "The default branch is red."\nAnswers:\n1. the failing check\nSize: S\n'
+        "Advances: none\nPriority: 0\nTouches: x\n"
+    )
+    assert session.contexts_line_problems(body) == []

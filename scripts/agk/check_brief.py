@@ -20,6 +20,8 @@ With `--root DIR` and `plan_issue` in the `[flow]` table of `DIR/agk.toml` a bri
 line `Wave: n` (amendment 140), a wave of `--waves` when that list is given. With `--root DIR` the
 `Touches:` and `Adds:` lines are also judged against the tree (amendment 141 item 1); an optional
 line `Adds:` lists the new files a brief creates and `Broad: <reason>` says that it is a sweep.
+Amendment 142: one line `Contexts:` states every context of `session.CONTEXTS`, each with how the
+change works there or `not applicable: <reason>`.
 
 `--event PAYLOAD` reads a saved `issues` event and prints one JSON line, for the job that labels a
 brief filed on GitHub: `ignore`, `fail` with the label, the rules and the comment, or `pass` with
@@ -42,6 +44,7 @@ from common import REQ_HEADER, CheckError, config_source, run
 from session import (
     advances_ids,
     brief_problems,
+    contexts_line_problems,
     plan_issue_set,
     touches_of,
     wave_of,
@@ -161,7 +164,7 @@ def screens_problems(body: str, root: Path) -> list[str]:
 
 def body_problems(body: str, root: Path | None, waves: set[int] | None) -> list[str]:
     """Every rule the body breaks: the shape first, then what needs the root."""
-    problems = brief_problems(body)
+    problems = brief_problems(body) + contexts_line_problems(body)
     if root is None or problems:
         return problems
     problems = (

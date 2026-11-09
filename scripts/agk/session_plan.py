@@ -105,6 +105,7 @@ from reviewers import verdict_authors
 from session import (
     ADDS,
     BROAD,
+    HELD_PREFIX,
     RELEASED,
     TOUCHES,
     Survey,
@@ -116,6 +117,7 @@ from session import (
     flow_value,
     gh,
     glob_regex,
+    hold_state,
     line_entries,
     literal,
     live_takes,
@@ -1467,6 +1469,8 @@ def build(root, record: bool = False) -> dict:
         else {}
     )
     malformed_rows = [row for row in s.skipped if row[1].startswith("rule ")]
+    held, ignored_holds = holds_of(root, s)
+    held_rows = [row for row in s.skipped if row[1].startswith(HELD_PREFIX)]
     return {
         "start": [start_entry(names[i], b, protected) for i, b in enumerate(chosen[:count])],
         "running": running_sessions(s),
@@ -1475,8 +1479,10 @@ def build(root, record: bool = False) -> dict:
         "skipped": [
             {"brief": n, "why": why}
             for n, why in [*s.skipped, *build_skips, *unplanned]
-            if (n, why) not in malformed_rows
+            if (n, why) not in malformed_rows and (n, why) not in held_rows
         ],
+        "held": held,
+        "ignored_holds": ignored_holds,
         "malformed": [
             {"brief": n, "why": why, "filer": filer_of(s, n)} for n, why in malformed_rows
         ],
@@ -1505,6 +1511,18 @@ def build(root, record: bool = False) -> dict:
         "default_branch": default,
         "stale_commits": behind_limit,
     } | playbook
+
+
+def holds_of(root, s: Survey) -> tuple[list[dict], list[dict]]:
+    """Amendment 142: (every held brief with its reason, each `Hold:` by someone not listed)."""
+    held: list[dict] = []
+    ignored: list[dict] = []
+    for number, comments in sorted(s.comments.items()):
+        reason, logins = hold_state(root, comments, number)
+        if reason:
+            held.append({"brief": number, "reason": reason})
+        ignored += [{"brief": number, "by": login} for login in logins]
+    return held, ignored
 
 
 def start_entry(name: str, brief: dict, protected: list[str] | None) -> dict:
@@ -1613,6 +1631,8 @@ def words(plan: dict) -> str:
         f"MALFORMED: #{m['brief']} {m['why']}" + (f" (fix: {m['filer']})" if m["filer"] else "")
         for m in plan["malformed"]
     ]
+    lines += [f"HELD: #{h['brief']} {HELD_PREFIX}{h['reason']}" for h in plan["held"]]
+    lines += [f"HOLD IGNORED: #{h['brief']} by {h['by']}" for h in plan["ignored_holds"]]
     if plan["skipped"]:
         lines.append(
             "Skipped: " + ", ".join(f"#{s['brief']} ({s['why']})" for s in plan["skipped"]) + "."
