@@ -1,7 +1,8 @@
 """The evidence pack's form, its release test, its offline check and `make` from git (SPEC-0052).
 
     python3 scripts/agk/release_pack.py check <out>/<tag>
-    python3 scripts/agk/release_pack.py make --tag <tag> --out DIR
+    python3 scripts/agk/release_pack.py make --tag <tag> --out DIR [--api-dir DIR]
+        [--repo OWNER/REPO]
 
 A pack is one folder named by a release tag with exactly six files: the five parts `tests.json`,
 `scans.json`, `coverage.json`, `bom.json`, `decisions.json` and the index `pack.json` (rule 2).
@@ -21,8 +22,10 @@ those files are found.
 `make` (build (c), rules 3, 8 and 9) applies the release test and the folder refusals, then writes
 `bom.json` and `decisions.json` to `<out>/<tag>/` with no network: it reads the tagged commit with
 local `git`, never checks it out over the work tree, posts nothing and changes no file of the
-repository. The three parts read from GitHub, the fields of `decisions.json` read from GitHub and
-the index are build (d)'s; until then `check` fails such a folder, naming what is missing.
+repository. Build (d) adds `tests.json` and `scans.json` (rules 5 and 6), read with
+`gh api --method GET` only, or from saved responses with `--api-dir` as `scorecard.py` takes them:
+what cannot be read is `unknown`, never a pass. `coverage.json`, the fields of `decisions.json` read
+from GitHub and the index are still to come; until then `check` fails such a folder, naming them.
 """
 
 from __future__ import annotations
@@ -42,11 +45,14 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import guard
+import metrics
+import scorecard
 from common import (
     REQUIREMENTS,
     CheckError,
     block_source,
     git,
+    load_config,
     parse_requirements,
     repo_root,
     run,
@@ -54,7 +60,10 @@ from common import (
 )
 
 NAME = "pack"
-USAGE = "usage: release_pack.py check <out>/<tag> | make --tag <tag> --out DIR"
+USAGE = (
+    "usage: release_pack.py check <out>/<tag> | "
+    "make --tag <tag> --out DIR [--api-dir DIR] [--repo OWNER/REPO]"
+)
 INDEX = "pack.json"
 UNKNOWN = "unknown"
 NO_RELEASE_TEST = "refused: this repository has no release test (path class kit/)"
@@ -75,6 +84,15 @@ ACTION = re.compile(
 )
 PINNED = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*==(?!=)\s*([^\s;,]+)")
 SCANNER = re.compile(r"^\s*GITLEAKS_VERSION:\s*(\S+)", re.MULTILINE)
+SCAN_CHECK, SECRET_STEP = "governance", "Secret scan"  # the job and step that run the secret scan
+# SPEC-0052 rule 1's measurement: the dependency scanners no file configures today.
+DEPENDENCY = re.compile(r"(?<![\w-])(pip-audit|osv-scanner|dependency-review|trivy|grype)(?![\w-])")
+RUN_ID = re.compile(r"/actions/runs/(\d+)(?:/|$)")
+COUNTS = {
+    word: re.compile(rf"(?<![\w.])(\d+) {word}\b") for word in ("passed", "failed", "skipped")
+}
+CONCLUSION = re.compile(r"[a-z_]{1,32}")  # a conclusion GitHub gives; anything else is unknown
+OUTCOME = {"success": "passed", "failure": "failed", "skipped": "not run"}
 # Each part's fields beside `schema`: None is one value, a type a list of it, a tuple a list of
 # objects with exactly those fields.
 FORMS: dict[str, dict[str, Any]] = {
@@ -300,10 +318,7 @@ def text_or_empty(root: Path, commit: str, rel: str) -> str:
 
 def actions_at(root: Path, commit: str) -> list[dict[str, str]]:
     """Each SHA-pinned action of the workflows, once, as `scorecard.action_pins` reads them."""
-    listing = git(root, "ls-tree", "--name-only", commit, ".github/workflows/").split("\n")
-    found: set[tuple[str, str, str]] = set()
-    for rel in (name for name in listing if name.endswith(".yml")):
-        found |= set(ACTION.findall(text_at(root, commit, rel, ".github/workflows/")))
+    found = {match for text in workflow_texts(root, commit) for match in ACTION.findall(text)}
     return [{"name": n, "tag": tag, "sha": sha} for n, sha, tag in sorted(found)]
 
 
@@ -382,6 +397,115 @@ def decisions(root: Path, tag: str, commit: str) -> dict[str, Any]:
     return {"schema": 1, "adrs": adrs, "requirements": changed, "skipped_tags": skipped}
 
 
+class Live(scorecard.Live):
+    """The scorecard's GET-only reader; a machine without `gh` reads nothing, so `unknown`."""
+
+    def raw(self, endpoint: str) -> str | None:
+        try:
+            return super().raw(endpoint)
+        except OSError:
+            return None
+
+
+def as_int(value: object) -> int:
+    return value if type(value) is int else 0
+
+
+def check_runs(src: Any, commit: str) -> list[dict]:
+    data = src.get("check-runs", f"repos/{{repo}}/commits/{commit}/check-runs?per_page=100")
+    runs = data.get("check_runs") if isinstance(data, dict) else None
+    return [r for r in runs if isinstance(r, dict)] if isinstance(runs, list) else []
+
+
+def latest_run(runs: list[dict], name: str) -> dict | None:
+    named = [r for r in runs if r.get("name") == name]
+    return max(named, key=lambda r: as_int(r.get("id")), default=None)
+
+
+def required_contexts(data: Any) -> list[str] | None:
+    """The required checks of the branch's rules, or None when the response is not of that form."""
+    try:
+        names = [
+            entry["context"]
+            for rule in data
+            if rule["type"] == "required_status_checks"
+            for entry in rule["parameters"]["required_status_checks"]
+        ]
+    except (TypeError, KeyError):
+        return None
+    return (
+        sorted(set(names)) if all(isinstance(n, str) and n.isprintable() for n in names) else None
+    )
+
+
+def check_entry(name: str, run: dict | None) -> dict[str, Any]:
+    """One required check: its name, its conclusion and the counts its run's output states."""
+    found = (run or {}).get("conclusion")
+    usable = isinstance(found, str) and CONCLUSION.fullmatch(found)
+    output = (run or {}).get("output")
+    fields = output if isinstance(output, dict) else {}
+    text = " ".join(str(fields.get(key) or "") for key in ("title", "summary", "text"))
+    entry: dict[str, Any] = {"name": name, "conclusion": found if usable else UNKNOWN}
+    for word, pattern in COUNTS.items():
+        stated = {int(number) for number in pattern.findall(text)}
+        entry[word] = stated.pop() if len(stated) == 1 else UNKNOWN
+    return entry
+
+
+def tests_part(src: Any, branch: str, runs: list[dict]) -> dict[str, Any]:
+    """`tests.json` (rule 5); rules that cannot be read are one `unknown` entry, never no entry."""
+    rules = src.get("rules-branch", f"repos/{{repo}}/rules/branches/{branch}")
+    names = required_contexts(rules)
+    return {
+        "schema": 1,
+        "checks": [
+            check_entry(n, latest_run(runs, n)) for n in ([UNKNOWN] if names is None else names)
+        ],
+    }
+
+
+def step_outcome(src: Any, runs: list[dict]) -> str:
+    """The secret scan's outcome: its step in the newest attempt of the run on the tagged commit."""
+    run = latest_run(runs, SCAN_CHECK) or {}
+    found = RUN_ID.search(str(run.get("details_url") or ""))
+    jobs = metrics.jobs_of(src, found[1]) if found else None
+    if jobs is None:
+        return UNKNOWN
+    newest = sorted(jobs, key=lambda job: as_int(job.get("run_attempt")))
+    steps = [
+        step
+        for job in newest
+        if isinstance(job.get("steps"), list)
+        for step in job["steps"]
+        if isinstance(step, dict) and step.get("name") == SECRET_STEP
+    ]
+    return OUTCOME.get(str(steps[-1].get("conclusion")), UNKNOWN) if steps else UNKNOWN
+
+
+def workflow_texts(root: Path, commit: str) -> list[str]:
+    listing = git(root, "ls-tree", "--name-only", commit, ".github/workflows/").split("\n")
+    names = [name for name in listing if name.endswith(".yml")]
+    return [text_at(root, commit, rel, ".github/workflows/") for rel in names]
+
+
+def scan_entry(kind: str, scanner: str, version: str, outcome: str) -> dict[str, str]:
+    return {"kind": kind, "scanner": scanner, "version": version, "outcome": outcome}
+
+
+def scans_part(root: Path, commit: str, src: Any, runs: list[dict]) -> dict[str, Any]:
+    """`scans.json` (rule 6): what no file configures is `not run` with the scanner `none`."""
+    pins = set(SCANNER.findall(text_or_empty(root, commit, GOVERNANCE)))
+    secret = scan_entry("secret", "none", "none", "not run")
+    if pins:
+        version = next(iter(pins)) if len(pins) == 1 else UNKNOWN
+        secret = scan_entry("secret", "gitleaks", version, step_outcome(src, runs))
+    named = sorted({m for text in workflow_texts(root, commit) for m in DEPENDENCY.findall(text)})
+    dependency = scan_entry("dependency", "none", "none", "not run")
+    if named:
+        dependency = scan_entry("dependency", named[0], UNKNOWN, UNKNOWN)
+    return {"schema": 1, "scans": [secret, dependency]}
+
+
 def folder_refusal(root: Path, target: Path) -> str | None:
     """Why `<out>/<tag>/` may not be written; every file of a pack must be ignored by git."""
     if os.path.lexists(target):
@@ -410,7 +534,14 @@ def write_parts(target: Path, parts: dict[str, dict[str, Any]]) -> str | None:
     return None
 
 
-def make(tag: str, out: str) -> int:
+def source(options: dict[str, str]) -> Any:
+    """The saved responses of `--api-dir`, or the live GET-only reader of `--repo` or `origin`."""
+    if "--api-dir" in options:
+        return metrics.ApiDir(Path(options["--api-dir"]))
+    return Live(options.get("--repo") or metrics.origin_repo())
+
+
+def make(tag: str, out: str, options: dict[str, str]) -> int:
     root = repo_root()
     commit = commit_of(root, tag)
     target = Path(out).resolve() / tag
@@ -418,7 +549,14 @@ def make(tag: str, out: str) -> int:
     parts: dict[str, dict[str, Any]] = {}
     if refusal is None:
         try:
-            parts = {"bom.json": bill(root, commit), "decisions.json": decisions(root, tag, commit)}
+            src = source(options)
+            runs = check_runs(src, commit)
+            parts = {
+                "tests.json": tests_part(src, load_config(root)["default_branch"], runs),
+                "scans.json": scans_part(root, commit, src, runs),
+                "bom.json": bill(root, commit),
+                "decisions.json": decisions(root, tag, commit),
+            }
             refusal = write_parts(target, parts)
         except Refused as exc:
             refusal = str(exc)
@@ -426,7 +564,7 @@ def make(tag: str, out: str) -> int:
         print(refusal)
         return 1
     missing = " ".join(name for name in (*FORMS, INDEX) if name not in parts)
-    print(f"made {' '.join(parts)}; left to build (d): {missing}")
+    print(f"made {' '.join(parts)}; not yet made: {missing}")
     return 0
 
 
@@ -449,9 +587,15 @@ def check(arg: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    options = dict(zip(args[1::2], args[2::2], strict=False)) if len(args) == 5 else {}
-    if args[:1] == ["make"] and set(options) == {"--tag", "--out"}:
-        return make(options["--tag"], options["--out"])
+    pairs = list(zip(args[1::2], args[2::2], strict=False)) if len(args) % 2 else []
+    options = dict(pairs)
+    allowed = {"--tag", "--out", "--api-dir", "--repo"}
+    if (
+        args[:1] == ["make"]
+        and len(options) == len(pairs)
+        and {"--tag", "--out"} <= set(options) <= allowed
+    ):
+        return make(options["--tag"], options["--out"], options)
     if len(args) != 2 or args[0] != "check":
         print(USAGE)
         return 2
