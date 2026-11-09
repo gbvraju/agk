@@ -354,8 +354,9 @@ def test_a_pattern_python_cannot_read_is_refused(tmp_path, monkeypatch, capsys):
     def refuse(*_args, **_kwargs):  # the pattern an older Python's glob refuses, on any Python
         raise ValueError
 
-    monkeypatch.setattr(failures.Path, "glob", refuse)
-    assert copy_files() == 2
+    with monkeypatch.context() as patch:
+        patch.setattr(failures.Path, "glob", refuse)
+        assert copy_files() == 2
     assert "setting: failures.artifact_paths" in capsys.readouterr().out
     assert len(stored(root)) == 3
 
