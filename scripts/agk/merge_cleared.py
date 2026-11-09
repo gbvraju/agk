@@ -119,6 +119,13 @@ older than 20 minutes it could not merge (in local mode it only reports). The la
 input: a cleared pull request labelled `agk:fix` or `agk:review` prints `LABEL #<n> <label> but
 cleared`, and the router runs for it when it is left unmerged. `--sweep-gate` prints `on` or `off`
 for the workflow.
+
+`--status --pr <n> --sha <head>` (brief #853, ADR-0387) sets the commit status `agk/verdict` by the
+reading of the merge: `success` when the head is cleared, no hold of rule 5 stands and it is not in
+the re-prove state; else `pending` with the reason. It prints `merge-cleared #<n> <sha12>: status
+<state>` and sets nothing in local mode or on a `--sha` that is not the head. `--status --event FILE
+--event-name NAME` is the job's form, for a comment; the merger also starts on that status with
+`success`, and only the guarded command merges. `[flow] merge_queue = true` holds the merge.
 """
 
 from __future__ import annotations
@@ -239,6 +246,11 @@ NO_MERGE_LINE = f"merge needs {MERGE_ENV} or the owner's tap"  # the `Correction
 PENDING = "checks pending"  # SPEC-0039 rule 10, exactly (brief #569)
 RED = ("failure", "error")  # a commit status that failed
 ENDED = ("success", *RED)  # a commit status that is no longer `pending`
+STATUS_CONTEXT = "agk/verdict"  # the commit status of a verdict (brief #853)
+STATUS_LIMIT = 140  # characters GitHub takes in a status description (verify)
+OWNER_MERGE = "owner merge"
+QUEUE_SETTING = "merge_queue"
+QUEUE_HOLD = f"merge queue (setting flow.{QUEUE_SETTING})"
 
 
 class Refused(CheckError):
@@ -268,6 +280,7 @@ class Rules(NamedTuple):
     required: list[str]  # required_checks
     pre: dict | None = None  # [testing] pre_merge_tests, checked (brief #667)
     behind: int | None = None  # [flow] max_behind_merges, checked (brief #727)
+    queue: bool = False  # [flow] merge_queue, checked (brief #853)
 
 
 class Stopped(Exception):
@@ -382,6 +395,16 @@ def max_behind_setting(data: dict) -> int | None:
             f"{BEHIND_SETTING} must be a whole number of at least 0 "
             f"({SETTING.format(BEHIND_SETTING)})"
         )
+    return value
+
+
+def merge_queue_setting(data: dict) -> bool:
+    """`[flow] merge_queue` (brief #853 answer 4): a boolean, false when absent; anything else is
+    refused naming the setting, never the value."""
+    flow = data.get("flow", {})
+    value = flow.get(QUEUE_SETTING, False) if isinstance(flow, dict) else False
+    if not isinstance(value, bool):
+        raise Refused(f"{QUEUE_SETTING} must be true or false ({SETTING.format(QUEUE_SETTING)})")
     return value
 
 
@@ -1152,14 +1175,23 @@ def in_worktree(
         git_out(root, "worktree", "prune")
 
 
-def would_be_merge(root: Path, branch: str, number: int, sha: str) -> tuple[str | None, str]:
-    """Fetch the default branch and the pull request's head, and make their merge one commit on
-    the fetched default branch, as the squash merge will be: (the commit, the default branch's
-    commit), or (None, the failing step). A conflict holds, as rule 5 holds one (brief #610)."""
+def fetched_base(root: Path, branch: str, number: int, sha: str) -> str | None:
+    """Fetch the default branch and the pull request's head: the default branch's commit, or None
+    when either cannot be read."""
     code, _ = git_out(root, "fetch", "-q", "origin", branch, f"refs/pull/{number}/head")
     base_code, base = git_out(root, "rev-parse", "--verify", "-q", f"{REMOTE}{branch}^{{commit}}")
     head_code, _ = git_out(root, "cat-file", "-e", f"{sha}^{{commit}}")
     if code != 0 or base_code != 0 or head_code != 0 or not SHA.fullmatch(base):
+        return None
+    return base
+
+
+def would_be_merge(root: Path, branch: str, number: int, sha: str) -> tuple[str | None, str]:
+    """Fetch the default branch and the pull request's head, and make their merge one commit on
+    the fetched default branch, as the squash merge will be: (the commit, the default branch's
+    commit), or (None, the failing step). A conflict holds, as rule 5 holds one (brief #610)."""
+    base = fetched_base(root, branch, number, sha)
+    if base is None:
         return None, "fetch"
     code, out = git_out(root, "merge-tree", "--write-tree", "--no-messages", base, sha)
     if code == 1:
@@ -1418,7 +1450,30 @@ def event_target(name: str, payload: dict) -> tuple[int, str | None] | None:
         if not (isinstance(number, int) and number > 0 and isinstance(sha, str)):
             return None
         return (number, sha) if SHA.fullmatch(sha) else None
+    if name == "status":  # the number is read from GitHub by the caller (brief #853 answer 2)
+        if payload.get("context") != STATUS_CONTEXT or payload.get("state") != "success":
+            return None
+        sha = payload.get("sha")
+        return (0, sha) if isinstance(sha, str) and SHA.fullmatch(sha) else None
     return None
+
+
+def pull_of_head(repo: str, sha: str, branch: str) -> int:
+    """The one open pull request into BRANCH whose head is SHA; Nothing unless there is exactly
+    one (brief #853 answer 2)."""
+    pulls = read_json(f"repos/{repo}/commits/{sha}/pulls", list, "the pull requests of the head")
+    found = [
+        p["number"]
+        for p in pulls
+        if isinstance(p, dict)
+        and p.get("state") == "open"
+        and isinstance(p.get("number"), int)
+        and (p.get("head") or {}).get("sha") == sha
+        and (p.get("base") or {}).get("ref") == branch
+    ]
+    if len(found) != 1:
+        raise Nothing(f"not one open pull request has this head (event status, {len(found)} found)")
+    return found[0]
 
 
 def event_main(path: str, name: str, root: Path) -> int:
@@ -1437,8 +1492,12 @@ def event_main(path: str, name: str, root: Path) -> int:
             raise Nothing(f"not a verdict, an approval or a green run of a head (event {name})")
         _, data = default_ref(root)
         github_mode(data)
+        if merge_queue_setting(data):
+            raise Nothing(QUEUE_HOLD)
         repo = repo_of(root)
         number, sha = target
+        if number == 0 and sha is not None:
+            number = pull_of_head(repo, sha, str(data.get("default_branch", "main")))
         if sha is None:
             sha = current_head(repo, number)
         if not SHA.fullmatch(sha):
@@ -1535,6 +1594,7 @@ def sweep_one(root: Path, repo: str, pull: dict, merging: bool, tried: int) -> t
         print(f"{prefix} not cleared: {why}")
         return tried, False
     verdict = latest_verdict(comments)
+    refresh_status(root, number, sha)
     stale = next((name for name in STALE_LABELS if name in labels_of(pull)), None)
     if stale:
         print(f"LABEL #{number} {stale} but cleared")
@@ -1641,11 +1701,150 @@ def report_main(number: int, sha: str, line: str, root: Path) -> int:
     return EXIT_CLEARED
 
 
+# --- the verdict as a commit status (brief #853, ADR-0387) ----------------------------------------
+
+
+def verdict_reason(comments: list[dict], sha: str, reason: str) -> str:
+    """The `pending` reason of a head the latest verdict does not clear; REASON is `judge`'s."""
+    verdict = latest_verdict(comments)
+    if verdict is None:
+        return "no verdict"
+    line = first_line(verdict)
+    if line == f"Verdict: fix list {sha}":
+        return "fix list"
+    if line == f"Verdict: rejected {sha}":
+        return "rejected"
+    if "not listed" in reason:
+        return "the verdict's author is not listed"
+    return "no verdict for this head"
+
+
+def spec_waiting(
+    root: Path, number: int, pull: dict, comments: list[dict], sha: str, approvers: list[str]
+) -> str:
+    """The first spec of an `Approval:` line that has no approval for the head; `the spec` for a
+    pull request held by its `agk:approve` label alone."""
+    asked = sorted(set(APPROVAL.findall(str(pull.get("body") or ""))))
+    for spec in asked:
+        alone = {**pull, "body": f"Approval: {spec}", "labels": []}
+        if unapproved(alone, comments, sha, approvers, root, number):
+            return spec
+    return asked[0] if asked else "the spec"
+
+
+def verdict_state(root: Path, repo: str, number: int, sha: str, rules: Rules) -> tuple[str, str]:
+    """(`success`, "") or (`pending`, the reason) for the head SHA, by the reading of the merge
+    (`judge`, `hold_list`, the re-prove state); a moved head is Refused, so nothing is set."""
+    pull = read_json(f"repos/{repo}/pulls/{number}", dict, "the pull request")
+    head = pull.get("head")
+    if not isinstance(head, dict) or head.get("sha") != sha:
+        raise Refused("head moved (rule 3: --sha is not the pull request's head)", EXIT_HELD)
+    comments = read_comments(repo, number)
+    state, reason = judge(comments, sha, rules.allowed)
+    if state != "cleared":
+        return "pending", verdict_reason(comments, sha, reason)
+    accepts = accepted_adrs(latest_verdict(comments) or {}, sha) or []
+    try:
+        hold_list(repo, number, pull, comments, rules.approvers, accepts, root)
+    except Held as err:
+        text = str(err)
+        if text.startswith(("release", "protected class")):
+            return "pending", OWNER_MERGE
+        if text.startswith("spec approval"):
+            return "pending", "approve " + spec_waiting(
+                root, number, pull, comments, sha, rules.approvers
+            )
+        return "pending", text
+    if rules.queue:  # the queue tests it with the default branch (brief #853 answer 4)
+        return "success", ""
+    branch = str(rules.data.get("default_branch", "main"))
+    base = fetched_base(root, branch, number, sha)
+    files = None if base is None else session_plan.reprove_files(root, base, sha)
+    if files is None:
+        return "pending", "re-prove unknown"
+    return ("pending", f"re-prove {files[0]}") if files else ("success", "")
+
+
+def set_status(repo: str, sha: str, state: str, reason: str) -> bool:
+    """Set the status unless its newest entry says the same; False when the write fails."""
+    description = (reason or "cleared")[:STATUS_LIMIT]
+    seen = read_pages(f"repos/{repo}/commits/{sha}/statuses", "the statuses of the head")
+    newest = next((s for s in seen if s.get("context") == STATUS_CONTEXT), None)
+    if newest and (newest.get("state"), newest.get("description")) == (state, description):
+        return True
+    fields = [f"state={state}", f"context={STATUS_CONTEXT}", f"description={description}"]
+    args = ["--method", "POST", f"repos/{repo}/statuses/{sha}"]
+    for field in fields:
+        args += ["-f", field]
+    return write_once(args)[0] == 0
+
+
+def status_line(root: Path, number: int, sha: str) -> tuple[str, int]:
+    """Compute and set the status of one head: (the one line, the exit code)."""
+    prefix = f"merge-cleared #{number} {sha[:12]}:"
+    try:
+        rules = ruled(root)
+        repo = repo_of(root)
+        state, reason = verdict_state(root, repo, number, sha, rules)
+        shown = f"{prefix} status {state}{' ' + reason if reason else ''}"
+        issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
+        if local_mode(rules.data, issues) or rules.data.get("forge") == "files":
+            return f"{shown} (local mode: not set)", EXIT_CLEARED
+        if not set_status(repo, sha, state, reason):
+            return f"{shown}: the status cannot be set", EXIT_REFUSED
+    except Held as err:
+        return f"{prefix} held: {err}", EXIT_HELD
+    except Refused as err:
+        return f"{prefix} refused: {err}", err.code
+    except CheckError as err:
+        return f"{prefix} refused: {err}", EXIT_REFUSED
+    except Unreadable as err:
+        return f"{prefix} refused: GitHub cannot be read ({err}, {READS} reads in a row)", (
+            EXIT_UNREADABLE
+        )
+    return shown, EXIT_CLEARED
+
+
+def refresh_status(root: Path, number: int, sha: str) -> None:
+    """The sweep's refresh of a cleared head when main moves: one line, and a failure ends
+    nothing (brief #853 answer 1)."""
+    print(status_line(root, number, sha)[0])
+
+
+def status_event_main(path: str, name: str, root: Path) -> int:
+    """`--status --event FILE --event-name NAME`: the job's step, on a comment alone, so that no
+    status write answers a status event; every outcome ends green."""
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        payload = None
+    if name != "issue_comment" or not isinstance(payload, dict):
+        return EXIT_CLEARED
+    target = event_target(name, payload)
+    if target is None:
+        return EXIT_CLEARED
+    try:
+        _, data = default_ref(root)
+        github_mode(data)
+        sha = current_head(repo_of(root), target[0])
+    except (Nothing, Refused, Unreadable) as err:
+        print(f"merger: no status: {err}", file=sys.stderr)
+        return EXIT_CLEARED
+    print(status_line(root, target[0], sha)[0])
+    return EXIT_CLEARED
+
+
 def job_args(argv: list[str]) -> tuple[str, list[str]] | None:
     """The merger job's modes: (`event`, [file, name]), (`report`, [n, sha, line]),
-    (`no-secret`, [n]), (`sweep`, []) or (`sweep-gate`, [])."""
+    (`no-secret`, [n]), (`sweep`, []), (`sweep-gate`, []), (`status`, [n, sha]) or
+    (`status-event`, [file, name])."""
     if argv in (["--sweep"], ["--sweep-gate"]):
         return argv[0][2:], []
+    if len(argv) == 5 and argv[:2] == ["--status", "--pr"] and argv[3] == "--sha":
+        if NUMBER.fullmatch(argv[2]) and SHA.fullmatch(argv[4]):
+            return "status", [argv[2], argv[4]]
+    if len(argv) == 5 and argv[:2] == ["--status", "--event"] and argv[3] == "--event-name":
+        return "status-event", [argv[2], argv[4]]
     if len(argv) == 4 and argv[0] == "--event" and argv[2] == "--event-name":
         return "event", [argv[1], argv[3]]
     if len(argv) == 4 and argv[:2] == ["--report", "--pr"] and argv[3] == "--no-secret":
@@ -1680,7 +1879,8 @@ def ruled(root: Path) -> Rules:
     after_merge_seconds(data)  # a bad setting is refused before anything is merged
     pre = pre_merge_setting(data)  # likewise the pre-merge tests (brief #667)
     behind = max_behind_setting(data)  # and the behind limit (brief #727)
-    return Rules(data, people, allowed, approvers, required, pre, behind)
+    queue = merge_queue_setting(data)  # and the merge queue (brief #853)
+    return Rules(data, people, allowed, approvers, required, pre, behind, queue)
 
 
 def local_mode(data: dict, issues: list[dict]) -> bool:
@@ -1729,6 +1929,8 @@ def holds(
 
 def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
     rules = ruled(root)
+    if rules.queue:
+        raise Held(QUEUE_HOLD)
     data = rules.data
     repo = repo_of(root)
     with merge_lock(root):
@@ -1784,6 +1986,12 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
             return sweep_gate_main(here)
         if job[0] == "event":
             return event_main(job[1][0], job[1][1], here)
+        if job[0] == "status":
+            line, code = status_line(here, int(job[1][0]), job[1][1])
+            print(line)
+            return code
+        if job[0] == "status-event":
+            return status_event_main(job[1][0], job[1][1], here)
         if job[0] == "no-secret":
             return no_secret_main(int(job[1][0]), here)
         return report_main(int(job[1][0]), job[1][1], job[1][2], here)

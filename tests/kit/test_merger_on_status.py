@@ -2,10 +2,9 @@
 
 ADR-0387, amendment 151, REQ-046 (SPEC-0039 rule 2). `merger.yml` also starts on the `status` event
 for `agk/verdict` with `success`, as a step of its existing job, and `merge_cleared.py --event`
-names
-the open pull request whose head is that sha, then the guarded command runs as for any other start.
-A verdict comment refreshes the status first. Saved payloads, a git repository in `tmp_path` and a
-fake `gh`; no network, invented data.
+names the open pull request whose head is that sha, then the guarded command runs as for any
+other start. A verdict comment refreshes the status first. Saved payloads, a git repository in
+`tmp_path` and a fake `gh`; no network, invented data.
 """
 
 from __future__ import annotations
@@ -15,7 +14,6 @@ import re
 from pathlib import Path
 
 import pytest
-import test_merge_cleared_verdict as saved_world
 from test_merge_cleared_merger import comment_event, run_event, writes
 from test_merge_cleared_verdict import (
     HEAD,
@@ -31,17 +29,11 @@ from test_merge_cleared_verdict import (
     run,
     toml,
 )
-from test_verdict_status import OLD_LINE, ROUTES, posted
+from test_verdict_status import posted
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "merger.yml"
 OPEN_PULL = {"number": 7, "state": "open", "head": {"sha": HEAD}, "base": {"ref": "main"}}
 FIX_LIST = f"Verdict: fix list {HEAD}\n\n1. Fix the test.\n"
-
-
-@pytest.fixture(autouse=True)
-def status_routes(monkeypatch):
-    patched = saved_world.FAKE_GH.replace(OLD_LINE, ROUTES + OLD_LINE, 1)
-    monkeypatch.setattr(saved_world, "FAKE_GH", patched)
 
 
 def status_event(state: str = "success", context: str = "agk/verdict", sha: str = HEAD) -> dict:
@@ -63,9 +55,7 @@ def fire(tmp_path, payload: dict, name: str = "status", main: str = toml(ON), **
 
 def test_the_success_status_names_the_open_pull_request_of_that_head(tmp_path):
     """REQ-046: brief #853 answer 2."""
-    proc, made, _, _ = fire(
-        tmp_path, status_event(), comments=[cleared()], head_pulls=[OPEN_PULL]
-    )
+    proc, made, _, _ = fire(tmp_path, status_event(), comments=[cleared()], head_pulls=[OPEN_PULL])
     assert proc.stdout.strip() == f"7 {HEAD}", proc.stdout + proc.stderr
     assert writes(made) == []
 
@@ -212,7 +202,7 @@ def test_no_new_job():
 
 def test_the_job_starts_only_for_a_success_of_the_verdict_status():
     """REQ-046: brief #853 answer 2."""
-    condition = re.search(r"\n    if: (.*)\n", job("merger")).group(1)
+    condition = re.search(r"^    if: (.*)$", job("merger"), re.M).group(1)
     assert (
         "(github.event_name == 'status' && github.event.context == 'agk/verdict' "
         "&& github.event.state == 'success')"
@@ -221,7 +211,7 @@ def test_the_job_starts_only_for_a_success_of_the_verdict_status():
 
 def test_a_status_event_never_starts_the_sweep():
     """REQ-046: brief #853 (each status of any check must cost no sweep)."""
-    assert "'status'" not in re.search(r"\n    if: (.*)\n", job("sweep-gate")).group(1)
+    assert "'status'" not in re.search(r"^    if: (.*)$", job("sweep-gate"), re.M).group(1)
 
 
 def test_runs_of_one_head_share_a_group():
@@ -236,7 +226,7 @@ def test_the_job_refreshes_the_status_after_a_comment():
         'python3 scripts/agk/merge_cleared.py --status --event "$GITHUB_EVENT_PATH" '
         '--event-name "$EVENT_NAME" || echo "merger: no status"'
     ) in steps
-    assert steps.index("--status --event") < steps.index("--event-name \"$EVENT_NAME\")")
+    assert steps.index("--status --event") < steps.index('--event-name "$EVENT_NAME")')
 
 
 def test_the_pull_request_copy_of_the_body_is_never_read():

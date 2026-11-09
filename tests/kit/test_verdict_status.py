@@ -13,9 +13,9 @@ import sys
 from pathlib import Path
 
 import pytest
-import test_merge_cleared_verdict as saved_world
 from test_merge_cleared_reprove import FIRST, LAST, SHARED, reprove_world
 from test_merge_cleared_verdict import (
+    AUTO_ISSUE,
     HEAD,
     OLD,
     ON,
@@ -38,25 +38,7 @@ sys.path.insert(0, str(SCRIPTS))
 import doctor as doctor_module  # noqa: E402
 
 CONTEXT = "agk/verdict"
-ROUTES = """elif method == 'POST' and parts[0] == 'statuses':
-    if data.get('status_fails'):
-        fail(403)
-    out = {'id': 77}
-elif method == 'GET' and parts[0] == 'commits' and parts[2:] == ['statuses']:
-    out = paged(data.get('commit_statuses', []))
-elif method == 'GET' and parts[0] == 'commits' and parts[2:] == ['pulls']:
-    out = data.get('head_pulls', [])
-"""
-OLD_LINE = "elif method != 'GET':\n    fail(405)\n"
 FIX_LIST = f"Verdict: fix list {HEAD}\n\n1. Fix the test.\n"
-
-
-@pytest.fixture(autouse=True)
-def status_routes(monkeypatch):
-    """The fake `gh` also answers the three status routes of this build."""
-    assert OLD_LINE in saved_world.FAKE_GH
-    patched = saved_world.FAKE_GH.replace(OLD_LINE, ROUTES + OLD_LINE, 1)
-    monkeypatch.setattr(saved_world, "FAKE_GH", patched)
 
 
 def status_run(tmp_path: Path, main: str = toml(ON), sha: str = HEAD, **saved):
@@ -124,7 +106,7 @@ def test_a_missing_spec_approval_is_pending_naming_the_spec(tmp_path):
 
 def test_an_approval_that_is_in_gives_success(tmp_path):
     """REQ-046: brief #853 answer 1 (its `Approve:` lines are in)."""
-    people = f"spec_approvers:\n  - {OWNER}\n"
+    people = f'version: 1\nspec_approvers: ["@{OWNER}"]\n'
     root = repo(tmp_path, toml(ON), reviewers_yaml=people)
     pull = {**world()["pull"], "body": "Approval: SPEC-0039\n"}
     approval = comment(f"Approve: {HEAD} SPEC-0039", at=6)
@@ -244,7 +226,7 @@ def test_local_mode_prints_the_state_and_sets_nothing(tmp_path):
 def test_the_local_mode_record_issue_also_sets_nothing(tmp_path):
     """REQ-046: brief #853 answer 5 (local mode as rule 4 reads it)."""
     record = {"number": 42, "title": "Local mode since 2026-11-01", "body": "", "labels": []}
-    issues = [saved_world.AUTO_ISSUE, record]
+    issues = [AUTO_ISSUE, record]
     proc, made = status_run(tmp_path, comments=[comment(FIX_LIST, at=6)], issues=issues)
     assert proc.stdout.strip() == line("pending fix list") + " (local mode: not set)"
     assert posted(made) == []
@@ -281,7 +263,7 @@ def test_a_malformed_merge_queue_is_refused_naming_the_setting(tmp_path, value):
     root = repo(tmp_path, toml(ON + f"merge_queue = {value}\n"))
     bin_dir, log = fake_gh(tmp_path, comments=[cleared()])
     proc = run(root, bin_dir, "--status", "--pr", "7", "--sha", HEAD)
-    assert ": refused: " in proc.stdout and "flow.merge_queue" in proc.stdout
+    assert ": refused: " in proc.stdout and "setting: merge_queue" in proc.stdout
     assert value not in proc.stdout
     assert posted(calls(log)) == []
 
@@ -335,7 +317,9 @@ def test_doctor_reports_strict_off_only_where_it_matters(flow, strict, status):
 
 
 def test_doctor_lists_the_check_as_a_warning():
-    """REQ-046: brief #853 answer 3 (the owner's step follows the merge, so it never fails)."""
+    """REQ-046: brief #853 answer 3 (a warning: the owner's step follows the merge)."""
     assert doctor_module.CHECKS["ruleset-up-to-date"][0] == "warn"
-    assert "ruleset-up-to-date" in doctor_module.RULESET_IDS
-
+    assert doctor_module.up_to_date_result(None, {"flow": {"auto_merge": True}}).status == (
+        "cannot-check"
+    )
+    assert doctor_module.up_to_date_result(None, {}).status == "ok"

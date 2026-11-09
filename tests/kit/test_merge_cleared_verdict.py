@@ -247,8 +247,16 @@ elif method == 'POST' and parts == ['labels']:
     out = {'name': 'agk-brief'}
 elif method == 'GET' and parts == ['labels']:
     out = paged(data.get('labels', []))
+elif method == 'POST' and parts[0] == 'statuses':  # the verdict status (brief #853)
+    if data.get('status_fails'):
+        fail(403)
+    out = {'id': 77}
 elif method != 'GET':
     fail(405)
+elif parts[0] == 'commits' and parts[2:] == ['statuses']:  # the verdict status (brief #853)
+    out = paged(data.get('commit_statuses', []))
+elif parts[0] == 'commits' and parts[2:] == ['pulls']:  # the head of a status event (brief #853)
+    out = data.get('head_pulls', [])
 elif parts[0] == 'pulls' and len(parts) == 2 and parts[1] == '7':
     out = data['pull']
 elif parts == ['pulls']:  # the open pull requests, as the merge queue lists them (brief #643)

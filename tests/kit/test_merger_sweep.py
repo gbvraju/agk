@@ -71,6 +71,7 @@ class World:
         monkeypatch.setattr(merge_cleared, "read_pages", pages)
         monkeypatch.setattr(merge_cleared, "read_comments", lambda r, n: comments.get(n, []))
         monkeypatch.setattr(merge_cleared, "guarded", guarded)
+        monkeypatch.setattr(merge_cleared, "refresh_status", lambda *args: None)  # brief #853
         monkeypatch.setattr(merge_cleared, "clock", lambda: NOW)
         monkeypatch.setattr(merge_cleared, "repo_of", lambda root: "example-owner/example-repo")
 

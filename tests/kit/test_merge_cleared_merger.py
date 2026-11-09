@@ -373,6 +373,7 @@ def test_the_workflow_starts_only_on_comments_and_on_the_two_required_runs():
     assert re.findall(r"^  ([a-z_]+):", block, re.M) == [
         "issue_comment",
         "workflow_run",
+        "status",  # brief #853 (ADR-0387): the verdict status, also never from a pull request's run
         "schedule",
         "workflow_dispatch",
     ]
@@ -401,8 +402,9 @@ def test_the_merger_is_the_only_workflow_that_names_the_secret():
     assert named == ["merger.yml"]
 
 
-def test_the_job_token_may_write_only_comments():
-    """REQ-046: verdict on f3acd19 item 2 (`issues: write` alone; every merge is the secret's)."""
+def test_the_job_token_may_write_only_comments_and_statuses():
+    """REQ-046: verdict on f3acd19 item 2 (every merge is the secret's), and brief #853 answer 1
+    (ADR-0387: `statuses: write` for the verdict status)."""
     head = text().split("\njobs:", 1)[0]
     block = re.search(r"\npermissions:\n((?:  [a-z-]+: [a-z]+\n)+)", head).group(1)
     assert sorted(block.split("\n")[:-1]) == [
@@ -411,7 +413,7 @@ def test_the_job_token_may_write_only_comments():
         "  contents: read",
         "  issues: write",
         "  pull-requests: read",
-        "  statuses: read",
+        "  statuses: write",
     ]
     assert "permissions:" not in merger_job()
 
@@ -424,7 +426,7 @@ def test_the_merger_job_runs_exactly_the_guarded_command_from_the_default_branch
     assert "ref: ${{ github.event.repository.default_branch }}" in job_text
     assert "GH_TOKEN: ${{ github.token }}" in job_text
     assert set(re.findall(r"secrets\.\w+", job_text)) == {"secrets.AGK_MERGE_TOKEN"}
-    assert job_text.count(' || echo "merger: ') == 3  # with the one above, every command ends green
+    assert job_text.count(' || echo "merger: ') == 4  # with the one above, every command ends green
     assert "startsWith(github.event.comment.body, 'Verdict:')" in job_text
     assert "github.event.workflow_run.conclusion == 'success'" in job_text
     assert "github.event.workflow_run.event == 'pull_request'" in job_text
