@@ -220,6 +220,15 @@ def test_ac13_a_line_moved_by_the_commits_between_stays_apart(repo, commits):
     assert mark(repo, first, commits.change(7, text="y")) == "false"
 
 
+def test_ac13_a_line_inside_a_change_between_maps_to_the_whole_of_it(repo, commits):
+    """REQ-057 AC13: item 7, the safe side: a later line that a commit between rewrote may be any
+    of the lines it replaced, so a hold on one of them is true."""
+    first = commits.change(4)
+    commits.lines[1:4] = ["merged\n"]
+    commits.save()
+    assert mark(repo, first, commits.change(2, text="y")) == "true"
+
+
 def test_ac13_a_file_only_one_changed_is_a_false_hold(repo, commits):
     """REQ-057 AC13: item 7, "a file only one of them changed included"."""
     first = commits.change(2)
