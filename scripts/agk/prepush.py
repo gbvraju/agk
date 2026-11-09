@@ -127,6 +127,7 @@ from impact import (
     impact,
     junit_setting,
     level_groups,
+    link_groups,
     machine_env,
     map_lines,
     parallel_command,
@@ -690,7 +691,15 @@ def regression_sets(
 ) -> tuple[list[tuple[str, str, str, str]], list[str]]:
     """The regression runs and the lines of what is not run, led by `tests: map` where it is set."""
     sets, notes = selection_sets(root, found, areas)
-    return sets, map_lines(found) + notes
+    groups, said = link_groups(found, areas, {s[0] for s in sets}, machine_env())
+    for group in groups:
+        notes = [n for n in notes if not n.startswith(f"tests: {group['label']} runs on ")]
+        level = group["level"]
+        command = area_command(level, group["files"])
+        if group["failed"]:  # fails where a run fails, naming the setting (SPEC-0055 rule 7)
+            command = f"echo {shlex.quote(group['reason'])}; exit 1"
+        sets = [*sets, (group["label"], command, level["cwd"], group["reason"])]
+    return sets, map_lines(found) + list(dict.fromkeys([*notes, *said]))
 
 
 def selection_sets(

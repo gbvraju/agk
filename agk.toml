@@ -337,7 +337,7 @@ code = "scripts/agk/flakes.py"
 tests = ["tests/kit/test_flakes.py", "tests/kit/test_rerun_alone.py"]
 [[testing.map]]
 code = "scripts/agk/front_door.py"
-tests = ["tests/kit/test_front_door_entry.py"]
+tests = ["tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py"]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
 tests = [
