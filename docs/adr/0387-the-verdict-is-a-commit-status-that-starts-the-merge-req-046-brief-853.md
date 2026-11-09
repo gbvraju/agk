@@ -10,7 +10,7 @@
 
 Measured on 2026-11-09: cleared heads waited 80 minutes (#783) and 7 hours 26 minutes (#831), and the merger's schedule ran 2 of about 32 times overnight. The ruleset's required checks had `strict_required_status_checks_policy: false`, so #831, green on its own head, turned main red at e05411d. GitHub's merge queue is offered only on organization-owned public repositories and on Enterprise Cloud, so a personal repository cannot use it, and the ruleset's code-owner review keeps GitHub's own auto-merge from firing.
 
-This build changes the protected path classes `.github/` (the workflow `merger.yml`), `.claude/` (`.claude/agents/conductor.md`), `scripts/agk/` and `tests/kit/`. A workflow change needs its own ADR (session rule 36), and the owner's yes for it is quoted in brief #853.
+This build changes the protected path classes `.github/` (the workflow `merger.yml`), `.claude/` (`.claude/agents/conductor.md`), `scripts/agk/` and `tests/kit/`. A workflow change needs its own ADR (session rule 36), and the owner's yes for it is quoted in brief #853. Four existing test pins change with this decision: the merger's trigger and permission lists, the list of the script's writes (one POST in `set_status`), the doctor's summary counts, and the sweep fixture.
 
 ## Decision
 
