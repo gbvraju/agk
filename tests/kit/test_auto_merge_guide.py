@@ -101,3 +101,13 @@ def test_local_mode_links_to_the_guide():
     """REQ-046"""
     text = LOCAL.read_text(encoding="utf-8")
     assert "(auto-merge.md)" in text
+
+
+def test_the_guide_names_the_final_only_fix_list_that_merges():
+    """REQ-046: a fix list with no numbered items whose every `Final:` line accepts an ADR clears
+    the head too (SPEC-0021 rule 3a), so only a fix list with numbered items never merges."""
+    text = guide()
+    assert "SPEC-0021 rule 3a" in text
+    assert "Final: docs/adr/<file> Proposed -> Accepted" in text
+    assert "a fix list with numbered items" in text
+    assert "a fix list, a short sha" not in text

@@ -20,7 +20,10 @@ again, at the moment it runs, everything a person would check before merging:
 
 - the setting, and that the kit is not paused (`paused = true` on the default branch);
 - that `<sha>` is still the pull request's head, and that the latest comment starting `Verdict:` reads exactly
-  `Verdict: cleared <that full sha>` (a newer `Verdict:` by anyone hides it; a fix list, a short sha or more text never merges);
+  `Verdict: cleared <that full sha>`, or `Verdict: fix list <that full sha>` with no numbered items whose every `Final:` line
+  reads `Final: docs/adr/<file> Proposed -> Accepted` for an ADR among the pull request's files and `Proposed` at the head
+  (SPEC-0021 rule 3a; the squash message then records each acceptance). A newer `Verdict:` by anyone hides it;
+  a fix list with numbered items, a short sha or more text after a cleared verdict never merges;
 - the evidence for that head: in CI mode every check of `required_checks` ended `success` on it; in local mode the verdict
   carries `Local evidence:` and `Evidence check: agrees` for that head;
 - the hold list: a release, a spec approval still missing, a change to `constitution/`, `config/reviewers.yaml`, the ruleset files
