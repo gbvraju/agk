@@ -666,7 +666,7 @@ def red_body(name: str, sha: str, url: str) -> str:
         f"Answers:\n1. Failing check: {one_line(name)}\n2. Head: {one_line(sha)}\n"
         f"3. Run: {one_line(url)}\n"
         "Priority: 0\nAdvances: none\nTouches: **\nSize: S\n"
-        "Broad: a red default branch can be caused by any file\n"
+        "Broad: a red default branch can start in any file\n"
     )
 
 
