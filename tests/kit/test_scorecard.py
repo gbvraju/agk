@@ -303,13 +303,21 @@ def test_ac1_live_reads_are_get_only_and_write_no_file(repo, tmp_path_factory):
 def test_ac1_no_check_gate_or_prepush_step_runs_the_scorecard():
     """REQ-054 AC1: rule 2, no governance check, `make governance` or `prepush.py` step uses it."""
     importer = re.compile(r"^\s*(?:import scorecard|from scorecard import)", re.MULTILINE)
+    pack_importer = re.compile(r"^\s*(?:import|from) release_pack\b", re.MULTILINE)
+    # release_pack.py reads it only at a release, by a person's command (SPEC-0052 rule 3).
+    allowed = {"scorecard.py", "release_pack.py"}
     for path in (KIT / "scripts/agk").glob("*.py"):
-        if path.name != "scorecard.py":
-            assert not importer.search(path.read_text(encoding="utf-8")), path.name
+        text = path.read_text(encoding="utf-8")
+        if path.name not in allowed:
+            assert not importer.search(text), path.name
+        if path.name != "release_pack.py":
+            assert not pack_importer.search(text), path.name
     named = [KIT / "Makefile", KIT / "agk.mk", KIT / "scripts/agk/prepush.py"]
     named += sorted((KIT / ".github/workflows").glob("*.yml"))
     for path in named:
-        assert "scorecard.py" not in path.read_text(encoding="utf-8"), path.name
+        text = path.read_text(encoding="utf-8")
+        assert "scorecard.py" not in text, path.name
+        assert "release_pack" not in text, path.name
 
 
 # --- the [scorecard] setting (rule 3) ----------------------------------------------------------
