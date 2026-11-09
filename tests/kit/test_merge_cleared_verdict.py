@@ -876,7 +876,8 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     body file, written only in the governance run's temporary home; brief #601 adds the one record
     comments file there, amendment 122; brief #610 adds the close of the red-branch issue, one
     comment and one PATCH, in `close_red` alone; brief #765 adds the merger job's report, one
-    comment in `post_once`; brief #853, ADR-0387, adds the commit status, one POST in `set_status`)."""
+    comment in `post_once`; brief #853, ADR-0387, adds the commit status, one POST in
+    `set_status`)."""
     text = SCRIPT.read_text(encoding="utf-8")
     status = text.split("\ndef set_status(", 1)[1].split("\ndef ", 1)[0]
     assert status.count('"POST"') == 1 and 'f"repos/{repo}/statuses/{sha}"' in status
