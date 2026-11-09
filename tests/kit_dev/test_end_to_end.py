@@ -306,6 +306,7 @@ def test_ac1_an_intake_passes_its_checks_and_governance_and_waits_in_the_report(
         "## Tests\n\n"
         f"- Rule 1: {marker(num, 'AC1')}\n- Rule 1: {marker(num, 'AC2')}\n\n"
         "## Proof\n\nRule 1.\n\n## Residual\n\nnone\n\n"
+        "## Contexts\n\nkit, github, local, personal and stacks: as written\n\n"
         f"## Open questions\n\n- Q-S{ids['spec']}-1 which file format?\n"
     )
     (stage / "docs" / "specs" / f"{ids['spec']}-{ids['slug']}.md").write_text(

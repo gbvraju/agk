@@ -183,3 +183,16 @@ def test_ac4_the_routers_red_branch_brief_needs_no_line(tmp_path):
         "Advances: none\nPriority: 0\nTouches: x\n"
     )
     assert session.contexts_line_problems(body) == []
+
+
+def test_ac4_the_spec_template_lists_every_context_and_is_refused_unfilled():
+    """REQ-037 AC4: the template names the five contexts, and left empty it does not pass."""
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "docs/specs/TEMPLATE.md").read_text(encoding="utf-8")
+    lines = [
+        x.strip().removeprefix("- ")
+        for x in text.split("## Contexts")[1].split("##")[0].split("\n")
+    ]
+    entries = [x for x in lines if x]
+    assert entries == [f"{c}:" for c in session.CONTEXTS]
+    assert session.contexts_problems("; ".join(entries)) != []

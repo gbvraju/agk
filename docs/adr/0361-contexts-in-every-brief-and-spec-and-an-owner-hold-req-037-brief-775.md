@@ -13,8 +13,8 @@ front end, back end and mobile tests. Nothing in AGK asks that question, so it d
 day the owner said "Wait, keep a note" about #773, and AGK had no way to hold a brief: `session.py plan` still offered it,
 and only a comment stood between it and a builder (owner direction quoted as data in brief #775, 2026-11-08).
 
-This build changes the protected path classes `scripts/agk/`, `tests/kit/`, `tests/kit_dev/` and `.claude/` (the
-conductor's report and review lines).
+This build changes the protected path classes `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `skills/` (the
+intake's spec shape) and `.claude/` (the conductor's report and review lines).
 
 ## Decision
 
@@ -37,7 +37,8 @@ conductor's report and review lines).
 ## Consequences
 
 Every open brief needs a `Contexts:` line once this merges, so the repair of brief #775 answer 4 goes first. A new spec is
-refused until it has its section; `docs/specs/TEMPLATE.md` and `docs/briefs/TEMPLATE.md` are unchanged (`Q-775-2`). The
+refused until it has its section: `docs/specs/TEMPLATE.md` carries the five entries empty, so a spec left unfilled is
+refused, and the intake's spec skill names the section. The
 hold is one more read of comments the plan already fetches, so it adds no request. The hold is read only by the three
 `session.py` commands.
 
