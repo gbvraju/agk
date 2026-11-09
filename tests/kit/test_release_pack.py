@@ -1,6 +1,6 @@
 """The evidence pack's form, its release test and its offline check (SPEC-0052 build (b),
 brief #769, rules 2, 4 and 10, ADR-0343), and `make` from git (build (c), brief #820, rules 3, 8
-and 9).
+and 9), and the required checks and scans read from GitHub (build (d), brief #829, rules 5 and 6).
 
 REQ-059 AC2 and AC8. `release_pack.py check <out>/<tag>` reads the folder and the repository's
 git only and prints `ok pack`, one `FAIL pack:` line per problem or one `refused:` line. Fixtures
@@ -38,7 +38,7 @@ WORKFLOW = (
 )
 PYPROJECT = (
     '[project]\nname = "x"\ndependencies = ["rich==13.0.0", "loose>=1"]\n'
-    '[dependency-groups]\ndev = ["pytest[cov]==9.0.0 ; python_version > \'3\'"]\n'
+    "[dependency-groups]\ndev = [\"pytest[cov]==9.0.0 ; python_version > '3'\"]\n"
 )
 
 
@@ -640,7 +640,7 @@ def test_ac8_no_governance_step_runs_the_check():
 
 
 def test_ac8_the_script_starts_only_git_and_reads_no_network():
-    """REQ-059 AC8: rules 3 and 10 (this build starts git alone, by the common reader)."""
+    """REQ-059 AC8: rules 3 and 10 (git and `gh api --method GET`, by the shared readers)."""
     text = SCRIPT.read_text(encoding="utf-8")
     for word in ("urllib", "http.client", "requests", '"gh"', "subprocess.run", "os.system"):
         assert word not in text, word
@@ -655,12 +655,13 @@ def test_ac8_the_script_is_installed_and_mapped_to_its_tests():
     assert len(entries) == 1 and "tests/kit/test_release_pack.py" in entries[0]["tests"]
 
 
-# Build (c): `make` from git (rules 3, 8 and 9). A pack is whole only after build (d).
+# Build (c): `make` from git (rules 3, 8 and 9). Nothing here reads GitHub: --api-dir names no file.
 
 
-def make(root: Path, out, tag=TAG) -> subprocess.CompletedProcess:
+def make(root: Path, out, tag=TAG, api=None) -> subprocess.CompletedProcess:
+    place = str(api or Path(out).parent / "no-api")
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(SCRIPT), "make", "--tag", tag, "--out", str(out)],
+        [sys.executable, str(SCRIPT), "make", "--tag", tag, "--out", str(out), "--api-dir", place],
         cwd=root,
         capture_output=True,
         text=True,
@@ -705,18 +706,24 @@ def test_ac1_make_writes_this_builds_parts_in_the_tags_folder_and_changes_nothin
     before = state(root)
     done = make(root, out)
     assert done.returncode == 0, done.stdout
-    assert sorted(p.name for p in (out / TAG).iterdir()) == ["bom.json", "decisions.json"]
+    assert sorted(p.name for p in (out / TAG).iterdir()) == [
+        "bom.json",
+        "decisions.json",
+        "scans.json",
+        "tests.json",
+    ]
     assert [p.name for p in out.iterdir()] == [TAG]
     assert state(root) == before
 
 
 def test_ac1_a_part_of_this_build_is_only_what_build_d_leaves_short_of_a_pack(billed):
-    """REQ-059 AC8: rule 10 (until build (d) the check says the pack is not whole)."""
+    """REQ-059 AC8: rule 10 (until brief #832 the check says the pack is not whole)."""
     root, out = billed
     make(root, out)
     done = check(root, out / TAG)
-    assert done.returncode == 1 and "FAIL pack: tests.json is missing" in done.stdout
-    assert "FAIL pack: bom.json" not in done.stdout
+    assert done.returncode == 1 and "FAIL pack: coverage.json is missing" in done.stdout
+    for name in ("bom.json", "scans.json", "tests.json"):
+        assert f"FAIL pack: {name}" not in done.stdout
 
 
 def test_ac6_the_bill_names_files_pins_and_actions_at_the_tag(billed):
@@ -916,6 +923,272 @@ def test_ac6_make_opens_no_socket(billed, monkeypatch, capsys):
     monkeypatch.chdir(root)
     for name in ("GITHUB_BASE_REF", "AGK_BASE", "CI"):
         monkeypatch.delenv(name, raising=False)
-    assert release_pack.main(["make", "--tag", TAG, "--out", str(out)]) == 0
+    argv = ["make", "--tag", TAG, "--out", str(out), "--api-dir", str(out.parent / "no-api")]
+    assert release_pack.main(argv) == 0
     assert (out / TAG / "bom.json").is_file()
     capsys.readouterr()
+
+
+# Build (d): the required checks and the scans (rules 5 and 6), from saved responses.
+
+NO_SCANNER = {"kind": "dependency", "scanner": "none", "version": "none", "outcome": "not run"}
+ROUTES = {
+    "/rules/branches/main": "rules-branch",
+    "/check-runs": "check-runs",
+    "/actions/runs/77/jobs": "run-jobs-77",
+}
+
+
+def responses(root: Path, **over) -> dict:
+    url = "https://example.com/o/r/actions/runs/{}/job/1"
+    data = {
+        "rules-branch": [
+            {"type": "pull_request", "parameters": {}},
+            {
+                "type": "required_status_checks",
+                "parameters": {
+                    "required_status_checks": [{"context": "governance"}, {"context": "proof"}]
+                },
+            },
+        ],
+        "check-runs": {
+            "check_runs": [
+                {
+                    "id": 1,
+                    "name": "governance",
+                    "conclusion": "failure",
+                    "details_url": url.format(76),
+                },
+                {
+                    "id": 2,
+                    "name": "governance",
+                    "conclusion": "success",
+                    "details_url": url.format(77),
+                    "output": {"title": "12 passed", "summary": "12 passed, 0 failed in 3s"},
+                },
+            ]
+        },
+        "run-jobs-77": {"jobs": [{"steps": [{"name": "Secret scan", "conclusion": "success"}]}]},
+    }
+    data.update(over)
+    return data
+
+
+def saved(root: Path, place: Path, **over) -> Path:
+    """The saved responses; a name given as None is one GitHub would not answer."""
+    api = place / "api"
+    api.mkdir()
+    for name, value in responses(root, **over).items():
+        if value is not None:
+            (api / f"{name}.json").write_text(json.dumps(value), encoding="utf-8")
+    return api
+
+
+def made(billed_repo, tmp_path, name: str, **over) -> dict:
+    root, out = billed_repo
+    done = make(root, out, api=saved(root, tmp_path, **over))
+    assert done.returncode == 0, done.stdout
+    return part(out, name)
+
+
+def test_ac1_only_get_reaches_gh(billed, tmp_path):
+    """REQ-059 AC1: rule 3 (the live reader: `gh api --method GET` only, nothing is posted)."""
+    root, out = billed
+    api = saved(root, tmp_path)
+    place = tmp_path / "bin"
+    place.mkdir()
+    stub = place / "gh"
+    stub.write_text(
+        f"""#!{sys.executable}
+import json, pathlib, sys
+args = sys.argv[1:]
+with open({str(tmp_path / "calls")!r}, "a") as log:
+    log.write(json.dumps(args) + "\\n")
+if args[:3] != ["api", "--method", "GET"]:
+    pathlib.Path({str(tmp_path / "written")!r}).write_text("x")
+    sys.exit(1)
+path = args[3].split("?")[0]
+routes = {ROUTES!r}
+for key in sorted(routes, key=len, reverse=True):
+    if path.endswith(key):
+        print(pathlib.Path({str(api)!r}, routes[key] + ".json").read_text())
+        break
+else:
+    sys.exit(1)
+""",
+        encoding="utf-8",
+    )
+    stub.chmod(0o700)
+    run_env = {**env(), "PATH": f"{place}{os.pathsep}{os.environ['PATH']}"}
+    argv = [sys.executable, str(SCRIPT), "make", "--tag", TAG, "--out", str(out), "--repo", "o/r"]
+    done = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        argv, cwd=root, capture_output=True, text=True, env=run_env
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not (tmp_path / "written").exists()
+    calls = [json.loads(ln) for ln in (tmp_path / "calls").read_text().splitlines()]
+    assert calls and all(c[:3] == ["api", "--method", "GET"] for c in calls)
+    paths = [c[3].split("?")[0] for c in calls]
+    assert all(any(p.endswith(key) for p in paths) for key in ROUTES), paths
+    assert part(out, "tests.json")["checks"][0]["conclusion"] == "success"
+    assert part(out, "scans.json")["scans"][0]["outcome"] == "passed"
+
+
+def test_ac1_a_pack_is_not_written_for_a_tag_that_is_not_a_release_with_api_dir(tmp_path):
+    """REQ-059 AC2: rule 4 (the release test comes before any read of GitHub)."""
+    root = kit_repo(tmp_path, toml="9.9.9", bill=True)
+    out = tmp_path / "out"
+    done = make(root, out, api=tmp_path / "none")
+    assert done.returncode == 1 and done.stdout.startswith("refused: the tag is not a release")
+    assert not out.exists()
+
+
+def test_ac3_the_required_checks_with_their_latest_run_and_stated_counts(billed, tmp_path):
+    """REQ-059 AC3: rule 5 (the latest run; a count only where stated; a missing run unknown)."""
+    assert made(billed, tmp_path, "tests.json") == {
+        "schema": 1,
+        "checks": [
+            {
+                "name": "governance",
+                "conclusion": "success",
+                "passed": 12,
+                "failed": 0,
+                "skipped": "unknown",
+            },
+            {
+                "name": "proof",
+                "conclusion": "unknown",
+                "passed": "unknown",
+                "failed": "unknown",
+                "skipped": "unknown",
+            },
+        ],
+    }
+
+
+UNKNOWN_CHECK = {
+    "conclusion": "unknown",
+    "passed": "unknown",
+    "failed": "unknown",
+    "skipped": "unknown",
+}
+
+
+@pytest.mark.parametrize(
+    "rules", [None, {"message": "Not Found"}, [{"type": "required_status_checks"}]]
+)
+def test_ac3_rules_that_cannot_be_read_are_unknown_never_success(billed, tmp_path, rules):
+    """REQ-059 AC3: rule 5 (an empty list would say that nothing is required)."""
+    data = made(billed, tmp_path, "tests.json", **{"rules-branch": rules})
+    assert data["checks"] == [{"name": "unknown", **UNKNOWN_CHECK}]
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        {"status": "in_progress", "conclusion": None},
+        {"conclusion": "success", "output": {"summary": "a run with no count"}},
+    ],
+)
+def test_ac3_no_conclusion_is_unknown_and_no_count_is_never_zero(billed, tmp_path, run):
+    """REQ-059 AC3: rule 5 (no conclusion is `unknown`; no count is `unknown`, never 0)."""
+    runs = {"check_runs": [{"id": 9, "name": "governance", **run}]}
+    entry = made(billed, tmp_path, "tests.json", **{"check-runs": runs})["checks"][0]
+    assert entry["conclusion"] == (run["conclusion"] or "unknown")
+    assert (entry["passed"], entry["failed"], entry["skipped"]) == ("unknown",) * 3
+
+
+def test_ac3_a_check_run_output_is_never_copied(billed, tmp_path):
+    """REQ-059 AC3: rule 11 (counts only, never the run's text)."""
+    runs = {
+        "check_runs": [
+            {
+                "id": 9,
+                "name": "governance",
+                "conclusion": "success",
+                "output": {"text": "line-of-a-log 3 passed"},
+            }
+        ]
+    }
+    root, out = billed
+    made(billed, tmp_path, "tests.json", **{"check-runs": runs})
+    assert "line-of-a-log" not in (out / TAG / "tests.json").read_text()
+    assert part(out, "tests.json")["checks"][0]["passed"] == 3
+    assert root.is_dir()
+
+
+@pytest.mark.parametrize(
+    ("step", "outcome"),
+    [
+        ("success", "passed"),
+        ("failure", "failed"),
+        ("skipped", "not run"),
+        ("cancelled", "unknown"),
+        (None, "unknown"),
+    ],
+)
+def test_ac4_the_secret_scan_is_the_pinned_scanner_and_its_step(billed, tmp_path, step, outcome):
+    """REQ-059 AC4: rule 6 (the version at the tag, the outcome from the run's jobs)."""
+    jobs = {"jobs": [{"steps": [{"name": "Secret scan", "conclusion": step}]}]}
+    assert made(billed, tmp_path, "scans.json", **{"run-jobs-77": jobs}) == {
+        "schema": 1,
+        "scans": [
+            {"kind": "secret", "scanner": "gitleaks", "version": "8.30.1", "outcome": outcome},
+            NO_SCANNER,
+        ],
+    }
+
+
+def test_ac4_the_latest_attempt_of_the_run_decides(billed, tmp_path):
+    """REQ-059 AC4: rule 6 (a re-run's step replaces the earlier attempt's)."""
+    step = {"name": "Secret scan", "conclusion": "{}"}
+    first = {"run_attempt": 1, "steps": [{**step, "conclusion": "failure"}]}
+    second = {"run_attempt": 2, "steps": [{**step, "conclusion": "success"}]}
+    data = made(billed, tmp_path, "scans.json", **{"run-jobs-77": {"jobs": [second, first]}})
+    assert data["scans"][0]["outcome"] == "passed"
+
+
+@pytest.mark.parametrize("jobs", [None, {"jobs": [{"steps": []}]}, {"jobs": "x"}])
+def test_ac4_a_job_that_cannot_be_read_is_unknown(billed, tmp_path, jobs):
+    """REQ-059 AC4: rule 6 (no job or no step is `unknown`, never passed)."""
+    data = made(billed, tmp_path, "scans.json", **{"run-jobs-77": jobs})
+    assert data["scans"][0]["outcome"] == "unknown"
+
+
+def test_ac4_no_scanner_configured_is_not_run_and_is_no_refusal(tmp_path):
+    """REQ-059 AC4: rule 6 (nothing configures it: `not run`, scanner `none`, never passed)."""
+    root = kit_repo(tmp_path, bill=True)
+    put(root, ".github/workflows/governance.yml", "jobs: {}\n")
+    commit(root, "no scanner")
+    git(root, "tag", "-f", TAG)
+    out = tmp_path / "out"
+    assert make(root, out, api=saved(root, tmp_path)).returncode == 0
+    assert part(out, "scans.json")["scans"] == [{**NO_SCANNER, "kind": "secret"}, NO_SCANNER]
+
+
+def test_ac4_a_dependency_scanner_in_a_workflow_is_not_recorded_as_not_run(tmp_path):
+    """REQ-059 AC4: rule 6 (`not run` is for a scan nothing configures; its outcome is unread)."""
+    root = kit_repo(tmp_path, bill=True)
+    put(root, ".github/workflows/deps.yml", "jobs:\n  d:\n    steps:\n      - run: pip-audit\n")
+    commit(root, "a scanner")
+    git(root, "tag", "-f", TAG)
+    out = tmp_path / "out"
+    assert make(root, out, api=saved(root, tmp_path)).returncode == 0
+    assert part(out, "scans.json")["scans"][1] == {
+        "kind": "dependency",
+        "scanner": "pip-audit",
+        "version": "unknown",
+        "outcome": "unknown",
+    }
+
+
+@pytest.mark.parametrize("extra", [["--api-dir"], ["--bad", "x"], ["--tag", "v2"]])
+def test_ac1_make_with_a_bad_option_prints_the_usage(billed, extra):
+    """REQ-059 AC1: rule 3 (only the flags the rule lists, each once)."""
+    root, out = billed
+    argv = [sys.executable, str(SCRIPT), "make", "--tag", TAG, "--out", str(out), *extra]
+    done = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        argv, cwd=root, capture_output=True, text=True, env=env()
+    )
+    assert done.returncode == 2 and done.stdout.startswith("usage:"), done.stdout
+    assert not out.exists()
