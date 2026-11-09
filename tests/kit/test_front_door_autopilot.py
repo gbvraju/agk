@@ -15,7 +15,7 @@ import json
 import socket
 from pathlib import Path
 
-import front_door  # noqa: F401 - loads scripts/agk through test_front_door_design's path
+import front_door
 import pytest
 from test_front_door_design import (
     DEMO,
@@ -148,7 +148,9 @@ def test_ac1_an_issue_that_fails_the_entry_stays_at_phase_1(tmp_path, capsys):
     configure(tmp_path)
     save(tmp_path, [PILOT], {**ISSUE, "labels": [], "title": PRIVATE_WORDS})
     line = line_of(tmp_path, capsys)
-    assert line == f"#{NUMBER}: phase 1 the entry; waits for a problem issue that passes check-issue"
+    assert (
+        line == f"#{NUMBER}: phase 1 the entry; waits for a problem issue that passes check-issue"
+    )
     assert "private" not in line
 
 
@@ -300,7 +302,9 @@ def test_ac7_once_the_document_is_there_the_files_say_the_phase(tmp_path, capsys
     configure(tmp_path)
     save(tmp_path, [PILOT, round_of(1)])
     discovery(tmp_path)
-    expected = f"#{NUMBER} {SLUG}: phase 3 research; auto-pilot on; waits for docs/research/{SLUG}.md"
+    expected = (
+        f"#{NUMBER} {SLUG}: phase 3 research; auto-pilot on; waits for docs/research/{SLUG}.md"
+    )
     assert line_of(tmp_path, capsys) == expected
 
 
@@ -439,7 +443,11 @@ def test_ac4_in_solo_mode_a_line_outside_a_confirmation_is_not_the_go(tmp_path, 
     solo_config(tmp_path)
     bare = comment(OWNER, SPEC_GO)
     shaped = comment(OWNER, f"Verdict: cleared {HEAD}\n{SPEC_GO}")
-    for item in (bare, shaped, confirmed(SPEC_GO) | {"performed_via_github_app": {"slug": "claude"}}):
+    for item in (
+        bare,
+        shaped,
+        confirmed(SPEC_GO) | {"performed_via_github_app": {"slug": "claude"}},
+    ):
         assert line_of(tmp_path, capsys, *pull(tmp_path, [item])).endswith("waits for the go")
 
 
@@ -482,7 +490,7 @@ def test_ac7_a_sidecar_refuses_the_issue_entry(tmp_path, capsys):
 
 
 def test_ac7_a_sidecar_keeps_the_vision_door(tmp_path, capsys):
-    """REQ-055 AC7: SPEC-0048 rule 13 (the vision door reaches the answers, not the rule 13 stop)."""
+    """REQ-055 AC7: SPEC-0048 rule 13 (the vision door is not stopped by rule 13)."""
     write(tmp_path, "agk.toml", PERSONAL)
     idea = write(tmp_path, "in/idea.txt", "Orders at example.com are lost.")
     answers = write(tmp_path, "in/answers.json", json.dumps({"answers": []}))
