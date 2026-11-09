@@ -251,6 +251,7 @@ def derived(path: str, level: str = "web:contract") -> str:
     ("schema", "text", "importer", "names"),
     [
         ("api/schema/shop.proto", 'syntax = "proto3";\n', "web/app/a.proto", BUF),
+        ("api/p/g/any.proto", 'syntax = "proto3";\n', "web/b.proto", 'import "g/any.proto";\n'),
         (
             "api/shop.graphql",
             "type Q { a: Int }\n",
