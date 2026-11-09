@@ -238,6 +238,9 @@ jobs:
       - name: check_runbooks
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_runbooks.py
+      - name: check_acceptance
+        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
+        run: python scripts/agk/check_acceptance.py
       - name: reviewers --check
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/reviewers.py --check

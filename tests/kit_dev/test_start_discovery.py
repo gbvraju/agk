@@ -137,13 +137,14 @@ def test_ac6_an_old_charter_in_the_base_is_not_checked_again(started):
 
 def test_ac6_no_other_script_reads_the_discovery_item():
     """REQ-030 AC6: rule 7 (`check-start` is the only check; nothing in governance reads it).
-    `front_door.py` names its own `# Discovery:` heading (SPEC-0048 rule 5), not the charter."""
+    `front_door.py` names its own `# Discovery:` heading (SPEC-0048 rule 5), not the charter, and
+    `check_acceptance.py` the record's `- Discovery:` line (SPEC-0051 rule 3, ADR-0381)."""
     hits = [
         p.name
         for p in sorted((KIT_ROOT / "scripts" / "agk").glob("*.py"))
         if "Discovery" in p.read_text(encoding="utf-8")
     ]
-    assert hits == ["front_door.py", "playbook.py"]
+    assert hits == ["check_acceptance.py", "front_door.py", "playbook.py"]
 
 
 def test_ac5_messages_name_the_rule_and_the_topic_never_the_answer(started):
