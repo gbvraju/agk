@@ -1,7 +1,7 @@
 """The acceptance record and its check (SPEC-0051 rules 2 to 5 and 7; REQ-058). Installed: a
 verbatim entry of `kit/manifest.json`; a step of `agk-governance` after `check_runbooks.py`.
 
-    python3 scripts/agk/check_acceptance.py [--root DIR]
+    python3 scripts/agk/check_acceptance.py [--comments FILE] [--root DIR]
     python3 scripts/agk/check_acceptance.py status [--root DIR]
 
 The check reads every `docs/acceptance/<slug>.md` and prints `ok acceptance (<n> records)`, or one
@@ -10,9 +10,12 @@ SPEC-0051 and the file and never a quote, a value or an answer. `status` prints 
 `<slug> accepted`, `<slug> accepted with <n> not met`, `<slug> proposed` or `<slug> stale`, and
 writes nothing; a record the check refuses for anything but its status is never shown as accepted.
 
-Files only: no network, and no piece of evidence is ever run or opened beyond parsing a named test
-file. The discovery document is read through `front_door.py`. An `accepted` status fails until
-build (c) can read the owner's yes (rule 6). Exit 0 ok, 1 refused, 2 usage.
+Files and git only: no network, and no piece of evidence is ever run or opened beyond parsing a
+named test file. The discovery document is read through `front_door.py`. An `accepted` status
+passes only with `--comments FILE` (saved pull request comments), when a yes read by
+`reviewers.acceptance_heads` names a head of this tree's history where the record equals its text
+apart from the status line, there `proposed` (rule 6); without the option it fails. Exit 0 ok,
+1 refused, 2 usage.
 """
 
 from __future__ import annotations
@@ -25,7 +28,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import config_source, repo_root, run
+from check_final_clearance import comments_of
+from check_specs import in_history
+from common import agent_apps, config_source, repo_root, review_mode, run, show
 from front_door import (
     ANSWER_END,
     ANSWER_START,
@@ -39,10 +44,11 @@ from front_door import (
     sections_of,
 )
 from impact import matches
+from reviewers import acceptance_heads, solo_person, spec_approvers
 
 NAME = "acceptance"
 FOLDER = "docs/acceptance"
-USAGE = "usage: check_acceptance.py [status] [--root DIR]"
+USAGE = "usage: check_acceptance.py [--comments FILE] [--root DIR] | status [--root DIR]"
 NO_GOALS = "not known yet"
 NOT_MET = "not met"
 DIGEST = re.compile(r"- Success digest: ([0-9a-f]{64})")
@@ -227,7 +233,18 @@ def evidence_problems(root: Path, rel: str, goals: list[Goal]) -> list[str]:
     return out
 
 
-def inspect(root: Path, path: Path) -> tuple[list[str], str]:
+def has_yes(root: Path, rel: str, lines: list[str], heads: set[str]) -> bool:
+    """Rule 6: a head in this tree's history where the record is this text, status `proposed`."""
+    at = next(i for i, ln in enumerate(lines) if STATUS.fullmatch(ln))
+    asked = [*lines[:at], "- Status: proposed", *lines[at + 1 :]]
+    for head in sorted(heads):
+        old = show(root, head, rel) if in_history(root, head) else None
+        if old is not None and old.split("\n") == asked:
+            return True
+    return False
+
+
+def inspect(root: Path, path: Path, heads: set[str] | None = None) -> tuple[list[str], str]:
     """The problems of one record and its state of rule 7."""
     rel = f"{FOLDER}/{path.name}"
     text = read(inside(root, rel))
@@ -260,8 +277,10 @@ def inspect(root: Path, path: Path) -> tuple[list[str], str]:
     else:
         unmet = sum(1 for _, _, evidence in goals if evidence == NOT_MET)
         state = f"accepted with {unmet} not met" if unmet else "accepted"
-    if accepted:
+    if accepted and heads is None:
         out.append(one_line(6, rel, "`accepted` needs the owner's yes, not readable yet"))
+    elif accepted and heads is not None and not has_yes(root, rel, lines, heads):
+        out.append(one_line(6, rel, "no yes names a head where the record is this text"))
     return out, state
 
 
@@ -269,9 +288,21 @@ def records(root: Path) -> list[Path]:
     return sorted((root / FOLDER).glob("*.md"))
 
 
-def cmd_check(root: Path) -> int:
+def yes_heads(root: Path, items: list[dict], slug: str) -> set[str]:
+    """The heads the saved comments ITEMS say yes to for one record (rule 6)."""
+    solo = review_mode(root) == "solo"
+    return acceptance_heads(
+        items, spec_approvers(root), slug, agent_apps(root), solo_person(root), solo
+    )
+
+
+def cmd_check(root: Path, comments: Path | None = None) -> int:
     paths = records(root)
-    problems = [p for path in paths for p in inspect(root, path)[0]]
+    items = comments_of(comments) if comments is not None else None
+    problems: list[str] = []
+    for path in paths:
+        heads = None if items is None else yes_heads(root, items, path.stem)
+        problems += inspect(root, path, heads)[0]
     if problems:
         for problem in problems:
             print(f"FAIL {NAME}: {problem}")
@@ -290,11 +321,16 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     status = args[:1] == ["status"]
     args = args[1:] if status else args
-    root = Path(args[1]) if args[:1] == ["--root"] and len(args) == 2 else None
-    if (root is None and args) or (root is not None and not root.is_dir()):
+    opts = dict(zip(args[::2], args[1::2], strict=False))
+    known = {"--root"} if status else {"--root", "--comments"}
+    root = Path(opts["--root"]) if "--root" in opts else None
+    bad_root = root is not None and not root.is_dir()
+    if len(args) % 2 or len(opts) * 2 != len(args) or set(opts) - known or bad_root:
         print(USAGE, file=sys.stderr)
         return 2
-    return run(NAME, lambda: (cmd_status if status else cmd_check)(root or repo_root()))
+    comments = Path(opts["--comments"]) if "--comments" in opts else None
+    base = root or repo_root()
+    return run(NAME, lambda: cmd_status(base) if status else cmd_check(base, comments))
 
 
 if __name__ == "__main__":

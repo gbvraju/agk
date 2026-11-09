@@ -1,0 +1,1 @@
+- In personal mode the marker readers read the sidecar's `test-map.toml`, so nothing is written into the product's tests; a repository without a `[personal]` table reads its tests as before (brief #900, ADR-0399 Proposed)

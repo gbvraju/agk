@@ -86,6 +86,7 @@
     "scripts/agk/facts.py",
     "scripts/agk/failures.py",
     "scripts/agk/flakes.py",
+    "scripts/agk/forge.py",
     "scripts/agk/front_door.py",
     "scripts/agk/full_run.py",
     "scripts/agk/guard.py",
