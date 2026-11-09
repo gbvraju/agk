@@ -15,8 +15,9 @@ each of the five kinds gets a tier and an effort, the table's or rule 2's defaul
 effort outside the lists, a non-string value or `review` below `strongest` at `high` is refused,
 naming `setting: models.<kind>` and never the value. `model_names(root)` reads the optional
 `[models.names]` table, a tier to a project's model name, which the kit never ships. No check,
-gate or reading list reads either in this build (rule 1). `model_providers(root)` reads the optional
-`[models.providers]` table (SPEC-0053 rule 3, brief #763): a tier to its ordered list of plain labels.
+gate or reading list reads either in this build (rule 1). `model_providers(root)` reads the
+optional `[models.providers]` table (SPEC-0053 rule 3, brief #763): a tier to its ordered list of
+plain labels.
 
 `failures_settings(root)` reads the optional `[failures]` table (SPEC-0046 rule 2, brief #634):
 `issues` and `artifacts` (booleans, false) and `artifact_paths` (relative path patterns, empty).

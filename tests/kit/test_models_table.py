@@ -19,9 +19,9 @@ import tomllib
 from pathlib import Path
 
 import pytest
+import session
 
 import config
-import session
 
 KIT = Path(__file__).resolve().parents[2]
 PLACEHOLDER = re.compile(r"\{\{[a-z_]+\}\}")
