@@ -80,8 +80,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/intake.py" stub --req REQ-nnn --title
      negative case, the spec has the line `Negative cases: none, because <a reason of at least 20 characters>`;
    - create `docs/specs/<spec>-<slug>.md` in the shape of `docs/specs/TEMPLATE.md`, with `- Status: Draft`,
      `- Requirements:` naming only the new requirement, numbered testable rules, `## Tests` with a line for each criterion
-     containing the marker `REQ-nnn ACn`, `## Proof`, `## Residual` (dated bullets with `(due YYYY-MM-DD)`, or `none`) and
-     `## Open questions`.
+     containing the marker `REQ-nnn ACn`, `## Proof`, `## Residual` (dated bullets with `(due YYYY-MM-DD)`, or `none`), `## Contexts` (each of `kit`, `github`,
+     `local`, `personal` and `stacks` with how the change works there or `not applicable: <reason>`; a bare entry is
+     refused) and `## Open questions`.
 7. Check, and correct the files on a failure, at most three rounds, then stop and report:
 
 ```

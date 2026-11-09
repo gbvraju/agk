@@ -303,7 +303,8 @@ def test_check_specs_accepts_the_change_with_the_amendment_and_refuses_it_withou
     now = {p: (ROOT / p).read_text(encoding="utf-8") for p in paths}
     repo.commit({p: text + "\nbefore\n" for p, text in now.items()}, "base")
     repo.branch()
-    repo.commit(dict(now), "move")
+    section = "\n## Contexts\n\nkit, github, local, personal and stacks: as written\n"
+    repo.commit({p: text + section for p, text in now.items()}, "move")
     refused = repo.run("check_specs.py", "--base", "main")
     assert refused.returncode == 1
     repo.commit({AMENDMENT: (ROOT / AMENDMENT).read_text(encoding="utf-8")}, "amendment")

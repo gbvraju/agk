@@ -22,6 +22,7 @@ WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "gove
 def spec(status: str, rule: str = "A rule.") -> str:
     return (
         f"# SPEC-0001: Thing\n\n- Status: {status}\n- Owner: reviewers\n\n## Rules\n\n1. {rule}\n"
+        "\n## Contexts\n\nkit, github, local, personal and stacks: as written\n"
     )
 
 

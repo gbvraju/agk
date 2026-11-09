@@ -77,9 +77,22 @@ def test_fix7_the_spec_template_and_the_skill_agree_on_the_sections():
     """Issue #156 fix 7: the template gains `## Proof` and `## Residual`, in the skill's order."""
     template = TEMPLATE.read_text(encoding="utf-8")
     headings = re.findall(r"(?m)^## .*$", template)
-    assert headings == ["## Rules", "## Tests", "## Proof", "## Residual", "## Open questions"]
+    assert headings == [
+        "## Rules",
+        "## Tests",
+        "## Proof",
+        "## Residual",
+        "## Contexts",
+        "## Open questions",
+    ]
     skill = SKILL.read_text(encoding="utf-8")
-    for name in ("`## Tests`", "`## Proof`", "`## Residual`", "`## Open questions`"):
+    for name in (
+        "`## Tests`",
+        "`## Proof`",
+        "`## Residual`",
+        "`## Contexts`",
+        "`## Open questions`",
+    ):
         assert name in skill, name
     assert template.rstrip().endswith("none")
 

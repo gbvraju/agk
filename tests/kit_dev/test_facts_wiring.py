@@ -177,3 +177,28 @@ def test_ac8_the_facts_schema_allows_usage_and_keeps_the_number():
     assert '"usage": {"oneOf": [{"type": "integer"}, {"enum": ["not-reported", "unknown"]}]}' in (
         json.dumps(schema())
     )
+
+
+def test_ac7_a_measures_section_is_valid_against_the_schema(tmp_path):
+    """REQ-063 AC7: read from saved responses; `unknown` is valid and an extra key is not."""
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import facts  # noqa: PLC0415 - from the kit's scripts, put on the path above
+    import metrics  # noqa: PLC0415
+
+    closed = {
+        "title": "The default branch is red",
+        "created_at": "2026-11-03T08:00:00Z",
+        "closed_at": "2026-11-03T10:00:00Z",
+    }
+    saved = {"issues-open": [], "issues-closed": [closed], "issues-agk-secret-leak": []}
+    for name, data in saved.items():
+        (tmp_path / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+    today, merged = "2026-11-09", [{"merged_at": "2026-11-03T09:00:00Z"}]
+    found = facts.measures_section(
+        metrics.ApiDir(tmp_path), facts.date.fromisoformat(today), merged
+    )
+    assert found["restore"]["red default branch"]["median_hours"] == "2.0"
+    doc = json.loads((FIXTURES / "ok" / "facts.json").read_text(encoding="utf-8"))
+    for measures in (found, "unknown"):
+        assert errors(doc | {"measures": measures}, schema()) == []
+    assert errors(doc | {"measures": {**found, "extra": 1}}, schema())

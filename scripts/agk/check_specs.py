@@ -63,6 +63,13 @@ SPEC_FILE = re.compile(r"^docs/specs/(\d{4})-[^/]+\.md$")
 REQUIREMENTS_LINE = re.compile(r"(?m)^- Requirements:\s*(.*?)\s*$")
 ASKED = re.compile(r"^\s*[|-]\s*(Q-[A-Z0-9]+-[0-9]+)")
 DOC_ONLY = ("docs/", ".github/ISSUE_TEMPLATE/")
+CONTEXTS = ("kit", "github", "local", "personal", "stacks")  # amendment 142
+CONTEXTS_PREFIX = "Contexts:"
+CONTEXTS_RULE = "rule 4"
+CONTEXT_NAMES = r"[a-z]+(?:(?:, and |, | and )[a-z]+)*"
+CONTEXT_ENTRY = re.compile(rf"({CONTEXT_NAMES})(?:\s*\((.*)\)|:\s*(.*))", re.S)
+CONTEXT_SPLIT = re.compile(r", and |, | and ")
+NOT_APPLICABLE = re.compile(r"not applicable(?::\s*)?", re.I)
 
 
 def status_of(text: str) -> str | None:
@@ -183,6 +190,52 @@ def section_lines(text: str, heading: str) -> list[str]:
     return found
 
 
+def context_entries(text: str) -> list[str]:
+    """TEXT cut at its top-level semicolons: a semicolon inside an entry's brackets stays."""
+    entries, depth, part = [], 0, ""
+    for ch in text:
+        depth += (ch == "(") - (ch == ")")
+        if ch == ";" and depth == 0:
+            entries.append(part)
+            part = ""
+        else:
+            part += ch
+    return [e.strip() for e in [*entries, part] if e.strip()]
+
+
+def contexts_problems(text: str) -> list[str]:
+    """Amendment 142: what is wrong with a list of contexts, each stated by `<names> (<how>)` or
+    `<names>: <how>`, naming the rule and the fixed context, never the text."""
+    named: list[str] = []
+    for entry in context_entries(text.strip().rstrip(".")):
+        found = CONTEXT_ENTRY.fullmatch(entry)
+        how = (found.group(2) or found.group(3) or "").strip() if found else ""
+        if not found or not how or NOT_APPLICABLE.fullmatch(how):
+            return [f"{CONTEXTS_RULE}: each context says how it works or not applicable: <reason>"]
+        named += CONTEXT_SPLIT.split(found.group(1))
+    if len(set(named)) != len(named) or not set(named) <= set(CONTEXTS):
+        return [f"{CONTEXTS_RULE}: the contexts are {', '.join(CONTEXTS)}, each once"]
+    return [f"{CONTEXTS_RULE}: no entry for the context {c}" for c in CONTEXTS if c not in named]
+
+
+def contexts_failures(root, mb: str, changed: dict[str, str]) -> list[str]:
+    """Amendment 142: a new spec, a spec whose status changes and an amended Approved spec state
+    every context in a `## Contexts` section; naming the rule and the path, never the text."""
+    failures: list[str] = []
+    for path, state in sorted(changed.items()):
+        if not SPEC_FILE.match(path) or state == "D" or not (root / path).is_file():
+            continue
+        text = (root / path).read_text(encoding="utf-8")
+        old = show(root, mb, path)
+        if old is not None and status_of(old) == status_of(text) and status_of(old) != "Approved":
+            continue
+        lines = section_lines(text, "Contexts")
+        listed = "; ".join(x.strip().removeprefix("- ") for x in lines if x.strip())
+        for problem in contexts_problems(listed) if listed else [f"{CONTEXTS_RULE}: no section"]:
+            failures.append(f"spec '{path}' Contexts section: {problem}")
+    return failures
+
+
 def flipped_specs(root, mb: str, changed: dict[str, str]) -> dict[str, str]:
     """SPEC-<n> -> path, for each spec whose Approved status line is added or changed."""
     found = {}
@@ -299,6 +352,7 @@ def main(argv: list[str] | None = None) -> int:
             agent_apps(root),
         )
     messages += approval_failures(root, mb, changed, approvals)
+    messages += contexts_failures(root, mb, changed)
     messages += decision_file_problems(root)  # one row per decision file (brief 557)
     messages += frozen_log_problems(changed)  # the old log is frozen (brief 557 fix list item 3)
     if body is None or not body.strip():

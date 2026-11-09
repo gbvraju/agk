@@ -33,7 +33,11 @@ UNKNOWN = "0f9e8d7c6b" * 4
 
 def spec(status: str, rule: str = "A rule.") -> str:
     head = f"# SPEC-0042: Thing\n\n- Status: {status}\n"
-    return head + f"- Owner: reviewers\n\n## Rules\n\n1. {rule}\n"
+    return (
+        head
+        + f"- Owner: reviewers\n\n## Rules\n\n1. {rule}\n"
+        + "\n## Contexts\n\nkit, github, local, personal and stacks: as written\n"
+    )
 
 
 # --- the text rule ------------------------------------------------------------------------------
