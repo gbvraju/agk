@@ -66,11 +66,12 @@ def test_a_verdict_with_a_final_line_the_router_cannot_read_gets_one_correction(
     assert "flip ADR-0146" not in body and HEAD[:7] not in body
 
 
-def test_the_label_stays_as_the_router_decides_it_today(proj, stub, tmp_path):
-    """Brief 238 answer 2: the reply changes no label."""
+def test_a_verdict_it_cannot_read_is_in_review(proj, stub, tmp_path):
+    """Brief #854 answer 2 (ADR-0388), which replaces brief 238 answer 2: a line the router cannot
+    read puts the pull request in `agk:review` instead of leaving the label to lag."""
     route(proj, stub, tmp_path, [said(11, "boss", BAD)])
     labels = [w for w in stub.writes() if w[1].endswith("/issues/7/labels")]
-    assert labels and labels[0][2] == ["-f", "labels[]=agk:ready"]
+    assert labels and labels[0][2] == ["-f", "labels[]=agk:review"]
 
 
 def test_a_rerun_posts_nothing_new_for_a_verdict_it_has_answered(proj, stub, tmp_path):

@@ -27,7 +27,8 @@ FAST_TESTS = (
 )
 TEST_SELECTION = (
     "   - test selection: judgement (the [testing] profile and the always_full paths the option "
-    "proposes, for example authentication, permissions, migrations and secrets handling)\n"
+    "proposes, its test configuration and build files, and any other path only with a "
+    "`# full: <reason>` comment)\n"
 )
 
 

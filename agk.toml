@@ -74,8 +74,8 @@ plan_issue = 661
 # and the tests its change can affect, while a push to main and a release run the full suite. `balanced`: a changed file that no
 # entry covers selects the tests that name it, and makes the selection full only when no test names it (SPEC-0055 rule 6). `pr_tests = "selected"` is the owner's setting; this repository's `Project tests` step
 # stays skipped (kit/agk-kit.mk), so its pull requests' CI still runs the full suite as "Tests of the checks". `always_full` is
-# the shared core: the files the brief names, and every script whose import closure reaches more than 100 of the kit's test
-# files. The map was built from the code: each test file under tests/kit/ and tests/kit_dev/ that imports a script or names it
+# the test system's own files only (brief #878, ADR-0393); any other entry needs an adjacent `# full: <reason>` comment. A
+# core script selects its map entry's tests and the tests of the files that import it. The map was built from the code: each test file under tests/kit/ and tests/kit_dev/ that imports a script or names it
 # as `<script>.py`, closed over the scripts' own imports. A change of any of this needs an ADR (agk.toml is protected).
 [testing]
 map_source = "curated"
@@ -86,13 +86,8 @@ pr_tests = "selected"
 # The full suite in parallel workers where the interpreter imports xdist (brief #631, ADR-0305).
 workers = "auto"
 always_full = [
-  "scripts/agk/common.py", "kit/agk-kit.mk", "Makefile", "agk.mk", ".github/workflows/**", "tests/kit/conftest.py",
-  "tests/kit/pytest.ini", "tests/kit_dev/conftest.py",
-  "scripts/agk/check_adrs.py", "scripts/agk/check_final_clearance.py", "scripts/agk/check_pr_body.py",
-  "scripts/agk/check_specs.py", "scripts/agk/drift_audit.py", "scripts/agk/facts.py", "scripts/agk/heavy_queue.py",
-  "scripts/agk/impact.py", "scripts/agk/lock.py", "scripts/agk/merge_cleared.py", "scripts/agk/metrics.py",
-  "scripts/agk/minutes.py", "scripts/agk/proof.py", "scripts/agk/reviewers.py", "scripts/agk/route.py",
-  "scripts/agk/session.py", "scripts/agk/session_plan.py", "scripts/agk/shadow_rate.py",
+  "tests/kit/conftest.py", "tests/kit/pytest.ini", "tests/kit_dev/conftest.py", "Makefile", "agk.mk", "kit/agk-kit.mk",
+  ".github/workflows/**", "scripts/agk/common.py", "scripts/agk/impact.py",
 ]
 [[testing.map]]
 code = "scripts/agk/adopt.py"
@@ -139,6 +134,14 @@ tests = [
 code = "scripts/agk/check_acceptance.py"
 tests = ["tests/kit/test_agk_mk.py", "tests/kit/test_check_acceptance.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/check_adrs.py"
+tests = [
+  "tests/kit/test_check_adrs.py", "tests/kit/test_conductor_guard.py", "tests/kit/test_core_audit.py",
+  "tests/kit/test_final_accepts.py", "tests/kit/test_personal_state.py", "tests/kit/test_review_context.py",
+  "tests/kit_dev/test_doctor_wiring.py", "tests/kit_dev/test_intake.py", "tests/kit_dev/test_new_spec.py",
+  "tests/kit_dev/test_release_check.py",
+]
+[[testing.map]]
 code = "scripts/agk/check_brief.py"
 tests = [
   "tests/kit/test_agk_mk.py", "tests/kit/test_check_brief.py", "tests/kit/test_conductor_guard_issue.py",
@@ -160,6 +163,15 @@ tests = [
   "tests/kit_dev/test_design_write.py",
 ]
 [[testing.map]]
+code = "scripts/agk/check_final_clearance.py"
+tests = [
+  "tests/kit/test_clearance_lateness.py", "tests/kit/test_core_contradictions.py",
+  "tests/kit/test_draft_and_progress.py", "tests/kit/test_final_accepts.py", "tests/kit/test_final_clearance.py",
+  "tests/kit/test_fix_list_tags.py", "tests/kit/test_self_clearance.py", "tests/kit/test_session.py",
+  "tests/kit/test_session_rules.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
+  "tests/kit/test_status_only.py",
+]
+[[testing.map]]
 code = "scripts/agk/check_kit_tests.py"
 tests = [
   "tests/kit/test_check_kit_tests.py", "tests/kit/test_kit_tests_own_adr_status.py",
@@ -174,6 +186,18 @@ tests = ["tests/kit/test_check_numbers_amendments.py", "tests/kit/test_numbers.p
 [[testing.map]]
 code = "scripts/agk/check_playbooks.py"
 tests = ["tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py"]
+[[testing.map]]
+code = "scripts/agk/check_pr_body.py"
+tests = [
+  "tests/kit/test_agk_mk.py", "tests/kit/test_check_kit_tests.py", "tests/kit/test_check_pr_body.py",
+  "tests/kit/test_check_pr_body_fix_record.py", "tests/kit/test_conductor_playbook_evidence.py",
+  "tests/kit/test_decision_files.py", "tests/kit/test_draft_and_progress.py", "tests/kit/test_evidence.py",
+  "tests/kit/test_launch_kinds.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_pr_bodies.py",
+  "tests/kit/test_pr_body_behaviour.py", "tests/kit/test_pr_summary.py", "tests/kit/test_prepush_record.py",
+  "tests/kit/test_review_context.py", "tests/kit_dev/test_intake.py", "tests/kit_dev/test_local_mode_guide.py",
+  "tests/kit_dev/test_pilot_gaps_first_pr.py", "tests/kit_dev/test_playbook.py",
+  "tests/kit_dev/test_pr_bodies_kit.py",
+]
 [[testing.map]]
 code = "scripts/agk/check_pr_mode.py"
 tests = ["tests/kit/test_pr_mode.py", "tests/kit/test_pr_mode_briefs.py", "tests/kit/test_session_rules.py"]
@@ -219,6 +243,17 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/check_runbooks.py"
 tests = ["tests/kit/test_check_runbooks.py"]
+[[testing.map]]
+code = "scripts/agk/check_specs.py"
+tests = [
+  "tests/kit/test_agent_apps.py", "tests/kit/test_agent_apps_check.py", "tests/kit/test_approval_same_text.py",
+  "tests/kit/test_approve_short.py", "tests/kit/test_architect_guard.py", "tests/kit/test_brief_contexts.py",
+  "tests/kit/test_check_specs.py", "tests/kit/test_check_specs_lifecycle.py", "tests/kit/test_core_audit.py",
+  "tests/kit/test_core_parallel_specs.py", "tests/kit/test_core_release_specs.py",
+  "tests/kit/test_core_report_specs.py", "tests/kit/test_decision_files.py", "tests/kit/test_personal_state.py",
+  "tests/kit/test_review_context.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_flip_approval.py",
+  "tests/kit/test_workflow.py", "tests/kit_dev/test_kit_manifest.py",
+]
 [[testing.map]]
 code = "scripts/agk/check_tag.py"
 tests = ["tests/kit/test_agk_mk.py", "tests/kit_dev/test_check_tag.py", "tests/kit_dev/test_kit_manifest.py"]
@@ -315,6 +350,14 @@ tests = [
   "tests/kit_dev/test_upgrade_route_triggers.py",
 ]
 [[testing.map]]
+code = "scripts/agk/drift_audit.py"
+tests = [
+  "tests/kit/test_check_requirements_ac.py", "tests/kit/test_common_refactors.py", "tests/kit/test_drift_audit.py",
+  "tests/kit/test_drift_mutation.py", "tests/kit/test_drift_own_config.py", "tests/kit/test_drift_unused_code.py",
+  "tests/kit/test_drift_workflow.py", "tests/kit/test_facts.py", "tests/kit/test_final_accepts.py",
+  "tests/kit_dev/test_drift_audit_release.py", "tests/kit_dev/test_drift_wiring.py",
+]
+[[testing.map]]
 code = "scripts/agk/engines.py"
 tests = [
   "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
@@ -334,6 +377,18 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/execution.py"
 tests = ["tests/kit/test_execution.py"]
+[[testing.map]]
+code = "scripts/agk/facts.py"
+tests = [
+  "tests/kit/test_architect_guard.py", "tests/kit/test_decision_files.py", "tests/kit/test_facts.py",
+  "tests/kit/test_facts_done_on.py", "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py",
+  "tests/kit/test_head_cleared.py", "tests/kit/test_product_report_facts_artifact.py",
+  "tests/kit/test_product_report_workflow.py", "tests/kit/test_retired_requirements.py",
+  "tests/kit/test_runbook_measures.py", "tests/kit/test_self_clearance.py", "tests/kit/test_session.py",
+  "tests/kit/test_usage_by_kind.py", "tests/kit/test_usage_figures.py", "tests/kit/test_verdict_forms.py",
+  "tests/kit_dev/test_end_to_end.py", "tests/kit_dev/test_facts_wiring.py", "tests/kit_dev/test_init.py",
+  "tests/kit_dev/test_intake.py", "tests/kit_dev/test_product_report_wiring.py",
+]
 [[testing.map]]
 code = "scripts/agk/failures.py"
 tests = ["tests/kit/test_failures.py", "tests/kit/test_failures_seen.py"]
@@ -361,6 +416,12 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/guard_logs.py"
 tests = ["tests/kit/test_agk_config.py", "tests/kit/test_guard_detectors.py", "tests/kit/test_guard_logs.py"]
+[[testing.map]]
+code = "scripts/agk/heavy_queue.py"
+tests = [
+  "tests/kit/test_lock_heartbeat.py", "tests/kit/test_lock_queue_runner.py", "tests/kit/test_lock_queue_submit.py",
+  "tests/kit/test_prepush_queue.py", "tests/kit/test_test_timing.py",
+]
 [[testing.map]]
 code = "scripts/agk/init.py"
 tests = [
@@ -413,6 +474,52 @@ tests = ["tests/kit/test_lessons.py"]
 [[testing.map]]
 code = "scripts/agk/local_mode.py"
 tests = ["tests/kit/test_local_mode.py", "tests/kit_dev/test_local_mode_guide.py"]
+[[testing.map]]
+code = "scripts/agk/lock.py"
+tests = [
+  "tests/kit/test_evidence.py", "tests/kit/test_lock.py", "tests/kit/test_lock_heartbeat.py",
+  "tests/kit/test_lock_queue_runner.py", "tests/kit/test_lock_queue_submit.py", "tests/kit/test_lock_slots.py",
+  "tests/kit/test_merge_cleared_after.py", "tests/kit/test_merge_cleared_run.py",
+  "tests/kit/test_prepush_lock_inherited.py", "tests/kit/test_prepush_queue.py",
+  "tests/kit/test_prepush_regression.py", "tests/kit/test_session_plan_lanes.py", "tests/kit/test_session_rules.py",
+  "tests/kit/test_session_tidy.py", "tests/kit/test_test_timing.py", "tests/kit_dev/test_local_mode_guide.py",
+]
+[[testing.map]]
+code = "scripts/agk/merge_cleared.py"
+tests = [
+  "tests/kit/test_approval_same_text.py", "tests/kit/test_approved_spec_not_draft.py",
+  "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_commands.py",
+  "tests/kit/test_conductor_merge_queue.py", "tests/kit/test_conductor_playbook_evidence.py",
+  "tests/kit/test_final_accepts.py", "tests/kit/test_launch_kinds.py", "tests/kit/test_merge_cleared_after.py",
+  "tests/kit/test_merge_cleared_before.py", "tests/kit/test_merge_cleared_ci.py",
+  "tests/kit/test_merge_cleared_merger.py", "tests/kit/test_merge_cleared_pre_tests.py",
+  "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_merge_cleared_run.py",
+  "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_merger_on_status.py", "tests/kit/test_merger_sweep.py",
+  "tests/kit/test_personal_mode_rules.py", "tests/kit/test_rule3a_covered_and_label.py",
+  "tests/kit/test_rule3a_record_comments.py", "tests/kit/test_session_kind.py", "tests/kit/test_session_rules.py",
+  "tests/kit/test_sweep_by_verdict.py", "tests/kit/test_verdict_status.py",
+  "tests/kit_dev/test_conductor_catches.py", "tests/kit_dev/test_drift_audit_release.py",
+  "tests/kit_dev/test_release_check.py",
+]
+[[testing.map]]
+code = "scripts/agk/metrics.py"
+tests = [
+  "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py", "tests/kit/test_head_cleared.py",
+  "tests/kit/test_holds_metric.py", "tests/kit/test_main_batching.py", "tests/kit/test_metrics.py",
+  "tests/kit/test_metrics_minutes.py", "tests/kit/test_metrics_pr_tests.py", "tests/kit/test_metrics_testing.py",
+  "tests/kit/test_over_cap_builder.py", "tests/kit/test_product_report.py", "tests/kit/test_runbook_measures.py",
+  "tests/kit/test_self_clearance.py", "tests/kit/test_solo_mode.py", "tests/kit/test_usage_by_kind.py",
+  "tests/kit/test_verdict_authors.py", "tests/kit/test_verdict_forms.py", "tests/kit_dev/test_architect_review.py",
+  "tests/kit_dev/test_facts_wiring.py", "tests/kit_dev/test_metrics_wiring.py", "tests/kit_dev/test_playbook.py",
+  "tests/kit_dev/test_shadow_count.py",
+]
+[[testing.map]]
+code = "scripts/agk/minutes.py"
+tests = [
+  "tests/kit/test_doctor_ci.py", "tests/kit/test_execution.py", "tests/kit/test_metrics_minutes.py",
+  "tests/kit/test_minutes.py", "tests/kit/test_runbook_pointers.py", "tests/kit_dev/test_reference_commands.py",
+  "tests/kit_dev/test_self_hosted_pool.py",
+]
 [[testing.map]]
 code = "scripts/agk/new_spec.py"
 tests = [
@@ -492,6 +599,16 @@ tests = [
   "tests/kit_dev/test_init.py", "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_make_once.py",
 ]
 [[testing.map]]
+code = "scripts/agk/proof.py"
+tests = [
+  "tests/kit/test_architect_guard.py", "tests/kit/test_conductor_playbook_evidence.py", "tests/kit/test_lock.py",
+  "tests/kit/test_long_temp_dir.py", "tests/kit/test_prepush_queue.py", "tests/kit/test_proof.py",
+  "tests/kit/test_proof_areas.py", "tests/kit/test_proof_manifest.py", "tests/kit/test_proof_regression.py",
+  "tests/kit/test_proof_timeout.py", "tests/kit/test_run_folders.py", "tests/kit/test_test_plan.py",
+  "tests/kit/test_test_timing.py", "tests/kit/test_workflow.py", "tests/kit_dev/test_end_to_end.py",
+  "tests/kit_dev/test_local_mode_guide.py",
+]
+[[testing.map]]
 code = "scripts/agk/release_pack.py"
 tests = ["tests/kit/test_release_pack.py"]
 [[testing.map]]
@@ -502,6 +619,30 @@ code = "scripts/agk/review_context.py"
 tests = [
   "tests/kit/test_check_kit_tests.py", "tests/kit/test_review_context.py",
   "tests/kit_dev/test_experimental_reviewer.py", "tests/kit_dev/test_reviewer_wiring.py",
+]
+[[testing.map]]
+code = "scripts/agk/reviewers.py"
+tests = [
+  "tests/kit/test_agent_apps.py", "tests/kit/test_agk_mk.py", "tests/kit/test_approve_short.py",
+  "tests/kit/test_approved_spec_not_draft.py", "tests/kit/test_check_kit_tests.py",
+  "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_personal_state.py", "tests/kit/test_reviewers.py",
+  "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
+  "tests/kit/test_verdict_authors.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
+  "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
+]
+[[testing.map]]
+code = "scripts/agk/route.py"
+tests = [
+  "tests/kit/test_agent_apps.py", "tests/kit/test_approve_short.py", "tests/kit/test_approved_spec_not_draft.py",
+  "tests/kit/test_ci_saving.py", "tests/kit/test_conductor_guard_launch.py",
+  "tests/kit/test_conductor_guard_queue.py", "tests/kit/test_conductor_playbook_evidence.py",
+  "tests/kit/test_main_batching.py", "tests/kit/test_merge_cleared_after.py", "tests/kit/test_pause.py",
+  "tests/kit/test_pipeline.py", "tests/kit/test_plan_exact_touches.py", "tests/kit/test_pool_health.py",
+  "tests/kit/test_route.py", "tests/kit/test_route_latest.py", "tests/kit/test_route_red.py",
+  "tests/kit/test_route_required.py", "tests/kit/test_rule3a_covered_and_label.py",
+  "tests/kit/test_runbook_pointers.py", "tests/kit/test_session_kind.py", "tests/kit/test_session_parked.py",
+  "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py", "tests/kit/test_stalls.py",
+  "tests/kit/test_sweep_by_verdict.py", "tests/kit_dev/test_uninstall.py",
 ]
 [[testing.map]]
 code = "scripts/agk/rules.py"
@@ -522,8 +663,43 @@ tests = ["tests/kit/test_sbom.py"]
 code = "scripts/agk/scorecard.py"
 tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
+code = "scripts/agk/session.py"
+tests = [
+  "tests/kit/test_always_full_infra.py", "tests/kit/test_brief_contexts.py", "tests/kit/test_conductor_guard.py",
+  "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_conductor_guard_queue.py",
+  "tests/kit/test_conductor_guard_tell.py", "tests/kit/test_conductor_sweep_late_line.py",
+  "tests/kit/test_draft_and_progress.py", "tests/kit/test_flow_rules.py", "tests/kit/test_front_door_entry.py",
+  "tests/kit/test_holds_metric.py", "tests/kit/test_impact.py", "tests/kit/test_launch.py",
+  "tests/kit/test_launch_auto_start.py", "tests/kit/test_launch_kinds.py", "tests/kit/test_merge_cleared_run.py",
+  "tests/kit/test_next_red.py", "tests/kit/test_over_cap_builder.py", "tests/kit/test_plan_exact_touches.py",
+  "tests/kit/test_plan_holders.py", "tests/kit/test_plan_what_if.py", "tests/kit/test_pool_health.py",
+  "tests/kit/test_route_red.py", "tests/kit/test_session.py", "tests/kit/test_session_flow.py",
+  "tests/kit/test_session_kind.py", "tests/kit/test_session_next_plan.py", "tests/kit/test_session_parked.py",
+  "tests/kit/test_session_paused.py", "tests/kit/test_session_plan.py", "tests/kit/test_session_plan_lanes.py",
+  "tests/kit/test_session_plan_malformed.py", "tests/kit/test_session_plan_overlap.py",
+  "tests/kit/test_session_prompt.py", "tests/kit/test_session_resume.py", "tests/kit/test_session_review.py",
+  "tests/kit/test_session_rules.py", "tests/kit/test_session_silent.py", "tests/kit/test_session_tell.py",
+  "tests/kit/test_session_tidy.py", "tests/kit/test_stalls.py", "tests/kit_dev/test_guide_loop.py",
+  "tests/kit_dev/test_intake.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_launcher_guide.py",
+  "tests/kit_dev/test_local_mode_guide.py", "tests/kit_dev/test_remote_builders_guide.py",
+  "tests/kit_dev/test_review_pass_skill.py", "tests/kit_dev/test_session_rules_found_bug.py",
+  "tests/kit_dev/test_uninstall.py",
+]
+[[testing.map]]
+code = "scripts/agk/session_plan.py"
+tests = [
+  "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py", "tests/kit/test_merge_cleared_reprove.py",
+  "tests/kit/test_plan_exact_touches.py", "tests/kit/test_plan_reprove_paths.py",
+  "tests/kit/test_session_claim_overlap.py",
+]
+[[testing.map]]
 code = "scripts/agk/shadow_count.py"
 tests = ["tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_shadow_count.py"]
+[[testing.map]]
+code = "scripts/agk/shadow_rate.py"
+tests = [
+  "tests/kit/test_facts_shadow.py", "tests/kit/test_shadow_rate.py",
+]
 [[testing.map]]
 code = "scripts/agk/stalls.py"
 tests = ["tests/kit/test_stalls.py", "tests/kit_dev/test_intelligent_testing.py"]

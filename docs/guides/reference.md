@@ -125,7 +125,7 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/conductor.py sweep
     python3 scripts/agk/conductor.py merge-queue [--dry-run] [--max-batch N]
     python3 scripts/agk/conductor.py rerun --pr N [--apply]
-    python3 scripts/agk/conductor.py check-verdict FILE
+    python3 scripts/agk/conductor.py check-verdict FILE [--pr N]
     python3 scripts/agk/conductor.py lease (--show | --take NAME | --release NAME)
     python3 scripts/agk/session.py prompt --brief N [--session ID] [--follow-up TEXT]
     python3 scripts/agk/session.py slot (--take | --renew | --release | --next) SLOT
@@ -160,8 +160,9 @@ prints one line per cancelled run; `--apply` reruns them (catch log row 18). Whe
 pull request, row 19) it prints the one step that starts them, converting the pull request to a draft and back through the
 runtime's `ccr/convert_to_draft` and `ccr/ready_for_review` routes `(verify)`, and takes it only with `--apply`; a draft is left
 alone. `check-verdict FILE` prints `ok`, or the problem of the verdict's `Final:` lines by the router's own reading
-(`common.verdict_problem`), or that its first line is not `Verdict: cleared|fix list|rejected <sha>`; exit 1 on a problem, nothing
-read on GitHub. `lease` is the active-conductor marker: one comment `Conductor: active <time> <name>` on the plan issue that
+(`common.verdict_problem`), or that its first line is not a verdict or a `Correction:` with text; exit 1 on a problem, nothing
+read on GitHub. With `--pr N` it also refuses a verdict on another head, a `Final:` path the head does not have and a fix list
+with no item on a pull request with no Proposed ADR, and a read that fails is an error (brief #854, ADR-0388). `lease` is the active-conductor marker: one comment `Conductor: active <time> <name>` on the plan issue that
 `plan_issue` of the `[flow]` table names (absent: the lease is off), valid 10 minutes, renewed at every `watch` pass (`watch` returns within 5 minutes with `nothing new`; ADR-0368); `--take NAME` posts or edits it in place
 unless another name holds a valid lease (exit 3, naming the setting) and keeps the name in the git directory, `--release NAME`
 marks it released, `--show` prints `held by <name> until <time>` or `free`; `merge-queue` refuses to run while another name holds a

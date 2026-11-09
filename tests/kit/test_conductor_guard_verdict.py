@@ -33,8 +33,29 @@ NUMBERED_BODY = (
 )
 
 
+STUB_PULL = json.dumps({"head": {"sha": SHA + "0" * 28}})
+STUB_TREE = json.dumps({"truncated": False, "tree": [{"path": "docs/adr/0001-x.md"}]})
+GH_STUB = f"""#!/bin/sh
+case "$4" in
+  repos/o/r/pulls/7) echo '{STUB_PULL}' ;;
+  repos/o/r/git/trees/*) echo '{STUB_TREE}' ;;
+  *) exit 1 ;;
+esac
+"""
+
+
 def run_hook(command: str, project: Path, tmpdir: Path, *args: str):
-    env = {"PATH": "/usr/bin:/bin", "CLAUDE_PROJECT_DIR": str(project), "TMPDIR": str(tmpdir)}
+    """The hook with a `gh` stub first on `PATH`: its check reads the pull request (brief #854)."""
+    bin_dir = tmpdir / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    gh = bin_dir / "gh"
+    gh.write_text(GH_STUB, encoding="utf-8")
+    gh.chmod(0o755)
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "CLAUDE_PROJECT_DIR": str(project),
+        "TMPDIR": str(tmpdir),
+    }
     payload = {"tool_name": "Bash", "tool_input": {"command": command}}
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(HOOK), *args],
