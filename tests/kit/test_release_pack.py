@@ -1,6 +1,7 @@
 """The evidence pack's form, its release test and its offline check (SPEC-0052 build (b),
 brief #769, rules 2, 4 and 10, ADR-0343), and `make` from git (build (c), brief #820, rules 3, 8
-and 9), and the parts read from GitHub (build (d), brief #829, rules 5, 6, 7 and 9).
+and 9), and the parts read from GitHub (build (d), briefs #829 and #832, rules 5, 6, 7
+and 9).
 
 REQ-059 AC2 and AC8. `release_pack.py check <out>/<tag>` reads the folder and the repository's
 git only and prints `ok pack`, one `FAIL pack:` line per problem or one `refused:` line. Fixtures
@@ -22,6 +23,7 @@ from pathlib import Path
 
 import kit_hashes
 import pytest
+import release_pack
 
 KIT = Path(__file__).resolve().parents[2]
 SCRIPT = KIT / "scripts" / "agk" / "release_pack.py"
@@ -713,6 +715,7 @@ def test_ac1_make_writes_exactly_the_six_files_and_the_check_prints_ok_pack(bill
     assert state(root) == before
     index = part(out, "pack.json")
     assert index["schema"] == 1 and index["tag"] == TAG
+    assert datetime.strptime(index["date"], "%Y-%m-%d")
     assert index["commit"] == git(root, "rev-parse", f"refs/tags/{TAG}^{{commit}}")
     assert index["parts"] == {
         n: hashlib.sha256((out / TAG / n).read_bytes()).hexdigest() for n in PARTS
@@ -1311,6 +1314,22 @@ def test_ac7_no_week_holds_the_tag_when_the_columns_miss_it(billed, tmp_path):
     body = AUDIT.format(day="2000-01-03") + weeks(tag_day(root) + timedelta(days=30))
     data = made(billed, tmp_path, "decisions.json", **{"issues-drift-audit": [{"body": body}]})
     assert data["scorecard_week"] == "unknown"
+
+
+def test_ac7_a_cell_is_a_number_or_not_applicable_and_an_empty_section_is_unknown(billed, tmp_path):
+    """REQ-059 AC7: rule 9 (a cell is read as the scorecard reads it, never copied as it stands)."""
+    root, _ = billed
+    day = tag_day(root) + timedelta(days=1)
+    cells = "| red_hours | 4 | not applicable |\n| flaky_rate | - | a line of a body |\n"
+    table = f"| metric | line | {day} |\n| --- | --- | --- |\n{cells}"
+    body = f"<!-- scorecard weeks -->\n{table}<!-- /scorecard weeks -->\n"
+    data = made(billed, tmp_path, "decisions.json", **{"issues-drift-audit": [{"body": body}]})
+    assert data["scorecard_week"] == [
+        {"metric": "red_hours", "value": "not applicable"},
+        {"metric": "flaky_rate", "value": "unknown"},
+    ]
+    empty = "<!-- scorecard weeks --><!-- /scorecard weeks -->"
+    assert release_pack.scorecard_week(empty, day) == "unknown"
 
 
 def test_ac7_no_part_holds_a_login_or_a_line_of_a_body(billed, tmp_path):

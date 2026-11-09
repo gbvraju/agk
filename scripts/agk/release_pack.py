@@ -22,10 +22,10 @@ those files are found.
 `make` (build (c), rules 3, 8 and 9) applies the release test and the folder refusals, then writes
 `bom.json` and `decisions.json` to `<out>/<tag>/` with no network: it reads the tagged commit with
 local `git`, never checks it out over the work tree, posts nothing and changes no file of the
-repository. Build (d) adds `tests.json` and `scans.json` (rules 5 and 6), read with
-`gh api --method GET` only, or from saved responses with `--api-dir` as `scorecard.py` takes them:
-what cannot be read is `unknown`, never a pass. `coverage.json`, the fields of `decisions.json` read
-from GitHub and the index are still to come; until then `check` fails such a folder, naming them.
+repository. Build (d) adds `tests.json`, `scans.json`, `coverage.json`, the GitHub fields of
+`decisions.json` (rules 5, 6, 7 and 9) and the index, read with `gh api --method GET` only, or from
+saved responses with `--api-dir` as `scorecard.py` takes them: what cannot be read is `unknown`,
+never a pass and never 0. The coverage command is never run.
 """
 
 from __future__ import annotations
@@ -39,11 +39,14 @@ import shutil
 import sys
 import tempfile
 import tomllib
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import drift_audit
+import failures
 import guard
 import metrics
 import scorecard
@@ -93,6 +96,9 @@ COUNTS = {
 }
 CONCLUSION = re.compile(r"[a-z_]{1,32}")  # a conclusion GitHub gives; anything else is unknown
 OUTCOME = {"success": "passed", "failure": "failed", "skipped": "not run"}
+AUDIT_LABEL, FAILURE_LABEL = "agk-drift-audit", "found-bug"
+AUDIT_DAY = re.compile(r"^agk drift audit (\d{4}-\d{2}-\d{2}) \(window", re.MULTILINE)
+UNREAD_ISSUE = {"number": UNKNOWN, "state": UNKNOWN}
 # Each part's fields beside `schema`: None is one value, a type a list of it, a tuple a list of
 # objects with exactly those fields.
 FORMS: dict[str, dict[str, Any]] = {
@@ -382,8 +388,83 @@ def previous_release(root: Path, tag: str, commit: str) -> tuple[str, list[str]]
     return git(root, "rev-list", "--max-parents=0", commit).split()[-1], skipped
 
 
-def decisions(root: Path, tag: str, commit: str) -> dict[str, Any]:
-    """`decisions.json` (rule 9) without the fields read from GitHub, which are build (d)'s."""
+def audit_body(src: Any) -> str | None:
+    """The body of the one open audit issue; none, several or no text is None (`unknown`)."""
+    data = src.get("issues-drift-audit", f"repos/{{repo}}/issues?state=open&labels={AUDIT_LABEL}")
+    issues = [i for i in scorecard.listed(data) or [] if "pull_request" not in i]
+    body = issues[0].get("body") if len(issues) == 1 else None
+    return body if isinstance(body, str) else None
+
+
+def commit_day(root: Path, commit: str) -> date:
+    stamp = int(git(root, "show", "-s", "--format=%ct", commit).strip())
+    return datetime.fromtimestamp(stamp, UTC).date()
+
+
+def coverage_part(body: str | None, day: date) -> dict[str, Any]:
+    """`coverage.json` (rule 7): the audit's D9 figure, when its report is not later than DAY."""
+    report = AUDIT_DAY.search(body or "")
+    covered = drift_audit.PREVIOUS_COVERAGE.search(body or "")
+    try:
+        if report and covered and date.fromisoformat(report[1]) <= day:
+            return {"schema": 1, "covered": float(covered[1]), "date": report[1]}
+    except ValueError:
+        pass
+    return {"schema": 1, "covered": UNKNOWN, "date": UNKNOWN}
+
+
+def failure_entry(src: Any, number: int) -> dict[str, Any] | None:
+    """One issue a merged fix names: None when it is no `found-bug` issue; `unknown` if unread."""
+    issue = src.get(f"issue-{number}", f"repos/{{repo}}/issues/{number}")
+    labels = issue.get("labels") if isinstance(issue, dict) else None
+    if not isinstance(labels, list):
+        return {"number": number, "state": UNKNOWN}
+    if not any(isinstance(lb, dict) and lb.get("name") == FAILURE_LABEL for lb in labels):
+        return None
+    state = issue.get("state")
+    usable = isinstance(state, str) and CONCLUSION.fullmatch(state)
+    return {"number": number, "state": state if usable else UNKNOWN}
+
+
+def failure_issues(root: Path, before: str, commit: str, src: Any) -> list[dict[str, Any]]:
+    """The `found-bug` issues whose fix merged in the range; unread pulls are never `[]`."""
+    endpoint = "repos/{repo}/pulls?state=closed&sort=updated&direction=desc"
+    pulls = scorecard.listed(src.get("pulls", endpoint))
+    if pulls is None:
+        return [UNREAD_ISSUE]
+    inside = set(git(root, "rev-list", f"{before}..{commit}").split())
+    fixed = failures.fixed_by([p for p in pulls if p.get("merge_commit_sha") in inside])
+    entries = (failure_entry(src, number) for number in sorted(fixed))
+    return [entry for entry in entries if entry]
+
+
+def week_value(cell: str) -> str:
+    """A cell as `scorecard.history` reads one: a number or `not applicable`, else `unknown`."""
+    return cell if scorecard.NUMBER.match(cell) or cell == scorecard.NOT_APPLICABLE else UNKNOWN
+
+
+def scorecard_week(body: str | None, day: date) -> list[dict[str, str]] | str:
+    """The rows of the column whose week holds DAY: a column dated D is D-7 to D-1 (rule 9)."""
+    text = body or ""
+    if scorecard.WEEKS_START not in text or scorecard.WEEKS_END not in text:
+        return UNKNOWN
+    section = text.split(scorecard.WEEKS_START, 1)[1].split(scorecard.WEEKS_END, 1)[0]
+    table = [
+        [cell.strip() for cell in row.strip().strip("|").split("|")]
+        for row in section.strip().splitlines()
+    ]
+    head = table[0] if table else []
+    holders = [str(day + timedelta(days=k)) for k in range(1, 8)]
+    column = next((i for i, cell in enumerate(head) if i > 1 and cell in holders), None)
+    if column is None:
+        return UNKNOWN
+    known = {*scorecard.LEVEL, *scorecard.FRESH}
+    rows = [row for row in table[2:] if len(row) == len(head) and row[0] in known]
+    return [{"metric": row[0], "value": week_value(row[column])} for row in rows] or UNKNOWN
+
+
+def decisions(root: Path, tag: str, commit: str, src: Any, body: str | None) -> dict[str, Any]:
+    """`decisions.json` (rule 9); the failure issues and the scorecard week come from GitHub."""
     before, skipped = previous_release(root, tag, commit)
     old = adr_statuses(root, before)
     new = adr_statuses(root, commit)
@@ -394,7 +475,14 @@ def decisions(root: Path, tag: str, commit: str) -> dict[str, Any]:
         for rid in sorted({*was, *now})
         if was.get(rid) != now.get(rid)
     ]
-    return {"schema": 1, "adrs": adrs, "requirements": changed, "skipped_tags": skipped}
+    return {
+        "schema": 1,
+        "adrs": adrs,
+        "requirements": changed,
+        "failure_issues": failure_issues(root, before, commit, src),
+        "scorecard_week": scorecard_week(body, commit_day(root, commit)),
+        "skipped_tags": skipped,
+    }
 
 
 class Live(scorecard.Live):
@@ -517,6 +605,17 @@ def folder_refusal(root: Path, target: Path) -> str | None:
     return None if all(git(root, "check-ignore", "--", n, check=False) for n in names) else IN_REPO
 
 
+def encoded(data: dict[str, Any]) -> bytes:
+    return (json.dumps(data, indent=1) + "\n").encode("utf-8")
+
+
+def index_of(tag: str, commit: str, parts: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """`pack.json` (rule 2): each part's digest over exactly the bytes that are written."""
+    digests = {name: hashlib.sha256(encoded(data)).hexdigest() for name, data in parts.items()}
+    made_on = str(datetime.now(UTC).date())
+    return {"schema": 1, "tag": tag, "commit": commit, "date": made_on, "parts": digests}
+
+
 def write_parts(target: Path, parts: dict[str, dict[str, Any]]) -> str | None:
     """The parts, in a folder this call creates; a folder it cannot finish it removes."""
     try:
@@ -527,7 +626,7 @@ def write_parts(target: Path, parts: dict[str, dict[str, Any]]) -> str | None:
         return NO_FOLDER
     try:
         for name, data in parts.items():
-            (target / name).write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
+            (target / name).write_bytes(encoded(data))
     except OSError:
         shutil.rmtree(target, ignore_errors=True)
         return NO_FOLDER
@@ -551,20 +650,22 @@ def make(tag: str, out: str, options: dict[str, str]) -> int:
         try:
             src = source(options)
             runs = check_runs(src, commit)
+            body = audit_body(src)
             parts = {
                 "tests.json": tests_part(src, load_config(root)["default_branch"], runs),
                 "scans.json": scans_part(root, commit, src, runs),
+                "coverage.json": coverage_part(body, commit_day(root, commit)),
                 "bom.json": bill(root, commit),
-                "decisions.json": decisions(root, tag, commit),
+                "decisions.json": decisions(root, tag, commit, src, body),
             }
+            parts[INDEX] = index_of(tag, commit, parts)
             refusal = write_parts(target, parts)
         except Refused as exc:
             refusal = str(exc)
     if refusal:
         print(refusal)
         return 1
-    missing = " ".join(name for name in (*FORMS, INDEX) if name not in parts)
-    print(f"made {' '.join(parts)}; not yet made: {missing}")
+    print(f"made {' '.join(parts)}")
     return 0
 
 
