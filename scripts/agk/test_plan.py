@@ -30,7 +30,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import CheckError, git
-from impact import Impact, head_files, impact, is_test_file, level_groups, machine_env
+from impact import (
+    Impact,
+    head_files,
+    impact,
+    is_test_file,
+    level_groups,
+    link_groups,
+    machine_env,
+)
 from impact import text as regression_text
 from proof import Failure, Plan, Run, area_command, plan, resolve_range
 
@@ -93,6 +101,21 @@ def level_plan(root: Path, head: str, shown: Plan) -> tuple[list[Run], list[str]
             runs.append(Run(group["label"], group["files"], command, level["cwd"]))
             needs_env = needs_env or bool(level["env"])
     return runs, notes, needs_env
+
+
+def with_links(shown: Plan, found: Impact, levels):
+    """LEVELS with the levels that links add (SPEC-0055 rule 7), as prepush.py runs them."""
+    if not found.linked and not found.link_notes:
+        return levels
+    runs, notes, needs_env = levels or ([], [], False)
+    groups, said = link_groups(found, shown.areas, {r.name for r in runs}, machine_env())
+    for group in (g for g in groups if not g["failed"]):
+        level = group["level"]
+        command = area_command(level, group["files"])
+        runs = [*runs, Run(group["label"], group["files"], command, level["cwd"])]
+        needs_env = needs_env or bool(level["env"])
+        notes = [n for n in notes if not n.startswith(f"tests: {group['label']} runs on ")]
+    return runs, list(dict.fromkeys([*notes, *said])), needs_env
 
 
 def level_data(levels: tuple[list[Run], list[str], bool] | None) -> dict:
@@ -197,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
         base, head = resolve_range(root, options["base"], options["head"])
         shown = plan(root, base, head)
         found = impact(root, base, head)
-        levels = level_plan(root, head, shown)
+        levels = with_links(shown, found, level_plan(root, head, shown))
     except Usage as exc:
         print(exc, file=sys.stderr)
         return 2
