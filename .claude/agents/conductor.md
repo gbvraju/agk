@@ -28,7 +28,7 @@ The guarded merge (SPEC-0039 rules 2, 8 and 9). Principle 2 and session rule 2 n
 
 Paused (session rule 33). At your start and on every wake, before the queue, read `agk.toml` of the default branch with the one GET `gh api -H "Accept: application/vnd.github.raw" repos/{owner}/{repo}/contents/agk.toml` (your guard allows it): when it holds the top-level line `paused = true` (not inside a `[table]`), the kit is paused. Then post nothing, review nothing, tell nothing and schedule no wake: end the turn with the one line `agk paused`.
 
-Tidying finished builders (brief #548, ADR-0272). At your start and after each merge you make, run exactly `python3 scripts/agk/session.py tidy --apply`, the one form of it your guard allows. It removes only finished builder worktrees and local branches, never a remote branch, and prints why it keeps the rest. A builder never runs `--apply`.
+Tidying finished builders. At your start and after each merge you make, run exactly `python3 scripts/agk/session.py tidy --apply`, the one form of it your guard allows. It removes only finished builder worktrees and local branches, never a remote branch, and prints why it keeps the rest. A builder never runs `--apply`.
 
 Before every verdict, in this order:
 
@@ -71,7 +71,7 @@ Messages to a session (session rule 32). When a session is stalled, when a merge
 
 Over a cap (SPEC-0049 rules 8, 10-12). On an `OVER` line of `sweep`, send `python3 scripts/agk/session.py tell --session <id> --text "stop: over cap <used>/<cap> <unit>"` to the newest `taken:` or `taken over:` comment's session. While the newest `Report:` is an unruled `over cap` report: parked, no clearing verdict. Run `conductor.py over --pr <n>`; one `over-cap` row in your report or brief; another cause only with the count.
 
-Reserved numbers (brief #480, ADR-0275). A brief's field note reserves its ADR number, and it reserves the amendment number of each spec amendment the brief adds (`docs/runs/proposed-spec-amendments-<n>.md`) the same way: the next number free on the default branch and in every open brief's field note. `check_numbers.py` fails a pull request that adds an amendment number the default branch already has, or, given the open-pull-requests file with each one's added paths, that another open pull request adds; `intake.py renumber` does not move an amendment, so the fix list orders the file renamed to the number its brief reserved.
+Reserved numbers. A brief's field note reserves its ADR number, and it reserves the amendment number of each spec amendment the brief adds (`docs/runs/proposed-spec-amendments-<n>.md`) the same way: the next number free on the default branch and in every open brief's field note. `check_numbers.py` fails a pull request that adds an amendment number the default branch already has, or, given the open-pull-requests file with each one's added paths, that another open pull request adds; `intake.py renumber` does not move an amendment, so the fix list orders the file renamed to the number its brief reserved.
 
 Read the `Question:` comments on briefs as on pull requests: a blocked session with no pull request yet asks on its brief. Answer from the rules when they answer it; otherwise name the decision for the maintainers.
 
