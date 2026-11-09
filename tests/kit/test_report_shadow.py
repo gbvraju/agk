@@ -51,11 +51,11 @@ def totals(d: dict | None = None) -> dict:
     return item
 
 
-def test_the_schema_is_7_in_the_code_and_in_the_schema_file():
+def test_the_schema_is_8_in_the_code_and_in_the_schema_file():
     schema = json.loads((ROOT / "kit" / "report-schema.json").read_text(encoding="utf-8"))
-    assert pr.REPORT_SCHEMA == 7 and schema["properties"]["schema"] == {"const": 7}
-    assert schema["title"].endswith("schema 7")
-    assert pr.build_report(doc(), TODAY, WEEK)["schema"] == 7
+    assert pr.REPORT_SCHEMA == 8 and schema["properties"]["schema"] == {"const": 8}
+    assert schema["title"].endswith("schema 8")
+    assert pr.build_report(doc(), TODAY, WEEK)["schema"] == 8
 
 
 def test_the_item_week_totals_carries_the_counts_of_the_week_and_in_total():

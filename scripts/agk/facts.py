@@ -16,7 +16,9 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
 from datetime import UTC, date, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -44,6 +46,7 @@ from common import (
     ruled_in,
     run,
 )
+from minutes import estimate
 
 NAME = "facts"
 SCHEMA = 1
@@ -70,6 +73,12 @@ WAITING_ON_BUILDER = ("agk:fix", "agk:conflict", "agk:ci-red")
 FLOW_DEFAULTS = {"max_builders": 3, "stall_hours": 4}
 OUTCOMES = ("proven", "not-proven", "skipped", "unknown")
 REASON = re.compile(r"(?!unknown$)[a-z]+(-[a-z]+)*")
+LEAK_LABEL = "agk-secret-leak"  # SPEC-0056 rule 11
+RECORD_TITLE = "Local mode since"  # local_mode.RECORD_TITLE (local_mode imports this file)
+RED_TITLE = "The default branch is red"  # session.RED_TITLE, the title scorecard.py reads
+LEAK_TIME = re.compile(r"(Detected|Revoked): (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)")
+LEAK_LINE = re.compile(r"(Detected|Revoked):.*")
+NO_MEDIAN = "none"
 
 
 # --- the git facts ----------------------------------------------------------------------------
@@ -794,6 +803,156 @@ def issues_section(src: Any) -> Any:
     return sorted(found, key=lambda i: (i["number"], i["label"]))
 
 
+# --- the time to restore and the run minutes (SPEC-0056 rule 12) -------------------------------
+
+
+class WeekRuns:
+    """What `minutes.estimate` reads (status, data), from the week's runs and their job lists: the
+    answers `scorecard.py` gives it. No script imports the scorecard (SPEC-0047 rule 2)."""
+
+    def __init__(self, src: Any, runs: dict) -> None:
+        self.src, self.runs = src, runs
+
+    def get(self, name: str, endpoint: str, until: Any = None) -> tuple[int, Any]:
+        if name == "runs":
+            return 200, self.runs
+        rid = name.removeprefix("jobs-")
+        data = self.src.get(f"run-jobs-{rid}", f"repos/{{repo}}/actions/runs/{rid}/jobs?filter=all")
+        return (200, data) if isinstance(data, dict) else (404, None)
+
+
+def tenth(value: Decimal) -> str:
+    return str(value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+
+
+def inside(item: dict, key: str, start: datetime, end: datetime) -> bool:
+    moment = metrics.stamp(item.get(key))
+    return moment is not None and start <= moment < end
+
+
+def median_of(hours: list[str]) -> str:
+    """The median of the hours, to 0.1; `unknown` when one of them is."""
+    if UNKNOWN in hours:
+        return UNKNOWN
+    return tenth(Decimal(str(median(Decimal(h) for h in hours))))
+
+
+def plain_issues(listed: list | None) -> list[dict] | None:
+    return None if listed is None else [i for i in listed if "pull_request" not in i]
+
+
+def leak_hours(body: Any) -> str:
+    """Hours from `Detected:` to `Revoked:`, the only lines of the body read; `unknown` unless
+    each is there once, in UTC, and the second is not before the first."""
+    times: dict[str, str] = {}
+    for line in str(body or "").splitlines():
+        if named := LEAK_LINE.fullmatch(line.strip()):
+            found = LEAK_TIME.fullmatch(line.strip())
+            if found is None or named.group(1) in times:
+                return UNKNOWN
+            times[found.group(1)] = found.group(2)
+    hours = metrics.hours_between(times.get("Detected"), times.get("Revoked"))
+    return UNKNOWN if hours.startswith("-") else hours
+
+
+def restore_counts(opened: list, closed: list, hours: Any, start: datetime, end: datetime) -> dict:
+    """The number closed in the week, the median of their hours and the number open now."""
+    done = [i for i in closed if inside(i, "closed_at", start, end)]
+    return {
+        "closed": len(done),
+        "median_hours": median_of([hours(i) for i in done]) if done else NO_MEDIAN,
+        "open": len(opened),
+    }
+
+
+UNKNOWN_COUNTS = {"closed": UNKNOWN, "median_hours": UNKNOWN, "open": UNKNOWN}
+
+
+def opened_to_closed(issue: dict) -> str:
+    return metrics.hours_between(issue.get("created_at"), issue.get("closed_at"))
+
+
+def week_minutes(src: Any, start: datetime, end: datetime) -> int | None:
+    """The minutes of the week by `minutes.estimate`, as `scorecard.py` reads them (`Q-S0056-8`);
+    None when a list cannot be read."""
+    first, last = (start - timedelta(days=1)).date(), (end - timedelta(days=1)).date()
+    runs = src.get("runs-week", f"repos/{{repo}}/actions/runs?created={first}..{last}")
+    if not isinstance(runs, dict) or not isinstance(runs.get("workflow_runs"), list):
+        return None
+    repo = src.get("repo", "repos/{repo}")
+    rates = not (isinstance(repo, dict) and repo.get("private") is False)
+    found = estimate(WeekRuns(src, runs), start, end, rates)
+    return found.minutes if found.complete else None
+
+
+def run_minutes(minutes: int | None, pulls: Any, start: datetime, end: datetime) -> dict:
+    merged = (
+        sum(1 for p in pulls if inside(p, "merged_at", start, end))
+        if isinstance(pulls, list)
+        else 0
+    )
+    return {
+        "minutes": UNKNOWN if minutes is None else minutes,
+        "per_merged": UNKNOWN
+        if minutes is None or not merged
+        else tenth(Decimal(minutes) / merged),
+    }
+
+
+def measures_section(src: Any, today: date, pulls: Any) -> Any:
+    """For the full ISO week before `today`, the report's own week: the three kinds of SPEC-0056
+    rule 12 and the run minutes. Counts and timings only; each figure that cannot be read is
+    `unknown`, and the whole section when nothing can be read."""
+    monday = today - timedelta(days=today.weekday() + 7)
+    start, end = metrics.start_of(monday), metrics.start_of(monday + timedelta(days=7))
+    since = start.strftime("%Y-%m-%dT%H:%M:%SZ")
+    opened = plain_issues(get_list(src, "issues-open", "repos/{repo}/issues?state=open"))
+    closed = plain_issues(
+        get_list(src, "issues-closed", f"repos/{{repo}}/issues?state=closed&since={since}")
+    )
+    leaks = plain_issues(
+        get_list(
+            src, f"issues-{LEAK_LABEL}", f"repos/{{repo}}/issues?state=all&labels={LEAK_LABEL}"
+        )
+    )
+    minutes = None if src is None else week_minutes(src, start, end)
+    if opened is None and closed is None and leaks is None and minutes is None:
+        return UNKNOWN
+
+    def titled(listed: list, match: Any) -> list:
+        return [i for i in listed if match(str(i.get("title") or ""))]
+
+    def kind(match: Any) -> dict:
+        if opened is None or closed is None:
+            return dict(UNKNOWN_COUNTS)
+        return restore_counts(
+            titled(opened, match), titled(closed, match), opened_to_closed, start, end
+        )
+
+    restore = {
+        "red default branch": kind(lambda title: title == RED_TITLE),
+        "actions blocked": kind(lambda title: title.startswith(RECORD_TITLE)),
+        "leaked secret": dict(UNKNOWN_COUNTS),
+    }
+    if leaks is not None:
+        labelled = [
+            i for i in leaks if LEAK_LABEL in [x.get("name") for x in i.get("labels") or []]
+        ]
+        restore["leaked secret"] = restore_counts(
+            [i for i in labelled if not i.get("closed_at")],
+            [i for i in labelled if i.get("closed_at")],
+            lambda issue: leak_hours(issue.get("body")),
+            start,
+            end,
+        )
+    year, week, _ = monday.isocalendar()
+    return {
+        "week": f"{year}-W{week:02d}",
+        "restore": restore,
+        "run_minutes": run_minutes(minutes, pulls, start, end),
+    }
+
+
 # --- the audit's counts -----------------------------------------------------------------------
 
 
@@ -857,6 +1016,7 @@ def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
         "pull_requests": pulls,
         "flow": flow,
         "shadow": UNKNOWN if pulls == UNKNOWN else shadow_section(src, kept, authors),
+        "measures": measures_section(src, today, pulls),
         "issues": issues,
         "drift": drift_section(root, today, cfg, issues),
     }

@@ -25,6 +25,10 @@ The week 2026-W41, Monday 2026-10-05 to Sunday 2026-10-11 (UTC); the lists of wh
 ## Cost
 
 - unknown: pull requests could not be read — https://github.com/demo-org/demo-repo/pulls
+- restore red default branch: unknown closed, median unknown hours, unknown open — https://github.com/demo-org/demo-repo/issues
+- restore actions blocked: unknown closed, median unknown hours, unknown open — https://github.com/demo-org/demo-repo/issues
+- restore leaked secret: unknown closed, median unknown hours, unknown open — https://github.com/demo-org/demo-repo/issues
+- run minutes: unknown this week, unknown per merged pull request — https://github.com/demo-org/demo-repo/actions
 
 ## Flow
 
