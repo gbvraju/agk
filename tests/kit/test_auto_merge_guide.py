@@ -28,7 +28,8 @@ def script_lines() -> list[str]:
     """The lines of rule 2 as the script's docstring shows them: `merge-cleared #<n> <sha12>: ...`
     up to the reason, and the stop line."""
     text = SCRIPT.read_text(encoding="utf-8")
-    found = re.findall(r"^\s+(merge-cleared #<n> <sha12>: (?:merged|held|refused)[^ ]*)", text, re.M)
+    line = r"^\s+(merge-cleared #<n> <sha12>: (?:merged|held|refused)[^ ]*)"
+    found = re.findall(line, text, re.M)
     stopped = re.findall(r"^\s+(merge-cleared: stopped: default branch red after #<n>)", text, re.M)
     lines = sorted(set(found)) + stopped[:1]
     assert len(lines) == 4, lines
