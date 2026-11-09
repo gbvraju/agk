@@ -280,7 +280,7 @@ SCORECARD_LINES: dict[str, float | None] = {
     "pins_oldest_gap_days": 180,
     "kit_releases_behind": 3,
     "stale_guides": 0,
-    "goals_not_met": 0,  # SPEC-0051 rule 9
+    "goals_not_met": 0,  # SPEC-0051 rule 9 (verify)
 }
 SCORECARD_WINDOWS = {"trend_weeks": 4, "close_weeks": 2}  # (verify)
 
