@@ -2,8 +2,8 @@
 
 REQ-057 AC13. `session.py plan --record` appends one line per held brief and holder to
 `docs/runs/holds.jsonl`, kept out of git; after both merge one more line marks the hold;
-`metrics.py` reads the file and says `unknown` where it is absent. Local git fixtures and a `gh` stub; invented
-data only; no network."""
+`metrics.py` reads the file and says `unknown` where it is absent. Local git fixtures and a `gh`
+stub; invented data only; no network."""
 
 from __future__ import annotations
 
