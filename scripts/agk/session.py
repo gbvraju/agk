@@ -1095,7 +1095,11 @@ def held_elsewhere(s: Survey, number: int, own: list[str]) -> tuple[str, int] | 
 
     for held in own:
         for pr in s.prs:
-            if pr.get("state") == "open" and pr_brief(pr) != number and held in added_numbers(s, pr):
+            if (
+                pr.get("state") == "open"
+                and pr_brief(pr) != number
+                and held in added_numbers(s, pr)
+            ):
                 return held, pr["number"]
         for other, brief in sorted(s.briefs.items()):
             if other < number and held in (brief_reserved(str(brief.get("body") or "")) or []):

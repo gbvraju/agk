@@ -66,17 +66,25 @@ def merged_pull(stub_: RouteStub, n: int, text: str, merged: bool = True) -> Non
 
 
 def closed_event(n: int = 7) -> dict:
-    return {"action": "closed", "pull_request": {"number": n, "merged": True}, "repository": REPO_INFO}
+    return {
+        "action": "closed",
+        "pull_request": {"number": n, "merged": True},
+        "repository": REPO_INFO,
+    }
 
 
 def test_a_merged_pull_request_with_closes_closes_its_brief(route_proj, route_stub, tmp_path):  # noqa: F811
     proj, stub = route_proj, route_stub
     merged_pull(stub, 7, body(f"Brief: #{BRIEF}", f"Closes #{BRIEF}"))
-    stub.serve(f"issues/{BRIEF}", {"number": BRIEF, "state": "open", "labels": [{"name": "agk-brief"}]})
+    stub.serve(
+        f"issues/{BRIEF}", {"number": BRIEF, "state": "open", "labels": [{"name": "agk-brief"}]}
+    )
     stub.fixtures.setdefault(f"repos/{ROUTE_REPO}/issues/{BRIEF}/comments", [])
     run_router(proj, stub, tmp_path, "pull_request", closed_event())
     writes = [
-        w for w in stub.writes() if re.fullmatch(rf"repos/{ROUTE_REPO}/issues/{BRIEF}(/comments)?", w[1])
+        w
+        for w in stub.writes()
+        if re.fullmatch(rf"repos/{ROUTE_REPO}/issues/{BRIEF}(/comments)?", w[1])
     ]
     assert any("state=closed" in " ".join(map(str, w)) for w in writes), stub.writes()
 
@@ -128,7 +136,9 @@ def test_a_brief_with_no_reserved_line_gets_the_next_free_number(proj, stub):
 
 
 def test_the_next_free_number_skips_what_another_open_brief_reserves(proj, stub):
-    setup_take(proj, stub, [issue(5, brief("other/**") + "Reserved: ADR-0004\n"), issue(6, brief())])
+    setup_take(
+        proj, stub, [issue(5, brief("other/**") + "Reserved: ADR-0004\n"), issue(6, brief())]
+    )
     assert claim(proj, stub).returncode == 0
     assert " reserves ADR-0005" in taken(stub)
 
@@ -185,7 +195,9 @@ def red_issue(number: int = 66) -> dict:
 
 def with_plan_issue(proj_, stub_) -> None:
     flow(proj_, "plan_issue = 1")
-    stub_.serve(f"{ISSUES}/1", {"number": 1, "body": "## Wave 1\n", "title": "plan", "milestone": None})
+    stub_.serve(
+        f"{ISSUES}/1", {"number": 1, "body": "## Wave 1\n", "title": "plan", "milestone": None}
+    )
     stub_.serve(f"repos/{REPO}/milestones", [])
 
 
@@ -226,7 +238,9 @@ def test_the_merge_limit_stays_off_for_a_red_fix(proj, stub):
     free(stub, 66)
     at = (datetime.now(UTC) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
     ready = {**pr(21, 7), "labels": [{"name": "agk:ready"}]}
-    stub.serve(PULLS, [{**pr(20, 5, state="closed"), "merged_at": at}, ready, {**ready, "number": 22}])
+    stub.serve(
+        PULLS, [{**pr(20, 5, state="closed"), "merged_at": at}, ready, {**ready, "number": 22}]
+    )
     assert data(proj, stub)["start"], "the red brief is started"
 
 
@@ -241,5 +255,3 @@ def test_a_failed_read_of_the_merged_pull_requests_is_not_an_unknown_rate(proj, 
 def test_the_role_file_says_a_red_fix_brief_carries_the_wave():
     text = (ROOT / ".claude" / "agents" / "conductor.md").read_text(encoding="utf-8")
     assert "A brief that fixes a red default branch carries `Wave:` of the current wave" in text
-
-

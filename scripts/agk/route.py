@@ -28,7 +28,8 @@ No review, no merge, and one comment only: the reply `Correction needed:` to a v
 `Final:` line it cannot read (brief 238), and one comment `Unreadable: <rule>` for another
 conductor line it cannot read, which sets `agk:review` while it is the newest (brief #854). When a
 pull request merges (`pull_request` closed, the job runs only for a merge), the brief its body
-names with `Finishes: #n` or `Closes #n` beside `Brief: #n` is closed as completed, with one comment that names the merge commit (brief 302, ADR-0178); apart
+names with `Finishes: #n` or `Closes #n` beside `Brief: #n` is closed as completed, with one
+comment that names the merge commit (brief 302, ADR-0178); apart
 from the health issues below, that is the only other issue it closes. Messages name the rule,
 never a value.
 A covered fix list on the full head whose every `Final:` line accepts an ADR the pull request
@@ -519,14 +520,14 @@ UNREADABLE = "Unreadable:"
 
 
 def head_check(repo: str, n: int, body: str, head: str, files: list) -> str | None:
-    """`conductor.head_problem`, the check of the guard; a function so that a test can replace it."""
+    """`conductor.head_problem`, the guard's check; a function so that a test can replace it."""
     import conductor  # conductor imports merge_cleared, which imports this file
 
     return conductor.head_problem(repo, n, body, head, files)
 
 
 def form_lines(comments: list[dict], authors: list[str] | None) -> list[dict]:
-    """The comments of a listed verdict author whose first line is a conductor line, oldest first."""
+    """The comments of a listed author whose first line is a conductor line, oldest first."""
     allowed = {a.lstrip("@").lower() for a in authors or []}
     return [
         c

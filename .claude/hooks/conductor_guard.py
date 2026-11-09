@@ -25,7 +25,8 @@ judging of `git` and `gh api` is the architect's (`architect_guard.py`), which t
 A comment whose first line starts `Verdict:`, `Final:` or `Correction:` is denied unless
 `conductor.py check-verdict` accepts it, naming the failed rule (brief #854, ADR-0388; the reading
 the router applies, brief 238): on a pull request's comment endpoint that reads the pull request
-with GET, the one network read of this guard, and a read that fails is a denial. With the one argument `--shadow` (the shadow reviewer of SPEC-0035,
+with GET, the one network read of this guard, and a read that fails is a denial. With the one
+argument `--shadow` (the shadow reviewer of SPEC-0035,
 `.claude/agents/shadow.md`) the comment `POST` is allowed only on the issue-comment endpoint of the
 checkout's origin repository and with exactly one field: `-f body=Shadow: #<pr> <sha> cleared|fix
 list|rejected` followed by anything, or `-F body=@<file>` where the file is a regular file inside a
@@ -75,7 +76,8 @@ regular file; and its merge queue (brief #643 build (b), ADR-0329): exactly
 both in that order, the dry run always and a run that merges only when `[flow] auto_merge` reads
 `on` in both places, as `merge_cleared.py` below; for that one the hook prints the same explicit
 `allow` decision. Brief #700 (ADR-0330): exactly `... rerun --pr <n>`, with `--apply` after it,
-`... check-verdict <path>` (with `--pr <n>` after it, brief #854) and `... lease --show`, `... lease --take <name>` or `... lease
+`... check-verdict <path>` (with `--pr <n>` after it, brief #854) and `... lease --show`,
+`... lease --take <name>` or `... lease
 --release <name>` too, the same regular file. Brief #781 (ADR-0366): exactly `... over --pr <n>`,
 which only reads GitHub. Every other form stays denied.
 Without `--shadow` the conductor may also merge a pull request it cleared (brief #531, ADR-0265,
@@ -345,9 +347,7 @@ def verdict_denial(command: object) -> str | None:
     import conductor  # read only for such a line: it imports most of the kit
 
     targets = [
-        m
-        for m in map(ISSUE_COMMENTS.fullmatch, words[2:])
-        if m and comment_target_ok(m.group(0))
+        m for m in map(ISSUE_COMMENTS.fullmatch, words[2:]) if m and comment_target_ok(m.group(0))
     ]
     try:
         problem = (
@@ -554,8 +554,10 @@ def routine_form(rest: list[str]) -> bool:
     if rest[:1] == ["lease"]:
         if rest[1:] == ["--show"]:
             return True
-        return len(rest) == 3 and rest[1] in ("--take", "--release") and bool(
-            SESSION_NAME.fullmatch(rest[2])
+        return (
+            len(rest) == 3
+            and rest[1] in ("--take", "--release")
+            and bool(SESSION_NAME.fullmatch(rest[2]))
         )
     return False
 

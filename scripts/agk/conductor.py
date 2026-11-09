@@ -378,7 +378,9 @@ def held_verdict_line(root, repo: str, pull: dict, authors, now) -> str | None:
         for c in comments
         if session.author_of(c) in allowed and not session.first_line(c).startswith(ALIVE)
     ]
-    if any(now - session.moment(c.get("created_at")) <= timedelta(minutes=HELD_MINUTES) for c in spoken):
+    if any(
+        now - session.moment(c.get("created_at")) <= timedelta(minutes=HELD_MINUTES) for c in spoken
+    ):
         return None
     if session.check_state(repo, root, head)[0] != "green":
         return None
@@ -975,10 +977,12 @@ HEAD_RUNS = "repos/{}/actions/runs?event=pull_request&head_sha={}&per_page=100"
 DRAFT_STEP = ("ccr/convert_to_draft", "ccr/ready_for_review")  # the runtime's routes (verify)
 ADR_FILE = re.compile(r"docs/adr/\d{4}-[^/]+\.md")
 VERDICT_SHAPE = "the first line is not `Verdict: cleared|fix list|rejected <sha>` (session rule 1)"
-CORRECTION_EMPTY = "a Correction: line needs its text: 'Correction: <what was wrong>; <what stands>'"
+CORRECTION_EMPTY = (
+    "a Correction: line needs its text: 'Correction: <what was wrong>; <what stands>'"
+)
 APPROVAL_SHAPE = (
     "SPEC-0032 rule 5: an Approval: line reads 'Approval: SPEC-<n> <path> Draft -> Approved, "
-    "waiting for a person: post \"Approve: SPEC-<n>\"'"
+    'waiting for a person: post "Approve: SPEC-<n>"\''
 )
 FINAL_PATH = "SPEC-0021 rule 2: a Final: line names a path that does not exist on the head"
 NO_ITEMS = (
@@ -1077,7 +1081,9 @@ def adr_is_proposed(repo: str, path: str, head: str) -> bool:
     return "- Status: Proposed" in text.splitlines()
 
 
-def head_problem(repo: str, number: int, body: str, head: str, files: list | None = None) -> str | None:
+def head_problem(
+    repo: str, number: int, body: str, head: str, files: list | None = None
+) -> str | None:
     """The rule a verdict that names HEAD breaks against the pull request (brief #854 answer 1), or
     None. It reads only what the verdict needs; a read that fails is a CheckError, never `ok`."""
     text = body.strip()
@@ -1122,7 +1128,11 @@ def check_verdict(path: str, root=None, number: int | None = None) -> int:
         body = Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise CheckError("the verdict file cannot be read") from exc
-    problem = line_problem(body) if number is None else full_problem(session.repo_name(root), number, body)
+    problem = (
+        line_problem(body)
+        if number is None
+        else full_problem(session.repo_name(root), number, body)
+    )
     print("ok" if problem is None else problem)
     return 0 if problem is None else 1
 

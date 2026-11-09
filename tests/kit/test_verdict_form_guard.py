@@ -154,7 +154,11 @@ def hook(project: Path, tmpdir: Path, text: str, endpoint: str = "repos/o/r/issu
     }
     payload = {"tool_name": "Bash", "tool_input": {"command": command}}
     out = subprocess.run(  # nosec B603 - fixed argument list, no shell
-        [sys.executable, str(HOOK)], input=json.dumps(payload), capture_output=True, text=True, env=env
+        [sys.executable, str(HOOK)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env=env,
     )
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout)["hookSpecificOutput"] if out.stdout.strip() else None
@@ -217,7 +221,10 @@ def test_the_router_reads_the_newest_line_with_the_same_check(monkeypatch):
     other = said(3, "builder", "Correction:\n")
     f = facts(head=HEAD, comments=[bad, good, other])
     assert route.unreadable_lines("o/r", 7, f) == [(bad, common.NOT_FIX_LIST)]
-    assert route.newest_is_unreadable(f["comments"], f["authors"], route.unreadable_lines("o/r", 7, f)) is False
+    assert (
+        route.newest_is_unreadable(f["comments"], f["authors"], route.unreadable_lines("o/r", 7, f))
+        is False
+    )
     bad = said(4, "boss", bad["body"])
     f = facts(head=HEAD, comments=[good, bad])
     found = route.unreadable_lines("o/r", 7, f)
