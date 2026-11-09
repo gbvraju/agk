@@ -104,7 +104,7 @@ def test_ac9_a_wrong_value_is_refused_naming_the_setting_never_the_value(proj, s
 
 
 def test_ac9_a_wildcard_all_of_whose_files_are_prose_holds_nothing(proj, stub):
-    """REQ-057 AC9: item 3, a folder or wildcard entry is in a class when every file it matches is."""
+    """REQ-057 AC9: item 3, a folder or wildcard is in a class when every file it matches is."""
     proj.commit({GUIDE: "a\n", "docs/guides/b.md": "b\n"})
     for entry in ("docs/guides/*.md", "docs/guides/"):
         assert started(together(proj, stub, entry, GUIDE)) == [5, 6]
@@ -128,8 +128,6 @@ def test_ac9_shared_prose_is_still_merged_one_after_the_other(proj, stub):
     stub.serve(PULLS, [labelled(20, 7, "agk:ready"), labelled(21, 8, "agk:ready")])
     changed(stub, 20, ("modified", GUIDE))
     changed(stub, 21, ("modified", GUIDE))
-    for n in (20, 21):
-        stub.serve(f"repos/{REPO}/compare/main...{'a' * 40}", {"behind_by": 0})
     picked = data(proj, stub)["merge_set"]
     assert picked["together"] == [20] and picked["later"] == [
         {"pr": 21, "after": 20, "shares": GUIDE}
