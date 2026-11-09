@@ -107,10 +107,10 @@ def _bytes(root: Path, args: list[str], given: bytes | None = None) -> bytes:
     return done.stdout
 
 
-def listing(root: Path) -> dict[str, tuple[str, int]]:
+def listing(root: Path, ref: str = "HEAD") -> dict[str, tuple[str, int]]:
     """Path -> (blob id, size) of each regular file at the head; a non-UTF-8 name is left out."""
     found = {}
-    for record in _bytes(root, ["ls-tree", "-r", "-l", "-z", "HEAD"]).split(b"\0"):
+    for record in _bytes(root, ["ls-tree", "-r", "-l", "-z", ref]).split(b"\0"):
         head, _, raw = record.partition(b"\t")
         fields = head.split()
         if len(fields) == 4 and fields[0] in (b"100644", b"100755"):
@@ -540,12 +540,8 @@ def schema_links(root: Path, tree: dict[str, tuple[str, int]]) -> dict[str, set[
     return {s: levels for s, levels in links.items() if levels}
 
 
-def entries(root: Path, tree: dict[str, tuple[str, int]]) -> tuple[dict[str, set[str]], bool]:
-    """Code path -> the tests that guard it, and whether a tsconfig could not be read."""
-    dirs, patterns = head_settings(root, tree)
-    files, configs = set(tree), TsConfigs(root, tree)
-    usable = {p for p in files if p.strip() and not NOT_A_GLOB.search(p)}
-    tests = sorted(p for p in usable if is_test_file(p, dirs, patterns))
+def source_texts(root: Path, tree: dict[str, tuple[str, int]]) -> dict[str, str]:
+    """Path -> text of each source and stack file of the tree that is small enough to read."""
     read = [
         p
         for p, v in tree.items()
@@ -553,7 +549,14 @@ def entries(root: Path, tree: dict[str, tuple[str, int]]) -> tuple[dict[str, set
         and (p.endswith((".py", ".go", *JS_SOURCES)) or posixpath.basename(p) in STACK_FILES)
     ]
     found = blobs(root, [tree[p][0] for p in read])
-    texts = {p: found[tree[p][0]] for p in read}
+    return {p: found[tree[p][0]] for p in read}
+
+
+def import_edges(
+    tree: dict[str, tuple[str, int]], texts: dict[str, str], configs: TsConfigs
+) -> dict[str, set[str]]:
+    """Each source file -> the files of the tree it imports directly."""
+    files = set(tree)
     deps: dict[str, set[str]] = {}
     go = GoModules(tree, texts)
     for path, text in texts.items():
@@ -563,6 +566,29 @@ def entries(root: Path, tree: dict[str, tuple[str, int]]) -> tuple[dict[str, set
             deps[path] = go.edges(path, text)
         elif path.endswith(JS_SOURCES):
             deps[path] = js_edges(path, text, files, configs)
+    return deps
+
+
+def importers_of(root: Path, head: str, targets: list[str]) -> dict[str, set[str]]:
+    """Each of TARGETS -> the files at HEAD that import it directly (brief #878, ADR-0393)."""
+    tree = listing(root, head)
+    deps = import_edges(tree, source_texts(root, tree), TsConfigs(root, tree))
+    wanted = set(targets)
+    found: dict[str, set[str]] = {t: set() for t in targets}
+    for path, imported in deps.items():
+        for target in (imported - {path}) & wanted:
+            found[target].add(path)
+    return found
+
+
+def entries(root: Path, tree: dict[str, tuple[str, int]]) -> tuple[dict[str, set[str]], bool]:
+    """Code path -> the tests that guard it, and whether a tsconfig could not be read."""
+    dirs, patterns = head_settings(root, tree)
+    files, configs = set(tree), TsConfigs(root, tree)
+    usable = {p for p in files if p.strip() and not NOT_A_GLOB.search(p)}
+    tests = sorted(p for p in usable if is_test_file(p, dirs, patterns))
+    texts = source_texts(root, tree)
+    deps = import_edges(tree, texts, configs)
     unit_edges(files, set(tests), texts, deps)
     for test in (t for t in tests if t.endswith(".py")):  # pytest loads each conftest above a test
         above = package_roots(posixpath.dirname(test))[::2]

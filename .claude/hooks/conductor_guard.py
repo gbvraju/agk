@@ -22,9 +22,11 @@ A scratch directory is `agk-conductor-<name>` directly in the system temp direct
 the work tree. A POST
 to anything else, a PATCH, a PUT, a DELETE, any other script and any other `make` are denied. The
 judging of `git` and `gh api` is the architect's (`architect_guard.py`), which this file imports.
-A comment whose body starts with `Verdict:` is read with `common.verdict_problem` (the reading the
-router applies, brief 238) and denied, with that message, when the router could not read a `Final:`
-line of it. With the one argument `--shadow` (the shadow reviewer of SPEC-0035,
+A comment whose first line starts `Verdict:`, `Final:` or `Correction:` is denied unless
+`conductor.py check-verdict` accepts it, naming the failed rule (brief #854, ADR-0388; the reading
+the router applies, brief 238): on a pull request's comment endpoint that reads the pull request
+with GET, the one network read of this guard, and a read that fails is a denial. With the one
+argument `--shadow` (the shadow reviewer of SPEC-0035,
 `.claude/agents/shadow.md`) the comment `POST` is allowed only on the issue-comment endpoint of the
 checkout's origin repository and with exactly one field: `-f body=Shadow: #<pr> <sha> cleared|fix
 list|rejected` followed by anything, or `-F body=@<file>` where the file is a regular file inside a
@@ -74,7 +76,8 @@ regular file; and its merge queue (brief #643 build (b), ADR-0329): exactly
 both in that order, the dry run always and a run that merges only when `[flow] auto_merge` reads
 `on` in both places, as `merge_cleared.py` below; for that one the hook prints the same explicit
 `allow` decision. Brief #700 (ADR-0330): exactly `... rerun --pr <n>`, with `--apply` after it,
-`... check-verdict <path>` and `... lease --show`, `... lease --take <name>` or `... lease
+`... check-verdict <path>` (with `--pr <n>` after it, brief #854) and `... lease --show`,
+`... lease --take <name>` or `... lease
 --release <name>` too, the same regular file. Brief #781 (ADR-0366): exactly `... over --pr <n>`,
 which only reads GitHub. Every other form stays denied.
 Without `--shadow` the conductor may also merge a pull request it cleared (brief #531, ADR-0265,
@@ -93,7 +96,8 @@ by name in both modes: only the person posts it, from the browser or the GitHub 
 A comment `POST` whose `body=@` file is not an absolute path is refused with a message that names
 the likely cause (a backslash path loses its backslashes in a POSIX shell such as Git Bash), so
 that the conductor writes the forward-slash form; nothing more is allowed by it.
-The message names the rule, never the command or the path. Standard library only; no network.
+The message names the rule, never the command or the path. Standard library only; no network but
+the reads of `check-verdict` named above.
 """
 
 from __future__ import annotations
@@ -162,6 +166,8 @@ SHADOW_BODY = re.compile(
 POST_METHODS = ("--method", "-X")
 FIELDS = ("-f", "--raw-field")
 FILE_FIELDS = ("-F", "--field")
+FORM_LINES = ("Verdict:", "Final:", "Correction:")  # the conductor's lines AGK reads (brief #854)
+ISSUE_COMMENTS = re.compile(r"/?repos/([^/\s]+/[^/\s]+)/issues/(\d+)/comments")
 ISSUES_ENDPOINT = re.compile(r"^/?repos/([^/\s]+)/([^/\s]+)/issues$")
 BRIEF_LABEL = "labels[]=agk-brief"
 BODY_LIMIT = 65536  # GitHub's limit of an issue body; a longer file is not read in part
@@ -327,12 +333,32 @@ def confirmed_denial(command: object) -> str | None:
 
 
 def verdict_denial(command: object) -> str | None:
-    """The reason to deny a comment whose body is a `Verdict:` with a problem, else None."""
+    """The reason to deny a comment that `conductor.py check-verdict` would not accept, else None
+    (brief #854 answer 1). A body on no issue's comment endpoint is read from its text alone."""
     words = tokens_of(command) if isinstance(command, str) else None
     if not words or words[:2] != ["gh", "api"]:
         return None
     body = comment_body(words)
-    problem = READ_VERDICT(body) if body is not None and READ_VERDICT else None
+    text = body.strip() if body is not None else ""
+    if not text.startswith(FORM_LINES):
+        return None
+    if READ_VERDICT is None:  # a checkout without the scripts: the hook cannot judge a line
+        return None
+    import conductor  # read only for such a line: it imports most of the kit
+
+    targets = [
+        m for m in map(ISSUE_COMMENTS.fullmatch, words[2:]) if m and comment_target_ok(m.group(0))
+    ]
+    try:
+        problem = (
+            conductor.full_problem(targets[0].group(1), int(targets[0].group(2)), text)
+            if targets
+            else conductor.line_problem(text)
+        )
+    except common.CheckError as exc:
+        problem = str(exc)
+    except OSError:  # no `gh` to read the pull request with: the check did not accept the line
+        problem = "the pull request cannot be read"
     return f"conductor guard rule 6: {problem}" if problem else None
 
 
@@ -522,12 +548,16 @@ def routine_form(rest: list[str]) -> bool:
     if rest[:2] == ["over", "--pr"]:
         return len(rest) == 3 and bool(MERGE_PR.fullmatch(rest[2]))
     if rest[:1] == ["check-verdict"]:
-        return len(rest) == 2 and bool(rest[1]) and not rest[1].startswith("-")
+        path_ok = len(rest) > 1 and bool(rest[1]) and not rest[1].startswith("-")
+        with_pr = len(rest) == 4 and rest[2] == "--pr" and bool(MERGE_PR.fullmatch(rest[3]))
+        return path_ok and (len(rest) == 2 or with_pr)
     if rest[:1] == ["lease"]:
         if rest[1:] == ["--show"]:
             return True
-        return len(rest) == 3 and rest[1] in ("--take", "--release") and bool(
-            SESSION_NAME.fullmatch(rest[2])
+        return (
+            len(rest) == 3
+            and rest[1] in ("--take", "--release")
+            and bool(SESSION_NAME.fullmatch(rest[2]))
         )
     return False
 
