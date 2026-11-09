@@ -84,6 +84,7 @@ def status(tmp_path: Path, *extra: str, api: bool = True, capsys=None) -> tuple[
     args = ["status", "--date", TODAY, "--root", str(tmp_path)]
     if api:
         args += ["--issue", str(NUMBER), "--api-dir", str(tmp_path / "api")]
+    capsys.readouterr()  # a fixture's `discovery-write` printed its own line
     code = front_door.main([*args, *extra])
     out = capsys.readouterr()
     return code, out.out + out.err
@@ -505,7 +506,7 @@ def test_ac7_a_sidecar_keeps_the_vision_door(tmp_path, capsys):
 def test_ac7_the_conductor_file_carries_the_drive():
     """REQ-055 AC7: SPEC-0048 rule 13 (the steps are in the conductor's file)."""
     text = (KIT_ROOT / ".claude/agents/conductor.md").read_text(encoding="utf-8")
-    start = text.index("Auto-pilot (SPEC-0048 rule 13).")
+    start = text.index("Auto-pilot (REQ-055).")
     step = text[start : text.index("\n", start)]
     for needle in (
         '`[flow] assign = "conductor"`',
@@ -523,5 +524,5 @@ def test_ac7_the_session_rules_place_the_two_lines():
     """REQ-055 AC7: SPEC-0048 rule 13 and Q-S0048-4 (a session never posts the owner's line)."""
     text = (KIT_ROOT / "config/session-rules.md").read_text(encoding="utf-8")
     rule = next(ln for ln in text.splitlines() if ln.startswith("17. "))
-    assert "On a problem issue: only a listed approver posts `Auto-pilot: on`" in rule
+    assert "On problem issues: only an approver posts `Auto-pilot: on`" in rule
     assert "the conductor posts `Discovery: round <n>`" in rule
