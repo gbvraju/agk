@@ -25,12 +25,17 @@ This is build (a) of brief #842, its answer 1. It changes item 8 of ADR-0153 for
 2. A value that a team sets still decides, and a value that is not a whole number of 1 or more is still refused, naming
    the setting.
 3. This repository's `agk.toml` sets `reviews_in_flight = 9` in `[flow]`, equal to its `max_builders`.
+4. A pull request counts as waiting for a verdict only when it is not a draft, its author's newest `Report:` says
+   `ready for review`, `fix list applied` or `merge of main`, and no `Verdict:` by a listed author names its head. The
+   label `agk:review` alone no longer counts, because the router also puts it on drafts still being built. Where its
+   comments cannot be read, the label decides, as before, so a failed read frees no review slot.
 
 ## Consequences
 
 One setting decides the count unless a team lowers review on purpose. A project that sets neither key keeps 3, because
 `max_builders` defaults to 3. A project that raised `max_builders` and left `reviews_in_flight` unset now starts more
 sessions while pull requests wait for a verdict; it sets `reviews_in_flight` to keep the lower figure.
+`session.py plan` makes one more paged read of the comments per open builder pull request that is not a draft.
 
 ## Residual
 
