@@ -1,6 +1,7 @@
 """The evidence pack's form, its release test and its offline check (SPEC-0052 build (b),
 brief #769, rules 2, 4 and 10, ADR-0343), and `make` from git (build (c), brief #820, rules 3, 8
-and 9), and the required checks and scans read from GitHub (build (d), brief #829, rules 5 and 6).
+and 9), and the parts read from GitHub (build (d), briefs #829 and #832, rules 5, 6, 7
+and 9).
 
 REQ-059 AC2 and AC8. `release_pack.py check <out>/<tag>` reads the folder and the repository's
 git only and prints `ok pack`, one `FAIL pack:` line per problem or one `refused:` line. Fixtures
@@ -17,10 +18,12 @@ import socket
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import kit_hashes
 import pytest
+import release_pack
 
 KIT = Path(__file__).resolve().parents[2]
 SCRIPT = KIT / "scripts" / "agk" / "release_pack.py"
@@ -700,30 +703,34 @@ def billed(tmp_path):
     return kit_repo(tmp_path, bill=True), tmp_path / "out"
 
 
-def test_ac1_make_writes_this_builds_parts_in_the_tags_folder_and_changes_nothing(billed):
-    """REQ-059 AC1: rules 2 and 3 (only `<out>/<tag>/`; the repository is left as it was)."""
+def test_ac1_make_writes_exactly_the_six_files_and_the_check_prints_ok_pack(billed, tmp_path):
+    """REQ-059 AC1: rules 2 and 3 (only the folder, digests in the index, no change)."""
     root, out = billed
+    api = saved(root, tmp_path)
     before = state(root)
-    done = make(root, out)
+    done = make(root, out, api=api)
     assert done.returncode == 0, done.stdout
-    assert sorted(p.name for p in (out / TAG).iterdir()) == [
-        "bom.json",
-        "decisions.json",
-        "scans.json",
-        "tests.json",
-    ]
+    assert sorted(p.name for p in (out / TAG).iterdir()) == sorted([*PARTS, "pack.json"])
     assert [p.name for p in out.iterdir()] == [TAG]
     assert state(root) == before
+    index = part(out, "pack.json")
+    assert index["schema"] == 1 and index["tag"] == TAG
+    assert datetime.strptime(index["date"], "%Y-%m-%d")
+    assert index["commit"] == git(root, "rev-parse", f"refs/tags/{TAG}^{{commit}}")
+    assert index["parts"] == {
+        n: hashlib.sha256((out / TAG / n).read_bytes()).hexdigest() for n in PARTS
+    }
+    assert check(root, out / TAG).stdout.splitlines()[-1] == "ok pack"
 
 
-def test_ac1_a_part_of_this_build_is_only_what_build_d_leaves_short_of_a_pack(billed):
-    """REQ-059 AC8: rule 10 (until brief #832 the check says the pack is not whole)."""
+def test_ac8_a_pack_made_with_nothing_readable_is_whole_and_warns(billed):
+    """REQ-059 AC8: rule 10 (what cannot be read is `unknown`, a warning and not a failure)."""
     root, out = billed
     make(root, out)
     done = check(root, out / TAG)
-    assert done.returncode == 1 and "FAIL pack: coverage.json is missing" in done.stdout
-    for name in ("bom.json", "scans.json", "tests.json"):
-        assert f"FAIL pack: {name}" not in done.stdout
+    assert done.returncode == 0, done.stdout
+    assert "warn pack: tests.json unknown unknown" in done.stdout
+    assert "warn pack: scans.json secret unknown" in done.stdout
 
 
 def test_ac6_the_bill_names_files_pins_and_actions_at_the_tag(billed):
@@ -816,6 +823,8 @@ def test_ac7_the_decisions_between_two_releases_skip_a_tag_that_is_not_one(bille
         "schema": 1,
         "adrs": [1],
         "requirements": [{"id": "REQ-001", "from": "planned", "to": "done"}],
+        "failure_issues": UNREAD_ISSUES,
+        "scorecard_week": "unknown",
         "skipped_tags": ["v1.1.5"],
     }
 
@@ -831,6 +840,8 @@ def test_ac7_with_no_earlier_release_the_range_starts_at_the_first_commit(billed
             {"id": "REQ-001", "from": "none", "to": "planned"},
             {"id": "REQ-002", "from": "none", "to": "done"},
         ],
+        "failure_issues": UNREAD_ISSUES,
+        "scorecard_week": "unknown",
         "skipped_tags": [],
     }
 
@@ -929,18 +940,47 @@ def test_ac6_make_opens_no_socket(billed, monkeypatch, capsys):
     capsys.readouterr()
 
 
-# Build (d): the required checks and the scans (rules 5 and 6), from saved responses.
+# Build (d): the parts read from GitHub (rules 5, 6, 7 and 9), saved responses and a `gh` stub.
 
+UNREAD_ISSUES = [{"number": "unknown", "state": "unknown"}]
+UNREAD_COVERAGE = {"schema": 1, "covered": "unknown", "date": "unknown"}
 NO_SCANNER = {"kind": "dependency", "scanner": "none", "version": "none", "outcome": "not run"}
+AUDIT = (
+    "agk drift audit {day} (window a to b): findings=1\n\n"
+    "- D9 coverage | SPEC-0004 rule 25 | covered 81.5%, change since the previous audit: unknown\n"
+)
 ROUTES = {
     "/rules/branches/main": "rules-branch",
     "/check-runs": "check-runs",
     "/actions/runs/77/jobs": "run-jobs-77",
+    "/issues": "issues-drift-audit",
+    "/pulls": "pulls",
+    "/issues/12": "issue-12",
+    "/issues/13": "issue-13",
 }
 
 
+def tag_day(root: Path, tag=TAG):
+    stamp = int(git(root, "show", "-s", "--format=%ct", f"refs/tags/{tag}^{{commit}}"))
+    return datetime.fromtimestamp(stamp, UTC).date()
+
+
+def weeks(day) -> str:
+    """The scorecard's section: a column dated D holds the week D-7 to D-1 (`scorecard.render`)."""
+    days = [day - timedelta(days=6), day + timedelta(days=1), day + timedelta(days=8)]
+    return (
+        "<!-- scorecard weeks -->\n"
+        f"| metric | line | {days[0]} | {days[1]} | {days[2]} |\n| --- | --- | --- | --- | --- |\n"
+        "| red_hours | 4 | 3 | 1 | 9 |\n| flaky_rate | - | unknown | unknown | 2 |\n"
+        "<!-- /scorecard weeks -->\n"
+    )
+
+
 def responses(root: Path, **over) -> dict:
+    sha = git(root, "rev-parse", f"refs/tags/{TAG}^{{commit}}")
     url = "https://example.com/o/r/actions/runs/{}/job/1"
+    label = [{"name": "found-bug"}]
+    body = "Summary: a line of a body\nFixes-failure: #{}\n"
     data = {
         "rules-branch": [
             {"type": "pull_request", "parameters": {}},
@@ -969,6 +1009,31 @@ def responses(root: Path, **over) -> dict:
             ]
         },
         "run-jobs-77": {"jobs": [{"steps": [{"name": "Secret scan", "conclusion": "success"}]}]},
+        "issues-drift-audit": [
+            {"number": 150, "body": AUDIT.format(day="2000-01-03") + weeks(tag_day(root))}
+        ],
+        "pulls": [
+            {
+                "number": 5,
+                "merge_commit_sha": sha,
+                "merged_at": "2026-01-01T00:00:00Z",
+                "body": body.format(12),
+            },
+            {
+                "number": 4,
+                "merge_commit_sha": sha,
+                "merged_at": "2026-01-01T00:00:00Z",
+                "body": body.format(13),
+            },
+            {
+                "number": 3,
+                "merge_commit_sha": "0" * 40,
+                "merged_at": "2026-01-01T00:00:00Z",
+                "body": body.format(14),
+            },
+        ],
+        "issue-12": {"state": "closed", "labels": label, "user": {"login": "a-person-example"}},
+        "issue-13": {"state": "open", "labels": [{"name": "agk-brief"}]},
     }
     data.update(over)
     return data
@@ -1032,6 +1097,7 @@ else:
     assert all(any(p.endswith(key) for p in paths) for key in ROUTES), paths
     assert part(out, "tests.json")["checks"][0]["conclusion"] == "success"
     assert part(out, "scans.json")["scans"][0]["outcome"] == "passed"
+    assert part(out, "coverage.json")["covered"] == 81.5
 
 
 def test_ac1_a_pack_is_not_written_for_a_tag_that_is_not_a_release_with_api_dir(tmp_path):
@@ -1180,6 +1246,111 @@ def test_ac4_a_dependency_scanner_in_a_workflow_is_not_recorded_as_not_run(tmp_p
         "version": "unknown",
         "outcome": "unknown",
     }
+
+
+def test_ac5_the_d9_line_of_an_earlier_report_is_the_figure(billed, tmp_path):
+    """REQ-059 AC5: rule 7 (the percentage with that report's date)."""
+    assert made(billed, tmp_path, "coverage.json") == {
+        "schema": 1,
+        "covered": 81.5,
+        "date": "2000-01-03",
+    }
+
+
+@pytest.mark.parametrize(
+    "issues",
+    [
+        None,
+        [],
+        [{"body": AUDIT.format(day="2999-01-01")}],
+        [{"body": "agk drift audit 2000-01-03 (window a to b): findings=0\n"}],
+        [{"body": AUDIT.format(day="2000-01-03")}, {"body": AUDIT.format(day="2000-01-04")}],
+        [{"body": None}],
+    ],
+)
+def test_ac5_a_later_or_unreadable_report_is_unknown_never_zero(billed, tmp_path, issues):
+    """REQ-059 AC5: rule 7 (after the tag, no line, no issue, or not the one open issue)."""
+    data = made(billed, tmp_path, "coverage.json", **{"issues-drift-audit": issues})
+    assert data == UNREAD_COVERAGE
+
+
+def test_ac5_the_coverage_command_is_never_started(billed, tmp_path):
+    """REQ-059 AC5: rule 7 (a command that leaves a marker leaves none)."""
+    root, _ = billed
+    marker = tmp_path / "marker"
+    with (root / "agk.toml").open("a", encoding="utf-8") as handle:
+        handle.write(f"coverage = 'touch {marker}'\n")
+    made(billed, tmp_path, "coverage.json")
+    assert not marker.exists()
+
+
+def test_ac7_the_failure_issues_and_the_scorecard_week(billed, tmp_path):
+    """REQ-059 AC7: rule 9 (found-bug only, in the range; the week that holds the tag's date)."""
+    data = made(billed, tmp_path, "decisions.json")
+    assert data["failure_issues"] == [{"number": 12, "state": "closed"}]
+    assert data["scorecard_week"] == [
+        {"metric": "red_hours", "value": "1"},
+        {"metric": "flaky_rate", "value": "unknown"},
+    ]
+
+
+def test_ac7_an_issue_that_cannot_be_read_keeps_its_number(billed, tmp_path):
+    """REQ-059 AC7: rule 9 (named by a merged fix, its state is `unknown`)."""
+    data = made(billed, tmp_path, "decisions.json", **{"issue-12": None, "issue-13": None})
+    assert data["failure_issues"] == [
+        {"number": 12, "state": "unknown"},
+        {"number": 13, "state": "unknown"},
+    ]
+
+
+def test_ac7_pulls_that_cannot_be_read_are_unknown_never_none_fixed(billed, tmp_path):
+    """REQ-059 AC7: rule 9 (an empty list would say that no failure was fixed)."""
+    assert made(billed, tmp_path, "decisions.json", pulls=None)["failure_issues"] == UNREAD_ISSUES
+
+
+def test_ac7_no_week_holds_the_tag_when_the_columns_miss_it(billed, tmp_path):
+    """REQ-059 AC7: rule 9 (the audit issue holds later weeks only: `unknown`)."""
+    root, _ = billed
+    body = AUDIT.format(day="2000-01-03") + weeks(tag_day(root) + timedelta(days=30))
+    data = made(billed, tmp_path, "decisions.json", **{"issues-drift-audit": [{"body": body}]})
+    assert data["scorecard_week"] == "unknown"
+
+
+def test_ac7_the_week_of_the_tag_is_the_seven_days_before_a_column(billed, tmp_path):
+    """REQ-059 AC7: rule 9 (a column dated D holds D-7 to D-1: D itself and D-8 do not)."""
+    root, _ = billed
+    day = tag_day(root)
+    head = "| metric | line | {} |\n| --- | --- | --- |\n| red_hours | 4 | 2 |\n"
+    results = []
+    for column in (day, day + timedelta(days=1), day + timedelta(days=7), day + timedelta(days=8)):
+        body = f"<!-- scorecard weeks -->\n{head.format(column)}<!-- /scorecard weeks -->\n"
+        results.append(release_pack.scorecard_week(body, day))
+    held = [{"metric": "red_hours", "value": "2"}]
+    assert results == ["unknown", held, held, "unknown"] and made(billed, tmp_path, "tests.json")
+
+
+def test_ac7_a_cell_is_a_number_or_not_applicable_and_an_empty_section_is_unknown(billed, tmp_path):
+    """REQ-059 AC7: rule 9 (a cell is read as the scorecard reads it, never copied as it stands)."""
+    root, _ = billed
+    day = tag_day(root) + timedelta(days=1)
+    cells = "| red_hours | 4 | not applicable |\n| flaky_rate | - | a line of a body |\n"
+    table = f"| metric | line | {day} |\n| --- | --- | --- |\n{cells}"
+    body = f"<!-- scorecard weeks -->\n{table}<!-- /scorecard weeks -->\n"
+    data = made(billed, tmp_path, "decisions.json", **{"issues-drift-audit": [{"body": body}]})
+    assert data["scorecard_week"] == [
+        {"metric": "red_hours", "value": "not applicable"},
+        {"metric": "flaky_rate", "value": "unknown"},
+    ]
+    empty = "<!-- scorecard weeks --><!-- /scorecard weeks -->"
+    assert release_pack.scorecard_week(empty, day) == "unknown"
+
+
+def test_ac7_no_part_holds_a_login_or_a_line_of_a_body(billed, tmp_path):
+    """REQ-059 AC7: rule 11 (ids, names, statuses, digests and counts only)."""
+    root, out = billed
+    made(billed, tmp_path, "tests.json")
+    text = "".join((out / TAG / n).read_text() for n in PARTS)
+    assert "a-person-example" not in text and "a line of a body" not in text and root.is_dir()
 
 
 @pytest.mark.parametrize("extra", [["--api-dir"], ["--bad", "x"], ["--tag", "v2"]])
