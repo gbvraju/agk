@@ -234,6 +234,17 @@ def test_ac13_a_rename_is_unknown(repo, commits):
     assert mark(repo, first, repo.git("rev-parse", "HEAD").strip()) == "unknown"
 
 
+def test_ac13_a_binary_file_changed_by_both_is_unknown(repo, commits):
+    """REQ-057 AC13: item 7, a file with no lines cannot be mapped."""
+    shas = []
+    for content in (b"\0one", b"\0two"):
+        (repo.root / "b.bin").write_bytes(content)
+        repo.git("add", "-A")
+        repo.git("commit", "-qm", "bin")
+        shas.append(repo.git("rev-parse", "HEAD").strip())
+    assert mark(repo, shas[0], shas[1], "b.bin") == "unknown"
+
+
 def test_ac13_a_folder_entry_is_unknown(repo, commits):
     """REQ-057 AC13: item 7, two folders clash on a folder, which has no lines to map."""
     repo.write("d/one.txt", "1\n")

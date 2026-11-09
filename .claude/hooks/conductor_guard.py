@@ -38,6 +38,8 @@ Without `--shadow` the conductor may also file a brief (brief 276, ADR-0170): th
 directory (no link out of it, at most 65536 characters) that `check_brief.py FILE --root <project>`
 accepts. Any other label or a second one, another field or flag, another repository, an issue
 edit, a label creation and an inline body stay denied; the shadow mode files nothing.
+Without `--shadow` the conductor may also try a wave before filing it (amendment 141 item 6):
+exactly `python3 scripts/agk/session.py plan --what-if <dir>`, the dir a scratch directory.
 Without `--shadow` the conductor may also read its queue (brief 284, ADR-0175) with the project's
 own script, the regular file `scripts/agk/session.py` of the project directory (named relative to
 the session's working directory or by its full path, never through a link): exactly
@@ -444,6 +446,19 @@ def tell_form(args: list[str]) -> bool:
     return text.splitlines() == [text] and not TELL_REFUSED.match(ZERO_WIDTH.sub("", text))
 
 
+def what_if_form(args: list[str]) -> bool:
+    """`plan --what-if <scratch folder>` (amendment 141 item 6), the conductor's filing step; it
+    reads saved briefs and GitHub and posts and records nothing."""
+    if len(args) != 3 or args[:2] != ["plan", "--what-if"]:
+        return False
+    path = args[2]
+    return (
+        scratch_dir(path) is not None
+        and os.path.realpath(path) == os.path.normpath(path)
+        and os.path.isdir(path)
+    )
+
+
 def own_script(path: str, cwd: object, script: str) -> bool:
     """`path` names the regular file `script` of the project directory itself, never a link."""
     if not path or "\0" in path or path.startswith("-"):
@@ -461,7 +476,7 @@ def queue_allowed(words: list[str], cwd: object) -> bool:
     327)."""
     if len(words) < 2 or words[0] != "python3":
         return False
-    if words[2:] not in QUEUE_FORMS and not tell_form(words[2:]):
+    if words[2:] not in QUEUE_FORMS and not tell_form(words[2:]) and not what_if_form(words[2:]):
         return False
     return own_script(words[1], cwd, SESSION_SCRIPT)
 
@@ -507,8 +522,10 @@ def routine_form(rest: list[str]) -> bool:
     if rest[:1] == ["lease"]:
         if rest[1:] == ["--show"]:
             return True
-        return len(rest) == 3 and rest[1] in ("--take", "--release") and bool(
-            SESSION_NAME.fullmatch(rest[2])
+        return (
+            len(rest) == 3
+            and rest[1] in ("--take", "--release")
+            and bool(SESSION_NAME.fullmatch(rest[2]))
         )
     return False
 

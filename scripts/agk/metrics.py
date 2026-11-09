@@ -68,6 +68,7 @@ VERDICT = re.compile(
 )
 # the kind of the two forms whose sha is optional (SPEC-0007 rule 4)
 FIXED = {"fix list": "fix", "rejected": "rejected"}
+HOLDS_FILE = "docs/runs/holds.jsonl"  # written by `session.py plan --record`, kept out of git
 ADR_FILE = re.compile(r"docs/adr/\d{4}-[^/]+\.md")
 AMENDMENT_FILE = re.compile(r"docs/runs/proposed-spec-amendments-[^/]+\.md")
 TEST_PATTERN = r"^[[:space:]]*(async[[:space:]]+)?def test_"
@@ -1188,6 +1189,65 @@ def totals(records: list[dict[str, str]]) -> str:
     )
 
 
+def hold_rows(root: Path) -> list[dict]:
+    """The readable lines of the record of holds, in order; an unreadable one is passed over."""
+    try:
+        text = (Path(root) / HOLDS_FILE).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    rows = []
+    for line in text.splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(row, dict) or not isinstance(row.get("at"), str):
+            continue
+        if stamp(row["at"]) is None:
+            continue
+        if type(row.get("brief")) is int and type(row.get("holder")) is int:
+            if isinstance(row.get("file"), str):
+                rows.append(row)
+    return rows
+
+
+def holds_line(root: Path, start: date, end: date) -> str:
+    """Amendment 141 items 7 and 10: held builder-minutes per day, the false-hold rate and the entry
+    with the most false holds, of the record of `session.py plan --record`. Absent, empty or silent
+    on the window, it says `unknown`, never 0. A brief waiting on two holders is one builder."""
+    rows = hold_rows(root)
+    lo, hi = start_of(start), start_of(end)
+    inside = [r for r in rows if lo <= stamp(r["at"]) < hi]
+    if not inside:
+        return "holds: unknown"
+    last: dict[tuple, int] = {}
+    held: dict[tuple, dict] = {}
+    for row in sorted(rows, key=lambda r: r["at"]):
+        if not isinstance(row.get("minutes"), int):
+            continue
+        pair = (row.get("brief"), row.get("holder"))
+        gone = row["minutes"] - last.get(pair, 0)
+        last[pair] = row["minutes"]
+        if lo <= stamp(row["at"]) < hi:
+            day = held.setdefault((row.get("brief"), row["at"][:10]), {})
+            day[pair[1]] = day.get(pair[1], 0) + gone
+    minutes = sum(max(day.values()) for day in held.values())
+    per_day = tenths(Decimal(minutes) / Decimal((end - start).days))
+    marks = [r for r in inside if r.get("mark") in ("true", "false")]
+    wrong = [str(r.get("file")) for r in marks if r["mark"] == "false"]
+    rate = (
+        f"{len(wrong)}/{len(marks)} ({round(100 * len(wrong) / len(marks))}%)" if marks else UNKNOWN
+    )
+    worst = "none"
+    if wrong:
+        name = min(set(wrong), key=lambda f: (-wrong.count(f), f))
+        worst = f"{name} ({wrong.count(name)})"
+    return (
+        f"holds: held builder-minutes per day {per_day}; false-hold rate {rate}; "
+        f"most false holds: {worst}"
+    )
+
+
 def render(
     week: str,
     start: date,
@@ -1243,6 +1303,7 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
         escapes_line(details, ctx.src),
         over_budget_line(ctx, details),
         *pr_tests_lines(ctx, details),
+        holds_line(ctx.root, start, end),
     )
     records.sort(key=lambda r: int(r["number"]))
     flags = []
