@@ -22,6 +22,10 @@ It also writes one `[[testing.links]]` entry (SPEC-0055 rule 7) for a schema fil
 `.graphql`, `.graphqls`, `.gql`, or a YAML or JSON file whose root says `openapi` or `swagger`) that
 a file of another `[proof]` area names by a path, an import or a generator's input alike, naming
 that area's `contract` level; an area with none adds no link.
+
+`refresh`, for the callers of `impact.py`, rebuilds the file before a selection under
+`map_source = "generated"` when it is missing or of another tree; it prints nothing, and a map that
+cannot be built adds no entries, which `impact.py` says naming `testing.map_source` (brief #833).
 """
 
 from __future__ import annotations
@@ -40,7 +44,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import CheckError, area_levels, git, load_config, proof_areas, repo_root, run
-from impact import MAP_FILE, is_doc, is_test_file
+from impact import MAP_FILE, generated_entries, is_doc, is_test_file, testing_table
 
 NAME = "test_map"
 OUT = MAP_FILE
@@ -589,7 +593,8 @@ def toml_string(path: str) -> str:
     return json.dumps(path, ensure_ascii=False)  # no control character reaches it: NOT_A_GLOB
 
 
-def build(root: Path) -> int:
+def write_map(root: Path) -> tuple[int, bool]:
+    """Write the map of the head: how many entries, and whether a tsconfig could not be read."""
     tree = listing(root)
     if OUT in tree:
         raise CheckError(f"the generated map is committed; principle 5 forbids it (setting: {OUT})")
@@ -613,10 +618,29 @@ def build(root: Path) -> int:
         os.replace(temporary, root / OUT)
     except OSError:
         raise CheckError(f"the map cannot be written (setting: {OUT})") from None
+    return len(covered), broken
+
+
+def build(root: Path) -> int:
+    count, broken = write_map(root)
     if broken:
         print(UNREADABLE)
-    print(f"ok {NAME}: {len(covered)} entries")
+    print(f"ok {NAME}: {count} entries")
     return 0
+
+
+def refresh(root: Path, head: str = "HEAD") -> None:
+    """Rebuild a missing or stale map before a selection (SPEC-0055 rule 5). The build reads the
+    checked-out head, so another HEAD gets no build. Any failure leaves the map unread."""
+    try:
+        if (testing_table(root) or {}).get("map_source") != "generated":
+            return
+        if generated_entries(root, head) is not None:
+            return
+        if git(root, "rev-parse", f"{head}^{{tree}}") == git(root, "rev-parse", "HEAD^{tree}"):
+            write_map(root)
+    except (CheckError, OSError, ValueError, LookupError, TypeError, AttributeError, RuntimeError):
+        return
 
 
 def main(argv: list[str] | None = None) -> int:
