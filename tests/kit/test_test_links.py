@@ -211,6 +211,51 @@ def test_the_test_step_runs_a_link_and_fails_without_its_environment(repo, mode)
     assert "web:e2e" in good.stdout and "web:e2e FAIL" in good.stdout  # `whole-e2e` is no command
 
 
+def start_outside(repo, mode: str) -> None:
+    """A link, and a selected test in no `[proof]` area, which makes the selection a full run."""
+    toml = (
+        HEAD.replace('"api/tests"]', '"api/tests", "other/tests"]')
+        + AREAS.replace("whole-e2e", "echo whole-e2e")
+        + TESTING.replace("web/tests/unit/**", "other/tests/**")
+        + f'pr_tests = "{mode}"\n'
+        + link("web/app/**", "web:e2e")
+    )
+    repo.commit({"agk.toml": toml, **FILES, "other/tests/test_o.py": "# o\n"}, "base")
+    repo.branch("feature")
+    change(repo, "web/app/cart.py")
+
+
+PULL = {"EVENT": "pull_request", "AGK_BASE": "main"}
+
+
+@pytest.mark.parametrize("mode", ["full", "selected"])
+def test_a_link_runs_after_the_full_run_of_a_file_in_no_area(repo, mode):
+    """REQ-062 AC4: SPEC-0055 rule 7 (a link only adds; the fallback to a full run keeps it)."""
+    start_outside(repo, mode)
+    done = repo.run("project_tests.py", CI="true", AGK_TEST_ENV="browser", **PULL)
+    assert done.returncode == 0 and "project tests: web:e2e ok" in done.stdout
+    assert "whole-e2e" in done.stdout
+    if mode == "selected":
+        assert done.stdout.index("project tests: full ok") < done.stdout.index("web:e2e ok")
+
+
+@pytest.mark.parametrize("mode", ["full", "selected"])
+def test_an_absent_environment_fails_after_the_full_run_of_a_file_in_no_area(repo, mode):
+    """REQ-062 AC4: SPEC-0055 rule 7, Q-S0055-8 (in CI the fallback never passes without it)."""
+    start_outside(repo, mode)
+    done = repo.run("project_tests.py", CI="true", **PULL)
+    assert done.returncode == 1 and "project tests: web:e2e FAIL" in done.stdout
+    assert "setting: testing.links" in done.stdout
+
+
+@pytest.mark.parametrize("mode", ["full", "selected"])
+def test_an_absent_environment_is_said_on_a_machine_under_either_mode(repo, mode):
+    """REQ-062 AC4: SPEC-0055 rules 4 and 7 (`not run` is printed, with no link run to show)."""
+    start_outside(repo, mode)
+    done = repo.run("project_tests.py", **PULL)
+    assert done.returncode == 0 and "not run: web:e2e (env browser)" in done.stdout
+
+
 def test_the_test_step_is_unchanged_without_a_link_or_on_a_push(repo):
     """REQ-062 AC1: SPEC-0055 rule 2 (with no link, as today; a link is for a pull request)."""
     start(repo, "", 'pr_tests = "full"\n')
@@ -327,3 +372,12 @@ def test_a_map_of_another_tree_adds_no_link_and_says_so(repo):
     change(repo, "api/schema/shop.proto")
     result = found(repo)
     assert result.linked == [] and "setting: testing.links" in " ".join(result.link_notes)
+
+
+def test_the_test_step_says_a_map_is_of_another_tree_under_full(repo):
+    """REQ-062 AC4: SPEC-0055 rule 5 (the line is printed with no link to run, under `full`)."""
+    start(repo, "", GENERATED + 'pr_tests = "full"\n', {"web/app/s.proto": BUF})
+    built(repo)
+    change(repo, "api/schema/shop.proto")
+    done = repo.run("project_tests.py", **PULL)
+    assert done.returncode == 0 and impact.MAP_STALE in done.stdout

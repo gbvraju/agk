@@ -42,9 +42,10 @@ failed test alone for any runner, in the level's `cwd` and under the same limit 
 brief #806). Its ids come only from the reports this run wrote (the level's `junit`, else
 `[testing] junit`); with no report there is no rerun and no strike, and it exits as it did.
 
-A pull request's links (SPEC-0055 rule 7, brief #828) run after the selection, and under `full`
-after the full command: a linked level need not be part of it. A linked level whose environment
-is absent is a failing run that names `testing.links`.
+A pull request's links (SPEC-0055 rule 7, brief #828) run after the selection, after a full run
+that a selected file in no area causes, and under `full` after the full command: a linked level
+need not be part of it. A linked level whose environment is absent is a failing run that names
+`testing.links`.
 
 `check_release.py` is kit-only (never installed), so `toml_version` restates its reading of
 `version`; a kit test pins the two equal (Q-453-7).
@@ -67,6 +68,7 @@ from common import CheckError, git, load_config, merge_base, proof_areas, repo_r
 from impact import (
     LINK_REASON,
     MAP_FILE,
+    MAP_STALE,
     impact,
     junit_setting,
     level_of,
@@ -266,7 +268,8 @@ def plan(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], lis
     lines = [*head, *text(found), *notes]
     if any(n.startswith("tests: not run (in no [proof] area)") for n in notes):
         why = "a selected file is in no [proof] area"
-        return [("full", project, ".", why)], [*lines, f"project tests: full ({why})"]
+        added = [s for s in sets if s[3].startswith(LINK_REASON)]  # a link only adds (rule 7)
+        return [("full", project, ".", why), *added], [*lines, f"project tests: full ({why})"]
     if sets and sets[0][0] == "full":
         lines.append(f"project tests: full ({sets[0][3]})")
     else:
@@ -288,7 +291,10 @@ def linked_runs(root: Path, project: str) -> tuple[list[tuple[str, str, str, str
     if not table.get("links") and not (root / MAP_FILE).is_file():
         return [], []
     runs, lines = plan(root, project)
-    return [r for r in runs if r[3].startswith(LINK_REASON)], lines
+    added = [r for r in runs if r[3].startswith(LINK_REASON)]
+    if added or any(line.startswith(LINK_REASON) for line in lines):
+        return added, lines
+    return [], [line for line in lines if line == MAP_STALE]
 
 
 def run_all(root: Path, project: str, runs: list, rerun: bool) -> int:
@@ -333,7 +339,7 @@ def main(argv: list[str] | None = None) -> int:
         if code != 0:
             return code
         links, lines = linked_runs(root, project)
-        say(lines if links else [])
+        say(lines)
         return run_all(root, project, links, rerun)
     try:
         runs, lines = plan(root, project)
