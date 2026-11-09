@@ -21,7 +21,8 @@ The plan, in the order it is decided:
    open pull request is stale: it holds nothing and is listed as `stale claim by <session>, <age>`.
 3. **Capacity.** The sessions to start are the smallest of the ready, non-overlapping briefs,
    `max_builders` less the running builders (open builder pull requests and claims with no pull
-   request yet) and `reviews_in_flight` less the pull requests waiting for a verdict. When
+   request yet) and `reviews_in_flight` (by default `max_builders`, brief #842, ADR-0384) less
+   the pull requests waiting for a verdict. When
    `builder_memory_gb` of the `[flow]` table is set (brief #409, ADR-0223), also the machine's
    available memory divided by it, rounded down, and never below 1 while no builder runs (with
    builders running it may be 0, the verdict on 43ada36); memory that cannot be read is
@@ -112,7 +113,6 @@ RULE = 15
 GIB = 1024**3  # builder_memory_gb counts in GiB, the lower reading of a GB (Q-409-2)
 WINDOW_DAYS = 14
 DEFAULTS = {
-    "reviews_in_flight": 3,
     "merge_hours": 1,
     "stale_commits": 20,
     "claim_stale_hours": 24,
@@ -928,10 +928,10 @@ def pr_login(pr: dict) -> str:
 
 def build(root) -> dict:
     repo = repo_name(root)
-    reviews = flow_int(root, "reviews_in_flight", DEFAULTS["reviews_in_flight"], RULE)
     hours = flow_int(root, "merge_hours", DEFAULTS["merge_hours"], RULE)
     behind_limit = flow_int(root, "stale_commits", DEFAULTS["stale_commits"], RULE)
     s = survey(root, repo, "")
+    reviews = flow_int(root, "reviews_in_flight", s.max_builders, RULE)
     default = _default_branch(root)
     now = datetime.now(UTC)
     read_gone(root, s, now)
