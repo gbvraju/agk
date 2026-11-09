@@ -73,6 +73,10 @@ The holders (item 4): `holders` ranks the open builder pull requests by the brie
 brief held by two counts under each. `plan` prints `Holds <k>:`, and `Stall:` for a holder of two
 or more idle over `[flow] stall_minutes` (30 by default); it posts nothing, the conductor does.
 
+Plan before filing and every hold measured (amendment 141 items 6 and 7, brief #772 build (c)):
+`--what-if DIR` judges saved briefs with `waves` and posts and records nothing; `--record` appends
+each hold to `docs/runs/holds.jsonl`, kept out of git (`Q-772-1` as read); `metrics.py` reads it.
+
 Exact `Touches:` (amendment 141 item 1, brief #772): `touch_problems` is the one function behind
 `check_brief.py --root`, `next`, `plan` and the doctor's `brief-broad-touches`. A folder or wildcard
 `Touches:` entry that matches more than `[flow] max_touch_glob` files that can hold a brief is
@@ -96,7 +100,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import common
 import playbook_format
 from common import CheckError, matches, read_list
-from metrics import author_of, counted_authors
+from metrics import HOLDS_FILE, author_of, counted_authors, hold_rows
 from reviewers import verdict_authors
 from session import (
     ADDS,
@@ -106,6 +110,7 @@ from session import (
     Survey,
     all_takes,
     brief_number,
+    brief_shape,
     first_line,
     flow_int,
     flow_value,
@@ -157,6 +162,7 @@ REPROVE_PATHS = ("**/*.md", "!docs/specs/**", "!docs/adr/**")
 REPROVE_REFUSED = "setting: flow.reprove_paths must be a list of non-empty strings"
 STALL_MINUTES = 30  # the default of `[flow] stall_minutes`, `Q-772-7`
 STALL_HOLDS = 2  # a holder of fewer briefs is not reported as a stall
+HUNK = re.compile(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 ADDED_NUMBER = re.compile(r"docs/(adr|specs)/(\d{4})-[^/]+\.md")
 ADDED_AMENDMENT = re.compile(r"docs/runs/proposed-spec-amendments-(\d+)\.md")
 
@@ -480,6 +486,228 @@ def holders(root, s: Survey, held: list[dict], now: datetime) -> list[dict]:
             row["stall"] = f"Stall: #{pr['number']} holds {len(briefs)}, idle {idle} min"
         rows.append(row)
     return sorted(rows, key=lambda r: (-len(r["briefs"]), r["pr"]))
+
+
+# --- every hold measured (amendment 141 item 7, `Q-772-1` as read) --------------------------------
+
+
+def hold_pairs(
+    root, s: Survey, ready: list[dict], chosen: list[dict]
+) -> list[tuple[int, int, str]]:
+    """(brief, holder, file) for every held brief and each of its holders (`Q-772-6`): the first
+    holder alone would hide a second. A holder is a brief or a pull request; GitHub numbers the two
+    from one sequence, so the number says which."""
+    shared = exempt(root)
+    pairs: list[tuple[int, int, str]] = []
+    earlier: list[dict] = []
+    for brief in ready:
+        if brief in chosen:
+            earlier.append(brief)
+            continue
+        number = brief["number"]
+        mine = unshared(root, entries_of(root, touches_of(brief["body"])), shared)
+        rivals = [(n, theirs) for n, theirs in s.held if n != number]
+        rivals += [(b["number"], touches_of(b["body"])) for b in earlier]
+        for other, theirs in rivals:
+            if found := clash(mine, unshared(root, entries_of(root, theirs), shared)):
+                pairs.append((number, other, found))
+        for pr in s.builders:
+            if pr_brief(pr) != number and (why := pull_conflict(s, pr, mine, shared)):
+                pairs.append((number, pr["number"], why.split(" ", 2)[2]))
+    return pairs
+
+
+def _hunks(root, start: str, end: str, path: str) -> list[tuple[int, int, int, int]] | None:
+    """The hunks of `git diff -U0` of one file: (old start, old count, new start, new count)."""
+    out = _git(root, "diff", "-U0", "--no-renames", start, end, "--", path)
+    if out is None:
+        return None
+    found = (HUNK.match(x) for x in out.splitlines() if x.startswith("@@ "))
+    return [(int(m[1]), int(m[2] or 1), int(m[3]), int(m[4] or 1)) for m in found if m is not None]
+
+
+def _span(start: int, count: int) -> tuple[int, int]:
+    """The lines of one side of a hunk; a side of no lines is the two lines around the place."""
+    return (start, start + count - 1) if count else (start, start + 1)
+
+
+def _back(line: int, between: list[tuple[int, int, int, int]]) -> tuple[int, int]:
+    """Where a line after the hunks stood before them; inside a hunk, the whole of its old side."""
+    moved = 0
+    for old, old_n, new, new_n in between:
+        if new_n and new <= line < new + new_n:
+            return _span(old, old_n)
+        if line < new or (not new_n and line <= new):
+            break
+        moved += new_n - old_n
+    return line - moved, line - moved
+
+
+def hold_mark(root, path: str, first: str, second: str) -> str:
+    """Amendment 141 item 7: `false` when the two merged diffs of PATH change no common line, a
+    file only one changed included; `true` otherwise; `unknown` when the lines cannot be mapped.
+    FIRST merged before SECOND; each is one commit on the default branch."""
+    if is_folder(path) or has_wildcard(path):
+        return "unknown"
+    before, after = f"{first}^1", f"{second}^1"
+    if _git(root, "merge-base", "--is-ancestor", first, after) is None:
+        return "unknown"
+    span = f"{before}..{second}"
+    moves = _git(root, "log", "-M", "--diff-filter=R", "--name-status", "--format=", span)
+    if moves is None or any(path in x.split("\t")[1:] for x in moves.splitlines()):
+        return "unknown"
+    changed = (_changed(root, before, first), _changed(root, after, second))
+    if changed[0] is None or changed[1] is None:
+        return "unknown"
+    if any(n.startswith(f"{path}/") for n in changed[0] | changed[1]):
+        return "unknown"
+    theirs, later, between = (
+        _hunks(root, before, first, path),
+        _hunks(root, after, second, path),
+        _hunks(root, first, after, path),
+    )
+    if theirs is None or later is None or between is None:
+        return "unknown"
+    if path in changed[0] & changed[1] and not (theirs and later):
+        return "unknown"  # a binary file has no lines
+    spans = [_span(h[2], h[3]) for h in theirs]
+    for old, count, _new, _new_n in later:
+        low, high = _span(old, count)
+        low, high = _back(low, between)[0], _back(high, between)[1]
+        if any(a <= high and low <= b for a, b in spans):
+            return "true"
+    return "false"
+
+
+def merged_pulls(s: Survey, number: int) -> list[dict]:
+    """The merged pull requests of a holder or a brief, read by number or by its `Brief:` line."""
+    return [
+        p for p in s.prs if p.get("merged_at") and (p["number"] == number or pr_brief(p) == number)
+    ]
+
+
+def hold_marks(root, s: Survey, known: list[dict], at: str) -> list[dict]:
+    """One more line for each hold whose two pieces of work have merged and that has no mark. A
+    commit this clone has not fetched waits for a later pass: a stale clone is no measurement."""
+    marked = {(r["brief"], r["holder"]) for r in known if "mark" in r}
+    pairs: dict[tuple[int, int], str] = {}
+    for row in known:
+        pairs.setdefault((row["brief"], row["holder"]), row["file"])
+    rows: list[dict] = []
+    for (brief, holder), path in pairs.items():
+        ours, theirs = merged_pulls(s, brief), merged_pulls(s, holder)
+        if (brief, holder) in marked or not ours or not theirs:
+            continue
+        mark = "unknown"
+        if len(ours) == 1 and len(theirs) == 1:
+            first, second = sorted([*ours, *theirs], key=lambda p: (p["merged_at"], p["number"]))
+            shas = [str(first.get("merge_commit_sha")), str(second.get("merge_commit_sha"))]
+            if any(_git(root, "cat-file", "-e", f"{sha}^{{commit}}") is None for sha in shas):
+                continue
+            mark = hold_mark(root, path, shas[0], shas[1])
+        rows.append({"at": at, "brief": brief, "holder": holder, "file": path, "mark": mark})
+    return rows
+
+
+def keep_out_of_git(root) -> None:
+    """`Q-772-1` as read: the record is kept out of git in any project, by this clone's own exclude
+    file, so no tracked ignore line is needed; a rewritten tracked file would be a generated one."""
+    out = _git(root, "rev-parse", "--git-path", "info/exclude")
+    if out is None:
+        return
+    path = Path(root) / out.strip()
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if HOLDS_FILE not in text.splitlines():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as lines:
+            lines.write(f"{HOLDS_FILE}\n")
+
+
+def record_holds(root, s: Survey, ready: list[dict], chosen: list[dict], now: datetime) -> None:
+    """Append this pass to the record (`plan --record`); lines are only ever appended."""
+    known = hold_rows(root)
+    first: dict[tuple, datetime] = {}
+    for row in known:
+        first.setdefault((row["brief"], row["holder"]), moment(row["at"]))
+    at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    rows: list[dict] = [
+        {
+            "at": at,
+            "brief": brief,
+            "holder": holder,
+            "file": path,
+            "minutes": int((now - first.get((brief, holder), now)).total_seconds() // 60),
+        }
+        for brief, holder, path in hold_pairs(root, s, ready, chosen)
+    ] + hold_marks(root, s, known, at)
+    if not rows:
+        return
+    target = Path(root) / HOLDS_FILE
+    try:
+        keep_out_of_git(root)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("a", encoding="utf-8") as out:
+            out.write("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows))
+    except OSError as exc:
+        raise CheckError("rule 4 of SPEC-0050: the record of holds cannot be written") from exc
+
+
+# --- plan before filing (amendment 141 item 6) -----------------------------------------------
+
+
+def holder_name(wait: dict, names: dict[int, str]) -> str:
+    """The saved file that holds a brief back, or the number of the open work."""
+    number = int(wait.get("waits_for", wait.get("pull_request", 0)))
+    return names.get(number) or f"#{number}"
+
+
+def what_if_lines(root, directory: str) -> list[str]:
+    """How the saved briefs of DIR would split with the open work, by the plan's own `waves`.
+    Capacity is read from nothing; nothing is posted or recorded. A saved brief has a number below
+    zero, which no running work can have, so it is never mistaken for a build of its own brief."""
+    folder = Path(directory)
+    if not folder.is_dir():
+        raise CheckError("rule 4 of SPEC-0050: --what-if needs a folder of saved briefs")
+    repo = repo_name(root)
+    s = survey(root, repo, "")
+    read_gone(root, s, datetime.now(UTC))
+    _, ready, _, _ = settled(s)
+    shape = brief_shape(root, repo)
+    found: list[tuple[int, str, str]] = []
+    malformed: list[str] = []
+    paths = sorted(p for p in folder.glob("*.md") if p.is_file())
+    for path in paths:
+        try:
+            body = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            malformed.append(f"MALFORMED: {path.name} rule 2: the file is not readable text")
+            continue
+        if problems := shape(body):
+            malformed.append(f"MALFORMED: {path.name} {problems[0]}")
+            continue
+        found.append((priority_of(body), path.name, body))
+    found.sort(key=lambda x: x[:2])
+    names = {-i: f[1] for i, f in enumerate(found, 1)}
+    saved = [{"number": -i, "title": f[1], "body": f[2]} for i, f in enumerate(found, 1)]
+    chosen, waits = waves(root, s, [*lane_order(playbook_of(root), ready), *saved])
+    held = [
+        f"{names[w['brief']]} waits for {holder_name(w, names)} ({w['why']})"
+        for w in waits
+        if w["brief"] in names
+    ]
+    start = sum(1 for b in chosen if b["number"] in names)
+    order = ", ".join(f[1] for f in found) or "none"
+    return [
+        f"What-if: {start} of {len(paths)} can start together.",
+        *held,
+        *malformed,
+        f"File in this order: {order}",
+    ]
+
+
+def what_if(root, directory: str) -> int:
+    print("\n".join(what_if_lines(root, directory)))
+    return 0
 
 
 def builds_of(body: str) -> list[tuple[str, bool]]:
@@ -1161,7 +1389,19 @@ def comment_id(comment: dict) -> int:
     return number if isinstance(number, int) else 0
 
 
-def build(root) -> dict:
+def settled(s: Survey) -> tuple[list, list[dict], list[dict], list]:
+    """The takes settled and the refused briefs left out: (skipped, ready, build waits, skips)."""
+    freed, skipped = settle_takes(s)
+    s.held = [h for h in s.held if h[0] not in freed]
+    s.skipped = skipped + reservation_refusals(s)
+    refused = {n for n, why in s.skipped if why.startswith("rule ")}
+    s.free = [b for b in s.free if b["number"] not in refused]
+    freed -= refused
+    ready, build_waits, build_skips = candidates(s, freed)
+    return skipped, ready, build_waits, build_skips
+
+
+def build(root, record: bool = False) -> dict:
     repo = repo_name(root)
     hours = flow_int(root, "merge_hours", DEFAULTS["merge_hours"], RULE)
     behind_limit = flow_int(root, "stale_commits", DEFAULTS["stale_commits"], RULE)
@@ -1171,17 +1411,13 @@ def build(root) -> dict:
     now = datetime.now(UTC)
     read_gone(root, s, now)
     stale = stale_claims(s)
-    freed, skipped = settle_takes(s)
-    s.held = [h for h in s.held if h[0] not in freed]
-    s.skipped = skipped + reservation_refusals(s)
-    refused = {n for n, why in s.skipped if why.startswith("rule ")}
-    s.free = [b for b in s.free if b["number"] not in refused]
-    freed -= refused
-    ready, build_waits, build_skips = candidates(s, freed)
+    skipped, ready, build_waits, build_skips = settled(s)
     pb = playbook_of(root)
     ready = lane_order(pb, ready)
     chosen, waits = waves(root, s, ready)
     ranked = holders(root, s, [b for b in ready if b not in chosen], now)
+    if record:
+        record_holds(root, s, ready, chosen, now)
     waits = build_waits + waits
     running = len(s.builders) + len(s.held)
     authors = verdict_authors(root)
@@ -1414,7 +1650,7 @@ def words(plan: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def plan(root, as_json: bool) -> int:
-    found = build(root)
+def plan(root, as_json: bool, record: bool = False) -> int:
+    found = build(root, record)
     print(json.dumps(found, indent=2) if as_json else words(found), end="" if not as_json else "\n")
     return 0

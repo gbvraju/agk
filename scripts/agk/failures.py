@@ -4,6 +4,9 @@ Usage: python3 scripts/agk/failures.py signature --output FILE [--step NAME]
        python3 scripts/agk/failures.py evidence --output FILE [--test ID]
        python3 scripts/agk/failures.py issue-body --signature SIG --test ID [--issues FILE]
        python3 scripts/agk/failures.py seen --signature SIG --test ID
+       python3 scripts/agk/failures.py files --signature SIG --from DIR
+       python3 scripts/agk/failures.py files --delete --signature SIG
+       python3 scripts/agk/failures.py files --prune --issues FILE
 
 Brief #634, build (b) of SPEC-0046 (ADR-0303). `signature` prints `<sig> <test id>` for each
 failed test of a run: the ids come from the JUnit reports at `[testing] junit`, a path or a glob
@@ -30,6 +33,16 @@ nothing and writes no file. It reads the closed `found-bug` issues whose body ho
 same test id, newest issue first within each; an issue that no merged pull request names is
 skipped, and nothing is matched by text similarity. No match prints nothing; a read that fails
 prints one line naming what could not be read and exits 4.
+
+Brief #768, build (h) (rules 6 and 13): `files` is the one subcommand that writes, and only below
+`.agk-failures/` at the top of the work tree. `--from DIR` copies the regular files that
+`[failures] artifact_paths` matches below DIR, keeping their relative paths, into
+`.agk-failures/<signature>/`, replacing that folder's earlier content; a link is never followed,
+and with no patterns set nothing happens. A write is refused, naming the path class, when
+`git check-ignore -q .agk-failures/` says the folder is not ignored. `--delete` removes the folder
+of a fixed failure; `--prune` removes every signature folder with no open `found-bug` issue in a
+saved list, and a list that cannot be read removes nothing. Output names a folder only by its
+relative path, so no path names a user.
 """
 
 from __future__ import annotations
@@ -38,6 +51,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import xml.parsers.expat
@@ -77,6 +91,9 @@ RECORD = ("Symptom:", "Cause:", "Reproduce:", "Fixed-by:")  # rule 7
 SEEN_MAX = 3
 PAGE = 100
 ORIGIN = re.compile(r"github\.com[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$")
+SIGNATURE = re.compile(r"[0-9a-f]{12}")
+FOLDER = ".agk-failures"  # rule 13, at the top of the work tree
+PATH_CLASS = f"path class: {FOLDER}/"
 
 
 class Usage(Exception):
@@ -344,6 +361,162 @@ def read(opts: dict[str, str], option: str) -> str:
         raise Usage(f"the file cannot be read (option: {option})") from None
 
 
+def work_tree() -> Path:
+    """The top of the work tree, where the evidence folder lives (rule 13)."""
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if proc.returncode != 0:
+        raise Usage(f"the work tree cannot be read ({PATH_CLASS})")
+    return Path(proc.stdout.strip())
+
+
+def evidence_base(root: Path) -> Path:
+    """`.agk-failures` of ROOT; a link there would carry a write or a delete elsewhere."""
+    base = root / FOLDER
+    if base.is_symlink():
+        raise Usage(f"the folder is a link ({PATH_CLASS})")
+    return base
+
+
+def is_ignored(root: Path) -> bool:
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "-C", str(root), "check-ignore", "-q", f"{FOLDER}/"],
+        capture_output=True,
+    )
+    return proc.returncode == 0
+
+
+def remove(path: Path) -> None:
+    """Remove PATH, a folder of the evidence folder; a link goes, never what it points at."""
+    try:
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    except OSError:
+        raise Usage(f"the evidence cannot be removed ({PATH_CLASS})") from None
+
+
+def matched_files(source: Path, patterns: list[str], base: Path) -> list[Path]:
+    """The regular files below SOURCE that PATTERNS match: no link, nothing reached through a
+    link, nothing already in the evidence folder at BASE."""
+    top = source.resolve()
+    found: set[Path] = set()
+    try:
+        paths = [path for pattern in patterns for path in source.glob(pattern)]
+    except (ValueError, NotImplementedError):
+        raise Usage("a pattern cannot be read (setting: failures.artifact_paths)") from None
+    for path in paths:
+        resolved = path.parent.resolve() / path.name
+        if (
+            path.is_file()
+            and not path.is_symlink()
+            and resolved.is_relative_to(top)
+            and not resolved.is_relative_to(base.resolve())
+        ):
+            found.add(path)
+    return sorted(found)
+
+
+def copy_evidence(root: Path, sig: str, source: Path) -> str:
+    """Rule 13: replace `.agk-failures/<sig>/` with the matched files of the run folder SOURCE."""
+    patterns = config.failures_settings(root)["artifact_paths"]
+    if not patterns:
+        return "files: none (setting: failures.artifact_paths)"
+    if not source.is_dir():
+        raise Usage("the run's folder cannot be read (option: --from)")
+    base = evidence_base(root)
+    if not is_ignored(root):
+        raise Usage(f"the folder is not ignored by git ({PATH_CLASS})")
+    files = matched_files(source, patterns, base)
+    folder = base / sig
+    try:
+        if folder.exists() or folder.is_symlink():
+            remove(folder)
+        for path in files:
+            target = folder / path.relative_to(source)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, target)
+    except OSError:
+        raise Usage(f"the evidence cannot be written ({PATH_CLASS})") from None
+    return f"files: {len(files)} copied to {FOLDER}/{sig}/"
+
+
+def open_signatures(issues: list) -> set[str]:
+    """The signatures of the open `found-bug` issues of a saved list."""
+    found: set[str] = set()
+    for item in issues:
+        if (
+            "pull_request" not in item
+            and item.get("state") == "open"
+            and any(
+                isinstance(lb, dict) and lb.get("name") == "found-bug"
+                for lb in item.get("labels", [])
+            )
+        ):
+            found |= {
+                ln.split(":", 1)[1].strip()
+                for ln in body_lines(item)
+                if ln.startswith("Failure-signature:")
+            }
+    return found
+
+
+def prune_evidence(root: Path, issues: list) -> str:
+    """Rule 13: delete each signature folder with no open issue; other names are left alone."""
+    base = evidence_base(root)
+    keep = open_signatures(issues)
+    gone = (
+        [p for p in sorted(base.iterdir()) if SIGNATURE.fullmatch(p.name) and p.name not in keep]
+        if base.is_dir()
+        else []
+    )
+    for path in gone:
+        remove(path)
+    return "\n".join(f"files: deleted {FOLDER}/{p.name}/" for p in gone)
+
+
+def delete_evidence(root: Path, sig: str) -> str:
+    folder = evidence_base(root) / sig
+    if not (folder.exists() or folder.is_symlink()):
+        return ""
+    remove(folder)
+    return f"files: deleted {FOLDER}/{sig}/"
+
+
+def issue_list_for_prune(opts: dict[str, str]) -> list[dict]:
+    """The saved list, or a refusal: a list that cannot be read never reads as no open issue."""
+    try:
+        issues = json.loads(read(opts, "--issues"))
+    except ValueError:
+        issues = None
+    if not isinstance(issues, list) or not all(isinstance(i, dict) for i in issues):
+        raise Usage("the issue list cannot be read (option: --issues)")
+    return issues
+
+
+def files_command(rest: list[str]) -> str:
+    flags = [a for a in rest if a in ("--delete", "--prune")]
+    args = [a for a in rest if a not in ("--delete", "--prune")]
+    if len(flags) > 1:
+        raise Usage("--delete or --prune, not both (option: --prune)")
+    allowed = {"--issues"} if flags == ["--prune"] else {"--signature"}
+    opts = options(args, allowed if flags else {"--signature", "--from"})
+    if flags == ["--prune"]:
+        return prune_evidence(work_tree(), issue_list_for_prune(opts))
+    if not SIGNATURE.fullmatch(opts.get("--signature", "")):
+        raise Usage("a signature is needed (option: --signature)")
+    if flags:
+        return delete_evidence(work_tree(), opts["--signature"])
+    if "--from" not in opts:
+        raise Usage("the run's folder is needed (option: --from)")
+    return copy_evidence(work_tree(), opts["--signature"], Path(opts["--from"]))
+
+
 def command(args: list[str]) -> str:
     root = Path.cwd()
     name, rest = (args[0], args[1:]) if args else ("", [])
@@ -382,7 +555,9 @@ def command(args: list[str]) -> str:
         if not re.fullmatch(r"[0-9a-f]{12}", opts.get("--signature", "")) or not opts.get("--test"):
             raise Usage("a signature and a test id are needed (option: --signature)")
         return seen_command(root, opts["--signature"], opts["--test"])
-    raise Usage("usage: failures.py signature|evidence|issue-body|seen ...")
+    if name == "files":
+        return files_command(rest)
+    raise Usage("usage: failures.py signature|evidence|issue-body|seen|files ...")
 
 
 def main(argv: list[str] | None = None) -> int:

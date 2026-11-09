@@ -168,7 +168,7 @@ USAGE = (
     "       session.py resume --pr N\n"
     "       session.py ids [--exclude-pr N]\n"
     "       session.py demand\n"
-    "       session.py plan [--json]\n"
+    "       session.py plan [--json] [--record] | plan --what-if DIR\n"
     "       session.py push-check\n"
     "       session.py slot (--take | --renew | --release | --next) SLOT\n"
     "       session.py tell --session ID --text MESSAGE\n"
@@ -2893,13 +2893,19 @@ def number_ok(text: str) -> bool:
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if args[:1] == ["plan"]:
-        if args[1:] not in ([], ["--json"]):
+        flags = args[1:]
+        what_if_dir = flags[1] if len(flags) == 2 and flags[0] == "--what-if" else None
+        if what_if_dir is None and (
+            set(flags) - {"--json", "--record"} or len(set(flags)) != len(flags)
+        ):
             print(USAGE)
             return 2
         try:
-            from session_plan import plan  # the plan builds on this module
+            from session_plan import plan, what_if  # the plan builds on this module
 
-            return plan(repo_root(), args[1:] == ["--json"])
+            if what_if_dir is not None:
+                return what_if(repo_root(), what_if_dir)
+            return plan(repo_root(), "--json" in flags, "--record" in flags)
         except CheckError as exc:
             print(f"FAIL {NAME}: {exc}")
             return 2
