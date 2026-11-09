@@ -215,7 +215,8 @@ def test_rule16_a_folder_that_is_not_a_sidecar_is_refused(tmp_path):
 def table_of(tmp_path: Path, name: str, line: str) -> Path:
     root = tmp_path / name
     root.mkdir()
-    (root / "agk.toml").write_text(f'[personal]\nforge = "files"\n{line}\n', encoding="utf-8")
+    forge = "" if line.startswith("forge ") else 'forge = "files"\n'
+    (root / "agk.toml").write_text(f"[personal]\n{forge}{line}\n", encoding="utf-8")
     return root
 
 
