@@ -205,7 +205,9 @@ def test_ac11_a_requirement_and_an_amendment_added_here_are_read(repo):
             "docs/runs/proposed-spec-amendments-139.md": "x\n",
         },
     )
-    proc = run_numbers(repo, "--briefs", briefs_file(repo, (7, "REQ-900, amendment 139")), "--brief", "5")
+    proc = run_numbers(
+        repo, "--briefs", briefs_file(repo, (7, "REQ-900, amendment 139")), "--brief", "5"
+    )
     assert proc.returncode == 1
     assert "REQ-900" in proc.stdout and "amendment 139" in proc.stdout
 
@@ -216,7 +218,9 @@ def test_ac11_without_briefs_the_check_is_unchanged(repo):
     assert run_numbers(repo).returncode == 0
 
 
-@pytest.mark.parametrize("args", [("--briefs", "x"), ("--brief", "5"), ("--briefs", "x", "--brief", "y")])
+@pytest.mark.parametrize(
+    "args", [("--briefs", "x"), ("--brief", "5"), ("--briefs", "x", "--brief", "y")]
+)
 def test_ac11_the_two_flags_come_together(repo, args):
     """REQ-057 AC11: a usage error, exit 2."""
     assert repo.run("check_numbers.py", *args).returncode == 2

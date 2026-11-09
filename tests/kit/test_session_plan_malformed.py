@@ -199,7 +199,9 @@ def test_q_772_9_the_reserved_numbers_of_a_take_stop_at_the_bracket():
 
     body = "Reserved: ADR-0304 (Covered-by: ADR-0303)\n"
     assert session.reserved_numbers(body, []) == ["ADR-0304"]
-    assert session.reservations("Reserved: REQ-901, SPEC-0901, ADR-0901, amendment 7 (x ADR-1)\n") == [
+    assert session.reservations(
+        "Reserved: REQ-901, SPEC-0901, ADR-0901, amendment 7 (x ADR-1)\n"
+    ) == [
         "REQ-901",
         "SPEC-0901",
         "ADR-0901",

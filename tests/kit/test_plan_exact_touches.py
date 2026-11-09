@@ -41,9 +41,7 @@ def problems(root: Path, body: str) -> list[str]:
 
 
 def with_touches(entry: str, *extra: str) -> str:
-    return GOOD.replace("Touches: src/a.py", f"Touches: {entry}") + "".join(
-        f"{x}\n" for x in extra
-    )
+    return GOOD.replace("Touches: src/a.py", f"Touches: {entry}") + "".join(f"{x}\n" for x in extra)
 
 
 def check(tmp_path: Path, body: str, *extra: str):
@@ -213,9 +211,10 @@ def test_ac8_the_tree_is_git_s_list_in_a_repository(repo):
     repo.commit({"src/a.py": "x\n"}, "base")
     for i in range(9):
         repo.write(f"src/u{i}.py", "x\n")
-    assert session_plan.touch_problems(
-        with_touches("src/**"), session_plan.touch_rules(repo.root)
-    ) == []
+    assert (
+        session_plan.touch_problems(with_touches("src/**"), session_plan.touch_rules(repo.root))
+        == []
+    )
 
 
 def test_ac8_the_red_branch_brief_of_the_router_says_it_is_a_sweep(tmp_path):
@@ -372,4 +371,3 @@ def test_item9_the_row_is_a_warning_after_the_invalid_label_row():
     assert doctor.CHECKS["brief-broad-touches"][0] == "warn"
     names = list(doctor.CHECKS)
     assert names.index("brief-broad-touches") == names.index("brief-invalid-label") + 1
-
