@@ -815,16 +815,21 @@ def usage_of(p: dict) -> int | str:
     return value
 
 
+def table(held: dict, key: str) -> dict:
+    """The object under `key`, or an empty one for what is absent or `unknown`."""
+    found = held.get(key)
+    return found if isinstance(found, dict) else {}
+
+
 def measures(doc: dict, links: Links, label: str) -> list[dict]:
     """The time to restore of the three kinds and the run minutes (SPEC-0056 rule 12): the facts
     hold one week, so facts of another week, or none, print `unknown`, never 0."""
-    held = doc.get("measures")
-    figures = held if isinstance(held, dict) and held.get("week") == label else {}
-    restore = figures.get("restore") if isinstance(figures.get("restore"), dict) else {}
-    minutes = figures.get("run_minutes") if isinstance(figures.get("run_minutes"), dict) else {}
+    figures = table(doc, "measures")
+    figures = figures if figures.get("week") == label else {}
+    restore, minutes = table(figures, "restore"), table(figures, "run_minutes")
     items = []
     for name in RESTORE_KINDS:
-        found = restore.get(name) if isinstance(restore.get(name), dict) else {}
+        found = table(restore, name)
         items.append(
             item(
                 "restore",
