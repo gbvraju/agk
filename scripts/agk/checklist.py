@@ -303,7 +303,7 @@ def late_cleared(pull: dict, end: datetime) -> bool:
     times = [
         stamp(v.get("at"))
         for v in verdicts
-        if v.get("kind") == "cleared" and head.startswith(str(v.get("sha") or "-"))
+        if head.startswith(str(v.get("sha") or "-"))
     ]
     times = [t for t in times if t is not None]
     return bool(times) and (end - max(times)) > timedelta(minutes=LATE_MINUTES)

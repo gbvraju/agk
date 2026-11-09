@@ -291,6 +291,24 @@ def test_auto_merge_a_cleared_head_inside_20_minutes_is_not_late(tmp_path, capsy
     assert "cleared unmerged over 20 min 0" in found[5][1]
 
 
+def test_auto_merge_a_head_cleared_by_a_fix_list_with_a_final_line_counts_as_late(tmp_path, capsys):
+    """REQ-054: `head_cleared` is `yes` for a fix list with no items and a `Final:` line too."""
+    waiting = pull(62, 32, state="open", merged_at=None)
+    waiting["verdicts"] = [{"kind": "fix", "sha": "a" * 40, "at": day(11, 30)}]
+    document = saved(facts={"pull_requests": [waiting], "flow": {"stall_hours": 4}})
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert found[5][0] == "partly"
+    assert "cleared unmerged over 20 min 1" in found[5][1]
+
+
+def test_auto_merge_a_verdict_on_another_head_does_not_date_a_cleared_head(tmp_path, capsys):
+    waiting = pull(63, 33, state="open", merged_at=None)
+    waiting["verdicts"] = [{"kind": "fix", "sha": "b" * 40, "at": day(11, 30)}]
+    document = saved(facts={"pull_requests": [waiting], "flow": {"stall_hours": 4}})
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "cleared unmerged over 20 min 0" in found[5][1]
+
+
 def test_auto_merge_no_when_the_setting_is_off(tmp_path, capsys):
     root = tmp_path / "off"
     root.mkdir()
