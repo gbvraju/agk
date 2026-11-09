@@ -242,12 +242,22 @@ OTHER = "cd" * 6
 SHOTS = '[failures]\nartifact_paths = ["shots/*.png", "traces/**/*.zip"]\n'
 
 
+def git(root: Path, *args: str) -> str:
+    return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "-C", str(root), *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout
+
+
 def evidence_tree(tmp_path: Path, monkeypatch, ignored: bool = True) -> Path:
     """A git work tree with a run folder: two screenshots, a trace and a file nothing matches."""
     root = tmp_path / "work"
     (root / "run" / "shots").mkdir(parents=True)
     (root / "run" / "traces" / "a").mkdir(parents=True)
-    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    git(root, "init", "-q")
     (root / "agk.toml").write_text(SHOTS, encoding="utf-8")
     (root / ".gitignore").write_text(".agk-failures/\n" if ignored else "", encoding="utf-8")
     (root / "run" / "shots" / "one.png").write_text("one", encoding="utf-8")
@@ -335,14 +345,27 @@ def test_a_folder_git_does_not_ignore_is_refused(tmp_path, monkeypatch, capsys):
     assert not (root / ".agk-failures").exists()
 
 
+def test_a_pattern_python_cannot_read_is_refused(tmp_path, monkeypatch, capsys):
+    """REQ-053 AC1: rule 2, a bad pattern names the setting and leaves the folder as it was."""
+    root = evidence_tree(tmp_path, monkeypatch)
+    copy_files()
+    capsys.readouterr()
+
+    def refuse(*_args, **_kwargs):  # the pattern an older Python's glob refuses, on any Python
+        raise ValueError
+
+    monkeypatch.setattr(failures.Path, "glob", refuse)
+    assert copy_files() == 2
+    assert "setting: failures.artifact_paths" in capsys.readouterr().out
+    assert len(stored(root)) == 3
+
+
 def test_nothing_shows_in_git_status(tmp_path, monkeypatch, capsys):
     """REQ-053 AC8: rule 13, the folder is never committed."""
     root = evidence_tree(tmp_path, monkeypatch)
-    status = ["git", "status", "--porcelain", "--untracked-files=all"]
-    before = subprocess.run(status, cwd=root, capture_output=True, text=True, check=True).stdout
+    before = git(root, "status", "--porcelain", "--untracked-files=all")
     copy_files()
-    after = subprocess.run(status, cwd=root, capture_output=True, text=True, check=True).stdout
-    assert before == after
+    assert git(root, "status", "--porcelain", "--untracked-files=all") == before
 
 
 def test_without_artifact_paths_nothing_happens(tmp_path, monkeypatch, capsys):
@@ -464,10 +487,12 @@ def test_prune_touches_only_signature_folders(tmp_path, monkeypatch, capsys):
     (away / "kept.txt").write_text("kept", encoding="utf-8")
     (root / ".agk-failures" / OTHER).symlink_to(away, target_is_directory=True)
     (root / ".agk-failures" / "not-a-signature").mkdir()
+    (root / ".agk-failures" / ("ef" * 6)).write_text("a stray file", encoding="utf-8")
     assert failures.main(["files", "--prune", "--issues", issue_list(tmp_path)]) == 0
     assert (away / "kept.txt").exists() and not (root / ".agk-failures" / OTHER).is_symlink()
     assert not (root / ".agk-failures" / SIG).exists()
     assert (root / ".agk-failures" / "not-a-signature").is_dir()
+    assert not (root / ".agk-failures" / ("ef" * 6)).exists()
     assert (root / "run" / "shots" / "one.png").exists()
 
 
