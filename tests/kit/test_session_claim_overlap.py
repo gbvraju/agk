@@ -190,7 +190,7 @@ def test_a_set_list_replaces_the_default(proj, stub):
 
 def test_an_empty_list_exempts_no_index(proj, stub):
     """REQ-057 AC2: a set list replaces the default, so an empty one exempts nothing."""
-    flow(proj, "shared_indexes = []")
+    flow(proj, "shared_indexes = []\nreprove_paths = []")
     same = brief("docs/requirements.md")
     listing(stub, [issue(5, same), issue(6, same)])
     stub.serve(PULLS, [])
