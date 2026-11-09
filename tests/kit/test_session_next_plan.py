@@ -79,12 +79,12 @@ def test_two_briefs_under_one_folder_with_different_files_do_not_block_each_othe
 
 
 def test_a_folder_only_brief_waits_for_a_brief_that_names_a_file_under_it(proj, stub):
-    listing(stub, [issue(4, brief("docs/guides/")), issue(5, brief("docs/guides/a.md"))])
+    listing(stub, [issue(4, brief("docs/guides/")), issue(5, brief("docs/guides/a.txt"))])
     stub.serve(f"{ISSUES}/4/comments", [comment(1, "x", f"taken: builder-x {DAY}")])
     free(stub, 5)
     got = data(proj, stub)
     out = nxt(proj, stub)
-    assert skips(out)[5] == plan_waits(got)[5] == "waits for #4 (both touch docs/guides/a.md)"
+    assert skips(out)[5] == plan_waits(got)[5] == "waits for #4 (both touch docs/guides/a.txt)"
     assert out.returncode == 1 and posts(stub) == []
 
 
