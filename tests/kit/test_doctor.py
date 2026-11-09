@@ -124,7 +124,7 @@ def test_ac1_the_ok_case_reports_none_and_exits_0(tmp_path):
     assert proc.returncode == 0, proc.stdout
     assert "FAIL" not in proc.stdout and "??" not in proc.stdout
     assert proc.stdout.splitlines()[0] == "agk doctor 9.9.9"
-    assert proc.stdout.splitlines()[-1] == "summary: 38 ok, 0 fail, 0 cannot-check"
+    assert proc.stdout.splitlines()[-1] == "summary: 39 ok, 0 fail, 0 cannot-check"
 
 
 def test_ac1_stricter_than_the_minimum_is_ok(tmp_path):
@@ -190,7 +190,7 @@ def test_ac1_text_report_shape(tmp_path):
     assert lines[i + 1] == "  fix: run /agk:upgrade (SPEC-0008)"
     j = lines.index(next(ln for ln in lines if ln.startswith("?? vendored-missing error ")))
     assert lines[j + 1].startswith("  to check: ")
-    assert lines[-1] == "summary: 34 ok, 2 fail, 2 cannot-check"
+    assert lines[-1] == "summary: 35 ok, 2 fail, 2 cannot-check"
 
 
 def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
@@ -199,7 +199,7 @@ def test_ac1_json_has_sorted_keys_the_summary_and_no_timestamp(tmp_path):
     data = json.loads(proc.stdout)
     # `secret_scan`: the gitleaks line of brief #632 (ADR-0306); `work_type`: SPEC-0038 rule 5
     assert list(data) == sorted(data) == ["checks", "doctor", "secret_scan", "summary", "work_type"]
-    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 37}
+    assert data["summary"] == {"cannot-check": 0, "fail": 1, "ok": 38}
     for check in data["checks"]:
         assert list(check) == sorted(check)
         assert (check["status"] == "cannot-check") == ("reason" in check)
@@ -545,7 +545,7 @@ def test_ac1_default_root_is_the_current_directory(tmp_path):
 
 def test_ac1_every_id_has_a_severity_and_a_printed_fix():
     """REQ-002 AC1: rule 5."""
-    assert len(IDS) == 38
+    assert len(IDS) == 39
     for severity, ok_text, fail_text, fix in CHECKS.values():
         assert severity in ("error", "warn") and ok_text and fail_text and fix
     assert CHECKS["ruleset-missing"][3].endswith("use a ruleset (ADR-0001 decision 3)")
