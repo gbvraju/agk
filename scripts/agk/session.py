@@ -234,6 +234,8 @@ ZERO_WIDTH = re.compile("[\u200b-\u200f\u2060\ufeff]")  # read as nothing before
 ASSIGN_MODES = ("conductor", "next")
 BRIEF_LINE = re.compile(r"Brief: #(\d+)")
 TOUCHES = re.compile(r"Touches: (.+)")
+ADDS = re.compile(r"Adds: (.+)")
+BROAD = re.compile(r"Broad: \S.*")
 SENTENCE = re.compile(r'Sentence: "(.*)"')
 DEPENDS = re.compile(r"Depends-on: #(\d+)")
 SIZE = re.compile(r"Size: [SML]")
@@ -671,6 +673,16 @@ def line_problems(lines: list[str]) -> list[str]:
         or not all(g.strip() for g in globs)
     ):
         problems.append("rule 2: exactly one line Touches: with path globs separated by commas")
+    adds = [x for x in lines if x.startswith("Adds:")]
+    if (
+        len(adds) > 1
+        or not all(ADDS.fullmatch(x.rstrip()) for x in adds)
+        or not all(g.strip() for x in adds for g in x[len("Adds:") :].split(","))
+    ):
+        problems.append("rule 4: at most one line Adds: with paths separated by commas")
+    broad = [x for x in lines if x.startswith("Broad:")]
+    if len(broad) > 1 or not all(BROAD.fullmatch(x.rstrip()) for x in broad):
+        problems.append("rule 4: at most one line Broad: with its reason")
     if not pair and (len(priority) > 1 or any(not PRIORITY.fullmatch(x) for x in priority)):
         problems.append("rule 2: at most one line Priority: 0, 1, 2 or 3")
     return problems + measured_problems(lines, pair, priority)
@@ -890,11 +902,18 @@ def judge(
     return None, comments
 
 
-def touches_of(body: str) -> list[str]:
-    for line in body.splitlines():
-        if found := TOUCHES.fullmatch(line.rstrip()):
+def line_entries(body: str, line: re.Pattern) -> list[str]:
+    """The comma-separated entries of the first line of a brief that LINE matches."""
+    for text in body.splitlines():
+        if found := line.fullmatch(text.rstrip()):
             return [g.strip() for g in found.group(1).split(",")]
     return []
+
+
+def touches_of(body: str) -> list[str]:
+    """What a brief works on: its `Touches:` and `Adds:` lines as one list (amendment 141 item 1).
+    Only the two refusals of `session_plan.touch_problems` read the lines apart."""
+    return line_entries(body, TOUCHES) + line_entries(body, ADDS)
 
 
 def priority_of(body: str) -> int:
@@ -906,10 +925,17 @@ def priority_of(body: str) -> int:
 
 def brief_shape(root, repo: str) -> Callable:
     """What this repository refuses in a brief body: rule 4, and the wave with a plan issue."""
-    if not plan_issue_set(root):
-        return brief_problems
-    known = plan_waves(repo)
-    return lambda body: brief_problems(body) + wave_problems(body, known)
+    from session_plan import touch_problems, touch_rules  # the plan builds on this module
+
+    rules = touch_rules(root)
+    known = plan_waves(repo) if plan_issue_set(root) else None
+    waves = plan_issue_set(root)
+
+    def shape(body: str | None) -> list[str]:
+        found = brief_problems(body) + (wave_problems(body, known) if waves else [])
+        return found or touch_problems(str(body), rules)
+
+    return shape
 
 
 def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
@@ -1155,6 +1181,11 @@ def kind_of(body: str, protected: list[str] | None) -> str:
     touches = [x for x in lines if x.startswith("Touches")]
     found = TOUCHES.fullmatch(touches[0]) if len(touches) == 1 else None
     globs = [g.strip() for g in found.group(1).split(",")] if found else []
+    adds = [x for x in lines if x.startswith("Adds:")]
+    added = ADDS.fullmatch(adds[0]) if len(adds) == 1 else None
+    if adds and not added:
+        return "design"
+    globs += [g.strip() for g in added.group(1).split(",")] if added else []
     if len(sizes) != 1 or not SIZE.fullmatch(sizes[0]) or not globs or not all(globs):
         return "design"
     design = (*DESIGN_DIRS, *DESIGN_FILES, GUARD_PREFIX)
@@ -2699,6 +2730,7 @@ BUILDER_RULES = (2, 3, 7, 8, 17, 21, 27, 28, 31, 33, 34, 36)  # the session rule
 CORE_RULES_FILE = "config/core-rules.md"
 RESERVED_LINE = re.compile(r"Reserved: (.+)")
 NUMBER_RE = re.compile(NUMBER)
+RESERVATION = re.compile(r"\b(?:ADR-\d{4}|SPEC-\d{4}|REQ-\d{3}|amendment \d+)\b")
 RULE_START = re.compile(r"(\d+)\. (\S.*)")
 BODY_LINE = re.compile(r"`[A-Z][A-Za-z -]*:[^`]*`")
 PROMPT_HEAD = (
@@ -2743,13 +2775,23 @@ STOP_LINE = (
 FOLLOW_UP_LINE = "Follow-up for the open pull request of branch `claude/brief-{brief}`: {text}"
 
 
+def reservations(body: str) -> list[str]:
+    """The numbers of a brief's `Reserved:` lines, each once in the line's order: `ADR-nnnn`,
+    `SPEC-nnnn`, `REQ-nnn` or `amendment n`, read only before the first `(` (Q-772-9)."""
+    found: list[str] = []
+    for line in body.splitlines():
+        if match := RESERVED_LINE.fullmatch(line.strip()):
+            found += RESERVATION.findall(match.group(1).split("(", 1)[0])
+    return list(dict.fromkeys(found))
+
+
 def reserved_numbers(body: str, comments: list) -> list[str]:
     """The numbers the brief reserved: its `Reserved:` lines and the `reserves` of its takes, in
     the order REQ, SPEC, ADR, each once."""
     found: list[str] = []
     for line in body.splitlines():
         if match := RESERVED_LINE.fullmatch(line.strip()):
-            found += NUMBER_RE.findall(match.group(1))
+            found += NUMBER_RE.findall(match.group(1).split("(", 1)[0])
     for take_row in all_takes(comments):
         found += list(take_row[4])
     order = {"REQ": 0, "SPEC": 1, "ADR": 2}

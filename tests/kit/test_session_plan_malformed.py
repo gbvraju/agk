@@ -94,3 +94,116 @@ def test_with_no_plan_issue_no_wave_is_needed_and_no_milestone_is_read(proj, stu
     free(stub, 7)
     assert malformed(plan(proj, stub).stdout) == []
     assert not any("milestones" in " ".join(map(str, call)) for call in stub.calls())
+
+
+# --- reservation clashes (amendment 141 item 5; REQ-057 AC11) ----------------------------------
+
+CLASH = "rule 4 of SPEC-0050: Reserved {} is also held by #{}"
+
+
+def reserving(line: str) -> str:
+    return brief() + f"Reserved: {line}\n"
+
+
+def open_pr(stub, number: int, brief_no: int, *files: dict) -> dict:
+    stub.serve(f"repos/{REPO}/pulls/{number}/files", list(files))
+    return {
+        "number": number,
+        "state": "open",
+        "body": f"Brief: #{brief_no}\n",
+        "labels": [],
+        "head": {"ref": f"claude/brief-{brief_no}", "sha": "a" * 40},
+        "updated_at": "2099-01-01T00:00:00Z",
+        "created_at": "2099-01-01T00:00:00Z",
+        "merged_at": None,
+        "user": {"login": "x"},
+    }
+
+
+def served(proj, stub, issues, prs=()) -> str:
+    stub.serve(f"repos/{REPO}/pulls", list(prs))
+    listing(stub, issues)
+    free(stub, *[i["number"] for i in issues])
+    out = plan(proj, stub)
+    assert out.returncode == 0, out.stdout + out.stderr
+    return out.stdout
+
+
+def test_ac11_of_two_briefs_the_later_one_is_refused_naming_both(proj, stub):
+    """REQ-057 AC11: two open briefs reserve one number."""
+    out = served(proj, stub, [filed(5, reserving("ADR-0900")), filed(6, reserving("ADR-0900"))])
+    assert malformed(out) == [f"MALFORMED: #6 {CLASH.format('ADR-0900', 5)} (fix: filer)"]
+
+
+def test_ac11_an_amendment_number_is_a_reservation(proj, stub):
+    """REQ-057 AC11: `amendment n` counts."""
+    out = served(
+        proj, stub, [filed(5, reserving("amendment 139")), filed(6, reserving("amendment 139"))]
+    )
+    assert malformed(out) == [f"MALFORMED: #6 {CLASH.format('amendment 139', 5)} (fix: filer)"]
+
+
+def test_ac11_a_brief_yields_to_a_pull_request_of_another_brief(proj, stub):
+    """REQ-057 AC11: the brief is refused and the pull request is named."""
+    added = {"filename": "docs/adr/0900-a.md", "status": "added"}
+    pr = open_pr(stub, 40, 9, added)
+    out = served(proj, stub, [filed(5, reserving("ADR-0900"))], [pr])
+    assert malformed(out) == [f"MALFORMED: #5 {CLASH.format('ADR-0900', 40)} (fix: filer)"]
+
+
+def test_ac11_a_brief_s_own_pull_request_is_excepted(proj, stub):
+    """REQ-057 AC11: the pull request of that brief (its `Brief: #n` line) holds nothing."""
+    added = {"filename": "docs/runs/proposed-spec-amendments-139.md", "status": "added"}
+    pr = open_pr(stub, 40, 5, added)
+    assert malformed(served(proj, stub, [filed(5, reserving("amendment 139"))], [pr])) == []
+
+
+def test_ac11_a_requirement_added_by_a_pull_request_is_a_clash(proj, stub):
+    """REQ-057 AC11: `REQ-nnn` is read from the added section of the requirements."""
+    changed = {
+        "filename": "docs/requirements.md",
+        "status": "modified",
+        "patch": "@@ -1 +1,2 @@\n+### REQ-900 — x\n",
+    }
+    pr = open_pr(stub, 40, 9, changed)
+    out = served(proj, stub, [filed(5, reserving("REQ-900"))], [pr])
+    assert malformed(out) == [f"MALFORMED: #5 {CLASH.format('REQ-900', 40)} (fix: filer)"]
+
+
+def test_ac11_a_modified_adr_is_not_a_reservation_clash(proj, stub):
+    """REQ-057 AC11: a pull request that only edits an ADR adds no number."""
+    changed = {"filename": "docs/adr/0900-a.md", "status": "modified"}
+    pr = open_pr(stub, 40, 9, changed)
+    assert malformed(served(proj, stub, [filed(5, reserving("ADR-0900"))], [pr])) == []
+
+
+def test_ac11_text_in_brackets_is_not_a_reservation(proj, stub):
+    """REQ-057 AC11, Q-772-9: only the text before the first `(`."""
+    one = filed(5, reserving("none (Covered-by: ADR-0303)"))
+    two = filed(6, reserving("ADR-0304 (not ADR-0303)"))
+    three = filed(7, reserving("ADR-0303"))
+    assert malformed(served(proj, stub, [one, two, three])) == []
+
+
+def test_ac11_a_refused_brief_does_not_start(proj, stub):
+    """REQ-057 AC11: a refused brief is not planned."""
+    listing(stub, [filed(5, reserving("ADR-0900")), filed(6, reserving("ADR-0900"))])
+    free(stub, 5, 6)
+    out = json.loads(plan(proj, stub, "--json").stdout)
+    assert [row["brief"] for row in out["start"]] == [5]
+
+
+def test_q_772_9_the_reserved_numbers_of_a_take_stop_at_the_bracket():
+    """Q-772-9: `session.reserved_numbers` reads the same way."""
+    import session
+
+    body = "Reserved: ADR-0304 (Covered-by: ADR-0303)\n"
+    assert session.reserved_numbers(body, []) == ["ADR-0304"]
+    assert session.reservations(
+        "Reserved: REQ-901, SPEC-0901, ADR-0901, amendment 7 (x ADR-1)\n"
+    ) == [
+        "REQ-901",
+        "SPEC-0901",
+        "ADR-0901",
+        "amendment 7",
+    ]

@@ -60,6 +60,12 @@ overlap with `running_conflict` and `clash`, leaving out the paths that `exempt`
 shared-mechanical files and the shared indexes of `[flow] shared_indexes` (exact paths, default
 `SHARED_INDEXES`; a set list replaces it, a bad value is refused naming the setting). A shared
 index never makes an overlap; it still counts for the re-prove above, which has no exemption.
+
+Exact `Touches:` (amendment 141 item 1, brief #772): `touch_problems` is the one function behind
+`check_brief.py --root`, `next`, `plan` and the doctor's `brief-broad-touches`. A folder or wildcard
+`Touches:` entry that matches more than `[flow] max_touch_glob` files that can hold a brief is
+refused unless the brief has one `Broad:` line, and an `Adds:` entry may not name an existing file.
+`reservation_refusals` refuses a `Reserved:` number held elsewhere (item 5).
 """
 
 from __future__ import annotations
@@ -79,7 +85,10 @@ import common
 import playbook_format
 from common import CheckError, matches, read_list
 from session import (
+    ADDS,
+    BROAD,
     RELEASED,
+    TOUCHES,
     Survey,
     all_takes,
     brief_number,
@@ -87,6 +96,7 @@ from session import (
     flow_value,
     gh,
     glob_regex,
+    line_entries,
     literal,
     live_takes,
     moment,
@@ -96,6 +106,7 @@ from session import (
     protected_entries,
     pull_files,
     repo_name,
+    reservations,
     shared_patterns,
     survey,
     touches_of,
@@ -125,6 +136,11 @@ SHARED_INDEXES = (
     "docs/build-state.md",
 )
 INDEXES_REFUSED = "setting: flow.shared_indexes must be a list of exact repository paths"
+MAX_TOUCH_GLOB = 5  # the default of `[flow] max_touch_glob`
+REPROVE_PATHS = ("**/*.md", "!docs/specs/**", "!docs/adr/**")
+REPROVE_REFUSED = "setting: flow.reprove_paths must be a list of non-empty strings"
+ADDED_NUMBER = re.compile(r"docs/(adr|specs)/(\d{4})-[^/]+\.md")
+ADDED_AMENDMENT = re.compile(r"docs/runs/proposed-spec-amendments-(\d+)\.md")
 
 
 def shared_indexes(root) -> list[str]:
@@ -148,6 +164,120 @@ def exempt(root) -> list[re.Pattern]:
 
 def label_names(pr: dict) -> set[str]:
     return {str(x.get("name")) for x in pr.get("labels") or [] if isinstance(x, dict)}
+
+
+def reprove_paths(root) -> list[str]:
+    """`[flow] reprove_paths` (amendment 141 item 3), else the default; refused by its name."""
+    value = flow_value(root, "reprove_paths", list(REPROVE_PATHS), RULE)
+    if not isinstance(value, list) or not all(
+        isinstance(v, str) and v.strip() and v.strip() != "!" for v in value
+    ):
+        raise CheckError(REPROVE_REFUSED)
+    return value
+
+
+def is_prose(path: str, rules: list[str]) -> bool:
+    """Whether PATH is prose under the list, read in order: a `!` entry takes matches away."""
+    found = False
+    for rule in rules:
+        if glob_regex(rule.removeprefix("!")).fullmatch(path):
+            found = not rule.startswith("!")
+    return found
+
+
+def tree_files(root) -> list[str]:
+    """The files under ROOT: git's list in a repository, else every file (`.git` is never one)."""
+    base = Path(root)
+    if (base / ".git").exists():
+        return [p for p in common.git(base, "ls-files", "-z").split("\0") if p]
+    return sorted(
+        p.relative_to(base).as_posix()
+        for p in base.rglob("*")
+        if p.is_file() and ".git" not in p.relative_to(base).parts
+    )
+
+
+def touch_rules(root) -> dict:
+    """What `touch_problems` reads once per run; a bad setting is refused by its name."""
+    held_not = exempt(root)
+    prose = reprove_paths(root)
+    shared = [glob_regex(p) for p in shared_patterns(root)]
+    files = tree_files(root)
+    return {
+        "root": root,
+        "limit": flow_int(root, "max_touch_glob", MAX_TOUCH_GLOB, 4),
+        "files": files,
+        "holding": [
+            f for f in files if not any(r.fullmatch(f) for r in held_not) and not is_prose(f, prose)
+        ],
+        "unshared": [f for f in files if not any(r.fullmatch(f) for r in shared)],
+    }
+
+
+def broad_entries(body: str, rules: dict) -> list[str]:
+    """The `Touches:` entries refused for matching too many files that can hold a brief; none
+    for a brief with exactly one `Broad:` line, its own statement that it sweeps."""
+    if sum(1 for x in body.splitlines() if BROAD.fullmatch(x.rstrip())) == 1:
+        return []
+    broad = []
+    for entry in line_entries(body, TOUCHES):
+        read = entries_of(rules["root"], [entry])[0]
+        if is_folder(read) or has_wildcard(read):
+            pattern = glob_regex(read)
+            if sum(1 for f in rules["holding"] if pattern.fullmatch(f)) > rules["limit"]:
+                broad.append(entry)
+    return broad
+
+
+def touch_problems(body: str, rules: dict) -> list[str]:
+    """Amendment 141 item 1, naming the rule, the setting and the entry, never a count."""
+    problems = [
+        f"rule 4: Touches entry {e} matches more than flow.max_touch_glob files"
+        for e in broad_entries(body, rules)
+    ]
+    for entry in line_entries(body, ADDS):
+        pattern = glob_regex(entries_of(rules["root"], [entry])[0])
+        if any(pattern.fullmatch(f) for f in rules["unshared"]):
+            problems.append(f"rule 4: Adds entry {entry} names an existing file")
+    return problems
+
+
+def added_numbers(s: Survey, pr: dict) -> set[str]:
+    """The numbers a pull request adds: a new ADR, spec or amendment file, a new requirement."""
+    found: set[str] = set()
+    for item in pull_files(s, pr):
+        name = str(item.get("filename"))
+        if name == "docs/requirements.md":
+            patch = str(item.get("patch") or "")
+            found.update(f"REQ-{n}" for n in re.findall(r"(?m)^\+### REQ-(\d{3})\b", patch))
+        elif item.get("status") == "added":
+            if m := ADDED_NUMBER.fullmatch(name):
+                found.add(("ADR-" if m.group(1) == "adr" else "SPEC-") + m.group(2))
+            elif m := ADDED_AMENDMENT.fullmatch(name):
+                found.add(f"amendment {m.group(1)}")
+    return found
+
+
+def reservation_refusals(s: Survey) -> list[tuple[int, str]]:
+    """Amendment 141 item 5: (brief, why) for each open brief whose `Reserved:` number an open pull
+    request of another brief adds, or an earlier open brief reserves; a brief yields to a pull
+    request, and of two briefs the later is refused. No pull request is read when none reserves."""
+    reserved = {n: reservations(str(b.get("body") or "")) for n, b in sorted(s.briefs.items())}
+    if not any(reserved.values()):
+        return []
+    opened = [p for p in s.prs if p.get("state") == "open"]
+    adds = {p["number"]: added_numbers(s, p) for p in opened}
+    refused: list[tuple[int, str]] = []
+    for number, mine in reserved.items():
+        for held in mine:
+            prs = [
+                p["number"] for p in opened if pr_brief(p) != number and held in adds[p["number"]]
+            ]
+            earlier = [m for m, theirs in reserved.items() if m < number and held in theirs]
+            if holder := (prs or earlier)[:1]:
+                why = f"rule 4 of SPEC-0050: Reserved {held} is also held by #{holder[0]}"
+                refused.append((number, why))
+    return refused
 
 
 def unshared(globs: list[str], shared: list) -> list[str]:
@@ -938,7 +1068,10 @@ def build(root) -> dict:
     stale = stale_claims(s)
     freed, skipped = settle_takes(s)
     s.held = [h for h in s.held if h[0] not in freed]
-    s.skipped = skipped
+    s.skipped = skipped + reservation_refusals(s)
+    refused = {n for n, why in s.skipped if why.startswith("rule ")}
+    s.free = [b for b in s.free if b["number"] not in refused]
+    freed -= refused
     ready, build_waits, build_skips = candidates(s, freed)
     pb = playbook_of(root)
     ready = lane_order(pb, ready)
