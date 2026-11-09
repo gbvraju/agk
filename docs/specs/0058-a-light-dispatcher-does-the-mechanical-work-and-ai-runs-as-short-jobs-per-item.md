@@ -1,6 +1,6 @@
 # SPEC-0058: A light dispatcher does the mechanical work and AI runs as short jobs per item
 
-- Status: Draft
+- Status: Approved
 - Owner: reviewer group (a team from config/reviewers.yaml)
 - Requirements: REQ-065
 
