@@ -27,7 +27,7 @@ OVER_1MB = 1_000_001
 
 
 def git(root: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=root, capture_output=True, check=True)  # nosec B603 B607
+    subprocess.run(["git", *args], cwd=root, capture_output=True, check=True)  # nosec B603 B607 - fixed argument list, no shell
 
 
 def commit(root: Path) -> None:
