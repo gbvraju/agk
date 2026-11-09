@@ -1,0 +1,1 @@
+- Three checked runbook pages, `docs/runbooks/red-default-branch.md`, `actions-blocked.md` and `leaked-secret.md`, and the guide `docs/guides/local-mode.md` are now installed in every project; `check_runbooks.py` passes on them (brief #818, SPEC-0056 build (b), Covered-by ADR-0372)

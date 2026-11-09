@@ -56,6 +56,7 @@ AGK asks for none, stores none and prints none. The one optional secret is yours
   keyed on its version and digest, and checked against the digest on every use, so a GitHub download outage does not stop the
   scan once one run has succeeded; with no cached copy, a failed download fails the step with one line, `could not download the
   secret scanner from GitHub (HTTP <code>); re-run the job`.
+  For a real finding, a person follows [the leaked-secret page](../runbooks/leaked-secret.md), which starts by revoking the credential.
 - **Secrets in a session.** Principle 9 says there are none in the repository or in an agent session (`constitution/principles.md`).
   That is a rule the checks and the scan look for. It is not a wall: the architect role can read any file in the folder it is started in.
 
