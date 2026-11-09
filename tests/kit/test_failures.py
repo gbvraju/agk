@@ -442,7 +442,12 @@ def test_prune_counts_only_open_found_bug_issues(tmp_path, monkeypatch, capsys):
             [
                 {"state": "closed", "labels": [{"name": "found-bug"}], "body": body},
                 {"state": "open", "labels": [{"name": "other"}], "body": body},
-                {"state": "open", "labels": [{"name": "found-bug"}], "body": body, "pull_request": {}},
+                {
+                    "state": "open",
+                    "labels": [{"name": "found-bug"}],
+                    "body": body,
+                    "pull_request": {},
+                },
             ]
         ),
     )
