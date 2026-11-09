@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import json
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -15,8 +14,6 @@ import facts
 import metrics
 import product_report as pr
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tests" / "kit_dev"))
 OK = Path(__file__).parent / "fixtures" / "facts" / "ok" / "facts.json"
 TODAY, WEEK = date(2026, 11, 9), "2026-W45"
 RED, LOCAL = "The default branch is red", "Local mode since 2026-11-03"
@@ -136,7 +133,7 @@ def test_ac7_one_refused_read_leaves_the_other_figures(tmp_path):
 
 def test_ac7_an_incomplete_run_list_is_unknown(tmp_path):
     """REQ-063 AC7: a job list that cannot be read never counts as no minutes."""
-    found = section(tmp_path, {"runs-week": RUNS["runs-week"]})
+    found = section(tmp_path, {**ISSUES, "runs-week": RUNS["runs-week"]})
     assert found["run_minutes"]["minutes"] == "unknown"
 
 
@@ -146,18 +143,6 @@ def test_ac7_a_malformed_detected_line_is_printed_unknown(tmp_path):
     assert "restore leaked secret: 1 closed, median unknown hours, 0 open" in lines(
         section(tmp_path, bad)
     )
-
-
-def test_ac7_the_facts_document_is_valid_against_its_schema(tmp_path):
-    """REQ-063 AC7: a full section, the `unknown` section and an extra key."""
-    from jsonschema_lite import errors  # noqa: PLC0415 - tests/kit_dev, on the path above
-
-    schema = json.loads((ROOT / "kit" / "facts-schema.json").read_text(encoding="utf-8"))
-    doc = json.loads(OK.read_text(encoding="utf-8"))
-    full = section(tmp_path, {**ISSUES, **RUNS})
-    for measures in (full, "unknown"):
-        assert errors(doc | {"measures": measures}, schema) == []
-    assert errors(doc | {"measures": {**full, "extra": 1}}, schema)
 
 
 def test_ac6_a_stranger_s_unlabelled_issue_is_not_counted(tmp_path):

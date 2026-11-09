@@ -41,6 +41,7 @@ SECTIONS = ("Delivered", "Proven", "Needs you", "At risk", "Cost", "Flow")
 # A week is busy when more than this many pull requests merged in it (SPEC-0015 rule 1).
 BUSY_WEEK = 10
 NOTHING = "nothing this week"
+RESTORE_KINDS = ("red default branch", "actions blocked", "leaked secret")  # SPEC-0056 rule 12
 
 
 class Refusal(Exception):
@@ -167,7 +168,7 @@ def unknown_line(what: str, link: str) -> str:
 # An item is `{"kind", <its fields>, "links"}`. The fields of a kind are fixed here; a kind or a
 # field that is not in the table does not exist (a new one is a new schema number).
 
-REPORT_SCHEMA = 7
+REPORT_SCHEMA = 8
 SHADOW_COUNTS = (
     "heads",
     "right_conductor_only",
@@ -211,6 +212,8 @@ ITEM_KINDS = {
         "renumbers",
         "retakes",
     ),
+    "restore": ("of", "closed", "median_hours", "open"),
+    "run-minutes": ("minutes", "per_merged"),
     "briefs-idle": ("entries", "count"),
     "requirements-without-brief": ("entries", "count"),
     "pull-requests-stalled": ("entries", "count"),
@@ -812,7 +815,42 @@ def usage_of(p: dict) -> int | str:
     return value
 
 
-def cost(doc: dict, links: Links, start: date, end: date) -> list[dict]:
+def measures(doc: dict, links: Links, label: str) -> list[dict]:
+    """The time to restore of the three kinds and the run minutes (SPEC-0056 rule 12): the facts
+    hold one week, so facts of another week, or none, print `unknown`, never 0."""
+    held = doc.get("measures")
+    figures = held if isinstance(held, dict) and held.get("week") == label else {}
+    restore = figures.get("restore") if isinstance(figures.get("restore"), dict) else {}
+    minutes = figures.get("run_minutes") if isinstance(figures.get("run_minutes"), dict) else {}
+    items = []
+    for name in RESTORE_KINDS:
+        found = restore.get(name) if isinstance(restore.get(name), dict) else {}
+        items.append(
+            item(
+                "restore",
+                [link("search", f"{links.repo}/issues")],
+                of=name,
+                closed=found.get("closed", UNKNOWN),
+                median_hours=found.get("median_hours", UNKNOWN),
+                open=found.get("open", UNKNOWN),
+            )
+        )
+    items.append(
+        item(
+            "run-minutes",
+            [link("search", f"{links.repo}/actions")],
+            minutes=minutes.get("minutes", UNKNOWN),
+            per_merged=minutes.get("per_merged", UNKNOWN),
+        )
+    )
+    return items
+
+
+def cost(doc: dict, links: Links, start: date, end: date, label: str) -> list[dict]:
+    return pull_request_costs(doc, links, start, end) + measures(doc, links, label)
+
+
+def pull_request_costs(doc: dict, links: Links, start: date, end: date) -> list[dict]:
     if not is_list(doc["pull_requests"]):
         return [unknown_item("pull requests", "search", f"{links.repo}/pulls")]
     merged = merged_in_week(doc, start, end)
@@ -1044,7 +1082,7 @@ def build_report(doc: dict, today: date, week: str | None) -> dict:
         "proven": proven(doc, links),
         "needs_you": inbox(doc, links, today),
         "at_risk": at_risk(doc, links, today, start, end),
-        "cost": cost(doc, links, start, end),
+        "cost": cost(doc, links, start, end, label),
         "flow": flow(doc, links, start, end),
     }
     return {
@@ -1291,6 +1329,14 @@ RENDER = {
         f"{plural(i['count'], 'requirement is', 'requirements are')} planned and not counted here",
     ),
     "pull-request-cost": lambda i: bullet_of(i, cost_text(i)),
+    "restore": lambda i: bullet_of(
+        i,
+        f"restore {i['of']}: {i['closed']} closed, median {i['median_hours']} hours, "
+        f"{i['open']} open",
+    ),
+    "run-minutes": lambda i: bullet_of(
+        i, f"run minutes: {i['minutes']} this week, {i['per_merged']} per merged pull request"
+    ),
     "week-totals": lambda i: bullet_of(i, totals_text(i)),
     "facts-commit": lambda i: f"facts: {i['commit']}",
     "kit-version": lambda i: f"kit version: {i['version']}",
