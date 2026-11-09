@@ -70,6 +70,7 @@
     "scripts/agk/check_requirements.py",
     "scripts/agk/check_runbooks.py",
     "scripts/agk/check_specs.py",
+    "scripts/agk/checklist.py",
     "scripts/agk/ci_tools.py",
     "scripts/agk/common.py",
     "scripts/agk/conductor.py",
