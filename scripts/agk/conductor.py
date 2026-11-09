@@ -923,6 +923,17 @@ NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")  # a conductor's name, never 
 HEAD_RUNS = "repos/{}/actions/runs?event=pull_request&head_sha={}&per_page=100"
 DRAFT_STEP = ("ccr/convert_to_draft", "ccr/ready_for_review")  # the runtime's routes (verify)
 VERDICT_SHAPE = "the first line is not `Verdict: cleared|fix list|rejected <sha>` (session rule 1)"
+CORRECTION_EMPTY = "a Correction: line needs its text: 'Correction: <what was wrong>; <what stands>'"
+APPROVAL_SHAPE = (
+    "SPEC-0032 rule 5: an Approval: line reads 'Approval: SPEC-<n> <path> Draft -> Approved, "
+    "waiting for a person: post \"Approve: SPEC-<n>\"'"
+)
+FINAL_PATH = "SPEC-0021 rule 2: a Final: line names a path that does not exist on the head"
+NO_ITEMS = (
+    "brief #854 answer 1: a fix list with no numbered item and no Final: line on a pull request "
+    "with no Proposed ADR gives the builder nothing to do; the verdict is `cleared`"
+)
+OTHER_HEAD = "session rule 1: the verdict names a head that is not the pull request's current head"
 PLAN_ISSUE = "plan_issue"
 LEASE_SETTING = f"(setting: {PLAN_ISSUE} in the flow table of agk.toml)"
 LEASE_OFF = f"lease: off {LEASE_SETTING}"
