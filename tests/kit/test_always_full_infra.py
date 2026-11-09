@@ -163,7 +163,8 @@ def test_another_comment_is_no_reason(tmp_path):
 
 def test_a_hash_inside_an_entry_is_not_a_comment(tmp_path):
     """REQ-051: brief #878 answer 3 (a `#` inside a string starts no comment)."""
-    assert len(problems(tmp_path, 'always_full = ["a#full: x/**"]\n')) == 1
+    assert len(problems(tmp_path, 'always_full = ["a#b/**"]\n')) == 1
+    assert problems(tmp_path, 'always_full = [\n  "a#b/**", # full: why\n]\n') == []
 
 
 def test_no_table_and_no_key_have_nothing_to_refuse(tmp_path):

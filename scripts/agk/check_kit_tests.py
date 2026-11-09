@@ -18,6 +18,9 @@ are not read; without a base outside CI the rule is skipped.
 Brief #773 (ADR-0359, SPEC-0055 rule 6): with a `[testing]` table and a base, a file the pull
 request adds under `config/`, `kit/`, `skills/` or `.claude/` must be covered by a map entry or
 named, as a whole path, by a test file; the folder counts for the selection only.
+
+Brief #878 (ADR-0393, SPEC-0055 rule 6 as amendment 153 proposes): an `always_full` entry that is not
+test infrastructure needs an adjacent `# full: <reason>` comment (`impact.always_full_problems`).
 """
 
 from __future__ import annotations
@@ -244,6 +247,7 @@ def main(argv: list[str] | None = None) -> int:
             )
     problems += own_adr_problems(root, argv)
     problems += map_problems(root, argv)
+    problems += selection.always_full_problems(root)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     if not problems:

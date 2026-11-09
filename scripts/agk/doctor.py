@@ -362,6 +362,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "docs/guides/project-ci.md to use fewer, and local mode in docs/guides/local-mode.md for "
         "when they run out",
     ),
+    "always-full-infra": (  # SPEC-0055 rule 6 as amendment 153 proposes (brief #878, ADR-0393)
+        "error",
+        "[testing] always_full names test infrastructure, or each other entry has a reason",
+        "[testing] always_full has entries that are not test infrastructure and have no reason:",
+        'keep only the files that change how tests are found or run, or add an adjacent "# full: '
+        '<reason>" comment (a change to agk.toml needs an ADR in the same pull request)',
+    ),
     "design-ui-paths": (  # SPEC-0037 rule 10 (brief #460): information, never a failure
         "warn",
         "ui_paths in [design] of agk.toml: ",
@@ -943,6 +950,16 @@ def auto_merge_result(config: dict) -> Result:
     return Result("ok", message="on, method squash" if state == "on" else "off")
 
 
+def always_full_result(root: Path) -> Result:
+    """Brief #878 answer 3: each `always_full` entry names test infrastructure or has a reason. A
+    malformed `[testing]` table is ok here; the commands that read it refuse it naming the setting."""
+    try:
+        found = impact.always_full_problems(root)
+    except CheckError:
+        return Result("ok")
+    return Result("fail", message=" " + "; ".join(found)) if found else Result("ok")
+
+
 def design_ui_result(root: Path, config: dict) -> Result:
     """`ui_paths` of the `[design]` table (SPEC-0037 rule 10): `absent` when a prototype folder
     exists and the list is unset or empty; always ok, and never a glob in the message."""
@@ -1342,6 +1359,7 @@ def run_checks(
     results.update(engine_results(root, kit_root, config))
     results["actions-minutes"] = minutes_result(root, reads)
     results["auto-merge-setting"] = auto_merge_result(config)
+    results["always-full-infra"] = always_full_result(root)
     results["design-ui-paths"] = design_ui_result(root, config)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
