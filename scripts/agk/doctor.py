@@ -952,7 +952,8 @@ def auto_merge_result(config: dict) -> Result:
 
 def always_full_result(root: Path) -> Result:
     """Brief #878 answer 3: each `always_full` entry names test infrastructure or has a reason. A
-    malformed `[testing]` table is ok here; the commands that read it refuse it naming the setting."""
+    malformed `[testing]` table is ok here; the commands that read it refuse it naming the
+    setting."""
     try:
         found = impact.always_full_problems(root)
     except CheckError:
