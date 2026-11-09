@@ -155,7 +155,7 @@ from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
 from reviewers import spec_approvers, verdict_authors
 
-from config import caps_settings
+from config import MODEL_KINDS, caps_settings, model_providers, model_settings
 
 NAME = "session"
 USAGE = (
@@ -177,7 +177,8 @@ USAGE = (
     "       session.py mine --session ID (--pr N | --brief N)\n"
     "       session.py kind --brief N\n"
     "       session.py prompt --brief N [--session ID] [--follow-up TEXT]\n"
-    "       session.py tidy [--apply] [--json]"
+    "       session.py tidy [--apply] [--json]\n"
+    "       session.py fallback --kind KIND [--after LABEL]"
 )
 COMMANDS = (
     "watch",
@@ -198,6 +199,7 @@ COMMANDS = (
     "kind",
     "prompt",
     "tidy",
+    "fallback",
 )
 PAGE = 100
 PAUSED_EXIT = 5
@@ -2996,6 +2998,27 @@ def number_ok(text: str) -> bool:
         return False
 
 
+def fallback(root, kind: str, after: str | None) -> int:
+    """The next provider of a kind's own tier (SPEC-0053 rule 4): reads `agk.toml` alone, with no
+    network, writes and posts nothing, and never prints a label of another tier."""
+    if kind not in MODEL_KINDS:
+        print(f"FAIL {NAME}: fallback is refused (option: --kind)")
+        return 2
+    setting = model_settings(root)[kind]
+    tier = setting["tier"]
+    labels = model_providers(root).get(tier, [])
+    if after is not None and labels:
+        if after not in labels:
+            print(f"FAIL {NAME}: fallback is refused (option: --after)")
+            return 2
+        labels = labels[labels.index(after) + 1 :]
+    if not labels:
+        print(f"no provider left: {kind} {tier}")
+        return 1
+    print(f"fallback: {kind} {tier} {setting['effort']} {labels[0]}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if args[:1] == ["plan"]:
@@ -3071,6 +3094,7 @@ def main(argv: list[str] | None = None) -> int:
         "mine": {"--session", "--pr", "--brief"},
         "kind": {"--brief"},
         "prompt": {"--brief", "--session", "--follow-up"},
+        "fallback": {"--kind", "--after"},
     }
     if not set(opts) <= allowed[cmd] or len(opts) != len(args[1::2]):
         print(USAGE)
@@ -3113,6 +3137,8 @@ def main(argv: list[str] | None = None) -> int:
         ok = number_of(opts.get("--brief")) and bool(
             SESSION_ID.fullmatch(opts.get("--session", "x"))
         )
+    elif cmd == "fallback":
+        ok = "--kind" in opts
     elif cmd == "mine":
         targets = [k for k in ("--pr", "--brief") if k in opts]
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and len(targets) == 1
@@ -3157,6 +3183,8 @@ def main(argv: list[str] | None = None) -> int:
             return prompt(
                 root, int(opts["--brief"]), opts.get("--session"), opts.get("--follow-up")
             )
+        if cmd == "fallback":
+            return fallback(root, opts["--kind"], opts.get("--after"))
         if cmd == "mine":
             number = {k: int(v) for k, v in opts.items() if k in ("--pr", "--brief")}
             return mine(root, opts["--session"], number.get("--pr"), number.get("--brief"))
