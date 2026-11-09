@@ -48,5 +48,6 @@ three listings. A weekly `pr tests:` line means point 3 shows the last full week
   separate brief.
 - 2026-12-09: The conductor's guard allows neither `metrics.py --save-checklist` nor `checklist.py`, and `.claude/hooks/` is not in the
   brief's `Touches:` (`Q-799-1`); the role file says so.
+- 2026-12-09: Point 8 counts an open, untaken brief with no open `Depends-on` as ready; a brief the plan holds for another reason (a shared file) counts too, so the idle figure is an upper bound.
 - 2026-12-09: Whether the full suite ran in workers is read from the `[testing] workers` setting, not from a run's log (point 4).
 - 2026-12-09: The thresholds are the kit's first guesses (verify) until four weeks of readings exist.
