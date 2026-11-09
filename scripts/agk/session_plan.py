@@ -560,6 +560,12 @@ def wait_text(w: dict) -> str:
     return f"waits for {target} ({w['why']})"
 
 
+def filer_of(s: Survey, number: int) -> str:
+    """The login of the person who filed a brief, the one who can fix it; empty when not given."""
+    user = s.briefs.get(number, {}).get("user")
+    return str(user.get("login") or "") if isinstance(user, dict) else ""
+
+
 def settle_takes(s: Survey) -> tuple[set[int], list[tuple[int, str]]]:
     """(the briefs built in parts whose takes all belong to sessions that moved on, the skips).
 
@@ -984,11 +990,19 @@ def build(root) -> dict:
         if pb
         else {}
     )
+    malformed_rows = [row for row in s.skipped if row[1].startswith("rule ")]
     return {
         "start": [start_entry(names[i], b, protected) for i, b in enumerate(chosen[:count])],
         "running": running_sessions(s),
         "waits": waits,
-        "skipped": [{"brief": n, "why": why} for n, why in [*s.skipped, *build_skips, *unplanned]],
+        "skipped": [
+            {"brief": n, "why": why}
+            for n, why in [*s.skipped, *build_skips, *unplanned]
+            if (n, why) not in malformed_rows
+        ],
+        "malformed": [
+            {"brief": n, "why": why, "filer": filer_of(s, n)} for n, why in malformed_rows
+        ],
         "stale_claims": stale,
         "capacity": {
             "max_builders": s.max_builders,
@@ -1111,6 +1125,10 @@ def words(plan: dict) -> str:
         lines.append(
             "Stale: " + ", ".join(f"#{c['brief']} ({c['why']})" for c in plan["stale_claims"]) + "."
         )
+    lines += [
+        f"MALFORMED: #{m['brief']} {m['why']}" + (f" (fix: {m['filer']})" if m["filer"] else "")
+        for m in plan["malformed"]
+    ]
     if plan["skipped"]:
         lines.append(
             "Skipped: " + ", ".join(f"#{s['brief']} ({s['why']})" for s in plan["skipped"]) + "."
