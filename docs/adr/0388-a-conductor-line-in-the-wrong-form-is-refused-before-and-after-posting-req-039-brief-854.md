@@ -6,7 +6,7 @@
 - Related: ADR-0178, ADR-0330, ADR-0310, brief #854, conductor catch log rows 24 and 25
 - Requirements: REQ-039
 
-Protected classes: `.claude/`, `config/`, `scripts/agk/`, `tests/kit/`
+Protected classes: `.claude/`, `config/`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
