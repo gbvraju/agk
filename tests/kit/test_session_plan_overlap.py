@@ -47,14 +47,14 @@ def test_two_briefs_under_one_folder_with_different_files_start_together(proj, s
 
 
 def test_a_folder_only_brief_waits_for_a_brief_that_names_a_file_under_it(proj, stub):
-    """The verdict on 1f1969e, item 1: `docs/guides/` against `docs/guides/a.md` waits, and the
+    """The verdict on 1f1969e, item 1: `docs/guides/` against `docs/guides/a.txt` waits, and the
     wait names the file."""
-    listing(stub, [issue(4, brief("docs/guides/")), issue(5, brief("docs/guides/a.md"))])
+    listing(stub, [issue(4, brief("docs/guides/")), issue(5, brief("docs/guides/a.txt"))])
     stub.serve(f"{ISSUES}/4/comments", [comment(1, "x", f"taken: builder-x {DAY}")])
     free(stub, 5)
     got = data(proj, stub)
     assert got["start"] == []
-    assert got["waits"] == [{"brief": 5, "waits_for": 4, "why": "both touch docs/guides/a.md"}]
+    assert got["waits"] == [{"brief": 5, "waits_for": 4, "why": "both touch docs/guides/a.txt"}]
 
 
 def test_a_folder_with_a_file_named_under_it_counts_only_for_that_file(proj, stub):
@@ -71,22 +71,22 @@ def test_a_folder_with_a_file_named_under_it_counts_only_for_that_file(proj, stu
 
 def test_a_folder_of_the_repository_without_its_slash_is_a_folder(proj, stub):
     """The verdict on 1f1969e, item 2: `docs/guides` behaves like `docs/guides/`."""
-    proj.write("docs/guides/a.md", "a\n")
+    proj.write("docs/guides/a.txt", "a\n")
     listing(
         stub,
         [
             issue(4, brief("docs/guides")),
-            issue(5, brief("docs/guides/a.md")),
-            issue(6, brief("docs/guides/sub/b.md")),
-            issue(7, brief("docs/guide, docs/guide/a.md")),
+            issue(5, brief("docs/guides/a.txt")),
+            issue(6, brief("docs/guides/sub/b.txt")),
+            issue(7, brief("docs/guide, docs/guide/a.txt")),
         ],
     )
     stub.serve(f"{ISSUES}/4/comments", [comment(1, "x", f"taken: builder-x {DAY}")])
     free(stub, 5, 6, 7)
     got = data(proj, stub)
     assert got["waits"] == [
-        {"brief": 5, "waits_for": 4, "why": "both touch docs/guides/a.md"},
-        {"brief": 6, "waits_for": 4, "why": "both touch docs/guides/sub/b.md"},
+        {"brief": 5, "waits_for": 4, "why": "both touch docs/guides/a.txt"},
+        {"brief": 6, "waits_for": 4, "why": "both touch docs/guides/sub/b.txt"},
     ]
     assert [s["brief"] for s in got["start"]] == [7]  # `docs/guide` is no folder: it names a file
 
@@ -95,15 +95,15 @@ def test_the_same_file_waits_and_the_plan_names_that_file(proj, stub):
     listing(
         stub,
         [
-            issue(5, brief("docs/guides/a.md, scripts/a.py")),
-            issue(6, brief("docs/guides/, docs/guides/a.md")),
+            issue(5, brief("docs/guides/a.txt, scripts/a.py")),
+            issue(6, brief("docs/guides/, docs/guides/a.txt")),
         ],
     )
     free(stub, 5, 6)
     got = data(proj, stub)
     assert [s["brief"] for s in got["start"]] == [5]
-    assert got["waits"] == [{"brief": 6, "waits_for": 5, "why": "both touch docs/guides/a.md"}]
-    assert "#6 waits for #5 (both touch docs/guides/a.md)." in plan(proj, stub).stdout.splitlines()
+    assert got["waits"] == [{"brief": 6, "waits_for": 5, "why": "both touch docs/guides/a.txt"}]
+    assert "#6 waits for #5 (both touch docs/guides/a.txt)." in plan(proj, stub).stdout.splitlines()
 
 
 def test_a_file_glob_overlaps_the_file_it_matches_and_names_it(proj, stub):

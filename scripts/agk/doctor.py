@@ -63,6 +63,7 @@ import impact  # noqa: E402
 import merge_cleared  # noqa: E402
 import minutes  # noqa: E402
 import playbook_format  # noqa: E402
+import session_plan  # noqa: E402
 from common import (  # noqa: E402
     GITLEAKS_INSTALL,
     GITLEAKS_PIN,
@@ -108,6 +109,7 @@ PLACEHOLDER = "@REPLACE-ME"
 DRIFT_WORKFLOW = ".github/workflows/drift-audit.yml"
 DRIFT_NAME = "drift-audit.yml"
 REPORT_WORKFLOW = ".github/workflows/product-report.yml"
+BRIEF_WORKFLOW = ".github/workflows/agk-brief.yml"
 REPORT_NAME = "product-report.yml"
 ISSUE_WRITERS = ("metrics.yml", "drift-audit.yml", "product-report.yml")  # `issues: write`
 DEFAULT_REQUIRED = ["proof", "governance"]  # the default of `required_checks` (common.py)
@@ -318,6 +320,18 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "close each brief listed as completed if its work is done; the last pull request of each "
         "brief carries `Finishes: #n` beside `Brief: #n`, so that the router closes it when it "
         "merges (session rule 28)",
+    ),
+    "brief-invalid-label": (
+        "warn",
+        "the repository has the agk-brief-invalid label, or no workflow that needs it",
+        "the repository has the brief-check workflow and no agk-brief-invalid label",
+        "create the label agk-brief-invalid (the brief check sets it on a refused brief)",
+    ),
+    "brief-broad-touches": (
+        "warn",
+        "no open brief has a Touches entry the brief check refuses as broad",
+        "an open brief has a Touches entry over flow.max_touch_glob files",
+        "name the exact files on its Touches and Adds lines, or add a Broad line for a sweep",
     ),
     "pr-mode": (
         "warn",
@@ -716,6 +730,34 @@ def remote_results(
         "ok" if repo_data.get("default_branch") == config.get("default_branch", "main") else "fail"
     )
     return out
+
+
+def brief_invalid_label_result(root: Path, reads: Any) -> Result:
+    """The label the brief-check workflow sets; a project without that workflow needs none."""
+    if not (root / BRIEF_WORKFLOW).is_file():
+        return Result("ok")
+    _, why = reads.get("label-agk-brief-invalid", "/labels/agk-brief-invalid", not_found="missing")
+    if why == "missing":
+        return Result("fail")
+    return Result("cannot-check", why) if why else Result("ok")
+
+
+def broad_touches_result(root: Path, reads: Any) -> Result:
+    """`brief-broad-touches` (amendment 141 item 9): each open brief and its refused entry."""
+    briefs, why = reads.get("briefs-open", "/issues?state=open&labels=agk-brief&per_page=100")
+    if not isinstance(briefs, list):
+        return Result("cannot-check", why or "bad-response")
+    try:
+        rules = session_plan.touch_rules(root)
+    except CheckError as exc:
+        return Result("cannot-check", str(exc))
+    listed = [
+        f"#{b['number']} {entry}"
+        for b in briefs
+        if isinstance(b, dict) and "pull_request" not in b and isinstance(b.get("body"), str)
+        for entry in session_plan.broad_entries(b["body"], rules)
+    ]
+    return Result("fail", message=listing(listed)) if listed else Result("ok")
 
 
 BRIEF_OF = re.compile(r"Brief: #(\d+)")
@@ -1257,6 +1299,8 @@ def run_checks(
     reads = Reads(repo or origin_repo(root), api_dir)
     results.update(remote_results(reads, config, (root / REPORT_WORKFLOW).is_file(), writers))
     results["brief-finished"] = finished_result(reads)
+    results["brief-invalid-label"] = brief_invalid_label_result(root, reads)
+    results["brief-broad-touches"] = broad_touches_result(root, reads)
     results["placeholder-team-reviewers"] = placeholder_result(root / "config" / "reviewers.yaml")
     results["placeholder-team-codeowners"] = placeholder_result(root / ".github" / "CODEOWNERS")
     results["origin-head"] = origin_head_result(root)

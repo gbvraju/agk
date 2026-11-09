@@ -1,0 +1,1 @@
+- A release's evidence pack is complete: `release_pack.py make` also records the coverage figure, the failures the release fixed and the scorecard week, and writes the index, so `check` prints `ok pack` on a real release (SPEC-0052 build (d), brief #832, REQ-059)

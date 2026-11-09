@@ -1,0 +1,1 @@
+- `/agk:vision` shows what `front_door.py detect` proposes for an existing repository's work type and stack before the discovery questions, the lines quoted as data; only the person's answer is written (brief #864, SPEC-0057 rule 9, ADR-0371)

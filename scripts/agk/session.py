@@ -127,6 +127,7 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -233,9 +234,13 @@ ZERO_WIDTH = re.compile("[\u200b-\u200f\u2060\ufeff]")  # read as nothing before
 ASSIGN_MODES = ("conductor", "next")
 BRIEF_LINE = re.compile(r"Brief: #(\d+)")
 TOUCHES = re.compile(r"Touches: (.+)")
+ADDS = re.compile(r"Adds: (.+)")
+BROAD = re.compile(r"Broad: \S.*")
 SENTENCE = re.compile(r'Sentence: "(.*)"')
 DEPENDS = re.compile(r"Depends-on: #(\d+)")
 SIZE = re.compile(r"Size: [SML]")
+WAVE = re.compile(r"Wave: ([1-9]\d*)")
+MILESTONE_WAVE = re.compile(r"Wave ([1-9]\d*)\b")
 NUMBERED = re.compile(r"(\d+)\.\s+\S")
 ADVANCES = re.compile(r"Advances: (new|REQ-\d{3}(?:, REQ-\d{3})*)")
 PRIORITY = re.compile(r"Priority: ([0123])")  # 0 is valid in a brief only with `Measured:`
@@ -668,6 +673,16 @@ def line_problems(lines: list[str]) -> list[str]:
         or not all(g.strip() for g in globs)
     ):
         problems.append("rule 2: exactly one line Touches: with path globs separated by commas")
+    adds = [x for x in lines if x.startswith("Adds:")]
+    if (
+        len(adds) > 1
+        or not all(ADDS.fullmatch(x.rstrip()) for x in adds)
+        or not all(g.strip() for x in adds for g in x[len("Adds:") :].split(","))
+    ):
+        problems.append("rule 4: at most one line Adds: with paths separated by commas")
+    broad = [x for x in lines if x.startswith("Broad:")]
+    if len(broad) > 1 or not all(BROAD.fullmatch(x.rstrip()) for x in broad):
+        problems.append("rule 4: at most one line Broad: with its reason")
     if not pair and (len(priority) > 1 or any(not PRIORITY.fullmatch(x) for x in priority)):
         problems.append("rule 2: at most one line Priority: 0, 1, 2 or 3")
     return problems + measured_problems(lines, pair, priority)
@@ -689,6 +704,39 @@ def measured_problems(lines: list[str], pair: bool, priority: list[str]) -> list
             " before and after a change that turns it green"
         )
     return problems
+
+
+def wave_problems(body: str | None, known: set[int] | None = None) -> list[str]:
+    """Amendment 140 of SPEC-0030 rule 4: the `Wave:` line of a brief of a repository with a plan
+    issue; `known` is the plan's waves, None when they cannot be read (the shape is then enough)."""
+    wave = wave_of(body)
+    if wave is None:
+        return ["rule 4: exactly one line Wave: n (setting: plan_issue)"]
+    if known and wave not in known:
+        return ["rule 4: the Wave line names a wave the plan does not have"]
+    return []
+
+
+def wave_of(body: str | None) -> int | None:
+    """The wave a brief's one good `Wave:` line names, None without one."""
+    lines = [x.rstrip() for x in (body or "").splitlines() if x.startswith("Wave:")]
+    found = WAVE.fullmatch(lines[0]) if len(lines) == 1 else None
+    return int(found.group(1)) if found else None
+
+
+def plan_issue_set(root) -> bool:
+    """`plan_issue` of the `[flow]` table is set, so every brief needs a wave of that plan."""
+    table = config_source(root).get("flow")
+    return isinstance(table, dict) and table.get("plan_issue") is not None
+
+
+def plan_waves(repo: str) -> set[int] | None:
+    """The waves of the plan: the milestones titled `Wave <n>`; None when they cannot be read."""
+    found = pages(f"repos/{repo}/milestones?state=all")
+    if found is None:
+        return None
+    titles = (MILESTONE_WAVE.match(str(m.get("title"))) for m in found if isinstance(m, dict))
+    return {int(t.group(1)) for t in titles if t} or None
 
 
 def advances_ids(body: str) -> list[str]:
@@ -828,13 +876,15 @@ def is_parked(brief: dict) -> bool:
     return PARKED_LABEL in labels or any(x.startswith(PARKED_PREFIX) for x in lines)
 
 
-def judge(repo: str, brief: dict, me: str, prs: list, hours: int) -> tuple[str | None, list]:
+def judge(
+    repo: str, brief: dict, me: str, prs: list, hours: int, shape: Callable = brief_problems
+) -> tuple[str | None, list]:
     """Why the brief is not for this session (or None when it is free), and its comments."""
     if is_stale(brief):
         return "stale", []
     if is_parked(brief):
         return "parked", []
-    problems = brief_problems(brief.get("body"))
+    problems = shape(brief.get("body"))
     if problems:
         return problems[0], []
     for dep in depends_on(brief["body"]):
@@ -852,11 +902,18 @@ def judge(repo: str, brief: dict, me: str, prs: list, hours: int) -> tuple[str |
     return None, comments
 
 
-def touches_of(body: str) -> list[str]:
-    for line in body.splitlines():
-        if found := TOUCHES.fullmatch(line.rstrip()):
+def line_entries(body: str, line: re.Pattern) -> list[str]:
+    """The comma-separated entries of the first line of a brief that LINE matches."""
+    for text in body.splitlines():
+        if found := line.fullmatch(text.rstrip()):
             return [g.strip() for g in found.group(1).split(",")]
     return []
+
+
+def touches_of(body: str) -> list[str]:
+    """What a brief works on: its `Touches:` and `Adds:` lines as one list (amendment 141 item 1).
+    Only the two refusals of `session_plan.touch_problems` read the lines apart."""
+    return line_entries(body, TOUCHES) + line_entries(body, ADDS)
 
 
 def priority_of(body: str) -> int:
@@ -864,6 +921,21 @@ def priority_of(body: str) -> int:
         if found := PRIORITY.fullmatch(line.rstrip()):
             return int(found.group(1))
     return 2
+
+
+def brief_shape(root, repo: str) -> Callable:
+    """What this repository refuses in a brief body: rule 4, and the wave with a plan issue."""
+    from session_plan import touch_problems, touch_rules  # the plan builds on this module
+
+    rules = touch_rules(root)
+    known = plan_waves(repo) if plan_issue_set(root) else None
+    waves = plan_issue_set(root)
+
+    def shape(body: str | None) -> list[str]:
+        found = brief_problems(body) + (wave_problems(body, known) if waves else [])
+        return found or touch_problems(str(body), rules)
+
+    return shape
 
 
 def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
@@ -885,8 +957,9 @@ def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
     found = Survey(repo, me, limit, hours, prs, builders)
     found.briefs = {i["number"]: i for i in issues if "pull_request" not in i}
     named = {brief_number(p) for p in prs if p.get("state") == "open"}
+    shape = brief_shape(root, repo)
     for brief in sorted((i for i in issues if "pull_request" not in i), key=lambda i: i["number"]):
-        why, comments = judge(repo, brief, me, prs, hours)
+        why, comments = judge(repo, brief, me, prs, hours, shape)
         found.comments[brief["number"]] = comments
         if why is None:
             found.free.append(brief)
@@ -1108,6 +1181,11 @@ def kind_of(body: str, protected: list[str] | None) -> str:
     touches = [x for x in lines if x.startswith("Touches")]
     found = TOUCHES.fullmatch(touches[0]) if len(touches) == 1 else None
     globs = [g.strip() for g in found.group(1).split(",")] if found else []
+    adds = [x for x in lines if x.startswith("Adds:")]
+    added = ADDS.fullmatch(adds[0]) if len(adds) == 1 else None
+    if adds and not added:
+        return "design"
+    globs += [g.strip() for g in added.group(1).split(",")] if added else []
     if len(sizes) != 1 or not SIZE.fullmatch(sizes[0]) or not globs or not all(globs):
         return "design"
     design = (*DESIGN_DIRS, *DESIGN_FILES, GUARD_PREFIX)
@@ -2652,6 +2730,7 @@ BUILDER_RULES = (2, 3, 7, 8, 17, 21, 27, 28, 31, 33, 34, 36)  # the session rule
 CORE_RULES_FILE = "config/core-rules.md"
 RESERVED_LINE = re.compile(r"Reserved: (.+)")
 NUMBER_RE = re.compile(NUMBER)
+RESERVATION = re.compile(r"\b(?:ADR-\d{4}|SPEC-\d{4}|REQ-\d{3}|amendment \d+)\b")
 RULE_START = re.compile(r"(\d+)\. (\S.*)")
 BODY_LINE = re.compile(r"`[A-Z][A-Za-z -]*:[^`]*`")
 PROMPT_HEAD = (
@@ -2696,13 +2775,23 @@ STOP_LINE = (
 FOLLOW_UP_LINE = "Follow-up for the open pull request of branch `claude/brief-{brief}`: {text}"
 
 
+def reservations(body: str) -> list[str]:
+    """The numbers of a brief's `Reserved:` lines, each once in the line's order: `ADR-nnnn`,
+    `SPEC-nnnn`, `REQ-nnn` or `amendment n`, read only before the first `(` (Q-772-9)."""
+    found: list[str] = []
+    for line in body.splitlines():
+        if match := RESERVED_LINE.fullmatch(line.strip()):
+            found += RESERVATION.findall(match.group(1).split("(", 1)[0])
+    return list(dict.fromkeys(found))
+
+
 def reserved_numbers(body: str, comments: list) -> list[str]:
     """The numbers the brief reserved: its `Reserved:` lines and the `reserves` of its takes, in
     the order REQ, SPEC, ADR, each once."""
     found: list[str] = []
     for line in body.splitlines():
         if match := RESERVED_LINE.fullmatch(line.strip()):
-            found += NUMBER_RE.findall(match.group(1))
+            found += NUMBER_RE.findall(match.group(1).split("(", 1)[0])
     for take_row in all_takes(comments):
         found += list(take_row[4])
     order = {"REQ": 0, "SPEC": 1, "ADR": 2}

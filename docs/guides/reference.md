@@ -54,6 +54,8 @@ product file: it creates its own files (`agk.mk`, `agk.toml`, `scripts/agk/`, `.
 exist, to `CLAUDE.md`, `.github/CODEOWNERS` and `.github/PULL_REQUEST_TEMPLATE.md`, and refuses rather than overwrite.
 The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/specs/0002-agk-adopt.md`.
 
+`python3 scripts/agk/survey.py [--clone DIR] [--sidecar DIR] [--today YYYY-MM-DD]` lists a codebase for personal mode and never runs it (ADR-0386).
+
 ## Drift audit
 
     python3 scripts/agk/drift_audit.py [--today YYYY-MM-DD]
@@ -77,6 +79,16 @@ cleared). Review rounds, rejection and the cleared head come from comments whose
 sha>`, `Verdict: fix list` or `Verdict: rejected`. The installed workflow `.github/workflows/metrics.yml` runs every
 Monday and files one issue per week labelled `agk-metrics` (it needs `issues: write`); a week with no closed pull
 request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
+
+## Release pack
+
+    python3 scripts/agk/release_pack.py check <out>/<tag>
+
+Checks one release's evidence pack: a folder named by its tag with exactly `tests.json`, `scans.json`, `coverage.json`,
+`bom.json`, `decisions.json` and the index `pack.json`. It reads the folder and git only, with no network, and prints
+`ok pack`, or one `FAIL pack: <part> <reason>` line per problem and exits 1, naming the part and never a value. A failed or unknown
+check or scan is a `warn pack:` line and passes. A tag that is not a release, or a repository with no release test, is one
+`refused:` line. No governance step runs it. See `docs/specs/0052-every-release-carries-one-evidence-pack-named-by-its-tag.md`.
 
 ## Doctor
 
@@ -234,6 +246,11 @@ When GitHub Actions is blocked (minutes exhausted, billing blocked, an outage), 
 disable and re-enable the workflows with `gh workflow`, what a builder runs and pastes as its `Local evidence:` line, what the
 conductor runs instead of reading CI, what is lost, and the one issue that records every merge (session rule 30, ADR-0182).
 
+## Runbooks
+
+`docs/runbooks/` holds one short checked page each for a red default branch, blocked Actions and a leaked secret. A real
+secret-scan finding goes straight to [the leaked-secret page](../runbooks/leaked-secret.md): revoke first.
+
 A person enters local mode with `python3 scripts/agk/local_mode.py enter` and leaves it with `python3 scripts/agk/local_mode.py
 leave`: each lists the workflows and the one `gh api` call that disables (or enables) each, the kit's and the project's, as a dry
 run that changes nothing; `--write` makes the calls, one line per workflow, and reports a refused call while it makes the rest.
@@ -335,6 +352,14 @@ changed test files, the command line with `{files}` filled in and its folder, th
 files in no area as "not run by proof"; without the table it prints `project_tests` and the files it selects. It reads git and
 files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0185.
+
+## Test map
+
+    python3 scripts/agk/test_map.py build [--root DIR]
+
+Writes the git-ignored file `.agk-test-map.toml` from the tree at the head: which tests cover which files, read from Python
+imports and the JavaScript or TypeScript import graph, with folder conventions as the fallback. The same tree gives the same
+bytes, and nothing reads the file yet. It reads git and files only and runs no test. See ADR-0379 and SPEC-0055 rule 5.
 
 ## Requirement status
 

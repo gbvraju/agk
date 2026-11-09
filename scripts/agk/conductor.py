@@ -4,6 +4,9 @@ nothing and writes no file.
     python3 conductor.py watch [--since ISO] [--once]
     python3 conductor.py sweep
 
+Each `watch` also prints `SWEEP late <m> min`, after its other lines, when no sweep run finished in
+the last 30 minutes and a cleared pull request is open (brief #836 answer 4, ADR-0383).
+
 `watch` polls the comments of every open issue labelled `agk-brief` and every open pull request,
 and exits 0 printing one line `<number> <first line>` for each comment created after `--since`
 (default: the start) whose first line starts `Question:` or `Report:` (conductor catch log row 1);
@@ -37,6 +40,19 @@ after its merge base (the earliest merged pull request that changed it), and `BE
 with the compare's `ahead_by`. It reads `GET pulls/N/files`, one `GET compare/<head>...<default>`
 and, for a re-prove, `GET commits?path=`; a read that fails prints `re-prove: #<n> unknown (cannot
 be read)`. With none of them nothing more is printed.
+
+Brief #781 (SPEC-0049 rules 11 and 12, ADR-0366), GET only:
+
+    python3 conductor.py over --pr N
+
+prints `over #<pr> brief #<brief>`, then one count per line, `unknown` when its evidence cannot be
+read and never 0, then the cause of the first matching rule of rule 12: `loop-red-heads` (the same
+check red on heads in a row), `loop-file-commits` (one file in commits with no green run between),
+`wander-files` (files outside the brief's `Touches:` and `Adds:` lines), `counted-hours` and
+`blocked-hours` (`caps.hours_used`, up to the `over cap` report; blocked runs from a reported tool
+error or refused push to the next commit), `unreadable`, `cause`. The walk stops at `unknown` when
+a rule is not met and part of its evidence cannot be read; `estimate` needs at most half the
+counted hours blocked (Q-781-2).
 
 Build (b) of brief #643 (ADR-0329, catch log rows 3 and 22):
 
@@ -100,6 +116,7 @@ import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from urllib.parse import quote
 
@@ -108,6 +125,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import caps
 import merge_cleared
 import session
+import session_plan
 from common import CheckError, repo_root, verdict_problem
 from full_run import contained_in, covered
 from reviewers import approval_shas, authors_of, spec_approvers, verdict_authors
@@ -116,15 +134,31 @@ USAGE = (
     "usage: conductor.py watch [--since ISO] [--once] | conductor.py sweep | "
     "conductor.py merge-queue [--dry-run] [--max-batch N] | "
     "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE | "
-    "conductor.py lease (--show | --take NAME | --release NAME)"
+    "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N"
 )
 TRIGGERS = ("Question:", "Report:")
 QUESTION_ID = re.compile(r"Question: (Q-\S+)")
+SWEEP_LATE = 30  # minutes without a finished sweep run before `SWEEP late` (brief #836 answer 4)
+SWEEP_RUNS = "repos/{}/actions/workflows/merger.yml/runs?status=completed&per_page=100"
+SWEEP_EVENTS = ("schedule", "workflow_dispatch", "workflow_run")
 POLL = ("conductor_poll_seconds", 60)
 LATE = ("conductor_late_minutes", 30)
 SILENT = ("silent_minutes", 30)
 ALIVE = ("Progress:", "Report:", "Question:")
 ESCALATE = re.compile(r"Report: .*\bescalate\b")
+RED_RUN = ("failure", "timed_out")
+GREEN_RUN = ("success", "neutral")
+BLOCKED = re.compile(
+    r"(?:Question|Report): .*(?:tool error|push\b.*\brefused|refused\b.*\bpush)", re.I
+)
+OVER_REPORT = re.compile(r"Report: \S+ over cap\b")
+OVER_KEYS = (
+    "loop-red-heads",
+    "loop-file-commits",
+    "wander-files",
+    "counted-hours",
+    "blocked-hours",
+)
 SQUASHED = re.compile(r"\(#(\d+)\)\s*$")  # the `(#m)` that ends a merged pull request's subject
 
 
@@ -180,6 +214,39 @@ def renew_lease(root) -> int:
     return code
 
 
+def cleared_open(repo: str) -> bool:
+    """True when an open, non-draft pull request's latest verdict clears its current head."""
+    for pull in read(f"repos/{repo}/pulls?state=open", "the open pull requests"):
+        if pull.get("draft") is not False:
+            continue
+        comments = read(f"repos/{repo}/issues/{pull['number']}/comments", "the comments")
+        if merge_cleared.judge(comments, str(pull["head"]["sha"]), [])[0] == "cleared":
+            return True
+    return False
+
+
+def sweep_late(root, repo: str) -> list[str]:
+    """`SWEEP late <m> min` when no sweep run finished in the last 30 minutes and a cleared pull
+    request is open (brief #836 answer 4), by the sweep's own gate; a failed read is silent."""
+    try:
+        merge_cleared.github_mode(merge_cleared.default_ref(root)[1])
+        found = read_one(SWEEP_RUNS.format(repo), "the sweep runs").get("workflow_runs")
+        ended = [
+            when(str(r.get("updated_at")))
+            for r in (found if isinstance(found, list) else [])
+            if r.get("event") in SWEEP_EVENTS
+            and r.get("conclusion") not in ("cancelled", "skipped")
+        ]
+        newest = max((t for t in ended if t), default=None)
+        now = datetime.now(UTC)
+        minutes = SWEEP_LATE if newest is None else int((now - newest).total_seconds() // 60)
+        if minutes < SWEEP_LATE or not cleared_open(repo):
+            return []
+    except (merge_cleared.Nothing, merge_cleared.Unreadable, CheckError, OSError):
+        return []
+    return [f"SWEEP late {minutes} min"]
+
+
 def watch(root, since: datetime, once: bool) -> int:
     repo = session.repo_name(root)
     interval = session.flow_int(root, POLL[0], POLL[1], 0)
@@ -198,7 +265,7 @@ def watch(root, since: datetime, once: bool) -> int:
                 raise
             print(f"error: {exc}; retrying", file=sys.stderr, flush=True)
         if lines or once or time.monotonic() - started + interval >= WATCH_BOUND:
-            print("\n".join(lines) if lines else "nothing new")
+            print("\n".join((lines or ["nothing new"]) + sweep_late(root, repo)))
             return 0
         time.sleep(interval)
 
@@ -376,8 +443,9 @@ def changed_by(repo: str, branch: str, path: str, compare: dict) -> int | None:
 
 def proof_lines(root, repo: str, pulls: list, branch: str) -> list[str]:
     """SPEC-0050 rule 5 (brief #755): `overlap:`, `re-prove:` and `BEHIND` lines of the open builder
-    pull requests, from `GET pulls/N/files` and one `GET compare/<head>...<branch>` each."""
-    shared = [session.glob_regex(p) for p in session.shared_patterns(root)]
+    pull requests, from `GET pulls/N/files` and one `GET compare/<head>...<branch>` each. An
+    `overlap:` leaves out the files of the table of rule 3 (amendment 141 item 8)."""
+    shared = session_plan.exempt(root)
     mine: dict[int, set[str]] = {}
     brief: dict[int, int] = {}
     reprove: list[str] = []
@@ -445,6 +513,162 @@ def sweep(root) -> int:
             lines.append(found)
     lines += slot_lines(root, repo, issues, every, now)
     print("\n".join(lines))
+    return 0
+
+
+# --- over: the counts of an overrun and its cause (brief #781, SPEC-0049 rule 12) ---------------
+
+
+def head_runs(repo: str, commits: list) -> list | None:
+    """The finished, not skipped check runs of each commit, or None when one cannot be read."""
+    from route import listing  # route imports session
+
+    found = []
+    for c in commits:
+        runs = listing(f"repos/{repo}/commits/{c.get('sha')}/check-runs", "check_runs")
+        if not isinstance(runs, list):
+            return None
+        found.append([r for r in runs if r.get("conclusion") not in (None, "skipped")])
+    return found
+
+
+def red_heads(runs: list) -> int:
+    """The longest run of heads in a row on which one check failed; no finished run, no head."""
+    best = 0
+    streak: dict[str, int] = {}
+    for ran in filter(None, runs):
+        red = {r.get("name") for r in ran if r.get("conclusion") in RED_RUN}
+        streak = {name: streak.get(name, 0) + 1 for name in red}
+        best = max([best, *streak.values()])
+    return best
+
+
+def file_commits(repo: str, commits: list, runs: list) -> int | str:
+    """The most commits that changed one file with no green run between; merges change none."""
+    best = 0
+    seen: dict[str, int] = {}
+    for c, ran in zip(commits, runs, strict=True):
+        if len(c.get("parents") or []) < 2:
+            detail = session.gh(f"repos/{repo}/commits/{c.get('sha')}")
+            if not isinstance(detail, dict) or not isinstance(detail.get("files"), list):
+                return caps.UNKNOWN
+            for f in detail["files"]:
+                seen[f.get("filename")] = seen.get(f.get("filename"), 0) + 1
+            best = max([best, *seen.values()])
+        if ran and all(r.get("conclusion") in GREEN_RUN for r in ran):
+            seen = {}
+    return best
+
+
+def wander_files(repo: str, number: int, body: object) -> int | str:
+    """The files of the pull request outside the brief's lines, or `unknown`."""
+    globs = session.touches_of(body) if isinstance(body, str) else []
+    files = session.pages(f"repos/{repo}/pulls/{number}/files")
+    if not globs or files is None:
+        return caps.UNKNOWN
+    rules = [session.glob_regex(g) for g in globs]
+    return sum(not any(r.fullmatch(f.get("filename", "")) for r in rules) for f in files)
+
+
+def build_end(comments: list, login: str, now: datetime) -> datetime:
+    """The builder's `over cap` report ends the build: a person's time is not the builder's."""
+    said = [c for c in comments if session.author_of(c) == login.lower()]
+    ends = [
+        session.moment(c.get("created_at"))
+        for c in said
+        if OVER_REPORT.match(session.first_line(c))
+    ]
+    return max(ends, default=now)
+
+
+def blocked_spans(comments: list, login: str, pushes: list[datetime], end: datetime) -> dict:
+    """{the next push or the end: the earliest report of a block before it}."""
+    spans: dict[datetime, datetime] = {}
+    for c in comments:
+        said = session.moment(c.get("created_at"))
+        if (
+            session.author_of(c) == login.lower()
+            and said <= end
+            and BLOCKED.match(session.first_line(c))
+        ):
+            stop = min((p for p in pushes if p > said), default=end)
+            spans[stop] = min(spans.get(stop, said), said)
+    return spans
+
+
+def hours_of(repo_data: tuple, login: str, allowed: set[str], opened: str, commits, now) -> tuple:
+    """(counted, blocked) hours, each `unknown` when its evidence cannot be read (rules 6, 12)."""
+    brief, pull = repo_data
+    if not isinstance(brief, list) or not isinstance(pull, list):
+        return caps.UNKNOWN, caps.UNKNOWN
+    end = build_end(pull, login, now)
+
+    def upto(moment: datetime) -> Decimal | str:  # caps.hours_used on what had happened by then
+        early = [
+            [c for c in side if session.moment(c.get("created_at")) <= moment]
+            for side in (brief, pull)
+        ]
+        return caps.hours_used(early[0], early[1], login, allowed, opened, moment)
+
+    counted = upto(end)
+    if commits is None or not isinstance(counted, Decimal):
+        return counted, caps.UNKNOWN
+    pushes = [
+        when(str(((c.get("commit") or {}).get("committer") or {}).get("date"))) for c in commits
+    ]
+    known = [p for p in pushes if p is not None]
+    if len(known) != len(pushes):
+        return counted, caps.UNKNOWN
+    blocked = Decimal("0.0")
+    for stop, start in blocked_spans(pull, login, known, end).items():
+        high, low = upto(stop), upto(start)
+        if not isinstance(high, Decimal) or not isinstance(low, Decimal):
+            return counted, caps.UNKNOWN
+        blocked += high - low
+    return counted, min(blocked, counted)
+
+
+def cause_of(red, files, wander, counted, blocked) -> str:
+    """Rule 12: the first rule met, in order; evidence that cannot be read stops the walk."""
+    if (red != caps.UNKNOWN and red >= 2) or (files != caps.UNKNOWN and files >= 3):
+        return "loop"
+    if caps.UNKNOWN in (red, files, wander):
+        return caps.UNKNOWN
+    if wander:
+        return "wander"
+    if caps.UNKNOWN in (counted, blocked):
+        return caps.UNKNOWN
+    return "blocked" if blocked * 2 > counted else "estimate"
+
+
+def over(root, number: int) -> int:
+    """`over --pr N`: the counts of rule 12, one line each, and the cause; GET only."""
+    repo = session.repo_name(root)
+    pull = session.gh(f"repos/{repo}/pulls/{number}")
+    pull = pull if isinstance(pull, dict) else {}
+    brief = session.brief_number(pull) if pull else None
+    commits = session.pages(f"repos/{repo}/pulls/{number}/commits") if pull else None
+    runs = head_runs(repo, commits) if commits is not None else None
+    red = red_heads(runs) if runs is not None else caps.UNKNOWN
+    known = commits is not None and runs is not None
+    files = file_commits(repo, commits or [], runs or []) if known else caps.UNKNOWN
+    issue = session.gh(f"repos/{repo}/issues/{brief}") if brief else None
+    body = issue.get("body") if isinstance(issue, dict) else None
+    wander = wander_files(repo, number, body) if pull else caps.UNKNOWN
+    login = str((pull.get("user") or {}).get("login") or "")
+    said = (
+        session.pages(f"repos/{repo}/issues/{brief}/comments") if brief else None,
+        session.pages(f"repos/{repo}/issues/{number}/comments") if pull else None,
+    )
+    allowed = {a.lower() for a in verdict_authors(root)}
+    opened = str(pull.get("created_at"))
+    counted, blocked = hours_of(said, login, allowed, opened, commits, datetime.now(UTC))
+    counts = (red, files, wander, counted, blocked)
+    print(f"over #{number} brief {f'#{brief}' if brief else caps.UNKNOWN}")
+    for key, value in zip(OVER_KEYS, counts, strict=True):
+        print(f"{key} {value}")
+    print(f"unreadable {counts.count(caps.UNKNOWN)}")
+    print(f"cause {cause_of(*counts)}")
     return 0
 
 
@@ -898,6 +1122,8 @@ def routine_args(args: list[str]) -> tuple | None:
             return ("lease", "--show", None)
         if len(args) == 3 and args[1] in ("--take", "--release") and NAME.fullmatch(args[2]):
             return ("lease", args[1], args[2])
+    if args[:2] == ["over", "--pr"] and len(args) == 3 and PR_NUMBER.fullmatch(args[2]):
+        return ("over", int(args[2]))
     return None
 
 
@@ -938,6 +1164,8 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
                 return rerun(root, routine[1], routine[2])
             if routine[0] == "check-verdict":
                 return check_verdict(routine[1])
+            if routine[0] == "over":
+                return over(root, routine[1])
             return lease(root, routine[1], routine[2])
         if args == ["sweep"]:
             return sweep(root)

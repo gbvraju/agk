@@ -1,7 +1,9 @@
 """The test plan: which tests a change will run in proof, and why (brief #325, ADR-0185).
 
 Standard library only. Read-only: it reads git and files and runs nothing else, no test and no
-worktree. It prints the plan that `proof.py` runs for the change base..head, built by the same
+worktree, except that under `map_source = "generated"` it first rebuilds the git-ignored test map
+of the head when that is missing or of another tree (`test_map.refresh`, SPEC-0055 rule 5). It
+prints the plan that `proof.py` runs for the change base..head, built by the same
 function (`proof.plan`), so the plan shown is the plan run:
 
 - for each `[proof]` area with added or changed test files: its files, the command line with
@@ -30,9 +32,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 from common import CheckError, git
-from impact import Impact, head_files, impact, is_test_file, level_groups, machine_env
+from impact import (
+    Impact,
+    head_files,
+    impact,
+    is_test_file,
+    level_groups,
+    link_groups,
+    machine_env,
+)
 from impact import text as regression_text
 from proof import Failure, Plan, Run, area_command, plan, resolve_range
+from test_map import refresh
 
 NAME = "test-plan"
 USAGE = "usage: test_plan.py [--base REF] [--head REF] [--json] [ROOT]"
@@ -93,6 +104,21 @@ def level_plan(root: Path, head: str, shown: Plan) -> tuple[list[Run], list[str]
             runs.append(Run(group["label"], group["files"], command, level["cwd"]))
             needs_env = needs_env or bool(level["env"])
     return runs, notes, needs_env
+
+
+def with_links(shown: Plan, found: Impact, levels):
+    """LEVELS with the levels that links add (SPEC-0055 rule 7), as prepush.py runs them."""
+    if not found.linked and not found.link_notes:
+        return levels
+    runs, notes, needs_env = levels or ([], [], False)
+    groups, said = link_groups(found, shown.areas, {r.name for r in runs}, machine_env())
+    for group in (g for g in groups if not g["failed"]):
+        level = group["level"]
+        command = area_command(level, group["files"])
+        runs = [*runs, Run(group["label"], group["files"], command, level["cwd"])]
+        needs_env = needs_env or bool(level["env"])
+        notes = [n for n in notes if not n.startswith(f"tests: {group['label']} runs on ")]
+    return runs, list(dict.fromkeys([*notes, *said])), needs_env
 
 
 def level_data(levels: tuple[list[Run], list[str], bool] | None) -> dict:
@@ -196,8 +222,9 @@ def main(argv: list[str] | None = None) -> int:
             raise Failure("ROOT is not a git work tree (path class: root)")
         base, head = resolve_range(root, options["base"], options["head"])
         shown = plan(root, base, head)
+        refresh(root, head)
         found = impact(root, base, head)
-        levels = level_plan(root, head, shown)
+        levels = with_links(shown, found, level_plan(root, head, shown))
     except Usage as exc:
         print(exc, file=sys.stderr)
         return 2

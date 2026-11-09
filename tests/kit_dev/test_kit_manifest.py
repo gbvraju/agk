@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 import tomllib
 
 from conftest import KIT_ROOT, manifest
@@ -46,6 +47,10 @@ SINGLES = {
     "docs/adr/TEMPLATE.md",
     "docs/specs/TEMPLATE.md",
     "docs/briefs/TEMPLATE.md",
+    "docs/guides/local-mode.md",
+    "docs/runbooks/actions-blocked.md",
+    "docs/runbooks/leaked-secret.md",
+    "docs/runbooks/red-default-branch.md",
     "config/ci-tools.txt",
     "config/core-rules.md",
     "config/playbooks/cloud-migration.toml",
@@ -60,6 +65,7 @@ SINGLES = {
     "config/playbooks/web-app.toml",
     "config/review-checklist.md",
     "config/session-rules.md",
+    "config/stack-signals.toml",
 }
 FORBIDDEN = [r"gbvraju", r"day-\d", r"\bK[0-4]\b", r"PR #\d+", r"Q-K\d"]
 ALLOWED_VARS = {
@@ -128,6 +134,21 @@ def test_ac2_law_files_are_all_in_the_manifest_and_kit_only_are_not():
     assert optional <= law
     for rel in verbatim:
         assert not rel.startswith(("kit/", "tests/kit_dev/")) and rel not in KIT_ONLY
+
+
+def test_ac4_the_signal_table_is_installed_verbatim_and_passes_its_check(shared_install):
+    """REQ-064 AC4: SPEC-0057 rule 5, `Q-S0057-2`."""
+    rel = "config/stack-signals.toml"
+    assert rel in manifest()["verbatim"]
+    assert (shared_install / rel).read_bytes() == (KIT_ROOT / rel).read_bytes()
+    proc = subprocess.run(
+        [sys.executable, "scripts/agk/front_door.py", "check-signals"],
+        cwd=shared_install,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
 def test_ac2_rendered_files_are_codeowners_only():

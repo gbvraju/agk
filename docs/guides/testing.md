@@ -41,6 +41,12 @@ budget_seconds = 300
 - `pr_tests`: `full` (the default) or `selected`. With `selected`, the CI step `Project tests` of a pull request runs only the
   selection, and a push and a release pull request run the full suite (brief #453, ADR-0242; `docs/guides/project-ci.md`,
   "Selected tests on pull requests"). Any other value is refused with `setting: pr_tests`.
+- `links`: `[[testing.links]]` entries, each `code` (path globs) and `run` (`<area>:<level>` names). A changed file that matches a
+  `code` glob selects each named level on the pull request, even one whose `when` has no `pr`: the selected tests of that level,
+  or all of it when none is selected. A link only adds tests. `test_map.py build` adds one link
+  for a schema file (a `.proto`, `.graphql`, `.graphqls` or `.gql` file, or an OpenAPI or Swagger YAML or JSON file) that a file of
+  another area names, naming that area's `contract` level when it has one. A linked level whose environment is absent fails the
+  test step in CI, naming `testing.links`, and is `not run` on a developer's machine.
 
 Every key is optional; an empty `[testing]` table takes the defaults. A bad entry is refused, and the message names the setting
 (for example `setting: testing.map[2].tests`), never its value.

@@ -23,6 +23,7 @@ scripts/agk/** text eol=lf
 .github/ISSUE_TEMPLATE/question.md text eol=lf
 .github/ISSUE_TEMPLATE/report.md text eol=lf
 .github/PULL_REQUEST_TEMPLATE.md text eol=lf
+.github/workflows/agk-brief.yml text eol=lf
 .github/workflows/agk-route.yml text eol=lf
 .github/workflows/drift-audit.yml text eol=lf
 .github/workflows/governance.yml text eol=lf
@@ -39,9 +40,14 @@ config/core-rules.md text eol=lf
 config/playbooks/** text eol=lf
 config/review-checklist.md text eol=lf
 config/session-rules.md text eol=lf
+config/stack-signals.toml text eol=lf
 constitution/principles.md text eol=lf
 docs/adr/TEMPLATE.md text eol=lf
 docs/briefs/TEMPLATE.md text eol=lf
+docs/guides/local-mode.md text eol=lf
+docs/runbooks/actions-blocked.md text eol=lf
+docs/runbooks/leaked-secret.md text eol=lf
+docs/runbooks/red-default-branch.md text eol=lf
 docs/specs/TEMPLATE.md text eol=lf
 
 # agk: the kit's own scripts; GitHub collapses them in pull-request diffs and leaves them out of language statistics.

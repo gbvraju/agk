@@ -1,0 +1,78 @@
+# The brief check on GitHub (brief #770, SPEC-0030 rule 4, ADR-0357): a brief is checked when it is filed or edited, not only by the
+# conductor's guard. It runs `scripts/agk/check_brief.py --event` from a checkout of the default branch, on the saved event file, so the
+# issue's text never reaches a command. On a failure the issue gets the label `agk-brief-invalid` and one comment naming each failing
+# rule, never a value; on a pass both go and the issue's milestone is set to its wave. It reads the issue, its comments and the
+# milestones, and fetches nothing else. A label set with the job's token starts no workflow, so it cannot loop. The owner creates the
+# label when `doctor.py` reports it missing (`brief-invalid-label`).
+# Installed in projects (`verbatim` of kit/manifest.json, the owner's ruling Q-770-4). A project with no milestone `Wave <n>` gets the shape check only.
+name: agk-brief
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+# Fast CI (brief #283): an issue event has no draft and changes no documentation or code, it installs and caches nothing, and it uploads
+# nothing, so no retention applies. The concurrency group is one per issue, so two events of one brief never write its label at once.
+concurrency:
+  group: agk-brief-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  agk-brief:
+    if: ${{ contains(github.event.issue.labels.*.name, 'agk-brief') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Check the brief
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          repo="repos/$GITHUB_REPOSITORY"
+          decision="$RUNNER_TEMP/decision.json"
+          field() {
+            python3 -c 'import json,sys; v=json.load(open(sys.argv[1])).get(sys.argv[2]); print("" if v is None else v)' "$decision" "$1"
+          }
+          # The plan's waves are the milestones titled `Wave <n>`; unreadable, the Wave line is checked for its shape only.
+          milestones="$(gh api --method GET --paginate "$repo/milestones?state=all&per_page=100" --jq '.[] | "\(.number) \(.title)"' | grep -E '^[0-9]+ Wave [1-9][0-9]*$' || true)"
+          waves="$(printf '%s\n' "$milestones" | awk 'NF==3 {print $3}' | paste -sd, -)"
+          if [ -n "$waves" ]; then
+            python3 scripts/agk/check_brief.py --event "$GITHUB_EVENT_PATH" --root . --waves "$waves" > "$decision"
+          else
+            python3 scripts/agk/check_brief.py --event "$GITHUB_EVENT_PATH" --root . > "$decision"
+          fi
+          action="$(field action)"
+          if [ "$action" = ignore ]; then
+            exit 0
+          fi
+          issue="$(field issue)"
+          label="$(field label)"
+          comment="$(gh api --method GET --paginate "$repo/issues/$issue/comments?per_page=100" --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- agk-brief-check -->"))) | .id' | head -n 1)"
+          if [ "$action" = fail ]; then
+            gh api --method POST "$repo/issues/$issue/labels" -f "labels[]=$label" > /dev/null
+            python3 -c 'import json,sys; json.dump({"body": json.load(open(sys.argv[1]))["comment"]}, open(sys.argv[2], "w"))' "$decision" "$RUNNER_TEMP/comment.json"
+            if [ -n "$comment" ]; then
+              gh api --method PATCH "$repo/issues/comments/$comment" --input "$RUNNER_TEMP/comment.json" > /dev/null
+            else
+              gh api --method POST "$repo/issues/$issue/comments" --input "$RUNNER_TEMP/comment.json" > /dev/null
+            fi
+            exit 0
+          fi
+          # A brief that never failed has no such label, and GitHub answers 404: nothing to clear.
+          gh api --method DELETE "$repo/issues/$issue/labels/$label" > /dev/null 2>&1 || true
+          if [ -n "$comment" ]; then
+            gh api --method DELETE "$repo/issues/comments/$comment" > /dev/null
+          fi
+          wave="$(field wave)"
+          number="$(printf '%s\n' "$milestones" | awk -v wave="$wave" 'NF==3 && $3==wave {print $1; exit}')"
+          if [ -n "$number" ]; then
+            gh api --method PATCH "$repo/issues/$issue" -F "milestone=$number" > /dev/null
+          fi

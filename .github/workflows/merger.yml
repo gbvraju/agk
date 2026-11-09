@@ -10,11 +10,15 @@
 # The sweep (SPEC-0039 rule 2, brief #797, ADR-0373): a clearing event that fell in an outage is never sent again, so every 15 minutes,
 # or by hand, the jobs `sweep-gate` (no secret, reads the settings) and `sweep` run the same guarded merge on the open cleared pull
 # requests. A project without `[flow] auto_merge = true`, or in local or personal mode, stops at the gate and opens no `merge` environment.
+# Brief #836 (ADR-0383): an edited `Verdict:`, `Final:` or `Approve:` comment starts the job too, and every finished `governance` or
+# `proof` run also sweeps, after the event job: GitHub drops scheduled runs under load, so the schedule is only a fallback. The sweep
+# picks pull requests by their cleared verdict, never by label. A skipped ancestor skips a job unless its `if` says otherwise, hence
+# `!cancelled()` on both sweep jobs; the sweep has its own group because each finished run's group is per pull request.
 name: merger
 
 on:
   issue_comment:
-    types: [created]
+    types: [created, edited]
   workflow_run:
     workflows: [governance, proof]
     types: [completed]
@@ -36,7 +40,7 @@ concurrency:
 
 jobs:
   merger:
-    if: ${{ (github.event_name == 'issue_comment' && github.event.issue.pull_request && (startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:'))) || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ (github.event_name == 'issue_comment' && github.event.issue.pull_request && (startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || (github.event.action == 'edited' && startsWith(github.event.comment.body, 'Final:')))) || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     environment: merge
     steps:
@@ -77,7 +81,8 @@ jobs:
           python3 scripts/agk/merge_cleared.py --report --pr "$1" --sha "$2" --line "$line" || echo "merger: no report"
 
   sweep-gate:
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    needs: merger
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run') }}
     runs-on: ubuntu-latest
     outputs:
       sweep: ${{ steps.gate.outputs.sweep }}
@@ -95,7 +100,10 @@ jobs:
 
   sweep:
     needs: sweep-gate
-    if: ${{ needs.sweep-gate.outputs.sweep == 'on' }}
+    if: ${{ !cancelled() && needs.sweep-gate.outputs.sweep == 'on' }}
+    concurrency:
+      group: agk-merger-sweep-job
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: merge
     steps:

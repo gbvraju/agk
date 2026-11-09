@@ -1,0 +1,1 @@
+- The installed line-ending pins cover the local-mode guide and the three runbook pages (brief #867, issue #866, Covered-by ADR-0372)

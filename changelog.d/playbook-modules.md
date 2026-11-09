@@ -1,0 +1,1 @@
+- A playbook may name shipped playbooks in `modules` and takes their gates and evidence whole: the composed gates are `default`, then each module, then its own, each id once; `check_playbooks.py` fails a playbook that weakens a gate it takes (`kind` or `owner_only`) or names a module that is not shipped, naming the rule and the key (brief #693, SPEC-0048 build (j), ADR-0314)

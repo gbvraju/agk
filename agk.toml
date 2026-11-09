@@ -56,6 +56,8 @@ auto_merge = true
 auto_merge_method = "squash"
 # The builder capacity (SPEC-0034 rule 1): nine builder sessions at once, by the owner's choice on 2026-11-08 (plan #661, ADR-0341).
 max_builders = 9
+# The conductor's review capacity (SPEC-0034 rule 15): equal to max_builders, the default when unset (brief #842, ADR-0384).
+reviews_in_flight = 9
 # The conductor lease (ADR-0330): one live conductor at a time, marked on the plan issue; merge-queue refuses while another holds it (ADR-0353).
 plan_issue = 661
 # The heavy-run queue (SPEC-0040 rule 1, brief #529): off by default and when absent. This repository keeps it off; turning it on is the
@@ -340,7 +342,7 @@ code = "scripts/agk/flakes.py"
 tests = ["tests/kit/test_flakes.py", "tests/kit/test_rerun_alone.py"]
 [[testing.map]]
 code = "scripts/agk/front_door.py"
-tests = ["tests/kit/test_front_door_entry.py"]
+tests = ["tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py"]
 [[testing.map]]
 code = "scripts/agk/full_run.py"
 tests = [
@@ -487,6 +489,9 @@ tests = [
   "tests/kit_dev/test_init.py", "tests/kit_dev/test_intelligent_testing.py", "tests/kit_dev/test_make_once.py",
 ]
 [[testing.map]]
+code = "scripts/agk/release_pack.py"
+tests = ["tests/kit/test_release_pack.py"]
+[[testing.map]]
 code = "scripts/agk/req_status.py"
 tests = ["tests/kit/test_req_status.py"]
 [[testing.map]]
@@ -522,6 +527,12 @@ tests = ["tests/kit/test_stalls.py", "tests/kit_dev/test_intelligent_testing.py"
 [[testing.map]]
 code = "scripts/agk/status_only.py"
 tests = ["tests/kit/test_ci_saving.py", "tests/kit/test_status_only.py", "tests/kit/test_status_only_governance.py"]
+[[testing.map]]
+code = "scripts/agk/survey.py"
+tests = ["tests/kit/test_survey.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "scripts/agk/test_map.py"
+tests = ["tests/kit/test_test_map.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/test_plan.py"
 tests = [

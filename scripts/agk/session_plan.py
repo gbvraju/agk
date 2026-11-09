@@ -21,7 +21,10 @@ The plan, in the order it is decided:
    open pull request is stale: it holds nothing and is listed as `stale claim by <session>, <age>`.
 3. **Capacity.** The sessions to start are the smallest of the ready, non-overlapping briefs,
    `max_builders` less the running builders (open builder pull requests and claims with no pull
-   request yet) and `reviews_in_flight` less the pull requests waiting for a verdict. When
+   request yet) and `reviews_in_flight` (by default `max_builders`, brief #842, ADR-0384) less
+   the pull requests waiting for a verdict: not a draft, the author's newest `Report:` says
+   `ready for review`, `fix list applied` or `merge of main`, and no `Verdict:` by a listed
+   author names the head. When
    `builder_memory_gb` of the `[flow]` table is set (brief #409, ADR-0223), also the machine's
    available memory divided by it, rounded down, and never below 1 while no builder runs (with
    builders running it may be 0, the verdict on 43ada36); memory that cannot be read is
@@ -60,6 +63,21 @@ overlap with `running_conflict` and `clash`, leaving out the paths that `exempt`
 shared-mechanical files and the shared indexes of `[flow] shared_indexes` (exact paths, default
 `SHARED_INDEXES`; a set list replaces it, a bad value is refused naming the setting). A shared
 index never makes an overlap; it still counts for the re-prove above, which has no exemption.
+
+The table of files (amendment 141 item 3, build (b)): `exempt` also holds `Prose`, the row of
+`[flow] reprove_paths`. Prose never makes an overlap, and the later change re-proves. A folder or
+wildcard entry is in a row only when every file it matches in the tree is, and one that matches
+none is held (`in_a_row`). `merge_set` keeps counting shared prose, as it counts a shared index.
+
+The holders (item 4): `holders` ranks the open builder pull requests by the briefs they hold; a
+brief held by two counts under each. `plan` prints `Holds <k>:`, and `Stall:` for a holder of two
+or more idle over `[flow] stall_minutes` (30 by default); it posts nothing, the conductor does.
+
+Exact `Touches:` (amendment 141 item 1, brief #772): `touch_problems` is the one function behind
+`check_brief.py --root`, `next`, `plan` and the doctor's `brief-broad-touches`. A folder or wildcard
+`Touches:` entry that matches more than `[flow] max_touch_glob` files that can hold a brief is
+refused unless the brief has one `Broad:` line, and an `Adds:` entry may not name an existing file.
+`reservation_refusals` refuses a `Reserved:` number held elsewhere (item 5).
 """
 
 from __future__ import annotations
@@ -78,15 +96,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import common
 import playbook_format
 from common import CheckError, matches, read_list
+from metrics import author_of, counted_authors
+from reviewers import verdict_authors
 from session import (
+    ADDS,
+    BROAD,
     RELEASED,
+    TOUCHES,
     Survey,
     all_takes,
     brief_number,
+    first_line,
     flow_int,
     flow_value,
     gh,
     glob_regex,
+    line_entries,
     literal,
     live_takes,
     moment,
@@ -96,9 +121,11 @@ from session import (
     protected_entries,
     pull_files,
     repo_name,
+    reservations,
     shared_patterns,
     survey,
     touches_of,
+    verdict_line,
 )
 from session import kind_of as task_kind  # SPEC-0045 rule 4; kind_of below is the lane's
 
@@ -109,10 +136,10 @@ HEAVY_LOCK = "a builder runs each under lock.py run --name heavy"
 INDEPENDENT = "independent:"
 MERGED_ALL = "every build is merged; the conductor closes it"
 RULE = 15
+WAITING_REPORT = re.compile(r"Report: \S+ (?:ready for review|fix list applied|merge of main)\b")
 GIB = 1024**3  # builder_memory_gb counts in GiB, the lower reading of a GB (Q-409-2)
 WINDOW_DAYS = 14
 DEFAULTS = {
-    "reviews_in_flight": 3,
     "merge_hours": 1,
     "stale_commits": 20,
     "claim_stale_hours": 24,
@@ -125,6 +152,13 @@ SHARED_INDEXES = (
     "docs/build-state.md",
 )
 INDEXES_REFUSED = "setting: flow.shared_indexes must be a list of exact repository paths"
+MAX_TOUCH_GLOB = 5  # the default of `[flow] max_touch_glob`
+REPROVE_PATHS = ("**/*.md", "!docs/specs/**", "!docs/adr/**")
+REPROVE_REFUSED = "setting: flow.reprove_paths must be a list of non-empty strings"
+STALL_MINUTES = 30  # the default of `[flow] stall_minutes`, `Q-772-7`
+STALL_HOLDS = 2  # a holder of fewer briefs is not reported as a stall
+ADDED_NUMBER = re.compile(r"docs/(adr|specs)/(\d{4})-[^/]+\.md")
+ADDED_AMENDMENT = re.compile(r"docs/runs/proposed-spec-amendments-(\d+)\.md")
 
 
 def shared_indexes(root) -> list[str]:
@@ -139,19 +173,154 @@ def shared_indexes(root) -> list[str]:
     return list(value)
 
 
-def exempt(root) -> list[re.Pattern]:
-    """The paths that never make an overlap (SPEC-0050 rule 2): the shared-mechanical files and the
-    shared indexes. The one list `next`, `plan` and `claim` judge with."""
-    found = [glob_regex(p) for p in shared_patterns(root)]
-    return found + [re.compile(re.escape(p)) for p in shared_indexes(root)]
+class Prose:
+    """The row of `[flow] reprove_paths`, read as one more pattern of `exempt`."""
+
+    def __init__(self, rules: list[str]) -> None:
+        self.rules = rules
+
+    def fullmatch(self, path: str) -> bool:
+        return is_prose(path, self.rules)
+
+
+def exempt(root) -> list:
+    """The paths that never make an overlap (the table of SPEC-0050 rule 3): the shared-mechanical
+    files, the shared indexes and the prose. The one list `next`, `plan`, `claim` and the sweep
+    judge with."""
+    found: list = [glob_regex(p) for p in shared_patterns(root)]
+    found += [re.compile(re.escape(p)) for p in shared_indexes(root)]
+    return [*found, Prose(reprove_paths(root))]
 
 
 def label_names(pr: dict) -> set[str]:
     return {str(x.get("name")) for x in pr.get("labels") or [] if isinstance(x, dict)}
 
 
-def unshared(globs: list[str], shared: list) -> list[str]:
-    return [g for g in globs if not any(r.fullmatch(literal(g)) for r in shared)]
+def reprove_paths(root) -> list[str]:
+    """`[flow] reprove_paths` (amendment 141 item 3), else the default; refused by its name."""
+    value = flow_value(root, "reprove_paths", list(REPROVE_PATHS), RULE)
+    if not isinstance(value, list) or not all(
+        isinstance(v, str) and v.strip() and v.strip() != "!" for v in value
+    ):
+        raise CheckError(REPROVE_REFUSED)
+    return value
+
+
+def is_prose(path: str, rules: list[str]) -> bool:
+    """Whether PATH is prose under the list, read in order: a `!` entry takes matches away."""
+    found = False
+    for rule in rules:
+        if glob_regex(rule.removeprefix("!")).fullmatch(path):
+            found = not rule.startswith("!")
+    return found
+
+
+def tree_files(root) -> list[str]:
+    """The files under ROOT: git's list in a repository, else every file (`.git` is never one)."""
+    base = Path(root)
+    if (base / ".git").exists():
+        return [p for p in common.git(base, "ls-files", "-z").split("\0") if p]
+    return sorted(
+        p.relative_to(base).as_posix()
+        for p in base.rglob("*")
+        if p.is_file() and ".git" not in p.relative_to(base).parts
+    )
+
+
+def touch_rules(root) -> dict:
+    """What `touch_problems` reads once per run; a bad setting is refused by its name."""
+    held_not = exempt(root)
+    shared = [glob_regex(p) for p in shared_patterns(root)]
+    files = tree_files(root)
+    return {
+        "root": root,
+        "limit": flow_int(root, "max_touch_glob", MAX_TOUCH_GLOB, 4),
+        "files": files,
+        "holding": [f for f in files if not any(r.fullmatch(f) for r in held_not)],
+        "unshared": [f for f in files if not any(r.fullmatch(f) for r in shared)],
+    }
+
+
+def broad_entries(body: str, rules: dict) -> list[str]:
+    """The `Touches:` entries refused for matching too many files that can hold a brief; none
+    for a brief with exactly one `Broad:` line, its own statement that it sweeps."""
+    if sum(1 for x in body.splitlines() if BROAD.fullmatch(x.rstrip())) == 1:
+        return []
+    broad = []
+    for entry in line_entries(body, TOUCHES):
+        read = entries_of(rules["root"], [entry])[0]
+        if is_folder(read) or has_wildcard(read):
+            pattern = glob_regex(read)
+            if sum(1 for f in rules["holding"] if pattern.fullmatch(f)) > rules["limit"]:
+                broad.append(entry)
+    return broad
+
+
+def touch_problems(body: str, rules: dict) -> list[str]:
+    """Amendment 141 item 1, naming the rule, the setting and the entry, never a count."""
+    problems = [
+        f"rule 4: Touches entry {e} matches more than flow.max_touch_glob files"
+        for e in broad_entries(body, rules)
+    ]
+    for entry in line_entries(body, ADDS):
+        pattern = glob_regex(entries_of(rules["root"], [entry])[0])
+        if any(pattern.fullmatch(f) for f in rules["unshared"]):
+            problems.append(f"rule 4: Adds entry {entry} names an existing file")
+    return problems
+
+
+def added_numbers(s: Survey, pr: dict) -> set[str]:
+    """The numbers a pull request adds: a new ADR, spec or amendment file, a new requirement."""
+    found: set[str] = set()
+    for item in pull_files(s, pr):
+        name = str(item.get("filename"))
+        if name == "docs/requirements.md":
+            patch = str(item.get("patch") or "")
+            found.update(f"REQ-{n}" for n in re.findall(r"(?m)^\+### REQ-(\d{3})\b", patch))
+        elif item.get("status") == "added":
+            if m := ADDED_NUMBER.fullmatch(name):
+                found.add(("ADR-" if m.group(1) == "adr" else "SPEC-") + m.group(2))
+            elif m := ADDED_AMENDMENT.fullmatch(name):
+                found.add(f"amendment {m.group(1)}")
+    return found
+
+
+def reservation_refusals(s: Survey) -> list[tuple[int, str]]:
+    """Amendment 141 item 5: (brief, why) for each open brief whose `Reserved:` number an open pull
+    request of another brief adds, or an earlier open brief reserves; a brief yields to a pull
+    request, and of two briefs the later is refused. No pull request is read when none reserves."""
+    reserved = {n: reservations(str(b.get("body") or "")) for n, b in sorted(s.briefs.items())}
+    if not any(reserved.values()):
+        return []
+    opened = [p for p in s.prs if p.get("state") == "open"]
+    adds = {p["number"]: added_numbers(s, p) for p in opened}
+    refused: list[tuple[int, str]] = []
+    for number, mine in reserved.items():
+        for held in mine:
+            prs = [
+                p["number"] for p in opened if pr_brief(p) != number and held in adds[p["number"]]
+            ]
+            earlier = [m for m, theirs in reserved.items() if m < number and held in theirs]
+            if holder := (prs or earlier)[:1]:
+                why = f"rule 4 of SPEC-0050: Reserved {held} is also held by #{holder[0]}"
+                refused.append((number, why))
+    return refused
+
+
+def in_a_row(root, entry: str, shared: list) -> bool:
+    """Whether a `Touches:` entry never holds: a file by its row, a folder or wildcard as today or
+    when every file it matches in the tree is in a row; one that matches none is held."""
+    if not is_folder(entry) and not has_wildcard(entry):
+        return any(r.fullmatch(entry) for r in shared)
+    if any(isinstance(r, re.Pattern) and r.fullmatch(literal(entry)) for r in shared):
+        return True
+    pattern = glob_regex(entry)
+    found = [f for f in tree_files(root) if pattern.fullmatch(f)]
+    return bool(found) and all(any(r.fullmatch(f) for r in shared) for f in found)
+
+
+def unshared(root, globs: list[str], shared: list) -> list[str]:
+    return [g for g in globs if not in_a_row(root, g, shared)]
 
 
 def is_folder(glob: str) -> bool:
@@ -254,20 +423,63 @@ def entries_of(root, globs: list[str]) -> list[str]:
 
 def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
     """What running work the brief waits for: a taken brief or an open builder pull request."""
-    mine = unshared(entries_of(root, touches_of(brief["body"])), shared)
+    mine = unshared(root, entries_of(root, touches_of(brief["body"])), shared)
     for number, theirs in s.held:
         if number == brief["number"]:
             continue  # another build of the same brief is not a rival
-        if found := clash(mine, unshared(entries_of(root, theirs), shared)):
+        if found := clash(mine, unshared(root, entries_of(root, theirs), shared)):
             return {"brief": brief["number"], "waits_for": number, "why": f"both touch {found}"}
     for pr in s.builders:
         if pr_brief(pr) == brief["number"]:
             continue
-        for item in pull_files(s, pr):
-            found = file_conflict(item, mine, shared)
-            if found:
-                return {"brief": brief["number"], "pull_request": pr["number"], "why": found}
+        if found := pull_conflict(s, pr, mine, shared):
+            return {"brief": brief["number"], "pull_request": pr["number"], "why": found}
     return None
+
+
+def pull_conflict(s: Survey, pr: dict, mine: list[str], shared: list) -> str | None:
+    """Why the changed files of one open pull request block these entries, else None."""
+    for item in pull_files(s, pr):
+        if found := file_conflict(item, mine, shared):
+            return found
+    return None
+
+
+def holder_state(pr: dict) -> str:
+    """The `agk:` label without its prefix, or `draft`, or `open`."""
+    marks = sorted(n for n in label_names(pr) if n.startswith("agk:"))
+    return marks[0].removeprefix("agk:") if marks else "draft" if pr.get("draft") else "open"
+
+
+def holders(root, s: Survey, held: list[dict], now: datetime) -> list[dict]:
+    """Amendment 141 item 4: the open builder pull requests that hold briefs, most briefs first,
+    then the lowest number. A holder of `STALL_HOLDS` or more idle over the setting has `stall`."""
+    limit = flow_int(root, "stall_minutes", STALL_MINUTES, 4)
+    shared = exempt(root)
+    rows: list[dict] = []
+    for pr in s.builders:
+        briefs = {
+            b["number"]
+            for b in held
+            if b["number"] != pr_brief(pr)
+            and pull_conflict(
+                s, pr, unshared(root, entries_of(root, touches_of(b["body"])), shared), shared
+            )
+        }
+        if not briefs:
+            continue
+        idle = max(0, int((now - moment(pr.get("updated_at"))).total_seconds() // 60))
+        row = {
+            "pr": pr["number"],
+            "state": holder_state(pr),
+            "idle": idle,
+            "head": str((pr.get("head") or {}).get("sha") or ""),
+            "briefs": sorted(briefs),
+        }
+        if len(briefs) >= STALL_HOLDS and idle > limit:
+            row["stall"] = f"Stall: #{pr['number']} holds {len(briefs)}, idle {idle} min"
+        rows.append(row)
+    return sorted(rows, key=lambda r: (-len(r["briefs"]), r["pr"]))
 
 
 def builds_of(body: str) -> list[tuple[str, bool]]:
@@ -560,6 +772,12 @@ def wait_text(w: dict) -> str:
     return f"waits for {target} ({w['why']})"
 
 
+def filer_of(s: Survey, number: int) -> str:
+    """The login of the person who filed a brief, the one who can fix it; empty when not given."""
+    user = s.briefs.get(number, {}).get("user")
+    return str(user.get("login") or "") if isinstance(user, dict) else ""
+
+
 def settle_takes(s: Survey) -> tuple[set[int], list[tuple[int, str]]]:
     """(the briefs built in parts whose takes all belong to sessions that moved on, the skips).
 
@@ -751,9 +969,9 @@ def waves(root, s: Survey, ready: list[dict]) -> tuple[list[dict], list[dict]]:
         if found := running_conflict(root, s, brief, shared):
             waits.append(found)
             continue
-        mine = unshared(entries_of(root, touches_of(brief["body"])), shared)
+        mine = unshared(root, entries_of(root, touches_of(brief["body"])), shared)
         for other in chosen:
-            theirs = unshared(entries_of(root, touches_of(other["body"])), shared)
+            theirs = unshared(root, entries_of(root, touches_of(other["body"])), shared)
             if found := clash(mine, theirs):
                 waits.append(
                     {
@@ -920,26 +1138,54 @@ def pr_login(pr: dict) -> str:
     return login if isinstance(login, str) else ""
 
 
+def waiting_for_verdict(s: Survey, pr: dict, authors: list[str] | None) -> bool:
+    """Whether the conductor owes this pull request a verdict (brief #842, ADR-0384); one read of
+    its comments, and comments that cannot be read keep the router's label as the answer."""
+    if pr.get("draft"):
+        return False
+    comments = pages(f"repos/{s.repo}/issues/{pr['number']}/comments")
+    if comments is None:
+        return "agk:review" in label_names(pr)
+    me = pr_login(pr).lstrip("@").lower()
+    counted = counted_authors(authors, me)
+    reports = [c for c in comments if author_of(c) == me and first_line(c).startswith("Report:")]
+    if not reports or not WAITING_REPORT.match(first_line(max(reports, key=comment_id))):
+        return False
+    head = pr.get("head")
+    sha = head.get("sha") if isinstance(head, dict) else None
+    return verdict_line(comments, 0, sha if isinstance(sha, str) else "", counted) is None
+
+
+def comment_id(comment: dict) -> int:
+    number = comment.get("id")
+    return number if isinstance(number, int) else 0
+
+
 def build(root) -> dict:
     repo = repo_name(root)
-    reviews = flow_int(root, "reviews_in_flight", DEFAULTS["reviews_in_flight"], RULE)
     hours = flow_int(root, "merge_hours", DEFAULTS["merge_hours"], RULE)
     behind_limit = flow_int(root, "stale_commits", DEFAULTS["stale_commits"], RULE)
     s = survey(root, repo, "")
+    reviews = flow_int(root, "reviews_in_flight", s.max_builders, RULE)
     default = _default_branch(root)
     now = datetime.now(UTC)
     read_gone(root, s, now)
     stale = stale_claims(s)
     freed, skipped = settle_takes(s)
     s.held = [h for h in s.held if h[0] not in freed]
-    s.skipped = skipped
+    s.skipped = skipped + reservation_refusals(s)
+    refused = {n for n, why in s.skipped if why.startswith("rule ")}
+    s.free = [b for b in s.free if b["number"] not in refused]
+    freed -= refused
     ready, build_waits, build_skips = candidates(s, freed)
     pb = playbook_of(root)
     ready = lane_order(pb, ready)
     chosen, waits = waves(root, s, ready)
+    ranked = holders(root, s, [b for b in ready if b not in chosen], now)
     waits = build_waits + waits
     running = len(s.builders) + len(s.held)
-    waiting_review = sum(1 for p in s.builders if "agk:review" in label_names(p))
+    authors = verdict_authors(root)
+    waiting_review = sum(1 for p in s.builders if waiting_for_verdict(s, p, authors))
     limits = [("max_builders", s.max_builders - running), ("reviews", reviews - waiting_review)]
     memory = memory_capacity(root, running)
     if isinstance(memory.get("memory"), dict):
@@ -984,11 +1230,20 @@ def build(root) -> dict:
         if pb
         else {}
     )
+    malformed_rows = [row for row in s.skipped if row[1].startswith("rule ")]
     return {
         "start": [start_entry(names[i], b, protected) for i, b in enumerate(chosen[:count])],
         "running": running_sessions(s),
         "waits": waits,
-        "skipped": [{"brief": n, "why": why} for n, why in [*s.skipped, *build_skips, *unplanned]],
+        "holders": ranked,
+        "skipped": [
+            {"brief": n, "why": why}
+            for n, why in [*s.skipped, *build_skips, *unplanned]
+            if (n, why) not in malformed_rows
+        ],
+        "malformed": [
+            {"brief": n, "why": why, "filer": filer_of(s, n)} for n, why in malformed_rows
+        ],
         "stale_claims": stale,
         "capacity": {
             "max_builders": s.max_builders,
@@ -1107,10 +1362,21 @@ def words(plan: dict) -> str:
     lines += playbook_lines(plan)
     for w in plan["waits"]:
         lines.append(f"#{w['brief']} {wait_text(w)}.")
+    for h in plan["holders"]:
+        held = ", ".join(f"#{n}" for n in h["briefs"])
+        lines.append(
+            f"Holds {len(h['briefs'])}: #{h['pr']} ({h['state']}, idle {h['idle']} min) for {held}"
+        )
+        if "stall" in h:
+            lines.append(h["stall"])
     if plan["stale_claims"]:
         lines.append(
             "Stale: " + ", ".join(f"#{c['brief']} ({c['why']})" for c in plan["stale_claims"]) + "."
         )
+    lines += [
+        f"MALFORMED: #{m['brief']} {m['why']}" + (f" (fix: {m['filer']})" if m["filer"] else "")
+        for m in plan["malformed"]
+    ]
     if plan["skipped"]:
         lines.append(
             "Skipped: " + ", ".join(f"#{s['brief']} ({s['why']})" for s in plan["skipped"]) + "."

@@ -1,6 +1,7 @@
-"""The front door's entry, discovery, research, design and phase (SPEC-0048 builds (b), (d), (e)).
+"""The front door's entry, discovery, research, design and phase (SPEC-0048 builds (b), (d)-(f)).
 
-Standard library only, files only, no network: every input is a saved file.
+Standard library only, no network: every input is a saved file, but for `detect`, which reads a
+repository's head commit by `git`.
 
     front_door.py check-issue --issue FILE
         a saved problem issue (the JSON of one GET): the `agk-problem` label, a first line
@@ -31,7 +32,30 @@ Standard library only, files only, no network: every input is a saved file.
     front_door.py status --date YYYY-MM-DD [SLUG ...] [--root DIR]
         prints one line per problem (by default each `docs/discovery/*.md`), the phase of rule 1
         it is in and what it waits for, from the files only, and writes nothing; past the design
-        it prints `waits for the go`, which is read from saved comments (rule 9; build (f))
+        it prints `waits for the go`, which only `--issue` reads (rule 9)
+    front_door.py status --date YYYY-MM-DD --issue N --api-dir DIR [--pr K] [--root DIR]
+        one line for one problem issue, from the saved GETs `issue-<N>.json` and
+        `issue-<N>-comments.json` and the files: the phase and what it waits for, the auto-pilot
+        state (rule 13: `[flow] assign = "conductor"` and the first line `Auto-pilot: on` by a
+        listed approver) and its `Discovery: round <n>` rounds, and, with `--pr K`, the go of rule
+        9 from `pr-<K>-comments.json` when `pr-<K>-files.json` shows K carries the artifact
+    front_door.py check-signals
+        checks the form of the signal table `config/stack-signals.toml` against `config/playbooks/`,
+        both read from this script's own root and never from a repository (SPEC-0057 rule 5)
+    front_door.py derive-write --slug SLUG [--modules NAME,NAME] [--root DIR]
+        writes one engagement's skeleton `config/playbooks/<slug>.toml` from `default`, the named
+        shipped modules and the slug of `docs/research/<slug>.md`, which must pass rule 6; never
+        over a file, never in the kit, and only that file: no `agk.toml`, nothing under `kit/`
+        (rule 22)
+    front_door.py check-playbook --date YYYY-MM-DD [FILE ...] [--root DIR]
+        the check of `check_playbooks.py` on each playbook (by default every one), then freshness
+        from the gate sources: more than 180 days before `--date` is a `flag` line and exit 0, and
+        a failure when a design under `docs/design/architecture/` names the playbook's path. The
+        `reviewed` key of amendment 129 (verify) stays refused until it is approved (rule 25)
+    front_door.py detect [--root DIR] [--json]
+        prints a proposed work type and stack for the repository at DIR, from the files of its head
+        commit that the signal table names, read as text; runs nothing it reads and writes nothing,
+        and a person confirms the proposal in discovery (SPEC-0057 rules 2 to 4, 6 to 8, 10, 11)
 
 The answers file: `{"screens": "yes|no|open", "work_type": "<work type>", "answers": [{"id":
 "<id>", "answer": "<words>", "where": "<comment link>|in session YYYY-MM-DD"} or {"id": "<id>",
@@ -46,14 +70,19 @@ and the file or the setting, never a value, a problem's words or an answer (rule
 from __future__ import annotations
 
 import datetime
+import fnmatch
 import hashlib
 import json
+import os
 import re
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import playbook_format
 from guard import scan_text
 from playbook_format import WORK_TYPES
 
@@ -63,6 +92,10 @@ USAGE = (
     " --answers FILE [--root DIR] | check-discovery [FILE ...] [--root DIR]"
     " | (check-research | check-design) --date YYYY-MM-DD [FILE ...] [--root DIR]"
     " | status --date YYYY-MM-DD [SLUG ...] [--root DIR]"
+    " | status --date YYYY-MM-DD --issue N --api-dir DIR [--pr K] [--root DIR] | check-signals"
+    " | derive-write --slug SLUG [--modules NAME,NAME] [--root DIR]"
+    " | check-playbook --date YYYY-MM-DD [FILE ...] [--root DIR]"
+    " | detect [--root DIR] [--json]"
 )
 LABEL = "agk-problem"
 PREFIX = "Problem: "
@@ -753,6 +786,383 @@ def status(names: list[str], root: Path, today: datetime.date) -> int:
     return 0
 
 
+# --- the auto-pilot drive and the go, from saved responses (rules 1, 9 and 13) --------------------
+
+AUTO_PILOT = "Auto-pilot: on"
+ROUND = re.compile(r"^Discovery: round ([1-9]\d*)$")
+QUESTION = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\S")
+MAX_ROUND = 3
+NOT_ANSWERS = ("Auto-pilot:", "Discovery:", "Approve:", "Confirmed:", "Verdict:")
+DESIGN_GO = re.compile(r"^Approve: design v[1-9]\d* [0-9a-f]{40}$")
+NUMBER = re.compile(r"^[1-9][0-9]*$")
+
+
+def saved(api: Path, name: str, kind: type, rule: int):
+    """One saved GET of `--api-dir`; a missing or misshapen one is refused, never read as empty."""
+    try:
+        data = json.loads((api / f"{name}.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        data = None
+    if not isinstance(data, kind):
+        raise Refusal([f"rule {rule}: {name}.json: not a readable saved response"])
+    return data
+
+
+def saved_comments(api: Path, name: str, rule: int) -> list[dict]:
+    return [c for c in saved(api, name, list, rule) if isinstance(c, dict)]
+
+
+def refuse_issue_door(root: Path) -> None:
+    """Rule 13: a sidecar has no issue entry; the vision door stays open."""
+    from common import (
+        CheckError,
+        personal_table,
+    )  # here, so a load failure leaves every other command as it is
+
+    try:
+        personal = personal_table(root)
+    except CheckError as err:
+        raise Refusal([f"rule 13: {err}"]) from None
+    if personal is not None:
+        raise Refusal(["rule 13: personal mode enters by `/agk:vision` only (setting: forge)"])
+
+
+class People:
+    """Who counts on one problem: the listed approvers, the conductor and the agent apps."""
+
+    def __init__(self, root: Path) -> None:
+        from common import agent_apps
+        from reviewers import spec_approvers, verdict_authors
+
+        self.approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
+        self.conductors = {a.lstrip("@").lower() for a in verdict_authors(root)}
+        self.apps = agent_apps(root)
+
+    def person(self, item: dict) -> bool:
+        from reviewers import login_of, via_agent
+
+        return login_of(item) in self.approvers and not via_agent(item, self.apps)
+
+
+def auto_pilot_wait(comments: list[dict], root: Path, people: People, doc: str) -> str | None:
+    """What auto-pilot's discovery waits for; None when auto-pilot is off (rules 3 and 13)."""
+    from common import config_source
+    from reviewers import first_line, login_of
+
+    flow = config_source(root).get("flow")
+    if not isinstance(flow, dict) or flow.get("assign") != "conductor":
+        return None
+    start = next(
+        (n for n, c in enumerate(comments) if first_line(c) == AUTO_PILOT and people.person(c)),
+        None,
+    )
+    if start is None:
+        return None
+    rounds, last, out_of_form = 0, start, False
+    for n, item in enumerate(comments):
+        match = ROUND.match(first_line(item)) if n > start else None
+        if not match or login_of(item) not in people.conductors:
+            continue
+        asked = sum(1 for ln in str(item.get("body")).splitlines()[1:] if QUESTION.match(ln))
+        if int(match.group(1)) == rounds + 1 and 1 <= asked <= MAX_ROUND:
+            rounds, last, out_of_form = rounds + 1, n, False
+        else:
+            out_of_form = True
+    if out_of_form:
+        return f"the conductor to post round {rounds + 1} with one to three questions"
+    if not rounds:
+        return "the conductor's `Discovery: round 1`"
+    if any(
+        people.person(c) and first_line(c) and not first_line(c).startswith(NOT_ANSWERS)
+        for c in comments[last + 1 :]
+    ):
+        return f"the conductor's round {rounds + 1} or the brief of {doc}"
+    return f"the person's answer to round {rounds}"
+
+
+def go_lines(comments: list[dict], root: Path, people: People) -> list[str]:
+    """The lines rule 9 reads: a listed person's first lines, or in solo mode only the lines inside
+    a whole `Confirmed:` comment of the one person."""
+    from common import review_mode
+    from reviewers import confirmed_comments, first_line, solo_person
+
+    if review_mode(root) != "solo":
+        return [first_line(c) for c in comments if people.person(c)]
+    person = solo_person(root)
+    if not person:
+        return []
+    own = {id(c) for c in comments}
+    added = [c for c in confirmed_comments(comments, people.apps, person) if id(c) not in own]
+    return [
+        ln.strip()
+        for c in added
+        if first_line(c).startswith("Verdict:")
+        for ln in str(c.get("body")).splitlines()
+    ]
+
+
+def go_given(api: Path, pr: str, name: str, root: Path, people: People) -> bool:
+    """Rule 9: the owner's line, on the pull request whose saved files carry the artifact."""
+    from reviewers import APPROVE, APPROVE_SHORT
+
+    with_screens = screens_of(root, name) != "no"
+    paths = [
+        f.get("filename") for f in saved(api, f"pr-{pr}-files", list, 9) if isinstance(f, dict)
+    ]
+    if with_screens:
+        carries = any(isinstance(p, str) and p.startswith(f"{PROTOTYPE}/") for p in paths)
+    else:
+        carries = f"{DESIGN}/{name}.md" in paths
+    lines = go_lines(saved_comments(api, f"pr-{pr}-comments", 9), root, people)
+    if not carries or not any(APPROVE.fullmatch(x) or APPROVE_SHORT.fullmatch(x) for x in lines):
+        return False
+    return not with_screens or any(DESIGN_GO.match(x) for x in lines)
+
+
+def status_issue(opts: dict[str, str], root: Path, today: datetime.date) -> int:
+    """One line for one problem issue, from saved responses and the files; writes nothing."""
+    from common import CheckError
+
+    refuse_issue_door(root)
+    number, api = opts["--issue"], Path(opts["--api-dir"])
+    issue = saved(api, f"issue-{number}", dict, 1)
+    comments = saved_comments(api, f"issue-{number}-comments", 1)
+    title = one_line(str(issue.get("title") or ""))
+    name = slug(title)
+    if (
+        not name
+        or issue_problems(Path(f"issue-{number}.json"), issue)
+        or guard_problems(3, f"issue-{number}.json", title)
+    ):
+        print(f"#{number}: phase 1 the entry; waits for a problem issue that passes check-issue")
+        return 0
+    try:
+        people = People(root)
+        line = phase_of(root, name, today)
+        doc = f"{DIR}/{name}.md"
+        wait = auto_pilot_wait(comments, root, people, doc)
+        if line.endswith("waits for the go") and "--pr" in opts:
+            if go_given(api, opts["--pr"], name, root, people):
+                line = (
+                    "phase 6 milestones and the stack; waits for the plan (rule 10),"
+                    " then the existing path (rule 11)"
+                )
+    except CheckError as err:
+        raise Refusal([f"rule 13: {err}"]) from None
+    if wait is not None:
+        if not (root / doc).is_file():
+            line = f"phase 2 discovery; waits for {wait}"
+        line = line.replace("; waits for", "; auto-pilot on; waits for", 1)
+    print(f"#{number} {name}: {line}")
+    return 0
+
+
+SIGNALS = "config/stack-signals.toml"
+PLAYBOOKS = "config/playbooks"
+SIGNAL_SLUG = re.compile(r"^[a-z0-9-]+$")
+SIGNAL_ROWS = {
+    "stack": ("name", "manifests", "locks"),
+    "work_type": ("name", "signal", "file", "contains"),
+}
+
+
+def is_word(value: object) -> bool:
+    return isinstance(value, str) and bool(value) and not re.search(r"\s", value)
+
+
+def is_words(value: object) -> bool:
+    return isinstance(value, list) and all(is_word(item) for item in value)
+
+
+SIGNAL_FORM = {
+    "name": is_word,
+    "manifests": lambda v: is_words(v) and bool(v),
+    "locks": is_words,
+    "signal": lambda v: isinstance(v, str) and bool(SIGNAL_SLUG.match(v)),
+    "file": is_word,
+    "contains": is_word,
+}
+
+
+def signal_row_problems(kind: str, rows: object) -> list[str]:
+    """The form of each `[[stack]]` or `[[work_type]]` row, and what no row may be named."""
+    if not isinstance(rows, list) or not rows:
+        return [f"rule 5: {SIGNALS}: [[{kind}]] has no row"]
+    found: list[str] = []
+    for number, row in enumerate(rows, 1):
+        where = f"rule 5: {SIGNALS}: [[{kind}]] row {number}"
+        if not isinstance(row, dict):
+            found.append(f"{where} is not a table")
+            continue
+        if set(row) - set(SIGNAL_ROWS[kind]):
+            found.append(f"{where} has an unknown key")
+        for key in SIGNAL_ROWS[kind]:
+            if not SIGNAL_FORM[key](row.get(key)):
+                found.append(f"{where} `{key}` is missing or malformed")
+        if row.get("name") == "default":
+            found.append(f"{where} `name` holds the base playbook")
+        if row.get("name") == "pilot":
+            found.append(f"{where} `name` holds the kind never proposed")
+    return found
+
+
+def signal_problems(root: Path) -> list[str]:
+    """Rule 5's form check of the table, naming the setting and never a value."""
+    try:
+        table = tomllib.loads((root / SIGNALS).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return [f"rule 5: {SIGNALS} cannot be read"]
+    head = f"rule 5: {SIGNALS}:"
+    found = (
+        []
+        if set(table) <= {*SIGNAL_ROWS, "no_signal", "ignore"}
+        else [f"{head} an unknown top-level key"]
+    )
+    for kind in SIGNAL_ROWS:
+        found += signal_row_problems(kind, table.get(kind))
+    for key in ("no_signal", "ignore"):
+        if not is_words(table.get(key)):
+            found.append(f"{head} `{key}` is not a list of names")
+    if found:
+        return found
+    held = set(table["no_signal"])
+    named = {row["name"] for row in table["work_type"]}
+    files = {path.stem for path in (root / PLAYBOOKS).glob("*.toml")}
+    for number, row in enumerate(table["work_type"], 1):
+        if row["name"] not in files:
+            found.append(f"{head} [[work_type]] row {number} `name` has no file in {PLAYBOOKS}/")
+    if "default" in held:
+        found.append(f"{head} `no_signal` holds the base playbook")
+    if "pilot" not in held:
+        found.append(f"{head} `no_signal` lacks the kind never proposed")
+    if held - files - {"pilot"}:
+        found.append(f"{head} `no_signal` holds a name with no file in {PLAYBOOKS}/")
+    if files - named - held - {"default"}:
+        found.append(f"{head} a playbook has no row and is not in `no_signal`")
+    if named & held:
+        found.append(f"{head} `no_signal` holds a name that has rows")
+    return found
+
+
+def check_signals(root: Path) -> int:
+    found = signal_problems(root)
+    if found:
+        raise Refusal(found)
+    print(f"ok {NAME}: {SIGNALS}")
+    return 0
+
+
+def _toml(value: object) -> str:
+    """A string or a list of strings as TOML: JSON's escapes are TOML's."""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def skeleton(name: str, modules: list[str], base: dict) -> str:
+    """The derived playbook's text: `default`'s discovery, testing profile and milestones, and
+    the modules; its gates and evidence come by composition, so they have one home (rule 23)."""
+    lines = [
+        "# The derived playbook of one engagement. The architect fills its phases, lanes, evidence",
+        "# and gates in the design's pull request. Replace `gates = []` with [[gates]] tables,",
+        '# each with `source = "<URL> (accessed YYYY-MM-DD)"` or `basis = "expected"`.',
+        "format = 1",
+        f"work_type = {_toml(name)}",
+        'title = "A derived playbook, written for one engagement"',
+        "heavy_steps = []",
+        "evidence = []",
+        "phases = []",
+        "lanes = []",
+        "claims = []",
+        "gates = []",
+    ]
+    if modules:
+        lines.append(f"modules = {_toml(modules)}")
+    lines += ["", "[split]", "brief_order = []", "depends_on = []", "", "[testing]"]
+    lines += [f"profile = {_toml(base['testing']['profile'])}", "always_full = []", "map = []"]
+    milestones = base["milestones"]
+    lines += ["", "[milestones]", f"shape = {_toml(milestones['shape'])}"]
+    lines.append(f"batch_by = {_toml(milestones['batch_by'])}")
+    for row in base["discovery"]:
+        lines += ["", "[[discovery]]", f"id = {_toml(row['id'])}", f"text = {_toml(row['text'])}"]
+    return "\n".join(lines) + "\n"
+
+
+def derive_write(opts: dict[str, str], root: Path) -> int:
+    """Rule 22: writes the skeleton, or refuses and leaves nothing behind."""
+    name = opts["--slug"]
+    if not SLUG.match(name):
+        raise Refusal(["rule 22: `--slug` is not a slug of rule 5"])
+    if name in WORK_TYPES or name == playbook_format.BASE:
+        raise Refusal(["rule 22: `--slug` names a shipped playbook"])
+    if (root / "kit" / "manifest.json").is_file():
+        raise Refusal(["rule 22: a derived playbook is the project's, never the kit's (kit/)"])
+    rel = f"{playbook_format.FOLDER}/{name}.toml"
+    target = root / rel
+    if target.exists():
+        raise Refusal([f"rule 22: {rel}: the file exists and is never overwritten"])
+    base_path = root / playbook_format.FOLDER / f"{playbook_format.BASE}.toml"
+    if not base_path.is_file() or playbook_format.problems(base_path, root):
+        raise Refusal([f"rule 22: {playbook_format.FOLDER}/default.toml: missing or not sound"])
+    record = root / RESEARCH / f"{name}.md"
+    record_rel = f"{RESEARCH}/{name}.md"
+    if not record.is_file():
+        raise Refusal([f"rule 22: {record_rel}: the research record is missing"])
+    try:
+        text = record.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise Refusal([f"rule 6: {record_rel}: not readable"]) from None
+    found, _ = research_problems(record_rel, text)
+    if found:
+        raise Refusal(found)
+    modules = [m for m in opts.get("--modules", "").split(",") if m]
+    base = tomllib.loads(base_path.read_text(encoding="utf-8"))
+    import check_playbooks  # here, so a load failure leaves every other command as it is
+
+    target.write_text(skeleton(name, modules, base), encoding="utf-8")
+    found = check_playbooks.findings(root, [target])
+    if found:
+        target.unlink()
+        raise Refusal(found)
+    print(f"ok {NAME}: wrote {rel}")
+    return 0
+
+
+def design_text(root: Path) -> str:
+    """Every design's text, to find which playbooks a design names (rule 25)."""
+    texts = []
+    for path in sorted((root / DESIGN).glob("*.md")):
+        try:
+            texts.append(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+    return "\n".join(texts)
+
+
+def check_playbook(files: list[str], root: Path, today: datetime.date) -> int:
+    """Rule 25: the check of `check_playbooks.py`, then the freshness of the gate sources."""
+    named = [Path(f) if Path(f).is_absolute() else root / f for f in files]
+    missing = [rel_of(path, root) for path in named if not path.is_file()]
+    if missing:
+        raise Refusal([f"rule 25: {rel}: not readable" for rel in missing])
+    import check_playbooks  # here, so a load failure leaves every other command as it is
+
+    paths = named or playbook_format.playbooks(root)
+    found = check_playbooks.findings(root, paths)
+    designs = design_text(root)
+    for path in paths:
+        if not stale(playbook_format.source_dates(path), today):
+            continue
+        rel = rel_of(path, root)
+        line = f"rule 25: {rel}: a gate source is more than {FRESH_DAYS} days old"
+        if rel in designs:
+            found.append(f"{line} and a design names the playbook")
+        else:
+            print(f"flag {NAME}: {line}")
+    if found:
+        raise Refusal(found)
+    print(f"ok {NAME}: {len(paths)} playbooks")
+    return 0
+
+
 COMMANDS = (
     "check-issue",
     "discovery-write",
@@ -760,7 +1170,257 @@ COMMANDS = (
     "check-research",
     "check-design",
     "status",
+    "check-signals",
+    "derive-write",
+    "check-playbook",
+    "detect",
 )
+MAX_READ = 1024 * 1024  # rule 7: a larger file gets a note and is not read
+MAX_FILES = 200  # rule 7: at most this many files are read, in path order
+NOT_FILES = {"120000": "symlink", "160000": "submodule"}
+WORD = r"(?<![A-Za-z0-9_.@/-]){}(?![A-Za-z0-9_-])"  # rule 6: `vue` is not in `vue-router`
+
+
+def git_read(root: Path, *args: str, given: bytes | None = None) -> bytes | None:
+    """One read of the repository: stdout, or None when git refused. No `GIT_*` of the caller
+    applies, and a missing object of a partial clone is never fetched (rule 7)."""
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env["GIT_NO_LAZY_FETCH"] = "1"
+    try:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "--no-optional-locks", *args],
+            cwd=root,
+            env=env,
+            input=given,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def head_tree(root: Path) -> list[tuple[str, str, str]] | None:
+    """(path, mode, object) of each entry at HEAD in path order; None for a head with no commit."""
+    head = git_read(root, "cat-file", "--batch-check", given=b"HEAD\n")
+    if head is None:
+        raise Refusal(["detect: --root is not a git repository"])
+    if head.split()[-1:] == [b"missing"]:
+        return None
+    listed = git_read(root, "ls-tree", "-r", "-z", "HEAD")
+    if listed is None:
+        raise Refusal(["detect: --root is not a git repository"])
+    rows = []
+    for record in filter(None, listed.split(b"\0")):
+        meta, _, raw = record.partition(b"\t")
+        mode, _kind, sha = meta.decode("ascii").split()
+        rows.append((os.fsdecode(raw), mode, sha))
+    return sorted(rows)
+
+
+def named_texts(
+    root: Path, tree: list[tuple[str, str, str]], names: set[str], ignore: list[str]
+) -> tuple[dict[str, str], list[str]]:
+    """The text of each file the table names, and a note for each listed and not read (rule 7)."""
+    named = [
+        row
+        for row in tree
+        if any(fnmatch.fnmatchcase(base_of(row[0]), name) for name in names)
+        and not set(row[0].split("/")[:-1]) & set(ignore)
+    ]
+    blobs = [row[2] for row in named if row[1] not in NOT_FILES]
+    checked = git_read(root, "cat-file", "--batch-check", given="\n".join([*blobs, ""]).encode())
+    sizes = {}
+    for line in (checked or b"").decode("ascii", "replace").splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[2].isdigit():
+            sizes[parts[0]] = int(parts[2])
+    texts: dict[str, str] = {}
+    notes: list[str] = []
+    read = 0
+    for path, mode, sha in named:
+        reason = NOT_FILES.get(mode)
+        if reason is None and sha not in sizes:
+            reason = "no object"
+        if reason is None and sizes[sha] > MAX_READ:
+            reason = "over 1 MB"
+        if reason is None and read == MAX_FILES:
+            notes.append(f"{MAX_FILES} files read, the proposal is partial")
+            break
+        data = b""
+        if reason is None:
+            read += 1
+            data = git_read(root, "cat-file", "blob", sha)
+            reason = "binary" if data is None or b"\0" in data else None
+        if reason:
+            notes.append(f"file {quoted(path)} not read ({reason})")
+        else:
+            texts[path] = data.decode("utf-8", "replace")
+    return texts, notes
+
+
+def base_of(path: str) -> str:
+    return path.rsplit("/", 1)[-1]
+
+
+def folder_of(path: str) -> str:
+    return path.rsplit("/", 1)[0] if "/" in path else "."
+
+
+def quoted(path: str) -> str:
+    """A path is the repository's data: one line, in double quotes (rule 11)."""
+    plain = (
+        c if c.isprintable() and c not in '"\\' else c.encode("unicode_escape").decode()
+        for c in path
+    )
+    return '"' + "".join('\\"' if c == '"' else c for c in plain) + '"'
+
+
+def signal_table(kit: Path) -> dict:
+    """The table of the kit's own root; `signal_row_problems` also refuses a `pilot` row."""
+    try:
+        table = tomllib.loads((kit / SIGNALS).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        raise Refusal([f"detect: {SIGNALS} cannot be read"]) from None
+    rows = [
+        problem for kind in SIGNAL_ROWS for problem in signal_row_problems(kind, table.get(kind))
+    ]
+    if rows or not (is_words(table.get("no_signal")) and is_words(table.get("ignore"))):
+        raise Refusal([f"detect: {SIGNALS} cannot be read"])
+    return table
+
+
+def work_type_hits(table: dict, texts: dict[str, str]) -> list[dict[str, str]]:
+    """Each file, row by row; a lockfile never suggests a work type (rule 6)."""
+    locks = {lock for row in table["stack"] for lock in row["locks"]}
+    hits = set()
+    for path, text in texts.items():
+        base = base_of(path)
+        if any(fnmatch.fnmatchcase(base, lock) for lock in locks):
+            continue
+        for row in table["work_type"]:
+            word = WORD.format(re.escape(row["contains"]))
+            if fnmatch.fnmatchcase(base, row["file"]) and re.search(word, text):
+                hits.add((path, row["name"], row["signal"]))
+    return [{"file": p, "name": n, "signal": s} for p, n, s in sorted(hits)]
+
+
+def stack_rows(table: dict, texts: dict[str, str]) -> list[dict[str, str | None]]:
+    """One row per stack and folder: its first manifest and first lockfile, in path order."""
+    found: dict[tuple[str, str], dict[str, str | None]] = {}
+    for row in table["stack"]:
+        for path in sorted(texts):
+            if any(fnmatch.fnmatchcase(base_of(path), name) for name in row["manifests"]):
+                key = (row["name"], folder_of(path))
+                found.setdefault(
+                    key, {"file": path, "folder": key[1], "lock": None, "name": key[0]}
+                )
+        for path in sorted(texts):
+            at = found.get((row["name"], folder_of(path)))
+            is_lock = any(fnmatch.fnmatchcase(base_of(path), name) for name in row["locks"])
+            if at and is_lock and at["lock"] is None:
+                at["lock"] = path
+    return [found[key] for key in sorted(found)]
+
+
+def tests_fact(root: Path, tree: list[tuple[str, str, str]]) -> dict:
+    """Rule 8: `adopt.detect_tests`, loaded only here; its answer counts only for the head tree."""
+    source = "adopt.detect_tests"
+    sys.dont_write_bytecode = True  # rule 7: this read leaves no file, in the kit's tree either
+    try:
+        import adopt
+
+        folders, patterns = adopt.detect_tests(root)
+    except Exception:  # any failure to load is "not read", never "no signal"
+        return {"folders": [], "source": source, "state": "not read"}
+    paths = [path for path, mode, _ in tree if mode not in NOT_FILES]
+    rows = []
+    for folder in sorted(folders):
+        under = [p for p in paths if folder == "." or p.startswith(f"{folder}/")]
+        held = sorted({g for g in patterns for p in under if fnmatch.fnmatchcase(base_of(p), g)})
+        if held:
+            rows.append({"folder": folder, "patterns": held})
+    state = "found" if rows else "no signal"
+    return {"folders": rows, "source": f"{source}, work tree", "state": state}
+
+
+def detect_facts(root: Path, kit: Path) -> dict:
+    table = signal_table(kit)
+    if not root.is_dir():
+        raise Refusal(["detect: --root is not a git repository"])
+    head = head_tree(root)
+    tree = head or []
+    names = {row["file"] for row in table["work_type"]}
+    for row in table["stack"]:
+        names |= {*row["manifests"], *row["locks"]}
+    texts, notes = named_texts(root, tree, names, table["ignore"])
+    if head is None:
+        notes.append("no commit at head")
+    hits = work_type_hits(table, texts)
+    kinds = {hit["name"] for hit in hits}
+    stacks = stack_rows(table, texts)
+    stack_names = {row["name"] for row in stacks}
+    return {
+        "not_detectable": sorted(table["no_signal"]),
+        "notes": sorted(notes),
+        "stack": {
+            "rows": stacks,
+            "state": "mixed" if len(stack_names) > 1 else "proposed" if stacks else "no signal",
+        },
+        "tests": tests_fact(root, tree),
+        "work_type": {
+            "candidates": hits,
+            "state": "mixed" if len(kinds) > 1 else "proposed" if kinds else "default",
+        },
+    }
+
+
+def detect_lines(facts: dict) -> list[str]:
+    """Rules 3 and 4, in the order of rule 3."""
+    out = ["detect: proposal only; a person confirms it in discovery"]
+    work, stack, tests = facts["work_type"], facts["stack"], facts["tests"]
+    hits = work["candidates"]
+    if work["state"] == "default":
+        out.append("work type: default (proposed; no signal of a work type)")
+    elif work["state"] == "mixed":
+        out.append(f"work type: mixed ({len(hits)} candidates)")
+        out += [
+            f"candidate: {h['name']} file {quoted(h['file'])} signal {h['signal']}" for h in hits
+        ]
+    else:
+        out += [
+            f"work type: {h['name']} (proposed) file {quoted(h['file'])} signal {h['signal']}"
+            for h in hits
+        ]
+    if stack["state"] == "no signal":
+        out.append("stack: no signal")
+    if stack["state"] == "mixed":
+        out.append(f"stack: mixed ({len({row['name'] for row in stack['rows']})} stacks)")
+    for row in stack["rows"]:
+        lock = "none" if row["lock"] is None else quoted(row["lock"])
+        out.append(
+            f"stack: {row['name']} (proposed) folder {quoted(row['folder'])}"
+            f" file {quoted(row['file'])} lock {lock}"
+        )
+    if tests["state"] == "not read":
+        out.append(f"tests: not read ({tests['source']} cannot be loaded)")
+    elif tests["state"] == "no signal":
+        out.append("tests: no signal")
+    out += [
+        f"tests: {quoted(row['folder'])} patterns {','.join(row['patterns'])}"
+        f" (from {tests['source']})"
+        for row in tests["folders"]
+    ]
+    out += [f"not detectable from files: {name}" for name in facts["not_detectable"]]
+    return out + [f"note: {note}" for note in facts["notes"]]
+
+
+def detect(root: Path, kit: Path, as_json: bool) -> int:
+    facts = detect_facts(root, kit)
+    print(
+        json.dumps(facts, sort_keys=True, indent=1) if as_json else "\n".join(detect_lines(facts))
+    )
+    return 0
 
 
 def parse(argv: list[str]) -> tuple[str, dict[str, str], list[str]] | None:
@@ -770,11 +1430,24 @@ def parse(argv: list[str]) -> tuple[str, dict[str, str], list[str]] | None:
     rest: list[str] = []
     i = 1
     while i < len(argv):
-        if argv[i] in ("--issue", "--vision", "--answers", "--root", "--date"):
+        if argv[i] in (
+            "--issue",
+            "--vision",
+            "--answers",
+            "--root",
+            "--date",
+            "--slug",
+            "--modules",
+            "--api-dir",
+            "--pr",
+        ):
             if i + 1 >= len(argv) or argv[i] in opts:
                 return None
             opts[argv[i]] = argv[i + 1]
             i += 2
+        elif argv[0] == "detect" and argv[i] == "--json" and "--json" not in opts:
+            opts["--json"] = ""
+            i += 1
         elif argv[i].startswith("-"):
             return None
         else:
@@ -797,25 +1470,49 @@ def main(argv: list[str] | None = None) -> int:
         ok = "--answers" in opts and doors == 1 and not rest and "--date" not in opts
     elif cmd == "check-discovery":
         ok = set(opts) <= {"--root"}
+    elif cmd == "check-signals":
+        ok = not opts and not rest
+    elif cmd == "detect":
+        ok = set(opts) <= {"--root", "--json"} and not rest
+    elif cmd == "derive-write":
+        ok = "--slug" in opts and set(opts) <= {"--slug", "--modules", "--root"} and not rest
     else:
-        ok = set(opts) <= {"--root", "--date"} and iso_date(opts.get("--date", "")) is not None
+        by_issue = cmd == "status" and "--issue" in opts
+        known = {"--root", "--date"} | ({"--issue", "--api-dir", "--pr"} if by_issue else set())
+        ok = set(opts) <= known and iso_date(opts.get("--date", "")) is not None
         if cmd == "status":
             ok = ok and all(SLUG.match(name) for name in rest)
+        if by_issue:
+            numbers = [opts["--issue"], *([opts["--pr"]] if "--pr" in opts else [])]
+            ok = ok and "--api-dir" in opts and not rest and all(NUMBER.match(n) for n in numbers)
     today = iso_date(opts.get("--date", "")) or datetime.date.min
     if not ok:
         print(USAGE, file=sys.stderr)
         return 2
     try:
+        if cmd == "check-signals":
+            return check_signals(Path(__file__).resolve().parents[2])
+        if cmd == "detect":
+            return detect(root, Path(__file__).resolve().parents[2], "--json" in opts)
         if cmd == "check-issue":
+            refuse_issue_door(root)
             return check_issue(Path(opts["--issue"]))
         if cmd == "discovery-write":
+            if "--issue" in opts:
+                refuse_issue_door(root)
             return discovery_write(opts, root)
         if cmd == "check-discovery":
             return check_discovery(rest, root)
         if cmd == "check-research":
             return check_research(rest, root, today)
         if cmd == "status":
-            return status(rest, root, today)
+            return (
+                status_issue(opts, root, today) if "--issue" in opts else status(rest, root, today)
+            )
+        if cmd == "derive-write":
+            return derive_write(opts, root)
+        if cmd == "check-playbook":
+            return check_playbook(rest, root, today)
         return check_design(rest, root, today)
     except Refusal as refusal:
         for problem in refusal.problems:

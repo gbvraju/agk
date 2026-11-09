@@ -165,7 +165,8 @@ def test_the_checks_that_take_the_body_are_in_the_kept_set():
 
 # --- the router on comments (answer 5) -----------------------------------------------------------
 
-PREFIXES = ("Verdict:", "Approve:", "Approval:", "Correction:", "Assign:", "Request:")
+# brief #836 answer 1 (ADR-0383): `Final:` starts it only when edited
+PREFIXES = ("Verdict:", "Approve:", "Final:", "Approval:", "Correction:", "Assign:", "Request:")
 
 
 def router_condition() -> str:
@@ -177,6 +178,7 @@ def runs_for(event: str, body: str | None = None) -> bool:
     cond = router_condition()
     prefixes = re.findall(r"startsWith\(github\.event\.comment\.body, '([^']+)'\)", cond)
     assert tuple(prefixes) == PREFIXES
+    prefixes.remove("Final:")  # a new comment; the edited one is in test_merger_edited_verdict.py
     return event != "issue_comment" or any((body or "").startswith(p) for p in prefixes)
 
 
@@ -223,7 +225,7 @@ def test_the_router_still_runs_for_the_other_events():
 
 def test_the_router_keeps_its_triggers_and_permissions():
     """Brief #216: only the job's `if` changes."""
-    assert re.search(r"issue_comment:\n    types: \[created\]", workflow("agk-route.yml"))
+    assert re.search(r"issue_comment:\n    types: \[created, edited\]", workflow("agk-route.yml"))
     assert "permissions:\n  contents: read\n  pull-requests: write" in workflow("agk-route.yml")
 
 
@@ -434,7 +436,8 @@ def test_a_merge_and_a_push_to_the_default_branch_still_start_the_router():
     }
     assert jobs_started(push)["agk-route.yml"] == 1
     for prefix in PREFIXES:
-        assert jobs_started(comment_event(f"{prefix} x"))["agk-route.yml"] == 1, prefix
+        want = 0 if prefix == "Final:" else 1  # a new `Final:` comment; brief #836 answer 1
+        assert jobs_started(comment_event(f"{prefix} x"))["agk-route.yml"] == want, prefix
 
 
 def test_a_skipped_proof_run_never_reports_green_over_a_failed_run_of_the_same_head():

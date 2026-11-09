@@ -223,19 +223,19 @@ def test_sweep_prints_an_overlap_of_two_briefs_once_naming_the_first_file(proj, 
     give one `overlap:` line, the smaller number first and the first shared file in sorted order."""
     a, b = pr(7, body="Brief: #9\n"), pr(8, head=OTHER, body="Brief: #10\n")
     builders(stub, b, a)
-    stub.serve(f"repos/{REPO}/pulls/7/files", changed("scripts/agk/example.py", "docs/x.md"))
-    stub.serve(f"repos/{REPO}/pulls/8/files", changed("scripts/agk/example.py", "docs/x.md"))
-    assert proof_of(sweep(proj, stub)) == ["overlap: #7 #8 docs/x.md"]
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("scripts/agk/example.py", "docs/x.txt"))
+    stub.serve(f"repos/{REPO}/pulls/8/files", changed("scripts/agk/example.py", "docs/x.txt"))
+    assert proof_of(sweep(proj, stub)) == ["overlap: #7 #8 docs/x.txt"]
 
 
 def test_sweep_overlap_counts_an_added_file_and_a_renamed_old_name(proj, stub):
     """REQ-057 AC3: rule 5, a file both add, or one renames from, is a file both change."""
     a, b = pr(7, body="Brief: #9\n"), pr(8, head=OTHER, body="Brief: #10\n")
     builders(stub, a, b)
-    moved = [{"filename": "docs/new.md", "status": "renamed", "previous_filename": "docs/old.md"}]
+    moved = [{"filename": "docs/new.txt", "status": "renamed", "previous_filename": "docs/old.txt"}]
     stub.serve(f"repos/{REPO}/pulls/7/files", moved)
-    stub.serve(f"repos/{REPO}/pulls/8/files", changed("docs/old.md", status="removed"))
-    assert proof_of(sweep(proj, stub)) == ["overlap: #7 #8 docs/old.md"]
+    stub.serve(f"repos/{REPO}/pulls/8/files", changed("docs/old.txt", status="removed"))
+    assert proof_of(sweep(proj, stub)) == ["overlap: #7 #8 docs/old.txt"]
 
 
 def test_sweep_no_overlap_for_one_brief_or_shared_mechanical_files(proj, stub):
@@ -343,18 +343,29 @@ def test_sweep_prints_behind_with_or_without_the_setting(proj, stub, setting):
     assert proof_of(sweep(proj, stub)) == ["BEHIND #7 4"]
 
 
+@pytest.mark.parametrize("path", ["docs/guides/a.md", "agk.toml"])
+def test_sweep_no_overlap_for_prose_or_a_shared_index_and_still_a_re_prove(proj, stub, path):
+    """REQ-057 AC3 and AC9: amendment 141 item 8, the table of rule 3; rule 6 does not change."""
+    a, b = pr(7, body="Brief: #9\n"), pr(8, head=OTHER, body="Brief: #10\n")
+    builders(stub, a, b)
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed(path))
+    stub.serve(f"repos/{REPO}/pulls/8/files", changed(path))
+    main_changed(stub, SHA, changed(path), ahead=1, by=((OLD, "A (#41)"),))
+    assert proof_of(sweep(proj, stub)) == [f"re-prove: #7 {path} (changed by #41)", "BEHIND #7 1"]
+
+
 def test_sweep_the_new_lines_follow_the_pull_request_lines(proj, stub):
     """REQ-057 AC3: rule 5, the lines come after the per-pull-request lines, overlaps first."""
     a, b = pr(7, body="Brief: #9\n"), pr(8, head=OTHER, body="Brief: #10\n")
     builders(stub, a, b)
-    stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml"))
-    stub.serve(f"repos/{REPO}/pulls/8/files", changed("agk.toml"))
-    main_changed(stub, SHA, changed("agk.toml"), ahead=1, by=((OLD, "A (#41)"),))
+    stub.serve(f"repos/{REPO}/pulls/7/files", changed("scripts/agk/example.py"))
+    stub.serve(f"repos/{REPO}/pulls/8/files", changed("scripts/agk/example.py"))
+    main_changed(stub, SHA, changed("scripts/agk/example.py"), ahead=1, by=((OLD, "A (#41)"),))
     assert sweep(proj, stub) == [
         f"#7 {SHORT} ready: no verdict 1h",
         f"#8 {OTHER[:7]} ready: no verdict 1h",
-        "overlap: #7 #8 agk.toml",
-        "re-prove: #7 agk.toml (changed by #41)",
+        "overlap: #7 #8 scripts/agk/example.py",
+        "re-prove: #7 scripts/agk/example.py (changed by #41)",
         "BEHIND #7 1",
         "main: no run at ddddddd",
     ]
