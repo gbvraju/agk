@@ -609,6 +609,20 @@ def hold_marks(root, s: Survey, known: list[dict], at: str) -> list[dict]:
     return rows
 
 
+def keep_out_of_git(root) -> None:
+    """`Q-772-1` as read: the record is kept out of git in any project, by this clone's own exclude
+    file, so no tracked ignore line is needed; a rewritten tracked file would be a generated one."""
+    out = _git(root, "rev-parse", "--git-path", "info/exclude")
+    if out is None:
+        return
+    path = Path(root) / out.strip()
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if HOLDS_FILE not in text.splitlines():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as lines:
+            lines.write(f"{HOLDS_FILE}\n")
+
+
 def record_holds(root, s: Survey, ready: list[dict], chosen: list[dict], now: datetime) -> None:
     """Append this pass to the record (`plan --record`); lines are only ever appended."""
     known = hold_rows(root)
@@ -630,6 +644,7 @@ def record_holds(root, s: Survey, ready: list[dict], chosen: list[dict], now: da
         return
     target = Path(root) / HOLDS_FILE
     try:
+        keep_out_of_git(root)
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("a", encoding="utf-8") as out:
             out.write("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows))

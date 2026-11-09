@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
-from pathlib import Path
 
 import metrics as metrics_module
 import pytest
@@ -20,7 +19,6 @@ from test_session_flow import DAY as TODAY
 from test_session_flow import PULLS, brief, pr
 from test_session_plan import changed, free, labelled, plan
 
-ROOT = Path(__file__).resolve().parents[2]
 HOLDS = "docs/runs/holds.jsonl"
 DAY = timedelta(days=1)
 TEN = "".join(f"line {n}\n" for n in range(1, 11))
@@ -148,10 +146,15 @@ def test_ac13_recording_posts_nothing(proj, stub):
     assert posts(stub) == []
 
 
-def test_ac13_the_record_is_kept_out_of_git():
-    """REQ-057 AC13: `Q-772-1` as read, principle 5; the kit's block and this repository's."""
-    for path in (ROOT / ".gitignore", ROOT / "kit" / "templates" / "gitignore"):
-        assert HOLDS in path.read_text(encoding="utf-8").splitlines(), path
+def test_ac13_the_record_is_kept_out_of_git(proj, stub):
+    """REQ-057 AC13: `Q-772-1` as read, principle 5: no tracked ignore line, in any project."""
+    held_by_pull(stub)
+    plan(proj, stub, "--record")
+    plan(proj, stub, "--record")
+    assert (proj.root / HOLDS).exists()
+    assert HOLDS not in proj.git("status", "--porcelain", "--untracked-files=all")
+    exclude = proj.root / ".git" / "info" / "exclude"
+    assert exclude.read_text(encoding="utf-8").splitlines().count(HOLDS) == 1
 
 
 # --- marking a hold ----------------------------------------------------------------------------

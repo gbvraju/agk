@@ -6,5 +6,4 @@ traceability*.md
 traceability*.txt
 *.whl
 .agk-test-map.toml
-docs/runs/holds.jsonl
 # <<< agk
