@@ -6,7 +6,7 @@
 - Related: ADR-0285, ADR-0359, ADR-0360, brief #878, amendment 153
 - Requirements: REQ-051
 
-Protected classes: `agk.toml`, `scripts/agk/`, `tests/kit/`, `kit/`
+Protected classes: `agk.toml`, `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `kit/`
 
 ## Context
 
@@ -32,7 +32,8 @@ still runs everything after each merge.
    entry that is not test infrastructure unless the list carries an adjacent `# full: <reason>` comment, on the entry's
    line or the line above it. The refusal names SPEC-0055 rule 6 and the entry by its place (`testing.always_full[2]`),
    never its value (principle 8). What counts as test infrastructure is one list in `impact.py`, by stack.
-4. The examples a new project copies in `kit/templates/agk.toml` and `agk.adopt.toml` name test infrastructure only.
+4. The examples a new project copies in `kit/templates/agk.toml` and `agk.adopt.toml`, and the `test selection` practice of
+   `kit/templates/stack-adr.md`, name test infrastructure only.
 5. `[testing] budget_seconds` is reported, never enforced. The weekly report gives the full suite's median on the default
    branch against the budget, the slowest ten test files and the workers' balance, each `unknown` when the log does not
    hold it, and over budget says that one brief splits or speeds up the slowest files, never removing a test. It also

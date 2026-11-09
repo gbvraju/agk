@@ -107,10 +107,10 @@ def _bytes(root: Path, args: list[str], given: bytes | None = None) -> bytes:
     return done.stdout
 
 
-def listing(root: Path, head: str = "HEAD") -> dict[str, tuple[str, int]]:
+def listing(root: Path, ref: str = "HEAD") -> dict[str, tuple[str, int]]:
     """Path -> (blob id, size) of each regular file at the head; a non-UTF-8 name is left out."""
     found = {}
-    for record in _bytes(root, ["ls-tree", "-r", "-l", "-z", head]).split(b"\0"):
+    for record in _bytes(root, ["ls-tree", "-r", "-l", "-z", ref]).split(b"\0"):
         head, _, raw = record.partition(b"\t")
         fields = head.split()
         if len(fields) == 4 and fields[0] in (b"100644", b"100755"):
@@ -556,7 +556,8 @@ def import_edges(
     tree: dict[str, tuple[str, int]], texts: dict[str, str], configs: TsConfigs
 ) -> dict[str, set[str]]:
     """Each source file -> the files of the tree it imports directly."""
-    files, deps = set(tree), {}
+    files = set(tree)
+    deps: dict[str, set[str]] = {}
     go = GoModules(tree, texts)
     for path, text in texts.items():
         if path.endswith(".py"):
