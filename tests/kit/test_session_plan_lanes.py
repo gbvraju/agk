@@ -98,6 +98,7 @@ TODAY_KEYS = {
     "start",
     "running",
     "waits",
+    "holders",
     "skipped",
     "malformed",
     "stale_claims",
