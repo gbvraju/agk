@@ -2,6 +2,7 @@
 
 Standard library only. Read-only: it reads local files and runs `git` only to read, and `gh api`
 only with GET on seven paths of the repository, an eighth where the product report is installed,
+two more with `builder_start = "assign"` (the assignments issue and its slot markers, ADR-0402)
 and one more of the kit's own repository, its newest release (brief #320; `gh` holds the
 credential; this script holds none). It writes nothing.
 A check that could not read what it needs is `cannot-check` with a reason class, never `ok`.
@@ -63,6 +64,7 @@ import impact  # noqa: E402
 import merge_cleared  # noqa: E402
 import minutes  # noqa: E402
 import playbook_format  # noqa: E402
+import session  # noqa: E402
 import session_plan  # noqa: E402
 from common import (  # noqa: E402
     GITLEAKS_INSTALL,
@@ -127,6 +129,7 @@ ENGINE_FIX = (
     "(a change to agk.toml needs an ADR in the same pull request)"
 )
 LIST_LIMIT = 10
+SLOT_OFFSETS = (5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 1, 2, 4)  # minutes past the quarter (not 3)
 TIDY_LIMIT = 5  # more finished worktrees than this prints the tidy line (brief #548 answer 5)
 
 # id -> (severity, text when ok, text when it fails, printed fix); the order is the report order.
@@ -361,6 +364,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "middle level); see `python3 scripts/agk/minutes.py` for where they go, the defaults in "
         "docs/guides/project-ci.md to use fewer, and local mode in docs/guides/local-mode.md for "
         "when they run out",
+    ),
+    "slot-schedule": (  # brief #776 build (c), ADR-0402: answer 4
+        "warn",
+        "each builder slot has run in the last hour, or builder_start is not assign",
+        "a builder slot has no run in the last hour",
+        "create the scheduled tasks this line lists, one task per slot at each of its minutes "
+        "(setting: builder_slots in the flow table of agk.toml)",
     ),
     "always-full-infra": (  # SPEC-0055 rule 6 as amendment 153 proposes (brief #878, ADR-0393)
         "error",
@@ -950,6 +960,48 @@ def auto_merge_result(config: dict) -> Result:
     return Result("ok", message="on, method squash" if state == "on" else "off")
 
 
+def slot_minutes(number: int) -> list[int]:
+    """The four minutes of the hour at which a slot starts: a quarter hour apart, one offset per
+    slot, none on the conductor's own (:03, :18, :33, :48)."""
+    first = SLOT_OFFSETS[(number - 1) % len(SLOT_OFFSETS)]
+    return [first + 15 * n for n in range(4)]
+
+
+def slot_schedule_result(root: Path, reads: Reads) -> Result:
+    """Brief #776 answer 4: the schedule a pool needs, and whether each slot has run. An account's
+    scheduled tasks cannot be read from here, so a slot's own marker is the evidence."""
+    try:
+        if session.builder_start(root) != "assign":
+            return Result("ok", message=" (builder_start is not assign)")
+        count = session.builder_slots(root)
+    except CheckError:
+        return Result("cannot-check", reason="bad-response")
+    times = ", ".join(
+        f"s{n} " + " ".join(f":{m:02d}" for m in slot_minutes(n)) for n in range(1, count + 1)
+    )
+    needed = f"; {count} slots x 4 starts = {count * 4} an hour: {times}"
+    found, reason = reads.get(
+        "conductor-issue", f"repos/{reads.repo}/issues?state=open&labels=agk-conductor&per_page=100"
+    )
+    if reason or not isinstance(found, list) or not found:
+        return Result("cannot-check", reason=reason or "bad-response")
+    hour_ago = datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=1)
+    since = hour_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
+    path = f"repos/{reads.repo}/issues/{found[0].get('number')}/comments?since={since}&per_page=100"
+    comments, reason = reads.get("slot-markers", path)
+    if reason or not isinstance(comments, list):
+        return Result("cannot-check", reason=reason or "bad-response")
+    ran = {
+        match.group(3)
+        for c in comments
+        if (match := session.SLOT_LINE.fullmatch(session.first_line(c)))
+    }
+    missing = [f"s{n}" for n in range(1, count + 1) if f"s{n}" not in ran]
+    if missing:
+        return Result("fail", message=f" (no run in the last hour: {' '.join(missing)}){needed}")
+    return Result("ok", message=needed)
+
+
 def always_full_result(root: Path) -> Result:
     """Brief #878 answer 3: each `always_full` entry names test infrastructure or has a reason. A
     malformed `[testing]` table is ok here; the commands that read it refuse it naming the
@@ -1361,6 +1413,7 @@ def run_checks(
     results["actions-minutes"] = minutes_result(root, reads)
     results["auto-merge-setting"] = auto_merge_result(config)
     results["always-full-infra"] = always_full_result(root)
+    results["slot-schedule"] = slot_schedule_result(root, reads)
     results["design-ui-paths"] = design_ui_result(root, config)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():

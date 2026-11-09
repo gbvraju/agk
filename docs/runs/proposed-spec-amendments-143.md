@@ -28,3 +28,15 @@ person's `Approve: SPEC-0034`; no session posts it. Items 1 to 3 are built by bu
 7. **Health (ADR-0368, build (b)).** The router job reads both leases on every event and opens, updates or closes the plain
    issues `No live conductor` and `Builder pool down` (label `agk-health`); `route.py --health` is the same check with no
    job. `sweep` lists each slot as working, idle or dead since when. With `builder_start = "start"` none of this runs.
+8. **The conductor assigns (ADR-0402, build (c)).** With `builder_start = "assign"`, rule 15's plan has no sessions to start:
+   an `assign` list names the free slots, each row with its `Assign:` line, and the conductor posts those lines. Follow-ups are
+   `Assign: <slot> #<brief> pr #<n> <fix list|merge of main>`.
+9. **The schedule (ADR-0402).** Each slot runs from four staggered scheduled starts an hour; `doctor.py` prints them and warns
+   of a slot with no `Slot:` marker written in the last hour.
+10. **Ticks and stalls (ADR-0402).** `conductor.py watch` ends with `tick` within 5 minutes with no event, and `sweep` and a tick print
+    `STALL #<pr> <m>m: restart <session>`, `STALL #<pr>: failed check <name>` and `STALL conductor <name> <m> min`. One `Owner
+    needed:` per refused start.
+11. **Takeover (ADR-0402).** Another name may take a lease whose holder has made no conductor comment for `stall_minutes` with a
+    review or a start due, after posting the `STALL conductor` line on the plan issue. A run that ends releases its lease before its report.
+12. **Main green (ADR-0402).** A red-branch issue closed ends the watch, naming the pull requests whose every failed check finished
+    while it was open; the pass starts their merge of main.

@@ -73,6 +73,9 @@ The holders (item 4): `holders` ranks the open builder pull requests by the brie
 brief held by two counts under each. `plan` prints `Holds <k>:`, and `Stall:` for a holder of two
 or more idle over `[flow] stall_minutes` (30 by default); it posts nothing, the conductor does.
 
+With `builder_start = "assign"` (brief #776 build (c), ADR-0402) nothing starts: `start` is empty and
+an `assign` list names the free slots, each row with its `Assign:` line; `launch.py` starts nothing.
+
 Plan before filing and every hold measured (amendment 141 items 6 and 7, brief #772 build (c)):
 `--what-if DIR` judges saved briefs with `waves` and posts and records nothing; `--record` appends
 each hold to `docs/runs/holds.jsonl`, kept out of git (`Q-772-1` as read); `metrics.py` reads it.
@@ -103,6 +106,8 @@ from common import CheckError, matches, read_list
 from metrics import HOLDS_FILE, author_of, counted_authors, hold_rows
 from reviewers import verdict_authors
 from session import (
+    builder_slots,
+    builder_start,
     ADDS,
     BROAD,
     HELD_PREFIX,
@@ -1451,7 +1456,12 @@ def build(root, record: bool = False) -> dict:
         for t in live_takes(comments, number, s.prs, s.hours)
     }
     count = 0 if hold else min(len(chosen), slots)
-    names = session_names(busy, count)
+    assigning = builder_start(root) == "assign"
+    free = []
+    if assigning:
+        free = [f"s{n + 1}" for n in range(builder_slots(root)) if f"s{n + 1}" not in busy]
+        count = min(count, len(free))
+    names = free[:count] if assigning else session_names(busy, count)
     unplanned = unplaced(s, chosen[:count], chosen[count:], hold, waits, skipped, build_skips)
     behind: list[dict] = []
     unread: list[int] = []
@@ -1482,8 +1492,9 @@ def build(root, record: bool = False) -> dict:
     malformed_rows = [row for row in s.skipped if row[1].startswith("rule ")]
     held, ignored_holds = holds_of(root, s)
     held_rows = [row for row in s.skipped if row[1].startswith(HELD_PREFIX)]
+    entries = [start_entry(names[i], b, protected) for i, b in enumerate(chosen[:count])]
     found = {
-        "start": [start_entry(names[i], b, protected) for i, b in enumerate(chosen[:count])],
+        "start": [] if assigning else entries,
         "running": running_sessions(s),
         "waits": waits,
         "holders": ranked,
@@ -1505,7 +1516,8 @@ def build(root, record: bool = False) -> dict:
             "ready": len(chosen),
             "limit": limit,
         }
-        | memory,
+        | memory
+        | ({"free_slots": len(free)} if assigning else {}),
         "merge": {
             "waiting": len(ready_prs),
             "merge_hours": hours,
@@ -1520,6 +1532,8 @@ def build(root, record: bool = False) -> dict:
         "default_branch": default,
         "stale_commits": behind_limit,
     } | playbook
+    if assigning:
+        found["assign"] = [e | {"line": assign_line_of(e)} for e in entries]
     if held:
         found["held"] = held
     if ignored_holds:
@@ -1537,6 +1551,12 @@ def holds_of(root, s: Survey) -> tuple[list[dict], list[dict]]:
             held.append({"brief": number, "reason": reason})
         ignored += [{"brief": number, "by": login} for login in logins]
     return held, ignored
+
+
+def assign_line_of(entry: dict) -> str:
+    """The `Assign:` line the conductor posts for a row of the plan's `assign` list (ADR-0402)."""
+    build = f" build ({entry['build']})" if "build" in entry else ""
+    return f"Assign: {entry['session']} #{entry['brief']}{build}"
 
 
 def start_entry(name: str, brief: dict, protected: list[str] | None) -> dict:
@@ -1605,6 +1625,8 @@ def reason(plan: dict) -> str:
             f"({cap['memory']['available_bytes'] // GIB} GB available, "
             f"builder_memory_gb is {cap['builder_memory_gb']})"
         )
+    if cap.get("free_slots") == 0:
+        return "every builder slot is working (builder_slots in the flow table)"
     if cap["reviews_in_flight"] - cap["waiting_for_verdict"] <= 0:
         return (
             f"the conductor has {cap['waiting_for_verdict']} pull requests waiting for a verdict "
@@ -1616,7 +1638,10 @@ def reason(plan: dict) -> str:
 def words(plan: dict) -> str:
     lines: list[str] = []
     started = plan["start"]
-    if started:
+    if plan.get("assign"):
+        rows = ", ".join(row["line"].removeprefix("Assign: ") for row in plan["assign"])
+        lines.append(f"Assign {len(plan['assign'])}: {rows}.")
+    elif started:
         takes = ", ".join(
             f"{s['session']} takes #{s['brief']}"
             + (f" build ({s['build']})" if "build" in s else "")

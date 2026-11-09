@@ -56,6 +56,9 @@ auto_merge = true
 auto_merge_method = "squash"
 # The builder capacity (SPEC-0034 rule 1): nine builder sessions at once, by the owner's choice on 2026-11-08 (plan #661, ADR-0341).
 max_builders = 9
+# How a builder starts (SPEC-0034, brief #776, ADR-0402): "assign" means no session starts one; each slot runs from four staggered
+# scheduled starts an hour (`doctor.py` prints them and warns of a slot with none) and the conductor posts `Assign:` lines.
+builder_start = "assign"
 # The conductor's review capacity (SPEC-0034 rule 15): equal to max_builders, the default when unset (brief #842, ADR-0384).
 reviews_in_flight = 9
 # The conductor lease (ADR-0330): one live conductor at a time, marked on the plan issue; merge-queue refuses while another holds it (ADR-0353).
