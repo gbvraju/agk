@@ -1,7 +1,9 @@
 """The test plan: which tests a change will run in proof, and why (brief #325, ADR-0185).
 
 Standard library only. Read-only: it reads git and files and runs nothing else, no test and no
-worktree. It prints the plan that `proof.py` runs for the change base..head, built by the same
+worktree, except that under `map_source = "generated"` it first rebuilds the git-ignored test map
+of the head when that is missing or of another tree (`test_map.refresh`, SPEC-0055 rule 5). It
+prints the plan that `proof.py` runs for the change base..head, built by the same
 function (`proof.plan`), so the plan shown is the plan run:
 
 - for each `[proof]` area with added or changed test files: its files, the command line with
@@ -41,6 +43,7 @@ from impact import (
 )
 from impact import text as regression_text
 from proof import Failure, Plan, Run, area_command, plan, resolve_range
+from test_map import refresh
 
 NAME = "test-plan"
 USAGE = "usage: test_plan.py [--base REF] [--head REF] [--json] [ROOT]"
@@ -219,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
             raise Failure("ROOT is not a git work tree (path class: root)")
         base, head = resolve_range(root, options["base"], options["head"])
         shown = plan(root, base, head)
+        refresh(root, head)
         found = impact(root, base, head)
         levels = with_links(shown, found, level_plan(root, head, shown))
     except Usage as exc:

@@ -138,6 +138,7 @@ from impact import (
     workers_setting,
 )
 from proof import area_command, execute, is_test_file, timeout_note
+from test_map import refresh
 
 HERE = Path(__file__).resolve().parent
 USAGE = (
@@ -489,6 +490,7 @@ def regression_step(
     """The tests step with a `[testing]` table: the lock, proof's runs, the regression set."""
     try:
         limit = proof_timeout(root)
+        refresh(root)
         found = impact(root, mb, "HEAD")
         areas = proof_areas(root)
     except CheckError as exc:

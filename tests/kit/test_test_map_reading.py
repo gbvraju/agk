@@ -184,7 +184,7 @@ def test_prepush_rebuilds_before_the_selection(repo, monkeypatch):
     monkeypatch.setattr(prepush, "gate", spy)
     ran = prepush.Ran([], repo.root, 0, "")
     step = prepush.regression_step(repo.root, base(repo), [], [], ran, False)
-    assert step.status == "ok" and seen == [["tests/test_checkout.py"]]
+    assert step.outcome == "ok" and seen == [["tests/test_checkout.py"]]
 
 
 @pytest.mark.parametrize(
@@ -219,6 +219,16 @@ def test_a_map_that_cannot_be_built_leaves_rule_6_to_the_files_it_would_have_cov
     lines = map_lines(result)
     assert len(lines) == 1 and "committed" not in lines[0] and "tree" not in lines[0]
     assert result.data()["map_notes"] == lines
+
+
+def test_under_full_a_map_that_cannot_be_built_is_said_once(repo):
+    """REQ-062 AC3: brief #833 answer 4 (a pull request under `pr_tests = "full"`)."""
+    extra = {".gitignore": "# none\n", impact.MAP_FILE: "# tree committed\n"}
+    start(repo, GENERATED.replace('pr_tests = "selected"\n', ""), files=extra)
+    change(repo, "src/pricing.py")
+    done = repo.run("project_tests.py", **PULL)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert sum(SETTING in line for line in done.stdout.splitlines()) == 1
 
 
 def test_a_build_that_breaks_does_not_stop_the_selection(repo, monkeypatch):
