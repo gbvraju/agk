@@ -1,0 +1,1 @@
+- `front_door.py detect` reports test files with the survey's detector over the head tree, and `survey.py` reads its manifest names from `config/stack-signals.toml` (brief #879, SPEC-0057 build (d), ADR-0371)
