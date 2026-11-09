@@ -75,7 +75,8 @@ both in that order, the dry run always and a run that merges only when `[flow] a
 `on` in both places, as `merge_cleared.py` below; for that one the hook prints the same explicit
 `allow` decision. Brief #700 (ADR-0330): exactly `... rerun --pr <n>`, with `--apply` after it,
 `... check-verdict <path>` and `... lease --show`, `... lease --take <name>` or `... lease
---release <name>` too, the same regular file. Every other form stays denied.
+--release <name>` too, the same regular file. Brief #781 (ADR-0366): exactly `... over --pr <n>`,
+which only reads GitHub. Every other form stays denied.
 Without `--shadow` the conductor may also merge a pull request it cleared (brief #531, ADR-0265,
 SPEC-0039 rule 8, the one exception to principle 2 and session rule 2): exactly
 `python3 scripts/agk/merge_cleared.py --pr <n> --sha <40 lower-case hex>` (or `python`), the
@@ -514,9 +515,12 @@ def routine_allowed(words: list[str], cwd: object) -> bool:
 
 def routine_form(rest: list[str]) -> bool:
     """The routines of brief #700 (ADR-0330): `rerun --pr <n> [--apply]`, `check-verdict <path>`
-    and `lease (--show | --take <name> | --release <name>)`, exactly these forms."""
+    and `lease (--show | --take <name> | --release <name>)`, and brief #781's `over --pr <n>`
+    (ADR-0366), exactly these forms."""
     if rest[:2] == ["rerun", "--pr"] and len(rest) in (3, 4) and MERGE_PR.fullmatch(rest[2]):
         return rest[3:] in ([], ["--apply"])
+    if rest[:2] == ["over", "--pr"]:
+        return len(rest) == 3 and bool(MERGE_PR.fullmatch(rest[2]))
     if rest[:1] == ["check-verdict"]:
         return len(rest) == 2 and bool(rest[1]) and not rest[1].startswith("-")
     if rest[:1] == ["lease"]:
