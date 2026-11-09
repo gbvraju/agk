@@ -511,10 +511,8 @@ def routine_form(rest: list[str]) -> bool:
     if rest[:1] == ["lease"]:
         if rest[1:] == ["--show"]:
             return True
-        return (
-            len(rest) == 3
-            and rest[1] in ("--take", "--release")
-            and bool(SESSION_NAME.fullmatch(rest[2]))
+        return len(rest) == 3 and rest[1] in ("--take", "--release") and bool(
+            SESSION_NAME.fullmatch(rest[2])
         )
     return False
 
