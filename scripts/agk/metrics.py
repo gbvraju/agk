@@ -1217,7 +1217,12 @@ def holds_line(root: Path, start: date, end: date) -> str:
     on the window, it says `unknown`, never 0. A brief waiting on two holders is one builder."""
     rows = hold_rows(root)
     lo, hi = start_of(start), start_of(end)
-    inside = [r for r in rows if lo <= stamp(r["at"]) < hi]
+
+    def in_window(row: dict) -> bool:
+        at = stamp(row["at"])
+        return at is not None and lo <= at < hi
+
+    inside = [r for r in rows if in_window(r)]
     if not inside:
         return "holds: unknown"
     last: dict[tuple, int] = {}
@@ -1228,7 +1233,7 @@ def holds_line(root: Path, start: date, end: date) -> str:
         pair = (row.get("brief"), row.get("holder"))
         gone = row["minutes"] - last.get(pair, 0)
         last[pair] = row["minutes"]
-        if lo <= stamp(row["at"]) < hi:
+        if in_window(row):
             day = held.setdefault((row.get("brief"), row["at"][:10]), {})
             day[pair[1]] = day.get(pair[1], 0) + gone
     minutes = sum(max(day.values()) for day in held.values())

@@ -44,8 +44,20 @@ HOME_FILES = (".netrc", ".git-credentials", ".docker/config.json")
 TOKEN_FILES = (".npmrc", ".pypirc")
 TOKEN_LINE = re.compile(r"(?im)^[^#;\n]*(?:_authtoken|_auth|token|password)\s*[=:]\s*\S")
 LOG_NAME = re.compile(r".*\.log(?:\.\d+)?")
-SAMPLES = (".env", ".env.local", "x.pem", "x.key", "x.p12", "x.pfx", "id_rsa", "x.tfstate",
-           "x.tfstate.1", "secrets.json", "x.log", "x.log.1")
+SAMPLES = (
+    ".env",
+    ".env.local",
+    "x.pem",
+    "x.key",
+    "x.p12",
+    "x.pfx",
+    "id_rsa",
+    "x.tfstate",
+    "x.tfstate.1",
+    "secrets.json",
+    "x.log",
+    "x.log.1",
+)
 CHUNK = re.compile(r"[\w.~/\\-]+")
 ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*", re.S)
 ANSI_C = re.compile(r"\$'((?:[^'\\]|\\.)*)'", re.S)
@@ -58,15 +70,33 @@ DECODER = re.compile(
 FEEDS = {"xargs", "sh", "bash", "zsh", "dash", "ksh", "eval", "source", "."}
 KEYWORDS = {"{", "}", "!", "if", "then", "else", "elif", "do", "while", "until", "fi", "done"}
 WRAPPERS = {
-    "env": {"-u", "-C", "-S", "--unset", "--chdir"}, "sudo": {"-u", "-g", "-C", "-h", "-p", "-U"},
-    "doas": {"-u"}, "timeout": {"-k", "-s"}, "time": {"-f", "-o"}, "nice": {"-n"}, "nohup": set(),
-    "stdbuf": {"-i", "-o", "-e"}, "command": set(), "builtin": set(), "exec": {"-a"},
-    "xargs": {"-I", "-n", "-P", "-d", "-E", "-L", "-s", "-a"}, "watch": {"-n", "-d"},
+    "env": {"-u", "-C", "-S", "--unset", "--chdir"},
+    "sudo": {"-u", "-g", "-C", "-h", "-p", "-U"},
+    "doas": {"-u"},
+    "timeout": {"-k", "-s"},
+    "time": {"-f", "-o"},
+    "nice": {"-n"},
+    "nohup": set(),
+    "stdbuf": {"-i", "-o", "-e"},
+    "command": set(),
+    "builtin": set(),
+    "exec": {"-a"},
+    "xargs": {"-I", "-n", "-P", "-d", "-E", "-L", "-s", "-a"},
+    "watch": {"-n", "-d"},
 }
 SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
-LOG_COMMANDS = {"journalctl": None, "dmesg": None, "kubectl": "logs", "docker": "logs",
-                "docker-compose": "logs", "podman": "logs", "heroku": "logs", "aws": "logs",
-                "gcloud": "logging", "az": "monitor"}
+LOG_COMMANDS = {
+    "journalctl": None,
+    "dmesg": None,
+    "kubectl": "logs",
+    "docker": "logs",
+    "docker-compose": "logs",
+    "podman": "logs",
+    "heroku": "logs",
+    "aws": "logs",
+    "gcloud": "logging",
+    "az": "monitor",
+}
 GREPS = {"grep", "egrep", "fgrep"}
 READER = re.compile(r"python(?:3(?:\.\d+)?)?(?:\.exe)?")
 MAX_DEPTH = 3
@@ -323,15 +353,34 @@ class Guard:
         recursive = (
             name in ("rg", "ag", "ack")
             or (name == "git" and "grep" in low[:3])
-            or (name in GREPS and any(
-                w in ("-r", "-R", "--recursive", "--directories=recurse", "--dereference-recursive")
-                or re.fullmatch(r"-[a-zA-Z]*[rR][a-zA-Z]*", w) for w in rest[1:]
-            ) or (name in GREPS and "recurse" in low))
-            or (name == "find" and (bool({"-exec", "-execdir", "-ok", "-okdir"} & set(low))
-                                    or "xargs" in following))
+            or (
+                name in GREPS
+                and any(
+                    w
+                    in (
+                        "-r",
+                        "-R",
+                        "--recursive",
+                        "--directories=recurse",
+                        "--dereference-recursive",
+                    )
+                    or re.fullmatch(r"-[a-zA-Z]*[rR][a-zA-Z]*", w)
+                    for w in rest[1:]
+                )
+                or (name in GREPS and "recurse" in low)
+            )
+            or (
+                name == "find"
+                and (
+                    bool({"-exec", "-execdir", "-ok", "-okdir"} & set(low)) or "xargs" in following
+                )
+            )
             or (name == "select-string" and "-recurse" in low)
-            or (name in ("get-childitem", "gci", "dir", "ls") and "-recurse" in low
-                and "select-string" in following)
+            or (
+                name in ("get-childitem", "gci", "dir", "ls")
+                and "-recurse" in low
+                and "select-string" in following
+            )
         )
         if not recursive:
             return []
@@ -419,9 +468,15 @@ def split(command: str) -> list[tuple[list[str], str]] | None:
 
 
 FIELDS = {
-    "Read": ("file_path",), "Edit": ("file_path",), "Write": ("file_path",),
-    "MultiEdit": ("file_path",), "NotebookEdit": ("notebook_path",), "Bash": ("command",),
-    "PowerShell": ("command",), "Glob": ("pattern",), "Grep": (),
+    "Read": ("file_path",),
+    "Edit": ("file_path",),
+    "Write": ("file_path",),
+    "MultiEdit": ("file_path",),
+    "NotebookEdit": ("notebook_path",),
+    "Bash": ("command",),
+    "PowerShell": ("command",),
+    "Glob": ("pattern",),
+    "Grep": (),
 }
 
 
@@ -472,8 +527,11 @@ def main() -> int:
         payload = None
     line = judge(payload)
     if line is not None:
-        out = {"hookEventName": "PreToolUse", "permissionDecision": "deny",
-               "permissionDecisionReason": line}
+        out = {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": line,
+        }
         print(json.dumps({"hookSpecificOutput": out}))
     return 0
 

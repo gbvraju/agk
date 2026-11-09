@@ -657,8 +657,8 @@ def record_holds(root, s: Survey, ready: list[dict], chosen: list[dict], now: da
 
 def holder_name(wait: dict, names: dict[int, str]) -> str:
     """The saved file that holds a brief back, or the number of the open work."""
-    number = wait.get("waits_for", wait.get("pull_request"))
-    return names.get(number) or f"#{number}"  # type: ignore[arg-type]
+    number = int(wait.get("waits_for", wait.get("pull_request", 0)))
+    return names.get(number) or f"#{number}"
 
 
 def what_if_lines(root, directory: str) -> list[str]:
