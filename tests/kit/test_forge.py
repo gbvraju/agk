@@ -103,7 +103,9 @@ def test_req_048_one_number_sequence_and_github_shapes(files, sidecar):
     assert files.create_issue("One", "A", ["agk-brief"]) == 1
     assert pull(files) == 2
     assert FilesForge(sidecar, env={}).create_issue("Three", "C", []) == 3
-    assert (sidecar / "forge/issues/3.json").is_file() and (sidecar / "forge/pulls/2.json").is_file()
+    assert (sidecar / "forge/issues/3.json").is_file() and (
+        sidecar / "forge/pulls/2.json"
+    ).is_file()
     record = files.get("pull-2", "x")
     assert record["user"]["login"] == PERSON and record["state"] == "open"
     assert record["head"] == {"ref": "feature", "sha": SHA} and record["base"]["ref"] == "main"

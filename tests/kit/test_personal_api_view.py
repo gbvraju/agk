@@ -72,7 +72,9 @@ def world(tmp_path: Path) -> dict:
     git(clone, "add", "-A")
     git(clone, "commit", "-q", "-m", "first")
     home = tmp_path / "home"
-    proc = script("personal_state.py", "attach", "--person", "demo-dev", cwd=clone, AGK_HOME=str(home))
+    proc = script(
+        "personal_state.py", "attach", "--person", "demo-dev", cwd=clone, AGK_HOME=str(home)
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     side = next((home / "projects").iterdir())
     return {"clone": clone, "home": home, "side": side, "out": tmp_path / "view"}
@@ -98,7 +100,10 @@ def view_of_fixture(w: dict, api: Path) -> Path:
     for name in ("pulls.json", "pulls-open.json"):
         for item in read(api / name) if (api / name).is_file() else []:
             detail = api / f"pull-{item['number']}.json"
-            put(forge / "pulls" / f"{item['number']}.json", read(detail) if detail.is_file() else item)
+            put(
+                forge / "pulls" / f"{item['number']}.json",
+                read(detail) if detail.is_file() else item,
+            )
     issues: dict[int, dict] = {}
     for path in sorted(api.glob("issues-*.json")):
         for item in read(path):
@@ -113,6 +118,9 @@ def view_of_fixture(w: dict, api: Path) -> Path:
     for path in api.glob("*.json"):
         if not path.name.startswith(HELD):
             shutil.copy(path, w["out"] / path.name)
+    for path in w["out"].glob("issues-*.json"):  # a list this fixture never saved stays unread
+        if not (api / path.name).is_file():
+            path.unlink()
     return w["out"]
 
 
@@ -126,9 +134,7 @@ def reviewers_file(root: Path) -> None:
 METRICS_CASES = sorted(
     p.name for p in (FIXTURES / "metrics").iterdir() if p.is_dir() and p.name not in NOT_A_RECORD
 )
-FACTS_CASES = sorted(
-    p.name for p in (FIXTURES / "facts").iterdir() if read(p / "case.json")["api"]
-)
+FACTS_CASES = sorted(p.name for p in (FIXTURES / "facts").iterdir() if read(p / "case.json")["api"])
 
 
 @pytest.mark.parametrize("case", METRICS_CASES)
@@ -173,7 +179,11 @@ def test_req_048_final_clearance_reads_the_view(world):
     head = git(world["clone"], "rev-parse", "HEAD")
     one, two = (
         script(
-            "check_final_clearance.py", "--comments", str(d / "comments-102.json"), "--head", head,
+            "check_final_clearance.py",
+            "--comments",
+            str(d / "comments-102.json"),
+            "--head",
+            head,
             cwd=world["clone"],
         )
         for d in (api, view)
@@ -243,16 +253,24 @@ def test_req_048_git_rendered_records_read_byte_for_byte(world, tmp_path):
         (saved / path.name).write_text(json.dumps(read(path)), encoding="utf-8")
     clone = world["clone"]
     one, two = (
-        script("facts.py", "--today", TODAY, "--repo", "demo-org/demo-repo", "--api-dir", str(d), str(clone), cwd=clone)
+        script(
+            "facts.py",
+            "--today",
+            TODAY,
+            "--repo",
+            "demo-org/demo-repo",
+            "--api-dir",
+            str(d),
+            str(clone),
+            cwd=clone,
+        )
         for d in (world["out"], saved)
     )
     assert one.returncode == 0, one.stdout + one.stderr
     assert one.stdout == two.stdout and head in one.stdout
 
 
-@pytest.mark.parametrize(
-    ("head", "base"), [("b" * 40, "main"), (None, "--output=escape.txt")]
-)
+@pytest.mark.parametrize(("head", "base"), [("b" * 40, "main"), (None, "--output=escape.txt")])
 def test_req_048_an_unreadable_record_leaves_files_unknown(world, head, base):
     """REQ-048: rules 4 and 7 (no file rather than an empty answer; no option from a record)."""
     head = head or git(world["clone"], "rev-parse", "HEAD")
@@ -274,7 +292,7 @@ def test_req_048_a_view_inside_the_clone_is_refused(world, where):
 
 
 def test_req_048_a_non_empty_folder_and_an_unattached_clone_are_refused(world, tmp_path):
-    """REQ-048: rules 3 and 7 (a view never mixes with files it did not write; no sidecar, no view)."""
+    """REQ-048: rules 3 and 7 (a view never mixes with other files; no sidecar, no view)."""
     world["out"].mkdir()
     (world["out"] / "mine.txt").write_text("keep\n", encoding="utf-8")
     proc = api_view(world)
@@ -300,9 +318,7 @@ def test_req_048_empty_lists_and_the_agent_mark_through_the_view(world):
     assert comment["performed_via_github_app"] == {"slug": "claude"}
 
 
-@pytest.mark.parametrize(
-    ("env", "word"), [({"CLAUDECODE": "1"}, "CLAUDECODE"), ({}, "build (g)")]
-)
+@pytest.mark.parametrize(("env", "word"), [({"CLAUDECODE": "1"}, "CLAUDECODE"), ({}, "build (g)")])
 def test_req_048_confirm_refused_in_a_session_and_later_otherwise(world, env, word):
     """REQ-048: rule 8 (refused as `local_mode.py --write` is; else it comes in build (g))."""
     before = snapshot(world["home"])

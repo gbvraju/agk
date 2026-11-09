@@ -338,6 +338,9 @@ tests = ["tests/kit/test_failures.py", "tests/kit/test_failures_seen.py"]
 code = "scripts/agk/flakes.py"
 tests = ["tests/kit/test_flakes.py", "tests/kit/test_rerun_alone.py"]
 [[testing.map]]
+code = "scripts/agk/forge.py"
+tests = ["tests/kit/test_forge.py"]
+[[testing.map]]
 code = "scripts/agk/front_door.py"
 tests = ["tests/kit/test_front_door_detect.py", "tests/kit/test_front_door_entry.py"]
 [[testing.map]]
@@ -416,6 +419,9 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/parity.py"
 tests = ["tests/kit/test_parity.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "scripts/agk/personal.py"
+tests = ["tests/kit/test_personal_api_view.py"]
 [[testing.map]]
 code = "scripts/agk/personal_state.py"
 tests = ["tests/kit/test_personal_state.py", "tests/kit_dev/test_kit_manifest.py"]
