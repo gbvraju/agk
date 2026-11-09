@@ -122,9 +122,7 @@ class Gh:
     def serve(self, issues: list | None = None, pulls: list | None = None, **more) -> None:
         self.fixtures[f"repos/{REPO}/issues"] = issues or []
         self.fixtures[f"repos/{REPO}/pulls"] = pulls or []
-        self.fixtures.update(
-            {f"repos/{REPO}/issues/{k[1:]}/comments": v for k, v in more.items()}
-        )
+        self.fixtures.update({f"repos/{REPO}/issues/{k[1:]}/comments": v for k, v in more.items()})
         self.write()
 
     def write(self) -> None:
@@ -304,7 +302,8 @@ def test_a_step_failure_with_no_test_id_is_not_dropped(gh, monkeypatch):
 def test_evidence_the_guard_refuses_is_not_posted(gh, monkeypatch):
     """REQ-053 AC2: a finding left after redaction withholds the text, counts only (rule 5)."""
     text = (gh.root / "agk.toml").read_text("utf-8")
-    text = text.replace("[testing]", f'[guard]\npatterns = [{{ name = "l", regex = "{PLANTED}" }}]\n[testing]')
+    guard = f'[guard]\npatterns = [{{ name = "l", regex = "{PLANTED}" }}]\n[testing]'
+    text = text.replace("[testing]", guard)
     set_toml(gh, text)
     monkeypatch.setenv("FAKE_PRINT", f"user {PLANTED}")
     assert run() == 1
@@ -314,7 +313,8 @@ def test_evidence_the_guard_refuses_is_not_posted(gh, monkeypatch):
 def test_a_test_id_with_a_finding_is_withheld(gh, monkeypatch):
     """REQ-053 AC2: a test id the guard refuses is never posted; the failure still opens."""
     text = (gh.root / "agk.toml").read_text("utf-8")
-    text = text.replace("[testing]", '[guard]\npatterns = [{ name = "l", regex = "test_cart" }]\n[testing]')
+    guard = '[guard]\npatterns = [{ name = "l", regex = "test_cart" }]\n[testing]'
+    text = text.replace("[testing]", guard)
     set_toml(gh, text)
     assert run() == 1
     assert "test_cart" not in json.dumps(gh.writes())
