@@ -6,6 +6,7 @@ Saved API responses (`--api-dir`), no network, no `gh`. REQ-039"""
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -338,6 +339,22 @@ def test_it_writes_nothing(repo, tmp_path):
     after = sorted(p.relative_to(repo.root).as_posix() for p in repo.root.rglob("*"))
     assert after == before
     assert repo.git("status", "--porcelain") == ""
+
+
+def test_a_commit_in_a_kit_test_starts_no_background_git(repo):
+    """REQ-016: brief #913: a commit starts no maintenance that could write during a listing."""
+    repo.write("agk.toml", 'default_branch = "main"\n')
+    repo.git("add", "-A")
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "commit", "-q", "-m", "seed"],
+        cwd=repo.root,
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "GIT_TRACE": "1"},
+    )
+    assert "maintenance" not in proc.stderr
+    assert "gc --auto" not in proc.stderr
 
 
 @pytest.mark.parametrize(
