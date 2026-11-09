@@ -1425,8 +1425,9 @@ def lease(root, mode: str, name: str | None, takeover: bool = True) -> int:
             print("lease: free")
         return 0
     if holder and holder[0] != name:
-        stalled = lease_stall(root, repo, comments, authors, now) if takeover else None
-        if mode != "--take" or stalled is None:
+        relay = mode == "--take" and takeover
+        stalled = lease_stall(root, repo, comments, authors, now) if relay else None
+        if stalled is None:
             print(f"lease: held by {holder[0]} until {stamp_of(holder[1])} {LEASE_SETTING}")
             return merge_cleared.EXIT_HELD
         line = f"body=STALL conductor {stalled[0]} {stalled[1]} min"
