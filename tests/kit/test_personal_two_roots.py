@@ -89,7 +89,7 @@ def write_map(root: Path, text: str) -> None:
 
 
 def holding(path: Path) -> Path:
-    """A sidecar with one requirement, one spec and one ADR of its own, and the map that proves it."""
+    """A sidecar with one requirement, one spec and one ADR of its own, and its map."""
     root = sidecar(path)
     requirements = root / "docs" / "requirements.md"
     requirements.write_text(requirements.read_text(encoding="utf-8") + REQ_101, encoding="utf-8")
