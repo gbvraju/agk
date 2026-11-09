@@ -5,3 +5,4 @@ traceability*.md
 traceability*.txt
 *.whl
 .agk-test-map.toml
+.agk-failures/
