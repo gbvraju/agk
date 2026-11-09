@@ -1,0 +1,1 @@
+- The code-safety note on the write call of `failures.py` names only the rule that applies there, which turns the default branch green again (brief #897, issue #896, Covered-by ADR-0303)
