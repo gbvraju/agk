@@ -111,6 +111,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 import caps
 import merge_cleared
 import session
+import session_plan
 from common import CheckError, repo_root, verdict_problem
 from full_run import contained_in, covered
 from reviewers import approval_shas, authors_of, spec_approvers, verdict_authors
@@ -415,8 +416,9 @@ def changed_by(repo: str, branch: str, path: str, compare: dict) -> int | None:
 
 def proof_lines(root, repo: str, pulls: list, branch: str) -> list[str]:
     """SPEC-0050 rule 5 (brief #755): `overlap:`, `re-prove:` and `BEHIND` lines of the open builder
-    pull requests, from `GET pulls/N/files` and one `GET compare/<head>...<branch>` each."""
-    shared = [session.glob_regex(p) for p in session.shared_patterns(root)]
+    pull requests, from `GET pulls/N/files` and one `GET compare/<head>...<branch>` each. An
+    `overlap:` leaves out the files of the table of rule 3 (amendment 141 item 8)."""
+    shared = session_plan.exempt(root)
     mine: dict[int, set[str]] = {}
     brief: dict[int, int] = {}
     reprove: list[str] = []
