@@ -115,6 +115,7 @@
     "scripts/agk/shadow_rate.py",
     "scripts/agk/stalls.py",
     "scripts/agk/status_only.py",
+    "scripts/agk/survey.py",
     "scripts/agk/test_map.py",
     "scripts/agk/test_plan.py",
     "scripts/agk/traceability.py"

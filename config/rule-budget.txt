@@ -8,7 +8,7 @@ config/core-rules.md 660 26
 config/session-rules.md 3448 37
 .claude/agents/architect-review.md 720 13
 .claude/agents/architect.md 863 17
-.claude/agents/conductor.md 4518 37
+.claude/agents/conductor.md 4513 37
 .claude/agents/drift-auditor.md 140 4
 .claude/agents/reviewer.md 579 12
 .claude/agents/shadow.md 1280 15

@@ -1,4 +1,4 @@
-"""The front door's entry, discovery, research, design and phase (SPEC-0048 builds (b), (d), (e)).
+"""The front door's entry, discovery, research, design and phase (SPEC-0048 builds (b), (d)-(f)).
 
 Standard library only, no network: every input is a saved file, but for `detect`, which reads a
 repository's head commit by `git`.
@@ -32,7 +32,13 @@ repository's head commit by `git`.
     front_door.py status --date YYYY-MM-DD [SLUG ...] [--root DIR]
         prints one line per problem (by default each `docs/discovery/*.md`), the phase of rule 1
         it is in and what it waits for, from the files only, and writes nothing; past the design
-        it prints `waits for the go`, which is read from saved comments (rule 9; build (f))
+        it prints `waits for the go`, which only `--issue` reads (rule 9)
+    front_door.py status --date YYYY-MM-DD --issue N --api-dir DIR [--pr K] [--root DIR]
+        one line for one problem issue, from the saved GETs `issue-<N>.json` and
+        `issue-<N>-comments.json` and the files: the phase and what it waits for, the auto-pilot
+        state (rule 13: `[flow] assign = "conductor"` and the first line `Auto-pilot: on` by a
+        listed approver) and its `Discovery: round <n>` rounds, and, with `--pr K`, the go of rule
+        9 from `pr-<K>-comments.json` when `pr-<K>-files.json` shows K carries the artifact
     front_door.py check-signals
         checks the form of the signal table `config/stack-signals.toml` against `config/playbooks/`,
         both read from this script's own root and never from a repository (SPEC-0057 rule 5)
@@ -85,7 +91,8 @@ USAGE = (
     "usage: front_door.py check-issue --issue FILE | discovery-write (--issue FILE | --vision FILE)"
     " --answers FILE [--root DIR] | check-discovery [FILE ...] [--root DIR]"
     " | (check-research | check-design) --date YYYY-MM-DD [FILE ...] [--root DIR]"
-    " | status --date YYYY-MM-DD [SLUG ...] [--root DIR] | check-signals"
+    " | status --date YYYY-MM-DD [SLUG ...] [--root DIR]"
+    " | status --date YYYY-MM-DD --issue N --api-dir DIR [--pr K] [--root DIR] | check-signals"
     " | derive-write --slug SLUG [--modules NAME,NAME] [--root DIR]"
     " | check-playbook --date YYYY-MM-DD [FILE ...] [--root DIR]"
     " | detect [--root DIR] [--json]"
@@ -779,6 +786,177 @@ def status(names: list[str], root: Path, today: datetime.date) -> int:
     return 0
 
 
+# --- the auto-pilot drive and the go, from saved responses (rules 1, 9 and 13) --------------------
+
+AUTO_PILOT = "Auto-pilot: on"
+ROUND = re.compile(r"^Discovery: round ([1-9]\d*)$")
+QUESTION = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\S")
+MAX_ROUND = 3
+NOT_ANSWERS = ("Auto-pilot:", "Discovery:", "Approve:", "Confirmed:", "Verdict:")
+DESIGN_GO = re.compile(r"^Approve: design v[1-9]\d* [0-9a-f]{40}$")
+NUMBER = re.compile(r"^[1-9][0-9]*$")
+
+
+def saved(api: Path, name: str, kind: type, rule: int):
+    """One saved GET of `--api-dir`; a missing or misshapen one is refused, never read as empty."""
+    try:
+        data = json.loads((api / f"{name}.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        data = None
+    if not isinstance(data, kind):
+        raise Refusal([f"rule {rule}: {name}.json: not a readable saved response"])
+    return data
+
+
+def saved_comments(api: Path, name: str, rule: int) -> list[dict]:
+    return [c for c in saved(api, name, list, rule) if isinstance(c, dict)]
+
+
+def refuse_issue_door(root: Path) -> None:
+    """Rule 13: a sidecar has no issue entry; the vision door stays open."""
+    from common import (
+        CheckError,
+        personal_table,
+    )  # here, so a load failure leaves every other command as it is
+
+    try:
+        personal = personal_table(root)
+    except CheckError as err:
+        raise Refusal([f"rule 13: {err}"]) from None
+    if personal is not None:
+        raise Refusal(["rule 13: personal mode enters by `/agk:vision` only (setting: forge)"])
+
+
+class People:
+    """Who counts on one problem: the listed approvers, the conductor and the agent apps."""
+
+    def __init__(self, root: Path) -> None:
+        from common import agent_apps
+        from reviewers import spec_approvers, verdict_authors
+
+        self.approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
+        self.conductors = {a.lstrip("@").lower() for a in verdict_authors(root)}
+        self.apps = agent_apps(root)
+
+    def person(self, item: dict) -> bool:
+        from reviewers import login_of, via_agent
+
+        return login_of(item) in self.approvers and not via_agent(item, self.apps)
+
+
+def auto_pilot_wait(comments: list[dict], root: Path, people: People, doc: str) -> str | None:
+    """What auto-pilot's discovery waits for; None when auto-pilot is off (rules 3 and 13)."""
+    from common import config_source
+    from reviewers import first_line, login_of
+
+    flow = config_source(root).get("flow")
+    if not isinstance(flow, dict) or flow.get("assign") != "conductor":
+        return None
+    start = next(
+        (n for n, c in enumerate(comments) if first_line(c) == AUTO_PILOT and people.person(c)),
+        None,
+    )
+    if start is None:
+        return None
+    rounds, last, out_of_form = 0, start, False
+    for n, item in enumerate(comments):
+        match = ROUND.match(first_line(item)) if n > start else None
+        if not match or login_of(item) not in people.conductors:
+            continue
+        asked = sum(1 for ln in str(item.get("body")).splitlines()[1:] if QUESTION.match(ln))
+        if int(match.group(1)) == rounds + 1 and 1 <= asked <= MAX_ROUND:
+            rounds, last, out_of_form = rounds + 1, n, False
+        else:
+            out_of_form = True
+    if out_of_form:
+        return f"the conductor to post round {rounds + 1} with one to three questions"
+    if not rounds:
+        return "the conductor's `Discovery: round 1`"
+    if any(
+        people.person(c) and first_line(c) and not first_line(c).startswith(NOT_ANSWERS)
+        for c in comments[last + 1 :]
+    ):
+        return f"the conductor's round {rounds + 1} or the brief of {doc}"
+    return f"the person's answer to round {rounds}"
+
+
+def go_lines(comments: list[dict], root: Path, people: People) -> list[str]:
+    """The lines rule 9 reads: a listed person's first lines, or in solo mode only the lines inside
+    a whole `Confirmed:` comment of the one person."""
+    from common import review_mode
+    from reviewers import confirmed_comments, first_line, solo_person
+
+    if review_mode(root) != "solo":
+        return [first_line(c) for c in comments if people.person(c)]
+    person = solo_person(root)
+    if not person:
+        return []
+    own = {id(c) for c in comments}
+    added = [c for c in confirmed_comments(comments, people.apps, person) if id(c) not in own]
+    return [
+        ln.strip()
+        for c in added
+        if first_line(c).startswith("Verdict:")
+        for ln in str(c.get("body")).splitlines()
+    ]
+
+
+def go_given(api: Path, pr: str, name: str, root: Path, people: People) -> bool:
+    """Rule 9: the owner's line, on the pull request whose saved files carry the artifact."""
+    from reviewers import APPROVE, APPROVE_SHORT
+
+    with_screens = screens_of(root, name) != "no"
+    paths = [
+        f.get("filename") for f in saved(api, f"pr-{pr}-files", list, 9) if isinstance(f, dict)
+    ]
+    if with_screens:
+        carries = any(isinstance(p, str) and p.startswith(f"{PROTOTYPE}/") for p in paths)
+    else:
+        carries = f"{DESIGN}/{name}.md" in paths
+    lines = go_lines(saved_comments(api, f"pr-{pr}-comments", 9), root, people)
+    if not carries or not any(APPROVE.fullmatch(x) or APPROVE_SHORT.fullmatch(x) for x in lines):
+        return False
+    return not with_screens or any(DESIGN_GO.match(x) for x in lines)
+
+
+def status_issue(opts: dict[str, str], root: Path, today: datetime.date) -> int:
+    """One line for one problem issue, from saved responses and the files; writes nothing."""
+    from common import CheckError
+
+    refuse_issue_door(root)
+    number, api = opts["--issue"], Path(opts["--api-dir"])
+    issue = saved(api, f"issue-{number}", dict, 1)
+    comments = saved_comments(api, f"issue-{number}-comments", 1)
+    title = one_line(str(issue.get("title") or ""))
+    name = slug(title)
+    if (
+        not name
+        or issue_problems(Path(f"issue-{number}.json"), issue)
+        or guard_problems(3, f"issue-{number}.json", title)
+    ):
+        print(f"#{number}: phase 1 the entry; waits for a problem issue that passes check-issue")
+        return 0
+    try:
+        people = People(root)
+        line = phase_of(root, name, today)
+        doc = f"{DIR}/{name}.md"
+        wait = auto_pilot_wait(comments, root, people, doc)
+        if line.endswith("waits for the go") and "--pr" in opts:
+            if go_given(api, opts["--pr"], name, root, people):
+                line = (
+                    "phase 6 milestones and the stack; waits for the plan (rule 10),"
+                    " then the existing path (rule 11)"
+                )
+    except CheckError as err:
+        raise Refusal([f"rule 13: {err}"]) from None
+    if wait is not None:
+        if not (root / doc).is_file():
+            line = f"phase 2 discovery; waits for {wait}"
+        line = line.replace("; waits for", "; auto-pilot on; waits for", 1)
+    print(f"#{number} {name}: {line}")
+    return 0
+
+
 SIGNALS = "config/stack-signals.toml"
 PLAYBOOKS = "config/playbooks"
 SIGNAL_SLUG = re.compile(r"^[a-z0-9-]+$")
@@ -1260,6 +1438,8 @@ def parse(argv: list[str]) -> tuple[str, dict[str, str], list[str]] | None:
             "--date",
             "--slug",
             "--modules",
+            "--api-dir",
+            "--pr",
         ):
             if i + 1 >= len(argv) or argv[i] in opts:
                 return None
@@ -1297,9 +1477,14 @@ def main(argv: list[str] | None = None) -> int:
     elif cmd == "derive-write":
         ok = "--slug" in opts and set(opts) <= {"--slug", "--modules", "--root"} and not rest
     else:
-        ok = set(opts) <= {"--root", "--date"} and iso_date(opts.get("--date", "")) is not None
+        by_issue = cmd == "status" and "--issue" in opts
+        known = {"--root", "--date"} | ({"--issue", "--api-dir", "--pr"} if by_issue else set())
+        ok = set(opts) <= known and iso_date(opts.get("--date", "")) is not None
         if cmd == "status":
             ok = ok and all(SLUG.match(name) for name in rest)
+        if by_issue:
+            numbers = [opts["--issue"], *([opts["--pr"]] if "--pr" in opts else [])]
+            ok = ok and "--api-dir" in opts and not rest and all(NUMBER.match(n) for n in numbers)
     today = iso_date(opts.get("--date", "")) or datetime.date.min
     if not ok:
         print(USAGE, file=sys.stderr)
@@ -1310,15 +1495,20 @@ def main(argv: list[str] | None = None) -> int:
         if cmd == "detect":
             return detect(root, Path(__file__).resolve().parents[2], "--json" in opts)
         if cmd == "check-issue":
+            refuse_issue_door(root)
             return check_issue(Path(opts["--issue"]))
         if cmd == "discovery-write":
+            if "--issue" in opts:
+                refuse_issue_door(root)
             return discovery_write(opts, root)
         if cmd == "check-discovery":
             return check_discovery(rest, root)
         if cmd == "check-research":
             return check_research(rest, root, today)
         if cmd == "status":
-            return status(rest, root, today)
+            return (
+                status_issue(opts, root, today) if "--issue" in opts else status(rest, root, today)
+            )
         if cmd == "derive-write":
             return derive_write(opts, root)
         if cmd == "check-playbook":
