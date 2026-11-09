@@ -25,6 +25,7 @@ import front_door  # noqa: E402
 
 FIRST = "detect: proposal only; a person confirms it in discovery"
 NO_KIND = "work type: default (proposed; no signal of a work type)"
+SOURCE = "(from survey.detect_test_files, head tree)"
 TAIL = ["not detectable from files: cloud-migration", "not detectable from files: pilot"]
 REACT = '{"dependencies": {"react-dom": "1.0.0"}}\n'
 FLUTTER = "dependencies:\n  flutter:\n    sdk: flutter\n"
@@ -314,48 +315,76 @@ def test_a_broken_table_is_refused_naming_the_setting(tmp_path, capsys):
     assert capsys.readouterr().out == ""
 
 
-def test_the_tests_line_comes_from_detect_tests(tmp_path):
-    """REQ-064 AC5: rule 8."""
-    out = lines(repo(tmp_path / "r", {"tests/test_a.py": "x = 1\n", "tests/test_b.py": "x = 2\n"}))
-    assert 'tests: "tests" patterns test_*.py (from adopt.detect_tests, work tree)' in out
+def kit_copy(tmp_path: Path, *extra: str) -> Path:
+    """A copy of `front_door.py` with its table, plus the named scripts of `scripts/agk`."""
+    (tmp_path / "kit/scripts/agk").mkdir(parents=True)
+    for name in ("front_door.py", "guard.py", "playbook_format.py", *extra):
+        shutil.copy(SCRIPTS / name, tmp_path / "kit/scripts/agk" / name)
+    (tmp_path / "kit/config").mkdir()
+    shutil.copy(KIT_ROOT / front_door.SIGNALS, tmp_path / "kit" / front_door.SIGNALS)
+    return tmp_path / "kit/scripts/agk/front_door.py"
 
 
-def test_a_patched_detect_tests_shows_the_call(tmp_path, monkeypatch, capsys):
-    """REQ-064 AC5: rule 8."""
-    root = repo(tmp_path / "r", {"zone/spec_x.check": "x\n"})
+def test_the_tests_line_comes_from_the_survey(tmp_path):
+    """REQ-064 AC5: rule 8, brief #879 answer 1."""
+    files = {"tests/test_a.py": "x = 1\n", "tests/test_b.py": "x = 2\n", "web/a.test.js": "\n"}
+    out = lines(repo(tmp_path / "r", files))
+    assert f'tests: "tests" language Python files 2 {SOURCE}' in out
+    assert f'tests: "web" language JavaScript files 1 {SOURCE}' in out
+
+
+def test_a_patched_detector_shows_the_call_and_adopt_is_not_used(tmp_path, monkeypatch, capsys):
+    """REQ-064 AC5: rule 8: the survey's answer stands, and `adopt.detect_tests` is not called."""
+    root = repo(tmp_path / "r", {"zone/x.check": "x\n"})
     calls = []
 
     class Fake:
         @staticmethod
-        def detect_tests(where):
-            calls.append(Path(where))
-            return ["zone"], ["spec_*.check"]
+        def detect_test_files(paths):
+            calls.append(sorted(paths))
+            return [{"path": "zone/x.check", "language": "Invented", "framework": None}]
 
-    monkeypatch.setitem(sys.modules, "adopt", Fake)
+    class NoAdopt:
+        @staticmethod
+        def detect_tests(where):
+            raise AssertionError("adopt.detect_tests was called")
+
+    monkeypatch.setitem(sys.modules, "survey", Fake)
+    monkeypatch.setitem(sys.modules, "adopt", NoAdopt)
     assert front_door.main(["detect", "--root", str(root)]) == 0
-    assert calls == [root]
-    want = 'tests: "zone" patterns spec_*.check (from adopt.detect_tests, work tree)'
+    assert calls == [["README.md", "zone/x.check"]]
+    want = f'tests: "zone" language Invented files 1 {SOURCE}'
     assert want in capsys.readouterr().out.splitlines()
 
 
-def test_a_test_file_only_in_the_work_tree_is_no_signal(tmp_path):
-    """REQ-064 AC5: rule 8: an answer counts only for a path of the head tree."""
+def test_an_uncommitted_test_file_is_not_read(tmp_path):
+    """REQ-064 AC5: rule 8, `Q-S0057-12`: only the head tree counts, staged or not."""
     root = repo(tmp_path / "r")
-    (root / "tests").mkdir()
-    (root / "tests/test_a.py").write_text("x = 1\n", encoding="utf-8")
+    for rel in ("tests/test_staged.py", "tests/test_loose.py"):
+        (root / "tests").mkdir(exist_ok=True)
+        (root / rel).write_text("x = 1\n", encoding="utf-8")
+    git(root, "add", "tests/test_staged.py")
     assert "tests: no signal" in lines(root)
 
 
-def test_an_import_failure_says_not_read(tmp_path):
-    """REQ-064 AC5: rule 8, `Q-S0057-9`: an installed copy has no adopt.py."""
-    (tmp_path / "kit/scripts/agk").mkdir(parents=True)
-    for name in ("front_door.py", "guard.py", "playbook_format.py"):
-        shutil.copy(SCRIPTS / name, tmp_path / "kit/scripts/agk" / name)
-    (tmp_path / "kit/config").mkdir()
-    shutil.copy(KIT_ROOT / front_door.SIGNALS, tmp_path / "kit" / front_door.SIGNALS)
+def test_a_test_file_in_an_ignored_folder_gives_no_signal(tmp_path):
+    """REQ-064 AC5: rule 5: the table's `ignore` folders give no signal."""
+    assert "tests: no signal" in lines(repo(tmp_path / "r", {"vendor/test_a.py": "x = 1\n"}))
+
+
+def test_a_load_failure_says_not_read(tmp_path):
+    """REQ-064 AC5: rule 8, `Q-S0057-9`: not read, never no signal."""
     root = repo(tmp_path / "r", {"tests/test_a.py": "x = 1\n"})
-    out = run(root, script=tmp_path / "kit/scripts/agk/front_door.py").stdout.splitlines()
-    assert "tests: not read (adopt.detect_tests cannot be loaded)" in out
+    out = run(root, script=kit_copy(tmp_path)).stdout.splitlines()
+    assert "tests: not read (survey.detect_test_files cannot be loaded)" in out
+    assert "tests: no signal" not in out
+
+
+def test_an_installed_copy_with_the_survey_reads_the_tests(tmp_path):
+    """REQ-064 AC5: rule 8: `survey.py` is installed, so a project's `detect` reads the tests."""
+    root = repo(tmp_path / "r", {"tests/test_a.py": "x = 1\n"})
+    out = run(root, script=kit_copy(tmp_path, "survey.py", "common.py")).stdout.splitlines()
+    assert f'tests: "tests" language Python files 1 {SOURCE}' in out
 
 
 def test_front_door_holds_no_test_file_pattern():
@@ -364,11 +393,11 @@ def test_front_door_holds_no_test_file_pattern():
     assert "*_test.py" not in text and "test_*.py" not in text
 
 
-def test_other_commands_do_not_load_adopt():
+def test_other_commands_do_not_load_the_survey_or_adopt():
     """REQ-064 AC5: rule 8: a load failure leaves every other command as it is."""
     code = (
         f"import sys; sys.path.insert(0, {str(SCRIPTS)!r}); import front_door;"
-        " print('adopt' in sys.modules)"
+        " print('adopt' in sys.modules or 'survey' in sys.modules)"
     )
     proc = subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, "-I", "-c", code], capture_output=True, text=True, check=True

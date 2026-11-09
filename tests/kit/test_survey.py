@@ -11,8 +11,10 @@ import ast
 import hashlib
 import json
 import os
+import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -335,6 +337,61 @@ def test_rule12_a_mixed_codebase_with_framework_as_data(tmp_path):
     assert found["web/a.test.js"]["framework"] == "vitest"
     assert found["test_a.py"]["framework"] == "pytest"
     assert found["b_test.go"]["framework"] is None
+
+
+def table_names() -> set[str]:
+    table = tomllib.loads((SCRIPTS.parents[1] / survey.SIGNALS).read_text(encoding="utf-8"))
+    return {name for row in table["stack"] for name in row["manifests"]}
+
+
+def test_one_list_the_survey_reads_the_table():
+    """REQ-064 AC5: SPEC-0057 rule 8: only the names of amendment 154 are outside the table."""
+    assert set(survey.manifest_names()) - set(survey.OUTSIDE_TABLE) == table_names()
+    assert set(survey.OUTSIDE_TABLE) == {"*.csproj", "Gemfile", "composer.json"}
+    assert not set(survey.OUTSIDE_TABLE) & table_names()
+
+
+def test_one_list_every_manifest_keeps_a_language():
+    """REQ-064 AC5: SPEC-0057 rule 8: a manifest of the table is never dropped for no language."""
+    assert set(survey.manifest_names()) == set(survey.MANIFESTS)
+    assert all(survey.MANIFESTS.values())
+
+
+def test_one_list_table_manifests_new_to_the_survey_are_listed(tmp_path):
+    """REQ-064 AC5: SPEC-0057 rule 8 (`requirements.txt` declares its framework as data)."""
+    files = {"requirements.txt": "pytest\n", "app/pubspec.yaml": "name: x\n", "test_a.py": "\n"}
+    data = survey_of(tmp_path, files)
+    assert {m["path"] for m in data["manifests"]} == {"app/pubspec.yaml", "requirements.txt"}
+    assert data["test_files"] == [
+        {"path": "test_a.py", "language": "Python", "framework": "pytest"}
+    ]
+
+
+def test_one_list_the_table_is_the_kits_and_never_the_repositorys(tmp_path):
+    """REQ-064 AC5: SPEC-0057 rule 5: a table in the repository read changes nothing."""
+    plant = '[[stack]]\nname = "x"\nmanifests = ["zanzibar.manifest"]\nlocks = []\n'
+    data = survey_of(tmp_path, {"config/stack-signals.toml": plant, "zanzibar.manifest": "\n"})
+    assert data["manifests"] == []
+
+
+@pytest.mark.parametrize("table", [None, "stack = ["])
+def test_one_list_a_table_that_cannot_be_read_is_refused(tmp_path, table):
+    """REQ-064 AC5: SPEC-0057 rule 8: never an empty list; the refusal names the path only."""
+    kit = tmp_path / "kit"
+    (kit / "scripts/agk").mkdir(parents=True)
+    for name in ("survey.py", "common.py"):
+        shutil.copy(SCRIPTS / name, kit / "scripts/agk" / name)
+    if table is not None:
+        (kit / "config").mkdir()
+        (kit / survey.SIGNALS).write_text(table, encoding="utf-8")
+    clone, side = clone_of(tmp_path, {"a.py": "\n"}), sidecar_of(tmp_path)
+    cmd = [sys.executable, str(kit / "scripts/agk/survey.py"), "--clone", str(clone)]
+    done = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [*cmd, "--sidecar", str(side)], capture_output=True, text=True
+    )
+    assert done.returncode == 1
+    assert done.stdout == f"refused: the signal table cannot be read (path: {survey.SIGNALS})\n"
+    assert not (side / "cache").exists()
 
 
 def test_rule12_adopt_detect_tests_is_unchanged(tmp_path):
