@@ -1,6 +1,7 @@
 """The front door's entry, discovery, research, design and phase (SPEC-0048 builds (b), (d), (e)).
 
-Standard library only, files only, no network: every input is a saved file.
+Standard library only, no network: every input is a saved file, but for `detect`, which reads a
+repository's head commit by `git`.
 
     front_door.py check-issue --issue FILE
         a saved problem issue (the JSON of one GET): the `agk-problem` label, a first line
@@ -45,6 +46,10 @@ Standard library only, files only, no network: every input is a saved file.
         from the gate sources: more than 180 days before `--date` is a `flag` line and exit 0, and
         a failure when a design under `docs/design/architecture/` names the playbook's path. The
         `reviewed` key of amendment 129 (verify) stays refused until it is approved (rule 25)
+    front_door.py detect [--root DIR] [--json]
+        prints a proposed work type and stack for the repository at DIR, from the files of its head
+        commit that the signal table names, read as text; runs nothing it reads and writes nothing,
+        and a person confirms the proposal in discovery (SPEC-0057 rules 2 to 4, 6 to 8, 10, 11)
 
 The answers file: `{"screens": "yes|no|open", "work_type": "<work type>", "answers": [{"id":
 "<id>", "answer": "<words>", "where": "<comment link>|in session YYYY-MM-DD"} or {"id": "<id>",
@@ -59,9 +64,12 @@ and the file or the setting, never a value, a problem's words or an answer (rule
 from __future__ import annotations
 
 import datetime
+import fnmatch
 import hashlib
 import json
+import os
 import re
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tomllib
 from pathlib import Path
@@ -80,6 +88,7 @@ USAGE = (
     " | status --date YYYY-MM-DD [SLUG ...] [--root DIR] | check-signals"
     " | derive-write --slug SLUG [--modules NAME,NAME] [--root DIR]"
     " | check-playbook --date YYYY-MM-DD [FILE ...] [--root DIR]"
+    " | detect [--root DIR] [--json]"
 )
 LABEL = "agk-problem"
 PREFIX = "Problem: "
@@ -986,7 +995,254 @@ COMMANDS = (
     "check-signals",
     "derive-write",
     "check-playbook",
+    "detect",
 )
+MAX_READ = 1024 * 1024  # rule 7: a larger file gets a note and is not read
+MAX_FILES = 200  # rule 7: at most this many files are read, in path order
+NOT_FILES = {"120000": "symlink", "160000": "submodule"}
+WORD = r"(?<![A-Za-z0-9_.@/-]){}(?![A-Za-z0-9_-])"  # rule 6: `vue` is not in `vue-router`
+
+
+def git_read(root: Path, *args: str, given: bytes | None = None) -> bytes | None:
+    """One read of the repository: stdout, or None when git refused. No `GIT_*` of the caller
+    applies, and a missing object of a partial clone is never fetched (rule 7)."""
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env["GIT_NO_LAZY_FETCH"] = "1"
+    try:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", "--no-optional-locks", *args],
+            cwd=root,
+            env=env,
+            input=given,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def head_tree(root: Path) -> list[tuple[str, str, str]] | None:
+    """(path, mode, object) of each entry at HEAD in path order; None for a head with no commit."""
+    head = git_read(root, "cat-file", "--batch-check", given=b"HEAD\n")
+    if head is None:
+        raise Refusal(["detect: --root is not a git repository"])
+    if head.split()[-1:] == [b"missing"]:
+        return None
+    listed = git_read(root, "ls-tree", "-r", "-z", "HEAD")
+    if listed is None:
+        raise Refusal(["detect: --root is not a git repository"])
+    rows = []
+    for record in filter(None, listed.split(b"\0")):
+        meta, _, raw = record.partition(b"\t")
+        mode, _kind, sha = meta.decode("ascii").split()
+        rows.append((os.fsdecode(raw), mode, sha))
+    return sorted(rows)
+
+
+def named_texts(
+    root: Path, tree: list[tuple[str, str, str]], names: set[str], ignore: list[str]
+) -> tuple[dict[str, str], list[str]]:
+    """The text of each file the table names, and a note for each listed and not read (rule 7)."""
+    named = [
+        row
+        for row in tree
+        if any(fnmatch.fnmatchcase(base_of(row[0]), name) for name in names)
+        and not set(row[0].split("/")[:-1]) & set(ignore)
+    ]
+    blobs = [row[2] for row in named if row[1] not in NOT_FILES]
+    checked = git_read(root, "cat-file", "--batch-check", given="\n".join([*blobs, ""]).encode())
+    sizes = {}
+    for line in (checked or b"").decode("ascii", "replace").splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[2].isdigit():
+            sizes[parts[0]] = int(parts[2])
+    texts: dict[str, str] = {}
+    notes: list[str] = []
+    read = 0
+    for path, mode, sha in named:
+        reason = NOT_FILES.get(mode)
+        if reason is None and sha not in sizes:
+            reason = "no object"
+        if reason is None and sizes[sha] > MAX_READ:
+            reason = "over 1 MB"
+        if reason is None and read == MAX_FILES:
+            notes.append(f"{MAX_FILES} files read, the proposal is partial")
+            break
+        data = b""
+        if reason is None:
+            read += 1
+            data = git_read(root, "cat-file", "blob", sha)
+            reason = "binary" if data is None or b"\0" in data else None
+        if reason:
+            notes.append(f"file {quoted(path)} not read ({reason})")
+        else:
+            texts[path] = data.decode("utf-8", "replace")
+    return texts, notes
+
+
+def base_of(path: str) -> str:
+    return path.rsplit("/", 1)[-1]
+
+
+def folder_of(path: str) -> str:
+    return path.rsplit("/", 1)[0] if "/" in path else "."
+
+
+def quoted(path: str) -> str:
+    """A path is the repository's data: one line, in double quotes (rule 11)."""
+    plain = (
+        c if c.isprintable() and c not in '"\\' else c.encode("unicode_escape").decode()
+        for c in path
+    )
+    return '"' + "".join('\\"' if c == '"' else c for c in plain) + '"'
+
+
+def signal_table(kit: Path) -> dict:
+    """The table of the kit's own root; `signal_row_problems` also refuses a `pilot` row."""
+    try:
+        table = tomllib.loads((kit / SIGNALS).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        raise Refusal([f"detect: {SIGNALS} cannot be read"]) from None
+    rows = [
+        problem for kind in SIGNAL_ROWS for problem in signal_row_problems(kind, table.get(kind))
+    ]
+    if rows or not (is_words(table.get("no_signal")) and is_words(table.get("ignore"))):
+        raise Refusal([f"detect: {SIGNALS} cannot be read"])
+    return table
+
+
+def work_type_hits(table: dict, texts: dict[str, str]) -> list[dict[str, str]]:
+    """Each file, row by row; a lockfile never suggests a work type (rule 6)."""
+    locks = {lock for row in table["stack"] for lock in row["locks"]}
+    hits = set()
+    for path, text in texts.items():
+        base = base_of(path)
+        if any(fnmatch.fnmatchcase(base, lock) for lock in locks):
+            continue
+        for row in table["work_type"]:
+            word = WORD.format(re.escape(row["contains"]))
+            if fnmatch.fnmatchcase(base, row["file"]) and re.search(word, text):
+                hits.add((path, row["name"], row["signal"]))
+    return [{"file": p, "name": n, "signal": s} for p, n, s in sorted(hits)]
+
+
+def stack_rows(table: dict, texts: dict[str, str]) -> list[dict[str, str | None]]:
+    """One row per stack and folder: its first manifest and first lockfile, in path order."""
+    found: dict[tuple[str, str], dict[str, str | None]] = {}
+    for row in table["stack"]:
+        for path in sorted(texts):
+            if any(fnmatch.fnmatchcase(base_of(path), name) for name in row["manifests"]):
+                key = (row["name"], folder_of(path))
+                found.setdefault(
+                    key, {"file": path, "folder": key[1], "lock": None, "name": key[0]}
+                )
+        for path in sorted(texts):
+            at = found.get((row["name"], folder_of(path)))
+            is_lock = any(fnmatch.fnmatchcase(base_of(path), name) for name in row["locks"])
+            if at and is_lock and at["lock"] is None:
+                at["lock"] = path
+    return [found[key] for key in sorted(found)]
+
+
+def tests_fact(root: Path, tree: list[tuple[str, str, str]]) -> dict:
+    """Rule 8: `adopt.detect_tests`, loaded only here; its answer counts only for the head tree."""
+    source = "adopt.detect_tests"
+    sys.dont_write_bytecode = True  # rule 7: this read leaves no file, in the kit's tree either
+    try:
+        import adopt
+
+        folders, patterns = adopt.detect_tests(root)
+    except Exception:  # any failure to load is "not read", never "no signal"
+        return {"folders": [], "source": source, "state": "not read"}
+    paths = [path for path, mode, _ in tree if mode not in NOT_FILES]
+    rows = []
+    for folder in sorted(folders):
+        under = [p for p in paths if folder == "." or p.startswith(f"{folder}/")]
+        held = sorted({g for g in patterns for p in under if fnmatch.fnmatchcase(base_of(p), g)})
+        if held:
+            rows.append({"folder": folder, "patterns": held})
+    state = "found" if rows else "no signal"
+    return {"folders": rows, "source": f"{source}, work tree", "state": state}
+
+
+def detect_facts(root: Path, kit: Path) -> dict:
+    table = signal_table(kit)
+    if not root.is_dir():
+        raise Refusal(["detect: --root is not a git repository"])
+    head = head_tree(root)
+    tree = head or []
+    names = {row["file"] for row in table["work_type"]}
+    for row in table["stack"]:
+        names |= {*row["manifests"], *row["locks"]}
+    texts, notes = named_texts(root, tree, names, table["ignore"])
+    if head is None:
+        notes.append("no commit at head")
+    hits = work_type_hits(table, texts)
+    kinds = {hit["name"] for hit in hits}
+    stacks = stack_rows(table, texts)
+    stack_names = {row["name"] for row in stacks}
+    return {
+        "not_detectable": sorted(table["no_signal"]),
+        "notes": sorted(notes),
+        "stack": {
+            "rows": stacks,
+            "state": "mixed" if len(stack_names) > 1 else "proposed" if stacks else "no signal",
+        },
+        "tests": tests_fact(root, tree),
+        "work_type": {
+            "candidates": hits,
+            "state": "mixed" if len(kinds) > 1 else "proposed" if kinds else "default",
+        },
+    }
+
+
+def detect_lines(facts: dict) -> list[str]:
+    """Rules 3 and 4, in the order of rule 3."""
+    out = ["detect: proposal only; a person confirms it in discovery"]
+    work, stack, tests = facts["work_type"], facts["stack"], facts["tests"]
+    hits = work["candidates"]
+    if work["state"] == "default":
+        out.append("work type: default (proposed; no signal of a work type)")
+    elif work["state"] == "mixed":
+        out.append(f"work type: mixed ({len(hits)} candidates)")
+        out += [
+            f"candidate: {h['name']} file {quoted(h['file'])} signal {h['signal']}" for h in hits
+        ]
+    else:
+        out += [
+            f"work type: {h['name']} (proposed) file {quoted(h['file'])} signal {h['signal']}"
+            for h in hits
+        ]
+    if stack["state"] == "no signal":
+        out.append("stack: no signal")
+    if stack["state"] == "mixed":
+        out.append(f"stack: mixed ({len({row['name'] for row in stack['rows']})} stacks)")
+    for row in stack["rows"]:
+        lock = "none" if row["lock"] is None else quoted(row["lock"])
+        out.append(
+            f"stack: {row['name']} (proposed) folder {quoted(row['folder'])}"
+            f" file {quoted(row['file'])} lock {lock}"
+        )
+    if tests["state"] == "not read":
+        out.append(f"tests: not read ({tests['source']} cannot be loaded)")
+    elif tests["state"] == "no signal":
+        out.append("tests: no signal")
+    out += [
+        f"tests: {quoted(row['folder'])} patterns {','.join(row['patterns'])}"
+        f" (from {tests['source']})"
+        for row in tests["folders"]
+    ]
+    out += [f"not detectable from files: {name}" for name in facts["not_detectable"]]
+    return out + [f"note: {note}" for note in facts["notes"]]
+
+
+def detect(root: Path, kit: Path, as_json: bool) -> int:
+    facts = detect_facts(root, kit)
+    print(
+        json.dumps(facts, sort_keys=True, indent=1) if as_json else "\n".join(detect_lines(facts))
+    )
+    return 0
 
 
 def parse(argv: list[str]) -> tuple[str, dict[str, str], list[str]] | None:
@@ -1009,6 +1265,9 @@ def parse(argv: list[str]) -> tuple[str, dict[str, str], list[str]] | None:
                 return None
             opts[argv[i]] = argv[i + 1]
             i += 2
+        elif argv[0] == "detect" and argv[i] == "--json" and "--json" not in opts:
+            opts["--json"] = ""
+            i += 1
         elif argv[i].startswith("-"):
             return None
         else:
@@ -1033,6 +1292,8 @@ def main(argv: list[str] | None = None) -> int:
         ok = set(opts) <= {"--root"}
     elif cmd == "check-signals":
         ok = not opts and not rest
+    elif cmd == "detect":
+        ok = set(opts) <= {"--root", "--json"} and not rest
     elif cmd == "derive-write":
         ok = "--slug" in opts and set(opts) <= {"--slug", "--modules", "--root"} and not rest
     else:
@@ -1046,6 +1307,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if cmd == "check-signals":
             return check_signals(Path(__file__).resolve().parents[2])
+        if cmd == "detect":
+            return detect(root, Path(__file__).resolve().parents[2], "--json" in opts)
         if cmd == "check-issue":
             return check_issue(Path(opts["--issue"]))
         if cmd == "discovery-write":

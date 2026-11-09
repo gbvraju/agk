@@ -28,7 +28,15 @@ NO_KIND = "work type: default (proposed; no signal of a work type)"
 TAIL = ["not detectable from files: cloud-migration", "not detectable from files: pilot"]
 REACT = '{"dependencies": {"react-dom": "1.0.0"}}\n'
 FLUTTER = "dependencies:\n  flutter:\n    sdk: flutter\n"
-GIT = ["git", "-c", "user.name=Ada", "-c", "user.email=ada@example.com", "-c", "commit.gpgsign=false"]
+GIT = [
+    "git",
+    "-c",
+    "user.name=Ada",
+    "-c",
+    "user.email=ada@example.com",
+    "-c",
+    "commit.gpgsign=false",
+]
 
 
 def git(root: Path, *args: str) -> None:
@@ -66,7 +74,10 @@ def lines(root: Path) -> list[str]:
 
 def snapshot(root: Path) -> dict[str, tuple[int, str]]:
     return {
-        path.relative_to(root).as_posix(): (path.stat().st_size, hashlib.sha256(path.read_bytes()).hexdigest())
+        path.relative_to(root).as_posix(): (
+            path.stat().st_size,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
         for path in sorted(root.rglob("*"))
         if path.is_file()
     }
@@ -284,7 +295,10 @@ def test_a_lockfile_never_suggests_a_work_type(tmp_path, capsys):
     kit = tmp_path / "kit"
     (kit / "config").mkdir(parents=True)
     text = (KIT_ROOT / front_door.SIGNALS).read_text(encoding="utf-8")
-    row = '\n[[work_type]]\nname = "web-app"\nsignal = "s"\nfile = "yarn.lock"\ncontains = "react-dom"\n'
+    row = (
+        '\n[[work_type]]\nname = "web-app"\nsignal = "s"\nfile = "yarn.lock"\n'
+        'contains = "react-dom"\n'
+    )
     (kit / front_door.SIGNALS).write_text(text + row, encoding="utf-8")
     assert front_door.detect(root, kit, as_json=False) == 0
     assert NO_KIND in capsys.readouterr().out.splitlines()
