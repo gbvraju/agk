@@ -8,6 +8,7 @@ of the reader, and nothing is written into the product tree. Invented data only;
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
@@ -111,6 +112,7 @@ def run_check(root: Path, name: str, *args: str) -> subprocess.CompletedProcess:
         cwd=root,
         capture_output=True,
         text=True,
+        env={k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")},
     )
 
 
