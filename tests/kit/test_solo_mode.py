@@ -394,6 +394,7 @@ SPEC_ONE = "docs/specs/0001-thing.md"
 def thing(status: str) -> str:
     return (
         f"# SPEC-0001: Thing\n\n- Status: {status}\n- Owner: reviewers\n\n## Rules\n\n1. A rule.\n"
+        "\n## Contexts\n\nkit, github, local, personal and stacks: as written\n"
     )
 
 
