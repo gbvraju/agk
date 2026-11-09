@@ -173,7 +173,7 @@ def test_without_auto_merge_the_watch_reads_no_sweep_run(proj, stub):  # noqa: F
     serve_runs(stub, a_run("schedule", 300))
     serve_pr(stub, pr(7), [cleared()])
     assert watch_lines(proj, stub) == ["nothing new"]
-    assert not any("actions/workflows" in " ".join(c) for c in stub.calls())
+    assert not any("actions/workflows" in str(c) for c in stub.calls())
 
 
 def test_a_late_sweep_never_ends_the_watch_early(proj, stub):  # noqa: F811

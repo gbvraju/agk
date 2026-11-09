@@ -2,8 +2,8 @@
 
 Brief #797 answers 3, 5 and 6, ADR-0373, amendment 144, REQ-046 (SPEC-0039 rule 2): a cleared pull
 request whose own event was lost is still merged, because a scheduled run lists the open pull
-requests labelled `agk:ready`, oldest first, and runs the one guarded merge on at most five
-cleared heads. Saved answers and a recorded merge only; no network, invented logins.
+requests, oldest first, and runs the one guarded merge on at most five cleared heads (the label
+is never read, brief #836). Saved answers and a recorded merge only; no network, invented logins.
 """
 
 from __future__ import annotations
@@ -81,8 +81,8 @@ def sweep(tmp_path, capsys, main: str = toml(ON)) -> list[str]:
     return capsys.readouterr().out.splitlines()
 
 
-def test_the_sweep_takes_open_ready_pull_requests_oldest_first(tmp_path, monkeypatch, capsys):
-    """REQ-046: brief #797 answer 3 (open, not a draft, labelled `agk:ready`, oldest first)."""
+def test_the_sweep_takes_open_pull_requests_oldest_first(tmp_path, monkeypatch, capsys):
+    """REQ-046: brief #797 answer 3, brief #836 answer 2 (open, not a draft, oldest first)."""
     pulls = [
         a_pull(5, day=3),
         a_pull(6, day=1),
@@ -92,7 +92,7 @@ def test_the_sweep_takes_open_ready_pull_requests_oldest_first(tmp_path, monkeyp
     world = World(monkeypatch, pulls, {5: clearing(5), 6: clearing(6), 7: clearing(7)})
     lines = sweep(tmp_path, capsys)
     assert world.ran == [(6, sha_of(6)), (5, sha_of(5))]
-    assert len(lines) == 2  # one line per pull request
+    assert len(lines) == 5  # a line per pull request, and a `MERGED` line for each merged one
 
 
 def test_a_head_that_is_not_cleared_gets_a_line_and_no_merge(tmp_path, monkeypatch, capsys):
@@ -111,7 +111,7 @@ def test_at_most_five_guarded_merges_a_run(tmp_path, monkeypatch, capsys):
     world = World(monkeypatch, pulls, {n: clearing(n) for n in range(1, 8)})
     lines = sweep(tmp_path, capsys)
     assert [n for n, _ in world.ran] == [1, 2, 3, 4, 5]
-    assert len(lines) == 7
+    assert len(lines) == 12  # one line each, and a `MERGED` line for each of the five (brief #836)
 
 
 def test_a_cleared_head_past_the_limit_is_reported_when_old(tmp_path, monkeypatch, capsys):
@@ -231,7 +231,7 @@ def test_the_event_job_is_unchanged_by_the_sweep():
     assert "--sweep" not in event and "needs:" not in event
 
 
-def test_the_gate_holds_no_secret_and_starts_only_on_the_schedule():
+def test_the_gate_holds_no_secret_and_starts_on_the_schedule():
     """REQ-046: brief #797 answer 6 (a project without auto-merge opens no `merge` environment)."""
     gate = job("sweep-gate")
     assert "secrets." not in gate and "environment:" not in gate

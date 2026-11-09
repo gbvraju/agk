@@ -6,6 +6,7 @@
 # no workflow, and no trigger below listens to a label change, so it cannot loop.
 # A comment starts a job only when its first line can change a state: `Verdict:`, `Approve:`, `Approval:` or `Correction:` (brief #216),
 # or, for the health issues, `Assign:` or `Request:`: a dead pool pushes nothing, so these are its only events (brief #776, ADR-0368).
+# An edited `Verdict:`, `Final:` or `Approve:` comment starts it too, since a verdict corrected in place changes the state (brief #836, ADR-0383).
 # Brief #369 (ADR-0207): GitHub bills every job as at least one whole minute, so a job starts only where it can change a label.
 # A `pull_request` event of a draft starts no job: a draft's governance run wakes the router when it finishes, and the label is
 # set again when it is marked ready, by the router run that the `ready_for_review` governance run wakes. A `workflow_run` whose
@@ -20,7 +21,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
   issue_comment:
-    types: [created]
+    types: [created, edited]
   workflow_run:
     # The workflows that hold the checks of `required_checks` in agk.toml (brief #285): `workflow_run` takes names, not patterns,
     # so upgrade.py and init.py write this one line from that setting and the project's workflows, and keep names added to it.
@@ -50,7 +51,7 @@ concurrency:
 
 jobs:
   agk-route:
-    if: ${{ (github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true) && (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) && (github.event_name != 'issue_comment' || startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || startsWith(github.event.comment.body, 'Approval:') || startsWith(github.event.comment.body, 'Correction:') || startsWith(github.event.comment.body, 'Assign:') || startsWith(github.event.comment.body, 'Request:')) && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped') }}
+    if: ${{ (github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true) && (github.event_name != 'push' || github.ref_name == github.event.repository.default_branch) && (github.event_name != 'issue_comment' || startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || (github.event.action == 'edited' && startsWith(github.event.comment.body, 'Final:')) || (github.event.action == 'created' && (startsWith(github.event.comment.body, 'Approval:') || startsWith(github.event.comment.body, 'Correction:') || startsWith(github.event.comment.body, 'Assign:') || startsWith(github.event.comment.body, 'Request:')))) && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
