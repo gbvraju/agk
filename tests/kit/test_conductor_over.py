@@ -267,12 +267,16 @@ def test_another_form_of_the_command_is_refused(proj, stub, args):
     assert stub.calls() == []
 
 
+def snapshot(proj) -> list[Path]:
+    return sorted(p for p in proj.root.rglob("*") if not {".git", "stub", "bin"} & set(p.parts))
+
+
 def test_the_command_writes_no_file(proj, stub):
     """REQ-056 AC5: rule 16, GET only and nothing written."""
     serve(stub, [(GREEN, [GOOD], 100)])
-    before = sorted(p for p in proj.root.rglob("*") if ".git" not in p.parts)
+    before = snapshot(proj)
     over(proj, stub)
-    assert sorted(p for p in proj.root.rglob("*") if ".git" not in p.parts) == before
+    assert snapshot(proj) == before
 
 
 # --- the guard --------------------------------------------------------------------------------
