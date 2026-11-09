@@ -700,6 +700,32 @@ def billed(tmp_path):
     return kit_repo(tmp_path, bill=True), tmp_path / "out"
 
 
+def test_ac1_make_writes_this_builds_parts_in_the_tags_folder_and_changes_nothing(billed):
+    """REQ-059 AC1: rules 2 and 3 (only `<out>/<tag>/`; the repository is left as it was)."""
+    root, out = billed
+    before = state(root)
+    done = make(root, out)
+    assert done.returncode == 0, done.stdout
+    assert sorted(p.name for p in (out / TAG).iterdir()) == [
+        "bom.json",
+        "decisions.json",
+        "scans.json",
+        "tests.json",
+    ]
+    assert [p.name for p in out.iterdir()] == [TAG]
+    assert state(root) == before
+
+
+def test_ac1_a_part_of_this_build_is_only_what_build_d_leaves_short_of_a_pack(billed):
+    """REQ-059 AC8: rule 10 (until brief #832 the check says the pack is not whole)."""
+    root, out = billed
+    make(root, out)
+    done = check(root, out / TAG)
+    assert done.returncode == 1 and "FAIL pack: coverage.json is missing" in done.stdout
+    for name in ("bom.json", "scans.json", "tests.json"):
+        assert f"FAIL pack: {name}" not in done.stdout
+
+
 def test_ac6_the_bill_names_files_pins_and_actions_at_the_tag(billed):
     """REQ-059 AC6: rule 8 (the installed files, the pinned tools and the SHA-pinned actions)."""
     root, out = billed
@@ -773,6 +799,40 @@ def test_ac6_no_scanner_pin_is_no_tool_and_no_refusal(tmp_path):
     out = tmp_path / "out"
     assert make(root, out).returncode == 0
     assert "gitleaks" not in {t["name"] for t in part(out, "bom.json")["tools"]}
+
+
+def test_ac7_the_decisions_between_two_releases_skip_a_tag_that_is_not_one(billed):
+    """REQ-059 AC7: rule 9 (exactly what changed, and the skipped tag by name)."""
+    root, out = billed
+    put(root, "note.txt", "not a release\n")
+    commit(root, "a commit")
+    git(root, "tag", "v1.1.5")
+    put(root, "docs/adr/0001-one.md", "# ADR-0001\n\n- Status: Accepted\n")
+    put(root, "docs/adr/0003-three.md", "# ADR-0003\n\n- Status: Proposed\n")
+    put(root, "docs/requirements.md", requirements("done", "done"))
+    release(root, "1.2.0")
+    assert make(root, out, "v1.2.0").returncode == 0, "make failed"
+    assert part(out, "decisions.json", "v1.2.0") == {
+        "schema": 1,
+        "adrs": [1],
+        "requirements": [{"id": "REQ-001", "from": "planned", "to": "done"}],
+        "skipped_tags": ["v1.1.5"],
+    }
+
+
+def test_ac7_with_no_earlier_release_the_range_starts_at_the_first_commit(billed):
+    """REQ-059 AC7: rule 9 (none means the repository's first commit; Q-820-3 for `from`)."""
+    root, out = billed
+    make(root, out)
+    assert part(out, "decisions.json") == {
+        "schema": 1,
+        "adrs": [2],
+        "requirements": [
+            {"id": "REQ-001", "from": "none", "to": "planned"},
+            {"id": "REQ-002", "from": "none", "to": "done"},
+        ],
+        "skipped_tags": [],
+    }
 
 
 def test_ac1_an_out_inside_the_repository_that_git_does_not_ignore_is_refused(billed):
@@ -872,6 +932,11 @@ def test_ac6_make_opens_no_socket(billed, monkeypatch, capsys):
 # Build (d): the required checks and the scans (rules 5 and 6), from saved responses.
 
 NO_SCANNER = {"kind": "dependency", "scanner": "none", "version": "none", "outcome": "not run"}
+ROUTES = {
+    "/rules/branches/main": "rules-branch",
+    "/check-runs": "check-runs",
+    "/actions/runs/77/jobs": "run-jobs-77",
+}
 
 
 def responses(root: Path, **over) -> dict:
@@ -924,6 +989,49 @@ def made(billed_repo, tmp_path, name: str, **over) -> dict:
     done = make(root, out, api=saved(root, tmp_path, **over))
     assert done.returncode == 0, done.stdout
     return part(out, name)
+
+
+def test_ac1_only_get_reaches_gh(billed, tmp_path):
+    """REQ-059 AC1: rule 3 (the live reader: `gh api --method GET` only, nothing is posted)."""
+    root, out = billed
+    api = saved(root, tmp_path)
+    place = tmp_path / "bin"
+    place.mkdir()
+    stub = place / "gh"
+    stub.write_text(
+        f"""#!{sys.executable}
+import json, pathlib, sys
+args = sys.argv[1:]
+with open({str(tmp_path / "calls")!r}, "a") as log:
+    log.write(json.dumps(args) + "\\n")
+if args[:3] != ["api", "--method", "GET"]:
+    pathlib.Path({str(tmp_path / "written")!r}).write_text("x")
+    sys.exit(1)
+path = args[3].split("?")[0]
+routes = {ROUTES!r}
+for key in sorted(routes, key=len, reverse=True):
+    if path.endswith(key):
+        print(pathlib.Path({str(api)!r}, routes[key] + ".json").read_text())
+        break
+else:
+    sys.exit(1)
+""",
+        encoding="utf-8",
+    )
+    stub.chmod(0o700)
+    run_env = {**env(), "PATH": f"{place}{os.pathsep}{os.environ['PATH']}"}
+    argv = [sys.executable, str(SCRIPT), "make", "--tag", TAG, "--out", str(out), "--repo", "o/r"]
+    done = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        argv, cwd=root, capture_output=True, text=True, env=run_env
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not (tmp_path / "written").exists()
+    calls = [json.loads(ln) for ln in (tmp_path / "calls").read_text().splitlines()]
+    assert calls and all(c[:3] == ["api", "--method", "GET"] for c in calls)
+    paths = [c[3].split("?")[0] for c in calls]
+    assert all(any(p.endswith(key) for p in paths) for key in ROUTES), paths
+    assert part(out, "tests.json")["checks"][0]["conclusion"] == "success"
+    assert part(out, "scans.json")["scans"][0]["outcome"] == "passed"
 
 
 def test_ac1_a_pack_is_not_written_for_a_tag_that_is_not_a_release_with_api_dir(tmp_path):
