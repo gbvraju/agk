@@ -52,7 +52,11 @@ STEP = timedelta(minutes=15)
 HOLDS_FILE = "docs/runs/holds.jsonl"  # metrics.HOLDS_FILE
 TAKE = re.compile(r"taken(?: over)?: (\S+) \d{4}-\d{2}-\d{2}(?: build \([\w.-]+\))?( retakes)?.*")
 RELEASED = re.compile(r"released: (\S+)")
-ASSIGN = re.compile(r"Assign: (\S+) #(\d+)\b")  # every brief form of session.py's ASSIGN
+# The brief forms of session.py's ASSIGN (its `none` form starts nothing), matched on the whole
+# first line as its `assign_line` does (`fullmatch`).
+ASSIGN = re.compile(
+    r"Assign: (\S+) #(\d+)(?: build \([A-Za-z0-9._-]+\))?(?: pr #\d+ (?:fix list|merge of main))?"
+)
 REFUSED = re.compile(r"\bRefused \((\d+)\)")
 PR_TESTS = re.compile(
     r"pr tests: (\d+) runs; selected (\d+) of (\d+) \([^)]*\); test step ([\d.]+) minutes"
@@ -110,6 +114,11 @@ def first_line(comment: dict) -> str:
     return lines[0].strip() if lines else ""
 
 
+def login(name: Any) -> str:
+    """A login as reviewers.authors_of lists it: lower case without a leading `@`."""
+    return str(name or "").strip().lstrip("@").lower()
+
+
 def issue_of(comment: dict) -> int | None:
     tail = str(comment.get("issue_url") or "").rsplit("/", 1)[-1]
     return int(tail) if tail.isdigit() else None
@@ -143,7 +152,7 @@ class View:
         window = saved.get("window_tests")
         self.window_tests = window if isinstance(window, dict) else None
         authors = saved.get("verdict_authors")
-        self.authors = set(authors) if isinstance(authors, list) else None
+        self.authors = {login(a) for a in authors} if isinstance(authors, list) else None
         issues = saved.get("conductor_issues")
         self.conductor_issues = set(issues) if isinstance(issues, list) else None
         self.local = saved.get("local_mode") is True
@@ -242,10 +251,10 @@ def assigns(view: View) -> list[tuple[datetime, str, int]]:
     verdict author, in time order: (when, slot, brief)."""
     found = []
     for comment in view.comments or []:
-        match = ASSIGN.match(first_line(comment))
+        match = ASSIGN.fullmatch(first_line(comment))
         if (
             match
-            and comment.get("author") in (view.authors or ())
+            and login(comment.get("author")) in (view.authors or ())
             and issue_of(comment) in (view.conductor_issues or ())
         ):
             found.append((stamp(comment["created_at"]), match[1], int(match[2])))

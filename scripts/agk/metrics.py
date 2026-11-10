@@ -1489,6 +1489,9 @@ def save_checklist(src: Any, root: Path, repo: str, days: int, target: Path, now
     weekly_body = str(weekly[0].get("body") or "") if isinstance(weekly, list) and weekly else ""
     pr_tests = weekly_line(weekly_body, "pr tests:")
     counted = re.match(r"pr tests: [1-9]", pr_tests or "")
+    local_mode = isinstance(opened, list) and any(
+        str(i.get("title") or "").startswith("Local mode since") for i in opened
+    )
     document = {
         "saved_at": now,
         "facts": facts.build(root, end.date(), repo, src, weeks),
@@ -1528,9 +1531,11 @@ def save_checklist(src: Any, root: Path, repo: str, days: int, target: Path, now
         "pr_tests": pr_tests,
         "pr_tests_median": weekly_line(weekly_body, "pr tests median:"),
         "full_suite": weekly_line(weekly_body, "full suite:"),
-        "window_tests": None if counted else window_tests(src, root, start_of_window, end),
-        "local_mode": isinstance(opened, list)
-        and any(str(i.get("title") or "").startswith("Local mode since") for i in opened),
+        # point 3 prints unknown in local mode, so its window's reads are skipped there
+        "window_tests": None
+        if counted or local_mode
+        else window_tests(src, root, start_of_window, end),
+        "local_mode": local_mode,
     }
     target.write_text(json.dumps(document), encoding="utf-8")
 

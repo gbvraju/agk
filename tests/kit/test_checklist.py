@@ -229,6 +229,32 @@ def test_an_assign_followed_by_the_slots_take_is_counted_once(tmp_path, capsys):
     assert "conductor 2 of 3 (67%); by hand 1" in found[2][1]
 
 
+def test_an_assign_by_a_listed_author_counts_whatever_the_case_of_the_login(tmp_path, capsys):
+    """REQ-054: brief #981 answer 1: authors compare as reviewers.authors_of lists them, lower
+    case without `@` (fix list of ed594c0, item 1)."""
+    document = saved(
+        comments=[assign(20, author="Conductor-Example"), *takes(20)],
+        verdict_authors=["@Conductor-Example"],
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "conductor 1 of 1 (100%); by hand 0" in found[2][1]
+
+
+def test_only_an_assign_line_session_acts_on_counts(tmp_path, capsys):
+    """REQ-054: brief #981 answer 1: the whole first line must be a brief form of session.py's
+    ASSIGN; trailing words or the `none` form start nothing (fix list of ed594c0, item 2)."""
+    document = saved(
+        comments=[
+            assign(20, tail=" extra words"),
+            comment(CONDUCTOR_ISSUE, "Assign: s21 none", day(7), CONDUCTOR),
+            assign(22, tail=" pr #985 fix list"),
+            *takes(20, 21, 22),
+        ]
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "conductor 1 of 3 (33%); by hand 2" in found[2][1]
+
+
 def test_conductor_share_yes_and_stalls_replaced_counted(tmp_path, capsys):
     retake = comment(21, "taken: s9 2026-03-10 retakes", day(8))
     document = saved(comments=[assign(20), assign(21, slot="s9"), *takes(20), retake])
@@ -722,7 +748,11 @@ def test_with_no_weekly_line_the_save_step_keeps_the_windows_figures(tmp_path, m
         {"number": 50, "closed_at": day(9), "updated_at": day(9)},
         {"number": 49, "closed_at": "2026-02-01T00:00:00Z", "updated_at": "2026-02-01T00:00:00Z"},
     ]
-    more = {"pulls": listing, "pull-50": {"number": 50, "merged_at": day(9)}}
+    more = {
+        "pulls": listing,
+        "pull-50": {"number": 50, "merged_at": day(9)},
+        "checklist-open": [],  # not local mode
+    }
     target = tmp_path / "saved.json"
     folder = api_dir(tmp_path, weekly="no lines here", more=more)
     metrics.save_checklist(metrics.ApiDir(folder), tmp_path, "o/r", 7, target, SAVED_AT)
@@ -734,6 +764,25 @@ def test_with_no_weekly_line_the_save_step_keeps_the_windows_figures(tmp_path, m
         "pr_tests_median": MEDIAN_FAST,
         "full_suite": FULL_SUITE,
     }
+
+
+def test_in_local_mode_the_save_step_skips_the_windows_reads(tmp_path, monkeypatch):
+    """REQ-054: brief #981 answer 2: point 3 prints unknown in local mode, so the save reads no
+    runs or logs of the window for it (fix list of ed594c0, item 4)."""
+    import facts
+
+    monkeypatch.setattr(facts, "build", lambda *a, **k: {"pull_requests": [], "flow": {}})
+
+    def never(*a, **k):
+        raise AssertionError("the window's runs were read in local mode")
+
+    monkeypatch.setattr(metrics, "window_tests", never)
+    target = tmp_path / "saved.json"
+    folder = api_dir(tmp_path, weekly="no lines here")  # its open issues name local mode
+    metrics.save_checklist(metrics.ApiDir(folder), tmp_path, "o/r", 7, target, SAVED_AT)
+    document = json.loads(target.read_text(encoding="utf-8"))
+    assert document["local_mode"] is True
+    assert document["window_tests"] is None
 
 
 def test_save_leaves_unread_parts_unknown_not_empty(tmp_path, monkeypatch):
