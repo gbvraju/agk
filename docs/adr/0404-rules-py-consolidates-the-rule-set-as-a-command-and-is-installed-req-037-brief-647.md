@@ -37,7 +37,8 @@ ADR-0310 made it kit-only.
    consolidate).`, a guide line becomes `<n>. Moved to `docs/guides/session-how-to.md` (rules.py
    consolidate).` and its text is appended to that guide under a heading naming the file and
    number, each retired rule appends one line to the catch log `docs/runs/rules-retired.md`
-   naming its check, and the lines of `config/rule-budget.txt` are rewritten to the new counts.
+   naming its check, the applied lines of `config/rule-plan.txt` are cleared (its comments stay),
+   and the lines of `config/rule-budget.txt` are rewritten to the new counts.
    Numbers are kept (a pointer line, as `config/session-rules.md` already does for merged rules),
    so a `(rule: <file> <n>)` tag keeps its meaning. It refuses, naming the rule, when the hash is
    not the plan's hash now ("the plan has changed since --plan") or when `git status --porcelain`
