@@ -461,3 +461,94 @@ def test_the_settings_deny_write_to_a_session():
         "Bash(*local_mode.py*--write*)",
     ):
         assert entry in deny, entry
+
+
+# --- brief #982 answer 3: `enter` when every workflow is already off by hand ---------------------
+
+ALL_OFF = [
+    workflow(101, "agk-route.yml", "disabled_manually", "2026-11-02T08:05:00Z"),
+    workflow(102, "governance.yml", "disabled_manually", "2026-11-01T22:40:00Z"),
+    workflow(103, "project-build.yml", "disabled_manually", "2026-11-02T08:07:00Z"),
+]
+ALL_OFF_DAY = "2026-11-01"  # the day of the earliest of them, the one `leave --since` takes
+TITLE = f"Local mode since {ALL_OFF_DAY}"
+LEAVE = f"leave: python3 scripts/agk/local_mode.py leave --since {ALL_OFF_DAY}"
+
+
+def test_enter_with_every_workflow_off_prints_the_record_call_and_the_leave_command(repo, tmp_path):
+    """REQ-013: brief #982 answer 3 (the dry run names the record it would open; writes nothing)."""
+    folder = api(tmp_path, ALL_OFF, issues=OTHER_ISSUES)
+    proc = local_mode(repo, folder, "enter")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    out = proc.stdout.splitlines()
+    assert "active workflows: 0" in out
+    assert f"already off: 3 workflows disabled by hand, the earliest on {ALL_OFF_DAY}" in out
+    assert any(
+        ln.startswith(f"record: gh api --method POST repos/{REPO}/issues -f title=\"{TITLE}\"")
+        for ln in out
+    ), out
+    assert out[-1] == LEAVE
+    assert calls(folder) == []
+
+
+def test_enter_write_with_every_workflow_off_opens_the_record_in_the_form_leave_reads(
+    repo, tmp_path
+):
+    """REQ-013: brief #982 answer 3 (one POST; `leave` then reads that start without --since)."""
+    folder = api(tmp_path, ALL_OFF, issues=OTHER_ISSUES)
+    proc = local_mode(repo, folder, "enter", "--write")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert calls(folder) == [f"POST /repos/{REPO}/issues title={TITLE}"]
+    assert f"recorded: {TITLE}" in proc.stdout.splitlines()
+    assert proc.stdout.splitlines()[-1] == LEAVE
+    # The issue as GitHub would list it: `leave` takes the start from it, and enables all three.
+    record = {"number": 90, "title": TITLE, "created_at": "2026-11-02T08:09:00Z"}
+    folder = api(tmp_path, ALL_OFF, issues=[*OTHER_ISSUES, record])
+    proc = local_mode(repo, folder, "leave")
+    assert f"local mode since: {ALL_OFF_DAY}T00:00:00Z (the record issue #90)" in proc.stdout
+    assert "workflows disabled for local mode: 3" in proc.stdout
+
+
+def test_the_printed_leave_command_enables_every_workflow_that_was_off(repo, tmp_path):
+    """REQ-013: brief #982 answer 3 (the exact command works without a record issue)."""
+    folder = api(tmp_path, ALL_OFF, issues=OTHER_ISSUES)
+    proc = local_mode(repo, folder, "leave", "--since", ALL_OFF_DAY, "--write")
+    assert "workflows disabled for local mode: 3" in proc.stdout, proc.stdout
+    assert len([c for c in calls(folder) if c.endswith("/enable")]) == 3
+
+
+def test_enter_with_a_record_issue_already_open_opens_no_second_one(repo, tmp_path):
+    """REQ-013: brief #982 answer 3 (keep exactly one record issue open)."""
+    folder = api(tmp_path, ALL_OFF)
+    proc = local_mode(repo, folder, "enter", "--write")
+    assert proc.returncode == 0, proc.stdout
+    assert calls(folder) == []
+    assert "record: the record issue #77 is open" in proc.stdout
+    assert proc.stdout.splitlines()[-1] == LEAVE
+
+
+def test_enter_with_unreadable_issues_opens_nothing_and_is_unknown(repo, tmp_path):
+    """REQ-013: brief #982 answer 3 (an unreadable list never opens a second record)."""
+    folder = api(tmp_path, ALL_OFF)
+    refuse(folder, "issues", 403)
+    proc = local_mode(repo, folder, "enter", "--write")
+    assert proc.returncode == 4, proc.stdout
+    assert calls(folder) == []
+    assert "record: unknown (the open issues cannot be read" in proc.stdout
+    assert proc.stdout.splitlines()[-1] == LEAVE
+
+
+def test_a_refused_record_call_is_reported(repo, tmp_path):
+    """REQ-013: brief #982 answer 3"""
+    folder = api(tmp_path, ALL_OFF, issues=OTHER_ISSUES)
+    refuse(folder, "post-issues", 403)
+    proc = local_mode(repo, folder, "enter", "--write")
+    assert proc.returncode == 3, proc.stdout
+    assert any(ln.startswith("refused record: HTTP 403") for ln in proc.stdout.splitlines())
+
+
+def test_enter_with_some_workflows_still_active_records_nothing(repo, tmp_path):
+    """REQ-013: brief #982 answer 3 (only when every workflow is off by hand)."""
+    folder = api(tmp_path, [*ALL_OFF, workflow(104, "x.yml", "active")], issues=OTHER_ISSUES)
+    out = local_mode(repo, folder, "enter").stdout
+    assert "already off" not in out and "record:" not in out and "leave:" not in out

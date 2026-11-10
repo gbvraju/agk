@@ -130,9 +130,9 @@ def test_ac1_a_verdict_by_an_unlisted_author_is_ignored():
 
 
 def test_ac1_a_cleared_head_with_green_checks_is_ready():
-    """REQ-039 AC1: rule 2 (agk:ready)."""
+    """REQ-039 AC1: rule 2 (agk:merge-ready, ADR-0385)."""
     cleared = said(1, "boss", f"Verdict: cleared {HEAD[:7]}")
-    assert route.decide(facts(comments=[cleared])) == "agk:ready"
+    assert route.decide(facts(comments=[cleared])) == "agk:merge-ready"
 
 
 def test_ac1_a_covered_head_is_ready():
@@ -149,9 +149,9 @@ def test_ac1_a_covered_head_is_ready():
             }
         ],
     }
-    assert route.decide(facts(comments=[said(1, "boss", body)], commit=commit)) == "agk:ready"
+    assert route.decide(facts(comments=[said(1, "boss", body)], commit=commit)) == "agk:merge-ready"
     commit["files"][0]["patch"] = "@@ -1 +1 @@\n-- Status: Proposed\n+- Status: Rejected\n"
-    assert route.decide(facts(comments=[said(1, "boss", body)], commit=commit)) != "agk:ready"
+    assert route.decide(facts(comments=[said(1, "boss", body)], commit=commit)) != "agk:merge-ready"
 
 
 def test_ac1_a_cleared_head_that_approves_a_spec_waits_for_a_person():
@@ -160,7 +160,7 @@ def test_ac1_a_cleared_head_that_approves_a_spec_waits_for_a_person():
     assert route.decide(facts(comments=[cleared], files=approved_spec())) == "agk:approve"
     by_person = said(2, "maintainer", f"Approve: {OLD[:7]} SPEC-0032")
     both = facts(comments=[cleared, by_person], files=approved_spec())
-    assert route.decide(both) == "agk:ready"
+    assert route.decide(both) == "agk:merge-ready"
 
 
 def test_ac1_an_approve_review_body_by_an_approver_counts_and_other_accounts_do_not():
@@ -168,7 +168,7 @@ def test_ac1_an_approve_review_body_by_an_approver_counts_and_other_accounts_do_
     cleared = said(1, "boss", f"Verdict: cleared {HEAD[:7]}")
     review = {"user": {"login": "maintainer"}, "body": f"Approve: {HEAD[:7]} SPEC-0032"}
     assert route.decide(facts(comments=[cleared], reviews=[review], files=approved_spec())) == (
-        "agk:ready"
+        "agk:merge-ready"
     )
     stranger = said(2, "stranger", f"Approve: {HEAD[:7]} SPEC-0032")
     other = facts(comments=[cleared, stranger], files=approved_spec())
