@@ -46,6 +46,8 @@ NAME = "metrics"
 USAGE = (
     "usage: metrics.py [--today YYYY-MM-DD] [--repo OWNER/REPO] [--api-dir DIR] [--issues FILE] "
     "[--print-action | --print-title | --print-body]\n"
+    "       metrics.py --save-checklist [--to FILE] [--days N] [--repo OWNER/REPO] "
+    "[--api-dir DIR]\n"
     "       metrics.py --usage-by-kind FACTS [--before YYYY-MM-DD] [--after YYYY-MM-DD] "
     "[--repo OWNER/REPO] [--api-dir DIR]"
 )
@@ -138,7 +140,7 @@ class Gh:
 
     def read(self, name: str, endpoint: str, until: Any = None) -> Any:
         endpoint = endpoint.replace("{repo}", self.repo)
-        if name == "pulls" or name.startswith(("comments-", "files-", "commits-")):
+        if name == "pulls" or name.startswith(("comments-", "files-", "commits-", "checklist-")):
             return self.pages(endpoint, until)
         if name.startswith("runs-"):
             return self.keyed(endpoint, "workflow_runs")
@@ -1433,12 +1435,89 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
 # --- command line -----------------------------------------------------------------------------
 
 
+def save_checklist(src: Any, root: Path, repo: str, days: int, target: Path, now: str) -> None:
+    """What `checklist.py` reads (brief #799, ADR-0374): GET only, one file, a part that cannot be
+    read saved as null. `facts` imports this module, so it is imported here."""
+    import facts
+
+    end = stamp(now)
+    since = (end - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    weeks = max(1, (days + 6) // 7)
+    comments = src.get("comments-checklist", f"repos/{{repo}}/issues/comments?since={since}")
+    runs = src.get("runs-checklist", f"repos/{{repo}}/actions/runs?created=%3E%3D{since[:10]}")
+    briefs = src.get("checklist-briefs", "repos/{repo}/issues?state=all&labels=agk-brief")
+    weekly = src.get(
+        "issues-checklist-metrics", "repos/{repo}/issues?state=all&labels=agk-metrics&per_page=1"
+    )
+    opened = src.get("checklist-open", "repos/{repo}/issues?state=open")
+    weekly_body = str(weekly[0].get("body") or "") if isinstance(weekly, list) and weekly else ""
+    document = {
+        "saved_at": now,
+        "facts": facts.build(root, end.date(), repo, src, weeks),
+        "comments": None
+        if comments is None
+        else [
+            {k: c.get(k) for k in ("issue_url", "body", "created_at")}
+            for c in comments
+            if isinstance(c, dict)
+        ],
+        "runs": None
+        if not isinstance(runs, dict)
+        else [
+            {k: r.get(k) for k in ("name", "conclusion", "created_at")}
+            for r in runs.get("workflow_runs") or []
+        ],
+        "briefs": None
+        if not isinstance(briefs, list)
+        else [
+            {k: b.get(k) for k in ("number", "created_at", "closed_at", "body")}
+            for b in briefs
+            if "pull_request" not in b
+        ],
+        "pr_tests": next(
+            (ln for ln in weekly_body.splitlines() if ln.startswith("pr tests:")), None
+        ),
+        "local_mode": isinstance(opened, list)
+        and any(str(i.get("title") or "").startswith("Local mode since") for i in opened),
+    }
+    target.write_text(json.dumps(document), encoding="utf-8")
+
+
+def save_main(options: dict) -> int:
+    import checklist
+
+    root = repo_root()
+    target = Path(options["to"]) if options["to"] else checklist.default_saved(root)
+    if target is None:
+        raise CheckError("the checklist file has no git directory (path class: .git)")
+    repo = options["repo"] or origin_repo()
+    src = ApiDir(Path(options["api"])) if options["api"] else Gh(repo)
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    save_checklist(src, root, repo, options["days"], target, now)
+    print(f"saved {target}")
+    return 0
+
+
 def parse_args(args: list[str]) -> dict | None:
     options: dict = {"today": None, "repo": None, "api": None, "issues": None, "mode": "body"}
     options |= {"usage": None, "before": None, "after": None}
+    options |= {"save": False, "to": None, "days": 7}
     i = 0
     while i < len(args):
         arg = args[i]
+        if arg == "--save-checklist":
+            options["save"] = True
+            i += 1
+            continue
+        if arg in ("--to", "--days") and i + 1 < len(args):
+            if arg == "--to":
+                options["to"] = args[i + 1]
+            elif args[i + 1].isdigit() and int(args[i + 1]) >= 1:
+                options["days"] = int(args[i + 1])
+            else:
+                return None
+            i += 2
+            continue
         if arg in ("--usage-by-kind", "--before", "--after") and i + 1 < len(args):
             if arg != "--usage-by-kind" and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args[i + 1]):
                 return None
@@ -1492,6 +1571,8 @@ def main(argv: list[str] | None = None) -> int:
     if options is None:
         print(USAGE, file=sys.stderr)
         return 2
+    if options["save"]:
+        return save_main(options)
     if options["usage"]:
         return usage_main(options)
     today = options["today"] or datetime.now(UTC).date()
