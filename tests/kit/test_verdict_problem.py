@@ -149,3 +149,9 @@ def test_no_message_carries_a_sha_a_path_or_a_word_of_the_body():
         message = common.verdict_problem(body) or ""
         assert message and "hunter2" not in message and SHA not in message
         assert "0001" not in message and "secret" not in message
+
+
+def test_a_conductor_fallback_fix_list_with_only_final_lines_has_no_problem():
+    """REQ-046: brief #1013 answer 4 (ADR-0431 decision 3): the fallback ending is the same verdict."""
+    body = f"Verdict: fix list {SHA} (conductor fallback)\n\nFinal: {ADR} Proposed -> Accepted\n"
+    assert common.verdict_problem(body) is None
