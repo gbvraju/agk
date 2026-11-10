@@ -713,3 +713,73 @@ def test_ac1_an_adopted_tree_and_its_printed_text_do_not_mention_the_kit_tests(t
     ]
     assert found == []
     assert "tests/kit" not in proc.stdout
+
+
+# --- Front-end test folders and patterns (SPEC-0044 rule 10, brief #946) ----------------------
+
+
+def _detect(root: Path, *rels: str):
+    sys.path.insert(0, str(KIT_ROOT / "scripts" / "agk"))
+    import adopt as adopt_mod
+
+    for rel in rels:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text("", encoding="utf-8")
+    root.mkdir(parents=True, exist_ok=True)
+    return adopt_mod.detect_tests(root)
+
+
+def test_req051_front_end_folders_and_patterns_are_found(tmp_path):
+    """REQ-051: SPEC-0044 rule 10 (a `__tests__/` and an `e2e/` folder, as folders found)."""
+    dirs, patterns = _detect(tmp_path / "p", "src/app/__tests__/cart.test.tsx", "e2e/login.spec.ts")
+    assert dirs == ["e2e", "src/app/__tests__"]
+    assert patterns == ["*.spec.ts", "*.test.tsx"]
+
+
+def test_req051_python_and_front_end_tests_give_both_sets_sorted(tmp_path):
+    """REQ-051: SPEC-0044 rule 10 (it only adds to the Python answer)."""
+    dirs, patterns = _detect(
+        tmp_path / "p",
+        "tests/test_a.py",
+        "pkg/tests/b_test.py",
+        "web/__tests__/nav.test.ts",
+        "cypress/e2e/flow.spec.tsx",
+    )
+    assert dirs == ["cypress/e2e", "pkg/tests", "tests", "web/__tests__"]
+    assert patterns == ["*.spec.tsx", "*.test.ts", "*_test.py", "test_*.py"]
+
+
+def test_req051_a_project_without_front_end_tests_reads_as_today(tmp_path):
+    """REQ-051: SPEC-0044 rule 10 (no front-end file: today's answer, byte for byte)."""
+    assert _detect(tmp_path / "p", "tests/test_a.py", "src/app.ts", "src/a.test.js") == (
+        ["tests"],
+        ["test_*.py"],
+    )
+    assert _detect(tmp_path / "e", "src/app.ts") == (["tests"], ["test_*.py"])
+
+
+def test_req051_front_end_tests_in_skipped_folders_are_not_found(tmp_path):
+    """REQ-051: SPEC-0044 rule 10 (`node_modules/`, hidden and kit folders stay skipped)."""
+    found = _detect(
+        tmp_path / "p",
+        "node_modules/lib/__tests__/x.test.ts",
+        "node_modules/lib/e2e/y.spec.tsx",
+        ".cache/z.test.tsx",
+        "scripts/agk/w.spec.ts",
+    )
+    assert found == (["tests"], ["test_*.py"])
+
+
+def test_req051_an_adopted_project_keeps_its_stamped_values(tmp_path):
+    """REQ-051: SPEC-0044 rule 10, Q-S0044-10 (the stamp is reused, never rewritten)."""
+    root = make_existing(tmp_path / "p")
+    assert adopt(root).returncode == 0
+    before = (root / "agk.toml").read_bytes()
+    for rel in ("web/__tests__/cart.test.tsx", "e2e/login.spec.ts"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text("", encoding="utf-8")
+    proc = adopt(root)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (root / "agk.toml").read_bytes() == before
+    cfg = tomllib.loads(before.decode("utf-8"))
+    assert cfg["test_dirs"] == ["pkg/tests"] and cfg["test_patterns"] == ["*_test.py"]
