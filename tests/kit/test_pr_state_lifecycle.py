@@ -222,6 +222,13 @@ def good() -> list[dict]:
     return [{"name": n, "description": route.description_of(n)} for n in route.ACTOR]
 
 
+def test_the_doctor_fixture_holds_the_labels_the_router_creates():
+    """REQ-039: amendment 150 item 8 (the saved labels of the `ok` case are the router's own)."""
+    root = Path(__file__).resolve().parents[2]
+    saved = root / "tests/kit/fixtures/doctor/ok/api/labels.json"
+    assert json.loads(saved.read_text(encoding="utf-8")) == good()
+
+
 def test_doctor_is_ok_when_every_state_label_names_its_actor(tmp_path):
     """REQ-039: amendment 150 item 8 (`state-labels`, a warning, ok here)."""
     row = _row(tmp_path, good())
