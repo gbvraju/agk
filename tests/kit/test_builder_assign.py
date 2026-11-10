@@ -85,6 +85,56 @@ def test_a_slot_with_a_live_take_is_not_assigned_and_the_plan_is_capped_by_the_f
     assert [(a["session"], a["brief"]) for a in found["assign"]] == [("s2", 7)]
 
 
+def board(stub, *comments) -> None:
+    """The assignments issue (61) beside the briefs of `two_briefs`, with these comments."""
+    numbers = [7, 8]
+    conductor_issue = {"number": 61, "title": "assignments", "body": "",
+                       "labels": [{"name": "agk-conductor"}]}  # fmt: skip
+    listing(stub, [issue(n, brief(f"src/f{n}.py")) for n in numbers] + [conductor_issue])
+    stub.serve(f"{ISSUES}/61/comments", list(comments))
+
+
+def test_an_assign_not_yet_taken_keeps_its_slot_and_its_brief_out_of_the_plan(proj, stub):
+    """REQ-041: the verdict on 0534baa item 2; a posted `Assign:` is never listed again."""
+    two_briefs(proj, stub)
+    board(stub, comment(10, "boss", "Request: s1 ready"), comment(11, "boss", "Assign: s1 #7"))
+    found = data(proj, stub)
+    assert [(a["session"], a["brief"]) for a in found["assign"]] == [("s2", 8)]
+
+
+def test_an_assign_taken_or_answered_by_a_later_request_frees_the_slot(proj, stub):
+    """REQ-041: the `taken:` spends the line, and a newer `Request:` asks again."""
+    two_briefs(proj, stub)
+    board(
+        stub,
+        comment(10, "boss", "Assign: s1 #9"),
+        comment(12, "boss", "Request: s1 ready"),
+        comment(13, "boss", "Assign: s2 #9"),
+    )
+    stub.serve(f"{ISSUES}/8/comments", [comment(14, "boss", "released: s2")])
+    stub.serve(f"{ISSUES}/7/comments", [comment(15, "boss", "taken: s2 2026-11-08 retakes"),
+                                        comment(16, "boss", "released: s2")])  # fmt: skip
+    found = data(proj, stub)
+    assert [a["session"] for a in found["assign"]] == ["s1", "s2"]
+
+
+def test_an_assign_by_an_unlisted_account_holds_nothing(proj, stub):
+    """REQ-041"""
+    two_briefs(proj, stub)
+    board(stub, comment(11, "stranger", "Assign: s1 #7"))
+    found = data(proj, stub)
+    assert [(a["session"], a["brief"]) for a in found["assign"]] == [("s1", 7), ("s2", 8)]
+
+
+def test_an_assignments_issue_that_cannot_be_read_assigns_nothing(proj, stub):
+    """REQ-041: unknown is never a free slot."""
+    two_briefs(proj, stub)
+    board(stub)
+    stub.serve(f"{ISSUES}/61/comments", "FAIL")
+    found = data(proj, stub)
+    assert found["assign"] == [] and found["start"] == []
+
+
 def test_builder_start_start_keeps_the_session_names(proj, stub):
     """REQ-041: answer 7, `builder_start = "start"` unchanged."""
     proj.write("agk.toml", "[flow]\n")
@@ -147,6 +197,14 @@ def test_doctor_prints_the_schedule_and_passes_when_each_slot_has_run(tmp_path):
 def test_doctor_names_a_slot_with_no_run_in_the_last_hour(tmp_path):
     """REQ-041: the kit cannot read an account's schedule; a slot that never ran has none."""
     markers = [said(1, f"Slot: active {stamp(2)} s1 r1")]
+    result = doctor_script.slot_schedule_result(setting(tmp_path, ON), FakeReads(markers))
+    assert result.status == "fail" and "no run in the last hour: s2" in result.message
+
+
+def test_doctor_names_a_slot_whose_marker_is_older_than_an_hour(tmp_path):
+    """REQ-041: the verdict on 0534baa item 4; these reads ignore `since=`, so the marker's own
+    time decides."""
+    markers = [said(1, f"Slot: active {stamp(2)} s1 r1"), said(2, f"Slot: active {stamp(90)} s2 r2")]
     result = doctor_script.slot_schedule_result(setting(tmp_path, ON), FakeReads(markers))
     assert result.status == "fail" and "no run in the last hour: s2" in result.message
 
@@ -220,15 +278,22 @@ def test_main_turning_green_ends_the_watch_at_once(monkeypatch, capsys):
 
 
 def test_a_stall_read_that_fails_still_ticks(monkeypatch, capsys):
-    """REQ-041: unknown is never a stall, and it never loses the tick."""
+    """REQ-041: unknown is never a stall, and it never loses the tick (the verdict on 0534baa
+    item 5: `watch` itself prints the `tick`)."""
 
     def broken(*a):
         raise conductor.CheckError("the comments cannot be read")
 
+    real = conductor.stall_report
+    ticking(monkeypatch)
+    monkeypatch.setattr(conductor, "stall_report", real)
     monkeypatch.setattr(conductor, "stall_lines", broken)
     monkeypatch.setattr(conductor, "conductor_stall", broken)
     monkeypatch.setattr(conductor, "read", lambda *a: [])
-    assert conductor.stall_report("root", REPO) == []
+    assert conductor.watch("root", datetime.now(UTC), False) == 0
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "tick"
+    assert "the comments cannot be read" in captured.err
 
 
 # --- STALL lines ----------------------------------------------------------------------------------
@@ -477,7 +542,15 @@ def test_a_failure_outside_the_red_window_is_the_pull_requests_own(monkeypatch, 
     """REQ-041"""
     answers = greening(monkeypatch, tmp_path, [red_issue(40, 60, 2)], [draft(draft=False)],
                        [run("failure", minutes=1)])  # fmt: skip
-    assert conductor.green_lines(answers.root, REPO, since(5)) == []
+    assert conductor.green_lines(answers.root, REPO, since(5)) == ["MAIN GREEN after #40"]
+
+
+def test_a_red_issue_closed_with_no_pull_request_to_merge_still_ends_the_watch(
+    monkeypatch, tmp_path
+):
+    """REQ-041: the verdict on 0534baa item 1; ADR-0402 decision 9, amendment 143 item 12."""
+    answers = greening(monkeypatch, tmp_path, [red_issue(40, 60, 2)], [], [])
+    assert conductor.green_lines(answers.root, REPO, since(5)) == ["MAIN GREEN after #40"]
 
 
 def test_an_issue_still_open_or_closed_before_the_watch_is_no_event(monkeypatch, tmp_path):

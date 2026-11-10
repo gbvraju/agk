@@ -108,6 +108,7 @@ from metrics import HOLDS_FILE, author_of, counted_authors, hold_rows
 from reviewers import verdict_authors
 from session import (
     ADDS,
+    ASSIGN,
     BROAD,
     HELD_PREFIX,
     RELEASED,
@@ -124,6 +125,7 @@ from session import (
     gh,
     glob_regex,
     hold_state,
+    last_request,
     line_entries,
     literal,
     live_takes,
@@ -1456,11 +1458,17 @@ def build(root, record: bool = False) -> dict:
         for number, comments in s.comments.items()
         for t in live_takes(comments, number, s.prs, s.hours)
     }
-    count = 0 if hold else min(len(chosen), slots)
     assigning = builder_start(root) == "assign"
     free = []
     if assigning:
-        free = [f"s{n + 1}" for n in range(builder_slots(root)) if f"s{n + 1}" not in busy]
+        pending = pending_assigns(s, authors)
+        held_slots = busy | set(pending or {})
+        free = [] if pending is None else [f"s{n + 1}" for n in range(builder_slots(root))]
+        free = [name for name in free if name not in held_slots]
+        sent = set((pending or {}).values())
+        chosen = [b for b in chosen if (b["number"], b.get("build") or None) not in sent]
+    count = 0 if hold else min(len(chosen), slots)
+    if assigning:
         count = min(count, len(free))
     names = free[:count] if assigning else session_names(busy, count)
     unplanned = unplaced(s, chosen[:count], chosen[count:], hold, waits, skipped, build_skips)
@@ -1552,6 +1560,31 @@ def holds_of(root, s: Survey) -> tuple[list[dict], list[dict]]:
             held.append({"brief": number, "reason": reason})
         ignored += [{"brief": number, "by": login} for login in logins]
     return held, ignored
+
+
+def pending_assigns(s: Survey, authors: list[str]) -> dict[str, tuple] | None:
+    """Each slot's newest `Assign: <slot> #<brief> [build (<x>)]` by a listed author on the
+    assignments issue, newer than the slot's last `Request:` and with no `taken:` of the slot after
+    it, as (brief, build): that slot and that brief are spoken for (the verdict on 0534baa item 2).
+    None when the assignments issue cannot be read, so that no slot reads as free."""
+    board = conductor_comments(s.repo)
+    if board is None:
+        return None
+    allowed = {a.lstrip("@").lower() for a in authors}
+    takes = [t for comments in s.comments.values() for t in all_takes(comments)]
+    newest: dict[str, tuple] = {}
+    for c in sorted((c for c in board if isinstance(c.get("id"), int)), key=lambda c: c["id"]):
+        match = ASSIGN.fullmatch(first_line(c))
+        if match and author_of(c) in allowed:
+            newest[match.group(1)] = (c["id"], match)
+    out = {}
+    for slot, (cid, match) in newest.items():
+        if match.group(3) is None or match.group(5) or cid < last_request(board, slot):
+            continue
+        if any(t[2] == slot and t[1] > cid for t in takes):
+            continue
+        out[slot] = (int(match.group(3)), match.group(4))
+    return out
 
 
 def assign_line_of(entry: dict) -> str:

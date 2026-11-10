@@ -23,7 +23,9 @@ rule 36); 0402 is what `session.py ids` printed. It adds items to amendment 143.
 
 1. With `builder_start = "assign"`, `session.py plan` has an empty `start` list and an `assign` list of the free slots,
    each row with its `line`, `Assign: <slot> #<brief> [build (<x>)]`; `launch.py` therefore starts nothing. A slot with a
-   live take is not free, and the rows are capped by the free slots. With `start` the plan is what it was.
+   live take is not free, and the rows are capped by the free slots. A slot whose newest `Assign:` of a brief is newer than
+   its last `Request:` and has no `taken:` of the slot after it is not free either, and that brief is not listed again; an
+   assignments issue that cannot be read frees no slot. With `start` the plan is what it was.
 2. This repository sets `builder_start = "assign"`. `builder_slots` stays unset, so it is `max_builders`.
 3. `doctor.py` has one warning, `slot-schedule`: with `assign`, its message prints each slot's four staggered minutes and
    slots times starts per hour, and it fails naming a slot with no `Slot:` marker written in the last hour. The kit cannot
@@ -45,8 +47,9 @@ rule 36); 0402 is what `session.py ids` printed. It adds items to amendment 143.
 8. A run that ends releases its lease in the same step, before its report, and the report says `lease released`
    (`.claude/agents/conductor.md`).
 9. A red-branch issue closed since the watch began ends it with `MAIN GREEN after #<n>: merge of main #<pr> (<session>) ...`,
-   naming the open pull requests whose every failed check finished while the issue was open. The pass starts each merge
-   of main (with `assign`, `Assign: <slot> #<brief> pr #<n> merge of main`).
+   naming the open pull requests whose every failed check finished while the issue was open, and `MAIN GREEN after #<n>`
+   alone when none did, which ends it too. The pass starts each merge of main (with `assign`,
+   `Assign: <slot> #<brief> pr #<n> merge of main`).
 
 ## Consequences
 

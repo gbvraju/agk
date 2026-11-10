@@ -991,10 +991,11 @@ def slot_schedule_result(root: Path, reads: Reads) -> Result:
     comments, reason = reads.get("slot-markers", path)
     if reason or not isinstance(comments, list):
         return Result("cannot-check", reason=reason or "bad-response")
-    ran = {
+    ran = {  # the marker's own time decides: an edit of another line also moves `since=`
         match.group(3)
         for c in comments
         if (match := session.SLOT_LINE.fullmatch(session.first_line(c)))
+        and session.moment(match.group(2)) >= hour_ago
     }
     missing = [f"s{n}" for n in range(1, count + 1) if f"s{n}" not in ran]
     if missing:

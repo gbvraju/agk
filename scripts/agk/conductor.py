@@ -124,7 +124,8 @@ minutes, and `STALL conductor <name> <m> min` for a lease holder with no conduct
 `stall_minutes` with a review or a start due, counted from its take (`since <time>`). Another
 name's `lease --take` then posts that line on the plan issue and takes the lease; a renewal never
 does. `MAIN GREEN after #<n>: merge of main #<pr> (<session>) ...` ends a watch when a red-branch
-issue has closed, naming the pull requests whose every failed required check finished inside it.
+issue has closed, naming the pull requests whose every failed required check finished inside it;
+with none, the line is `MAIN GREEN after #<n>`.
 """
 
 from __future__ import annotations
@@ -459,8 +460,8 @@ def stall_report(root, repo: str) -> list[str]:
 
 def green_lines(root, repo: str, since: datetime) -> list[str]:
     """One `MAIN GREEN` line per red-branch issue closed since the watch began, naming the open
-    pull requests whose every failed required check finished while it was open; a read that fails
-    is no event."""
+    pull requests whose every failed required check finished while it was open, and `MAIN GREEN
+    after #<n>` alone when none did, which still ends the watch; a read that fails is no event."""
     closed = session.pages(f"repos/{repo}/issues?state=closed&since={stamp_of(since)}") or []
     red = [
         i
@@ -479,9 +480,9 @@ def green_lines(root, repo: str, since: datetime) -> list[str]:
                 brief = session.brief_number(pull)
                 who = taker(root, repo, brief, pulls) if brief is not None else "unknown"
                 named_pulls.append(f"#{pull['number']} ({who})")
-        if named_pulls:
-            names = " ".join(named_pulls)
-            lines.append(f"MAIN GREEN after #{issue['number']}: merge of main {names}")
+        names = " ".join(named_pulls)
+        tail = f": merge of main {names}" if named_pulls else ""
+        lines.append(f"MAIN GREEN after #{issue['number']}{tail}")
     return lines
 
 
