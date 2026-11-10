@@ -106,7 +106,7 @@ review_mode = "team"
 # budget_seconds = 300
 # excluded = ["e2e: needs a browser the runner lacks"]
 # pr_tests = "full"
-# Optional (ADR-0404): the instruction files an agent reads, as paths or globs in order, for `python3 scripts/agk/rules.py budget`,
+# Optional: the instruction files an agent reads, as paths or globs in order, for `python3 scripts/agk/rules.py budget`,
 # `dropped` and `consolidate`; without it the four core files, `.claude/agents/*.md` and `config/review-checklist.md`.
 # [rules]
 # files = ["CLAUDE.md", "constitution/principles.md", "config/core-rules.md", "config/session-rules.md", ".claude/agents/*.md"]
