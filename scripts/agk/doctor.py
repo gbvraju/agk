@@ -324,6 +324,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "brief carries `Finishes: #n` beside `Brief: #n`, so that the router closes it when it "
         "merges (session rule 28)",
     ),
+    "state-labels": (
+        "warn",
+        "every state label of the router names its actor",
+        "state labels missing or not naming their actor",
+        "create or edit each label listed with the description `route.py` gives it in `STATES` "
+        "(SPEC-0032 rule 2, ADR-0385)",
+    ),
     "brief-invalid-label": (
         "warn",
         "the repository has the agk-brief-invalid label, or no workflow that needs it",
@@ -839,6 +846,27 @@ def finished_result(reads: Reads, now: datetime.datetime | None = None) -> Resul
         times = [t for p in prs if (t := merged_time(p.get("merged_at"))) is not None]
         if times and now - max(times) > FINISHED_AFTER:
             listed.append(f"#{number}")
+    return Result("fail", message=listing(listed)) if listed else Result("ok")
+
+
+def state_labels_result(root: Path, config: dict, reads: Reads) -> Result:
+    """`state-labels` (ADR-0385): each state label of `route.STATES` exists and its description
+    names its actor; one GET, and none without a router or in local mode."""
+    if not (root / ROUTER_WORKFLOW).is_file() or config.get("execution") == "local":
+        return Result("ok", message=" (not applicable: no router)")
+    import route
+
+    labels, why = reads.get("labels", "/labels?per_page=100")
+    if not isinstance(labels, list):
+        return Result("cannot-check", why or "bad-response")
+    found = {
+        str(x.get("name")): str(x.get("description") or "") for x in labels if isinstance(x, dict)
+    }
+    listed = [
+        name
+        for name, actor, _ in route.STATES
+        if not found.get(name, "").startswith(f"AGK: {actor} acts next: ")
+    ]
     return Result("fail", message=listing(listed)) if listed else Result("ok")
 
 
@@ -1395,6 +1423,7 @@ def run_checks(
     reads = Reads(repo or origin_repo(root), api_dir)
     results.update(remote_results(reads, config, (root / REPORT_WORKFLOW).is_file(), writers))
     results["brief-finished"] = finished_result(reads)
+    results["state-labels"] = state_labels_result(root, config, reads)
     results["brief-invalid-label"] = brief_invalid_label_result(root, reads)
     results["brief-broad-touches"] = broad_touches_result(root, reads)
     results["placeholder-team-reviewers"] = placeholder_result(root / "config" / "reviewers.yaml")
