@@ -14,6 +14,9 @@ changes (`git diff` from the merge base) and `Proposed` at the head, and no stat
 stack-options ADR keeps rule 3.
 A numbered item of the latest fix list that does not end with `(rule: <file> <n>)` or `(rule: none)`
 is a warning, and a failure from the date in `rule_tags_from` of agk.toml on (brief 647, ADR-0310).
+Each row that the head adds to `docs/design/signoffs.md` (absent at every parent) counts only with
+the `Approve: design|inventory` line of an account in `spec_approvers` naming its head, and its
+commit changes only that file (SPEC-0037 rules 3 and 9, brief #459).
 Anything else passes unchecked. With `review_mode = "solo"` in agk.toml the one listed person's
 confirmation counts as its verdict and its `Approve:` lines (brief 277,
 `reviewers.confirmed_comments`). Without
@@ -32,6 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import design_signoff
 from check_adrs import status_of
 from common import (
     CheckError,
@@ -51,6 +55,7 @@ from common import (
 from metrics import counted_authors, latest_verdict_body
 from reviewers import (
     confirmed_comments,
+    design_approvals,
     person_approvals,
     solo_person,
     spec_approvers,
@@ -71,6 +76,10 @@ UNTAGGED = (
     "brief 647: {n} fix-list {item} no rule; end each numbered item with (rule: <file> <n>) "
     "or (rule: none) (setting: rule_tags_from)"
 )
+SIGNOFF_NO_LINE = (
+    "rule 9: a design sign-off row has no Approve line by an account in spec_approvers"
+)
+SIGNOFF_MORE = f"rule 9: the sign-off commit changes more than {design_signoff.SIGNOFFS}"
 NO_BASE = "rule 3a: no base ref resolves, so the pull request's files cannot be read"
 USAGE = (
     "usage: check_final_clearance.py [--comments FILE] [--reviews FILE] [--head SHA] "
@@ -159,6 +168,38 @@ def rule_tags(root: Path, body: str) -> None:
     print(f"warning: {message.removeprefix('brief 647: ')}")
 
 
+def signoff_rows_added(root: Path, commit: str) -> tuple[list[dict], list[str]]:
+    """(the sign-off rows COMMIT adds, absent at every parent; its parents)."""
+    parents = git(root, "rev-list", "--parents", "-n", "1", commit).split()[1:]
+    at_head = _rows_at(root, commit)
+    before = [{_row_key(r) for r in _rows_at(root, p)} for p in parents]
+    return [r for r in at_head if not any(_row_key(r) in keys for keys in before)], parents
+
+
+def _rows_at(root: Path, rev: str) -> list[dict]:
+    text = show(root, rev, design_signoff.SIGNOFFS)
+    return [] if text is None else design_signoff.parse_rows(text)
+
+
+def _row_key(row: dict) -> tuple[str, ...]:
+    return tuple(row[c] for c in design_signoff.COLUMNS)
+
+
+def signoff_problems(root: Path, commit: str, items: list[dict]) -> None:
+    """SPEC-0037 rules 3 and 9: an added row needs the person's line on its head, and its commit
+    changes only the sign-off record (compared with the first parent)."""
+    added, parents = signoff_rows_added(root, commit)
+    if not added:
+        return
+    given = design_approvals(items, spec_approvers(root), agent_apps(root))
+    if any((r["kind"], r["version"], r["head"]) not in given for r in added):
+        raise CheckError(SIGNOFF_NO_LINE)
+    if parents:
+        names = git(root, "diff", "-z", "--name-only", "--no-renames", parents[0], commit)
+        if set(filter(None, names.split("\0"))) - {design_signoff.SIGNOFFS}:
+            raise CheckError(SIGNOFF_MORE)
+
+
 def check(
     root: Path, comments: Path, head: str, author: str | None = None, reviews: Path | None = None
 ) -> int:
@@ -167,6 +208,7 @@ def check(
     items = confirmed_comments(items, agent_apps(root), solo_person(root))  # brief 277
     body = latest_verdict_body(items, authors)
     rule_tags(root, body)
+    signoff_problems(root, git(root, "rev-parse", head).strip(), items)
     covered = covered_fix_list(body)
     if covered is not None:
         sha, edits = covered

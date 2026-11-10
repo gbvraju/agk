@@ -10,8 +10,11 @@ project root with `/`. `version_digest(root, version)` applies it to every file 
 of `docs/design/signoffs.md` (columns kind, version, digest, head, date and comment) and returns its
 `inventory` and `design` rows in file order, refusing a row of another shape naming the rule and
 the row number, never a value. Whether a row counts (the person's `Approve:` line on the head it
-names) is `check_final_clearance.py`'s question, not this module's. Files only: no network, no
-model, nothing written.
+names) is `check_final_clearance.py`'s question, not this module's; `parse_rows(text)` reads the
+same table from a text (the file at a commit). `frozen_problems(root)` fails each `design` row whose
+folder no longer has the row's digest (rule 9: a signed-off version changed, naming the version and
+never a digest), and `signed_off(root, version)` is rule 12's evidence reading (brief #459). Files
+only: no network, no model, nothing written.
 """
 
 from __future__ import annotations
@@ -119,7 +122,12 @@ def rows(root: Path) -> list[dict]:
     path = root / SIGNOFFS
     if not path.is_file():
         return []
-    lines = path.read_text(encoding="utf-8").splitlines()
+    return parse_rows(path.read_text(encoding="utf-8"))
+
+
+def parse_rows(text: str) -> list[dict]:
+    """The rows of the sign-off table in TEXT, in file order, refusing a row of another shape."""
+    lines = text.splitlines()
     header = next(
         (i for i, ln in enumerate(lines) if ln.startswith("|") and tuple(_cells(ln)) == COLUMNS),
         None,
@@ -143,3 +151,31 @@ def rows(root: Path) -> list[dict]:
             raise CheckError(f"rule 9: {SIGNOFFS}: row {number}: {problem}")
         found.append({"row": number, **row})
     return found
+
+
+def frozen_problems(root: Path) -> list[str]:
+    """Rule 9: each `design` row's folder must still have the row's digest (screenshots aside)."""
+    out: list[str] = []
+    for row in rows(root):
+        if row["kind"] != "design":
+            continue
+        try:
+            same = version_digest(root, row["version"]) == row["digest"]
+        except CheckError:
+            same = False  # a signed-off folder that is gone has changed too
+        problem = f"rule 9: {PROTOTYPE}/{row['version']}: a signed-off version changed"
+        if not same and problem not in out:
+            out.append(problem)
+    return out
+
+
+def signed_off(root: Path, version: str) -> bool:
+    """Rule 12: a `design` row of VERSION records the digest its folder has now."""
+    try:
+        now = version_digest(root, version)
+        return any(
+            r["kind"] == "design" and r["version"] == version and r["digest"] == now
+            for r in rows(root)
+        )
+    except CheckError:
+        return False

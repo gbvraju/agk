@@ -163,7 +163,7 @@ tests = [
   "tests/kit/test_check_design.py", "tests/kit/test_check_design_prototype.py", "tests/kit/test_check_playbooks.py",
   "tests/kit/test_design_inventory_check.py", "tests/kit/test_design_standard.py",
   "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
-  "tests/kit_dev/test_design_write.py",
+  "tests/kit_dev/test_design_write.py", "tests/kit/test_design_signoff.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_final_clearance.py"
@@ -172,7 +172,7 @@ tests = [
   "tests/kit/test_draft_and_progress.py", "tests/kit/test_final_accepts.py", "tests/kit/test_final_clearance.py",
   "tests/kit/test_fix_list_tags.py", "tests/kit/test_self_clearance.py", "tests/kit/test_session.py",
   "tests/kit/test_session_rules.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
-  "tests/kit/test_status_only.py",
+  "tests/kit/test_status_only.py", "tests/kit_dev/test_final_clearance_design.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_kit_tests.py"
@@ -325,7 +325,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/design_signoff.py"
 tests = [
-  "tests/kit/test_check_design_prototype.py", "tests/kit/test_design_signoff_digest.py",
+  "tests/kit/test_check_design_prototype.py", "tests/kit/test_design_signoff.py",
+  "tests/kit/test_design_signoff_digest.py", "tests/kit_dev/test_final_clearance_design.py",
   "tests/kit_dev/test_design_inventory.py", "tests/kit_dev/test_design_prototype.py",
   "tests/kit_dev/test_design_write.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
   "tests/kit_dev/test_reference_commands.py",
@@ -639,7 +640,7 @@ tests = [
   "tests/kit/test_forge.py", "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_personal_state.py", "tests/kit/test_reviewers.py",
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
   "tests/kit/test_verdict_authors.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
-  "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
+  "tests/kit_dev/test_final_clearance_design.py", "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
 ]
 [[testing.map]]
 code = "scripts/agk/route.py"

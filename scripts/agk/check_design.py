@@ -1,6 +1,6 @@
 """The design check (SPEC-0029 rule 7; SPEC-0037 rules 2, 3). Installed: `kit/manifest.json` lists
-it in `verbatim`, with the modules it imports, `design_standard.py`, `design_inventory.py` and
-`design_prototype_check.py`.
+it in `verbatim`, with the modules it imports, `design_standard.py`, `design_inventory.py`,
+`design_prototype_check.py` and `design_signoff.py`.
 
 Reads `docs/design/theme.md` and the folders of `docs/design/mockups/` and fails, naming the rule
 and the path and never a value, on: a script or an event handler in a mockup, an external request
@@ -17,9 +17,12 @@ basics, and the reflow record, which reads `design: reflow not run (<version>)` 
 or incomplete, information and never `ok`. A theme with the line
 `Standard: agk design standard <n>` is on the kit's standard (SPEC-0037 rule 2): it may set only its
 theme block and its layout block, and its contrast is computed on the standard's colour roles after
-its overrides, in light and dark; a theme without the line is checked as before. Two things are
-information and not failures: a theme whose evidence folder has no approval line, or that points to
-a prototype version, reads "not approved yet", and a placeholder brand is reported as at risk.
+its overrides, in light and dark; a theme without the line is checked as before. A version
+with a `design` row in `docs/design/signoffs.md` is frozen (SPEC-0037 rule 9, `design_signoff.py`):
+a change in its folder outside `screenshots/` fails naming the version. Two things are information
+and not failures: a theme whose evidence folder has no approval line, or whose prototype version has
+no `design` row of its digest (rule 12), reads "not approved yet", and a placeholder brand is
+reported as at risk.
 Files only: no network, no model, nothing written.
 """
 
@@ -33,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import design_inventory
 import design_prototype_check
+import design_signoff
 import design_standard
 from common import repo_root, run
 
@@ -253,6 +257,8 @@ def theme_problems(root: Path, text: str) -> tuple[list[str], list[tuple[str, st
     elif evidence is not None and evidence.group(1):
         readme = folder / "README.md"
         approved = readme.is_file() and bool(APPROVAL.search(readme.read_text(encoding="utf-8")))
+    elif evidence is not None:
+        approved = design_signoff.signed_off(root, evidence.group(2))  # rule 12
     return out, pairs, placeholder, approved
 
 
@@ -261,7 +267,8 @@ def cmd_check(root: Path) -> int:
     folders = sorted(p for p in (root / MOCKUPS).glob("*") if p.is_dir())
     inventory = (root / INVENTORY).is_file()
     versions = design_prototype_check.versions(root)
-    if not theme.is_file() and not folders and not inventory and not versions:
+    signoffs = (root / design_signoff.SIGNOFFS).is_file()
+    if not theme.is_file() and not folders and not inventory and not versions and not signoffs:
         print("ok design (no design record)")
         return 0
     problems: list[str] = []
@@ -284,6 +291,7 @@ def cmd_check(root: Path) -> int:
         problems += design_prototype_check.version_problems(root, version)
         if design_prototype_check.reflow_not_run(root, version):
             print(f"design: reflow not run ({version})")
+    problems += design_signoff.frozen_problems(root)  # rule 9: a signed-off version is frozen
     for line in notes if not problems else []:
         print(line)
     for problem in problems:
