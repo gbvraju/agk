@@ -40,6 +40,7 @@ def world(proj, stub):
             "docs/requirements.md": "# Requirements\n\n### REQ-001\n\n- Status: Approved\n",
             "constitution/principles.md": "# Principles\n\n1. One.\n",
             "CLAUDE.md": "# Rules\n",
+            ".gitignore": "stub/\nbin/\n",  # the gh stub lives beside the checkout
         },
         "base",
     )
