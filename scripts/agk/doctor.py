@@ -356,6 +356,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         'turn on "Require branches to be up to date before merging" in the ruleset, or set '
         "merge_queue in the flow table of agk.toml (brief #853, ADR-0387)",
     ),
+    "merge-queue-setting": (
+        "warn",
+        "merge queue: ",
+        "merge queue: ",
+        "set merge_queue in the flow table of agk.toml to true or false (brief #972, ADR-0417; "
+        "a change needs an ADR in the same pull request)",
+    ),
     "auto-merge-setting": (
         "error",
         "auto-merge: ",
@@ -994,6 +1001,16 @@ def auto_merge_result(config: dict) -> Result:
     return Result("ok", message="on, method squash" if state == "on" else "off")
 
 
+def merge_queue_result(config: dict) -> Result:
+    """`merge queue: on` or `merge queue: off` (brief #972 answer 5, amendment 158 item 7), from
+    the setting alone, never from the ruleset; a malformed value fails naming the setting."""
+    try:
+        state = merge_cleared.merge_queue_setting(config)
+    except CheckError as err:
+        return Result("fail", message=str(err))
+    return Result("ok", message="on" if state else "off")
+
+
 def slot_minutes(number: int) -> list[int]:
     """The four minutes of the hour at which a slot starts: a quarter hour apart, one offset per
     slot, none on the conductor's own (:03, :18, :33, :48)."""
@@ -1483,6 +1500,7 @@ def run_checks(
     results.update(engine_results(root, kit_root, config))
     results["actions-minutes"] = minutes_result(root, reads)
     results["auto-merge-setting"] = auto_merge_result(config)
+    results["merge-queue-setting"] = merge_queue_result(config)
     results["always-full-infra"] = always_full_result(root)
     results["slot-schedule"] = slot_schedule_result(root, reads)
     results["design-ui-paths"] = design_ui_result(root, config)

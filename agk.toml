@@ -54,6 +54,10 @@ assign = "conductor"
 # owner's choice, ADR-0266; turning it off is again the owner's change, by an ADR in the same pull request.
 auto_merge = true
 auto_merge_method = "squash"
+# merge_queue (SPEC-0039 rule 1, amendment 158, ADR-0416): with true, GitHub mode and auto_merge on, the merger adds a cleared
+# head to GitHub's merge queue instead of merging it. GitHub offers the queue only to organization-owned repositories (verify),
+# so this repository keeps it off; the guide gives the switch-over order. A change needs an ADR.
+merge_queue = false  # brief #972, ADR-0417
 # The builder capacity (SPEC-0034 rule 1): nine builder sessions at once, by the owner's choice on 2026-11-08 (plan #661, ADR-0341).
 max_builders = 9
 # How a builder starts (SPEC-0034, brief #776, ADR-0402): "assign" means no session starts one; each slot runs from four staggered

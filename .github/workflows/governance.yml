@@ -2,6 +2,10 @@
 # required status check and does not change. Each check step runs unless the run is cancelled, so every failure shows
 # on its own step; the job still fails if any step fails. From `PR body file` on, every step runs unless the run is
 # cancelled (brief #261): a failed body step hides no lint, test or scan, and an edit cures only a run that reached them. The same checks run locally as `make -f agk.mk agk-governance`.
+# The merge queue (brief #972, ADR-0417, amendment 158): on `merge_group` the job runs on the queue's commit, with the tests selected
+# for the batch against the queue's base sha (`AGK_QUEUE_BASE`, set by its own step, never `AGK_BASE`, so the checks that read the
+# pull request body behave as on a push) plus `[testing] pre_merge_tests`; the pull-request body checks run on a pull request only,
+# where they already passed on the head. The job and check names do not change, so the required checks keep their names.
 name: governance
 
 # A run for an edited description is named `governance edited`, every other one `governance full`: the first step of the partial run reads
@@ -12,6 +16,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
   push:
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
@@ -37,7 +43,7 @@ concurrency:
 
 jobs:
   governance:
-    if: ${{ github.event_name == 'pull_request' || github.ref_name == github.event.repository.default_branch }}
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' || github.ref_name == github.event.repository.default_branch }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
@@ -59,6 +65,13 @@ jobs:
           if [ -n "$base" ]; then
             echo "AGK_BASE=$base" >> "$GITHUB_ENV"
           fi
+      - name: Base of the merge queue
+        if: ${{ github.event_name == 'merge_group' }}
+        env:
+          QUEUE_BASE: ${{ github.event.merge_group.base_sha }}
+        run: |
+          # Brief #972: the queue's commit is the batch on top of this base; only the test selection and the secret scan read it.
+          echo "AGK_QUEUE_BASE=$QUEUE_BASE" >> "$GITHUB_ENV"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5.6.0
         with:
           python-version: "3.12"
@@ -283,7 +296,17 @@ jobs:
           # With `[testing] pr_tests = "selected"` a pull request of the kit runs only its selected tests, by the plan of
           # `Project tests` against AGK_BASE (set above); a push and a release run the full suite (brief #749, ADR-0348).
           EVENT: ${{ github.event_name }}
-        run: make -f agk.mk agk-test
+        run: |
+          # On `merge_group` (brief #972) the batch's selection against the queue's base, as for a pull request.
+          if [ -n "${AGK_QUEUE_BASE:-}" ]; then export AGK_BASE="$AGK_QUEUE_BASE" EVENT=pull_request; fi
+          make -f agk.mk agk-test
+      - name: Pre-merge tests
+        if: ${{ !cancelled() && github.event_name == 'merge_group' && steps.paused.outputs.paused != 'true' }}
+        run: |
+          # Brief #972: the queue's commit also runs `[testing] pre_merge_tests`, as merge_cleared.py runs them on the would-be merge.
+          files="$(python3 -c 'import tomllib; t = tomllib.load(open("agk.toml", "rb")).get("testing", {}); print(" ".join(t.get("pre_merge_tests") or []))')"
+          if [ -z "$files" ]; then echo "pre-merge tests: none"; exit 0; fi
+          AGK_KIT_TESTS=1 python -m pytest -q $files
       # The kit repository runs its own suite as "Tests of the checks" and its `project_tests` is that same suite
       # (the proof job runs it); there the step is skipped. In a project kit/agk-kit.mk is absent and the step runs.
       - name: Restore the secret scanner
@@ -304,7 +327,10 @@ jobs:
           # With `[testing] pr_tests = "selected"` a pull request runs only the selected tests; a push and a release pull
           # request run the full suite (brief #453, ADR-0242). Without the setting the step runs the full suite as before.
           EVENT: ${{ github.event_name }}
-        run: make -f agk.mk agk-project-test
+        run: |
+          # On `merge_group` (brief #972) the batch's selection against the queue's base, as for a pull request.
+          if [ -n "${AGK_QUEUE_BASE:-}" ]; then export AGK_BASE="$AGK_QUEUE_BASE" EVENT=pull_request; fi
+          make -f agk.mk agk-project-test
       - name: Secret scan
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         env:
@@ -348,6 +374,8 @@ jobs:
           elif [ "$EVENT" = push ] && [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != 0000000000000000000000000000000000000000 ] \
             && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
             range="$PUSH_BEFORE..$HEAD_SHA"
+          elif [ "$EVENT" = merge_group ] && [ -n "${AGK_QUEUE_BASE:-}" ]; then
+            range="$AGK_QUEUE_BASE..$HEAD_SHA"
           else
             range="$HEAD_SHA"
           fi

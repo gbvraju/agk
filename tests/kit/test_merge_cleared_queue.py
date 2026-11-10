@@ -187,7 +187,7 @@ def test_every_hold_of_today_holds_before_the_queue(tmp_path, name, saved, expec
     proc, made = queued_run(tmp_path, **saved)
     assert expected in proc.stdout, proc.stdout + proc.stderr
     assert proc.returncode == 3
-    assert graphql(made) == [] and merges(made) == []
+    assert enqueues(made) == [] and merges(made) == []
 
 
 # --- (c) with the queue off, or in local mode, it merges as today ---
@@ -228,7 +228,12 @@ def test_the_merger_event_no_longer_stops_at_the_queue_setting(tmp_path):
     bin_dir, _ = queue_gh(tmp_path, comments=[cleared()])
     event = tmp_path / "event.json"
     event.write_text(
-        json.dumps({"issue": {"number": 7, "pull_request": {}}, "comment": cleared()}),
+        json.dumps(
+            {
+                "issue": {"number": 7, "pull_request": {"url": "https://example.com/7"}},
+                "comment": cleared(),
+            }
+        ),
         encoding="utf-8",
     )
     proc = run(root, bin_dir, "--event", str(event), "--event-name", "issue_comment")
@@ -357,12 +362,13 @@ def test_the_merger_job_has_a_timeout():
     assert "--queue-removed" in text
 
 
-def test_no_workflow_or_guide_names_agk_verdict_a_required_check_of_the_queue():
+def test_the_guide_names_governance_and_proof_the_queue_checks_never_agk_verdict():
     """REQ-046: amendment 158 items 3 and 9."""
     guide = (ROOT / "docs" / "guides" / "getting-started.md").read_text(encoding="utf-8")
-    section = guide.split("## The merge queue", 1)[1]
-    assert "`governance` and `proof`" in section
-    assert "agk/verdict" not in section.split("required", 1)[1].split("\n\n", 1)[0]
+    section = guide.split("## The merge queue", 1)[1].split("\n## ", 1)[0]
+    named = section.split("the required checks are", 1)[1].split(".", 1)[0]
+    assert "`governance` and `proof`" in named and "agk/verdict" not in named
+    assert "Do not add `agk/verdict`" in section
 
 
 # --- answers 5 and 6: the setting, the doctor line and the guide ---
@@ -404,7 +410,7 @@ def test_the_guide_gives_the_ruleset_settings_and_the_switch_over_order():
     for words in (
         "Require merge queue",
         "Squash",
-        "Maximum pull requests to build: 5",
+        "Maximum group size: 5",
         "Require branches to be up to date before merging",
         "organization",
         "merge_queue = true",

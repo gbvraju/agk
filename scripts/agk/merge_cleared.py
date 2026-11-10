@@ -125,7 +125,26 @@ reading of the merge: `success` when the head is cleared, no hold of rule 5 stan
 the re-prove state; else `pending` with the reason. It prints `merge-cleared #<n> <sha12>: status
 <state>` and sets nothing in local mode or on a `--sha` that is not the head. `--status --event FILE
 --event-name NAME` is the job's form, for a comment; the merger also starts on that status with
-`success`, and only the guarded command merges. `[flow] merge_queue = true` holds the merge.
+`success`, and only the guarded command merges.
+
+Brief #972 (ADR-0417, amendment 158 of SPEC-0039 rule 2a) changes what `[flow] merge_queue = true`
+does in GitHub mode (not local mode, not personal mode): every hold above still runs first, in the
+same order, the check before the merge included (`Q-S0039-18`); then, instead of merging, the
+command adds the head to GitHub's merge queue, pinned to the cleared sha:
+
+    merge-cleared #<n> <sha12>: queued                            exit 0
+    merge-cleared #<n> <sha12>: already queued                    exit 0
+    merge-cleared #<n> <sha12>: refused: head moved (rule 2a: ...)  exit 3
+
+The queue is offered only through GraphQL (`enqueuePullRequest` with `expectedHeadOid`, verify), so
+that one read and one write are made only inside GitHub Actions (`GITHUB_ACTIONS=true`, the merger
+job, with `AGK_MERGE_TOKEN`); anywhere else the command is refused with a line naming rule 2a before
+any GraphQL call, and a session stays REST-only (`Q-S0039-12`, `Q-S0039-19`). A head already in the
+queue is read before the check before the merge, so a sweep never re-runs it for a queued head.
+`--queue-removed --event FILE` is the merger's job on a failed `governance` or `proof` run of the
+`merge_group` event: one comment `Removed from the merge queue: <check> failed on <queue sha12>` on
+the pull request the queue's branch names (`gh-readonly-queue/<base>/pr-<n>-<sha>`, verify), never
+twice for one queue sha (rule 2c).
 """
 
 from __future__ import annotations
@@ -231,7 +250,8 @@ CONFLICT = ("dirty", "unknown")
 HTTP = re.compile(r"HTTP (\d{3})")
 RULESET = "rule violation"  # GitHub's words for a merge its ruleset refuses (brief #765, verify)
 JOB_LINE = re.compile(
-    r"merge-cleared #([1-9][0-9]{0,9}) ([0-9a-f]{12}): (merged|held|refused)(?:\s|:)"
+    r"merge-cleared #([1-9][0-9]{0,9}) ([0-9a-f]{12}): "
+    r"(merged|queued|already queued|held|refused)(?:\s|:|$)"
 )
 CREATED_STARTS = ("Verdict:", "Approve:")  # first lines of a new comment that may clear a head
 EDITED_STARTS = (*CREATED_STARTS, "Final:")  # and of an edited one (brief #836 answer 1)
@@ -255,7 +275,23 @@ STATUS_CONTEXT = "agk/verdict"  # the commit status of a verdict (brief #853)
 STATUS_LIMIT = 140  # characters GitHub takes in a status description (verify)
 OWNER_MERGE = "owner merge"
 QUEUE_SETTING = "merge_queue"
-QUEUE_HOLD = f"merge queue (setting flow.{QUEUE_SETTING})"
+QUEUE_OUTSIDE = (
+    "the merge queue is joined only by the merger job on GitHub Actions "
+    "(rule 2a; a session stays REST-only)"
+)
+QUEUE_MOVED = "head moved (rule 2a: GitHub refused the pinned sha)"
+QUEUE_FAILED = "GitHub did not add the head to the merge queue (rule 2a)"
+QUEUE_BRANCH = re.compile(r"gh-readonly-queue/.+/pr-([1-9][0-9]{0,9})-[0-9a-f]{40}")
+QUEUE_REMOVED = "Removed from the merge queue: {check} failed on {sha12}"
+QUEUE_READ = (
+    "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, "
+    "name: $name) { pullRequest(number: $number) { id headRefOid isInMergeQueue } } }"
+)
+QUEUE_WRITE = (
+    "mutation($pullRequestId: ID!, $expectedHeadOid: GitObjectID!) { enqueuePullRequest(input: "
+    "{pullRequestId: $pullRequestId, expectedHeadOid: $expectedHeadOid}) "
+    "{ mergeQueueEntry { state position } } }"
+)
 
 
 class Refused(CheckError):
@@ -1621,8 +1657,7 @@ def event_main(path: str, name: str, root: Path) -> int:
             raise Nothing(f"not a verdict, an approval or a green run of a head (event {name})")
         _, data = default_ref(root)
         github_mode(data)
-        if merge_queue_setting(data):
-            raise Nothing(QUEUE_HOLD)
+        merge_queue_setting(data)  # a bad setting is refused; the command queues or merges (#972)
         repo = repo_of(root)
         number, sha = target
         if number == 0 and sha is not None:
@@ -1798,6 +1833,38 @@ def post_once(repo: str, number: int, body: str) -> None:
     print("merger: commented" if code == 0 else "merger: the comment cannot be posted")
 
 
+def queue_removed(payload: dict) -> tuple[int, str] | None:
+    """Brief #972 answer 4: (the pull request, its one line) for a failed `governance` or `proof`
+    run of the `merge_group` event on a queue branch, else None."""
+    run = payload.get("workflow_run")
+    if not isinstance(run, dict) or run.get("event") != "merge_group":
+        return None
+    if run.get("conclusion") != "failure" or run.get("name") not in ("governance", "proof"):
+        return None
+    found = QUEUE_BRANCH.fullmatch(str(run.get("head_branch") or ""))
+    sha = str(run.get("head_sha") or "")
+    if not found or not SHA.fullmatch(sha):
+        return None
+    return int(found.group(1)), QUEUE_REMOVED.format(check=run["name"], sha12=sha[:12])
+
+
+def queue_removed_main(path: str, root: Path) -> int:
+    """`--queue-removed --event FILE`: one removal line, never twice for one queue sha; exit 0."""
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        payload = None
+    target = queue_removed(payload) if isinstance(payload, dict) else None
+    if target is None:
+        print("merger: nothing to do: not a failed merge queue run", file=sys.stderr)
+        return EXIT_CLEARED
+    try:
+        post_once(repo_of(root), *target)
+    except (Refused, Unreadable) as err:
+        print(f"merger: nothing posted: {err}")
+    return EXIT_CLEARED
+
+
 def no_secret_main(number: int, root: Path) -> int:
     """`--report --pr N --no-secret`: the job has no merge secret, so one line and nothing else."""
     try:
@@ -1820,6 +1887,9 @@ def report_main(number: int, sha: str, line: str, root: Path) -> int:
         repo = repo_of(root)
         if found.group(3) == "merged":
             print("merger: the merge's own push starts governance")
+            return EXIT_CLEARED
+        if found.group(3) in ("queued", "already queued"):  # the queue's run is the gate (#972)
+            print("merger: in the merge queue; nothing posted")
             return EXIT_CLEARED
         if line.endswith(f": held: {PENDING}"):  # the other required run ends and tries again
             print("merger: checks pending; nothing posted")
@@ -1974,6 +2044,8 @@ def job_args(argv: list[str]) -> tuple[str, list[str]] | None:
             return "status", [argv[2], argv[4]]
     if len(argv) == 5 and argv[:2] == ["--status", "--event"] and argv[3] == "--event-name":
         return "status-event", [argv[2], argv[4]]
+    if len(argv) == 3 and argv[:2] == ["--queue-removed", "--event"]:
+        return "queue-removed", [argv[2]]
     if len(argv) == 4 and argv[0] == "--event" and argv[2] == "--event-name":
         return "event", [argv[1], argv[3]]
     if len(argv) == 4 and argv[:2] == ["--report", "--pr"] and argv[3] == "--no-secret":
@@ -2056,20 +2128,82 @@ def holds(
     return pull, verdict, accepted, record, fixing
 
 
+def queue_mode(repo: str, rules: Rules) -> bool:
+    """Brief #972: True when the head joins the merge queue instead of being merged: `[flow]
+    merge_queue = true`, GitHub mode (`execution` not `local`, `forge` not `files`) and no open
+    local-mode record issue (rule 4); one more read of the open issues, only with the setting on."""
+    data = rules.data
+    if not rules.queue or data.get("execution") == "local" or data.get("forge") == "files":
+        return False
+    issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
+    return not titled(issues, RECORD_TITLE)
+
+
+def graphql(fields: list[str]) -> tuple[int, dict | None, str]:
+    """One GraphQL call of the merger job (brief #972, `Q-S0039-19`): (exit code, the answer's
+    `data` or None, the error text); an answer that carries `errors` counts as a failure."""
+    proc = gh_api(["graphql", *fields], merge_env())
+    try:
+        answer = json.loads(proc.stdout) if proc.returncode == 0 else None
+    except ValueError:
+        answer = None
+    if isinstance(answer, dict) and answer.get("errors"):
+        text = " ".join(str(e.get("message", "")) for e in answer["errors"] if isinstance(e, dict))
+        return 1, None, text
+    data = answer.get("data") if isinstance(answer, dict) else None
+    return proc.returncode, data if isinstance(data, dict) else None, proc.stderr
+
+
+def queue_state(repo: str, number: int, sha: str) -> tuple[str, bool]:
+    """The pull request's GraphQL id and whether it is in the merge queue; a head that is no longer
+    SHA is refused as moved, an unreadable answer is Unreadable."""
+    owner, _, name = repo.partition("/")
+    fields = ["-f", f"query={QUEUE_READ}", "-f", f"owner={owner}", "-f", f"name={name}"]
+    _, data, _ = graphql([*fields, "-F", f"number={number}"])
+    pull = ((data or {}).get("repository") or {}).get("pullRequest")
+    if not isinstance(pull, dict) or not isinstance(pull.get("id"), str):
+        raise Unreadable("the merge queue state of the pull request")
+    if pull.get("headRefOid") != sha:
+        raise Refused(QUEUE_MOVED, EXIT_HELD)
+    return pull["id"], pull.get("isInMergeQueue") is True
+
+
+def enqueue(node: str, sha: str) -> None:
+    """The one write of rule 2a: add the pull request NODE to the merge queue, pinned to SHA."""
+    fields = ["-f", f"query={QUEUE_WRITE}", "-f", f"pullRequestId={node}"]
+    code, data, err = graphql([*fields, "-f", f"expectedHeadOid={sha}"])
+    entry = ((data or {}).get("enqueuePullRequest") or {}).get("mergeQueueEntry")
+    if code == 0 and isinstance(entry, dict):
+        return
+    words = err.lower()
+    if "head" in words and ("oid" in words or "moved" in words or "sha" in words):
+        raise Refused(QUEUE_MOVED, EXIT_HELD)
+    raise Refused(QUEUE_FAILED)
+
+
 def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
     rules = ruled(root)
-    if rules.queue:
-        raise Held(QUEUE_HOLD)
     data = rules.data
     repo = repo_of(root)
     with merge_lock(root):
         pull, verdict, accepted, record, fixing = holds(root, repo, number, sha, rules)
+        queue = queue_mode(repo, rules)
+        if queue and os.environ.get("GITHUB_ACTIONS") != "true":
+            raise Refused(QUEUE_OUTSIDE)
+        node = ""
+        if queue:
+            node, queued = queue_state(repo, number, sha)
+            if queued:
+                return "already queued", "", EXIT_CLEARED
         text = str(pull.get("body") or "")  # the body read above, for governance (brief #576)
         branch = str(data.get("default_branch", "main"))
         wait = after_merge_seconds(data)
         step = merge_check(root, branch, number, sha, wait, text, repo, rules.pre, rules.behind)
         if step is not None:
             raise Held(f"{FAILS} ({step})")
+        if queue:
+            enqueue(node, sha)
+            return "queued", "", EXIT_CLEARED
         merged = merge_pull(repo, number, sha, accepted)
         recorded, closed = after_merge(
             root,
@@ -2130,6 +2264,8 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
             return code
         if job[0] == "status-event":
             return status_event_main(job[1][0], job[1][1], here)
+        if job[0] == "queue-removed":
+            return queue_removed_main(job[1][0], here)
         if job[0] == "no-secret":
             return no_secret_main(int(job[1][0]), here)
         return report_main(int(job[1][0]), job[1][1], job[1][2], here)
