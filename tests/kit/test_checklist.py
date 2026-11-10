@@ -301,7 +301,9 @@ def test_a_weekly_line_with_no_runs_falls_back_to_the_window(tmp_path, capsys):
 
 def test_a_selected_median_slower_than_mains_full_median_reads_partly(tmp_path, capsys):
     """REQ-054: brief #981 answer 3 (d): both medians are printed."""
-    found = lines_of(capsys, project(tmp_path, saved(**WEEKLY | {"pr_tests_median": MEDIAN_SLOW})), tmp_path)
+    found = lines_of(
+        capsys, project(tmp_path, saved(**WEEKLY | {"pr_tests_median": MEDIAN_SLOW})), tmp_path
+    )
     assert found[3][0] == "partly"
     assert "selected median 8.0 minutes; full suite median on main 5.0 minutes" in found[3][1]
 
@@ -653,7 +655,11 @@ def api_dir(tmp_path: Path, weekly: str = WEEKLY_BODY, more: dict | None = None)
         "issues-checklist-metrics": [{"body": weekly}],
         "checklist-open": [
             {"number": 2, "title": "Local mode since 2026-03-01", "labels": []},
-            {"number": CONDUCTOR_ISSUE, "title": "Conductor", "labels": [{"name": "agk-conductor"}]},
+            {
+                "number": CONDUCTOR_ISSUE,
+                "title": "Conductor",
+                "labels": [{"name": "agk-conductor"}],
+            },
         ],
     }
     for name, body in {**responses, **(more or {})}.items():

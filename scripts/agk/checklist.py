@@ -1,4 +1,4 @@
-"""The nine-point operations checklist (brief #799, REQ-054, ADR-0374).
+"""The nine-point operations checklist (brief #799, REQ-054, ADR-0374; brief #981, ADR-0420).
 
     python3 scripts/agk/checklist.py [--root DIR] [--days N] [--saved FILE]
 
@@ -52,11 +52,13 @@ STEP = timedelta(minutes=15)
 HOLDS_FILE = "docs/runs/holds.jsonl"  # metrics.HOLDS_FILE
 TAKE = re.compile(r"taken(?: over)?: (\S+) \d{4}-\d{2}-\d{2}(?: build \([\w.-]+\))?( retakes)?.*")
 RELEASED = re.compile(r"released: (\S+)")
-STARTED = re.compile(r"^Builders started \((\d+)\)", re.M)
+ASSIGN = re.compile(r"Assign: (\S+) #(\d+)\b")  # every brief form of session.py's ASSIGN
 REFUSED = re.compile(r"\bRefused \((\d+)\)")
 PR_TESTS = re.compile(
     r"pr tests: (\d+) runs; selected (\d+) of (\d+) \([^)]*\); test step ([\d.]+) minutes"
 )
+SELECTED_MEDIAN = re.compile(r"pr tests median: selected ([\d.]+) minutes")
+FULL_MEDIAN = re.compile(r"full suite: median (\d+)s")
 USAGE_FIGURE = re.compile(r"\bUsage: \d")
 DEPENDS = re.compile(r"^Depends-on:(.*)$", re.M)
 FAILED = ("failure", "timed_out", "startup_failure")
@@ -137,7 +139,13 @@ class View:
         self.stall = timedelta(hours=hours if isinstance(hours, int) else DEFAULT_STALL_HOURS)
         self.runs = saved.get("runs") if isinstance(saved.get("runs"), list) else None
         self.briefs = saved.get("briefs") if isinstance(saved.get("briefs"), list) else None
-        self.pr_tests = saved.get("pr_tests")
+        self.weekly = {k: saved.get(k) for k in ("pr_tests", "pr_tests_median", "full_suite")}
+        window = saved.get("window_tests")
+        self.window_tests = window if isinstance(window, dict) else None
+        authors = saved.get("verdict_authors")
+        self.authors = set(authors) if isinstance(authors, list) else None
+        issues = saved.get("conductor_issues")
+        self.conductor_issues = set(issues) if isinstance(issues, list) else None
         self.local = saved.get("local_mode") is True
         maximum = self.flow.get("max_builders", DEFAULT_MAX_BUILDERS)
         usable = isinstance(maximum, int) and not isinstance(maximum, bool) and maximum >= 1
@@ -229,19 +237,40 @@ def capacity(view: View) -> Point:
     return "partly", measure
 
 
+def assigns(view: View) -> list[tuple[datetime, str, int]]:
+    """Brief #981 answer 1: each `Assign: <slot> #<brief>` on the conductor issue by a listed
+    verdict author, in time order: (when, slot, brief)."""
+    found = []
+    for comment in view.comments or []:
+        match = ASSIGN.match(first_line(comment))
+        if (
+            match
+            and comment.get("author") in (view.authors or ())
+            and issue_of(comment) in (view.conductor_issues or ())
+        ):
+            found.append((stamp(comment["created_at"]), match[1], int(match[2])))
+    return sorted(found, key=lambda item: item[0])
+
+
 def conductor_starts(view: View) -> Point:
     if view.comments is None:
         return UNKNOWN, "the comments were not saved"
-    counts = [int(m[1]) for c in view.reports() for m in [STARTED.search(c["body"])] if m]
     takes = [t for t in view.takes() if view.inside(t[1].isoformat())]
     if not takes:
         return UNKNOWN, "no builder was started in the window"
-    if not counts:
-        return UNKNOWN, "no conductor report gave a start count"
-    started, stalls = min(sum(counts), len(takes)), sum(1 for t in takes if t[3])
+    if view.authors is None or view.conductor_issues is None:
+        return UNKNOWN, "the verdict authors or the conductor issue were not saved"
+    open_assigns = assigns(view)
+    started = 0
+    for number, when, session, _ in takes:
+        found = next((a for a in open_assigns if a[0] <= when and a[1:] == (session, number)), None)
+        if found is not None:
+            open_assigns.remove(found)  # one Assign starts one take
+            started += 1
+    stalls = sum(1 for t in takes if t[3])
     percent = round(100 * started / len(takes))
     measure = (
-        f"conductor started {started} of {len(takes)} builder starts ({percent}%); "
+        f"conductor {started} of {len(takes)} ({percent}%); by hand {len(takes) - started}; "
         f"stalls replaced {stalls}"
     )
     if started == 0:
@@ -249,19 +278,47 @@ def conductor_starts(view: View) -> Point:
     return "yes" if started / len(takes) >= view.limits["conductor_share"] else "partly", measure
 
 
+def test_figures(view: View) -> tuple[dict, str] | None:
+    """The weekly lines when they count a run, else the window's (brief #981 answer 2)."""
+    weekly = view.weekly.get("pr_tests")
+    match = PR_TESTS.search(weekly) if isinstance(weekly, str) else None
+    if match and int(match[1]) > 0:
+        return view.weekly, "weekly line"
+    if view.window_tests is not None:
+        return view.window_tests, "window"
+    return None
+
+
+def minutes_of(pattern: re.Pattern, line: Any, scale: float = 1) -> float | None:
+    match = pattern.search(line) if isinstance(line, str) else None
+    return float(match[1]) / scale if match else None
+
+
 def tests_point(view: View) -> Point:
     if view.local:
         return UNKNOWN, "local mode: no Actions runs to read"
-    match = PR_TESTS.search(view.pr_tests) if isinstance(view.pr_tests, str) else None
+    found, source = test_figures(view) or (view.weekly, "weekly line")
+    line = found.get("pr_tests")
+    match = PR_TESTS.search(line) if isinstance(line, str) else None
     if match is None:
-        return UNKNOWN, "no weekly metrics line was saved"
+        return UNKNOWN, "no weekly metrics line or window figures were saved"
     runs, selected = int(match[1]), int(match[2])
     if runs == 0:
-        return UNKNOWN, "no pull request runs in the weekly line"
-    measure = f"selected {selected} of {runs} pull request runs; test step {match[4]} minutes"
+        return UNKNOWN, f"no pull request runs in the {source}"
+    pr = minutes_of(SELECTED_MEDIAN, found.get("pr_tests_median"))
+    full = minutes_of(FULL_MEDIAN, found.get("full_suite"), 60)
+
+    def shown(value: float | None) -> str:
+        return UNKNOWN if value is None else f"{value:.1f} minutes"
+
+    measure = (
+        f"selected {selected} of {runs} pull request runs; test step {match[4]} minutes; "
+        f"selected median {shown(pr)}; full suite median on main {shown(full)} ({source})"
+    )
     if selected == 0:
         return "no", measure
-    return "yes" if selected / runs >= view.limits["selected_share"] else "partly", measure
+    fast = pr is not None and full is not None and pr <= full
+    return "yes" if selected / runs >= view.limits["selected_share"] and fast else "partly", measure
 
 
 def parallel(view: View) -> Point:
@@ -300,11 +357,7 @@ def late_cleared(pull: dict, end: datetime) -> bool:
         return False
     head = str(pull.get("head") or "")
     verdicts = pull.get("verdicts") if isinstance(pull.get("verdicts"), list) else []
-    times = [
-        stamp(v.get("at"))
-        for v in verdicts
-        if head.startswith(str(v.get("sha") or "-"))
-    ]
+    times = [stamp(v.get("at")) for v in verdicts if head.startswith(str(v.get("sha") or "-"))]
     times = [t for t in times if t is not None]
     return bool(times) and (end - max(times)) > timedelta(minutes=LATE_MINUTES)
 
