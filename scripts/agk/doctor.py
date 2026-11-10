@@ -1617,21 +1617,6 @@ def record_lines(root: Path, path: Path) -> list[str]:
     return list(dict.fromkeys(lines + timeout_lines(root, path)))
 
 
-def kept_dirs(rel_here: str, dirnames: list[str]) -> list[str]:
-    """The folders `adopt.detect_tests` walks into: no dot folder, none of `adopt.SKIP_DIRS` and
-    none of `adopt.KIT_DIRS` (its constants, not a copy)."""
-    return [
-        d
-        for d in dirnames
-        if not d.startswith(".")
-        and d not in adopt.SKIP_DIRS
-        and not any(
-            f"{rel_here}/{d}".lstrip("/") == k or f"{rel_here}/{d}".lstrip("/").startswith(k + "/")
-            for k in adopt.KIT_DIRS
-        )
-    ]
-
-
 def configured_test_found(root: Path, dirs: list[str], patterns: list[str]) -> bool:
     """Whether any file under a configured test folder matches a configured file-name pattern."""
     for folder in dirs:
@@ -1652,7 +1637,7 @@ def frontend_count(root: Path) -> int:
     count = 0
     for here, dirnames, filenames in os.walk(root):
         rel_here = Path(here).relative_to(root).as_posix()
-        dirnames[:] = kept_dirs("" if rel_here == "." else rel_here, dirnames)
+        dirnames[:] = adopt.walked_dirs("" if rel_here == "." else rel_here, dirnames)
         count += sum(
             1 for n in filenames if any(fnmatch.fnmatch(n, p) for p in adopt.FRONTEND_PATTERNS)
         )

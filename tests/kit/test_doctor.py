@@ -960,5 +960,11 @@ def test_rule10_both_walks_skip_the_same_folders(tmp_path, monkeypatch):
     assert module.frontend_count(root) == 1
     assert not hasattr(module, "kept_dirs")
     monkeypatch.setattr(adopt, "walked_dirs", lambda _rel_here, dirnames: list(dirnames))
-    assert adopt.detect_tests(root)[0] == [".hidden", "node_modules/pkg", "scripts/agk", "src/app/__tests__", "tests/kit"]
+    assert adopt.detect_tests(root)[0] == [
+        ".hidden",
+        "node_modules/pkg",
+        "scripts/agk",
+        "src/app/__tests__",
+        "tests/kit",
+    ]
     assert module.frontend_count(root) == 1 + len(skipped)
