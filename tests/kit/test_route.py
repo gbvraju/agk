@@ -540,3 +540,99 @@ def test_ac2_the_step_skips_cleanly_when_route_py_is_not_on_the_default_branch()
     assert "if [ -f scripts/agk/route.py ]; then" in step
     assert "python3 scripts/agk/route.py" in step.split("then", 1)[1].split("else", 1)[0]
     assert "nothing to route" in step.split("else", 1)[1]
+
+
+# --- one red default branch, one alarm: green closes every copy (brief #916) -----------------
+
+RED_TIP = "9f8e7d6c5b4a39281706f5e4d3c2b1a098765432"
+RED_URL = "https://github.com/acme/widgets/actions/runs/42"
+RED_TITLE = "The default branch is red"
+ON_MAIN = {"ref": "refs/heads/main", "repository": REPO_INFO}
+PERSON = "person-example"
+
+
+def red_tip(stub: Stub, checks: list[dict]) -> None:
+    stub.fixtures[f"repos/{REPO}/branches/main"] = {"commit": {"sha": RED_TIP}}
+    stub.fixtures[f"repos/{REPO}/commits/{RED_TIP}/check-runs"] = {
+        "total_count": len(checks),
+        "check_runs": checks,
+    }
+    stub.fixtures[f"repos/{REPO}/commits/{RED_TIP}/status"] = {"statuses": []}
+
+
+def failed(name: str = "proof") -> dict:
+    return {"name": name, "status": "completed", "conclusion": "failure", "html_url": RED_URL}
+
+
+def alarm(number: int, login: str, sha: str = RED_TIP) -> dict:
+    return {
+        "number": number,
+        "title": RED_TITLE,
+        "body": route.red_body("proof", sha, RED_URL) + "\n---\n_a session footer_\n",
+        "user": {"login": login},
+    }
+
+
+def issue_calls(stub: Stub) -> list[list]:
+    return [w for w in stub.writes() if "/labels" not in w[1]]
+
+
+def closes(stub: Stub) -> list[str]:
+    return [w[1] for w in issue_calls(stub) if w[0] == "PATCH" and "state=closed" in w[2]]
+
+
+def test_ac5_916c_a_red_head_with_no_copy_opens_exactly_one_alarm(proj, stub, tmp_path):
+    """REQ-039 AC5: brief #916 test 5(c) (no copy open: the router opens exactly one)."""
+    red_tip(stub, [ok("governance"), failed()])
+    proc = run_router(proj, stub, tmp_path, "push", ON_MAIN)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    writes = issue_calls(stub)
+    assert [(w[0], w[1]) for w in writes] == [("POST", f"repos/{REPO}/issues")]
+    assert f"title={RED_TITLE}" in writes[0][2]
+
+
+def test_ac5_916d_green_closes_a_copy_by_another_login_and_the_routers_own(proj, stub, tmp_path):
+    """REQ-039 AC5: brief #916 answer 3 and test 5(d) (every same-shape copy, whoever wrote it,
+    closed as completed; the 9 Nov history: a person's copy, then the router's, for one head)."""
+    red_tip(stub, [ok("governance"), ok("proof")])
+    stub.fixtures[f"repos/{REPO}/issues"] = [alarm(909, PERSON), alarm(911, "github-actions[bot]")]
+    proc = run_router(proj, stub, tmp_path, "push", ON_MAIN)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    writes = issue_calls(stub)
+    assert sorted(w[1] for w in writes) == [f"repos/{REPO}/issues/909", f"repos/{REPO}/issues/911"]
+    for w in writes:
+        assert w[0] == "PATCH" and "state=closed" in w[2] and "state_reason=completed" in w[2]
+    assert not any(w[1].endswith("/comments") for w in stub.writes())
+
+
+def test_ac5_916d_green_closes_only_the_shape_title_priority_0_and_advances_none(
+    proj, stub, tmp_path
+):
+    """REQ-039 AC5: brief #916 answer 3 (the shape is the title and the two lines; a pull request,
+    another title or a body without the two lines is left open)."""
+    red_tip(stub, [ok("governance"), ok("proof")])
+    no_pair = {**alarm(5, PERSON), "body": "The default branch looked red to me.\n"}
+    renamed = {**alarm(6, PERSON), "title": "The default branch is not red"}
+    pull = {**alarm(7, PERSON), "pull_request": {}}
+    half = {**alarm(8, PERSON), "body": "Priority: 0\nTouches: **\n"}
+    stub.fixtures[f"repos/{REPO}/issues"] = [no_pair, renamed, pull, half, alarm(9, PERSON)]
+    run_router(proj, stub, tmp_path, "push", ON_MAIN)
+    assert closes(stub) == [f"repos/{REPO}/issues/9"]
+
+
+def test_ac5_916e_red_or_pending_closes_no_copy(proj, stub, tmp_path):
+    """REQ-039 AC5: brief #916 answer 3 and test 5(e) (never closed while red or pending; the red
+    run still opens the router's own alarm, as today, and updates no person's copy)."""
+    copies = [alarm(909, PERSON), alarm(911, "github-actions[bot]", sha=OLD)]
+    stub.fixtures[f"repos/{REPO}/issues"] = copies
+    red_tip(stub, [ok("governance"), failed()])
+    proc = run_router(proj, stub, tmp_path, "push", ON_MAIN)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert closes(stub) == []
+    assert [(w[0], w[1]) for w in issue_calls(stub)] == [("PATCH", f"repos/{REPO}/issues/911")]
+    running = {"name": "proof", "status": "in_progress", "conclusion": None}
+    for checks in ([ok("governance"), running], []):
+        (stub.dir / "calls.log").unlink(missing_ok=True)
+        red_tip(stub, checks)
+        run_router(proj, stub, tmp_path, "push", ON_MAIN)
+        assert issue_calls(stub) == [], checks
