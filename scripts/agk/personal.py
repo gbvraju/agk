@@ -243,7 +243,7 @@ def regression_step(command: str, clone: Path, sidecar: Path, base: str, head: s
 def floor(clone: Path, sidecar: Path, ref: str | None, approve: bool) -> tuple[bool, str]:
     """Rule 18: both steps at every level; `level` is only printed."""
     command = test_command(sidecar)
-    level = personal_table(sidecar).get("level", "light")
+    level = (personal_table(sidecar) or {}).get("level", "light")
     head = head_of(clone)
     base = merge_base(clone, ref)
     lines = [f"floor: level {level}, base {base[:12]}, head {head[:12]}"]

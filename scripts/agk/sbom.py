@@ -421,7 +421,8 @@ def need(condition: object) -> None:
 
 def advisory_ids(value: object) -> list[str]:
     """Ids as the result states them; only the form of an id can reach the printed body."""
-    need(isinstance(value, list))
+    if not isinstance(value, list):
+        raise ValueError
     need(all(isinstance(i, str) and ADVISORY_ID.fullmatch(i) for i in value))
     return list(value)
 

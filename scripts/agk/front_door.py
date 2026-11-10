@@ -1251,8 +1251,11 @@ def named_texts(
         data = b""
         if reason is None:
             read += 1
-            data = git_read(root, "cat-file", "blob", sha)
-            reason = "binary" if data is None or b"\0" in data else None
+            blob = git_read(root, "cat-file", "blob", sha)
+            if blob is None or b"\0" in blob:
+                reason = "binary"
+            else:
+                data = blob
         if reason:
             notes.append(f"file {quoted(path)} not read ({reason})")
         else:
