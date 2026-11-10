@@ -207,3 +207,19 @@ def test_ac3_judging_a_release_writes_nothing_in_the_repository(repo):
     assert d1(repo, "--comments", comments) == []
     assert full_snapshot(repo) == before
     assert set(os.listdir(repo.parent)) == {"kit", "final-comments.json"}
+
+
+def test_a_commit_in_a_kit_dev_test_starts_no_background_git(target):
+    """REQ-016: brief #914: a commit starts no maintenance that could write during a listing."""
+    (target / "more.md").write_text("more\n", encoding="utf-8")
+    git(target, "add", "-A")
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "commit", "-q", "-m", "more"],
+        cwd=target,
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "GIT_TRACE": "1"},
+    )
+    assert "maintenance" not in proc.stderr
+    assert "gc --auto" not in proc.stderr

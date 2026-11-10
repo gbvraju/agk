@@ -107,13 +107,25 @@ a pull request with no Proposed ADR (it must be `cleared`); a read that fails is
 once: one comment on the plan issue that `plan_issue` of the `[flow]` table names (absent: the
 lease is off, said as such), whose first line is `Conductor: active <time> <name>`, valid 10
 minutes from `<time>` (ADR-0368; `watch` renews this checkout's at every pass, exit 3 when another
-name holds it, and returns within 5 minutes with `nothing new`), counted only when its author is
+name holds it, and returns within 5 minutes with `tick`), counted only when its author is
 in `verdict_authors`; `--take NAME` posts
 it, or edits the newest counted `Conductor:` comment in place, unless another name holds a valid
 lease (exit 3, naming the setting), and keeps NAME in the git directory as this checkout's name;
 `--release NAME` edits it to `Conductor: released <time> <name>` for the holder; `--show` prints
 `held by <name> until <time>` or `free`. `merge-queue` refuses to run (`held`, exit 3) while a
 name other than this checkout's holds a valid lease.
+
+Brief #776 build (c) (ADR-0402): `watch` ends within 5 minutes with no event with the line `tick`
+(`--once` keeps `nothing new`) and the stall lines, which `sweep` prints too: `STALL #<pr> <m>m:
+restart <session>` for a builder's draft with no push and no builder comment for `stall_minutes`
+of `[flow]` (30), `... (owner needed posted)` when the one `Owner needed:` of a refused start is
+there, `STALL #<pr>: failed check <name>` for a failed required check with no `Progress:` for 15
+minutes, and `STALL conductor <name> <m> min` for a lease holder with no conductor comment for
+`stall_minutes` with a review or a start due, counted from its take (`since <time>`). Another
+name's `lease --take` then posts that line on the plan issue and takes the lease; a renewal never
+does. `MAIN GREEN after #<n>: merge of main #<pr> (<session>) ...` ends a watch when a red-branch
+issue has closed, naming the pull requests whose every failed required check finished inside it;
+with none, the line is `MAIN GREEN after #<n>`.
 """
 
 from __future__ import annotations
@@ -162,7 +174,10 @@ SWEEP_EVENTS = ("schedule", "workflow_dispatch", "workflow_run")
 POLL = ("conductor_poll_seconds", 60)
 LATE = ("conductor_late_minutes", 30)
 SILENT = ("silent_minutes", 30)
+STALL_SETTING = "stall_minutes"
 ALIVE = ("Progress:", "Report:", "Question:")
+STALL_CHECK_MINUTES = 15  # a failed required check with no `Progress:` for this long (brief #776)
+SAYS = ("Verdict:", "Assign:", "Tell:", "Correction:", "Owner needed:", "STALL ", "Conductor ")
 ESCALATE = re.compile(r"Report: .*\bescalate\b")
 RED_RUN = ("failure", "timed_out")
 GREEN_RUN = ("success", "neutral")
@@ -226,7 +241,7 @@ def renew_lease(root) -> int:
         return 0
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
-        code = lease(root, "--take", name)
+        code = lease(root, "--take", name, takeover=False)
     if code:
         print(out.getvalue().strip(), flush=True)
     return code
@@ -277,15 +292,198 @@ def watch(root, since: datetime, once: bool) -> int:
                 if code := renew_lease(root):
                     return code
                 renewed = time.monotonic()
-            lines = new_lines(repo, since)
+            lines = new_lines(repo, since) + green_lines(root, repo, since)
         except CheckError as exc:
             if once:
                 raise
             print(f"error: {exc}; retrying", file=sys.stderr, flush=True)
         if lines or once or time.monotonic() - started + interval >= WATCH_BOUND:
-            print("\n".join((lines or ["nothing new"]) + sweep_late(root, repo)))
+            ticked = not lines and not once
+            said = lines or ["tick" if ticked else "nothing new"]
+            said += stall_report(root, repo) if ticked else []
+            print("\n".join(said + sweep_late(root, repo)))
             return 0
         time.sleep(interval)
+
+
+# --- ticks and stalls (brief #776 build (c), ADR-0402) ----------------------------------------
+
+
+def minutes_since(moment: datetime, now: datetime) -> int:
+    return max(0, int((now - moment).total_seconds() // 60))
+
+
+def failed_checks(root, repo: str, head: str) -> list[dict]:
+    """The required check runs of a head that failed, by the router's own `judged`; none when
+    they cannot be read, since unknown is never a stall."""
+    from route import FAILED_RUN, judged  # route imports session
+
+    found = session.gh(f"repos/{repo}/commits/{head}/check-runs?per_page=100")
+    checks = found.get("check_runs") if isinstance(found, dict) else None
+    if not isinstance(checks, list):
+        return []
+    runs, _, _ = judged(checks, [], session.required_checks(root), wait=False)
+    return [r for r in runs if r.get("conclusion") in FAILED_RUN]
+
+
+def taker(root, repo: str, brief: int, pulls: list) -> str:
+    """The session of the newest live take of a brief, `unknown` without one."""
+    comments = session.pages(f"repos/{repo}/issues/{brief}/comments") or []
+    hours = session.flow_int(root, "claim_hours", session.CLAIM_HOURS, 5)
+    takes = session.live_takes(comments, brief, pulls, hours)
+    return max(takes, key=lambda t: t[:2])[2] if takes else "unknown"
+
+
+def stall_line(root, repo: str, pull: dict, pulls: list, limit: int, now) -> str | None:
+    """The `STALL` line of a builder's draft, else None: a failed required check with no
+    `Progress:` for 15 minutes, or no push and no builder comment for `stall_minutes`. A draft
+    whose newest comment is a `Question:` waits for its answer; a head that cannot be read is
+    never a stall."""
+    brief = session.brief_number(pull)
+    if not pull.get("draft") or brief is None:
+        return None
+    number, head = pull["number"], str(pull["head"]["sha"])
+    comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+    ordered = sorted(comments, key=lambda c: c.get("id") or 0)
+    if ordered and session.first_line(ordered[-1]).startswith("Question:"):
+        return None
+    commit = session.gh(f"repos/{repo}/commits/{head}")
+    detail = commit.get("commit") if isinstance(commit, dict) else None
+    pushed = when(str(((detail or {}).get("committer") or {}).get("date")))
+    if pushed is None:
+        return None
+    alive = [c for c in ordered if session.first_line(c).startswith(ALIVE)]
+    moments = [session.moment(c.get("created_at")) for c in alive]
+    progress = [
+        session.moment(c.get("created_at"))
+        for c in alive
+        if session.first_line(c).startswith("Progress:")
+    ]
+    failed = failed_checks(root, repo, head)
+    if failed and minutes_since(max([pushed, *progress]), now) >= STALL_CHECK_MINUTES:
+        return f"STALL #{number}: failed check {sorted(str(r.get('name')) for r in failed)[0]}"
+    last = max([pushed, *moments])
+    idle = minutes_since(last, now)
+    if idle < limit:
+        return None
+    asked = any(
+        session.first_line(c).startswith("Owner needed:")
+        and session.moment(c.get("created_at")) >= last
+        for c in ordered
+    )
+    note = " (owner needed posted)" if asked else ""
+    return f"STALL #{number} {idle}m: restart {taker(root, repo, brief, pulls)}{note}"
+
+
+def stall_lines(root, repo: str, pulls: list, now: datetime) -> list[str]:
+    limit = session.flow_int(root, STALL_SETTING, session_plan.STALL_MINUTES, 4)
+    found = (stall_line(root, repo, p, pulls, limit, now) for p in pulls)
+    return [x for x in found if x]
+
+
+def review_or_start_due(root, repo: str, authors: list[str]) -> bool:
+    """Whether a ready pull request has no verdict on its head, or the plan has work to hand
+    out. A plan or a pull request that cannot be read says nothing is due."""
+    try:
+        for pull in read(f"repos/{repo}/pulls?state=open", "the open pull requests"):
+            if pull.get("draft"):
+                continue
+            number, head = pull["number"], str(pull["head"]["sha"])
+            comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+            me = str((pull.get("user") or {}).get("login") or "").lower()
+            ready = [
+                c
+                for c in comments
+                if session.author_of(c) == me and session.first_line(c).startswith("Report:")
+            ]
+            newest = max(ready, key=lambda c: c.get("id") or 0, default=None)
+            counted = session.counted_authors(authors, me)
+            if (
+                newest is not None
+                and session_plan.WAITING_REPORT.match(session.first_line(newest))
+                and session.verdict_line(comments, 0, head, counted) is None
+            ):
+                return True
+        plan = session_plan.build(root)
+    except CheckError:
+        return False
+    return bool(plan["start"] or plan.get("assign"))
+
+
+def lease_stall(root, repo: str, comments: list, authors: list[str], now) -> tuple[str, int] | None:
+    """(holder, minutes) when the lease's holder has said nothing for `stall_minutes`, counted
+    from the later of its take and its last conductor comment, with a review or a start due."""
+    holder, found = lease_holder(comments, authors, now), lease_comment(comments, authors)
+    if holder is None or found is None:
+        return None
+    floor = when(found[1].group(4) or found[1].group(2))
+    if floor is None:
+        return None
+    spoken = session.pages(f"repos/{repo}/issues/comments?since={stamp_of(floor)}")
+    if spoken is None:
+        return None
+    listed = {a.lstrip("@").lower() for a in authors}
+    times = [
+        session.moment(c.get("created_at"))
+        for c in spoken
+        if session.author_of(c) in listed and session.first_line(c).startswith(SAYS)
+    ]
+    minutes = minutes_since(max([floor, *times]), now)
+    limit = session.flow_int(root, STALL_SETTING, session_plan.STALL_MINUTES, 4)
+    if minutes < limit or not review_or_start_due(root, repo, authors):
+        return None
+    return holder[0], minutes
+
+
+def conductor_stall(root, repo: str, now: datetime) -> list[str]:
+    issue = plan_issue(root)
+    if issue is None:
+        return []
+    found = lease_stall(root, repo, plan_comments(repo, issue), verdict_authors(root), now)
+    return [f"STALL conductor {found[0]} {found[1]} min"] if found else []
+
+
+def stall_report(root, repo: str) -> list[str]:
+    """The `STALL` lines of a tick or a sweep; what cannot be read adds none."""
+    now, lines = datetime.now(UTC), []
+    try:
+        pulls = read(f"repos/{repo}/pulls?state=open", "the open pull requests")
+        lines += stall_lines(root, repo, sorted(pulls, key=lambda p: p["number"]), now)
+    except CheckError as exc:
+        print(f"error: {exc}", file=sys.stderr, flush=True)
+    try:
+        lines += conductor_stall(root, repo, now)
+    except CheckError as exc:
+        print(f"error: {exc}", file=sys.stderr, flush=True)
+    return lines
+
+
+def green_lines(root, repo: str, since: datetime) -> list[str]:
+    """One `MAIN GREEN` line per red-branch issue closed since the watch began, naming the open
+    pull requests whose every failed required check finished while it was open, and `MAIN GREEN
+    after #<n>` alone when none did, which still ends the watch; a read that fails is no event."""
+    closed = session.pages(f"repos/{repo}/issues?state=closed&since={stamp_of(since)}") or []
+    red = [
+        i
+        for i in closed
+        if i.get("closed_at") and session.is_red(i) and session.moment(i["closed_at"]) > since
+    ]
+    pulls = (session.pages(f"repos/{repo}/pulls?state=open") or []) if red else []
+    lines = []
+    for issue in red:
+        opened, shut = session.moment(issue.get("created_at")), session.moment(issue["closed_at"])
+        named_pulls = []
+        for pull in sorted(pulls, key=lambda p: p["number"]):
+            failed = failed_checks(root, repo, str(pull["head"]["sha"]))
+            ended = [when(str(r.get("completed_at"))) for r in failed]
+            if failed and all(e is not None and opened <= e <= shut for e in ended):
+                brief = session.brief_number(pull)
+                who = taker(root, repo, brief, pulls) if brief is not None else "unknown"
+                named_pulls.append(f"#{pull['number']} ({who})")
+        names = " ".join(named_pulls)
+        tail = f": merge of main {names}" if named_pulls else ""
+        lines.append(f"MAIN GREEN after #{issue['number']}{tail}")
+    return lines
 
 
 # --- sweep (row 13) ---------------------------------------------------------------------------
@@ -565,6 +763,7 @@ def sweep(root) -> int:
         if found := silent_line(root, repo, issue, pulls, every, wait, now):
             lines.append(found)
     lines += slot_lines(root, repo, issues, every, now)
+    lines += stall_report(root, repo)
     print("\n".join(lines))
     return 0
 
@@ -994,10 +1193,11 @@ PLAN_ISSUE = "plan_issue"
 LEASE_SETTING = f"(setting: {PLAN_ISSUE} in the flow table of agk.toml)"
 LEASE_OFF = f"lease: off {LEASE_SETTING}"
 LEASE_MINUTES = 10  # ADR-0368: a dead holder is replaced by the next staggered start
-WATCH_BOUND = 300  # seconds: `watch` returns by then with `nothing new` (ADR-0368)
+WATCH_BOUND = 300  # seconds: `watch` returns by then with `tick` (ADR-0368, ADR-0402)
 RENEW_EVERY = 240  # seconds between renewals during one watch
 LEASE_LINE = re.compile(
     r"Conductor: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+)"
+    r"(?: since (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z))?"
 )
 TIME = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -1210,7 +1410,7 @@ def write_marker(repo: str, issue: int, found, text: str) -> None:
         )
 
 
-def lease(root, mode: str, name: str | None) -> int:
+def lease(root, mode: str, name: str | None, takeover: bool = True) -> int:
     issue = plan_issue(root)
     if issue is None:
         print(LEASE_OFF)
@@ -1226,12 +1426,20 @@ def lease(root, mode: str, name: str | None) -> int:
             print("lease: free")
         return 0
     if holder and holder[0] != name:
-        print(f"lease: held by {holder[0]} until {stamp_of(holder[1])} {LEASE_SETTING}")
-        return merge_cleared.EXIT_HELD
+        relay = mode == "--take" and takeover
+        stalled = lease_stall(root, repo, comments, authors, now) if relay else None
+        if stalled is None:
+            print(f"lease: held by {holder[0]} until {stamp_of(holder[1])} {LEASE_SETTING}")
+            return merge_cleared.EXIT_HELD
+        line = f"body=STALL conductor {stalled[0]} {stalled[1]} min"
+        post(f"repos/{repo}/issues/{issue}/comments", "the stall line cannot be posted", "-f", line)
+        holder = None
     found = lease_comment(comments, authors)
     mark = lease_mark(root)
     if mode == "--take":
-        write_marker(repo, issue, found, f"body=Conductor: active {stamp_of(now)} {name}")
+        taken = found[1].group(4) or found[1].group(2) if holder and found else stamp_of(now)
+        text = f"body=Conductor: active {stamp_of(now)} {name} since {taken}"
+        write_marker(repo, issue, found, text)
         if mark is not None:
             mark.parent.mkdir(parents=True, exist_ok=True)
             mark.write_text(f"{name}\n", encoding="utf-8")
