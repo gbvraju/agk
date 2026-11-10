@@ -6,7 +6,7 @@
 - Related: ADR-0247, ADR-0277, ADR-0310, SPEC-0045, brief #941, plan #661
 - Requirements: REQ-052
 
-Protected classes: `CLAUDE.md`, `config/`, `tests/kit/`
+Protected classes: `CLAUDE.md`, `tests/kit/`
 
 ## Context
 
@@ -30,8 +30,8 @@ rule (a new row is one file under `docs/runs/decisions/`) stays in `.claude/agen
 A session's reading after a restart falls from the whole log to the few files that name its item.
 The grep includes the touched paths, so a ruling about a file the build changes is still read; a
 ruling it misses is caught at review, as today (`config/review-checklist.md`, the conductor's
-`Read:` line). No other rule's meaning changes. `CLAUDE.md` stays within its rule budget line in
-`config/rule-budget.txt`. The pinned text in `tests/kit/test_core_rules_page.py` follows the new
+`Read:` line). No other rule's meaning changes. `CLAUDE.md` stays at its rule budget line in
+`config/rule-budget.txt` (229 words), with three words cut from its opening paragraph. The pinned text in `tests/kit/test_core_rules_page.py` follows the new
 section.
 
 ## Residual
