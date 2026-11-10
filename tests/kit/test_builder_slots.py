@@ -84,9 +84,14 @@ def held(proj, stub, *others: dict) -> None:
     stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
 
 
-def owned(stub, number: int = 7, brief: int = 5, state: str = "clean", said=()) -> None:
-    """Pull request `number`, of a brief this slot has taken, with the comments `said`."""
-    pull = {"number": number, "state": "open", "body": f"Brief: #{brief}"}
+def owned(stub, number=7, brief=5, state="clean", said=(), author="bot") -> None:
+    """Pull request `number` by `author`, of a brief this slot took, with the comments `said`."""
+    pull = {
+        "number": number,
+        "state": "open",
+        "body": f"Brief: #{brief}",
+        "user": {"login": author},
+    }
     stub.serve(PULLS, [pull])
     stub.serve(f"{PULLS}/{number}", {**pull, "mergeable_state": state, "head": {"sha": "a" * 40}})
     stub.serve(f"{ISSUES}/{brief}/comments", [comment(50, "boss", f"taken: s1 {DAY}")])
@@ -270,6 +275,80 @@ def test_a_fix_list_with_a_report_after_it_is_answered(proj, stub):
         comment(60, "boss", f"Verdict: fix list {'a' * 40}"),
         comment(61, "boss", f"Report: {'b' * 12} fix list applied"),
     ]
+    owned(stub, said=said)
+    assert last(slot(proj, stub, "--next")) == "wait pr #7"
+
+
+ESCALATE = f"Report: {'d' * 7} escalate Q-5-1 Q-5-2; Usage: not shown"
+
+
+def test_an_answered_escalation_is_a_follow_up(proj, stub):
+    """REQ-041 REQ-040"""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #12"))
+    said = [comment(60, "bot", ESCALATE), comment(61, "boss", "Answer: Q-5-2 keep the order")]
+    owned(stub, said=said)
+    assert last(slot(proj, stub, "--next")) == "follow-up pr #7 answer"
+
+
+@pytest.mark.parametrize(
+    "asked, answer",
+    [
+        ("Report: 1234567 blocked Q-5-1", "Maintainer answer: Q-5-1 yes"),
+        ("Question: Q-5-1 which order?", "Correction: Q-5-1 the order is kept"),
+    ],
+)
+def test_a_blocked_report_or_a_question_answered_is_a_follow_up(proj, stub, asked, answer):
+    """REQ-041"""
+    held(proj, stub)
+    owned(stub, said=[comment(60, "bot", asked), comment(61, "owner", answer)])
+    assert last(slot(proj, stub, "--next")) == "follow-up pr #7 answer"
+
+
+def test_a_question_answered_under_the_same_login_is_a_follow_up(proj, stub):
+    """REQ-041"""
+    held(proj, stub)
+    said = [
+        comment(60, "boss", "Question: Q-5-1 which order?"),
+        comment(61, "boss", "Answer: Q-5-1"),
+    ]
+    owned(stub, said=said, author="boss")
+    assert last(slot(proj, stub, "--next")) == "follow-up pr #7 answer"
+
+
+def test_an_answer_with_a_newer_report_is_spent(proj, stub):
+    """REQ-041"""
+    held(proj, stub)
+    said = [
+        comment(60, "bot", ESCALATE),
+        comment(61, "boss", "Answer: Q-5-2 keep the order"),
+        comment(62, "bot", f"Report: {'e' * 7} ready for review; Usage: not shown"),
+    ]
+    owned(stub, said=said)
+    assert last(slot(proj, stub, "--next")) == "wait pr #7"
+
+
+def test_an_answer_by_an_unlisted_author_is_not_a_follow_up(proj, stub):
+    """REQ-041"""
+    held(proj, stub)
+    said = [comment(60, "bot", ESCALATE), comment(61, "stranger", "Answer: Q-5-2 keep it")]
+    owned(stub, said=said)
+    assert last(slot(proj, stub, "--next")) == "wait pr #7"
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        [comment(60, "bot", ESCALATE), comment(61, "boss", "Answer: Q-9-1 another question")],
+        [comment(61, "boss", "Answer: Q-5-2 before"), comment(62, "bot", ESCALATE)],
+        [
+            comment(60, "bot", f"Report: {'d' * 7} ready Q-5-1"),
+            comment(61, "boss", "Answer: Q-5-1"),
+        ],
+    ],
+)
+def test_an_answer_that_names_no_open_question_is_not_a_follow_up(proj, stub, said):
+    """REQ-041"""
+    held(proj, stub)
     owned(stub, said=said)
     assert last(slot(proj, stub, "--next")) == "wait pr #7"
 
@@ -495,4 +574,3 @@ def test_a_bad_slot_seen_minutes_skips_the_health_naming_the_setting_only(tmp_pa
     out = health.router(root, stub, tmp_path)
     assert out.returncode == 0, out.stdout + out.stderr
     assert "slot_seen_minutes" in out.stdout and stub.writes() == []
-
