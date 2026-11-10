@@ -8,7 +8,9 @@ deny, it prints {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissi
 A hook of a project agent runs only in a trusted folder (verify for the `--agent` main session).
 
 With the argument `--review` (the read-only review agent, SPEC-0023) it denies `Edit`, `Write`,
-`MultiEdit` and `NotebookEdit` everywhere, `docs/` included, and judges `Bash` the same way.
+`MultiEdit` and `NotebookEdit` everywhere, `docs/` included, and judges `Bash` the same way, and
+allows besides `evidence.py check RECORD [--head SHA] [--sample N] [--json]` (brief #982), which
+writes nothing in the repository: its worktree is a temporary folder it removes.
 
 Denies `Edit`, `Write`, `MultiEdit` and `NotebookEdit` outside `docs/` and `constitution/vision.md`,
 and `Bash` unless the command is one of: a read-only `git` command; `gh api` with `--method GET` or
@@ -47,6 +49,9 @@ READ_ONLY_SCRIPTS = frozenset(
         "traceability",
     }
 )
+# Brief #982: the review agent alone re-runs the evidence check, in this one form.
+REVIEW_SCRIPT = re.compile(r"(?:\./)?scripts/agk/evidence\.py")
+EVIDENCE_VALUES = {"--head": re.compile(r"[0-9a-fA-F]{7,40}"), "--sample": re.compile(r"[1-9]\d*")}
 READ_GIT = frozenset(
     {
         "status",
@@ -287,13 +292,35 @@ def gh_api_allowed(words: list[str]) -> bool:
     return False
 
 
-def bash_allowed(command: object) -> bool:
+def evidence_check_allowed(args: list[str]) -> bool:
+    """`check` and one record, with only the options that change no file (brief #982)."""
+    if not args or args[0] != "check":
+        return False
+    records, i = 0, 1
+    while i < len(args):
+        arg = args[i]
+        if arg in EVIDENCE_VALUES:
+            if i + 1 >= len(args) or not EVIDENCE_VALUES[arg].fullmatch(args[i + 1]):
+                return False
+            i += 2
+            continue
+        if arg != "--json":
+            if arg.startswith("-"):
+                return False
+            records += 1
+        i += 1
+    return records == 1
+
+
+def bash_allowed(command: object, review: bool = False) -> bool:
     if not isinstance(command, str):
         return False
     words = tokens_of(command)
     if not words:
         return False
     head = words[0]
+    if review and head == "python3" and len(words) > 1 and REVIEW_SCRIPT.fullmatch(words[1]):
+        return evidence_check_allowed(words[2:])
     if head == "git":
         return git_allowed(words)
     if head == "gh":
@@ -319,7 +346,7 @@ def decide(payload: dict, review: bool = False) -> str | None:
         target = data.get("file_path", data.get("notebook_path"))
         return None if path_allowed(target, project_root()) else PATH_RULE
     if tool == "Bash":
-        return None if bash_allowed(data.get("command")) else BASH_RULE
+        return None if bash_allowed(data.get("command"), review) else BASH_RULE
     return None
 
 

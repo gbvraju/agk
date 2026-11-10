@@ -39,7 +39,9 @@ A person with admin on the repository does this once, in a terminal on their own
        python3 scripts/agk/local_mode.py enter --write
 
    It needs a token that may change workflows (Actions write is enough), so the person runs it in their own terminal:
-   `--write` refuses to run inside an agent session, and the kit's settings deny it to a session. For a person without the
+   `--write` refuses to run inside an agent session, and the kit's settings deny it to a session. When every workflow is
+   already off by hand, `enter` takes the day of the earliest as the start, opens the record issue of step 2 in the form
+   `leave` reads (`--write`, only when none is open) and prints the exact `leave --since` command to keep. For a person without the
    kit, disable each workflow with one command (`gh workflow disable` takes the file name):
 
        gh workflow disable agk-brief.yml

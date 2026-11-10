@@ -12,3 +12,4 @@ Makefile
 pyproject.toml
 agk.mk
 agk.toml
+project.mk

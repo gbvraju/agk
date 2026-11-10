@@ -5,6 +5,9 @@ Usage: python3 scripts/agk/local_mode.py enter|leave [--write] [--since YYYY-MM-
 
 Standard library only. `enter` lists every active workflow of the repository, the kit's and the
 project's, with the one `gh api --method PUT .../actions/workflows/<id>/disable` call for each.
+When every workflow is already `disabled_manually` (brief #982), `enter` takes the day of the
+earliest of them as the start, opens the record issue in the form `leave` reads with `--write` when
+none is open (the dry run prints the call), and prints the exact `leave --since` command.
 `leave` takes the start of local mode from `--since` (midnight UTC) or from the day of the one open
 record issue (`Local mode since YYYY-MM-DD`), lists every workflow disabled by hand since then with
 its `enable` call (one disabled before it is left as it is), the pull requests merged into the
@@ -104,6 +107,15 @@ class ApiDir:
             return int(text) if text.isdigit() else 0
         return 204
 
+    def post(self, name: str, endpoint: str, title: str, body: str) -> int:
+        with (self.path / "calls.log").open("a", encoding="utf-8") as log:
+            log.write(f"POST {endpoint.replace('{repo}', self.repo)} title={title}\n")
+        status = self.path / f"{name}.status"
+        if status.is_file():
+            text = status.read_text(encoding="utf-8").strip()
+            return int(text) if text.isdigit() else 0
+        return 201
+
 
 class Gh:
     """Live calls through `gh api`: reads with GET, paged by hand; writes with PUT."""
@@ -111,10 +123,10 @@ class Gh:
     def __init__(self, repo: str) -> None:
         self.repo = repo
 
-    def call(self, method: str, endpoint: str) -> tuple[int, str]:
+    def call(self, method: str, endpoint: str, *fields: str) -> tuple[int, str]:
         try:
             proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-                ["gh", "api", "--method", method, endpoint],
+                ["gh", "api", "--method", method, endpoint, *fields],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -175,6 +187,11 @@ class Gh:
     def put(self, name: str, endpoint: str) -> int:
         status, _ = self.call("PUT", endpoint.replace("{repo}", self.repo))
         return 204 if status == 200 else status
+
+    def post(self, name: str, endpoint: str, title: str, body: str) -> int:
+        fields = ("-f", f"title={title}", "-f", f"body={body}")
+        status, _ = self.call("POST", endpoint.replace("{repo}", self.repo), *fields)
+        return 201 if status == 200 else status
 
 
 # --- reading ----------------------------------------------------------------------------------
@@ -358,6 +375,44 @@ def act(
     return lines, refused
 
 
+RECORD_BODY = (
+    "Actions is blocked; the workflows were already off. One comment per merge: "
+    "Local merge: #<n> <head sha> <evidence>."
+)
+
+
+def adopt_off(src: Any, repo: str, every: list[dict], write: bool) -> tuple[list[str], int]:
+    """Brief #982: every workflow already off by hand. The start is midnight UTC of the earliest
+    of them; with `--write` the record issue is opened unless one is open. (lines, exit)."""
+    days = [d for d in (stamp(w.get("updated_at")) for w in every) if d is not None]
+    if not days:
+        return ["already off: the day the workflows were turned off cannot be read"], 4
+    day = min(days).astimezone(UTC).strftime("%Y-%m-%d")
+    title = f"{RECORD_TITLE} {day}"
+    lines = [f"already off: {len(every)} workflows disabled by hand, the earliest on {day}"]
+    code = 0
+    start, found = record_start(src)
+    if start is not None:
+        lines.append(f"record: {found} is open; no second one is opened")
+    elif not found.startswith("no open"):
+        lines.append(f"record: unknown ({found}); nothing is opened")
+        code = 4
+    elif not write:
+        lines.append(
+            f'record: gh api --method POST repos/{repo}/issues -f title="{title}" '
+            f'-f body="{RECORD_BODY}"'
+        )
+    else:
+        status = src.post("post-issues", "/repos/{repo}/issues", title, RECORD_BODY)
+        if status in (200, 201):
+            lines.append(f"recorded: {title}")
+        else:
+            lines.append(f"refused record: {f'HTTP {status}' if status else 'no answer'}")
+            code = 3
+    lines.append(f"leave: python3 scripts/agk/local_mode.py leave --since {day}")
+    return lines, code
+
+
 def main_of(command: str, write: bool, since_arg: datetime | None, repo: str, src: Any) -> int:
     root = repo_root()
     branch = str(load_config(root).get("default_branch") or "main")
@@ -425,11 +480,15 @@ def main_of(command: str, write: bool, since_arg: datetime | None, repo: str, sr
     out.append(f"{label}: {len(chosen)}")
     lines, refused = act(src, repo, chosen, verb, done, write)
     red = False
+    adopted = 0
     if command == "enter":
         out += lines
         if not write and chosen:
             out.append(f"a person whose token may change workflows runs these; see {GUIDE}")
-        if write:
+        if every and all(w.get("state") == "disabled_manually" for w in every):
+            more, adopted = adopt_off(src, repo, every, write)
+            out += more
+        elif write:
             out.append(f"next: open the record issue, as {GUIDE} says")
     else:
         out += lines + left + pulls_lines  # the merges were read before any workflow was enabled
@@ -441,9 +500,9 @@ def main_of(command: str, write: bool, since_arg: datetime | None, repo: str, sr
             red = result.red
             unknown = unknown or result.unknown
     sys.stdout.write("\n".join(out) + "\n")
-    if refused or red:
+    if refused or red or adopted == 3:
         return 3
-    return 4 if unknown else 0
+    return 4 if unknown or adopted == 4 else 0
 
 
 def parse_args(args: list[str]) -> dict | None:
