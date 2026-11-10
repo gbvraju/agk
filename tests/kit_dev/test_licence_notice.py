@@ -1,4 +1,4 @@
-"""The licence is named as proprietary, all rights reserved, in every place that names it (REQ-014, brief #1016, ADR-0433)."""
+"""Every place that names the licence says all rights reserved (REQ-014, brief #1016, ADR-0433)."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ NAMING_FILES = [
 
 
 def test_no_file_names_the_apache_licence() -> None:
-    """REQ-014: none of the five files that name the licence names Apache-2.0 or the Apache License."""
+    """REQ-014: none of the five licence files names Apache-2.0 or the Apache License."""
     for rel in NAMING_FILES:
         text = (KIT_ROOT / rel).read_text(encoding="utf-8")
         assert "Apache-2.0" not in text, rel
