@@ -57,6 +57,9 @@ from init import (
 from reviewers import parse, render_codeowners
 
 TEST_PATTERNS = ("*_test.py", "test_*.py")
+# Front-end test runners' file names (SPEC-0044 rule 10); their topmost folders are found the same
+# way, `__tests__/`, `e2e/` and `cypress/` among them, always as folder prefixes, never as globs.
+FRONTEND_PATTERNS = ("*.test.ts", "*.test.tsx", "*.spec.ts", "*.spec.tsx")
 SKIP_DIRS = {
     "node_modules",
     "__pycache__",
@@ -80,7 +83,7 @@ def toml_list(items: list[str]) -> str:
 
 
 def detect_tests(root: Path) -> tuple[list[str], list[str]]:
-    """Directories (topmost) holding *_test.py or test_*.py files, and the patterns that matched."""
+    """Topmost directories holding Python or front-end test files, and the patterns matched."""
     dirs: set[str] = set()
     found: set[str] = set()
     for here, dirnames, filenames in os.walk(root):
@@ -98,7 +101,7 @@ def detect_tests(root: Path) -> tuple[list[str], list[str]]:
             )
         ]
         for name in filenames:
-            for pattern in TEST_PATTERNS:
+            for pattern in TEST_PATTERNS + FRONTEND_PATTERNS:
                 if fnmatch.fnmatch(name, pattern):
                     found.add(pattern)
                     dirs.add(rel_here)
