@@ -449,6 +449,44 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
 
    `"closeOnExit": "always"` closes the tab on any exit of the wrapper, a crash included. The terminal's default, `graceful`, closes a tab only after a clean exit and keeps it open on a bare shell or an error after a non-zero one; the setting belongs to this profile alone, so your other tabs keep their own. A builder's tab therefore closes by itself when its pull request is ready and the session ends, or when the session crashes; the exit file in the worktree then tells the two apart: `exit_code=0` for a session that ended, any other code for a crash, with the UTC time it ended. Try the adapter once by hand from the repository's folder before you turn `auto_start` on: `$env:AGK_SESSION = 'builder-x'; $env:AGK_BRIEF = '1'; 'hello' | pwsh -NoProfile -File scripts/start-session-windows.ps1`, then type `/exit` in the new tab, check that the tab closes and that `..\agk-builder-x\.agk-session-exit` reads `exit_code=0`, and remove the trial worktree with `git worktree remove ..\agk-builder-x`.
 
+## The merge queue
+
+With `[flow] auto_merge = true` the merger merges each cleared pull request itself. In a repository owned by an
+organization it can instead add each cleared head to GitHub's merge queue, which tests up to five pull requests together on
+top of `main`, so a pull request's checks run once on its own head and once in its batch, never again after each merge to
+`main` (brief #972, ADR-0416, ADR-0417). GitHub offers the merge queue only to repositories owned by an organization
+(public, or on Enterprise Cloud), not to a repository owned by a personal account `(verify)`.
+
+The ruleset of `main` is yours to set; no session sets or reads it. In Settings, Rules, Rulesets, the ruleset of `main`,
+in the order of that page `(verify: the labels are read from GitHub's documentation)`:
+
+1. **Require merge queue**: on.
+   - Merge method: **Squash**.
+   - Build concurrency: 5.
+   - Minimum group size: 1. Maximum group size: 5.
+   - Wait time to meet minimum group size: 5 minutes.
+   - Require all queue entries to pass required checks: on (only non-failing pull requests merge).
+2. **Require status checks to pass**: the required checks are `governance` and `proof`, the names the workflows already
+   use. Do not add `agk/verdict`: GitHub sets it only on a pull request's head, the queue's commit never carries it, and
+   the queue would wait for it forever.
+3. **Require branches to be up to date before merging**: off, with the queue on or off. `merge_cleared.py` already
+   re-proves a head only when `main` changed its files (SPEC-0050 rule 6) and runs `[testing] pre_merge_tests` on the
+   would-be merge.
+
+Switch over in this order:
+
+(i) the pull request of brief #972 merges, with `merge_queue = false` in the `[flow]` table of `agk.toml`;
+(ii) you turn on **Require merge queue** as above and turn off **Require branches to be up to date before merging**. In a
+repository owned by a personal account there is no queue: turn off only the up-to-date rule, which removes the reruns
+after every merge to `main`, and stop here;
+(iii) you set `merge_queue = true` in the `[flow]` table of `agk.toml`, in a pull request with an ADR. `/agk:doctor` then
+prints `merge queue: on`.
+
+A pull request that fails its batch is removed by GitHub, and the merger posts one line on it,
+`Removed from the merge queue: <check> failed on <queue sha>`. The merger then holds that head and never queues it again
+until a new verdict, which a new head needs anyway. GitHub's merge
+queue is not the conductor's `conductor.py merge-queue`, which stays as it is.
+
 ## Upgrading the kit
 
 Run `/agk:upgrade` (or `python3 scripts/agk/upgrade.py <your repository>` from the kit) to bring the kit's files to a newer

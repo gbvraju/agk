@@ -112,14 +112,13 @@ def test_a_status_alone_clears_nothing(tmp_path):
     assert "not cleared" in proc.stderr
 
 
-def test_with_the_merge_queue_the_status_starts_no_merge(tmp_path):
-    """REQ-046: brief #853 answer 4."""
+def test_with_the_merge_queue_the_status_names_the_head_for_the_command(tmp_path):
+    """REQ-046: brief #853 answer 4; brief #972 answer 3 (the command decides queue or merge)."""
     main = toml(ON + "merge_queue = true\n")
     proc, _, _, _ = fire(
         tmp_path, status_event(), main=main, comments=[cleared()], head_pulls=[OPEN_PULL]
     )
-    assert proc.stdout == "", proc.stdout
-    assert "flow.merge_queue" in proc.stderr
+    assert proc.stdout.split()[0] == "7", proc.stdout + proc.stderr
 
 
 # --- the status step of the job -------------------------------------------------------------------
