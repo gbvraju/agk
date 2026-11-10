@@ -223,3 +223,85 @@ def test_ac6_the_brief_the_router_writes_for_a_red_branch_needs_none(tmp_path):
         "Advances: none\nTouches: docs/**\nPriority: 0\n"
     )
     assert check(tmp_path, body).stdout.strip() == "ok brief"
+
+
+# --- brief #982 answer 1: a brief that touches a protected path class without an ADR -----------
+
+PROTECTED = "# classes\nconstitution/\nscripts/agk/\nMakefile\ndocs/requirements.md\n"
+WARN_4B = "rule 4b: Touches names a protected path class"
+
+
+def protected_root(tmp_path: Path) -> Path:
+    root = requirements(tmp_path, "REQ-001", "REQ-002")
+    (root / "config").mkdir()
+    (root / "config" / "protected-paths.txt").write_text(PROTECTED, encoding="utf-8")
+    return root
+
+
+def test_rule4b_a_protected_touch_without_an_adr_warns_and_still_passes(tmp_path):
+    """REQ-013: brief #982 answer 1 (a warning, never a failure; the class is named)."""
+    out = check(tmp_path, GOOD, "--root", str(protected_root(tmp_path)))
+    assert out.returncode == 0, out.stdout
+    warns = [ln for ln in out.stdout.splitlines() if WARN_4B in ln]
+    assert warns == [
+        "warning: rule 4b: Touches names a protected path class (scripts/agk/, "
+        "docs/requirements.md) and the brief "
+        "reserves no ADR and names no Covered-by"
+    ]
+    assert out.stdout.splitlines()[-1] == "ok brief"
+
+
+@pytest.mark.parametrize("line", ["Reserved: ADR-0999\n", "Covered-by: ADR-0998\n"])
+def test_rule4b_a_reserved_adr_or_a_covered_by_line_silences_the_warning(tmp_path, line):
+    """REQ-013: brief #982 answer 1"""
+    out = check(tmp_path, GOOD + line, "--root", str(protected_root(tmp_path)))
+    assert out.returncode == 0 and out.stdout.strip() == "ok brief"
+
+
+@pytest.mark.parametrize(
+    ("touches", "named"),
+    [
+        ("docs/adr/0999-x.md, changelog.d/", None),
+        ("Makefile", "Makefile"),
+        ("scripts/, docs/requirements.md", "scripts/agk/, docs/requirements.md"),
+        ("Makefile.bak", None),
+    ],
+)
+def test_rule4b_the_classes_are_read_from_the_roots_protected_paths(tmp_path, touches, named):
+    """REQ-013: brief #982 answer 1 (a folder class matches below it, a file class exactly)."""
+    body = GOOD.replace("scripts/agk/*.py, docs/**", touches)
+    out = check(tmp_path, body, "--root", str(protected_root(tmp_path)))
+    assert out.returncode == 0, out.stdout
+    warns = [ln for ln in out.stdout.splitlines() if WARN_4B in ln]
+    assert warns == ([] if named is None else [f"warning: {WARN_4B} ({named}) and the brief "
+                                               "reserves no ADR and names no Covered-by"])
+
+
+def test_rule4b_without_root_or_without_the_file_nothing_is_warned(tmp_path):
+    """REQ-013: brief #982 answer 1 (the classes come only from the root's file)."""
+    assert check(tmp_path, GOOD).stdout.strip() == "ok brief"
+    root = requirements(tmp_path, "REQ-001", "REQ-002")
+    assert check(tmp_path, GOOD, "--root", str(root)).stdout.strip() == "ok brief"
+
+
+def test_rule4b_a_failing_brief_still_fails_and_the_event_carries_the_warning(tmp_path):
+    """REQ-013: brief #982 answer 1 (a saved `issues` event passes and carries the warning)."""
+    import json
+
+    root = protected_root(tmp_path)
+    assert check(tmp_path, GOOD.replace("Size: M\n", ""), "--root", str(root)).returncode == 1
+    event = {
+        "action": "opened",
+        "issue": {"number": 5, "body": GOOD, "labels": [{"name": "agk-brief"}]},
+    }
+    (tmp_path / "event.json").write_text(json.dumps(event), encoding="utf-8")
+    out = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPTS / "check_brief.py"), "--event", str(tmp_path / "event.json"),
+         "--root", str(root)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+    result = json.loads(out.stdout)
+    assert result["action"] == "pass"
+    assert result["warnings"] and WARN_4B in result["warnings"][0]
