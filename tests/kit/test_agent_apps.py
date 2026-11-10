@@ -118,7 +118,7 @@ def test_the_router_keeps_waiting_for_a_person_when_an_agent_posted_the_approval
     cleared = said(1, "boss", CLEARED)
     sent = said(2, "maintainer", LONG)
     base = {"files": approved_spec(), "approvers": ["maintainer"], "agent_apps": APPS}
-    assert route.decide(facts(comments=[cleared, sent], **base)) == "agk:ready"
+    assert route.decide(facts(comments=[cleared, sent], **base)) == "agk:merge-ready"
     assert route.decide(facts(comments=[cleared, via(sent)], **base)) == "agk:approve"
 
 

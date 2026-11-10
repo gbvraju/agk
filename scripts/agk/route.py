@@ -10,10 +10,11 @@ It runs in the workflow `agk-route.yml` on `pull_request`, `issue_comment`, `wor
 `push` to the default branch, with the job's `GITHUB_TOKEN`, from a checkout of the default
 branch: it runs no code of a pull request. For each pull request to route it reads the facts with
 GET (the head, the latest run of each check and the latest status of each context of the head,
-`mergeable_state`, the comments, the reviews, the changed files) and sets exactly one of the seven
-labels `agk:ci-running`, `agk:ci-red`, `agk:conflict`, `agk:review`, `agk:fix`, `agk:approve`,
-`agk:ready`, removing the other six. When more than one state holds, the first of that list in the
-order conflict, ci-running, ci-red, approve, fix, ready, review wins. A label set with the job's
+`mergeable_state`, the comments, the reviews, the changed files) and sets exactly one of the
+states of `STATES`, each naming its actor in its description, removing the others and the old
+`agk:ready` (amendment 150, ADR-0385); `pr_state` gives the label and its actor, the first of
+`STATES` that holds, except that `agk:conflict` comes before the checks, and `agk:parked`, a
+person's hold, is never set or removed. A label set with the job's
 token starts no workflow, so the router cannot loop. It writes labels and, for the default branch
 (SPEC-0032 rule 7), the one issue `The default branch is red`: on a `push` to the default branch
 or a finished workflow on it, it reads the checks of the branch's head and, when they fail, opens
@@ -34,7 +35,7 @@ from the health issues below, that is the only other issue it closes. Messages n
 never a value.
 A covered fix list on the full head whose every `Final:` line accepts an ADR the pull request
 changes (SPEC-0021 rule 3a) clears the head for the label, as `merge_cleared.py` clears it, so a
-pull request merged on it ends with `agk:ready` (brief #601, ADR-0293).
+pull request merged on it ends with `agk:merge-ready` (brief #601, ADR-0293).
 With `builder_start = "assign"` every run of the job also reads the conductor lease and the slot
 leases and opens, updates or closes the plain issues `No live conductor` and `Builder pool down`,
 labelled `agk-health` (brief #776 answer 5, ADR-0368); with `start` it reads none of them.
@@ -71,6 +72,7 @@ from common import (
     required_checks,
     verdict_problem,
 )
+from merge_cleared import PROTECTED
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
 from reviewers import (
     APPROVE,
@@ -91,31 +93,47 @@ from session import RED_TITLE, ROUTER_PAIR, gh, is_red, pages, repo_name
 NAME = "route"
 USAGE = "usage: route.py [--pr N | --all | --branch | --health] [--dry-run]"
 ROUTER_JOB = "agk-route"
-LABELS = (
-    "agk:ci-running",
-    "agk:ci-red",
-    "agk:conflict",
-    "agk:review",
-    "agk:fix",
-    "agk:approve",
-    "agk:ready",
+STATES = (  # (label, actor, what), amendment 150 item 1; pr_state's precedence (ADR-0385)
+    ("agk:parked", "owner", "a person holds it"),
+    ("agk:build", "builder", "a draft, or no ready Report: on the head"),
+    ("agk:ci-running", "checks", "the required checks of the head run"),
+    ("agk:ci-red", "builder", "a required check of the head failed"),
+    ("agk:conflict", "builder", "a conflict with the default branch"),
+    ("agk:review", "conductor", "a verdict on the reported head"),
+    ("agk:fix", "builder", "the fix list on the head"),
+    ("agk:question", "owner", "an answer to Owner needed:"),
+    ("agk:approve", "owner", "a spec approval the head needs"),
+    ("agk:owner-merge", "owner", "the merge of a path only a person merges"),
+    ("agk:merge-ready", "merger", "the guarded merge"),
+)
+ACTOR = {label: actor for label, actor, _ in STATES}
+PARKED = "agk:parked"
+OLD_READY = "agk:ready"  # read as agk:merge-ready until the next release (amendment 150 item 2)
+LABELS = (*(label for label, _, _ in STATES if label != PARKED), OLD_READY)  # set or removed
+OWNER_PATHS = PROTECTED  # the one list merge_cleared.py refuses (SPEC-0039 rule 5)
+BRIEF_LINE = re.compile(r"^Brief: #\d+", re.MULTILINE)
+BUILT = re.compile(
+    r"Report: ([0-9a-f]{7,40}) (?:ready for review|fix list applied|merge of main)\b"
 )
 COLORS = {
+    "agk:build": "c2e0c6",
     "agk:ci-running": "fbca04",
     "agk:ci-red": "d93f0b",
     "agk:conflict": "b60205",
     "agk:review": "0e8a16",
     "agk:fix": "d4c5f9",
+    "agk:question": "5319e7",
     "agk:approve": "5319e7",
-    "agk:ready": "0e8a16",
+    "agk:owner-merge": "5319e7",
+    "agk:merge-ready": "0e8a16",
     "agk-brief": "1d76db",
     "agk-health": "b60205",
     "agk:parked": "c5def5",
 }
 DESCRIPTIONS = {
     "agk-brief": "AGK: a brief a builder session can take",
-    "agk:parked": "AGK: a brief `next` does not offer",
     "agk-health": "AGK: the conductor or the builder pool has no valid lease",
+    **{label: f"AGK: {actor} acts next: {what}" for label, actor, what in STATES},
 }
 FAILED_RUN = {"failure", "timed_out", "cancelled", "action_required", "startup_failure", "stale"}
 FAILED_STATUS = {"failure", "error"}
@@ -250,10 +268,73 @@ def final_accept_clears(body: str, head: str, files: list[dict]) -> bool:
     return all(path in touched for path in accepts)
 
 
+def description_of(label: str) -> str:
+    """The GitHub description of a label the router creates (amendment 150 item 1)."""
+    return DESCRIPTIONS.get(label, "AGK: the state of a pull request")
+
+
 def decide(f: dict) -> str:
-    """The one label of a pull request from its facts; the first state that holds, in order."""
-    if f.get("mergeable_state") == "dirty":
+    """The one label of a pull request from its facts (the label of `pr_state`)."""
+    return pr_state(f)[0]
+
+
+def pr_state(f: dict) -> tuple[str, str]:
+    """(the one state label, its actor): the first state that holds, in order (ADR-0385)."""
+    label = state_of(f)
+    return label, ACTOR[label]
+
+
+def reported(f: dict, head: str) -> bool:
+    """Whether the author's `Report:` names HEAD as ready, fixed or merged (amendment 150)."""
+    me = str(f.get("author") or "").lower()
+    for c in f.get("comments") or []:
+        match = BUILT.match(first_line(c))
+        if match and login_of(c) == me and head.startswith(match.group(1)):
+            return True
+    return False
+
+
+def asks_owner(f: dict, comments: list[dict], authors: list[str] | None) -> bool:
+    """An `Owner needed:` by a listed verdict author with no later answer by a spec approver and
+    no later head (amendment 150 item 1, Q-846-4); comments are in the order GitHub lists them."""
+    approvers = {str(a).lower() for a in f.get("approvers") or []}
+    listed = {str(a).lstrip("@").lower() for a in authors or []}
+    pushed = str(
+        (((f.get("commit") or {}).get("commit") or {}).get("committer") or {}).get("date") or ""
+    )
+    open_ask = False
+    for c in comments:
+        line = first_line(c)
+        if line.startswith("Owner needed:") and login_of(c) in listed:
+            open_ask = not pushed or str(c.get("created_at") or "") >= pushed
+        elif line.startswith(("Maintainer answer:", "Approve:")) and login_of(c) in approvers:
+            open_ask = False
+    return open_ask
+
+
+def state_of(f: dict) -> str:
+    if PARKED in (f.get("labels") or ()):  # a person's hold; never set or removed (Q-846-1)
+        return PARKED
+    if f.get("draft"):
+        return "agk:build"
+    if f.get("mergeable_state") == "dirty":  # before the checks: none start on it (Q-846-8)
         return "agk:conflict"
+    head = str(f.get("head") or "")
+    comments = f.get("comments") or []
+    if f.get("solo_person"):  # brief 277: the person's confirmation is the verdict and approval
+        parents = (f.get("commit") or {}).get("parents") or []
+        heads = {head} | ({str(parents[0].get("sha"))} if len(parents) == 1 else set())
+        comments = confirmed_comments(
+            comments, f.get("agent_apps") or (), f["solo_person"], heads=heads
+        )
+    authors = counted_authors(f.get("authors"), f.get("author"))
+    listed = verdicts(comments, authors) or []
+    kind, sha = listed[-1] if listed else ("", "")
+    names_head = bool(sha) and head.startswith(sha)
+    covered = covered_head(Held(f.get("commit") or {}), head, comments, authors) == "yes"
+    brief = BRIEF_LINE.search(str(f.get("body") or ""))
+    if brief and not (names_head or covered or reported(f, head)):  # Q-846-3, Q-846-7
+        return "agk:build"
     checks, statuses, missing = judged(
         f.get("checks") or [], f.get("statuses") or [], f.get("required")
     )
@@ -269,18 +350,6 @@ def decide(f: dict) -> str:
         return "agk:ci-red"
     if f.get("unreadable"):  # brief #854 answer 2: the conductor sees it at its next pass
         return "agk:review"
-    head = str(f.get("head") or "")
-    comments = f.get("comments") or []
-    if f.get("solo_person"):  # brief 277: the person's confirmation is the verdict and approval
-        parents = (f.get("commit") or {}).get("parents") or []
-        heads = {head} | ({str(parents[0].get("sha"))} if len(parents) == 1 else set())
-        comments = confirmed_comments(
-            comments, f.get("agent_apps") or (), f["solo_person"], heads=heads
-        )
-    authors = counted_authors(f.get("authors"), f.get("author"))
-    listed = verdicts(comments, authors) or []
-    kind, sha = listed[-1] if listed else ("", "")
-    names_head = bool(sha) and head.startswith(sha)
     flipped = specs_approved_by(f.get("files") or [])
     people = approved_by_a_person(
         comments,
@@ -290,19 +359,23 @@ def decide(f: dict) -> str:
         f.get("agent_apps") or (),
     )
     latest = latest_verdict_body(comments, authors)
-    if names_head and asked_for(latest) - people:
-        return "agk:approve"
     accepted = names_head and final_accept_clears(latest, head, f.get("files") or [])
     if names_head and kind in ("fix", "rejected") and not accepted:
         return "agk:fix"
-    covered = covered_head(Held(f.get("commit") or {}), head, comments, authors) == "yes"
+    if asks_owner(f, comments, authors):
+        return "agk:question"
+    if names_head and asked_for(latest) - people:
+        return "agk:approve"
     if (names_head and kind == "cleared") or accepted or covered:
         # brief #797 answer 4: an approval given while the spec on the head still reads Draft
         drafts = set(f.get("draft_specs") or ()) & specs_named_approved(
             comments, f.get("approvers") or []
         )
-        waiting = (flipped - people) | drafts
-        return "agk:approve" if waiting else "agk:ready"
+        if (flipped - people) | drafts:
+            return "agk:approve"
+        files = {str(x.get("filename") or "") for x in f.get("files") or []}
+        owner = any(p.startswith(OWNER_PATHS) for p in files)
+        return "agk:owner-merge" if owner else "agk:merge-ready"
     return "agk:review"
 
 
@@ -376,6 +449,9 @@ def read_facts(repo: str, n: int, root: Path) -> tuple[dict, dict] | None:
         "agent_apps": agent_apps(root),
         "solo_person": solo_person(root),
         "author": (pr.get("user") or {}).get("login"),
+        "draft": pr.get("draft") is True,
+        "body": str(pr.get("body") or ""),
+        "labels": [str(x.get("name")) for x in pr.get("labels") or []],
         "files": files,
         "draft_specs": draft_specs_of(repo, files, head),
         "commit": commit if isinstance(commit, dict) else {},
@@ -404,7 +480,7 @@ class Labels:
                 "-f",
                 f"color={COLORS[name]}",
                 "-f",
-                "description=" + DESCRIPTIONS.get(name, "AGK: the state of a pull request"),
+                "description=" + description_of(name),
                 method="POST",
             )
             self.known.add(name)
@@ -782,10 +858,13 @@ def red_copies(found: list[dict]) -> list[dict]:
     3): the title `RED_TITLE` and the lines `Priority: 0` and `Advances: none`, oldest first. A
     green branch closes them all, so no stale copy holds every merge; `is_red` still counts only
     the router's own (answer 4)."""
+
     def shaped(item: dict) -> bool:
         lines = {x.rstrip() for x in str(item.get("body") or "").splitlines()}
-        return "pull_request" not in item and item.get("title") == RED_TITLE and (
-            set(ROUTER_PAIR) <= lines
+        return (
+            "pull_request" not in item
+            and item.get("title") == RED_TITLE
+            and (set(ROUTER_PAIR) <= lines)
         )
 
     return sorted((i for i in found if shaped(i)), key=lambda i: i["number"])
@@ -975,6 +1054,8 @@ def pipeline_document(repo: str, root: Path) -> dict:
     held = {k: [] for k in PIPELINE_COUNTS}
     for pr in found:
         names = {(x or {}).get("name") for x in pr.get("labels") or []}
+        if names & {"agk:merge-ready", "agk:owner-merge"}:  # schema 1 until build (b) of #846
+            names.add(OLD_READY)
         for k in PIPELINE_COUNTS:
             if f"agk:{k}" in names and isinstance(pr.get("number"), int):
                 held[k].append(pr)

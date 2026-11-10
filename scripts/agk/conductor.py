@@ -996,13 +996,30 @@ def pool_state(root, repo: str) -> list[tuple[str, bool, bool, str]]:
         )
         rows.append((NO_CONDUCTOR, down, bool(briefs or ready), text))
     comments, allowed, names = assignments(root, repo)
-    dead = [n for n in names if not slot_state(comments, n, allowed, now)[0]]
+    window = timedelta(minutes=session.flow_int(root, SEEN, SLOT_SEEN_MINUTES, 1))
+    dead = []
+    for name in names:
+        seen = slot_seen(comments, name, allowed)
+        late = seen is None or now - seen >= window
+        if late and not slot_state(comments, name, allowed, now)[0]:
+            dead.append(f"{name} ({f'last seen {stamp_of(seen)}' if seen else 'never'})")
     text = (
-        f"Slots with no valid lease: {', '.join(dead) or 'none'}, of {len(names)} (setting: "
-        "builder_slots in the flow table of agk.toml). This issue closes when the leases are back."
+        f"Slots not seen within the window: {', '.join(dead) or 'none'}, of {len(names)} "
+        f"(settings: builder_slots and {SEEN} in the flow table of agk.toml). This issue closes "
+        "when the slots run again."
     )
     rows.append((POOL_DOWN, len(dead) * 3 > len(names), bool(briefs), text))
     return rows
+
+
+SEEN, SLOT_SEEN_MINUTES = "slot_seen_minutes", 90  # one hourly run plus margin (ADR-0412)
+
+
+def slot_seen(comments: list, name: str, allowed: set[str]) -> datetime | None:
+    """The time on the slot's lease marker by a listed author: it is edited in place by `taken`,
+    `renewed` and `released`, so it is the newest of the three; None when it has none."""
+    found = session.slot_marker(comments, name, allowed)
+    return when(found[1].group(2)) if found else None
 
 
 # --- merge-queue (rows 3 and 22; brief #643 build (b), ADR-0329) ------------------------------

@@ -1,0 +1,46 @@
+[
+  {
+    "name": "agk:parked",
+    "description": "AGK: owner acts next: a person holds it"
+  },
+  {
+    "name": "agk:build",
+    "description": "AGK: builder acts next: a draft, or no ready Report: on the head"
+  },
+  {
+    "name": "agk:ci-running",
+    "description": "AGK: checks acts next: the required checks of the head run"
+  },
+  {
+    "name": "agk:ci-red",
+    "description": "AGK: builder acts next: a required check of the head failed"
+  },
+  {
+    "name": "agk:conflict",
+    "description": "AGK: builder acts next: a conflict with the default branch"
+  },
+  {
+    "name": "agk:review",
+    "description": "AGK: conductor acts next: a verdict on the reported head"
+  },
+  {
+    "name": "agk:fix",
+    "description": "AGK: builder acts next: the fix list on the head"
+  },
+  {
+    "name": "agk:question",
+    "description": "AGK: owner acts next: an answer to Owner needed:"
+  },
+  {
+    "name": "agk:approve",
+    "description": "AGK: owner acts next: a spec approval the head needs"
+  },
+  {
+    "name": "agk:owner-merge",
+    "description": "AGK: owner acts next: the merge of a path only a person merges"
+  },
+  {
+    "name": "agk:merge-ready",
+    "description": "AGK: merger acts next: the guarded merge"
+  }
+]
