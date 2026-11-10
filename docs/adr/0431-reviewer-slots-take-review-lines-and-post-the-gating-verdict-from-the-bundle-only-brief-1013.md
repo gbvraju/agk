@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-10
 - Deciders: maintainers
-- Related: ADR-0430, ADR-0362, ADR-0425, SPEC-0023, SPEC-0034, amendment 160, brief #1012, brief #1013, plan #661
+- Related: ADR-0020, ADR-0430, ADR-0362, ADR-0425, SPEC-0023, SPEC-0034, amendment 160, brief #1012, brief #1013, plan #661
 - Requirements: REQ-046, REQ-054
 
 Protected classes: `scripts/agk/`, `tests/kit/`, `.claude/`, `kit/`, `agk.toml`
@@ -23,7 +23,8 @@ protected classes, so the build writes its own (session rule 36); 0431 is the br
    pull request), each with its author and time, oldest first, and the conclusions of the head's check runs by name. It
    reads REST with GET only, and of the issues only the brief and the two comment lists. It refuses a sha that is not
    the pull request's head, and a checkout whose `HEAD` is not that sha, naming this ADR. The same replies and the same
-   checkout give the same bytes. It is installed with the kit.
+   checkout give the same bytes. It is installed with the kit as a fourth path of the `experimental` list of
+   `kit/manifest.json` that ADR-0020 decision 2 set, beside `review_context.py`.
 2. `session.py` reads `Review: r<N> #<pr> <40-hex>` on the one open `agk-conductor` issue by a listed verdict author.
    `slot --take|--renew|--release|--next r<N>` use the builder slots' lease (ADR-0362, ADR-0425). `slot --next r<N>`
    prints `review pr #<n> <sha>` for the newest of its lines with no `Verdict:` on that head by a listed verdict author,
