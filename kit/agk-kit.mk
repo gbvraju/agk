@@ -5,6 +5,7 @@
 # With `[testing] pr_tests = "selected"` and EVENT=pull_request (the workflow passes it) the run is the plan of the step
 # `Project tests` (project_tests.plan: impact.py's selection, run by the [proof] area); a push, any other event, a release
 # and a full plan run the full suite (brief #749, ADR-0348). One line says which mode ran and the selected count.
+# The selected runs take the same workers, and a selection of `[testing] full_when_share` runs the full suite (#980).
 # A bad setting fails the target with one line naming it. The command run is printed last.
 AGK_KIT_SUITE = AGK_KIT_TESTS=1 $(PY) -m pytest -c tests/kit/pytest.ini $(strip tests/kit $(wildcard tests/kit_dev)) -q
 define AGK_KIT_CHOOSE
@@ -25,8 +26,10 @@ try:
         runs, lines = [("full", "", ".", f"event {event or 'unknown'}")], []
     else:
         runs, lines = project_tests.plan(here, command)
-        # The plan's own line about the workers of `project_tests` is not this run's: `single` is.
-        lines = [x for x in lines if x not in (NO_PARALLEL, NO_XDIST)]
+        # A full plan's line about the workers of `project_tests` is not this run's: `single` is.
+        # A selected plan's line is its selected runs' own, kept (SPEC-0044 rule 4, #980).
+        if any(r[0] == "full" for r in runs):
+            lines = [x for x in lines if x not in (NO_PARALLEL, NO_XDIST)]
 except CheckError as exc:
     sys.exit(f"tests: {exc}")
 full = next((r for r in runs if r[0] == "full"), None)

@@ -23,6 +23,11 @@ SPEC-0044 rule 7 (brief #583): `--record FILE` reads that one prepush record, an
 another; when its `full` regression run took longer than `[testing] slow_suite_seconds` (600) while
 `workers` is 1, it prints one information line naming `testing.workers` before the summary. A record
 that cannot be read prints one line naming the option. Neither changes the exit code.
+SPEC-0044 rules 9 and 10 (brief #997): beside it, for any record whose `full` run and `head` are
+there, one line suggests `proof_timeout` as ceil(n * 1.5 / 60) * 60, the formula of prepush's
+warning (ADR-0258); and when the configured `test_dirs` and `test_patterns` match no test file
+while `adopt.FRONTEND_PATTERNS` match some outside `adopt.py`'s skipped folders, one line names
+`test_dirs`. Both are information lines: they write nothing and change no exit code.
 Brief #632 (ADR-0306): one information line after the checks (before `tidy:` and the summary),
 and the same text as `secret_scan` in `--json`, says whether gitleaks is on PATH and which version
 `gitleaks version` prints (that one fixed argument list, no shell), naming the governance
@@ -44,7 +49,10 @@ is read); the JSON report carries them as `skills`. An absent skill changes no e
 from __future__ import annotations
 
 import datetime
+import fnmatch
 import json
+import math
+import os
 import re
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
@@ -60,6 +68,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 # The kit scripts the doctor imports: the router's list is read as upgrade.py writes it, and
 # the check names of a workflow's jobs as the router reads them (brief #283); the minutes line as
 # minutes.py prints it (brief #370).
+import adopt  # noqa: E402
 import impact  # noqa: E402
 import merge_cleared  # noqa: E402
 import minutes  # noqa: E402
@@ -73,9 +82,11 @@ from common import (  # noqa: E402
     ROUTER_WORKFLOW,
     CheckError,
     jobs_of,
+    load_config,
     minutes_warn,
     paused,
     personal_table,
+    proof_timeout,
     router_names,
     router_wanted,
     with_router_names,
@@ -1561,13 +1572,19 @@ def full_seconds(record: dict) -> float | None:
     return None
 
 
-def suite_lines(root: Path, path: Path) -> list[str]:
-    """SPEC-0044 rule 7: the information line for a slow single-process full run of one record."""
+def read_record(path: Path) -> dict | None:
+    """The prepush record as an object, None when it cannot be read."""
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(record, dict):
-            raise ValueError("not an object")
     except (OSError, UnicodeDecodeError, ValueError):
+        return None
+    return record if isinstance(record, dict) else None
+
+
+def suite_lines(root: Path, path: Path) -> list[str]:
+    """SPEC-0044 rule 7: the information line for a slow single-process full run of one record."""
+    record = read_record(path)
+    if record is None:
         return [NO_RECORD]
     seconds = full_seconds(record)
     try:
@@ -1580,6 +1597,91 @@ def suite_lines(root: Path, path: Path) -> list[str]:
         f"tests: the full suite took {round(seconds)} s in one process, more than "
         f"slow_suite_seconds ({limit} s); see the testing guide on workers "
         "(setting: testing.workers)"
+    ]
+
+
+def headroom(seconds: float) -> int:
+    """SPEC-0044 rule 9: the suggested `proof_timeout`, ceil(n * 1.5 / 60) * 60 of the rounded run.
+    The same formula is in `prepush.full_suite_warning` (ADR-0258); a test holds the two equal."""
+    return math.ceil(round(seconds) * 1.5 / 60) * 60
+
+
+def timeout_lines(root: Path, path: Path) -> list[str]:
+    """SPEC-0044 rule 9: the `proof_timeout` suggestion from one record's full run, whatever the
+    run took against the setting; nothing without a full run or a head, or for an unread record."""
+    record = read_record(path)
+    seconds = full_seconds(record) if record is not None else None
+    head = record.get("head") if record is not None else None
+    if seconds is None or not isinstance(head, str) or not head:
+        return []
+    try:
+        limit = proof_timeout(root)
+    except CheckError as exc:
+        return [f"tests: {exc}"]
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []
+    return [
+        f"tests: proof_timeout {limit} s; the recorded full suite took {round(seconds)} s "
+        f"(record {head[:12]}); a value of about {headroom(seconds)} s leaves headroom "
+        "(setting: proof_timeout)"
+    ]
+
+
+def record_lines(root: Path, path: Path) -> list[str]:
+    """SPEC-0044 rules 7 and 9 for `--record FILE`: one `NO_RECORD` line, or both kinds of line."""
+    lines = suite_lines(root, path)
+    if lines == [NO_RECORD]:
+        return lines
+    return list(dict.fromkeys(lines + timeout_lines(root, path)))
+
+
+def configured_test_found(root: Path, dirs: list[str], patterns: list[str]) -> bool:
+    """Whether any file under a configured test folder matches a configured file-name pattern."""
+    for folder in dirs:
+        base = root / folder
+        if not base.is_dir():
+            continue
+        for _here, dirnames, filenames in os.walk(base):
+            dirnames[:] = [
+                d for d in dirnames if not d.startswith(".") and d not in adopt.SKIP_DIRS
+            ]
+            if any(fnmatch.fnmatch(n, p) for n in filenames for p in patterns):
+                return True
+    return False
+
+
+def frontend_count(root: Path) -> int:
+    """The files matching `adopt.FRONTEND_PATTERNS` outside the folders `adopt.py` skips."""
+    count = 0
+    for here, dirnames, filenames in os.walk(root):
+        rel_here = Path(here).relative_to(root).as_posix()
+        dirnames[:] = adopt.walked_dirs("" if rel_here == "." else rel_here, dirnames)
+        count += sum(
+            1 for n in filenames if any(fnmatch.fnmatch(n, p) for p in adopt.FRONTEND_PATTERNS)
+        )
+    return count
+
+
+def frontend_lines(root: Path) -> list[str]:
+    """SPEC-0044 rule 10: the stamped folders and patterns find no test while front-end tests are
+    there. A malformed setting gives none here; the commands that read it refuse it by name."""
+    try:
+        cfg = load_config(root)
+    except (CheckError, OSError, UnicodeDecodeError, ValueError):
+        return []
+    dirs, patterns = cfg.get("test_dirs"), cfg.get("test_patterns")
+    if not (isinstance(dirs, list) and isinstance(patterns, list)):
+        return []
+    if not all(isinstance(i, str) for i in [*dirs, *patterns]):
+        return []
+    if configured_test_found(root, dirs, patterns):
+        return []
+    count = frontend_count(root)
+    if count == 0:
+        return []
+    return [
+        f"tests: test_dirs and test_patterns match no test file; {count} files match the "
+        "front-end test patterns (setting: test_dirs)"
     ]
 
 
@@ -1786,8 +1888,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         api = Path(options["api"]) if options["api"] else None
         tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
-        extra = suite_lines(root.resolve(), Path(options["record"])) if options["record"] else []
-        extra = extra + unmapped_lines(root.resolve())
+        extra = record_lines(root.resolve(), Path(options["record"])) if options["record"] else []
+        extra = extra + frontend_lines(root.resolve()) + unmapped_lines(root.resolve())
         deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()
         work, work_failed = work_type_line(root.resolve())

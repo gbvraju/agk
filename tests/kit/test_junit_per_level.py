@@ -226,6 +226,8 @@ def level_project(
     write(root / "again.sh", AGAIN.format(code=alone_code))
     write(root / "src/a.js", "export const a = 1;\n")
     write(root / "web/a.test.js", "// names src/a.js\n")
+    for spare in ("b", "c"):  # one selected file stays below `full_when_share` (brief #980)
+        write(root / f"web/{spare}.test.js", "// guards nothing\n")
     write(root / ".gitignore", "out/\nagain.txt\ndocs/runs/\n")
     level_rerun = 'rerun = "sh again.sh {id}"\n' if rerun else ""
     write(
@@ -233,7 +235,7 @@ def level_project(
         'default_branch = "main"\nproject_tests = "sh run.sh"\n'
         'test_dirs = ["web"]\ntest_patterns = ["*.test.js"]\n'
         f'[testing]\npr_tests = "selected"\nrerun_alone = {switch}\n{setting}'
-        'map = [{ code = "src/**", tests = ["web/*.test.js"] }]\n'
+        'map = [{ code = "src/**", tests = ["web/a.test.js"] }]\n'
         '[proof.web]\ndirs = ["web"]\npatterns = ["*.test.js"]\n'
         'command = "sh run.sh {files}"\ncwd = "."\n'
         '[proof.web.levels.unit]\ncommand = "sh run.sh {files}"\nwhen = ["pr", "main"]\n'

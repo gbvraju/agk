@@ -82,6 +82,21 @@ def toml_list(items: list[str]) -> str:
     return "[" + ", ".join(json.dumps(i) for i in items) + "]"
 
 
+def walked_dirs(rel_here: str, dirnames: list[str]) -> list[str]:
+    """The folders under `rel_here` that a test walk enters: no dot folder, none of `SKIP_DIRS`
+    and none of `KIT_DIRS`. `detect_tests` and `doctor.py` both call it (brief #997)."""
+    return [
+        d
+        for d in dirnames
+        if not d.startswith(".")
+        and d not in SKIP_DIRS
+        and not any(
+            f"{rel_here}/{d}".lstrip("/") == k or f"{rel_here}/{d}".lstrip("/").startswith(k + "/")
+            for k in KIT_DIRS
+        )
+    ]
+
+
 def detect_tests(root: Path) -> tuple[list[str], list[str]]:
     """Topmost directories holding Python or front-end test files, and the patterns matched."""
     dirs: set[str] = set()
@@ -89,17 +104,7 @@ def detect_tests(root: Path) -> tuple[list[str], list[str]]:
     for here, dirnames, filenames in os.walk(root):
         rel_here = Path(here).relative_to(root).as_posix()
         rel_here = "" if rel_here == "." else rel_here
-        dirnames[:] = [
-            d
-            for d in dirnames
-            if not d.startswith(".")
-            and d not in SKIP_DIRS
-            and not any(
-                f"{rel_here}/{d}".lstrip("/") == k
-                or f"{rel_here}/{d}".lstrip("/").startswith(k + "/")
-                for k in KIT_DIRS
-            )
-        ]
+        dirnames[:] = walked_dirs(rel_here, dirnames)
         for name in filenames:
             for pattern in TEST_PATTERNS + FRONTEND_PATTERNS:
                 if fnmatch.fnmatch(name, pattern):

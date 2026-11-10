@@ -825,3 +825,147 @@ def test_ac6_the_doctor_installs_no_skill(tmp_path, monkeypatch):
     assert tree_hash(dirs["root"]) == before
     assert not (dirs["root"] / ".claude" / "skills").exists()
     assert not (tmp_path / "home" / ".claude" / "skills").exists()
+
+
+# --- SPEC-0044 build (d), second part: rules 9 and 10 (brief #997) ----------------------------
+
+HEAD = "0123456789abcdef0123456789abcdef01234567"
+
+
+def suite_record(path: Path, seconds: float | None, head: str | None = HEAD) -> Path:
+    runs = [] if seconds is None else [{"name": "full", "set": "regression", "seconds": seconds}]
+    data: dict = {"schema": 1, "steps": [{"name": "tests", "outcome": "ok", "runs": runs}]}
+    if head is not None:
+        data["head"] = head
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+def timeout_root(tmp_path: Path, limit: int = 1800) -> Path:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "agk.toml").write_text(f"proof_timeout = {limit}\n", encoding="utf-8")
+    return root
+
+
+def timeout_text(limit: int, took: int, about: int) -> str:
+    return (
+        f"tests: proof_timeout {limit} s; the recorded full suite took {took} s "
+        f"(record {HEAD[:12]}); a value of about {about} s leaves headroom (setting: proof_timeout)"
+    )
+
+
+@pytest.mark.parametrize(("seconds", "took", "about"), [(1700.2, 1700, 2580), (100.0, 100, 180)])
+def test_rule9_the_record_suggests_proof_timeout(tmp_path, seconds, took, about):
+    """REQ-051: SPEC-0044 rule 9 (the line for any recorded full run, under or over the limit)."""
+    import doctor as module
+
+    root = timeout_root(tmp_path)
+    path = suite_record(tmp_path / "record.json", seconds)
+    assert module.timeout_lines(root, path) == [timeout_text(1800, took, about)]
+
+
+@pytest.mark.parametrize("seconds", [1700, 3000])
+def test_rule9_the_value_equals_the_prepush_warning(seconds):
+    """REQ-051: SPEC-0044 rule 9 (one formula in effect: doctor's value is prepush's, ADR-0258)."""
+    import doctor as module
+    import prepush
+
+    warning = prepush.full_suite_warning(seconds, 1)
+    assert warning is not None
+    assert f"a value of about {module.headroom(seconds)} s leaves headroom" in warning
+
+
+def test_rule9_no_full_run_or_no_head_gives_no_line(tmp_path):
+    """REQ-051: SPEC-0044 rule 9 (a record without a full run or without a head says nothing)."""
+    import doctor as module
+
+    root = timeout_root(tmp_path)
+    assert module.timeout_lines(root, suite_record(tmp_path / "a.json", None)) == []
+    assert module.timeout_lines(root, suite_record(tmp_path / "b.json", 1700, None)) == []
+
+
+def test_rule9_an_unreadable_record_gives_only_no_record(tmp_path):
+    """REQ-051: SPEC-0044 rules 7 and 9 (one NO_RECORD line, never a second line)."""
+    import doctor as module
+
+    root = timeout_root(tmp_path)
+    (tmp_path / "bad.json").write_text("{", encoding="utf-8")
+    for path in (tmp_path / "missing.json", tmp_path / "bad.json"):
+        assert module.record_lines(root, path) == [module.NO_RECORD]
+
+
+def test_rule9_the_record_changes_no_exit_code_and_writes_nothing(tmp_path):
+    """REQ-051: SPEC-0044 rule 9 (an information line; agk.toml is never written)."""
+    path = suite_record(tmp_path / "record.json", 1700)
+    without, _, _ = run_case("ok", tmp_path / "a")
+    proc, _, dirs = run_case("ok", tmp_path / "b", "--record", str(path))
+    before = (dirs["root"] / "agk.toml").read_bytes()
+    assert proc.returncode == without.returncode, proc.stdout + proc.stderr
+    lines = proc.stdout.splitlines()
+    timeout = [line for line in lines if line.startswith("tests: proof_timeout ")]
+    assert len(timeout) == 1 and "about 2580 s" in timeout[0]
+    assert lines.index(timeout[0]) < len(lines) - 1 and lines[-1].startswith("summary: ")
+    assert (dirs["root"] / "agk.toml").read_bytes() == before
+
+
+def frontend_root(tmp_path: Path, files: list[str]) -> Path:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "agk.toml").write_text(
+        'test_dirs = ["tests"]\ntest_patterns = ["test_*.py"]\n', encoding="utf-8"
+    )
+    for rel in files:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text("// example.com\n", encoding="utf-8")
+    return root
+
+
+FRONTEND_LINE = (
+    "tests: test_dirs and test_patterns match no test file; 1 files match the front-end test "
+    "patterns (setting: test_dirs)"
+)
+
+
+@pytest.mark.parametrize(
+    ("files", "lines"),
+    [
+        (["src/app/__tests__/cart.test.tsx"], [FRONTEND_LINE]),
+        (["src/app/__tests__/cart.test.tsx", "tests/test_a.py"], []),
+        (["node_modules/pkg/cart.test.tsx"], []),
+        ([], []),
+    ],
+)
+def test_rule10_unfound_front_end_tests_are_named(tmp_path, files, lines):
+    """REQ-051: SPEC-0044 rule 10 (stamped folders find nothing while front-end tests exist)."""
+    import doctor as module
+
+    assert module.frontend_lines(frontend_root(tmp_path, files)) == lines
+
+
+def test_rule10_both_walks_skip_the_same_folders(tmp_path, monkeypatch):
+    """REQ-051: SPEC-0044 rule 10 (brief #997 answer 3): the front-end walk of `doctor.py` and
+    `adopt.detect_tests` skip the same folders through one function of `adopt.py`, never a copy."""
+    import adopt
+    import doctor as module
+
+    kept = "src/app/__tests__/cart.test.tsx"
+    skipped = [
+        ".hidden/cart.test.tsx",
+        "node_modules/pkg/cart.test.tsx",
+        "scripts/agk/cart.test.tsx",
+        "tests/kit/cart.test.tsx",
+    ]
+    root = frontend_root(tmp_path, [kept, *skipped])
+    assert adopt.detect_tests(root)[0] == ["src/app/__tests__"]
+    assert module.frontend_count(root) == 1
+    assert not hasattr(module, "kept_dirs")
+    monkeypatch.setattr(adopt, "walked_dirs", lambda _rel_here, dirnames: list(dirnames))
+    assert adopt.detect_tests(root)[0] == [
+        ".hidden",
+        "node_modules/pkg",
+        "scripts/agk",
+        "src/app/__tests__",
+        "tests/kit",
+    ]
+    assert module.frontend_count(root) == 1 + len(skipped)
