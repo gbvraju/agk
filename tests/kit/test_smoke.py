@@ -193,7 +193,7 @@ def stub(tmp_path: Path) -> str:
         "import json, os, sys\n"
         f"open({str(out)!r}, 'w').write(json.dumps({{'argv': sys.argv[1:], "
         "'lock': os.environ.get('AGK_LOCK_NAME'), "
-        "'token': bool(os.environ.get('AGK_LOCK_TOKEN'))}))\n",
+        "'slot': bool(os.environ.get('AGK_LOCK_TOKEN'))}))\n",
         encoding="utf-8",
     )
     return f"{sys.executable} {script}"
@@ -214,7 +214,7 @@ def test_run_takes_the_heavy_lock(tmp_path, monkeypatch, capsys):
     assert code == 0, out
     assert out.splitlines()[0].startswith("smoke: contract: ")
     ran = json.loads((tmp_path / "ran.json").read_text(encoding="utf-8"))
-    assert ran == {"argv": ["contract"], "lock": "heavy", "token": True}
+    assert ran == {"argv": ["contract"], "lock": "heavy", "slot": True}
 
 
 def test_run_returns_the_command_exit_code(tmp_path, monkeypatch, capsys):
