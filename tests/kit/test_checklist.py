@@ -241,8 +241,9 @@ def test_an_assign_by_a_listed_author_counts_whatever_the_case_of_the_login(tmp_
 
 
 def test_only_an_assign_line_session_acts_on_counts(tmp_path, capsys):
-    """REQ-054: brief #981 answer 1: the whole first line must be a brief form of session.py's
-    ASSIGN; trailing words or the `none` form start nothing (fix list of ed594c0, item 2)."""
+    """REQ-054: brief #981 answer 1: the whole first line must be a brief form that the builder
+    session's Assign reader takes; trailing words or the `none` form start nothing (fix list of
+    ed594c0, item 2)."""
     document = saved(
         comments=[
             assign(20, tail=" extra words"),
