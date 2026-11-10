@@ -1871,7 +1871,7 @@ def quietly(act, *args) -> tuple[int, str]:
 def release_slot(root, name: str, decided: str | None = None) -> None:
     """Release the slot on a run's way out; a release that cannot be written is left to expire."""
     with contextlib.suppress(CheckError):
-        quietly(slot_lease, root, "--release", name, decided)
+        quietly(slot_lease, root, "--release", name, *([] if decided is None else [decided]))
 
 
 def is_slot(root, me: str) -> bool:
