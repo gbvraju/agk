@@ -111,6 +111,8 @@ from session import (
     ASSIGN,
     BROAD,
     HELD_PREFIX,
+    LABEL,
+    RED_TITLE,
     RELEASED,
     TOUCHES,
     Survey,
@@ -125,6 +127,7 @@ from session import (
     gh,
     glob_regex,
     hold_state,
+    is_red,
     last_request,
     line_entries,
     literal,
@@ -1004,7 +1007,7 @@ def read_gone(root, s: Survey, now: datetime | None = None) -> None:
 
 def wait_text(w: dict) -> str:
     """Why a brief waits, in the words of the plan and of the skips of `next` (brief #345)."""
-    if "held_by" in w or "waits_for_build" in w:
+    if "held_by" in w or "waits_for_build" in w or "fixed_by" in w:
         return str(w["why"])
     target = f"#{w['waits_for']}" if "waits_for" in w else f"pull request #{w['pull_request']}"
     return f"waits for {target} ({w['why']})"
@@ -1422,17 +1425,79 @@ def settled(s: Survey) -> tuple[list, list[dict], list[dict], list]:
     return skipped, ready, build_waits, build_skips
 
 
+# --- one red head gets one fix (brief #962, ADR-0414) ---------------------------------------------
+
+FIX_LINE = re.compile(r"\s*(?:(?:fixes|closes)\b|red:|plan:)", re.IGNORECASE)
+FIX_FILED = re.compile(r"fix brief filed:\s*#(\d+)", re.IGNORECASE)
+
+
+def names_red(body: object, red: int) -> bool:
+    """Whether a body names the alarm: `#<red>` in a `Fixes`, `Closes`, `Red:` or `Plan:` line, or
+    a line holding `for issue #<red>`, the whole number only."""
+    number = re.compile(rf"#{red}(?!\d)")
+    phrase = re.compile(rf"\bfor issue #{red}(?!\d)", re.IGNORECASE)
+    for line in str(body or "").splitlines():
+        if (FIX_LINE.match(line) and number.search(line)) or phrase.search(line):
+            return True
+    return False
+
+
+def open_pulls(s: Survey) -> list:
+    """The open pull requests: the survey's, or one read while the branch is red (it reads none)."""
+    if s.prs:
+        return [p for p in s.prs if p.get("state") == "open"]
+    found = pages(f"repos/{s.repo}/pulls?state=open")
+    if found is None:
+        raise CheckError("rule 1: the pull requests cannot be read")
+    return [p for p in found if p.get("state") == "open"]
+
+
+def red_fixes(root, s: Survey, issues: list, ready: list[dict]) -> list[dict]:
+    """A wait `#<red> is fixed by #<n>` for each ready alarm titled `RED_TITLE` that an open fix
+    brief or pull request names, or that a listed author's `fix brief filed: #n` on it names with
+    `#n` an open brief (brief #962 answer 1); an alarm with no fix gets none (answer 2)."""
+    alarms = [b for b in ready if b.get("title") == RED_TITLE]
+    if not alarms:
+        return []
+    briefs = {
+        i["number"]: i
+        for i in issues
+        if "pull_request" not in i and i.get("title") != RED_TITLE and not is_red(i)
+    }
+    pulls = open_pulls(s)
+    allowed = {a.lstrip("@").lower() for a in verdict_authors(root)}
+    out: list[dict] = []
+    for red in alarms:
+        number = red["number"]
+        found = {n for n, i in briefs.items() if names_red(i.get("body"), number)}
+        found |= {int(p["number"]) for p in pulls if names_red(p.get("body"), number)}
+        for c in s.comments.get(number) or []:
+            if author_of(c) in allowed:
+                found |= {int(m) for m in FIX_FILED.findall(str(c.get("body") or ""))} & set(briefs)
+        found.discard(number)
+        if found:
+            fix = min(found)
+            out.append({"brief": number, "fixed_by": fix, "why": f"is fixed by #{fix}"})
+    return out
+
+
 def build(root, record: bool = False) -> dict:
     repo = repo_name(root)
     hours = flow_int(root, "merge_hours", DEFAULTS["merge_hours"], RULE)
     behind_limit = flow_int(root, "stale_commits", DEFAULTS["stale_commits"], RULE)
-    s = survey(root, repo, "")
+    issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}")
+    if issues is None:
+        raise CheckError("rule 3: the open briefs cannot be read")
+    s = survey(root, repo, "", issues)
     reviews = flow_int(root, "reviews_in_flight", s.max_builders, RULE)
     default = _default_branch(root)
     now = datetime.now(UTC)
     read_gone(root, s, now)
     stale = stale_claims(s)
     skipped, ready, build_waits, build_skips = settled(s)
+    fixed = red_fixes(root, s, issues, ready)
+    ready = [b for b in ready if b["number"] not in {w["brief"] for w in fixed}]
+    build_waits = fixed + build_waits
     pb = playbook_of(root)
     ready = lane_order(pb, ready)
     chosen, waits = waves(root, s, ready)
