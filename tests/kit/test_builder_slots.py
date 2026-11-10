@@ -574,3 +574,169 @@ def test_a_bad_slot_seen_minutes_skips_the_health_naming_the_setting_only(tmp_pa
     out = health.router(root, stub, tmp_path)
     assert out.returncode == 0, out.stdout + out.stderr
     assert "slot_seen_minutes" in out.stdout and stub.writes() == []
+
+
+# --- the slot log: each run's decision in its marker, unacted assignments (brief #998) -----------
+
+import sys  # noqa: E402
+from datetime import UTC, datetime  # noqa: E402
+
+from test_session import SCRIPTS  # noqa: E402
+
+sys.path.insert(0, str(SCRIPTS))
+import conductor  # noqa: E402
+
+
+def logged(cid, decided: str, minutes: float = 30, slot: str = "s1", run: str = "r1") -> dict:
+    """A released marker whose run started `minutes` ago and decided `decided`."""
+    start, end = ago(minutes), ago(minutes - 1)
+    body = f"Slot: released {end} {slot} {run}\nlast run: {start} to {end}\ndecided: {decided}"
+    return comment(cid, "boss", body, start)
+
+
+def test_a_runs_decision_is_written_into_its_marker_and_no_comment_is_added(proj, stub):
+    """REQ-041, REQ-054: brief #998 (a)."""
+    held(proj, stub, comment(2, "boss", "Assign: s1 #12"))
+    out = slot(proj, stub, "--next")
+    assert last(out) == "assign #12", out.stdout
+    done = writes(stub)
+    assert [c[0] for c in done] == ["PATCH"] and posts(stub) == []
+    body = done[0][2][1][5:].splitlines()
+    assert body[0].startswith("Slot: active ") and body[0].endswith(" s1 mine")
+    assert body[1].startswith("last run: 20") and " to 20" in body[1]
+    assert body[2] == "decided: assign #12"
+
+
+def test_an_idle_run_writes_its_decision_with_its_release_in_one_edit(proj, stub):
+    """REQ-041: brief #998 answer 1: an idle run still costs one edit."""
+    held(proj, stub, comment(3, "owner", "Pool: stop"))
+    out = slot(proj, stub, "--next")
+    assert last(out) == "stop"
+    done = writes(stub)
+    assert len(done) == 1 and "Slot: released" in done[0][2][1]
+    assert done[0][2][1].endswith("\ndecided: stop")
+
+
+def test_a_release_keeps_the_decision_and_closes_the_run(proj, stub):
+    """REQ-041: brief #998 answer 1: `slot --release` writes the end of the run."""
+    path = mark(proj)
+    path.write_text("mine 2026-11-10T15:09:00Z\n", encoding="utf-8")
+    body = "Slot: active 2026-11-10T15:09:30Z s1 mine\nlast run: 2026-11-10T15:09:00Z to "
+    body += "2026-11-10T15:09:30Z\ndecided: wait"
+    stub.serve(COMMENTS, [comment(1, "boss", body.replace("2026-11-10T15:09:30Z", ago(1)))])
+    stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
+    out = slot(proj, stub, "--release")
+    assert out.returncode == 0, out.stdout
+    lines = writes(stub)[0][2][1][5:].splitlines()
+    assert lines[0].startswith("Slot: released ")
+    assert lines[1].startswith("last run: 2026-11-10T15:09:00Z to ") and lines[1][-1] == "Z"
+    assert lines[1] != "last run: 2026-11-10T15:09:00Z to 2026-11-10T15:09:30Z"
+    assert lines[2] == "decided: wait"
+
+
+def test_a_renewal_keeps_the_log_lines(proj, stub):
+    """REQ-041: a renewal mid-build edits the lease and keeps the decision."""
+    mark(proj)
+    body = f"Slot: active {ago(1)} s1 mine\nlast run: {ago(2)} to {ago(1)}\ndecided: assign #12"
+    stub.serve(COMMENTS, [comment(1, "boss", body)])
+    stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
+    assert slot(proj, stub, "--renew").returncode == 0
+    assert writes(stub)[0][2][1].endswith("\ndecided: assign #12")
+
+
+class Pool:
+    """`session.pages` and `session.gh` of the conductor, in process, from saved answers."""
+
+    def __init__(self, monkeypatch, tmp_path, comments: list) -> None:
+        self.root = tmp_path / "proj"
+        (self.root / "config").mkdir(parents=True)
+        (self.root / "config" / "reviewers.yaml").write_text(REVIEWERS, encoding="utf-8")
+        (self.root / "agk.toml").write_text(ON, encoding="utf-8")
+        self.table: dict = {
+            f"repos/{REPO}/issues?state=open&labels=agk-conductor": [
+                {"number": 204, "title": "Assignments", "labels": [{"name": "agk-conductor"}]}
+            ],
+            f"repos/{REPO}/issues/204/comments": comments,
+            f"repos/{REPO}/issues/comments": [],
+        }
+        monkeypatch.setattr(conductor.session, "pages", self.pages)
+        monkeypatch.setattr(conductor.session, "gh", lambda e, *x, method="GET": self.pages(e))
+        monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
+        monkeypatch.setattr(conductor.session, "conductor_issue", lambda repo: 204)
+
+    def pages(self, endpoint: str):
+        return self.table.get(endpoint, self.table.get(endpoint.split("?")[0]))
+
+
+def test_the_sweep_prints_each_slots_last_run_and_decision(monkeypatch, tmp_path, capsys):
+    """REQ-041, REQ-054: brief #998 (b)."""
+    found = Pool(monkeypatch, tmp_path, [logged(1, "wait pr #977", 30)])
+    monkeypatch.setattr(conductor, "proof_lines", lambda *a: [])
+    monkeypatch.setattr(conductor.caps, "over_lines", lambda *a: [])
+    monkeypatch.setattr(conductor, "branch_line", lambda *a: "main: success at abc")
+    monkeypatch.setattr(conductor, "stall_report", lambda root, repo: [])
+    found.table[f"repos/{REPO}/pulls?state=open"] = []
+    found.table[f"repos/{REPO}"] = {"default_branch": "main"}
+    found.table[f"repos/{REPO}/issues?state=open"] = []
+    assert conductor.sweep(found.root) == 0
+    out = capsys.readouterr().out.splitlines()
+    start = datetime.strptime(ago(30), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    row = [x for x in out if x.startswith("slot s1: ")]
+    assert row == [f"slot s1: idle, last run {start:%H:%M} decided wait pr #977"], out
+    assert [x for x in out if x.startswith("slot s2: ")] == ["slot s2: dead (no lease yet)"]
+
+
+def unacted(monkeypatch, tmp_path, comments: list) -> list[str]:
+    found = Pool(monkeypatch, tmp_path, comments)
+    return conductor.unacted_lines(found.root, REPO, datetime.now(UTC))
+
+
+def test_an_assign_older_than_a_run_that_decided_otherwise_is_unacted(monkeypatch, tmp_path):
+    """REQ-041, REQ-054: brief #998 (c)."""
+    lines = unacted(
+        monkeypatch,
+        tmp_path,
+        [comment(2, "boss", "Assign: s1 #846 pr #965 fix list", ago(50)), logged(3, "wait", 40)],
+    )
+    start = datetime.strptime(ago(40), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    assert lines == [
+        f"UNACTED: Assign: s1 #846 pr #965 fix list (50 min; last run {start:%H:%M} decided wait)"
+    ]
+
+
+def test_an_assign_the_run_acted_on_is_not_unacted(monkeypatch, tmp_path):
+    """REQ-041: the run that decided the assignment acted on it."""
+    said = [comment(2, "boss", "Assign: s1 #12", ago(50)), logged(3, "assign #12", 40)]
+    assert unacted(monkeypatch, tmp_path, said) == []
+
+
+def test_an_assign_spent_by_an_earlier_run_is_not_unacted(monkeypatch, tmp_path):
+    """REQ-041: a later run that waits on the pull request of the assigned brief is no miss."""
+    found = Pool(monkeypatch, tmp_path, [comment(2, "boss", "Assign: s1 #12", ago(90)),
+                                         logged(3, "wait pr #20", 40)])  # fmt: skip
+    found.table[f"repos/{REPO}/issues/comments"] = [comment(5, "boss", f"taken: s1 {DAY}")]
+    assert conductor.unacted_lines(found.root, REPO, datetime.now(UTC)) == []
+
+
+def test_an_assign_newer_than_the_last_run_under_75_minutes_prints_nothing(monkeypatch, tmp_path):
+    """REQ-041, REQ-054: brief #998 (d)."""
+    said = [logged(2, "wait", 80), comment(3, "boss", "Assign: s1 #12", ago(74))]
+    assert unacted(monkeypatch, tmp_path, said) == []
+
+
+def test_an_assign_newer_than_the_last_run_over_75_minutes_is_unacted(monkeypatch, tmp_path):
+    """REQ-041: brief #998 answer 2: no run in 75 minutes since the assignment."""
+    said = [logged(2, "wait", 120), comment(3, "boss", "Assign: s1 #12", ago(76))]
+    lines = unacted(monkeypatch, tmp_path, said)
+    assert len(lines) == 1 and lines[0].startswith("UNACTED: Assign: s1 #12 (76 min; last run ")
+    assert lines[0].endswith(" decided wait)")
+
+
+def test_an_assign_none_or_by_an_unlisted_author_is_never_unacted(monkeypatch, tmp_path):
+    """REQ-041"""
+    said = [
+        comment(2, "boss", "Assign: s1 none", ago(200)),
+        comment(3, "stranger", "Assign: s2 #12", ago(200)),
+        logged(4, "wait", 100),
+    ]
+    assert unacted(monkeypatch, tmp_path, said) == []
