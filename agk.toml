@@ -495,6 +495,7 @@ tests = [
 code = "scripts/agk/merge_cleared.py"
 tests = [
   "tests/kit/test_approval_same_text.py", "tests/kit/test_approved_spec_not_draft.py",
+  "tests/kit/test_auto_merge_guide.py",
   "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py", "tests/kit/test_conductor_playbook_evidence.py",
   "tests/kit/test_final_accepts.py", "tests/kit/test_launch_kinds.py", "tests/kit/test_merge_cleared_after.py",
