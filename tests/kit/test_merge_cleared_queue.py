@@ -390,7 +390,7 @@ def test_the_same_removal_is_never_posted_twice(tmp_path):
 def test_the_removal_line_is_posted_only_when_github_removed_the_pull_request(
     tmp_path, name, saved, token
 ):
-    """REQ-046: amendment 158 item 4 (only a pull request GitHub removed; verdict item 4 on #993)."""
+    """REQ-046: amendment 158 item 4 (only one GitHub removed; verdict item 4 on #993)."""
     proc, made = removed_run(tmp_path, removal_event(), token=token, **saved)
     assert posted_comments(made) == [], name + proc.stdout + proc.stderr
     assert proc.returncode == 0
@@ -463,7 +463,10 @@ def test_the_pull_request_body_checks_run_only_on_a_pull_request():
         assert found and "github.event_name == 'pull_request'" in found.group(1), step
 
 
-@pytest.mark.parametrize("step", ["check_protected_changes", "check_specs", "check_final_clearance"])
+BODY_STEPS = ["check_protected_changes", "check_specs", "check_final_clearance"]
+
+
+@pytest.mark.parametrize("step", BODY_STEPS)
 def test_the_body_reading_checks_are_skipped_on_the_merge_queue(step):
     """REQ-057: brief #972 answer 1 (verdict item 1 on #993). On `merge_group` no step sets
     AGK_BASE, so these checks would diff the whole batch, a `Covered-by:` pull request's protected
