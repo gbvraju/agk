@@ -147,7 +147,7 @@ def test_ac7_the_session_transcript_is_found_by_the_runtime_variable(tmp_path):
 
 
 def test_ac7_the_default_home_is_the_runtime_folder_under_home(tmp_path):
-    """REQ-052 AC7: rule 8, without the folder variable the home is `~/.claude` (verify, Q-798-5)."""
+    """REQ-052 AC7: rule 8, with no folder variable the home is `~/.claude` (verify, Q-798-5)."""
     folder = tmp_path / ".claude" / "projects" / "-p"
     folder.mkdir(parents=True)
     write(folder / f"{SESSION}.jsonl", ENTRIES[3:])
@@ -197,8 +197,8 @@ def test_ac7_session_rules_8_and_17_take_the_line_of_usage_py():
     """REQ-052 AC7: rule 8, the `Report:` and `Progress:` lines take the printed line."""
     text = (KIT / "config" / "session-rules.md").read_text(encoding="utf-8")
     rules = {x.split(". ", 1)[0]: x for x in text.splitlines() if x[:3].rstrip(". ").isdigit()}
-    for n in ("8", "17"):
-        assert "`python3 scripts/agk/usage.py`" in rules[n], n
+    assert "`usage.py --since <previous Report:>`" in rules["8"]
+    assert "(from `usage.py`; not reported, never 0)" in rules["17"]
     assert "`Usage: not shown`" in rules["17"] and "never 0" in rules["17"]
 
 
@@ -215,7 +215,12 @@ def project(tmp_path: Path, text: str) -> Path:
 def test_ac7_no_prices_table_reads_as_empty(tmp_path):
     """REQ-052 AC7: rule 8, the table is optional."""
     assert config.model_prices(project(tmp_path, "[flow]\n")) == {}
-    assert config.model_prices(project(tmp_path, '[models]\nbuild = { tier = "mid", effort = "low" }\n')) == {}
+    assert (
+        config.model_prices(
+            project(tmp_path, '[models]\nbuild = { tier = "mid", effort = "low" }\n')
+        )
+        == {}
+    )
 
 
 def test_ac7_a_prices_table_reads_and_the_kinds_still_read(tmp_path):
@@ -260,11 +265,16 @@ def test_ac7_the_kit_ships_no_prices_table():
 
 # --- rule 9: one line per pull request and the cost per kind --------------------------------------
 
-PROTECTED = "constitution/\nconfig/\n.claude/\n.github/\ndocs/requirements.md\nscripts/agk/\ntests/kit/\n"
+PROTECTED = (
+    "constitution/\nconfig/\n.claude/\n.github/\ndocs/requirements.md\nscripts/agk/\ntests/kit/\n"
+)
 
 
 def brief(size: str, touches: str) -> dict:
-    return {"number": 0, "body": f'Sentence: "A widget shows its price."\n\nSize: {size}\nTouches: {touches}\n'}
+    return {
+        "number": 0,
+        "body": f'Sentence: "A widget shows its price."\n\nSize: {size}\nTouches: {touches}\n',
+    }
 
 
 BRIEFS = {11: brief("S", "tests/kit/**"), 12: brief("M", "src/**")}  # small, build

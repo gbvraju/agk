@@ -42,6 +42,8 @@ from full_run import contained_in, covered
 from impact import DEFAULT_BUDGET, durations_sums, testing_table
 from reviewers import confirmed_comments, solo_person, verdict_authors
 
+from config import model_prices, model_settings
+
 NAME = "metrics"
 USAGE = (
     "usage: metrics.py [--today YYYY-MM-DD] [--repo OWNER/REPO] [--api-dir DIR] [--issues FILE] "
@@ -546,6 +548,8 @@ def usage_by_kind(src: Any, root: Path, document: Any, windows: list[tuple]) -> 
         )
     seen: dict = {}
     out = []
+    prices = model_prices(root)  # the prices table of rule 8, {} when there is none
+    tiers = model_settings(root) if prices else {}
     for label, start, end in windows:
         span = (
             "every pull request of the facts"
@@ -564,7 +568,54 @@ def usage_by_kind(src: Any, root: Path, document: Any, windows: list[tuple]) -> 
         for kind in BRIEF_KINDS:
             if kind != "none" or chosen[kind]:
                 out.append(f"{kind}: {kind_line(chosen[kind])}")
+                out += [f"  #{r.get('number')} {tokens_of(r)}" for r in chosen[kind]]
+                if prices and chosen[kind]:
+                    tier = tiers.get(kind, {}).get("tier", "strongest")
+                    out.append(f"  {cost_line(src, chosen[kind], tier, prices)}")
     return "\n".join(out) + "\n"
+
+
+ESCALATE = re.compile(r"Report: \S+ escalate\b")
+
+
+def tokens_of(record: dict) -> str:
+    used = record.get("usage")
+    return str(used) if type(used) is int else "not reported"
+
+
+def priced_tier(src: Any, record: dict, tier: str) -> str:
+    """The tier a pull request is priced at (rule 9, Q-798-9): its kind's, or `strongest` when a
+    `Report:` is an `escalate` or carries a `Route:` line, or when its comments cannot be read."""
+    number = record.get("number")
+    if tier == "strongest" or not isinstance(number, int) or isinstance(number, bool):
+        return "strongest"
+    comments = src.get(f"comments-{number}", f"repos/{{repo}}/issues/{number}/comments")
+    if not isinstance(comments, list):
+        return "strongest"
+    for c in comments:
+        body = c.get("body") if isinstance(c, dict) else None
+        lines = body.splitlines() if isinstance(body, str) else []
+        if lines and lines[0].startswith("Report:"):
+            if ESCALATE.match(lines[0]) or any(x.startswith("Route: ") for x in lines):
+                return "strongest"
+    return tier
+
+
+def cost_line(src: Any, records: list[dict], tier: str, prices: dict) -> str:
+    """One kind's cost at the prices table: a `not reported` pull request adds no cost and is
+    counted; a tier with no price makes the cost `unknown`, never 0. One price for every token,
+    cached or not, so the line is an upper bound (amendment 145, residual)."""
+    missing = len([r for r in records if type(r.get("usage")) is not int])
+    cost = Decimal(0)
+    for record in records:
+        if type(record.get("usage")) is not int:
+            continue
+        price = prices.get(priced_tier(src, record, tier))
+        if price is None:
+            return f"cost unknown at the prices table ({missing} not reported)"
+        cost += Decimal(record["usage"]) * Decimal(str(price)) / Decimal(1_000_000)
+    amount = cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return f"cost {amount} at the prices table ({missing} not reported)"
 
 
 def usage_main(options: dict) -> int:

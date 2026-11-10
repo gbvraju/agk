@@ -277,7 +277,8 @@ code = "scripts/agk/config.py"
 tests = [
   "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_capacity_profiles.py",
   "tests/kit/test_caps.py",
-  "tests/kit/test_failures.py", "tests/kit/test_models_table.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit/test_failures.py", "tests/kit/test_models_table.py", "tests/kit/test_usage_transcript.py",
+  "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
 code = "scripts/agk/core_audit.py"
@@ -518,7 +519,7 @@ tests = [
   "tests/kit/test_metrics_minutes.py", "tests/kit/test_metrics_pr_tests.py", "tests/kit/test_metrics_testing.py",
   "tests/kit/test_over_cap_builder.py", "tests/kit/test_product_report.py", "tests/kit/test_runbook_measures.py",
   "tests/kit/test_self_clearance.py", "tests/kit/test_solo_mode.py", "tests/kit/test_usage_by_kind.py",
-  "tests/kit/test_verdict_authors.py", "tests/kit/test_verdict_forms.py", "tests/kit_dev/test_architect_review.py",
+  "tests/kit/test_usage_transcript.py", "tests/kit/test_verdict_authors.py", "tests/kit/test_verdict_forms.py", "tests/kit_dev/test_architect_review.py",
   "tests/kit_dev/test_facts_wiring.py", "tests/kit_dev/test_metrics_wiring.py", "tests/kit_dev/test_playbook.py",
   "tests/kit_dev/test_shadow_count.py",
 ]
@@ -763,6 +764,9 @@ tests = [
   "tests/kit_dev/test_upgrade_opt_in_several.py", "tests/kit_dev/test_upgrade_project_lines.py",
   "tests/kit_dev/test_upgrade_route_triggers.py", "tests/kit_dev/test_windows_line_endings.py",
 ]
+[[testing.map]]
+code = "scripts/agk/usage.py"
+tests = ["tests/kit/test_usage_transcript.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "kit/manifest.json"
 tests = [
