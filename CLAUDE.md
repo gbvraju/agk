@@ -1,8 +1,8 @@
 # CLAUDE.md — agent operating rules (agk)
 
 `constitution/principles.md` is authoritative (twelve numbered rules). Read it first, then `config/core-rules.md`: the
-one page that names the core rules by number and holds the numbered operating rules this file listed before, each
-cited as `CLAUDE.md item N`. Items 2 and 10 stay here with their numbers:
+one page that names the core rules by number and holds the numbered rules this file listed before, each
+cited as `CLAUDE.md item N`. Items 2 and 10 stay here, numbered:
 
 2. One PR per item, branched from the default branch (`origin/<default branch>`), never stacked on another's
    unmerged change; a dependence is declared with `Depends-on: #n`. One open PR per session: several sessions may
@@ -19,5 +19,5 @@ The working rule of a session (what it acts on, what it never does, how it finds
 
 ## Compaction recovery
 
-After compaction or a new session, re-read CLAUDE.md, the current brief, `docs/runs/decisions-log.md` and the
-open PR body before acting. A new decisions-log row is one file under `docs/runs/decisions/`; the old log is frozen.
+After compaction or a new session, re-read CLAUDE.md, the brief, the open PR body and the `docs/runs/decisions/` files
+that `grep -l` finds for the brief's number, spec, Q ids and paths; the old `docs/runs/decisions-log.md` is frozen.

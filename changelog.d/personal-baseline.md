@@ -1,0 +1,1 @@
+- In personal mode `personal.py baseline` prints the test command and, only with `--approve`, runs it once on the head tree in the sidecar and records the tests already failing; the ten `[personal]` keys are checked by type and range and a wrong one is refused naming the key, never the value (brief #922, SPEC-0041 build (h) first part, ADR-0400 Proposed)

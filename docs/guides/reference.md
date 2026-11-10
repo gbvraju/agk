@@ -58,6 +58,8 @@ The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/sp
 
 `scripts/agk/forge.py` is the one record interface of personal mode and has no command: a script imports it and calls `get(name, endpoint)`, `create_issue`, `comment` or `record_pull`. `GithubForge` reads GitHub's records and refuses every write; `FilesForge` keeps GitHub-shaped records under `forge/` of the sidecar, with `git` only and no connection (SPEC-0041 rule 6, ADR-0397).
 
+`python3 scripts/agk/personal.py baseline [--clone DIR] [--sidecar DIR] [--approve]` prints the test command of personal mode and, only with `--approve`, runs it once on the head tree in the sidecar and records the tests already failing in `records/baseline.json` (SPEC-0041 rule 16, ADR-0400).
+
 ## Drift audit
 
     python3 scripts/agk/drift_audit.py [--today YYYY-MM-DD]

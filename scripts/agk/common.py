@@ -799,13 +799,32 @@ PERSONAL_CHOICES = {
     "ai_disclosure": ("commit-trailer", "pr-note", "both"),
 }
 PERSONAL_DEFAULTS = {"level": "light", "ai_disclosure": "both"}
+PERSONAL_RANGES = {"survey_budget": (1, 1000), "quote_lines": (0, 20), "schema": (1, None)}
+PERSONAL_TEXTS = ("sync_remote", "test_command")
+PERSONAL_FLAGS = ("sign", "team_refs")
+
+
+def _personal_value_ok(key: str, value: object) -> bool:
+    """SPEC-0041 rule 18: each key by its type and range; a boolean is never a whole number."""
+    if key in PERSONAL_CHOICES:
+        return isinstance(value, str) and value in PERSONAL_CHOICES[key]
+    if key in PERSONAL_RANGES:
+        low, high = PERSONAL_RANGES[key]
+        if not isinstance(value, int) or isinstance(value, bool):
+            return False
+        return low <= value and (high is None or value <= high)
+    if key in PERSONAL_FLAGS:
+        return isinstance(value, bool)
+    if key == "test_command":  # only spaces would skip the no-regression step
+        return isinstance(value, str) and bool(value.strip())
+    return isinstance(value, str) and bool(value)
 
 
 def personal_table(root: Path) -> dict | None:
     """The `[personal]` table of a sidecar's settings, defaults filled; None in team mode.
 
-    Only `forge = "files"` is accepted (rule 1); the other keys of rule 18 are known names, and
-    the values of `level` and `ai_disclosure` are checked here. Refusals name the setting."""
+    Only `forge = "files"` is accepted (rule 1); each other key of rule 18 is checked by its type
+    and range. Refusals name the key, never the value (principle 8)."""
     source = config_source(root)
     if PERSONAL_TABLE not in source:
         return None
@@ -820,8 +839,8 @@ def personal_table(root: Path) -> dict | None:
             f"a sidecar accepts only the files forge (setting: {PERSONAL_TABLE}.{FORGE_SETTING})"
         )
     out = {**PERSONAL_DEFAULTS, **table}
-    for key, allowed in PERSONAL_CHOICES.items():
-        if out[key] not in allowed:
+    for key in sorted(out):
+        if key != FORGE_SETTING and not _personal_value_ok(key, out[key]):
             raise CheckError(f"not an accepted value (setting: {PERSONAL_TABLE}.{key})")
     return out
 
