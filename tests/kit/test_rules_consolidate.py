@@ -59,7 +59,9 @@ def project(tmp_path: Path, plan: str = PLAN, toml: str | None = None) -> Path:
     sys.path.insert(0, str(SCRIPT.parent))
     from rules import budget_lines
 
-    write(root, "config/rule-budget.txt", "# budget\n" + "".join(f"{x}\n" for x in budget_lines(root)))
+    write(
+        root, "config/rule-budget.txt", "# budget\n" + "".join(f"{x}\n" for x in budget_lines(root))
+    )
     git(root, "init", "-q")
     git(root, "add", "-A")
     git(root, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "init")
@@ -69,7 +71,9 @@ def project(tmp_path: Path, plan: str = PLAN, toml: str | None = None) -> Path:
 def api(tmp_path: Path) -> Path:
     folder = tmp_path / "api"
     folder.mkdir()
-    pulls = [{"number": 5, "state": "open", "merged_at": None, "updated_at": "2026-11-09T09:00:00Z"}]
+    pulls = [
+        {"number": 5, "state": "open", "merged_at": None, "updated_at": "2026-11-09T09:00:00Z"}
+    ]
     notes = [
         {
             "id": 51,
