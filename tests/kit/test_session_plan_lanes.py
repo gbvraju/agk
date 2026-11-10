@@ -94,6 +94,7 @@ RATE = (
     "Your merge rate is unknown (no pull request merged in the last 14 days): "
     "the merge queue limit does not apply."
 )
+CAPACITY = "Capacity: 3 of 3 (none; limit: max_builders 3)."  # ADR-0409, every plan says it
 TODAY_KEYS = {
     "start",
     "running",
@@ -163,6 +164,7 @@ def test_without_a_declaration_the_plan_prints_exactly_what_it_prints_today(proj
     three(stub)
     assert lines_of(plan(proj, stub)) == [
         "Start 3: builder-a takes #5, builder-b takes #6, builder-c takes #7.",
+        CAPACITY,
         RATE,
     ]
     got = data(proj, stub)
@@ -176,6 +178,7 @@ def test_a_commented_delivery_table_is_no_declaration(proj, stub):
     three(stub)
     assert lines_of(plan(proj, stub)) == [
         "Start 3: builder-a takes #5, builder-b takes #6, builder-c takes #7.",
+        CAPACITY,
         RATE,
     ]
     assert "playbook" not in data(proj, stub)
