@@ -704,7 +704,13 @@ def pip_install(python: str, tools: Path, folder: Path) -> bool:
     for argv in (base, [*base, "--break-system-packages"]):
         try:
             proc = subprocess.run(  # nosec B603 - the project's interpreter, its own pinned file
-                argv, cwd=folder, capture_output=True, text=True, timeout=600
+                argv,
+                cwd=folder,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=600,
             )
         except (OSError, subprocess.SubprocessError):
             return False
