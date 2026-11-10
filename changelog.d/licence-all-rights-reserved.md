@@ -1,0 +1,1 @@
+- AGK's licence changes from Apache-2.0 to proprietary, all rights reserved; versions released before this change keep the licence they were released under (brief #1016, ADR-0433)
