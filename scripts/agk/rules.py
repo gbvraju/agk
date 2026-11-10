@@ -488,7 +488,12 @@ def dirty(root: Path) -> str | None:
     """None for a clean git work tree, else the refusal."""
     try:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["git", "status", "--porcelain"], cwd=root, capture_output=True, text=True, check=False
+            ["git", "status", "--porcelain"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
         )
     except OSError:
         return "git cannot be run"
