@@ -38,7 +38,8 @@ build (c).
    `[[testing.map]]`, and `docs/guides/getting-started.md` no longer says `reviews_in_flight` is 3 by default.
 6. `doctor.py` gains the `capacity` row (`warn`): a refused table fails it; otherwise it prints the profile, the
    ceilings, the measured figures and the suggested profile (`small` under 8 GB free, `balanced` under 32 GB, `full`
-   above), and it never fails the run.
+   above), and it never fails the run. With `--api-dir` every figure prints `unknown`, so that two runs print the
+   same bytes (SPEC-0006 AC1); a live run measures (the maintainer answer to Q-842-17).
 
 ## Consequences
 

@@ -261,6 +261,22 @@ def test_doctor_prints_the_profile_ceilings_figures_and_a_suggestion(tmp_path, m
     assert doctor.CHECKS["capacity"][0] == "warn"
 
 
+
+def test_doctor_with_an_api_dir_prints_every_figure_unknown(tmp_path, monkeypatch):
+    """REQ-041: amendment 149 item 9 and SPEC-0006 AC1 (the maintainer answer to Q-842-17: with
+    `--api-dir` the figures print `unknown`, so two runs print the same bytes)."""
+    import common
+    import doctor
+
+    monkeypatch.setattr(common, "available_memory", lambda: 12 * GIB)
+    (tmp_path / "agk.toml").write_text("[flow]\nmax_builders = 3\n", encoding="utf-8")
+    res = doctor.capacity_result(tmp_path, measure=False)
+    assert res.status == "ok" and res.message == (
+        "profile none; max_builders 3, reviews_in_flight 3; "
+        "memory unknown, cpu unknown, disk unknown; suggested profile unknown"
+    )
+
+
 @pytest.mark.parametrize(
     ("free", "profile"),
     [(4, "small"), (8, "balanced"), (31, "balanced"), (32, "full"), (None, None)],

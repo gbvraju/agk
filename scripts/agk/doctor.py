@@ -1030,9 +1030,11 @@ def suggested_profile(available: int | None) -> str | None:
     return next((p for gb, p in SUGGEST_GB if available < gb * 1024**3), "full")
 
 
-def capacity_result(root: Path) -> Result:
+def capacity_result(root: Path, measure: bool = True) -> Result:
     """The profile, every ceiling and every measured figure, and the profile suggested for the
-    machine (amendment 149 item 9); a refused table fails, naming the setting."""
+    machine (amendment 149 item 9); a refused table fails, naming the setting. With `--api-dir`
+    (`measure` false) every figure prints `unknown`, so two runs print the same bytes; a live
+    run measures (the maintainer answer to Q-842-17)."""
     import session
     import session_plan as plan
 
@@ -1043,7 +1045,7 @@ def capacity_result(root: Path) -> Result:
         return Result("fail", message=f" ({err})")
     keys = ("max_builders", "reviews_in_flight", *(key for _, key in plan.MEASURES))
     set_ = ", ".join(f"{k} {ceil[k]}" for k in keys if ceil[k] is not None)
-    free = {name: plan.figure(root, name)[0] for name, _ in plan.MEASURES}
+    free = {name: plan.figure(root, name)[0] if measure else None for name, _ in plan.MEASURES}
     shown = []
     for name, value in free.items():
         cap = {name: {plan.FREE_KEYS[name]: value}}
@@ -1455,7 +1457,7 @@ def run_checks(
     results["always-full-infra"] = always_full_result(root)
     results["slot-schedule"] = slot_schedule_result(root, reads)
     results["design-ui-paths"] = design_ui_result(root, config)
-    results["capacity"] = capacity_result(root)
+    results["capacity"] = capacity_result(root, measure=api_dir is None)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]
