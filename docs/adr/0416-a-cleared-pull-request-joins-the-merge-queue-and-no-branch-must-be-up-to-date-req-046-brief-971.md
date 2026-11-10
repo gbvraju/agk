@@ -1,6 +1,6 @@
 # ADR-0416: A cleared pull request joins the merge queue, and no branch must be up to date before it merges
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0339, ADR-0354, ADR-0387, amendment 151, amendment 158, brief #971, brief #972, plan #661
