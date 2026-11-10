@@ -26,6 +26,8 @@ counted a slot dead whenever it held no valid lease, so an idle pool whose slots
    `route.route_health`, now under test).
 4. A `slot_seen_minutes` that is not a whole number of 1 or more is refused naming the setting; the router's health
    step then skips and writes nothing, as for an unreadable lease.
+5. `agk.toml` sets `slot_seen_minutes = 90` in its `[flow]` table. The test of `tests/kit/test_pool_health.py` that
+   took a slot 11 minutes old for dead now takes one 91 minutes old, the rule of point 1.
 
 ## Consequences
 

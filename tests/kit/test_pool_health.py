@@ -195,8 +195,8 @@ def test_an_expired_or_released_or_strangers_marker_is_no_live_conductor(proj, s
 
 
 def test_more_than_a_third_of_the_slots_dead_opens_the_pool_issue(proj, stub, tmp_path):
-    """REQ-041: of 3 slots, 2 have no valid lease (2 > 3 / 3)."""
-    stub.fixtures[ASSIGNMENTS] = [slot("s1", 2), slot("s2", 3, minutes=11)]
+    """REQ-041: of 3 slots, 2 not seen within slot_seen_minutes (2 > 3 / 3; ADR-0412)."""
+    stub.fixtures[ASSIGNMENTS] = [slot("s1", 2), slot("s2", 3, minutes=91)]
     router(proj, stub, tmp_path)
     assert opened(stub) == ["Builder pool down"]
     made = next(c for c in stub.writes() if c[1] == ISSUES)
