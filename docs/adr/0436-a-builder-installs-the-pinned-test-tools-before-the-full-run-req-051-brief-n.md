@@ -38,8 +38,9 @@ the full run its parallel command through `[testing] parallel_command`.
 
 Decision 2 replaces, for a project that sets `tools_file`, ADR-0305's "The kit installs no plugin (`Q-S0044-2`)":
 with the key set, prepush installs the project's own pinned file, which may hold pytest-xdist. Without the key nothing
-changes and the kit installs nothing, as ADR-0305 decided. Whether SPEC-0044 rule 4 and the ruled Q-S0044-2 ("never")
-allow this install is open on brief #1021 (verdict on 0e2e042, item 1); this ADR does not change the spec. With it, a session's first
+changes and the kit installs nothing, as ADR-0305 decided. The maintainer ruled item 1 of the verdict on 0e2e042: an
+opt-in `[testing] tools_file` install, off unless a project sets it, is allowed under SPEC-0044 rule 4 and Q-S0044-2,
+with no spec amendment; this ADR does not change the spec. With it, a session's first
 pre-push run may install the pinned tools (seconds, from the package index the session already reaches); the checks
 of CI never install, since CI's interpreter already imports xdist. `project_tests.py` and the `agk-test` chooser call
 `full_command` too, so they get the same rule; in CI this repository's full `project_tests` run now uses workers, as
