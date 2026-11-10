@@ -1,9 +1,9 @@
 """One state label per pull request, naming who acts next (brief #846 build (a); REQ-039, ADR-0385).
 
-Amendment 150 items 1 to 4 and 8: `route.pr_state` gives one of eleven labels and its actor from saved
-facts, the old `agk:ready` is read as `agk:merge-ready` and removed, the queues list the new labels by
-role, and `doctor.py` warns when a state label is missing or does not name its actor. Saved
-responses and invented data only; no network.
+Amendment 150 items 1 to 4 and 8: `route.pr_state` gives one of eleven labels and its actor from
+saved facts, the old `agk:ready` is read as `agk:merge-ready` and removed, the queues list the new
+labels by role, and `doctor.py` warns when a state label is missing or does not name its actor.
+Saved responses and invented data only; no network.
 """
 
 from __future__ import annotations
@@ -87,9 +87,10 @@ def test_a_brief_pull_request_without_a_ready_report_on_its_head_is_build():
     assert state(body=BRIEF) == ("agk:build", "builder")
     assert state(body=BRIEF, comments=[ready(sha=OLD)])[0] == "agk:build"
     assert state(body=BRIEF, comments=[ready(login="someone")])[0] == "agk:build"
-    assert state(body=BRIEF, comments=[said(3, "builder", f"Report: {HEAD[:12]} over cap")])[
-        0
-    ] == "agk:build"
+    assert (
+        state(body=BRIEF, comments=[said(3, "builder", f"Report: {HEAD[:12]} over cap")])[0]
+        == "agk:build"
+    )
     for line in ("ready for review", "fix list applied", "merge of main"):
         assert state(body=BRIEF, comments=[ready(line)]) == ("agk:review", "conductor"), line
     assert state(body="Summary: a person opened it.") == ("agk:review", "conductor")
@@ -118,7 +119,7 @@ def test_the_parked_label_wins_and_is_never_set_or_removed():
 
 
 def test_a_cleared_head_that_changes_an_owner_path_is_owner_merge():
-    """REQ-039: amendment 150 item 1 (`agk:owner-merge` reads the list `merge_cleared.py` refuses)."""
+    """REQ-039: amendment 150 item 1 (`agk:owner-merge`: the list `merge_cleared.py` refuses)."""
     assert route.OWNER_PATHS is merge_cleared.PROTECTED
     for path in (".github/workflows/x.yml", "constitution/principles.md", "config/reviewers.yaml"):
         files = [{"filename": path, "status": "modified"}]
@@ -158,7 +159,9 @@ def test_fix_comes_before_question_and_approve():
 def test_the_router_removes_the_old_ready_label_and_never_sets_it(monkeypatch):
     """REQ-039: amendment 150 item 2 (`agk:ready` is one of the labels removed)."""
     calls = []
-    monkeypatch.setattr(route, "write", lambda endpoint, *a, method, **k: calls.append((method, endpoint)))
+    monkeypatch.setattr(
+        route, "write", lambda endpoint, *a, method, **k: calls.append((method, endpoint))
+    )
     labels = route.Labels("acme/widgets")
     labels.known = set(route.LABELS)
     route.apply("acme/widgets", 7, ["agk:ready"], "agk:merge-ready", labels)
@@ -174,7 +177,7 @@ def test_the_readers_take_the_old_ready_label_as_merge_ready():
 
 
 def test_merge_cleared_holds_a_parked_pull_request_and_sees_a_stale_build_label():
-    """REQ-039: Q-846-1 (`agk:parked` holds as `agk:hold` does) and item 1 (`agk:build` is stale)."""
+    """REQ-039: Q-846-1 (`agk:parked` holds as `agk:hold` does); item 1 (`agk:build` is stale)."""
     assert merge_cleared.held_label({"labels": [{"name": "agk:parked"}]}) == "agk:parked"
     assert merge_cleared.held_label({"labels": [{"name": "agk:hold"}]}) == "agk:hold"
     assert merge_cleared.held_label({"labels": [{"name": "agk:merge-ready"}]}) is None
