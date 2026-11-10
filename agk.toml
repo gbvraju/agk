@@ -538,6 +538,9 @@ tests = [
 code = "scripts/agk/parity.py"
 tests = ["tests/kit/test_parity.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/personal.py"
+tests = ["tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/personal_state.py"
 tests = ["tests/kit/test_personal_state.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
