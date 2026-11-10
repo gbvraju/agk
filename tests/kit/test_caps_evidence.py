@@ -164,3 +164,12 @@ def test_req056_no_caps_change_ignores_a_stray_line(repo, tmp_path):
     repo.commit({"src/app.py": "x = 2\n"})
     proc = check(repo, tmp_path, "Caps-evidence: by feel")
     assert proc.returncode == 0, proc.stdout
+
+
+def test_req056_indented_line_is_not_read(repo, tmp_path):
+    """REQ-056 AC6: the line must start a body line, as `Covered-by:` must, so indented is none."""
+    make_base(repo)
+    change(repo, NEW_CAPS_TOML)
+    proc = check(repo, tmp_path, "  " + GOOD)
+    assert proc.returncode == 1
+    assert "SPEC-0049 rule 13" in proc.stdout
