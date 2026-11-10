@@ -193,7 +193,7 @@ def alarm(number: int = 953) -> dict:
 
 def fixing(number: int, line: str) -> dict:
     """An open brief whose body carries LINE, which may name the alarm."""
-    return {**issue(number, brief("scripts/agk/route.py") + line + "\n"), "user": {"login": "boss"}}
+    return {**issue(number, brief("src/fix.py") + line + "\n"), "user": {"login": "boss"}}
 
 
 def red_scene(stub: Stub, briefs: list[dict], pulls: list[dict], said: list[dict] = ()) -> None:
