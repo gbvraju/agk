@@ -1,0 +1,1 @@
+- In personal mode `personal.py floor --approve` appends one event to the sidecar's `metrics/events.jsonl`, and `personal.py report [--week YYYY-Www]` counts the defects the floor caught before a push, `unknown` under two events (brief #999, SPEC-0041 build (k) first part, ADR-0426 Proposed)

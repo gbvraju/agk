@@ -17,7 +17,8 @@ naming `setting: models.<kind>` and never the value. `model_names(root)` reads t
 `[models.names]` table, a tier to a project's model name, which the kit never ships. No check,
 gate or reading list reads either in this build (rule 1). `model_providers(root)` reads the
 optional `[models.providers]` table (SPEC-0053 rule 3, brief #763): a tier to its ordered list of
-plain labels.
+plain labels. `model_prices(root)` reads the optional `[models.prices]` table (SPEC-0045 rule 8,
+brief #798 build (a)): a tier to a price per million tokens, 0 or more; the kit ships none.
 
 `failures_settings(root)` reads the optional `[failures]` table (SPEC-0046 rule 2, brief #634):
 `issues` and `artifacts` (booleans, false) and `artifact_paths` (relative path patterns, empty).
@@ -38,6 +39,7 @@ a smaller one; None without the table. Any other shape is refused, naming `setti
 
 from __future__ import annotations
 
+import math
 import re
 import sys
 import tomllib
@@ -229,15 +231,31 @@ def model_providers(root: Path) -> dict[str, list[str]]:
     return {tier: list(labels) for tier, labels in table.items()}
 
 
+def model_prices(root: Path) -> dict[str, int | float]:
+    """The optional `[models.prices]` table (rule 8): a tier to a price per million tokens, an
+    integer or a decimal of 0 or more. An unknown tier names only the table, for a key may be
+    anything; a bad price names its tier."""
+    table = _models_table(root).get("prices", {})
+    if not isinstance(table, dict):
+        raise _refuse_model("models.prices")
+    for tier, price in table.items():
+        if tier not in MODEL_TIERS:
+            raise _refuse_model("models.prices")
+        if type(price) not in (int, float) or not math.isfinite(price) or price < 0:
+            raise _refuse_model(f"models.prices.{tier}")
+    return dict(table)
+
+
 def model_settings(root: Path) -> dict[str, dict[str, str]]:
     """The tier and effort of every kind (rule 2): the table's entry or the default. A kind, tier
     or effort outside the lists, a value that is not a string, an entry that is not exactly
     `{ tier, effort }` and `review` below `strongest` at `high` are refused."""
     table = _models_table(root)
     model_providers(root)
+    model_prices(root)
     settings = {k: {"tier": t, "effort": e} for k, (t, e) in MODEL_DEFAULTS.items()}
     for kind, entry in table.items():
-        if kind in ("names", "providers"):
+        if kind in ("names", "providers", "prices"):
             continue
         if (
             kind not in MODEL_KINDS
