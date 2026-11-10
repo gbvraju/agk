@@ -1000,12 +1000,13 @@ def pool_state(root, repo: str) -> list[tuple[str, bool, bool, str]]:
     dead = []
     for name in names:
         seen = slot_seen(comments, name, allowed)
-        if not slot_state(comments, name, allowed, now)[0] and (seen is None or now - seen >= window):
+        late = seen is None or now - seen >= window
+        if late and not slot_state(comments, name, allowed, now)[0]:
             dead.append(f"{name} ({f'last seen {stamp_of(seen)}' if seen else 'never'})")
     text = (
-        f"Slots not seen within the window: {', '.join(dead) or 'none'}, of {len(names)} (settings: "
-        f"builder_slots and {SEEN} in the flow table of agk.toml). This issue closes when the "
-        "slots run again."
+        f"Slots not seen within the window: {', '.join(dead) or 'none'}, of {len(names)} "
+        f"(settings: builder_slots and {SEEN} in the flow table of agk.toml). This issue closes "
+        "when the slots run again."
     )
     rows.append((POOL_DOWN, len(dead) * 3 > len(names), bool(briefs), text))
     return rows
