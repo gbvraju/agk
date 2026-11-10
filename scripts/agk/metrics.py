@@ -1435,13 +1435,49 @@ def report(ctx: Context, today: date, issues: list[dict]) -> tuple[str, bool]:
 # --- command line -----------------------------------------------------------------------------
 
 
+def window_tests(src: Any, root: Path, start: datetime, end: datetime) -> dict | None:
+    """Brief #981 answer 2: the `pr tests:`, `pr tests median:` and `full suite:` lines that the
+    weekly report writes, for the pull requests closed in the checklist's window, with the same
+    GETs; None when the pull requests cannot be listed."""
+
+    def older(chunk: list[dict]) -> bool:
+        last = stamp(chunk[-1].get("updated_at") or chunk[-1].get("closed_at"))
+        return last is not None and last < start
+
+    pulls = src.get("pulls", "repos/{repo}/pulls?state=closed&sort=updated&direction=desc", older)
+    if not isinstance(pulls, list):
+        return None
+    details = []
+    for p in pulls:
+        closed = stamp(p.get("closed_at")) if isinstance(p, dict) else None
+        if closed is None or not start <= closed <= end:
+            continue
+        detail = src.get(f"pull-{p['number']}", f"repos/{{repo}}/pulls/{p['number']}")
+        if isinstance(detail, dict) and "number" in detail:
+            details.append(detail)
+    details.sort(key=lambda d: int(d["number"]))
+    ctx = Context(src, root, [])
+    lines = pr_tests_lines(ctx, details)
+    return {
+        "pr_tests": lines[0],
+        "pr_tests_median": lines[2],
+        "full_suite": full_suite_line(ctx, details),
+    }
+
+
+def weekly_line(body: str, prefix: str) -> str | None:
+    return next((ln for ln in body.splitlines() if ln.startswith(prefix)), None)
+
+
 def save_checklist(src: Any, root: Path, repo: str, days: int, target: Path, now: str) -> None:
-    """What `checklist.py` reads (brief #799, ADR-0374): GET only, one file, a part that cannot be
-    read saved as null. `facts` imports this module, so it is imported here."""
+    """What `checklist.py` reads (brief #799, ADR-0374; brief #981, ADR-0420): GET only, one
+    file, a part that cannot be read saved as null. `facts` imports this module, so it is
+    imported here."""
     import facts
 
     end = stamp(now)
-    since = (end - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    start_of_window = end - timedelta(days=days)
+    since = start_of_window.strftime("%Y-%m-%dT%H:%M:%SZ")
     weeks = max(1, (days + 6) // 7)
     comments = src.get("comments-checklist", f"repos/{{repo}}/issues/comments?since={since}")
     runs = src.get("runs-checklist", f"repos/{{repo}}/actions/runs?created=%3E%3D{since[:10]}")
@@ -1451,6 +1487,11 @@ def save_checklist(src: Any, root: Path, repo: str, days: int, target: Path, now
     )
     opened = src.get("checklist-open", "repos/{repo}/issues?state=open")
     weekly_body = str(weekly[0].get("body") or "") if isinstance(weekly, list) and weekly else ""
+    pr_tests = weekly_line(weekly_body, "pr tests:")
+    counted = re.match(r"pr tests: [1-9]", pr_tests or "")
+    local_mode = isinstance(opened, list) and any(
+        str(i.get("title") or "").startswith("Local mode since") for i in opened
+    )
     document = {
         "saved_at": now,
         "facts": facts.build(root, end.date(), repo, src, weeks),
@@ -1458,8 +1499,21 @@ def save_checklist(src: Any, root: Path, repo: str, days: int, target: Path, now
         if comments is None
         else [
             {k: c.get(k) for k in ("issue_url", "body", "created_at")}
+            | {"author": (c.get("user") or {}).get("login")}
             for c in comments
             if isinstance(c, dict)
+        ],
+        "verdict_authors": verdict_authors(root),
+        "conductor_issues": None
+        if not isinstance(opened, list)
+        else [
+            i.get("number")
+            for i in opened
+            if isinstance(i, dict)
+            and any(
+                isinstance(label, dict) and label.get("name") == "agk-conductor"
+                for label in i.get("labels") or []
+            )
         ],
         "runs": None
         if not isinstance(runs, dict)
@@ -1474,11 +1528,14 @@ def save_checklist(src: Any, root: Path, repo: str, days: int, target: Path, now
             for b in briefs
             if "pull_request" not in b
         ],
-        "pr_tests": next(
-            (ln for ln in weekly_body.splitlines() if ln.startswith("pr tests:")), None
-        ),
-        "local_mode": isinstance(opened, list)
-        and any(str(i.get("title") or "").startswith("Local mode since") for i in opened),
+        "pr_tests": pr_tests,
+        "pr_tests_median": weekly_line(weekly_body, "pr tests median:"),
+        "full_suite": weekly_line(weekly_body, "full suite:"),
+        # point 3 prints unknown in local mode, so its window's reads are skipped there
+        "window_tests": None
+        if counted or local_mode
+        else window_tests(src, root, start_of_window, end),
+        "local_mode": local_mode,
     }
     target.write_text(json.dumps(document), encoding="utf-8")
 

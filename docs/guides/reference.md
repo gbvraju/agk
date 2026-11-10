@@ -89,8 +89,10 @@ request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
     python3 scripts/agk/metrics.py --save-checklist [--to FILE] [--days N]
     python3 scripts/agk/checklist.py [--root DIR] [--days N] [--saved FILE]
 
-The first command saves one file with GET requests only: the document of `facts.py`, the window's comments and Actions runs, the
-briefs and the newest weekly `pr tests:` line. By default it is `agk-checklist.json` in the checkout's git directory, which git
+The first command saves one file with GET requests only: the document of `facts.py`, the window's comments with their authors and
+Actions runs, the briefs, the listed verdict authors, the open `agk-conductor` issues, the newest weekly `pr tests:`, `pr tests
+median:` and `full suite:` lines and, when no weekly line counts a run and the project is not in local mode, the same figures for
+the pull requests closed in the window (ADR-0420). By default it is `agk-checklist.json` in the checkout's git directory, which git
 never tracks. The second reads that file, writes nothing and makes no network call, and prints nine lines `<n>. <name>:
 <yes|partly|no|unknown> <measure>`: machine capacity, conductor runs builders, test optimization, parallel runs, auto-merge,
 model selection, conflict planning, smart assignment and cost per pull request. A point it cannot measure prints `unknown` with

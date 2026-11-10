@@ -500,3 +500,199 @@ def test_floor_the_clone_and_its_git_folder_are_unchanged(tmp_path):
     assert done.returncode == 1
     assert snapshot(clone) == before
     assert run_git(clone, "status", "--porcelain") == ""
+
+
+# Rule 23: the floor's events and the report's first measure (brief #999, build (k), first part).
+
+EVENTS = "metrics/events.jsonl"
+
+
+def event_lines(sidecar: Path) -> list[dict]:
+    path = sidecar / EVENTS
+    if not path.is_file():
+        return []
+    return [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_floor_with_approve_appends_one_event_with_the_four_fields(tmp_path):
+    """REQ-048 AC5: rule 23 (one JSON line: the head, the step, the result, the UTC time)."""
+    clone = floor_clone(tmp_path, head_bad=False)
+    sidecar = floor_sidecar(tmp_path, junit=True)
+    done = floor(clone, sidecar, scanner_dir(tmp_path, False), "--approve")
+    assert done.returncode == 0, done.stdout + done.stderr
+    events = event_lines(sidecar)
+    assert len(events) == 1
+    (event,) = events
+    assert set(event) == {"head", "step", "result", "time"}
+    assert event["head"] == run_git(clone, "rev-parse", "HEAD").strip()
+    assert event["step"] == "floor"
+    assert event["result"] == "passed"
+    assert event["time"].endswith("Z") and event["time"][:2] == "20"
+    if os.name == "posix":
+        assert (sidecar / EVENTS).stat().st_mode & 0o777 == 0o600
+
+
+def test_floor_a_failed_floor_appends_a_failed_event(tmp_path):
+    """REQ-048 AC5: rule 23 (the result is the floor's own)."""
+    clone = floor_clone(tmp_path, head_bad=True)
+    sidecar = floor_sidecar(tmp_path, junit=True)
+    done = floor(clone, sidecar, scanner_dir(tmp_path, False), "--approve")
+    assert done.returncode == 1
+    assert [e["result"] for e in event_lines(sidecar)] == ["failed"]
+
+
+def test_floor_without_approve_appends_no_event(tmp_path):
+    """REQ-048 AC5: rule 23 (a floor that runs no tests records nothing)."""
+    clone = floor_clone(tmp_path, head_bad=False)
+    sidecar = floor_sidecar(tmp_path, junit=True)
+    floor(clone, sidecar, scanner_dir(tmp_path, False))
+    assert not (sidecar / EVENTS).exists()
+
+
+def test_floor_event_leaves_the_clone_and_its_git_folder_unchanged(tmp_path):
+    """REQ-048 AC5: rules 4 and 23 (the event is written in the sidecar only)."""
+    clone = floor_clone(tmp_path, head_bad=False)
+    before = snapshot(clone)
+    sidecar = floor_sidecar(tmp_path, junit=True)
+    floor(clone, sidecar, scanner_dir(tmp_path, False), "--approve")
+    assert snapshot(clone) == before
+    assert len(event_lines(sidecar)) == 1
+
+
+def test_floor_an_event_that_cannot_be_written_keeps_the_exit_code(tmp_path):
+    """REQ-048 AC5: rule 23 (a failed append prints one line naming the file)."""
+    clone = floor_clone(tmp_path, head_bad=False)
+    sidecar = floor_sidecar(tmp_path, junit=True)
+    (sidecar / EVENTS).mkdir(parents=True)  # a folder where the file should be
+    done = floor(clone, sidecar, scanner_dir(tmp_path, False), "--approve")
+    assert done.returncode == 0
+    assert f"the event cannot be written (path: {EVENTS})" in done.stdout
+
+
+def report_repo(tmp_path: Path) -> dict[str, str]:
+    """`main` has the failed head and a later fixed head; `other` does not descend from it."""
+    clone = make_clone(tmp_path / "repo")
+    run_git(clone, "checkout", "-q", "-b", "other")
+    (clone / "other.txt").write_text("other\n", encoding="utf-8")
+    run_git(clone, "add", "-A")
+    run_git(clone, "commit", "-q", "-m", "other")
+    heads = {"other": run_git(clone, "rev-parse", "HEAD").strip()}
+    run_git(clone, "checkout", "-q", "main")
+    (clone / "shop.py").write_text("TOTAL = 2\n", encoding="utf-8")
+    run_git(clone, "add", "-A")
+    run_git(clone, "commit", "-q", "-m", "broken")
+    heads["failed"] = run_git(clone, "rev-parse", "HEAD").strip()
+    (clone / "shop.py").write_text("TOTAL = 3\n", encoding="utf-8")
+    run_git(clone, "add", "-A")
+    run_git(clone, "commit", "-q", "-m", "fixed")
+    heads["fixed"] = run_git(clone, "rev-parse", "HEAD").strip()
+    heads["clone"] = str(clone)
+    return heads
+
+
+def write_events(sidecar: Path, rows: list, raw: tuple[str, ...] = ()) -> None:
+    path = sidecar / EVENTS
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        json.dumps({"head": h, "step": "floor", "result": r, "time": t}) for h, r, t in rows
+    ]
+    path.write_text("\n".join([*lines, *raw]) + "\n", encoding="utf-8")
+
+
+def report(clone: str, sidecar: Path, *extra: str):
+    skip = ("AGK_HOME", "AGK_BASE", "GITHUB_BASE_REF", "CI")
+    env = {k: v for k, v in os.environ.items() if k not in skip}
+    cmd = [sys.executable, str(SCRIPTS / "personal.py"), "report", "--clone", clone]
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [*cmd, "--sidecar", str(sidecar), *extra], capture_output=True, text=True, env=env
+    )
+
+
+W46 = ("2026-11-10T09:00:00Z", "2026-11-11T10:00:00Z", "2026-11-12T11:00:00Z")
+
+
+def test_report_a_failed_head_then_a_passed_descendant_counts_one(tmp_path):
+    """REQ-048 AC5: rule 23 (a floor failure followed by a pass on a later head of the branch)."""
+    heads = report_repo(tmp_path)
+    sidecar = make_sidecar(tmp_path / "side", None)
+    write_events(sidecar, [(heads["failed"], "failed", W46[0]), (heads["fixed"], "passed", W46[1])])
+    done = report(heads["clone"], sidecar, "--week", "2026-W46")
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = done.stdout.splitlines()
+    assert lines[0] == "report: defects caught before push: 1 (floor)"
+    for name in ("review findings accepted", "rework", "time per change"):
+        assert any(ln.startswith(f"report: {name}: unknown") and "(k)" in ln for ln in lines)
+    assert "report: baseline: unknown (the attach time is not recorded)" in lines
+    assert lines[-1] == "These numbers show correlation, not causation."
+
+
+def test_report_a_pass_that_does_not_descend_from_the_failed_head_counts_zero(tmp_path):
+    """REQ-048 AC5: rule 23 (the pass must be on a later head of the same branch)."""
+    heads = report_repo(tmp_path)
+    sidecar = make_sidecar(tmp_path / "side", None)
+    write_events(sidecar, [(heads["failed"], "failed", W46[0]), (heads["other"], "passed", W46[1])])
+    done = report(heads["clone"], sidecar, "--week", "2026-W46")
+    assert "report: defects caught before push: 0 (floor)" in done.stdout.splitlines()
+
+
+def test_report_one_event_gives_unknown_never_zero(tmp_path):
+    """REQ-048 AC5: rule 23 (`unknown` where there are too few events)."""
+    heads = report_repo(tmp_path)
+    sidecar = make_sidecar(tmp_path / "side", None)
+    write_events(sidecar, [(heads["failed"], "failed", W46[0])])
+    done = report(heads["clone"], sidecar, "--week", "2026-W46")
+    assert "report: defects caught before push: unknown (floor)" in done.stdout.splitlines()
+    assert done.stdout.splitlines()[-1] == "These numbers show correlation, not causation."
+
+
+def test_report_an_unreadable_line_is_skipped_and_counted(tmp_path):
+    """REQ-048 AC5: rule 23 (a line without the four fields is skipped and counted once)."""
+    heads = report_repo(tmp_path)
+    sidecar = make_sidecar(tmp_path / "side", None)
+    raw = ("not json", '{"head": "abc", "step": "floor"}', "[1, 2]")
+    rows = [(heads["failed"], "failed", W46[0]), (heads["fixed"], "passed", W46[1])]
+    write_events(sidecar, rows, raw)
+    done = report(heads["clone"], sidecar, "--week", "2026-W46")
+    lines = done.stdout.splitlines()
+    assert "report: skipped 3 unreadable event lines" in lines
+    assert "report: defects caught before push: 1 (floor)" in lines
+
+
+def test_report_week_reads_only_that_week(tmp_path):
+    """REQ-048 AC5: rule 23 (`--week 2026-W46` counts the events of that ISO week only)."""
+    heads = report_repo(tmp_path)
+    sidecar = make_sidecar(tmp_path / "side", None)
+    rows = [
+        (heads["failed"], "failed", "2026-11-03T09:00:00Z"),
+        (heads["fixed"], "passed", "2026-11-04T09:00:00Z"),
+        (heads["other"], "passed", W46[2]),
+    ]
+    write_events(sidecar, rows)
+    w45 = report(heads["clone"], sidecar, "--week", "2026-W45").stdout.splitlines()
+    w46 = report(heads["clone"], sidecar, "--week", "2026-W46").stdout.splitlines()
+    assert "report: defects caught before push: 1 (floor)" in w45
+    assert "report: defects caught before push: unknown (floor)" in w46
+
+
+@pytest.mark.parametrize("week", ["2026-46", "2026-W99", "W46", "2026-w46x"])
+def test_report_a_bad_week_is_refused_naming_the_option(tmp_path, week):
+    """REQ-048 AC5: rule 23 and principle 8 (refused naming the option, never the value)."""
+    heads = report_repo(tmp_path)
+    sidecar = make_sidecar(tmp_path / "side", None)
+    done = report(heads["clone"], sidecar, "--week", week)
+    assert done.returncode == 1
+    assert "--week" in done.stdout
+    assert week not in done.stdout + done.stderr
+
+
+def test_report_writes_nothing_and_runs_no_test(tmp_path):
+    """REQ-048 AC5: rule 23 (the report reads files and git only)."""
+    heads = report_repo(tmp_path)
+    sidecar = make_sidecar(tmp_path / "side", command_of("green_stub.py", False))
+    write_events(sidecar, [(heads["failed"], "failed", W46[0]), (heads["fixed"], "passed", W46[1])])
+    clone = Path(heads["clone"])
+    before, side_before = snapshot(clone), snapshot(sidecar)
+    done = report(heads["clone"], sidecar, "--week", "2026-W46")
+    assert done.returncode == 0
+    assert snapshot(clone) == before
+    assert snapshot(sidecar) == side_before
