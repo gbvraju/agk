@@ -54,14 +54,14 @@ def project(tmp_path: Path, plan: str = PLAN, toml: str | None = None) -> Path:
     write(root, "scripts/agk/check_x.py", "print('ok')\n")
     write(root, "config/rule-plan.txt", plan)
     write(root, "config/reviewers.yaml", "version: 1\nverdict_authors: [reviewer]\n")
-    if toml is not None:
-        write(root, "agk.toml", toml)
     sys.path.insert(0, str(SCRIPT.parent))
     from rules import budget_lines
 
     write(
         root, "config/rule-budget.txt", "# budget\n" + "".join(f"{x}\n" for x in budget_lines(root))
     )
+    if toml is not None:  # after the baseline, so a bad setting is still written
+        write(root, "agk.toml", toml)
     git(root, "init", "-q")
     git(root, "add", "-A")
     git(root, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "init")

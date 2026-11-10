@@ -106,6 +106,10 @@ review_mode = "team"
 # budget_seconds = 300
 # excluded = ["e2e: needs a browser the runner lacks"]
 # pr_tests = "full"
+# Optional (ADR-0404): the instruction files an agent reads, as paths or globs in order, for `python3 scripts/agk/rules.py budget`,
+# `dropped` and `consolidate`; without it the four core files, `.claude/agents/*.md` and `config/review-checklist.md`.
+# [rules]
+# files = ["CLAUDE.md", "constitution/principles.md", "config/core-rules.md", "config/session-rules.md", ".claude/agents/*.md"]
 # Optional (SPEC-0040, brief #529): the heavy-run queue of `python3 scripts/agk/lock.py`, off by default and when the table is absent,
 # when nothing changes. With queue = true, `lock.py submit --name heavy --session ID [--kind prepush|proof|other] [--brief N] -- <cmd...>`
 # queues one heavy run for the committed head and returns at once with a ticket, and `lock.py status --name heavy` shows the queue.

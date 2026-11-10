@@ -1,0 +1,6 @@
+# The plan of `python3 scripts/agk/rules.py consolidate` (brief #647 build (b), ADR-0404): one line per rule to cut,
+#   <file> <n> retire <check>   the rule is enforced by <check>, a path that must exist; the rule file keeps <n> with a pointer
+#   <file> <n> guide            the rule is a how-to; its text moves to docs/guides/session-how-to.md
+# <n> is the number of one numbered rule line of <file>. A rule with no line here is kept. `--plan` prints the rows and a hash,
+# `--apply --hash <hash>` writes them and clears the applied lines. No entries yet: on this repository `--apply` runs only after
+# 2026-11-13T13:22Z and on the owner's word (Q-647-3), from the counts of `rules.py dropped`.
