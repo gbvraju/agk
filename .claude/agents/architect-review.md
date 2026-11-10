@@ -43,5 +43,5 @@ A reviewer slot run (`slot --next r<N>` printed `review pr #<n> <sha>`, ADR-0431
 
 The shape of a verdict. After its first line, in this order: `Read:`; `Rules:` (one line per rule of the spec); `Not proven:` (one line per criterion); `Lens:` (five lines: security, honesty, portability, size, duplication); `Gaps:` (each gap as `project:` or `kit:`); `Checklist:` (one answer per question of `config/review-checklist.md`, with evidence or `n/a`); then the findings.
 
-The file enforces the tool list and the guard hook (no write at all; `Bash` only for read-only `git`, `gh api` GET, a comment POST in this repository, `date -u`, `make governance` and the read-only scripts of `scripts/agk/`). A comment goes only to the pull
+The file enforces the tool list and the guard hook (no write until Q-1013-3; `Bash` only for read-only `git`, `gh api` GET, a comment POST in this repository, `date -u`, `make governance` and the read-only scripts of `scripts/agk/`). A comment goes only to the pull
 request under review; the guard cannot tell. Whether every pull request reaches you, a verdict is right or the Approved text good is a person's to judge.

@@ -31,7 +31,8 @@ protected classes, so the build writes its own (session rule 36); 0431 is the br
    pushed this branch`, and releases the lease, when a commit of that pull request names the slot or this run's name as
    a word in its message (body or trailer).
 3. A verdict's first line may end ` (conductor fallback)`. `conductor.py check-verdict`, `session.py` (its `watch` and
-   slot readers) and `merge_cleared.py` read such a line exactly as the same line without it.
+   slot readers), `merge_cleared.py` and the router (`metrics.VERDICT`, read by `metrics.verdicts`, and
+   `common.FIX_LIST`, read by `common.verdict_problem`) read such a line exactly as the same line without it.
 4. `.claude/agents/architect-review.md` gains one paragraph for the slot run, with no rise in its rule budget, and the
    review guard's read-only scripts gain `review_bundle`.
 
@@ -45,6 +46,9 @@ protected classes, so the build writes its own (session rule 36); 0431 is the br
 
 - 2026-11-30: the `[flow] reviewer_slots` count, the marker's `agent:`, `tier:` and `session:` lines and the local and
   personal refusal of amendment 160 items 1, 4 and 7 are not in brief #1013's answers and are not built here (Q-1013-1).
-- 2026-11-30: `metrics.py`, `shadow_rate.py`, `core_audit.py` and `common.verdict_problem` still read a verdict's first
-  line without the fallback ending; brief #1014 owns the metrics (Q-1013-2).
+- 2026-11-30: `shadow_rate.py`, `core_audit.py` and `reviewers.py` still read a verdict's first line without the
+  fallback ending; brief #1014 owns them, and a shared constant for the first-line grammar (Q-1013-2).
+- 2026-11-30: under the review guard the slot run of decision 4 cannot save the bundle file, write `v.md` or run
+  `conductor.py check-verdict`, since the guard refuses every write and redirect; reviewer slots wait for the
+  maintainers' guard decision before they are scheduled (Q-1013-3, asked of the owner on #661).
 - 2026-12-31: "the bundle only" is a written rule; the runtime can read the checkout (ADR-0430 residual).

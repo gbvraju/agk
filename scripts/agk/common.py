@@ -323,7 +323,8 @@ def show(root: Path, rev: str, path: str) -> str | None:
     return proc.stdout if proc.returncode == 0 else None
 
 
-FIX_LIST = re.compile(r"Verdict: fix list ([0-9a-f]{4,40})")
+# an optional ` (conductor fallback)` ending is the same verdict (ADR-0431 decision 3)
+FIX_LIST = re.compile(r"Verdict: fix list ([0-9a-f]{4,40})(?: \(conductor fallback\))?")
 FINAL_LINE = re.compile(r"Final: (\S+) (?:(REQ-\d+) )?(\S+) -> (\S+)")
 REQUIREMENTS = "docs/requirements.md"
 
