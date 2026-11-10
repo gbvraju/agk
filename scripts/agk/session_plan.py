@@ -30,6 +30,11 @@ The plan, in the order it is decided:
    builders running it may be 0, the verdict on 43ada36); memory that cannot be read is
    `memory: unknown` and leaves the figure as it was. The plan names the limit that applied:
    `max_builders`, `reviews` or `memory` (the first of them on a tie).
+   The `[capacity]` table (brief #842 build (b), ADR-0409) adds profiles: each ceiling is the
+   smaller of the two tables; `full` measures nothing; `balanced` and `small` keep 25 and 50
+   percent of memory, cores and disk free where each per-builder setting is set, and `small`
+   starts at most 2; `fixed` uses `max_builders` only; `auto` reads as no table until build (c).
+   Every plan prints `Capacity: <n> of <ceiling> (<profile>; limit: <name> <figure>).`
 4. **The merge queue.** The merge rate is the merged pull requests of the last 14 days divided by
    the active hours (hour-long buckets, counted back from now, that hold a merge). While the
    `agk:ready` pull requests exceed `merge_hours` times the rate, no session starts; a running
@@ -91,7 +96,9 @@ refused unless the brief has one `Broad:` line, and an `Adds:` entry may not nam
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 import string
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -102,6 +109,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import common
+import config
 import playbook_format
 from common import CheckError, matches, read_list
 from metrics import HOLDS_FILE, author_of, counted_authors, hold_rows
@@ -1427,7 +1435,6 @@ def build(root, record: bool = False) -> dict:
     hours = flow_int(root, "merge_hours", DEFAULTS["merge_hours"], RULE)
     behind_limit = flow_int(root, "stale_commits", DEFAULTS["stale_commits"], RULE)
     s = survey(root, repo, "")
-    reviews = flow_int(root, "reviews_in_flight", s.max_builders, RULE)
     default = _default_branch(root)
     now = datetime.now(UTC)
     read_gone(root, s, now)
@@ -1443,10 +1450,15 @@ def build(root, record: bool = False) -> dict:
     running = len(s.builders) + len(s.held)
     authors = verdict_authors(root)
     waiting_review = sum(1 for p in s.builders if waiting_for_verdict(s, p, authors))
-    limits = [("max_builders", s.max_builders - running), ("reviews", reviews - waiting_review)]
-    memory = memory_capacity(root, running)
-    if isinstance(memory.get("memory"), dict):
-        limits.append(("memory", memory["memory"]["builders"]))
+    ceil = ceilings(root, s.max_builders)
+    reviews, profile = ceil["reviews_in_flight"], ceil["profile"]
+    if profile == "small" and SMALL_MOST < ceil["max_builders"]:
+        limits = [("small", SMALL_MOST - running)]
+    else:
+        limits = [("max_builders", ceil["max_builders"] - running)]
+    limits.append(("reviews", reviews - waiting_review))
+    memory = measured_capacity(root, ceil, running)
+    limits += [(n, memory[n]["builders"]) for n, _ in MEASURES if isinstance(memory.get(n), dict)]
     limit, lowest = min(limits, key=lambda x: x[1])  # min keeps the first of a tie
     slots = max(0, lowest)
     ready_prs = [p for p in s.prs if p.get("state") == "open" and "agk:ready" in label_names(p)]
@@ -1517,7 +1529,11 @@ def build(root, record: bool = False) -> dict:
         ],
         "stale_claims": stale,
         "capacity": {
-            "max_builders": s.max_builders,
+            "max_builders": ceil["max_builders"],
+            "profile": profile,
+            "ceiling": min(ceil["max_builders"], SMALL_MOST)
+            if profile == "small"
+            else ceil["max_builders"],
             "running": running,
             "reviews_in_flight": reviews,
             "waiting_for_verdict": waiting_review,
@@ -1602,40 +1618,113 @@ def start_entry(name: str, brief: dict, protected: list[str] | None) -> dict:
     return entry | ({"build": brief["build"]} if brief.get("build") else {})
 
 
-def memory_capacity(root, running: int) -> dict:
-    """The memory figure of the capacity (brief #409 answers 1 and 2): nothing when
-    `builder_memory_gb` is not set; else the setting and `memory`, either `unknown` or the
-    available bytes and the builders they carry, rounded down. The available memory is what is
-    free after the running builders, so the floor of 1, which lets a project start its first
-    builder, holds only while none runs (the verdict on 43ada36)."""
-    if flow_value(root, "builder_memory_gb", None, RULE) is None:
-        return {}
-    per = flow_int(root, "builder_memory_gb", 1, RULE)
-    available = common.available_memory()
-    if available is None:
-        return {"builder_memory_gb": per, "memory": "unknown"}
-    builders = available // (per * GIB)
-    if running == 0:
-        builders = max(1, builders)
-    return {
-        "builder_memory_gb": per,
-        "memory": {"available_bytes": available, "builders": builders},
-    }
+RESERVES = {"balanced": 0.25, "small": 0.5}  # the share of the machine each profile keeps free
+SMALL_MOST = 2  # `small` runs at most 2 builders at once
+MEASURES = (("memory", "builder_memory_gb"), ("cpu", "builder_cpus"), ("disk", "builder_disk_gb"))
+FREE_KEYS = {"memory": "available_bytes", "cpu": "free_cores", "disk": "free_bytes"}
 
 
-def capacity_line(cap: dict) -> str | None:
-    """`Capacity: <slots> (limit: <name>; ...)` when `builder_memory_gb` is set, else None."""
-    if "builder_memory_gb" not in cap:
+def total_memory() -> int | None:
+    """The machine's memory in bytes (`os.sysconf`), None where it cannot be read."""
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (AttributeError, OSError, ValueError):
         return None
-    memory = cap["memory"]
-    if memory == "unknown":
-        detail = "memory: unknown"
-    else:
-        detail = (
-            f"{memory['available_bytes'] // GIB} GB available, builder_memory_gb is "
-            f"{cap['builder_memory_gb']}, room for {memory['builders']}"
-        )
-    return f"Capacity: {cap['slots']} (limit: {cap['limit']}; {detail})."
+
+
+def cpu_figures() -> tuple[float, int] | None:
+    """(free cores: `os.cpu_count()` less the one-minute load, the cores), None when unread."""
+    count = os.cpu_count()
+    try:
+        load = os.getloadavg()[0]
+    except (AttributeError, OSError):
+        return None
+    return (max(0.0, count - load), count) if count else None
+
+
+def disk_figures(root) -> tuple[int, int] | None:
+    """(free bytes, total bytes) of the disk under the repository, None when unread."""
+    try:
+        usage = shutil.disk_usage(root)
+    except OSError:
+        return None
+    return usage.free, usage.total
+
+
+def ceilings(root, flow_max: int) -> dict:
+    """SPEC-0034 rule 1: each ceiling the smaller of `[flow]` and `[capacity]`, and the profile
+    (`none` without a table); `reviews_in_flight` is `max_builders` when unset, and always under
+    `fixed`, which reads no other ceiling."""
+    table = config.capacity_settings(Path(root)) or {}
+    found: dict = {"profile": table.get("profile", "none")}
+    for key in ("max_builders", "reviews_in_flight", "builder_memory_gb"):
+        set_in_flow = flow_value(root, key, None, RULE) is not None
+        values = [flow_int(root, key, 1, RULE)] if set_in_flow else []
+        found[key] = min([*values, table[key]] if key in table else values, default=None)
+    found["max_builders"] = min(flow_max, found["max_builders"] or flow_max)
+    found |= {k: table.get(k) for k in ("builder_cpus", "builder_disk_gb")}
+    if found["profile"] == "fixed" or found["reviews_in_flight"] is None:
+        found["reviews_in_flight"] = found["max_builders"]
+    return found
+
+
+def figure(root, name: str) -> tuple[float | None, float | None]:
+    """(free, total) of one figure; either may be None when it cannot be read."""
+    if name == "memory":
+        return common.available_memory(), total_memory()
+    got = cpu_figures() if name == "cpu" else disk_figures(root)
+    return got if got else (None, None)
+
+
+def measured_capacity(root, ceil: dict, running: int) -> dict:
+    """The measured figures of the profile: none under `full` and `fixed`; memory alone with no
+    reserve under `none` and `auto` (brief #409); memory, cores and disk under `balanced` and
+    `small`, each only where its per-builder setting is set, with the profile's reserve. A figure
+    is (free - reserve x total) // per builder, never below 1 while no builder runs (the verdict
+    on 43ada36), or `unknown`, which is left out, never read as 0."""
+    profile = ceil["profile"]
+    if profile in ("full", "fixed"):
+        return {}
+    reserve = RESERVES.get(profile, 0)
+    found: dict = {}
+    for name, key in MEASURES if reserve else MEASURES[:1]:
+        per = ceil[key]
+        if per is None:
+            continue
+        found[key] = per
+        free, total = figure(root, name)
+        if free is None or (reserve and total is None):
+            found[name] = "unknown"
+            continue
+        unit = per if name == "cpu" else per * GIB
+        builders = max(0, int((free - reserve * (total or 0)) // unit))
+        if running == 0:
+            builders = max(1, builders)
+        found[name] = {FREE_KEYS[name]: free, "builders": builders}
+    return found
+
+
+def figure_text(cap: dict, name: str) -> str:
+    """The figure that a limit names: a setting's number, or a measured one."""
+    if name == "reviews":
+        return f"{cap['waiting_for_verdict']} waiting of {cap['reviews_in_flight']}"
+    if name in ("max_builders", "small"):
+        return str(cap["ceiling"])
+    free = cap[name][FREE_KEYS[name]]
+    if name == "cpu":
+        return f"{int(free)} cores free"
+    return f"{free // GIB} GB " + ("available" if name == "memory" else "free")
+
+
+def capacity_line(cap: dict) -> str:
+    """`Capacity: <n> of <ceiling> (<profile>; limit: <name> <figure>).` (amendment 149 item 7),
+    then ` Unknown: <names>.` for each counted figure that cannot be read."""
+    line = (
+        f"Capacity: {cap['slots']} of {cap['ceiling']} ({cap['profile']}; "
+        f"limit: {cap['limit']} {figure_text(cap, cap['limit'])})."
+    )
+    unknown = [name for name, _ in MEASURES if cap.get(name) == "unknown"]
+    return line + (f" Unknown: {', '.join(unknown)}." if unknown else "")
 
 
 def _default_branch(root) -> str:
@@ -1653,6 +1742,14 @@ def reason(plan: dict) -> str:
             f"{merge['waiting']} pull requests wait for your merge, more than "
             f"{merge['merge_hours']} hour(s) of your merge rate ({merge['rate']:g} an hour)"
         )
+    if cap.get("limit") == "small":
+        most = f"at most {SMALL_MOST} builders at once"
+        return f"the small profile runs {most} ({cap['running']} running)"
+    if cap.get("limit") in ("cpu", "disk"):
+        name = cap["limit"]
+        key = dict(MEASURES)[name]
+        figures = f"{figure_text(cap, name)}, {key} is {cap[key]}"
+        return f"the machine's {name} has room for no more builders ({figures})"
     if cap.get("limit") == "memory":
         return (
             "the machine's memory has room for no more builders "
@@ -1684,8 +1781,7 @@ def words(plan: dict) -> str:
         lines.append(f"Start {len(started)}: {takes}.")
     else:
         lines.append(f"Start 0: {reason(plan)}.")
-    if line := capacity_line(plan["capacity"]):
-        lines.append(line)
+    lines.append(capacity_line(plan["capacity"]))
     lines += playbook_lines(plan)
     for w in plan["waits"]:
         lines.append(f"#{w['brief']} {wait_text(w)}.")

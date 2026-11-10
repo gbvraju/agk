@@ -386,6 +386,12 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "set ui_paths in the [design] table of agk.toml to the globs of the project's UI files, so "
         "that check_brief.py asks a UI brief for its Screens line (agk.toml is a protected path)",
     ),
+    "capacity": (  # SPEC-0006 rule 5, SPEC-0034 rule 1 (brief #842, ADR-0409): a printed line
+        "warn",
+        "capacity: ",
+        "the [capacity] table of agk.toml is refused",
+        "correct the setting the refusal names in agk.toml (a protected path)",
+    ),
     "engines-keys": (
         "warn",
         "[engines] in agk.toml has only the keys vision, stack, design and review",
@@ -1014,6 +1020,39 @@ def always_full_result(root: Path) -> Result:
     return Result("fail", message=" " + "; ".join(found)) if found else Result("ok")
 
 
+SUGGEST_GB = ((8, "small"), (32, "balanced"))  # free memory under n GB suggests the profile
+
+
+def suggested_profile(available: int | None) -> str | None:
+    """`small` under 8 GB free, `balanced` under 32 GB, `full` above; None when unread."""
+    if available is None:
+        return None
+    return next((p for gb, p in SUGGEST_GB if available < gb * 1024**3), "full")
+
+
+def capacity_result(root: Path) -> Result:
+    """The profile, every ceiling and every measured figure, and the profile suggested for the
+    machine (amendment 149 item 9); a refused table fails, naming the setting."""
+    import session
+    import session_plan as plan
+
+    try:
+        flow_max = session.flow_int(root, "max_builders", session.MAX_BUILDERS, 1)
+        ceil = plan.ceilings(root, flow_max)
+    except CheckError as err:
+        return Result("fail", message=f" ({err})")
+    keys = ("max_builders", "reviews_in_flight", *(key for _, key in plan.MEASURES))
+    set_ = ", ".join(f"{k} {ceil[k]}" for k in keys if ceil[k] is not None)
+    free = {name: plan.figure(root, name)[0] for name, _ in plan.MEASURES}
+    shown = []
+    for name, value in free.items():
+        cap = {name: {plan.FREE_KEYS[name]: value}}
+        shown.append(f"{name} " + ("unknown" if value is None else plan.figure_text(cap, name)))
+    suggested = suggested_profile(free["memory"]) or "unknown"
+    text = f"profile {ceil['profile']}; {set_}; {', '.join(shown)}; suggested profile {suggested}"
+    return Result("ok", message=text)
+
+
 def design_ui_result(root: Path, config: dict) -> Result:
     """`ui_paths` of the `[design]` table (SPEC-0037 rule 10): `absent` when a prototype folder
     exists and the list is unset or empty; always ok, and never a glob in the message."""
@@ -1416,6 +1455,7 @@ def run_checks(
     results["always-full-infra"] = always_full_result(root)
     results["slot-schedule"] = slot_schedule_result(root, reads)
     results["design-ui-paths"] = design_ui_result(root, config)
+    results["capacity"] = capacity_result(root)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]

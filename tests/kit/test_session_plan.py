@@ -872,9 +872,7 @@ def test_a_memory_limit_below_max_builders_caps_the_start_and_is_named(
     code, words = planned(proj, stub, monkeypatch, capsys, 11 * GIB)
     lines = words.splitlines()
     assert lines[0] == "Start 2: builder-a takes #5, builder-b takes #6."
-    assert (
-        "Capacity: 2 (limit: memory; 11 GB available, builder_memory_gb is 4, room for 2)." in lines
-    )
+    assert "Capacity: 2 of 4 (none; limit: memory 11 GB available)." in lines  # ADR-0409
 
 
 def test_a_memory_limit_above_max_builders_leaves_max_builders_the_limit(
@@ -888,10 +886,7 @@ def test_a_memory_limit_above_max_builders_leaves_max_builders_the_limit(
     assert code == 0 and cap["slots"] == 2 and cap["limit"] == "max_builders"
     assert cap["memory"] == {"available_bytes": 64 * GIB, "builders": 32}
     code, words = planned(proj, stub, monkeypatch, capsys, 64 * GIB)
-    assert (
-        "Capacity: 2 (limit: max_builders; 64 GB available, builder_memory_gb is 2, room for 32)."
-        in words.splitlines()
-    )
+    assert "Capacity: 2 of 2 (none; limit: max_builders 2)." in words.splitlines()  # ADR-0409
 
 
 def test_the_reviews_limit_is_named_when_it_is_the_lowest(proj, stub, monkeypatch, capsys):
@@ -925,7 +920,7 @@ def test_an_unreadable_memory_says_unknown_and_uses_todays_figure(proj, stub, mo
     assert code == 0 and cap["slots"] == 3 and cap["limit"] == "max_builders"
     assert cap["memory"] == "unknown" and cap["builder_memory_gb"] == 4
     code, words = planned(proj, stub, monkeypatch, capsys, None)
-    assert "Capacity: 3 (limit: max_builders; memory: unknown)." in words.splitlines()
+    assert "Capacity: 3 of 3 (none; limit: max_builders 3). Unknown: memory." in words.splitlines()
 
 
 @pytest.mark.parametrize("value", ["0", "-2", "2.5", '"4"', "true"])
@@ -1023,6 +1018,4 @@ def test_with_builders_running_memory_for_none_more_starts_none(proj, stub, monk
         "Start 0: the machine's memory has room for no more builders "
         "(2 GB available, builder_memory_gb is 6)."
     )
-    assert (
-        "Capacity: 0 (limit: memory; 2 GB available, builder_memory_gb is 6, room for 0)." in lines
-    )
+    assert "Capacity: 0 of 4 (none; limit: memory 2 GB available)." in lines  # ADR-0409
