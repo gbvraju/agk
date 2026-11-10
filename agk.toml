@@ -626,6 +626,15 @@ tests = ["tests/kit/test_release_pack.py"]
 code = "scripts/agk/req_status.py"
 tests = ["tests/kit/test_req_status.py"]
 [[testing.map]]
+code = "scripts/agk/rules.py"
+tests = [
+  "tests/kit/test_fix_list_tags.py", "tests/kit/test_rule_budget.py", "tests/kit/test_rules_consolidate.py",
+  "tests/kit/test_rules_dropped.py", "tests/kit_dev/test_kit_manifest.py",
+]
+[[testing.map]]
+code = "config/rule-plan.txt"
+tests = ["tests/kit/test_rules_consolidate.py"]
+[[testing.map]]
 code = "scripts/agk/review_context.py"
 tests = [
   "tests/kit/test_check_kit_tests.py", "tests/kit/test_review_context.py",
