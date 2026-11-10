@@ -63,6 +63,7 @@ and the JSON keep it.
    | `vendored-missing` | error | a file the installer for `mode` writes verbatim is absent | restore it from the kit |
    | `vendored-differs` | error | a vendored file differs byte for byte from the kit's copy, and the versions match | review `git log -p -- <path>`; restore the kit's copy, or record the deliberate edit in an ADR that names the path class |
    | `default-branch-config` | warn | `default_branch` in `agk.toml` differs from the repository's `default_branch` | set `default_branch` in `agk.toml` |
+   | `capacity` | warn | the `[capacity]` table of `agk.toml` is refused (SPEC-0034 rule 1); otherwise a printed line that never fails the run: the profile, every ceiling and every measured figure, and the suggested profile for the machine, `small` under 8 GB free, `balanced` under 32 GB, `full` above (amendment 149, item 9) | correct the setting the refusal names |
 
 6. **The reads (four, and a fifth where the product report is installed).** `gh api repos/{o}/{r}` (default branch, `allow_auto_merge`, `delete_branch_on_merge`, `has_issues`,
    `permissions`), `gh api repos/{o}/{r}/rulesets` (the list carries no rules), `gh api repos/{o}/{r}/rulesets/{id}` for
@@ -180,3 +181,11 @@ and the JSON keep it.
   is not read (due 2026-12-31).
 - 2026-10-15: a legitimate local edit of a vendored file is reported on every run until it is reverted or the kit
   copy changes; there is no allow-list (due 2026-11-30).
+
+## Contexts
+
+- kit: `doctor.py` prints the `capacity` row of rule 5 in every project the kit is installed in
+- github: the same row, read from the project's `agk.toml`
+- local: the same row, its figures measured on that machine
+- personal: the same row, and a personal project's profile reads as `small` when no table sets it (SPEC-0034 rule 15)
+- stacks: not applicable: no test or build step changes
