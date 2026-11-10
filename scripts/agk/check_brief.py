@@ -22,6 +22,9 @@ line `Wave: n` (amendment 140), a wave of `--waves` when that list is given. Wit
 line `Adds:` lists the new files a brief creates and `Broad: <reason>` says that it is a sweep.
 Amendment 142: one line `Contexts:` states every context of `session.CONTEXTS`, each with how the
 change works there or `not applicable: <reason>`.
+Brief #982 (rule 4b): with `--root DIR`, a `Touches:` glob that meets a class of
+`DIR/config/protected-paths.txt` in a brief that reserves no ADR and names no `Covered-by:` is
+warned (`warning: ...` before `ok brief`, a `warnings` list in a passing event), never failed.
 
 `--event PAYLOAD` reads a saved `issues` event and prints one JSON line, for the job that labels a
 brief filed on GitHub: `ignore`, `fail` with the label, the rules and the comment, or `pass` with
@@ -67,6 +70,12 @@ COMMENT_MARK = "<!-- agk-brief-check -->"
 EVENT_ACTIONS = ("opened", "edited", "labeled")
 FLAGS = ("--root", "--event", "--waves")
 WAVES = re.compile(r"[1-9]\d*(,[1-9]\d*)*")
+PROTECTED_PATHS = "config/protected-paths.txt"
+ADR_LINE = re.compile(r"(Reserved:.*\bADR-\d+|Covered-by:\s*ADR-\d+)")
+WARN_4B = (
+    "rule 4b: Touches names a protected path class ({}) and the brief reserves no ADR and "
+    "names no Covered-by"
+)
 
 
 def absent_requirements(body: str, root: Path) -> list[str]:
@@ -162,6 +171,35 @@ def screens_problems(body: str, root: Path) -> list[str]:
     return []
 
 
+def protected_classes(root: Path) -> list[str]:
+    try:
+        text = (root / PROTECTED_PATHS).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    return [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
+
+
+def touches_class(touch: str, cls: str) -> bool:
+    """A folder class (`x/`) meets a glob below or above it; a file class a glob matching it."""
+    if fnmatch.fnmatchcase(cls, touch):
+        return True
+    if not cls.endswith("/"):
+        return False
+    lit = _literal(touch)
+    return fnmatch.fnmatchcase(touch, cls + "*") or bool(
+        lit and (lit.startswith(cls) or cls.startswith(lit))
+    )
+
+
+def protected_warnings(body: str, root: Path | None) -> list[str]:
+    """Rule 4b (brief #982): a warning, never a failure, naming the classes and never a value."""
+    if root is None or any(ADR_LINE.match(ln) for ln in body.splitlines()):
+        return []
+    touches = [t for t in touches_of(body) if t]
+    named = [c for c in protected_classes(root) if any(touches_class(t, c) for t in touches)]
+    return [WARN_4B.format(", ".join(named))] if named else []
+
+
 def body_problems(body: str, root: Path | None, waves: set[int] | None) -> list[str]:
     """Every rule the body breaks: the shape first, then what needs the root."""
     problems = brief_problems(body) + contexts_line_problems(body)
@@ -185,6 +223,8 @@ def check(path: Path, root: Path | None = None, waves: set[int] | None = None) -
     problems = body_problems(body, root, waves)
     if problems:
         raise CheckError("; ".join(problems))
+    for warning in protected_warnings(body, root):
+        print(f"warning: {warning}")
     print(f"ok {NAME}")
     return 0
 
@@ -221,7 +261,9 @@ def event_result(payload: dict, root: Path | None, waves: set[int] | None) -> di
             "problems": problems,
             "comment": event_comment(problems),
         }
-    return {"action": "pass", "issue": number, "label": INVALID_LABEL, "wave": wave_of(body)}
+    result = {"action": "pass", "issue": number, "label": INVALID_LABEL, "wave": wave_of(body)}
+    warnings = protected_warnings(body, root)
+    return {**result, "warnings": warnings} if warnings else result
 
 
 def run_event(path: Path, root: Path | None, waves: set[int] | None) -> int:
