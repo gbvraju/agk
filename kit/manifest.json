@@ -117,6 +117,7 @@
     "scripts/agk/session.py",
     "scripts/agk/session_plan.py",
     "scripts/agk/shadow_rate.py",
+    "scripts/agk/smoke.py",
     "scripts/agk/stalls.py",
     "scripts/agk/status_only.py",
     "scripts/agk/survey.py",
