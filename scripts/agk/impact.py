@@ -24,6 +24,9 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
   the parallel workers of the full run (SPEC-0044 rule 4, brief #583; `prepush.full_command`);
 - `parallel_command`: the full command of a non-pytest runner with more than one worker, `{workers}`
   filled with the number (rule 5);
+- `tools_file`: unset by default; a pinned requirements file inside the repository that prepush
+  installs once with the run's interpreter when `workers` is above 1 and xdist is not importable
+  (brief #1021, ADR-0436; `prepush.xdist_ready`);
 - `full_when_share`: a number above 0 and at most 1 (0.5): a pull request whose selected test files
   are at least that share of the `[proof]` areas' test files runs the full suite in workers instead
   (brief #980, ADR-0422; `project_tests.plan`);
@@ -101,6 +104,7 @@ KEYS = {
     "junit",
     "workers",
     "parallel_command",
+    "tools_file",
     "slow_suite_seconds",
     "full_when_share",
     "results_dir",
@@ -304,7 +308,7 @@ def testing_table(root: Path) -> dict | None:
     if not isinstance(table, dict) or set(table) - KEYS:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
-            "proof_regression, pr_tests, junit, workers, parallel_command, "
+            "proof_regression, pr_tests, junit, workers, parallel_command, tools_file, "
             "slow_suite_seconds, full_when_share, results_dir, keep_passed, keep_runs, "
             "rerun_alone, map_source and smoke (setting: testing)"
         )
@@ -345,6 +349,10 @@ def testing_table(root: Path) -> dict | None:
     command = table.get("parallel_command", "x")
     if not isinstance(command, str) or not command.strip():
         raise CheckError("parallel_command must be a command (setting: testing.parallel_command)")
+    if "tools_file" in table and not _folder_ok(table["tools_file"]):
+        raise CheckError(
+            "tools_file must be a file path inside the repository (setting: testing.tools_file)"
+        )
     slow = table.get("slow_suite_seconds", DEFAULT_SLOW)
     if isinstance(slow, bool) or not isinstance(slow, int) or slow <= 0:
         raise CheckError(
@@ -564,6 +572,13 @@ def parallel_command(root: Path) -> str | None:
     if testing_table(root) is None:
         return None
     return config_source(root)["testing"].get("parallel_command")
+
+
+def tools_file(root: Path) -> str | None:
+    """`[testing] tools_file`, None without the table or the key (checked first, brief #1021)."""
+    if testing_table(root) is None:
+        return None
+    return config_source(root)["testing"].get("tools_file")
 
 
 def slow_suite_seconds(root: Path) -> int:
