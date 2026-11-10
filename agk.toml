@@ -706,6 +706,9 @@ tests = [
   "tests/kit/test_facts_shadow.py", "tests/kit/test_shadow_rate.py",
 ]
 [[testing.map]]
+code = "scripts/agk/smoke.py"
+tests = ["tests/kit/test_smoke.py"]
+[[testing.map]]
 code = "scripts/agk/stalls.py"
 tests = ["tests/kit/test_stalls.py", "tests/kit_dev/test_intelligent_testing.py"]
 [[testing.map]]
