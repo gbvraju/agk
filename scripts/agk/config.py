@@ -15,7 +15,9 @@ each of the five kinds gets a tier and an effort, the table's or rule 2's defaul
 effort outside the lists, a non-string value or `review` below `strongest` at `high` is refused,
 naming `setting: models.<kind>` and never the value. `model_names(root)` reads the optional
 `[models.names]` table, a tier to a project's model name, which the kit never ships. No check,
-gate or reading list reads either in this build (rule 1).
+gate or reading list reads either in this build (rule 1). `model_providers(root)` reads the
+optional `[models.providers]` table (SPEC-0053 rule 3, brief #763): a tier to its ordered list of
+plain labels.
 
 `failures_settings(root)` reads the optional `[failures]` table (SPEC-0046 rule 2, brief #634):
 `issues` and `artifacts` (booleans, false) and `artifact_paths` (relative path patterns, empty).
@@ -167,6 +169,7 @@ MODEL_DEFAULTS = {
 }
 # Rules 2 and 6: a reviewer runs on `strongest`, at `high` for a first review (Q-623-1).
 REVIEW_FLOOR = {"tier": "strongest", "effort": "high"}
+MODEL_LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")  # SPEC-0053 rule 3
 
 
 class ModelSettingError(CheckError):
@@ -199,15 +202,39 @@ def model_names(root: Path) -> dict[str, str]:
     return dict(names)
 
 
+def model_providers(root: Path) -> dict[str, list[str]]:
+    """The optional `[models.providers]` table: a tier to its labels in the order of trial
+    (SPEC-0053 rule 3). An unknown tier names only the table, for a key may be anything."""
+    table = _models_table(root).get("providers", {})
+    if not isinstance(table, dict):
+        raise _refuse_model("models.providers")
+    names = model_names(root)
+    seen: set[str] = set()
+    for tier, labels in table.items():
+        if tier not in MODEL_TIERS:
+            raise _refuse_model("models.providers")
+        if (
+            not isinstance(labels, list)
+            or not labels
+            or not all(isinstance(x, str) and MODEL_LABEL.fullmatch(x) for x in labels)
+            or len(set(labels)) != len(labels)
+            or seen & set(labels)
+            or labels[0] != names.get(tier, labels[0])
+        ):
+            raise _refuse_model(f"models.providers.{tier}")
+        seen |= set(labels)
+    return {tier: list(labels) for tier, labels in table.items()}
+
+
 def model_settings(root: Path) -> dict[str, dict[str, str]]:
     """The tier and effort of every kind (rule 2): the table's entry or the default. A kind, tier
     or effort outside the lists, a value that is not a string, an entry that is not exactly
     `{ tier, effort }` and `review` below `strongest` at `high` are refused."""
     table = _models_table(root)
-    model_names(root)
+    model_providers(root)
     settings = {k: {"tier": t, "effort": e} for k, (t, e) in MODEL_DEFAULTS.items()}
     for kind, entry in table.items():
-        if kind == "names":
+        if kind in ("names", "providers"):
             continue
         if (
             kind not in MODEL_KINDS
