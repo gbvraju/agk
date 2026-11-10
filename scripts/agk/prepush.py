@@ -37,7 +37,12 @@ with that step's own output:
 SPEC-0044 rules 4 and 5 (brief #583): with `[testing] workers` above 1 the regression run named
 `full` is `full_command`'s: `-n <workers>` at the end of a simple pytest command whose interpreter
 imports xdist in the run's folder, `[testing] parallel_command` for another runner, or else the
-command of today after one line naming the setting. Proof's runs and area commands stay single.
+command of today after one line naming the setting. Proof's own runs stay single.
+Brief #980 (ADR-0422): each other regression run, a selected one, takes the same rule through
+`selected_workers`: `-n <workers>` at the end of a pytest command (the whole command, or its one
+simple command after a last `;`) whose interpreter imports xdist, else the command of today after
+the one line of SPEC-0044 rule 4 (`NO_XDIST`, printed once with the full run's); `parallel_command`
+stays the full run's alone.
 
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
 one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing,
@@ -153,6 +158,10 @@ NO_XDIST = (
 NO_PARALLEL = (
     "tests: the command is not a simple pytest command and parallel_command is not set, running "
     "in one process (setting: testing.parallel_command)"
+)
+SELECTED_NOT_PYTEST = (
+    "tests: {name} is not a simple pytest command, running in one process "
+    "(setting: testing.workers)"
 )
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 PYTHON = re.compile(r"python(?:\d+(?:\.\d+)?)?")
@@ -676,6 +685,14 @@ def imports_xdist(python: str, folder: Path) -> bool:
     return proc.returncode == 0
 
 
+def pytest_workers(command: str, folder: Path, workers: int, python: str) -> str | None:
+    """The one rule of the workers (SPEC-0044 rule 4, brief #980): COMMAND with `-n <workers>` at
+    its end when WORKERS is above 1 and PYTHON imports xdist in FOLDER, else None."""
+    if workers > 1 and imports_xdist(python, folder):
+        return f"{command} -n {workers}"
+    return None
+
+
 def full_command(root: Path, command: str, folder: Path) -> tuple[str, str | None]:
     """The full run's command with `[testing] workers` (SPEC-0044 rules 4 and 5) and the one line
     when it stays single: `-n <workers>` at the end of a pytest command whose interpreter imports
@@ -685,13 +702,51 @@ def full_command(root: Path, command: str, folder: Path) -> tuple[str, str | Non
         return command, None
     python = pytest_interpreter(command)
     if python is not None:
-        if imports_xdist(python, folder):
-            return f"{command} -n {workers}", None
-        return command, NO_XDIST
+        with_n = pytest_workers(command, folder, workers, python)
+        return (with_n, None) if with_n else (command, NO_XDIST)
     parallel = parallel_command(root)
     if parallel is None:
         return command, NO_PARALLEL
     return parallel.replace("{workers}", str(workers)), None
+
+
+def last_pytest(command: str) -> str | None:
+    """The interpreter of the pytest command that `-n` at the end of COMMAND reaches: the whole
+    command, or the one simple command after its last `;` when the part before has no `#`."""
+    python = pytest_interpreter(command)
+    if python is not None:
+        return python
+    head, sep, tail = command.rpartition(";")
+    if not sep or "#" in head:
+        return None
+    return pytest_interpreter(tail.strip())
+
+
+def selected_workers(
+    root: Path, sets: list[tuple[str, str, str, str]]
+) -> tuple[list[tuple[str, str, str, str]], list[str]]:
+    """Each selected run (every run but `full`) with the workers of the full run's rule (brief
+    #980, ADR-0422), and the lines of the runs that stay in one process. The files never change."""
+    workers = workers_setting(root)
+    if workers <= 1:
+        return sets, []
+    made, lines = [], []
+    for name, command, cwd, reason in sets:
+        python = last_pytest(command) if name != "full" else None
+        if name != "full" and python is None:
+            lines.append(SELECTED_NOT_PYTEST.format(name=name))
+        elif python is not None:
+            with_n = pytest_workers(command, root / cwd, workers, python)
+            lines.extend([] if with_n else [NO_XDIST])  # the one line of SPEC-0044 rule 4
+            command = with_n or command
+        made.append((name, command, cwd, reason))
+    return made, list(dict.fromkeys(lines))
+
+
+def suite_test_files(root: Path, areas: list[dict] | None) -> int:
+    """The tracked test files that the `[proof]` areas hold (brief #980 answer 3)."""
+    files = git(root, "ls-files", check=False).splitlines()
+    return sum(any(is_test_file(f, a["dirs"], a["patterns"]) for a in areas or []) for f in files)
 
 
 def regression_sets(
@@ -790,7 +845,8 @@ def gate(
     made: list[dict] = []
     warnings: list[str] = []
     sets, notes = regression_sets(root, found, areas)
-    notes = list(dict.fromkeys([*notes, *own_notes]))
+    sets, single = selected_workers(root, sets)
+    notes = list(dict.fromkeys([*notes, *single, *own_notes]))
     junit = junit_setting(root)
     planned = [(r["name"], r["command"], r["cwd"], OWN, "proof") for r in runs]
     planned.extend((*item, "regression") for item in sets)

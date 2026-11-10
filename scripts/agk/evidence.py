@@ -25,7 +25,8 @@ cannot be repeated: the unit is listed, not sampled. It compares exit codes with
 different output digest is a note, never a failure, since outputs carry timings. A run's optional
 `timing` object (SPEC-0044 rule 3) is accepted in its one form and never re-run or compared.
 The full run's command is rebuilt with `[testing] workers` as prepush builds it (SPEC-0044 rule
-4, `prepush.full_command`), so a record made with workers agrees on the same machine.
+4, `prepush.full_command`) and each selected run with `prepush.selected_workers` (brief #980,
+ADR-0422), so a record made with workers agrees on the same machine.
 Governance and the re-runs hold the heavy-step lock (`lock.py`, name `heavy`), unless the caller
 already holds it. Each command runs in its own process group, and on a timeout, a signal or an
 error its whole tree is killed before the lock is released and the worktree is removed, also on a
@@ -64,6 +65,7 @@ from prepush import (
     regression_sets,
     safe_command,
     safe_cwd,
+    selected_workers,
     stop_signals,
     take_lock,
 )
@@ -408,6 +410,7 @@ def planned_runs(
             sets, _ = regression_sets(tree, impact(tree, mb, "HEAD"), proof_areas(tree))
         except CheckError:
             return planned
+        sets, _ = selected_workers(tree, sets)  # as prepush.gate runs them (brief #980)
         for name, command, cwd, _reason in sets:
             planned[("regression", name)] = (command, tree / cwd)
     return planned

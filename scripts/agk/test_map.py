@@ -186,7 +186,8 @@ class TsConfigs:
     """The `paths` and `baseUrl` of the config nearest a folder, read from the head."""
 
     def __init__(self, root: Path, tree: dict[str, tuple[str, int]]) -> None:
-        self.root, self.tree, self.nearest_of, self.broken = root, tree, {}, False
+        self.root, self.tree, self.broken = root, tree, False
+        self.nearest_of: dict[str, dict] = {}
 
     def _load(self, path: str, seen: tuple[str, ...]) -> dict:
         def keep(found: re.Match) -> str:
@@ -393,6 +394,8 @@ def xcode_targets(path: str, text: str, files: set[str]) -> tuple[Units, Units]:
     """The files of each target of a `project.pbxproj`, and the targets each depends on."""
     tokens = [t for t in PLIST_TOKEN.findall(text) if not t.startswith(("/*", "//"))]
     data = plist(tokens, 0)[0]
+    if not isinstance(data, dict):
+        raise ValueError
     objects, project = data["objects"], data["objects"][data["rootObject"]]
     base = inside(
         posixpath.join(
@@ -466,7 +469,8 @@ def subject(test: str) -> tuple[str, str]:
     folder, name = posixpath.split(test)
     folder = posixpath.dirname(folder) if posixpath.basename(folder) == "__tests__" else folder
     folder = f"/{folder}/".replace("/src/test/", "/src/main/", 1).strip("/")
-    return folder, SUBJECT.fullmatch(posixpath.splitext(name)[0])[1]
+    found = SUBJECT.fullmatch(posixpath.splitext(name)[0])
+    return folder, found[1] if found else ""
 
 
 def head_config(root: Path, tree: dict[str, tuple[str, int]], read):

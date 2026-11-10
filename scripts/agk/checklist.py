@@ -76,6 +76,11 @@ def stamp(value: Any) -> datetime | None:
         return None
 
 
+def table_of(value: Any) -> dict:
+    """A saved or configured table, or an empty one when it is missing or not a table."""
+    return value if isinstance(value, dict) else {}
+
+
 def settings(root: Path) -> dict:
     """The thresholds: the `[checklist]` table's, else the kit's; a bad one is refused by name."""
     table = config_source(root).get("checklist", {})
@@ -129,25 +134,29 @@ class View:
 
     def __init__(self, root: Path, saved: dict, days: int, limits: dict) -> None:
         source = config_source(root)
-        self.flow = source.get("flow") if isinstance(source.get("flow"), dict) else {}
-        self.testing = source.get("testing") if isinstance(source.get("testing"), dict) else {}
+        self.flow: dict = table_of(source.get("flow"))
+        self.testing: dict = table_of(source.get("testing"))
         self.limits = limits
-        self.end = stamp(saved["saved_at"])
-        self.start = self.end - timedelta(days=days)
+        end = stamp(saved.get("saved_at"))
+        if end is None:  # load_saved returns no document without it
+            raise CheckError("the saved facts have no time (field: saved_at)")
+        self.end: datetime = end
+        self.start: datetime = end - timedelta(days=days)
         comments = saved.get("comments")
         self.comments = (
             [c for c in comments if stamp(c.get("created_at")) is not None]
             if isinstance(comments, list)
             else None
         )
-        facts = saved.get("facts") if isinstance(saved.get("facts"), dict) else {}
+        facts = table_of(saved.get("facts"))
         pulls = facts.get("pull_requests")
         self.pulls = pulls if isinstance(pulls, list) else None
-        flow = facts.get("flow") if isinstance(facts.get("flow"), dict) else {}
+        flow = table_of(facts.get("flow"))
         hours = flow.get("stall_hours")
         self.stall = timedelta(hours=hours if isinstance(hours, int) else DEFAULT_STALL_HOURS)
-        self.runs = saved.get("runs") if isinstance(saved.get("runs"), list) else None
-        self.briefs = saved.get("briefs") if isinstance(saved.get("briefs"), list) else None
+        runs, briefs = saved.get("runs"), saved.get("briefs")
+        self.runs: list | None = runs if isinstance(runs, list) else None
+        self.briefs: list | None = briefs if isinstance(briefs, list) else None
         self.weekly = {k: saved.get(k) for k in ("pr_tests", "pr_tests_median", "full_suite")}
         window = saved.get("window_tests")
         self.window_tests = window if isinstance(window, dict) else None
@@ -182,9 +191,10 @@ class View:
         for comment in self.comments or []:
             match = TAKE.fullmatch(first_line(comment))
             number = issue_of(comment)
-            if match and number is not None:
+            when = stamp(comment.get("created_at"))
+            if match and number is not None and when is not None:
                 retake = bool(match[2]) or first_line(comment).startswith("taken over:")
-                found.append((number, stamp(comment["created_at"]), match[1], retake))
+                found.append((number, when, match[1], retake))
         return sorted(found, key=lambda item: item[1])
 
     def intervals(self) -> list[tuple[int, datetime, datetime]]:
@@ -198,8 +208,9 @@ class View:
         for number, begin, session, _ in self.takes():
             limit = begin + self.stall
             ends = [limit, self.end]
-            if closed.get(number) and closed[number] > begin:
-                ends.append(closed[number])
+            closed_at = closed.get(number)
+            if closed_at and closed_at > begin:
+                ends.append(closed_at)
             for comment in self.comments or []:
                 when = stamp(comment.get("created_at"))
                 line = first_line(comment)
@@ -252,12 +263,14 @@ def assigns(view: View) -> list[tuple[datetime, str, int]]:
     found = []
     for comment in view.comments or []:
         match = ASSIGN.fullmatch(first_line(comment))
+        when = stamp(comment.get("created_at"))
         if (
             match
+            and when is not None
             and login(comment.get("author")) in (view.authors or ())
             and issue_of(comment) in (view.conductor_issues or ())
         ):
-            found.append((stamp(comment["created_at"]), match[1], int(match[2])))
+            found.append((when, match[1], int(match[2])))
     return sorted(found, key=lambda item: item[0])
 
 
@@ -365,9 +378,13 @@ def late_cleared(pull: dict, end: datetime) -> bool:
     if pull.get("state") != "open" or pull.get("head_cleared") != "yes":
         return False
     head = str(pull.get("head") or "")
-    verdicts = pull.get("verdicts") if isinstance(pull.get("verdicts"), list) else []
-    times = [stamp(v.get("at")) for v in verdicts if head.startswith(str(v.get("sha") or "-"))]
-    times = [t for t in times if t is not None]
+    verdicts = pull.get("verdicts")
+    stamps = [
+        stamp(v.get("at"))
+        for v in (verdicts if isinstance(verdicts, list) else [])
+        if head.startswith(str(v.get("sha") or "-"))
+    ]
+    times = [t for t in stamps if t is not None]
     return bool(times) and (end - max(times)) > timedelta(minutes=LATE_MINUTES)
 
 
@@ -406,14 +423,14 @@ def conflicts(root: Path, view: View | None) -> Point:
 
 def ready_count(view: View, taken_at: dict, moment: datetime) -> int:
     def closed_by(number: int) -> bool:
-        record = next((b for b in view.briefs if b.get("number") == number), None)
+        record = next((b for b in view.briefs or [] if b.get("number") == number), None)
         if record is None:
             return True  # a dependency that is not a brief of the list is not waited on here
         when = stamp(record.get("closed_at"))
         return when is not None and when <= moment
 
     count = 0
-    for brief in view.briefs:
+    for brief in view.briefs or []:
         begin, end = stamp(brief.get("created_at")), stamp(brief.get("closed_at"))
         if begin is None or begin > moment or (end is not None and end <= moment):
             continue

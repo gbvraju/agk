@@ -54,6 +54,10 @@ assign = "conductor"
 # owner's choice, ADR-0266; turning it off is again the owner's change, by an ADR in the same pull request.
 auto_merge = true
 auto_merge_method = "squash"
+# merge_queue (SPEC-0039 rule 1, amendment 158, ADR-0416): with true, GitHub mode and auto_merge on, the merger adds a cleared
+# head to GitHub's merge queue instead of merging it. GitHub offers the queue only to organization-owned repositories (verify),
+# so this repository keeps it off; the guide gives the switch-over order. A change needs an ADR.
+merge_queue = false  # brief #972, ADR-0417
 # The builder capacity (SPEC-0034 rule 1): nine builder sessions at once, by the owner's choice on 2026-11-08 (plan #661, ADR-0341).
 max_builders = 9
 # How a builder starts (SPEC-0034, brief #776, ADR-0402): "assign" means no session starts one; each slot runs from four staggered
@@ -91,6 +95,8 @@ profile = "balanced"
 pr_tests = "selected"
 # The full suite in parallel workers where the interpreter imports xdist (brief #631, ADR-0305).
 workers = "auto"
+# A selection of at least this share of the test files runs the full suite in workers (brief #980, ADR-0422).
+full_when_share = 0.5
 always_full = [
   "tests/kit/conftest.py", "tests/kit/pytest.ini", "tests/kit_dev/conftest.py", "Makefile", "agk.mk", "kit/agk-kit.mk",
   ".github/workflows/**", "scripts/agk/common.py", "scripts/agk/impact.py",
@@ -350,8 +356,8 @@ tests = [
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
   "tests/kit/test_delivery_declaration.py", "tests/kit/test_doctor.py", "tests/kit/test_doctor_ci.py",
   "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py",
-  "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_run.py", "tests/kit/test_merge_cleared_verdict.py",
-  "tests/kit/test_pause.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_route_triggers.py",
+  "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_run.py",
+  "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_pause.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_route_triggers.py",
   "tests/kit/test_run_folders.py", "tests/kit/test_session_rules.py", "tests/kit/test_session_tidy.py",
   "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_doctor_wiring.py",
   "tests/kit_dev/test_engines_local_profile.py", "tests/kit_dev/test_experimental_reviewer.py",
@@ -508,7 +514,7 @@ tests = [
   "tests/kit/test_final_accepts.py", "tests/kit/test_launch_kinds.py", "tests/kit/test_merge_cleared_after.py",
   "tests/kit/test_merge_cleared_before.py", "tests/kit/test_merge_cleared_ci.py",
   "tests/kit/test_merge_cleared_merger.py", "tests/kit/test_merge_cleared_pre_tests.py",
-  "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_merge_cleared_run.py",
+  "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_merger_on_status.py", "tests/kit/test_merger_sweep.py",
   "tests/kit/test_personal_mode_rules.py", "tests/kit/test_rule3a_covered_and_label.py",
   "tests/kit/test_rule3a_record_comments.py", "tests/kit/test_session_kind.py", "tests/kit/test_session_rules.py",

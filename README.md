@@ -77,4 +77,4 @@ What the kit was shown to do is recorded in `docs/runs/`: `k1-live-proof.md` (in
 `doctor-live-proof.md`, `upgrade-live-proof.md`, `drift-audit-live-run-1.md`, `metrics-first-run.md`,
 `product-report-live-1.md` and `intake-proof.md`.
 
-Licence: Apache-2.0.
+Licence: proprietary, all rights reserved (see LICENSE).

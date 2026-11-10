@@ -24,6 +24,9 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
   the parallel workers of the full run (SPEC-0044 rule 4, brief #583; `prepush.full_command`);
 - `parallel_command`: the full command of a non-pytest runner with more than one worker, `{workers}`
   filled with the number (rule 5);
+- `full_when_share`: a number above 0 and at most 1 (0.5): a pull request whose selected test files
+  are at least that share of the `[proof]` areas' test files runs the full suite in workers instead
+  (brief #980, ADR-0422; `project_tests.plan`);
 - `slow_suite_seconds`: above it a single-process full run gets doctor's line (rule 7; 600);
 - `smoke`: a list of `{ kind = "frontend" | "contract", code = [<glob>, ...], command = "..." }`,
   one entry per kind, from which `smoke.py` chooses the after-merge smoke run (rule 8, brief #923);
@@ -99,6 +102,7 @@ KEYS = {
     "workers",
     "parallel_command",
     "slow_suite_seconds",
+    "full_when_share",
     "results_dir",
     "keep_passed",
     "keep_runs",
@@ -111,6 +115,7 @@ KEYS = {
 MAP_SOURCES = ("curated", "generated")  # SPEC-0055 rule 1: data, never a code path
 TEST_ENV = "AGK_TEST_ENV"  # what a machine has (SPEC-0055 rule 4)
 DEFAULT_SLOW = 600
+DEFAULT_SHARE = 0.5  # brief #980
 DEFAULT_KEEP_RUNS = 20
 RUN_FOLDER_KEYS = ("results_dir", "keep_passed", "keep_runs")  # retired (SPEC-0046 rule 11)
 RUN_FOLDER_DEPRECATED = "deprecated: testing.results_dir (ADR-0303)"
@@ -300,8 +305,8 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
             "proof_regression, pr_tests, junit, workers, parallel_command, "
-            "slow_suite_seconds, results_dir, keep_passed, keep_runs, rerun_alone, map_source "
-            "and smoke (setting: testing)"
+            "slow_suite_seconds, full_when_share, results_dir, keep_passed, keep_runs, "
+            "rerun_alone, map_source and smoke (setting: testing)"
         )
     links = check_links(table.get("links", []), root)
     check_smoke(table.get("smoke", []))
@@ -345,6 +350,12 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "slow_suite_seconds must be a whole number of seconds above 0 "
             "(setting: testing.slow_suite_seconds)"
+        )
+    share = table.get("full_when_share", DEFAULT_SHARE)
+    if isinstance(share, bool) or not isinstance(share, int | float) or not 0 < share <= 1:
+        raise CheckError(
+            "full_when_share must be a number above 0 and at most 1 "
+            "(setting: testing.full_when_share)"
         )
     if "results_dir" in table and not _folder_ok(table["results_dir"]):
         raise CheckError(
@@ -560,6 +571,14 @@ def slow_suite_seconds(root: Path) -> int:
     if testing_table(root) is None:
         return DEFAULT_SLOW
     return config_source(root)["testing"].get("slow_suite_seconds", DEFAULT_SLOW)
+
+
+def full_when_share(root: Path) -> float:
+    """`[testing] full_when_share`, 0.5 without the key; 1 without the table, where no selection
+    runs (checked first, brief #980)."""
+    if testing_table(root) is None:
+        return 1.0
+    return config_source(root)["testing"].get("full_when_share", DEFAULT_SHARE)
 
 
 def rerun_alone(root: Path) -> bool:

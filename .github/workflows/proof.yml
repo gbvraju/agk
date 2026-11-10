@@ -19,17 +19,22 @@ name: proof
 # (documentation only, say) is reported as skipped by proof.py, never left waiting; per-area runs are the `[proof]` table of
 # agk.toml (brief #305). No install is cached (the project's own command installs what it needs), and nothing is uploaded,
 # so no retention applies.
+# The merge queue (brief #972, ADR-0417): on `merge_group` the job runs on the queue's commit with the same steps; `AGK_BASE` is
+# set only by `Base of the merge ref`, so proof.py takes the default branch, which the queue's commit is built on, as its base.
+# Each queue commit has its own concurrency group and is never cancelled. The job name does not change.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
   checks: read
 
 concurrency:
-  group: proof-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: proof-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   proof:
@@ -78,11 +83,12 @@ jobs:
             echo "paused=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Status-only final commit
-        if: ${{ steps.paused.outputs.paused != 'true' }}
+        # Not on `merge_group` (brief #972): the queue's commit is never a status-only commit of a pull request.
+        if: ${{ github.event_name != 'merge_group' && steps.paused.outputs.paused != 'true' }}
         id: status
         env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           # A draft pull request (brief #283): the suite runs in full on `ready_for_review`. The job-level `if:` (brief #369)
@@ -105,7 +111,7 @@ jobs:
         if: ${{ steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           rc=0
           printf '%s\n' "$PR_BODY" | python scripts/agk/proof.py --head "$HEAD_SHA" --body - --json --manifest "$RUNNER_TEMP/proof-manifest.md" > "$RUNNER_TEMP/proof.json" || rc=$?
@@ -131,7 +137,7 @@ jobs:
       - name: Test manifest
         if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
         env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           SKIP: ${{ steps.status.outputs.skip }}
         run: |

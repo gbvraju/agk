@@ -61,10 +61,12 @@ def test_proof_and_governance_keep_their_job_names():
 
 
 def test_proof_cancels_the_run_on_a_superseded_commit():
-    """Brief #216 answer 3: one group per pull request, the older run cancelled."""
+    """Brief #216 answer 3: one group per pull request, the older run cancelled; brief #972: a
+    merge queue commit has its own group and is never cancelled."""
     assert re.search(
-        r"^concurrency:\n  group: proof-\$\{\{ github\.event\.pull_request\.number \}\}\n"
-        r"  cancel-in-progress: true\n",
+        r"^concurrency:\n  group: proof-\$\{\{ github\.event\.pull_request\.number \|\| "
+        r"github\.sha \}\}\n"
+        r"  cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}\n",
         workflow("proof.yml"),
         flags=re.M,
     )

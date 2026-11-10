@@ -420,3 +420,20 @@ def test_ac2_the_mirrored_ids_and_limit_equal_their_source():
     assert front_door.TOPICS == engines.TOPICS == tuple(COMMON)
     assert front_door.FIXED == tuple(FIXED)
     assert front_door.MAX_STATEMENT == playbook.MAX_STATEMENT
+
+
+def test_a_named_file_git_cannot_read_is_noted_and_not_read(tmp_path, monkeypatch):
+    """REQ-016: brief #1007 answer 3 (guard: a blob that git refuses is noted as not read)."""
+    import front_door
+
+    def read(root, *args, given=None):
+        return b"b1 blob 12\nb2 blob 6\n" if "--batch-check" in args else None
+
+    monkeypatch.setattr(front_door, "git_read", read)
+    tree = [("package.json", "100644", "b1"), ("a/package.json", "100644", "b2")]
+    texts, notes = front_door.named_texts(tmp_path, tree, {"package.json"}, [])
+    assert texts == {}
+    assert notes == [
+        'file "package.json" not read (binary)',
+        'file "a/package.json" not read (binary)',
+    ]

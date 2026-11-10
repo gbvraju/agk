@@ -502,3 +502,12 @@ def test_rule29_only_the_sidecar_gains_commits(tmp_path):
     assert run_git(sidecar, "log", "--format=%s").strip() == ps.ATTACH_SUBJECT
     assert run_git(clone, "for-each-ref") == refs
     assert run_git(clone, "log", "--all", "--format=%H %T") == history
+
+
+def test_the_floor_of_a_folder_with_no_personal_table_is_refused_by_name(tmp_path):
+    """REQ-016: brief #1007 answer 3 (guard: a folder in team mode is refused by the setting)."""
+    import personal
+
+    (tmp_path / "agk.toml").write_text('[flow]\nassign = "next"\n', encoding="utf-8")
+    with pytest.raises(common.CheckError, match="setting: personal"):
+        personal.floor(tmp_path, tmp_path, None, False)
