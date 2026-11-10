@@ -778,9 +778,10 @@ def test_the_reads_are_rest_gets_as_argument_lists_with_no_jq(tmp_path):
         ["api", "--method", "GET", f"repos/{REPO}/pulls/7/files?per_page=100&page=1"],
         ["api", "--method", "GET", f"repos/{REPO}/pulls/7/commits?per_page=100&page=1"],
         merge_call(),
-        made[-1],
+        made[-2],
+        ["api", "--method", "GET", f"repos/{REPO}/issues/500"],
     ]
-    assert made[-1][:4] == ["api", "--method", "POST", f"repos/{REPO}/issues/41/comments"]
+    assert made[-2][:4] == ["api", "--method", "POST", f"repos/{REPO}/issues/41/comments"]
     flat = [a for c in made for a in c]
     assert "--jq" not in flat and "graphql" not in flat
 
@@ -877,8 +878,26 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     comments file there, amendment 122; brief #610 adds the close of the red-branch issue, one
     comment and one PATCH, in `close_red` alone; brief #765 adds the merger job's report, one
     comment in `post_once`; brief #853, ADR-0387, adds the commit status, one POST in
-    `set_status`)."""
+    `set_status`; brief #959, ADR-0411, adds the close of a finished brief, one comment and one
+    PATCH, in `close_brief` alone, and the note on an issue left open, one comment, in
+    `close_after_merge` alone)."""
     text = SCRIPT.read_text(encoding="utf-8")
+    brief = text.split("\ndef close_brief(", 1)[1].split("\ndef ", 1)[0]
+    assert brief.count('"POST"') == 1 and brief.count('"PATCH"') == 1
+    assert '["--method", "POST", f"{endpoint}/comments", "-f", f"body={line}"]' in brief
+    assert 'line = f"All builds merged; last #{number} {merged[:12]}"' in brief
+    assert '"PATCH", endpoint, "-f", "state=closed", "-f", "state_reason=completed"]' in brief
+    text = text.replace(brief, "")
+    after = text.split("\ndef close_after_merge(", 1)[1].split("\ndef ", 1)[0]
+    assert after.count('"POST"') == 1 and after.count('"PATCH"') == 0
+    flat = " ".join(after.split()).replace("[ ", "[").replace(" ]", "]")
+    assert (
+        '["--method", "POST", f"repos/{repo}/issues/{issue}/comments", "-f", f"body={line}"]'
+        in flat
+    )
+    note = 'f"Not closed by merge {merged[:12]} of #{number}; close it if the work is done"'
+    assert f"line = {note}" in after
+    text = text.replace(after, "")
     status = text.split("\ndef set_status(", 1)[1].split("\ndef ", 1)[0]
     assert status.count('"POST"') == 1 and 'f"repos/{repo}/statuses/{sha}"' in status
     text = text.replace(status, "")

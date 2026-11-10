@@ -33,6 +33,14 @@ Every read is one GET, never retried; a read GitHub refuses skips that issue. Ev
 call, never retried. The merge stands and nothing is held: any error of this step is ignored and
 the run goes on to the governance run of rule 6. The merger job runs the same command.
 
+Three existing tests are extended, never weakened (answer to Q-959-1 on #967):
+`tests/kit/test_merge_cleared_verdict.py::test_the_script_writes_no_file_and_makes_no_other_write`
+carves `close_brief` and `close_after_merge` out of the write count by name, as `close_red` is,
+and asserts each new write as an exact string; `test_the_reads_are_rest_gets_as_argument_lists_with_no_jq`
+in the same file and `tests/kit/test_merge_cleared_run.py::test_a_merge_is_one_pinned_put_and_one_line`
+allow only the GET of the body's brief issue after the record line, as an exact string. Every
+other count and write assertion stands.
+
 ## Consequences
 
 A finished brief leaves the plan when its last build merges, without a person. An issue that a

@@ -1003,7 +1003,7 @@ def brief_built(repo: str, brief: dict, title: str) -> bool:
     return all(any(session_plan.names_build(p, number, n) for p in pulls) for n, _ in builds)
 
 
-def is_open(item: dict | None) -> bool:
+def open_issue(item: dict | None) -> bool:
     return isinstance(item, dict) and item.get("state") == "open" and "pull_request" not in item
 
 
@@ -1011,7 +1011,7 @@ def close_brief(repo: str, brief: int, number: int, merged: str, title: str) -> 
     """Close the brief the body builds when every build has merged (brief #959 answer 2); whether
     it was closed. An open brief with a build unmerged gets nothing."""
     item = read_once(f"repos/{repo}/issues/{brief}", dict)
-    if not is_open(item):
+    if not open_issue(item):
         return False
     labels = {str(x.get("name")) for x in item.get("labels") or [] if isinstance(x, dict)}
     if BRIEF_LABEL not in labels or not brief_built(repo, item, title):
@@ -1039,7 +1039,7 @@ def close_after_merge(repo: str, number: int, merged: str, text: str, title: str
         closes = [n for n in closes if n != brief]
     line = f"Not closed by merge {merged[:12]} of #{number}; close it if the work is done"
     for issue in closes:
-        if is_open(read_once(f"repos/{repo}/issues/{issue}", dict)):
+        if open_issue(read_once(f"repos/{repo}/issues/{issue}", dict)):
             write_once(
                 ["--method", "POST", f"repos/{repo}/issues/{issue}/comments", "-f", f"body={line}"]
             )
@@ -1466,10 +1466,8 @@ def after_merge(
     with after_merge_signals():
         try:
             recorded = post_record(repo, record, number, merged, verdict)
-            try:
+            with contextlib.suppress(Exception):  # the merge stands, nothing is held (#959)
                 close_after_merge(repo, number, merged, text, title)
-            except Exception:  # nosec B110 - the merge stands and nothing is held (brief #959)
-                pass
             branch = str(data.get("default_branch", "main"))
             step = governance(root, branch, merged, wait, text, repo)
         except BaseException:  # the merge stands; the run cannot show green (fix list, #556)
