@@ -48,4 +48,4 @@ document's schema 2 are build (b).
 ## Residual
 
 - 2026-11-10: the reading of `agk:ready` is removed by the first build after the next kit release (amendment 150 item 2).
-- 2026-11-10: `Q-846-7`, `Q-846-8` and `Q-846-9` wait for the conductor's ruling on the pull request.
+- 2026-11-10: `Q-846-7`, `Q-846-8` and `Q-846-9` were ruled as read in the conductor's verdict on 0702a776ee09.
