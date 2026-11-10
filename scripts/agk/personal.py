@@ -2,6 +2,7 @@
 
     python3 personal.py baseline [--clone DIR] [--sidecar DIR] [--approve]
     python3 personal.py floor [--clone DIR] [--sidecar DIR] [--base REF] [--approve]
+    python3 personal.py report [--week YYYY-Www] [--clone DIR] [--sidecar DIR]
 
 SPEC-0041 build (h), first part, rule 16. `baseline` prints the test command it would run: the
 sidecar's `[personal] test_command`, else the one test command the survey's inventory declares
@@ -18,18 +19,26 @@ unchanged, and a missing gitleaks fails (`Q-S0041-15`); with `--approve` the tes
 the base tree and on the head tree, and a test that passed on the base and fails on the head fails
 the floor, or, without `{junit}`, a passing base and a failing head do, and a failing base is
 `unknown`, never a pass. No setting changes a step; it exits 0 only when both pass.
+
+Rule 23 (build (k), first part): a floor with `--approve` appends one line `{head, step, result,
+time}` to the sidecar's `metrics/events.jsonl`; `report` counts, for one ISO week, the defects the
+floor caught before a push (a failed head followed by a passed head that descends from it), with
+`unknown` under two events. It reads files and git only; build (k)'s second part adds the rest.
 """
 
 from __future__ import annotations
 
 import io
 import json
+import os
+import re
 import shlex
 import shutil
 import subprocess  # nosec B404 - fixed git argument lists and the person's approved command, no shell
 import sys
 import tarfile
 import xml.parsers.expat
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -37,13 +46,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 from common import CheckError, personal_table  # noqa: E402
 from survey import INVENTORY, find_sidecar, write_private  # noqa: E402
 
-USAGE = "usage: personal.py baseline|floor [--clone DIR] [--sidecar DIR] [--base REF] [--approve]"
+USAGE = (
+    "usage: personal.py baseline|floor|report [--clone DIR] [--sidecar DIR] [--base REF] "
+    "[--week YYYY-Www] [--approve]"
+)
 SETTING = "personal.test_command"
 JUNIT = "{junit}"
 BASELINE = "records/baseline.json"
 TREES = "cache/trees"
 REPORT = "cache/baseline-junit.xml"
 GIT = ("git", "--no-optional-locks")
+EVENTS = "metrics/events.jsonl"
+FIELDS = {"head", "step", "result", "time"}
+STAMP = "%Y-%m-%dT%H:%M:%SZ"
+WEEK = re.compile(r"([0-9]{4})-W([0-9]{2})")
+SECOND_PART = "build (k), second part"
+CAUTION = "These numbers show correlation, not causation."
 
 
 def _git(clone: Path, *args: str) -> subprocess.CompletedProcess:
@@ -242,20 +260,115 @@ def floor(clone: Path, sidecar: Path, ref: str | None, approve: bool) -> tuple[b
     lines.append(line)
     passed = scanned and tested
     lines.append("floor: passed" if passed else "floor: failed")
+    if approve:
+        lines.extend(append_event(sidecar, head, "floor", "passed" if passed else "failed"))
     return passed, "\n".join(lines)
 
 
+def append_event(sidecar: Path, head: str, step: str, result: str) -> list[str]:
+    """Rule 23: one JSON line, `0600` under `0700` as `write_private`; a failure is one line."""
+    stamp = datetime.now(UTC).strftime(STAMP)
+    line = json.dumps({"head": head, "step": step, "result": result, "time": stamp})
+    path = sidecar / EVENTS
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_APPEND, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8", newline="\n") as handle:
+            handle.write(line + "\n")
+    except OSError:
+        return [f"floor: the event cannot be written (path: {EVENTS})"]
+    return []
+
+
+def read_events(sidecar: Path) -> tuple[list[dict], int]:
+    """The readable events and the count of lines skipped; no file is no event."""
+    try:
+        text = (sidecar / EVENTS).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return [], 0
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CheckError(f"the events cannot be read (path: {EVENTS})") from exc
+    events, skipped = [], 0
+    for raw in text.splitlines():
+        if not raw.strip():
+            continue
+        try:
+            event = json.loads(raw)
+            ok = isinstance(event, dict) and set(event) == FIELDS
+            ok = ok and all(isinstance(event[k], str) for k in FIELDS)
+            ok = ok and re.fullmatch(r"[0-9a-f]{40}", event["head"]) is not None
+            ok = ok and event["result"] in ("passed", "failed")
+            if ok:
+                event["at"] = datetime.strptime(event["time"], STAMP).replace(tzinfo=UTC)
+        except ValueError:
+            ok = False
+        if ok:
+            events.append(event)
+        else:
+            skipped += 1
+    return events, skipped
+
+
+def week_of(text: str | None) -> tuple[int, int]:
+    if text is None:
+        year, week, _ = datetime.now(UTC).isocalendar()
+        return year, week
+    found = WEEK.fullmatch(text)
+    try:
+        if found is None:
+            raise ValueError
+        date.fromisocalendar(int(found[1]), int(found[2]), 1)
+    except ValueError as exc:
+        raise CheckError("the week must have the form YYYY-Www (option: --week)") from exc
+    return int(found[1]), int(found[2])
+
+
+def descends(clone: Path, old: str, new: str) -> bool:
+    """A later head of the same branch: NEW is not OLD and OLD is its ancestor; no fetch."""
+    return old != new and _git(clone, "merge-base", "--is-ancestor", old, new).returncode == 0
+
+
+def report(clone: Path, sidecar: Path, week: str | None) -> str:
+    """Rule 23, first measure: defects caught before push by the floor, for one ISO week."""
+    year, number = week_of(week)
+    events, skipped = read_events(sidecar)
+    floors = [e for e in events if e["step"] == "floor"]
+    in_week = [e for e in floors if tuple(e["at"].isocalendar())[:2] == (year, number)]
+    if len(in_week) < 2:
+        caught = "unknown"
+    else:
+        failed = {e["head"]: e["at"] for e in in_week if e["result"] == "failed"}
+        passes = [e for e in floors if e["result"] == "passed"]
+        caught = str(
+            sum(
+                any(p["at"] >= at and descends(clone, head, p["head"]) for p in passes)
+                for head, at in failed.items()
+            )
+        )
+    lines = [f"report: defects caught before push: {caught} (floor)"]
+    if skipped:
+        lines.append(f"report: skipped {skipped} unreadable event lines")
+    for name in ("review findings accepted", "rework", "time per change"):
+        lines.append(f"report: {name}: unknown ({SECOND_PART})")
+    lines.append("report: baseline: unknown (the attach time is not recorded)")
+    lines.append(CAUTION)
+    return "\n".join(lines)
+
+
 def parse(args: list[str]) -> dict | None:
-    if not args or args[0] not in ("baseline", "floor"):
+    if not args or args[0] not in ("baseline", "floor", "report"):
         return None
     out: dict = {"command": args.pop(0), "clone": ".", "sidecar": None, "base": None}
+    out["week"] = None
     out["approve"] = False
     while args:
         flag = args.pop(0)
-        if flag == "--approve":
+        if flag == "--approve" and out["command"] != "report":
             out["approve"] = True
         elif flag == "--base" and args and out["command"] == "floor":
             out["base"] = args.pop(0)
+        elif flag == "--week" and args and out["command"] == "report":
+            out["week"] = args.pop(0)
         elif flag in ("--clone", "--sidecar") and args:
             out[flag[2:]] = args.pop(0)
         else:
@@ -276,6 +389,9 @@ def main(argv: list[str] | None = None) -> int:
         sidecar = Path(options["sidecar"]) if options["sidecar"] else find_sidecar(clone)
         if options["command"] == "baseline":
             print(baseline(clone, sidecar, options["approve"]))
+            return 0
+        if options["command"] == "report":
+            print(report(clone, sidecar, options["week"]))
             return 0
         passed, text = floor(clone, sidecar, options["base"], options["approve"])
         print(text)
