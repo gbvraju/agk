@@ -102,6 +102,18 @@ A point is `yes` only past its threshold in the optional `[checklist]` table of 
 and `idle_minutes`. The defaults are in `scripts/agk/checklist.py` and marked (verify) until measured for four weeks. An
 unknown key or a wrong value is refused, naming the setting. See ADR-0374.
 
+## The token figure of a session
+
+    python3 scripts/agk/usage.py [--transcript FILE] [--since YYYY-MM-DDTHH:MM:SSZ]
+    python3 scripts/agk/metrics.py --usage-by-kind FACTS [--before YYYY-MM-DD] [--after YYYY-MM-DD]
+
+The first prints `Usage: <n> tokens` from the running session's own transcript, each message counted once over its input,
+cache and output counts, or `Usage: not shown`; it writes no file, posts nothing and makes no network call, and prints no
+text of the transcript. A builder passes `--since` with the time of its previous `Report:` and ends its `Report:` and
+`Progress:` lines with the line it prints. The second prints, per kind, the merged pull requests with their tokens, one
+line per pull request and, with an optional `[models.prices]` table in `agk.toml` (a tier to a price per million tokens),
+one cost line. See SPEC-0045 rules 8 and 9 and ADR-0419.
+
 ## Release pack
 
     python3 scripts/agk/release_pack.py check <out>/<tag>
