@@ -4,10 +4,11 @@
 # cancelled (brief #261): a failed body step hides no lint, test or scan, and an edit cures only a run that reached them. The same checks run locally as `make -f agk.mk agk-governance`.
 # The merge queue (brief #972, ADR-0417, amendment 158): on `merge_group` the job runs on the queue's commit. The test steps get
 # `EVENT=merge_group`, which runs the full suite (a superset of the batch's selection, its
-# `always_full` and `[testing] pre_merge_tests`; Q-972-5). `AGK_BASE` is never set there, so the checks that read the pull request
-# body behave as on a push; the pull-request body checks run on a pull request only, where they already passed on the head. The
-# secret scan reads the queue's base sha (`QUEUE_BASE`, its own step's env). The job and check names do not change, so the
-# required checks keep their names.
+# `always_full` and `[testing] pre_merge_tests`; Q-972-5). `AGK_BASE` is never set there, and a check that reads the pull request
+# body would then diff the whole batch against an empty body, so `check_protected_changes`, `check_specs` and
+# `check_final_clearance` are skipped on `merge_group`, as are the pull-request body checks: each passed on its own head. The
+# `Paused` step and the secret scan read the queue's base sha (`QUEUE_BASE`, each step's own env). The job and check names do
+# not change, so the required checks keep their names.
 name: governance
 
 # A run for an edited description is named `governance edited`, every other one `governance full`: the first step of the partial run reads
@@ -72,13 +73,18 @@ jobs:
           python-version: "3.12"
       - name: Paused
         id: paused
+        env:
+          QUEUE_BASE: ${{ github.event.merge_group.base_sha }}
         run: |
           # Brief #348 (ADR-0196): while agk.toml sets `paused = true` the job prints one line and every later step is skipped, so
           # the required check reports success. A pull request is judged by its base (AGK_BASE), never by its head: the pull
           # request that adds the line is still checked in full, its ADR included. A push reads the commit pushed. A value that
-          # is not true or false fails this step, with the refusal (it names the setting, never the value).
+          # is not true or false fails this step, with the refusal (it names the setting, never the value). A merge queue run
+          # (brief #972) is judged by the queue's base sha, so a batch member that adds the line is still checked in full.
           if [ -n "${AGK_BASE:-}" ]; then
             state="$(python3 scripts/agk/doctor.py --paused --ref "$AGK_BASE")" || { echo "$state"; exit 1; }
+          elif [ -n "${QUEUE_BASE:-}" ]; then
+            state="$(python3 scripts/agk/doctor.py --paused --ref "$QUEUE_BASE")" || { echo "$state"; exit 1; }
           else
             state="$(python3 scripts/agk/doctor.py --paused)" || { echo "$state"; exit 1; }
           fi
@@ -213,7 +219,7 @@ jobs:
           fi
       - name: check_protected_changes
         # Reads the body's `Covered-by:` line (brief #545, ADR-0271), so it runs on an edited description too.
-        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
+        if: ${{ !cancelled() && github.event_name != 'merge_group' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_protected_changes.py --body "$RUNNER_TEMP/pr-body.md" --comments "$RUNNER_TEMP/record-comments.json"
       - name: check_requirements
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
@@ -225,7 +231,7 @@ jobs:
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_numbers.py
       - name: check_specs
-        if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
+        if: ${{ !cancelled() && github.event_name != 'merge_group' && steps.paused.outputs.paused != 'true' }}
         # On a push there is no base ref and the check is skipped, so the saved comments are the pull request's.
         run: python scripts/agk/check_specs.py --body "$RUNNER_TEMP/pr-body.md" --comments "$RUNNER_TEMP/comments.json" --reviews "$RUNNER_TEMP/reviews.json" --runs "$RUNNER_TEMP/approval-runs.json"
       - name: check_neutrality
@@ -261,7 +267,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: python scripts/agk/check_pr_mode.py --body "$RUNNER_TEMP/pr-body.md" --states "$RUNNER_TEMP/states.json" --open "$RUNNER_TEMP/open-prs.json" --number "$PR_NUMBER"
       - name: check_final_clearance
-        if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
+        if: ${{ !cancelled() && github.event_name != 'merge_group' && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}

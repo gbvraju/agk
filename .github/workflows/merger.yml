@@ -18,10 +18,12 @@
 # status only starts it, and the guarded command reads the verdict again. A verdict or an approval sets the status first, so the job's
 # token writes statuses as well as comments. A status event never sweeps, and nothing the job sets starts a run.
 # Brief #972 (ADR-0417, amendment 158): with `[flow] merge_queue = true` the guarded command adds a cleared head to GitHub's merge
-# queue instead of merging it; this file calls it as before and the command decides. The merger job ends after 30 minutes, so a run
-# that waits on the `merge` environment can never block every later run for hours (run 42669997036, 9 to 10 November). On a failed
-# `governance` or `proof` run of `merge_group` the job's step `Report a removal from the merge queue` posts one line on the pull
-# request the queue removed, with the job's token, and no other step runs (a step of the existing job, no new job: the cost rule).
+# queue instead of merging it; this file calls it as before and the command decides. The merger job ends after 30 minutes of
+# running, so a run that hangs cannot block every later run for hours (run 42669997036, 9 to 10 November); whether the limit also
+# ends a wait for the `merge` environment's approval is not confirmed (verify, ADR-0417 residual). On a failed `governance` or
+# `proof` run of `merge_group` the job's step `Report a removal from the merge queue` posts one line on the pull request the queue
+# branch names, only when GitHub removed it (open, not merged, not in the queue: one GraphQL read with `AGK_MERGE_TOKEN`), with the
+# job's token, and no other step runs (a step of the existing job, no new job: the cost rule).
 name: merger
 
 on:
@@ -65,6 +67,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          AGK_MERGE_TOKEN: ${{ secrets.AGK_MERGE_TOKEN }}
         run: |
           python3 scripts/agk/merge_cleared.py --queue-removed --event "$GITHUB_EVENT_PATH" || echo "merger: no removal posted"
       - name: Set the verdict status

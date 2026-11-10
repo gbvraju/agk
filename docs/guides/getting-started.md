@@ -483,7 +483,8 @@ after every merge to `main`, and stop here;
 prints `merge queue: on`.
 
 A pull request that fails its batch is removed by GitHub, and the merger posts one line on it,
-`Removed from the merge queue: <check> failed on <queue sha>`; it then needs a new head and a new verdict. GitHub's merge
+`Removed from the merge queue: <check> failed on <queue sha>`. The merger then holds that head and never queues it again
+until a new verdict, which a new head needs anyway. GitHub's merge
 queue is not the conductor's `conductor.py merge-queue`, which stays as it is.
 
 ## Upgrading the kit

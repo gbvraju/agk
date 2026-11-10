@@ -138,13 +138,17 @@ command adds the head to GitHub's merge queue, pinned to the cleared sha:
 
 The queue is offered only through GraphQL (`enqueuePullRequest` with `expectedHeadOid`, verify), so
 that one read and one write are made only inside GitHub Actions (`GITHUB_ACTIONS=true`, the merger
-job, with `AGK_MERGE_TOKEN`); anywhere else the command is refused with a line naming rule 2a before
-any GraphQL call, and a session stays REST-only (`Q-S0039-12`, `Q-S0039-19`). A head already in the
-queue is read before the check before the merge, so a sweep never re-runs it for a queued head.
-`--queue-removed --event FILE` is the merger's job on a failed `governance` or `proof` run of the
-`merge_group` event: one comment `Removed from the merge queue: <check> failed on <queue sha12>` on
-the pull request the queue's branch names (`gh-readonly-queue/<base>/pr-<n>-<sha>`, verify), never
-twice for one queue sha (rule 2c).
+job, with `AGK_MERGE_TOKEN` set); anywhere else, or without that token, the command is refused with
+a line naming rule 2a before any GraphQL call, and a session stays REST-only (`Q-S0039-12`,
+`Q-S0039-19`). A head with a `Removed from the merge queue:` line newer than its clearing verdict is
+held (`removed from the merge queue since the verdict (rule 2c)`) until a new verdict, so a sweep
+never queues a removed head again. A head already in the queue is read before the check before the
+merge, so a sweep never re-runs it for a queued head. `--queue-removed --event FILE` is the
+merger's job on a failed `governance` or `proof` run of the `merge_group` event: one comment
+`Removed from the merge queue: <check> failed on <queue sha12>` on the pull request the queue's
+branch names (`gh-readonly-queue/<base>/pr-<n>-<sha>`, verify), only when GitHub removed it (open,
+not merged and not in the queue, read with the merger's token), never twice for one queue sha
+(rule 2c).
 """
 
 from __future__ import annotations
@@ -276,13 +280,15 @@ STATUS_LIMIT = 140  # characters GitHub takes in a status description (verify)
 OWNER_MERGE = "owner merge"
 QUEUE_SETTING = "merge_queue"
 QUEUE_OUTSIDE = (
-    "the merge queue is joined only by the merger job on GitHub Actions "
+    f"the merge queue is joined only by the merger job on GitHub Actions with {MERGE_ENV} "
     "(rule 2a; a session stays REST-only)"
 )
 QUEUE_MOVED = "head moved (rule 2a: GitHub refused the pinned sha)"
 QUEUE_FAILED = "GitHub did not add the head to the merge queue (rule 2a)"
 QUEUE_BRANCH = re.compile(r"gh-readonly-queue/.+/pr-([1-9][0-9]{0,9})-[0-9a-f]{40}")
 QUEUE_REMOVED = "Removed from the merge queue: {check} failed on {sha12}"
+REMOVED_START = "Removed from the merge queue:"
+REMOVED_HOLD = "removed from the merge queue since the verdict (rule 2c)"
 QUEUE_READ = (
     "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, "
     "name: $name) { pullRequest(number: $number) { id headRefOid isInMergeQueue } } }"
@@ -1859,10 +1865,29 @@ def queue_removed_main(path: str, root: Path) -> int:
         print("merger: nothing to do: not a failed merge queue run", file=sys.stderr)
         return EXIT_CLEARED
     try:
-        post_once(repo_of(root), *target)
+        repo = repo_of(root)
+        if not github_removed(repo, target[0]):
+            print("merger: nothing posted: GitHub did not remove the pull request (rule 2c)")
+            return EXIT_CLEARED
+        post_once(repo, *target)
     except (Refused, Unreadable) as err:
         print(f"merger: nothing posted: {err}")
     return EXIT_CLEARED
+
+
+def github_removed(repo: str, number: int) -> bool:
+    """Verdict item 4 on #993: whether GitHub removed pull request NUMBER from the queue: it is
+    open and not merged (REST), and not in the queue (one GraphQL read, only in the merger job
+    with its own token). A failed batch requeues the members it did not remove (verify)."""
+    if os.environ.get("GITHUB_ACTIONS") != "true" or not os.environ.get(MERGE_ENV):
+        raise Refused(QUEUE_OUTSIDE)
+    pull = read_json(f"repos/{repo}/pulls/{number}", dict, "the pull request")
+    if pull.get("state") != "open" or pull.get("merged") is True or pull.get("merged_at"):
+        return False
+    found = queue_read(repo, number)
+    if not isinstance(found.get("isInMergeQueue"), bool):
+        raise Unreadable("the merge queue state of the pull request")
+    return found["isInMergeQueue"] is False
 
 
 def no_secret_main(number: int, root: Path) -> int:
@@ -2154,14 +2179,22 @@ def queue_call(fields: list[str]) -> tuple[int, dict | None, str]:
     return proc.returncode, data if isinstance(data, dict) else None, proc.stderr
 
 
-def queue_state(repo: str, number: int, sha: str) -> tuple[str, bool]:
-    """The pull request's GraphQL id and whether it is in the merge queue; a head that is no longer
-    SHA is refused as moved, an unreadable answer is Unreadable."""
+def queue_read(repo: str, number: int) -> dict:
+    """The one GraphQL read of the merger job: the pull request's id, head and queue state."""
     owner, _, name = repo.partition("/")
     fields = ["-f", f"query={QUEUE_READ}", "-f", f"owner={owner}", "-f", f"name={name}"]
     _, data, _ = queue_call([*fields, "-F", f"number={number}"])
     pull = ((data or {}).get("repository") or {}).get("pullRequest")
-    if not isinstance(pull, dict) or not isinstance(pull.get("id"), str):
+    if not isinstance(pull, dict):
+        raise Unreadable("the merge queue state of the pull request")
+    return pull
+
+
+def queue_state(repo: str, number: int, sha: str) -> tuple[str, bool]:
+    """The pull request's GraphQL id and whether it is in the merge queue; a head that is no longer
+    SHA is refused as moved, an unreadable answer is Unreadable."""
+    pull = queue_read(repo, number)
+    if not isinstance(pull.get("id"), str):
         raise Unreadable("the merge queue state of the pull request")
     if pull.get("headRefOid") != sha:
         raise Refused(QUEUE_MOVED, EXIT_HELD)
@@ -2181,6 +2214,19 @@ def enqueue(node: str, sha: str) -> None:
     raise Refused(QUEUE_FAILED)
 
 
+def removed_since(comments: list[dict], verdict: dict) -> bool:
+    """Verdict item 3 on #993 (amendment 158 item 4): a `Removed from the merge queue:` line
+    newer than the clearing VERDICT holds the head, so a sweep never queues it again; a new head
+    needs a new verdict anyway, and a new verdict on the head lifts the hold."""
+
+    def order(item: dict) -> tuple[str, int]:
+        cid = item.get("id")
+        return str(item.get("created_at") or ""), cid if isinstance(cid, int) else -1
+
+    removals = [c for c in comments if first_line(c).startswith(REMOVED_START)]
+    return any(order(c) > order(verdict) for c in removals)
+
+
 def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
     rules = ruled(root)
     data = rules.data
@@ -2188,9 +2234,11 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
     with merge_lock(root):
         pull, verdict, accepted, record, fixing = holds(root, repo, number, sha, rules)
         queue = queue_mode(repo, rules)
-        if queue and os.environ.get("GITHUB_ACTIONS") != "true":
-            raise Refused(QUEUE_OUTSIDE)
+        if queue and (os.environ.get("GITHUB_ACTIONS") != "true" or not os.environ.get(MERGE_ENV)):
+            raise Refused(QUEUE_OUTSIDE)  # before any GraphQL call: never a session's own login
         node = ""
+        if queue and removed_since(read_comments(repo, number), verdict):
+            raise Held(REMOVED_HOLD)
         if queue:
             node, queued = queue_state(repo, number, sha)
             if queued:

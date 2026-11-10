@@ -28,6 +28,7 @@ from test_merge_cleared_verdict import (
     SHA12,
     calls,
     cleared,
+    comment,
     fake_gh,
     repo,
     toml,
@@ -67,18 +68,21 @@ if args[:2] == ['api', 'graphql']:
 """
 
 
+PULL = {
+    "number": 7,
+    "node_id": NODE,
+    "head": {"sha": HEAD},
+    "state": "open",
+    "draft": False,
+    "labels": [],
+    "mergeable_state": "clean",
+    "body": "Brief: #500\nAdvances: REQ-046\n",
+}
+
+
 def queue_gh(tmp_path: Path, **saved):
     """The fake `gh` of test_merge_cleared_verdict with a GraphQL answer in front of it."""
-    pull = saved.pop("pull", None) or {
-        "number": 7,
-        "node_id": NODE,
-        "head": {"sha": HEAD},
-        "state": "open",
-        "draft": False,
-        "labels": [],
-        "mergeable_state": "clean",
-        "body": "Brief: #500\nAdvances: REQ-046\n",
-    }
+    pull = saved.pop("pull", None) or dict(PULL)
     bin_dir, log = fake_gh(tmp_path, pull=pull, **saved)
     script = bin_dir / "gh"
     text = script.read_text(encoding="utf-8")
@@ -88,7 +92,7 @@ def queue_gh(tmp_path: Path, **saved):
     return bin_dir, log
 
 
-def run(root: Path, bin_dir: Path, *args: str, actions: bool = True):
+def run(root: Path, bin_dir: Path, *args: str, actions: bool = True, token: bool = True):
     env = {
         k: v
         for k, v in os.environ.items()
@@ -100,17 +104,24 @@ def run(root: Path, bin_dir: Path, *args: str, actions: bool = True):
     env["TMPDIR"] = env["TEMP"] = env["TMP"] = str(temp)
     if actions:
         env["GITHUB_ACTIONS"] = "true"
+    if actions and token:
         env["AGK_MERGE_TOKEN"] = "example-merge-token"  # nosec B105 - an invented placeholder
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [sys.executable, str(SCRIPT), *args], cwd=root, capture_output=True, text=True, env=env
     )
 
 
-def queued_run(tmp_path: Path, main: str = toml(QUEUE_ON), actions: bool = True, **saved):
+def queued_run(
+    tmp_path: Path,
+    main: str = toml(QUEUE_ON),
+    actions: bool = True,
+    token: bool = True,
+    **saved,
+):
     saved.setdefault("comments", [cleared()])
     root = repo(tmp_path, main)
     bin_dir, log = queue_gh(tmp_path, **saved)
-    proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD, actions=actions)
+    proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD, actions=actions, token=token)
     return proc, calls(log)
 
 
@@ -178,7 +189,36 @@ HOLDS = [
     ),
     ("no record issue", {"issues": []}, ": held: no record issue (rule 7)"),
     ("governance of the would-be merge", {"premerge_exit": 2}, ": held: the merge with"),
+    # the hold list of SPEC-0039 rule 5 (verdict item 5 on #993)
+    ("a draft", {"pull": {**PULL, "draft": True}}, ": held: draft (rule 5)"),
+    (
+        "the hold label",
+        {"pull": {**PULL, "labels": [{"name": "agk:hold"}]}},
+        ": held: hold label (rule 5)",
+    ),
+    (
+        "the approve label",
+        {"pull": {**PULL, "labels": [{"name": "agk:approve"}]}},
+        ": held: spec approval (rule 5)",
+    ),
+    (
+        "an unmerged dependence",
+        {
+            "pull": {**PULL, "body": "Brief: #500\nDepends-on: #12\n"},
+            "items": {"12": {"number": 12, "state": "open", "pull_request": {}, "pull": {}}},
+        },
+        ": held: depends-on (rule 5)",
+    ),
+    ("a conflict", {"pull": {**PULL, "mergeable_state": "dirty"}}, ": held: conflict (rule 5)"),
 ]
+
+# The REST reads of the holds, each of which must come before any GraphQL call.
+HOLD_READS = (
+    f"repos/{REPO}/pulls/7",
+    f"repos/{REPO}/issues/7/comments",
+    f"repos/{REPO}/pulls/7/files",
+    f"repos/{REPO}/pulls/7/commits",
+)
 
 
 @pytest.mark.parametrize(("name", "saved", "expected"), HOLDS, ids=[h[0] for h in HOLDS])
@@ -188,6 +228,42 @@ def test_every_hold_of_today_holds_before_the_queue(tmp_path, name, saved, expec
     assert expected in proc.stdout, proc.stdout + proc.stderr
     assert proc.returncode == 3
     assert enqueues(made) == [] and merges(made) == []
+    if "premerge_exit" not in saved:  # the queue state is read after the REST holds alone
+        assert graphql(made) == []
+
+
+def test_no_queue_call_comes_before_the_rest_holds(tmp_path):
+    """REQ-046: brief #972 answer 7b (the holds first; verdict item 5 on #993)."""
+    proc, made = queued_run(tmp_path)
+    assert proc.stdout.strip() == f"merge-cleared #7 {SHA12}: queued", proc.stdout + proc.stderr
+    first = next(i for i, c in enumerate(made) if c[:2] == ["api", "graphql"])
+    for path in HOLD_READS:
+        reads = [i for i, c in enumerate(made) if any(a.split("?")[0] == path for a in c)]
+        assert reads and max(reads) < first, path
+
+
+# --- a head the queue removed is held until a new head or verdict (verdict item 3 on #993) ---
+
+REMOVED = f"Removed from the merge queue: governance failed on {QUEUE_SHA[:12]}"
+
+
+def test_a_head_removed_from_the_queue_is_not_queued_again(tmp_path):
+    """REQ-046: amendment 158 item 4 (a removed head needs a new head and a new verdict)."""
+    removal = comment(REMOVED, "github-actions[bot]", 8)
+    proc, made = queued_run(tmp_path, comments=[cleared(at=5), removal])
+    assert proc.stdout.strip() == (
+        f"merge-cleared #7 {SHA12}: held: removed from the merge queue since the verdict (rule 2c)"
+    ), proc.stdout + proc.stderr
+    assert proc.returncode == 3
+    assert graphql(made) == [] and merges(made) == []
+
+
+def test_a_new_verdict_after_the_removal_queues_the_head_again(tmp_path):
+    """REQ-046: amendment 158 item 4 (a new verdict lifts the hold)."""
+    removal = comment(REMOVED, "github-actions[bot]", 3)
+    proc, made = queued_run(tmp_path, comments=[removal, cleared(at=9)])
+    assert proc.stdout.strip() == f"merge-cleared #7 {SHA12}: queued", proc.stdout + proc.stderr
+    assert len(enqueues(made)) == 1
 
 
 # --- (c) with the queue off, or in local mode, it merges as today ---
@@ -218,6 +294,16 @@ def test_the_queue_call_outside_actions_is_refused_naming_the_rule(tmp_path):
     out = proc.stdout.strip()
     assert out.startswith(f"merge-cleared #7 {SHA12}: refused: "), proc.stdout + proc.stderr
     assert "rule 2a" in out and "GitHub Actions" in out
+    assert proc.returncode == 1
+    assert graphql(made) == [] and merges(made) == []
+
+
+def test_the_queue_call_without_the_merger_token_is_refused(tmp_path):
+    """REQ-046: session rule 2 (verdict item 6 on #993: never a session's own login)."""
+    proc, made = queued_run(tmp_path, token=False)
+    out = proc.stdout.strip()
+    assert out.startswith(f"merge-cleared #7 {SHA12}: refused: "), proc.stdout + proc.stderr
+    assert "rule 2a" in out and "AGK_MERGE_TOKEN" in out
     assert proc.returncode == 1
     assert graphql(made) == [] and merges(made) == []
 
@@ -255,12 +341,12 @@ def removal_event(conclusion: str = "failure", event: str = "merge_group") -> di
     }
 
 
-def removed_run(tmp_path: Path, payload: dict, **saved):
+def removed_run(tmp_path: Path, payload: dict, token: bool = True, **saved):
     root = repo(tmp_path, toml(QUEUE_ON))
     bin_dir, log = queue_gh(tmp_path, **saved)
     path = tmp_path / "event.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
-    proc = run(root, bin_dir, "--queue-removed", "--event", str(path))
+    proc = run(root, bin_dir, "--queue-removed", "--event", str(path), token=token)
     return proc, calls(log)
 
 
@@ -290,6 +376,26 @@ def test_the_same_removal_is_never_posted_twice(tmp_path):
     proc, made = removed_run(tmp_path, removal_event(), comments=seen)
     assert posted_comments(made) == [], proc.stdout + proc.stderr
     assert proc.returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("name", "saved", "token"),
+    [
+        ("still in the queue", {"queue": {"in_queue": True}}, True),
+        ("merged", {"pull": {**PULL, "state": "closed", "merged": True}}, True),
+        ("closed", {"pull": {**PULL, "state": "closed"}}, True),
+        ("no merger token", {}, False),
+    ],
+)
+def test_the_removal_line_is_posted_only_when_github_removed_the_pull_request(
+    tmp_path, name, saved, token
+):
+    """REQ-046: amendment 158 item 4 (only a pull request GitHub removed; verdict item 4 on #993)."""
+    proc, made = removed_run(tmp_path, removal_event(), token=token, **saved)
+    assert posted_comments(made) == [], name + proc.stdout + proc.stderr
+    assert proc.returncode == 0
+    if not token:
+        assert graphql(made) == []
 
 
 @pytest.mark.parametrize(
@@ -357,6 +463,63 @@ def test_the_pull_request_body_checks_run_only_on_a_pull_request():
         assert found and "github.event_name == 'pull_request'" in found.group(1), step
 
 
+@pytest.mark.parametrize("step", ["check_protected_changes", "check_specs", "check_final_clearance"])
+def test_the_body_reading_checks_are_skipped_on_the_merge_queue(step):
+    """REQ-057: brief #972 answer 1 (verdict item 1 on #993). On `merge_group` no step sets
+    AGK_BASE, so these checks would diff the whole batch, a `Covered-by:` pull request's protected
+    change included, against an empty body and fail the batch; each passed on its own head."""
+    text = (WORKFLOWS / "governance.yml").read_text(encoding="utf-8")
+    found = re.search(rf"- name: {step}\n(?:\s+#.*\n)*\s+if: \$\{{\{{ (.+) \}}\}}", text)
+    assert found, step
+    assert "github.event_name != 'merge_group'" in found.group(1), found.group(1)
+
+
+def paused_step() -> str:
+    text = (WORKFLOWS / "governance.yml").read_text(encoding="utf-8")
+    step = text.split("      - name: Paused\n", 1)[1].split("\n      - name: ", 1)[0]
+    return step
+
+
+@pytest.mark.parametrize(
+    ("env", "ref"),
+    [
+        ({"QUEUE_BASE": "b" * 40}, "b" * 40),
+        ({"AGK_BASE": "a" * 40}, "a" * 40),
+        ({}, None),
+    ],
+    ids=["merge-group", "pull-request", "push"],
+)
+def test_the_paused_step_judges_a_queue_run_by_its_base(tmp_path, env, ref):
+    """REQ-057: ADR-0196 (verdict item 2 on #993): a batch member that adds `paused = true`
+    never turns the queue's checks green unchecked; the queue's run reads its base sha."""
+    step = paused_step()
+    assert "QUEUE_BASE: ${{ github.event.merge_group.base_sha }}" in step
+    script = step.split("        run: |\n", 1)[1]
+    script = "\n".join(line[10:] for line in script.splitlines())
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "python3.log"
+    fake = bin_dir / "python3"
+    fake.write_text(
+        f"#!/bin/sh\necho \"$@\" >> {log}\necho 'agk not paused'\n", encoding="utf-8"
+    )
+    fake.chmod(0o755)
+    out = tmp_path / "out"
+    base = {k: v for k, v in os.environ.items() if k not in ("AGK_BASE", "QUEUE_BASE")}
+    base.update(env, PATH=f"{bin_dir}{os.pathsep}{base['PATH']}")
+    base.update(GITHUB_OUTPUT=str(out), GITHUB_STEP_SUMMARY=str(tmp_path / "summary"))
+    proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell input
+        ["bash", "-e", "-c", script], cwd=tmp_path, capture_output=True, text=True, env=base
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    called = log.read_text(encoding="utf-8").split()
+    if ref is None:
+        assert "--ref" not in called
+    else:
+        assert called[called.index("--ref") + 1] == ref
+    assert out.read_text(encoding="utf-8").strip() == "paused=false"
+
+
 def test_the_merger_job_has_a_timeout():
     """REQ-046: brief #972 answer 3 (a waiting run can never block the queue for hours)."""
     text = (WORKFLOWS / "merger.yml").read_text(encoding="utf-8")
@@ -372,6 +535,7 @@ def test_the_guide_names_governance_and_proof_the_queue_checks_never_agk_verdict
     named = section.split("the required checks are", 1)[1].split(".", 1)[0]
     assert "`governance` and `proof`" in named and "agk/verdict" not in named
     assert "Do not add `agk/verdict`" in section
+    assert "holds that head and never queues it again" in section  # verdict item 3 on #993
 
 
 # --- answers 5 and 6: the setting, the doctor line and the guide ---
