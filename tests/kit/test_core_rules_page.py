@@ -75,7 +75,8 @@ KEPT_IN_CLAUDE = {2, 10}
 COMPACTION = (
     "## Compaction recovery\n\nAfter compaction or a new session, re-read CLAUDE.md, "
     "the brief, the open PR body and the `docs/runs/decisions/` files\nthat `grep -l` finds "
-    "for the brief's number, spec, Q ids and paths; the old `docs/runs/decisions-log.md` is frozen.\n"
+    "for the brief's number, spec, Q ids and paths; "
+    "the old `docs/runs/decisions-log.md` is frozen.\n"
 )
 
 REF = re.compile(r"`?(session rule|principle|CLAUDE\.md item) (\d+)`?")
