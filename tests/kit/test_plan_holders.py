@@ -176,3 +176,115 @@ def test_ac10_the_conductor_works_in_the_order_of_the_holders():
     """REQ-057 AC10: item 4, the work list reads `holders` and posts each `stall` once."""
     text = (ROOT / ".claude/agents/conductor.md").read_text(encoding="utf-8")
     assert "`holders`" in text and "`stall`" in text and "plan issue" in text
+
+
+# --- one red head gets one fix (brief #962) -----------------------------------------------------
+
+RED = "The default branch is red"  # session.RED_TITLE
+ROUTER = {"login": "github-actions[bot]"}  # session.ROUTER_LOGIN
+SLOTS = '[flow]\nbuilder_start = "assign"\nbuilder_slots = 2\n'
+
+
+def alarm(number: int = 953) -> dict:
+    """The router's red-branch alarm (`route.write_red`), invented."""
+    body = "Sentence: the default branch is red at an example head.\nAdvances: none\nPriority: 0\n"
+    return {**issue(number, body), "title": RED, "user": ROUTER}
+
+
+def fixing(number: int, line: str) -> dict:
+    """An open brief whose body carries LINE, which may name the alarm."""
+    return {**issue(number, brief("scripts/agk/route.py") + line + "\n"), "user": {"login": "boss"}}
+
+
+def red_scene(stub: Stub, briefs: list[dict], pulls: list[dict], said: list[dict] = ()) -> None:
+    stub.serve(PULLS, pulls)
+    listing(stub, [alarm(), *briefs])
+    free(stub, *(b["number"] for b in briefs))
+    stub.serve(f"{ISSUES}/953/comments", list(said))
+
+
+def pull(number: int, body: str, state: str = "open") -> dict:
+    return {**pr(number, None, state), "body": body}
+
+
+def assigned(found: dict) -> list[int]:
+    return [row["brief"] for row in found.get("assign", [])]
+
+
+def test_962_a_red_alarm_with_an_open_fix_brief_is_not_assigned(proj, stub):
+    """REQ-039 REQ-041: brief #962 answers 1 and 3 (a), the case of 10 Nov (#953, #955)."""
+    proj.write("agk.toml", SLOTS)
+    red_scene(stub, [fixing(955, "Red: #953")], [])
+    found = data(proj, stub)
+    assert 953 not in assigned(found)
+    assert {"brief": 953, "fixed_by": 955, "why": "is fixed by #955"} in found["waits"]
+    out = plan(proj, stub).stdout
+    assert "#953 is fixed by #955." in out and "s1 #953" not in out and "s2 #953" not in out
+    assert posts(stub) == []
+
+
+def test_962_a_red_alarm_alone_is_still_assigned(proj, stub):
+    """REQ-039 REQ-041: brief #962 answers 2 and 3 (b), SPEC-0032 rule 9 kept."""
+    proj.write("agk.toml", SLOTS)
+    red_scene(stub, [], [])
+    found = data(proj, stub)
+    assert assigned(found) == [953]
+    assert not any(w.get("brief") == 953 for w in found["waits"])
+
+
+def test_962_an_open_fix_pull_request_that_names_it_stops_the_assignment(proj, stub):
+    """REQ-039 REQ-041: brief #962 answers 1 and 3 (c)."""
+    proj.write("agk.toml", SLOTS)
+    red_scene(stub, [], [pull(956, "Fixes #953\nAdvances: REQ-039\n")])
+    found = data(proj, stub)
+    assert assigned(found) == []
+    assert {"brief": 953, "fixed_by": 956, "why": "is fixed by #956"} in found["waits"]
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["Fixes #953", "Closes #953", "closes: #953", "Red: #953", "Plan: #953",
+     "This is the fix brief for issue #953."],
+)  # fmt: skip
+def test_962_each_naming_line_names_the_alarm(proj, stub, line):
+    """REQ-039 REQ-041: brief #962 answer 1, the lines that name `#<red>`."""
+    proj.write("agk.toml", SLOTS)
+    red_scene(stub, [fixing(955, line)], [])
+    assert assigned(data(proj, stub)) == []
+
+
+@pytest.mark.parametrize(
+    "line", ["Fixes #9531", "Brief: #953", "Sentence: see #953", "Red: #95"]
+)
+def test_962_a_line_that_does_not_name_the_alarm_leaves_it_assigned(proj, stub, line):
+    """REQ-039 REQ-041: brief #962 answer 2, only the named lines and the whole number count."""
+    proj.write("agk.toml", SLOTS)
+    red_scene(stub, [fixing(955, line)], [pull(956, line + "\n")])
+    assert 953 in assigned(data(proj, stub))
+
+
+def test_962_a_closed_pull_request_fixes_nothing(proj, stub):
+    """REQ-039 REQ-041: brief #962 answer 1, an open pull request only."""
+    proj.write("agk.toml", SLOTS)
+    red_scene(stub, [], [pull(956, "Fixes #953\n", state="closed")])
+    assert assigned(data(proj, stub)) == [953]
+
+
+def test_962_a_listed_author_naming_an_open_brief_on_the_alarm_stops_it(proj, stub):
+    """REQ-039 REQ-041: brief #962 answer 1, `fix brief filed: #n` by a listed author."""
+    proj.write("agk.toml", SLOTS)
+    red_scene(stub, [fixing(955, "")], [], [comment(1, "boss", "Fix brief filed: #955.")])
+    found = data(proj, stub)
+    assert assigned(found) == []
+    assert {"brief": 953, "fixed_by": 955, "why": "is fixed by #955"} in found["waits"]
+
+
+@pytest.mark.parametrize(
+    ("login", "named"), [("someone", 955), ("boss", 957)]
+)  # fmt: skip
+def test_962_an_unlisted_author_or_a_brief_not_open_does_not_stop_it(proj, stub, login, named):
+    """REQ-039 REQ-041: brief #962 answer 1, a listed author and an open brief only."""
+    proj.write("agk.toml", SLOTS)
+    said = [comment(1, login, f"fix brief filed: #{named}")]
+    red_scene(stub, [fixing(955, "")], [], said)
+    assert assigned(data(proj, stub)) == [953]
