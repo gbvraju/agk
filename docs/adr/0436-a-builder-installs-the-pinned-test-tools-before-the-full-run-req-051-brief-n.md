@@ -36,7 +36,10 @@ the full run its parallel command through `[testing] parallel_command`.
 
 ## Consequences
 
-Without the key nothing changes: the kit installs nothing (SPEC-0044 rule 4 by default). With it, a session's first
+Decision 2 replaces, for a project that sets `tools_file`, ADR-0305's "The kit installs no plugin (`Q-S0044-2`)":
+with the key set, prepush installs the project's own pinned file, which may hold pytest-xdist. Without the key nothing
+changes and the kit installs nothing, as ADR-0305 decided. Whether SPEC-0044 rule 4 and the ruled Q-S0044-2 ("never")
+allow this install is open on brief #1021 (verdict on 0e2e042, item 1); this ADR does not change the spec. With it, a session's first
 pre-push run may install the pinned tools (seconds, from the package index the session already reaches); the checks
 of CI never install, since CI's interpreter already imports xdist. `project_tests.py` and the `agk-test` chooser call
 `full_command` too, so they get the same rule; in CI this repository's full `project_tests` run now uses workers, as
@@ -46,4 +49,6 @@ plan's lines, so a failed install may print its line twice there (the brief allo
 ## Residual
 
 - 2026-11-10: the after-measure is the brief's: the next builder run of #994 or #1011 finishes `prepush.py` inside
-  1800 s.
+  1800 s. Measured on head 0e2e042 in a 2-CPU cloud session with xdist installed by this change and the full run at
+  `-n 2`: `prepush: tests FAIL (1802.4s)`, the tests did not finish, so the after-measure is not met. The remaining
+  suite time went to the owner as Q-1021-2.
