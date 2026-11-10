@@ -57,6 +57,7 @@ from test_merge_cleared_verdict import (
 
 sys.path.insert(0, str(SCRIPTS))
 
+import check_pr_mode  # noqa: E402
 import merge_cleared  # noqa: E402
 
 FAILS = "held: the merge with the default branch fails governance"
@@ -377,3 +378,78 @@ def test_a_red_issue_that_cannot_be_closed_is_said(tmp_path, monkeypatch, capsys
     monkeypatch.setattr(merge_cleared, "close_red", lambda *args: False)
     code, lines, _ = main_in(root, capsys)
     assert lines == [f"{MERGED}: the red-branch issue cannot be closed (rule 6)"] and code == 1
+
+
+# Brief #991 (REQ-046, ADR-0265, Q-991-1): `dependence_unmet` reads `Depends-on: #n` only from a
+# stripped line that is exactly that line, as `check_pr_mode.py` rule 5 does; a mention inside a
+# sentence or backticks is no dependence. The REST reads are a saved world of invented records:
+# #7 an open brief, #8 a merged pull request, #842 an open brief. No network.
+
+DEP_REPO = "example/agk"
+DEP_ISSUES = {
+    7: {"number": 7, "state": "open", "state_reason": None},
+    8: {"number": 8, "state": "closed", "pull_request": {"url": "https://example.com/8"}},
+    842: {"number": 842, "state": "open", "state_reason": None},
+}
+DEP_PULLS = {8: {"number": 8, "merged_at": "2026-11-01T00:00:00Z"}}
+DEP_SENTENCE = "Brief: #900\nNo `Depends-on:` line: the brief names `Depends-on: #842` later.\n"
+DEP_OPEN_BRIEF = "Brief: #900\nDepends-on: #7\n"
+DEP_MERGED_PULL = "Brief: #900\n  Depends-on: #8  \n"
+DEP_CASES = [(DEP_SENTENCE, False), (DEP_OPEN_BRIEF, True), (DEP_MERGED_PULL, False)]
+
+
+@pytest.fixture
+def dep_world(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    reads: list[str] = []
+
+    def read_json(endpoint: str, kind: type, what: str) -> object:
+        reads.append(endpoint)
+        number = int(endpoint.rsplit("/", 1)[1])
+        return (DEP_PULLS if "/pulls/" in endpoint else DEP_ISSUES)[number]
+
+    monkeypatch.setattr(merge_cleared, "read_json", read_json)
+    return reads
+
+
+def dep_held(body: str) -> bool:
+    return merge_cleared.dependence_unmet(DEP_REPO, {"number": 900, "body": body})
+
+
+def dep_record(number: int) -> dict:
+    """The record `check_pr_mode.py` reads for NUMBER, as the workflow writes it."""
+    item = DEP_ISSUES[number]
+    if "pull_request" in item:
+        return {"pull_request": True, "merged": bool(DEP_PULLS[number].get("merged_at"))}
+    return {"pull_request": False, "state": item["state"], "state_reason": item["state_reason"]}
+
+
+def dep_mode_check_holds(body: str, tmp_path: Path) -> bool:
+    path = tmp_path / "body.md"
+    path.write_text(body, encoding="utf-8")
+    named = check_pr_mode.depends_on(path)
+    return any(check_pr_mode.unmet(dep_record(n)) is not None for n in named)
+
+
+def test_dep_a_mention_inside_a_sentence_is_not_held(dep_world):
+    """REQ-046: brief #991 answer 1, test (a)."""
+    assert dep_held(DEP_SENTENCE) is False
+    assert dep_world == []
+
+
+def test_dep_a_whole_line_naming_an_open_brief_is_held(dep_world):
+    """REQ-046: brief #991 answer 2, test (b)."""
+    assert dep_held(DEP_OPEN_BRIEF) is True
+    assert dep_world == [f"repos/{DEP_REPO}/issues/7"]
+
+
+def test_dep_a_whole_line_naming_a_merged_pull_request_is_not_held(dep_world):
+    """REQ-046: brief #991 answer 2, test (c)."""
+    assert dep_held(DEP_MERGED_PULL) is False
+    assert dep_world == [f"repos/{DEP_REPO}/issues/8", f"repos/{DEP_REPO}/pulls/8"]
+
+
+@pytest.mark.parametrize(("body", "expected"), DEP_CASES)
+def test_dep_the_merge_and_the_mode_check_agree(dep_world, tmp_path, body, expected):
+    """REQ-046: brief #991 answer 3, test (d)."""
+    assert dep_held(body) is expected
+    assert dep_mode_check_holds(body, tmp_path) is expected
