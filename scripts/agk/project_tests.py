@@ -24,7 +24,10 @@ nothing more. A bad setting is refused naming it (exit 1). It calls no network.
 With `[testing] workers` above 1 (SPEC-0044 rules 4 and 5, brief #583) the full command is
 `prepush.full_command`'s: `-n <workers>` added to a pytest command whose interpreter imports
 xdist, `parallel_command` for another runner, or else the command of today after one line naming
-the setting. A `[proof]` area's command is never changed.
+the setting. A selected run takes the same rule (`prepush.selected_workers`, brief #980, ADR-0422)
+without changing the `[proof]` area's command in `agk.toml`, and when the selected test files are
+at least `[testing] full_when_share` (0.5) of the areas' test files the pull request runs the full
+command instead, with the reason `selection <n> of <m> files`.
 
 With `[testing] rerun_alone = true` (brief #670, ADR-0323, SPEC-0044 rule 1 as amendment 135
 proposes; `--no-rerun-alone` turns it off for one call, and `--rerun-alone` without the setting is
@@ -73,6 +76,7 @@ from impact import (
     MAP_FILE,
     MAP_STALE,
     MAP_UNREAD,
+    full_when_share,
     impact,
     junit_setting,
     level_of,
@@ -83,7 +87,13 @@ from impact import (
     testing_table,
     text,
 )
-from prepush import full_command, pytest_interpreter, regression_sets
+from prepush import (
+    full_command,
+    pytest_interpreter,
+    regression_sets,
+    selected_workers,
+    suite_test_files,
+)
 from test_map import refresh
 
 NOTICE = "agk: no project_tests configured; the project runs its own tests"
@@ -270,12 +280,21 @@ def plan(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], lis
         return [("full", project, ".", why)], [*head, f"project tests: full ({why})"]
     refresh(root)
     found = impact(root, mb, "HEAD")
-    sets, notes = regression_sets(root, found, proof_areas(root))
+    areas = proof_areas(root)
+    sets, notes = regression_sets(root, found, areas)
     lines = [*head, *text(found), *[n for n in notes if n not in found.map_notes]]
     if any(n.startswith("tests: not run (in no [proof] area)") for n in notes):
         why = "a selected file is in no [proof] area"
         added = [s for s in sets if s[3].startswith(LINK_REASON)]  # a link only adds (rule 7)
         return [("full", project, ".", why), *added], [*lines, f"project tests: full ({why})"]
+    chosen, total = len({s.test for s in found.selected}), suite_test_files(root, areas)
+    if sets and sets[0][0] != "full" and total and chosen / total >= full_when_share(root):
+        why = f"selection {chosen} of {total} files"  # wider and faster (brief #980 answer 3)
+        command, said = full_command(root, project, root)
+        added = [s for s in sets if s[3].startswith(LINK_REASON)]
+        sets, lines = [("full", command, ".", why), *added], [*lines, *([said] if said else [])]
+    sets, single = selected_workers(root, sets)
+    lines.extend(line for line in single if line not in lines)  # one line, once (SPEC-0044 rule 4)
     if sets and sets[0][0] == "full":
         lines.append(f"project tests: full ({sets[0][3]})")
     else:
