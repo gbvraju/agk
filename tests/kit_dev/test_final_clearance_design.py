@@ -1,8 +1,8 @@
 """Tests of the design sign-off rows in `check_final_clearance.py` (SPEC-0037 rules 3 and 9;
 REQ-044 AC5, brief #459).
 
-A row that the pull request adds to `docs/design/signoffs.md` (against its merge base with the default
-branch, in any of its commits) counts only with an `Approve: design v<n>
+A row that the pull request adds to `docs/design/signoffs.md` (against its merge base with the
+default branch, in any of its commits) counts only with an `Approve: design v<n>
 <full head ID>` (or `Approve: inventory <full head ID>`) line by an account of `spec_approvers`
 that names the row's head, never through an app of `agent_apps`; in solo mode the line counts
 inside the person's `Confirmed:` comment too. Each commit adding a row that changes any other file

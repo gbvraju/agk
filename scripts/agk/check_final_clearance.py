@@ -207,7 +207,7 @@ def _row_key(row: dict) -> tuple[str, ...]:
 
 def signoff_problems(root: Path, commit: str, items: list[dict]) -> None:
     """SPEC-0037 rules 3 and 9: a row the pull request adds needs the person's line on its head, and
-    each commit that adds a row changes only the sign-off record (compared with its first parent)."""
+    each commit adding a row changes only the sign-off record (compared with its first parent)."""
     added, mb = signoff_rows_added(root, commit)
     if not added:
         return
