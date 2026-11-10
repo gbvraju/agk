@@ -711,3 +711,158 @@ def test_sigterm_during_the_run_opens_the_red_branch_issue(tmp_path):
     assert f"Failing check: {NOT_FINISHED}" in red_body_of(calls(log))
     assert not (locks / "agk-lock-heavy").exists(), "the heavy lock is released"
     assert worktrees(root) == [str(root)]
+
+
+# --- after the merge: the issues the body closes and the brief it builds (brief #959) ----------
+
+SHA = "f" * 40  # an invented merge commit
+CLOSE_BRIEF = 959
+
+
+def saved_gh(replies: dict[str, object], writes: list[list[str]]):
+    """A stand-in for merge_cleared.gh_api that answers each GET from saved REST replies (by its
+    endpoint without the query) and records every write; an endpoint not saved answers 404."""
+
+    def fake(args, env=None):
+        verb = args[args.index("--method") + 1] if "--method" in args else "GET"
+        target = next(a for a in args if a.startswith("repos/"))
+        if verb != "GET":
+            writes.append(args)
+            return subprocess.CompletedProcess(args, 0, "{}", "")
+        route_, _, query = target.partition("?")
+        page = int(query.split("page=")[-1]) if "page=" in query else 1
+        if route_ not in replies:
+            return subprocess.CompletedProcess(args, 1, "", "gh: Not Found (HTTP 404)\n")
+        value = replies[route_]
+        if isinstance(value, list):
+            value = value[(page - 1) * 100 : page * 100]
+        return subprocess.CompletedProcess(args, 0, json.dumps(value), "")
+
+    return fake
+
+
+def issue(number: int, state: str = "open", body: str = "", labels=("agk-brief",)) -> dict:
+    return {"number": number, "state": state, "body": body, "labels": [{"name": n} for n in labels]}
+
+
+def merged_ref(number: int, title: str) -> dict:
+    """A timeline event of the brief: a merged pull request that names it."""
+    pull = {"merged_at": "2026-11-09T10:00:00Z", "url": f"https://example.com/pulls/{number}"}
+    return {
+        "event": "cross-referenced",
+        "source": {
+            "type": "issue",
+            "issue": {"number": number, "title": title, "pull_request": pull},
+        },
+    }
+
+
+def after_close(monkeypatch, replies: dict, body: str, title: str = "Example (brief #959)"):
+    """One run of the step after the record line; the writes it made, and the waits it slept."""
+    writes: list[list[str]] = []
+    slept: list[float] = []
+    monkeypatch.setattr(merge_cleared, "gh_api", saved_gh(replies, writes))
+    monkeypatch.setattr(merge_cleared.time, "sleep", slept.append)
+    merge_cleared.close_after_merge(REPO, 7, SHA, body, title)
+    return writes, slept
+
+
+def comment_of(write: list[str]) -> str:
+    return next(a for a in write if a.startswith("body="))[len("body=") :]
+
+
+def test_an_issue_the_body_closes_still_open_gets_one_note(monkeypatch):
+    """REQ-046 AC6: brief #959 answer 1 (`Closes #n` still open after the wait: one note)."""
+    replies = {f"repos/{REPO}/issues/614": issue(614, labels=())}
+    writes, slept = after_close(monkeypatch, replies, "Closes #614\nAdvances: REQ-046\n")
+    assert slept and sum(slept) <= merge_cleared.CLOSE_WAIT, "one short, bounded wait"
+    assert len(writes) == 1
+    assert f"repos/{REPO}/issues/614/comments" in writes[0]
+    assert (
+        comment_of(writes[0])
+        == f"Not closed by merge {SHA[:12]} of #7; close it if the work is done"
+    )
+
+
+def test_a_one_build_brief_is_closed_after_its_merge(monkeypatch):
+    """REQ-046 AC6: brief #959 answer 2 (a brief that names no builds is closed as completed)."""
+    replies = {f"repos/{REPO}/issues/{CLOSE_BRIEF}": issue(CLOSE_BRIEF, body="Sentence: x\n")}
+    writes, _ = after_close(monkeypatch, replies, f"Brief: #{CLOSE_BRIEF}\nAdvances: REQ-046\n")
+    endpoint = f"repos/{REPO}/issues/{CLOSE_BRIEF}"
+    assert [w[w.index("--method") + 2] for w in writes] == [f"{endpoint}/comments", endpoint]
+    assert comment_of(writes[0]) == f"All builds merged; last #7 {SHA[:12]}"
+    assert "state=closed" in writes[1] and "state_reason=completed" in writes[1]
+
+
+def test_a_brief_with_every_build_merged_is_closed(monkeypatch):
+    """REQ-046 AC6: brief #959 answer 2 (each build named by a merged pull request's title)."""
+    body = "Builds: (a) the reader; (b) the writer\n"
+    replies = {
+        f"repos/{REPO}/issues/{CLOSE_BRIEF}": issue(CLOSE_BRIEF, body=body),
+        f"repos/{REPO}/issues/{CLOSE_BRIEF}/timeline": [
+            merged_ref(5, f"Example reader (brief #{CLOSE_BRIEF} build (a))")
+        ],
+    }
+    title = f"Example writer (brief #{CLOSE_BRIEF} build (b))"
+    writes, _ = after_close(monkeypatch, replies, f"Brief: #{CLOSE_BRIEF}\n", title)
+    assert len(writes) == 2 and comment_of(writes[0]) == f"All builds merged; last #7 {SHA[:12]}"
+
+
+def test_a_brief_with_build_b_unmerged_stays_open_with_no_comment(monkeypatch):
+    """REQ-046 AC6: brief #959 answer 2 (a build unmerged: no comment, the brief stays open)."""
+    body = "Builds: (a) the reader; (b) the writer\n"
+    open_ref = merged_ref(6, f"Example writer (brief #{CLOSE_BRIEF} build (b))")
+    open_ref["source"]["issue"]["pull_request"]["merged_at"] = None
+    replies = {
+        f"repos/{REPO}/issues/{CLOSE_BRIEF}": issue(CLOSE_BRIEF, body=body),
+        f"repos/{REPO}/issues/{CLOSE_BRIEF}/timeline": [open_ref],
+    }
+    title = f"Example reader (brief #{CLOSE_BRIEF} build (a))"
+    writes, _ = after_close(monkeypatch, replies, f"Brief: #{CLOSE_BRIEF}\n", title)
+    assert writes == []
+
+
+def test_a_closed_issue_gets_nothing(monkeypatch):
+    """REQ-046 AC6: brief #959 answer 1 (an issue GitHub closed gets no note)."""
+    replies = {
+        f"repos/{REPO}/issues/614": issue(614, state="closed", labels=()),
+        f"repos/{REPO}/issues/{CLOSE_BRIEF}": issue(CLOSE_BRIEF, state="closed"),
+    }
+    body = f"Brief: #{CLOSE_BRIEF}\nFixes: #614\nCloses #{CLOSE_BRIEF}\n"
+    writes, _ = after_close(monkeypatch, replies, body)
+    assert writes == []
+
+
+def test_closing_keywords_are_read_as_github_reads_them():
+    """REQ-046 AC6: brief #959 answer 1 (`Closes`, `Fixes`, `Resolves` with `#n`; never
+    `Fixes-failure:`, and never a bare `Brief: #n`)."""
+    body = (
+        "Closes #1\nfixed #2\nResolves: #3\nFixes-failure: #4\nBrief: #5\n"
+        "Depends-on: #6\nclose #7, fix #8\n"
+    )
+    assert merge_cleared.closed_by(body) == [1, 2, 3, 7, 8]
+
+
+def test_no_closing_line_and_no_brief_reads_nothing(monkeypatch):
+    """REQ-046 AC6: brief #959 (a body that closes nothing and names no brief: no wait)."""
+    writes, slept = after_close(monkeypatch, {}, "Advances: REQ-046\n")
+    assert writes == [] and slept == []
+
+
+def test_an_unreadable_brief_is_left_alone_and_the_merge_stands(monkeypatch):
+    """REQ-046 AC6: brief #959 answer 1 (nothing is held: a read GitHub refuses writes nothing)."""
+    writes, _ = after_close(monkeypatch, {}, f"Brief: #{CLOSE_BRIEF}\nCloses #614\n")
+    assert writes == []
+
+
+def test_the_merge_command_closes_a_finished_brief_after_its_record_line(tmp_path):
+    """REQ-046 AC6: brief #959 answers 2 and 3 (the command, as the merger job runs it: the record
+    line first, then the close of brief #500, which names no builds)."""
+    items = {"500": issue(500, body="Sentence: an example brief.\n")}
+    proc, gh_calls, _, _ = after_run(tmp_path, items=items)
+    assert proc.stdout.splitlines() == [MERGED], proc.stdout + proc.stderr
+    posts = [c for c in gh_calls if "POST" in c or "PATCH" in c]
+    targets = [c[c.index("--method") + 2] for c in posts]
+    assert targets[0] == f"repos/{REPO}/issues/{AUTO_ISSUE['number']}/comments"
+    assert targets[1:3] == [f"repos/{REPO}/issues/500/comments", f"repos/{REPO}/issues/500"]
+    assert comment_of(posts[1]) == f"All builds merged; last #7 {MERGE12}"

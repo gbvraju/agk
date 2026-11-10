@@ -223,7 +223,7 @@ SAFETY = {
         "from that branch; a push that is refused for another branch is a block (rule 21), "
         "not a reason to try another name."
     ),
-    29: (
+    29: (  # brief #976 (ADR-0418, SPEC-0037 rule 9) added the sign-off lines' sentence
         "A session never posts a comment whose first line is `Confirmed:`. In solo mode "
         '(`review_mode = "solo"` in `agk.toml`) that comment is the one person\'s yes: '
         "the verdict, its `Final:` lines and the spec approval of the head it names. The "
@@ -233,7 +233,12 @@ SAFETY = {
         "it from the browser or the GitHub app. GitHub cannot tell a comment the person "
         "typed from one a session posted under the same account, so this rule and the "
         "conductor's guard are what hold it. After the person's confirmation is on the "
-        "pull request, the session may make the `Final:` commit as in rule 4."
+        "pull request, the session may make the `Final:` commit as in rule 4. The "
+        "`Approve: inventory <full head ID>` and `Approve: design <version> <full head ID>` "
+        "lines go on the inventory's or the prototype's pull request and only an account "
+        "of `spec_approvers` gives them; a session never posts them, in solo mode prints "
+        "them inside the `Confirmed:` text, and after one appends one row from `date -u` in "
+        "a commit that changes only `docs/design/signoffs.md` (SPEC-0037 rule 9)."
     ),
     30: (
         "When GitHub Actions is blocked (minutes exhausted, billing blocked, an outage), a "

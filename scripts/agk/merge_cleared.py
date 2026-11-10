@@ -939,6 +939,122 @@ def post_record(repo: str, issue: int, number: int, merged: str, verdict: dict) 
     return code == 0
 
 
+# --- after the record line: the issues the body closes and the brief it builds (brief #959) -----
+
+# GitHub's closing keywords (close, closes, closed, fix, fixes, fixed, resolve, resolves, resolved,
+# any case, an optional colon) before `#n`; `Fixes-failure: #n` and `Brief: #n` are not among them.
+CLOSING = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#(\d+)\b", re.IGNORECASE)
+BRIEF_LINE = re.compile(r"Brief: #(\d+)")
+CLOSE_WAIT = 5.0  # seconds GitHub is given to close the issues a merged body closes
+TIMELINE_PAGES = 10  # pages of the brief's timeline read at most
+BRIEF_LABEL = "agk-brief"
+
+
+def closed_by(text: str) -> list[int]:
+    """The issues a pull request body closes, as GitHub reads its closing keywords, in order."""
+    out: list[int] = []
+    for found in CLOSING.finditer(text or ""):
+        number = int(found.group(1))
+        if number not in out:
+            out.append(number)
+    return out
+
+
+def brief_of(text: str) -> int | None:
+    for line in (text or "").splitlines():
+        found = BRIEF_LINE.fullmatch(line.strip())
+        if found:
+            return int(found.group(1))
+    return None
+
+
+def read_once(endpoint: str, kind: type) -> Any:
+    """One GET, never retried: this step holds nothing, so a read GitHub refuses is skipped."""
+    proc = gh_api(["--method", "GET", endpoint])
+    if proc.returncode != 0:
+        return None
+    try:
+        value = json.loads(proc.stdout)
+    except ValueError:
+        return None
+    return value if isinstance(value, kind) else None
+
+
+def merged_titles(repo: str, brief: int) -> list[str] | None:
+    """The titles of the merged pull requests that name BRIEF, from its timeline; None when GitHub
+    cannot answer."""
+    titles: list[str] = []
+    for page in range(1, TIMELINE_PAGES + 1):
+        chunk = read_once(f"repos/{repo}/issues/{brief}/timeline?per_page={PAGE}&page={page}", list)
+        if chunk is None:
+            return None
+        for event in chunk:
+            source = event.get("source") if isinstance(event, dict) else None
+            item = source.get("issue") if isinstance(source, dict) else None
+            pull = item.get("pull_request") if isinstance(item, dict) else None
+            if isinstance(pull, dict) and pull.get("merged_at"):
+                titles.append(str(item.get("title") or ""))
+        if len(chunk) < PAGE:
+            return titles
+    return titles
+
+
+def brief_built(repo: str, brief: dict, title: str) -> bool:
+    """Every build the brief names is named by a merged pull request's title, as `session.py
+    plan` reads builds (this one's TITLE among them); a brief that names no builds is built."""
+    number = int(brief.get("number") or 0)
+    builds = session_plan.builds_of(str(brief.get("body") or ""))
+    if not builds:
+        return True
+    titles = merged_titles(repo, number)
+    if titles is None:
+        return False
+    pulls = [{"title": t} for t in [title, *titles]]
+    return all(any(session_plan.names_build(p, number, n) for p in pulls) for n, _ in builds)
+
+
+def open_issue(item: dict | None) -> bool:
+    return isinstance(item, dict) and item.get("state") == "open" and "pull_request" not in item
+
+
+def close_brief(repo: str, brief: int, number: int, merged: str, title: str) -> bool:
+    """Close the brief the body builds when every build has merged (brief #959 answer 2); whether
+    it was closed. An open brief with a build unmerged gets nothing."""
+    item = read_once(f"repos/{repo}/issues/{brief}", dict)
+    if not open_issue(item):
+        return False
+    labels = {str(x.get("name")) for x in item.get("labels") or [] if isinstance(x, dict)}
+    if BRIEF_LABEL not in labels or not brief_built(repo, item, title):
+        return False
+    endpoint = f"repos/{repo}/issues/{brief}"
+    line = f"All builds merged; last #{number} {merged[:12]}"
+    code, _, _ = write_once(["--method", "POST", f"{endpoint}/comments", "-f", f"body={line}"])
+    if code != 0:
+        return False
+    args = ["--method", "PATCH", endpoint, "-f", "state=closed", "-f", "state_reason=completed"]
+    return write_once(args)[0] == 0
+
+
+def close_after_merge(repo: str, number: int, merged: str, text: str, title: str) -> None:
+    """After the record line (brief #959): the brief of the body's `Brief: #N` is closed when every
+    build has merged, and each issue the body closes that is still open after a short wait gets one
+    note. The merge stands and nothing is held."""
+    closes = closed_by(text)
+    brief = brief_of(text)
+    if not closes and brief is None:
+        return
+    if closes:
+        time.sleep(CLOSE_WAIT)  # GitHub closes them itself, a moment after the merge
+    if brief is not None and close_brief(repo, brief, number, merged, title):
+        closes = [n for n in closes if n != brief]
+    line = f"Not closed by merge {merged[:12]} of #{number}; close it if the work is done"
+    for issue in closes:
+        if open_issue(read_once(f"repos/{repo}/issues/{issue}", dict)):
+            write_once(
+                ["--method", "POST", f"repos/{repo}/issues/{issue}/comments", "-f", f"body={line}"]
+            )
+
+
 # --- rule 6: governance after the merge, and the red-branch stop -------------------------------
 
 
@@ -1348,6 +1464,7 @@ def after_merge(
     data: dict,
     text: str,
     fixing: int | None = None,
+    title: str = "",
 ) -> tuple[bool, bool]:
     """Everything after the merge (SPEC-0039 rules 6 and 7): the record line, then governance.
     Any exception, interrupt or termination counts as red (`governance not finished`): the
@@ -1359,6 +1476,8 @@ def after_merge(
     with after_merge_signals():
         try:
             recorded = post_record(repo, record, number, merged, verdict)
+            with contextlib.suppress(Exception):  # the merge stands, nothing is held (#959)
+                close_after_merge(repo, number, merged, text, title)
             branch = str(data.get("default_branch", "main"))
             step = governance(root, branch, merged, wait, text, repo)
         except BaseException:  # the merge stands; the run cannot show green (fix list, #556)
@@ -1953,7 +2072,16 @@ def outcome(root: Path, number: int, sha: str) -> tuple[str, str, int]:
             raise Held(f"{FAILS} ({step})")
         merged = merge_pull(repo, number, sha, accepted)
         recorded, closed = after_merge(
-            root, repo, number, merged, record, verdict, data, text, fixing
+            root,
+            repo,
+            number,
+            merged,
+            record,
+            verdict,
+            data,
+            text,
+            fixing,
+            str(pull.get("title") or ""),
         )
     if not recorded:
         return f"merged {merged[:12]}", "the record line cannot be posted (rule 7)", EXIT_REFUSED
