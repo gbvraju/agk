@@ -43,10 +43,16 @@ Brief #980 (ADR-0422): each other regression run, a selected one, takes the same
 simple command after a last `;`) whose interpreter imports xdist, else the command of today after
 the one line of SPEC-0044 rule 4 (`NO_XDIST`, printed once with the full run's); `parallel_command`
 stays the full run's alone.
+Brief #1021 (ADR-0436): with `[testing] tools_file` set (unset by default), a run whose interpreter
+cannot import xdist first runs `<python> -m pip install -q -r <tools_file>` once per interpreter
+(`--break-system-packages` added only when pip refuses without it) and checks again; a failed
+install prints `NO_TOOLS`, naming the setting, and the run stays in one process. A full run that
+takes `parallel_command` whose last part is a pytest command gets the same install before it, and
+the command of today with that line when xdist is still missing.
 
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
-one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing,
-downloads nothing and changes no file other than the record.
+one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing but
+the `tools_file` of brief #1021 when that is set, and changes no file other than the record.
 
 Brief #507 (ADR-0256): when `make lint` exits non-zero and its output shows that a command could not
 be started (`CreateProcess(NULL, <cmd> ...) failed`, `<cmd>: command not found`, `<cmd>: not found`,
@@ -139,6 +145,7 @@ from impact import (
     report_of,
     run_folder_deprecation,
     run_timing,
+    tools_file,
     unmapped_lines,
     workers_setting,
 )
@@ -159,6 +166,11 @@ NO_PARALLEL = (
     "tests: the command is not a simple pytest command and parallel_command is not set, running "
     "in one process (setting: testing.parallel_command)"
 )
+NO_TOOLS = (
+    "tests: the install of the test tools failed, running in one process "
+    "(setting: testing.tools_file)"
+)
+INSTALLS: dict[tuple[str, str], bool] = {}  # one install per interpreter and file (brief #1021)
 SELECTED_NOT_PYTEST = (
     "tests: {name} is not a simple pytest command, running in one process "
     "(setting: testing.workers)"
@@ -674,8 +686,8 @@ def pytest_interpreter(command: str) -> str | None:
 
 
 def imports_xdist(python: str, folder: Path) -> bool:
-    """`import xdist` succeeds with this interpreter in the run's folder; the kit installs
-    nothing (SPEC-0044 rule 4)."""
+    """`import xdist` succeeds with this interpreter in the run's folder; this check installs
+    nothing (SPEC-0044 rule 4; the opt-in install is `xdist_ready`'s, brief #1021)."""
     try:
         proc = subprocess.run(  # nosec B603 - the project's own interpreter, fixed arguments
             [python, "-c", "import xdist"], cwd=folder, capture_output=True, timeout=60
@@ -685,12 +697,57 @@ def imports_xdist(python: str, folder: Path) -> bool:
     return proc.returncode == 0
 
 
-def pytest_workers(command: str, folder: Path, workers: int, python: str) -> str | None:
+def pip_install(python: str, tools: Path, folder: Path) -> bool:
+    """`<python> -m pip install -q -r <tools>` in FOLDER, again with `--break-system-packages` only
+    when pip refuses without it (brief #1021 answer 2); True when it succeeded."""
+    base = [python, "-m", "pip", "install", "-q", "-r", str(tools)]
+    for argv in (base, [*base, "--break-system-packages"]):
+        try:
+            proc = subprocess.run(  # nosec B603 - the project's interpreter, its own pinned file
+                argv,
+                cwd=folder,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=600,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        if proc.returncode == 0:
+            return True
+        if "externally-managed-environment" not in proc.stdout + proc.stderr:
+            return False
+    return False
+
+
+def xdist_ready(python: str, folder: Path, root: Path | None) -> str | None:
+    """None when PYTHON imports xdist in FOLDER, after one install of `[testing] tools_file` when
+    it is set and the first check fails (brief #1021, ADR-0436); else the one line of the run
+    that stays in one process: NO_TOOLS when the install failed, NO_XDIST otherwise."""
+    if imports_xdist(python, folder):
+        return None
+    tools = tools_file(root) if root is not None else None
+    if tools is None:
+        return NO_XDIST
+    key = (python, str(root / tools))
+    if key not in INSTALLS:
+        INSTALLS[key] = pip_install(python, root / tools, folder)
+    if not INSTALLS[key]:
+        return NO_TOOLS
+    return None if imports_xdist(python, folder) else NO_XDIST
+
+
+def pytest_workers(
+    command: str, folder: Path, workers: int, python: str, root: Path | None = None
+) -> tuple[str | None, str | None]:
     """The one rule of the workers (SPEC-0044 rule 4, brief #980): COMMAND with `-n <workers>` at
-    its end when WORKERS is above 1 and PYTHON imports xdist in FOLDER, else None."""
-    if workers > 1 and imports_xdist(python, folder):
-        return f"{command} -n {workers}"
-    return None
+    its end when WORKERS is above 1 and PYTHON imports xdist in FOLDER (after the one install of
+    brief #1021 with ROOT's `tools_file`), else None with the line of the single run."""
+    if workers <= 1:
+        return None, None
+    line = xdist_ready(python, folder, root)
+    return (None, line) if line else (f"{command} -n {workers}", None)
 
 
 def full_command(root: Path, command: str, folder: Path) -> tuple[str, str | None]:
@@ -702,12 +759,18 @@ def full_command(root: Path, command: str, folder: Path) -> tuple[str, str | Non
         return command, None
     python = pytest_interpreter(command)
     if python is not None:
-        with_n = pytest_workers(command, folder, workers, python)
-        return (with_n, None) if with_n else (command, NO_XDIST)
+        with_n, line = pytest_workers(command, folder, workers, python, root)
+        return (with_n, None) if with_n else (command, line)
     parallel = parallel_command(root)
     if parallel is None:
         return command, NO_PARALLEL
-    return parallel.replace("{workers}", str(workers)), None
+    parallel = parallel.replace("{workers}", str(workers))
+    python = last_pytest(parallel) if tools_file(root) is not None else None
+    if python is not None:  # the same one-time install before it (Q-1021-1 ruled (b))
+        line = xdist_ready(python, folder, root)
+        if line:
+            return command, line
+    return parallel, None
 
 
 def last_pytest(command: str) -> str | None:
@@ -736,8 +799,8 @@ def selected_workers(
         if name != "full" and python is None:
             lines.append(SELECTED_NOT_PYTEST.format(name=name))
         elif python is not None:
-            with_n = pytest_workers(command, root / cwd, workers, python)
-            lines.extend([] if with_n else [NO_XDIST])  # the one line of SPEC-0044 rule 4
+            with_n, line = pytest_workers(command, root / cwd, workers, python, root)
+            lines.extend([line] if line else [])  # the one line of SPEC-0044 rule 4
             command = with_n or command
         made.append((name, command, cwd, reason))
     return made, list(dict.fromkeys(lines))

@@ -97,6 +97,10 @@ pr_tests = "selected"
 workers = "auto"
 # A selection of at least this share of the test files runs the full suite in workers (brief #980, ADR-0422).
 full_when_share = 0.5
+# Install the pinned CI test tools once when xdist is missing, so builders run the tests in workers
+# as CI does; the full run takes parallel_command, since project_tests is compound (brief #1021, ADR-0436).
+tools_file = "config/ci-tools.txt"
+parallel_command = "(python3 -m pytest --version && ruff --version) >/dev/null 2>&1 || python3 -m pip install -q pytest ruff; AGK_KIT_TESTS=1 python3 -m pytest -c tests/kit/pytest.ini tests/kit tests/kit_dev -q -n {workers}"
 always_full = [
   "tests/kit/conftest.py", "tests/kit/pytest.ini", "tests/kit_dev/conftest.py", "Makefile", "agk.mk", "kit/agk-kit.mk",
   ".github/workflows/**", "scripts/agk/common.py", "scripts/agk/impact.py",
