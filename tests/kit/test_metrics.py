@@ -363,3 +363,23 @@ def test_ac1_the_script_writes_nothing_and_never_calls_gh(repo, tmp_path):
     assert proc.returncode == 0
     assert not marker.exists()
     assert sorted(p.name for p in repo.root.iterdir()) == before
+
+
+def test_a_checklist_save_with_no_readable_time_is_refused_by_name(tmp_path):
+    """REQ-016: brief #1007 answer 4 (red then green: a time that does not read crashed with a
+    TypeError; it is now refused with a CheckError that names the field, never the value)."""
+    import metrics
+
+    target = tmp_path / "checklist.json"
+    with pytest.raises(metrics.CheckError, match="saved_at"):
+        metrics.save_checklist(None, tmp_path, "example/shop", 7, target, "not a time")
+    assert not target.exists()
+
+
+def test_a_job_whose_steps_are_not_a_list_has_no_tests_step():
+    """REQ-016: brief #1007 answer 3 (guard: steps of another kind read as none, as before)."""
+    import metrics
+
+    step = {"name": metrics.TESTS_STEP, "conclusion": "success"}
+    assert metrics.tests_step([{"steps": None}, {"steps": "x"}]) == ("not-run", None)
+    assert metrics.tests_step([{"steps": [step]}])[0] == "ran"

@@ -1,0 +1,1 @@
+- `metrics.py`, `test_map.py`, `sbom.py`, `personal.py` and `front_door.py` pass the pinned type check again; a checklist save whose time does not read is refused by the field's name instead of crashing, and a test path with no file name maps with an empty stem (brief #1007, ADR-0428)
