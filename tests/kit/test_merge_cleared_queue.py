@@ -57,7 +57,8 @@ if args[:2] == ['api', 'graphql']:
     if 'enqueuePullRequest' in query:
         if queue.get('error'):
             sys.stderr.write('gh: %s\\n' % queue['error']); sys.exit(1)
-        out = {'data': {'enqueuePullRequest': {'mergeQueueEntry': {'state': 'QUEUED', 'position': 1}}}}
+        entry = {'state': 'QUEUED', 'position': 1}
+        out = {'data': {'enqueuePullRequest': {'mergeQueueEntry': entry}}}
     else:
         out = {'data': {'repository': {'pullRequest': {
             'id': data['pull'].get('node_id'), 'headRefOid': data['pull']['head']['sha'],
@@ -125,7 +126,7 @@ def merges(made: list[list[str]]) -> list[list[str]]:
     return [c for c in made if "PUT" in c]
 
 
-# --- (a) a cleared head is queued with its exact sha, not merged ----------------------------------
+# --- (a) a cleared head is queued with its exact sha, not merged ---
 
 
 def test_a_cleared_head_is_queued_pinned_to_its_sha_and_not_merged(tmp_path):
@@ -151,7 +152,9 @@ def test_a_head_that_moved_is_refused_by_the_queue(tmp_path):
     """REQ-046: amendment 158 item 2 (`refused: head moved`, exit 3)."""
     error = "Expected head oid does not match the pull request's head (HTTP 200)"
     proc, made = queued_run(tmp_path, queue={"error": error})
-    assert re.fullmatch(rf"merge-cleared #7 {SHA12}: refused: head moved \(.+\)", proc.stdout.strip())
+    assert re.fullmatch(
+        rf"merge-cleared #7 {SHA12}: refused: head moved \(.+\)", proc.stdout.strip()
+    )
     assert proc.returncode == 3
     assert merges(made) == []
 
@@ -164,7 +167,7 @@ def test_a_queue_call_that_fails_otherwise_is_refused_naming_the_rule(tmp_path):
     assert proc.returncode != 0 and merges(made) == []
 
 
-# --- (b) every hold of today still holds first -----------------------------------------------------
+# --- (b) every hold of today still holds first ---
 
 HOLDS = [
     ("no verdict", {"comments": []}, ": held: "),
@@ -187,7 +190,7 @@ def test_every_hold_of_today_holds_before_the_queue(tmp_path, name, saved, expec
     assert graphql(made) == [] and merges(made) == []
 
 
-# --- (c) with the queue off, or in local mode, it merges as today ----------------------------------
+# --- (c) with the queue off, or in local mode, it merges as today ---
 
 
 def test_with_the_queue_off_it_merges_as_today(tmp_path):
@@ -206,7 +209,7 @@ def test_in_local_mode_the_queue_setting_is_not_read_and_it_merges_as_today(tmp_
     assert "rule 2a" not in proc.stdout, proc.stdout
 
 
-# --- (d) the queue call outside Actions is refused --------------------------------------------------
+# --- (d) the queue call outside Actions is refused ---
 
 
 def test_the_queue_call_outside_actions_is_refused_naming_the_rule(tmp_path):
@@ -232,7 +235,7 @@ def test_the_merger_event_no_longer_stops_at_the_queue_setting(tmp_path):
     assert proc.stdout.strip() == f"7 {HEAD}", proc.stdout + proc.stderr
 
 
-# --- answer 4: a pull request removed from the queue ------------------------------------------------
+# --- answer 4: a pull request removed from the queue ---
 
 
 def removal_event(conclusion: str = "failure", event: str = "merge_group") -> dict:
@@ -268,7 +271,9 @@ def test_a_failed_queue_run_posts_one_removal_line(tmp_path):
     """REQ-046: brief #972 answer 4 (amendment 158 item 4)."""
     proc, made = removed_run(tmp_path, removal_event())
     expected = f"Removed from the merge queue: governance failed on {QUEUE_SHA[:12]}"
-    assert [b.splitlines()[0] for b in posted_comments(made)] == [expected], proc.stdout + proc.stderr
+    assert [b.splitlines()[0] for b in posted_comments(made)] == [expected], (
+        proc.stdout + proc.stderr
+    )
     assert f"repos/{REPO}/issues/7/comments" in [a for c in made for a in c]
     assert proc.returncode == 0
 
@@ -299,7 +304,7 @@ def test_anything_but_a_failed_queue_run_posts_nothing(tmp_path, payload):
     assert proc.returncode == 0
 
 
-# --- answer 1 and 3: the workflows -----------------------------------------------------------------
+# --- answer 1 and 3: the workflows ---
 
 
 def on_block(name: str) -> str:
@@ -313,7 +318,9 @@ def on_block(name: str) -> str:
 def test_governance_and_proof_run_on_the_merge_queue(name):
     """REQ-057: brief #972 answers 1 and 7 (the `merge_group` trigger)."""
     block = on_block(name)
-    assert re.search(r"^  merge_group:\n    types: \[checks_requested\]$", block, re.MULTILINE), block
+    assert re.search(r"^  merge_group:\n    types: \[checks_requested\]$", block, re.MULTILINE), (
+        block
+    )
     text = (WORKFLOWS / name).read_text(encoding="utf-8")
     assert "github.event_name == 'merge_group'" in text  # the job is not skipped on the queue's ref
 
@@ -358,7 +365,7 @@ def test_no_workflow_or_guide_names_agk_verdict_a_required_check_of_the_queue():
     assert "agk/verdict" not in section.split("required", 1)[1].split("\n\n", 1)[0]
 
 
-# --- answers 5 and 6: the setting, the doctor line and the guide ------------------------------------
+# --- answers 5 and 6: the setting, the doctor line and the guide ---
 
 
 def test_the_setting_is_committed_off_with_its_adr():
