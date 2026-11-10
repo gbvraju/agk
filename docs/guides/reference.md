@@ -56,6 +56,8 @@ The project's `Makefile`, `pyproject.toml` and tests are untouched. See `docs/sp
 
 `python3 scripts/agk/survey.py [--clone DIR] [--sidecar DIR] [--today YYYY-MM-DD]` lists a codebase for personal mode and never runs it (ADR-0386).
 
+`scripts/agk/forge.py` is the one record interface of personal mode and has no command: a script imports it and calls `get(name, endpoint)`, `create_issue`, `comment` or `record_pull`. `GithubForge` reads GitHub's records and refuses every write; `FilesForge` keeps GitHub-shaped records under `forge/` of the sidecar, with `git` only and no connection (SPEC-0041 rule 6, ADR-0397).
+
 ## Drift audit
 
     python3 scripts/agk/drift_audit.py [--today YYYY-MM-DD]
@@ -79,6 +81,24 @@ cleared). Review rounds, rejection and the cleared head come from comments whose
 sha>`, `Verdict: fix list` or `Verdict: rejected`. The installed workflow `.github/workflows/metrics.yml` runs every
 Monday and files one issue per week labelled `agk-metrics` (it needs `issues: write`); a week with no closed pull
 request is still written. See `docs/specs/0007-metrics.md` and ADR-0016.
+
+## The operations checklist
+
+    python3 scripts/agk/metrics.py --save-checklist [--to FILE] [--days N]
+    python3 scripts/agk/checklist.py [--root DIR] [--days N] [--saved FILE]
+
+The first command saves one file with GET requests only: the document of `facts.py`, the window's comments and Actions runs, the
+briefs and the newest weekly `pr tests:` line. By default it is `agk-checklist.json` in the checkout's git directory, which git
+never tracks. The second reads that file, writes nothing and makes no network call, and prints nine lines `<n>. <name>:
+<yes|partly|no|unknown> <measure>`: machine capacity, conductor runs builders, test optimization, parallel runs, auto-merge,
+model selection, conflict planning, smart assignment and cost per pull request. A point it cannot measure prints `unknown` with
+the reason, never 0; personal mode prints that for the records it does not keep, and local mode for those that need Actions runs.
+The owner's word `AGK-NINE-CHECKLIST` in chat means: run these and give the lines.
+
+A point is `yes` only past its threshold in the optional `[checklist]` table of `agk.toml`: `capacity_use`, `conductor_share`,
+`selected_share` and `usage_share` (shares from 0 to 1), `parallel_peak`, `merge_late`, `merge_failed_runs`, `false_hold_rate`
+and `idle_minutes`. The defaults are in `scripts/agk/checklist.py` and marked (verify) until measured for four weeks. An
+unknown key or a wrong value is refused, naming the setting. See ADR-0374.
 
 ## Release pack
 
