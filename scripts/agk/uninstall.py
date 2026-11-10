@@ -52,15 +52,21 @@ PAUSE_LINE = "paused = true"
 CODEOWNERS = ".github/CODEOWNERS"
 RULESET = "kit/templates/ruleset.json"
 INCLUDE = re.compile(r"^-?include\s+agk\.mk\s*$")
-# The kit's labels: the router's seven states, then the labels of the issues the kit reads or opens.
+# The kit's labels: the router's states and the old `agk:ready` (ADR-0385), then the labels of the
+# issues the kit reads or opens.
 LABELS = (
+    "agk:build",
     "agk:ci-running",
     "agk:ci-red",
     "agk:conflict",
     "agk:review",
     "agk:fix",
+    "agk:question",
     "agk:approve",
+    "agk:owner-merge",
+    "agk:merge-ready",
     "agk:ready",
+    "agk:parked",
     "agk-brief",
     "agk-conductor",
     "agk-shadow",
