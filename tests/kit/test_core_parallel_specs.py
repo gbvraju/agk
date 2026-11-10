@@ -151,10 +151,11 @@ def test_rule_8_moves_in_the_text_spec_0028_amended_it_to():
     assert "`scripts/agk/check_release.py` checks it (SPEC-0028 rules 4 and 5)." in moved
 
 
-def test_spec_0034_keeps_its_own_rules_and_leaves_15_and_16_free():
-    """Brief #387 answer 3 (REQ-041): rules 1 to 14 stay; 15 and 16 wait for 88 and 89."""
+def test_spec_0034_keeps_its_own_rules_and_leaves_16_free():
+    """Brief #387 answer 3 (REQ-041): rules 1 to 14 stay; 15 is amendments 88 and 149 (brief
+    #842); 16 waits for 89."""
     numbers = list(rules(read(SPEC_0034)))
-    own = [str(n) for n in range(1, 15)]
+    own = [str(n) for n in range(1, 16)]
     moved = [str(n + OFFSET) for n in OLD]
     assert numbers == own + moved
     assert "### Independent pull requests (from SPEC-0025)" in read(SPEC_0034)
