@@ -953,3 +953,14 @@ def test_the_script_is_installed_and_the_templates_carry_the_commented_keys():
     assert 'auto_merge_method = "squash"' in lines
     data = tomllib.loads((root / "agk.toml").read_text(encoding="utf-8"))
     assert merge_cleared.auto_merge_setting(data) == "on"
+
+
+def test_a_conductor_fallback_cleared_verdict_clears_like_today():
+    """REQ-046: brief #1013 answer 4 (ADR-0431): the merger reads the fallback as gating."""
+    sha = "c" * 40
+    when = "2026-11-10T10:00:00Z"
+    said = [{"id": 1, "user": {"login": "boss"}, "created_at": when,
+             "body": f"Verdict: cleared {sha} (conductor fallback)\n"}]  # fmt: skip
+    assert merge_cleared.judge(said, sha, ["boss"]) == ("cleared", "")
+    said[0]["body"] = f"Verdict: cleared {sha} (someone else)\n"
+    assert merge_cleared.judge(said, sha, ["boss"])[0] == "held"

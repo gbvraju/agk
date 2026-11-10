@@ -706,6 +706,15 @@ def test_check_verdict_prints_the_problem_of_a_final_line_and_exits_1(proj, stub
     assert "ADR-0146" not in out.stdout  # the rule and the shape, never the body
 
 
+def test_check_verdict_accepts_a_first_line_that_ends_conductor_fallback(proj, stub):
+    """REQ-046: brief #1013 answer 4 (ADR-0431): the fallback marks a verdict, nothing more."""
+    for kind in ("cleared", "fix list", "rejected"):
+        out = check(proj, stub, f"Verdict: {kind} {SHA} (conductor fallback)\n\n1. One.\n")
+        assert out.returncode == 0 and out.stdout.strip() == "ok", kind
+    for text in (f"Verdict: cleared {SHA} (fallback)\n", f"Verdict: cleared {SHA}(conductor fallback)\n"):
+        assert check(proj, stub, text).returncode == 1, text
+
+
 def test_check_verdict_a_first_line_that_names_no_head_is_a_problem(proj, stub):
     for text in ("Verdict: cleared\n", "Report: done\n", "", "Verdict: fix list main\n"):
         out = check(proj, stub, text)
