@@ -1639,7 +1639,9 @@ def configured_test_found(root: Path, dirs: list[str], patterns: list[str]) -> b
         if not base.is_dir():
             continue
         for _here, dirnames, filenames in os.walk(base):
-            dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in adopt.SKIP_DIRS]
+            dirnames[:] = [
+                d for d in dirnames if not d.startswith(".") and d not in adopt.SKIP_DIRS
+            ]
             if any(fnmatch.fnmatch(n, p) for n in filenames for p in patterns):
                 return True
     return False
@@ -1678,6 +1680,7 @@ def frontend_lines(root: Path) -> list[str]:
         f"tests: test_dirs and test_patterns match no test file; {count} files match the "
         "front-end test patterns (setting: test_dirs)"
     ]
+
 
 def secret_scan_line() -> str:
     """Whether gitleaks is on PATH and at which version (brief #632, ADR-0306)."""
