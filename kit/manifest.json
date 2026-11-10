@@ -124,7 +124,8 @@
     "scripts/agk/survey.py",
     "scripts/agk/test_map.py",
     "scripts/agk/test_plan.py",
-    "scripts/agk/traceability.py"
+    "scripts/agk/traceability.py",
+    "scripts/agk/usage.py"
   ],
   "experimental": [
     ".claude/agents/reviewer.md",
