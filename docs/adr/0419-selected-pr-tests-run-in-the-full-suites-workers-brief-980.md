@@ -38,7 +38,9 @@ took 14.7 to 17.5 minutes in one process, against 6.4 minutes for the whole suit
 
 A wide pull request takes about the full suite's minutes, not up to 23 minutes in one process. Every installed
 project with pytest-xdist importable gains the workers in its pull request step and in prepush. A test that is not
-safe in parallel, already a failure of the full suite, can now also fail a selected run.
+safe in parallel, already a failure of the full suite, can now also fail a selected run. Under the default share a
+project with few test files runs its full suite more often (one of two files is half); two kit test files whose invented
+trees held one or two test files gain spare files so that their selection stays below it.
 
 ## Residual
 

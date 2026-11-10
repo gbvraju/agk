@@ -86,6 +86,9 @@ def project(
             "src/other.py": "base\n",
             "tests/billing/test_pay.py": "# guards pay\n",
             "tests/test_other.py": "# guards other\n",
+            # Two more, so that one selected file stays below `full_when_share` (brief #980).
+            "tests/test_spare_one.py": "# guards nothing\n",
+            "tests/test_spare_two.py": "# guards nothing\n",
         },
     )
     git(root, "add", "-A")

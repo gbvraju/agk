@@ -357,3 +357,48 @@ def test_the_selected_file_list_is_the_same_with_workers(tmp_path, outside):
         seen.append((sorted(files), selected))
     assert seen[0] == seen[1]
     assert seen[0][0] == ["tests/kit/test_pay.py"]
+
+
+def prepush_module():
+    sys.path.insert(0, str(ROOT / "scripts" / "agk"))
+    import prepush
+
+    return prepush
+
+
+@pytest.mark.parametrize(
+    ("command", "python"),
+    [
+        ("python3 -m pytest -q a.py", "python3"),
+        ("pip -q install x || true; AGK_KIT_TESTS=1 python3 -m pytest -q a.py", "python3"),
+        ("(cd x; python3 -m pytest a.py)", None),
+        ("echo x # ; python3 -m pytest a.py", None),
+        ("echo boom; exit 1", None),
+        ("npm test -- a.js", None),
+    ],
+)
+def test_the_pytest_command_that_n_reaches(command, python):
+    """REQ-051: brief #980 answer 2 (only a pytest command that a final `-n` reaches gains it)."""
+    assert prepush_module().last_pytest(command) == python
+
+
+def test_prepush_selected_runs_gain_the_workers_and_full_is_untouched(tmp_path, monkeypatch):
+    """REQ-051: brief #980 answer 2, context local (prepush regression runs take the rule)."""
+    prepush = prepush_module()
+    monkeypatch.setattr(prepush, "workers_setting", lambda root: 4)
+    monkeypatch.setattr(prepush, "imports_xdist", lambda python, folder: True)
+    sets = [
+        ("kit", "python3 -m pytest -q a.py", ".", "why"),
+        ("web", "npm test -- a.js", ".", "why"),
+        ("full", "make test", ".", "why"),
+    ]
+    made, lines = prepush.selected_workers(tmp_path, sets)
+    assert [c for _, c, _, _ in made] == [
+        "python3 -m pytest -q a.py -n 4",
+        "npm test -- a.js",
+        "make test",
+    ]
+    assert lines == [prepush.SELECTED_NOT_PYTEST.format(name="web")]
+    monkeypatch.setattr(prepush, "imports_xdist", lambda python, folder: False)
+    made, lines = prepush.selected_workers(tmp_path, sets[:1])
+    assert made == sets[:1] and lines == [prepush.SELECTED_NO_XDIST]
