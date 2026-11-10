@@ -6,7 +6,7 @@
 - Related: ADR-0020, ADR-0430, ADR-0362, ADR-0425, SPEC-0023, SPEC-0034, amendment 160, brief #1012, brief #1013, plan #661
 - Requirements: REQ-046, REQ-054
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `.claude/`, `kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `.claude/`, `kit/`, `agk.toml`
 
 ## Context
 
