@@ -12,13 +12,20 @@ a SPEC-0021 rule 3a record of it on the merge base is verified by its Final comm
 comments of `--comments FILE` (the workflow's `Record comments` step), or, without the option, of
 the file `AGK_RECORD_COMMENTS` names (merge_cleared.py's after-merge run and prepush, amendment
 122); without either, while such a record exists, the check fails closed and names the option.
+
+Brief #924 (SPEC-0049 rule 13, ADR-0324): a change set that changes the `[caps]` table of
+`agk.toml` against the merge base (added, removed or a value changed) also needs exactly one body
+line `Caps-evidence: scorecard #<issue>:<YYYY-MM-DD> usage <S>/<M>/<L>`, each size
+`<tokens P50>,<tokens P85>,<hours P50>,<hours P85>`; it is in addition to the ADR, never instead.
 """
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 import sys
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -53,6 +60,70 @@ OWN_ADR = (
     "kit/templates/ruleset.json",
     ".github/CODEOWNERS",
 )
+
+
+CONFIG = "agk.toml"
+CAPS_EVIDENCE = "Caps-evidence:"
+CAPS_RULE = "SPEC-0049 rule 13 (setting: caps)"
+_TOKENS = r"(?:0|[1-9]\d*)"
+_HOURS = r"(?:0|[1-9]\d*)(?:\.\d+)?"
+_SIZE = rf"({_TOKENS}),({_TOKENS}),({_HOURS}),({_HOURS})"
+CAPS_FORM = re.compile(
+    rf"Caps-evidence: scorecard #[1-9]\d*:(\d{{4}}-\d{{2}}-\d{{2}}) usage {_SIZE}/{_SIZE}/{_SIZE}"
+)
+CAPS_SHAPE = (
+    f"'{CAPS_EVIDENCE} scorecard #<issue>:<YYYY-MM-DD> usage <S>/<M>/<L>', each size "
+    "'<tokens P50>,<tokens P85>,<hours P50>,<hours P85>' with P50 not above P85"
+)
+
+
+def caps_table(text: str | None) -> tuple[bool, object]:
+    """(readable, the `[caps]` value or None) of one agk.toml text; no file reads as no table."""
+    if text is None:
+        return True, None
+    try:
+        return True, tomllib.loads(text).get("caps")
+    except tomllib.TOMLDecodeError:
+        return False, None
+
+
+def caps_changed(root, mb, changed: dict[str, str]) -> bool:
+    """Whether the change set changes the `[caps]` table; an unreadable side counts as a change."""
+    if CONFIG not in changed:
+        return False
+    path = root / CONFIG
+    new = path.read_text(encoding="utf-8") if path.is_file() else None
+    old_ok, old = caps_table(show(root, mb, CONFIG))
+    new_ok, new_caps = caps_table(new)
+    return not (old_ok and new_ok) or old != new_caps
+
+
+def caps_line_ok(line: str) -> bool:
+    form = CAPS_FORM.fullmatch(line)
+    if form is None:
+        return False
+    try:
+        datetime.date.fromisoformat(form.group(1))
+    except ValueError:
+        return False
+    nums = [float(x) for x in form.groups()[1:]]
+    return all(nums[i] <= nums[i + 1] for i in range(0, len(nums), 2))
+
+
+def caps_problems(root, mb, changed: dict[str, str], argv: list[str] | None) -> list[str]:
+    """[] unless the `[caps]` table changes without exactly one well-formed line (rule 13)."""
+    if not caps_changed(root, mb, changed):
+        return []
+    body = body_text(argv) or ""
+    lines = [ln.rstrip() for ln in body.splitlines() if ln.startswith(CAPS_EVIDENCE)]
+    if len(lines) != 1:
+        return [
+            f"{CAPS_RULE}: a change of the [caps] table needs exactly one '{CAPS_EVIDENCE}' "
+            f"line, the body has {len(lines)}"
+        ]
+    if not caps_line_ok(lines[0]):
+        return [f"{CAPS_RULE}: the '{CAPS_EVIDENCE}' line must be {CAPS_SHAPE}"]
+    return []
 
 
 def is_adr(path: str, status: str) -> bool:
@@ -249,19 +320,27 @@ def main(argv: list[str] | None = None) -> int:
                 classes.append(entry)
             break
 
+    caps = caps_problems(root, mb, changed, argv)
+    ok = None
     if not classes:
-        print(f"ok {NAME}")
+        ok = f"ok {NAME}"
+    elif release_pull_request(root, mb, comments_arg(argv)):
+        ok = f"ok {NAME} (a release pull request)"
+    elif covering_adrs(root, mb, changed, classes):
+        ok = f"ok {NAME} (protected change covered by an ADR)"
+    else:
+        problems = covered_by_problems(
+            root, mb, body_text(argv), changed, classes, comments_arg(argv)
+        )
+        if problems == []:
+            ok = f"ok {NAME} (protected change covered by an Accepted ADR named in '{COVERED_BY}')"
+    if ok is not None and not caps:
+        print(ok)
         return 0
-    if release_pull_request(root, mb, comments_arg(argv)):
-        print(f"ok {NAME} (a release pull request)")
-        return 0
-    if covering_adrs(root, mb, changed, classes):
-        print(f"ok {NAME} (protected change covered by an ADR)")
-        return 0
-    problems = covered_by_problems(root, mb, body_text(argv), changed, classes, comments_arg(argv))
-    if problems == []:
-        print(f"ok {NAME} (protected change covered by an Accepted ADR named in '{COVERED_BY}')")
-        return 0
+    for problem in caps:
+        print(f"FAIL {NAME}: {problem}")
+    if ok is not None:
+        return 1
     for problem in problems or []:
         print(f"FAIL {NAME}: {problem}")
     for entry in classes:
