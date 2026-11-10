@@ -628,6 +628,56 @@ def test_a_saved_file_that_is_not_json_is_unknown_not_a_crash(tmp_path, capsys):
     assert {status for status, _ in found.values()} == {"unknown"}
 
 
+def test_a_record_with_no_time_is_skipped_not_a_crash(tmp_path, capsys):
+    """REQ-016: brief #1004 answer 3: a take, a brief, a verdict and a closing time with no
+    readable time are skipped as a missing field is; the command still prints its nine lines."""
+    untimed = [comment(22, "taken: s22 2026-03-10", None), comment(23, "taken: s23 2026-03-10", "x")]
+    stale = pull(62, 32, state="open", merged_at=None)
+    stale["verdicts"] = [{"kind": "cleared", "sha": "a" * 40, "at": None}]
+    document = saved(
+        comments=[*takes(20, at=day(9)), *untimed, report(1)],
+        briefs=[brief(30, None), brief(31, "not a time", "not a time"), brief(20, day(1), "x")],
+        facts={"pull_requests": [stale], "flow": {"stall_hours": 4}},
+    )
+    found = lines_of(capsys, project(tmp_path, document, holds=hold(None, at=None)), tmp_path)
+    assert "peak 1 of max_builders 4" in found[1][1]
+    assert "cleared unmerged over 20 min 0" in found[5][1]
+    assert found[7] == ("unknown", "no hold recorded in the window")
+    # brief 20, open by its unreadable close, is ready from 01:00 until its take at 09:00
+    assert "idle builder-minutes 480" in found[8][1]
+
+
+def test_a_read_that_returned_nothing_is_unknown_not_a_crash(tmp_path, capsys):
+    """REQ-016: brief #1004 answer 3: saved parts that are missing or null read as unknown."""
+    open_pull = pull(63, 33, state="open", merged_at=None, verdicts=None)
+    document = saved(
+        comments=None,
+        runs=None,
+        briefs=None,
+        verdict_authors=None,
+        conductor_issues=None,
+        window_tests=None,
+        facts={"pull_requests": None, "flow": None},
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    for number in (1, 2, 4, 9):
+        assert found[number] == ("unknown", "the comments were not saved")
+    assert found[5] == ("unknown", "the runs or the pull requests were not saved")
+    assert found[8] == ("unknown", "the briefs or the comments were not saved")
+    nulls = saved(facts=None, runs=[], comments=[report(0)])
+    del nulls["briefs"]
+    again = tmp_path / "again"
+    again.mkdir()
+    found = lines_of(capsys, project(again, nulls), again)
+    assert found[5] == ("unknown", "the runs or the pull requests were not saved")
+    assert found[8] == ("unknown", "the briefs or the comments were not saved")
+    pulls = saved(facts={"pull_requests": [open_pull], "flow": {"stall_hours": "x"}})
+    third = tmp_path / "third"
+    third.mkdir()
+    found = lines_of(capsys, project(third, pulls), third)
+    assert "cleared unmerged over 20 min 0" in found[5][1]
+
+
 def test_it_reads_only_the_standard_library_and_common():
     """REQ-054: brief #799 answer 1: no network call, nothing but common.py."""
     source = (KIT_ROOT / "scripts" / "agk" / "checklist.py").read_text(encoding="utf-8")
