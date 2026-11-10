@@ -1565,6 +1565,10 @@ SLOT_LINE = re.compile(
     r"Slot: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+) (\S+)"
 )
 POOL_STOP = re.compile(r"Pool: stop(?: .*)?")
+SLOT_RAN = re.compile(
+    r"last run: (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) to (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)"
+)
+SLOT_DECIDED = re.compile(r"decided: (.+)")
 SLOT_MINUTES = 10  # ADR-0368: a dead holder is replaced by the next staggered start
 WATCH_BOUND = 300  # seconds: a slot's `watch --assign` returns by then with no event (ADR-0368)
 RENEW_EVERY = 240  # seconds between renewals during one watch
@@ -1603,6 +1607,15 @@ def slot_holder(found: tuple[dict, re.Match] | None, now: datetime) -> tuple[str
     return (found[1].group(4), end.strftime("%Y-%m-%dT%H:%M:%SZ")) if now < end else None
 
 
+def slot_log(comment: dict) -> tuple[str, str, str] | None:
+    """(start, end, decision) of the last run a slot's marker records (brief #998, ADR-0425): the
+    lines after its first, `last run: <start> to <end>` and `decided: <line>`; None without them."""
+    lines = [x.strip() for x in str(comment.get("body") or "").splitlines()[1:]]
+    ran = next((m for x in lines if (m := SLOT_RAN.fullmatch(x))), None)
+    said = next((m for x in lines if (m := SLOT_DECIDED.fullmatch(x))), None)
+    return (ran.group(1), ran.group(2), said.group(1) if said else "none") if ran else None
+
+
 def slot_mark(root, name: str) -> Path:
     """The file in the git directory that holds this checkout's run name for a slot."""
     return inbox_mark(root, name).with_name(f"slot-{name}")
@@ -1611,13 +1624,35 @@ def slot_mark(root, name: str) -> Path:
 def slot_run(root, name: str) -> str:
     """This checkout's run name for the slot, empty when it has taken none."""
     mark = slot_mark(root, name)
-    return mark.read_text(encoding="utf-8").strip() if mark.exists() else ""
+    words = mark.read_text(encoding="utf-8").split() if mark.exists() else []
+    return words[0] if words else ""
 
 
-def slot_lease(root, mode: str, name: str) -> int:
+def slot_start(root, name: str) -> str:
+    """The UTC start of this checkout's run of the slot, recorded by its take; empty when none."""
+    mark = slot_mark(root, name)
+    words = mark.read_text(encoding="utf-8").split() if mark.exists() else []
+    return words[1] if len(words) > 1 else ""
+
+
+def log_lines(found, start: str, stamp: str, decided: str | None, mode: str) -> str:
+    """The marker's log lines after its first (ADR-0425): a decision writes the run's start, now
+    and the decision; a release closes the run and keeps its decision; otherwise they are kept."""
+    old = slot_log(found[0]) if found else None
+    if decided is not None:
+        return f"\nlast run: {start or stamp} to {stamp}\ndecided: {decided}"
+    if mode == "--release" and start:
+        kept = old[2] if old and old[0] == start else "none"
+        return f"\nlast run: {start} to {stamp}\ndecided: {kept}"
+    return f"\nlast run: {old[0]} to {old[1]}\ndecided: {old[2]}" if old else ""
+
+
+def slot_lease(root, mode: str, name: str, decided: str | None = None) -> int:
     """Take, renew or release a slot's lease: one marker comment per slot on the one open
     `agk-conductor` issue, edited in place, valid 10 minutes; this checkout's run name is kept in
-    the git directory. A run that finds the slot another's exits 3 and writes nothing."""
+    the git directory. A run that finds the slot another's exits 3 and writes nothing. `--hold`
+    checks that this run holds it and writes nothing; `decided` is written with the lease as the
+    run's log (brief #998, ADR-0425)."""
     repo = repo_name(root)
     issue = conductor_issue(repo)
     path = f"repos/{repo}/issues/{issue}/comments"
@@ -1640,13 +1675,17 @@ def slot_lease(root, mode: str, name: str) -> int:
             mark.unlink(missing_ok=True)
             print(f"slot: {name} free")
             return 0
-    elif mode == "--renew" and not (
+    elif mode in ("--renew", "--hold") and not (
         run and found and found[1].group(1) == "active" and found[1].group(4) == run
     ):
         print(f"slot: {name} is not held by this run {SLOT_SETTING}")
         return SLOT_ENDS
+    if mode == "--hold":
+        return 0
+    start = stamp if mode == "--take" else slot_start(root, name)
     run = run or secrets.token_hex(4)
-    text = f"body=Slot: {state} {stamp} {name} {run}"
+    log = log_lines(found, start, stamp, decided, mode)
+    text = f"body=Slot: {state} {stamp} {name} {run}{log}"
     done = (
         gh(f"repos/{repo}/issues/comments/{found[0].get('id')}", "-f", text, method="PATCH")
         if found
@@ -1659,7 +1698,7 @@ def slot_lease(root, mode: str, name: str) -> int:
         print(f"slot: {name} released")
         return 0
     mark.parent.mkdir(parents=True, exist_ok=True)
-    mark.write_text(f"{run}\n", encoding="utf-8")
+    mark.write_text(f"{run} {start}\n" if start else f"{run}\n", encoding="utf-8")
     if mode == "--take":
         again = pages(path)  # two runs at the same moment: the marker read back decides
         if again is None:
@@ -1767,12 +1806,24 @@ def follow_up_owed(
 
 
 def slot_next(root, name: str) -> int:
-    """One pass of a slot's loop: renew the lease, then print its one next step as the last line:
-    `stop`, `follow-up pr #n <why>` (`conflict`, `fix list` or `answer`), `assign #b [build (x)]`,
-    `wait pr #n`, `take` (`next --take`, after 10 minutes with no `Assign:`), `wait`, or `request`
-    (no `Request:` or `Assign:` yet)."""
-    if code := slot_lease(root, "--renew", name):
+    """One pass of a slot's loop: check the lease, decide, then renew it with the decision as the
+    run's log in one edit (brief #998, ADR-0425; on `stop` the release carries it) and print the one
+    next step as the last line: `stop`, `follow-up pr #n <why>` (`conflict`, `fix list` or
+    `answer`), `assign #b [build (x)]`, `wait pr #n`, `take` (`next --take`, after 10 minutes with
+    no `Assign:`), `wait`, or `request` (no `Request:` or `Assign:` yet)."""
+    if code := slot_lease(root, "--hold", name):
         return code
+    line = slot_decide(root, name)
+    if line == "stop":
+        release_slot(root, name, line)  # every exit of a run releases its lease (ADR-0368)
+    elif code := slot_lease(root, "--renew", name, line):
+        return code
+    print(line)
+    return 0
+
+
+def slot_decide(root, name: str) -> str:
+    """The next step of a slot that holds its lease, as `slot_next` prints it."""
     repo = repo_name(root)
     issue = conductor_issue(repo)
     comments = pages(f"repos/{repo}/issues/{issue}/comments")
@@ -1781,40 +1832,32 @@ def slot_next(root, name: str) -> int:
     allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None) or []}
     approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
     if any(POOL_STOP.fullmatch(first_line(c)) and author_of(c) in approvers for c in comments):
-        release_slot(root, name)  # every exit of a run releases its lease (ADR-0368)
-        print("stop")
-        return 0
+        return "stop"
     owned = owned_pulls(root, repo, name)
     for pull in owned:
         if why := follow_up_owed(repo, pull, allowed, approvers):
-            print(f"follow-up pr #{pull.get('number')} {why}")
-            return 0
+            return f"follow-up pr #{pull.get('number')} {why}"
     lines = [(c, m) for c in comments if (m := assign_line(c, name, allowed))]
     if lines:
         line, match = max(lines, key=lambda x: x[0].get("id", 0))
         if match.group(5):
             if not reports_after(repo, int(match.group(5)), line.get("id", 0)):
-                print(f"follow-up pr #{match.group(5)} {match.group(6)}")
-                return 0
+                return f"follow-up pr #{match.group(5)} {match.group(6)}"
         elif match.group(2) != "none" and not owned:
             used = spent(repo, name, line)
             if used is None:
                 raise CheckError("slot: the comments of the briefs cannot be read")
             if not used:
-                print(f"assign {match.group(2)}")
-                return 0
+                return f"assign {match.group(2)}"
     if owned:
-        print(f"wait pr #{owned[0].get('number')}")
-        return 0
+        return f"wait pr #{owned[0].get('number')}"
     asked = [c for c in comments if str(c.get("body") or "").startswith(f"Request: {name} ")]
     times = [moment(c["created_at"]) for c in [*asked, *(x[0] for x in lines)]]
     if not times:
-        print("request")
-    elif datetime.now(UTC) - max(times) >= timedelta(minutes=SLOT_IDLE_MINUTES):
-        print("take")
-    else:
-        print("wait")
-    return 0
+        return "request"
+    if datetime.now(UTC) - max(times) >= timedelta(minutes=SLOT_IDLE_MINUTES):
+        return "take"
+    return "wait"
 
 
 def quietly(act, *args) -> tuple[int, str]:
@@ -1825,10 +1868,10 @@ def quietly(act, *args) -> tuple[int, str]:
     return code, out.getvalue().strip()
 
 
-def release_slot(root, name: str) -> None:
+def release_slot(root, name: str, decided: str | None = None) -> None:
     """Release the slot on a run's way out; a release that cannot be written is left to expire."""
     with contextlib.suppress(CheckError):
-        quietly(slot_lease, root, "--release", name)
+        quietly(slot_lease, root, "--release", name, *([] if decided is None else [decided]))
 
 
 def is_slot(root, me: str) -> bool:

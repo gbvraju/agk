@@ -672,3 +672,16 @@ def test_no_governance_step_names_the_scanner() -> None:
     paths = [".github/workflows/governance.yml", "Makefile", "agk.mk", "scripts/agk/prepush.py"]
     for path in paths:
         assert "osv-scanner" not in (root / path).read_text(encoding="utf-8").lower(), path
+
+
+@pytest.mark.parametrize("value", [None, "GHSA-aaaa-bbbb-cccc", {"id": "x"}, ["not an id!"]])
+def test_advisory_ids_of_another_form_are_refused(value):
+    """REQ-016: brief #1007 answer 3 (guard: a value that is not a list of ids is refused)."""
+    with pytest.raises(ValueError):
+        sbom.advisory_ids(value)
+
+
+def test_advisory_ids_of_rule_form_are_kept_in_order():
+    """REQ-016: brief #1007 answer 3 (guard: a list of ids is returned as a new list)."""
+    ids = ["GHSA-aaaa-bbbb-cccc", "CVE-2026-0001"]
+    assert sbom.advisory_ids(ids) == ids and sbom.advisory_ids(ids) is not ids

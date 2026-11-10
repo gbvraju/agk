@@ -764,6 +764,7 @@ def sweep(root) -> int:
             lines.append(found)
     lines += slot_lines(root, repo, issues, every, now)
     lines += stall_report(root, repo)
+    lines += unacted_lines(root, repo, now)
     print("\n".join(lines))
     return 0
 
@@ -967,7 +968,69 @@ def slot_lines(root, repo: str, issues: list, every, now: datetime) -> list[str]
             state = "dead (no lease yet)" if since == "no lease yet" else f"dead since {since}"
         else:
             state = f"working (#{takes[name]})" if name in takes else "idle"
-        lines.append(f"slot {name}: {state}")
+        lines.append(f"slot {name}: {state}{last_run(comments, name, allowed, ', ')}")
+    return lines
+
+
+def last_run(comments: list, name: str, allowed: set[str], lead: str) -> str:
+    """`<lead>last run <hh:mm> decided <...>` from the slot's marker (brief #998, ADR-0425), or
+    nothing when the marker records no run."""
+    found = session.slot_marker(comments, name, allowed)
+    log = session.slot_log(found[0]) if found else None
+    start = when(log[0]) if log else None
+    return f"{lead}last run {start:%H:%M} decided {log[2]}" if log and start else ""
+
+
+UNACTED_MINUTES = 75  # brief #998 answer 2: past one hourly run of the slot and its margin
+
+
+def acted(decided: str, match) -> bool:
+    """Whether a run's decision is the assignment `match`: `assign #b ...` or `follow-up pr #n`."""
+    if match.group(5):
+        return decided.startswith(f"follow-up pr #{match.group(5)} ")
+    return decided == f"assign {match.group(2)}"
+
+
+def spent_line(repo: str, name: str, line: dict, match) -> bool | None:
+    """Whether an `Assign:` was acted on since: a later `taken:` of the slot for a brief, a later
+    `Report:` on the pull request for a follow-up; None when that cannot be read."""
+    if match.group(5):
+        try:
+            return session.reports_after(repo, int(match.group(5)), line.get("id", 0))
+        except CheckError:
+            return None
+    return session.spent(repo, name, line)
+
+
+def unacted_lines(root, repo: str, now: datetime) -> list[str]:
+    """One `UNACTED:` line per slot whose newest `Assign:` no run acted on (brief #998, ADR-0425):
+    a run started after it and decided otherwise, or none started after it within 75 minutes; a
+    spent assignment, `none`, or what cannot be read adds no line. None with `start`."""
+    if session.builder_start(root) != "assign":
+        return []
+    comments, allowed, names = assignments(root, repo)
+    lines = []
+    for name in names:
+        said = [(c, m) for c in comments if (m := session.assign_line(c, name, allowed))]
+        if not said:
+            continue
+        line, match = max(said, key=lambda x: x[0].get("id", 0))
+        posted = when(str(line.get("created_at")))
+        if match.group(2) == "none" or posted is None:
+            continue
+        found = session.slot_marker(comments, name, allowed)
+        log = session.slot_log(found[0]) if found else None
+        start = when(log[0]) if log else None
+        if start is not None and start >= posted:
+            if acted(log[2], match):
+                continue
+        elif now - posted <= timedelta(minutes=UNACTED_MINUTES):
+            continue
+        if spent_line(repo, name, line, match) is not False:
+            continue
+        minutes = int((now - posted).total_seconds() // 60)
+        tail = last_run(comments, name, allowed, "; ") or "; no run recorded"
+        lines.append(f"UNACTED: {session.first_line(line)} ({minutes} min{tail})")
     return lines
 
 

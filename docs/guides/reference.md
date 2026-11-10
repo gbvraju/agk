@@ -746,4 +746,4 @@ configuration:
   mypy:    [tool.mypy] exclude = ['^scripts/agk/', '^\.claude/hooks/']
 ```
 
-Licence: Apache-2.0.
+Licence: proprietary, all rights reserved (see LICENSE).

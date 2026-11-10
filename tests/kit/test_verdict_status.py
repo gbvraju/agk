@@ -248,12 +248,13 @@ def test_the_merge_queue_replaces_the_re_prove_state(tmp_path):
 
 
 def test_with_the_merge_queue_the_command_does_not_merge(tmp_path):
-    """REQ-046: brief #853 answer 4 (the merger does not merge)."""
+    """REQ-046: brief #853 answer 4 (the merger does not merge); brief #972 answer 2 turns the
+    hold into the queue, joined only by the merger job on GitHub Actions."""
     root = repo(tmp_path, toml(ON + "merge_queue = true\n"))
     bin_dir, log = fake_gh(tmp_path, comments=[cleared()])
     proc = run(root, bin_dir, "--pr", "7", "--sha", HEAD)
-    assert proc.stdout.strip().endswith("held: merge queue (setting flow.merge_queue)")
-    assert proc.returncode == 3
+    assert ": refused: the merge queue is joined only by the merger job" in proc.stdout
+    assert proc.returncode == 1
     assert not any("PUT" in call for call in calls(log))
 
 

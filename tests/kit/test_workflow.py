@@ -87,7 +87,8 @@ def test_ac2_every_check_step_runs_unless_cancelled():
     for name, block in checks.items():
         # brief #216: on an edited description only the steps that read the body run
         assert re.search(
-            r"        if: \$\{\{ !cancelled\(\)( && github\.event\.action != 'edited')?"
+            r"        if: \$\{\{ !cancelled\(\)( && github\.event_name != 'merge_group')?"
+            r"( && github\.event\.action != 'edited')?"  # merge_group: brief #972, ADR-0417
             r"( && steps\.status\.outputs\.skip != 'true')?"
             r" && steps\.paused\.outputs\.paused != 'true' \}\}\n",  # brief #348
             block,
@@ -316,8 +317,9 @@ def test_ac1_check_specs_reads_the_pull_request_body_from_a_file_written_first()
     assert "github.event.pull_request.body" in blocks["PR body file"]
     assert 'check_specs.py --body "$RUNNER_TEMP/pr-body.md"' in blocks["check_specs"]
     assert (
-        "if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}" in blocks["check_specs"]
-    )  # brief #348
+        "if: ${{ !cancelled() && github.event_name != 'merge_group' && "
+        "steps.paused.outputs.paused != 'true' }}" in blocks["check_specs"]
+    )  # brief #348; skipped on the merge queue's commit (brief #972, ADR-0417)
 
 
 def test_rule9_the_pr_body_step_is_given_a_saved_copy_of_the_briefs():

@@ -811,13 +811,18 @@ def latest_ran(items: list[dict]) -> tuple[str, dict | None]:
     return "ran", max(ran, key=lambda i: str(i.get("started_at") or ""))
 
 
+def as_list(value: object) -> list:
+    """VALUE when it is a list; anything else reads as none."""
+    return value if isinstance(value, list) else []
+
+
 def tests_step(jobs: list[dict]) -> tuple[str, int | None]:
     """The `Project tests` step of a run's jobs: (`ran`, its seconds or None), (`not-run`, None)
     or (`unknown`, None); the latest attempt that ran it counts."""
     steps = [
         s
         for j in jobs
-        for s in (j.get("steps") if isinstance(j.get("steps"), list) else [])
+        for s in as_list(j.get("steps"))
         if isinstance(s, dict) and s.get("name") == TESTS_STEP
     ]
     state, found = latest_ran(steps)
@@ -1527,6 +1532,8 @@ def save_checklist(src: Any, root: Path, repo: str, days: int, target: Path, now
     import facts
 
     end = stamp(now)
+    if end is None:
+        raise CheckError("the checklist's time does not read (field: saved_at)")
     start_of_window = end - timedelta(days=days)
     since = start_of_window.strftime("%Y-%m-%dT%H:%M:%SZ")
     weeks = max(1, (days + 6) // 7)

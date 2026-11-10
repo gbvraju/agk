@@ -371,7 +371,9 @@ def calls(log: Path) -> list[list[str]]:
 
 
 def run(root: Path, bin_dir: Path, *args: str):
-    env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")}
+    # GITHUB_ACTIONS: a CI runner sets it, and the merge queue path reads it (brief #972)
+    drop = ("GITHUB_BASE_REF", "AGK_BASE", "CI", "GITHUB_ACTIONS")
+    env = {k: v for k, v in os.environ.items() if k not in drop}
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     temp = bin_dir.parent / "temp"  # the merge-cleared lock of this test alone
     temp.mkdir(exist_ok=True)
@@ -880,7 +882,8 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     comment in `post_once`; brief #853, ADR-0387, adds the commit status, one POST in
     `set_status`; brief #959, ADR-0411, adds the close of a finished brief, one comment and one
     PATCH, in `close_brief` alone, and the note on an issue left open, one comment, in
-    `close_after_merge` alone)."""
+    `close_after_merge` alone; brief #972, ADR-0417, adds the one GraphQL call of the merge
+    queue, in `queue_call` alone, made only inside GitHub Actions)."""
     text = SCRIPT.read_text(encoding="utf-8")
     brief = text.split("\ndef close_brief(", 1)[1].split("\ndef ", 1)[0]
     assert brief.count('"POST"') == 1 and brief.count('"PATCH"') == 1
@@ -918,6 +921,10 @@ def test_the_script_writes_no_file_and_makes_no_other_write():
     assert "(home / RECORD_COMMENTS).write_text(" in run_body
     text = text.replace("body.write_text(text", "body.(text")
     text = text.replace("(home / RECORD_COMMENTS).write_text(", "(home / RECORD_COMMENTS).(")
+    queue = text.split("\ndef queue_call(", 1)[1].split("\ndef ", 1)[0]  # brief #972, ADR-0417
+    assert queue.count('gh_api(["graphql", *fields], merge_env())') == 1
+    assert text.count("queue_call([") == 2 and '"--method"' not in queue
+    text = text.replace(queue, "")
     words = ('"PATCH"', '"DELETE"', ".write_text(", "open(", '"push"', "--jq")
     words += ("shell=True", "graphql", '"tag"', "/reviews")
     for word in words:  # `subprocess.Popen(` of the governance run is not a file open (#556)

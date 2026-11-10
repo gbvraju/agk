@@ -3,7 +3,7 @@ name = "agk"
 version = "0.0.0"
 description = "Agentic Governance Kit"
 requires-python = ">=3.11"
-license = "Apache-2.0"
+license = "LicenseRef-Proprietary"
 dependencies = []
 
 [tool.agk]

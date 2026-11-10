@@ -426,7 +426,8 @@ def test_the_merger_job_runs_exactly_the_guarded_command_from_the_default_branch
     assert "ref: ${{ github.event.repository.default_branch }}" in job_text
     assert "GH_TOKEN: ${{ github.token }}" in job_text
     assert set(re.findall(r"secrets\.\w+", job_text)) == {"secrets.AGK_MERGE_TOKEN"}
-    assert job_text.count(' || echo "merger: ') == 4  # with the one above, every command ends green
+    # with the one above, every command ends green; brief #972 adds the removal line's step
+    assert job_text.count(' || echo "merger: ') == 5
     assert "startsWith(github.event.comment.body, 'Verdict:')" in job_text
     assert "github.event.workflow_run.conclusion == 'success'" in job_text
     assert "github.event.workflow_run.event == 'pull_request'" in job_text
