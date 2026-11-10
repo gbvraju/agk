@@ -371,7 +371,9 @@ def calls(log: Path) -> list[list[str]]:
 
 
 def run(root: Path, bin_dir: Path, *args: str):
-    env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")}
+    # GITHUB_ACTIONS: a CI runner sets it, and the merge queue path reads it (brief #972)
+    drop = ("GITHUB_BASE_REF", "AGK_BASE", "CI", "GITHUB_ACTIONS")
+    env = {k: v for k, v in os.environ.items() if k not in drop}
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     temp = bin_dir.parent / "temp"  # the merge-cleared lock of this test alone
     temp.mkdir(exist_ok=True)
