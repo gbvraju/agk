@@ -23,7 +23,7 @@ NEW_CAPS_TOML = '[project]\nname = "example"\n\n[caps]\nS = { tokens = 700000, h
 NO_CAPS_TOML = '[project]\nname = "example"\n'
 GOOD = "Caps-evidence: scorecard #812:2026-11-08 usage 1,2,0.5,1.5/3,4,2,3/5,6,4,7"
 # A value that must never appear in a refusal (principle 8): the new token cap.
-SECRET_FREE_VALUE = "700000"
+CAP_FIGURE = "700000"
 
 
 def make_base(repo, toml: str | None = BASE_TOML):
@@ -61,7 +61,7 @@ def test_req056_caps_change_without_the_line_fails_naming_the_rule(repo, tmp_pat
     assert proc.returncode == 1
     assert "SPEC-0049 rule 13" in proc.stdout
     assert "setting: caps" in proc.stdout
-    assert SECRET_FREE_VALUE not in proc.stdout
+    assert CAP_FIGURE not in proc.stdout
 
 
 def test_req056_caps_change_without_a_body_fails(repo):
@@ -106,7 +106,7 @@ def test_req056_malformed_line_fails_naming_the_rule_not_the_value(repo, tmp_pat
     assert "SPEC-0049 rule 13" in proc.stdout
     assert "setting: caps" in proc.stdout
     assert line not in proc.stdout
-    assert SECRET_FREE_VALUE not in proc.stdout
+    assert CAP_FIGURE not in proc.stdout
 
 
 def test_req056_other_table_change_needs_no_line(repo, tmp_path):
