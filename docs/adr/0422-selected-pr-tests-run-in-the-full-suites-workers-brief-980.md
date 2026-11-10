@@ -1,4 +1,4 @@
-# ADR-0419: Selected pull request tests run in the full suite's workers
+# ADR-0422: Selected pull request tests run in the full suite's workers
 
 - Status: Proposed
 - Date: 2026-11-10

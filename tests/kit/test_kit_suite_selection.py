@@ -8,7 +8,7 @@ the step `Project tests` (`project_tests.plan`: the same map, `always_full` list
 `[proof]` area); otherwise, and whenever that plan is full, the kit's full suite as before. It
 prints which mode ran and the selected count; a bad setting fails it with one line naming it.
 
-Brief #980 (ADR-0419, REQ-051): a selected pytest run gains `-n <workers>` by the full suite's rule
+Brief #980 (ADR-0422, REQ-051): a selected pytest run gains `-n <workers>` by the full suite's rule
 when its interpreter imports xdist, and a selection of at least `[testing] full_when_share` of the
 suite's test files runs the full suite instead; the selected file list never changes.
 
@@ -401,4 +401,62 @@ def test_prepush_selected_runs_gain_the_workers_and_full_is_untouched(tmp_path, 
     assert lines == [prepush.SELECTED_NOT_PYTEST.format(name="web")]
     monkeypatch.setattr(prepush, "imports_xdist", lambda python, folder: False)
     made, lines = prepush.selected_workers(tmp_path, sets[:1])
-    assert made == sets[:1] and lines == [prepush.SELECTED_NO_XDIST]
+    assert made == sets[:1] and lines == [prepush.NO_XDIST]
+
+
+def module(name: str):
+    sys.path.insert(0, str(ROOT / "scripts" / "agk"))
+    return __import__(name)
+
+
+def test_without_xdist_the_full_and_a_selected_run_print_the_one_line_once(monkeypatch, tmp_path):
+    """REQ-051: brief #980 answer 2 and SPEC-0044 rule 4 (fix list on b5095b4, item 3: the one
+    line of the rule, printed once when the full run and a linked selected run both fall back)."""
+    prepush, chooser = module("prepush"), module("project_tests")
+    monkeypatch.setenv("EVENT", chooser.EVENT)
+    monkeypatch.setattr(prepush, "workers_setting", lambda root: 3)
+    monkeypatch.setattr(prepush, "imports_xdist", lambda python, folder: False)
+    link = ("web", "python3 -m pytest -q tests/web/test_b.py", ".", chooser.LINK_REASON + "x")
+    found = type("Found", (), {"selected": [type("S", (), {"test": "tests/kit/a.py"})()]})()
+    found.map_notes = []
+    patched = {
+        "resolve_base": lambda root, ref: "main",
+        "merge_base": lambda root, base: "mb",
+        "version_at": lambda root, ref: "1.0.0",
+        "refresh": lambda root: None,
+        "impact": lambda root, mb, head: found,
+        "proof_areas": lambda root: [],
+        "regression_sets": lambda root, f, a: ([("kit", "x", ".", "why"), link], []),
+        "text": lambda f: [],
+        "suite_test_files": lambda root, areas: 1,
+        "full_when_share": lambda root: 0.5,
+        "full_command": lambda root, project, folder: ("python3 -m pytest -q", prepush.NO_XDIST),
+    }
+    for name, value in patched.items():
+        monkeypatch.setattr(chooser, name, value)
+    sets, lines = chooser.plan(tmp_path, "python3 -m pytest -q")
+    assert [s[0] for s in sets] == ["full", "web"]
+    assert lines.count(prepush.NO_XDIST) == 1, lines
+    assert not [line for line in lines if "selected runs stay" in line], lines
+
+
+def test_a_record_of_a_selected_run_with_workers_agrees(monkeypatch, tmp_path):
+    """REQ-051: brief #980 answer 2 (fix list on b5095b4, item 2: `evidence.py` rebuilds a
+    selected regression run with the workers prepush gave it, so the record reads no `differs`)."""
+    prepush, evidence = module("prepush"), module("evidence")
+    monkeypatch.setattr(prepush, "workers_setting", lambda root: 4)
+    monkeypatch.setattr(prepush, "imports_xdist", lambda python, folder: True)
+    sets = [
+        ("kit", "python3 -m pytest -q tests/kit/test_pay.py", ".", "why"),
+        ("web", "npm test -- a.js", ".", "why"),
+    ]
+    shown = '{"runs": [], "regression": {"table": true}}'
+    monkeypatch.setattr(evidence, "spawn", lambda argv, cwd, env, limit: (0, shown))
+    monkeypatch.setattr(evidence, "impact", lambda tree, mb, head: None)
+    monkeypatch.setattr(evidence, "proof_areas", lambda tree: [])
+    monkeypatch.setattr(evidence, "regression_sets", lambda tree, found, areas: (sets, []))
+    recorded, _ = prepush.selected_workers(tmp_path, sets)  # what gate runs and records
+    planned = evidence.planned_runs(tmp_path, ["test_plan"], {}, "mb", 10)
+    for name, command, cwd, _reason in recorded:
+        assert planned[("regression", name)] == (command, tmp_path / cwd)
+    assert planned[("regression", "kit")][0].endswith(" -n 4")

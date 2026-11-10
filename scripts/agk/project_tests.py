@@ -24,7 +24,7 @@ nothing more. A bad setting is refused naming it (exit 1). It calls no network.
 With `[testing] workers` above 1 (SPEC-0044 rules 4 and 5, brief #583) the full command is
 `prepush.full_command`'s: `-n <workers>` added to a pytest command whose interpreter imports
 xdist, `parallel_command` for another runner, or else the command of today after one line naming
-the setting. A selected run takes the same rule (`prepush.selected_workers`, brief #980, ADR-0419)
+the setting. A selected run takes the same rule (`prepush.selected_workers`, brief #980, ADR-0422)
 without changing the `[proof]` area's command in `agk.toml`, and when the selected test files are
 at least `[testing] full_when_share` (0.5) of the areas' test files the pull request runs the full
 command instead, with the reason `selection <n> of <m> files`.

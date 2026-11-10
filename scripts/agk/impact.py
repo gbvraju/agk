@@ -26,7 +26,7 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
   filled with the number (rule 5);
 - `full_when_share`: a number above 0 and at most 1 (0.5): a pull request whose selected test files
   are at least that share of the `[proof]` areas' test files runs the full suite in workers instead
-  (brief #980, ADR-0419; `project_tests.plan`);
+  (brief #980, ADR-0422; `project_tests.plan`);
 - `slow_suite_seconds`: above it a single-process full run gets doctor's line (rule 7; 600);
 - `smoke`: a list of `{ kind = "frontend" | "contract", code = [<glob>, ...], command = "..." }`,
   one entry per kind, from which `smoke.py` chooses the after-merge smoke run (rule 8, brief #923);

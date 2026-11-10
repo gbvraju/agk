@@ -38,7 +38,7 @@ SPEC-0044 rules 4 and 5 (brief #583): with `[testing] workers` above 1 the regre
 `full` is `full_command`'s: `-n <workers>` at the end of a simple pytest command whose interpreter
 imports xdist in the run's folder, `[testing] parallel_command` for another runner, or else the
 command of today after one line naming the setting. Proof's runs and area commands stay single.
-Brief #980 (ADR-0419): each other regression run, a selected one, takes the same rule through
+Brief #980 (ADR-0422): each other regression run, a selected one, takes the same rule through
 `selected_workers`: `-n <workers>` at the end of a pytest command (the whole command, or its one
 simple command after a last `;`) whose interpreter imports xdist, else the command of today after
 one line naming `testing.workers`; `parallel_command` stays the full run's alone.
@@ -729,7 +729,7 @@ def selected_workers(
     root: Path, sets: list[tuple[str, str, str, str]]
 ) -> tuple[list[tuple[str, str, str, str]], list[str]]:
     """Each selected run (every run but `full`) with the workers of the full run's rule (brief
-    #980, ADR-0419), and the lines of the runs that stay in one process. The files never change."""
+    #980, ADR-0422), and the lines of the runs that stay in one process. The files never change."""
     workers = workers_setting(root)
     if workers <= 1:
         return sets, []
