@@ -507,7 +507,8 @@ def test_a_merge_is_one_pinned_put_and_one_line(tmp_path):
     writes = [c for c in made if c[2] != "GET"]
     record = ["api", "--method", "POST", f"repos/{REPO}/issues/41/comments"]
     assert writes[0] == merge_call() and [c[:4] for c in writes[1:]] == [record]
-    assert made[-2:] == writes, "the merge, then the record line of build (c), are the last calls"
+    brief = ["api", "--method", "GET", f"repos/{REPO}/issues/500"]  # brief #959: the body's brief
+    assert made[-3:] == [*writes, brief], "the merge, the record line, then the read of the brief"
 
 
 def test_every_call_is_a_rest_get_but_the_merge_and_nothing_tags_approves_or_pushes(tmp_path):

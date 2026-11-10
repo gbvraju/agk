@@ -44,8 +44,8 @@ def test_ac_rule_7_names_each_milestone_in_order():
         "the tests written so far expected-red",
         "the tests green",
         "marking the pull request ready",
-        "before any stop it can foresee (a usage limit near, a question it will wait on, "
-        "the end of its turn)",
+        # Brief #976 (ADR-0418) cut the example parenthesis; the milestone stays.
+        "before any stop it can foresee",
     )
     at = [seven.find(m) for m in milestones]
     assert all(i >= 0 for i in at), [m for m, i in zip(milestones, at, strict=True) if i < 0]
