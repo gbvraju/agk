@@ -2139,7 +2139,7 @@ def queue_mode(repo: str, rules: Rules) -> bool:
     return not titled(issues, RECORD_TITLE)
 
 
-def graphql(fields: list[str]) -> tuple[int, dict | None, str]:
+def queue_call(fields: list[str]) -> tuple[int, dict | None, str]:
     """One GraphQL call of the merger job (brief #972, `Q-S0039-19`): (exit code, the answer's
     `data` or None, the error text); an answer that carries `errors` counts as a failure."""
     proc = gh_api(["graphql", *fields], merge_env())
@@ -2159,7 +2159,7 @@ def queue_state(repo: str, number: int, sha: str) -> tuple[str, bool]:
     SHA is refused as moved, an unreadable answer is Unreadable."""
     owner, _, name = repo.partition("/")
     fields = ["-f", f"query={QUEUE_READ}", "-f", f"owner={owner}", "-f", f"name={name}"]
-    _, data, _ = graphql([*fields, "-F", f"number={number}"])
+    _, data, _ = queue_call([*fields, "-F", f"number={number}"])
     pull = ((data or {}).get("repository") or {}).get("pullRequest")
     if not isinstance(pull, dict) or not isinstance(pull.get("id"), str):
         raise Unreadable("the merge queue state of the pull request")
@@ -2171,7 +2171,7 @@ def queue_state(repo: str, number: int, sha: str) -> tuple[str, bool]:
 def enqueue(node: str, sha: str) -> None:
     """The one write of rule 2a: add the pull request NODE to the merge queue, pinned to SHA."""
     fields = ["-f", f"query={QUEUE_WRITE}", "-f", f"pullRequestId={node}"]
-    code, data, err = graphql([*fields, "-f", f"expectedHeadOid={sha}"])
+    code, data, err = queue_call([*fields, "-f", f"expectedHeadOid={sha}"])
     entry = ((data or {}).get("enqueuePullRequest") or {}).get("mergeQueueEntry")
     if code == 0 and isinstance(entry, dict):
         return
