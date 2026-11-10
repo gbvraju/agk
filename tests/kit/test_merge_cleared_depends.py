@@ -29,7 +29,7 @@ ISSUES = {
 }
 PULLS = {8: {"number": 8, "merged_at": "2026-11-01T00:00:00Z"}}
 
-SENTENCE = "Brief: #900\nNo `Depends-on:` line: the brief names `Depends-on: #842` as a later build.\n"
+SENTENCE = "Brief: #900\nNo `Depends-on:` line: the brief names `Depends-on: #842` later.\n"
 OPEN_BRIEF = "Brief: #900\nDepends-on: #7\n"
 MERGED_PULL = "Brief: #900\n  Depends-on: #8  \n"
 CASES = [(SENTENCE, False), (OPEN_BRIEF, True), (MERGED_PULL, False)]
