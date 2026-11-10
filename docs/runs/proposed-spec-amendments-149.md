@@ -89,3 +89,12 @@ Each is open until a person rules; the reading after it is the conservative one 
 - **Q-842-9:** the reserved `ADR-0384` is spent on build (a), which leaves this table undecided. Reading: this pull
   request adds no ADR and takes no new number; builds (b) and (c) each change a decision, so each asks the conductor to
   reserve one.
+
+## Applied
+
+2026-11-10 (from `date -u`), brief #842: the items above are applied to
+`docs/specs/0034-a-team-sets-how-many-builder-sessions-run-at-once-and-agk-ha.md` (items 1, 2 and 8 to rule 1, item 8
+to rule 6, item 11 to rule 13, and items 3 to 7 and 10 to a new rule 15 that cites amendment 88 for what does not
+change) and to `docs/specs/0006-doctor.md` (item 9, one `capacity` row in the table of rule 5), on the owner's
+`Approve:` lines for SPEC-0034 and SPEC-0006 on #869 at a8d0edf. Each spec gains the `## Contexts` section amendment 142
+asks of an amended Approved spec. The items are unchanged.
