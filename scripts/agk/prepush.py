@@ -37,11 +37,12 @@ with that step's own output:
 SPEC-0044 rules 4 and 5 (brief #583): with `[testing] workers` above 1 the regression run named
 `full` is `full_command`'s: `-n <workers>` at the end of a simple pytest command whose interpreter
 imports xdist in the run's folder, `[testing] parallel_command` for another runner, or else the
-command of today after one line naming the setting. Proof's runs and area commands stay single.
+command of today after one line naming the setting. Proof's own runs stay single.
 Brief #980 (ADR-0422): each other regression run, a selected one, takes the same rule through
 `selected_workers`: `-n <workers>` at the end of a pytest command (the whole command, or its one
 simple command after a last `;`) whose interpreter imports xdist, else the command of today after
-one line naming `testing.workers`; `parallel_command` stays the full run's alone.
+the one line of SPEC-0044 rule 4 (`NO_XDIST`, printed once with the full run's); `parallel_command`
+stays the full run's alone.
 
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
 one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing,
@@ -157,10 +158,6 @@ NO_XDIST = (
 NO_PARALLEL = (
     "tests: the command is not a simple pytest command and parallel_command is not set, running "
     "in one process (setting: testing.parallel_command)"
-)
-SELECTED_NO_XDIST = (
-    "tests: pytest-xdist is not importable, the selected runs stay in one process "
-    "(setting: testing.workers)"
 )
 SELECTED_NOT_PYTEST = (
     "tests: {name} is not a simple pytest command, running in one process "
@@ -740,7 +737,7 @@ def selected_workers(
             lines.append(SELECTED_NOT_PYTEST.format(name=name))
         elif python is not None:
             with_n = pytest_workers(command, root / cwd, workers, python)
-            lines.extend([] if with_n else [SELECTED_NO_XDIST])
+            lines.extend([] if with_n else [NO_XDIST])  # the one line of SPEC-0044 rule 4
             command = with_n or command
         made.append((name, command, cwd, reason))
     return made, list(dict.fromkeys(lines))

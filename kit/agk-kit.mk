@@ -26,8 +26,10 @@ try:
         runs, lines = [("full", "", ".", f"event {event or 'unknown'}")], []
     else:
         runs, lines = project_tests.plan(here, command)
-        # The plan's own line about the workers of `project_tests` is not this run's: `single` is.
-        lines = [x for x in lines if x not in (NO_PARALLEL, NO_XDIST)]
+        # A full plan's line about the workers of `project_tests` is not this run's: `single` is.
+        # A selected plan's line is its selected runs' own, kept (SPEC-0044 rule 4, #980).
+        if any(r[0] == "full" for r in runs):
+            lines = [x for x in lines if x not in (NO_PARALLEL, NO_XDIST)]
 except CheckError as exc:
     sys.exit(f"tests: {exc}")
 full = next((r for r in runs if r[0] == "full"), None)

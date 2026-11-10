@@ -23,11 +23,13 @@ took 14.7 to 17.5 minutes in one process, against 6.4 minutes for the whole suit
    gets `-n <workers>` at its end. The pytest command is the whole command or, when the command is a shell step
    followed by `;` and one simple command, that last command (the kit's own `[proof.kit]` command has that form);
    any other shell syntax leaves the command single. Without xdist, or for another runner, the run is the command of
-   today after one line naming `testing.workers`; `parallel_command` stays the full suite's alone, since it carries
-   no file list.
+   today after the one line of SPEC-0044 rule 4 (`tests: pytest-xdist is not importable, running in one process
+   (setting: testing.workers)`), printed once when the full run falls back too; `parallel_command` stays the full
+   suite's alone, since it carries no file list.
 2. It is applied where the selected runs are assembled: `project_tests.plan` (the CI step, and through it the
    `agk-test` chooser) and the regression runs of `prepush.gate`. `regression_sets`, the `[proof]` table in
-   `agk.toml` and proof's own base and head runs do not change, nor does the record of `evidence.py`.
+   `agk.toml` and proof's own base and head runs do not change. `evidence.py` rebuilds each selected regression
+   run with the same rule, so a local evidence record made with workers agrees on the same machine.
 3. A new `[testing] full_when_share` (a number above 0 and at most 1; default 0.5): when the selected test files are
    at least that share of the test files the `[proof]` areas hold at the head, the pull request runs the full
    suite in workers instead, saying `selection <n> of <m> files` as the reason (`tests: mode full (selection 255 of

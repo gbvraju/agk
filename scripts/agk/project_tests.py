@@ -294,7 +294,7 @@ def plan(root: Path, project: str) -> tuple[list[tuple[str, str, str, str]], lis
         added = [s for s in sets if s[3].startswith(LINK_REASON)]
         sets, lines = [("full", command, ".", why), *added], [*lines, *([said] if said else [])]
     sets, single = selected_workers(root, sets)
-    lines.extend(single)
+    lines.extend(line for line in single if line not in lines)  # one line, once (SPEC-0044 rule 4)
     if sets and sets[0][0] == "full":
         lines.append(f"project tests: full ({sets[0][3]})")
     else:
