@@ -1700,8 +1700,52 @@ def reports_after(repo: str, number: int, floor: int) -> bool:
     return any(first_line(c).startswith("Report:") and c.get("id", 0) > floor for c in comments)
 
 
-def follow_up_owed(repo: str, pull: dict, allowed: set[str]) -> str | None:
-    """`conflict`, `fix list` (the newest verdict, with no `Report:` after it) or None."""
+QUESTION_ID = re.compile(r"\bQ-\d+-\w+")
+ANSWER_LINE = re.compile(r"(?:Answer|Maintainer answer): (Q-\d+-\w+)")
+
+
+def answer_owed(pull: dict, comments: list, answerers: set[str]) -> bool:
+    """Whether a question the pull request's author stopped on has been answered since (brief #961):
+    its newest `Report:` says `escalate` or `blocked`, or its newest `Report:` or `Question:` is the
+    `Question:`, and a
+    later `Answer: Q-…`, `Maintainer answer: Q-…` or `Correction:` by one of `answerers` names one
+    of its Q ids; a newer `Report:` by the author spends it."""
+    author = author_of(pull)
+    mine = sorted(
+        (c for c in comments if author and author_of(c) == author), key=lambda c: c.get("id", 0)
+    )
+    reports = [c for c in mine if first_line(c).startswith("Report:")]
+    stops = []
+    if reports and re.search(r"\b(escalate|blocked)\b", first_line(reports[-1])):
+        stops.append(reports[-1])
+    said = [c for c in mine if first_line(c).startswith(("Report:", "Question:"))]
+    if said and first_line(said[-1]).startswith("Question:"):  # the answerer may share the login
+        stops.append(said[-1])
+    for stop in stops:
+        asked = set(QUESTION_ID.findall(str(stop.get("body") or "")))
+        floor = stop.get("id", 0)
+        for c in comments:
+            if c.get("id", 0) <= floor or author_of(c) not in answerers:
+                continue
+            line = first_line(c)
+            named = (
+                m.group(1) in asked
+                if (m := ANSWER_LINE.match(line))
+                else (
+                    line.startswith("Correction:")
+                    and bool(asked & set(QUESTION_ID.findall(str(c.get("body") or ""))))
+                )
+            )
+            if named and not any(r.get("id", 0) > c.get("id", 0) for r in reports):
+                return True
+    return False
+
+
+def follow_up_owed(
+    repo: str, pull: dict, allowed: set[str], approvers: set[str] = frozenset()
+) -> str | None:
+    """`conflict`, `fix list` (the newest verdict, with no `Report:` after it), `answer` (an
+    answered question the builder stopped on, brief #961) or None."""
     number = pull.get("number")
     full = gh(f"repos/{repo}/pulls/{number}")
     if not isinstance(full, dict):
@@ -1716,15 +1760,17 @@ def follow_up_owed(repo: str, pull: dict, allowed: set[str]) -> str | None:
         for c in comments
         if author_of(c) in allowed and (m := VERDICT.match(first_line(c)))
     ]
-    if not verdicts or max(verdicts)[1] != "fix list":
-        return None
-    return None if reports_after(repo, int(number or 0), max(verdicts)[0]) else "fix list"
+    if verdicts and max(verdicts)[1] == "fix list":
+        if not reports_after(repo, int(number or 0), max(verdicts)[0]):
+            return "fix list"
+    return "answer" if answer_owed({**pull, **full}, comments, allowed | approvers) else None
 
 
 def slot_next(root, name: str) -> int:
     """One pass of a slot's loop: renew the lease, then print its one next step as the last line:
-    `stop`, `follow-up pr #n <why>`, `assign #b [build (x)]`, `wait pr #n`, `take` (`next --take`,
-    after 10 minutes with no `Assign:`), `wait`, or `request` (no `Request:` or `Assign:` yet)."""
+    `stop`, `follow-up pr #n <why>` (`conflict`, `fix list` or `answer`), `assign #b [build (x)]`,
+    `wait pr #n`, `take` (`next --take`, after 10 minutes with no `Assign:`), `wait`, or `request`
+    (no `Request:` or `Assign:` yet)."""
     if code := slot_lease(root, "--renew", name):
         return code
     repo = repo_name(root)
@@ -1740,7 +1786,7 @@ def slot_next(root, name: str) -> int:
         return 0
     owned = owned_pulls(root, repo, name)
     for pull in owned:
-        if why := follow_up_owed(repo, pull, allowed):
+        if why := follow_up_owed(repo, pull, allowed, approvers):
             print(f"follow-up pr #{pull.get('number')} {why}")
             return 0
     lines = [(c, m) for c in comments if (m := assign_line(c, name, allowed))]

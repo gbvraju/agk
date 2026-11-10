@@ -84,9 +84,14 @@ def held(proj, stub, *others: dict) -> None:
     stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
 
 
-def owned(stub, number: int = 7, brief: int = 5, state: str = "clean", said=()) -> None:
-    """Pull request `number`, of a brief this slot has taken, with the comments `said`."""
-    pull = {"number": number, "state": "open", "body": f"Brief: #{brief}", "user": {"login": "bot"}}
+def owned(stub, number=7, brief=5, state="clean", said=(), author="bot") -> None:
+    """Pull request `number` by `author`, of a brief this slot took, with the comments `said`."""
+    pull = {
+        "number": number,
+        "state": "open",
+        "body": f"Brief: #{brief}",
+        "user": {"login": author},
+    }
     stub.serve(PULLS, [pull])
     stub.serve(f"{PULLS}/{number}", {**pull, "mergeable_state": state, "head": {"sha": "a" * 40}})
     stub.serve(f"{ISSUES}/{brief}/comments", [comment(50, "boss", f"taken: s1 {DAY}")])
@@ -299,6 +304,17 @@ def test_a_blocked_report_or_a_question_answered_is_a_follow_up(proj, stub, aske
     assert last(slot(proj, stub, "--next")) == "follow-up pr #7 answer"
 
 
+def test_a_question_answered_under_the_same_login_is_a_follow_up(proj, stub):
+    """REQ-041"""
+    held(proj, stub)
+    said = [
+        comment(60, "boss", "Question: Q-5-1 which order?"),
+        comment(61, "boss", "Answer: Q-5-1"),
+    ]
+    owned(stub, said=said, author="boss")
+    assert last(slot(proj, stub, "--next")) == "follow-up pr #7 answer"
+
+
 def test_an_answer_with_a_newer_report_is_spent(proj, stub):
     """REQ-041"""
     held(proj, stub)
@@ -324,7 +340,10 @@ def test_an_answer_by_an_unlisted_author_is_not_a_follow_up(proj, stub):
     [
         [comment(60, "bot", ESCALATE), comment(61, "boss", "Answer: Q-9-1 another question")],
         [comment(61, "boss", "Answer: Q-5-2 before"), comment(62, "bot", ESCALATE)],
-        [comment(60, "bot", f"Report: {'d' * 7} ready Q-5-1"), comment(61, "boss", "Answer: Q-5-1")],
+        [
+            comment(60, "bot", f"Report: {'d' * 7} ready Q-5-1"),
+            comment(61, "boss", "Answer: Q-5-1"),
+        ],
     ],
 )
 def test_an_answer_that_names_no_open_question_is_not_a_follow_up(proj, stub, said):
@@ -555,4 +574,3 @@ def test_a_bad_slot_seen_minutes_skips_the_health_naming_the_setting_only(tmp_pa
     out = health.router(root, stub, tmp_path)
     assert out.returncode == 0, out.stdout + out.stderr
     assert "slot_seen_minutes" in out.stdout and stub.writes() == []
-
