@@ -6,7 +6,7 @@
 - Related: SPEC-0032 rules 2 and 3, SPEC-0006 rule 5, amendment 150, ADR-0293, ADR-0384, brief #846
 - Requirements: REQ-039
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `agk.toml`, `scripts/agk/`, `tests/kit/`
 
 ## Context
 
@@ -23,7 +23,8 @@ This is build (a) of brief #846: its items 1 to 4 and 8.
    `agk:question` (an open `Owner needed:` line), `agk:owner-merge` and `agk:merge-ready` (a cleared head, split by the
    one list `merge_cleared.py` refuses to merge). `agk:parked` wins over every state and the router never sets or
    removes it.
-2. The order of precedence is amendment 150's, with one exception: `agk:conflict` stays before the checks, because a
+2. The order of precedence is amendment 150's, so a fix list on the head now wins over an approval it asks for, with
+   one exception: `agk:conflict` stays before the checks, because a
    dirty head starts no workflow and would wait at `agk:ci-running` for ever (`Q-846-8`).
 3. A head that a verdict by a listed author names, or that the latest verdict covers, is past `agk:build` without a
    `Report:` (`Q-846-7`), so a status-only commit after a clearing verdict is not held.
@@ -34,7 +35,8 @@ This is build (a) of brief #846: its items 1 to 4 and 8.
 5. `doctor.py` has the warning row `state-labels`: a state label missing in the repository, or whose description does
    not name its actor, read with one GET. It reads nothing and prints `not applicable` without a router or with
    `execution = "local"`.
-6. The plan's verdict wait stays as ADR-0384 decision 4 reads it, from the comments (`Q-846-9`): it counts exactly the
+6. `agk.toml` maps `tests/kit/test_pr_state_lifecycle.py` to the four scripts it imports (`[[testing.map]]`).
+7. The plan's verdict wait stays as ADR-0384 decision 4 reads it, from the comments (`Q-846-9`): it counts exactly the
    pull requests that item 1 labels `agk:review`, and does not depend on a label that may lag.
 
 ## Consequences
