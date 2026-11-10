@@ -264,13 +264,17 @@ def test_ac5_the_router_still_writes_no_comment_review_or_merge(proj, stub, tmp_
         assert "/reviews" not in endpoint, endpoint
 
 
-def test_ac5_a_hand_written_red_brief_is_not_updated_or_closed_by_the_router(proj, stub, tmp_path):
-    """REQ-039 AC5: the router touches only an issue its own token opened."""
+def test_ac5_a_hand_written_red_brief_is_never_updated_and_closed_only_when_green(
+    proj, stub, tmp_path
+):
+    """REQ-039 AC5: while red the router updates only an issue its own token opened; a green
+    branch closes every copy of the same shape, whoever wrote it (brief #916 answer 3)."""
     by_hand = red_issue(9, sha=OTHER, user={"login": "someone"})
     branch(stub, [ok("governance"), ok("proof")])
     issues(stub, by_hand)
     push(proj, stub, tmp_path)
-    assert issue_writes(stub) == []
+    assert [(w[0], w[1]) for w in issue_writes(stub)] == [("PATCH", f"repos/{REPO}/issues/9")]
+    (stub.dir / "calls.log").unlink()
     branch(stub, [bad("proof")])
     push(proj, stub, tmp_path)
     assert [(w[0], w[1]) for w in issue_writes(stub)] == [("POST", f"repos/{REPO}/issues")]

@@ -18,8 +18,8 @@ token starts no workflow, so the router cannot loop. It writes labels and, for t
 (SPEC-0032 rule 7), the one issue `The default branch is red`: on a `push` to the default branch
 or a finished workflow on it, it reads the checks of the branch's head and, when they fail, opens
 or updates that issue as a brief (`Priority: 0`, `Advances: none`) that names the failing check,
-the sha and the run and no cause, and closes it when the branch is green; while checks still run
-it does nothing.
+the sha and the run and no cause, and closes it when the branch is green, with every open copy of
+the same shape whoever wrote it (brief #916); while checks still run it does nothing.
 A run woken by a finished workflow (`workflow_run`) also sweeps (brief #309): it re-reads every
 open pull request labelled `agk:ci-running` that the event did not name and relabels each one whose
 required checks have all finished, by the same rules, writing the label only, so a wake lost to
@@ -86,7 +86,7 @@ from reviewers import (
     verdict_authors,
     via_agent,
 )
-from session import RED_TITLE, gh, is_red, pages, repo_name
+from session import RED_TITLE, ROUTER_PAIR, gh, is_red, pages, repo_name
 
 NAME = "route"
 USAGE = "usage: route.py [--pr N | --all | --branch | --health] [--dry-run]"
@@ -777,6 +777,20 @@ def red_body(name: str, sha: str, url: str) -> str:
     )
 
 
+def red_copies(found: list[dict]) -> list[dict]:
+    """Every open issue in the shape of the red-branch brief, whoever wrote it (brief #916 answer
+    3): the title `RED_TITLE` and the lines `Priority: 0` and `Advances: none`, oldest first. A
+    green branch closes them all, so no stale copy holds every merge; `is_red` still counts only
+    the router's own (answer 4)."""
+    def shaped(item: dict) -> bool:
+        lines = {x.rstrip() for x in str(item.get("body") or "").splitlines()}
+        return "pull_request" not in item and item.get("title") == RED_TITLE and (
+            set(ROUTER_PAIR) <= lines
+        )
+
+    return sorted((i for i in found if shaped(i)), key=lambda i: i["number"])
+
+
 def route_branch(
     repo: str, default: str, labels: Labels, dry: bool, required: list[str] | None = None
 ) -> str:
@@ -796,7 +810,7 @@ def route_branch(
         return state
     issues = f"repos/{repo}/issues"
     if state == "green":
-        for item in open_red:
+        for item in red_copies(found):
             args = ("-f", "state=closed", "-f", "state_reason=completed")
             write(f"{issues}/{item['number']}", *args, method="PATCH", what="rule 7: the issue")
         return state
