@@ -145,8 +145,8 @@ from impact import (
     report_of,
     run_folder_deprecation,
     run_timing,
-    unmapped_lines,
     tools_file,
+    unmapped_lines,
     workers_setting,
 )
 from proof import area_command, execute, is_test_file, timeout_note
