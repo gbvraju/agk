@@ -231,13 +231,13 @@ def test_the_one_person_is_read_from_the_project(tmp_path):
 
 def test_a_solo_confirmation_clears_the_head():
     """REQ-039: brief #277 answers 2 and 7."""
-    assert route.decide(solo(comments=[said(5, "boss", confirmation())])) == "agk:ready"
+    assert route.decide(solo(comments=[said(5, "boss", confirmation())])) == "agk:merge-ready"
 
 
 def test_a_solo_confirmation_that_approves_a_spec_needs_no_second_step():
     """REQ-039: brief #277 answers 2 and 7 (the verdict and the approval together)."""
     with_approve = said(5, "boss", confirmation(middle=("Approve: SPEC-0032",)))
-    assert route.decide(solo(comments=[with_approve], files=approved_spec())) == "agk:ready"
+    assert route.decide(solo(comments=[with_approve], files=approved_spec())) == "agk:merge-ready"
     without = said(5, "boss", confirmation())
     assert route.decide(solo(comments=[without], files=approved_spec())) == "agk:approve"
 
@@ -295,7 +295,7 @@ def test_the_router_reads_the_mode_from_the_project(proj, stub, tmp_path):
     proc = run_router(proj, stub, tmp_path, "pull_request", EVENT)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     adds = [w for w in stub.writes() if w[0] == "POST" and w[1].endswith("/issues/7/labels")]
-    assert adds and "labels[]=agk:ready" in adds[0][2]
+    assert adds and "labels[]=agk:merge-ready" in adds[0][2]
     (proj / "agk.toml").write_text('review_mode = "team"\n', encoding="utf-8")
     proc = run_router(proj, stub, tmp_path, "pull_request", EVENT)
     adds = [w for w in stub.writes() if w[0] == "POST" and w[1].endswith("/issues/7/labels")]

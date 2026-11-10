@@ -509,7 +509,7 @@ def listed(n: int, label: str | None, author: str = "builder", draft: bool = Fal
 
 
 def test_ac3_queue_lists_for_each_role_the_pull_requests_with_its_labels(proj, stub):
-    """REQ-039 AC3: rule 3 (the three roles; ci-red is the builder's and the conductor's)."""
+    """REQ-039 AC3: rule 3 (the roles; ci-red is the builder's and the conductor's; ADR-0385)."""
     stub.serve(
         OPEN,
         [
@@ -526,7 +526,8 @@ def test_ac3_queue_lists_for_each_role_the_pull_requests_with_its_labels(proj, s
     expect = {
         "conductor": ["#1 agk:review", "#2 agk:ci-red"],
         "builder": ["#2 agk:ci-red", "#3 agk:fix", "#4 agk:conflict"],
-        "person": ["#5 agk:approve", "#6 agk:ready"],
+        "person": ["#5 agk:approve"],
+        "merger": ["#6 agk:ready"],
     }
     for role, lines in expect.items():
         out = session(proj, stub, "queue", "--role", role)

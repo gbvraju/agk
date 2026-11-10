@@ -255,4 +255,4 @@ def test_doctor_reads_nothing_without_a_router_or_in_local_mode(tmp_path):
 
 def test_doctor_cannot_check_unreadable_labels(tmp_path):
     """REQ-039: amendment 150 item 8 (a failed read is `cannot-check`, never ok)."""
-    assert _row(tmp_path, None)["status"] == "cannot-check"
+    assert _row(tmp_path, {"message": "Server Error"})["status"] == "cannot-check"
