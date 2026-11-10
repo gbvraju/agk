@@ -176,3 +176,15 @@ Each is open until a person rules; the reading after it is the conservative one 
   2027-01-31).
 - 2026-11-10: the kit cannot read which model a slot's scheduled starts run on, so a slot's tier is the owner's word
   in `[models.routes]`; a slot set up on a weaker model than its route says is not seen (due 2027-01-31).
+
+## Applied
+
+2026-11-10 (from `date -u`), brief #798: the items above are applied to
+`docs/specs/0045-each-kind-of-work-runs-on-the-model-it-needs.md` (item 2 to rule 2, item 1 to rule 3, item 3 to rule 5,
+item 4 to rule 7, items 7 to 9 and item 8's reader sentence to rule 8, item 10 to rule 9, items 11 and 12 to rule 10 as
+builds (e) and (f), item 13 to the Tests section and the three residual lines to its Residual section), to
+`docs/specs/0034-a-team-sets-how-many-builder-sessions-run-at-once-and-agk-ha.md` (item 5, rule 6) and to
+`docs/specs/0006-doctor.md` (item 6, one `model-routes` row in the table of rule 5), on the owner's `Approve:` lines for
+SPEC-0045, SPEC-0034 and SPEC-0006 on #939 at 316d229. SPEC-0045 gains the `## Contexts` section amendment 142 asks of
+an amended Approved spec, from the brief's `Contexts:` line. The items are unchanged; item 14 changes nothing, so it
+adds no text.
