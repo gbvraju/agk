@@ -275,7 +275,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
-  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_caps.py",
+  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_capacity_profiles.py",
+  "tests/kit/test_caps.py",
   "tests/kit/test_failures.py", "tests/kit/test_models_table.py", "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
@@ -342,7 +343,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/doctor.py"
 tests = [
-  "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
+  "tests/kit/test_capacity_profiles.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
   "tests/kit/test_delivery_declaration.py", "tests/kit/test_doctor.py", "tests/kit/test_doctor_ci.py",
   "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py",
   "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_run.py", "tests/kit/test_merge_cleared_verdict.py",
@@ -709,7 +710,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session_plan.py"
 tests = [
-  "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py", "tests/kit/test_merge_cleared_reprove.py",
+  "tests/kit/test_capacity_profiles.py", "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py",
+  "tests/kit/test_merge_cleared_reprove.py",
   "tests/kit/test_plan_exact_touches.py", "tests/kit/test_plan_reprove_paths.py",
   "tests/kit/test_session_claim_overlap.py",
 ]
