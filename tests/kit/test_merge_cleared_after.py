@@ -750,7 +750,10 @@ def merged_ref(number: int, title: str) -> dict:
     pull = {"merged_at": "2026-11-09T10:00:00Z", "url": f"https://example.com/pulls/{number}"}
     return {
         "event": "cross-referenced",
-        "source": {"type": "issue", "issue": {"number": number, "title": title, "pull_request": pull}},
+        "source": {
+            "type": "issue",
+            "issue": {"number": number, "title": title, "pull_request": pull},
+        },
     }
 
 
@@ -775,7 +778,10 @@ def test_an_issue_the_body_closes_still_open_gets_one_note(monkeypatch):
     assert slept and sum(slept) <= merge_cleared.CLOSE_WAIT, "one short, bounded wait"
     assert len(writes) == 1
     assert f"repos/{REPO}/issues/614/comments" in writes[0]
-    assert comment_of(writes[0]) == f"Not closed by merge {SHA[:12]} of #7; close it if the work is done"
+    assert (
+        comment_of(writes[0])
+        == f"Not closed by merge {SHA[:12]} of #7; close it if the work is done"
+    )
 
 
 def test_a_one_build_brief_is_closed_after_its_merge(monkeypatch):
@@ -803,7 +809,7 @@ def test_a_brief_with_every_build_merged_is_closed(monkeypatch):
 
 
 def test_a_brief_with_build_b_unmerged_stays_open_with_no_comment(monkeypatch):
-    """REQ-046 AC6: brief #959 answer 2 (a build still unmerged: no comment, the brief stays open)."""
+    """REQ-046 AC6: brief #959 answer 2 (a build unmerged: no comment, the brief stays open)."""
     body = "Builds: (a) the reader; (b) the writer\n"
     open_ref = merged_ref(6, f"Example writer (brief #{CLOSE_BRIEF} build (b))")
     open_ref["source"]["issue"]["pull_request"]["merged_at"] = None
@@ -838,7 +844,7 @@ def test_closing_keywords_are_read_as_github_reads_them():
 
 
 def test_no_closing_line_and_no_brief_reads_nothing(monkeypatch):
-    """REQ-046 AC6: brief #959 (a body that closes nothing and builds no brief: no call, no wait)."""
+    """REQ-046 AC6: brief #959 (a body that closes nothing and names no brief: no wait)."""
     writes, slept = after_close(monkeypatch, {}, "Advances: REQ-046\n")
     assert writes == [] and slept == []
 
