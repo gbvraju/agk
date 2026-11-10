@@ -43,10 +43,21 @@ this session: `GET repos/gbvraju/agk/issues/219`, `comments` 0).
    - runs on the `strongest` tier (SPEC-0045);
    - holds a reviewer slot, `r1` or `r2` (item 4), by the same lease as a builder slot (SPEC-0034);
    - pushed no commit to the branch of that pull request, and is not the conductor's run.
-   A session that cannot meet all four posts no verdict on that head. `Verdict: rejected <sha>` follows the same rule." The
-   first two conditions are checked from the slot's lease line, the third from the branch's commits against the slot's
-   holder, and the fourth from the lease name: a lease that starts `r` is never the conductor's
-   `(verify: the conductor holds no slot lease today; the build reads the lease lines to confirm it)`.
+   A session that cannot meet all four posts no verdict on that head. `Verdict: rejected <sha>` follows the same rule."
+   The lease line on the default branch (`Slot: <state> <time> <slot> <run>`, `SLOT_LINE` in `session.py`) holds none of
+   the agent, the tier or a link to commits, and its run name is a random `secrets.token_hex(4)` that no commit carries.
+   So build (a) adds three lines to a reviewer slot's marker, written at `slot --take r<N>` and kept by every renewal and
+   release beside the log lines of ADR-0425: `agent: architect-review`, `tier: strongest` and `session: <the session
+   link>`, the link the runtime writes in each commit's `Claude-Session:` trailer `(verify: the trailer is the runtime's
+   attribution as this session's prompt gives it, not read from the runtime's documentation)`. The review helper then
+   checks:
+   - the first two conditions from the marker's `agent:` and `tier:` lines, and refuses a verdict when either is missing
+     or names another value;
+   - the third from the branch's commits: a verdict is refused when any commit between the merge base and the head
+     carries a `Claude-Session:` trailer equal to the marker's `session:` line, or when the marker has no `session:` line;
+   - the fourth from the lease name: a lease that starts `r` is never the conductor's
+     `(verify: the conductor holds no slot lease today; the build reads the lease lines to confirm it)`.
+   The three lines are written by the review session itself; what that leaves unchecked is in the Residual.
 2. **SPEC-0023, a new rule 2b "the goldfish bundle".** "The review session reads only:
    - the document `review_context.py` prints for the head;
    - the brief's body (the issue the `Brief: #n` line names);
@@ -109,7 +120,10 @@ this session: `GET repos/gbvraju/agk/issues/219`, `comments` 0).
       `Request:` or plan-issue text, and is the same bytes on two runs;
     - `slot --next r1` prints `review #<pr> <head>` for its `Review:` line, `wait` without one, and refuses a slot past
       `reviewer_slots`; a malformed `reviewer_slots` or `shadow_sample` is refused naming the setting;
-    - a verdict by a session whose holder pushed to the branch is refused by the review helper;
+    - `slot --take r1` writes the `agent:`, `tier:` and `session:` lines, and a renewal and a release keep them;
+    - the review helper refuses a verdict whose slot marker lacks the `agent:`, `tier:` or `session:` line or names
+      another agent or tier, and refuses one whose marker's `session:` line equals the `Claude-Session:` trailer of a
+      commit on the fixture branch; it passes one whose link no commit carries;
     - with no reviewer slot alive the conductor's text and the fallback marker are read as gating by `watch` and
       `merge_cleared.py`;
     - the sample picks the same heads from the same shas, about one in five over a fixture of shas, and none of a head
@@ -135,8 +149,11 @@ this session: `GET repos/gbvraju/agk/issues/219`, `comments` 0).
 ## Residual
 
 - 2026-11-10: all sessions post from one account, so no check can tell a reviewer slot's verdict from the conductor's or a
-  builder's; item 1's conditions rest on the lease lines and the branch's commits, and a session that ignores its role
-  file is caught only by a person (due 2026-12-31).
+  builder's; item 1's conditions rest on the marker's `agent:`, `tier:` and `session:` lines and the branch's
+  `Claude-Session:` trailers, and a session that ignores its role file is caught only by a person (due 2026-12-31).
+- 2026-11-10: the `agent:`, `tier:` and `session:` lines of item 1 are written by the review session itself, so the
+  helper checks that they are present and consistent, not that they are true: a session that runs another agent or tier
+  and writes these values, or a commit pushed without its `Claude-Session:` trailer, is not caught (due 2026-12-31).
 - 2026-11-10: "reads only the bundle" is a written rule; the runtime can still read any file in the checkout, and the
   guard cannot tell a bundle read from another (due 2026-12-31).
 - 2026-11-10: a fresh reviewer has no memory of earlier heads beyond the prior `Verdict:` lines; a finding the conductor

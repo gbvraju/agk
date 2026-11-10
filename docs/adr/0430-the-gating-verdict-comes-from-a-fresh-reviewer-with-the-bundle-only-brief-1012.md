@@ -42,8 +42,10 @@ and #1014 build it, each with its own ADR naming the protected classes it change
 
 ## Residual
 
-- 2026-11-10: all sessions post from one account, so the separation of decision 1 rests on lease lines, branch commits and
-  role files, not on identities (due 2026-12-31).
+- 2026-11-10: all sessions post from one account, so the separation of decision 1 rests on the reviewer slot's marker
+  lines (`agent:`, `tier:`, `session:`, written by the review session itself), the branch's `Claude-Session:` trailers
+  and role files, not on identities; the helper checks those lines are present and consistent, not that they are true
+  (due 2026-12-31).
 - 2026-11-10: "the bundle only" is a written rule; the runtime can read the checkout, and no guard can tell a bundle read
   from another (due 2026-12-31).
 - 2026-11-10: the number of slots, the sample rate and the fallback rule are the owner's (`Q-S0023-1` to `Q-S0023-3`)
