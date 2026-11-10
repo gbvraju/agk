@@ -1,0 +1,1 @@
+- Each builder slot run writes when it ran and what it decided into its own lease marker, and `conductor.py sweep` prints each slot's last run and decision and one `UNACTED:` line for an `Assign:` no run acted on (brief #998, ADR-0425)
