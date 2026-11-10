@@ -523,3 +523,18 @@ def test_the_three_stacks_give_the_same_bytes_from_the_head(tmp_path):
     (root / "go.mod").write_text("", encoding="utf-8")
     built(root)
     assert (root / OUT).read_bytes() == first
+
+
+def test_a_test_path_with_no_file_name_has_an_empty_subject():
+    """REQ-016: brief #1007 answer 4 (red then green: a name the subject pattern does not match
+    crashed with a TypeError; it now has an empty stem)."""
+    import test_map
+
+    assert test_map.subject("tests/") == ("tests", "")
+    assert test_map.subject("tests/test_cart.py") == ("tests", "cart")
+
+
+def test_an_xcode_project_that_is_not_a_table_adds_no_entries(tmp_path):
+    """REQ-016: brief #1007 answer 3 (guard: a project file whose top value is a list maps
+    nothing, as before)."""
+    assert built(repo(tmp_path, STACKS, {PBX_FILE: "( A, B, )", **XCODE_TREE})) == {}
