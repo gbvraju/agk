@@ -83,7 +83,7 @@ def toml_list(items: list[str]) -> str:
 
 
 def detect_tests(root: Path) -> tuple[list[str], list[str]]:
-    """Directories (topmost) holding Python or front-end test files, and the patterns that matched."""
+    """Topmost directories holding Python or front-end test files, and the patterns matched."""
     dirs: set[str] = set()
     found: set[str] = set()
     for here, dirnames, filenames in os.walk(root):
