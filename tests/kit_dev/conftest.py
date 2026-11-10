@@ -18,7 +18,7 @@ INIT = KIT_ROOT / "scripts" / "agk" / "init.py"
 MANIFEST = KIT_ROOT / "kit" / "manifest.json"
 
 # A commit starts git's automatic maintenance, in the background on the runner's git, and
-# it writes under .git while a test lists the tree (brief #913). Off for every git here.
+# it writes under .git while a test lists the tree (brief #914). Off for every git here.
 _GIT_COUNT = int(os.environ.get("GIT_CONFIG_COUNT", "0"))
 for _n, (_key, _value) in enumerate((("maintenance.auto", "false"), ("gc.auto", "0"))):
     os.environ[f"GIT_CONFIG_KEY_{_GIT_COUNT + _n}"] = _key

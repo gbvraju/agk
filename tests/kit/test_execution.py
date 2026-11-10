@@ -342,7 +342,7 @@ def test_it_writes_nothing(repo, tmp_path):
 
 
 def test_a_commit_in_a_kit_test_starts_no_background_git(repo):
-    """REQ-016: brief #913: a commit starts no maintenance that could write during a listing."""
+    """REQ-016: brief #914: a commit starts no maintenance that could write during a listing."""
     repo.write("agk.toml", 'default_branch = "main"\n')
     repo.git("add", "-A")
     proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
