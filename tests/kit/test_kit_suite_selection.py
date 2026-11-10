@@ -8,6 +8,10 @@ the step `Project tests` (`project_tests.plan`: the same map, `always_full` list
 `[proof]` area); otherwise, and whenever that plan is full, the kit's full suite as before. It
 prints which mode ran and the selected count; a bad setting fails it with one line naming it.
 
+Brief #980 (ADR-0419, REQ-051): a selected pytest run gains `-n <workers>` by the full suite's rule
+when its interpreter imports xdist, and a selection of at least `[testing] full_when_share` of the
+suite's test files runs the full suite instead; the selected file list never changes.
+
 Each case is an invented kit tree in a temporary git repository. `PY` is a stub runner: it records
 a `-m pytest` call (the full suite) in a log outside the tree and runs every other call with the
 real interpreter; the `[proof]` area's command only records the files it was given.
@@ -26,9 +30,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "governance.yml"
 MAP = 'map = [ { code = "src/billing/**", tests = ["tests/kit/test_pay.py"] } ]\n'
-SELECTED = (
-    'profile = "fast"\npr_tests = "selected"\nalways_full = ["src/core.py"]\n' + MAP
-)
+SELECTED = 'profile = "fast"\npr_tests = "selected"\nalways_full = ["src/core.py"]\n' + MAP
 
 
 @pytest.fixture
@@ -36,8 +38,11 @@ def outside(tmp_path_factory) -> Path:
     return tmp_path_factory.mktemp("outside")
 
 
-def toml(outside: Path, testing: str = SELECTED, version: str = "1.0.0") -> str:
+def toml(
+    outside: Path, testing: str = SELECTED, version: str = "1.0.0", area: str | None = None
+) -> str:
     log = outside / "ran.log"
+    area = area or f"echo kit {{files}} >> {log}"
     return (
         f'version = "{version}"\n'
         'default_branch = "main"\nlint_paths = ["scripts/agk"]\n'
@@ -45,7 +50,7 @@ def toml(outside: Path, testing: str = SELECTED, version: str = "1.0.0") -> str:
         f"project_tests = 'echo project >> {log}'\n"
         "[proof]\n"
         f'kit = {{ dirs = ["tests/kit"], patterns = ["test_*.py"], '
-        f"command = 'echo kit {{files}} >> {log}' }}\n"
+        f"command = '{area}' }}\n"
         "[testing]\n" + testing
     )
 
@@ -106,6 +111,9 @@ def kit_tree(
             "src/core.py": "base\n",
             "tests/kit/test_pay.py": "# guards pay\n",
             "tests/kit/test_core.py": "# guards core\n",
+            "tests/kit/test_one.py": "# guards one\n",
+            "tests/kit/test_two.py": "# guards two\n",
+            "tests/kit/test_three.py": "# guards three\n",
             "docs/notes.md": "base\n",
         },
     )
@@ -235,3 +243,117 @@ def test_the_workflow_passes_the_event_to_tests_of_the_checks():
     step = text.split("- name: Tests of the checks\n", 1)[1].split("- name: ", 1)[0]
     assert "EVENT: ${{ github.event_name }}" in step, step
     assert "run: make -f agk.mk agk-test" in step
+
+
+def interpreter(outside: Path) -> Path:
+    """A stub `python3` for a `[proof]` area: `-c` is the xdist probe (fails with NO_XDIST set),
+    any other call is recorded as `area <args>`."""
+    path = outside / "bin" / "python3"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "-c" ]; then [ -z "$NO_XDIST" ]; exit $?; fi\n'
+        f'echo "area $*" >> "{outside / "ran.log"}"\n',
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+    return path
+
+
+def pytest_area(outside: Path, prefixed: bool) -> str:
+    """A `[proof]` area command that is a pytest command; PREFIXED puts a shell step before it, as
+    the kit's own `[proof.kit]` command does."""
+    command = f"AGK_KIT_TESTS=1 {interpreter(outside)} -m pytest -q {{files}}"
+    return f"(true) >/dev/null 2>&1 || true; {command}" if prefixed else command
+
+
+def expected_workers() -> int:
+    return max(1, os.cpu_count() or 1)
+
+
+@pytest.mark.parametrize("prefixed", [False, True])
+def test_a_selected_pytest_run_gets_the_workers_when_xdist_imports(tmp_path, outside, prefixed):
+    """REQ-051: brief #980 answer 2, test (a) (a selected run takes `-n` as the full suite does)."""
+    testing = SELECTED + 'workers = "auto"\n'
+    root = kit_tree(tmp_path, toml(outside, testing, area=pytest_area(outside, prefixed)))
+    proc = run(root, outside, "pull_request")
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 0, out
+    workers = expected_workers()
+    tail = f" -n {workers}" if workers > 1 else ""
+    assert ran(outside) == [f"area -m pytest -q tests/kit/test_pay.py{tail}"], out
+    assert "tests: mode selected, 1 test file (event pull_request)" in out.splitlines(), out
+
+
+def test_without_xdist_the_selected_run_stays_single_and_names_the_setting(tmp_path, outside):
+    """REQ-051: brief #980 answer 2, test (b) (no xdist: no `-n`, one line names the setting)."""
+    testing = SELECTED + "workers = 3\n"
+    root = kit_tree(tmp_path, toml(outside, testing, area=pytest_area(outside, True)))
+    proc = run(root, outside, "pull_request", NO_XDIST="1")
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 0, out
+    assert ran(outside) == ["area -m pytest -q tests/kit/test_pay.py"], out
+    named = [line for line in out.splitlines() if "setting: testing.workers" in line]
+    assert len(named) == 1 and "one process" in named[0], out
+
+
+def test_a_selected_run_with_one_worker_is_unchanged(tmp_path, outside):
+    """REQ-051: brief #980 answer 2 (with `workers` 1 the selected run is the command of today)."""
+    testing = SELECTED + "workers = 1\n"
+    root = kit_tree(tmp_path, toml(outside, testing, area=pytest_area(outside, False)))
+    proc = run(root, outside, "pull_request")
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 0, out
+    assert ran(outside) == ["area -m pytest -q tests/kit/test_pay.py"], out
+    assert "setting: testing.workers" not in out, out
+
+
+def test_a_selection_at_the_share_runs_the_full_suite(tmp_path, outside):
+    """REQ-051: brief #980 answer 3 and test (c) (a wide selection runs the full suite)."""
+    testing = SELECTED + "full_when_share = 0.2\n"
+    root = kit_tree(tmp_path, toml(outside, testing))
+    proc = run(root, outside, "pull_request")
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 0, out
+    assert is_full(ran(outside)), out
+    assert "tests: mode full (selection 1 of 5 files)" in out.splitlines(), out
+
+
+def test_a_selection_below_the_share_stays_selected(tmp_path, outside):
+    """REQ-051: brief #980 answer 3 (below the share, the default 0.5 here, the selection runs)."""
+    root = kit_tree(tmp_path, toml(outside, SELECTED + "full_when_share = 0.5\n"))
+    proc = run(root, outside, "pull_request")
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 0, out
+    assert ran(outside) == ["kit tests/kit/test_pay.py"], out
+
+
+@pytest.mark.parametrize("value", ["0", "1.5", '"half"', "true"])
+def test_a_bad_share_fails_naming_the_setting(tmp_path, outside, value):
+    """REQ-051: brief #980 answer 3 (a bad `full_when_share` is refused, naming the setting)."""
+    root = kit_tree(tmp_path, toml(outside, SELECTED + f"full_when_share = {value}\n"))
+    proc = run(root, outside, "pull_request")
+    out = proc.stdout + proc.stderr
+    assert proc.returncode != 0
+    assert ran(outside) == []
+    assert "setting: testing.full_when_share" in out, out
+
+
+def test_the_selected_file_list_is_the_same_with_workers(tmp_path, outside):
+    """REQ-051: brief #980 answer 4 and test (d) (only how the selection runs changes)."""
+    seen = []
+    for workers in ("1", '"auto"'):
+        (outside / "ran.log").unlink(missing_ok=True)
+        testing = SELECTED + f"workers = {workers}\n"
+        here = tmp_path / workers.strip('"')
+        root = kit_tree(here, toml(outside, testing, area=pytest_area(outside, True)))
+        proc = run(root, outside, "pull_request")
+        out = proc.stdout + proc.stderr
+        assert proc.returncode == 0, out
+        lines = ran(outside)
+        assert len(lines) == 1, out
+        files = [w for w in lines[0].split() if w.startswith("tests/")]
+        selected = [x for x in out.splitlines() if x.startswith("regression: ")]
+        seen.append((sorted(files), selected))
+    assert seen[0] == seen[1]
+    assert seen[0][0] == ["tests/kit/test_pay.py"]
