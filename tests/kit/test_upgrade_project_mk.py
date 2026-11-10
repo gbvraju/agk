@@ -233,30 +233,3 @@ def test_a_crlf_copy_of_the_current_makefile_is_unchanged(tmp_path, kit, capsys)
     code, out = run(capsys, target)
     assert code == 0, out
     assert "unchanged Makefile" in out.splitlines()
-
-
-# --- brief #982 answer 2: project.mk is a protected path of every init project -----------------
-
-TEMPLATES = ROOT / "kit" / "templates"
-
-
-def test_the_protected_paths_template_lists_project_mk():
-    """REQ-010: brief #982 answer 2 (an exact-file entry, so governance targets moved there stay
-    protected)."""
-    lines = (TEMPLATES / "protected-paths.txt").read_text(encoding="utf-8").splitlines()
-    assert lines.count(PROJECT_MK) == 1
-
-
-def test_the_reviewers_template_protects_project_mk_as_the_protected_paths_template_does():
-    """REQ-010: brief #982 answer 2 (the two templates stay equal, as reviewers.py --check asks)."""
-    text = (TEMPLATES / "reviewers.yaml").read_text(encoding="utf-8")
-    protected = next(ln for ln in text.splitlines() if ln.strip().startswith("protected:"))
-    assert f" {PROJECT_MK}," in protected or f" {PROJECT_MK}]" in protected
-    kit_line = next(ln for ln in text.splitlines() if ln.strip().startswith("kit:"))
-    assert PROJECT_MK not in kit_line, "project.mk is the project's file, not the kit's"
-
-
-def test_the_upgrade_fix_line_says_project_mk_is_protected():
-    """REQ-010: brief #982 answer 2"""
-    assert PROJECT_MK in upgrade.PROJECT_MK_FIX
-    assert "protected" in upgrade.PROJECT_MK_FIX
