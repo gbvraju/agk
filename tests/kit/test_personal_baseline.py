@@ -294,14 +294,16 @@ def test_rule18_a_repository_without_the_table_reads_as_today(tmp_path):
 
 FLOOR_STUB = """import pathlib, sys
 bad = pathlib.Path("bad.txt").is_file()
-cases = [("tests/test_shop.py", "test_cart_total", not bad), ("tests/test_shop.py", "test_login", False)]
+cases = [("tests/test_shop.py", "test_cart_total", not bad)]
+cases.append(("tests/test_shop.py", "test_login", False))
 if bad:
     cases.append(("tests/test_shop.py", "test_new_on_head", False))
 rows = []
 for file, name, ok in cases:
     body = "" if ok else '<failure message="assert 1 == 2"/>'
     rows.append(f'<testcase classname="x" file="{file}" name="{name}">{body}</testcase>')
-pathlib.Path(sys.argv[1]).write_text("<testsuite>" + "".join(rows) + "</testsuite>", encoding="utf-8")
+text = "<testsuite>" + "".join(rows) + "</testsuite>"
+pathlib.Path(sys.argv[1]).write_text(text, encoding="utf-8")
 pathlib.Path("ran.txt").write_text("ran", encoding="utf-8")
 sys.exit(1)
 """
@@ -333,7 +335,11 @@ def floor_clone(tmp_path: Path, head_bad: bool, base_bad: bool = False) -> Path:
     clone = tmp_path / "clone"
     clone.mkdir()
     run_git(clone, "init", "-q", "-b", "main")
-    for key, value in (("user.email", "t@example.com"), ("user.name", "t"), ("commit.gpgsign", "false")):
+    for key, value in (
+        ("user.email", "t@example.com"),
+        ("user.name", "t"),
+        ("commit.gpgsign", "false"),
+    ):
         run_git(clone, "config", key, value)
     (clone / "floor_stub.py").write_text(FLOOR_STUB, encoding="utf-8")
     (clone / "whole_floor_stub.py").write_text(WHOLE_FLOOR_STUB, encoding="utf-8")
@@ -366,7 +372,9 @@ def floor(clone: Path, sidecar: Path, path: str, *extra: str):
     cmd = [sys.executable, str(SCRIPTS / "personal.py"), "floor", "--clone", str(clone)]
     return subprocess.run(  # nosec B603 - fixed argument list, no shell
         [*cmd, "--sidecar", str(sidecar), "--base", "main", *extra],
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
 
@@ -377,7 +385,9 @@ def step_lines(out: str) -> list[str]:
 def test_floor_a_clean_range_passes_the_secret_scan(tmp_path):
     """REQ-048 AC5: rule 18 (gitleaks over the range finds nothing: step one passes)."""
     clone = floor_clone(tmp_path, head_bad=False)
-    done = floor(clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, False), "--approve")
+    done = floor(
+        clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, False), "--approve"
+    )
     assert "floor: secret-scan ok" in done.stdout, done.stdout + done.stderr
     assert "floor: no-regression ok" in done.stdout
     assert done.stdout.strip().endswith("floor: passed")
@@ -387,7 +397,9 @@ def test_floor_a_clean_range_passes_the_secret_scan(tmp_path):
 def test_floor_a_finding_fails_naming_the_step_never_the_finding(tmp_path):
     """REQ-048 AC5: rule 18 and principle 8 (a finding fails step one; its text is not printed)."""
     clone = floor_clone(tmp_path, head_bad=False)
-    done = floor(clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, True), "--approve")
+    done = floor(
+        clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, True), "--approve"
+    )
     assert done.returncode == 1
     assert "floor: secret-scan FAIL" in done.stdout
     assert "value-example-com" not in done.stdout + done.stderr
@@ -397,7 +409,9 @@ def test_floor_a_finding_fails_naming_the_step_never_the_finding(tmp_path):
 def test_floor_without_gitleaks_fails_with_the_line_of_q_s0041_15(tmp_path):
     """REQ-048 AC5: rule 18 and Q-S0041-15 (no gitleaks: the floor fails; no deferral to CI)."""
     clone = floor_clone(tmp_path, head_bad=False)
-    done = floor(clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, None), "--approve")
+    done = floor(
+        clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, None), "--approve"
+    )
     assert done.returncode == 1
     assert "floor: secret scan not run (gitleaks not installed)" in done.stdout
     assert "deferred" not in done.stdout
@@ -406,7 +420,9 @@ def test_floor_without_gitleaks_fails_with_the_line_of_q_s0041_15(tmp_path):
 def test_floor_per_test_a_test_that_passed_on_the_base_and_fails_on_the_head_fails(tmp_path):
     """REQ-048 AC5: rule 18 (with `{junit}`: the regression is named by its test id)."""
     clone = floor_clone(tmp_path, head_bad=True)
-    done = floor(clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, False), "--approve")
+    done = floor(
+        clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, False), "--approve"
+    )
     assert done.returncode == 1
     assert "floor: no-regression FAIL" in done.stdout
     assert "tests/test_shop.py::test_cart_total" in done.stdout
@@ -417,7 +433,9 @@ def test_floor_per_test_a_test_that_passed_on_the_base_and_fails_on_the_head_fai
 def test_floor_per_test_a_test_already_failing_on_the_base_does_not_fail(tmp_path):
     """REQ-048 AC5: rule 18 (an old failure is not a regression, though the head run exits 1)."""
     clone = floor_clone(tmp_path, head_bad=False)
-    done = floor(clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, False), "--approve")
+    done = floor(
+        clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, False), "--approve"
+    )
     assert "floor: no-regression ok" in done.stdout, done.stdout + done.stderr
     assert done.returncode == 0
 
@@ -432,9 +450,11 @@ def test_floor_per_test_a_test_already_failing_on_the_base_does_not_fail(tmp_pat
     ],
 )
 def test_floor_whole_run_compares_the_two_runs(tmp_path, base_bad, head_bad, line, code):
-    """REQ-048 AC5: rule 18 and Q-S0041-19 (no `{junit}`: a failing base is `unknown`, never a pass)."""
+    """REQ-048 AC5: rule 18 and Q-S0041-19 (no `{junit}`: a failing base is `unknown`)."""
     clone = floor_clone(tmp_path, head_bad=head_bad, base_bad=base_bad)
-    done = floor(clone, floor_sidecar(tmp_path, junit=False), scanner_dir(tmp_path, False), "--approve")
+    done = floor(
+        clone, floor_sidecar(tmp_path, junit=False), scanner_dir(tmp_path, False), "--approve"
+    )
     assert line in done.stdout, done.stdout + done.stderr
     assert done.returncode == code
     if code:
@@ -460,7 +480,9 @@ def test_floor_every_level_gives_the_same_two_steps(tmp_path, level):
     clone = floor_clone(tmp_path, head_bad=True)
     path = scanner_dir(tmp_path, False)
     plain = floor(clone, floor_sidecar(tmp_path / "a", junit=True), path, "--approve")
-    leveled = floor(clone, floor_sidecar(tmp_path / "b", junit=True, level=level), path, "--approve")
+    leveled = floor(
+        clone, floor_sidecar(tmp_path / "b", junit=True, level=level), path, "--approve"
+    )
     assert f"floor: level {level}" in leveled.stdout
     assert "floor: level light" in plain.stdout
     assert step_lines(leveled.stdout) == step_lines(plain.stdout)
@@ -469,10 +491,12 @@ def test_floor_every_level_gives_the_same_two_steps(tmp_path, level):
 
 
 def test_floor_the_clone_and_its_git_folder_are_unchanged(tmp_path):
-    """REQ-048 AC5: rules 4 and 18 (both runs are in the sidecar's trees; the clone is only read)."""
+    """REQ-048 AC5: rules 4 and 18 (both runs are in the sidecar; the clone is only read)."""
     clone = floor_clone(tmp_path, head_bad=True)
     before = snapshot(clone)
-    done = floor(clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, False), "--approve")
+    done = floor(
+        clone, floor_sidecar(tmp_path, junit=True), scanner_dir(tmp_path, False), "--approve"
+    )
     assert done.returncode == 1
     assert snapshot(clone) == before
     assert run_git(clone, "status", "--porcelain") == ""
