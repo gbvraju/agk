@@ -1,0 +1,1 @@
+- The rule-cut command reads git status as UTF-8, so the kit encoding check passes again (brief #955, issue #953, Covered-by ADR-0404)
