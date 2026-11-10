@@ -24,6 +24,9 @@ plain labels.
 An unknown key or a value of the wrong kind is refused, naming `setting: failures.<key>` and never
 the value.
 
+`capacity_settings(root)` reads the optional `[capacity]` table (SPEC-0034 rule 1, brief #842,
+ADR-0409); an unknown key or a wrong value is refused, naming `setting: capacity.<key>`.
+
 `scorecard_settings(root)` reads the optional `[scorecard]` table (SPEC-0047 rule 3, brief #713):
 a line per metric and the windows `trend_weeks` and `close_weeks`, else the kit defaults. An
 unknown key, a non-number or a negative number is refused, naming `setting: scorecard.<key>`.
@@ -379,6 +382,54 @@ def caps_settings(root: Path) -> dict | None:
         if any(table[larger][k] < table[smaller][k] for k in CAP_KEYS):
             raise _refuse_caps(f"caps.{larger}")
     return {size: dict(table[size]) for size in CAP_SIZES}
+
+
+# --- the [capacity] table (SPEC-0034 rule 1, brief #842 build (b), ADR-0409) ---------------
+
+CAPACITY_PROFILES = ("auto", "full", "balanced", "small", "fixed")
+CAPACITY_NUMBERS = (
+    "max_builders",
+    "reviews_in_flight",
+    "builder_memory_gb",
+    "builder_cpus",
+    "builder_disk_gb",
+    "review_minutes",
+)
+REVIEW_MINUTES = 15
+
+
+class CapacitySettingError(CheckError):
+    """The `[capacity]` table is refused, naming the setting and never the value."""
+
+
+def _refuse_capacity(setting: str) -> CapacitySettingError:
+    return CapacitySettingError(f"the [capacity] table is refused (setting: capacity.{setting})")
+
+
+def capacity_settings(root: Path) -> dict | None:
+    """The `[capacity]` table with `profile` and `review_minutes` filled, or None without it; a
+    personal project (`forge = "files"`) reads `profile` as `small` when no table sets it."""
+    try:
+        source = config_source(root)
+    except (OSError, ValueError):
+        raise _refuse_capacity("table") from None
+    personal = isinstance(source.get("personal"), dict) and source["personal"].get("forge") == (
+        "files"
+    )
+    if "capacity" not in source and not personal:
+        return None
+    table = source.get("capacity", {})
+    if not isinstance(table, dict):
+        raise _refuse_capacity("table")
+    for key in sorted(table):
+        value = table[key]
+        if key == "profile":
+            if value not in CAPACITY_PROFILES:
+                raise _refuse_capacity(key)
+        elif key not in CAPACITY_NUMBERS or type(value) is not int or value < 1:
+            raise _refuse_capacity(key)
+    found = {"profile": "small" if personal else "auto", "review_minutes": REVIEW_MINUTES}
+    return found | table
 
 
 def main(argv: list[str] | None = None) -> int:
