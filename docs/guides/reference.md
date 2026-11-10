@@ -374,6 +374,16 @@ files in no area as "not run by proof"; without the table it prints `project_tes
 files only and runs no test. See [existing-codebase.md](existing-codebase.md#step-4-tell-the-proof-check-how-to-run-your-tests)
 and ADR-0185.
 
+## Smoke run after a merge
+
+    python3 scripts/agk/smoke.py [--base REF] [--head REF] [--run]
+
+Chooses the smoke run after a merge from what changed (by default the last merge on the default branch, read from local git)
+and prints one line, `smoke: <choice>: <reason>`: the `frontend` or `contract` kind of `[testing] smoke` when every changed
+file outside documentation matches its `code`, `none` for documentation only, and `full` (the `project_tests` run) for
+anything else or without the list. `--run` runs the choice under the heavy-step lock. It is never a gate. See SPEC-0044
+rule 8.
+
 ## Test map
 
     python3 scripts/agk/test_map.py build [--root DIR]
