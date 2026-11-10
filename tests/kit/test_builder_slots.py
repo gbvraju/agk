@@ -587,10 +587,10 @@ sys.path.insert(0, str(SCRIPTS))
 import conductor  # noqa: E402
 
 
-def logged(cid, decided: str, minutes: float = 30, slot: str = "s1", run: str = "r1") -> dict:
-    """A released marker whose run started `minutes` ago and decided `decided`."""
+def logged(cid, decided: str, minutes: float = 30, state: str = "released", slot="s1") -> dict:
+    """A marker whose run started `minutes` ago, a minute before its stamp, deciding `decided`."""
     start, end = ago(minutes), ago(minutes - 1)
-    body = f"Slot: released {end} {slot} {run}\nlast run: {start} to {end}\ndecided: {decided}"
+    body = f"Slot: {state} {end} {slot} r{cid}\nlast run: {start} to {end}\ndecided: {decided}"
     return comment(cid, "boss", body, start)
 
 
@@ -644,6 +644,12 @@ def test_a_renewal_keeps_the_log_lines(proj, stub):
     assert writes(stub)[0][2][1].endswith("\ndecided: assign #12")
 
 
+def began(marker_comment: dict) -> datetime:
+    """The start a logged marker records."""
+    stamp = marker_comment["body"].splitlines()[1].split()[2]
+    return datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+
+
 class Pool:
     """`session.pages` and `session.gh` of the conductor, in process, from saved answers."""
 
@@ -670,7 +676,8 @@ class Pool:
 
 def test_the_sweep_prints_each_slots_last_run_and_decision(monkeypatch, tmp_path, capsys):
     """REQ-041, REQ-054: brief #998 (b)."""
-    found = Pool(monkeypatch, tmp_path, [logged(1, "wait pr #977", 30)])
+    run = logged(1, "wait pr #977", 2, "active")
+    found = Pool(monkeypatch, tmp_path, [run])
     monkeypatch.setattr(conductor, "proof_lines", lambda *a: [])
     monkeypatch.setattr(conductor.caps, "over_lines", lambda *a: [])
     monkeypatch.setattr(conductor, "branch_line", lambda *a: "main: success at abc")
@@ -680,7 +687,7 @@ def test_the_sweep_prints_each_slots_last_run_and_decision(monkeypatch, tmp_path
     found.table[f"repos/{REPO}/issues?state=open"] = []
     assert conductor.sweep(found.root) == 0
     out = capsys.readouterr().out.splitlines()
-    start = datetime.strptime(ago(30), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    start = began(run)
     row = [x for x in out if x.startswith("slot s1: ")]
     assert row == [f"slot s1: idle, last run {start:%H:%M} decided wait pr #977"], out
     assert [x for x in out if x.startswith("slot s2: ")] == ["slot s2: dead (no lease yet)"]
@@ -693,12 +700,12 @@ def unacted(monkeypatch, tmp_path, comments: list) -> list[str]:
 
 def test_an_assign_older_than_a_run_that_decided_otherwise_is_unacted(monkeypatch, tmp_path):
     """REQ-041, REQ-054: brief #998 (c)."""
-    lines = unacted(
-        monkeypatch,
-        tmp_path,
-        [comment(2, "boss", "Assign: s1 #846 pr #965 fix list", ago(50)), logged(3, "wait", 40)],
-    )
-    start = datetime.strptime(ago(40), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    run = logged(3, "wait", 40)
+    said = [comment(2, "boss", "Assign: s1 #846 pr #965 fix list", ago(50)), run]
+    found = Pool(monkeypatch, tmp_path, said)
+    found.table[f"repos/{REPO}/issues/965/comments"] = []  # no `Report:` since the assignment
+    lines = conductor.unacted_lines(found.root, REPO, datetime.now(UTC))
+    start = began(run)
     assert lines == [
         f"UNACTED: Assign: s1 #846 pr #965 fix list (50 min; last run {start:%H:%M} decided wait)"
     ]
