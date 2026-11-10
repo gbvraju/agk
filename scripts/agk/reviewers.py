@@ -360,7 +360,8 @@ def confirmed_comments(
     confirmation, so team mode, and solo mode with nobody or more than one person listed, read none.
     A confirmation is a comment by that person whose lines are `Confirmed: <40-hex sha>`, then
     `Verdict: cleared|fix list|rejected <the same sha>`, then any lines (`Final:` lines, findings,
-    `Approve: SPEC-nnnn`, `Approve: design|inventory`), then `Shown:` and exactly three lines (the summary the person was shown),
+    `Approve: SPEC-nnnn`, `Approve: design|inventory`), then `Shown:` and exactly three lines (the
+    summary the person was shown),
     and last `confirmed by <login> in a session at <YYYY-MM-DDTHH:MM:SSZ>`, where the login is the
     comment's author. The sha must be a head the reader names: one of `heads` when given (the
     router: the head, or the parent of a head that may be its Final commit), and, when `runs` is
@@ -368,9 +369,9 @@ def confirmed_comments(
     line (`head_before_comment`). It adds, as the same author at the same time, one comment holding
     the verdict (its lines up to `Shown:`) and, for each `Approve: SPEC-nnnn` line, one comment
     `Approve: <sha> SPEC-nnnn`, and each `Approve: design|inventory` line that names the confirmed
-    sha as its own comment (brief #459). A comment posted through an app of `agent_apps`, or of any other
-    shape, adds nothing (answers 2, 3 and 7; the verdicts on f58803a and 1ae4fd4). Only the person
-    posts a confirmation; a session never does (session rule 29)."""
+    sha as its own comment (brief #459). A comment posted through an app of `agent_apps`, or of
+    any other shape, adds nothing (answers 2, 3 and 7; the verdicts on f58803a and 1ae4fd4). Only
+    the person posts a confirmation; a session never does (session rule 29)."""
     if not person:
         return list(comments)
     found: list[dict] = []

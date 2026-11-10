@@ -31,7 +31,10 @@ NO_LINE = "rule 9: a design sign-off row has no Approve line by an account in sp
 MORE = "rule 9: the sign-off commit changes more than docs/design/signoffs.md"
 LINK = "https://example.com/acme/books/pull/12#issuecomment-345"
 AT = "2026-11-10T12:00:00Z"
-HEADER = "# Design sign-offs\n\n| kind | version | digest | head | date | comment |\n|---|---|---|---|---|---|\n"
+HEADER = (
+    "# Design sign-offs\n\n| kind | version | digest | head | date | comment |\n"
+    "|---|---|---|---|---|---|\n"
+)
 
 
 def git(root: Path, *args: str) -> str:
@@ -60,7 +63,8 @@ def project(root: Path, solo: bool = False) -> str:
     """A repository whose head is the prototype's head, the one the person's line names."""
     git(root, "init", "-q", "-b", "main")
     if solo:
-        put(root, "config/reviewers.yaml", f"version: 1\nverdict_authors: [{OWNER}]\nspec_approvers: [{OWNER}]\n")
+        roles = f"version: 1\nverdict_authors: [{OWNER}]\nspec_approvers: [{OWNER}]\n"
+        put(root, "config/reviewers.yaml", roles)
         put(root, "agk.toml", 'review_mode = "solo"\n')
     else:
         roles = f"version: 1\nverdict_authors: [{CONDUCTOR}]\nspec_approvers: [{OWNER}]\n"

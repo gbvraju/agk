@@ -2,10 +2,10 @@
 
 `design_signoff.frozen_problems(root)` compares each `design` row of `docs/design/signoffs.md` with
 `version_digest` of its folder and fails `rule 9: docs/design/prototype/<version>: a signed-off
-version changed`, naming the version and never a digest; `screenshots/` stays outside. `check_design.py`
-calls it, and a theme whose evidence line names a prototype version reads approved only with a
-`design` row of a matching digest (rule 12). No check writes a file. Invented data only, in
-`tmp_path`; files only, no network.
+version changed`, naming the version and never a digest; `screenshots/` stays outside.
+`check_design.py` calls it, and a theme whose evidence line names a prototype version reads
+approved only with a `design` row of a matching digest (rule 12). No check writes a file.
+Invented data only, in `tmp_path`; files only, no network.
 """
 
 from __future__ import annotations
