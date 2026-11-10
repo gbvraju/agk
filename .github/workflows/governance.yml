@@ -2,12 +2,12 @@
 # required status check and does not change. Each check step runs unless the run is cancelled, so every failure shows
 # on its own step; the job still fails if any step fails. From `PR body file` on, every step runs unless the run is
 # cancelled (brief #261): a failed body step hides no lint, test or scan, and an edit cures only a run that reached them. The same checks run locally as `make -f agk.mk agk-governance`.
-# The merge queue (brief #972, ADR-0417, amendment 158): on `merge_group` the job runs on the queue's commit, with the tests selected
-# for the batch: the test steps get `EVENT=merge_group`, which runs the full suite (a superset of the batch's selection, its
+# The merge queue (brief #972, ADR-0417, amendment 158): on `merge_group` the job runs on the queue's commit. The test steps get
+# `EVENT=merge_group`, which runs the full suite (a superset of the batch's selection, its
 # `always_full` and `[testing] pre_merge_tests`; Q-972-5). `AGK_BASE` is never set there, so the checks that read the pull request
 # body behave as on a push; the pull-request body checks run on a pull request only, where they already passed on the head. The
-# secret scan reads the queue's base sha (`AGK_QUEUE_BASE`). The job and check names do not change, so the required checks keep
-# their names.
+# secret scan reads the queue's base sha (`QUEUE_BASE`, its own step's env). The job and check names do not change, so the
+# required checks keep their names.
 name: governance
 
 # A run for an edited description is named `governance edited`, every other one `governance full`: the first step of the partial run reads
@@ -89,13 +89,6 @@ jobs:
           else
             echo "paused=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Base of the merge queue
-        if: ${{ github.event_name == 'merge_group' && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
-        env:
-          QUEUE_BASE: ${{ github.event.merge_group.base_sha }}
-        run: |
-          # Brief #972: the queue's commit is the batch on top of this base; only the secret scan reads it.
-          echo "AGK_QUEUE_BASE=$QUEUE_BASE" >> "$GITHUB_ENV"
       - name: Status-only final commit
         id: status
         if: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
@@ -328,6 +321,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           PUSH_BEFORE: ${{ github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          QUEUE_BASE: ${{ github.event.merge_group.base_sha }}
         run: |
           # The open-source gitleaks binary, not its action, which needs a licence key on a repository owned by an organisation
           # (brief #258, ADR-0158); no secret and no permission beyond the job's.
@@ -363,8 +357,8 @@ jobs:
           elif [ "$EVENT" = push ] && [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != 0000000000000000000000000000000000000000 ] \
             && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
             range="$PUSH_BEFORE..$HEAD_SHA"
-          elif [ "$EVENT" = merge_group ] && [ -n "${AGK_QUEUE_BASE:-}" ]; then
-            range="$AGK_QUEUE_BASE..$HEAD_SHA"
+          elif [ "$EVENT" = merge_group ] && [ -n "$QUEUE_BASE" ] && git cat-file -e "$QUEUE_BASE^{commit}" 2>/dev/null; then
+            range="$QUEUE_BASE..$HEAD_SHA"
           else
             range="$HEAD_SHA"
           fi

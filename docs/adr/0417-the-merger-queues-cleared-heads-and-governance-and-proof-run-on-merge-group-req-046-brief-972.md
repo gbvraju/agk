@@ -25,11 +25,14 @@ keeps `merge_queue = false`; the merger job's timeout is the part that helps her
    prints `already queued`; a head GitHub reports as moved prints `refused: head moved`. Outside Actions it is refused
    with a line naming rule 2a, before any GraphQL call: sessions stay REST-only. With the setting off it merges as today.
 2. `.github/workflows/governance.yml` and `proof.yml` run on `merge_group: types: [checks_requested]`, on the queue's
-   commit, with the tests selected for the batch against the queue's base sha plus `[testing] pre_merge_tests`. Job and
-   check names do not change; the pull-request body checks stay pull-request only.
-3. `.github/workflows/merger.yml`: the merger job ends after 30 minutes (`timeout-minutes`), and a new job, on a failed
-   `governance` or `proof` run of `merge_group`, posts one `Removed from the merge queue: <check> failed on <sha12>` line
-   on the pull request the queue branch names, never twice for one queue sha.
+   commit. Governance's test steps run the full suite there, a superset of the batch's selection, `always_full` and
+   `[testing] pre_merge_tests`, because the kit's selection reads only the `pull_request` event and its files are outside
+   the brief (`Q-972-5`); the secret scan covers the queue's base to its commit. `AGK_BASE` stays set by the one
+   `Base of the merge ref` step, so the checks that read the body behave as on a push, and proof takes the default
+   branch as its base. Job and check names do not change; the pull-request body checks stay pull-request only.
+3. `.github/workflows/merger.yml`: the merger job ends after 30 minutes (`timeout-minutes`), and a step of that job,
+   on a failed `governance` or `proof` run of `merge_group`, posts one `Removed from the merge queue: <check> failed on
+   <sha12>` line on the pull request the queue branch names, never twice for one queue sha (no new job: the cost rule).
 4. `agk.toml` carries `merge_queue = false` with this ADR; `doctor.py` prints `merge queue: on|off` from the setting
    alone. The getting-started guide gives the ruleset settings and the switch-over order.
 

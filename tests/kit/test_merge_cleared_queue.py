@@ -327,7 +327,10 @@ def test_governance_and_proof_run_on_the_merge_queue(name):
         block
     )
     text = (WORKFLOWS / name).read_text(encoding="utf-8")
-    assert "github.event_name == 'merge_group'" in text  # the job is not skipped on the queue's ref
+    job_if = re.search(r"^jobs:\n  \w+:\n    if: (.+)$", text, re.MULTILINE)
+    assert job_if, name  # the job is not skipped on the queue's ref
+    allowed = ("github.event_name == 'merge_group'", "github.event_name != 'pull_request' ||")
+    assert any(words in job_if.group(1) for words in allowed), job_if.group(1)
 
 
 def test_no_other_workflow_runs_on_the_merge_queue():

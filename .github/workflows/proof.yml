@@ -19,8 +19,9 @@ name: proof
 # (documentation only, say) is reported as skipped by proof.py, never left waiting; per-area runs are the `[proof]` table of
 # agk.toml (brief #305). No install is cached (the project's own command installs what it needs), and nothing is uploaded,
 # so no retention applies.
-# The merge queue (brief #972, ADR-0417): on `merge_group` the job runs on the queue's commit against the queue's base sha, with
-# the same steps; each queue commit has its own concurrency group and is never cancelled. The job name does not change.
+# The merge queue (brief #972, ADR-0417): on `merge_group` the job runs on the queue's commit with the same steps; `AGK_BASE` is
+# set only by `Base of the merge ref`, so proof.py takes the default branch, which the queue's commit is built on, as its base.
+# Each queue commit has its own concurrency group and is never cancelled. The job name does not change.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -81,13 +82,6 @@ jobs:
           else
             echo "paused=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Base of the merge queue
-        if: ${{ github.event_name == 'merge_group' && steps.paused.outputs.paused != 'true' }}
-        env:
-          QUEUE_BASE: ${{ github.event.merge_group.base_sha }}
-        run: |
-          # Brief #972: red-then-green of the batch's tests against the queue's base (the queue's commit is the batch on it).
-          echo "AGK_BASE=$QUEUE_BASE" >> "$GITHUB_ENV"
       - name: Status-only final commit
         # Not on `merge_group` (brief #972): the queue's commit is never a status-only commit of a pull request.
         if: ${{ github.event_name != 'merge_group' && steps.paused.outputs.paused != 'true' }}
