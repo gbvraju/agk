@@ -813,7 +813,7 @@ def test_e_a_verdict_on_another_head_or_by_an_unlisted_author_leaves_the_line_op
     ],
 )
 def test_f_a_reviewer_that_pushed_the_branch_is_refused(proj, stub, message):
-    """REQ-046: brief #1013 (f); the slot's name or this run's name in a commit's body or trailer."""
+    """REQ-046: brief #1013 (f); the slot's or this run's name in a commit's body or trailer."""
     reviewer(proj, stub, pushed=("first", message))
     out = slot(proj, stub, "--next", "r1")
     assert last(out) == "stop: reviewer pushed this branch"

@@ -1,4 +1,4 @@
-"""review_bundle.py: the one document a reviewer slot reads (brief #1013 answer 1, ADR-0431; REQ-046).
+"""review_bundle.py: the document a reviewer slot reads (brief #1013 answer 1, ADR-0431; REQ-046).
 
 Saved REST replies through a `gh` stub on `PATH`, a git repository in `tmp_path`, invented names,
 no network.
@@ -13,16 +13,27 @@ from pathlib import Path
 
 import pytest
 from test_session import REPO, clean_env, comment
-from test_session import proj, stub  # noqa: F401  (the fixtures of test_session)
+from test_session import proj as session_proj  # noqa: F401  (the fixtures of test_session)
+from test_session import stub as session_stub  # noqa: F401
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "agk" / "review_bundle.py"
 PULL = f"repos/{REPO}/pulls/7"
 ISSUES = f"repos/{REPO}/issues"
-BRIEF_TEXT = "Sentence: \"The widget counts invented rows.\"\nAdvances: REQ-001\n"
+BRIEF_TEXT = 'Sentence: "The widget counts invented rows."\nAdvances: REQ-001\n'
 
 
 @pytest.fixture
-def world(proj, stub):  # noqa: F811
+def stub(request):
+    return request.getfixturevalue("session_stub")
+
+
+@pytest.fixture
+def proj(request):
+    return request.getfixturevalue("session_proj")
+
+
+@pytest.fixture
+def world(proj, stub):
     """A pull request #7 of brief #5 whose head is this checkout's HEAD, with saved comments."""
     proj.commit(
         {
@@ -46,14 +57,14 @@ def world(proj, stub):  # noqa: F811
         [
             comment(11, "boss", "taken: s1 2026-11-10", "2026-11-10T09:00:00Z"),
             comment(12, "boss", "Answer: Q-5-1 three rows", "2026-11-10T09:05:00Z"),
-            comment(13, "bot", "Progress: abc done 1/2; next: PROGRESS-TEXT", "2026-11-10T09:06:00Z"),
+            comment(13, "bot", "Progress: abc done 1/2; next: PROGRESS-TEXT", "2026-11-10T09:06Z"),
         ],
     )
     stub.serve(
         f"{ISSUES}/7/comments",
         [
             comment(21, "bot", f"Report: {sha[:7]} ready REPORT-TEXT", "2026-11-10T10:00:00Z"),
-            comment(22, "boss", f"Verdict: fix list {sha}\n\n1. Name the rows.", "2026-11-10T10:10:00Z"),
+            comment(22, "boss", f"Verdict: fix list {sha}\n\n1. Name it.", "2026-11-10T10:10Z"),
             comment(23, "boss", "Correction: the rows are three", "2026-11-10T10:20:00Z"),
             comment(24, "owner", "Approve: abc SPEC-0001", "2026-11-10T10:30:00Z"),
             comment(25, "boss", "Maintainer answer: Q-5-2 yes", "2026-11-10T10:40:00Z"),
