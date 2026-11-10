@@ -810,8 +810,9 @@ def _personal_value_ok(key: str, value: object) -> bool:
         return isinstance(value, str) and value in PERSONAL_CHOICES[key]
     if key in PERSONAL_RANGES:
         low, high = PERSONAL_RANGES[key]
-        whole = isinstance(value, int) and not isinstance(value, bool)
-        return whole and low <= value and (high is None or value <= high)
+        if not isinstance(value, int) or isinstance(value, bool):
+            return False
+        return low <= value and (high is None or value <= high)
     if key in PERSONAL_FLAGS:
         return isinstance(value, bool)
     if key == "test_command":  # only spaces would skip the no-regression step

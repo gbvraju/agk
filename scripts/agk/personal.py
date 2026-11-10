@@ -87,7 +87,7 @@ def write_tree(clone: Path, head: str, sidecar: Path) -> Path:
     if tree.exists():
         shutil.rmtree(tree)
     tree.mkdir(mode=0o700, parents=True)
-    with tarfile.open(fileobj=io.BytesIO(done.stdout)) as archive:
+    with tarfile.TarFile(fileobj=io.BytesIO(done.stdout)) as archive:
         archive.extractall(tree, filter="data")
     return tree
 

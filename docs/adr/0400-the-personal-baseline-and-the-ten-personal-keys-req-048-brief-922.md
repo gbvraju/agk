@@ -26,7 +26,7 @@ build (h), first part.
    `git archive` into the sidecar's `cache/trees/<head>/`, runs the command there once, without a shell, and writes
    `records/baseline.json`: `head`, `command`, `per_test`, `run` (`passed` or `failed`) and `failing`.
 3. With `{junit}` in the command, it is replaced by a report path under the sidecar's `cache/`, and `failing` lists
-   the id (`file::name`) of each test case with a failure or an error, sorted. Without it, `failing` is null and
+   the id (`file::name`, the classname where a case has no `file`) of each test case with a failure or an error, sorted. Without it, `failing` is null and
    `run` alone records the whole run (`Q-S0041-19`). A report that cannot be read is refused, naming the placeholder.
 4. `common.personal_table` checks each of the ten keys by its type and range, as rule 18 lists them; a boolean is
    never taken for a whole number. A wrong type, a value out of range, a `test_command` that is empty or only spaces
