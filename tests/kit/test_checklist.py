@@ -1,4 +1,4 @@
-"""The nine-point operations checklist (brief #799, REQ-054, ADR-0374).
+"""The nine-point operations checklist (brief #799, REQ-054, ADR-0374; brief #981, ADR-0420).
 
 `checklist.py` is read-only and judges saved facts: tests use invented saved documents (example.com
 names only) and a temporary root; no network, no `gh`.
@@ -31,13 +31,26 @@ NAMES = [
 ]
 
 
-def comment(issue: int, body: str, at: str) -> dict:
+CONDUCTOR = "conductor-example"
+CONDUCTOR_ISSUE = 5
+
+
+def comment(issue: int, body: str, at: str, author: str = "builder-example") -> dict:
     return {
         "issue_url": f"https://api.example.com/repos/o/r/issues/{issue}",
         "body": body,
         "created_at": at,
-        "user": {"login": "builder@example.com"},
+        "user": {"login": author},
+        "author": author,
     }
+
+
+def assign(brief: int, at: str = "2026-03-10T07:00:00Z", **kw) -> dict:
+    """An `Assign: s<brief> #<brief>` line on the conductor issue by the listed conductor."""
+    slot = kw.get("slot", f"s{brief}")
+    tail = kw.get("tail", "")
+    issue = kw.get("issue", CONDUCTOR_ISSUE)
+    return comment(issue, f"Assign: {slot} #{brief}{tail}", at, kw.get("author", CONDUCTOR))
 
 
 def day(hour: int, minute: int = 0) -> str:
@@ -72,6 +85,8 @@ def saved(**extra) -> dict:
         "briefs": [],
         "pr_tests": None,
         "local_mode": False,
+        "verdict_authors": [CONDUCTOR],
+        "conductor_issues": [CONDUCTOR_ISSUE],
     }
     return document | extra
 
@@ -172,17 +187,78 @@ def test_a_take_with_no_later_record_ends_at_the_stall_limit(tmp_path, capsys):
     assert "peak 1" in found[1][1]
 
 
-def test_conductor_share_is_starts_over_takes(tmp_path, capsys):
-    """REQ-054: brief #799 answer 2 (2)."""
-    document = saved(comments=[*takes(20, 21, 22, 23), report(1)])
+def test_conductor_share_is_assigned_starts_over_takes(tmp_path, capsys):
+    """REQ-054: brief #799 answer 2 (2); brief #981 answer 1."""
+    document = saved(comments=[assign(20), *takes(20, 21, 22, 23), report(4)])
     found = lines_of(capsys, project(tmp_path, document), tmp_path)
     assert found[2][0] == "partly"
-    assert "1 of 4" in found[2][1] and "25%" in found[2][1]
+    assert "conductor 1 of 4 (25%); by hand 3" in found[2][1]
+
+
+def test_hand_starts_are_not_counted_as_the_conductors(tmp_path, capsys):
+    """REQ-054: brief #981 answer 3 (a): a report's own start count, an Assign by someone else,
+    on another issue, for another brief or after the take are all starts by hand."""
+    document = saved(
+        comments=[
+            assign(20, author="person-example"),
+            assign(21, issue=99),
+            assign(23, slot="s22"),
+            *takes(20, 21, 22),
+            assign(23, at=day(9)),
+            *takes(23),
+            report(4),
+        ]
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert found[2][0] == "no"
+    assert "conductor 0 of 4 (0%); by hand 4" in found[2][1]
+
+
+def test_an_assign_followed_by_the_slots_take_is_counted_once(tmp_path, capsys):
+    """REQ-054: brief #981 answer 3 (b): any Assign form counts; one Assign starts one take."""
+    document = saved(
+        comments=[
+            assign(20),
+            assign(21, tail=" build (b)"),
+            *takes(20, 21),
+            comment(20, "taken: s20 2026-03-10", day(9)),
+        ]
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert found[2][0] == "partly"
+    assert "conductor 2 of 3 (67%); by hand 1" in found[2][1]
+
+
+def test_an_assign_by_a_listed_author_counts_whatever_the_case_of_the_login(tmp_path, capsys):
+    """REQ-054: brief #981 answer 1: authors compare as reviewers.authors_of lists them, lower
+    case without `@` (fix list of ed594c0, item 1)."""
+    document = saved(
+        comments=[assign(20, author="Conductor-Example"), *takes(20)],
+        verdict_authors=["@Conductor-Example"],
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "conductor 1 of 1 (100%); by hand 0" in found[2][1]
+
+
+def test_only_an_assign_line_session_acts_on_counts(tmp_path, capsys):
+    """REQ-054: brief #981 answer 1: the whole first line must be a brief form that the builder
+    session's Assign reader takes; trailing words or the `none` form start nothing (fix list of
+    ed594c0, item 2)."""
+    document = saved(
+        comments=[
+            assign(20, tail=" extra words"),
+            comment(CONDUCTOR_ISSUE, "Assign: s21 none", day(7), CONDUCTOR),
+            assign(22, tail=" pr #985 fix list"),
+            *takes(20, 21, 22),
+        ]
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "conductor 1 of 3 (33%); by hand 2" in found[2][1]
 
 
 def test_conductor_share_yes_and_stalls_replaced_counted(tmp_path, capsys):
     retake = comment(21, "taken: s9 2026-03-10 retakes", day(8))
-    document = saved(comments=[*takes(20), retake, report(2)])
+    document = saved(comments=[assign(20), assign(21, slot="s9"), *takes(20), retake])
     found = lines_of(capsys, project(tmp_path, document), tmp_path)
     assert found[2][0] == "yes"
     assert "stalls replaced 1" in found[2][1]
@@ -190,38 +266,80 @@ def test_conductor_share_yes_and_stalls_replaced_counted(tmp_path, capsys):
 
 def test_a_takeover_counts_as_a_stall_replaced(tmp_path, capsys):
     over = comment(21, "taken over: s9 2026-03-10", day(8))
-    document = saved(comments=[*takes(20), over, report(2)])
+    document = saved(comments=[assign(20), *takes(20), over])
     found = lines_of(capsys, project(tmp_path, document), tmp_path)
     assert "stalls replaced 1" in found[2][1]
 
 
-def test_conductor_share_no_when_it_started_none(tmp_path, capsys):
-    document = saved(comments=[*takes(20), report(0)])
+def test_conductor_share_no_when_it_assigned_none(tmp_path, capsys):
+    document = saved(comments=[*takes(20), report(1)])
     assert lines_of(capsys, project(tmp_path, document), tmp_path)[2][0] == "no"
 
 
-def test_conductor_share_unknown_without_a_report(tmp_path, capsys):
-    found = lines_of(capsys, project(tmp_path, saved(comments=takes(20))), tmp_path)
+@pytest.mark.parametrize("missing", ["verdict_authors", "conductor_issues"])
+def test_conductor_share_unknown_without_the_authors_or_the_issue(tmp_path, capsys, missing):
+    document = saved(comments=[assign(20), *takes(20)])
+    document[missing] = None
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
     assert found[2][0] == "unknown"
+    assert "not saved" in found[2][1]
 
 
 def test_a_report_on_another_issue_is_not_read(tmp_path, capsys):
-    stray = comment(99, "Conductor report x\nBuilders started (9): a.", day(9))
+    stray = comment(99, "Conductor report x\nBuilders started (9): a. Refused (0): b.", day(9))
     found = lines_of(capsys, project(tmp_path, saved(comments=[*takes(20), stray])), tmp_path)
-    assert found[2][0] == "unknown"
+    assert "refused unknown" in found[1][1]
 
 
 LINE_75 = (
     "pr tests: 12 runs; selected 9 of 12 (75%); test step 31.5 minutes; "
     "full: always_full 3; unknown: 0"
 )
+MEDIAN_FAST = "pr tests median: selected 2.5 minutes (9 runs); full 8.0 minutes (3 runs)"
+MEDIAN_SLOW = "pr tests median: selected 8.0 minutes (9 runs); full 9.0 minutes (3 runs)"
+FULL_SUITE = "full suite: median 300s; budget_seconds 600; 4 runs; slowest: x; workers: 2"
+WEEKLY = {"pr_tests": LINE_75, "pr_tests_median": MEDIAN_FAST, "full_suite": FULL_SUITE}
 
 
 def test_tests_share_and_minutes_from_the_weekly_line(tmp_path, capsys):
-    """REQ-054: brief #799 answer 2 (3)."""
-    found = lines_of(capsys, project(tmp_path, saved(pr_tests=LINE_75)), tmp_path)
+    """REQ-054: brief #799 answer 2 (3); brief #981 answer 2."""
+    found = lines_of(capsys, project(tmp_path, saved(**WEEKLY)), tmp_path)
     assert found[3][0] == "yes"
     assert "9 of 12" in found[3][1] and "31.5 minutes" in found[3][1]
+    assert "selected median 2.5 minutes; full suite median on main 5.0 minutes" in found[3][1]
+    assert "(weekly line)" in found[3][1]
+
+
+def test_tests_with_no_weekly_line_read_the_windows_figures(tmp_path, capsys):
+    """REQ-054: brief #981 answer 3 (c)."""
+    window = {"pr_tests": LINE_75, "pr_tests_median": MEDIAN_FAST, "full_suite": FULL_SUITE}
+    found = lines_of(capsys, project(tmp_path, saved(window_tests=window)), tmp_path)
+    assert found[3][0] == "yes"
+    assert "9 of 12" in found[3][1] and "(window)" in found[3][1]
+
+
+def test_a_weekly_line_with_no_runs_falls_back_to_the_window(tmp_path, capsys):
+    empty = "pr tests: 0 runs; selected 0 of 0 (none); test step 0.0 minutes; full: x"
+    window = {"pr_tests": LINE_75, "pr_tests_median": MEDIAN_FAST, "full_suite": FULL_SUITE}
+    document = saved(pr_tests=empty, window_tests=window)
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert found[3][0] == "yes" and "(window)" in found[3][1]
+
+
+def test_a_selected_median_slower_than_mains_full_median_reads_partly(tmp_path, capsys):
+    """REQ-054: brief #981 answer 3 (d): both medians are printed."""
+    found = lines_of(
+        capsys, project(tmp_path, saved(**WEEKLY | {"pr_tests_median": MEDIAN_SLOW})), tmp_path
+    )
+    assert found[3][0] == "partly"
+    assert "selected median 8.0 minutes; full suite median on main 5.0 minutes" in found[3][1]
+
+
+@pytest.mark.parametrize("missing", ["pr_tests_median", "full_suite"])
+def test_an_unknown_median_cannot_read_yes(tmp_path, capsys, missing):
+    found = lines_of(capsys, project(tmp_path, saved(**WEEKLY | {missing: None})), tmp_path)
+    assert found[3][0] == "partly"
+    assert "median" in found[3][1] and "unknown" in found[3][1]
 
 
 @pytest.mark.parametrize(
@@ -235,7 +353,8 @@ def test_tests_share_and_minutes_from_the_weekly_line(tmp_path, capsys):
     ],
 )
 def test_tests_statuses(tmp_path, capsys, line, expected):
-    assert lines_of(capsys, project(tmp_path, saved(pr_tests=line)), tmp_path)[3][0] == expected
+    document = saved(**WEEKLY | {"pr_tests": line})
+    assert lines_of(capsys, project(tmp_path, document), tmp_path)[3][0] == expected
 
 
 def test_parallel_yes_needs_the_peak_and_workers(tmp_path, capsys):
@@ -433,7 +552,8 @@ def test_cost_a_usage_not_shown_is_not_a_zero(tmp_path, capsys):
 
 def test_the_window_leaves_out_older_records(tmp_path, capsys):
     """REQ-054: brief #799 answer 1 (`--days`)."""
-    document = saved(comments=[*takes(20, at="2026-03-01T08:00:00Z"), report(1)])
+    old = "2026-03-01T08:00:00Z"
+    document = saved(comments=[assign(20, at=old), *takes(20, at=old)])
     found = lines_of(capsys, project(tmp_path, document), tmp_path, "--days", "2")
     assert found[2][0] == "unknown"  # nothing was taken in the window
     found = lines_of(capsys, project_again(tmp_path), tmp_path, "--days", "30")
@@ -536,7 +656,10 @@ def test_it_writes_nothing(tmp_path, capsys):
 # --- the saving step in metrics.py ------------------------------------------------------------
 
 
-def api_dir(tmp_path: Path) -> Path:
+WEEKLY_BODY = "\n".join(["x", FULL_SUITE, LINE_75, MEDIAN_FAST, "y", ""])
+
+
+def api_dir(tmp_path: Path, weekly: str = WEEKLY_BODY, more: dict | None = None) -> Path:
     folder = tmp_path / "api"
     folder.mkdir()
     responses = {
@@ -556,10 +679,17 @@ def api_dir(tmp_path: Path) -> Path:
             {"number": 3, "created_at": day(1), "closed_at": None, "body": "Depends-on: #2"},
             {"number": 4, "created_at": day(1), "closed_at": None, "pull_request": {}},
         ],
-        "issues-checklist-metrics": [{"body": "x\n" + LINE_75 + "\ny\n"}],
-        "checklist-open": [{"title": "Local mode since 2026-03-01"}],
+        "issues-checklist-metrics": [{"body": weekly}],
+        "checklist-open": [
+            {"number": 2, "title": "Local mode since 2026-03-01", "labels": []},
+            {
+                "number": CONDUCTOR_ISSUE,
+                "title": "Conductor",
+                "labels": [{"name": "agk-conductor"}],
+            },
+        ],
     }
-    for name, body in responses.items():
+    for name, body in {**responses, **(more or {})}.items():
         (folder / f"{name}.json").write_text(json.dumps(body), encoding="utf-8")
     return folder
 
@@ -582,6 +712,80 @@ def test_the_save_step_writes_the_document_checklist_reads(tmp_path, monkeypatch
     assert document["local_mode"] is True
 
 
+def test_the_save_step_keeps_authors_the_conductor_issue_and_the_weekly_medians(
+    tmp_path, monkeypatch
+):
+    """REQ-054: brief #981 answers 1 and 2: what points 2 and 3 read, from the same GETs."""
+    import facts
+
+    monkeypatch.setattr(facts, "build", lambda *a, **k: {"pull_requests": [], "flow": {}})
+    monkeypatch.setattr(metrics, "verdict_authors", lambda root: [CONDUCTOR])
+    target = tmp_path / "saved.json"
+    metrics.save_checklist(metrics.ApiDir(api_dir(tmp_path)), tmp_path, "o/r", 7, target, SAVED_AT)
+    document = json.loads(target.read_text(encoding="utf-8"))
+    assert document["comments"][0]["author"] == "builder-example"
+    assert document["verdict_authors"] == [CONDUCTOR]
+    assert document["conductor_issues"] == [CONDUCTOR_ISSUE]
+    assert document["pr_tests_median"] == MEDIAN_FAST
+    assert document["full_suite"] == FULL_SUITE
+    assert document["window_tests"] is None  # a weekly line with runs needs no window figures
+
+
+def test_with_no_weekly_line_the_save_step_keeps_the_windows_figures(tmp_path, monkeypatch):
+    """REQ-054: brief #981 answer 2: the figures metrics.py writes, for the pull requests closed
+    in the window, read with its own GETs (no new reader)."""
+    import facts
+
+    monkeypatch.setattr(facts, "build", lambda *a, **k: {"pull_requests": [], "flow": {}})
+    seen = []
+
+    def lines(ctx, details):
+        seen.append([d["number"] for d in details])
+        return (LINE_75, "most", MEDIAN_FAST, "reasons")
+
+    monkeypatch.setattr(metrics, "pr_tests_lines", lines)
+    monkeypatch.setattr(metrics, "full_suite_line", lambda ctx, details: FULL_SUITE)
+    listing = [
+        {"number": 50, "closed_at": day(9), "updated_at": day(9)},
+        {"number": 49, "closed_at": "2026-02-01T00:00:00Z", "updated_at": "2026-02-01T00:00:00Z"},
+    ]
+    more = {
+        "pulls": listing,
+        "pull-50": {"number": 50, "merged_at": day(9)},
+        "checklist-open": [],  # not local mode
+    }
+    target = tmp_path / "saved.json"
+    folder = api_dir(tmp_path, weekly="no lines here", more=more)
+    metrics.save_checklist(metrics.ApiDir(folder), tmp_path, "o/r", 7, target, SAVED_AT)
+    document = json.loads(target.read_text(encoding="utf-8"))
+    assert document["pr_tests"] is None
+    assert seen == [[50]]  # only the pull request closed in the window
+    assert document["window_tests"] == {
+        "pr_tests": LINE_75,
+        "pr_tests_median": MEDIAN_FAST,
+        "full_suite": FULL_SUITE,
+    }
+
+
+def test_in_local_mode_the_save_step_skips_the_windows_reads(tmp_path, monkeypatch):
+    """REQ-054: brief #981 answer 2: point 3 prints unknown in local mode, so the save reads no
+    runs or logs of the window for it (fix list of ed594c0, item 4)."""
+    import facts
+
+    monkeypatch.setattr(facts, "build", lambda *a, **k: {"pull_requests": [], "flow": {}})
+
+    def never(*a, **k):
+        raise AssertionError("the window's runs were read in local mode")
+
+    monkeypatch.setattr(metrics, "window_tests", never)
+    target = tmp_path / "saved.json"
+    folder = api_dir(tmp_path, weekly="no lines here")  # its open issues name local mode
+    metrics.save_checklist(metrics.ApiDir(folder), tmp_path, "o/r", 7, target, SAVED_AT)
+    document = json.loads(target.read_text(encoding="utf-8"))
+    assert document["local_mode"] is True
+    assert document["window_tests"] is None
+
+
 def test_save_leaves_unread_parts_unknown_not_empty(tmp_path, monkeypatch):
     import facts
 
@@ -593,6 +797,7 @@ def test_save_leaves_unread_parts_unknown_not_empty(tmp_path, monkeypatch):
     document = json.loads(target.read_text(encoding="utf-8"))
     assert document["comments"] is None and document["runs"] is None
     assert document["briefs"] is None and document["pr_tests"] is None
+    assert document["conductor_issues"] is None and document["window_tests"] is None
 
 
 def test_save_args_are_read(tmp_path):
