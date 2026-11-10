@@ -24,11 +24,14 @@ or imports, a change of `agk.toml` (the answer to Q-459-2 on #949, 2026-11-10).
    `-`, head) and (`design`, version, head) of first lines by accounts of `spec_approvers`, never through an app of
    `agent_apps`. In solo mode `confirmed_comments` adds such a line inside a `Confirmed:` comment as its own comment
    when it names the confirmed head, as `acceptance_heads` reads `Approve: acceptance`.
-2. **The rows (answer 2).** `check_final_clearance.py` reads the record at the head and at each parent with the new
-   `design_signoff.parse_rows(text)` (`rows(root)` calls it); a row absent at every parent is added. An added row
-   without its line fails `rule 9: a design sign-off row has no Approve line by an account in spec_approvers`; then a
-   commit that also changes another file than the record (against the first parent) fails
-   `rule 9: the sign-off commit changes more than docs/design/signoffs.md`. Without `--comments` it stays skipped.
+2. **The rows (answer 2, the fix list of 5aa97e0).** `check_final_clearance.py` reads the record with the new
+   `design_signoff.parse_rows(text)` (`rows(root)` calls it) at the head and at the merge base with the default branch
+   (the base rule 3a resolves; none resolving fails closed when the head has rows); a row absent at the merge base is
+   added by the pull request, in whichever commit. An added row without its line fails
+   `rule 9: a design sign-off row has no Approve line by an account in spec_approvers`; then each commit after the
+   merge base that adds a row (absent at every parent) and also changes another file than the record (against its
+   first parent) fails `rule 9: the sign-off commit changes more than docs/design/signoffs.md`. Without `--comments`
+   it stays skipped.
 3. **The frozen version (answer 3).** `design_signoff.frozen_problems(root)` fails each `design` row whose folder no
    longer has the row's digest, or is gone: `rule 9: docs/design/prototype/<version>: a signed-off version changed`,
    never a digest; `screenshots/` stays outside. `check_design.py` `cmd_check` calls it, and also runs when the record
