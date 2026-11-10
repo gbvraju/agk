@@ -109,7 +109,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import common
-import config
 import playbook_format
 from common import CheckError, matches, read_list
 from metrics import HOLDS_FILE, author_of, counted_authors, hold_rows
@@ -151,6 +150,8 @@ from session import (
     verdict_line,
 )
 from session import kind_of as task_kind  # SPEC-0045 rule 4; kind_of below is the lane's
+
+import config
 
 BUILDS_LINE = re.compile(r"Builds: (.+)")
 BUILD_ITEM = re.compile(r"\(([A-Za-z0-9._-]+)\)\s*(.*)")

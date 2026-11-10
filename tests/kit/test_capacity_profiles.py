@@ -124,7 +124,7 @@ def test_the_smaller_of_two_tables_is_the_ceiling_and_reviews_follow_it(
 ):
     """REQ-041: amendment 149 items 1 and 3 (smaller value wins; `reviews_in_flight` follows)."""
     got, lines = capacity(
-        proj, stub, monkeypatch, capsys, 8 * GIB, 'max_builders = 9\n[capacity]\nmax_builders = 2'
+        proj, stub, monkeypatch, capsys, 8 * GIB, "max_builders = 9\n[capacity]\nmax_builders = 2"
     )
     cap = got["capacity"]
     assert cap["ceiling"] == 2 and cap["reviews_in_flight"] == 2 and cap["profile"] == "auto"
@@ -262,7 +262,8 @@ def test_doctor_prints_the_profile_ceilings_figures_and_a_suggestion(tmp_path, m
 
 
 @pytest.mark.parametrize(
-    ("free", "profile"), [(4, "small"), (8, "balanced"), (31, "balanced"), (32, "full"), (None, None)]
+    ("free", "profile"),
+    [(4, "small"), (8, "balanced"), (31, "balanced"), (32, "full"), (None, None)],
 )
 def test_doctor_suggests_a_profile_by_free_memory(free, profile):
     """REQ-041: amendment 149 item 9 (`small` under 8 GB free, `balanced` under 32, `full`)."""

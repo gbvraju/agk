@@ -6,7 +6,7 @@
 - Related: SPEC-0034 rules 1 and 15, SPEC-0006 rule 5, amendment 149, ADR-0384, ADR-0223, ADR-0153, brief #842
 - Requirements: REQ-041
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `agk.toml`, `scripts/agk/`, `tests/kit/`
 
 ## Context
 
@@ -34,7 +34,9 @@ build (c).
    `os.sysconf`. A figure that cannot be read is `unknown` and left out.
 4. Every plan prints `Capacity: <n> of <ceiling> (<profile>; limit: <name> <figure>).`, replacing the line of ADR-0223,
    followed by ` Unknown: <names>.` when a counted figure cannot be read. A `Start 0` held by a profile figure names it.
-5. `doctor.py` gains the `capacity` row (`warn`): a refused table fails it; otherwise it prints the profile, the
+5. `agk.toml` maps `tests/kit/test_capacity_profiles.py` to `session_plan.py`, `config.py` and `doctor.py` in
+   `[[testing.map]]`, and `docs/guides/getting-started.md` no longer says `reviews_in_flight` is 3 by default.
+6. `doctor.py` gains the `capacity` row (`warn`): a refused table fails it; otherwise it prints the profile, the
    ceilings, the measured figures and the suggested profile (`small` under 8 GB free, `balanced` under 32 GB, `full`
    above), and it never fails the run.
 
