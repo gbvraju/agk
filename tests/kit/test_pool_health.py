@@ -331,8 +331,10 @@ def test_conductor_watch_with_no_event_returns_within_five_minutes(monkeypatch, 
     monkeypatch.setattr(conductor.session, "flow_int", lambda *a: 60)
     monkeypatch.setattr(conductor, "new_lines", lambda repo, since: [])
     monkeypatch.setattr(conductor, "renew_lease", lambda root: 0)
+    monkeypatch.setattr(conductor, "green_lines", lambda root, repo, since: [])
+    monkeypatch.setattr(conductor, "stall_report", lambda root, repo: [])
     assert conductor.watch("root", datetime.now(UTC), False) == 0
-    assert capsys.readouterr().out.strip() == "nothing new"
+    assert capsys.readouterr().out.strip() == "tick"  # ADR-0402
     assert clock.spent <= 300
 
 
@@ -348,6 +350,8 @@ def test_conductor_watch_is_bounded_while_github_cannot_be_read(monkeypatch, cap
     monkeypatch.setattr(conductor.session, "flow_int", lambda *a: 60)
     monkeypatch.setattr(conductor, "new_lines", broken)
     monkeypatch.setattr(conductor, "renew_lease", lambda root: 0)
+    monkeypatch.setattr(conductor, "green_lines", lambda root, repo, since: [])
+    monkeypatch.setattr(conductor, "stall_report", lambda root, repo: [])
     assert conductor.watch("root", datetime.now(UTC), False) == 0
     assert clock.spent <= 300
 
@@ -366,6 +370,8 @@ def test_conductor_watch_renews_at_each_pass_in_time(monkeypatch, capsys):
     monkeypatch.setattr(conductor.session, "flow_int", lambda *a: 60)
     monkeypatch.setattr(conductor, "new_lines", lambda repo, since: [])
     monkeypatch.setattr(conductor, "renew_lease", renew)
+    monkeypatch.setattr(conductor, "green_lines", lambda root, repo, since: [])
+    monkeypatch.setattr(conductor, "stall_report", lambda root, repo: [])
     conductor.watch("root", datetime.now(UTC), False)
     assert len(renewals) >= 2 and renewals[0] <= 2 and renewals[1] <= 300
 

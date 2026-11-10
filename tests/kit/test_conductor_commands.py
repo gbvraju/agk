@@ -783,7 +783,7 @@ def test_lease_take_posts_the_marker_when_there_is_none(proj, stub):
     made = posts(stub)
     assert len(made) == 1 and made[0][:2] == ["POST", PLAN]
     body = made[0][2][made[0][2].index("-f") + 1]
-    assert body.startswith("body=Conductor: active 20") and body.endswith(" c2")
+    assert body.startswith("body=Conductor: active 20") and " c2 since " in body  # ADR-0402
     assert body.split()[2].endswith("Z")
 
 
