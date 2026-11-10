@@ -631,7 +631,10 @@ def test_a_saved_file_that_is_not_json_is_unknown_not_a_crash(tmp_path, capsys):
 def test_a_record_with_no_time_is_skipped_not_a_crash(tmp_path, capsys):
     """REQ-016: brief #1004 answer 3: a take, a brief, a verdict and a closing time with no
     readable time are skipped as a missing field is; the command still prints its nine lines."""
-    untimed = [comment(22, "taken: s22 2026-03-10", None), comment(23, "taken: s23 2026-03-10", "x")]
+    untimed = [
+        comment(22, "taken: s22 2026-03-10", None),
+        comment(23, "taken: s23 2026-03-10", "x"),
+    ]
     stale = pull(62, 32, state="open", merged_at=None)
     stale["verdicts"] = [{"kind": "cleared", "sha": "a" * 40, "at": None}]
     document = saved(
