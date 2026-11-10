@@ -427,3 +427,72 @@ def test_a_slots_watch_renews_its_lease_before_it_waits(proj, stub):
     assert last(out) == "assign #12", out.stdout
     assert [c[0] for c in writes(stub)] == ["PATCH"]
     assert "Slot: active" in writes(stub)[0][2][1]
+
+
+# --- a slot alive when it ran on time (brief #960, ADR-0412) -----------------------------------
+
+import test_pool_health as health  # noqa: E402  (its gh stub and router, no fixtures)
+
+NINE = '[flow]\nbuilder_start = "assign"\nbuilder_slots = 9\nplan_issue = 61\n'
+ON_THREE = NINE.replace("builder_slots = 9", "builder_slots = 3")
+
+
+def pool(tmp_path: Path, toml: str = NINE):
+    """A project and the pool's gh stub, as `test_pool_health` builds them."""
+    root = tmp_path / "proj"
+    (root / "config").mkdir(parents=True)
+    (root / "config" / "reviewers.yaml").write_text(
+        "version: 1\nverdict_authors: [boss]\nspec_approvers: [owner]\n", encoding="utf-8"
+    )
+    (root / "agk.toml").write_text(toml, encoding="utf-8")
+    health.subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)  # nosec B603
+    return root, health.Stub(tmp_path)
+
+
+def pool_body(stub) -> str:
+    made = next(c for c in stub.writes() if c[1] == health.ISSUES)
+    return next(f[5:] for f in made[2] if f.startswith("body="))
+
+
+def test_nine_slots_released_twenty_minutes_ago_are_alive(tmp_path):
+    """REQ-041: brief #960 (a): an idle pool that ran on time is not down."""
+    root, stub = pool(tmp_path)
+    released = [health.slot(f"s{n}", n + 1, 20, "released") for n in range(1, 10)]
+    stub.fixtures[health.ASSIGNMENTS] = released
+    out = health.router(root, stub, tmp_path, "--health", "--dry-run")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "health: Builder pool down: ok" in out.stdout
+
+
+def test_a_slot_last_seen_three_hours_ago_is_dead_and_its_time_is_printed(tmp_path):
+    """REQ-041: brief #960 (b): dead means not seen within slot_seen_minutes; never is said."""
+    root, stub = pool(tmp_path, ON_THREE)
+    gone = health.slot("s2", 3, 180, "released")
+    stub.fixtures[health.ASSIGNMENTS] = [health.slot("s1", 2, 20, "released"), gone]
+    out = health.router(root, stub, tmp_path)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert health.opened(stub) == ["Builder pool down"]
+    body = pool_body(stub)
+    seen = gone["body"].split()[2]
+    assert f"s2 (last seen {seen})" in body and "s3 (never)" in body
+    assert "s1" not in body and "slot_seen_minutes" in body
+
+
+def test_an_open_pool_issue_is_updated_not_duplicated(tmp_path):
+    """REQ-041: brief #960 (c): one issue per title, as brief #916 did for the red alarm."""
+    root, stub = pool(tmp_path, ON_THREE)
+    stub.fixtures[health.ASSIGNMENTS] = [health.slot("s1", 2, 180, "released")]
+    stub.fixtures[health.HEALTH] = [{"number": 88, "title": "Builder pool down", "body": "older"}]
+    out = health.router(root, stub, tmp_path)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert health.opened(stub) == []
+    assert [c[:2] for c in stub.writes()] == [["PATCH", f"{health.ISSUES}/88"]]
+
+
+def test_a_bad_slot_seen_minutes_skips_the_health_naming_the_setting_only(tmp_path):
+    """REQ-041: the new key is a whole number, 1 or more; the refusal names it, not the value."""
+    root, stub = pool(tmp_path, ON_THREE + "slot_seen_minutes = 0\n")
+    out = health.router(root, stub, tmp_path)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "slot_seen_minutes" in out.stdout and stub.writes() == []
+
