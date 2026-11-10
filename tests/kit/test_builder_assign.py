@@ -204,7 +204,10 @@ def test_doctor_names_a_slot_with_no_run_in_the_last_hour(tmp_path):
 def test_doctor_names_a_slot_whose_marker_is_older_than_an_hour(tmp_path):
     """REQ-041: the verdict on 0534baa item 4; these reads ignore `since=`, so the marker's own
     time decides."""
-    markers = [said(1, f"Slot: active {stamp(2)} s1 r1"), said(2, f"Slot: active {stamp(90)} s2 r2")]
+    markers = [
+        said(1, f"Slot: active {stamp(2)} s1 r1"),
+        said(2, f"Slot: active {stamp(90)} s2 r2"),
+    ]
     result = doctor_script.slot_schedule_result(setting(tmp_path, ON), FakeReads(markers))
     assert result.status == "fail" and "no run in the last hour: s2" in result.message
 
