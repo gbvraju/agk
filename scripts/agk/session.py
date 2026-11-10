@@ -3,7 +3,7 @@
     python3 session.py watch --pr N [--interval S] [--timeout S]
     python3 session.py watch --merged N [--interval S] [--timeout S]
     python3 session.py next --session ID
-    python3 session.py queue --role conductor|builder|person [--author LOGIN]
+    python3 session.py queue --role conductor|builder|person|merger [--author LOGIN]
     python3 session.py review-queue [--all | --fingerprint]
     python3 session.py resume --pr N
     python3 session.py ids [--exclude-pr N]
@@ -22,8 +22,9 @@ than the start, on the pull request or on the brief named by its `Brief: #n` lin
 10), and with `label <name>` (or `label none`) when the `agk:` label that the router sets
 (SPEC-0032) changes from the one it read at its first poll; it prints its event and exits (no
 loop): each event is one wake. `queue` prints `#N <label>` for each open pull request whose router
-label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder: `agk:fix`,
-`agk:conflict`, `agk:ci-red`, of `--author` when given; person: `agk:approve`, `agk:ready`), or
+label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder: `agk:build`,
+`agk:fix`, `agk:conflict`, `agk:ci-red`, of `--author` when given; person: `agk:question`,
+`agk:approve`, `agk:owner-merge`, `agk:parked`; merger: `agk:merge-ready`, `agk:ready`), or
 `empty`, so a session that starts or restarts resumes from GitHub with one GET.
 `review-queue` (brief 306) prints, read-only, the open pull requests that need a conductor's verdict
 and why, one line `#N <head7> review: <reason>; ...` each, or `empty`: a pull request labelled
@@ -164,7 +165,7 @@ USAGE = (
     "       session.py next --session ID [--take]\n"
     "       session.py claim --session ID --brief N [--build X]\n"
     "       session.py after --session ID\n"
-    "       session.py queue --role conductor|builder|person [--author LOGIN]\n"
+    "       session.py queue --role conductor|builder|person|merger [--author LOGIN]\n"
     "       session.py review-queue [--all | --fingerprint]\n"
     "       session.py resume --pr N\n"
     "       session.py ids [--exclude-pr N]\n"
@@ -258,15 +259,16 @@ ROUTER_PAIR = ("Advances: none", "Priority: 0")  # written only by the router (S
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]+")
 STATE_PREFIX = "agk:"
 UNSET = object()
-ROLES = {
+ROLES = {  # amendment 150 item 4; agk:ready is the merger's until the next release (ADR-0385)
     "conductor": ("agk:review", "agk:ci-red"),
-    "builder": ("agk:fix", "agk:conflict", "agk:ci-red"),
-    "person": ("agk:approve", "agk:ready"),
+    "builder": ("agk:build", "agk:fix", "agk:conflict", "agk:ci-red"),
+    "person": ("agk:question", "agk:approve", "agk:owner-merge", "agk:parked"),
+    "merger": ("agk:merge-ready", "agk:ready"),
 }
 TAKEOVER = re.compile(r"taken over: (\S+) (\d{4}-\d{2}-\d{2})")
 HEAD_VERDICT = re.compile(r"Verdict: (cleared|fix list|rejected)(?: ([0-9a-f]{7,40}))?")
-BUILDER_LABELS = frozenset({"agk:fix", "agk:conflict", "agk:ci-red"})
-WAITING_LABELS = frozenset({"agk:ready", "agk:approve"})
+BUILDER_LABELS = frozenset(ROLES["builder"])
+WAITING_LABELS = frozenset({*ROLES["person"], *ROLES["merger"]})
 STALL_HOURS = 4
 SAFE_REF = re.compile(r"[A-Za-z0-9._/-]+")
 PROGRESS = re.compile(  # the step, then the usage ending of session rule 8 (SPEC-0049 rule 4)

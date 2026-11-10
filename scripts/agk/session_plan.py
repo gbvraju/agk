@@ -37,10 +37,10 @@ The plan, in the order it is decided:
    Every plan prints `Capacity: <n> of <ceiling> (<profile>; limit: <name> <figure>).`
 4. **The merge queue.** The merge rate is the merged pull requests of the last 14 days divided by
    the active hours (hour-long buckets, counted back from now, that hold a merge). While the
-   `agk:ready` pull requests exceed `merge_hours` times the rate, no session starts; a running
-   session is never stopped. With no merge in the window the rate is unknown and the limit does
-   not apply, and the plan says so.
-5. **The safe merge set.** The `agk:ready` pull requests that share no changed file (shared
+   cleared pull requests (`READY_LABELS`) exceed `merge_hours` times the rate, no session
+   starts; a running session is never stopped. With no merge in the window the rate is unknown
+   and the limit does not apply, and the plan says so.
+5. **The safe merge set.** The cleared pull requests that share no changed file (shared
    mechanical files aside), ordered by the waiting briefs each unblocks, then priority, then age,
    with those that change a protected path marked.
 6. **Drift.** A ready pull request more than `stale_commits` behind the default branch, and a
@@ -163,6 +163,7 @@ HEAVY_LOCK = "a builder runs each under lock.py run --name heavy"
 INDEPENDENT = "independent:"
 MERGED_ALL = "every build is merged; the conductor closes it"
 RULE = 15
+READY_LABELS = frozenset({"agk:merge-ready", "agk:owner-merge", "agk:ready"})  # ADR-0385
 WAITING_REPORT = re.compile(r"Report: \S+ (?:ready for review|fix list applied|merge of main)\b")
 GIB = 1024**3  # builder_memory_gb counts in GiB, the lower reading of a GB (Q-409-2)
 WINDOW_DAYS = 14
@@ -1316,7 +1317,7 @@ def session_names(busy: set[str], count: int) -> list[str]:
 
 
 def merge_set(root, s: Survey, ready: list[dict], waits: list[dict], briefs: dict) -> dict:
-    """The `agk:ready` pull requests that can be merged together, and the ones that go after."""
+    """The cleared pull requests (`READY_LABELS`) that merge together, and the ones after."""
     shared = [glob_regex(p) for p in shared_patterns(root)]
     protected = []
     try:
@@ -1527,7 +1528,7 @@ def build(root, record: bool = False) -> dict:
     limits += [(n, memory[n]["builders"]) for n, _ in MEASURES if isinstance(memory.get(n), dict)]
     limit, lowest = min(limits, key=lambda x: x[1])  # min keeps the first of a tie
     slots = max(0, lowest)
-    ready_prs = [p for p in s.prs if p.get("state") == "open" and "agk:ready" in label_names(p)]
+    ready_prs = [p for p in s.prs if p.get("state") == "open" and label_names(p) & READY_LABELS]
     known, rate = merge_rate(merged_list(s), now)
     hold = known and rate is not None and len(ready_prs) > hours * rate
     briefs = {b["number"]: b for b in s.free}

@@ -225,6 +225,7 @@ PROTECTED = (  # (class, a prefix) of SPEC-0039 rule 5; a class without a slash 
     ".github/workflows/",
 )
 HOLD_LABEL = "agk:hold"
+HOLD_LABELS = (HOLD_LABEL, "agk:parked")  # a person's hold, on a brief or a pull request (Q-846-1)
 APPROVE_LABEL = "agk:approve"
 CONFLICT = ("dirty", "unknown")
 HTTP = re.compile(r"HTTP (\d{3})")
@@ -234,7 +235,11 @@ JOB_LINE = re.compile(
 )
 CREATED_STARTS = ("Verdict:", "Approve:")  # first lines of a new comment that may clear a head
 EDITED_STARTS = (*CREATED_STARTS, "Final:")  # and of an edited one (brief #836 answer 1)
-STALE_LABELS = ("agk:fix", "agk:review")  # a cleared head's label contradicts these (brief #836)
+STALE_LABELS = (
+    "agk:build",
+    "agk:fix",
+    "agk:review",
+)  # a cleared head's label contradicts these (brief #836)
 SWEEP_MAX = 5  # guarded merges a run (brief #797 answer 3)
 UNMERGED_MINUTES = 20  # brief #797 answer 5
 STOPPED = "merge-cleared: stopped:"
@@ -662,6 +667,11 @@ def titled(issues: list[dict], prefix: str, exact: bool = False) -> bool:
     return False
 
 
+def held_label(pull: dict) -> str | None:
+    """The first hold label on PULL, or None (SPEC-0039 rule 5, ADR-0385)."""
+    return next((name for name in HOLD_LABELS if name in labels_of(pull)), None)
+
+
 def labels_of(pull: dict) -> set[str]:
     return {str(x.get("name")) for x in pull.get("labels") or [] if isinstance(x, dict)}
 
@@ -833,7 +843,7 @@ def hold_list(
         raise Held(DRAFT_HOLD)
     if (klass := protected_class(files)) is not None:
         raise Held(f"protected class {klass} (rule 5)")
-    if HOLD_LABEL in labels_of(pull):
+    if held_label(pull):
         raise Held("hold label (rule 5)")
     if pull.get("draft") is not False:
         raise Held("draft (rule 5)")
