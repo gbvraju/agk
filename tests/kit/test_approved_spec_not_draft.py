@@ -116,13 +116,13 @@ def test_the_label_stays_approve_while_an_approved_spec_reads_draft():
 
 
 def test_the_label_is_ready_once_the_spec_reads_approved():
-    """REQ-046: brief #797 answer 4 (the status commit made, the label is `agk:ready`)."""
-    assert labelled(set(), said(2, MAINTAINER, "Approve: SPEC-0052")) == "agk:ready"
+    """REQ-046: brief #797 answer 4 (the status commit made, the label is `agk:merge-ready`)."""
+    assert labelled(set(), said(2, MAINTAINER, "Approve: SPEC-0052")) == "agk:merge-ready"
 
 
 def test_a_draft_spec_nobody_approved_does_not_wait():
     """REQ-046: brief #797 answer 4 (only a spec a person approved)."""
-    assert labelled({"SPEC-0052"}) == "agk:ready"
+    assert labelled({"SPEC-0052"}) == "agk:merge-ready"
 
 
 def test_a_fix_list_still_goes_to_the_builder():

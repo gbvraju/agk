@@ -445,7 +445,7 @@ def pool(tmp_path: Path, toml: str = NINE):
         "version: 1\nverdict_authors: [boss]\nspec_approvers: [owner]\n", encoding="utf-8"
     )
     (root / "agk.toml").write_text(toml, encoding="utf-8")
-    health.subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)  # nosec B603
+    health.subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)  # nosec B603 B607 - fixed argument list, no shell
     return root, health.Stub(tmp_path)
 
 

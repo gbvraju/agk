@@ -1,4 +1,4 @@
-"""A rule 3a acceptance counts for `Covered-by:`, and its head is routed `agk:ready` (brief #601).
+"""A rule 3a acceptance counts for `Covered-by:`, and its head is routed `agk:merge-ready` (#601).
 
 ADR-0293, citing ADR-0271 (`Covered-by:`) and ADR-0277 (SPEC-0021 rule 3a). An ADR accepted by a
 covered `Final:` keeps `Proposed` in its file until the release flips it; its record on the merge
@@ -6,8 +6,8 @@ base, verified by its Final comment (`--comments FILE`, as the workflow's `Recor
 saves them), counts as Accepted for `Covered-by:`, and without the comments, while a record of
 that ADR exists, the check fails closed and names the option. The router reads a covered fix list
 on the full head whose every `Final:` line accepts an ADR the pull request changes as cleared, as
-`merge_cleared.py` does, so a pull request merged on it ends with `agk:ready`. Saved responses,
-invented logins, no network.
+`merge_cleared.py` does, so a pull request merged on it ends with `agk:merge-ready`. Saved
+responses, invented logins, no network.
 """
 
 from __future__ import annotations
@@ -176,9 +176,9 @@ def facts(comments: list[dict], files: list[dict] | None = None, **kw) -> dict:
 def test_req028_a_rule_3a_final_on_the_full_head_is_ready():
     """REQ-028: brief #601 item 2 (cleared for the label, as merge_cleared.py clears it)."""
     accept = said(1, fix_list(HEAD, ACCEPT))
-    assert route.decide(facts([accept])) == "agk:ready"
+    assert route.decide(facts([accept])) == "agk:merge-ready"
     changed = [{"filename": ADR, "status": "modified"}]
-    assert route.decide(facts([accept], files=changed)) == "agk:ready"
+    assert route.decide(facts([accept], files=changed)) == "agk:merge-ready"
 
 
 @pytest.mark.parametrize(

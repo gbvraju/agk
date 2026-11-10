@@ -231,10 +231,10 @@ def conductor(body: str, cid: int = 1, login: str = "boss") -> dict:
     return said(cid, login, body)
 
 
-def test_ac1_an_approval_line_of_a_verdict_naming_the_head_sets_approve_even_for_a_fix_list():
-    """REQ-039 AC1: rule 2 (it set agk:fix on #196: the person is waited for first)."""
+def test_ac1_an_approval_line_of_a_verdict_naming_the_head_sets_approve_after_a_fix_list():
+    """REQ-039 AC1: rule 2 (amendment 150 item 1, ADR-0385: the fix list first, then approve)."""
     fix = conductor(f"Verdict: fix list {HEAD[:7]}\n\nPush the ADR.\n\n{APPROVAL}\n")
-    assert route.decide(facts(comments=[fix])) == "agk:approve"
+    assert route.decide(facts(comments=[fix])) == "agk:fix"
     cleared = conductor(f"Verdict: cleared {HEAD[:7]}\n\n{APPROVAL}\n")
     assert route.decide(facts(comments=[cleared])) == "agk:approve"
 
@@ -247,7 +247,7 @@ def test_ac1_the_approve_of_a_listed_person_ends_the_wait_and_the_verdict_decide
     review = {"user": {"login": "maintainer"}, "body": "Approve: 80e4898 SPEC-0032"}
     assert route.decide(facts(comments=[fix], reviews=[review])) == "agk:fix"
     cleared = conductor(f"Verdict: cleared {HEAD[:7]}\n\n{APPROVAL}\n")
-    assert route.decide(facts(comments=[cleared, by])) == "agk:ready"
+    assert route.decide(facts(comments=[cleared, by])) == "agk:merge-ready"
 
 
 def test_ac1_an_approval_line_of_an_unlisted_author_or_for_another_head_is_ignored():
