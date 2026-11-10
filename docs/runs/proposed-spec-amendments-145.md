@@ -15,6 +15,9 @@ The baseline, read on the default branch at f829c51: `config.model_settings` acc
 `providers` in `[models]` (amendment 157); `launch.py` hands `AGK_KIND`, `AGK_TIER`, `AGK_EFFORT` and `AGK_MODEL` to an
 adapter; `metrics.usage_of` sums the `Usage: <n> tokens` figure that ends the first line of a builder's `Report:`, and
 `metrics.py --usage-by-kind` prints the sums per kind; no `[models.routes]`, `[models.prices]` or `usage.py` exists.
+This repository sets `[flow] builder_start = "assign"` (ADR-0402): no session starts a builder; slots `s1` to
+`s<builder_slots>` run from the owner's scheduled starts and take the briefs of the conductor's `Assign:` lines, which
+`session.py plan` lists. With `builder_start = "start"` the conductor starts each builder, as before.
 
 ## The tier reaches the runtime (answer 1)
 
@@ -22,32 +25,44 @@ adapter; `metrics.usage_of` sums the `Usage: <n> tokens` figure that ends the fi
    `[models.routes]` table maps a tier to how a session of that tier is started, as `<tier> = { task = "<label>" }`
    (a scheduled task of the runtime, named by a plain label of SPEC-0053 rule 3's shape) or `<tier> = { flag = true }`
    (a local command that takes the model flag, with the model name from `[models.names].<tier>` or the label
-   `session.py fallback` prints, so the name stays in one place). A table that routes any tier routes `strongest`. A
-   tier outside the three, a key other than `task` or `flag`, a route with both or neither, a label of the wrong shape,
-   a `flag` route for a tier with no `[models.names]` entry and no provider list, and a table without `strongest` are
-   refused naming the setting (`setting: models.routes` or `setting: models.routes.<tier>`), never the value. The kit's
+   `session.py fallback` prints, so the name stays in one place), or, with `builder_start = "assign"`, `<tier> = {
+   slots = ["s1", ...] }` (the slots whose scheduled starts the owner runs on that tier). A table that routes any tier
+   routes `strongest`. A tier outside the three, a key other than `task`, `flag` or `slots`, a route with more or fewer
+   than one of them, a label of the wrong shape, a `flag` route for a tier with no `[models.names]` entry and no
+   provider list, a table without `strongest`, a `slots` route under `start` or a `task` or `flag` route under
+   `assign`, and under `assign` a slot outside `s1` to `s<builder_slots>`, in two routes or in none, are refused naming
+   the setting (`setting: models.routes` or `setting: models.routes.<tier>`), never the value. The kit's
    `agk.toml` and its templates carry no `[models.routes]`." (`Q-798-2`, `Q-798-3`.)
 2. **SPEC-0045 rule 2, the table's keys.** `[models]` accepts `routes` and `prices` (item 9) beside `names`,
    `providers` and the five kinds; any other key stays refused as today (`setting: models.<key>`).
 3. **SPEC-0045 rule 5, the route of a start.** Rule 5 gains: "A session is started on the route of its tier. A tier
    with no route is started on the route of the next stronger tier (`fast` to `mid` to `strongest`), never a weaker
    one, and every `Report:` of that session carries one line `Route: <kind> <tier> via <tier>` beside its `Usage:` line;
-   a session on its own tier's route carries none. With no `[models.routes]` table every session starts on today's one
-   route and nothing changes. An escalation restarts the work on the route of the tier one up." (`Q-798-4`.)
+   a session on its own tier's route carries none. With `builder_start = "assign"` the route of a start is a slot:
+   `session.py plan` pairs a brief with a free slot of its tier, else with a free slot of the next stronger tier, never
+   with a slot of a weaker one, and a brief with no such free slot waits; the slot's builder carries the `Route:` line
+   when its slot's tier is stronger than the brief's. With no `[models.routes]` table every session starts on today's
+   one route and nothing changes. An escalation restarts the work on the route of the tier one up." (`Q-798-4`,
+   `Q-798-11`.)
 4. **SPEC-0045 rule 7, the prompt and the adapter.** `launch.py prompts` names the route beside the tier (`route: task
    <label>`, `route: flag` or `route: none`, and `via <tier>` when item 3 moved it), and the adapter gets it as
-   `AGK_ROUTE` (`task:<label>`, `flag` or `none`). A prompt built with no routes table is byte for byte as today. The
-   conductor's start step and the re-fire line of `conductor.py sweep` use that route: in cloud mode the conductor fires
-   the scheduled task the route names, and in local mode the adapter passes the model flag. No session starts, stops
-   or fires another on its own (SPEC-0034 rule 6), and a builder never fires a scheduled task.
+   `AGK_ROUTE` (`task:<label>`, `flag` or `none`). A prompt built with no routes table is byte for byte as today. With
+   `builder_start = "start"`, the conductor's start step and the re-fire line of `conductor.py sweep` use that route:
+   in cloud mode the conductor fires the scheduled task the route names, and in local mode the adapter passes the model
+   flag. With `builder_start = "assign"`, `launch.py` still starts nothing; the conductor posts the `Assign:` lines of
+   the plan, whose form is unchanged, so the route is the slot the plan chose, and a stall's restart and a merge of
+   main are assigned the same way. No session starts, stops or fires another on its own (SPEC-0034 rule 6), and a
+   builder never fires a scheduled task.
 5. **SPEC-0034 rule 6, the launcher contract.** The sentence "The guide shows the contract with two examples" gains:
    "Where `[models.routes]` names a task per tier, the scheduled-task example is one task per routed tier, each with the
-   same stored prompt; the owner creates each task once, and `demand` is unchanged." The guide says which tier the
-   kit's own examples use and that a missing `mid` task means `mid` work runs on `strongest`.
+   same stored prompt; the owner creates each task once, and `demand` is unchanged. Under `builder_start = "assign"`,
+   the owner runs each slot's scheduled starts on the tier of the route that names the slot." The guide says which tier
+   the kit's own examples use and that a missing `mid` task, or no `mid` slot, means `mid` work runs on `strongest`.
 6. **SPEC-0006 rule 5 (a consequence of items 1 and 3).** `doctor.py` gains one row `model-routes`, severity `warn`:
    it warns on a refused `[models.routes]` (naming the setting) and on a tier that a kind of `[models]` or rule 2's
    defaults uses and that has no route of its own while a routes table exists, naming the tier and the route it will
-   use instead; with no table it prints `ok (one route)`. It never fails the run.
+   use instead (under `assign`, a tier with no slot); with no table it prints `ok (one route)`. It never fails the
+   run, and the `slot-schedule` row of ADR-0402 is unchanged.
 
 ## The real usage (answer 2)
 
@@ -93,18 +108,20 @@ adapter; `metrics.usage_of` sums the `Usage: <n> tokens` figure that ends the fi
       `scripts/agk/metrics.py`, the `Usage:` sentences of session rules 8 and 17 within `config/rule-budget.txt`,
       `tests/kit/test_usage_transcript.py` with invented transcripts in `tmp_path`, one `changelog.d/` fragment. No
       dependence.
-    - (b) Items 1 to 6: the routes reader in `scripts/agk/config.py`, `scripts/agk/launch.py`, the re-fire line of
-      `scripts/agk/conductor.py`, the `model-routes` row of `scripts/agk/doctor.py`, one sentence in
-      `.claude/agents/conductor.md` and the `Route:` sentence of session rule 17 within the budget, the guide's
-      example, `tests/kit/test_model_routes.py`, one `changelog.d/` fragment. `Depends-on` (a), for the shared
-      `config.py` and `config/session-rules.md`.
+    - (b) Items 1 to 6: the routes reader in `scripts/agk/config.py`, `scripts/agk/launch.py`, the slot pairing of
+      `session.py plan` in `scripts/agk/session.py`, the re-fire line of `scripts/agk/conductor.py`, the `model-routes`
+      row of `scripts/agk/doctor.py`, one sentence in `.claude/agents/conductor.md` and the `Route:` sentence of session
+      rule 17 within the budget, the guide's example, `tests/kit/test_model_routes.py`, one `changelog.d/` fragment.
+      `Depends-on` (a), for the shared `config.py` and `config/session-rules.md`.
 13. **Tests.** Rule 8's tests gain: an invented transcript with repeated message ids sums each id once; `--since` drops
     the earlier entries; no file, an unreadable file and a file with no usage record print `Usage: not shown`; the
     output never holds a transcript's text (a marker string in a fixture message is absent from stdout); the command
     runs with the network blocked. The tests of rules 2 and 3 gain each refused shape of items 1 and 9, naming the
     setting and not the value, and no routes or prices table in the kit's `agk.toml` or templates. Rule 5's and 7's
     tests gain: no table gives today's prompt and adapter environment byte for byte; `mid` with no route goes `via
-    strongest`; no route is ever weaker than the tier; the doctor row's three cases.
+    strongest`; no route is ever weaker than the tier; under `assign`, the plan never pairs a brief with a slot of a
+    weaker tier, pairs it with a stronger one only when none of its own tier is free, and with no table lists what it
+    lists today; the doctor row's three cases.
 14. **Not in this amendment.** Capacity (amendment 149), the provider fallback (SPEC-0053), the review floor (rule 6)
     and every gate, check and reading list are unchanged. `constitution/`, the workflows, the ruleset and the required
     checks are not touched. No model name enters a tracked file of the kit.
@@ -145,6 +162,11 @@ Each is open until a person rules; the reading after it is the conservative one 
   2026-11-10: the first page (100 comments since 2026-11-09) of the repository's issue comments holds 18 `Report:`
   lines, each ending `Usage: not shown`; the next page could not be read (the session's proxy refused it). Reading: the
   cause holds; the full count is for build (a)'s `Verified:` line.
+- **Q-798-11:** the brief was filed when the conductor fired each builder's task; since ADR-0402 merged (2026-11-10
+  02:53Z) this repository starts builders from `Assign:` lines read by slots `s1` to `s<builder_slots>`. How does a
+  route apply there? Reading: under `assign` a route is a list of slots (item 1), every slot in exactly one; a brief is
+  assigned only to a free slot of its tier or, when none is free, of a stronger one, never a weaker one (item 3); the
+  `Assign:` form is unchanged; the `task` and `flag` routes stay for `builder_start = "start"`.
 
 ## Residual
 
@@ -152,3 +174,5 @@ Each is open until a person rules; the reading after it is the conservative one 
   `Usage: not shown` is printed, never an estimate (due 2027-01-31).
 - 2026-11-10: the cost line prices cached tokens at the full price of the tier, so it is an upper bound (due
   2027-01-31).
+- 2026-11-10: the kit cannot read which model a slot's scheduled starts run on, so a slot's tier is the owner's word
+  in `[models.routes]`; a slot set up on a weaker model than its route says is not seen (due 2027-01-31).
