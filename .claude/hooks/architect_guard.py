@@ -17,8 +17,9 @@ the repository: its worktree is a temporary folder it removes; and the steps of 
 (`.claude/agents/architect-review.md`, brief #1050), exactly: `git fetch origin`;
 `git checkout --detach <sha>`, the sha 7 to 40 lower-case hex characters and on a branch of origin
 (a fork's head is on none; the conductor guard's `on_origin_branch`, imported for that one step,
-runs the one `git branch -r --contains`); `python3 scripts/agk/conductor.py check-verdict <file> --pr <n>`; a
-comment `POST` to this repository's issue comments with the one field `-F body=@<file>` whose first
+runs the one `git branch -r --contains`);
+`python3 scripts/agk/conductor.py check-verdict <file> --pr <n>`; a comment `POST` to this
+repository's issue comments with the one field `-F body=@<file>` whose first
 line is a `Verdict:` line; and `python3 scripts/agk/session.py slot (--next | --release) r<N>`, a
 reviewer slot (`session.REVIEWER_NAME`) only. Each file there is an existing regular file of a
 review scratch directory. Any other option, slot name or file stays denied, and without
