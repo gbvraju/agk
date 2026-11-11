@@ -6,7 +6,7 @@
 - Related: brief #1029, plan #661, session rule 18, ADR-0271 (brief #545), ADR-0417, ADR-0402
 - Requirements: REQ-037
 
-Protected classes: `agk.toml`, `.claude/`, `tests/kit/`, `tests/kit_dev/`
+Protected classes: `agk.toml`, `.claude/`, `tests/kit/`, `tests/kit_dev/`, `kit/`
 
 ## Context
 
@@ -30,8 +30,9 @@ every stop. The owner's word (2026-11-11 02:56 IST): "file it both 1 and 2, laun
    `git fetch`, `git switch`, `git checkout`, `git merge origin/*` and `git push origin claude/*`. It denies
    `gh api *merge*`, `gh api *-X PUT*` and `gh api *--method PUT*`, so no allow line opens a merge outside
    `merge_cleared.py`. The allow lines name no repository. No other entry changes.
-3. `.gitignore` names `.claude/settings.local.json`, a person's own permissions, as a project line outside the
-   kit's block.
+3. `.gitignore` names `.claude/settings.local.json`, a person's own permissions, with a comment saying so. The line
+   is in the kit's block, so it is in `kit/templates/gitignore` too: the kit's own `.gitignore` is that block
+   exactly (ADR-0164), and every installing project gets the line.
 4. When `AGK_PR_BODY` is unset, the stop hook finds the open pull request whose head is the checkout's branch with
    one GET, `gh api "repos/<owner>/<repo>/pulls?head=<owner>:<branch>&state=open"` (owner and repository read from
    the `origin` remote), writes its body to a temporary file, runs governance with `AGK_PR_BODY` naming it and

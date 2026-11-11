@@ -179,7 +179,7 @@ SEES_NONE = '@test -z "$$AGK_PR_BODY" && echo none > seen.txt'
 
 
 def git(cwd: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)  # nosec B603 B607
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)  # nosec B603 B607 - fixed list
 
 
 def branch_project(tmp_path: Path, recipe: str, detached: bool = False) -> Path:
