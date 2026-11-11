@@ -35,6 +35,10 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
 - `full_when_share`: a number above 0 and at most 1 (0.5): a pull request whose selected test files
   are at least that share of the `[proof]` areas' test files runs the full suite in workers instead
   (brief #980, ADR-0422; `project_tests.plan`);
+- `local_full`: `"local"` (the default) or `"ci"`; with `"ci"`, a local `prepush.py` whose selection
+  is full only because a changed file matches `always_full` runs the mapped test files and leaves
+  the full suite to CI's proof job, which runs it anyway; CI's runs are unchanged (brief #1031,
+  ADR-0440; `local_full`, `prepush.left_to_ci`);
 - `slow_suite_seconds`: above it a single-process full run gets doctor's line (rule 7; 600);
 - `smoke`: a list of `{ kind = "frontend" | "contract", code = [<glob>, ...], command = "..." }`,
   one entry per kind, from which `smoke.py` chooses the after-merge smoke run (rule 8, brief #923);
@@ -121,6 +125,7 @@ KEYS = {
     "tools_file",
     "slow_suite_seconds",
     "full_when_share",
+    "local_full",
     "results_dir",
     "keep_passed",
     "keep_runs",
@@ -142,6 +147,7 @@ DEFAULT_KEEP_RUNS = 20
 RUN_FOLDER_KEYS = ("results_dir", "keep_passed", "keep_runs")  # retired (SPEC-0046 rule 11)
 RUN_FOLDER_DEPRECATED = "deprecated: testing.results_dir (ADR-0303)"
 PR_TESTS = ("full", "selected")
+LOCAL_FULL = ("local", "ci")  # `[testing] local_full` (brief #1031, ADR-0440)
 SMOKE_KINDS = ("frontend", "contract")  # SPEC-0044 rule 8
 SMOKE_KEYS = {"kind", "code", "command"}
 SMOKE_BAD = (
@@ -327,7 +333,7 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
             "proof_regression, pr_tests, junit, workers, worker_memory_mb, parallel_command, "
-            "tools_file, slow_suite_seconds, full_when_share, results_dir, keep_passed, keep_runs, "
+            "tools_file, slow_suite_seconds, full_when_share, local_full, results_dir, keep_passed, keep_runs, "
             "rerun_alone, map_source and smoke (setting: testing)"
         )
     links = check_links(table.get("links", []), root)
@@ -389,6 +395,9 @@ def testing_table(root: Path) -> dict | None:
             "full_when_share must be a number above 0 and at most 1 "
             "(setting: testing.full_when_share)"
         )
+    local_full = table.get("local_full", LOCAL_FULL[0])
+    if not isinstance(local_full, str) or local_full not in LOCAL_FULL:
+        raise CheckError('local_full is "local" or "ci" (setting: testing.local_full)')
     if "results_dir" in table and not _folder_ok(table["results_dir"]):
         raise CheckError(
             "results_dir must be a folder path inside the repository (setting: testing.results_dir)"
@@ -660,6 +669,13 @@ def slow_suite_seconds(root: Path) -> int:
     if testing_table(root) is None:
         return DEFAULT_SLOW
     return config_source(root)["testing"].get("slow_suite_seconds", DEFAULT_SLOW)
+
+
+def local_full(root: Path) -> str:
+    """`[testing] local_full`, `local` without the table or the key (checked first, brief #1031)."""
+    if testing_table(root) is None:
+        return LOCAL_FULL[0]
+    return config_source(root)["testing"].get("local_full", LOCAL_FULL[0])
 
 
 def full_when_share(root: Path) -> float:

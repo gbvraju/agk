@@ -49,6 +49,14 @@ cannot import xdist first runs `<python> -m pip install -q -r <tools_file>` once
 install prints `NO_TOOLS`, naming the setting, and the run stays in one process. A full run that
 takes `parallel_command` whose last part is a pytest command gets the same install before it, and
 the command of today with that line when xdist is still missing.
+Brief #1031 (ADR-0440): with `[testing] local_full = "ci"`, a selection that `impact` made full only
+because a changed file matches `always_full` (not under `profile = "thorough"`, not with
+`pr_tests = "full"`, and below `full_when_share` of the `[proof]` areas' test files) runs as a
+selection (`left_to_ci`): the mapped test files through their areas, with the same workers and the
+same lock, after one line `tests: full suite left to CI's proof job (always_full <glob>); ran the
+<n> mapped test files` (`0` when nothing is mapped, and nothing runs). The record names each such
+run's set `selected (full left to CI)`, so the evidence check and the verdict see that the full
+suite did not run here. CI's runs are not changed: `project_tests.py` never calls `left_to_ci`.
 
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
 one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing but
@@ -113,6 +121,7 @@ import tempfile
 import time
 import uuid
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -135,13 +144,16 @@ from impact import (
     NAMED,
     Impact,
     Selected,
+    full_when_share,
     impact,
     junit_setting,
     level_groups,
     link_groups,
+    local_full,
     machine_env,
     map_lines,
     parallel_command,
+    pr_tests,
     report_of,
     run_folder_deprecation,
     run_timing,
@@ -158,6 +170,11 @@ USAGE = (
     "usage: prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE] [--queue]"
 )
 SCHEMA = 1
+LEFT_TO_CI = "selected (full left to CI)"  # the record's set of such a run (brief #1031 answer 3)
+LEFT_LINE = (
+    "tests: full suite left to CI's proof job (always_full {glob}); ran the {n} mapped test files"
+)
+ALWAYS_FULL = re.compile(r"^always_full (\S+) matches ")
 LOCK = "heavy"
 OWN = "the pull request's own test files (the proof plan)"
 NO_XDIST = (
@@ -896,6 +913,25 @@ def selection_sets(
     return sets, notes
 
 
+def left_to_ci(
+    root: Path, found: Impact, areas: list[dict] | None
+) -> tuple[Impact, str | None]:
+    """With `[testing] local_full = "ci"` (brief #1031, ADR-0440), a selection that is full only
+    because a changed file matches `always_full` as a selection of its mapped files, and the one
+    line that says so; any other selection unchanged, with None. Not under `profile = "thorough"`,
+    not with `pr_tests = "full"`, not at `full_when_share` or above, not without a `[proof]` table
+    (which runs no single file). Used by the local tests step only, never by CI's runs."""
+    hit = ALWAYS_FULL.match(found.reason or "")
+    if not (found.full and hit and areas) or local_full(root) != "ci":
+        return found, None
+    if found.profile == "thorough" or pr_tests(root) == "full":
+        return found, None
+    chosen, total = len({s.test for s in found.selected}), suite_test_files(root, areas)
+    if total and chosen / total >= full_when_share(root):
+        return found, None
+    return replace(found, full=False, reason=None), LEFT_LINE.format(glob=hit.group(1), n=chosen)
+
+
 def full_suite_warning(seconds: float, limit: int) -> str | None:
     """The warning when the full suite took longer than `proof_timeout` (brief #509, ADR-0258):
     proof, held to the same limit, can never finish; the value suggested leaves half again as much,
@@ -924,9 +960,11 @@ def gate(
     printed when it ends; what is not run is printed before the regression runs."""
     made: list[dict] = []
     warnings: list[str] = []
+    found, left = left_to_ci(root, found, areas)
     sets, notes = regression_sets(root, found, areas)
     sets, single = selected_workers(root, sets)
-    notes = list(dict.fromkeys([*workers_notes(root, sets), *notes, *single, *own_notes]))
+    notes = [*([left] if left else []), *workers_notes(root, sets), *notes, *single, *own_notes]
+    notes = list(dict.fromkeys(notes))
     junit = junit_setting(root)
     planned = [(r["name"], r["command"], r["cwd"], OWN, "proof") for r in runs]
     planned.extend((*item, "regression") for item in sets)
@@ -945,7 +983,7 @@ def gate(
         made.append(
             {
                 "name": name,
-                "set": kind,
+                "set": LEFT_TO_CI if left and kind == "regression" else kind,
                 "reason": reason,
                 "command": safe_command(command, root),
                 "cwd": safe_cwd(folder, root),
