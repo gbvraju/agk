@@ -599,7 +599,7 @@ def red_mains(view: View) -> str:
         return shown  # a file saved before the branch was kept, or no run at all
     pushes = sorted(
         (r for r in runs if r.get("event") == "push" and stamp(r.get("created_at"))),
-        key=lambda r: stamp(r.get("created_at")),
+        key=lambda r: str(stamp(r.get("created_at"))),  # all stamped, all UTC: one order
     )
     merges = sorted(
         (

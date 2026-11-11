@@ -931,7 +931,7 @@ def test_point_9_tokens_per_review_from_the_review_sessions_usage(tmp_path, caps
 
 def test_shadow_count_prints_the_same_catch_rate_from_saved_comments(tmp_path):
     """REQ-054: brief #1014 answer 3: the kit-only counter reads the checklist's one reader."""
-    import subprocess
+    import subprocess  # nosec B404 - fixed argument lists only, no shell
     import sys
 
     comments = []
