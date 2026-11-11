@@ -35,7 +35,12 @@ def git_out(root: str, *args: str) -> str | None:
     """The stripped output of a git command, or None when it fails."""
     try:
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["git", *args], cwd=root, capture_output=True, text=True, timeout=GH_TIMEOUT_SECONDS
+            ["git", *args],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=GH_TIMEOUT_SECONDS,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None

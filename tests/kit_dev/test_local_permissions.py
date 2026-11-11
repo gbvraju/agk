@@ -57,7 +57,7 @@ def test_d_settings_deny_each_merge_line():
 
 
 def test_d_no_allow_line_opens_a_merge_and_deny_catches_it():
-    """REQ-037 (brief #1029 answer 2, test d): merges stay with merge_cleared.py."""
+    """REQ-037 (brief #1029 answer 2, test d): merges stay with the merger."""
     p = perms()
     for command in (
         "gh api repos/x/pulls/1/merge -X PUT",
