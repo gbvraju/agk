@@ -653,9 +653,12 @@ tests = [
 code = "config/rule-plan.txt"
 tests = ["tests/kit/test_rules_consolidate.py"]
 [[testing.map]]
+code = "scripts/agk/review_bundle.py"
+tests = ["tests/kit/test_review_bundle.py"]
+[[testing.map]]
 code = "scripts/agk/review_context.py"
 tests = [
-  "tests/kit/test_check_kit_tests.py", "tests/kit/test_review_context.py",
+  "tests/kit/test_check_kit_tests.py", "tests/kit/test_review_bundle.py", "tests/kit/test_review_context.py",
   "tests/kit_dev/test_experimental_reviewer.py", "tests/kit_dev/test_reviewer_wiring.py",
 ]
 [[testing.map]]

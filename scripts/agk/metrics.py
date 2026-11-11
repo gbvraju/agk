@@ -68,8 +68,9 @@ WEAKENING_SET = frozenset(
     }
 )
 UNSPLIT_STEP = "Governance checks"
-VERDICT = re.compile(
+VERDICT = re.compile(  # an optional ` (conductor fallback)` ending is the same verdict (ADR-0431)
     r"Verdict: (?:(cleared) ([0-9a-f]{4,40})|(fix list|rejected)(?: ([0-9a-f]{4,40}))?)"
+    r"(?: \(conductor fallback\))?"
 )
 # the kind of the two forms whose sha is optional (SPEC-0007 rule 4)
 FIXED = {"fix list": "fix", "rejected": "rejected"}
