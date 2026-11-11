@@ -33,7 +33,12 @@ list|rejected` followed by anything, or `-F body=@<file>` where the file is a re
 scratch directory and its first line has that shape, so that the findings of several lines can be
 posted: a verdict, a `Marks:` comment, a file elsewhere or a second field is denied. The hook
 cannot tell the `agk-shadow` issue from another issue without a network call, so that choice is the
-role file's (a residual of SPEC-0035). Any other argument denies everything.
+role file's (a residual of SPEC-0035). In shadow mode the one script is the shadow's own slot (brief
+#1050, Q-1014-1, ADR-0444): exactly `python3 scripts/agk/session.py slot --next s-shadow` and
+`... slot --release s-shadow`, the project's own regular file; another slot name, option or command
+of the script and every other `python3` command stay denied. Any other argument denies everything.
+Without `--shadow` the conductor may post the `Shadow: s-shadow #<pr> <sha>` line on an issue of the
+origin repository as any other comment: `Shadow:` is not one of the lines its verdict check reads.
 Without `--shadow` the conductor may also file a brief (brief 276, ADR-0170): the one issue creation
 `gh api --method POST repos/<origin>/issues` with exactly three fields, `-f title=<text>`,
 `-f labels[]=agk-brief` and `-F body=@<file>`, where the file is a regular file of a scratch
@@ -180,6 +185,10 @@ MERGE_PR = re.compile(r"[1-9][0-9]{0,9}")
 MERGE_SHA = re.compile(r"[0-9a-f]{40}")
 BATCH = re.compile(r"[1-9][0-9]?")  # `--max-batch` of the merge queue (brief #643 build (b))
 ALLOW_RULE = "conductor guard rule 6: the guarded merge of SPEC-0039 rule 8"
+SHADOW_SLOT_FORMS = (  # the shadow's own slot (brief #1050, ADR-0444), exactly these
+    ["slot", "--next", "s-shadow"],
+    ["slot", "--release", "s-shadow"],
+)
 QUEUE_FORMS = (  # the read-only commands of the conductor's queue (brief 284), exactly these
     ["review-queue"],
     ["review-queue", "--all"],
@@ -678,6 +687,8 @@ def bash_allowed(command: object, shadow: bool = False, cwd: object = None) -> b
         return gh_api_allowed(words)
     if words[0] == "date":
         return all(w == "-u" or w.startswith("+") for w in words[1:])
+    if shadow and words[0] == "python3":
+        return words[2:] in SHADOW_SLOT_FORMS and own_script(words[1], cwd, SESSION_SCRIPT)
     if words[0] in ("python3", "python") and not shadow:
         return (
             queue_allowed(words, cwd)
