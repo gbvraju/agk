@@ -1488,7 +1488,8 @@ def fix_briefs_of(root, alarms: list, issues: list, comments: dict, pulls) -> di
         found = {n for n, i in briefs.items() if names_red(i.get("body"), number)}
         for c in comments.get(number) or []:
             if author_of(c) in allowed:
-                found |= {int(m) for m in FIX_FILED.findall(str(c.get("body") or ""))} & set(briefs)
+                said = FIX_FILED.findall(str(c.get("body") or ""))
+                found |= {int(m) for m in said} & set(briefs)
         named[number] = found
     if not any(named.values()) and callable(pulls):
         pulls = []  # no brief is named: a pull request alone fixes nothing the red survey keeps
@@ -1504,7 +1505,7 @@ def fix_briefs_of(root, alarms: list, issues: list, comments: dict, pulls) -> di
 
 def fix_briefs(root, issues: list, comments: dict, pulls) -> dict[int, int]:
     """Brief #1052 answer 1, the one rule of `survey`, `plan` and `claim`: fix brief -> the open
-    red alarm (`is_red`) whose fix (`red_fixes`' rule) it is, an open brief and not a pull request."""
+    red alarm (`is_red`) whose fix by `red_fixes`' rule it is: an open brief, not a pull request."""
     alarms = [i for i in issues if is_red(i)]
     if not alarms:
         return {}
@@ -1522,8 +1523,7 @@ def red_fixes(root, s: Survey, issues: list, ready: list[dict]) -> list[dict]:
         return []
     found = fix_briefs_of(root, alarms, issues, s.comments, open_pulls(s))
     return [
-        {"brief": red, "fixed_by": fix, "why": f"is fixed by #{fix}"}
-        for red, fix in found.items()
+        {"brief": red, "fixed_by": fix, "why": f"is fixed by #{fix}"} for red, fix in found.items()
     ]
 
 

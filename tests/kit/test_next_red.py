@@ -279,7 +279,7 @@ def test_1052_d_a_fix_brief_filed_by_an_unlisted_author_makes_no_fix_brief(proj,
 
 
 def test_1052_a_survey_with_no_fix_named_reads_no_pull_request(proj, stub):
-    """REQ-039 AC5: brief #1052 answer 3, the red survey still reads none when nothing names a fix."""
+    """REQ-039 AC5: brief #1052 answer 3, a red survey that names no fix reads no pull request."""
     import session as module
 
     listing(stub, [red(9), issue(5, FREE)])

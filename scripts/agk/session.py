@@ -1019,7 +1019,9 @@ def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
     shape = brief_shape(root, repo)
 
     def sort(briefs: list, pulls: list) -> None:
-        for brief in sorted((i for i in briefs if "pull_request" not in i), key=lambda i: i["number"]):
+        for brief in sorted(
+            (i for i in briefs if "pull_request" not in i), key=lambda i: i["number"]
+        ):
             why, comments = judge(repo, brief, me, pulls, hours, shape, root)
             found.comments[brief["number"]] = comments
             if why is None:
