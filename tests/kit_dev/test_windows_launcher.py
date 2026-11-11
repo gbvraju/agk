@@ -3,8 +3,9 @@
 `scripts/start-session-windows.ps1` is the guide's adapter (getting-started step 7) with one change:
 an existing worktree folder `..\\agk-<AGK_SESSION>` of this repository is reused (fetch, then
 `origin/main` checked out detached when its tree is clean), and a folder that is not clean starts
-nothing and exits non-zero with one line naming the folder. `agk.toml` `[flow]` turns `auto_start` on
-with that script as `launch_adapter`. The tests read files only; no PowerShell runs here. REQ-037.
+nothing and exits non-zero with one line naming the folder. `agk.toml` `[flow]` turns
+`auto_start` on with that script as `launch_adapter`. The tests read files only; no PowerShell
+runs here. REQ-037.
 """
 
 from __future__ import annotations
@@ -56,7 +57,8 @@ def test_the_script_holds_the_guides_environment_steps():
 
 
 def test_the_script_keeps_the_guides_wrapper_unchanged():
-    """REQ-037: answer 1 (the guide's text as its start): the tab's wrapper is the guide's, line for line."""
+    """REQ-037: answer 1 (the guide's text as its start): the wrapper is the guide's."""
+
     def wrapper(block: str) -> list[str]:
         found = re.search(r"@'\n(.*?)\n\s*'@", block, re.S)
         assert found
