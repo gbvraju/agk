@@ -1024,10 +1024,11 @@ def brief_of(text: str) -> int | None:
 def finishes(text: str, brief: int) -> bool:
     """The body says it finishes BRIEF: a whole stripped line `Finishes: #<brief>` (brief #992),
     read as `brief_of` reads `Brief: #n`; a mention inside a sentence is not that line."""
-    return any(
-        (found := FINISHES_LINE.fullmatch(line.strip())) is not None and int(found.group(1)) == brief
-        for line in (text or "").splitlines()
-    )
+    for line in (text or "").splitlines():
+        found = FINISHES_LINE.fullmatch(line.strip())
+        if found and int(found.group(1)) == brief:
+            return True
+    return False
 
 
 def read_once(endpoint: str, kind: type) -> Any:
@@ -1101,8 +1102,9 @@ def close_brief(repo: str, brief: int, number: int, merged: str, title: str, tex
 
 def close_after_merge(repo: str, number: int, merged: str, text: str, title: str) -> None:
     """After the record line (brief #959): the brief of the body's `Brief: #N` is closed when every
-    build has merged (a brief with no `Builds:` line only on the body's `Finishes: #N`, brief #992), and each issue the body closes that is still open after a short wait gets one
-    note. The merge stands and nothing is held."""
+    build has merged (a brief with no `Builds:` line only on the body's `Finishes: #N`, brief
+    #992), and each issue the body closes that is still open after a short wait gets one note.
+    The merge stands and nothing is held."""
     closes = closed_by(text)
     brief = brief_of(text)
     if not closes and brief is None:

@@ -44,7 +44,7 @@ def closed(writes: list[list[str]]) -> bool:
 
 
 def test_a_brief_with_no_builds_line_and_brief_alone_stays_open(monkeypatch):
-    """REQ-046: brief #992 answers 1 and 4 (a): `Brief: #7` alone leaves the brief open, no comment."""
+    """REQ-046: brief #992 answers 1 and 4 (a): `Brief: #7` alone leaves the brief open."""
     replies = {ENDPOINT: issue(BRIEF, body="Sentence: an example brief.\n")}
     writes = after(monkeypatch, replies, f"Brief: #{BRIEF}\nAdvances: REQ-046\n")
     assert writes == []
