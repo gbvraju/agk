@@ -45,7 +45,10 @@ scratch folder outside the project, the conductor guard's limit) and Q-1014-1 (t
 A reviewer slot and the shadow slot can each run under their own guard, so gate review's fresh reviewer and its
 blind shadow can both run. Without `--review` and `--shadow` the guards are unchanged. In review mode the guard now
 runs one local `git branch -r --contains` (through the conductor guard) at a checkout, as the conductor's guard does
-at a worktree add; it still makes no network call.
+at a worktree add; the hook itself still makes no network call. After the allowed checkout of a head into the project,
+`conductor.py check-verdict` and `session.py slot --release` run that head's own versions of those scripts, with the
+reviewer's environment and GitHub access, not under the conductor's `env -i` bounded run in a separate worktree. The
+only bound is the origin-branch check, which refuses a fork's head.
 
 ## Residual
 
@@ -53,3 +56,5 @@ at a worktree add; it still makes no network call.
   "no write until Q-1013-3" stays the owner's to edit (brief #1050 answer 6); `session.py slot` on the default branch accepts no
   `s-shadow` name yet, so the shadow's slot runs once a brief adds that name; the guard cannot tell the pull request
   under review from another issue without a network call, so the comment's target stays the role file's rule.
+- 2026-11-11: a later brief may run the reviewer slot's `check-verdict` and `slot --release` from the default branch's
+  copy of the scripts (or under `env -i`), so that the reviewed head's code does not run with the reviewer's access.
