@@ -267,3 +267,82 @@ def test_a_glued_get_is_still_a_read_in_shadow_mode(project, method):
     """REQ-046: brief #531 (only the method is read differently; a GET stays a read)."""
     out = run_hook(bash(f"gh api {method} repos/o/r/pulls/7"), project, "--shadow")
     assert denial(out.stdout) is None
+
+
+# --- brief #1050 (Q-1014-1, ADR-0444): the shadow's slot and the conductor's Shadow: line ------
+
+
+@pytest.fixture
+def own(project: Path) -> Path:
+    """The project with its own `scripts/agk/session.py`, the one copy the guard allows."""
+    (project / "scripts" / "agk").mkdir(parents=True)
+    (project / "scripts" / "agk" / "session.py").write_text("", encoding="utf-8")
+    return project
+
+
+def from_project(command: str, project: Path) -> dict:
+    return {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": str(project)}
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python3 scripts/agk/session.py slot --next s-shadow",
+        "python3 scripts/agk/session.py slot --release s-shadow",
+    ],
+)
+def test_brief_1050_the_shadow_may_run_its_own_slot(own, command):
+    """REQ-042: brief #1050 answer 3 and 5(g)."""
+    out = run_hook(from_project(command, own), own, "--shadow")
+    assert out.returncode == 0 and denial(out.stdout) is None, command
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python3 scripts/agk/session.py slot --next s1",
+        "python3 scripts/agk/session.py slot --next r1",
+        "python3 scripts/agk/session.py slot --take s-shadow",
+        "python3 scripts/agk/session.py slot --renew s-shadow",
+        "python3 scripts/agk/session.py slot --next s-shadow --x",
+        "python3 scripts/agk/session.py slot --next s-shadow; id",
+        "python3 scripts/agk/session.py slot s-shadow",
+        "python3 scripts/agk/session.py plan",
+        "python3 scripts/agk/session.py plan --json",
+        "python3 scripts/agk/session.py review-queue",
+        "python python3 scripts/agk/session.py slot --next s-shadow",
+        "python scripts/agk/session.py slot --next s-shadow",
+        "python3 other/session.py slot --next s-shadow",
+        "python3 scripts/agk/conductor.py sweep",
+    ],
+)
+def test_brief_1050_every_other_python_command_stays_denied_in_shadow_mode(own, command):
+    """REQ-042: brief #1050 answer 3 and 5(g)."""
+    found = denial(run_hook(from_project(command, own), own, "--shadow").stdout)
+    assert found is not None and MARK in found["permissionDecisionReason"], command
+    assert command not in found["permissionDecisionReason"]
+
+
+def test_brief_1050_a_linked_session_script_is_denied_in_shadow_mode(project, tmp_path):
+    """REQ-042: brief #1050 answer 3 (the project's own regular file, never a link)."""
+    real = tmp_path.parent / "elsewhere-session.py"
+    real.write_text("", encoding="utf-8")
+    (project / "scripts" / "agk").mkdir(parents=True)
+    (project / "scripts" / "agk" / "session.py").symlink_to(real)
+    command = "python3 scripts/agk/session.py slot --next s-shadow"
+    assert denial(run_hook(from_project(command, project), project, "--shadow").stdout)
+
+
+def test_brief_1050_without_shadow_the_conductor_gets_no_shadow_slot(own):
+    """REQ-042: brief #1050 answer 3 (the slot is the shadow's alone)."""
+    command = "python3 scripts/agk/session.py slot --next s-shadow"
+    assert denial(run_hook(from_project(command, own), own).stdout) is not None
+
+
+@pytest.mark.parametrize("sha", ["abc1234", "abc1234" + "0" * 33])
+def test_brief_1050_the_conductor_may_post_the_shadow_line(project, sha):
+    """REQ-042: brief #1050 answer 3 and 5(h) (allowed on main already: `Shadow:` is not a line
+    the conductor's verdict check reads, so no code changes for it)."""
+    command = f"{POST} -f 'body=Shadow: s-shadow #9 {sha}'"
+    out = run_hook(bash(command), project)
+    assert out.returncode == 0 and denial(out.stdout) is None
