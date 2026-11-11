@@ -551,3 +551,51 @@ def test_mine_takes_a_session_and_exactly_one_of_pr_or_brief(proj, stub, args):
     """Brief #424 answer 1: `mine --session ID (--pr N | --brief N)`."""
     out = session(proj, stub, "mine", *args)
     assert out.returncode == 2 and out.stdout.startswith("usage:") and stub.calls() == []
+
+
+# --- brief #1026: a release with a reason frees the take (REQ-041) --------------------------
+
+TAKEN = "taken: s4 2026-11-10 retakes reserves ADR-0384"
+
+
+def freed(*bodies: str) -> list[bool]:
+    """Whether each take among saved comments (one account, a minute apart) is released."""
+    from session import all_takes
+
+    saved = [
+        comment(i + 1, "builder", body, f"2026-11-10T17:{24 + i:02d}:00Z")
+        for i, body in enumerate(bodies)
+    ]
+    return [t[5] for t in all_takes(saved)]
+
+
+def test_brief1026_a_release_with_a_reason_after_it_frees_the_take():
+    """REQ-041; brief #1026 answers 2 and 4a: the first line alone is the release."""
+    assert freed(TAKEN, "released: s4\n\nThe brief needs a ruling first.") == [True]
+
+
+def test_brief1026_a_bare_release_frees_the_take_as_today():
+    """REQ-041; brief #1026 answer 4b."""
+    assert freed(TAKEN, "released: s4") == [True]
+
+
+def test_brief1026_a_reasoned_release_of_another_session_frees_nothing():
+    """REQ-041; brief #1026 answer 4c: the same session, as today."""
+    assert freed(TAKEN, "released: s5\n\nNot mine to keep.") == [False]
+
+
+def test_brief1026_a_release_on_a_later_line_frees_nothing():
+    """REQ-041; brief #1026 answer 4d: a release that is not the first line is no release."""
+    assert freed(TAKEN, "Note: handing over\nreleased: s4") == [False]
+
+
+def test_brief1026_a_reasoned_release_names_its_build():
+    """REQ-041; brief #1026 answer 2: the build it names or every build, as today."""
+    take_c = "taken: s4 2026-11-10 build (c)"
+    assert freed(take_c, "released: s4 build (b)\n\nwhy") == [False]
+    assert freed(take_c, "released: s4 build (c)\n\nwhy") == [True]
+
+
+def test_brief1026_a_take_keeps_its_whole_body_reading():
+    """REQ-041; brief #1026 answer 3: a take with text after it is still no take."""
+    assert freed(f"{TAKEN}\n\nmore") == []
