@@ -821,7 +821,9 @@ def all_takes(comments: list) -> list[tuple]:
     """(when, id, session, login, reserves, released, build) of every take comment, oldest first.
 
     A `released:` frees a take only when the same account posted it, for the build it names or
-    for every build when it names none."""
+    for every build when it names none. A release is read from the first line of the comment
+    alone, so a reason may follow on the lines after it; a take is read from the whole body
+    (brief #1026, ADR-0437)."""
     takes, releases = [], []
     for c in comments:
         text = plain(c["body"]) if isinstance(c.get("body"), str) else ""
@@ -829,7 +831,7 @@ def all_takes(comments: list) -> list[tuple]:
         if found := TAKE.fullmatch(text):
             reserves = tuple(found.group(4).split(", ")) if found.group(4) else ()
             takes.append((when, cid, found.group(1), author_of(c), reserves, found.group(3)))
-        elif found := RELEASED.fullmatch(text):
+        elif found := RELEASED.fullmatch(text.split("\n", 1)[0].strip()):
             releases.append((when, cid, found.group(1), author_of(c), found.group(2)))
 
     def freed(t: tuple) -> bool:
