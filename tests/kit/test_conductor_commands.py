@@ -420,9 +420,7 @@ def test_watch_once_with_nothing_new_prints_nothing_new(proj, stub):
 def test_watch_prints_a_network_error_and_retries(proj, stub):
     stub.serve(f"repos/{REPO}/issues", "FAIL", nth=1)
     stub.serve(f"repos/{REPO}/issues", [brief(9)], nth=2)
-    stub.serve(
-        f"repos/{REPO}/issues/9/comments", [comment(1, "builder", "Report: done", ago(0))]
-    )
+    stub.serve(f"repos/{REPO}/issues/9/comments", [comment(1, "builder", "Report: done", ago(0))])
     out = run(proj, stub, "watch", "--since", ago(10))
     assert out.returncode == 0, out.stderr
     assert "cannot be read; retrying" in out.stderr
@@ -704,6 +702,18 @@ def test_check_verdict_prints_the_problem_of_a_final_line_and_exits_1(proj, stub
     assert out.returncode == 1
     assert out.stdout.strip().startswith("SPEC-0021 rule 1:")
     assert "ADR-0146" not in out.stdout  # the rule and the shape, never the body
+
+
+def test_check_verdict_accepts_a_first_line_that_ends_conductor_fallback(proj, stub):
+    """REQ-046: brief #1013 answer 4 (ADR-0431): the fallback marks a verdict, nothing more."""
+    for kind in ("cleared", "fix list", "rejected"):
+        out = check(proj, stub, f"Verdict: {kind} {SHA} (conductor fallback)\n\n1. One.\n")
+        assert out.returncode == 0 and out.stdout.strip() == "ok", kind
+    for text in (
+        f"Verdict: cleared {SHA} (fallback)\n",
+        f"Verdict: cleared {SHA}(conductor fallback)\n",
+    ):
+        assert check(proj, stub, text).returncode == 1, text
 
 
 def test_check_verdict_a_first_line_that_names_no_head_is_a_problem(proj, stub):

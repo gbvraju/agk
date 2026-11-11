@@ -33,7 +33,13 @@ The plan, in the order it is decided:
    The `[capacity]` table (brief #842 build (b), ADR-0409) adds profiles: each ceiling is the
    smaller of the two tables; `full` measures nothing; `balanced` and `small` keep 25 and 50
    percent of memory, cores and disk free where each per-builder setting is set, and `small`
-   starts at most 2; `fixed` uses `max_builders` only; `auto` reads as no table until build (c).
+   starts at most 2; `fixed` uses `max_builders` only. `auto` (brief #842 build (c), ADR-0435)
+   measures memory, cores and disk with no reserve where each per-builder setting is set, none of
+   them with `builders_run = "cloud"`, and adapts: from the last count in the record of
+   `plan --record` it drops by one on reviews over `review_minutes` or memory or disk under a
+   quarter of the machine, and rises by one when checks (the newest governance run within 1.5
+   times its usual minutes) and reviews (under `review_minutes`) hold, at least one of them read;
+   slow checks or reviews at the limit hold it. It stays between 1 and the smallest figure.
    Every plan prints `Capacity: <n> of <ceiling> (<profile>; limit: <name> <figure>).`
 4. **The merge queue.** The merge rate is the merged pull requests of the last 14 days divided by
    the active hours (hour-long buckets, counted back from now, that hold a merge). While the
@@ -632,7 +638,7 @@ def hold_marks(root, s: Survey, known: list[dict], at: str) -> list[dict]:
     return rows
 
 
-def keep_out_of_git(root) -> None:
+def keep_out_of_git(root, name: str = HOLDS_FILE) -> None:
     """`Q-772-1` as read: the record is kept out of git in any project, by this clone's own exclude
     file, so no tracked ignore line is needed; a rewritten tracked file would be a generated one."""
     out = _git(root, "rev-parse", "--git-path", "info/exclude")
@@ -640,10 +646,10 @@ def keep_out_of_git(root) -> None:
         return
     path = Path(root) / out.strip()
     text = path.read_text(encoding="utf-8") if path.is_file() else ""
-    if HOLDS_FILE not in text.splitlines():
+    if name not in text.splitlines():
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as lines:
-            lines.write(f"{HOLDS_FILE}\n")
+            lines.write(f"{name}\n")
 
 
 def record_holds(root, s: Survey, ready: list[dict], chosen: list[dict], now: datetime) -> None:
@@ -1526,6 +1532,9 @@ def build(root, record: bool = False) -> dict:
     limits.append(("reviews", reviews - waiting_review))
     memory = measured_capacity(root, ceil, running)
     limits += [(n, memory[n]["builders"]) for n, _ in MEASURES if isinstance(memory.get(n), dict)]
+    adapted = adapt(root, s, ceil, memory, running, authors, record) if profile == "auto" else {}
+    if adapted.get("history"):
+        limits.append(("adapt", adapted["count"] - running))
     limit, lowest = min(limits, key=lambda x: x[1])  # min keeps the first of a tie
     slots = max(0, lowest)
     ready_prs = [p for p in s.prs if p.get("state") == "open" and label_names(p) & READY_LABELS]
@@ -1609,6 +1618,7 @@ def build(root, record: bool = False) -> dict:
             "limit": limit,
         }
         | memory
+        | ({"adapt": adapted} if adapted else {})
         | ({"free_slots": len(free)} if assigning else {}),
         "merge": {
             "waiting": len(ready_prs),
@@ -1687,6 +1697,7 @@ def start_entry(name: str, brief: dict, protected: list[str] | None) -> dict:
 
 RESERVES = {"balanced": 0.25, "small": 0.5}  # the share of the machine each profile keeps free
 SMALL_MOST = 2  # `small` runs at most 2 builders at once
+AUTO_RESERVE = RESERVES["balanced"]  # `auto` drops under a quarter of the machine (Q-842-5)
 MEASURES = (("memory", "builder_memory_gb"), ("cpu", "builder_cpus"), ("disk", "builder_disk_gb"))
 FREE_KEYS = {"memory": "available_bytes", "cpu": "free_cores", "disk": "free_bytes"}
 
@@ -1730,6 +1741,8 @@ def ceilings(root, flow_max: int) -> dict:
         found[key] = min([*values, table[key]] if key in table else values, default=None)
     found["max_builders"] = min(flow_max, found["max_builders"] or flow_max)
     found |= {k: table.get(k) for k in ("builder_cpus", "builder_disk_gb")}
+    found["builders_run"] = table.get("builders_run", "here")
+    found["review_minutes"] = table.get("review_minutes", config.REVIEW_MINUTES)
     if found["profile"] == "fixed" or found["reviews_in_flight"] is None:
         found["reviews_in_flight"] = found["max_builders"]
     return found
@@ -1750,11 +1763,11 @@ def measured_capacity(root, ceil: dict, running: int) -> dict:
     is (free - reserve x total) // per builder, never below 1 while no builder runs (the verdict
     on 43ada36), or `unknown`, which is left out, never read as 0."""
     profile = ceil["profile"]
-    if profile in ("full", "fixed"):
+    if profile in ("full", "fixed") or (profile == "auto" and ceil["builders_run"] == "cloud"):
         return {}
     reserve = RESERVES.get(profile, 0)
     found: dict = {}
-    for name, key in MEASURES if reserve else MEASURES[:1]:
+    for name, key in MEASURES if reserve or profile == "auto" else MEASURES[:1]:
         per = ceil[key]
         if per is None:
             continue
@@ -1777,6 +1790,8 @@ def figure_text(cap: dict, name: str) -> str:
         return f"{cap['waiting_for_verdict']} waiting of {cap['reviews_in_flight']}"
     if name in ("max_builders", "small"):
         return str(cap["ceiling"])
+    if name == "adapt":
+        return f"{cap['adapt']['count']} {cap['adapt']['why']}"
     free = cap[name][FREE_KEYS[name]]
     if name == "cpu":
         return f"{int(free)} cores free"
@@ -1812,6 +1827,9 @@ def reason(plan: dict) -> str:
     if cap.get("limit") == "small":
         most = f"at most {SMALL_MOST} builders at once"
         return f"the small profile runs {most} ({cap['running']} running)"
+    if cap.get("limit") == "adapt":
+        got = cap["adapt"]
+        return f"the adapted capacity is {got['count']} ({got['why']}; {cap['running']} running)"
     if cap.get("limit") in ("cpu", "disk"):
         name = cap["limit"]
         key = dict(MEASURES)[name]
@@ -1849,6 +1867,9 @@ def words(plan: dict) -> str:
     else:
         lines.append(f"Start 0: {reason(plan)}.")
     lines.append(capacity_line(plan["capacity"]))
+    if "adapt" in plan["capacity"]:
+        got = plan["capacity"]["adapt"]
+        lines.append(f"Adapt: {got['count']} of {got['highest']} ({got['why']}).")
     lines += playbook_lines(plan)
     for w in plan["waits"]:
         lines.append(f"#{w['brief']} {wait_text(w)}.")
@@ -1904,6 +1925,167 @@ def words(plan: dict) -> str:
             "the merge queue limit does not apply."
         )
     return "\n".join(lines) + "\n"
+
+
+# --- `auto` adapts by evidence (SPEC-0034 rule 15, amendment 149 items 5 and 6, ADR-0435) -------
+
+CAPACITY_FILE = "docs/runs/capacity-record.jsonl"  # `plan --record` only, kept out of git (Q-842-2)
+CHANGES_KEPT = 20
+USUAL_RUNS = 20  # "usual": the median of the last 20 successful governance runs (Q-842-6)
+USUAL_TIMES = 1.5
+REVIEWS_KEPT = 10
+REVIEW_PULLS = 30  # the newest pull requests read for the last 10 verdicts
+CHECK_RUNS = "repos/{}/actions/workflows/governance.yml/runs?status=success&per_page={}"
+
+
+def median(values: list[float]) -> float:
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    return ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def check_runs(repo: str) -> list[float] | None:
+    """Minutes of the last successful governance runs, newest first; None when unread."""
+    got = gh(CHECK_RUNS.format(repo, USUAL_RUNS))
+    runs = got.get("workflow_runs") if isinstance(got, dict) else None
+    if not isinstance(runs, list):
+        return None
+    found = []
+    for run in runs:
+        try:
+            start = datetime.strptime(str(run.get("run_started_at")), "%Y-%m-%dT%H:%M:%SZ")
+            end = datetime.strptime(str(run.get("updated_at")), "%Y-%m-%dT%H:%M:%SZ")
+        except (AttributeError, ValueError):
+            continue
+        found.append((end - start).total_seconds() / 60)
+    return found
+
+
+def checks_hold(runs: list[float] | None) -> bool | None:
+    """The newest run within 1.5 times the median of the last 20; None with fewer than 20."""
+    if not runs or len(runs) < USUAL_RUNS:
+        return None
+    return runs[0] <= USUAL_TIMES * median(runs[:USUAL_RUNS])
+
+
+def review_times(s: Survey, authors: list[str] | None) -> list[float] | None:
+    """Minutes from a `Report:` that asks for a verdict to the `Verdict:` by a listed author that
+    names its head, for the last 10 verdicts of the newest pull requests, newest first."""
+    pulls = sorted(s.prs, key=lambda p: str(p.get("updated_at")), reverse=True)[:REVIEW_PULLS]
+    found: list[tuple[datetime, float]] = []
+    for pr in pulls:
+        comments = pages(f"repos/{s.repo}/issues/{pr['number']}/comments")
+        if comments is None:
+            continue
+        me = pr_login(pr).lstrip("@").lower()
+        counted = {a.lstrip("@").lower() for a in counted_authors(authors, me) or []}
+        asked: list[tuple[str, datetime]] = []
+        for c in sorted(comments, key=comment_id):
+            line = first_line(c)
+            if author_of(c) == me and WAITING_REPORT.match(line):
+                asked.append((line.split()[1], moment(c.get("created_at"))))
+            verdict = VERDICT_HEAD.match(line)
+            if verdict and author_of(c) in counted:
+                head = verdict.group(1)
+                named = [x for x in asked if head.startswith(x[0]) or x[0].startswith(head)]
+                if named:  # the newest report that asked about this head, never an older one
+                    when = moment(c.get("created_at"))
+                    found.append((when, (when - named[-1][1]).total_seconds() / 60))
+                    asked = [x for x in asked if x not in named]
+    found.sort(key=lambda x: x[0], reverse=True)
+    return [minutes for _, minutes in found[:REVIEWS_KEPT]]
+
+
+VERDICT_HEAD = re.compile(r"Verdict: (?:cleared|fix list|rejected) ([0-9a-f]{7,40})")
+
+
+def review_state(times: list[float] | None, limit: int) -> str:
+    """The median review against `review_minutes`: `ok` under it, `at` on it (stops the rise),
+    `over` it (drops the count), `unknown` when no review can be read."""
+    if not times:
+        return "unknown"
+    got = median(times)
+    return "ok" if got < limit else "at" if got == limit else "over"
+
+
+def capacity_rows(root) -> list[dict]:
+    """The record's lines that read as JSON objects with a whole `count`; others are left out."""
+    path = Path(root) / CAPACITY_FILE
+    try:
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except OSError:
+        return []
+    rows = []
+    for line in text.splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict) and type(row.get("count")) is int:
+            rows.append(row)
+    return rows
+
+
+def adapt(root, s: Survey, ceil: dict, measured: dict, running: int, authors, record: bool) -> dict:
+    """The count under `auto`: the smallest figure with no history, else the last count moved by
+    one by the readable conditions (a condition that cannot be read counts neither way)."""
+    figures = [running + m["builders"] for m in measured.values() if isinstance(m, dict)]
+    highest = max(1, min([ceil["max_builders"], *figures]))
+    rows = capacity_rows(root)
+    conditions = {"starts": "unknown"}  # a refused start is recorded nowhere (Q-842-8)
+    if rows:
+        # Item 5: checks and reviews (with starts) decide a rise; a refused start, memory or disk
+        # under its reserve, or reviews over `review_minutes` decide a drop. Slow checks and
+        # reviews at the limit only stop the rise; the reserve never raises the count.
+        checks = {True: "ok", False: "over", None: "unknown"}[checks_hold(check_runs(s.repo))]
+        conditions["checks"] = checks
+        conditions["reviews"] = review_state(review_times(s, authors), ceil["review_minutes"])
+        for name in ("memory", "disk"):
+            if isinstance(measured.get(name), dict):
+                free, total = figure(root, name)
+                room = None if free is None or total is None else free >= AUTO_RESERVE * total
+                conditions[name] = {True: "ok", False: "under", None: "unknown"}[room]
+        drops = [n for n, v in conditions.items() if v in ("over", "under") and n != "checks"]
+        rises = {n: conditions[n] for n in ("checks", "reviews") if conditions[n] != "unknown"}
+        stops = [n for n, v in rises.items() if v != "ok"]
+        last = rows[-1]["count"]
+        if drops:
+            count, why = max(1, min(highest, last - 1)), "drop: " + ", ".join(drops)
+        elif rises and not stops:
+            count, why = min(highest, last + 1), "rise"
+        elif stops:
+            count, why = min(highest, last), "held: " + ", ".join(stops)
+        else:
+            count, why = min(highest, last), "nothing read"
+        change = count - last
+    else:
+        count, why, change = highest, "no history", 0
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    row = {"at": now, "count": count, "change": change, "why": why}
+    if record:
+        write_capacity(root, row)
+    changes = [r for r in [*rows, row] if r.get("change")][-CHANGES_KEPT:]
+    return {
+        "count": count,
+        "highest": highest,
+        "change": change,
+        "why": why,
+        "history": bool(rows),
+        "conditions": conditions,
+        "changes": changes,
+    }
+
+
+def write_capacity(root, row: dict) -> None:
+    """Append one line to the record (`plan --record`), kept out of git like the holds."""
+    target = Path(root) / CAPACITY_FILE
+    try:
+        keep_out_of_git(root, CAPACITY_FILE)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("a", encoding="utf-8") as out:
+            out.write(json.dumps(row, sort_keys=True) + "\n")
+    except OSError as exc:
+        raise CheckError("rule 15: the record of capacity cannot be written") from exc
 
 
 def plan(root, as_json: bool, record: bool = False) -> int:

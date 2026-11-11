@@ -130,6 +130,7 @@
   "experimental": [
     ".claude/agents/reviewer.md",
     "scripts/agk/check_review_report.py",
+    "scripts/agk/review_bundle.py",
     "scripts/agk/review_context.py"
   ],
   "templates": {

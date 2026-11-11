@@ -291,7 +291,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/config.py"
 tests = [
-  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_capacity_profiles.py",
+  "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_capacity_adapt.py",
+  "tests/kit/test_capacity_profiles.py",
   "tests/kit/test_caps.py",
   "tests/kit/test_failures.py", "tests/kit/test_models_table.py", "tests/kit/test_usage_transcript.py",
   "tests/kit_dev/test_kit_manifest.py",
@@ -655,9 +656,12 @@ tests = [
 code = "config/rule-plan.txt"
 tests = ["tests/kit/test_rules_consolidate.py"]
 [[testing.map]]
+code = "scripts/agk/review_bundle.py"
+tests = ["tests/kit/test_review_bundle.py"]
+[[testing.map]]
 code = "scripts/agk/review_context.py"
 tests = [
-  "tests/kit/test_check_kit_tests.py", "tests/kit/test_review_context.py",
+  "tests/kit/test_check_kit_tests.py", "tests/kit/test_review_bundle.py", "tests/kit/test_review_context.py",
   "tests/kit_dev/test_experimental_reviewer.py", "tests/kit_dev/test_reviewer_wiring.py",
 ]
 [[testing.map]]
@@ -730,7 +734,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/session_plan.py"
 tests = [
-  "tests/kit/test_pr_state_lifecycle.py",
+  "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_capacity_adapt.py",
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py",
   "tests/kit/test_merge_cleared_reprove.py",
   "tests/kit/test_plan_exact_touches.py", "tests/kit/test_plan_reprove_paths.py",

@@ -18,6 +18,14 @@ import init  # noqa: E402
 EXPERIMENTAL = [
     ".claude/agents/reviewer.md",
     "scripts/agk/check_review_report.py",
+    "scripts/agk/review_bundle.py",
+    "scripts/agk/review_context.py",
+]
+# the paths a released row of kit/hashes.json lists; in flow mode a build never edits the table, so
+# a path ADR-0431 adds joins this list with the release that regenerates it (SPEC-0031 rule 2)
+RELEASED = [
+    ".claude/agents/reviewer.md",
+    "scripts/agk/check_review_report.py",
     "scripts/agk/review_context.py",
 ]
 # the reviewer's tests (tests/kit/test_review_*.py) stay in the kit repository (ADR-0052)
@@ -46,8 +54,8 @@ def opt_in(root):
         fh.write("experimental_reviewer = true\n")
 
 
-def test_ac3_manifest_lists_the_three_experimental_paths_outside_the_verbatim_set():
-    """REQ-013 AC3: ADR-0020 decision 2."""
+def test_ac3_manifest_lists_the_four_experimental_paths_outside_the_verbatim_set():
+    """REQ-013 AC3: ADR-0020 decision 2, extended by ADR-0431 decision 1 (review_bundle.py)."""
     m = manifest()
     assert m["experimental"] == EXPERIMENTAL
     assert not set(EXPERIMENTAL) & set(m["verbatim"])
@@ -58,7 +66,7 @@ def test_ac3_the_release_row_hashes_the_experimental_files():
     """REQ-013 AC3: ADR-0020 decision 2 (a later upgrade can tell an old copy from an edit)."""
     table = json.loads((KIT_ROOT / "kit" / "hashes.json").read_text(encoding="utf-8"))
     row = table["releases"][manifest()["kit_version"]]
-    assert set(EXPERIMENTAL) <= set(row["verbatim"])
+    assert set(RELEASED) <= set(row["verbatim"])
 
 
 def test_ac3_init_writes_none_of_them_by_default(tmp_path):
@@ -139,7 +147,7 @@ def test_ac3_upgrade_reports_but_never_deletes_files_when_the_key_is_off(tmp_pat
     (repo / "agk.toml").write_text(text, encoding="utf-8")
     proc = run_upgrade(repo, "--dry-run")
     assert proc.returncode == 0, proc.stdout
-    for rel in EXPERIMENTAL:
+    for rel in RELEASED:
         assert f"removed-in-kit {rel}" in proc.stdout
         assert (repo / rel).exists()
 
