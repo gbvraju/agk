@@ -599,3 +599,8 @@ def test_brief1026_a_reasoned_release_names_its_build():
 def test_brief1026_a_take_keeps_its_whole_body_reading():
     """REQ-041; brief #1026 answer 3: a take with text after it is still no take."""
     assert freed(f"{TAKEN}\n\nmore") == []
+
+
+def test_brief1026_a_reasoned_release_with_windows_line_ends_frees_the_take():
+    """REQ-041; brief #1026 answer 2, verdict on 45aa5ad: a `\\r` ending the first line matches."""
+    assert freed(TAKEN, "released: s4\r\n\r\nThe brief needs a ruling first.") == [True]
