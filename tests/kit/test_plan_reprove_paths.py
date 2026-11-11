@@ -154,7 +154,7 @@ def test_ac9_exempt_refuses_a_wrong_value(repo):
 
 
 def test_ac5_the_rule_texts_say_a_re_prove_head_is_not_cleared_and_claim_refuses_overlap():
-    """REQ-057 AC1 and AC5: build (e) of SPEC-0050, rules 4 and 7 written into the instruction files."""
+    """REQ-057 AC1 and AC5: build (e) of SPEC-0050, rules 4 and 7 in the instruction files."""
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
@@ -166,4 +166,5 @@ def test_ac5_the_rule_texts_say_a_re_prove_head_is_not_cleared_and_claim_refuses
     assert "`claim` refuses a brief that overlaps running work" in by_number["18"]
     assert "`skip #<n>: waits for ...`" in by_number["18"]
     assert "`Assign:` does not override it" in by_number["18"]
-    assert "re-prove state (SPEC-0050 rule 6) only after merging the default branch" in by_number["7"]
+    ready = "re-prove state (SPEC-0050 rule 6) only after merging the default branch"
+    assert ready in by_number["7"]
