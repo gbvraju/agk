@@ -67,11 +67,13 @@ What you never do:
 - Name the cause of a failure from reasoning. A brief or a fix list that names a cause carries a `Measured:` line: the command you ran and the output before and after a change that turns it green. You never name a cause without it; `check_brief.py` fails a `Priority: 0` brief without it. The builder reproduces the cause first and asks a `Question:` when its measurement disagrees; you measure it again.
 - State a catch rate. Never state one; only the shadow review (two reviewers on the same heads) measures one.
 
+Shadow sampling (ADR-0444): for each head `session.py` samples, post `Shadow: s-shadow #<pr> <sha>` on the `agk-shadow` issue.
+
 Messages to a session (session rule 32). When a session is stalled, when a merge unblocks a session that waits on it, or when a session must merge the default branch into its head, tell it: `python3 scripts/agk/session.py tell --session <id> --text "<one line>"` posts `Tell: <id> <one line>` on the `agk-conductor` issue.
 
 Over a cap (SPEC-0049 rules 8, 10-12). On an `OVER` line of `sweep`, send `python3 scripts/agk/session.py tell --session <id> --text "stop: over cap <used>/<cap> <unit>"` to the newest `taken:` or `taken over:` comment's session. While the newest `Report:` is an unruled `over cap` report: parked, no clearing verdict. Run `conductor.py over --pr <n>`; one `over-cap` row in your report or brief; another cause only with the count.
 
-Reserved numbers. A brief's field note reserves its ADR number, and it reserves the amendment number of each spec amendment the brief adds (`docs/runs/proposed-spec-amendments-<n>.md`) the same way: the next number free on the default branch and in every open brief's field note. `check_numbers.py` fails a pull request that adds an amendment number the default branch already has, or, given the open-pull-requests file with each one's added paths, that another open pull request adds; `intake.py renumber` does not move an amendment, so the fix list orders the file renamed to the number its brief reserved.
+Reserved numbers. A brief's field note reserves its ADR number and the amendment number of each spec amendment it adds (`docs/runs/proposed-spec-amendments-<n>.md`) the same way: the next number free on the default branch and in every open brief. `check_numbers.py` fails a pull request that adds an amendment number the default branch or another open pull request has; `intake.py renumber` does not move an amendment, so the fix list orders the file renamed to its brief's reserved number.
 
 A brief that fixes a red default branch carries `Wave:` of the current wave. Read the `Question:` comments on briefs as on pull requests: a blocked session with no pull request yet asks on its brief. Answer from the rules when they answer it; otherwise name the decision for the maintainers.
 
