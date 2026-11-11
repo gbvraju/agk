@@ -26,7 +26,8 @@ An unknown key or a value of the wrong kind is refused, naming `setting: failure
 the value.
 
 `capacity_settings(root)` reads the optional `[capacity]` table (SPEC-0034 rule 1, brief #842,
-ADR-0409); an unknown key or a wrong value is refused, naming `setting: capacity.<key>`.
+ADR-0409; `builders_run` is `here` or `cloud`, ADR-0435); an unknown key or a wrong value is
+refused, naming `setting: capacity.<key>`.
 
 `scorecard_settings(root)` reads the optional `[scorecard]` table (SPEC-0047 rule 3, brief #713):
 a line per metric and the windows `trend_weeks` and `close_weeks`, else the kit defaults. An
@@ -414,6 +415,7 @@ CAPACITY_NUMBERS = (
     "review_minutes",
 )
 REVIEW_MINUTES = 15
+BUILDERS_RUN = ("here", "cloud")  # amendment 149 item 4, Q-842-3; `here` when unset (ADR-0435)
 
 
 class CapacitySettingError(CheckError):
@@ -443,6 +445,9 @@ def capacity_settings(root: Path) -> dict | None:
         value = table[key]
         if key == "profile":
             if value not in CAPACITY_PROFILES:
+                raise _refuse_capacity(key)
+        elif key == "builders_run":
+            if value not in BUILDERS_RUN:
                 raise _refuse_capacity(key)
         elif key not in CAPACITY_NUMBERS or type(value) is not int or value < 1:
             raise _refuse_capacity(key)
