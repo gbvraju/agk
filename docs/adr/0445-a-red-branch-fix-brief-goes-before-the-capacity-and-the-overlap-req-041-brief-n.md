@@ -41,3 +41,7 @@ A red branch is fixed without a person's ruling when its fix overlaps open work.
 ADR-0414's tests (`test_plan_holders.py`) that expected no assignment now expect the fix brief, as
 answer 2 of brief #1052 requires; the alarm itself is still not assigned. `merge_cleared.red_fix`,
 `config/session-rules.md` and the role files are unchanged.
+
+## Residual
+
+- 2026-11-11: none.
