@@ -44,8 +44,8 @@ protected classes, so the build writes its own (session rule 36); 0431 is the br
 - The bundle runs `review_context.py` on the checkout, so a reviewer run checks out the head first.
 - Two tests of `tests/kit_dev/test_experimental_reviewer.py`, the release row's hashes and the `removed-in-kit` upgrade
   test, read a hand-kept `RELEASED` list instead of `EXPERIMENTAL`, so they no longer check `review_bundle.py`: a build
-  never edits `kit/hashes.json` (SPEC-0031 rule 2), so the released row cannot list the new script until a release
-  regenerates it.
+  never edits `kit/hashes.json` (SPEC-0028 rules 6 and 16; session rule 14), so the released row cannot list the new
+  script until a release regenerates it.
 
 ## Residual
 
