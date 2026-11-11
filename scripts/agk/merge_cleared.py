@@ -997,6 +997,7 @@ def post_record(repo: str, issue: int, number: int, merged: str, verdict: dict) 
 # any case, an optional colon) before `#n`; `Fixes-failure: #n` and `Brief: #n` are not among them.
 CLOSING = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#(\d+)\b", re.IGNORECASE)
 BRIEF_LINE = re.compile(r"Brief: #(\d+)")
+FINISHES_LINE = re.compile(r"Finishes: #(\d+)")  # session rule 28: the last pull request of a brief
 CLOSE_WAIT = 5.0  # seconds GitHub is given to close the issues a merged body closes
 TIMELINE_PAGES = 10  # pages of the brief's timeline read at most
 BRIEF_LABEL = "agk-brief"
@@ -1018,6 +1019,15 @@ def brief_of(text: str) -> int | None:
         if found:
             return int(found.group(1))
     return None
+
+
+def finishes(text: str, brief: int) -> bool:
+    """The body says it finishes BRIEF: a whole stripped line `Finishes: #<brief>` (brief #992),
+    read as `brief_of` reads `Brief: #n`; a mention inside a sentence is not that line."""
+    return any(
+        (found := FINISHES_LINE.fullmatch(line.strip())) is not None and int(found.group(1)) == brief
+        for line in (text or "").splitlines()
+    )
 
 
 def read_once(endpoint: str, kind: type) -> Any:
@@ -1051,13 +1061,14 @@ def merged_titles(repo: str, brief: int) -> list[str] | None:
     return titles
 
 
-def brief_built(repo: str, brief: dict, title: str) -> bool:
+def brief_built(repo: str, brief: dict, title: str, text: str) -> bool:
     """Every build the brief names is named by a merged pull request's title, as `session.py
-    plan` reads builds (this one's TITLE among them); a brief that names no builds is built."""
+    plan` reads builds (this one's TITLE among them); a brief that names no builds is built only
+    when the merged body TEXT says `Finishes: #<brief>` on a line of its own (brief #992)."""
     number = int(brief.get("number") or 0)
     builds = session_plan.builds_of(str(brief.get("body") or ""))
     if not builds:
-        return True
+        return finishes(text, number)
     titles = merged_titles(repo, number)
     if titles is None:
         return False
@@ -1069,14 +1080,15 @@ def open_issue(item: dict | None) -> bool:
     return isinstance(item, dict) and item.get("state") == "open" and "pull_request" not in item
 
 
-def close_brief(repo: str, brief: int, number: int, merged: str, title: str) -> bool:
-    """Close the brief the body builds when every build has merged (brief #959 answer 2); whether
-    it was closed. An open brief with a build unmerged gets nothing."""
+def close_brief(repo: str, brief: int, number: int, merged: str, title: str, text: str) -> bool:
+    """Close the brief the body TEXT builds when every build has merged (brief #959 answer 2), or,
+    for a brief that names no builds, when TEXT finishes it (brief #992); whether it was closed.
+    An open brief with a build unmerged, or not finished, gets nothing."""
     item = read_once(f"repos/{repo}/issues/{brief}", dict)
     if not open_issue(item):
         return False
     labels = {str(x.get("name")) for x in item.get("labels") or [] if isinstance(x, dict)}
-    if BRIEF_LABEL not in labels or not brief_built(repo, item, title):
+    if BRIEF_LABEL not in labels or not brief_built(repo, item, title, text):
         return False
     endpoint = f"repos/{repo}/issues/{brief}"
     line = f"All builds merged; last #{number} {merged[:12]}"
@@ -1089,7 +1101,7 @@ def close_brief(repo: str, brief: int, number: int, merged: str, title: str) -> 
 
 def close_after_merge(repo: str, number: int, merged: str, text: str, title: str) -> None:
     """After the record line (brief #959): the brief of the body's `Brief: #N` is closed when every
-    build has merged, and each issue the body closes that is still open after a short wait gets one
+    build has merged (a brief with no `Builds:` line only on the body's `Finishes: #N`, brief #992), and each issue the body closes that is still open after a short wait gets one
     note. The merge stands and nothing is held."""
     closes = closed_by(text)
     brief = brief_of(text)
@@ -1097,7 +1109,7 @@ def close_after_merge(repo: str, number: int, merged: str, text: str, title: str
         return
     if closes:
         time.sleep(CLOSE_WAIT)  # GitHub closes them itself, a moment after the merge
-    if brief is not None and close_brief(repo, brief, number, merged, title):
+    if brief is not None and close_brief(repo, brief, number, merged, title, text):
         closes = [n for n in closes if n != brief]
     line = f"Not closed by merge {merged[:12]} of #{number}; close it if the work is done"
     for issue in closes:
