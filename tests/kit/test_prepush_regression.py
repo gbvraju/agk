@@ -424,3 +424,34 @@ def test_this_repository_leaves_a_shared_file_full_run_to_ci():
     assert re.search(r'^local_full = "ci"$', text, re.M)
     before = text.split('local_full = "ci"', 1)[0].splitlines()[-1]
     assert "ADR-0440" in before and "owner" in before
+
+
+def test_local_full_ci_with_unmapped_files_still_runs_only_the_mapped_files(repo, outside):
+    """REQ-051: brief #1031 answer 2, verdict on 4be4df4 (Not proven 1): a change that matches
+    always_full and also has an unmapped file is full for the always_full match, so it runs only
+    its mapped files here and leaves the full suite to CI."""
+    change = {"src/billing/pay.py": "change\n", "src/other.py": "change\n"}
+    wide_project(repo, toml(outside, testing=CI + SHARED), change)
+    proc = prepush(repo, outside)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["kit tests/billing/test_pay.py"]
+    assert LEFT_LINE.format(n=1) in proc.stdout
+
+
+def test_evidence_check_says_a_left_to_ci_record_differs(repo, outside):
+    """REQ-051: brief #1031 answer 3, ADR-0440 Consequences, verdict on 4be4df4 (Not proven 2):
+    evidence.py rebuilds the full run, so a record made under local_full = "ci" never agrees and
+    cannot stand in for CI in local mode."""
+    wide_project(repo, toml(outside, testing=CI + SHARED))
+    scan = scanner(outside / "bin", 0)
+    record = outside / "record.json"
+    made = repo.run("prepush.py", "--record", str(record), PATH=path_with(scan))
+    assert made.returncode == 0, made.stdout + made.stderr
+    temp = outside / "tmp"
+    temp.mkdir(exist_ok=True)
+    proc = repo.run(
+        "evidence.py", "check", str(record), PATH=path_with(scan), TMPDIR=str(temp), TMP=str(temp)
+    )
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    line = "evidence: not what prepush runs: tests/selected (full left to CI)/kit (field: name)"
+    assert re.search(f"^{re.escape(line)}$", proc.stdout, re.M), proc.stdout
