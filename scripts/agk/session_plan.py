@@ -1549,7 +1549,7 @@ def build(root, record: bool = False) -> dict:
     assigning = builder_start(root) == "assign"
     free = []
     if assigning:
-        pending = pending_assigns(s, authors)
+        pending = pending_assigns(s, authors, {i["number"] for i in issues})
         held_slots = busy | set(pending or {})
         free = [] if pending is None else [f"s{n + 1}" for n in range(builder_slots(root))]
         free = [name for name in free if name not in held_slots]
@@ -1655,10 +1655,35 @@ def holds_of(root, s: Survey) -> tuple[list[dict], list[dict]]:
     return held, ignored
 
 
-def pending_assigns(s: Survey, authors: list[str]) -> dict[str, tuple] | None:
+def assign_spent(
+    number: int, build: str | None, cid: int, open_briefs: set[int] | None, takes: list, prs: list
+) -> bool:
+    """Brief #1020 answers 1 and 2: whether the `Assign: <slot> #<number> [build (<x>)]` of comment
+    `cid` is spent for any slot: the brief is not among the open briefs read (closed), a slot has
+    a live `taken:` of it (of that build, when the line names one) after the line, or an open pull
+    request has `Brief: #<number>` (and that build in its title). False when the open briefs were
+    not read (None): a brief's state is never guessed, so the slot stays held as before."""
+    if open_briefs is None:
+        return False
+    if number not in open_briefs:
+        return True
+    if any(t[1] > cid and not t[5] and build in (None, t[6]) for t in takes):
+        return True
+    return any(
+        p.get("state") == "open"
+        and brief_number(p) == number
+        and (build is None or names_build(p, number, build))
+        for p in prs
+    )
+
+
+def pending_assigns(
+    s: Survey, authors: list[str], open_briefs: set[int] | None = None
+) -> dict[str, tuple] | None:
     """Each slot's newest `Assign: <slot> #<brief> [build (<x>)]` by a listed author on the
     assignments issue, newer than the slot's last `Request:` and with no `taken:` of the slot after
     it, as (brief, build): that slot and that brief are spoken for (the verdict on 0534baa item 2).
+    A line that `assign_spent` finds spent on the open briefs read holds nothing (brief #1020).
     None when the assignments issue cannot be read, so that no slot reads as free."""
     board = conductor_comments(s.repo)
     if board is None:
@@ -1675,6 +1700,10 @@ def pending_assigns(s: Survey, authors: list[str]) -> dict[str, tuple] | None:
         if match.group(3) is None or match.group(5) or cid < last_request(board, slot):
             continue
         if any(t[2] == slot and t[1] > cid for t in takes):
+            continue
+        number, build = int(match.group(3)), match.group(4)
+        mine = all_takes(s.comments.get(number) or [])
+        if assign_spent(number, build, cid, open_briefs, mine, s.prs):
             continue
         out[slot] = (int(match.group(3)), match.group(4))
     return out
