@@ -36,9 +36,10 @@ The plan, in the order it is decided:
    starts at most 2; `fixed` uses `max_builders` only. `auto` (brief #842 build (c), ADR-0435)
    measures memory, cores and disk with no reserve where each per-builder setting is set, none of
    them with `builders_run = "cloud"`, and adapts: from the last count in the record of
-   `plan --record` it drops by one when a readable condition fails (reviews over `review_minutes`,
-   the newest governance run over 1.5 times its usual minutes, memory or disk under a quarter of
-   the machine) and rises by one when every readable one holds, between 1 and the smallest figure.
+   `plan --record` it drops by one on reviews over `review_minutes` or memory or disk under a
+   quarter of the machine, and rises by one when checks (the newest governance run within 1.5
+   times its usual minutes) and reviews (under `review_minutes`) hold, at least one of them read;
+   slow checks or reviews at the limit hold it. It stays between 1 and the smallest figure.
    Every plan prints `Capacity: <n> of <ceiling> (<profile>; limit: <name> <figure>).`
 4. **The merge queue.** The merge rate is the merged pull requests of the last 14 days divided by
    the active hours (hour-long buckets, counted back from now, that hold a merge). While the
@@ -1978,19 +1979,19 @@ def review_times(s: Survey, authors: list[str] | None) -> list[float] | None:
             continue
         me = pr_login(pr).lstrip("@").lower()
         counted = {a.lstrip("@").lower() for a in counted_authors(authors, me) or []}
-        asked: dict[str, datetime] = {}
+        asked: list[tuple[str, datetime]] = []
         for c in sorted(comments, key=comment_id):
             line = first_line(c)
             if author_of(c) == me and WAITING_REPORT.match(line):
-                asked[line.split()[1]] = moment(c.get("created_at"))
+                asked.append((line.split()[1], moment(c.get("created_at"))))
             verdict = VERDICT_HEAD.match(line)
             if verdict and author_of(c) in counted:
                 head = verdict.group(1)
-                for sha, at in list(asked.items()):
-                    if head.startswith(sha) or sha.startswith(head):
-                        when = moment(c.get("created_at"))
-                        found.append((when, (when - at).total_seconds() / 60))
-                        del asked[sha]
+                named = [x for x in asked if head.startswith(x[0]) or x[0].startswith(head)]
+                if named:  # the newest report that asked about this head, never an older one
+                    when = moment(c.get("created_at"))
+                    found.append((when, (when - named[-1][1]).total_seconds() / 60))
+                    asked = [x for x in asked if x not in named]
     found.sort(key=lambda x: x[0], reverse=True)
     return [minutes for _, minutes in found[:REVIEWS_KEPT]]
 
@@ -1998,9 +1999,13 @@ def review_times(s: Survey, authors: list[str] | None) -> list[float] | None:
 VERDICT_HEAD = re.compile(r"Verdict: (?:cleared|fix list|rejected) ([0-9a-f]{7,40})")
 
 
-def reviews_hold(times: list[float] | None, limit: int) -> bool | None:
-    """The median review under `review_minutes`; None when no review can be read."""
-    return median(times) < limit if times else None
+def review_state(times: list[float] | None, limit: int) -> str:
+    """The median review against `review_minutes`: `ok` under it, `at` on it (stops the rise),
+    `over` it (drops the count), `unknown` when no review can be read."""
+    if not times:
+        return "unknown"
+    got = median(times)
+    return "ok" if got < limit else "at" if got == limit else "over"
 
 
 def capacity_rows(root) -> list[dict]:
@@ -2029,25 +2034,27 @@ def adapt(root, s: Survey, ceil: dict, measured: dict, running: int, authors, re
     rows = capacity_rows(root)
     conditions = {"starts": "unknown"}  # a refused start is recorded nowhere (Q-842-8)
     if rows:
-        held = {
-            "checks": checks_hold(check_runs(s.repo)),
-            "reviews": reviews_hold(review_times(s, authors), ceil["review_minutes"]),
-        }
-        for name, _key in MEASURES:
-            if name != "cpu" and isinstance(measured.get(name), dict):
+        # Item 5: checks and reviews (with starts) decide a rise; a refused start, memory or disk
+        # under its reserve, or reviews over `review_minutes` decide a drop. Slow checks and
+        # reviews at the limit only stop the rise; the reserve never raises the count.
+        checks = {True: "ok", False: "over", None: "unknown"}[checks_hold(check_runs(s.repo))]
+        conditions["checks"] = checks
+        conditions["reviews"] = review_state(review_times(s, authors), ceil["review_minutes"])
+        for name in ("memory", "disk"):
+            if isinstance(measured.get(name), dict):
                 free, total = figure(root, name)
                 room = None if free is None or total is None else free >= AUTO_RESERVE * total
-                held[name] = room
-        words = {True: "ok", False: "over", None: "unknown"}
-        for name, ok in held.items():
-            under = name in ("memory", "disk")
-            conditions[name] = "under" if under and ok is False else words[ok]
-        failed = [name for name, ok in held.items() if ok is False]
+                conditions[name] = {True: "ok", False: "under", None: "unknown"}[room]
+        drops = [n for n, v in conditions.items() if v in ("over", "under") and n != "checks"]
+        rises = {n: conditions[n] for n in ("checks", "reviews") if conditions[n] != "unknown"}
+        stops = [n for n, v in rises.items() if v != "ok"]
         last = rows[-1]["count"]
-        if failed:
-            count, why = max(1, min(highest, last - 1)), "drop: " + ", ".join(failed)
-        elif any(ok for ok in held.values()):
+        if drops:
+            count, why = max(1, min(highest, last - 1)), "drop: " + ", ".join(drops)
+        elif rises and not stops:
             count, why = min(highest, last + 1), "rise"
+        elif stops:
+            count, why = min(highest, last), "held: " + ", ".join(stops)
         else:
             count, why = min(highest, last), "nothing read"
         change = count - last

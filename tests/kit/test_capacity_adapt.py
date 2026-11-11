@@ -184,11 +184,11 @@ def test_reviews_over_review_minutes_drop_the_count_and_start_zero_names_it(
     assert "Adapt: 2 of 3 (drop: reviews)." in lines
 
 
-def test_slow_checks_and_memory_under_its_reserve_drop_the_count(
+def test_memory_under_its_reserve_drops_the_count_and_slow_checks_do_not(
     proj, stub, monkeypatch, capsys, machine
 ):
-    """REQ-041: amendment 149 item 5 (newest run over 1.5 times the median of 20; 7 of 32 GiB
-    available is under the 25 percent reserve, Q-842-5 and Q-842-6)."""
+    """REQ-041: amendment 149 item 5 (7 of 32 GiB available is under the 25 percent reserve,
+    Q-842-5; the newest run over 1.5 times the median of 20 is not a reason to drop, Q-842-6)."""
     good(machine)
     machine["evidence"]["runs"] = [16.0] + [10.0] * 19
     history(proj, 3)
@@ -196,7 +196,43 @@ def test_slow_checks_and_memory_under_its_reserve_drop_the_count(
     cap, _ = run(proj, stub, monkeypatch, capsys, toml, 7 * GIB)
     adapt = cap["adapt"]
     assert adapt["conditions"]["checks"] == "over" and adapt["conditions"]["memory"] == "under"
-    assert adapt["why"] == "drop: checks, memory" and adapt["count"] == 2
+    assert adapt["why"] == "drop: memory" and adapt["count"] == 2
+
+
+def test_slow_checks_stop_the_rise_without_dropping(proj, stub, monkeypatch, capsys, machine):
+    """REQ-041: amendment 149 item 5 (checks over their usual minutes only stop the rise)."""
+    good(machine)
+    machine["evidence"]["runs"] = [16.0] + [10.0] * 19
+    history(proj, 2)
+    cap, _ = run(proj, stub, monkeypatch, capsys, AUTO + "builder_cpus = 2")
+    adapt = cap["adapt"]
+    assert (adapt["count"], adapt["change"], adapt["why"]) == (2, 0, "held: checks")
+
+
+def test_reviews_at_exactly_review_minutes_stop_the_rise_without_dropping(
+    proj, stub, monkeypatch, capsys, machine
+):
+    """REQ-041: amendment 149 item 5 (at the limit is neither under nor over it)."""
+    good(machine)
+    machine["evidence"]["reviews"] = [15.0] * 10
+    history(proj, 2)
+    cap, _ = run(proj, stub, monkeypatch, capsys, AUTO + "builder_cpus = 2")
+    adapt = cap["adapt"]
+    assert adapt["conditions"]["reviews"] == "at"
+    assert (adapt["count"], adapt["change"], adapt["why"]) == (2, 0, "held: reviews")
+
+
+def test_memory_above_its_reserve_alone_never_raises_the_count(
+    proj, stub, monkeypatch, capsys, machine
+):
+    """REQ-041: amendment 149 item 5 (the reserve is only a reason to drop; with checks and
+    reviews unread the count stays)."""
+    history(proj, 2)
+    toml = AUTO + "builder_cpus = 2\nbuilder_memory_gb = 1"
+    cap, _ = run(proj, stub, monkeypatch, capsys, toml)
+    adapt = cap["adapt"]
+    assert adapt["conditions"]["memory"] == "ok" and adapt["conditions"]["checks"] == "unknown"
+    assert (adapt["count"], adapt["change"], adapt["why"]) == (2, 0, "nothing read")
 
 
 def test_a_condition_that_cannot_be_read_counts_neither_way(
@@ -258,8 +294,9 @@ def test_check_runs_reads_the_last_twenty_successful_governance_runs(monkeypatch
     )
     assert session_plan.check_runs(REPO) == [12.5]
     assert "governance.yml/runs?status=success&per_page=20" in seen[0]
-    monkeypatch.setattr(session_plan, "gh", lambda endpoint: None)
+    monkeypatch.setattr(session_plan, "gh", lambda endpoint: None)  # no governance.yml: a 404
     assert session_plan.check_runs(REPO) is None
+    assert session_plan.checks_hold(session_plan.check_runs(REPO)) is None
 
 
 def test_review_times_run_from_the_asking_report_to_the_verdict_on_its_head(monkeypatch):
@@ -277,6 +314,11 @@ def test_review_times_run_from_the_asking_report_to_the_verdict_on_its_head(monk
             comment(5, "second", "Verdict: cleared fff0000aa", "2026-11-10T01:04:00Z"),
         ],
         8: None,
+        9: [  # a short head that two reports name: the newest report is the one answered
+            comment(6, "me", "Report: 9990000 ready for review", "2026-11-09T00:00:00Z"),
+            comment(7, "me", "Report: 9990000aa merge of main", "2026-11-09T00:30:00Z"),
+            comment(8, "boss", "Verdict: cleared 9990000", "2026-11-09T00:36:00Z"),
+        ],
     }
     monkeypatch.setattr(
         session_plan, "pages", lambda endpoint: comments[int(endpoint.split("/")[-2])]
@@ -287,9 +329,12 @@ def test_review_times_run_from_the_asking_report_to_the_verdict_on_its_head(monk
         prs = [
             {"number": 7, "user": {"login": "me"}, "updated_at": "2026-11-10T02:00:00Z"},
             {"number": 8, "user": {"login": "me"}, "updated_at": "2026-11-10T01:00:00Z"},
+            {"number": 9, "user": {"login": "me"}, "updated_at": "2026-11-09T01:00:00Z"},
         ]
 
-    assert session_plan.review_times(S, ["boss", "second"]) == [4.0, 20.0]
-    assert session_plan.reviews_hold([4.0, 20.0, 30.0], 15) is False
-    assert session_plan.reviews_hold([4.0, 10.0, 30.0], 15) is True
-    assert session_plan.reviews_hold([], 15) is None
+    assert session_plan.review_times(S, ["boss", "second"]) == [4.0, 20.0, 6.0]
+    assert session_plan.review_state([4.0, 20.0, 30.0], 15) == "over"
+    assert session_plan.review_state([4.0, 15.0, 30.0], 15) == "at"
+    assert session_plan.review_state([4.0, 10.0, 30.0], 15) == "ok"
+    assert session_plan.review_state([], 15) == "unknown"
+    assert session_plan.review_state(None, 15) == "unknown"

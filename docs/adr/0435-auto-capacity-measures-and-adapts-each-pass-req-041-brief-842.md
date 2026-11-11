@@ -27,14 +27,17 @@ build (c), items 4 to 6; it changes those two decisions of ADR-0409, so it write
    `docs/runs/capacity-record.jsonl`, added to the clone's own `.git/info/exclude`, as the holds record is (Q-842-2,
    Q-772-1). `plan` alone reads it and writes nothing; no check reads it.
 4. The count. The highest is the smallest of `max_builders` and, for each measured figure, the running builders plus
-   the builders it has room for. With no record the count is the highest. Otherwise, from the record's last count:
-   one less, never below 1, when a readable condition fails; one more, never above the highest, when every readable
-   condition holds and at least one can be read; the same, capped at the highest, when none can be read. The
-   conditions: `checks` (the newest of the last 20 successful `governance` runs within 1.5 times their median, unread
-   with fewer than 20, Q-842-6), `reviews` (the median of the last 10 times from a `Report:` that asks for a verdict to
-   a listed author's `Verdict:` on its head, read from the 30 newest pull requests, under `review_minutes`), and, for
-   memory and disk where measured, the free figure at or above a quarter of the machine (Q-842-5). `starts` always
-   reads `unknown`: a refused start is recorded nowhere (Q-842-8).
+   the builders it has room for. With no record the count is the highest. Otherwise, from the record's last count,
+   as amendment 149 item 5 lists them: one less, never below 1, after a reason to drop (reviews over `review_minutes`,
+   or memory or disk under its reserve); else one more, never above the highest, when the rise conditions that can
+   be read all hold and at least one of them can be read; else the same, capped at the highest. The rise conditions
+   are `checks` (the newest of the last 20 successful `governance` runs within 1.5 times their median, unread with
+   fewer than 20, Q-842-6) and `reviews` (the median of the last 10 times from a `Report:` that asks for a verdict to a
+   listed author's `Verdict:` on its head, read from the 30 newest pull requests, under `review_minutes`). Slow checks
+   and reviews at exactly `review_minutes` stop the rise and never drop the count. The reserve (the free memory or
+   disk, where measured, under a quarter of the machine, Q-842-5) is only a reason to drop, never to rise. `starts`
+   always reads `unknown`: a refused start is recorded nowhere (Q-842-8). A verdict that names a short head answers
+   the newest `Report:` whose head it matches.
 5. The output. With a record the count is one more limit, `adapt`, so `Capacity:` and `Start 0` name it with its
    figure (`limit: adapt 2 drop: reviews`). Under `auto` the JSON carries `adapt` with the count, the highest, the
    change, the reason, each condition and the last 20 changes, and the words print `Adapt: <n> of <highest> (<why>).`
