@@ -936,27 +936,10 @@ SKIPPED = "00000006" + "e" * 32  # 6 mod 5 is 1
 SHADOW_ISSUE = 219
 
 
-def test_a_the_one_in_five_rule_picks_the_same_heads_from_the_same_shas():
-    """REQ-054: brief #1014 (a): the first 8 hex characters as a number, mod 5, is 0."""
-    import hashlib
-
-    import session as kit_session
-
-    shas = [hashlib.sha1(str(i).encode(), usedforsecurity=False).hexdigest() for i in range(500)]
-    first = [s for s in shas if kit_session.shadow_sampled(s)]
-    assert first == [
-        s for s in shas if kit_session.shadow_sampled(s)
-    ]  # the same shas, the same heads
-    assert first == [s for s in shas if int(s[:8], 16) % 5 == 0]
-    assert 70 <= len(first) <= 130  # about one in five
-    assert kit_session.shadow_sampled("00000000" + "1" * 32)
-    assert kit_session.shadow_sampled(SAMPLED) and not kit_session.shadow_sampled(SKIPPED)
-    assert not kit_session.shadow_sampled("0000000")  # under 8 characters is never sampled
-    assert not kit_session.shadow_sampled("not-hex-")
-
-
 def shadowed(proj, stub, *lines: dict, answered: tuple[dict, ...] = ()) -> None:
     """This checkout holds s-shadow; the conductor issue has `lines`, the shadow's `answered`."""
+    for count in stub.dir.glob("count.*"):  # each run counts its calls from 1 again
+        count.unlink()
     mark(proj, "mine", "s-shadow")
     stub.serve(COMMENTS, [marker(1, "mine", slot="s-shadow"), *lines])
     stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
@@ -999,3 +982,33 @@ def test_a_pool_stop_stops_the_shadow_slot(proj, stub):
         comment(3, "owner", "Pool: stop"),
     )
     assert last(slot(proj, stub, "--next", "s-shadow")) == "stop"
+
+
+@pytest.mark.parametrize(
+    "first, sampled",
+    [
+        ("00000000", True),
+        ("00000001", False),
+        ("00000004", False),
+        ("00000005", True),
+        ("0000000a", True),
+        ("0000000b", False),
+        ("fffffff0", True),  # 4294967280 mod 5 is 0
+        ("abcdef12", False),  # 2882400018 mod 5 is 3
+    ],
+)
+def test_a_the_one_in_five_rule_picks_the_same_heads_from_the_same_shas(proj, stub, first, sampled):
+    """REQ-054: brief #1014 (a): the first 8 hex characters as a number, mod 5, is 0; two runs on
+    the same sha give the same answer, and only the 8 characters decide."""
+    head = first + "7" * 32
+    want = f"shadow pr #7 {head}" if sampled else "wait"
+    runs = []
+    for _ in range(2):
+        shadowed(proj, stub, comment(2, "boss", f"Shadow: s-shadow #7 {head}"))
+        runs.append(last(slot(proj, stub, "--next", "s-shadow")))
+    assert runs == [want, want]
+    other = first + "3" * 32  # the same first 8 characters, another tail
+    shadowed(proj, stub, comment(2, "boss", f"Shadow: s-shadow #7 {other}"))
+    assert last(slot(proj, stub, "--next", "s-shadow")) == (
+        f"shadow pr #7 {other}" if sampled else "wait"
+    )
