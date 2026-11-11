@@ -1577,7 +1577,7 @@ def save_checklist(src: Any, root: Path, repo: str, days: int, target: Path, now
         "runs": None
         if not isinstance(runs, dict)
         else [
-            {k: r.get(k) for k in ("name", "conclusion", "created_at")}
+            {k: r.get(k) for k in ("name", "conclusion", "created_at", "head_branch", "event")}
             for r in runs.get("workflow_runs") or []
         ],
         "briefs": None

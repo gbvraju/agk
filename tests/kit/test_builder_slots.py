@@ -927,3 +927,74 @@ def test_1020_c_the_sweep_still_prints_unacted_for_an_open_untaken_brief(monkeyp
     for issues in ([{"number": 33}], None):
         lines = stale(monkeypatch, tmp_path, "Assign: s1 #33", issues, [], [])
         assert len(lines) == 1 and lines[0].startswith("UNACTED: Assign: s1 #33 (90 min"), issues
+
+
+# --- the shadow slot (brief #1014 answer 1, ADR-0432) ----------------------------------------
+
+SAMPLED = "00000005" + "e" * 32  # 5 mod 5 is 0
+SKIPPED = "00000006" + "e" * 32  # 6 mod 5 is 1
+SHADOW_ISSUE = 219
+
+
+def test_a_the_one_in_five_rule_picks_the_same_heads_from_the_same_shas():
+    """REQ-054: brief #1014 (a): the first 8 hex characters as a number, mod 5, is 0."""
+    import hashlib
+
+    import session as kit_session
+
+    shas = [hashlib.sha1(str(i).encode(), usedforsecurity=False).hexdigest() for i in range(500)]
+    first = [s for s in shas if kit_session.shadow_sampled(s)]
+    assert first == [s for s in shas if kit_session.shadow_sampled(s)]  # same shas, same heads
+    assert first == [s for s in shas if int(s[:8], 16) % 5 == 0]
+    assert 70 <= len(first) <= 130  # about one in five
+    assert kit_session.shadow_sampled("00000000" + "1" * 32)
+    assert kit_session.shadow_sampled(SAMPLED) and not kit_session.shadow_sampled(SKIPPED)
+    assert kit_session.shadow_sampled(SAMPLED[:8] + "0" * 32)  # only the 8 characters decide
+    assert not kit_session.shadow_sampled("0000000")  # under 8 characters is never sampled
+    assert not kit_session.shadow_sampled("not-hex-")
+
+
+def shadowed(proj, stub, *lines: dict, answered: tuple[dict, ...] = ()) -> None:
+    """This checkout holds s-shadow; the conductor issue has `lines`, the shadow's `answered`."""
+    mark(proj, "mine", "s-shadow")
+    stub.serve(COMMENTS, [marker(1, "mine", slot="s-shadow"), *lines])
+    stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
+    shadow_issue = {"number": SHADOW_ISSUE, "labels": [{"name": "agk-shadow"}]}
+    stub.serve(ISSUES, [shadow_issue], nth=3)  # the lease's and the decision's reads come first
+    stub.serve(f"{ISSUES}/{SHADOW_ISSUE}/comments", list(answered))
+
+
+def test_a_shadow_line_gives_shadow_pr_n_sha_and_reads_no_verdict(proj, stub):
+    """REQ-054: brief #1014 answer 1: the shadow slot's next step, blind."""
+    shadowed(proj, stub, comment(2, "boss", f"Shadow: s-shadow #7 {SAMPLED}"))
+    out = slot(proj, stub, "--next", "s-shadow")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert last(out) == f"shadow pr #7 {SAMPLED}"
+    read = [c[1] for c in stub.calls() if c[0] == "GET"]
+    assert not any(path.startswith(f"{ISSUES}/7") or path.startswith(PULLS) for path in read)
+    assert all(c[1] == f"{ISSUES}/comments/1" for c in writes(stub))  # the lease, nothing else
+
+
+def test_a_shadow_line_answered_unsampled_or_unlisted_gives_wait(proj, stub):
+    """REQ-054: an answered head, a head outside the sample, another author or a short sha."""
+    shadowed(
+        proj,
+        stub,
+        comment(2, "boss", f"Shadow: s-shadow #7 {SAMPLED}"),
+        comment(3, "boss", f"Shadow: s-shadow #8 {SKIPPED}"),
+        comment(4, "stranger", f"Shadow: s-shadow #9 {SAMPLED}"),
+        comment(5, "boss", "Shadow: s-shadow #10 00000005"),
+        answered=(comment(6, "boss", f"Shadow: #7 {SAMPLED[:12]} fix list\nS1. a.py:1 x"),),
+    )
+    assert last(slot(proj, stub, "--next", "s-shadow")) == "wait"
+
+
+def test_a_pool_stop_stops_the_shadow_slot(proj, stub):
+    """REQ-054"""
+    shadowed(
+        proj,
+        stub,
+        comment(2, "boss", f"Shadow: s-shadow #7 {SAMPLED}"),
+        comment(3, "owner", "Pool: stop"),
+    )
+    assert last(slot(proj, stub, "--next", "s-shadow")) == "stop"

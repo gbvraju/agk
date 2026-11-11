@@ -663,16 +663,22 @@ def test_a_read_that_returned_nothing_is_unknown_not_a_crash(tmp_path, capsys):
         facts={"pull_requests": None, "flow": None},
     )
     found = lines_of(capsys, project(tmp_path, document), tmp_path)
-    for number in (1, 2, 4, 9):
+    for number in (1, 4):
         assert found[number] == ("unknown", "the comments were not saved")
-    assert found[5] == ("unknown", "the runs or the pull requests were not saved")
+    for number in (2, 9):  # the gate review's measures follow, each unknown (brief #1014)
+        assert found[number][0] == "unknown"
+        assert found[number][1].startswith("the comments were not saved; ")
+    assert found[5][0] == "unknown"
+    assert found[5][1].startswith("the runs or the pull requests were not saved; ")
+    assert "review latency unknown" in found[5][1] and "catch rate unknown" in found[5][1]
     assert found[8] == ("unknown", "the briefs or the comments were not saved")
     nulls = saved(facts=None, runs=[], comments=[report(0)])
     del nulls["briefs"]
     again = tmp_path / "again"
     again.mkdir()
     found = lines_of(capsys, project(again, nulls), again)
-    assert found[5] == ("unknown", "the runs or the pull requests were not saved")
+    assert found[5][0] == "unknown"
+    assert found[5][1].startswith("the runs or the pull requests were not saved; ")
     assert found[8] == ("unknown", "the briefs or the comments were not saved")
     pulls = saved(facts={"pull_requests": [open_pull], "flow": {"stall_hours": "x"}})
     third = tmp_path / "third"
@@ -704,6 +710,264 @@ def test_it_writes_nothing(tmp_path, capsys):
     before = sorted(p for p in tmp_path.rglob("*"))
     lines_of(capsys, root, tmp_path)
     assert sorted(p for p in tmp_path.rglob("*")) == before
+
+
+# --- gate review (brief #1014 answers 2 to 4, ADR-0432) -----------------------------------------
+
+HEAD_A, HEAD_B = "a" * 40, "b" * 40
+
+
+def verdict_on(issue: int, line: str, at: str, author: str = CONDUCTOR, tail: str = "") -> dict:
+    return comment(issue, line + tail, at, author)
+
+
+def test_b_review_latency_is_ready_report_to_gating_verdict_median_and_worst(tmp_path, capsys):
+    """REQ-054: brief #1014 (b): from saved comments; another head or author is not paired."""
+    document = saved(
+        comments=[
+            comment(50, f"Report: {HEAD_A[:12]} ready for review\nUsage: 9 tokens", day(9)),
+            verdict_on(50, f"Verdict: fix list {HEAD_A}", day(9, 30)),
+            comment(51, f"Report: {HEAD_B} ready for review", day(10)),
+            verdict_on(51, f"Verdict: cleared {HEAD_B[:12]}", day(10, 20), author="stranger"),
+            verdict_on(51, f"Verdict: cleared {HEAD_B[:12]} (conductor fallback)", day(11)),
+            verdict_on(
+                51, f"Verdict: cleared {HEAD_B}", day(11, 30)
+            ),  # the fallback before it gated
+            comment(52, f"Report: {'c' * 40} ready for review", day(10)),
+            verdict_on(52, f"Verdict: cleared {'d' * 40}", day(11)),
+        ]
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "review latency median 45 worst 60 minutes" in found[5][1]
+
+
+def test_b_fix_list_rounds_are_per_merged_pull_request(tmp_path, capsys):
+    """REQ-054: brief #1014 (b): each `fix` verdict of a pull request merged in the window."""
+    two = pull(50, 20, verdicts=[
+        {"kind": "fix", "sha": HEAD_A, "at": day(8)},
+        {"kind": "fix", "sha": HEAD_A, "at": day(9)},
+        {"kind": "cleared", "sha": HEAD_A, "at": day(10)},
+    ])  # fmt: skip
+    none = pull(51, 21)
+    still_open = pull(52, 22, state="open", merged_at=None, verdicts=[
+        {"kind": "fix", "sha": HEAD_A, "at": day(8)}])  # fmt: skip
+    document = saved(facts={"pull_requests": [two, none, still_open], "flow": {}})
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "fix-list rounds 1.0 per merged pull request (2 merged)" in found[5][1]
+
+
+def test_b_without_the_events_each_measure_is_unknown_never_zero(tmp_path, capsys):
+    """REQ-054: brief #1014 answer 2: unknown when it cannot be measured, never 0."""
+    document = saved(facts={"pull_requests": [], "flow": {}}, runs=[merger_run("success")])
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    for part in (
+        "review latency unknown",
+        "fix-list rounds unknown",
+        "red mains after a cleared head unknown",
+        "catch rate unknown",
+    ):
+        assert part in found[5][1], found[5][1]
+    assert "tokens per review unknown" in found[9][1]
+    assert "reviewer slots alive 0" in found[2][1]
+    assert "conductor fallback share unknown" in found[2][1]
+
+
+def main_run(conclusion: str, at: str, branch: str = "main", event: str = "push") -> dict:
+    return {
+        "name": "governance",
+        "conclusion": conclusion,
+        "created_at": at,
+        "head_branch": branch,
+        "event": event,
+    }
+
+
+def test_red_mains_count_a_first_red_after_the_merge_of_a_cleared_head(tmp_path, capsys):
+    """REQ-054: brief #1014 answer 2: a first red push run on the base, laid to the merge."""
+    cleared = pull(50, 20, merged_at=day(9), base="main")
+    uncleared = pull(51, 21, merged_at=day(10), base="main", head_cleared="no")
+    later = pull(52, 22, merged_at=day(11), base="main")
+    runs = [
+        main_run("success", day(8)),
+        main_run("failure", day(9, 5)),  # first red after #50, cleared: counted
+        main_run("failure", day(9, 10)),  # still red: not a first red
+        main_run("success", day(9, 40)),
+        main_run("failure", day(10, 5)),  # first red after #51, not cleared
+        main_run("success", day(10, 30)),
+        main_run("failure", day(11, 5), event="pull_request"),  # not a push
+        main_run("failure", day(11, 6), branch="claude/brief-22"),  # not the base
+    ]
+    document = saved(runs=runs, facts={"pull_requests": [cleared, uncleared, later], "flow": {}})
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "red mains after a cleared head 1" in found[5][1]
+    old = saved(runs=[merger_run("failure")], facts={"pull_requests": [cleared], "flow": {}})
+    again = tmp_path / "again"
+    again.mkdir()
+    found = lines_of(capsys, project(again, old), again)  # a file saved before the branch field
+    assert "red mains after a cleared head unknown" in found[5][1]
+
+
+def test_red_mains_are_unknown_in_local_mode_and_the_rest_is_measured(tmp_path, capsys):
+    """REQ-054: brief #1014 contexts: local keeps point 5's record measures, not the Actions."""
+    document = saved(
+        local_mode=True,
+        comments=[
+            comment(50, f"Report: {HEAD_A} ready for review", day(9)),
+            verdict_on(50, f"Verdict: cleared {HEAD_A}", day(9, 30)),
+        ],
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert found[5][0] == "unknown" and "local mode" in found[5][1]
+    assert "review latency median 30 worst 30 minutes" in found[5][1]
+    assert "red mains after a cleared head unknown" in found[5][1]
+
+
+def marks_for(number: int, sha: str, lines: list[str], at: str = day(11)) -> list[dict]:
+    """A sampled head of pull request `number`: its gating verdict, the shadow's comment and the
+    `Marks:` comment on the pull request."""
+    return [
+        verdict_on(number, f"Verdict: fix list {sha}\n1. x.py:1 y", day(9)),
+        comment(219, f"Shadow: #{number} {sha} fix list\nS1. x.py:1 y", day(9, 30), CONDUCTOR),
+        comment(number, "Marks:\n" + "\n".join(lines), at, "person-example"),
+    ]
+
+
+def test_c_the_catch_rate_is_unknown_under_10_marked_sampled_heads(tmp_path, capsys):
+    """REQ-054: brief #1014 (c)."""
+    comments = []
+    for n in range(9):
+        sha = f"{n:x}" * 40
+        comments += marks_for(60 + n, sha, [f"R{sha[:7]}-1 right", f"S{sha[:7]}-1 right"])
+    sha = "f" * 40  # a tenth head with a Shadow comment and no Marks: comment is unmarked
+    comments += marks_for(70, sha, [])[:2]
+    found = lines_of(capsys, project(tmp_path, saved(comments=comments)), tmp_path)
+    assert "catch rate unknown (9 marked sampled heads, 10 needed)" in found[5][1]
+
+
+def test_c_the_catch_rate_from_10_marked_heads_keeps_the_fallback_apart(tmp_path, capsys):
+    """REQ-054: brief #1014 answer 3; amendment 160 item 6: `C` reads as `R`, `both` is right, and
+    a fallback head is counted apart, never added."""
+    comments = []
+    for n in range(8):  # 8 reviewer heads: 8 right R, 4 right S-only, 2 wrong R
+        sha = f"{n:x}" * 40
+        lines = [f"{'C' if n % 2 else 'R'}{sha[:7]}-1 {'both' if n == 0 else 'right'}"]
+        lines += [f"S{sha[:7]}-1 right"] if n % 2 else []
+        lines += [f"R{sha[:7]}-2 wrong"] if n < 2 else []
+        comments += marks_for(60 + n, sha, lines)
+    for n in (8, 9):  # 2 fallback heads: 1 right R, 1 right S-only
+        sha = f"{n:x}" * 40
+        found_lines = [f"R{sha[:7]}-1 right"] if n == 8 else [f"S{sha[:7]}-1 right"]
+        head = marks_for(60 + n, sha, found_lines)
+        head[0] = verdict_on(60 + n, f"Verdict: fix list {sha} (conductor fallback)", day(9))
+        comments += head
+    found = lines_of(capsys, project(tmp_path, saved(comments=comments)), tmp_path)
+    assert "catch rate reviewer 8/12 (67%); fallback 1/2 (50%); 10 marked heads" in found[5][1]
+
+
+def test_c_the_catch_rate_with_no_right_finding_is_none_never_zero(tmp_path, capsys):
+    """REQ-054: SPEC-0035 rule 4: no rate without a right finding."""
+    comments = []
+    for n in range(10):
+        sha = f"{n:x}" * 40
+        comments += marks_for(60 + n, sha, [f"R{sha[:7]}-1 wrong"])
+    found = lines_of(capsys, project(tmp_path, saved(comments=comments)), tmp_path)
+    assert "catch rate reviewer none; fallback none; 10 marked heads" in found[5][1]
+
+
+def test_d_the_fallback_share_counts_only_lines_that_end_conductor_fallback(tmp_path, capsys):
+    """REQ-054: brief #1014 (d): the first line, ending with the words, by a listed author."""
+    document = saved(
+        comments=[
+            verdict_on(50, f"Verdict: cleared {HEAD_A} (conductor fallback)", day(9)),
+            verdict_on(51, f"Verdict: cleared {HEAD_A}", day(9), tail="\n(conductor fallback)"),
+            verdict_on(52, f"Verdict: cleared {HEAD_A} (conductor fallback) later", day(9)),
+            verdict_on(53, f"Verdict: fix list {HEAD_A}", day(9)),
+            verdict_on(54, f"Verdict: cleared {HEAD_A} (conductor fallback)", day(9), "stranger"),
+            comment(55, f"Report: {HEAD_A} ready for review (conductor fallback)", day(9)),
+        ]
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "conductor fallback share 1 of 3 gating verdicts (33%)" in found[2][1]
+
+
+def test_point_2_counts_the_reviewer_slots_alive(tmp_path, capsys):
+    """REQ-054: brief #1014 answer 2: an `r<N>` marker by a listed author on the conductor issue,
+    seen within `slot_seen_minutes` (90 by default) of the saved time."""
+    document = saved(
+        comments=[
+            comment(CONDUCTOR_ISSUE, f"Slot: active {day(11, 30)} r1 run1", day(1), CONDUCTOR),
+            comment(CONDUCTOR_ISSUE, f"Slot: released {day(10, 45)} r2 run2", day(1), CONDUCTOR),
+            comment(CONDUCTOR_ISSUE, f"Slot: active {day(9)} r3 run3", day(1), CONDUCTOR),  # old
+            comment(CONDUCTOR_ISSUE, f"Slot: active {day(11, 50)} s1 run4", day(1), CONDUCTOR),
+            comment(CONDUCTOR_ISSUE, f"Slot: active {day(11, 50)} r4 run5", day(1), "stranger"),
+            comment(9, f"Slot: active {day(11, 50)} r5 run6", day(1), CONDUCTOR),  # another issue
+        ]
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "reviewer slots alive 2" in found[2][1]
+
+
+def test_point_9_tokens_per_review_from_the_review_sessions_usage(tmp_path, capsys):
+    """REQ-054: brief #1014 answer 2: a gating verdict's own `Usage:`; the fallback is not a
+    review session, and `not shown` is not a zero."""
+    document = saved(
+        comments=[
+            verdict_on(
+                50, f"Verdict: cleared {HEAD_A}", day(9), tail="\nRead: all\nUsage: 1000 tokens"
+            ),
+            verdict_on(51, f"Verdict: fix list {HEAD_A}", day(9), tail="\nUsage: 3000 tokens"),
+            verdict_on(52, f"Verdict: cleared {HEAD_A}", day(9), tail="\nUsage: not shown"),
+            verdict_on(
+                53,
+                f"Verdict: cleared {HEAD_A} (conductor fallback)",
+                day(9),
+                tail="\nUsage: 9000 tokens",
+            ),  # fmt: skip
+        ]
+    )
+    found = lines_of(capsys, project(tmp_path, document), tmp_path)
+    assert "tokens per review 2000 (2 of 3 reviews)" in found[9][1]
+
+
+def test_shadow_count_prints_the_same_catch_rate_from_saved_comments(tmp_path):
+    """REQ-054: brief #1014 answer 3: the kit-only counter reads the checklist's one reader."""
+    import subprocess  # nosec B404 - fixed argument lists only, no shell
+    import sys
+
+    comments = []
+    for n in range(10):
+        sha = f"{n:x}" * 40
+        comments += marks_for(60 + n, sha, [f"R{sha[:7]}-1 right", f"S{sha[:7]}-2 right"])
+    path = tmp_path / "comments.json"
+    path.write_text(json.dumps(comments), encoding="utf-8")
+    script = KIT_ROOT / "scripts" / "agk" / "shadow_count.py"
+    out = subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(script), "--marks", str(path)], capture_output=True, text=True
+    )
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.strip() == "catch rate reviewer 10/20 (50%); fallback none; 10 marked heads"
+
+
+def test_the_save_step_keeps_each_runs_branch_and_event(tmp_path, monkeypatch):
+    """REQ-054: brief #1014 answer 2: what the red-main count reads, from the same GET."""
+    import facts
+
+    monkeypatch.setattr(facts, "build", lambda *a, **k: {"pull_requests": [], "flow": {}})
+    run = {"name": "governance", "conclusion": "failure", "created_at": day(9), "id": 2}
+    run |= {"head_branch": "main", "event": "push"}
+    folder = api_dir(tmp_path, more={"runs-checklist": {"workflow_runs": [run]}})
+    target = tmp_path / "saved.json"
+    metrics.save_checklist(metrics.ApiDir(folder), tmp_path, "o/r", 7, target, SAVED_AT)
+    document = json.loads(target.read_text(encoding="utf-8"))
+    assert document["runs"] == [
+        {
+            "name": "governance",
+            "conclusion": "failure",
+            "created_at": day(9),
+            "head_branch": "main",
+            "event": "push",
+        }
+    ]
 
 
 # --- the saving step in metrics.py ------------------------------------------------------------
@@ -759,7 +1023,10 @@ def test_the_save_step_writes_the_document_checklist_reads(tmp_path, monkeypatch
     assert document["saved_at"] == SAVED_AT
     assert document["facts"] == {"pull_requests": [], "flow": {}}
     assert document["comments"][0]["body"].startswith("Report:")
-    assert document["runs"] == [{"name": "merger", "conclusion": "failure", "created_at": day(9)}]
+    assert document["runs"] == [
+        {"name": "merger", "conclusion": "failure", "created_at": day(9)}
+        | {"head_branch": None, "event": None}
+    ]
     assert [b["number"] for b in document["briefs"]] == [3]  # a pull request is not a brief
     assert document["pr_tests"] == LINE_75
     assert document["local_mode"] is True

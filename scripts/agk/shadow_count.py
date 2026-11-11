@@ -1,21 +1,28 @@
 """Totals of the shadow record (SPEC-0023 rule 8). Kit-only: never installed.
 
     python3 shadow_count.py FILE
+    python3 shadow_count.py --marks FILE
 
 Reads FILE only and prints, for the findings the maintainers marked
 (`- <by> <mark> <where>: <text>`), the catches by both, by the person only and by the shadow
 only, the false findings by each, the findings with no `<where>` and the lines with no mark
 (both count for nothing), and the number of pasted verdicts that lack a line of the shape of
-SPEC-0023 rule 4. It uses no network and no model, and fails nothing but a bad call (exit 2).
+SPEC-0023 rule 4. With `--marks`, FILE is a saved list of comments (or the document that
+`metrics.py --save-checklist` writes) and it prints the reviewer's catch rate from the `Marks:`
+comments, by `checklist.marks_rate`, the one reader of the checklist's point 5 (brief #1014 answer
+3, ADR-0432). It uses no network and no model, and fails nothing but a bad call (exit 2).
 """
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
 
-USAGE = "usage: shadow_count.py FILE"
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
+USAGE = "usage: shadow_count.py FILE | --marks FILE"
 LINE = re.compile(r"^- (both|person|shadow)\b")
 MARKS = ("catch", "false")
 SHAPE = ("Read:", "Rules:", "Not proven:", "Lens:", "Gaps:", "Checklist:")
@@ -80,15 +87,30 @@ def totals(text: str) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) != 1 or args[0].startswith("-"):
+    marks = len(args) == 2 and args[0] == "--marks"
+    path = args[-1] if args else ""
+    if not (marks or len(args) == 1) or path.startswith("-"):
         print(USAGE)
         return 2
     try:
-        text = Path(args[0]).read_text(encoding="utf-8")
+        text = Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         print("shadow_count: cannot read the record file")
         return 2
-    print("\n".join(totals(text)))
+    if not marks:
+        print("\n".join(totals(text)))
+        return 0
+    import checklist
+
+    try:
+        saved = json.loads(text)
+    except ValueError:
+        saved = None
+    comments = saved.get("comments") if isinstance(saved, dict) else saved
+    if not isinstance(comments, list):
+        print("shadow_count: the file holds no list of comments")
+        return 2
+    print(checklist.marks_rate([c for c in comments if isinstance(c, dict)]))
     return 0
 
 

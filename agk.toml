@@ -715,6 +715,7 @@ code = "scripts/agk/session.py"
 tests = [
   "tests/kit/test_pr_state_lifecycle.py",
   "tests/kit/test_always_full_infra.py", "tests/kit/test_brief_contexts.py", "tests/kit/test_builder_assign.py",
+  "tests/kit/test_builder_slots.py",
   "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_conductor_guard_queue.py",
   "tests/kit/test_conductor_guard_tell.py", "tests/kit/test_conductor_sweep_late_line.py",
   "tests/kit/test_draft_and_progress.py", "tests/kit/test_flow_rules.py", "tests/kit/test_front_door_entry.py",
