@@ -46,12 +46,17 @@ Local builders run without the owner or the conductor in the loop between briefs
 auto-pilot of SPEC-0048 rule 3, which needs `[flow] assign = "conductor"`, is off in this repository until the
 setting is turned back by an ADR. Merges stay with `merge_cleared.py` and the merger job: the deny lines win over the
 allow lines, and a comment post whose text holds `merge` (a `Report: <head> merge of main`) is denied too unless its
-body is passed from a file (`-F body=@file`), so builders post from a file. The stop hook makes one network read per
-stop on a branch, bounded by a timeout, and never writes to GitHub. Every installing project gets the same allow
-lines and hook; `assign` is this repository's own setting.
+body is passed from a file (`-F body=@file`), so builders post from a file. The two comment allow lines let a session
+post any comment, on any pull request or issue, without the owner seeing it first; sessions and the owner share one
+account, so a builder's `Verdict:`, `Approve:`, `Confirmed:` or `Maintainer answer:` line is then held only by
+session rules 2 and 29. The stop hook makes one network read per stop on a branch, bounded by a timeout, and never
+writes to GitHub. Every installing project gets the same allow lines and hook; `assign` is this repository's own
+setting.
 
 ## Residual
 
 - 2026-11-11: the after-measure is the brief's: on the laptop `session.py after --session lap1` takes the next ready
   brief and the stop hook is green on a branch whose body has `Covered-by:`; it is measured on the laptop, not in a
   cloud session.
+- 2026-11-11: the comment allow lines leave a session's posts unprompted, and the owner's own lines held only by
+  session rules 2 and 29, until sessions post under their own identity.
