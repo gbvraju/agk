@@ -71,8 +71,10 @@ def interpreter(folder: Path, xdist: bool) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def fresh_memory():
-    """Each test reads free memory afresh (`impact.MEMORY` holds one reading per process)."""
+def fresh_memory(monkeypatch):
+    """Each test reads free memory afresh (`impact.MEMORY` holds one reading per process), and the
+    caller's `AGK_TEST_WORKERS` reaches no test or run it starts (brief #1032)."""
+    monkeypatch.delenv("AGK_TEST_WORKERS", raising=False)
     impact.MEMORY.clear()
     yield
     impact.MEMORY.clear()
