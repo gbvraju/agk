@@ -1,0 +1,1 @@
+- `session.py plan` under the `auto` capacity profile measures memory, cores and disk each pass, reads `builders_run = "here" | "cloud"`, and with `plan --record` adapts the count by one a pass on review time, check minutes and memory or disk reserve, naming the `adapt` limit (brief #842 build (c), ADR-0435)

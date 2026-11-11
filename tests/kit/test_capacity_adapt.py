@@ -143,9 +143,7 @@ def good(machine) -> None:
     machine["evidence"]["reviews"] = [5.0] * 10
 
 
-def test_with_no_history_the_count_is_the_smallest_figure(
-    proj, stub, monkeypatch, capsys, machine
-):
+def test_with_no_history_the_count_is_the_smallest_figure(proj, stub, monkeypatch, capsys, machine):
     """REQ-041: amendment 149 item 5 (no history: the smallest figure of item 4)."""
     good(machine)
     cap, lines = run(proj, stub, monkeypatch, capsys, AUTO + "builder_cpus = 2")
@@ -213,9 +211,7 @@ def test_a_condition_that_cannot_be_read_counts_neither_way(
     assert adapt["count"] == 2 and adapt["change"] == 0 and adapt["why"] == "nothing read"
 
 
-def test_the_last_twenty_changes_are_kept_in_the_output(
-    proj, stub, monkeypatch, capsys, machine
-):
+def test_the_last_twenty_changes_are_kept_in_the_output(proj, stub, monkeypatch, capsys, machine):
     """REQ-041: amendment 149 item 5 (the last 20 changes; a pass without a change is not one)."""
     good(machine)
     rows = [
@@ -234,7 +230,12 @@ def test_the_last_twenty_changes_are_kept_in_the_output(
 
 @pytest.mark.parametrize(
     ("runs", "want"),
-    [(None, None), ([10.0] * 19, None), ([15.0] + [10.0] * 19, True), ([15.5] + [10.0] * 19, False)],
+    [
+        (None, None),
+        ([10.0] * 19, None),
+        ([15.0] + [10.0] * 19, True),
+        ([15.5] + [10.0] * 19, False),
+    ],
 )
 def test_checks_hold_while_the_newest_run_is_within_its_usual_minutes(runs, want):
     """REQ-041: amendment 149 item 5 (usual: 1.5 times the median of the last 20, Q-842-6)."""
