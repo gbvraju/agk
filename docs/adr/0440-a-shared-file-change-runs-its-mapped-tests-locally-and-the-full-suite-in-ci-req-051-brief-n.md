@@ -40,7 +40,9 @@ made under it differs (`not what prepush runs: tests/selected (full left to CI)/
 outcome. A selection full for another reason (profile `thorough`, unmapped files under `balanced` with no `always_full`
 match, `full_when_share`, `pr_tests = "full"`) runs the full suite locally as before. A change that matches
 `always_full` and also has unmapped files is full for the `always_full` match, as `impact` reports it, so it runs its
-mapped files here too.
+mapped files here too. Two tests in `tests/kit/test_prepush_regression.py` prove both: an `always_full` change with an
+unmapped file runs only its mapped files, and `evidence.py check` on a record made under the rule exits 1 naming
+`tests/selected (full left to CI)/<area>`.
 
 ## Residual
 
