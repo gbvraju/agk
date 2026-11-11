@@ -274,10 +274,10 @@ def test_ac5_an_invalid_assign_is_refused_naming_the_setting_not_the_value(proj,
     assert value not in out.stdout or value == ""
 
 
-def test_ac5_this_repository_sets_assign_to_conductor():
-    """REQ-041 AC5"""
+def test_ac5_this_repository_sets_assign_to_next():
+    """REQ-041 AC5: `next` by the owner's direction of 2026-11-11 (brief #1029, ADR-0438)."""
     data = tomllib.loads((ROOT / "agk.toml").read_text(encoding="utf-8"))
-    assert data["flow"]["assign"] == "conductor"
+    assert data["flow"]["assign"] == "next"
 
 
 def test_ac4_a_release_frees_a_take_only_when_the_same_account_posted_it(proj, stub):
