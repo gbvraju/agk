@@ -6,7 +6,7 @@
 - Related: brief #1050, plan #661, brief #1013, brief #1014, ADR-0431, Q-1013-3, Q-1014-1
 - Requirements: REQ-046, REQ-054
 
-Protected classes: `.claude/`, `tests/kit/`
+Protected classes: `.claude/`, `config/`, `tests/kit/`
 
 ## Context
 
@@ -36,6 +36,10 @@ scratch folder outside the project, the conductor guard's limit) and Q-1014-1 (t
    imports the architect's. The on-origin test is the conductor guard's own `on_origin_branch`, imported late, at the
    one checkout step, so the architect's guard holds no command of its own and there is no import cycle.
 
+6. The owner's edit of `.claude/agents/conductor.md` on this branch (Q-1050-2) leaves the file at 4499 words, so its
+   line in `config/rule-budget.txt` is lowered from 4500 to 4499, as that file requires of a cut file in the same pull
+   request (ADR-0310). No other budget line changes.
+
 ## Consequences
 
 A reviewer slot and the shadow slot can each run under their own guard, so gate review's fresh reviewer and its
@@ -45,7 +49,7 @@ at a worktree add; it still makes no network call.
 
 ## Residual
 
-- 2026-11-11: the role files (`architect-review.md`'s "no write until Q-1013-3", the conductor's `Shadow:` sentence)
-  are the owner's to edit (brief #1050 answers 3 and 6); `session.py slot` on the default branch accepts no
+- 2026-11-11: the owner added the conductor's `Shadow:` sentence on this branch (Q-1050-2); the review role file's
+  "no write until Q-1013-3" stays the owner's to edit (brief #1050 answer 6); `session.py slot` on the default branch accepts no
   `s-shadow` name yet, so the shadow's slot runs once a brief adds that name; the guard cannot tell the pull request
   under review from another issue without a network call, so the comment's target stays the role file's rule.
