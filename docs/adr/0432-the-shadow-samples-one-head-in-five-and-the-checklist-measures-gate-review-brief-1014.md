@@ -6,7 +6,7 @@
 - Related: ADR-0430, ADR-0431, ADR-0374, ADR-0420, SPEC-0023, SPEC-0035, amendment 160, brief #1012, brief #1013, brief #1014, plan #661
 - Requirements: REQ-054, REQ-046
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `.claude/`
+Protected classes: `scripts/agk/`, `tests/kit/`
 
 ## Context
 
@@ -26,7 +26,9 @@ catch rate and the measures. No Accepted ADR covers these protected classes, so 
    ADR-0425), and `slot --next s-shadow` prints `shadow pr #<n> <sha>` for the newest such line by a listed verdict author
    whose head is sampled and that no `Shadow: #<n> <sha> cleared|fix list|rejected` comment on the one open `agk-shadow`
    issue answers yet, `wait` otherwise, and `stop` on `Pool: stop` by an approver. It reads only those two issues, never a
-   pull request's comments, so it never reads a `Verdict:` line, and `.claude/agents/shadow.md` keeps its blind rules.
+   pull request's comments, so it never reads a `Verdict:` line. `.claude/agents/shadow.md` keeps its blind rules and is
+   not changed: it stands at its word budget (`rules.py`, baseline 1280), and this decision is where the slot is
+   described until a guide carries it (Q-1014-1).
 3. `checklist.py` adds, each printed `unknown` when it cannot be measured and never 0:
    - point 5: review latency, from a head's `Report: <head> ready ...` to the first gating `Verdict:` by a listed verdict
      author that names that head, as the median and the worst in minutes; fix-list rounds per merged pull request (its
@@ -44,8 +46,9 @@ catch rate and the measures. No Accepted ADR covers these protected classes, so 
    printed `unknown` until 10 sampled heads (a `Shadow: #<pr> <sha> ...` comment) have a `Marks:` comment on their pull
    request, and `none` with no right finding. `checklist.py` holds the one reader (`marks_rate`), and the kit-only
    `shadow_count.py --marks FILE` prints the same figures from a saved comment list.
-5. `metrics.py --save-checklist` saves, beside the fields it saves today, each run's `head_branch` and `event`, and each
-   comment's `updated_at`, from the same GETs.
+5. `metrics.py --save-checklist` saves, beside the fields it saves today, each run's `head_branch` and `event`, from the
+   same GET. The reviewer slots' markers need no new field: the saved comments are listed by their update time
+   (`since=`), and a marker's first line carries its own time.
 
 ## Consequences
 

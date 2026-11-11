@@ -944,7 +944,9 @@ def test_a_the_one_in_five_rule_picks_the_same_heads_from_the_same_shas():
 
     shas = [hashlib.sha1(str(i).encode(), usedforsecurity=False).hexdigest() for i in range(500)]
     first = [s for s in shas if kit_session.shadow_sampled(s)]
-    assert first == [s for s in shas if kit_session.shadow_sampled(s)]  # the same shas, the same heads
+    assert first == [
+        s for s in shas if kit_session.shadow_sampled(s)
+    ]  # the same shas, the same heads
     assert first == [s for s in shas if int(s[:8], 16) % 5 == 0]
     assert 70 <= len(first) <= 130  # about one in five
     assert kit_session.shadow_sampled("00000000" + "1" * 32)
@@ -954,7 +956,7 @@ def test_a_the_one_in_five_rule_picks_the_same_heads_from_the_same_shas():
 
 
 def shadowed(proj, stub, *lines: dict, answered: tuple[dict, ...] = ()) -> None:
-    """This checkout holds s-shadow; the conductor issue has `lines`, the shadow issue `answered`."""
+    """This checkout holds s-shadow; the conductor issue has `lines`, the shadow's `answered`."""
     mark(proj, "mine", "s-shadow")
     stub.serve(COMMENTS, [marker(1, "mine", slot="s-shadow"), *lines])
     stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")

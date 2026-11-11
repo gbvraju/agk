@@ -8,8 +8,9 @@ it writes nothing and never makes a network call. In GitHub mode it reads the on
 `python3 scripts/agk/metrics.py --save-checklist` wrote (`--saved FILE`, by default
 `agk-checklist.json` in the checkout's git directory); the window is the `--days` (7 by default)
 before the file's `saved_at`. A value that cannot be read is `unknown` with the reason, never 0.
-A point is `yes` only past its threshold in the optional `[checklist]` table of agk.toml; an
-unknown key or a wrong value is refused naming the setting, never the value (exit 1).
+Points 2, 5 and 9 also print the gate review's measures (brief #1014, ADR-0432), which set
+no status. A point is `yes` only past its threshold in the optional `[checklist]` table of
+agk.toml; an unknown key or a wrong value is refused naming the setting, never the value (exit 1).
 """
 
 from __future__ import annotations
@@ -66,6 +67,18 @@ FULL_MEDIAN = re.compile(r"full suite: median (\d+)s")
 USAGE_FIGURE = re.compile(r"\bUsage: \d")
 DEPENDS = re.compile(r"^Depends-on:(.*)$", re.M)
 FAILED = ("failure", "timed_out", "startup_failure")
+# Gate review (brief #1014, ADR-0432): a gating verdict's first line, the ending ADR-0431 adds,
+# a head's ready report, the reviewer slots' lease markers, the shadow's comments and the marks.
+GATING = re.compile(
+    r"Verdict: (?:cleared|fix list|rejected) ([0-9a-f]{7,40})( \(conductor fallback\))?"
+)
+READY = re.compile(r"Report: ([0-9a-f]{7,40}) ready\b.*")
+REVIEW_USAGE = re.compile(r"\bUsage: (\d+) tokens\b")
+REVIEWER_MARKER = re.compile(r"Slot: (?:active|released) (\S+) (r[1-9]\d*) \S+")
+SHADOW_POSTED = re.compile(r"Shadow: #([1-9]\d*) ([0-9a-f]{7,40}) (?:cleared|fix list|rejected)")
+MARK = re.compile(r"([CRS])([0-9a-f]{7})-[1-9]\d* (right|wrong|both)")
+MARKED_NEEDED = 10  # brief #1014 answer 3
+SLOT_SEEN_MINUTES = 90  # `slot_seen_minutes` of conductor.py (ADR-0412)
 Point = tuple[str, str]
 
 
@@ -496,17 +509,253 @@ def cost(view: View) -> Point:
     return "yes" if enough else "partly", measure
 
 
+# --- gate review (brief #1014, ADR-0432) ---------------------------------------------------------
+
+
+def same_head(one: str, other: str) -> bool:
+    return one.startswith(other) or other.startswith(one)
+
+
+def gating(comments: list[dict], authors: set[str] | None) -> list[tuple[int, datetime, str, bool]]:
+    """Each gating verdict, in time order: (issue, when, sha, fallback). Its first line is the whole
+    verdict, with or without ` (conductor fallback)` at its end (ADR-0431 decision 3), by a listed
+    verdict author (any author when `authors` is None)."""
+    found = []
+    for comment in comments:
+        match = GATING.fullmatch(first_line(comment))
+        number, when = issue_of(comment), stamp(comment.get("created_at"))
+        listed = authors is None or login(comment.get("author")) in authors
+        if match and listed and number is not None and when is not None:
+            found.append((number, when, match[1], bool(match[2])))
+    return sorted(found, key=lambda item: item[1])
+
+
+def first_verdicts(verdicts: list[tuple[int, datetime, str, bool]]) -> list[tuple]:
+    """The first gating verdict of each head of each pull request."""
+    kept: list[tuple] = []
+    for item in verdicts:
+        if not any(k[0] == item[0] and same_head(k[2], item[2]) for k in kept):
+            kept.append(item)
+    return kept
+
+
+def minutes(value: timedelta) -> int:
+    return round(value.total_seconds() / 60)
+
+
+def latency(view: View) -> str:
+    """From a head's `Report: <head> ready ...` to its first gating verdict, median and worst."""
+    if view.comments is None or view.authors is None:
+        return f"review latency {UNKNOWN}"
+    ready = []
+    for comment in view.comments:
+        match = READY.fullmatch(first_line(comment))
+        number, when = issue_of(comment), stamp(comment.get("created_at"))
+        if match and number is not None and when is not None:
+            ready.append((number, when, match[1]))
+    waits = []
+    for number, when, sha, _ in first_verdicts(gating(view.comments, view.authors)):
+        before = [r[1] for r in ready if r[0] == number and r[1] <= when and same_head(r[2], sha)]
+        if before and view.start <= when <= view.end:
+            waits.append(minutes(when - max(before)))
+    if not waits:
+        return f"review latency {UNKNOWN}"
+    ordered = sorted(waits)
+    middle = len(ordered) // 2
+    median = ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
+    shown = f"{median:g}"
+    return f"review latency median {shown} worst {ordered[-1]} minutes"
+
+
+def merged_in(view: View) -> list[dict]:
+    return [
+        p
+        for p in view.pulls or []
+        if isinstance(p, dict) and p.get("state") == "merged" and view.inside(p.get("merged_at"))
+    ]
+
+
+def rounds(view: View) -> str:
+    """The `fix` verdicts of each pull request merged in the window, per pull request."""
+    counted = [
+        sum(1 for v in p["verdicts"] if isinstance(v, dict) and v.get("kind") == "fix")
+        for p in merged_in(view)
+        if isinstance(p.get("verdicts"), list)
+    ]
+    if not counted:
+        return f"fix-list rounds {UNKNOWN}"
+    average = sum(counted) / len(counted)
+    return f"fix-list rounds {average:.1f} per merged pull request ({len(counted)} merged)"
+
+
+def red_mains(view: View) -> str:
+    """Each first red push run on a pull request's base (the previous run of that workflow there
+    did not fail), laid to the latest merge before it, counted when that head was cleared."""
+    shown = f"red mains after a cleared head {UNKNOWN}"
+    if view.local or view.runs is None or view.pulls is None:
+        return shown
+    runs = [r for r in view.runs if isinstance(r, dict) and isinstance(r.get("head_branch"), str)]
+    if not runs:
+        return shown  # a file saved before the branch was kept, or no run at all
+    pushes = sorted(
+        (r for r in runs if r.get("event") == "push" and stamp(r.get("created_at"))),
+        key=lambda r: stamp(r.get("created_at")),
+    )
+    merges = sorted(
+        (
+            (when, p)
+            for p in view.pulls
+            if isinstance(p, dict) and (when := stamp(p.get("merged_at"))) is not None
+        ),
+        key=lambda item: item[0],
+    )
+    count = 0
+    for at, run_ in enumerate(pushes):
+        when = stamp(run_.get("created_at"))
+        if (
+            when is None
+            or run_.get("conclusion") not in FAILED
+            or not view.inside(when.isoformat())
+        ):
+            continue
+        key = (run_.get("name"), run_.get("head_branch"))
+        earlier = [r for r in pushes[:at] if (r.get("name"), r.get("head_branch")) == key]
+        if earlier and earlier[-1].get("conclusion") in FAILED:
+            continue  # still red: not a first red
+        cause = [p for merged, p in merges if merged <= when]
+        if cause and cause[-1].get("base") == key[1] and cause[-1].get("head_cleared") == "yes":
+            count += 1
+    return f"red mains after a cleared head {count}"
+
+
+def rate_of(right: int, shadow_only: int) -> str:
+    total = right + shadow_only
+    return "none" if total == 0 else f"{right}/{total} ({round(100 * right / total)}%)"
+
+
+def marks_rate(comments: list[dict], authors: set[str] | None = None) -> str:
+    """The reviewer's catch rate from the `Marks:` comments (SPEC-0035 rules 3 and 4; amendment
+    160 item 6): the `R` findings marked `right` or `both` (`C` reads as `R`), over those plus the
+    `S` findings marked `right`, for the sampled heads (a `Shadow: #<pr> <sha> ...` comment) whose
+    pull request has a `Marks:` comment. A head whose gating verdict ends `(conductor fallback)`
+    counts in its own rate, never added to the reviewer's. `unknown` under 10 marked heads, `none`
+    with no right finding."""
+    marks: dict[int, list[str]] = {}
+    for comment in comments:
+        number = issue_of(comment)
+        lines = str(comment.get("body") or "").splitlines()
+        if number is not None and lines and lines[0].strip() == "Marks:":
+            marks.setdefault(number, []).extend(x.strip() for x in lines[1:])
+    heads: list[tuple[int, str]] = []
+    for comment in comments:
+        match = SHADOW_POSTED.match(first_line(comment))
+        head = (int(match[1]), match[2][:7]) if match else None
+        if head and head[0] in marks and head not in heads:
+            heads.append(head)
+    if len(heads) < MARKED_NEEDED:
+        return f"catch rate {UNKNOWN} ({len(heads)} marked sampled heads, {MARKED_NEEDED} needed)"
+    verdicts = first_verdicts(gating(comments, authors))
+    sums = {False: [0, 0], True: [0, 0]}  # fallback -> [right reviewer, right shadow-only]
+    for number, sha7 in heads:
+        found = next((v for v in verdicts if v[0] == number and same_head(v[2], sha7)), None)
+        bucket = sums[bool(found and found[3])]
+        for line in marks[number]:
+            match = MARK.fullmatch(line)
+            if not match or match[2] != sha7:
+                continue
+            if match[1] in "RC" and match[3] in ("right", "both"):
+                bucket[0] += 1
+            elif match[1] == "S" and match[3] == "right":
+                bucket[1] += 1
+    return (
+        f"catch rate reviewer {rate_of(*sums[False])}; fallback {rate_of(*sums[True])}; "
+        f"{len(heads)} marked heads"
+    )
+
+
+def catch_rate(view: View) -> str:
+    if view.comments is None:
+        return f"catch rate {UNKNOWN}"
+    return marks_rate(view.comments, view.authors)
+
+
+def window_verdicts(view: View) -> list[tuple] | None:
+    if view.comments is None or view.authors is None:
+        return None
+    return [v for v in gating(view.comments, view.authors) if view.start <= v[1] <= view.end]
+
+
+def slots_alive(view: View) -> str:
+    """The `r<N>` lease markers by a listed author on the conductor issue whose time is within
+    `slot_seen_minutes` of the saved time (ADR-0412's window)."""
+    if view.comments is None or view.authors is None or view.conductor_issues is None:
+        return f"reviewer slots alive {UNKNOWN}"
+    window = view.flow.get("slot_seen_minutes", SLOT_SEEN_MINUTES)
+    usable = isinstance(window, int) and not isinstance(window, bool) and window >= 1
+    since = view.end - timedelta(minutes=window if usable else SLOT_SEEN_MINUTES)
+    names = set()
+    for comment in view.comments:
+        match = REVIEWER_MARKER.fullmatch(first_line(comment))
+        seen = stamp(match[1]) if match else None
+        if (
+            match
+            and seen is not None
+            and seen >= since
+            and login(comment.get("author")) in view.authors
+            and issue_of(comment) in view.conductor_issues
+        ):
+            names.add(match[2])
+    return f"reviewer slots alive {len(names)}"
+
+
+def fallback_share(view: View) -> str:
+    verdicts = window_verdicts(view)
+    if not verdicts:
+        return f"conductor fallback share {UNKNOWN}"
+    fallback = sum(1 for v in verdicts if v[3])
+    percent = round(100 * fallback / len(verdicts))
+    return f"conductor fallback share {fallback} of {len(verdicts)} gating verdicts ({percent}%)"
+
+
+def review_tokens(view: View) -> str:
+    """The `Usage: <n> tokens` of each gating verdict that is not the conductor's fallback."""
+    if view.comments is None or view.authors is None:
+        return f"tokens per review {UNKNOWN}"
+    reviews = [
+        c
+        for c in view.comments
+        if (m := GATING.fullmatch(first_line(c)))
+        and not m[2]
+        and login(c.get("author")) in view.authors
+        and view.inside(c.get("created_at"))
+    ]
+    figures = [
+        int(found[-1]) for c in reviews if (found := REVIEW_USAGE.findall(str(c.get("body") or "")))
+    ]
+    if not figures:
+        return f"tokens per review {UNKNOWN}" + (
+            f" (0 of {len(reviews)} reviews)" if reviews else ""
+        )
+    mean = round(sum(figures) / len(figures))
+    return f"tokens per review {mean} ({len(figures)} of {len(reviews)} reviews)"
+
+
+def joined(point: Point, *more: str) -> Point:
+    return point[0], "; ".join([point[1], *more])
+
+
 def points_of(root: Path, view: View) -> list[Point]:
+    gate = (latency(view), rounds(view), red_mains(view), catch_rate(view))
     return [
         capacity(view),
-        conductor_starts(view),
+        joined(conductor_starts(view), slots_alive(view), fallback_share(view)),
         tests_point(view),
         parallel(view),
-        auto_merge(view),
+        joined(auto_merge(view), *gate),
         models(),
         conflicts(root, view),
         assignment(view),
-        cost(view),
+        joined(cost(view), review_tokens(view)),
     ]
 
 

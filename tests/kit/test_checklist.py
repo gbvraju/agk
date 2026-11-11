@@ -730,7 +730,9 @@ def test_b_review_latency_is_ready_report_to_gating_verdict_median_and_worst(tmp
             comment(51, f"Report: {HEAD_B} ready for review", day(10)),
             verdict_on(51, f"Verdict: cleared {HEAD_B[:12]}", day(10, 20), author="stranger"),
             verdict_on(51, f"Verdict: cleared {HEAD_B[:12]} (conductor fallback)", day(11)),
-            verdict_on(51, f"Verdict: cleared {HEAD_B}", day(11, 30)),  # the fallback before it gated
+            verdict_on(
+                51, f"Verdict: cleared {HEAD_B}", day(11, 30)
+            ),  # the fallback before it gated
             comment(52, f"Report: {'c' * 40} ready for review", day(10)),
             verdict_on(52, f"Verdict: cleared {'d' * 40}", day(11)),
         ]
@@ -806,7 +808,7 @@ def test_red_mains_count_a_first_red_after_the_merge_of_a_cleared_head(tmp_path,
 
 
 def test_red_mains_are_unknown_in_local_mode_and_the_rest_is_measured(tmp_path, capsys):
-    """REQ-054: brief #1014 contexts: local keeps point 5's record measures; Actions stay unknown."""
+    """REQ-054: brief #1014 contexts: local keeps point 5's record measures, not the Actions."""
     document = saved(
         local_mode=True,
         comments=[
@@ -910,11 +912,17 @@ def test_point_9_tokens_per_review_from_the_review_sessions_usage(tmp_path, caps
     review session, and `not shown` is not a zero."""
     document = saved(
         comments=[
-            verdict_on(50, f"Verdict: cleared {HEAD_A}", day(9), tail="\nRead: all\nUsage: 1000 tokens"),
+            verdict_on(
+                50, f"Verdict: cleared {HEAD_A}", day(9), tail="\nRead: all\nUsage: 1000 tokens"
+            ),
             verdict_on(51, f"Verdict: fix list {HEAD_A}", day(9), tail="\nUsage: 3000 tokens"),
             verdict_on(52, f"Verdict: cleared {HEAD_A}", day(9), tail="\nUsage: not shown"),
-            verdict_on(53, f"Verdict: cleared {HEAD_A} (conductor fallback)", day(9),
-                       tail="\nUsage: 9000 tokens"),  # fmt: skip
+            verdict_on(
+                53,
+                f"Verdict: cleared {HEAD_A} (conductor fallback)",
+                day(9),
+                tail="\nUsage: 9000 tokens",
+            ),  # fmt: skip
         ]
     )
     found = lines_of(capsys, project(tmp_path, document), tmp_path)
