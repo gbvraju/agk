@@ -66,7 +66,8 @@ def run_suite(tmp_path: Path, testing: str, xdist: bool) -> subprocess.Completed
         path = tmp_path / "no-xdist"
         path.mkdir()
         (path / "xdist.py").write_text('raise ImportError("invented: no plugin")\n', "utf-8")
-    env = {k: v for k, v in os.environ.items() if k not in ("EVENT", "AGK_BASE", "CI")}
+    drop = ("EVENT", "AGK_BASE", "CI", "AGK_TEST_WORKERS")  # no one-machine number (brief #1032)
+    env = {k: v for k, v in os.environ.items() if k not in drop}
     env.update({"PYTHONPATH": str(path), "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"})
     return subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["make", "-s", "-f", "agk.mk", "agk-test", f"PY={sys.executable}"],

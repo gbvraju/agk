@@ -130,7 +130,15 @@ def kit_tree(
 
 
 def run(root: Path, outside: Path, event: str | None, **extra: str):
-    drop = ("GITHUB_BASE_REF", "AGK_BASE", "CI", "EVENT", "GITHUB_STEP_SUMMARY", "STUB_CODE")
+    drop = (
+        "GITHUB_BASE_REF",
+        "AGK_BASE",
+        "CI",
+        "EVENT",
+        "GITHUB_STEP_SUMMARY",
+        "STUB_CODE",
+        "AGK_TEST_WORKERS",  # the caller's one-machine number never reaches the run (brief #1032)
+    )
     env = {k: v for k, v in os.environ.items() if k not in drop}
     env["AGK_BASE"] = git(root, "rev-parse", "main").strip()
     if event is not None:
@@ -267,21 +275,24 @@ def pytest_area(outside: Path, prefixed: bool) -> str:
     return f"(true) >/dev/null 2>&1 || true; {command}" if prefixed else command
 
 
-def expected_workers() -> int:
-    return max(1, os.cpu_count() or 1)
-
-
+@pytest.mark.parametrize(
+    ("workers", "extra"),
+    [("3", {}), ('"auto"', {"AGK_TEST_WORKERS": "3"})],
+    ids=["number", "auto-pinned"],
+)
 @pytest.mark.parametrize("prefixed", [False, True])
-def test_a_selected_pytest_run_gets_the_workers_when_xdist_imports(tmp_path, outside, prefixed):
-    """REQ-051: brief #980 answer 2, test (a) (a selected run takes `-n` as the full suite does)."""
-    testing = SELECTED + 'workers = "auto"\n'
+def test_a_selected_pytest_run_gets_the_workers_when_xdist_imports(
+    tmp_path, outside, prefixed, workers, extra
+):
+    """REQ-051: brief #980 answer 2, test (a) (a selected run takes `-n` as the full suite does).
+    The number is pinned, never the machine's CPU count or free memory (brief #1032): a number as
+    written, and `"auto"` with `AGK_TEST_WORKERS` set for the run alone."""
+    testing = SELECTED + f"workers = {workers}\n"
     root = kit_tree(tmp_path, toml(outside, testing, area=pytest_area(outside, prefixed)))
-    proc = run(root, outside, "pull_request")
+    proc = run(root, outside, "pull_request", **extra)
     out = proc.stdout + proc.stderr
     assert proc.returncode == 0, out
-    workers = expected_workers()
-    tail = f" -n {workers}" if workers > 1 else ""
-    assert ran(outside) == [f"area -m pytest -q tests/kit/test_pay.py{tail}"], out
+    assert ran(outside) == ["area -m pytest -q tests/kit/test_pay.py -n 3"], out
     assert "tests: mode selected, 1 test file (event pull_request)" in out.splitlines(), out
 
 
