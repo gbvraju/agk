@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-11
 - Deciders: maintainers
-- Related: brief #1048, issue #1047, issue #1049, brief #1023, pull request #1040, plan #661, Q-1023-1, Q-1023-2, Q-1023-3
+- Related: brief #1048, issue #1049, issue #1047 (closed as a duplicate of #1049), brief #1023, pull request #1040, plan #661, Q-1023-1, Q-1023-2, Q-1023-3
 - Requirements: REQ-057
 
 Protected classes: `tests/kit/`, `tests/kit_dev/`
