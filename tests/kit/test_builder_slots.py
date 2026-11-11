@@ -834,3 +834,96 @@ def test_a_reviewer_slot_takes_its_lease_like_a_builder_slot(proj, stub):
     out = slot(proj, stub, "--take", "r1")
     assert out.returncode == 0, out.stdout
     assert posts(stub)[0][2][1].endswith(" r1 mine")
+
+
+# --- a stale `Assign:` frees its slot (brief #1020, ADR-0402) --------------------------------
+
+import session_plan  # noqa: E402
+
+
+def board(monkeypatch, *said: dict) -> None:
+    """The assignments issue of `pending_assigns`, in process, with the comments `said`."""
+    monkeypatch.setattr(session_plan, "conductor_comments", lambda repo: list(said))
+
+
+def brief_pull(number: int, state: str = "open") -> dict:
+    return {"number": 900 + number, "state": state, "title": f"brief #{number}",
+            "body": f"Brief: #{number}\n"}  # fmt: skip
+
+
+def plan_survey(comments: dict | None = None, prs: list | None = None) -> session_plan.Survey:
+    return session_plan.Survey(REPO, "", 9, 8, prs or [], [], comments=comments or {})
+
+
+def test_1020_a_an_assign_whose_brief_is_closed_leaves_the_slot_free(monkeypatch):
+    """REQ-041: brief #1020 (a): #31 is not among the open briefs the plan read."""
+    board(monkeypatch, comment(10, "boss", "Assign: s2 #31"), comment(11, "boss", "Assign: s3 #32"))
+    found = session_plan.pending_assigns(plan_survey(), ["boss"], {32})
+    assert found == {"s3": (32, None)}
+
+
+def test_1020_b_an_assign_another_slot_took_later_leaves_the_slot_free(monkeypatch):
+    """REQ-041: brief #1020 (b): s5 took #33 after the line to s8."""
+    board(monkeypatch, comment(10, "boss", "Assign: s8 #33"))
+    said = {33: [comment(12, "bot", f"taken: s5 {DAY}")]}
+    assert session_plan.pending_assigns(plan_survey(said), ["boss"], {33}) == {}
+
+
+def test_1020_b_a_take_before_the_line_or_released_still_holds_the_slot(monkeypatch):
+    """REQ-041: only a live take after the line spends it."""
+    board(monkeypatch, comment(10, "boss", "Assign: s8 #33"))
+    said = {33: [comment(9, "bot", f"taken: s5 {DAY}"), comment(12, "bot", f"taken: s6 {DAY}"),
+                 comment(13, "bot", "released: s6")]}  # fmt: skip
+    assert session_plan.pending_assigns(plan_survey(said), ["boss"], {33}) == {"s8": (33, None)}
+
+
+def test_1020_an_assign_whose_brief_has_an_open_pull_request_leaves_the_slot_free(monkeypatch):
+    """REQ-041: brief #1020 answer 1, the third test; a closed pull request holds as before."""
+    board(monkeypatch, comment(10, "boss", "Assign: s4 #34"), comment(11, "boss", "Assign: s5 #35"))
+    prs = [brief_pull(34), brief_pull(35, "closed")]
+    found = session_plan.pending_assigns(plan_survey(prs=prs), ["boss"], {34, 35})
+    assert found == {"s5": (35, None)}
+
+
+def test_1020_c_an_assign_with_an_open_brief_and_no_take_still_holds_the_slot(monkeypatch):
+    """REQ-041: brief #1020 (c): today's behaviour."""
+    board(monkeypatch, comment(10, "boss", "Assign: s3 #36"))
+    said = {36: [comment(8, "bot", f"taken: s1 {DAY}")]}
+    assert session_plan.pending_assigns(plan_survey(said), ["boss"], {36}) == {"s3": (36, None)}
+
+
+def test_1020_d_when_the_briefs_cannot_be_read_the_slot_stays_held(monkeypatch):
+    """REQ-041: brief #1020 (d): no open briefs read, so nothing is guessed free."""
+    board(monkeypatch, comment(10, "boss", "Assign: s2 #31"))
+    assert session_plan.pending_assigns(plan_survey(), ["boss"]) == {"s2": (31, None)}
+    assert session_plan.pending_assigns(plan_survey(), ["boss"], None) == {"s2": (31, None)}
+
+
+def stale(monkeypatch, tmp_path, line: str, issues, pulls, said=None) -> list[str]:
+    """`unacted_lines` for one `Assign:` 90 minutes old, after a run that decided `wait`."""
+    said_here = [logged(2, "wait", 100), comment(3, "boss", line, ago(90))]
+    place = tmp_path / f"run{len(list(tmp_path.iterdir()))}"
+    found = Pool(monkeypatch, place, said_here)
+    if said is not None:
+        found.table[f"repos/{REPO}/issues/33/comments"] = said
+    return conductor.unacted_lines(found.root, REPO, datetime.now(UTC), issues, pulls)
+
+
+def test_1020_b_the_sweep_prints_no_unacted_for_an_assign_another_slot_took(monkeypatch, tmp_path):
+    """REQ-041, REQ-054: brief #1020 (b) and answer 2."""
+    said = [comment(5, "bot", f"taken: s2 {DAY}")]
+    assert stale(monkeypatch, tmp_path, "Assign: s1 #33", [{"number": 33}], [], said) == []
+
+
+def test_1020_the_sweep_prints_no_unacted_for_a_closed_brief_or_an_open_pull(monkeypatch, tmp_path):
+    """REQ-041: brief #1020 answer 2, the first and third tests."""
+    assert stale(monkeypatch, tmp_path, "Assign: s1 #33", [{"number": 40}], []) == []
+    open_pull = [brief_pull(33)]
+    assert stale(monkeypatch, tmp_path, "Assign: s1 #33", [{"number": 33}], open_pull, []) == []
+
+
+def test_1020_c_the_sweep_still_prints_unacted_for_an_open_untaken_brief(monkeypatch, tmp_path):
+    """REQ-041: brief #1020 (c) and (d): an open brief, and briefs that cannot be read."""
+    for issues in ([{"number": 33}], None):
+        lines = stale(monkeypatch, tmp_path, "Assign: s1 #33", issues, [], [])
+        assert len(lines) == 1 and lines[0].startswith("UNACTED: Assign: s1 #33 (90 min"), issues

@@ -764,7 +764,7 @@ def sweep(root) -> int:
             lines.append(found)
     lines += slot_lines(root, repo, issues, every, now)
     lines += stall_report(root, repo)
-    lines += unacted_lines(root, repo, now)
+    lines += unacted_lines(root, repo, now, issues, pulls)
     print("\n".join(lines))
     return 0
 
@@ -991,21 +991,45 @@ def acted(decided: str, match) -> bool:
     return decided == f"assign {match.group(2)}"
 
 
-def spent_line(repo: str, name: str, line: dict, match) -> bool | None:
+def stale_brief(repo: str, line: dict, match, issues: list | None, pulls: list | None) -> bool:
+    """Brief #1020 answer 2: an `Assign:` of a brief that is closed (not among the open `issues`),
+    that a slot took after the line, or that an open pull request names, by
+    `session_plan.assign_spent`; False when the open issues were not read. The brief's comments
+    are read only while it is open; when they cannot be read, the take test finds nothing."""
+    if issues is None:
+        return False
+    number, build = int(match.group(3)), match.group(4)
+    known = {i["number"] for i in issues if isinstance(i.get("number"), int)}
+    said = session.pages(f"repos/{repo}/issues/{number}/comments") if number in known else []
+    takes = session.all_takes(said or [])
+    cid = line.get("id", 0)
+    return session_plan.assign_spent(number, build, cid, known, takes, pulls or [])
+
+
+def spent_line(
+    repo: str, name: str, line: dict, match, issues: list | None = None, pulls: list | None = None
+) -> bool | None:
     """Whether an `Assign:` was acted on since: a later `taken:` of the slot for a brief, a later
-    `Report:` on the pull request for a follow-up; None when that cannot be read."""
+    `Report:` on the pull request for a follow-up; None when that cannot be read. A brief's line
+    that `stale_brief` finds spent by the open issues and pull requests is spent (brief #1020)."""
     if match.group(5):
         try:
             return session.reports_after(repo, int(match.group(5)), line.get("id", 0))
         except CheckError:
             return None
+    if stale_brief(repo, line, match, issues, pulls):
+        return True
     return session.spent(repo, name, line)
 
 
-def unacted_lines(root, repo: str, now: datetime) -> list[str]:
+def unacted_lines(
+    root, repo: str, now: datetime, issues: list | None = None, pulls: list | None = None
+) -> list[str]:
     """One `UNACTED:` line per slot whose newest `Assign:` no run acted on (brief #998, ADR-0425):
     a run started after it and decided otherwise, or none started after it within 75 minutes; a
-    spent assignment, `none`, or what cannot be read adds no line. None with `start`."""
+    spent assignment, `none`, or what cannot be read adds no line. None with `start`. With the
+    open `issues` and open `pulls`, a line whose brief is closed, taken by a slot after it or named
+    by an open pull request is spent (brief #1020)."""
     if session.builder_start(root) != "assign":
         return []
     comments, allowed, names = assignments(root, repo)
@@ -1026,7 +1050,7 @@ def unacted_lines(root, repo: str, now: datetime) -> list[str]:
                 continue
         elif now - posted <= timedelta(minutes=UNACTED_MINUTES):
             continue
-        if spent_line(repo, name, line, match) is not False:
+        if spent_line(repo, name, line, match, issues, pulls) is not False:
             continue
         minutes = int((now - posted).total_seconds() // 60)
         tail = last_run(comments, name, allowed, "; ") or "; no run recorded"
