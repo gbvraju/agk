@@ -93,7 +93,7 @@ def test_ac7_the_conductor_reads_question_and_report_comments_and_answers_each_b
     text = conductor()
     for phrase in (
         "read the `Question:` and `Report:` comments there",
-        "answer each by a verdict",
+        "answer each by a `Verdict:` comment that names the head",
         "puts its questions and reports on its pull request",
     ):
         assert phrase in text, phrase

@@ -56,7 +56,7 @@ def test_ac_rule_7_keeps_its_draft_and_ready_parts():
     """Answer 1 changes when to push, nothing else of rule 7."""
     seven = rules()[7]
     for phrase in (
-        "so that the work is visible and owned at once",
+        "opens the pull request as a draft",
         "A checkpoint never carries a `Final:` status line",
         "ready for review only when its own checks pass",
     ):
