@@ -785,9 +785,11 @@ def test_an_issue_the_body_closes_still_open_gets_one_note(monkeypatch):
 
 
 def test_a_one_build_brief_is_closed_after_its_merge(monkeypatch):
-    """REQ-046 AC6: brief #959 answer 2 (a brief that names no builds is closed as completed)."""
+    """REQ-046 AC6: brief #959 answer 2 (a brief that names no builds is closed as completed);
+    since brief #992, ADR-0424, only when the merged body says `Finishes: #<brief>`."""
     replies = {f"repos/{REPO}/issues/{CLOSE_BRIEF}": issue(CLOSE_BRIEF, body="Sentence: x\n")}
-    writes, _ = after_close(monkeypatch, replies, f"Brief: #{CLOSE_BRIEF}\nAdvances: REQ-046\n")
+    body = f"Brief: #{CLOSE_BRIEF}\nFinishes: #{CLOSE_BRIEF}\nAdvances: REQ-046\n"
+    writes, _ = after_close(monkeypatch, replies, body)
     endpoint = f"repos/{REPO}/issues/{CLOSE_BRIEF}"
     assert [w[w.index("--method") + 2] for w in writes] == [f"{endpoint}/comments", endpoint]
     assert comment_of(writes[0]) == f"All builds merged; last #7 {SHA[:12]}"
@@ -857,9 +859,11 @@ def test_an_unreadable_brief_is_left_alone_and_the_merge_stands(monkeypatch):
 
 def test_the_merge_command_closes_a_finished_brief_after_its_record_line(tmp_path):
     """REQ-046 AC6: brief #959 answers 2 and 3 (the command, as the merger job runs it: the record
-    line first, then the close of brief #500, which names no builds)."""
+    line first, then the close of brief #500, which names no builds and whose merged body says
+    `Finishes: #500`, brief #992, ADR-0424)."""
     items = {"500": issue(500, body="Sentence: an example brief.\n")}
-    proc, gh_calls, _, _ = after_run(tmp_path, items=items)
+    pull = {**world()["pull"], "body": "Brief: #500\nFinishes: #500\nAdvances: REQ-046\n"}
+    proc, gh_calls, _, _ = after_run(tmp_path, items=items, pull=pull)
     assert proc.stdout.splitlines() == [MERGED], proc.stdout + proc.stderr
     posts = [c for c in gh_calls if "POST" in c or "PATCH" in c]
     targets = [c[c.index("--method") + 2] for c in posts]
