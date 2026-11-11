@@ -288,3 +288,29 @@ def test_1052_a_survey_with_no_fix_named_reads_no_pull_request(proj, stub):
     assert "brief #9" in found.stdout and "brief #5" not in found.stdout
     assert not any(c[1].startswith(PRS) for c in stub.calls())
     assert module.RED_TITLE == TITLE
+
+
+def test_1052_a_the_fix_brief_goes_before_a_full_capacity_and_a_taken_alarm(proj, stub):
+    """REQ-039 REQ-041: brief #1052 answer 2, capacity at least one: with `max_builders = 1` held
+    by the taken alarm (whose `Touches: **` overlaps everything) the fix brief is still assigned."""
+    from test_session_plan import data
+
+    fix_scene(proj, stub)
+    proj.write("agk.toml", SLOTS + "max_builders = 1\n")
+    said = [comment(1, "boss", "Fix brief filed: #10"), take(2, "s2", login="other")]
+    stub.serve(f"{ISSUES}/9/comments", said)
+    found = data(proj, stub)
+    assert assigned(found) == [10], found
+    assert found["capacity"]["slots"] == 1
+
+
+def test_1052_b_next_offers_the_fix_brief_beside_a_taken_alarm(proj, stub):
+    """REQ-039 REQ-041: brief #1052 answer 2: `next` offers the fix brief while the alarm, taken
+    by another session, would overlap it, and still no other brief."""
+    fix_scene(proj, stub)
+    said = [comment(1, "boss", "Fix brief filed: #10"), take(2, "s-other", login="other")]
+    stub.serve(f"{ISSUES}/9/comments", said)
+    out = session(proj, stub, "next", "--session", "s-me")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "brief #10" in out.stdout.splitlines()
+    assert posts(stub) == []

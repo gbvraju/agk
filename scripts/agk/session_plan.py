@@ -1223,6 +1223,9 @@ def waves(root, s: Survey, ready: list[dict]) -> tuple[list[dict], list[dict]]:
     chosen: list[dict] = []
     waits: list[dict] = []
     for brief in ready:
+        if brief["number"] in s.fixes:  # brief #1052: a red branch's fix goes before the overlap
+            chosen.append(brief)
+            continue
         if found := running_conflict(root, s, brief, shared):
             waits.append(found)
             continue
@@ -1468,6 +1471,48 @@ def open_pulls(s: Survey) -> list:
     return [p for p in found if p.get("state") == "open"]
 
 
+def fix_briefs_of(root, alarms: list, issues: list, comments: dict, pulls) -> dict[int, int]:
+    """Each alarm's fix, `min` of what names it: an open brief or pull request that names it, or
+    `#n` of a listed author's `fix brief filed: #n` on it with `#n` an open brief (brief #962
+    answer 1). PULLS is the open pull requests, or a callable that reads them; it is called only
+    when a brief or a listed author names a fix, so that a red survey that has none reads none."""
+    briefs = {
+        i["number"]: i
+        for i in issues
+        if "pull_request" not in i and i.get("title") != RED_TITLE and not is_red(i)
+    }
+    allowed = {a.lstrip("@").lower() for a in verdict_authors(root)}
+    named: dict[int, set[int]] = {}
+    for red in alarms:
+        number = red["number"]
+        found = {n for n, i in briefs.items() if names_red(i.get("body"), number)}
+        for c in comments.get(number) or []:
+            if author_of(c) in allowed:
+                found |= {int(m) for m in FIX_FILED.findall(str(c.get("body") or ""))} & set(briefs)
+        named[number] = found
+    if not any(named.values()) and callable(pulls):
+        pulls = []  # no brief is named: a pull request alone fixes nothing the red survey keeps
+    open_ = pulls() if callable(pulls) else pulls
+    out: dict[int, int] = {}
+    for number, found in named.items():
+        found |= {int(p["number"]) for p in open_ if names_red(p.get("body"), number)}
+        found.discard(number)
+        if found:
+            out[number] = min(found)
+    return out
+
+
+def fix_briefs(root, issues: list, comments: dict, pulls) -> dict[int, int]:
+    """Brief #1052 answer 1, the one rule of `survey`, `plan` and `claim`: fix brief -> the open
+    red alarm (`is_red`) whose fix (`red_fixes`' rule) it is, an open brief and not a pull request."""
+    alarms = [i for i in issues if is_red(i)]
+    if not alarms:
+        return {}
+    briefs = {i["number"] for i in issues if "pull_request" not in i and not is_red(i)}
+    found = fix_briefs_of(root, alarms, issues, comments, pulls)
+    return {fix: red for red, fix in sorted(found.items()) if fix in briefs}
+
+
 def red_fixes(root, s: Survey, issues: list, ready: list[dict]) -> list[dict]:
     """A wait `#<red> is fixed by #<n>` for each ready alarm titled `RED_TITLE` that an open fix
     brief or pull request names, or that a listed author's `fix brief filed: #n` on it names with
@@ -1475,26 +1520,11 @@ def red_fixes(root, s: Survey, issues: list, ready: list[dict]) -> list[dict]:
     alarms = [b for b in ready if b.get("title") == RED_TITLE]
     if not alarms:
         return []
-    briefs = {
-        i["number"]: i
-        for i in issues
-        if "pull_request" not in i and i.get("title") != RED_TITLE and not is_red(i)
-    }
-    pulls = open_pulls(s)
-    allowed = {a.lstrip("@").lower() for a in verdict_authors(root)}
-    out: list[dict] = []
-    for red in alarms:
-        number = red["number"]
-        found = {n for n, i in briefs.items() if names_red(i.get("body"), number)}
-        found |= {int(p["number"]) for p in pulls if names_red(p.get("body"), number)}
-        for c in s.comments.get(number) or []:
-            if author_of(c) in allowed:
-                found |= {int(m) for m in FIX_FILED.findall(str(c.get("body") or ""))} & set(briefs)
-        found.discard(number)
-        if found:
-            fix = min(found)
-            out.append({"brief": number, "fixed_by": fix, "why": f"is fixed by #{fix}"})
-    return out
+    found = fix_briefs_of(root, alarms, issues, s.comments, open_pulls(s))
+    return [
+        {"brief": red, "fixed_by": fix, "why": f"is fixed by #{fix}"}
+        for red, fix in found.items()
+    ]
 
 
 def build(root, record: bool = False) -> dict:
@@ -1537,6 +1567,8 @@ def build(root, record: bool = False) -> dict:
         limits.append(("adapt", adapted["count"] - running))
     limit, lowest = min(limits, key=lambda x: x[1])  # min keeps the first of a tie
     slots = max(0, lowest)
+    if s.fixes and chosen:  # brief #1052 answer 2: a red branch's fix goes before the capacity
+        slots = max(1, slots)
     ready_prs = [p for p in s.prs if p.get("state") == "open" and label_names(p) & READY_LABELS]
     known, rate = merge_rate(merged_list(s), now)
     hold = known and rate is not None and len(ready_prs) > hours * rate

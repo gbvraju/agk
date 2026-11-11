@@ -884,6 +884,7 @@ class Survey:
     free: list = field(default_factory=list)  # the briefs left, in the order of rule 3
     files: dict = field(default_factory=dict)  # pull request number -> its changed files
     briefs: dict = field(default_factory=dict)  # brief number -> its issue
+    fixes: dict = field(default_factory=dict)  # red-branch fix brief -> its alarm (brief #1052)
     gone: dict = field(default_factory=dict)  # session -> hours since its last post (plan only)
     posts: dict = field(default_factory=dict)  # pull request number -> its comments (plan only)
 
@@ -997,12 +998,14 @@ def brief_shape(root, repo: str) -> Callable:
 def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
     """Everything `next`, `demand` and `ids` read: the pull requests, the briefs and their takes.
 
-    While the default branch is red only its brief is left (SPEC-0032 rule 7)."""
+    While the default branch is red only its brief is left (SPEC-0032 rule 7), with each fix brief
+    of it (`session_plan.fix_briefs`, brief #1052) in `fixes`."""
     limit = flow_int(root, "max_builders", MAX_BUILDERS, 1)
     hours = flow_int(root, "claim_hours", CLAIM_HOURS, 5)
     issues = pages(f"repos/{repo}/issues?state=open&labels={LABEL}") if issues is None else issues
     if issues is None:
         raise CheckError("rule 3: the open briefs cannot be read")
+    everything = issues
     red = {i["number"] for i in issues if is_red(i)}
     issues = [i for i in issues if i["number"] in red] if red else issues
     # The red-branch brief goes before the capacity and the overlap, and no pull request is read.
@@ -1014,19 +1017,39 @@ def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
     found.briefs = {i["number"]: i for i in issues if "pull_request" not in i}
     named = {brief_number(p) for p in prs if p.get("state") == "open"}
     shape = brief_shape(root, repo)
-    for brief in sorted((i for i in issues if "pull_request" not in i), key=lambda i: i["number"]):
-        why, comments = judge(repo, brief, me, prs, hours, shape, root)
-        found.comments[brief["number"]] = comments
-        if why is None:
-            found.free.append(brief)
-            continue
-        found.skipped.append((brief["number"], why))
-        running = why.startswith("taken by") or (
-            why.startswith(HELD_PREFIX)
-            and any(t[2] != me for t in live_takes(comments, brief["number"], prs, hours))
-        )
-        if running and brief["number"] not in named:
-            found.held.append((brief["number"], touches_of(brief["body"])))
+
+    def sort(briefs: list, pulls: list) -> None:
+        for brief in sorted((i for i in briefs if "pull_request" not in i), key=lambda i: i["number"]):
+            why, comments = judge(repo, brief, me, pulls, hours, shape, root)
+            found.comments[brief["number"]] = comments
+            if why is None:
+                found.free.append(brief)
+                continue
+            found.skipped.append((brief["number"], why))
+            running = why.startswith("taken by") or (
+                why.startswith(HELD_PREFIX)
+                and any(t[2] != me for t in live_takes(comments, brief["number"], pulls, hours))
+            )
+            if running and brief["number"] not in named:
+                found.held.append((brief["number"], touches_of(brief["body"])))
+
+    sort(issues, prs)
+    if red:  # brief #1052: each fix brief of the alarm goes beside it, before capacity and overlap
+        from session_plan import fix_briefs  # the plan builds on this module
+
+        read: list = []
+
+        def pulls() -> list:
+            got = pages(f"repos/{repo}/pulls?state=open")
+            if got is None:
+                raise CheckError("rule 1: the pull requests cannot be read")
+            read.extend(p for p in got if p.get("state") == "open")
+            return read
+
+        found.fixes = fix_briefs(root, everything, found.comments, pulls)
+        fixes = [i for i in everything if i["number"] in found.fixes]
+        found.briefs.update({i["number"]: i for i in fixes})
+        sort(fixes, read)  # a take of a fix brief lives while its open pull request does
     found.free.sort(key=lambda b: (priority_of(b["body"]), b["number"]))
     return found
 
@@ -1404,6 +1427,24 @@ def claim_overlap(root, s: Survey, number: int, seen: dict) -> str | None:
     return wait_text(found) if found else None
 
 
+def red_fix(root, s: Survey, number: int) -> bool:
+    """Whether the brief is a fix brief of an open red alarm (`session_plan.fix_briefs`, brief
+    #1052): it is then claimed before the overlap. A read that fails stops the claim."""
+    from session_plan import fix_briefs
+
+    issues = pages(f"repos/{s.repo}/issues?state=open&labels={LABEL}")
+    if issues is None:
+        raise CheckError("rule 3: the open briefs cannot be read")
+    comments = dict(s.comments)
+    for alarm in (i for i in issues if is_red(i)):
+        found = pages(f"repos/{s.repo}/issues/{alarm['number']}/comments")
+        if found is None:
+            raise CheckError("rule 3: the comments of the red brief cannot be read")
+        comments[alarm["number"]] = found
+    pulls = [p for p in s.prs if p.get("state") == "open"]
+    return number in fix_briefs(root, issues, comments, pulls)
+
+
 def claim(root, me: str, number: int, build: str | None) -> int:
     repo = repo_name(root)
     comments = pages(f"repos/{repo}/issues/{number}/comments")
@@ -1427,6 +1468,8 @@ def claim(root, me: str, number: int, build: str | None) -> int:
         return claim_reservation(root, s, number)
 
     def gate() -> str | None:
+        if red_fix(root, s, number):  # brief #1052: a red branch's fix goes before the overlap
+            return None
         return claim_overlap(root, s, number, seen)
 
     if why := take(s, {"number": number}, reserve, build, gate):
@@ -2165,8 +2208,8 @@ def next_brief(root, me: str, taking: bool = False) -> int:
         print(f"skip #{number}: {why}")
     ready = [*s.free, *(s.briefs[n] for n in sorted(freed))]
     for brief in sorted(ready, key=lambda b: (priority_of(b["body"]), b["number"])):
-        found = running_conflict(root, s, brief, shared)
-        why = wait_text(found) if found else None
+        found = None if brief["number"] in s.fixes else running_conflict(root, s, brief, shared)
+        why = wait_text(found) if found else None  # a red branch's fix: before the overlap (#1052)
         if taking:
             why = why or take(s, brief, lambda b=brief: reservation(root, s, b))
         if why:
