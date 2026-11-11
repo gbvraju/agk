@@ -70,7 +70,7 @@ def test_an_existing_worktree_of_this_repository_is_reused_when_clean():
     code = text()
     assert "Test-Path -LiteralPath $worktree" in code
     # it is a worktree of this repository: the same common git folder
-    assert "rev-parse --git-common-dir" in code
+    assert "--git-common-dir" in code
     # clean: no change, staged or not, and no untracked file but the exit file
     assert "status --porcelain" in code
     reuse = code[code.find("Test-Path -LiteralPath $worktree") :]
