@@ -31,7 +31,7 @@ def perms() -> dict:
 
 
 def matches(rule: str, command: str) -> bool:
-    """A `Bash(...)` rule against a command, as the stop-hook tests read it (prefix `:*`, glob `*`)."""
+    """A `Bash(...)` rule against a command, read as the stop-hook tests read it."""
     if not (rule.startswith("Bash(") and rule.endswith(")")):
         return False
     inner = rule[len("Bash(") : -1]
@@ -69,7 +69,7 @@ def test_d_no_allow_line_opens_a_merge_and_deny_catches_it():
 
 
 def test_d_deny_does_not_shut_the_allowed_routes():
-    """REQ-037 (brief #1029 answer 2): deny beats allow, so no deny line matches a route it opens."""
+    """REQ-037 (brief #1029 answer 2): no deny line shuts a route it opens."""
     deny = perms()["deny"]
     for command in (
         "gh api repos/example/demo/issues/1/comments -F body=@report.md",

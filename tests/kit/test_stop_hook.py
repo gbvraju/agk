@@ -171,7 +171,10 @@ def test_ac2_settings_allow_the_agk_mk_targets():
 
 BODY = "Brief: #1\nCovered-by: ADR-0001\nSecret-scan: deferred to CI\n"
 # The recipe proves AGK_PR_BODY names a file holding the body, and keeps its name for the test.
-SEES_BODY = '@test -n "$$AGK_PR_BODY" && grep -q Covered-by "$$AGK_PR_BODY" && echo "$$AGK_PR_BODY" > seen.txt'
+SEES_BODY = (
+    '@test -n "$$AGK_PR_BODY" && grep -q Covered-by "$$AGK_PR_BODY"'
+    ' && echo "$$AGK_PR_BODY" > seen.txt'
+)
 SEES_NONE = '@test -z "$$AGK_PR_BODY" && echo none > seen.txt'
 
 
