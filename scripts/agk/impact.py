@@ -131,11 +131,11 @@ KEYS = {
     "smoke",
 }
 MAP_SOURCES = ("curated", "generated")  # SPEC-0055 rule 1: data, never a code path
-TEST_ENV = "AGK_TEST_ENV"
+TEST_ENV = "AGK_TEST_ENV"  # what a machine has (SPEC-0055 rule 4)
 WORKERS_ENV = "AGK_TEST_WORKERS"  # one machine's number of test workers (brief #1032)
 DEFAULT_WORKER_MB, MIN_WORKER_MB = 500, 100  # `[testing] worker_memory_mb` (brief #1032)
 MIB = 1024 * 1024
-MEMORY: dict[str, int | None] = {}  # one reading of the free memory per process  # what a machine has (SPEC-0055 rule 4)
+MEMORY: dict[str, int | None] = {}  # one reading of the free memory per process
 DEFAULT_SLOW = 600
 DEFAULT_SHARE = 0.5  # brief #980
 DEFAULT_KEEP_RUNS = 20
