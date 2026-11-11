@@ -519,6 +519,7 @@ tests = [
   "tests/kit/test_conductor_merge_queue.py", "tests/kit/test_conductor_playbook_evidence.py",
   "tests/kit/test_final_accepts.py", "tests/kit/test_launch_kinds.py", "tests/kit/test_merge_cleared_after.py",
   "tests/kit/test_merge_cleared_before.py", "tests/kit/test_merge_cleared_ci.py",
+  "tests/kit/test_merge_cleared_close_brief.py",
   "tests/kit/test_merge_cleared_merger.py", "tests/kit/test_merge_cleared_pre_tests.py",
   "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_merger_on_status.py", "tests/kit/test_merger_sweep.py",

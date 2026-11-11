@@ -6,7 +6,11 @@
 - Related: ADR-0411, ADR-0273, SPEC-0039, brief #992, brief #959, brief #846, plan #661
 - Requirements: REQ-046
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`
+
+`agk.toml` changes by one line: the new test file of `scripts/agk/merge_cleared.py` joins that
+script's `[[testing.map]]` entry, as every test of a mapped script must (CLAUDE.md item 3;
+`Correction:` on #1038).
 
 ## Context
 
