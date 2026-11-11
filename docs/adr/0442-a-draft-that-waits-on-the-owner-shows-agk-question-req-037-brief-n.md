@@ -21,16 +21,17 @@ found the questions only by reading the comments. The owner's word, 2026-11-11 1
    `for the maintainers`, by any author. It closes as an `Owner needed:` does: a later `Maintainer answer:` or
    `Approve:` by a spec approver, or a head pushed after it.
 2. `state_of` reads `asks_owner` right after the parked check and before the draft check, so a draft that waits on
-   the owner shows `agk:question`. The other states keep their order.
+   the owner shows `agk:question`. For a pull request that is not a draft every order stays as it is: `asks_owner`
+   is read where it was, after `agk:fix`, so a fix list on the head still comes first.
 3. A `Question:` without those words still asks the conductor, and a draft that has one stays `agk:build`.
 
 ## Consequences
 
 The label filter `agk:question` lists every pull request the owner must act on, drafts included, in every project
 that installs the router. A builder that needs the owner writes `for the maintainers` on the first line of its
-`Question:`; the cloud builder's prompt carries the phrase (the co-owner's edit, outside this change). Because the
-check now comes before the conflict and check states, a ready pull request with an open ask shows `agk:question`
-also while its checks run, fail or it conflicts, where before those states came first.
+`Question:`; the cloud builder's prompt carries the phrase (the co-owner's edit, outside this change). A ready pull
+request with a new `for the maintainers` question shows `agk:question` at the same place in the order where an
+`Owner needed:` showed it before.
 
 ## Residual
 
