@@ -828,8 +828,16 @@ def approved_still_draft(
     return False
 
 
+def depends_on(body: str) -> list[str]:
+    """The numbers of BODY's `Depends-on: #n` lines, in order, once each: only a stripped line that
+    is exactly that line, the reading of `check_pr_mode.py` rule 5 (brief #991); a mention inside a
+    sentence or backticks is not a dependence."""
+    found = [m.group(1) for ln in body.splitlines() if (m := DEPENDS.fullmatch(ln.strip()))]
+    return list(dict.fromkeys(found))
+
+
 def dependence_unmet(repo: str, pull: dict) -> bool:
-    for number in dict.fromkeys(DEPENDS.findall(str(pull.get("body") or ""))):
+    for number in depends_on(str(pull.get("body") or "")):
         item = read_json(f"repos/{repo}/issues/{number}", dict, "a Depends-on issue")
         if "pull_request" in item:
             other = read_json(f"repos/{repo}/pulls/{number}", dict, "a Depends-on pull request")
