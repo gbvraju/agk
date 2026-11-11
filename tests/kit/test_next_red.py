@@ -13,6 +13,7 @@ from test_session import (
     FREE,
     ISSUES,
     REPO,
+    comment,
     issue,
     listing,
     posts,
@@ -225,3 +226,65 @@ def test_ac5_a_hand_written_red_shaped_brief_that_is_taken_does_not_stop_the_oth
     out = nxt(proj, stub)
     assert out.returncode == 0 and "brief #5" in out.stdout.splitlines()
     assert "default branch red" not in out.stdout
+
+
+# --- a red branch's fix brief goes before the capacity and the overlap (brief #1052) ----------
+
+FIX_FILE = "scripts/agk/example.py"
+SLOTS = '[flow]\nbuilder_start = "assign"\nbuilder_slots = 2\n'
+
+
+def fix_scene(proj, stub, said_by: str = "boss") -> None:
+    """Alarm #9 (the router's), fix brief #10 named by `fix brief filed: #10` on the alarm, and an
+    open builder pull request #20 that changes the file the fix touches (the case of #1048)."""
+    from test_session_flow import brief, pr
+    from test_session_plan import changed
+
+    proj.write("config/reviewers.yaml", "version: 1\nverdict_authors: [boss, second]\n")
+    proj.write("agk.toml", SLOTS)
+    stub.serve(PRS, [pr(20, 1)])
+    changed(stub, 20, ("modified", FIX_FILE))
+    listing(stub, [red(9), issue(10, brief(FIX_FILE, priority=1))])
+    stub.serve(f"{ISSUES}/9/comments", [comment(1, said_by, "Fix brief filed: #10")])
+    stub.serve(f"{ISSUES}/10/comments", [])
+
+
+def assigned(found: dict) -> list[int]:
+    return [row["brief"] for row in found.get("assign", [])]
+
+
+def test_1052_a_the_plan_assigns_the_fix_brief_and_keeps_is_fixed_by(proj, stub):
+    """REQ-039 REQ-041: brief #1052 answers 1 and 2, test (a)."""
+    from test_session_plan import data, plan
+
+    fix_scene(proj, stub)
+    found = data(proj, stub)
+    assert assigned(found) == [10], found
+    assert {"brief": 9, "fixed_by": 10, "why": "is fixed by #10"} in found["waits"]
+    assert found["capacity"]["slots"] >= 1
+    out = plan(proj, stub).stdout
+    assert "#9 is fixed by #10." in out
+    assert "no brief is ready" not in out
+    assert posts(stub) == []
+
+
+def test_1052_d_a_fix_brief_filed_by_an_unlisted_author_makes_no_fix_brief(proj, stub):
+    """REQ-039 REQ-041: brief #1052 answer 1, test (d): only `red_fixes`' rule names a fix."""
+    from test_session_plan import data
+
+    fix_scene(proj, stub, said_by="someone")
+    found = data(proj, stub)
+    assert assigned(found) == [9], found
+    assert not any(w.get("fixed_by") == 10 for w in found["waits"])
+
+
+def test_1052_a_survey_with_no_fix_named_reads_no_pull_request(proj, stub):
+    """REQ-039 AC5: brief #1052 answer 3, the red survey still reads none when nothing names a fix."""
+    import session as module
+
+    listing(stub, [red(9), issue(5, FREE)])
+    stub.serve(f"{ISSUES}/9/comments", [])
+    found = session(proj, stub, "next", "--session", "s-me")
+    assert "brief #9" in found.stdout and "brief #5" not in found.stdout
+    assert not any(c[1].startswith(PRS) for c in stub.calls())
+    assert module.RED_TITLE == TITLE
