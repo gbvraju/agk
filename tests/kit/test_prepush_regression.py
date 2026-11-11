@@ -309,3 +309,112 @@ def test_the_testing_guide_has_a_section_on_the_pre_push_gate():
     for needle in ("--no-lock", "--quick", "heavy", "not run (in no [proof] area)", "full"):
         assert needle in section, needle
     assert "Nothing runs the selection yet" not in text
+
+
+# Brief #1031 (ADR-0440): `[testing] local_full = "ci"` leaves a full suite that only `always_full`
+# selected to CI's proof job, and runs the mapped test files locally.
+SHARED = 'always_full = ["src/billing/**"]\n' + MAP
+LEFT_LINE = (
+    "tests: full suite left to CI's proof job (always_full src/billing/**); "
+    "ran the {n} mapped test files"
+)
+
+
+def wide_project(repo, text: str, change: dict[str, str] | None = None) -> None:
+    """The fixture of `project` with two more test files, so one mapped file is below the share."""
+    repo.commit(
+        {
+            "agk.toml": text,
+            "agk.mk": MK_OK,
+            "Makefile": LINT_OK,
+            "src/billing/pay.py": "base\n",
+            "src/other.py": "base\n",
+            "tests/billing/test_pay.py": "# guards pay\n",
+            "tests/test_a.py": "# a\n",
+            "tests/test_b.py": "# b\n",
+        },
+        "base",
+    )
+    repo.branch("feature")
+    repo.commit(change or {"src/billing/pay.py": "change\n"}, "change")
+
+
+def test_local_full_ci_runs_only_the_mapped_files_of_an_always_full_change(repo, outside):
+    """REQ-051: brief #1031 answers 2 and 5a (local_full = "ci": the mapped files and the line)."""
+    wide_project(repo, toml(outside, testing='local_full = "ci"\n' + SHARED))
+    record = outside / "record.json"
+    proc = prepush(repo, outside, "--record", str(record))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["kit tests/billing/test_pay.py"]
+    assert LEFT_LINE.format(n=1) in proc.stdout
+    assert [r[0] for r in RUN_LINE.findall(proc.stdout)] == ["kit"]
+    data = json.loads(record.read_text(encoding="utf-8"))
+    entry = next(s for s in data["steps"] if s["name"] == "tests")
+    (made,) = entry["runs"]
+    assert made["set"] == "selected (full left to CI)", made  # brief #1031 answer 3
+    assert made["name"] == "kit" and made["exit"] == 0
+
+
+def test_local_full_ci_with_nothing_mapped_runs_nothing_and_says_0(repo, outside):
+    """REQ-051: brief #1031 answer 2 (an empty selection runs nothing and prints the line with 0)."""
+    testing = 'local_full = "ci"\nalways_full = ["src/other.py"]\n' + MAP
+    wide_project(repo, toml(outside, testing=testing), {"src/other.py": "change\n"})
+    proc = prepush(repo, outside)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == []
+    line = "tests: full suite left to CI's proof job (always_full src/other.py); ran the 0 mapped"
+    assert line in proc.stdout
+    assert RUN_LINE.findall(proc.stdout) == []
+
+
+@pytest.mark.parametrize("key", ["", 'local_full = "local"\n'])
+def test_without_local_full_ci_an_always_full_change_runs_the_full_suite(repo, outside, key):
+    """REQ-051: brief #1031 answers 1 and 5b (absent or "local": the full suite, as today)."""
+    wide_project(repo, toml(outside, testing=key + SHARED))
+    proc = prepush(repo, outside)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["full"]
+    assert "left to CI" not in proc.stdout
+
+
+@pytest.mark.parametrize(
+    "extra",
+    ['profile = "thorough"\n', 'pr_tests = "full"\n', "full_when_share = 0.3\n"],
+    ids=["thorough", "pr-tests-full", "full-when-share"],
+)
+def test_local_full_ci_still_runs_the_full_suite_for_another_reason(repo, outside, extra):
+    """REQ-051: brief #1031 answers 2 and 5c (thorough, pr_tests = "full", full_when_share)."""
+    wide_project(repo, toml(outside, testing='local_full = "ci"\n' + extra + SHARED))
+    proc = prepush(repo, outside)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["full"]
+    assert "left to CI" not in proc.stdout
+
+
+def test_local_full_ci_leaves_another_full_reason_alone(repo, outside):
+    """REQ-051: brief #1031 answer 2 (only an always_full selection; unmapped files stay full)."""
+    testing = 'local_full = "ci"\nprofile = "balanced"\n' + MAP
+    change = {"src/billing/pay.py": "change\n", "src/other.py": "change\n"}
+    wide_project(repo, toml(outside, testing=testing), change)
+    proc = prepush(repo, outside)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ran(outside) == ["full"]
+
+
+@pytest.mark.parametrize("value", ['"remote"', "true", '"CI"'])
+def test_a_bad_local_full_is_refused_naming_the_setting(repo, outside, value):
+    """REQ-051: brief #1031 answers 1 and 5d (a bad value is refused naming testing.local_full)."""
+    wide_project(repo, toml(outside, testing=f"local_full = {value}\n" + SHARED))
+    proc = prepush(repo, outside)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    (line,) = [x for x in proc.stdout.splitlines() if "setting: testing.local_full" in x]
+    assert value.strip('"') not in line.replace("local_full", "")
+    assert ran(outside) == []
+
+
+def test_this_repository_leaves_a_shared_file_full_run_to_ci():
+    """REQ-051: brief #1031 answer 4 (agk.toml sets local_full = "ci" and names ADR-0440)."""
+    text = (ROOT / "agk.toml").read_text(encoding="utf-8")
+    assert re.search(r'^local_full = "ci"$', text, re.M)
+    before = text.split('local_full = "ci"', 1)[0].splitlines()[-1]
+    assert "ADR-0440" in before and "owner" in before
