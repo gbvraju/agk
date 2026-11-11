@@ -19,7 +19,8 @@ f3b25f4 with the brief's `Measured:` command: `[False]` for the reasoned release
 ## Decision
 
 1. `session.all_takes` reads a `released: <session> [build (<x>)]` comment from its first line alone, after `plain`
-   removes the attribution footer; a reason may follow on the lines after it.
+   removes the attribution footer, with its line end stripped (a `\r` included, as the Windows line-end test of
+   `tests/kit/test_session_flow.py` shows); a reason may follow on the lines after it.
 2. Every other rule of a release stays: the same account, the same session, later than the take, and the build it
    names or every build when it names none. A comment whose first line is not a release frees nothing, even when a
    later line is one.
