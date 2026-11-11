@@ -851,8 +851,8 @@ def brief_pull(number: int, state: str = "open") -> dict:
             "body": f"Brief: #{number}\n"}  # fmt: skip
 
 
-def plan_survey(comments: dict | None = None, prs: list | None = None) -> session.Survey:
-    return session.Survey(REPO, "", 9, 8, prs or [], [], comments=comments or {})
+def plan_survey(comments: dict | None = None, prs: list | None = None) -> session_plan.Survey:
+    return session_plan.Survey(REPO, "", 9, 8, prs or [], [], comments=comments or {})
 
 
 def test_1020_a_an_assign_whose_brief_is_closed_leaves_the_slot_free(monkeypatch):
@@ -901,7 +901,9 @@ def test_1020_d_when_the_briefs_cannot_be_read_the_slot_stays_held(monkeypatch):
 
 def stale(monkeypatch, tmp_path, line: str, issues, pulls, said=None) -> list[str]:
     """`unacted_lines` for one `Assign:` 90 minutes old, after a run that decided `wait`."""
-    found = Pool(monkeypatch, tmp_path, [logged(2, "wait", 100), comment(3, "boss", line, ago(90))])
+    said_here = [logged(2, "wait", 100), comment(3, "boss", line, ago(90))]
+    place = tmp_path / f"run{len(list(tmp_path.iterdir()))}"
+    found = Pool(monkeypatch, place, said_here)
     if said is not None:
         found.table[f"repos/{REPO}/issues/33/comments"] = said
     return conductor.unacted_lines(found.root, REPO, datetime.now(UTC), issues, pulls)

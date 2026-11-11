@@ -1,0 +1,1 @@
+- `session.py plan` no longer holds a builder slot for an `Assign:` line whose brief is closed, was taken by any slot after the line or has an open pull request, and `conductor.py sweep` prints no `UNACTED:` line for one; a brief whose state cannot be read keeps the slot held (brief #1020, ADR-0402)
