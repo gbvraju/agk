@@ -100,6 +100,8 @@ pr_tests = "selected"
 workers = "auto"
 # A selection of at least this share of the test files runs the full suite in workers (brief #980, ADR-0422).
 full_when_share = 0.5
+# The owner's direction of 2026-11-11 ("file it"): a full run only for an always_full file runs the mapped tests here and leaves the full suite to CI's proof job (brief #1031, ADR-0440).
+local_full = "ci"
 # Install the pinned CI test tools once when xdist is missing, so builders run the tests in workers
 # as CI does; the full run takes parallel_command, since project_tests is compound (brief #1021, ADR-0436).
 tools_file = "config/ci-tools.txt"
@@ -739,7 +741,7 @@ tests = [
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py",
   "tests/kit/test_merge_cleared_reprove.py",
   "tests/kit/test_plan_exact_touches.py", "tests/kit/test_plan_reprove_paths.py",
-  "tests/kit/test_session_claim_overlap.py",
+  "tests/kit/test_session_claim_overlap.py", "tests/kit/test_builder_slots.py",
 ]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"
