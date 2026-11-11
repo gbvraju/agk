@@ -45,6 +45,7 @@ READ_ONLY_SCRIPTS = frozenset(
         "doctor",
         "facts",
         "product_report",
+        "review_bundle",
         "review_context",
         "traceability",
     }

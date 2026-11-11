@@ -219,7 +219,8 @@ PARKED_LABEL = "agk:parked"
 PARKED_PREFIX = "Parked:"
 MAX_BUILDERS = 3
 CLAIM_HOURS = 4
-VERDICT = re.compile(r"Verdict: (cleared|fix list|rejected) ([0-9a-f]{7,40})")
+FALLBACK = r"(?: \(conductor fallback\))?"  # ADR-0431 decision 3: read as the same verdict
+VERDICT = re.compile(rf"Verdict: (cleared|fix list|rejected) ([0-9a-f]{{7,40}}){FALLBACK}")
 NUMBER = r"(?:REQ-\d{3}|SPEC-\d{4}|ADR-\d{4})"
 BUILD = r"(?: build \(([A-Za-z0-9._-]+)\))?"
 TAKE = re.compile(
@@ -233,6 +234,7 @@ ASSIGN = re.compile(
     r"Assign: (\S+) (none|#(\d+)(?: build \(([A-Za-z0-9._-]+)\))?"
     r"(?: pr #(\d+) (fix list|merge of main))?)"
 )
+REVIEW = re.compile(r"Review: (r[1-9]\d*) #([1-9]\d*) ([0-9a-f]{40})")  # ADR-0431 decision 2
 ASSIGN_LABEL = "agk-conductor"
 TELL = re.compile(r"Tell: (\S+) (.+)")
 TELL_LIMIT = 300
@@ -266,7 +268,9 @@ ROLES = {  # amendment 150 item 4; agk:ready is the merger's until the next rele
     "merger": ("agk:merge-ready", "agk:ready"),
 }
 TAKEOVER = re.compile(r"taken over: (\S+) (\d{4}-\d{2}-\d{2})")
-HEAD_VERDICT = re.compile(r"Verdict: (cleared|fix list|rejected)(?: ([0-9a-f]{7,40}))?")
+HEAD_VERDICT = re.compile(
+    rf"Verdict: (cleared|fix list|rejected)(?: ([0-9a-f]{{7,40}}))?{FALLBACK}"
+)
 BUILDER_LABELS = frozenset(ROLES["builder"])
 WAITING_LABELS = frozenset({*ROLES["person"], *ROLES["merger"]})
 STALL_HOURS = 4
@@ -1561,6 +1565,8 @@ def wait_assign(root, me: str, args: dict[str, str]) -> int:
 BUILDER_STARTS = ("start", "assign")
 SLOT_SETTING = "(setting: builder_start in the flow table of agk.toml)"
 SLOT_NAME = re.compile(r"s([1-9]\d*)")
+REVIEWER_NAME = re.compile(r"r[1-9]\d*")  # a reviewer slot (brief #1013, ADR-0431)
+PUSHED = "stop: reviewer pushed this branch"
 SLOT_LINE = re.compile(
     r"Slot: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+) (\S+)"
 )
@@ -1813,8 +1819,8 @@ def slot_next(root, name: str) -> int:
     no `Assign:`), `wait`, or `request` (no `Request:` or `Assign:` yet)."""
     if code := slot_lease(root, "--hold", name):
         return code
-    line = slot_decide(root, name)
-    if line == "stop":
+    line = review_decide(root, name) if REVIEWER_NAME.fullmatch(name) else slot_decide(root, name)
+    if line.startswith("stop"):
         release_slot(root, name, line)  # every exit of a run releases its lease (ADR-0368)
     elif code := slot_lease(root, "--renew", name, line):
         return code
@@ -1860,6 +1866,59 @@ def slot_decide(root, name: str) -> str:
     return "wait"
 
 
+def pushed_by(messages: list[str], names: set[str]) -> bool:
+    """Whether a commit message names one of `names` as a whole word (ADR-0431 decision 2)."""
+    words = re.compile(
+        r"(?<![A-Za-z0-9_-])(?:" + "|".join(map(re.escape, names)) + r")(?![A-Za-z0-9_-])"
+    )
+    return any(words.search(m) for m in messages)
+
+
+def review_decide(root, name: str) -> str:
+    """A reviewer slot's next step (brief #1013 answer 2): `review pr #n <sha>` for its newest
+    `Review:` line by a listed author with no `Verdict:` on that head by a listed author, `wait`
+    without one, `stop` on `Pool: stop`, and `stop: reviewer pushed this branch` when a commit of
+    that pull request names this slot or this run."""
+    repo = repo_name(root)
+    issue = conductor_issue(repo)
+    comments = pages(f"repos/{repo}/issues/{issue}/comments")
+    if comments is None:
+        raise CheckError(f"slot: the comments of #{issue} cannot be read")
+    allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None) or []}
+    approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
+    if any(POOL_STOP.fullmatch(first_line(c)) and author_of(c) in approvers for c in comments):
+        return "stop"
+    lines = [
+        (c.get("id", 0), m)
+        for c in comments
+        if author_of(c) in allowed and (m := REVIEW.fullmatch(first_line(c))) and m.group(1) == name
+    ]
+    for _, match in sorted(lines, key=lambda x: x[0], reverse=True):
+        number, sha = match.group(2), match.group(3)
+        said = pages(f"repos/{repo}/issues/{number}/comments")
+        if said is None:
+            raise CheckError(f"slot: the comments of #{number} cannot be read")
+        if any(
+            author_of(c) in allowed
+            and (v := VERDICT.fullmatch(first_line(c)))
+            and sha.startswith(v.group(2))
+            for c in said
+        ):
+            continue
+        commits = pages(f"repos/{repo}/pulls/{number}/commits")
+        if commits is None:
+            raise CheckError(f"slot: the commits of #{number} cannot be read")
+        messages = [
+            str((c.get("commit") or {}).get("message") or "")
+            for c in commits
+            if isinstance(c, dict)
+        ]
+        if pushed_by(messages, {name, *filter(None, [slot_run(root, name)])}):
+            return PUSHED
+        return f"review pr #{number} {sha}"
+    return "wait"
+
+
 def quietly(act, *args) -> tuple[int, str]:
     """The exit of a lease action and what it printed, kept off a watch's own output."""
     out = io.StringIO()
@@ -1885,6 +1944,8 @@ def slot(root, mode: str, name: str) -> int:
     if builder_start(root) != "assign":
         print(f"slot: off {SLOT_SETTING}")
         return SLOT_ENDS
+    if REVIEWER_NAME.fullmatch(name):  # reviewer slots: no count in brief #1013 (Q-1013-1)
+        return slot_next(root, name) if mode == "--next" else slot_lease(root, mode, name)
     number = SLOT_NAME.fullmatch(name)
     if number is None or int(number.group(1)) > builder_slots(root):
         raise CheckError(

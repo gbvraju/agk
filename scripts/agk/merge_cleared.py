@@ -204,6 +204,7 @@ READS = 5  # reads in a row that GitHub cannot answer before the command ends (s
 PAUSE = 1.0  # seconds between two tries of one read
 PAGE = 100
 SHA = re.compile(r"[0-9a-f]{40}")
+FALLBACK = " (conductor fallback)"  # a verdict's first-line ending (ADR-0431 decision 3)
 NUMBER = re.compile(r"[1-9][0-9]{0,9}")
 ORIGIN = re.compile(r"github\.com[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$")
 USAGE = "usage: merge_cleared.py --pr <n> --sha <40-character sha>"
@@ -554,7 +555,8 @@ def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]
     verdict = latest_verdict(comments)
     if verdict is None:
         return "held", "no verdict (rule 3)"
-    if first_line(verdict) != f"Verdict: cleared {sha}" and accepted_adrs(verdict, sha) is None:
+    first = first_line(verdict).removesuffix(FALLBACK)  # ADR-0431 decision 3: read as the same
+    if first != f"Verdict: cleared {sha}" and accepted_adrs(verdict, sha) is None:
         return "held", "the latest verdict does not clear this head (rule 3)"
     if allowed and login(verdict) not in allowed:
         return "held", (

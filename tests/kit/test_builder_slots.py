@@ -747,3 +747,90 @@ def test_an_assign_none_or_by_an_unlisted_author_is_never_unacted(monkeypatch, t
         logged(4, "wait", 100),
     ]
     assert unacted(monkeypatch, tmp_path, said) == []
+
+
+# --- reviewer slots (brief #1013 answer 2, ADR-0431) -----------------------------------------
+
+HEAD = "c0ffee" + "1" * 34
+
+
+def reviewer(proj, stub, *said: dict, pushed: tuple[str, ...] = (), run: str = "mine") -> None:
+    """This checkout holds r1; #7 has the comments `said` and commits with the messages `pushed`."""
+    mark(proj, run, "r1")
+    stub.serve(COMMENTS, [marker(1, run, slot="r1"), comment(2, "boss", f"Review: r1 #7 {HEAD}")])
+    stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
+    stub.serve(f"{ISSUES}/7/comments", list(said))
+    commits = [{"sha": f"{i:040x}", "commit": {"message": m}} for i, m in enumerate(pushed, 1)]
+    stub.serve(f"{PULLS}/7/commits", commits)
+
+
+def test_d_a_review_line_gives_review_pr_n_sha(proj, stub):
+    """REQ-046, REQ-054: brief #1013 (d)."""
+    reviewer(proj, stub, pushed=("checkpoint: tests\n\nClaude-Session: https://example.com/s/9",))
+    out = slot(proj, stub, "--next", "r1")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert last(out) == f"review pr #7 {HEAD}"
+    assert all(c[1] == f"{ISSUES}/comments/1" for c in writes(stub))  # the lease, nothing else
+
+
+def test_d_a_review_line_for_another_slot_or_by_an_unlisted_author_gives_wait(proj, stub):
+    """REQ-046"""
+    mark(proj, "mine", "r1")
+    stub.serve(
+        COMMENTS,
+        [
+            marker(1, "mine", slot="r1"),
+            comment(2, "boss", f"Review: r2 #7 {HEAD}"),
+            comment(3, "stranger", f"Review: r1 #7 {HEAD}"),
+            comment(4, "boss", "Review: r1 #7 c0ffee"),  # not a full head
+        ],
+    )
+    stub.serve(f"{ISSUES}/comments/1", {"id": 1}, method="PATCH")
+    assert last(slot(proj, stub, "--next", "r1")) == "wait"
+
+
+def test_e_a_later_verdict_on_that_head_gives_wait(proj, stub):
+    """REQ-046: brief #1013 (e); a verdict by any listed author answers the line."""
+    for line in (f"Verdict: cleared {HEAD}", f"Verdict: fix list {HEAD[:12]} (conductor fallback)"):
+        reviewer(proj, stub, comment(3, "second", line))
+        assert last(slot(proj, stub, "--next", "r1")) == "wait", line
+
+
+def test_e_a_verdict_on_another_head_or_by_an_unlisted_author_leaves_the_line_open(proj, stub):
+    """REQ-046"""
+    said = (comment(3, "boss", f"Verdict: cleared {'d' * 40}"),
+            comment(4, "stranger", f"Verdict: cleared {HEAD}"))  # fmt: skip
+    reviewer(proj, stub, *said)
+    assert last(slot(proj, stub, "--next", "r1")) == f"review pr #7 {HEAD}"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "checkpoint: tests\n\nSlot: r1",
+        "fix\n\nthe r1 run pushed this",
+        "fix\n\nClaude-Session: https://example.com/s/mine",
+    ],
+)
+def test_f_a_reviewer_that_pushed_the_branch_is_refused(proj, stub, message):
+    """REQ-046: brief #1013 (f); the slot's or this run's name in a commit's body or trailer."""
+    reviewer(proj, stub, pushed=("first", message))
+    out = slot(proj, stub, "--next", "r1")
+    assert last(out) == "stop: reviewer pushed this branch"
+    released = [c for c in writes(stub) if c[1] == f"{ISSUES}/comments/1"]
+    assert released and "Slot: released" in " ".join(released[-1][2])
+
+
+def test_f_a_name_inside_another_word_is_not_a_push(proj, stub):
+    """REQ-046"""
+    reviewer(proj, stub, pushed=("fix r10 and minecraft",))
+    assert last(slot(proj, stub, "--next", "r1")) == f"review pr #7 {HEAD}"
+
+
+def test_a_reviewer_slot_takes_its_lease_like_a_builder_slot(proj, stub):
+    """REQ-046"""
+    mark(proj, "mine", "r1")
+    stub.serve(COMMENTS, [marker(9, "mine", slot="r1")], nth=2)
+    out = slot(proj, stub, "--take", "r1")
+    assert out.returncode == 0, out.stdout
+    assert posts(stub)[0][2][1].endswith(" r1 mine")

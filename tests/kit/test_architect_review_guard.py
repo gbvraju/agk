@@ -137,3 +137,12 @@ def test_the_deciding_architect_is_not_given_the_evidence_check(project):
     command = EVIDENCE_OK[0]
     proc = review({"tool_name": "Bash", "tool_input": {"command": command}}, project, "--x")
     assert denied(proc.stdout)["permissionDecision"] == "deny"
+
+
+def test_review_mode_allows_the_review_bundle_and_no_redirect_of_it(project):
+    """REQ-046: brief #1013 answer 3 (ADR-0431): the bundle is a read-only script of the guard."""
+    command = "python3 scripts/agk/review_bundle.py --pr 7 --sha " + "a" * 40
+    proc = review({"tool_name": "Bash", "tool_input": {"command": command}}, project)
+    assert proc.returncode == 0 and proc.stdout == ""
+    proc = review({"tool_name": "Bash", "tool_input": {"command": command + " > b.md"}}, project)
+    assert denied(proc.stdout)["permissionDecision"] == "deny"

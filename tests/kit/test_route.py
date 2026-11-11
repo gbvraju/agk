@@ -636,3 +636,10 @@ def test_ac5_916e_red_or_pending_closes_no_copy(proj, stub, tmp_path):
         red_tip(stub, checks)
         run_router(proj, stub, tmp_path, "push", ON_MAIN)
         assert issue_calls(stub) == [], checks
+
+
+def test_a_conductor_fallback_cleared_verdict_is_ready_like_today():
+    """REQ-046: brief #1013 answer 4 (ADR-0431 decision 3): the router reads the fallback ending
+    as the same verdict."""
+    cleared = said(1, "boss", f"Verdict: cleared {HEAD} (conductor fallback)")
+    assert route.decide(facts(comments=[cleared])) == "agk:merge-ready"
