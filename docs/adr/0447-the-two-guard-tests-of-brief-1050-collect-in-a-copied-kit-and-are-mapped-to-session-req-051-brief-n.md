@@ -1,9 +1,9 @@
-# ADR-0446: The two guard tests of brief #1050 collect in a copied kit and are mapped to session.py
+# ADR-0447: The two guard tests of brief #1050 collect in a copied kit and are mapped to session.py
 
 - Status: Proposed
 - Date: 2026-11-11
 - Deciders: maintainers
-- Related: brief #1059, brief #1050, pull request #1055, ADR-0444, pull request #1058, Q-1059-1
+- Related: brief #1059, brief #1050, pull request #1055, ADR-0444, pull request #1058, Q-1059-1, Q-1048-1
 - Requirements: REQ-051, REQ-010
 
 Protected classes: `agk.toml`, `tests/kit/`
