@@ -22,6 +22,11 @@ optional `[testing]` table of `agk.toml` says, by rule, which tests guard which 
   timing of a run; the kit adds no flag to the command, and with neither the timing is `unknown`;
 - `workers`: `1` (the default), `"auto"` (the CPU count, at least 1) or a positive whole number,
   the parallel workers of the full run (SPEC-0044 rule 4, brief #583; `prepush.full_command`);
+  `"auto"` takes no more workers than the free memory holds at `worker_memory_mb` each, and the
+  environment variable `AGK_TEST_WORKERS` overrides the number for one machine (brief #1032,
+  ADR-0441; `workers_setting`);
+- `worker_memory_mb`: a whole number of at least 100 (500), the free memory in MB that `"auto"`
+  counts for each worker (brief #1032);
 - `parallel_command`: the full command of a non-pytest runner with more than one worker, `{workers}`
   filled with the number (rule 5);
 - `tools_file`: unset by default; a pinned requirements file inside the repository that prepush
@@ -90,7 +95,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, area_levels, config_source, git, load_config, proof_areas
+from common import (
+    CheckError,
+    area_levels,
+    available_memory,
+    config_source,
+    git,
+    load_config,
+    proof_areas,
+)
 
 PROFILES = ("fast", "balanced", "thorough")
 KEYS = {
@@ -103,6 +116,7 @@ KEYS = {
     "pr_tests",
     "junit",
     "workers",
+    "worker_memory_mb",
     "parallel_command",
     "tools_file",
     "slow_suite_seconds",
@@ -118,6 +132,10 @@ KEYS = {
 }
 MAP_SOURCES = ("curated", "generated")  # SPEC-0055 rule 1: data, never a code path
 TEST_ENV = "AGK_TEST_ENV"  # what a machine has (SPEC-0055 rule 4)
+WORKERS_ENV = "AGK_TEST_WORKERS"  # one machine's number of test workers (brief #1032)
+DEFAULT_WORKER_MB, MIN_WORKER_MB = 500, 100  # `[testing] worker_memory_mb` (brief #1032)
+MIB = 1024 * 1024
+MEMORY: dict[str, int | None] = {}  # one reading of the free memory per process
 DEFAULT_SLOW = 600
 DEFAULT_SHARE = 0.5  # brief #980
 DEFAULT_KEEP_RUNS = 20
@@ -308,8 +326,8 @@ def testing_table(root: Path) -> dict | None:
     if not isinstance(table, dict) or set(table) - KEYS:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
-            "proof_regression, pr_tests, junit, workers, parallel_command, tools_file, "
-            "slow_suite_seconds, full_when_share, results_dir, keep_passed, keep_runs, "
+            "proof_regression, pr_tests, junit, workers, worker_memory_mb, parallel_command, "
+            "tools_file, slow_suite_seconds, full_when_share, results_dir, keep_passed, keep_runs, "
             "rerun_alone, map_source and smoke (setting: testing)"
         )
     links = check_links(table.get("links", []), root)
@@ -346,6 +364,12 @@ def testing_table(root: Path) -> dict | None:
         isinstance(workers, bool) or not isinstance(workers, int) or workers < 1
     ):
         raise CheckError('workers is "auto" or a whole number above 0 (setting: testing.workers)')
+    share_mb = table.get("worker_memory_mb", DEFAULT_WORKER_MB)
+    if isinstance(share_mb, bool) or not isinstance(share_mb, int) or share_mb < MIN_WORKER_MB:
+        raise CheckError(
+            "worker_memory_mb must be a whole number of megabytes, at least one hundred "
+            "(setting: testing.worker_memory_mb)"
+        )
     command = table.get("parallel_command", "x")
     if not isinstance(command, str) or not command.strip():
         raise CheckError("parallel_command must be a command (setting: testing.parallel_command)")
@@ -558,13 +582,63 @@ def junit_setting(root: Path) -> str | None:
     return config_source(root)["testing"].get("junit")
 
 
-def workers_setting(root: Path) -> int:
-    """`[testing] workers` as a number, 1 without the table or the key; `"auto"` is the CPU count,
-    at least 1. The whole table is checked first, so a bad setting is refused (CheckError)."""
+def free_memory_mb() -> int | None:
+    """The free memory in MB, read once per process (`MEMORY`), so that the `-n` of every run and
+    prepush's line give one number; None when `available_memory()` cannot read it."""
+    if "free" not in MEMORY:
+        free = available_memory()
+        MEMORY["free"] = None if free is None else free // MIB
+    return MEMORY["free"]
+
+
+def env_workers() -> int | None:
+    """`AGK_TEST_WORKERS`, a whole number of at least 1, or None when it is not set; any other
+    value is refused naming the variable, never the value (brief #1032 answer 3)."""
+    value = os.environ.get(WORKERS_ENV)
+    if value is None:
+        return None
+    if not re.fullmatch(r"[0-9]+", value) or int(value) < 1:
+        raise CheckError(
+            f"{WORKERS_ENV} must be a whole number of at least one (setting: {WORKERS_ENV})"
+        )
+    return int(value)
+
+
+def workers_choice(root: Path) -> tuple[int, str]:
+    """The workers of the run and why, as `workers_line` prints it (brief #1032, ADR-0441): 1
+    without the table; `AGK_TEST_WORKERS` when it is set; a number of `workers` as written;
+    `"auto"` the smaller of the CPU count and the free memory over `worker_memory_mb`, at least 1,
+    and the CPU count when the memory cannot be read. The whole table is checked first, so a bad
+    setting is refused (CheckError)."""
     if testing_table(root) is None:
-        return 1
-    workers = config_source(root)["testing"].get("workers", 1)
-    return max(1, os.cpu_count() or 1) if workers == "auto" else workers
+        return 1, ""
+    table = config_source(root)["testing"]
+    forced = env_workers()
+    if forced is not None:
+        return forced, WORKERS_ENV
+    workers = table.get("workers", 1)
+    if workers != "auto":
+        return workers, "setting: testing.workers"
+    cpus = max(1, os.cpu_count() or 1)
+    free = free_memory_mb()
+    if free is None:
+        return cpus, f"cpu {cpus}, free memory unknown"
+    share = table.get("worker_memory_mb", DEFAULT_WORKER_MB)
+    return (
+        max(1, min(cpus, free // share)),
+        f"cpu {cpus}, free memory {free} MB at {share} MB each",
+    )
+
+
+def workers_setting(root: Path) -> int:
+    """`[testing] workers` as a number, 1 without the table or the key (`workers_choice`)."""
+    return workers_choice(root)[0]
+
+
+def workers_line(root: Path) -> str:
+    """The one line prepush prints when it starts a parallel run (brief #1032 answer 4)."""
+    workers, why = workers_choice(root)
+    return f"tests: {workers} workers ({why})"
 
 
 def parallel_command(root: Path) -> str | None:

@@ -147,6 +147,7 @@ from impact import (
     run_timing,
     tools_file,
     unmapped_lines,
+    workers_line,
     workers_setting,
 )
 from proof import area_command, execute, is_test_file, timeout_note
@@ -806,6 +807,22 @@ def selected_workers(
     return made, list(dict.fromkeys(lines))
 
 
+def workers_notes(root: Path, sets: list[tuple[str, str, str, str]]) -> list[str]:
+    """The one line `tests: <n> workers (...)` when a run of SETS starts in workers: a command
+    that `pytest_workers` gave `-n <n>`, or the full run's filled `parallel_command` (brief
+    #1032 answer 4, ADR-0441); none when every run stays in one process."""
+    workers = workers_setting(root)
+    if workers <= 1:
+        return []
+    parallel = parallel_command(root)
+    filled = parallel.replace("{workers}", str(workers)) if parallel else None
+    started = any(
+        command.endswith(f" -n {workers}") or (name == "full" and command == filled)
+        for name, command, _cwd, _reason in sets
+    )
+    return [workers_line(root)] if started else []
+
+
 def suite_test_files(root: Path, areas: list[dict] | None) -> int:
     """The tracked test files that the `[proof]` areas hold (brief #980 answer 3)."""
     files = git(root, "ls-files", check=False).splitlines()
@@ -909,7 +926,7 @@ def gate(
     warnings: list[str] = []
     sets, notes = regression_sets(root, found, areas)
     sets, single = selected_workers(root, sets)
-    notes = list(dict.fromkeys([*notes, *single, *own_notes]))
+    notes = list(dict.fromkeys([*workers_notes(root, sets), *notes, *single, *own_notes]))
     junit = junit_setting(root)
     planned = [(r["name"], r["command"], r["cwd"], OWN, "proof") for r in runs]
     planned.extend((*item, "regression") for item in sets)
