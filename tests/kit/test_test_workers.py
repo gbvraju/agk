@@ -70,6 +70,14 @@ def interpreter(folder: Path, xdist: bool) -> Path:
     return path
 
 
+@pytest.fixture(autouse=True)
+def fresh_memory():
+    """Each test reads free memory afresh (`impact.MEMORY` holds one reading per process)."""
+    impact.MEMORY.clear()
+    yield
+    impact.MEMORY.clear()
+
+
 def full(root: Path) -> tuple[list[tuple[str, str, str, str]], list[str]]:
     found = impact.Impact(table=True, profile="balanced", full=True, reason="always")
     return prepush.regression_sets(root, found, None)
@@ -145,6 +153,7 @@ def test_auto_takes_the_cpu_count(tmp_path, monkeypatch):
     python = interpreter(tmp_path / "with", xdist=True)
     root = tree(tmp_path, f"{python} -m pytest", 'workers = "auto"\n')
     monkeypatch.setattr(impact.os, "cpu_count", lambda: 4)
+    monkeypatch.setattr(impact, "available_memory", lambda: None)  # brief #1032: memory unread
     assert impact.workers_setting(root) == 4
     assert full(root)[0][0][1] == f"{python} -m pytest -n 4"
     monkeypatch.setattr(impact.os, "cpu_count", lambda: None)
@@ -352,3 +361,138 @@ def test_doctor_prints_the_line_before_the_summary(tmp_path):
     out = slow.stdout.splitlines()
     assert out[-2] == SLOW
     assert SLOW not in plain.stdout
+
+
+# --- brief #1032: auto workers capped by free memory ----------------------------------------------
+
+MIB = 1024 * 1024
+WORKERS_ENV = "AGK_TEST_WORKERS"
+
+
+def machine(monkeypatch, cpus: int | None, free_mb: int | None, env: str | None = None) -> None:
+    """Stub the CPU count, the free memory (in MB) and the one-machine override."""
+    monkeypatch.setattr(impact.os, "cpu_count", lambda: cpus)
+    monkeypatch.setattr(
+        impact, "available_memory", lambda: None if free_mb is None else free_mb * MIB
+    )
+    if env is None:
+        monkeypatch.delenv(WORKERS_ENV, raising=False)
+    else:
+        monkeypatch.setenv(WORKERS_ENV, env)
+
+
+def test_auto_is_capped_by_free_memory(tmp_path, monkeypatch):
+    """REQ-051: brief #1032 answer 5 (a) (16 CPUs, 3000 MB free at 500 MB each: 6 workers)."""
+    root = tree(tmp_path, "python3 -m pytest", 'workers = "auto"\n')
+    machine(monkeypatch, 16, 3000)
+    assert impact.workers_setting(root) == 6
+    assert impact.workers_line(root) == (
+        "tests: 6 workers (cpu 16, free memory 3000 MB at 500 MB each)"
+    )
+
+
+def test_auto_with_ample_memory_is_the_cpu_count(tmp_path, monkeypatch):
+    """REQ-051: brief #1032 answer 5 (b) (4 CPUs and 32000 MB free: 4 workers)."""
+    root = tree(tmp_path, "python3 -m pytest", 'workers = "auto"\n')
+    machine(monkeypatch, 4, 32000)
+    assert impact.workers_setting(root) == 4
+
+
+def test_auto_with_unreadable_memory_is_the_cpu_count(tmp_path, monkeypatch):
+    """REQ-051: brief #1032 answer 5 (c) (memory unreadable: the CPU count, as before)."""
+    root = tree(tmp_path, "python3 -m pytest", 'workers = "auto"\n')
+    machine(monkeypatch, 8, None)
+    assert impact.workers_setting(root) == 8
+    assert impact.workers_line(root) == "tests: 8 workers (cpu 8, free memory unknown)"
+
+
+def test_auto_is_at_least_one_worker(tmp_path, monkeypatch):
+    """REQ-051: brief #1032 answer 1 (less free memory than one worker holds: still 1)."""
+    root = tree(tmp_path, "python3 -m pytest", 'workers = "auto"\n')
+    machine(monkeypatch, 8, 100)
+    assert impact.workers_setting(root) == 1
+
+
+def test_worker_memory_mb_sets_the_share_of_each_worker(tmp_path, monkeypatch):
+    """REQ-051: brief #1032 answer 2 (`worker_memory_mb = 1000`, 3000 MB free: 3 workers)."""
+    root = tree(tmp_path, "python3 -m pytest", 'workers = "auto"\nworker_memory_mb = 1000\n')
+    machine(monkeypatch, 16, 3000)
+    assert impact.workers_setting(root) == 3
+    assert impact.workers_line(root).endswith("(cpu 16, free memory 3000 MB at 1000 MB each)")
+
+
+@pytest.mark.parametrize("testing", ['workers = "auto"\n', "workers = 3\n", "workers = 1\n"])
+def test_the_environment_variable_overrides_the_result(tmp_path, monkeypatch, testing):
+    """REQ-051: brief #1032 answer 5 (d) (`AGK_TEST_WORKERS=2` gives 2 for one machine)."""
+    root = tree(tmp_path, "python3 -m pytest", testing)
+    machine(monkeypatch, 16, 32000, env="2")
+    assert impact.workers_setting(root) == 2
+    assert impact.workers_line(root) == "tests: 2 workers (AGK_TEST_WORKERS)"
+
+
+@pytest.mark.parametrize("value", ["99", "0", "-5", "1.5", '"500"', "true"])
+def test_a_bad_worker_memory_mb_is_refused_naming_the_setting(tmp_path, monkeypatch, value):
+    """REQ-051: brief #1032 answer 5 (e) (`worker_memory_mb` below 100 or not whole: refused)."""
+    root = tree(tmp_path, "python3 -m pytest", f'workers = "auto"\nworker_memory_mb = {value}\n')
+    machine(monkeypatch, 4, 32000)
+    for call in (impact.testing_table, impact.workers_setting):
+        with pytest.raises(CheckError) as caught:
+            call(root)
+        assert "(setting: testing.worker_memory_mb)" in str(caught.value)
+        assert value.strip('"') not in str(caught.value)
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "two", "1.5", "", " 3"])
+def test_a_bad_environment_variable_is_refused_naming_it(tmp_path, monkeypatch, value):
+    """REQ-051: brief #1032 answer 5 (e) (`AGK_TEST_WORKERS` not a whole number above 0)."""
+    root = tree(tmp_path, "python3 -m pytest", 'workers = "auto"\n')
+    machine(monkeypatch, 4, 32000, env=value)
+    with pytest.raises(CheckError) as caught:
+        impact.workers_setting(root)
+    assert "(setting: AGK_TEST_WORKERS)" in str(caught.value)
+    if value.strip():
+        assert value.strip() not in str(caught.value).replace("AGK_TEST_WORKERS", "")
+
+
+def test_a_numeric_workers_is_used_as_written(tmp_path, monkeypatch):
+    """REQ-051: brief #1032 answer 5 (f) (`workers = 12` with 1000 MB free: 12, unchanged)."""
+    root = tree(tmp_path, "python3 -m pytest", "workers = 12\n")
+    machine(monkeypatch, 2, 1000)
+    assert impact.workers_setting(root) == 12
+    assert impact.workers_line(root) == "tests: 12 workers (setting: testing.workers)"
+
+
+def test_without_the_table_the_variable_changes_nothing(tmp_path, monkeypatch):
+    """REQ-051: brief #1032 answer 3 (no `[testing]` table: one worker, as before)."""
+    root = tree(tmp_path, "python3 -m pytest", None)
+    machine(monkeypatch, 16, 32000, env="4")
+    assert impact.workers_setting(root) == 1
+
+
+def test_one_reading_of_free_memory_serves_the_whole_run(tmp_path, monkeypatch):
+    """REQ-051: brief #1032 answer 4 (the `-n` of the command and the line give one number)."""
+    root = tree(tmp_path, "python3 -m pytest", 'workers = "auto"\n')
+    readings = iter([3000, 1000, 500])
+    monkeypatch.setattr(impact.os, "cpu_count", lambda: 16)
+    monkeypatch.setattr(impact, "available_memory", lambda: next(readings) * MIB)
+    monkeypatch.delenv(WORKERS_ENV, raising=False)
+    assert impact.workers_setting(root) == 6
+    assert impact.workers_setting(root) == 6
+    assert impact.workers_line(root).startswith("tests: 6 workers ")
+
+
+def test_prepush_prints_the_workers_line_for_a_parallel_run(tmp_path, monkeypatch):
+    """REQ-051: brief #1032 answer 4 (one line when the run starts in workers, none when single)."""
+    python = interpreter(tmp_path / "with", xdist=True)
+    root = tree(tmp_path, f"{python} -m pytest -q", 'workers = "auto"\n')
+    machine(monkeypatch, 16, 3000)
+    sets, _ = full(root)
+    assert sets[0][1] == f"{python} -m pytest -q -n 6"
+    assert prepush.workers_notes(root, sets) == [
+        "tests: 6 workers (cpu 16, free memory 3000 MB at 500 MB each)"
+    ]
+    single = [("full", f"{python} -m pytest -q", ".", "always")]
+    assert prepush.workers_notes(root, single) == []
+    other = tree(tmp_path / "x", "npm test", 'workers = 3\nparallel_command = "jest -w {workers}"\n')
+    made, _ = full(other)
+    assert prepush.workers_notes(other, made) == ["tests: 3 workers (setting: testing.workers)"]
