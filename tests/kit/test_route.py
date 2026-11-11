@@ -643,3 +643,57 @@ def test_a_conductor_fallback_cleared_verdict_is_ready_like_today():
     as the same verdict."""
     cleared = said(1, "boss", f"Verdict: cleared {HEAD} (conductor fallback)")
     assert route.decide(facts(comments=[cleared])) == "agk:merge-ready"
+
+
+# --- a draft that waits on the owner (brief #1043, ADR-0442) -----------------------------------
+
+EARLY = {"commit": {"committer": {"date": "2026-10-25T09:00:00Z"}}}
+LATER = {"commit": {"committer": {"date": "2026-10-25T11:00:00Z"}}}
+ASKED = "Question: Q-9-1 for the maintainers: may the builder edit a file the cloud refuses?"
+
+
+def test_a_draft_with_an_open_question_for_the_maintainers_is_question():
+    """REQ-037: brief #1043 answers 1, 2 and test 3(a) (any author; a draft shows agk:question)."""
+    asked = said(4, "builder", ASKED)
+    assert route.pr_state(facts(draft=True, comments=[asked], commit=EARLY)) == (
+        "agk:question",
+        "owner",
+    )
+    stranger = said(4, "stranger", ASKED)
+    assert route.decide(facts(draft=True, comments=[stranger], commit=EARLY)) == "agk:question"
+
+
+def test_a_maintainer_answer_closes_the_question_for_the_maintainers():
+    """REQ-037: brief #1043 answer 1 and test 3(b) (an approver's answer or Approve: closes it)."""
+    asked = said(4, "builder", ASKED)
+    for line in ("Maintainer answer: yes", "Approve: yes"):
+        answer = said(5, "maintainer", line)
+        got = route.decide(facts(draft=True, comments=[asked, answer], commit=EARLY))
+        assert got == "agk:build", line
+    other = said(5, "stranger", "Maintainer answer: yes")
+    got = route.decide(facts(draft=True, comments=[asked, other], commit=EARLY))
+    assert got == "agk:question"
+
+
+def test_a_later_push_closes_the_question_for_the_maintainers():
+    """REQ-037: brief #1043 answer 1 and test 3(c) (a head pushed after the question)."""
+    asked = said(4, "builder", ASKED)
+    assert route.decide(facts(draft=True, comments=[asked], commit=LATER)) == "agk:build"
+
+
+def test_a_plain_question_on_a_draft_stays_build():
+    """REQ-037: brief #1043 answer 1 and test 3(d) (only `for the maintainers` asks the owner)."""
+    plain = said(4, "builder", "Question: Q-9-1 may the builder rename a test?")
+    assert route.decide(facts(draft=True, comments=[plain], commit=EARLY)) == "agk:build"
+    later_line = said(4, "builder", "Question: Q-9-1 a line\n\nfor the maintainers: in the body")
+    assert route.decide(facts(draft=True, comments=[later_line], commit=EARLY)) == "agk:build"
+    report = said(4, "builder", "Report: abc for the maintainers")
+    assert route.decide(facts(draft=True, comments=[report], commit=EARLY)) == "agk:build"
+
+
+def test_an_owner_needed_line_on_a_draft_is_question():
+    """REQ-037: brief #1043 answer 2 and test 3(e) (`Owner needed:` by a verdict author)."""
+    asked = said(4, "boss", "Owner needed: may this change the workflow?")
+    assert route.decide(facts(draft=True, comments=[asked], commit=EARLY)) == "agk:question"
+    unlisted = said(4, "stranger", "Owner needed: anything")
+    assert route.decide(facts(draft=True, comments=[unlisted], commit=EARLY)) == "agk:build"
