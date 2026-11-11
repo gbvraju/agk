@@ -1568,6 +1568,11 @@ BUILDER_STARTS = ("start", "assign")
 SLOT_SETTING = "(setting: builder_start in the flow table of agk.toml)"
 SLOT_NAME = re.compile(r"s([1-9]\d*)")
 REVIEWER_NAME = re.compile(r"r[1-9]\d*")  # a reviewer slot (brief #1013, ADR-0431)
+SHADOW_NAME = "s-shadow"  # the shadow slot (brief #1014, ADR-0432)
+SHADOW_SAMPLE = 5  # one head in five (brief #1014 answer 1)
+SHADOW_ASK = re.compile(r"Shadow: (s-shadow) #([1-9]\d*) ([0-9a-f]{40})")
+SHADOW_DONE = re.compile(r"Shadow: #([1-9]\d*) ([0-9a-f]{7,40}) (?:cleared|fix list|rejected)")
+SHADOW_LABEL = "agk-shadow"
 PUSHED = "stop: reviewer pushed this branch"
 SLOT_LINE = re.compile(
     r"Slot: (active|released) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (\S+) (\S+)"
@@ -1821,7 +1826,10 @@ def slot_next(root, name: str) -> int:
     no `Assign:`), `wait`, or `request` (no `Request:` or `Assign:` yet)."""
     if code := slot_lease(root, "--hold", name):
         return code
-    line = review_decide(root, name) if REVIEWER_NAME.fullmatch(name) else slot_decide(root, name)
+    if REVIEWER_NAME.fullmatch(name):
+        line = review_decide(root, name)
+    else:
+        line = shadow_decide(root) if name == SHADOW_NAME else slot_decide(root, name)
     if line.startswith("stop"):
         release_slot(root, name, line)  # every exit of a run releases its lease (ADR-0368)
     elif code := slot_lease(root, "--renew", name, line):
@@ -1921,6 +1929,72 @@ def review_decide(root, name: str) -> str:
     return "wait"
 
 
+def shadow_sampled(sha: str) -> bool:
+    """Whether the shadow reviews this head (brief #1014 answer 1, ADR-0432): the first 8 hex
+    characters of its sha as a number, modulo 5, are 0; a shorter or non-hex sha never is."""
+    first = sha[:8]
+    if len(first) < 8 or not re.fullmatch(r"[0-9a-f]{8}", first):
+        return False
+    return int(first, 16) % SHADOW_SAMPLE == 0
+
+
+def shadow_issue(repo: str) -> int:
+    """The one open issue labelled `agk-shadow`, where the shadow posts (SPEC-0035 rule 7)."""
+    found = pages(f"repos/{repo}/issues?state=open&labels={SHADOW_LABEL}")
+    issues = [
+        i
+        for i in found or []
+        if "pull_request" not in i
+        and isinstance(i.get("number"), int)
+        and any(
+            isinstance(x, dict) and x.get("name") == SHADOW_LABEL for x in i.get("labels") or []
+        )
+    ]
+    if len(issues) != 1:
+        raise CheckError(f"slot: exactly one open issue labelled {SHADOW_LABEL} is needed")
+    return issues[0]["number"]
+
+
+def shadow_decide(root) -> str:
+    """The shadow slot's next step (brief #1014 answer 1): `shadow pr #n <sha>` for the newest
+    `Shadow: s-shadow #n <sha>` line by a listed author whose head is sampled and that no
+    `Shadow: #n <sha> ...` comment on the `agk-shadow` issue answers, `wait` without one, and
+    `stop` on `Pool: stop`. It reads those two issues only, never a pull request's comments, so
+    it never reads a `Verdict:` line (the shadow is blind, SPEC-0035 rule 2)."""
+    repo = repo_name(root)
+    issue = conductor_issue(repo)
+    comments = pages(f"repos/{repo}/issues/{issue}/comments")
+    if comments is None:
+        raise CheckError(f"slot: the comments of #{issue} cannot be read")
+    allowed = {a.lstrip("@").lower() for a in counted_authors(verdict_authors(root), None) or []}
+    approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
+    if any(POOL_STOP.fullmatch(first_line(c)) and author_of(c) in approvers for c in comments):
+        return "stop"
+    asked = sorted(
+        (
+            (c.get("id", 0), m)
+            for c in comments
+            if author_of(c) in allowed
+            and (m := SHADOW_ASK.fullmatch(first_line(c)))
+            and shadow_sampled(m.group(3))
+        ),
+        key=lambda x: x[0],
+        reverse=True,
+    )
+    if not asked:
+        return "wait"
+    where = shadow_issue(repo)
+    posted = pages(f"repos/{repo}/issues/{where}/comments")
+    if posted is None:
+        raise CheckError(f"slot: the comments of #{where} cannot be read")
+    done = [m for c in posted if (m := SHADOW_DONE.match(first_line(c)))]
+    for _, match in asked:
+        number, sha = match.group(2), match.group(3)
+        if not any(d.group(1) == number and sha.startswith(d.group(2)) for d in done):
+            return f"shadow pr #{number} {sha}"
+    return "wait"
+
+
 def quietly(act, *args) -> tuple[int, str]:
     """The exit of a lease action and what it printed, kept off a watch's own output."""
     out = io.StringIO()
@@ -1946,7 +2020,7 @@ def slot(root, mode: str, name: str) -> int:
     if builder_start(root) != "assign":
         print(f"slot: off {SLOT_SETTING}")
         return SLOT_ENDS
-    if REVIEWER_NAME.fullmatch(name):  # reviewer slots: no count in brief #1013 (Q-1013-1)
+    if REVIEWER_NAME.fullmatch(name) or name == SHADOW_NAME:  # no count (Q-1013-1, ADR-0432)
         return slot_next(root, name) if mode == "--next" else slot_lease(root, mode, name)
     number = SLOT_NAME.fullmatch(name)
     if number is None or int(number.group(1)) > builder_slots(root):
