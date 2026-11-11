@@ -58,8 +58,9 @@ auto_merge_method = "squash"
 # head to GitHub's merge queue instead of merging it. GitHub offers the queue only to organization-owned repositories (verify),
 # so this repository keeps it off; the guide gives the switch-over order. A change needs an ADR.
 merge_queue = false  # brief #972, ADR-0417
-# The builder capacity (SPEC-0034 rule 1): nine builder sessions at once, by the owner's choice on 2026-11-08 (plan #661, ADR-0341).
-max_builders = 9
+# The builder capacity (SPEC-0034 rule 1): six builder sessions at once, the six slots that run, by the owner's direction of
+# 2026-11-10 (brief #1009, ADR-0341): s1 to s3 the build lane, s4 to s6 the follow-up lane; s7 to s9 are paused.
+max_builders = 6
 # How a builder starts (SPEC-0034, brief #776, ADR-0402): "assign" means no session starts one; each slot runs from four staggered
 # scheduled starts an hour (`doctor.py` prints them and warns of a slot with none) and the conductor posts `Assign:` lines.
 builder_start = "assign"
