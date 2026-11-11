@@ -875,7 +875,7 @@ def test_the_conductor_report_ends_with_the_nine_lines():
         if "scripts/agk/checklist.py" in s
     ]
     assert len(found) == 1
-    assert "every hourly report ends with" in found[0]
+    assert "every hourly report ends with" in found[0].lower()
     assert "AGK-NINE-CHECKLIST" in found[0]
     assert "metrics.py --save-checklist" in found[0]
 
