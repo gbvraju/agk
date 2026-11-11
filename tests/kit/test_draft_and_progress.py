@@ -105,8 +105,7 @@ def test_ac3_the_rules_file_states_the_progress_line():
     text = rules()
     for phrase in (
         "Progress: <head> done <n>/<m>; next: <step>",
-        "edits it in place",
-        "never repeats it",
+        "posts, or edits in place, one comment",
     ):
         assert phrase in text, phrase
 
