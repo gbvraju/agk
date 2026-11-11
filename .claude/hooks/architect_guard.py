@@ -7,10 +7,23 @@ deny, it prints {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissi
 "deny", "permissionDecisionReason": ...}} and exits 0; to allow, it prints nothing and exits 0.
 A hook of a project agent runs only in a trusted folder (verify for the `--agent` main session).
 
-With the argument `--review` (the read-only review agent, SPEC-0023) it denies `Edit`, `Write`,
-`MultiEdit` and `NotebookEdit` everywhere, `docs/` included, and judges `Bash` the same way, and
-allows besides `evidence.py check RECORD [--head SHA] [--sample N] [--json]` (brief #982), which
-writes nothing in the repository: its worktree is a temporary folder it removes.
+With the argument `--review` (the review agent, SPEC-0023) it denies `Edit`, `MultiEdit` and
+`NotebookEdit` everywhere, `docs/` included, and `Write` everywhere but a regular file inside a
+review scratch directory: `agk-review-<name>` directly in the system temp directory and outside the
+project, judged by its real path, with no link and no `..` out of it (brief #1050, Q-1013-3,
+ADR-0444; the limit of the conductor's guard). It judges `Bash` the same way, and allows besides
+`evidence.py check RECORD [--head SHA] [--sample N] [--json]` (brief #982), which writes nothing in
+the repository: its worktree is a temporary folder it removes; and the steps of a reviewer slot run
+(`.claude/agents/architect-review.md`, brief #1050), exactly: `git fetch origin`;
+`git checkout --detach <sha>`, the sha 7 to 40 lower-case hex characters and on a branch of origin
+(a fork's head is on none; the conductor guard's `on_origin_branch`, imported for that one step,
+runs the one `git branch -r --contains`);
+`python3 scripts/agk/conductor.py check-verdict <file> --pr <n>`; a comment `POST` to this
+repository's issue comments with the one field `-F body=@<file>` whose first
+line is a `Verdict:` line; and `python3 scripts/agk/session.py slot (--next | --release) r<N>`, a
+reviewer slot (`session.REVIEWER_NAME`) only. Each file there is an existing regular file of a
+review scratch directory. Any other option, slot name or file stays denied, and without
+`--review` none of it is allowed.
 
 Denies `Edit`, `Write`, `MultiEdit` and `NotebookEdit` outside `docs/` and `constitution/vision.md`,
 and `Bash` unless the command is one of: a read-only `git` command; `gh api` with `--method GET` or
@@ -30,6 +43,7 @@ import os
 import re
 import shlex
 import sys
+import tempfile
 
 READ_ONLY_SCRIPTS = frozenset(
     {
@@ -104,7 +118,16 @@ REMOTE_SECTION = re.compile(r'^\[remote "origin"\]\s*$')
 URL_LINE = re.compile(r"^\s*url\s*=\s*(\S.*?)\s*$")
 PATH_RULE = "architect guard rule 9: writes only under docs/ and constitution/vision.md"
 BASH_RULE = "architect guard rule 9: this command is not on the architect's list"
-REVIEW_RULE = "architect guard rule 9: the review agent writes nothing"
+REVIEW_RULE = "architect guard rule 9: the review agent writes only in its scratch directory"
+# Brief #1050 (ADR-0444): the reviewer slot's steps. The scratch test is the conductor guard's
+# (`conductor_guard.scratch_dir`) with this role's name; it is copied, not imported, because that
+# function reads the conductor's name and the conductor's guard imports this file.
+REVIEW_SCRATCH = re.compile(r"agk-review-[A-Za-z0-9._-]+")
+REVIEW_SHA = re.compile(r"[0-9a-f]{7,40}")
+REVIEWER_NAME = re.compile(r"r[1-9]\d*")  # session.REVIEWER_NAME (brief #1013); a test pins it
+PR_NUMBER = re.compile(r"[1-9][0-9]{0,9}")
+SESSION_WORD = re.compile(r"(?:\./)?scripts/agk/session\.py")
+CONDUCTOR_WORD = re.compile(r"(?:\./)?scripts/agk/conductor\.py")
 
 
 def project_root() -> str:
@@ -320,6 +343,8 @@ def bash_allowed(command: object, review: bool = False) -> bool:
     if not words:
         return False
     head = words[0]
+    if review and review_step_allowed(words):
+        return True
     if review and head == "python3" and len(words) > 1 and REVIEW_SCRIPT.fullmatch(words[1]):
         return evidence_check_allowed(words[2:])
     if head == "git":
@@ -336,14 +361,118 @@ def bash_allowed(command: object, review: bool = False) -> bool:
     return False
 
 
+def review_scratch(path: object) -> str | None:
+    """The real path of a review scratch directory that `path` is inside, else None: an absolute
+    path with no `..`, whose real path is below `agk-review-<name>` directly in the system temp
+    directory and outside the project (brief #1050; as `conductor_guard.scratch_dir`)."""
+    if not isinstance(path, str) or not path or "\0" in path or not os.path.isabs(path):
+        return None
+    if ".." in path.split(os.sep):
+        return None
+    real = os.path.realpath(path)
+    temp = os.path.realpath(tempfile.gettempdir())
+    rel = os.path.relpath(real, temp)
+    parts = rel.split(os.sep)
+    root = project_root()
+    inside = real == root or real.startswith(root + os.sep)
+    if rel.startswith("..") or len(parts) < 2 or not REVIEW_SCRATCH.fullmatch(parts[0]) or inside:
+        return None
+    return os.path.join(temp, parts[0])
+
+
+def review_write_ok(path: object) -> bool:
+    """`Write` of a regular file (new or existing, never a folder) of a review scratch directory."""
+    return review_scratch(path) is not None and not os.path.isdir(os.path.realpath(str(path)))
+
+
+def review_file(path: str) -> str | None:
+    """The first line of an existing regular file of a review scratch directory reached through no
+    link, else None."""
+    if review_scratch(path) is None or os.path.realpath(path) != os.path.normpath(path):
+        return None
+    try:
+        if not os.path.isfile(path):
+            return None
+        with open(path, encoding="utf-8") as handle:
+            return handle.readline(512).rstrip("\n")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def on_origin_branch(sha: str) -> bool:
+    """The sha is on a branch of origin: the conductor guard's own test (`git branch -r --contains`,
+    which reads only the local refs), imported when a checkout is judged; this file runs no command
+    of its own."""
+    if not REVIEW_SHA.fullmatch(sha):
+        return False
+    try:
+        import conductor_guard  # imports this file; read late, so there is no import cycle
+    except ImportError:  # without the conductor's guard no head is checked out
+        return False
+    return conductor_guard.on_origin_branch(sha)
+
+
+def verdict_post_ok(words: list[str]) -> bool:
+    """A comment `POST` to the origin's issue comments with the one field `-F body=@<file>`, the
+    file a review scratch file whose first line is a `Verdict:` line; nothing else."""
+    methods, fields, endpoints = [], [], []
+    for kind, arg, value in gh_api_items(words[2:]):
+        if kind == "method":
+            methods.append(value)
+        elif kind == "field":
+            fields.append((arg, value))
+        elif kind == "positional":
+            endpoints.append(arg)
+        else:
+            return False
+    if not methods or set(methods) != {"POST"} or len(endpoints) != 1 or len(fields) != 1:
+        return False
+    flag, value = fields[0]
+    if flag != "-F" or not value.startswith("body=@") or not comment_target_ok(endpoints[0]):
+        return False
+    first = review_file(value[len("body=@") :])
+    return first is not None and first.startswith("Verdict:")
+
+
+def review_step_allowed(words: list[str]) -> bool:
+    """One step of a reviewer slot run in its exact form (brief #1050 answer 2)."""
+    if words == ["git", "fetch", "origin"]:
+        return True
+    if words[:3] == ["git", "checkout", "--detach"]:
+        return len(words) == 4 and on_origin_branch(words[3])
+    if words[:2] == ["gh", "api"] and "-F" in words:
+        return verdict_post_ok(words)
+    if len(words) < 3 or words[0] != "python3":
+        return False
+    if CONDUCTOR_WORD.fullmatch(words[1]):
+        rest = words[2:]
+        return (
+            len(rest) == 4
+            and rest[0] == "check-verdict"
+            and rest[2] == "--pr"
+            and bool(PR_NUMBER.fullmatch(rest[3]))
+            and review_file(rest[1]) is not None
+        )
+    if SESSION_WORD.fullmatch(words[1]):
+        rest = words[2:]
+        return (
+            len(rest) == 3
+            and rest[0] == "slot"
+            and rest[1] in ("--next", "--release")
+            and bool(REVIEWER_NAME.fullmatch(rest[2]))
+        )
+    return False
+
+
 def decide(payload: dict, review: bool = False) -> str | None:
-    """A denial text, or None to allow; in review mode no write is ever allowed."""
+    """A denial text, or None to allow; in review mode the one write is a review scratch file."""
     tool = payload.get("tool_name")
     data = payload.get("tool_input")
     data = data if isinstance(data, dict) else {}
     if tool in WRITE_TOOLS:
         if review:
-            return REVIEW_RULE
+            ok = tool == "Write" and review_write_ok(data.get("file_path"))
+            return None if ok else REVIEW_RULE
         target = data.get("file_path", data.get("notebook_path"))
         return None if path_allowed(target, project_root()) else PATH_RULE
     if tool == "Bash":
