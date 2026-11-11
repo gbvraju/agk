@@ -736,7 +736,7 @@ tests = [
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py",
   "tests/kit/test_merge_cleared_reprove.py",
   "tests/kit/test_plan_exact_touches.py", "tests/kit/test_plan_reprove_paths.py",
-  "tests/kit/test_session_claim_overlap.py",
+  "tests/kit/test_session_claim_overlap.py", "tests/kit/test_builder_slots.py",
 ]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"

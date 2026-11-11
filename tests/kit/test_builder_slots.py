@@ -838,7 +838,7 @@ def test_a_reviewer_slot_takes_its_lease_like_a_builder_slot(proj, stub):
 
 # --- a stale `Assign:` frees its slot (brief #1020, ADR-0402) --------------------------------
 
-session_plan = conductor.session_plan  # the plan's module, as the conductor holds it
+import session_plan  # noqa: E402
 
 
 def board(monkeypatch, *said: dict) -> None:
