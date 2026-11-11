@@ -1,0 +1,1 @@
+- `[testing] workers = "auto"` now starts no more test workers than the free memory holds at the new `[testing] worker_memory_mb` each (500 MB by default; the CPU count when the memory cannot be read), `AGK_TEST_WORKERS` sets the number for one machine, and prepush prints one `tests: <n> workers (...)` line when it starts a parallel run (brief #1032, REQ-051, ADR-0441)

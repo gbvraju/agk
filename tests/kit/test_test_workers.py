@@ -493,6 +493,7 @@ def test_prepush_prints_the_workers_line_for_a_parallel_run(tmp_path, monkeypatc
     ]
     single = [("full", f"{python} -m pytest -q", ".", "always")]
     assert prepush.workers_notes(root, single) == []
+    (tmp_path / "x").mkdir()
     other = tree(tmp_path / "x", "npm test", 'workers = 3\nparallel_command = "jest -w {workers}"\n')
     made, _ = full(other)
     assert prepush.workers_notes(other, made) == ["tests: 3 workers (setting: testing.workers)"]
