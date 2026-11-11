@@ -6,7 +6,7 @@
 - Related: ADR-0430, ADR-0431, ADR-0374, ADR-0420, SPEC-0023, SPEC-0035, amendment 160, brief #1012, brief #1013, brief #1014, plan #661
 - Requirements: REQ-054, REQ-046
 
-Protected classes: `scripts/agk/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`
 
 ## Context
 
@@ -46,7 +46,10 @@ catch rate and the measures. No Accepted ADR covers these protected classes, so 
    printed `unknown` until 10 sampled heads (a `Shadow: #<pr> <sha> ...` comment) have a `Marks:` comment on their pull
    request, and `none` with no right finding. `checklist.py` holds the one reader (`marks_rate`), and the kit-only
    `shadow_count.py --marks FILE` prints the same figures from a saved comment list.
-5. `metrics.py --save-checklist` saves, beside the fields it saves today, each run's `head_branch` and `event`, from the
+5. `agk.toml`'s `[[testing.map]]` entry of `scripts/agk/session.py` lists `tests/kit/test_builder_slots.py`, which now
+   imports `session` to test `shadow_sampled` (the map rule of `test_always_full_infra.py`; one line, added to the brief's
+   `Touches:` by the verdict on 38ab784).
+6. `metrics.py --save-checklist` saves, beside the fields it saves today, each run's `head_branch` and `event`, from the
    same GET. The reviewer slots' markers need no new field: the saved comments are listed by their update time
    (`since=`), and a marker's first line carries its own time.
 

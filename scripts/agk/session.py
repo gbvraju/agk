@@ -1963,7 +1963,6 @@ def shadow_decide(root) -> str:
     it never reads a `Verdict:` line (the shadow is blind, SPEC-0035 rule 2)."""
     repo = repo_name(root)
     issue = conductor_issue(repo)
-    where = shadow_issue(repo)  # needed by every pass, so a missing issue shows at once
     comments = pages(f"repos/{repo}/issues/{issue}/comments")
     if comments is None:
         raise CheckError(f"slot: the comments of #{issue} cannot be read")
@@ -1984,6 +1983,7 @@ def shadow_decide(root) -> str:
     )
     if not asked:
         return "wait"
+    where = shadow_issue(repo)
     posted = pages(f"repos/{repo}/issues/{where}/comments")
     if posted is None:
         raise CheckError(f"slot: the comments of #{where} cannot be read")
