@@ -913,9 +913,7 @@ def selection_sets(
     return sets, notes
 
 
-def left_to_ci(
-    root: Path, found: Impact, areas: list[dict] | None
-) -> tuple[Impact, str | None]:
+def left_to_ci(root: Path, found: Impact, areas: list[dict] | None) -> tuple[Impact, str | None]:
     """With `[testing] local_full = "ci"` (brief #1031, ADR-0440), a selection that is full only
     because a changed file matches `always_full` as a selection of its mapped files, and the one
     line that says so; any other selection unchanged, with None. Not under `profile = "thorough"`,
