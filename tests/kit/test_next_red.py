@@ -314,3 +314,20 @@ def test_1052_b_next_offers_the_fix_brief_beside_a_taken_alarm(proj, stub):
     assert out.returncode == 0, out.stdout + out.stderr
     assert "brief #10" in out.stdout.splitlines()
     assert posts(stub) == []
+
+
+def test_1052_a_lower_pull_request_that_names_the_alarm_makes_no_fix_brief(proj, stub):
+    """REQ-039 REQ-041: brief #1052 answer 1: an open pull request #8, lower than brief #10, that
+    names the alarm is `red_fixes`' `fixed_by`, so #10 is no fix brief and is not kept."""
+    from test_session_flow import pr
+    from test_session_plan import data
+
+    fix_scene(proj, stub)
+    stub.serve(PRS, [pr(20, 1), {**pr(8, None), "body": "Fixes #9\nAdvances: REQ-039\n"}])
+    found = data(proj, stub)
+    assert assigned(found) == [], found
+    assert {"brief": 9, "fixed_by": 8, "why": "is fixed by #8"} in found["waits"]
+    out = session(proj, stub, "claim", "--session", "s-me", "--brief", "10")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert out.stdout.strip() == f"skip #10: waits for pull request #20 (it changes {FIX_FILE})"
+    assert posts(stub) == []
