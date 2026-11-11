@@ -357,7 +357,7 @@ def test_local_full_ci_runs_only_the_mapped_files_of_an_always_full_change(repo,
 
 
 def test_local_full_ci_with_nothing_mapped_runs_nothing_and_says_0(repo, outside):
-    """REQ-051: brief #1031 answer 2 (an empty selection runs nothing and prints the line with 0)."""
+    """REQ-051: brief #1031 answer 2 (an empty selection runs nothing; the line says 0)."""
     testing = CI + 'always_full = ["src/other.py"]\n' + MAP
     wide_project(repo, toml(outside, testing=testing), {"src/other.py": "change\n"})
     proc = prepush(repo, outside)

@@ -333,8 +333,8 @@ def testing_table(root: Path) -> dict | None:
         raise CheckError(
             "[testing] is a table of profile, always_full, map, budget_seconds, excluded, "
             "proof_regression, pr_tests, junit, workers, worker_memory_mb, parallel_command, "
-            "tools_file, slow_suite_seconds, full_when_share, local_full, results_dir, keep_passed, keep_runs, "
-            "rerun_alone, map_source and smoke (setting: testing)"
+            "tools_file, slow_suite_seconds, full_when_share, local_full, results_dir, keep_passed,"
+            " keep_runs, rerun_alone, map_source and smoke (setting: testing)"
         )
     links = check_links(table.get("links", []), root)
     check_smoke(table.get("smoke", []))
