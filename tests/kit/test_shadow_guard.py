@@ -346,3 +346,13 @@ def test_brief_1050_the_conductor_may_post_the_shadow_line(project, sha):
     command = f"{POST} -f 'body=Shadow: s-shadow #9 {sha}'"
     out = run_hook(bash(command), project)
     assert out.returncode == 0 and denial(out.stdout) is None
+
+
+def test_brief_1050_the_shadow_slot_name_is_sessions_own():
+    """REQ-042: brief #1050 answer 3 (the guard's slot is `session.SHADOW_NAME`, brief #1014)."""
+    sys.path.insert(0, str(HOOK.parents[2] / "scripts" / "agk"))
+    sys.path.insert(0, str(HOOK.parent))
+    import conductor_guard
+    import session
+
+    assert {form[2] for form in conductor_guard.SHADOW_SLOT_FORMS} == {session.SHADOW_NAME}

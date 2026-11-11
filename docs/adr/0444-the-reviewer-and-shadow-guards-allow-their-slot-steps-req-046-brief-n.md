@@ -53,8 +53,8 @@ only bound is the origin-branch check, which refuses a fork's head.
 ## Residual
 
 - 2026-11-11: the owner added the conductor's `Shadow:` sentence on this branch (Q-1050-2); the review role file's
-  "no write until Q-1013-3" stays the owner's to edit (brief #1050 answer 6); `session.py slot` on the default branch accepts no
-  `s-shadow` name yet, so the shadow's slot runs once a brief adds that name; the guard cannot tell the pull request
+  "no write until Q-1013-3" stays the owner's to edit (brief #1050 answer 6); `session.py slot` accepts the `s-shadow` name since
+  #1045 (brief #1014, `session.SHADOW_NAME`), which a test pins to the guard's forms; the guard cannot tell the pull request
   under review from another issue without a network call, so the comment's target stays the role file's rule.
 - 2026-11-11: a later brief may run the reviewer slot's `check-verdict` and `slot --release` from the default branch's
   copy of the scripts (or under `env -i`), so that the reviewed head's code does not run with the reviewer's access.
