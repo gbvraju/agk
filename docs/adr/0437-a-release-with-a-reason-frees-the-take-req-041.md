@@ -31,3 +31,9 @@ A builder may say why it gives a brief back, and the brief is free at once for t
 `session.py next`, `mine`, `plan` and every reader of `live_takes` see the release, since they all read takes through
 `all_takes`. `session_plan.py` reads a release once more on its own, to date a session's last activity; that reading
 is outside the brief's `Touches:` and is unchanged, so a reasoned release does not count there as activity.
+
+## Residual
+
+- 2026-11-11: the after-measure is the brief's `Measured:` command, which prints `[True]` for a reasoned and a bare
+  release on this branch. Whether the next reasoned release in the queue frees the assigned slot at once is seen on the
+  next such release, not measured here.
