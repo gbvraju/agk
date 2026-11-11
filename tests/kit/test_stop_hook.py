@@ -153,17 +153,6 @@ def _matches(rule: str, command: str) -> bool:
     return fnmatch.fnmatchcase(command, inner)
 
 
-def test_ac2_push_allow_is_exactly_one_command_and_no_deny_matches_it():
-    """REQ-002 AC2: deny beats allow, so no deny rule may match the allowed push."""
-    perms = settings()["permissions"]
-    pushes = [r for r in perms["allow"] if r.startswith("Bash(git push")]
-    assert pushes == ["Bash(git push -u origin HEAD)"]
-    command = "git push -u origin HEAD"
-    for rule in perms["deny"]:
-        if rule.startswith("Bash("):
-            assert not _matches(rule, command), rule
-
-
 def test_ac3_hook_calls_the_agk_mk_form_not_the_makefile_alias(tmp_path):
     """REQ-002 AC3 (SPEC-0002 rule 5): a project whose only target is the Makefile alias is red."""
     (tmp_path / "Makefile").write_text("governance:\n\t@true\n")
@@ -176,3 +165,122 @@ def test_ac2_settings_allow_the_agk_mk_targets():
     allow = settings()["permissions"]["allow"]
     for target in ("agk-governance", "agk-lint", "agk-test"):
         assert f"Bash(make -f agk.mk {target})" in allow
+
+
+# --- brief #1029 (ADR-0438): the hook reads the open pull request's body -----------------------
+
+BODY = "Brief: #1\nCovered-by: ADR-0001\nSecret-scan: deferred to CI\n"
+# The recipe proves AGK_PR_BODY names a file holding the body, and keeps its name for the test.
+SEES_BODY = (
+    '@test -n "$$AGK_PR_BODY" && grep -q Covered-by "$$AGK_PR_BODY"'
+    ' && echo "$$AGK_PR_BODY" > seen.txt'
+)
+SEES_NONE = '@test -z "$$AGK_PR_BODY" && echo none > seen.txt'
+
+
+def git(cwd: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)  # nosec B603 B607 - fixed list
+
+
+def branch_project(tmp_path: Path, recipe: str, detached: bool = False) -> Path:
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "agk.mk").write_text(f"agk-governance:\n\t{recipe}\n")
+    (proj / ".gitignore").write_text("seen.txt\n")
+    git(proj, "init", "-q", "-b", "claude/brief-1")
+    git(proj, "remote", "add", "origin", "https://github.com/example/demo.git")
+    git(proj, "add", ".")
+    git(proj, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "x")
+    if detached:
+        git(proj, "checkout", "-q", "--detach")
+    return proj
+
+
+def stub_gh(tmp_path: Path, stdout: str, code: int = 0) -> Path:
+    """A `gh` on PATH that logs its arguments and prints `stdout`; no network."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (tmp_path / "gh-out.json").write_text(stdout)
+    gh = bindir / "gh"
+    gh.write_text(
+        "#!/bin/sh\n"
+        f'printf "%s\\n" "$*" >> "{tmp_path}/gh-args.txt"\n'
+        f'cat "{tmp_path}/gh-out.json"\n'
+        f"exit {code}\n"
+    )
+    gh.chmod(0o755)
+    return bindir
+
+
+def run_on_branch(proj: Path, bindir: Path):
+    env = {k: v for k, v in os.environ.items() if k != "AGK_PR_BODY"}
+    env.update(CLAUDE_PROJECT_DIR=str(proj), PATH=f"{bindir}{os.pathsep}{env.get('PATH', '')}")
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(HOOK)], input="{}", capture_output=True, text=True, env=env
+    )
+
+
+def test_a_open_pull_request_body_reaches_governance(tmp_path):
+    """REQ-037 (brief #1029 answer 4, test a): the body with `Covered-by:` is in AGK_PR_BODY."""
+    proj = branch_project(tmp_path, SEES_BODY)
+    bindir = stub_gh(tmp_path, json.dumps([{"number": 7, "body": BODY}]))
+    proc = run_on_branch(proj, bindir)
+    assert proc.returncode == 0 and proc.stdout == "", proc.stdout
+    args = (tmp_path / "gh-args.txt").read_text()
+    assert "api" in args and "pulls?head=example:claude/brief-1&state=open" in args
+    assert (proj / "seen.txt").is_file()
+
+
+def test_b_no_pull_request_runs_governance_as_today(tmp_path):
+    """REQ-037 (brief #1029 answer 4, test b): no pull request means no AGK_PR_BODY."""
+    proj = branch_project(tmp_path, SEES_NONE)
+    proc = run_on_branch(proj, stub_gh(tmp_path, "[]"))
+    assert proc.returncode == 0 and proc.stdout == "", proc.stdout
+    assert (proj / "seen.txt").read_text().strip() == "none"
+
+
+def test_b_failing_gh_runs_governance_as_today(tmp_path):
+    """REQ-037 (brief #1029 answer 4, test b): a failing or garbled `gh` changes nothing."""
+    for name, out, code in (("fail", "error", 1), ("garbled", "not json", 0)):
+        (tmp_path / name).mkdir()
+        proj = branch_project(tmp_path / name, SEES_NONE)
+        proc = run_on_branch(proj, stub_gh(tmp_path / name, out, code))
+        assert proc.returncode == 0 and proc.stdout == "", (name, proc.stdout)
+        assert (proj / "seen.txt").read_text().strip() == "none"
+
+
+def test_b_detached_head_asks_no_pull_request(tmp_path):
+    """REQ-037 (brief #1029 answer 4, test b): a detached head runs governance as today."""
+    proj = branch_project(tmp_path, SEES_NONE, detached=True)
+    proc = run_on_branch(proj, stub_gh(tmp_path, json.dumps([{"number": 7, "body": BODY}])))
+    assert proc.returncode == 0 and proc.stdout == "", proc.stdout
+    assert not (tmp_path / "gh-args.txt").exists()
+
+
+def test_b_red_governance_still_blocks_with_the_body(tmp_path):
+    """REQ-037 (brief #1029): the body changes what governance reads, never that red blocks."""
+    proj = branch_project(tmp_path, "@echo FAIL demo; exit 1")
+    proc = run_on_branch(proj, stub_gh(tmp_path, json.dumps([{"number": 7, "body": BODY}])))
+    assert json.loads(proc.stdout)["decision"] == "block"
+
+
+def test_c_temporary_body_file_is_removed(tmp_path):
+    """REQ-037 (brief #1029 answer 4, test c): the body file is gone after the run."""
+    for recipe in (SEES_BODY, SEES_BODY + "; exit 1"):
+        sub = tmp_path / str(len(recipe))
+        sub.mkdir()
+        proj = branch_project(sub, recipe)
+        run_on_branch(proj, stub_gh(sub, json.dumps([{"number": 7, "body": BODY}])))
+        used = Path((proj / "seen.txt").read_text().strip())
+        assert used.name and not used.exists()
+
+
+def test_ac2_push_allows_head_and_claude_branches_and_no_deny_matches_them():
+    """REQ-002 AC2, REQ-037 (brief #1029 answer 2): deny beats allow."""
+    perms = settings()["permissions"]
+    pushes = [r for r in perms["allow"] if r.startswith("Bash(git push")]
+    assert pushes == ["Bash(git push -u origin HEAD)", "Bash(git push origin claude/*)"]
+    for command in ("git push -u origin HEAD", "git push origin claude/brief-1"):
+        for rule in perms["deny"]:
+            if rule.startswith("Bash("):
+                assert not _matches(rule, command), (rule, command)

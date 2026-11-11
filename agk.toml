@@ -48,7 +48,9 @@ rule_tags_from = "2026-12-06"
 # allow_paths = [{ path = "docs/logs/README.md", reason = "a guide about logs, not a log" }]
 # Who hands a finished builder its next work: "conductor" (the session asks on the agk-conductor issue and waits for an Assign: line) or "next" (session.py next, for setups with no conductor); a change needs an ADR.
 [flow]
-assign = "conductor"
+# "next" by the owner's direction of 2026-11-11 (brief #1029, ADR-0438): a finished builder takes its next brief at once;
+# the slots s<n> still act on Assign: lines (builder_start below is unchanged).
+assign = "next"
 # auto_merge and auto_merge_method (SPEC-0039 rule 1): off by default and when absent; only auto_merge = true with
 # auto_merge_method = "squash", read from the default branch, lets merge_cleared.py merge. This repository turns it on by the
 # owner's choice, ADR-0266; turning it off is again the owner's change, by an ADR in the same pull request.
