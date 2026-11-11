@@ -1,6 +1,6 @@
 # ADR-0437: A release with a reason frees the take
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Deciders: maintainers
 - Related: brief #1026, plan #661, brief #842
