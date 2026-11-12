@@ -36,10 +36,11 @@ of rule 1, that a design link of rule 2 is complete, or that a location of rule 
    `check_design` is the owner's commit (`Q-1074-1`), since a builder never changes a workflow.
 
 Protected path classes changed: `scripts/agk/` (`check_plan.py`), `tests/kit/` (`test_check_plan_sources.py`, and
-`test_workflow.py`'s two counts of governance checks, 16 to 17), `agk.mk` (one line of `agk-governance`), `kit/`
+`test_workflow.py`'s two counts and `test_ci_saving.py`'s count of governance checks, 16 to 17),
+`tests/kit_dev/` (`test_init.py`'s counts of CI steps, one more), `agk.mk` (one line of `agk-governance`), `kit/`
 (`kit/manifest.json`, one `verbatim` row; `kit/hashes.json` as `kit_hashes.py` prints it) and `agk.toml` (one
 `[[testing.map]]` entry for `check_plan.py`, the answer to `Q-1074-2` in the verdict on 6871e8c). `.github/` (the
-workflow step) changes only by the owner's commit.
+workflow step, ff17097) changes only by the owner's commit.
 
 ## Consequences
 
