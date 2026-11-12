@@ -225,3 +225,30 @@ def test_the_router_may_start_a_workflow():
     """REQ-039: brief #1116 answer 2 (`actions: write`, the one new permission)."""
     head = text("agk-route.yml").split("\njobs:", 1)[0]
     assert re.search(r"^  actions: write$", head, re.M)
+
+
+# --- (c) the merger runs on triggers; the schedule stays only for what nothing else starts ------
+# Brief #1143 answer 2: a review of every start found three paths that only the schedule covers,
+# so the schedule stays (ADR-0485): (1) a start the router's token is refused (`start_merger`
+# prints one line and the label stays, see the test above); (2) a merger run that ends without a
+# merge (a GitHub error, an environment wait past the job's limit) on a pull request whose label
+# does not change, so no router run starts it again; (3) the conductor's `SWEEP late` signal,
+# which counts finished sweep runs of merger.yml (`conductor.SWEEP_EVENTS`).
+
+
+def test_1143_the_schedule_stays_for_the_three_paths_only_it_covers():
+    """REQ-039: brief #1143 answer 3e (the workflow keeps `schedule:`; the test names the paths)."""
+    import conductor
+
+    head = text("merger.yml").split("\njobs:", 1)[0]
+    assert '\n  schedule:\n    - cron: "*/15 * * * *"\n' in head  # paths (1), (2) and (3)
+    assert "\n  workflow_dispatch:\n" in head  # a sweep by hand
+    assert "schedule" in conductor.SWEEP_EVENTS  # path (3)
+    assert "the merger's schedule still sweeps" in " ".join(route.__doc__.split())  # path (1)
+
+
+def test_1143_the_router_documents_the_start_on_a_green_branch():
+    """REQ-039: brief #1143 answer 1 (the router's docstring names the new trigger)."""
+    doc = " ".join(route.__doc__.split())
+    assert "Brief #1143 (ADR-0485)" in doc
+    assert "turns green" in doc
