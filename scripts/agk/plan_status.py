@@ -116,7 +116,10 @@ def scope_changes(plan: Path) -> list[dict]:
         elif out and line.startswith("Status: "):
             out[-1]["status"] = line.removeprefix("Status: ").strip()
         elif out and (found := APPROVED.match(line)):
-            out[-1]["approved"] = found[1]
+            try:  # a date-shaped value that is no date leaves the block not approved (rule 17)
+                out[-1]["approved"] = date.fromisoformat(found[1]).isoformat()
+            except ValueError:
+                pass
     return out
 
 
@@ -289,6 +292,8 @@ def status_of(target: str, opened: Any, estimate: dict, today: date) -> str:
     if target == NONE or estimate["kind"] in (UNCALIBRATED, UNKNOWN) or opened == UNKNOWN:
         return UNKNOWN
     p85 = estimate["dates"][1]
+    if p85 == UNKNOWN:
+        return UNKNOWN
     if p85 != "done" and date.fromisoformat(p85) > date.fromisoformat(target):
         return "at risk"
     return "on track"

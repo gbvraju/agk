@@ -280,6 +280,30 @@ def test_rule18_each_cause_phrase_with_its_count_in_order(tmp_path, monkeypatch,
     assert got["M1"]["cause"][2] == "1 briefs stalled (builder)" and len(got["M1"]["cause"]) == 3
 
 
+def test_rule18_unknown_when_calibrated_but_the_dates_are_unknown(tmp_path, monkeypatch, capsys):
+    """REQ-050 AC5: rule 18 (when the throughput cannot reach the open briefs within the cap of
+    rule 13, made 1 week here, the dates are `unknown`, so is the status, and the exit is 0)."""
+    monkeypatch.setattr(plan_estimate, "MOST_WEEKS", 1)
+    code, out, err = run(tmp_path, monkeypatch, capsys)
+    assert (code, err) == (0, "") and block(out, "M1")[5] == "  status unknown"
+    got = data(tmp_path, monkeypatch, capsys)
+    assert got["M1"]["forecast"] == {"p50": "unknown", "p85": "unknown"}
+    assert got["M1"]["estimate"] == "calibrated" and got["M1"]["status"] == "unknown"
+    estimate = {"kind": "calibrated", "dates": ["unknown", "unknown"]}
+    today = datetime(2026, 11, 12).date()
+    assert plan_status.status_of("2026-12-01", 3, estimate, today) == "unknown"
+
+
+def test_rule17_an_approved_line_that_is_no_date_is_not_approved(tmp_path, monkeypatch, capsys):
+    """REQ-050 AC5: rule 17 (a hand-written line it cannot read is never a crash or a guess)."""
+    changes = CHANGES.replace("Approved: 2026-10-28", "Approved: 2026-13-01")
+    code, out, err = run(tmp_path, monkeypatch, capsys, changes=changes)
+    assert (code, err) == (0, "")
+    got = data(tmp_path, monkeypatch, capsys, changes=changes)
+    assert "scope grew" not in "; ".join(got["M1"]["cause"])
+    assert got["all"]["waiting"]["scope_changes"] == ["SC-1", "SC-2"]
+
+
 def test_rule18_none_measured_when_no_count_is_above_zero(tmp_path, monkeypatch, capsys):
     """REQ-050 AC5: rule 18."""
     quiet = done_pull(actual_hours="3.0", verdicts=[])
