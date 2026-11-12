@@ -1,20 +1,20 @@
 """The plan check, the sources (SPEC-0043 rules 1 and 2, and rule 10's no-plan pass). Installed:
-`kit/manifest.json` lists it in `verbatim`. Build (b) of SPEC-0043 rule 27 as amendment 163 orders it.
+`kit/manifest.json` lists it in `verbatim`. Build (b) of SPEC-0043 rule 27 (amendment 163).
 
-Rule 1: every file under `docs/sources/` (any depth) is `.md` or `.txt`, UTF-8 text, and starts with
-exactly the lines `Source: <title>`, `Kind: <sow|brd|prd|design|charter|other>`, `Version: <version>`
-and `Date: <YYYY-MM-DD>`, in this order, then one blank line and the text. Rule 2: the design links
-are the rows of `docs/sources/design-links.md` (`Kind: design`), a table with the columns `Name`,
-`Link` (an `https://` address), `Version` and `Frames`, each row with the four values. No link is
-opened. A failure names the rule and the file (and the row), never a value.
+Rule 1: every file under `docs/sources/` (any depth) is `.md` or `.txt`, UTF-8 text, and starts
+with exactly the lines `Source: <title>`, `Kind: <sow|brd|prd|design|charter|other>`,
+`Version: <version>` and `Date: <YYYY-MM-DD>`, in this order, then one blank line and the text.
+Rule 2: the design links are the rows of `docs/sources/design-links.md` (`Kind: design`), a table
+with the columns `Name`, `Link` (an `https://` address), `Version` and `Frames`, each row with the
+four values. No link is opened. A failure names the rule and the file (and the row), never a value.
 
 With no problem it prints `ok plan (no plan)` when `docs/plan/` does not exist (rule 10), and
 `ok plan sources` when it does: the plan's own rules (9 to 11) are build (d)'s.
 
-`header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a location
-of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`, or a charter's
-`docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013, the `CHARTER_NAME` of `playbook.py`,
-which is kit-only, so the pattern is kept here and a test holds the two equal).
+`header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
+location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
+or a charter's `docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013; the `CHARTER_NAME` of
+`playbook.py`, which is kit-only, so the pattern is kept here and a test holds the two equal).
 Files only: no network, no model, nothing written.
 """
 
@@ -55,7 +55,7 @@ def _value(line: str, key: str) -> str | None:
 
 
 def header(text: str) -> dict[str, str] | None:
-    """The four header values of a source of rule 1, or None when its first four lines are not them."""
+    """The four header values of a source of rule 1, or None when its first four lines are not."""
     lines = text.splitlines()[: len(HEADER)]
     if len(lines) < len(HEADER):
         return None
@@ -76,7 +76,7 @@ def real_date(value: str) -> bool:
 
 
 def header_problems(text: str) -> list[str]:
-    """Rule 1's header problems of one source's text, each naming a header line and never a value."""
+    """Rule 1's header problems of a source's text, each naming a header line, never a value."""
     lines = text.splitlines()
     first = lines[: len(HEADER)]
     found = {key for key in HEADER if any(_value(line, key) for line in first)}
@@ -199,7 +199,7 @@ def _decision(text: str) -> list[str]:
 
 
 def location_problem(root: Path, location: str) -> str | None:
-    """None when a location of rule 1 resolves; otherwise the problem, never naming the location's text."""
+    """None when a location of rule 1 resolves; otherwise the problem, never the location's text."""
     if "#" in location:
         rel, _, anchor = location.partition("#")
         kind = "heading"

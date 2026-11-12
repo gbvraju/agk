@@ -15,10 +15,10 @@ agk-governance:
 	$(PY) scripts/agk/check_build_state.py
 	$(PY) scripts/agk/check_kit_tests.py
 	$(PY) scripts/agk/check_design.py
-	$(PY) scripts/agk/check_plan.py
 	$(PY) scripts/agk/check_playbooks.py
 	$(PY) scripts/agk/check_runbooks.py
 	$(PY) scripts/agk/check_acceptance.py
+	$(PY) scripts/agk/check_plan.py
 	$(PY) scripts/agk/reviewers.py --check
 	$(PY) scripts/agk/reviewers.py --check-codeowners
 	$(PY) scripts/agk/check_pr_mode.py
