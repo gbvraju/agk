@@ -73,6 +73,9 @@ For a change, the selection is worked out from git and files only, with no netwo
 - **Selected tests.** For each changed file, every entry whose `code` glob matches it selects the test files of the head that its
   `tests` globs match. Only test files count: files under `test_dirs` whose names match `test_patterns`, as for proof. Each
   selected file is shown with the changed file and the entry that chose it.
+  When init finds `e2e/`, `tests/e2e/`, `frontend/src/test/`, `frontend/tests/`, `src/__tests__/` or `cypress/`, it writes them
+  into `test_dirs` beside `tests` and prints one line naming them. Doctor warns, naming up to three folders and the line to add,
+  when files that look like tests sit outside every `test_dirs` folder and match no `test_patterns`.
 - **Full suite.** The selection is the full suite, with its reason, when a changed file matches `always_full`, when the profile
   is `thorough`, or, under `balanced`, when a changed file is unmapped and no test names it.
 - **Unmapped files.** A changed file that no entry covers, or whose entries select no existing test file (a typo in `tests`,
