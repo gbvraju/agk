@@ -25,7 +25,8 @@ loop): each event is one wake. `queue` prints `#N <label>` for each open pull re
 label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder:
 `agk:handover` first (amendment 162), then `agk:build`, `agk:fix`, `agk:conflict`, `agk:ci-red`, of
 `--author` when given; person: `agk:question`, `agk:approve`, `agk:owner-merge`, `agk:parked`;
-merger: `agk:merge-ready`, `agk:ready`), or `empty`, so a session that starts or restarts resumes from GitHub with one GET.
+merger: `agk:merge-ready`, `agk:ready`), or `empty`, so a session that starts or restarts resumes
+from GitHub with one GET.
 `review-queue` (brief 306) prints, read-only, the open pull requests that need a conductor's verdict
 and why, one line `#N <head7> review: <reason>; ...` each, or `empty`: a pull request labelled
 `agk:review`; one with a `Question:`, `Report:`, `Correction:` or `Maintainer answer:` comment

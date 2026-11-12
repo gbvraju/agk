@@ -45,6 +45,14 @@ REQ-039 AC1 and AC2: *GitHub events, not a session's memory, hold the state of e
 - 2026-10-25: until accounts are separated (lane F) sessions and people share one account, so `spec_approvers` and the rule against the conductor writing `Approve:` rest on the role file, not on the check (due 2026-12-31).
 - 2026-10-25: the workflow names the workflows that hold the required checks; how a project lists them is decided at build (a) (due 2026-12-31).
 
+## Contexts
+
+- kit: the installed `route.py` sets the state labels, `agk:handover` among them, so every project's stopped builders are labelled (rules 2 and 3, amendment 162)
+- github: the router workflow runs on each comment, push and finished check and sets the label, with no workflow change (rules 1 and 2)
+- local: a laptop builder that stops posts the same `Report:` line and gets the same label at the router's next event (rules 2 and 3)
+- personal: the same line and label wherever the router runs (rules 2 and 3)
+- stacks: not applicable: no test or build step of a stack changes
+
 ## Open questions
 
 none
