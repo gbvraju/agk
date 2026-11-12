@@ -994,6 +994,12 @@ def start_runner(root: Path, name: str, popen=subprocess.Popen) -> int:
     return proc.pid
 
 
+# The runner's slots make and remove their worktrees one at a time (brief #1139): two `git worktree
+# add` calls at once on one repository can fail, one reading the other's half-made entry under
+# `.git/worktrees/`, and a prune can remove an entry that an add is still making.
+TREES = threading.Lock()
+
+
 def drop_tree(job: dict) -> None:
     """Remove a job's worktree and its temporary folder, also when they were never made."""
     tree = job.get("worktree")
@@ -1001,8 +1007,9 @@ def drop_tree(job: dict) -> None:
         return
     repository = Path(str(job.get("repository") or "."))
     if repository.is_dir():
-        git(repository, "worktree", "remove", "--force", tree)
-        git(repository, "worktree", "prune")
+        with TREES:
+            git(repository, "worktree", "remove", "--force", tree)
+            git(repository, "worktree", "prune")
     shutil.rmtree(Path(tree).parent, ignore_errors=True)
 
 
@@ -1012,7 +1019,9 @@ def execute(root: Path, held: Path, name: str, job: dict, setup: dict, children:
     if not repository.is_dir() or git(repository, "cat-file", "-e", f"{job['head']}^{{commit}}")[0]:
         return "failed (head not found)", None, None
     tree = Path(job["worktree"])
-    if git(repository, "worktree", "add", "--detach", "-q", str(tree), job["head"])[0]:
+    with TREES:
+        made = git(repository, "worktree", "add", "--detach", "-q", str(tree), job["head"])[0] == 0
+    if not made:
         return "failed (the worktree cannot be made)", None, None
     clock = setup["clock"]
     token = uuid.uuid4().hex

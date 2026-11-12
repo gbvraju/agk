@@ -199,6 +199,37 @@ def test_with_two_slots_two_jobs_run_at_once_and_none_overtakes(repo, tmp_path):
     assert started == sorted(started)
 
 
+def test_with_two_slots_no_two_worktree_calls_run_at_once(repo, tmp_path, monkeypatch):
+    """REQ-047 AC3: SPEC-0040 rules 4 and 6 (brief #1139). Two `git worktree add` calls at once on
+    one repository can fail (`failed to read .git/worktrees/tree1/commondir`), which turned the
+    default branch red on 9a7b074; the runner makes and removes the worktrees of its slots one at
+    a time. Each worktree call is slowed so that two would overlap if nothing held them apart."""
+    where = configure(repo, tmp_path, extra="lock_slots = 2\n")
+    real, inside, most = lock.git, [0], [0]
+    count = threading.Lock()
+
+    def slow_git(cwd, *args):
+        if args[:1] != ("worktree",):
+            return real(cwd, *args)
+        with count:
+            inside[0] += 1
+            most[0] = max(most[0], inside[0])
+        try:
+            threading.Event().wait(0.2)
+            return real(cwd, *args)
+        finally:
+            with count:
+                inside[0] -= 1
+
+    monkeypatch.setattr(lock, "git", slow_git)
+    for label in ("j1", "j2", "j3"):
+        add(repo, where, label)
+    assert work(repo) == 0
+    assert sorted(log(where)) == ["j1", "j2", "j3"]
+    assert {r["outcome"] for r in results(where).values()} == {"passed"}
+    assert most[0] == 1
+
+
 # --- rule 14: cleanup; nothing that did not pass is passed --------------------------------------
 
 

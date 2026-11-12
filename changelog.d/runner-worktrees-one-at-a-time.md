@@ -1,0 +1,1 @@
+- `lock.py runner` with `lock_slots` above 1 makes and removes the worktrees of its slots one at a time, so two jobs that start together no longer fail one of them with `failed (the worktree cannot be made)` (brief #1139, ADR-0274)
