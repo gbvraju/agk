@@ -49,6 +49,9 @@ ALL_KINDS = {
     "kit-version",
     "metrics-issue",
     "drift-audit-issue",
+    "milestone-at-risk",
+    "scope-change-waiting",
+    "plan-waiting",
 }
 
 
@@ -95,7 +98,7 @@ def test_ac1_the_structure_has_the_document_keys_and_items_of_the_fixed_kinds(na
 
     _, _, structure = structure_of(facts)
     assert list(structure) == ["schema", "week", "opening", "sections", "counts", "notices"]
-    assert structure["schema"] == 8
+    assert structure["schema"] == 9
     assert list(structure["opening"]) == ["first", "last", "as_of"]
     assert list(structure["sections"]) == list(SECTIONS)
     for item in items_of(structure):
@@ -168,6 +171,8 @@ def test_ac1_needs_you_is_a_list_of_groups_with_a_count(name, facts):
             "pull-request",
             "residual",
             "requirement",
+            "scope-change",
+            "plan",
         }
         unknown = any(i["kind"] == "unknown" for i in group["items"])
         assert group["count"] == ("unknown" if unknown else len(group["items"])), group

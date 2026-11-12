@@ -122,6 +122,18 @@ def run_here(tmp_path, *args: str) -> subprocess.CompletedProcess:
     )
 
 
+def test_ac2_the_plan_key_is_optional_and_its_copy_validates():
+    """REQ-050 AC5: SPEC-0043 rule 19 (amendment 115 item 1, ADR-0466): the report fixture that
+    `plan_status.py --base IN --into OUT` wrote validates; `plan` is optional and closed."""
+    path = KIT_ROOT / "tests" / "kit" / "fixtures" / "report" / "plan" / "facts.json"
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert "plan" in doc and "plan" not in schema()["required"]
+    assert errors(doc, schema()) == []
+    assert errors({k: v for k, v in doc.items() if k != "plan"}, schema()) == []
+    assert errors({**doc, "plan": {"milestones": []}}, schema())
+    assert errors({**doc, "plan": {**doc["plan"], "extra": 1}}, schema())
+
+
 def test_ac2_the_document_for_this_repository_at_head_validates(tmp_path):
     """REQ-018 AC2: rule 23 (offline: no `gh` on PATH, so the GitHub sections are unknown)."""
     proc = run_here(tmp_path, "--repo", "example-org/example-repo", ".")

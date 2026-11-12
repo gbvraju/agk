@@ -32,7 +32,7 @@ def kinds(structure: dict, section: str, kind: str) -> list[dict]:
 def test_ac8_the_schema_is_6_and_the_report_has_a_sixth_section_after_cost():
     """REQ-041 AC8: a new section is a new schema number."""
     structure = report()
-    assert structure["schema"] == 8 and pr.REPORT_SCHEMA == 8
+    assert structure["schema"] == 9 and pr.REPORT_SCHEMA == 9
     assert list(structure["sections"]) == [
         "delivered",
         "proven",
@@ -148,7 +148,7 @@ def test_rule11_corrections_of_the_week_are_printed_next_to_the_verdicts():
 def test_ac8_the_published_schema_is_6_and_names_the_new_kinds(name):
     """REQ-041 AC8: kit/report-schema.json is changed by hand with the script (SPEC-0022 rule 7)."""
     schema = json.loads((Path(__file__).parents[2] / "kit" / f"{name}.json").read_text("utf-8"))
-    assert schema["properties"]["schema"] == {"const": 8}
+    assert schema["properties"]["schema"] == {"const": 9}
     text = json.dumps(schema)
     for kind in (
         "flow-figures",

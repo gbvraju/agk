@@ -1,0 +1,151 @@
+{
+  "adrs": [],
+  "commit": "c0ffee0000000000000000000000000000000000",
+  "config": {
+    "default_branch": "main",
+    "inbox_hours": 48,
+    "project_tests_declared": true,
+    "test_dirs": [
+      "tests"
+    ],
+    "test_patterns": [
+      "probe_*.py"
+    ]
+  },
+  "dirty": false,
+  "drift": {
+    "counts": {
+      "D1": 0,
+      "D2": 0,
+      "D3": 0,
+      "D4": 0,
+      "D5": 0,
+      "D6": 0,
+      "D7": 0
+    },
+    "total": 0
+  },
+  "flow": {
+    "briefs": [
+      {
+        "advances": [
+          "REQ-001"
+        ],
+        "created_at": "2026-10-14T09:00:00Z",
+        "number": 1,
+        "title": "The open work"
+      }
+    ],
+    "corrections": [],
+    "max_builders": 3,
+    "retakes": [],
+    "stall_hours": 4
+  },
+  "issues": [
+    {
+      "label": "agk-drift-audit",
+      "number": 7,
+      "state": "closed",
+      "title": "agk drift audit 2026-10-03"
+    }
+  ],
+  "markers": [],
+  "pull_requests": [],
+  "questions": [],
+  "repo": "demo-org/demo-repo",
+  "requirements": [
+    {
+      "criteria": [
+        {
+          "id": "AC1",
+          "text": "t"
+        }
+      ],
+      "criteria_form": "structured",
+      "id": "REQ-001",
+      "line": 3,
+      "status": "planned",
+      "title": "Only thing"
+    }
+  ],
+  "residuals": [],
+  "schema": 1,
+  "specs": [
+    {
+      "id": "SPEC-0001",
+      "notes": null,
+      "open_questions": [],
+      "path": "docs/specs/0001-approved.md",
+      "requirements": [
+        "REQ-001"
+      ],
+      "status": "Approved",
+      "title": "Approved one"
+    }
+  ],
+  "today": "2026-10-14",
+  "plan": {
+    "today": "2026-11-04",
+    "milestones": [
+      {
+        "id": "M1",
+        "title": "Orders",
+        "briefs": {
+          "done": 1,
+          "open": 2
+        },
+        "estimate": "calibrated",
+        "reasons": [],
+        "hours": {
+          "spent": "5.0",
+          "p50": "13.0",
+          "p85": "16.0"
+        },
+        "forecast": {
+          "p50": "2026-11-20",
+          "p85": "2026-11-20"
+        },
+        "target": "2026-11-06",
+        "status": "at risk",
+        "trend": "P85 7 days later",
+        "cause": [
+          "waiting on review 3.0 h this week",
+          "scope grew by 1 briefs",
+          "1 of 1 estimates missed"
+        ]
+      },
+      {
+        "id": "M2",
+        "title": "Payments",
+        "briefs": {
+          "done": 0,
+          "open": 1
+        },
+        "estimate": "calibrated",
+        "reasons": [],
+        "hours": {
+          "spent": "0.0",
+          "p50": "24.0",
+          "p85": "30.0"
+        },
+        "forecast": {
+          "p50": "2026-11-27",
+          "p85": "2026-11-27"
+        },
+        "target": "2026-11-03",
+        "status": "late",
+        "trend": "P85 7 days later",
+        "cause": [
+          "none measured"
+        ]
+      }
+    ],
+    "waiting": {
+      "plan": true,
+      "scope_changes": [
+        "SC-2"
+      ]
+    },
+    "limits": "Estimates are ranges from this project's own history, not promises; AGK drafts from the sources and the person owns scope."
+  }
+}

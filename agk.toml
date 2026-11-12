@@ -603,7 +603,14 @@ code = "scripts/agk/plan_intake.py"
 tests = ["tests/kit/test_plan_intake.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_plan_intake_skill.py"]
 [[testing.map]]
 code = "scripts/agk/plan_estimate.py"
-tests = ["tests/kit/test_plan_estimate.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = [
+  "tests/kit/test_plan_estimate.py", "tests/kit/test_plan_status.py", "tests/kit_dev/test_kit_manifest.py",
+]
+[[testing.map]]
+code = "scripts/agk/plan_status.py"
+tests = [
+  "tests/kit/test_plan_status.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_report_wiring.py",
+]
 [[testing.map]]
 code = "scripts/agk/playbook.py"
 tests = [
@@ -655,7 +662,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/product_report.py"
 tests = [
-  "tests/kit/test_head_cleared.py", "tests/kit/test_product_report.py", "tests/kit/test_product_report_at_risk.py",
+  "tests/kit/test_head_cleared.py", "tests/kit/test_plan_status.py", "tests/kit/test_product_report.py",
+  "tests/kit/test_product_report_at_risk.py",
   "tests/kit/test_product_report_delivered.py", "tests/kit/test_product_report_estimate.py",
   "tests/kit/test_product_report_facts_artifact.py", "tests/kit/test_product_report_flow.py",
   "tests/kit/test_product_report_workflow.py", "tests/kit/test_report_counts.py",

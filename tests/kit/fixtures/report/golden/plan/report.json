@@ -1,0 +1,196 @@
+{
+  "schema": 9,
+  "week": "2026-W41",
+  "opening": {
+    "first": "2026-10-05",
+    "last": "2026-10-11",
+    "as_of": "2026-10-14"
+  },
+  "sections": {
+    "delivered": [],
+    "proven": [
+      {
+        "kind": "planned-not-counted",
+        "count": 1,
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/requirements.md"
+          }
+        ]
+      }
+    ],
+    "needs_you": [
+      {
+        "group": "scope-change",
+        "count": 1,
+        "items": [
+          {
+            "kind": "scope-change-waiting",
+            "id": "SC-2",
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/plan/scope-changes.md"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "group": "plan",
+        "count": 1,
+        "items": [
+          {
+            "kind": "plan-waiting",
+            "milestones": 2,
+            "links": [
+              {
+                "to": "file",
+                "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/plan/milestones.md"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "at_risk": [
+      {
+        "kind": "milestone-at-risk",
+        "id": "M1",
+        "title": "Orders",
+        "status": "at risk",
+        "p85": "2026-11-20",
+        "target": "2026-11-06",
+        "cause": [
+          "waiting on review 3.0 h this week",
+          "scope grew by 1 briefs",
+          "1 of 1 estimates missed"
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/plan/milestones.md"
+          }
+        ]
+      },
+      {
+        "kind": "milestone-at-risk",
+        "id": "M2",
+        "title": "Payments",
+        "status": "late",
+        "p85": "2026-11-27",
+        "target": "2026-11-03",
+        "cause": [
+          "none measured"
+        ],
+        "links": [
+          {
+            "to": "file",
+            "url": "https://github.com/demo-org/demo-repo/blob/c0ffee0000000000000000000000000000000000/docs/plan/milestones.md"
+          }
+        ]
+      }
+    ],
+    "cost": [
+      {
+        "kind": "restore",
+        "of": "red default branch",
+        "closed": "unknown",
+        "median_hours": "unknown",
+        "open": "unknown",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/issues"
+          }
+        ]
+      },
+      {
+        "kind": "restore",
+        "of": "actions blocked",
+        "closed": "unknown",
+        "median_hours": "unknown",
+        "open": "unknown",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/issues"
+          }
+        ]
+      },
+      {
+        "kind": "restore",
+        "of": "leaked secret",
+        "closed": "unknown",
+        "median_hours": "unknown",
+        "open": "unknown",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/issues"
+          }
+        ]
+      },
+      {
+        "kind": "run-minutes",
+        "minutes": "unknown",
+        "per_merged": "unknown",
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/actions"
+          }
+        ]
+      }
+    ],
+    "flow": [
+      {
+        "kind": "flow-figures",
+        "open_builders": 0,
+        "max_builders": 3,
+        "taken_to_pull_request": "none",
+        "to_first_verdict": "none",
+        "verdict_to_cleared": "none",
+        "cleared_to_merge": "none",
+        "conflicts": 0,
+        "renumbers": 0,
+        "retakes": 0,
+        "links": [
+          {
+            "to": "search",
+            "url": "https://github.com/demo-org/demo-repo/pulls?q=is%3Apr+is%3Aopen"
+          }
+        ]
+      }
+    ]
+  },
+  "counts": {
+    "delivered": 0,
+    "proven": 0,
+    "needs_you": 2,
+    "at_risk": 2
+  },
+  "notices": [
+    {
+      "kind": "facts-commit",
+      "commit": "c0ffee0000000000000000000000000000000000",
+      "links": []
+    },
+    {
+      "kind": "kit-version",
+      "version": "unknown",
+      "links": []
+    },
+    {
+      "kind": "metrics-issue",
+      "state": "none-found",
+      "links": []
+    },
+    {
+      "kind": "drift-audit-issue",
+      "state": "none-found",
+      "links": []
+    }
+  ]
+}

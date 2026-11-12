@@ -643,6 +643,17 @@ requests and its weekly throughput of closed briefs, each followed by its `input
 reason and the briefs' declared ranges while the history is below `[plan] calibration_min` (10). It reads files only,
 with no network and no model, and writes nothing. See SPEC-0043 rules 12 to 16.
 
+## Plan status
+
+    python3 scripts/agk/plan_status.py --facts FILE [--plan DIR] [--today YYYY-MM-DD] [--weeks N] [--json | --base IN --into OUT]
+
+Prints, for each milestone of `docs/plan/milestones.md`, its briefs done and open, the hours spent against the P50 and
+P85 of `plan_estimate.py`, the forecast finish, the target, the status (`late`, `unknown`, `at risk` or `on track`), the
+trend of the P85 finish since the start of the report's week and at most three measured causes; then the plan or scope
+changes that wait for the person. `--json` prints the same as data, and `--base IN --into OUT` writes a copy of the
+report's facts `IN` with that data as the key `plan`, from which the weekly report lists the milestones at risk or late
+and what waits for you. An input it cannot read prints `unknown`. Files only, no network. See SPEC-0043 rules 17 to 19.
+
 ## Upgrade
 
     python3 scripts/agk/upgrade.py TARGET [--dry-run]
