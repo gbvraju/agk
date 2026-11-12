@@ -17,13 +17,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 GUIDE = ROOT / "docs" / "guides" / "planning.md"
 REFERENCE = ROOT / "docs" / "guides" / "reference.md"
-SPEC_0043 = (
-    ROOT / "docs/specs/0043-a-project-s-plan-is-drafted-from-its-sources-and-tracked-with-calibrated-ranges.md"
-)
-SPEC_0037 = ROOT / "docs/specs/0037-a-project-s-design-phase-delivers-a-click-through-prototype.md"
+SPECS = ROOT / "docs" / "specs"
+SPEC_0043 = next(SPECS.glob("0043-*.md"))
+SPEC_0037 = next(SPECS.glob("0037-*.md"))
 HONEST = (
-    "Estimates are ranges from this project's own history, not promises; AGK drafts from the sources"
-    " and the person owns scope."
+    "Estimates are ranges from this project's own history, not promises;"
+    " AGK drafts from the sources and the person owns scope."
 )
 # The path of the guide, in order (brief #1079 answer 1).
 PATH = (
