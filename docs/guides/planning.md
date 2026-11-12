@@ -95,10 +95,13 @@ the kit uses invented files only.
 5. **Validate and render** with `python3 scripts/agk/plan_intake.py validate --proposals FILE` and
    `python3 scripts/agk/plan_intake.py render --proposals FILE`, as in steps 5 and 6 above.
 6. **Trace and count.** `python3 scripts/agk/check_plan.py --trace` adds, after the first count of the coverage line,
-   `<a> of <b> scenarios have an acceptance line and <c> a test`. With the prototype source it also prints one
-   `info plan: scenario <location>: ...` line per scenario, naming the screens and states whose screen its steps name, or
-   `names no screen`, and one `info plan: screen <location>: no scenario names it` line per screen no scenario names.
-   These lines are information, not failures: read each one with the person before the plan is confirmed.
+   `<a> of <b> scenarios have an acceptance line and <c> a test`: `<c>` counts a scenario whose acceptance line is
+   criterion n of a requirement `REQ-nnn` that a test marks `REQ-nnn ACn`, and reads `and a test: not read` without
+   `--facts FILE`. With the prototype source it prints, before the coverage line, one `unmatched scenario: <location>`
+   line per scenario whose steps name no screen of the map and one `unmatched screen: <screen>` line per screen that no
+   scenario names; with `--trace` it also prints one `info plan: scenario <location>: ...` line per scenario, naming the
+   screens and states it is matched to. These lines are information, not failures: read each one with the person before
+   the plan is confirmed.
 7. **Approve and publish.** The approver posts `Approve: plan <full head ID>`, and
    `python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE]` prints the commands, as in
    steps 8 and 9 above.

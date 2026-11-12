@@ -189,7 +189,10 @@ def test_the_openspec_section_names_the_scenario_count():
     """REQ-050"""
     section = " ".join(openspec_section().split())
     assert "scenarios have an acceptance line and" in section
-    assert "info plan:" in section
+    assert "a test marks `REQ-nnn ACn`" in section
+    assert "and a test: not read" in section
+    assert "`unmatched scenario: <location>`" in section
+    assert "`unmatched screen: <screen>`" in section
 
 
 def test_the_guide_lists_openspec_among_the_kinds():

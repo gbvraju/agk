@@ -24,15 +24,17 @@ and screens only, and `docs/guides/planning.md` names no OpenSpec step.
    `*Capability ` line), as `plan_intake.py openspec` reads it. Its location is the one that reading writes:
    `<file>#<heading>`, or `<file>:<line>` when the heading repeats in its file.
 3. A scenario has an acceptance line when a line of a requirement block of `docs/plan/requirements-proposed.md` or
-   `docs/requirements.md` ends with ` (<its location>)`, and a test when the id of such a block has a test marker
-   (`common.markers_for`, the reading of `traceability.py`). The test count reads local files only, so it is printed
-   without `--facts`.
-4. With `--trace` and a `Kind: design` source, after the matrix, each scenario is one line
-   `info plan: scenario <location>: <screen locations>` or `info plan: scenario <location>: names no screen`, and each
-   `<screen>/<state>` heading no scenario names is one line `info plan: screen <location>: no scenario names it`. A step
-   (`GIVEN`, `WHEN`, `THEN` or `AND`) names a screen when it holds the screen part of the heading as whole words, case,
-   hyphens and underscores aside; it then names every state of that screen. The lines are information and never fail
-   the check, until the person confirms the plan.
+   `docs/requirements.md` ends with ` (<its location>)`, and a test when that line is criterion n of a `REQ-nnn` block
+   and a test marks `REQ-nnn ACn` (`common.ac_markers_for`). Criterion n is the last `ACn` of an `Acceptance:` line, or
+   the n-th list line after a `Criteria:` line; a proposed key, a bare `REQ-nnn` marker or another criterion's marker
+   marks no scenario. `<c>` is read with `--facts FILE`, else the part reads
+   `<a> of <b> scenarios have an acceptance line and a test: not read`, as rule 11's last counts.
+4. With a `Kind: design` source, a step (`GIVEN`, `WHEN`, `THEN` or `AND`) names a screen when it holds the screen part
+   of a `<screen>/<state>` heading as whole words, case, hyphens and underscores aside; it then names every state of
+   that screen. Before rule 11's line the check prints one `unmatched scenario: <location>` per scenario that names no
+   screen and one `unmatched screen: <screen>` per screen that no scenario names, with or without `--trace`; with
+   `--trace` it also prints, after the matrix, one `info plan: scenario <location>: <screen locations>` line per
+   scenario (`names no screen` when none). These lines are information and never fail the check.
 5. `docs/guides/planning.md` gains the section `From a prototype and an OpenSpec file`: import the prototype and its
    source, `openspec-import`, `openspec`, `/agk:plan-intake`, `validate`, `render`, `check_plan.py --trace`,
    `Approve: plan` and `publish`, in that order, with the sentence that a customer's file is processed only where the

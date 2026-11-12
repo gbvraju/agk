@@ -37,14 +37,18 @@ naming the milestone.
 
 Build (u), amendment 166 item 5 (ADR-0474): when `docs/sources/` holds a `Kind: openspec` file,
 rule 11's line gains `<a> of <b> scenarios have an acceptance line and <c> a test` after its first
-count. A scenario is a `Scenario: ` heading under a `Requirement: ` heading of such a file outside
+count (`<c>` with `--facts`, else `... and a test: not read`). A scenario is a `Scenario: `
+heading under a `Requirement: ` heading of such a file outside
 `changes/`, located as the reading writes it (`<file>#<heading>`, or `<file>:<line>` when the
 heading repeats in its file); it has an acceptance line when a line of a requirement block ends
-with ` (<location>)`, and a test when that block's id has a test marker. With `--trace` and a
-`Kind: design` source, each scenario is printed `info plan: scenario <location>: <screens>` (the
-`<screen>/<state>` headings whose screen its `GIVEN`, `WHEN`, `THEN` or `AND` steps name as whole
-words, case, hyphens and underscores aside) or `...: names no screen`, then each screen no
-scenario names `info plan: screen <location>: no scenario names it`: information, never a failure.
+with ` (<location>)`, and a test when that line is criterion n of a `REQ-nnn` block (its `ACn` on
+an `Acceptance:` line, or its place in the list after `Criteria:`) and a test marks `REQ-nnn ACn`.
+With a `Kind: design` source, a scenario names the screen of a `<screen>/<state>` heading when a
+`GIVEN`, `WHEN`, `THEN` or `AND` step holds that screen as whole words, case, hyphens and
+underscores aside; before rule 11's line one `unmatched scenario: <location>` per scenario that
+names none and one `unmatched screen: <screen>` per screen no scenario names are printed, and
+`--trace` adds `info plan: scenario <location>: <screens>` (or `names no screen`) per scenario
+after the matrix: information, never a failure.
 
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
@@ -63,7 +67,7 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import REQ_HEADER, markers_for, repo_root, run
+from common import REQ_HEADER, ac_markers_for, markers_for, repo_root, run
 
 NAME = "plan"
 SOURCES = "docs/sources"
@@ -103,6 +107,10 @@ REQUIREMENT, SCENARIO = "Requirement: ", "Scenario: "
 CAPABILITY_LINE = re.compile(r"^\*Capability `[^`]+`")
 STEP = re.compile(r"^\s*[-*+]\s+(?:\*\*)?(GIVEN|WHEN|THEN|AND)\b(?:\*\*)?:?\s*(.*?)\s*$", re.I)
 ACCEPTANCE = re.compile(r"\s\((docs/[^()]+)\)\s*$")
+ACCEPTANCE_LINE = re.compile(r"^\s*(?:[-*]\s+)?Acceptance:\s")
+AC_NUMBER = re.compile(r"(?:^|[:;]\s*)AC(\d+)\s")
+CRITERIA = re.compile(r"^\s*Criteria:\s*$")
+REQ_KEY = re.compile(r"^REQ-\d+$")
 
 
 def _value(line: str, key: str) -> str | None:
@@ -370,18 +378,37 @@ def scenarios(root: Path) -> list[tuple[str, list[str]]] | None:
     return out if found else None
 
 
-def acceptance_lines(root: Path) -> dict[str, list[str]]:
-    """Build (u): each location a requirement block's line ends with, to the blocks' ids."""
-    out: dict[str, list[str]] = {}
+def acceptance_lines(root: Path) -> dict[str, list[tuple[str, int | None]]]:
+    """Build (u): each location a requirement block's line ends with, to (the block's id, the
+    criterion's number n). On an `Acceptance:` line n is that of its last `ACn`; on a list line
+    after a `Criteria:` line, n is the list line's place there; else None."""
+    out: dict[str, list[tuple[str, int | None]]] = {}
     for rel, pattern in ((PROPOSED, BLOCK), (REQUIREMENTS, REQ_HEADER)):
         current: str | None = None
+        place: int | None = None
         for line in (_read(root / rel) or "").splitlines():
             if match := pattern.match(line):
-                current = match.group(1).rstrip(":")
-            elif line.startswith("#"):
+                current, place = match.group(1).rstrip(":"), None
+                continue
+            if line.startswith("#"):
                 current = None
-            elif current is not None and (end := ACCEPTANCE.search(line)):
-                out.setdefault(end.group(1), []).append(current)
+                continue
+            if current is None:
+                continue
+            if CRITERIA.match(line):
+                place = 0
+                continue
+            listed = LIST_ITEM.match(line) is not None and place is not None
+            if listed:
+                place = (place or 0) + 1
+            elif line.strip() and place is not None:
+                place = None
+            end = ACCEPTANCE.search(line)
+            if end is None:
+                continue
+            numbers = AC_NUMBER.findall(line) if ACCEPTANCE_LINE.match(line) else []
+            n = int(numbers[-1]) if numbers else (place if listed else None)
+            out.setdefault(end.group(1), []).append((current, n))
     return out
 
 
@@ -600,7 +627,7 @@ class Plan:
         a = sum(1 for unit in units if unit is not None and unit in self.cited)
         parts = [f"{a} of {len(units)} in-scope source lines have a requirement"]
         if self.scenarios is not None:
-            parts.append(self.scenario_count())
+            parts.append(self.scenario_count(facts))
         ids = [req for _, req, _ in self.reqs]
         if not facts:
             return ", ".join(parts + [f"{what}: {NOT_READ}" for what in self.LAST])
@@ -619,31 +646,54 @@ class Plan:
         )
         return ", ".join(parts)
 
-    def scenario_count(self) -> str:
-        """Build (u): `<a> of <b> scenarios have an acceptance line and <c> a test`."""
+    def scenario_count(self, facts: bool) -> str:
+        """Build (u): `<a> of <b> scenarios have an acceptance line and <c> a test`, where a test
+        marks `REQ-nnn ACn` for criterion n of `REQ-nnn`; `<c>` with `--facts`, else `not read`."""
         accepted = acceptance_lines(self.root)
-        tested = markers_for(self.root)
         lines = [accepted.get(location, []) for location, _ in self.scenarios or []]
-        a = sum(1 for ids in lines if ids)
-        c = sum(1 for ids in lines if any(tested.get(i) for i in ids))
-        return f"{a} of {len(lines)} scenarios have an acceptance line and {c} a test"
+        a = sum(1 for found in lines if found)
+        head = f"{a} of {len(lines)} scenarios have an acceptance line and"
+        if not facts:
+            return f"{head} a test: {NOT_READ}"
+        marked = {(m["req"], m["ac"]) for m in ac_markers_for(self.root) if m["ac"]}
+        c = sum(
+            1
+            for found in lines
+            if any(
+                REQ_KEY.match(req) and n is not None and (req, f"AC{n}") in marked
+                for req, n in found
+            )
+        )
+        return f"{head} {c} a test"
 
-    def screen_lines(self) -> list[str]:
-        """Build (u): each scenario's screens, then each screen no scenario names (`--trace`)."""
+    def matches(self) -> list[tuple[str, list[str]]]:
+        """Build (u): each scenario and the screen headings its steps name (a design source)."""
         if self.scenarios is None or not design_source(self.root):
             return []
-        out: list[str] = []
-        named: set[str] = set()
-        for location, steps in self.scenarios:
-            matched = [s for s in self.screens if names_screen(steps, s)]
-            named.update(matched)
-            out.append(
-                f"info plan: scenario {location}: " + (", ".join(matched) or "names no screen")
-            )
-        out += [
-            f"info plan: screen {s}: no scenario names it" for s in self.screens if s not in named
+        return [
+            (loc, [s for s in self.screens if names_screen(steps, s)])
+            for loc, steps in self.scenarios
         ]
-        return out
+
+    def unmatched(self) -> list[str]:
+        """Build (u): `unmatched scenario: <location>` and `unmatched screen: <screen>` lines."""
+        matches = self.matches()
+        if not matches:
+            return []
+        named = {s for _, found in matches for s in found}
+        out = [f"unmatched scenario: {loc}" for loc, found in matches if not found]
+        names: dict[str, bool] = {}
+        for screen in self.screens:
+            name = screen.partition("#")[2].partition("/")[0]
+            names[name] = names.get(name, False) or screen in named
+        return out + [f"unmatched screen: {name}" for name, hit in names.items() if not hit]
+
+    def screen_lines(self) -> list[str]:
+        """Build (u): each scenario's screens, printed with `--trace`."""
+        return [
+            f"info plan: scenario {loc}: " + (", ".join(found) or "names no screen")
+            for loc, found in self.matches()
+        ]
 
     def trace(self, facts: bool) -> list[str]:
         rows = [u for u in self.in_scope() if u is not None]
@@ -690,6 +740,8 @@ def cmd_check(
     problems += plan.problems()
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
+    for line in plan.unmatched():
+        print(line)
     print(("plan: " if problems else "ok plan: ") + plan.coverage(facts is not None))
     return 1 if problems else 0
 
