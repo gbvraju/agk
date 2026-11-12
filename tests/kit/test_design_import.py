@@ -173,7 +173,7 @@ def tree(folder: Path) -> dict[str, bytes]:
 
 
 def test_import_copies_every_file_byte_for_byte_into_files(tmp_path):
-    """REQ-044: amendment 161 item 1 (every file, every type, its relative path kept, Q-S0037-17/18)."""
+    """REQ-044: amendment 161 item 1 (every file, its relative path kept, Q-S0037-17, 18)."""
     root = imported(tmp_path)
     assert tree(root / I1 / "files") == tree(tmp_path / "customer")
     assert (root / I1 / "manifest.json").is_file()

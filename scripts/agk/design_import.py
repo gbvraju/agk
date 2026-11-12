@@ -64,7 +64,9 @@ EXTERNAL_URL = re.compile(
     r"""|(?:=\s*["']?|url\(\s*["']?|@import\s+["']?)\s*(//[^\s"'()<>]+)"""
 )
 PDF_PAGE = re.compile(rb"/Type\s*/Page(?![A-Za-z])")
-PDF_COUNT = re.compile(rb"/Type\s*/Pages\b[^>]*?/Count\s+(\d+)|/Count\s+(\d+)[^>]*?/Type\s*/Pages\b", re.S)
+PDF_COUNT = re.compile(
+    rb"/Type\s*/Pages\b[^>]*?/Count\s+(\d+)|/Count\s+(\d+)[^>]*?/Type\s*/Pages\b", re.S
+)
 PERCENT = re.compile(rb"%([0-9A-Fa-f]{2})")
 ROW = re.compile(r"^\s*(?:[-*]\s+)?`?(?P<file>[^`]+?)`?\s+->\s*(?P<target>.*?)\s*$")
 OUT = re.compile(r"^out:(.*)$")
@@ -108,7 +110,7 @@ def _unquote(text: str) -> str:
 
 
 def _references(page: str, text: str, names: set[str]) -> set[str]:
-    """The files of NAMES that PAGE references by a relative link, `src`, `srcset` or CSS `url()`."""
+    """The files of NAMES that PAGE references by a relative link, `src` or CSS `url()`."""
     found: set[str] = set()
     base = posixpath.dirname(page)
     for match in REFERENCE.finditer(text):
@@ -183,19 +185,25 @@ def versions(root: Path) -> list[str]:
     if not folder.is_dir():
         return []
     found = [
-        p.name for p in folder.iterdir() if p.is_dir() and VERSION.match(p.name) and any(p.iterdir())
+        p.name
+        for p in folder.iterdir()
+        if p.is_dir() and VERSION.match(p.name) and any(p.iterdir())
     ]
     return sorted(found, key=lambda name: int(name[1:]))
 
 
 def _next_version(root: Path) -> str:
     folder = root / IMPORTED
-    taken = [int(p.name[1:]) for p in folder.iterdir() if VERSION.match(p.name)] if folder.is_dir() else []
+    taken = (
+        [int(p.name[1:]) for p in folder.iterdir() if VERSION.match(p.name)]
+        if folder.is_dir()
+        else []
+    )
     return f"i{max(taken, default=0) + 1}"
 
 
 def _source_files(source: Path) -> list[str]:
-    """The relative paths of SOURCE's files; a symbolic link or a special file refuses the import."""
+    """The relative paths of SOURCE's files; a symbolic link or a special file refuses."""
     if source.is_symlink():
         raise CheckError("rule 15: the source folder is a symbolic link; nothing is imported")
     found: list[str] = []
