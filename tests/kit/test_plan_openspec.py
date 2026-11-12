@@ -125,7 +125,9 @@ def do_import(repo: Path, path: Path, capsys, slug: str = SLUG) -> tuple[int, st
 
 def draft(repo: Path, capsys) -> tuple[int, str, dict]:
     out_file = repo.parent / "proposals.json"
-    code, out = call(capsys, "openspec", "--slug", SLUG, "--out", str(out_file), "--root", str(repo))
+    code, out = call(
+        capsys, "openspec", "--slug", SLUG, "--out", str(out_file), "--root", str(repo)
+    )
     data = json.loads(out_file.read_text(encoding="utf-8")) if out_file.is_file() else {}
     return code, out, data
 
@@ -282,7 +284,10 @@ def test_ac2_change_status_cross_references_and_a_requirement_without_scenario(
     _, out, data = draft(repo, capsys)
     r1, r2, r3 = data["requirements"]
     assert (r1["changing"], r2["changing"], r3["changing"]) == (True, True, False)
-    assert r1["sources"] == [f"{FOLDER}/library.md#Requirement: Loan limit", f"{BRD}#2.1 Loan limits"]
+    assert r1["sources"] == [
+        f"{FOLDER}/library.md#Requirement: Loan limit",
+        f"{BRD}#2.1 Loan limits",
+    ]
     assert r3["criteria"] == ["(verify)"]
     questions = data["scope"]["open_questions"]
     assert all("(verify)" in q["text"] for q in questions)
@@ -296,16 +301,18 @@ def test_ac2_change_status_cross_references_and_a_requirement_without_scenario(
 
 def test_ac2_persona_candidates_come_from_the_steps(repo: Path, combined: Path, capsys) -> None:
     """REQ-050 AC2: amendment 164 item 2 is on the default branch, so actors are `personas`
-    (brief answer 2), each cited to its first scenario; a requirement without one has a
-    `(verify)` persona, and every story is the form with `(verify)` for the person."""
+    (brief answer 2): the `a <word>` or `an <word>` that starts a `WHEN` step, each cited to its
+    first scenario; a requirement without one has a `(verify)` persona, and every story is the
+    form with `(verify)` for the person."""
     do_import(repo, combined, capsys)
     _, _, data = draft(repo, capsys)
     names = [p["name"] for p in data["personas"]]
-    assert names == ["a member", "a librarian", "(verify)"]
-    assert [p["key"] for p in data["personas"]] == ["P1", "P2", "P3"]
+    assert names == ["a librarian", "(verify)"]
+    assert [p["key"] for p in data["personas"]] == ["P1", "P2"]
     assert data["personas"][0]["sources"] == [f"{FOLDER}/library.md#Scenario: Sixth loan refused"]
+    assert data["personas"][0]["goals"] == ["(verify)"]
     r1, _, r3 = data["requirements"]
-    assert r1["persona"] == "P2" and r3["persona"] == "P3"
+    assert r1["persona"] == "P1" and r3["persona"] == "P2"
     assert r1["story"] == "As a librarian, I want (verify), so that (verify)"
 
 
