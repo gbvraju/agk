@@ -58,10 +58,12 @@ def test_1112d_an_answer_posted_before_the_watch_started_is_printed_once(proj, s
     out = session(proj, stub, *QUIET)
     assert out.stdout.strip() == "answer Q-7-1 (comment 11)"
     reported = comment(12, "builder", f"Report: {SHA[:7]} ready for review (Q-7-1 applied)")
+    (tmp_path / "again").mkdir()
     again = Stub(tmp_path / "again")
     watching(again, [(pull(), [ASKED, said, reported])], base=[ASKED, said, reported])
     out = session(proj, again, *QUIET)
     assert out.returncode == 3 and out.stdout.strip() == "timeout"
+    (tmp_path / "later").mkdir()
     later = Stub(tmp_path / "later")
     watching(later, [(pull(), [ASKED, said])], base=[ASKED, said])
     out = session(proj, later, *QUIET, "--since", "11")
