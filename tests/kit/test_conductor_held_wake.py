@@ -14,7 +14,8 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from test_conductor_commands import SHORT, ago, pr, proj, run, serve_pr, stub  # noqa: F401
+import pytest
+from test_conductor_commands import SHA, SHORT, ago, pr, proj, run, serve_pr, stub  # noqa: F401
 from test_pool_health import Clock
 from test_session import REPO, comment
 
@@ -23,6 +24,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
 import conductor  # noqa: E402
 
 READY = f"Report: {SHORT} ready for review"
+
+
+@pytest.fixture(autouse=True)
+def judged(request):
+    """The proof check is required, so a green proof run is a green head (`check_state`)."""
+    if "proj" in request.fixturenames:
+        toml = 'required_checks = ["proof"]\n[flow]\nconductor_poll_seconds = 1\n'
+        request.getfixturevalue("proj").write("agk.toml", toml)
 
 
 def watch_once(proj, stub) -> list[str]:  # noqa: F811
@@ -57,8 +66,6 @@ def test_1125a_a_ready_green_head_waiting_20_minutes_ends_the_watch(proj, stub):
 
 def test_1125b_a_verdict_on_the_head_holds_nothing(proj, stub):  # noqa: F811
     """REQ-039: brief #1125 test (b)."""
-    from test_conductor_commands import SHA
-
     waiting(stub, extra=[comment(2, "boss", f"Verdict: fix list {SHA}\n\n1. A finding.", ago(18))])
     assert watch_once(proj, stub) == ["nothing new"]
 
@@ -70,11 +77,11 @@ def test_1125c_a_draft_holds_nothing(proj, stub):  # noqa: F811
 
 
 def test_1125d_the_check_runs_at_most_once_per_5_minutes(proj, stub):  # noqa: F811
-    """REQ-039: brief #1125 test (d): a check 4 minutes ago reads no comment now."""
+    """REQ-039: brief #1125 test (d): after a check 4 minutes ago no head's checks are read."""
     waiting(stub)
     write_mark(proj, checked=4, said={})
     assert watch_once(proj, stub) == ["nothing new"]
-    assert not any("issues/7/comments" in " ".join(c) for c in stub.calls())
+    assert not any("/check-runs" in str(c[1]) for c in stub.calls())
     write_mark(proj, checked=6, said={})
     assert watch_once(proj, stub) == ["HELD VERDICT #7"]
 
@@ -91,7 +98,8 @@ def test_1125d_a_returned_pull_request_returns_again_only_after_held_minutes(pro
 
 def test_1125d_a_new_line_wins_and_the_held_check_waits(proj, stub):  # noqa: F811
     """REQ-039: brief #1125 answer 1: the check runs only when a poll finds no new line."""
-    serve_pr(stub, pr(7), [comment(1, "builder", READY, ago(20)), comment(2, "x", "Report: y", ago(0))])
+    said = [comment(1, "builder", READY, ago(20)), comment(2, "x", "Report: y", ago(0))]
+    serve_pr(stub, pr(7), said)
     assert watch_once(proj, stub) == ["7 Report: y"]
     assert not mark(proj).exists()
 
