@@ -144,14 +144,16 @@ def test_an_open_owner_needed_line_is_question_until_answered():
     assert state(comments=[cleared(), unlisted], commit=commit)[0] == "agk:merge-ready"
 
 
-def test_fix_comes_before_question_and_approve():
-    """REQ-039: amendment 150 item 1 (the order fix, question, approve)."""
+def test_question_comes_before_fix_and_fix_before_approve():
+    """REQ-039: amendment 150 item 1 (fix before approve), brief #1101 answer 1 and ADR-0471
+    (an open owner ask before fix)."""
     body = (
         f"Verdict: fix list {HEAD[:7]}\n\n1. do this\n\n"
         "Approval: SPEC-0032 docs/specs/0032-the-spec.md Draft -> Approved, waiting for a person"
     )
     asked = said(4, "boss", "Owner needed: a line")
-    assert state(comments=[said(1, "boss", body), asked]) == ("agk:fix", "builder")
+    assert state(comments=[said(1, "boss", body), asked]) == ("agk:question", "owner")
+    assert state(comments=[said(1, "boss", body)]) == ("agk:fix", "builder")
 
 
 # --- item 2: the rename without a gap -----------------------------------------------------------
