@@ -18,6 +18,12 @@ the day they run out at this month's daily rate so far (`runs out about YYYY-MM-
 history only when billing cannot be read; `doctor.py` (`actions-minutes`) and `/agk:launch` print
 the same line.
 
+Brief #1116 (ADR-0476): the run list is read by time windows of the runs' creation
+(`created=<from>..<to>`, verify), each halved while it answers more than the cap, down to one hour,
+so a busy repository is no longer cut at 1,000 runs; only a one-hour window over the cap leaves the
+estimate a lower bound. It also prints the minutes per merged pull request of the last 7 days (the
+7 days through `--today`, which may begin in the month before), by the same rule.
+
 Exit: 0 read, 3 the warning was printed, 1 refused (the repository cannot be read, or a setting is
 invalid), 2 usage.
 """
@@ -45,9 +51,11 @@ USAGE = (
     "usage: minutes.py [--json | --line] [--repo OWNER/REPO] [--today YYYY-MM-DD] [--api-dir DIR]"
 )
 PAGE = 100
-# The run list answers at most this many runs for a filtered query (verify); past it the estimate
-# is a lower bound.
+# The run list answers at most this many runs for a filtered query (verify); a window over it is
+# halved (brief #1116), and a window of MIN_WINDOW over it leaves the estimate a lower bound.
 RUN_CAP = 1000
+MIN_WINDOW = timedelta(hours=1)
+WEEK_DAYS = 7
 GUIDE = "docs/guides/project-ci.md"
 LOCAL_MODE = "docs/guides/local-mode.md"
 RUNBOOK = "docs/runbooks/actions-blocked.md"  # SPEC-0056 rule 13
@@ -120,6 +128,8 @@ class Gh:
 
     def get(self, name: str, endpoint: str, until: Any = None) -> tuple[int, Any]:
         endpoint = endpoint.replace("{repo}", self.repo)
+        if name == "runs" and isinstance(until, tuple):
+            return self.windows(endpoint.split("?", 1)[0], until[0], until[1])
         if name == "runs":
             return self.keyed(endpoint, "workflow_runs", RUN_CAP // PAGE)
         if name.startswith("jobs-"):
@@ -128,11 +138,38 @@ class Gh:
             return self.listed(endpoint, until)
         return self.one(endpoint)
 
-    def keyed(self, endpoint: str, key: str, last_page: int | None) -> tuple[int, Any]:
+    def windows(self, base: str, since: datetime, end: datetime) -> tuple[int, Any]:
+        """The runs created in [SINCE, END), one window at a time (brief #1116): a window whose
+        first page counts more than RUN_CAP runs is halved, down to MIN_WINDOW. The answer's
+        `total_count` is the sum of the windows' counts, so a capped window still shows."""
+        last = end - timedelta(seconds=1)
+        query = f"{base}?created={iso(since)}..{iso(last)}"
+        status, first = self.one(f"{query}&per_page={PAGE}&page=1")
+        if status != 200 or not isinstance(first, dict):
+            return status, None
+        total = first.get("total_count", 0)
+        if isinstance(total, int) and total > RUN_CAP and end - since > MIN_WINDOW:
+            middle = since + timedelta(seconds=(end - since).total_seconds() // 2)
+            out: dict = {"total_count": 0, "workflow_runs": []}
+            for a, b in ((since, middle), (middle, end)):
+                status, part = self.windows(base, a, b)
+                if status != 200:
+                    return status, None
+                out["total_count"] += part["total_count"]
+                out["workflow_runs"] += part["workflow_runs"]
+            return 200, out
+        return self.keyed(query, "workflow_runs", RUN_CAP // PAGE, first)
+
+    def keyed(
+        self, endpoint: str, key: str, last_page: int | None, first: dict | None = None
+    ) -> tuple[int, Any]:
         out: dict = {"total_count": 0, key: []}
         page = 1
         while True:
-            status, chunk = self.one(f"{endpoint}&per_page={PAGE}&page={page}")
+            if page == 1 and first is not None:
+                status, chunk = 200, first
+            else:
+                status, chunk = self.one(f"{endpoint}&per_page={PAGE}&page={page}")
             if status != 200 or not isinstance(chunk, dict):
                 return status, None
             out["total_count"] = chunk.get("total_count", 0)
@@ -167,6 +204,16 @@ def stamp(text: Any) -> datetime | None:
         return datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def iso(moment: datetime) -> str:
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def week_of(today: date) -> tuple[datetime, datetime]:
+    """The 7 days through `today` in UTC: the first instant and the first of the day after."""
+    end = datetime(today.year, today.month, today.day, tzinfo=UTC) + timedelta(days=1)
+    return end - timedelta(days=WEEK_DAYS), end
 
 
 def month_of(today: date) -> tuple[datetime, datetime]:
@@ -209,23 +256,38 @@ class Estimate:
     self_hosted_jobs: int = 0
     running_jobs: int = 0
     workflows: dict[str, int] = field(default_factory=dict)
+    week_minutes: int = 0
 
 
-def estimate(src: Any, start: datetime, end: datetime, rates: bool = True) -> Estimate:
+def estimate(
+    src: Any,
+    start: datetime,
+    end: datetime,
+    rates: bool = True,
+    week: tuple[datetime, datetime] | None = None,
+) -> Estimate:
     """The month's minutes from the run history: each job of a GitHub-hosted runner that started
     in the month, rounded up per job, then multiplied by its runner's rate when `rates` (a private
     repository). A run created the day before the month is read, since its jobs may start in it;
-    a re-run of an older run keeps its old creation time and is not read."""
-    since = (start - timedelta(days=1)).date().isoformat()
-    status, data = src.get("runs", f"/repos/{{repo}}/actions/runs?created=%3E%3D{since}")
+    a re-run of an older run keeps its old creation time and is not read. With WEEK, the jobs
+    that started in it are also summed by the same rule (`week_minutes`, brief #1116), from one
+    reading of the runs from the earlier of the two starts."""
+    first = min(start, week[0]) if week else start
+    since = (first - timedelta(days=1)).date().isoformat()
+    floor = datetime.fromisoformat(since).replace(tzinfo=UTC)
+    status, data = src.get(
+        "runs", f"/repos/{{repo}}/actions/runs?created=%3E%3D{since}", (floor, end)
+    )
     if status != 200 or not isinstance(data, dict):
         return Estimate(minutes=None, reason=reason_of(status), complete=False)
     runs = data.get("workflow_runs") or []
     est = Estimate()
     if isinstance(data.get("total_count"), int) and data["total_count"] > len(runs):
         est.complete = False
-    floor = start - timedelta(days=1)
-    chosen = [r for r in runs if (c := stamp(r.get("created_at"))) is not None and floor <= c < end]
+    last = max(end, week[1]) if week else end
+    chosen = [
+        r for r in runs if (c := stamp(r.get("created_at"))) is not None and floor <= c < last
+    ]
     est.runs = len(chosen)
 
     def jobs_of(run_: dict) -> tuple[int, Any]:
@@ -241,7 +303,16 @@ def estimate(src: Any, start: datetime, end: datetime, rates: bool = True) -> Es
         name = str(run_.get("name") or run_.get("path") or "unknown")
         for job in jobs.get("jobs") or []:
             started = stamp(job.get("started_at"))
-            if started is None or not start <= started < end:
+            if started is None:
+                continue
+            if (
+                week
+                and week[0] <= started < week[1]
+                and SELF_HOSTED not in (job.get("labels") or [])
+            ):
+                value = job_minutes(job)
+                est.week_minutes += (value or 0) * (multiplier(job) if rates else 1)
+            if not start <= started < end:
                 continue
             est.workflows.setdefault(name, 0)
             if SELF_HOSTED in (job.get("labels") or []):
@@ -256,24 +327,29 @@ def estimate(src: Any, start: datetime, end: datetime, rates: bool = True) -> Es
     return est
 
 
-def merged_pulls(src: Any, start: datetime, end: datetime) -> int | None:
-    """The pull requests merged in the month, or None when they cannot be read."""
+def merged_times(src: Any, since: datetime) -> list[datetime] | None:
+    """The merge times of the closed pull requests updated since SINCE, or None when they cannot
+    be read."""
 
     def older(chunk: list) -> bool:
         last = stamp(chunk[-1].get("updated_at")) if chunk else None
-        return last is not None and last < start
+        return last is not None and last < since
 
     status, pulls = src.get(
         "pulls", "/repos/{repo}/pulls?state=closed&sort=updated&direction=desc", older
     )
     if status != 200 or not isinstance(pulls, list):
         return None
-    count = 0
-    for pull in pulls:
-        merged = stamp(pull.get("merged_at"))
-        if merged is not None and start <= merged < end:
-            count += 1
-    return count
+    return [m for pull in pulls if (m := stamp(pull.get("merged_at"))) is not None]
+
+
+def merged_in(times: list[datetime] | None, start: datetime, end: datetime) -> int | None:
+    return None if times is None else sum(1 for m in times if start <= m < end)
+
+
+def merged_pulls(src: Any, start: datetime, end: datetime) -> int | None:
+    """The pull requests merged in the month, or None when they cannot be read."""
+    return merged_in(merged_times(src, start), start, end)
 
 
 def billing(src: Any, owner: dict) -> tuple[str, int | None, int | None, str | None]:
@@ -372,8 +448,11 @@ def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
     start, end = month_of(today)
     endpoint, used, included, reason = billing(src, repo.get("owner") or {})
     rates = repo.get("private") is not False
-    est = estimate(src, start, end, rates)
-    merged = merged_pulls(src, start, end)
+    week = week_of(today)
+    est = estimate(src, start, end, rates, week)
+    times = merged_times(src, min(start, week[0]))
+    merged = merged_in(times, start, end)
+    week_merged = merged_in(times, *week)
     if used is not None:
         used_entry = {"minutes": used, "source": "billing"}
     elif est.minutes is not None:
@@ -413,11 +492,35 @@ def read(src: Any, today: date, warn: int, repo_name: str | None) -> dict:
         },
         "merged_pulls": merged,
         "per_merged_pull": per_pull,
+        "week": {
+            "from": week[0].date().isoformat(),
+            "through": today.isoformat(),
+            "minutes": est.week_minutes if est.minutes is not None else None,
+            "merged_pulls": week_merged,
+            "per_merged_pull": (
+                round(est.week_minutes / week_merged, 1)
+                if week_merged and est.minutes is not None
+                else None
+            ),
+        },
         "warn_percent": warn,
         "warning": warning,
         "level": level_of(top, included, warn),
         "runs_out": runs_out(top, included, today),
     }
+
+
+def week_line(week: dict, est: dict) -> str:
+    """The minutes per merged pull request of the last 7 days (brief #1116 answer 4)."""
+    head = "minutes per merged pull request, last 7 days: "
+    if week["minutes"] is None or week["merged_pulls"] is None:
+        return head + "unknown"
+    if not week["merged_pulls"]:
+        return head + f"- (none merged since {week['from']})"
+    bound = "" if est["complete"] else "at least "
+    return head + (
+        f"{bound}{week['per_merged_pull']} ({week['merged_pulls']} merged since {week['from']})"
+    )
 
 
 def plural(n: int, word: str) -> str:
@@ -477,6 +580,7 @@ def render(data: dict) -> str:
             f"minutes per merged pull request: {bound}{data['per_merged_pull']} "
             f"({data['merged_pulls']} merged this month)"
         )
+    lines.append(week_line(data["week"], est))
     if data["private"] is False:
         lines.append(
             "note: a public repository's standard runners are not billed; the figures show its "

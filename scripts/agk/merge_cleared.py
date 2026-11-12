@@ -1619,8 +1619,9 @@ def github_mode(data: dict) -> None:
 def event_target(name: str, payload: dict) -> tuple[int, str | None] | None:
     """(the pull request, its head sha or None) that event NAME's PAYLOAD may clear, or None: a
     `Verdict:` or `Approve:` comment on a pull request, one edited to start `Verdict:`, `Final:`
-    or `Approve:` (brief #836 answer 1), or a green run of `governance` or `proof` on a pull
-    request's head (the workflow's `workflow_run` start names which). Nothing here reads GitHub."""
+    or `Approve:` (brief #836 answer 1), a green run of `governance` or `proof` on a pull request's
+    head (the workflow's `workflow_run` start names which), or the router's `workflow_dispatch`
+    with the input `pr` (brief #1116, ADR-0476). Nothing here reads GitHub."""
     if name == "issue_comment":
         issue = payload.get("issue")
         note = payload.get("comment")
@@ -1645,6 +1646,12 @@ def event_target(name: str, payload: dict) -> tuple[int, str | None] | None:
         if not (isinstance(number, int) and number > 0 and isinstance(sha, str)):
             return None
         return (number, sha) if SHA.fullmatch(sha) else None
+    if name == "workflow_dispatch":  # the router's start with the input `pr` (brief #1116)
+        inputs = payload.get("inputs")
+        value = inputs.get("pr") if isinstance(inputs, dict) else None
+        if isinstance(value, str) and NUMBER.fullmatch(value):
+            return int(value), None
+        return None
     if name == "status":  # the number is read from GitHub by the caller (brief #853 answer 2)
         if payload.get("context") != STATUS_CONTEXT or payload.get("state") != "success":
             return None

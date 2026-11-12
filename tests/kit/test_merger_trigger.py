@@ -13,8 +13,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_route import HEAD, REPO, REPO_INFO, run_router, said  # noqa: F401
-from test_route import proj, stub  # noqa: F401  (fixtures)
+from test_route import HEAD, REPO, REPO_INFO, proj, run_router, said, stub  # noqa: F401
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
@@ -47,7 +46,7 @@ def dispatches(stub) -> list[list]:  # noqa: F811
     return [w for w in stub.writes() if w[1] == DISPATCH]
 
 
-# --- (a) the router starts the merger for a pull request entering agk:merge-ready ------------------
+# --- (a) the router starts the merger for a pull request entering agk:merge-ready ---------------
 
 
 def test_a_pull_request_entering_merge_ready_starts_the_merger_once(proj, stub, tmp_path):  # noqa: F811
@@ -133,7 +132,9 @@ def test_the_sweep_of_a_stale_label_starts_the_merger_too(proj, stub, tmp_path):
     turn_on(proj)
     cleared_pull(stub)
     stub.pull(8, labels=["agk:review"])
-    stub.serve("pulls", [{"number": 7, "head": {"sha": HEAD}, "labels": [{"name": "agk:ci-running"}]}])
+    stub.serve(
+        "pulls", [{"number": 7, "head": {"sha": HEAD}, "labels": [{"name": "agk:ci-running"}]}]
+    )
     run = {"head_branch": "feature", "head_sha": HEAD, "pull_requests": [{"number": 8}]}
     run_router(proj, stub, tmp_path, "workflow_run", {"workflow_run": run, "repository": REPO_INFO})
     sent = dispatches(stub)
@@ -213,7 +214,8 @@ def test_the_dispatch_takes_the_input_pr_and_groups_by_it():
     """REQ-039: brief #1116 answer 2 (one group per pull request, as for its comments)."""
     head = text("merger.yml").split("\njobs:", 1)[0]
     assert re.search(
-        r"\n  workflow_dispatch:\n    inputs:\n      pr:\n(?:        .*\n)*?        required: false\n",
+        r"\n  workflow_dispatch:\n    inputs:\n      pr:\n"
+        r"(?:        .*\n)*?        required: false\n",
         head,
     )
     assert "github.event.issue.number || github.event.inputs.pr ||" in head

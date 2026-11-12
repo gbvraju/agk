@@ -66,12 +66,14 @@ def cleared(minutes: int = 50) -> dict:
 # --- answer 3: the workflow -----------------------------------------------------------------------
 
 
-def test_the_gate_also_starts_on_a_finished_check():
-    """REQ-046: brief #836 answer 3 (`workflow_run` of `governance` or `proof`)."""
+def test_the_gate_no_longer_starts_on_a_finished_check():
+    """REQ-046: brief #836 answer 3 (`workflow_run` of `governance` or `proof`), replaced by brief
+    #1116 (ADR-0476): a finished run starts the router, which starts the merger for a pull request
+    entering `agk:merge-ready`; the schedule and a dispatch without `pr` sweep."""
     gate = job("sweep-gate")
-    assert "github.event_name == 'workflow_run'" in gate
+    assert "workflow_run" not in gate
     assert "github.event_name == 'schedule'" in gate
-    assert "github.event_name == 'workflow_dispatch'" in gate
+    assert "(github.event_name == 'workflow_dispatch' && github.event.inputs.pr == '')" in gate
 
 
 def test_the_sweep_runs_after_the_event_job_whatever_it_did():
