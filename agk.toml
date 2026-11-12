@@ -305,7 +305,8 @@ tests = [
   "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_capacity_adapt.py",
   "tests/kit/test_capacity_profiles.py",
   "tests/kit/test_caps.py",
-  "tests/kit/test_failures.py", "tests/kit/test_models_table.py", "tests/kit/test_usage_transcript.py",
+  "tests/kit/test_failures.py", "tests/kit/test_model_routes.py", "tests/kit/test_models_table.py",
+  "tests/kit/test_usage_transcript.py",
   "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
@@ -380,7 +381,7 @@ code = "scripts/agk/doctor.py"
 tests = [
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
   "tests/kit/test_delivery_declaration.py", "tests/kit/test_doctor.py", "tests/kit/test_doctor_ci.py",
-  "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py",
+  "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py", "tests/kit/test_model_routes.py",
   "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_pause.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_route_triggers.py",
   "tests/kit/test_run_folders.py", "tests/kit/test_session_rules.py", "tests/kit/test_session_tidy.py",
@@ -732,7 +733,7 @@ tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
-  "tests/kit/test_pr_state_lifecycle.py",
+  "tests/kit/test_model_routes.py", "tests/kit/test_models_table.py", "tests/kit/test_pr_state_lifecycle.py",
   "tests/kit/test_always_full_infra.py", "tests/kit/test_architect_review_guard.py",
   "tests/kit/test_brief_contexts.py", "tests/kit/test_builder_assign.py",
   "tests/kit/test_builder_slots.py",
