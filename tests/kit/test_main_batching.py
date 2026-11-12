@@ -69,20 +69,23 @@ def test_a_push_to_the_default_branch_shares_one_fixed_group():
 
 
 def test_a_running_push_run_is_never_cancelled():
-    """REQ-016: brief #621 answer 1 (a run 80% done finishes; only pull request runs cancel)."""
+    """REQ-016: brief #621 answer 1 (a run 80% done finishes; only pull request runs cancel, and
+    since brief #1122 an edited run cancels none, ADR-0480)."""
     assert re.search(
-        r"(?m)^  cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$",
+        r"(?m)^  cancel-in-progress: \$\{\{ github\.event_name == 'pull_request'"
+        r" && github\.event\.action != 'edited' \}\}$",
         concurrency(),
     )
 
 
 def test_pull_request_and_edited_groups_are_unchanged():
-    """REQ-016: brief #621 answer 1 (pull request and `edited` groups as brief #216 made them)."""
+    """REQ-016: brief #621 answer 1 (a pull request's group as brief #216 made it), with the
+    `edited` run in that same group since brief #1122 answer 1 (ADR-0480), where it waits for
+    the full run instead of polling it."""
     expr = re.search(r"(?m)^  group: (.+)$", concurrency()).group(1)
-    assert (
-        "format('governance-{0}-{1}', github.event.pull_request.number || github.sha, "
-        "github.event.action == 'edited' && 'edited' || 'code')"
-    ) in expr
+    pull = expr.split("||", 1)[1]
+    assert "format('governance-{0}-code', github.event.pull_request.number || github.sha)" in pull
+    assert "'edited'" not in expr
 
 
 def test_the_header_says_waiting_pushes_collapse():
