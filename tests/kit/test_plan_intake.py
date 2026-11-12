@@ -45,8 +45,11 @@ MILESTONE = {"id": "M1", "title": TITLE, "exit": "exit: all 3 list screens pass"
 MILESTONE |= {"acceptance": "The list shows orders", "target": "2026-12-18"}
 MILESTONE |= {"sources": [f"{SOW}#Milestones"]}
 CRITERIA = ["Given orders, when the list opens, then they show by date"]
+PERSONA = {"key": "P1", "name": "Shop owner", "goals": ["Sees every order"]}
+PERSONA |= {"sources": [f"{PRD}:8"]}  # amendment 164 item 2 (ADR-0462)
+STORY = "As Shop owner, I want the order list, so that I see every order"
 REQUIREMENT = {"key": "R1", "title": TITLE, "criteria": CRITERIA, "milestone": "M1"}
-REQUIREMENT |= {"sources": [f"{PRD}:8"]}
+REQUIREMENT |= {"persona": "P1", "story": STORY, "sources": [f"{PRD}:8"]}
 BRIEF = {"key": "B1", "milestone": "M1", "title": TITLE, "size": "M", "expected": "4-8 hours"}
 BRIEF |= {"advances": ["R1"], "touches": ["src/orders.py"], "depends_on": []}
 BRIEF |= {"sources": [f"{SOW}#Estimates"]}
@@ -57,7 +60,8 @@ SCOPE = {
     "constraints": [],
     "open_questions": [QUESTION],
 }
-GOOD: dict = {"schema": 1, "scope": SCOPE, "milestones": [MILESTONE], "requirements": [REQUIREMENT]}
+GOOD: dict = {"schema": 1, "scope": SCOPE, "personas": [PERSONA], "milestones": [MILESTONE]}
+GOOD |= {"requirements": [REQUIREMENT]}
 GOOD |= {"areas": [{"name": "Orders", "requirements": ["R1"]}], "briefs": [BRIEF], "conflicts": []}
 CONFLICT = {"locations": [f"{SOW}:20", f"{PRD}:10"], "description": "payments in or out"}
 
