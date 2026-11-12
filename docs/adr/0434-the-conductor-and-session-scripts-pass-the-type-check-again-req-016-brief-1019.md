@@ -24,7 +24,8 @@ the same function, and from a frozen empty set given as the default of a paramet
    `follow_up_owed` only reads are typed as a read-only set. No `# type: ignore`, no `cast` and no new baseline line
    (ADR-0010 decision 2, ADR-0307 decision 5).
 2. Where a `session.py` count falls below its baseline line, that line is lowered, or removed at zero, in
-   `config/mypy-baseline.txt` (ADR-0307 decision 2). No other baseline line changes.
+   `config/mypy-baseline.txt` (ADR-0307 decision 2): `session.py assignment 4` leaves the file (none left) and
+   `session.py arg-type 6` becomes 2 (the four calls that read the reused names). No other baseline line changes.
 3. The output does not change on any input that works today; no input crashed before, so the new tests only guard.
 
 ## Consequences
@@ -35,3 +36,5 @@ names `conductor.py` or `session.py`.
 ## Residual
 
 - `doctor.py` and `merge_cleared.py` of issue #986 still fail the ratchet test (2026-11-12); open work touches them.
+- `prepush.py` now fails it too (`operator: 2 errors, baseline 0`), added after the brief's measurement; it needs its
+  own brief.
