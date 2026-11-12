@@ -167,8 +167,9 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/session.py slot (--take | --renew | --release | --next) SLOT
 
 The conductor's watch and sweep (brief #643, ADR-0308). `watch` ends on the first poll that finds a comment created after
-`--since` (default: the start) whose first line starts `Question:` or `Report:`, on an open issue labelled `agk-brief` or an
-open pull request, and prints `<number> <first line>` for each; `--once` reads once and prints `nothing new` when there is none.
+`--since` (default: the start) whose first line starts `Question:` or `Report:`, or is an owner's answer or approval (an
+`Answer: Q-…` or `Maintainer answer: Q-…`, or an `Approve:` by a listed spec approver; brief #1112, ADR-0475), on an open
+issue labelled `agk-brief` or an open pull request, and prints `<number> <first line>` for each; `--once` reads once and prints `nothing new` when there is none.
 `sweep` prints `#<n> <head7> <state> <age>` per open pull request (`draft`, `ready: no verdict`, `fix list on <head7>`,
 `cleared on <head7>`, `cleared, head moved`, `waiting: Approve SPEC-nnnn at <head7>`, `blocked: Question Q-n unanswered <age>`,
 `checks pending`, `red`), then the latest run of the default branch and any open red-branch issue; a `Question:` or `Report:`
