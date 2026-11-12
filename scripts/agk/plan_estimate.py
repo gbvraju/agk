@@ -45,11 +45,10 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import check_plan  # noqa: E402
 from common import ESTIMATE_LINES, CheckError, estimate_parts, plan_settings  # noqa: F401, E402
 from facts import window_start  # noqa: E402
 from metrics import stamp, start_of  # noqa: E402
-
-import check_plan  # noqa: E402
 
 UNKNOWN = "unknown"
 USAGE = (
@@ -182,7 +181,9 @@ def open_briefs(
     """(size, expected) of the milestone's open briefs: the facts' by number, or before publish
     its brief files by key (rule 13). With a scope change (rule 21) its added keys are left out
     before it and counted from the change after it, and its removed keys are left out after it."""
-    adds = [(k, size, hours) for m, k, size, hours in (change or {}).get("adds", []) if m == milestone]
+    adds = [
+        (k, size, hours) for m, k, size, hours in (change or {}).get("adds", []) if m == milestone
+    ]
     removes = {k for m, k in (change or {}).get("removes", []) if m == milestone}
     added = [(size, hours) for _, size, hours in adds] if after else []
     mine = [b for b in briefs if isinstance(b, dict) and b.get("milestone") == milestone]

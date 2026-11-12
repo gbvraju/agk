@@ -66,10 +66,18 @@ def baseline(**change) -> dict:
         "date": "2026-11-12",
         "link": LINK,
         "milestones": [
-            {"id": "M1", "briefs": ["m1-list", "m1-filter"], "target": "2026-12-18",
-             "estimate": "M1 Orders: uncalibrated (history 0 of 10); declared 8-16 hours"},
-            {"id": "M2", "briefs": ["m2-invoice"], "target": "2027-01-15",
-             "estimate": "M2 Invoices: uncalibrated (history 0 of 10); declared 4-8 hours"},
+            {
+                "id": "M1",
+                "briefs": ["m1-list", "m1-filter"],
+                "target": "2026-12-18",
+                "estimate": "M1 Orders: uncalibrated (history 0 of 10); declared 8-16 hours",
+            },
+            {
+                "id": "M2",
+                "briefs": ["m2-invoice"],
+                "target": "2027-01-15",
+                "estimate": "M2 Invoices: uncalibrated (history 0 of 10); declared 4-8 hours",
+            },
         ],
     }
     return doc | change
@@ -258,8 +266,8 @@ def test_a_scope_change_without_a_field_fails(tmp_path, capsys, field):
     changes(root, change(drop=field))
     code, lines = check(root, capsys)
     assert code == 1
-    assert (
-        f"FAIL plan: rule 21: docs/plan/scope-changes.md: SC-1: no {field}: line" in failures(lines)
+    assert f"FAIL plan: rule 21: docs/plan/scope-changes.md: SC-1: no {field}: line" in failures(
+        lines
     )
 
 
@@ -281,7 +289,10 @@ def test_a_scope_change_of_another_shape_fails(tmp_path, capsys):
     found = failures(lines)
     prefix = "FAIL plan: rule 21: docs/plan/scope-changes.md: "
     assert f"{prefix}SC-1: Status: is not proposed" in found
-    assert f"{prefix}SC-2: a Briefs: entry is not +M<n>/<key> <size> <low>-<high> hours or -M<n>/<key>" in found
+    assert (
+        f"{prefix}SC-2: a Briefs: entry is not +M<n>/<key> <size> <low>-<high> hours or -M<n>/<key>"
+        in found
+    )
     assert f"{prefix}SC-2: Source: is neither a location nor person <date>" in found
     assert f"{prefix}SC-2: the number is used twice" in found
     assert (
@@ -355,7 +366,10 @@ def test_an_approval_through_an_agent_app_or_for_a_short_head_does_not_count(tmp
     saved = tmp_path / "comments.json"
     saved.write_text(
         json.dumps(
-            [comment(f"Approve: scope SC-1 {HEAD}", app="claude"), comment("Approve: scope SC-1 0123abc")]
+            [
+                comment(f"Approve: scope SC-1 {HEAD}", app="claude"),
+                comment("Approve: scope SC-1 0123abc"),
+            ]
         )
     )
     code, lines = check(root, capsys, "--comments", str(saved))
@@ -455,9 +469,15 @@ def test_with_prints_the_effect_before_and_after(tmp_path, monkeypatch, capsys):
     assert lines[0] == "effect of SC-1: before"
     after = lines.index("effect of SC-1: after")
     before, later = lines[1:after], lines[after + 1 :]
-    assert any(x.startswith("M1 Orders: uncalibrated") and "declared 6-12 hours" in x for x in before)
-    assert any(x.startswith("M2 Invoices: uncalibrated") and "declared 4-8 hours" in x for x in before)
-    assert any(x.startswith("M1 Orders: uncalibrated") and "declared 16-32 hours" in x for x in later)
+    assert any(
+        x.startswith("M1 Orders: uncalibrated") and "declared 6-12 hours" in x for x in before
+    )
+    assert any(
+        x.startswith("M2 Invoices: uncalibrated") and "declared 4-8 hours" in x for x in before
+    )
+    assert any(
+        x.startswith("M1 Orders: uncalibrated") and "declared 16-32 hours" in x for x in later
+    )
     assert any(x.startswith("M2 Invoices: hours done") for x in later)
     assert sum(1 for x in lines if x.startswith("inputs: ")) == 4
     assert lines[-1] == plan_estimate.LIMITS and lines.count(plan_estimate.LIMITS) == 1

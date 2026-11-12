@@ -1134,9 +1134,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     root = Path(values["--root"]) if "--root" in values else None
     base = values.get("--base")
-    return run(
-        NAME, lambda: cmd_check(root or repo_root(), trace, facts, numbers, comments, base)
-    )
+    return run(NAME, lambda: cmd_check(root or repo_root(), trace, facts, numbers, comments, base))
 
 
 if __name__ == "__main__":
