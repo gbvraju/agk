@@ -149,3 +149,9 @@ review_mode = "team"
 # render = ""
 # The share of a screenshot's pixels that may differ before the comparison reports pixel drift; it only reports, never fails.
 # pixel_tolerance = 0.01
+# The model routes (SPEC-0045 rule 3, REQ-052), absent by default: every session then starts on one route. With
+# builder_start = "start" a tier maps to the plain label of the scheduled task that starts it (or flag = true); with "assign" to its
+# slots. A table names strongest; a tier with no route uses the next stronger one. No model name here. A change needs an ADR.
+# [models.routes]
+# strongest = { task = "builder-strongest" }
+# mid = { task = "builder-mid" }

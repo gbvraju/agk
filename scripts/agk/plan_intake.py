@@ -1,8 +1,10 @@
-"""The plan's proposals, validated (SPEC-0043 rules 3 to 6). Installed: `kit/manifest.json` lists it
-in `verbatim`. Build (c1) of SPEC-0043 rule 27 (amendment 163, ADR-0456); `render` is build (c2).
+"""The plan's proposals, validated and rendered (SPEC-0043 rules 3 to 7). Installed:
+`kit/manifest.json` lists it in `verbatim`. Build (c1) of SPEC-0043 rule 27 (amendment 163,
+ADR-0456) and build (c2), `render` (ADR-0461).
 
     python3 plan_intake.py validate --proposals FILE [--root DIR]
     python3 plan_intake.py states [--root DIR]
+    python3 plan_intake.py render --proposals FILE [--root DIR]
 
 Rule 3: every command exits 2 with `data guard not installed: <path>` when `scripts/agk/guard.py`
 or `.claude/hooks/data_guard.py` is absent, and runs `guard.scan_text` on the whole text of every
@@ -10,7 +12,12 @@ source before it reads a line of one; a finding refuses with exit 1, naming the 
 `line <l>, column <c>`, never the matched text. Rules 4 to 6: `validate` prints `ok proposals` or
 one line per problem naming the rule and the item's `key` or `id`, never its text. `states` prints
 the inventory's `yes` states that no `<screen>/<state>` heading of a `Kind: design` source covers
-(amendment 163 item 5). Files only: no network, no model, nothing written.
+(amendment 163 item 5). Rule 7: `render` runs `validate` first, prints every conflict under
+`Conflicts for the person` and then every open question under `Open questions for the person`, and
+writes, as new files only and all or nothing, `docs/plan/scope.md`, `docs/plan/milestones.md`,
+`docs/plan/requirements-proposed.md`, one Draft spec per area (`new_spec.make_spec`, imported from
+the plugin's copy beside this script) and `docs/plan/briefs/M<n>/<key>.md`; it never edits
+`docs/requirements.md`. Files only: no network, no model; only `render` writes.
 """
 
 from __future__ import annotations
@@ -27,7 +34,10 @@ import design_import
 from common import ESTIMATE_LINES, repo_root, run
 
 NAME = "plan-intake"
-USAGE = "usage: plan_intake.py validate --proposals FILE [--root DIR] | states [--root DIR]"
+USAGE = (
+    "usage: plan_intake.py validate --proposals FILE [--root DIR] | states [--root DIR]"
+    " | render --proposals FILE [--root DIR]"
+)
 GUARDS = ("scripts/agk/guard.py", ".claude/hooks/data_guard.py")
 # The pattern of `playbook.py check-start` (SPEC-0013 rule 5). playbook.py is kit-only, so it is
 # kept here and a test holds the two equal (ADR-0456 decision 4).
@@ -265,7 +275,8 @@ def conflict_problems(items: list[tuple[str, str, dict]]) -> list[str]:
     return out
 
 
-def cmd_validate(root: Path, proposals: Path) -> int:
+def validation(root: Path, proposals: Path) -> tuple[dict, list[str]]:
+    """The proposals and what `validate` refuses in them (rules 3 to 6), in order."""
     inside = proposals.resolve().is_relative_to((root / "docs").resolve())
     try:
         data = json.loads(proposals.read_text(encoding="utf-8"))
@@ -277,11 +288,178 @@ def cmd_validate(root: Path, proposals: Path) -> int:
         charters = [i["sources"] for _, _, i in _items(data) if "sources" in i]
         cited = [loc.partition("#")[0] for locs in charters for loc in locs if "#" in loc]
         problems = scan_problems(root, cited) or plan_problems(root, data)
+    return data, problems
+
+
+def cmd_validate(root: Path, proposals: Path) -> int:
+    _, problems = validation(root, proposals)
     for problem in problems:
         print(problem)
     if problems:
         return 1
     print("ok proposals")
+    return 0
+
+
+# --- rule 7: render, once, as drafts the person owns (build (c2), ADR-0461) ----------------------
+
+PLAN = "docs/plan"
+SPEC_TEMPLATE = "docs/specs/TEMPLATE.md"
+NEW_SPEC = "scripts/agk/new_spec.py"
+FILE_KEY = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+HEADINGS = ("In scope", "Out of scope", "Assumptions", "Constraints", "Open questions")
+SENTENCE_MAX = 300  # SPEC-0030 rule 4, `session.brief_problems`
+
+
+def _one(text: str) -> str:
+    return " ".join(str(text).split())
+
+
+def _locs(sources: list[str]) -> str:
+    return ", ".join(f"`{loc}`" for loc in sources)
+
+
+def _sources(sources: list[str]) -> list[str]:
+    return [f"Source: `{loc}`" for loc in sources]
+
+
+def scope_text(data: dict) -> str:
+    out = [
+        "# Scope",
+        "",
+        "Drafted by `plan_intake.py render` (SPEC-0043 rule 7); the person owns it.",
+    ]
+    for name, heading in zip(SCOPE, HEADINGS, strict=True):
+        out += ["", f"## {heading}", ""]
+        items = data["scope"][name]
+        out += [f"- {_one(i['text'])} ({_locs(i['sources'])})" for i in items] or ["- none"]
+    return "\n".join(out) + "\n"
+
+
+def milestones_text(data: dict) -> str:
+    out = ["# Milestones"]
+    for m in data["milestones"]:
+        out += ["", f"### {m['id']} {_one(m['title'])}", ""]
+        out += [f"Exit: {_one(m['exit'])}", f"Acceptance: {_one(m['acceptance'])}"]
+        out += [f"Target: {m['target'] or VERIFY}", *_sources(m["sources"])]
+    return "\n".join(out) + "\n"
+
+
+def requirements_text(data: dict) -> str:
+    out = [
+        "# Requirements proposed",
+        "",
+        "Each enters `docs/requirements.md` through its own intake.",
+    ]
+    for r in data["requirements"]:
+        out += ["", f"### {r['key']} {_one(r['title'])}", "", "Criteria:", ""]
+        out += [f"- {_one(c)}" for c in r["criteria"]] or [f"- {VERIFY}"]
+        out += ["", f"Milestone: {r['milestone']}", "Status: planned", *_sources(r["sources"])]
+    return "\n".join(out) + "\n"
+
+
+def brief_text(data: dict, b: dict) -> str:
+    """SPEC-0034 rule 2 and SPEC-0030 rule 4, with keys on `Advances:` and `Depends-on:`."""
+    from check_specs import CONTEXTS  # noqa: PLC0415 - only render needs it
+
+    reqs = {r["key"]: r for r in data["requirements"]}
+    title = _one(b["title"])
+    out = [f"# {title}", "", f'Sentence: "{title}"', ""]
+    out.append(
+        "Answers (drafted from the sources by plan_intake.py render; the person edits them):"
+    )
+    for n, key in enumerate(b["advances"], start=1):
+        criteria = "; ".join(_one(c) for c in reqs[key]["criteria"]) or VERIFY
+        out.append(f"{n}. {key}: {_one(reqs[key]['title'])}. Criteria: {criteria}")
+    out += ["", f"Advances: {', '.join(b['advances'])}", f"Touches: {', '.join(b['touches'])}"]
+    out += [f"Size: {b['size']}", f"Expected: {b['expected']}", f"Milestone: {b['milestone']}"]
+    out += [f"Depends-on: {key}" for key in b["depends_on"]]
+    out.append("Contexts: " + "; ".join(f"{c}: {VERIFY} for the person to state" for c in CONTEXTS))
+    return "\n".join([*out, *_sources(b["sources"])]) + "\n"
+
+
+def render_problems(data: dict) -> list[str]:
+    """Rule 7: a brief that could never pass `check_brief.py` or would leave its folder, and an
+    area whose name gives `new_spec.slug` no file name."""
+    out: list[str] = []
+    for b in data["briefs"]:
+        where = f"rule 7: briefs {b['key']}"
+        if not FILE_KEY.fullmatch(b["key"]):
+            out.append(f"{where}: the key is not a file name")
+        out += [f"{where}: {field} is empty" for field in ("touches", "advances") if not b[field]]
+        if len(_one(b["title"])) > SENTENCE_MAX:
+            out.append(f"{where}: the title is over {SENTENCE_MAX} characters")
+    for a in data["areas"]:
+        if not re.search(r"[a-z0-9]", a["name"].lower()):
+            out.append(f"rule 7: areas {a['name']}: the name has no letters or digits")
+    return out
+
+
+def for_the_person(data: dict) -> list[str]:
+    """Rule 6 and amendment 163 item 5: every conflict first, then every open question."""
+    out = ["Conflicts for the person"]
+    for c in data["conflicts"]:
+        settled = f" ({c['settled']})" if c.get("settled") else ""
+        out.append(f"- {' '.join(c['locations'])}: {_one(c['description'])}{settled}")
+    out += ["- none"] if not data["conflicts"] else []
+    out.append("Open questions for the person")
+    questions = data["scope"]["open_questions"]
+    out += [f"- {_one(q['text'])} ({_locs(q['sources'])})" for q in questions] or ["- none"]
+    return out
+
+
+def cmd_render(root: Path, proposals: Path) -> int:
+    data, problems = validation(root, proposals)
+    problems = problems or render_problems(data)
+    if problems:
+        print("\n".join(problems))
+        return 1
+    if not (Path(__file__).resolve().parent / "new_spec.py").is_file():
+        print(f"render needs new_spec.py: {NEW_SPEC}")
+        return 2
+    import new_spec  # noqa: PLC0415 - kit-only: the plugin's copy, beside this script
+
+    files = {
+        f"{PLAN}/scope.md": scope_text(data),
+        f"{PLAN}/milestones.md": milestones_text(data),
+        f"{PLAN}/requirements-proposed.md": requirements_text(data),
+    }
+    files |= {
+        f"{PLAN}/briefs/{b['milestone']}/{b['key']}.md": brief_text(data, b) for b in data["briefs"]
+    }
+    first = new_spec.next_number(root / "docs" / "specs")
+    specs = [
+        (f"docs/specs/{first + n:04d}-{new_spec.slug(a['name'])}.md", a)
+        for n, a in enumerate(data["areas"])
+    ]
+    problems = [
+        f"rule 7: {rel} already exists; nothing was written"
+        for rel in [*files, *(s for s, _ in specs)]
+        if (root / rel).exists() or (root / rel).is_symlink()
+    ]
+    if data["areas"] and _read(root / SPEC_TEMPLATE) is None:
+        problems.append(f"rule 7: {SPEC_TEMPLATE} cannot be read; nothing was written")
+    if problems:
+        print("\n".join(sorted(problems)))
+        return 1
+    print("\n".join(for_the_person(data)))
+    for rel, text in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        print(f"created {rel}")
+    for _, area in specs:
+        keys = ", ".join(area["requirements"]) or VERIFY
+        issue = (
+            "Feature area drafted by `plan_intake.py render` (SPEC-0043 rule 7). Its requirements "
+            f"are proposed in `{PLAN}/requirements-proposed.md`: {keys}. They enter "
+            "`docs/requirements.md` through one intake pull request with its own ADR.\n"
+        )
+        try:
+            new_spec.make_spec(root, _one(area["name"]), [], issue)
+        except new_spec.Refusal as exc:
+            print(f"rule 7: refused: {exc}")
+            return 1
     return 0
 
 
@@ -316,11 +494,12 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     command, rest = (args[0], args[1:]) if args else ("", [])
     options = dict(zip(rest[::2], rest[1::2], strict=False)) if len(rest) % 2 == 0 else None
-    allowed = {"validate": {"--proposals", "--root"}, "states": {"--root"}}.get(command)
+    allowed = {"validate": {"--proposals", "--root"}, "states": {"--root"}}
+    allowed = (allowed | {"render": allowed["validate"]}).get(command)
     if allowed is None or options is None or not set(options) <= allowed:
         print(USAGE, file=sys.stderr)
         return 2
-    if command == "validate" and "--proposals" not in options:
+    if command in ("validate", "render") and "--proposals" not in options:
         print(USAGE, file=sys.stderr)
         return 2
     return run(NAME, lambda: dispatch(command, options))
@@ -333,6 +512,8 @@ def dispatch(command: str, options: dict[str, str]) -> int:
         return 2
     if command == "states":
         return cmd_states(root)
+    if command == "render":
+        return cmd_render(root, Path(options["--proposals"]))
     return cmd_validate(root, Path(options["--proposals"]))
 
 
