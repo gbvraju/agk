@@ -632,6 +632,16 @@ source headers and design links (rules 1 and 2), the plan's checks (rule 10) and
 (rule 11); `--trace` first prints the matrix from source location to requirement, spec rule, brief, pull request and test
 (rule 9). The whole path, with a recorded walk, is in `docs/guides/planning.md`.
 
+## Plan estimate
+
+    python3 scripts/agk/plan_estimate.py --facts FILE [--plan DIR] [--today YYYY-MM-DD] [--weeks N]
+
+Estimates each milestone of `docs/plan/milestones.md` from facts made with `facts.py --weeks N` for the same `N` (12 by
+default, 4 to 52): the hours and finish dates as P50 and P85 of a seeded simulation over the project's merged pull
+requests and its weekly throughput of closed briefs, each followed by its `inputs:` line, or `uncalibrated` with the
+reason and the briefs' declared ranges while the history is below `[plan] calibration_min` (10). It reads files only,
+with no network and no model, and writes nothing. See SPEC-0043 rules 12 to 16.
+
 ## Upgrade
 
     python3 scripts/agk/upgrade.py TARGET [--dry-run]

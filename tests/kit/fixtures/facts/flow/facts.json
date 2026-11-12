@@ -62,42 +62,78 @@
         "advances": [
           "REQ-001"
         ],
+        "closed_at": null,
         "created_at": "2026-10-01T09:00:00Z",
+        "expected": "unknown",
+        "milestone": null,
         "number": 30,
+        "size": "S",
+        "state": "open",
+        "state_reason": null,
         "title": "Brief 30"
       },
       {
         "advances": [
           "REQ-001"
         ],
+        "closed_at": null,
         "created_at": "2026-10-02T09:00:00Z",
+        "expected": "unknown",
+        "milestone": null,
         "number": 31,
+        "size": "S",
+        "state": "open",
+        "state_reason": null,
         "title": "Brief 31"
       },
       {
         "advances": [
           "REQ-001"
         ],
+        "closed_at": null,
         "created_at": "2026-10-03T09:00:00Z",
+        "expected": "unknown",
+        "milestone": null,
         "number": 32,
+        "size": "S",
+        "state": "open",
+        "state_reason": null,
         "title": "Brief 32"
       },
       {
         "advances": "new",
+        "closed_at": null,
         "created_at": "2026-10-02T09:00:00Z",
+        "expected": "unknown",
+        "milestone": null,
         "number": 33,
+        "size": "S",
+        "state": "open",
+        "state_reason": null,
         "title": "Brief 33"
       },
       {
         "advances": "new",
+        "closed_at": null,
         "created_at": "2026-10-13T09:00:00Z",
+        "expected": "unknown",
+        "milestone": null,
         "number": 34,
+        "size": "S",
+        "state": "open",
+        "state_reason": null,
         "title": "Brief 34"
       },
       {
         "advances": [],
+        "closed_at": null,
         "created_at": "2026-10-13T09:00:00Z",
+        "expected": "unknown",
+        "milestone": null,
         "number": 36,
+        "size": "S",
+        "state": "open",
+        "state_reason": null,
         "title": "The default branch is red"
       }
     ],

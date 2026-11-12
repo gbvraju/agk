@@ -1059,6 +1059,72 @@
                         }
                       }
                     ]
+                  },
+                  "state": {
+                    "description": "open or closed. Optional (amendment 115 item 1, ADR-0465).",
+                    "enum": [
+                      "open",
+                      "closed"
+                    ]
+                  },
+                  "closed_at": {
+                    "description": "When a closed brief closed; null when open. Optional.",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "state_reason": {
+                    "description": "Why a closed brief closed; null when open. Optional.",
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "completed",
+                          "not_planned",
+                          "unknown"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "milestone": {
+                    "description": "The brief's `Milestone: M<n>` line, or null. Optional.",
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^M\\d+$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "size": {
+                    "description": "The `Size:` line (SPEC-0018 rule 2), or unknown. Optional.",
+                    "enum": [
+                      "S",
+                      "M",
+                      "L",
+                      "unknown"
+                    ]
+                  },
+                  "expected": {
+                    "description": "The `Expected:` line (SPEC-0018 rule 2), or unknown. Optional.",
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d+(\\.\\d+)?-\\d+(\\.\\d+)? hours$"
+                      },
+                      {
+                        "const": "unknown"
+                      }
+                    ]
                   }
                 }
               }
