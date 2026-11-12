@@ -350,7 +350,9 @@ def test_ac2_amendment_169_every_reader_reads_the_same_lines(plan: Path, capsys)
     body = field(commands(out)[0], "body")
     inner = hidden(body)
     assert session.brief_problems(body) == session.brief_problems(inner) == []
-    assert check_brief.body_problems(body, None, None) == check_brief.body_problems(inner, None, None)
+    assert check_brief.body_problems(body, None, None) == check_brief.body_problems(
+        inner, None, None
+    )
     broken = plan_intake.issue_body(
         {"body": inner.replace("Size: M", "Size: XL"), "milestone": "M1"}, {}
     )

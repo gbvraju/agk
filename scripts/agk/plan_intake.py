@@ -845,15 +845,54 @@ def numbered_body(body: str, numbers: dict[str, int]) -> str:
     return re.sub(r"(?m)^Depends-on: (.+?)[ \t]*$", swap, body)
 
 
+HIDDEN_OPEN, HIDDEN_CLOSE = "<!-- agk", "-->"
+SENTENCE_LINE = re.compile(r'Sentence: "(.*)"')
+ANSWER_ITEM = re.compile(r"\d+\.\s+(\S.*)")
+
+
+def acceptance(lines: list[str]) -> list[str]:
+    """The numbered items after the line that starts `Answers` and ends with a colon, up to the
+    first line that is no item, each without its number (amendment 169 item 1)."""
+    heads = [i for i, x in enumerate(lines) if x.startswith("Answers") and x.rstrip().endswith(":")]
+    items: list[str] = []
+    for line in lines[heads[0] + 1 :] if heads else []:
+        if not (item := ANSWER_ITEM.fullmatch(line.rstrip())):
+            break
+        items.append(item[1])
+    return items
+
+
+def issue_body(b: dict, numbers: dict[str, int]) -> str:
+    """Amendment 169 item 1: an engineer part (`## What`, `## Acceptance`, the milestone and the
+    dependences in words), then the numbered brief body unchanged in a block GitHub hides."""
+    body = numbered_body(b["body"], numbers)
+    lines = body.splitlines()
+    sentence = next((m[1] for x in lines if (m := SENTENCE_LINE.fullmatch(x.rstrip()))), VERIFY)
+    deps = [x.rstrip().removeprefix("Depends-on: ") for x in lines if DEPENDS_ON.fullmatch(x)]
+    where = f"Part of milestone {b['milestone']}."
+    where += f" Depends on {', '.join(deps)}." if deps else ""
+    shown = ["## What", "", sentence, "", "## Acceptance", ""]
+    shown += [f"- [ ] {item}" for item in acceptance(lines)] or [f"- [ ] {VERIFY}"]
+    shown += ["", where, "", HIDDEN_OPEN, body.rstrip("\n"), HIDDEN_CLOSE]
+    return "\n".join(shown) + "\n"
+
+
 def brief_check(root: Path, briefs: list[dict], numbers: dict[str, int]) -> list[str]:
-    """Rule 25: every brief not yet published passes `check_brief.py --root .` once numbered."""
+    """Rule 25: every brief not yet published passes `check_brief.py --root .` once numbered, on
+    the whole issue body (amendment 169), and holds no `-->` that would end its hidden block."""
     import check_brief  # noqa: PLC0415 - only publish needs it
 
     out: list[str] = []
     for b in briefs:
         if b["key"] in numbers:
             continue
-        problems = check_brief.body_problems(numbered_body(b["body"], numbers), root, None)
+        if HIDDEN_CLOSE in b["body"]:
+            out.append(
+                f"rule 25: briefs {b['key']}: the body holds `{HIDDEN_CLOSE}`, which would end"
+                " its hidden block (amendment 169)"
+            )
+            continue
+        problems = check_brief.body_problems(issue_body(b, numbers), root, None)
         if problems:
             out.append(f"rule 25: briefs {b['key']}: check_brief.py fails: " + "; ".join(problems))
     return out
@@ -928,7 +967,7 @@ def publish_github(milestones: list[dict], briefs: list[dict], numbers: dict[str
             print(f"withheld {b['key']}: waits for {', '.join(waits)}")
             counts["withheld"] += 1
             continue
-        print(brief_command(b, numbered_body(b["body"], numbers), numbers[b["milestone"]]))
+        print(brief_command(b, issue_body(b, numbers), numbers[b["milestone"]]))
         counts["briefs"] += 1
     print(
         f"ok publish: {counts['milestones']} milestone and {counts['briefs']} brief commands"
@@ -954,7 +993,7 @@ def publish_files(
         if b["key"] in numbers:
             print(f"published {b['key']} #{numbers[b['key']]}")
             continue
-        number = forge.create_issue(b["title"], numbered_body(b["body"], numbers), [BRIEF_LABEL])
+        number = forge.create_issue(b["title"], issue_body(b, numbers), [BRIEF_LABEL])
         numbers[b["key"]] = number
         print(f"created {b['key']} #{number}")
         made += 1

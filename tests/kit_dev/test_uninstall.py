@@ -825,6 +825,9 @@ def test_the_github_list_starts_by_stopping_the_sessions(tmp_path, kit, capsys, 
     assert "claude/*" in branches
     ruleset = next(ln for ln in items if ln.startswith("- ruleset: "))
     assert "local mode has no ruleset" in ruleset
+    merger = (KIT_ROOT / ".github" / "workflows" / "merger.yml").read_text(encoding="utf-8")
+    assert f"environment: {uninstall.MERGE_ENVIRONMENT}\n" in merger
+    assert f"secrets.{uninstall.MERGE_SECRET} " in merger
     assert not gh_log.exists()
 
 
@@ -870,8 +873,11 @@ def test_a_released_install_round_trip_lists_every_kit_file_delete(tmp_path, cap
     ), left
     assert paths_of(out, "kept") in ([], ["pyproject.toml"])
     assert any(line.startswith("dry run: ") for line in out)
-    assert sorted(
-        p.relative_to(target).as_posix()
-        for p in target.rglob("*")
-        if p.is_file() and ".git" not in p.relative_to(target).parts
-    ) == created
+    assert (
+        sorted(
+            p.relative_to(target).as_posix()
+            for p in target.rglob("*")
+            if p.is_file() and ".git" not in p.relative_to(target).parts
+        )
+        == created
+    )
