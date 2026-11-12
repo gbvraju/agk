@@ -799,3 +799,79 @@ def test_a_real_install_of_an_older_release_is_removed_cleanly(tmp_path, capsys,
     assert doctor.returncode == 0 and "summary: no kit installed" in doctor.stdout, (
         doctor.stdout + "\n".join(out)
     )
+
+
+# --- brief #1124 (ADR-0481): every GitHub item AGK left, in order, and a released round trip -----
+
+
+def github_list(out: list[str]) -> list[str]:
+    start = next(i for i, ln in enumerate(out) if ln.startswith("GitHub (print only"))
+    return [ln for ln in out[start + 1 :] if ln.startswith("- ")]
+
+
+def test_the_github_list_starts_by_stopping_the_sessions(tmp_path, kit, capsys, gh_log):
+    """REQ-050: brief #1124 answer 3, the first item stops what starts AGK sessions; the `merge`
+    environment, its secret and the `claude/*` branches are named by pattern; no `gh` call."""
+    target = init_target(tmp_path)
+    code, out = run(capsys, target)
+    assert code == 0
+    items = github_list(out)
+    assert items[0] == (
+        "- sessions: stop the scheduled tasks or loops that start AGK sessions for this project"
+    )
+    environment = next(ln for ln in items if ln.startswith("- environment: "))
+    assert "`merge` environment" in environment and "AGK_MERGE_TOKEN" in environment
+    branches = next(ln for ln in items if ln.startswith("- branches: "))
+    assert "claude/*" in branches
+    ruleset = next(ln for ln in items if ln.startswith("- ruleset: "))
+    assert "local mode has no ruleset" in ruleset
+    assert not gh_log.exists()
+
+
+def test_the_github_list_ends_with_the_order(tmp_path, kit, capsys):
+    """REQ-050: brief #1124 answer 3, the order: stop the sessions, pause, relax the ruleset,
+    merge the removal branch, then the rest; the same for a pause."""
+    target = init_target(tmp_path)
+    out = run(capsys, target)[1]
+    order = next(ln for ln in out if ln.startswith("order: "))
+    steps = ["stop the sessions", "pause", "relax the ruleset", "merge the removal branch"]
+    at = [order.index(step) for step in steps]
+    assert at == sorted(at) and order.rstrip().endswith("then the rest")
+    assert out.index(order) > out.index(github_list(out)[-1])
+
+
+def newest_with_commit() -> str:
+    rows = uninstall.load_table(KIT_ROOT)["releases"]
+    named = [v for v, row in rows.items() if row.get("commits")]
+    return max(named, key=lambda v: tuple(int(p) for p in v.split(".")))
+
+
+def test_a_released_install_round_trip_lists_every_kit_file_delete(tmp_path, capsys):
+    """REQ-050: brief #1124 answer 4, init at the release commit of the newest release row that
+    names one (no `--unreleased`: it must not refuse), then a dry-run removal: every file init
+    created is listed `delete`, or is the project's own work or the `kept` pyproject.toml; none is
+    `changed`, and nothing is written."""
+    version = newest_with_commit()
+    target = real_install(tmp_path, version, "init")
+    assert target is not None, version
+    created = sorted(
+        p.relative_to(target).as_posix()
+        for p in target.rglob("*")
+        if p.is_file() and ".git" not in p.relative_to(target).parts
+    )
+    code, out = run(capsys, target)
+    assert code == 0, out
+    assert paths_of(out, "changed") == [], out
+    deleted = set(paths_of(out, "delete"))
+    left = [rel for rel in created if rel not in deleted]
+    assert all(
+        uninstall.own_work(rel) or rel in ("README.md", "src/app.py", "pyproject.toml")
+        for rel in left
+    ), left
+    assert paths_of(out, "kept") in ([], ["pyproject.toml"])
+    assert any(line.startswith("dry run: ") for line in out)
+    assert sorted(
+        p.relative_to(target).as_posix()
+        for p in target.rglob("*")
+        if p.is_file() and ".git" not in p.relative_to(target).parts
+    ) == created
