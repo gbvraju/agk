@@ -3,10 +3,10 @@
 - Status: Proposed
 - Date: 2026-11-12
 - Deciders: maintainers
-- Related: brief #1061, SPEC-0037, amendment 161 (`docs/runs/proposed-spec-amendments-161.md`, #1057), ADR-0446, Q-1061-1, Q-1061-2
+- Related: brief #1061, SPEC-0037, amendment 161 (`docs/runs/proposed-spec-amendments-161.md`, #1057), ADR-0446, Q-1061-1, Q-1061-2, Q-1061-3
 - Requirements: REQ-044, REQ-036
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `agk.toml`
 
 ## Context
 
@@ -34,7 +34,10 @@ the manifest and the map check. Before it, `design.py` had no `import` command a
    inventory, every `yes` state of the inventory must be covered by a row of an imported version or a page
    `<screen>--<state>.html` of a kit version `v<n>`. Rules 5, 6 and 7 do not apply to an imported version. Every file
    is read as bytes or text; no page is opened or run, no network, no model, and the check writes nothing.
-4. The spec text is not changed here; build (d) writes the amendment into it. Items 4 to 6 are builds (b) to (d).
+4. `agk.toml` gains one `[[testing.map]]` entry for `scripts/agk/design_import.py`, and
+   `tests/kit/test_design_import.py` joins the `tests` of the `scripts/agk/check_design.py` and `scripts/agk/design.py`
+   entries (the answer to Q-1061-3 on #1065); no other line changes.
+5. The spec text is not changed here; build (d) writes the amendment into it. Items 4 to 6 are builds (b) to (d).
 
 ## Consequences
 
