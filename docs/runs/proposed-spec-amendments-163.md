@@ -144,3 +144,14 @@ Each reading is the most conservative one, and applies until a person rules.
   a state marked `n/a: <reason>` was settled by the person's `Approve: inventory` and is not asked again.
 - Q-1073-4: rule 27 has (d) `Depends-on` (c); the brief runs them in parallel. Reading: parallel, both `Depends-on` (b),
   which they share `check_plan.py` with; (d)'s tests use their own fixtures of rule 7's file shapes.
+
+## Applied
+
+2026-11-12 (from `date -u`), brief #1079, ADR-0460: items 2 to 6 are written into the texts of
+`docs/specs/0043-a-project-s-plan-is-drafted-from-its-sources-and-tracked-with-calibrated-ranges.md` (rule 2a and the
+additions to rules 6, 10, 11 and 27, and a `## Contexts` section, amendment 142) and
+`docs/specs/0037-a-project-s-design-phase-delivers-a-click-through-prototype.md` (rule 13). Two changes from the text
+above, each following a ruling or the code: rule 2a reads every visible text of a page (all text outside `script`,
+`style` and `template` elements, in document order), the owner's answer to `Q-1073-2` on #1080
+(https://github.com/gbvraju/agk/pull/1080#issuecomment-6815621344), which came before this file merged; and the command
+is `design_import.py source`, as build (k) built it (ADR-0458), where item 2 wrote `design.py source`.
