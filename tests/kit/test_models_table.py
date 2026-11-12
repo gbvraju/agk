@@ -294,3 +294,50 @@ def test_no_tracked_toml_or_template_carries_a_provider_list():
     for path in [KIT / name for name in tracked] + templates:
         assert "[models.providers]" not in path.read_text(encoding="utf-8", errors="ignore"), path
     assert config.model_providers(KIT) == {}
+
+
+# --- rule 4 as amendment 165 proposes: the brief's own new ADR (brief #1099, ADR-0470) ---------
+
+OWN_PROTECTED = ["config/", "scripts/agk/", "agk.toml", "tests/kit/", "tests/kit_dev/", "kit/"]
+
+
+def own_brief(touches: str, reserved: str | None = "Reserved: ADR-0470, amendment 165") -> str:
+    lines = ["Size: S", f"Touches: {touches}"] + ([reserved] if reserved else [])
+    return "\n".join(lines) + "\n"
+
+
+def test_a_brief_whose_only_adr_is_its_own_reserved_one_is_small():
+    """REQ-052 AC2: rule 4, amendment 165 (brief #1099 test (a))."""
+    import session
+
+    body = own_brief("tests/kit/test_example.py, docs/adr/0470-*, changelog.d/*")
+    assert session.kind_of(body, OWN_PROTECTED) == "small"
+    assert session.kind_of(body + "Adds: docs/adr/0470-an-example.md\n", OWN_PROTECTED) == "small"
+
+
+@pytest.mark.parametrize(
+    ("touches", "reserved", "existing"),
+    [
+        ("tests/kit/test_example.py, docs/adr/0469-*", "Reserved: ADR-0470", ()),  # another ADR
+        ("docs/adr/0470-*, docs/adr/0101-example.md", "Reserved: ADR-0470", ()),
+        ("docs/adr/*", "Reserved: ADR-0470", ()),  # may match any ADR
+        ("docs/adr/0470-*", None, ()),  # no Reserved: line
+        ("docs/adr/0470-*", "Reserved: amendment 165", ()),  # no reserved ADR
+        ("docs/adr/0470-*", "Reserved: ADR-0470", (470,)),  # the ADR already exists
+        ("docs/adr/0470-*, docs/specs/0045-example.md", "Reserved: ADR-0470", ()),  # a spec too
+    ],
+)
+def test_editing_another_adr_or_a_spec_still_gives_design(touches, reserved, existing):
+    """REQ-052 AC2: rule 4, amendment 165 (brief #1099 test (b))."""
+    import session
+
+    body = own_brief(touches, reserved)
+    assert session.kind_of(body, OWN_PROTECTED, frozenset(existing)) == "design"
+
+
+def test_two_reserved_lines_give_no_own_adr():
+    """REQ-052 AC2: rule 4, a repeated `Reserved:` line is not read, so the ADR gives `design`."""
+    import session
+
+    body = own_brief("docs/adr/0470-*") + "Reserved: ADR-0471\n"
+    assert session.kind_of(body, OWN_PROTECTED) == "design"
