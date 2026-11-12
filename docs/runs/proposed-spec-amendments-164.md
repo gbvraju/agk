@@ -27,8 +27,9 @@ Read in the code by this session on `origin/main` (3e38560):
   `kit/templates/design-patterns.md` it uses (`app shell and navigation`, `list with filter and sort`, `detail`, ...) and
   its states (`default` and the six required ones, or `n/a: <reason>`).
 - `scripts/agk/design_import.py` (`pages`, `manifest`, `imported_problems`, `inventory_states`) lists an imported version's
-  pages and checks its map, but finds nothing that repeats across pages. On `origin/main` it has no command line;
-  brief #1077's open pull request #1086 gives it one (`design_import.py source`, its `Q-1077-1`), which item 3 follows.
+  pages and checks its map, but finds nothing that repeats across pages. Its one command, `design_import.py source`
+  (brief #1077, pull request #1086, merged as e3dbdc9, its `Q-1077-1`), writes the prototype source; item 3 adds a
+  second command beside it.
 - `config/playbooks/web-app.toml` sets `[milestones] shape = "per-batch"` and `batch_by = "demo value: the joins that show
   the most in a demo come first"`; `playbook.py split` prints it (SPEC-0038 rule 7), but no plan uses it.
 - SPEC-0037 rule 11 already compares a build with an imported version (`design_compare.py --version i<n>`, one line
@@ -113,7 +114,7 @@ Read in the code by this session on `origin/main` (3e38560):
    - (p) **personas and stories** (item 2): `scripts/agk/plan_intake.py` (`validate`, `render`),
      `scripts/agk/check_plan.py` (the trace's persona column), `skills/plan-intake/SKILL.md`,
      `tests/kit/test_plan_personas.py`. `Depends-on` #1081 (render) and #1076 (the trace).
-   - (q) **component detection** (item 3, the command): `scripts/agk/design_import.py` (`components`),
+   - (q) **component detection** (item 3, the command): `scripts/agk/design_import.py` (`components`, beside `source`),
      `tests/kit/test_design_import_components.py`, and the SPEC-0037 rule 13 and 16 texts. `Depends-on` #1077 (the
      command line of `design_import.py`).
    - (r) **components and slices in the draft** (items 3 and 4, the proposals): `scripts/agk/plan_intake.py`,
