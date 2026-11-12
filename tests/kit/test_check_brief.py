@@ -431,3 +431,93 @@ def test_ac5_a_kit_version_line_still_reads_its_pages(tmp_path):
     assert check_screens(tmp_path, "Screens: v1 books/error").returncode == 0
     out = check_screens(tmp_path / "x", "Screens: v1 books/default")
     assert out.returncode == 1 and "rule 10: a Screens screen or state is not in" in out.stdout
+
+
+# --- a brief's size limits its code paths (amendment 168 of SPEC-0030 rule 4, brief #1121) -------
+
+SIZED = (
+    'Sentence: "A team can size a thing."\nAnswers:\n1. one\n{size}\n'
+    "Advances: REQ-001\nTouches: {touches}\n{extra}"
+    "Contexts: kit (x); github (x); local (x); personal (x); stacks (x)\n"
+)
+NOT_CODE = "tests/kit/test_x.py, docs/x.md, docs/adr/0001-*, changelog.d/*, kit/hashes.json"
+
+
+def sized(size: str, code: int, extra: str = "", not_code: bool = False) -> str:
+    paths = [f"scripts/agk/p{i}.py" for i in range(code)] + ([NOT_CODE] if not_code else [])
+    return SIZED.format(size=f"Size: {size}", touches=", ".join(paths) or "docs/x.md", extra=extra)
+
+
+@pytest.mark.parametrize(("size", "limit"), [("S", 3), ("M", 6)])
+def test_rule4_a_size_allows_its_code_paths_and_refuses_one_more(tmp_path, size, limit):
+    """REQ-039: brief #1121 answer 4 (a) and (b), amendment 168."""
+    assert check(tmp_path, sized(size, limit)).stdout.strip() == "ok brief"
+    out = check(tmp_path, sized(size, limit + 1))
+    assert out.returncode == 1
+    assert (
+        f"rule 4: Size {size} allows at most {limit} code paths, Touches names {limit + 1}: "
+        "split the brief or raise Size"
+    ) in out.stdout
+
+
+def test_rule4_tests_docs_changelog_and_hashes_are_not_code_paths(tmp_path):
+    """REQ-039: brief #1121 answer 4 (c)."""
+    assert check(tmp_path, sized("S", 3, not_code=True)).stdout.strip() == "ok brief"
+
+
+def test_rule4_a_broad_line_lifts_the_limit(tmp_path):
+    """REQ-039: brief #1121 answer 4 (d), amendment 141's sweep."""
+    body = sized("S", 9, extra="Broad: a sweep of every script\n")
+    assert check(tmp_path, body).stdout.strip() == "ok brief"
+
+
+def test_rule4_size_l_is_refused_only_with_a_wave_line(tmp_path):
+    """REQ-039: brief #1121 answer 4 (e)."""
+    assert check(tmp_path, sized("L", 12)).stdout.strip() == "ok brief"
+    out = check(tmp_path, sized("L", 1, extra="Wave: 4\n"))
+    assert out.returncode == 1
+    assert "rule 4: Size L is refused for a planned build (Wave:): split the brief" in out.stdout
+
+
+def sized_root(tmp_path: Path, setting: str) -> Path:
+    root = requirements(tmp_path, "REQ-001")
+    (root / "agk.toml").write_text(f"[flow]\n{setting}\n", encoding="utf-8")
+    return root
+
+
+def test_rule4_the_flow_setting_changes_the_limits(tmp_path):
+    """REQ-039: brief #1121 answer 4 (f), `[flow] brief_code_paths`."""
+    root = sized_root(tmp_path, "brief_code_paths = { S = 1, M = 8 }")
+    out = check(tmp_path, sized("S", 2), "--root", str(root))
+    assert "rule 4: Size S allows at most 1 code paths, Touches names 2" in out.stdout
+    assert check(tmp_path, sized("M", 8), "--root", str(root)).stdout.strip() == "ok brief"
+
+
+@pytest.mark.parametrize(
+    "setting",
+    [
+        'brief_code_paths = "many"',
+        "brief_code_paths = { S = 0, M = 6 }",
+        "brief_code_paths = { S = 3, M = true }",
+        "brief_code_paths = { S = 3, M = 6, L = 9 }",
+        'brief_code_paths = { S = "3", M = 6 }',
+    ],
+)
+def test_rule4_an_invalid_setting_is_refused_naming_it_and_never_its_value(tmp_path, setting):
+    """REQ-039: brief #1121 answer 4 (f) (principle 8)."""
+    out = check(tmp_path, sized("S", 1), "--root", str(sized_root(tmp_path, setting)))
+    assert out.returncode == 1
+    assert "setting: flow.brief_code_paths" in out.stdout
+    assert "many" not in out.stdout
+
+
+def test_rule4_the_size_limits_are_in_brief_problems_for_next_and_plan():
+    """REQ-039: brief #1121 answer 2 (`check_brief.py`, `next` and `plan` share the function)."""
+    sys.path.insert(0, str(SCRIPTS))
+    import session
+
+    assert session.brief_problems(sized("S", 3)) == []
+    assert session.brief_problems(sized("S", 4)) == [
+        "rule 4: Size S allows at most 3 code paths, Touches names 4: split the brief or raise Size"
+    ]
+    assert session.brief_problems(sized("S", 4), {"S": 4, "M": 6}) == []
