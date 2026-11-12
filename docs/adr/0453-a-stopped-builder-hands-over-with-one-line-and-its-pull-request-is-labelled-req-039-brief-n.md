@@ -1,6 +1,6 @@
 # ADR-0453: A stopped builder hands over with one line and its pull request is labelled agk:handover
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: brief #1071, plan #661, amendment 162, amendment 150, ADR-0385, ADR-0442
