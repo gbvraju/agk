@@ -25,6 +25,12 @@ Build (d), rules 9 to 11 with amendment 163 item 4 (ADR-0457), when `docs/plan/`
   `--numbers FILE`, rule 25's key-to-number file) and test (`common.markers_for`, the reading
   `traceability.py` prints), `none` where a link is missing. It is printed, never written.
 
+Build (p), amendment 164 item 2 (ADR-0462): rule 10 also fails a requirement block of
+`docs/plan/requirements-proposed.md` whose `Persona: P<n> <name>` line names a key that no
+`### P<n> <name>` heading of `docs/plan/personas.md` holds, naming the requirement and the key,
+never a name; a block without a `Persona:` line is not failed. The trace (rule 9) has a `Persona`
+column after `Requirement`: the `Persona:` keys of the row's requirements, `none` where none.
+
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
 or a charter's `docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013; the `CHARTER_NAME` of
@@ -61,6 +67,9 @@ ITEM = re.compile(r"^\d+\.\s+\*\*([^*]+)\*\*")
 USAGE = "usage: check_plan.py [--root DIR] [--trace] [--facts FILE] [--numbers FILE]"
 SCOPE = f"{PLAN}/scope.md"
 PROPOSED = f"{PLAN}/requirements-proposed.md"
+PERSONAS = f"{PLAN}/personas.md"
+PERSONA_HEADING = re.compile(r"^###\s+(P[1-9]\d*)\b")
+PERSONA_LINE = re.compile(r"^\s*Persona:\s*(\S+)")
 REQUIREMENTS = "docs/requirements.md"
 MILESTONES = f"{PLAN}/milestones.md"
 BRIEFS = f"{PLAN}/briefs"
@@ -319,6 +328,21 @@ def requirements(root: Path) -> list[tuple[str, str, list[str]]]:
     return out
 
 
+def personas(root: Path) -> tuple[dict[str, str], set[str]]:
+    """Build (p): each proposed requirement's `Persona:` key, and the keys of `personas.md`."""
+    named: dict[str, str] = {}
+    current: str | None = None
+    for line in (_read(root / PROPOSED) or "").splitlines():
+        if match := BLOCK.match(line):
+            current = match.group(1).rstrip(":")
+        elif line.startswith("#"):
+            current = None
+        elif current is not None and current not in named and (key := PERSONA_LINE.match(line)):
+            named[current] = key.group(1)
+    text = (_read(root / PERSONAS) or "").splitlines()
+    return named, {m.group(1) for m in map(PERSONA_HEADING.match, text) if m}
+
+
 def briefs(root: Path) -> list[tuple[str, str | None, list[str]]]:
     """Each brief file as (key, its Milestone:, its Advances: ids)."""
     folder = root / BRIEFS
@@ -377,6 +401,7 @@ class Plan:
         self.briefs = briefs(root)
         self.scope = scope_lines(root)
         self.screens = screens(root)
+        self.persona_of, self.personas = personas(root)
         self.cited: dict[str, list[str]] = {}
         for _, req, sources in self.reqs:
             for source in sources:
@@ -413,6 +438,12 @@ class Plan:
         for rel, req, sources in self.reqs:
             if not any(location_problem(self.root, s) is None for s in sources):
                 out.append(f"rule 10: {rel}: {req}: no Source: line resolves")
+        for _, req, _ in (r for r in self.reqs if r[0] == PROPOSED):
+            key = self.persona_of.get(req)
+            if key is not None and key not in self.personas:
+                out.append(
+                    f"rule 10: {PROPOSED}: {req}: Persona: {key} names no persona of {PERSONAS}"
+                )
         reported: set[str] = set()
         for n, locations in self.scope:
             if not locations:
@@ -467,8 +498,8 @@ class Plan:
         specs = spec_rules(self.root)
         tested = markers_for(self.root)
         out = [
-            "| Location | Requirement | Spec rule | Brief | Pull request | Test |",
-            "| --- | --- | --- | --- | --- | --- |",
+            "| Location | Requirement | Persona | Spec rule | Brief | Pull request | Test |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
         ]
         for location in rows:
             reqs = list(dict.fromkeys(self.cited.get(location, [])))
@@ -477,6 +508,7 @@ class Plan:
             cells = [
                 location,
                 _cell(reqs),
+                _cell([self.persona_of[req] for req in reqs if req in self.persona_of]),
                 _cell([rule for req in reqs for rule in specs.get(req, [])]),
                 _cell(keys),
                 pulls,
