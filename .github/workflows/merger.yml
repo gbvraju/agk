@@ -24,6 +24,10 @@
 # `proof` run of `merge_group` the job's step `Report a removal from the merge queue` posts one line on the pull request the queue
 # branch names, only when GitHub removed it (open, not merged, not in the queue: one GraphQL read with `AGK_MERGE_TOKEN`), with the
 # job's token, and no other step runs (a step of the existing job, no new job: the cost rule).
+# Brief #1116 (ADR-0476): a finished `governance` or `proof` run of a pull request no longer starts the merger job or the sweep, since
+# almost every such run found nothing cleared. The router, which reads every finished run, starts this file once with
+# `workflow_dispatch` and the input `pr` when it labels a pull request `agk:merge-ready` (cleared, checks green); the job's token may
+# start that one event. A dispatch without `pr`, by hand, sweeps as before; `workflow_run` stays only for a failed merge queue run.
 name: merger
 
 on:
@@ -36,6 +40,11 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
+    inputs:
+      pr:
+        description: "The pull request the router labelled agk:merge-ready; empty for a sweep"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -46,12 +55,12 @@ permissions:
   statuses: write
 
 concurrency:
-  group: agk-merger-${{ github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.sha || ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'sweep') || github.run_id }}
+  group: agk-merger-${{ github.event.issue.number || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || github.event.sha || ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'sweep') || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   merger:
-    if: ${{ (github.event_name == 'issue_comment' && github.event.issue.pull_request && (startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || (github.event.action == 'edited' && startsWith(github.event.comment.body, 'Final:')))) || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'status' && github.event.context == 'agk/verdict' && github.event.state == 'success') || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group' && github.event.workflow_run.conclusion == 'failure') }}
+    if: ${{ (github.event_name == 'issue_comment' && github.event.issue.pull_request && (startsWith(github.event.comment.body, 'Verdict:') || startsWith(github.event.comment.body, 'Approve:') || (github.event.action == 'edited' && startsWith(github.event.comment.body, 'Final:')))) || (github.event_name == 'workflow_dispatch' && github.event.inputs.pr != '') || (github.event_name == 'status' && github.event.context == 'agk/verdict' && github.event.state == 'success') || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group' && github.event.workflow_run.conclusion == 'failure') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: merge
@@ -109,7 +118,7 @@ jobs:
 
   sweep-gate:
     needs: merger
-    if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run') }}
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.pr == '')) }}
     runs-on: ubuntu-latest
     outputs:
       sweep: ${{ steps.gate.outputs.sweep }}
