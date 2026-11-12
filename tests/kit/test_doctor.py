@@ -969,3 +969,122 @@ def test_rule10_both_walks_skip_the_same_folders(tmp_path, monkeypatch):
         "tests/kit",
     ]
     assert module.frontend_count(root) == 1 + len(skipped)
+
+
+# --- brief #1064: the imported design versions (SPEC-0037 rule 15, amendment 161 item 6) ------
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+IMPORT_PAGES = {
+    "index.html": '<a href="plans.html">Plans</a><img src="logo.png" alt="">'
+    '<a href="https://example.com/help">Help</a>',
+    "plans.html": "<h1>Plans</h1>",
+    "logo.png": "not really a png",
+    "style.css": "body { color: #123456 }",
+}
+
+
+def imported_root(tmp_path: Path, versions: int = 1, mapped: bool = True) -> Path:
+    """A project with `versions` imported versions of invented pages, each mapped `out:`."""
+    import design_import
+
+    root = tmp_path / "project"
+    root.mkdir(exist_ok=True)
+    source = tmp_path / "customer"
+    source.mkdir(exist_ok=True)
+    for name, text in IMPORT_PAGES.items():
+        (source / name).write_text(text, encoding="utf-8")
+    for _ in range(versions):
+        version = design_import.import_folder(root, source)
+        if mapped:
+            rows = "".join(f"- `{p}` -> out: an invented reason\n" for p in IMPORT_PAGES if
+                           p.endswith(".html"))  # fmt: skip
+            (root / design_import.IMPORTED / version / "map.md").write_text(rows, encoding="utf-8")
+    return root
+
+
+def test_ac6_no_imported_version_prints_no_design_line(tmp_path):
+    """REQ-044: amendment 161 item 6 (a project with no imported version reads as before)."""
+    import doctor as module
+
+    assert module.design_import_lines(tmp_path) == []
+
+
+def test_ac6_each_imported_version_has_one_line_with_its_manifest_and_map_state(tmp_path):
+    """REQ-044: amendment 161 item 6 (doctor reports each imported version's manifest and map)."""
+    import doctor as module
+
+    root = imported_root(tmp_path, versions=2)
+    assert module.design_import_lines(root) == [
+        "design import: i1 manifest matches the files; map complete (2 pages)",
+        "design import: i2 manifest matches the files; map complete (2 pages)",
+    ]
+
+
+def test_ac6_a_changed_file_and_a_missing_map_are_reported_never_by_name(tmp_path):
+    """REQ-044: amendment 161 item 6 (information: the state, never a file or a value)."""
+    import doctor as module
+
+    root = imported_root(tmp_path, versions=2)
+    i1 = root / "docs" / "design" / "imported" / "i1"
+    (i1 / "files" / "plans.html").write_text("<h1>Plans!</h1>", encoding="utf-8")
+    (root / "docs" / "design" / "imported" / "i2" / "map.md").unlink()
+    lines = module.design_import_lines(root)
+    assert lines == [
+        "design import: i1 manifest 2 problems; map complete (2 pages);"
+        " check_design.py names each problem",
+        "design import: i2 manifest matches the files; map absent (2 pages)",
+    ]
+    assert not any("plans" in line or "index" in line for line in lines)
+
+
+def test_ac6_a_map_with_a_missing_row_and_an_unreadable_manifest(tmp_path):
+    """REQ-044: amendment 161 item 6 (a map problem counted; an unreadable manifest is said)."""
+    import doctor as module
+
+    root = imported_root(tmp_path, versions=2)
+    imported = root / "docs" / "design" / "imported"
+    (imported / "i1" / "map.md").write_text("- `index.html` -> out: a reason\n", encoding="utf-8")
+    (imported / "i2" / "manifest.json").write_text("{", encoding="utf-8")
+    assert module.design_import_lines(root) == [
+        "design import: i1 manifest matches the files; map 1 problem (2 pages);"
+        " check_design.py names each problem",
+        "design import: i2 manifest cannot be read; map not checked;"
+        " check_design.py names each problem",
+    ]
+
+
+def test_ac6_the_design_lines_change_no_check_and_no_exit_code(tmp_path):
+    """REQ-044: amendment 161 item 6 (information, never a failure: the `ok` case stays 44 ok)."""
+    dirs = prepare("ok", tmp_path)
+    imported_root(tmp_path / "src", versions=1)
+    shutil.copytree(tmp_path / "src" / "project" / "docs", dirs["root"] / "docs",
+                    dirs_exist_ok=True)  # fmt: skip
+    (dirs["root"] / "docs" / "design" / "imported" / "i1" / "map.md").unlink()
+    stub = tmp_path / "bin"
+    stub_gh(stub)
+    path = f"{stub}{os.pathsep}{os.environ['PATH']}"
+    args = ["--api-dir", str(dirs["api"]), "--repo", "example-owner/example-repo", "--kit-root",
+            str(dirs["kit"])]  # fmt: skip
+    proc = doctor(*args, str(dirs["root"]), path=path)
+    assert proc.returncode == 0, proc.stdout
+    lines = proc.stdout.splitlines()
+    assert "design import: i1 manifest matches the files; map absent (2 pages)" in lines
+    assert lines[-1] == "summary: 44 ok, 0 fail, 0 cannot-check"
+    data = json.loads(doctor(*args, "--json", str(dirs["root"]), path=path).stdout)
+    assert data["design_import"] == [
+        "design import: i1 manifest matches the files; map absent (2 pages)"
+    ]
+    assert list(checks_of(json.dumps(data))) == IDS
+
+
+@pytest.mark.parametrize(
+    "rel", ["docs/guides/product-owner.md", "docs/guides/getting-started.md",
+            "skills/design/SKILL.md"],
+)  # fmt: skip
+def test_ac6_the_guides_and_the_skill_say_when_to_import_and_when_to_draw(rel):
+    """REQ-044: amendment 161 items 6 and 7 (when to import, when to draw, the person's call)."""
+    text = " ".join((REPO_ROOT / rel).read_text(encoding="utf-8").split())
+    assert "/agk:design import" in text
+    assert "the customer's prototype is the design" in text
+    assert "no prototype yet" in text and "/agk:design prototype" in text
+    assert "before the import" in text
