@@ -226,9 +226,13 @@ def test_the_schedule_runs_every_fifteen_minutes_and_by_hand():
 
 
 def test_the_event_job_is_unchanged_by_the_sweep():
-    """REQ-046: brief #797 answer 3 (event runs are unchanged)."""
+    """REQ-046: brief #797 answer 3 (event runs are unchanged); brief #1116 (ADR-0476): the
+    router's dispatch with `pr` is an event run, a dispatch without it is still the sweep's."""
     event = job("merger")
-    assert "schedule" not in event and "workflow_dispatch" not in event
+    assert "schedule" not in event
+    assert "workflow_dispatch" not in event.replace(
+        "(github.event_name == 'workflow_dispatch' && github.event.inputs.pr != '')", ""
+    )
     assert "--sweep" not in event and "needs:" not in event
 
 

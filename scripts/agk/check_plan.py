@@ -31,6 +31,10 @@ Build (p), amendment 164 item 2 (ADR-0462): rule 10 also fails a requirement blo
 never a name; a block without a `Persona:` line is not failed. The trace (rule 9) has a `Persona`
 column after `Requirement`: the `Persona:` keys of the row's requirements, `none` where none.
 
+Build (r), amendment 164 item 4 (ADR-0464): when `docs/sources/` holds a `Kind: design` file, rule
+10 also fails a `### M<n>` block of `docs/plan/milestones.md` after `M1` with no `Demo:` line,
+naming the milestone.
+
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
 or a charter's `docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013; the `CHARTER_NAME` of
@@ -359,6 +363,28 @@ def milestones(root: Path) -> list[str]:
     return [m.group(1) for m in map(MILESTONE.match, text.splitlines()) if m]
 
 
+def undemoed(root: Path) -> list[str]:
+    """Build (r): each milestone after the first whose block has no `Demo:` line."""
+    found: dict[str, bool] = {}
+    current: str | None = None
+    for line in (_read(root / MILESTONES) or "").splitlines():
+        if match := MILESTONE.match(line):
+            current = match.group(1)
+            found.setdefault(current, False)
+        elif line.startswith("#"):
+            current = None
+        elif current is not None and line.startswith("Demo:"):
+            found[current] = True
+    return [m for m, demo in found.items() if m != "M1" and not demo]
+
+
+def design_source(root: Path) -> bool:
+    """Whether a file under `docs/sources/` has the header `Kind: design`."""
+    return any(
+        (header(_read(path) or "") or {}).get("Kind") == "design" for path in source_files(root)
+    )
+
+
 def spec_rules(root: Path) -> dict[str, list[str]]:
     """Requirement id to `SPEC-nnnn rule N` (the rules citing it) or `SPEC-nnnn`."""
     out: dict[str, list[str]] = {}
@@ -459,6 +485,8 @@ class Plan:
         for milestone in milestones(self.root):
             if milestone not in named:
                 out.append(f"rule 10: {MILESTONES}: {milestone}: no brief names this milestone")
+        if design_source(self.root):
+            out += [f"rule 10: {MILESTONES}: {m}: no Demo: line" for m in undemoed(self.root)]
         return out
 
     def _merged_of(self, keys: list[str]) -> list[str]:

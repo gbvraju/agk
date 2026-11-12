@@ -242,7 +242,7 @@ def ticking(monkeypatch, stalls=(), green=()):
     monkeypatch.setattr(conductor, "time", clock)
     monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
     monkeypatch.setattr(conductor.session, "flow_int", lambda *a: 60)
-    monkeypatch.setattr(conductor, "new_lines", lambda repo, since: [])
+    monkeypatch.setattr(conductor, "new_lines", lambda repo, since, approvers=(): [])
     monkeypatch.setattr(conductor, "green_lines", lambda root, repo, since: list(green))
     monkeypatch.setattr(conductor, "renew_lease", lambda root: 0)
     monkeypatch.setattr(conductor, "sweep_late", lambda root, repo: [])

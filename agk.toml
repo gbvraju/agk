@@ -304,6 +304,7 @@ tests = ["tests/kit/test_ci_tools.py", "tests/kit/test_scanner_hygiene.py"]
 [[testing.map]]
 code = "scripts/agk/conductor.py"
 tests = [
+  "tests/kit/test_conductor_wakes.py",
   "tests/kit/test_caps.py", "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py",
 ]
@@ -552,6 +553,7 @@ tests = [
   "tests/kit/test_merge_cleared_merger.py", "tests/kit/test_merge_cleared_pre_tests.py",
   "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_merger_on_status.py", "tests/kit/test_merger_sweep.py",
+  "tests/kit/test_merger_trigger.py",
   "tests/kit/test_personal_mode_rules.py", "tests/kit/test_rule3a_covered_and_label.py",
   "tests/kit/test_rule3a_record_comments.py", "tests/kit/test_session_kind.py", "tests/kit/test_session_rules.py",
   "tests/kit/test_sweep_by_verdict.py", "tests/kit/test_verdict_status.py",
@@ -722,7 +724,7 @@ tests = [
   "tests/kit/test_route_required.py", "tests/kit/test_rule3a_covered_and_label.py",
   "tests/kit/test_runbook_pointers.py", "tests/kit/test_session_kind.py", "tests/kit/test_session_parked.py",
   "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py", "tests/kit/test_stalls.py",
-  "tests/kit/test_sweep_by_verdict.py", "tests/kit_dev/test_uninstall.py",
+  "tests/kit/test_sweep_by_verdict.py", "tests/kit/test_merger_trigger.py", "tests/kit_dev/test_uninstall.py",
 ]
 [[testing.map]]
 code = "scripts/agk/rules.py"
@@ -745,6 +747,7 @@ tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
+  "tests/kit/test_session_watch_answers.py",
   "tests/kit/test_model_routes.py", "tests/kit/test_models_table.py", "tests/kit/test_pr_state_lifecycle.py",
   "tests/kit/test_always_full_infra.py", "tests/kit/test_architect_review_guard.py",
   "tests/kit/test_brief_contexts.py", "tests/kit/test_builder_assign.py",

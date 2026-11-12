@@ -429,8 +429,9 @@ def test_the_merger_job_runs_exactly_the_guarded_command_from_the_default_branch
     # with the one above, every command ends green; brief #972 adds the removal line's step
     assert job_text.count(' || echo "merger: ') == 5
     assert "startsWith(github.event.comment.body, 'Verdict:')" in job_text
-    assert "github.event.workflow_run.conclusion == 'success'" in job_text
-    assert "github.event.workflow_run.event == 'pull_request'" in job_text
+    # brief #1116 (ADR-0476): a green run starts the job through the router's dispatch with `pr`
+    assert "github.event.workflow_run.event == 'pull_request'" not in job_text
+    assert "(github.event_name == 'workflow_dispatch' && github.event.inputs.pr != '')" in job_text
 
 
 def step_block(name: str) -> str:

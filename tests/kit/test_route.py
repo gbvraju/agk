@@ -476,8 +476,9 @@ def test_ac2_the_workflow_is_triggered_by_the_four_events_and_not_by_a_label_cha
     assert "labeled" not in on and "pull_request_target" not in text
 
 
-def test_ac2_the_workflow_holds_only_the_five_permissions():
-    """REQ-039 AC2: rule 1 (read checks and statuses, write labels, nothing else)."""
+def test_ac2_the_workflow_holds_only_the_six_permissions():
+    """REQ-039 AC2: rule 1 (read checks and statuses, write labels, nothing else), and brief
+    #1116 (ADR-0476): `actions: write`, to start the merger once for a pull request."""
     text = workflow()
     block = text.split("\npermissions:\n", 1)[1].split("\n\n", 1)[0].split("\njobs:", 1)[0]
     held = dict(re.findall(r"^\s{2}([a-z-]+): (read|write)$", block, re.MULTILINE))
@@ -487,8 +488,9 @@ def test_ac2_the_workflow_holds_only_the_five_permissions():
         "issues": "write",
         "checks": "read",
         "statuses": "read",
+        "actions": "write",
     }
-    assert "write-all" not in text and "actions: write" not in text
+    assert "write-all" not in text
 
 
 def test_ac2_the_workflow_runs_no_code_of_the_pull_request_and_no_agent():

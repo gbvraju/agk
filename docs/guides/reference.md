@@ -167,8 +167,9 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/session.py slot (--take | --renew | --release | --next) SLOT
 
 The conductor's watch and sweep (brief #643, ADR-0308). `watch` ends on the first poll that finds a comment created after
-`--since` (default: the start) whose first line starts `Question:` or `Report:`, on an open issue labelled `agk-brief` or an
-open pull request, and prints `<number> <first line>` for each; `--once` reads once and prints `nothing new` when there is none.
+`--since` (default: the start) whose first line starts `Question:` or `Report:`, or is an owner's answer or approval (an
+`Answer: Q-…` or `Maintainer answer: Q-…`, or an `Approve:` by a listed spec approver; brief #1112, ADR-0475), on an open
+issue labelled `agk-brief` or an open pull request, and prints `<number> <first line>` for each; `--once` reads once and prints `nothing new` when there is none.
 `sweep` prints `#<n> <head7> <state> <age>` per open pull request (`draft`, `ready: no verdict`, `fix list on <head7>`,
 `cleared on <head7>`, `cleared, head moved`, `waiting: Approve SPEC-nnnn at <head7>`, `blocked: Question Q-n unanswered <age>`,
 `checks pending`, `red`), then the latest run of the default branch and any open red-branch issue; a `Question:` or `Report:`
@@ -609,11 +610,28 @@ before pixels are reported as drift (0.01 by default; it only reports, never fai
 
     python3 scripts/agk/plan_intake.py validate --proposals FILE [--root DIR]
     python3 scripts/agk/plan_intake.py states [--root DIR]
+    python3 scripts/agk/plan_intake.py render --proposals FILE [--root DIR]
+    python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE] [--root DIR]
 
 Validates the plan's proposals file: `validate` prints `ok proposals` or one line per problem naming the rule and the item's
 `key` or `id`, never its text; `states` prints the inventory's `yes` states that no design source covers. Every command runs
 the data guard over each source first and stops with exit 2 when the guard is not installed. It reads files only, with no
-network and no model, and writes nothing. See SPEC-0043 rules 3 to 6.
+network and no model. `validate` and `states` write nothing. See SPEC-0043 rules 3 to 6. `render` validates first, prints
+the conflicts and the open questions, and writes once, as new files only, the scope, the milestones, the proposed
+requirements, one Draft spec per feature area and one brief per brief under `docs/plan/` (rule 7). `publish` exits 2 without
+`Approve: plan <--head>` by an account of `spec_approvers` in the saved comments, and prints one `gh api` command per
+milestone and per brief, briefs in dependency order, each withheld until `--numbers` names its milestone and its
+dependences; it runs none (rules 8 and 25).
+
+    python3 scripts/agk/design_import.py source --version i<n> --slug <slug> [--root DIR]
+    python3 scripts/agk/check_plan.py [--root DIR] [--trace] [--facts FILE] [--numbers FILE]
+
+`design_import.py source` writes once `docs/sources/<slug>-prototype-i<n>.md`, a `Kind: design` source with one
+`## <screen>/<state>` heading per mapped row of an imported version and the page's visible text under it (SPEC-0043 rule
+2a); it refuses a version whose import or map check fails and an existing file. `check_plan.py` is a governance check: the
+source headers and design links (rules 1 and 2), the plan's checks (rule 10) and the coverage line `ok plan: <a> of <b> ...`
+(rule 11); `--trace` first prints the matrix from source location to requirement, spec rule, brief, pull request and test
+(rule 9). The whole path, with a recorded walk, is in `docs/guides/planning.md`.
 
 ## Plan estimate
 
