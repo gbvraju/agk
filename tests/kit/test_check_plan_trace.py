@@ -20,6 +20,7 @@ from pathlib import Path
 
 import check_plan
 
+PROPOSED = "docs/plan/requirements-proposed.md"
 KIT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = KIT_ROOT / "scripts" / "agk" / "check_plan.py"
 
@@ -84,7 +85,11 @@ def plan(root: Path, *, prototype: bool = True) -> Path:
     write(root, "docs/plan/requirements-proposed.md", REQS)
     write(root, "docs/plan/milestones.md", MILESTONES)
     write(root, "docs/plan/briefs/M1/orders-page.md", BRIEF)
-    write(root, "docs/plan/briefs/M2/invoice-page.md", BRIEF.replace("orders-list", "invoices").replace("M1", "M2"))
+    write(
+        root,
+        "docs/plan/briefs/M2/invoice-page.md",
+        BRIEF.replace("orders-list", "invoices").replace("M1", "M2"),
+    )
     return root
 
 
@@ -141,9 +146,10 @@ def test_ac3_a_requirement_without_a_resolving_source_fails(tmp_path):
     code, out = check(tmp_path)
     assert code == 1, out
     assert fails(out) == [
-        "FAIL plan: rule 10: docs/plan/requirements-proposed.md: invoices: no Source: line resolves",
-        "FAIL plan: rule 10: docs/plan/requirements-proposed.md: refunds: no Source: line resolves",
-        "FAIL plan: rule 10: docs/plan/scope.md:6: no requirement cites docs/sources/sow.md#Invoices",
+        f"FAIL plan: rule 10: {PROPOSED}: invoices: no Source: line resolves",
+        f"FAIL plan: rule 10: {PROPOSED}: refunds: no Source: line resolves",
+        "FAIL plan: rule 10: docs/plan/scope.md:6: no requirement cites "
+        "docs/sources/sow.md#Invoices",
     ]
     assert TITLE not in out
 
@@ -154,7 +160,10 @@ def test_ac3_one_resolving_source_is_enough(tmp_path):
     write(
         tmp_path,
         "docs/plan/requirements-proposed.md",
-        REQS.replace("- Status: planned\n- Source: docs/sources/sow.md#", "- Status: planned\n- Source: docs/x.md:1\n- Source: docs/sources/sow.md#"),
+        REQS.replace(
+            "- Status: planned\n- Source: docs/sources/sow.md#",
+            "- Status: planned\n- Source: docs/x.md:1\n- Source: docs/sources/sow.md#",
+        ),
     )
     code, out = check(tmp_path)
     assert code == 0, out
@@ -166,21 +175,30 @@ def test_ac3_a_requirement_of_the_requirements_file_needs_a_source(tmp_path):
     write(
         tmp_path,
         "docs/requirements.md",
-        "# Requirements\n\n### REQ-001 Orders\n\n- Status: planned\n- Source: docs/sources/sow.md:8\n\n"
+        "# Requirements\n\n### REQ-001 Orders\n\n- Status: planned\n"
+        "- Source: docs/sources/sow.md:8\n\n"
         "### REQ-002 Search\n\n- Status: planned\n",
     )
     code, out = check(tmp_path)
     assert code == 1, out
-    assert fails(out) == ["FAIL plan: rule 10: docs/requirements.md: REQ-002: no Source: line resolves"]
+    assert fails(out) == [
+        "FAIL plan: rule 10: docs/requirements.md: REQ-002: no Source: line resolves"
+    ]
 
 
 def test_ac3_an_uncited_in_scope_line_fails_and_out_of_scope_is_not_read(tmp_path):
-    """REQ-050 AC3: rule 10, an In scope location no requirement cites; Out of scope is not counted."""
+    """REQ-050 AC3: rule 10, an In scope location no requirement cites; Out of scope is not read."""
     plan(tmp_path, prototype=False)
-    write(tmp_path, "docs/plan/scope.md", SCOPE.replace("- Invoices", "- Refunds `docs/sources/sow.md:12`\n- Invoices"))
+    write(
+        tmp_path,
+        "docs/plan/scope.md",
+        SCOPE.replace("- Invoices", "- Refunds `docs/sources/sow.md:12`\n- Invoices"),
+    )
     code, out = check(tmp_path)
     assert code == 1, out
-    assert fails(out) == ["FAIL plan: rule 10: docs/plan/scope.md:6: no requirement cites docs/sources/sow.md:12"]
+    assert fails(out) == [
+        "FAIL plan: rule 10: docs/plan/scope.md:6: no requirement cites docs/sources/sow.md:12"
+    ]
     assert "Refunds" not in out
     assert last(out).startswith("plan: 2 of 3 in-scope source lines have a requirement, ")
 
@@ -191,17 +209,25 @@ def test_ac3_an_in_scope_line_with_no_location_fails(tmp_path):
     write(tmp_path, "docs/plan/scope.md", SCOPE.replace("- Invoices", "- Refunds\n- Invoices"))
     code, out = check(tmp_path)
     assert code == 1, out
-    assert fails(out) == ["FAIL plan: rule 10: docs/plan/scope.md:6: an In scope line names no location"]
+    assert fails(out) == [
+        "FAIL plan: rule 10: docs/plan/scope.md:6: an In scope line names no location"
+    ]
     assert last(out).startswith("plan: 2 of 3 in-scope source lines have a requirement, ")
 
 
 def test_ac3_a_milestone_no_brief_names_fails(tmp_path):
     """REQ-050 AC3: rule 10, a milestone of milestones.md that no brief file names."""
     plan(tmp_path, prototype=False)
-    write(tmp_path, "docs/plan/milestones.md", MILESTONES + "\n### M3 Refunds\n\nExit: all 0 briefs.\n")
+    write(
+        tmp_path,
+        "docs/plan/milestones.md",
+        MILESTONES + "\n### M3 Refunds\n\nExit: all 0 briefs.\n",
+    )
     code, out = check(tmp_path)
     assert code == 1, out
-    assert fails(out) == ["FAIL plan: rule 10: docs/plan/milestones.md: M3: no brief names this milestone"]
+    assert fails(out) == [
+        "FAIL plan: rule 10: docs/plan/milestones.md: M3: no brief names this milestone"
+    ]
     assert "Refunds" not in out
 
 
@@ -237,8 +263,11 @@ def test_ac3_the_same_headings_in_another_kind_are_not_counted(tmp_path):
 
 
 def test_ac3_a_design_heading_without_a_slash_is_not_a_screen(tmp_path):
-    """REQ-050 AC3: rule 11, only a level-two `<screen>/<state>` heading, outside a fence, counts."""
-    text = PROTOTYPE.replace("## cart/default", "## Notes") + "\n```\n## search/default\n```\n### list/empty\n"
+    """REQ-050 AC3: rule 11, only a level-two `<screen>/<state>` heading outside a fence."""
+    text = (
+        PROTOTYPE.replace("## cart/default", "## Notes")
+        + "\n```\n## search/default\n```\n### list/empty\n"
+    )
     write(tmp_path, "docs/sources/shop-prototype-i1.md", text)
     write(
         tmp_path,
@@ -257,7 +286,10 @@ def test_ac3_a_screen_listed_in_scope_too_is_counted_once(tmp_path):
     write(
         tmp_path,
         "docs/plan/scope.md",
-        SCOPE.replace("- Invoices", "- Orders screen `docs/sources/shop-prototype-i1.md#orders/default`\n- Invoices"),
+        SCOPE.replace(
+            "- Invoices",
+            "- Orders screen `docs/sources/shop-prototype-i1.md#orders/default`\n- Invoices",
+        ),
     )
     code, out = check(tmp_path)
     assert last(out).startswith("plan: 3 of 5 in-scope source lines have a requirement, "), out
@@ -286,7 +318,9 @@ def test_ac3_the_counts_with_facts_equal_a_hand_count(tmp_path):
     """REQ-050 AC3: rule 11, a hand count: 3 of 5 locations (two sow lines, three screens), 2 of 2
     requirements with a brief, 1 of 2 briefs merged (#31 for #21), 0 of 2 with a test (keys)."""
     plan(tmp_path)
-    code, out = check(tmp_path, "--facts", str(facts(tmp_path)), "--numbers", str(numbers(tmp_path)))
+    code, out = check(
+        tmp_path, "--facts", str(facts(tmp_path)), "--numbers", str(numbers(tmp_path))
+    )
     assert code == 1, out
     assert last(out) == (
         "plan: 3 of 5 in-scope source lines have a requirement, "
@@ -298,7 +332,9 @@ def test_ac3_the_counts_with_facts_equal_a_hand_count(tmp_path):
 def test_ac3_a_requirement_with_a_test_marker_counts(tmp_path):
     """REQ-050 AC3: rule 11, the test count reads the REQ markers of the tests."""
     plan(tmp_path, prototype=False)
-    write(tmp_path, "docs/requirements.md", "### REQ-007 Orders\n\n- Source: docs/sources/sow.md:8\n")
+    write(
+        tmp_path, "docs/requirements.md", "### REQ-007 Orders\n\n- Source: docs/sources/sow.md:8\n"
+    )
     write(tmp_path, "tests/test_orders.py", '"""REQ-007 AC1: orders."""\n')
     write(tmp_path, "docs/plan/briefs/M1/orders-page.md", BRIEF.replace("orders-list", "REQ-007"))
     code, out = check(tmp_path, "--facts", str(facts(tmp_path)))
@@ -320,7 +356,7 @@ def test_ac3_unknown_pull_requests_in_the_facts_read_not_read(tmp_path):
 
 
 def test_ac3_an_unreadable_facts_file_is_a_usage_error(tmp_path):
-    """REQ-050 AC3: rule 11, a facts file that is not JSON exits 2 naming --facts, never its text."""
+    """REQ-050 AC3: rule 11, a facts file that is not JSON exits 2 naming --facts only."""
     plan(tmp_path, prototype=False)
     path = write(tmp_path, "out/facts.json", "not json at all")
     code, out = check(tmp_path, "--facts", str(path))
@@ -334,13 +370,18 @@ def test_ac3_an_unreadable_facts_file_is_a_usage_error(tmp_path):
 
 def trace_rows(out: str) -> dict[str, list[str]]:
     rows = [line for line in out.splitlines() if line.startswith("| docs/")]
-    return {cells[0]: cells[1:] for cells in ([c.strip() for c in row.strip("|").split("|")] for row in rows)}
+    return {
+        cells[0]: cells[1:]
+        for cells in ([c.strip() for c in row.strip("|").split("|")] for row in rows)
+    }
 
 
 def test_ac3_the_trace_prints_one_row_per_source_location(tmp_path):
     """REQ-050 AC3: rule 9, one row per location, `none` where a link is missing."""
     plan(tmp_path)
-    code, out = check(tmp_path, "--trace", "--facts", str(facts(tmp_path)), "--numbers", str(numbers(tmp_path)))
+    code, out = check(
+        tmp_path, "--trace", "--facts", str(facts(tmp_path)), "--numbers", str(numbers(tmp_path))
+    )
     assert "| Location | Requirement | Spec rule | Brief | Pull request | Test |" in out
     rows = trace_rows(out)
     assert list(rows) == [
@@ -351,15 +392,23 @@ def test_ac3_the_trace_prints_one_row_per_source_location(tmp_path):
         "docs/sources/shop-prototype-i1.md#cart/default",
     ]
     assert rows["docs/sources/sow.md:8"] == ["orders-list", "none", "orders-page", "#31", "none"]
-    assert rows["docs/sources/sow.md#Invoices"] == ["invoices", "none", "invoice-page", "none", "none"]
+    assert rows["docs/sources/sow.md#Invoices"] == [
+        "invoices",
+        "none",
+        "invoice-page",
+        "none",
+        "none",
+    ]
     assert rows["docs/sources/shop-prototype-i1.md#orders/empty"] == ["none"] * 5
     assert code == 1, out  # the checks still run after the trace
 
 
 def test_ac3_the_trace_names_the_spec_rule_and_the_test(tmp_path):
-    """REQ-050 AC3: rule 9, a spec whose Requirements: names the requirement and the rule citing it."""
+    """REQ-050 AC3: rule 9, the spec naming the requirement, its citing rule, the test."""
     plan(tmp_path, prototype=False)
-    write(tmp_path, "docs/requirements.md", "### REQ-007 Orders\n\n- Source: docs/sources/sow.md:8\n")
+    write(
+        tmp_path, "docs/requirements.md", "### REQ-007 Orders\n\n- Source: docs/sources/sow.md:8\n"
+    )
     write(
         tmp_path,
         "docs/specs/0001-orders.md",
@@ -371,7 +420,13 @@ def test_ac3_the_trace_names_the_spec_rule_and_the_test(tmp_path):
     code, out = check(tmp_path, "--trace")
     assert code == 0, out
     row = trace_rows(out)["docs/sources/sow.md:8"]
-    assert row == ["orders-list, REQ-007", "SPEC-0001 rule 1", "orders-page", "not read", "tests/test_orders.py"]
+    assert row == [
+        "orders-list, REQ-007",
+        "SPEC-0001 rule 1",
+        "orders-page",
+        "not read",
+        "tests/test_orders.py",
+    ]
 
 
 def test_ac3_the_trace_writes_nothing_and_opens_no_network(tmp_path, monkeypatch, capsys):
