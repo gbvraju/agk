@@ -1,0 +1,1 @@
+- `check_plan.py` (installed, in `agk-governance`) fails a source under `docs/sources/` without its `Source:`, `Kind:`, `Version:` and `Date:` header, or a design-link row without its four values or an `https://` link, naming the rule and the file, and passes `ok plan (no plan)` on a project with no `docs/plan/` (brief #1074, SPEC-0043 build (b), ADR-0455)
