@@ -76,6 +76,7 @@ def sliced() -> dict:
     m1 = data["milestones"][0] | {"title": "Foundation", "exit": "all 1 component briefs merge"}
     m2 = copy.deepcopy(m1) | {"id": "M2", "title": TITLE, "exit": EXIT, "screens": list(PAIRS)}
     m2["sources"] = [f"{PROTO}#{p}" for p in PAIRS]
+    m2["target"] = None  # no location of M2 states a date
     data["milestones"] = [m1, m2]
     data["requirements"][0]["milestone"] = "M2"
     data["requirements"][0]["sources"] += [f"{PROTO}#{p}" for p in PAIRS]
