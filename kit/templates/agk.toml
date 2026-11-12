@@ -123,7 +123,7 @@ review_mode = "team"
 # queue_idle_minutes = 10
 # queue_order = "priority"
 # queue_max_wait = 120
-# The plan's estimator (SPEC-0043 rules 12, 14 and 23, brief #1093, ADR-0465): optional, and the defaults apply when the table is absent.
+# The plan's estimator (SPEC-0043 rules 12, 14 and 23): optional, and the defaults apply when the table is absent.
 # calibration_min (10): the merged pull requests with a size and actual hours a calibrated estimate needs; iteration_days (10, 1 to 30):
 # the working days of an iteration; default_hours: the owner's range per size for a brief without an Expected: line, printed as
 # "owner default". The table holds only these keys; any other value is refused naming the setting. A change needs an ADR (agk.toml is protected).
