@@ -171,3 +171,13 @@ Each reading is the most conservative one, and applies until a person rules.
 - Q-S0037-19: may the inventory be drafted from the imported prototype? Reading: no; rule 3 fills it from the requirements
   and the specs only, and rule 13 keeps the prototype's text out of it; the person turns the prototype into requirements,
   and the map then proves each screen reached the inventory.
+
+## Applied
+
+2026-11-12 (from `date -u`), brief #1064, build (d): items 1 to 3, 6 and 9 are applied to
+`docs/specs/0037-a-project-s-design-phase-delivers-a-click-through-prototype.md` as its new rule 15 (item 1, item 2 as
+its screen map, item 3 as its import checks, item 6 as both kinds in one project, item 9 as what is unchanged), item 3's
+rule 13 sentence to rule 13, item 4 to rule 9 and item 5 to rules 10 and 11, with the readings of Q-S0037-12 to
+Q-S0037-19 unchanged in its Open questions, on the owner's `Approve: c9bae51f452165b8f15283c470885e2d9a6f98bd SPEC-0037`
+on #1057. SPEC-0037 gains the `## Contexts` section amendment 142 asks of an amended Approved spec, from this
+amendment's Contexts. The rules keep their numbers; items 7 and 8 are the builds' tests and list, and add no text.

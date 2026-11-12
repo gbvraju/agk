@@ -151,6 +151,15 @@ Read both files. The checks cannot tell you that the milestones are the right on
 That is your review. Then commit with the printed message, push with the printed command, open the pull request into `main`
 with the printed body, wait for `governance` to turn green and merge it (squash).
 
+**If the product has screens.** If a customer has given you a click-through prototype, the customer's prototype is
+the design: decide, before the import, what of it may be committed to the repository (it may hold real names and data, and no check can
+tell them from invented ones), then run `/agk:design import <folder>`, which keeps every file unchanged as an imported
+version `docs/design/imported/i<n>/` with its manifest, and map each of its pages to a screen and state of the inventory
+or to `out: <reason>`. If there is no prototype yet, draw one: `/agk:design inventory`, then `/agk:design prototype`. A
+project may hold both kinds (SPEC-0037 rule 15). `doctor.py` prints one `design import:` line for each imported version
+with its manifest and map state, as information; `check_design.py` names each problem. Either way, you sign the version
+off with `Approve: design <version> <full head ID>` on its pull request; no session posts that line.
+
 ## Step 7. Ask for one thing: `/agk:spec`
 
     /agk:spec "The tool refuses a file that is not text."

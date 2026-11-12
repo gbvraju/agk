@@ -44,6 +44,11 @@ carries it as `work_type`.
 SPEC-0048 rule 12 (brief #691): after that line, one `skill: <name> present|absent` for each skill
 the declared work type's playbook names, by the lookup of `[engines]` (`SKILL.md` exists, nothing
 is read); the JSON report carries them as `skills`. An absent skill changes no exit code.
+SPEC-0037 rule 15 (amendment 161 item 6, brief #1064): after those, one information line for each
+imported version `docs/design/imported/i<n>/`, `design import: i<n> manifest matches the files|<n>
+problems|cannot be read; map complete|<n> problems|absent|not checked (<n> pages)`, the counts of
+`design_import`'s own checks, never a file name or a value; the JSON report carries them as
+`design_import`. A project with no imported version prints none, and no line changes the exit code.
 """
 
 from __future__ import annotations
@@ -69,6 +74,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 # the check names of a workflow's jobs as the router reads them (brief #283); the minutes line as
 # minutes.py prints it (brief #370).
 import adopt  # noqa: E402
+import design_import  # noqa: E402
 import impact  # noqa: E402
 import merge_cleared  # noqa: E402
 import minutes  # noqa: E402
@@ -1747,6 +1753,43 @@ def work_type_line(root: Path) -> tuple[str, bool]:
     return f"work type: {value} (playbook {playbook_format.FOLDER}/{value}.toml)", False
 
 
+def _count(n: int) -> str:
+    return f"{n} problem" if n == 1 else f"{n} problems"
+
+
+def design_import_lines(root: Path) -> list[str]:
+    """SPEC-0037 rule 15 (amendment 161 item 6): one information line per imported version with
+    its manifest and map state, from the checks of `design_import`; never a file or a value."""
+    try:
+        found = design_import.versions(root)
+        states = design_import.inventory_states(root) if found else None
+    except (CheckError, OSError, UnicodeDecodeError, ValueError):
+        return ["design import: the imported versions cannot be read; check_design.py names why"]
+    lines = []
+    for version in found:
+        rel = f"{design_import.IMPORTED}/{version}"
+        folder = root / rel
+        try:
+            problems, listed = design_import._record_problems(folder, rel)
+            if listed is None:
+                text = "manifest cannot be read; map not checked"
+            else:
+                manifest = _count(len(problems)) if problems else "matches the files"
+                pages = f"({len(listed)} pages)"
+                if not (folder / design_import.MAP).is_file():
+                    mapped = f"absent {pages}"
+                else:
+                    found_map = design_import._map_problems(folder, rel, listed, states, set())
+                    mapped = f"{_count(len(found_map))} {pages}" if found_map else f"complete {pages}"
+                text = f"manifest {manifest}; map {mapped}"
+        except (CheckError, OSError, UnicodeDecodeError, ValueError):
+            text = "cannot be read"
+        clean = text.startswith("manifest matches the files; map ") and " problem" not in text
+        tail = "" if clean else "; check_design.py names each problem"
+        lines.append(f"design import: {version} {text}{tail}")
+    return lines
+
+
 def skill_lines(root: Path, kit_root: Path | None) -> list[str]:
     """SPEC-0048 rule 12: one line per skill the declared playbook names; none installs or fails."""
     path = playbook_format.selected(root)
@@ -1774,6 +1817,7 @@ def render_text(
     work: str | None = None,
     deprecation: list[str] | None = None,
     skills: list[str] | None = None,
+    design: list[str] | None = None,
 ) -> str:
     lines = [f"agk doctor {version}"]
     marks = {"ok": "ok", "fail": "FAIL", "cannot-check": "??"}
@@ -1792,6 +1836,7 @@ def render_text(
     lines += [scan] if scan else []
     lines += [work] if work else []
     lines += skills or []
+    lines += design or []  # SPEC-0037 rule 15: the imported versions, information only
     lines += extra or []
     lines.append(f"summary: {s['ok']} ok, {s['fail']} fail, {s['cannot-check']} cannot-check")
     return "\n".join(lines) + "\n"
@@ -1806,6 +1851,7 @@ def render_json(
     work: str | None = None,
     deprecation: list[str] | None = None,
     skills: list[str] | None = None,
+    design: list[str] | None = None,
 ) -> str:
     data: dict[str, Any] = {"doctor": version, "checks": report, "summary": summary(report)}
     if scan:
@@ -1814,6 +1860,8 @@ def render_json(
         data["work_type"] = work
     if skills:
         data["skills"] = skills
+    if design:
+        data["design_import"] = design
     if tidy:
         data["tidy"] = tidy
     if extra or deprecation:  # `tests` carries the suite and deprecation lines, as before
@@ -1894,6 +1942,7 @@ def main(argv: list[str] | None = None) -> int:
         scan = secret_scan_line()
         work, work_failed = work_type_line(root.resolve())
         skills = skill_lines(root.resolve(), Path(options["kit"]) if options["kit"] else None)
+        design = design_import_lines(root.resolve())
     except Refusal as exc:
         print(f"refused: {exc}")
         return exc.code
@@ -1901,9 +1950,9 @@ def main(argv: list[str] | None = None) -> int:
         print("error: cannot read the target (path class: the target root)")
         return 3
     sys.stdout.write(
-        render_json(report, version, tidy, extra, scan, work, deprecation, skills)
+        render_json(report, version, tidy, extra, scan, work, deprecation, skills, design)
         if options["json"]
-        else render_text(report, version, tidy, extra, scan, work, deprecation, skills)
+        else render_text(report, version, tidy, extra, scan, work, deprecation, skills, design)
     )
     return 1 if work_failed else exit_code(report)
 

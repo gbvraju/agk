@@ -988,9 +988,9 @@ def imported_root(tmp_path: Path, versions: int = 1, mapped: bool = True) -> Pat
     import design_import
 
     root = tmp_path / "project"
-    root.mkdir(exist_ok=True)
+    root.mkdir(parents=True, exist_ok=True)
     source = tmp_path / "customer"
-    source.mkdir(exist_ok=True)
+    source.mkdir(parents=True, exist_ok=True)
     for name, text in IMPORT_PAGES.items():
         (source / name).write_text(text, encoding="utf-8")
     for _ in range(versions):
