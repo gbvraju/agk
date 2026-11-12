@@ -91,3 +91,17 @@ def test_ac2_the_script_is_installed_and_the_skill_is_not():
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     assert "scripts/agk/plan_intake.py" in manifest["verbatim"]
     assert not [p for p in manifest["verbatim"] if p.startswith("skills/")]
+
+
+def test_ac2_the_skill_writes_personas_and_stories_and_invents_no_user():
+    """REQ-050 AC2: rules 4 and 6 with amendment 164 item 2 (ADR-0462), build (p)."""
+    text = flat()
+    for phrase in (
+        '"personas": [{"key": "P1", "name": "", "goals": [""], "sources": []}]',
+        '"persona": "P1", "story": "As <name>, I want <capability>, so that <outcome>"',
+        "persona keys run `P1`, `P2`, ... in order",
+        "starts `As <that persona's name>, I want ` and goes on `, so that <outcome>`",
+        "is never a persona you make up",
+        "is a `scope.open_questions` item whose text ends `(verify)`",
+    ):
+        assert phrase in text, phrase
