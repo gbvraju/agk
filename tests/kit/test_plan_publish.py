@@ -87,7 +87,20 @@ def publish(
 
 
 def commands(out: str) -> list[list[str]]:
-    return [shlex.split(line) for line in out.splitlines() if line.startswith("gh api ")]
+    """Each printed command, its quoted body spanning lines as the shell reads it."""
+    found: list[list[str]] = []
+    pending: list[str] = []
+    for line in out.splitlines():
+        if not pending and not line.startswith("gh api "):
+            continue
+        pending.append(line)
+        try:
+            found.append(shlex.split("\n".join(pending)))
+        except ValueError:
+            continue
+        pending = []
+    assert not pending, "a command is cut off"
+    return found
 
 
 def field(command: list[str], name: str) -> str:
