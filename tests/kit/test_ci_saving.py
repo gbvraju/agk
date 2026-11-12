@@ -85,10 +85,12 @@ def test_governance_cancels_a_superseded_run_of_a_pull_request_and_never_a_push(
 
 
 def test_a_description_edit_cannot_cancel_the_full_governance_run():
-    """Brief #216 answer 3 (a reading): `edited` runs have a group of their own, so a body edit
-    during a full run does not cancel it and leave the partial run to report the check."""
+    """Brief #216 answer 3, as brief #1122 answer 1 changed it (ADR-0480): an `edited` run joins
+    the full run's group with `cancel-in-progress` false, so a body edit during a full run waits
+    for it and never cancels it and leaves the partial run to report the check."""
     block = workflow("governance.yml").split("\nconcurrency:\n", 1)[1].split("\njobs:", 1)[0]
-    assert "github.event.action == 'edited'" in block
+    cancel = re.search(r"(?m)^  cancel-in-progress: (.+)$", block)
+    assert cancel and "github.event.action != 'edited'" in cancel.group(1)
 
 
 def test_proof_decides_the_status_only_commit_with_one_get_and_the_script():
