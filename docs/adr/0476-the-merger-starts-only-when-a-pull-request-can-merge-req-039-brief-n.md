@@ -46,7 +46,8 @@ time is the step `Latest full run` (2 and 12 minutes waiting for the full run of
    a job is unchanged (see Residual).
 4. The workflow files are the owner's (`.github/`): the exact new lines are posted as `Question: Q-1116-1 for the
    maintainers:` on the pull request, for the owner to commit on its branch. The protected path classes this decision
-   changes are `scripts/agk/`, `tests/kit/` and, with the owner's commit, `.github/`.
+   changes are `scripts/agk/`, `tests/kit/`, `agk.toml` (two test map entries name the new test file) and, with the
+   owner's commit, `.github/`.
 
 ## Consequences
 
