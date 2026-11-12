@@ -1780,7 +1780,8 @@ def design_import_lines(root: Path) -> list[str]:
                     mapped = f"absent {pages}"
                 else:
                     found_map = design_import._map_problems(folder, rel, listed, states, set())
-                    mapped = f"{_count(len(found_map))} {pages}" if found_map else f"complete {pages}"
+                    state = _count(len(found_map)) if found_map else "complete"
+                    mapped = f"{state} {pages}"
                 text = f"manifest {manifest}; map {mapped}"
         except (CheckError, OSError, UnicodeDecodeError, ValueError):
             text = "cannot be read"
