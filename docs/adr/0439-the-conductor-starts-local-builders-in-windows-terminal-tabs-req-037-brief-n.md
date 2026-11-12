@@ -1,6 +1,6 @@
 # ADR-0439: The conductor starts local builders in Windows Terminal tabs
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Deciders: maintainers
 - Related: brief #1030, plan #661, ADR-0438 (brief #1029), ADR-0255 (brief #506), ADR-0190 (brief #331)
