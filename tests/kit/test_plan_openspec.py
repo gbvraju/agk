@@ -299,6 +299,21 @@ def test_ac2_change_status_cross_references_and_a_requirement_without_scenario(
     )
 
 
+def test_ac2_a_second_source_of_the_kind_as_txt_makes_the_reference_a_question(
+    repo: Path, combined: Path, capsys
+) -> None:
+    """REQ-050 AC2: rule 6 (`Q-1108-9`), `BRD 2.1` links only when exactly one file under
+    `docs/sources/` has `Kind: brd`, `.md` or `.txt`; a second one makes it an open question."""
+    write(repo, "docs/sources/brd-two.txt", BRD_TEXT.replace("Loan limits", "Other limits"))
+    do_import(repo, combined, capsys)
+    _, _, data = draft(repo, capsys)
+    r1 = data["requirements"][0]
+    assert r1["sources"] == [f"{FOLDER}/library.md#Requirement: Loan limit"]
+    texts = [q["text"] for q in data["scope"]["open_questions"]]
+    assert any("R1" in t and "cross-reference 1" in t for t in texts), texts
+    assert any("R1" in t and "cross-reference 2" in t for t in texts), texts
+
+
 def test_ac2_persona_candidates_come_from_the_steps(repo: Path, combined: Path, capsys) -> None:
     """REQ-050 AC2: amendment 164 item 2 is on the default branch, so actors are `personas`
     (brief answer 2): the `a <word>` or `an <word>` that starts a `WHEN` step, each cited to its

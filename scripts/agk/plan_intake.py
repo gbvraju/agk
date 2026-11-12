@@ -1210,12 +1210,12 @@ class Reading:
         if match is None:
             return None
         kind, number = match.group(1).lower(), match.group(2)
-        paths = [
+        paths = [  # every source of the kind, `.md` or `.txt`; only one `.md` can link
             p
             for p in check_plan.source_files(self.root)
-            if p.suffix == ".md" and (check_plan.header(_read(p) or "") or {}).get("Kind") == kind
+            if (check_plan.header(_read(p) or "") or {}).get("Kind") == kind
         ]
-        if len(paths) != 1:
+        if len(paths) != 1 or paths[0].suffix != ".md":
             return None
         text = _read(paths[0]) or ""
         found = [
