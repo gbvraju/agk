@@ -42,9 +42,7 @@ def project(root: Path, test_dirs: list[str], files: list[str]) -> Path:
 
 def test_a_init_writes_the_front_end_folders_it_finds(tmp_path, capsys):
     """REQ-062: brief #1154 answer 1 (init on a tree with `e2e/` and `frontend/src/test/`)."""
-    target = make_tree(
-        tmp_path / "app", ["e2e/login.spec.ts", "frontend/src/test/cart.test.tsx"]
-    )
+    target = make_tree(tmp_path / "app", ["e2e/login.spec.ts", "frontend/src/test/cart.test.tsx"])
     dirs, out = run_init(target, capsys)
     assert dirs == ["tests", "e2e", "frontend/src/test"]
     assert "test_dirs: added e2e, frontend/src/test" in out

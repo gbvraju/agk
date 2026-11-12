@@ -28,8 +28,9 @@ there, one line suggests `proof_timeout` as ceil(n * 1.5 / 60) * 60, the formula
 warning (ADR-0258); and when the configured `test_dirs` and `test_patterns` match no test file
 while `adopt.FRONTEND_PATTERNS` match some outside `adopt.py`'s skipped folders, one line names
 `test_dirs`. Both are information lines: they write nothing and change no exit code.
-Brief #1154 (ADR-0490): when files that look like tests sit outside every `test_dirs` folder and match
-no `test_patterns`, one information line names up to three of their topmost folders and the fix.
+Brief #1154 (ADR-0490): when files that look like tests sit outside every `test_dirs` folder and
+match no `test_patterns`, one information line names up to three of their topmost folders and the
+fix.
 Brief #632 (ADR-0306): one information line after the checks (before `tidy:` and the summary),
 and the same text as `secret_scan` in `--json`, says whether gitleaks is on PATH and which version
 `gitleaks version` prints (that one fixed argument list, no shell), naming the governance
@@ -1755,9 +1756,7 @@ def outside_test_dirs_lines(root: Path) -> list[str]:
         if any(rel_here == d or rel_here.startswith(d + "/") for d in inside):
             dirnames[:] = []
             continue
-        dirnames[:] = [
-            d for d in adopt.walked_dirs(rel_here, dirnames) if d not in OUTSIDE_SKIPPED
-        ]
+        dirnames[:] = [d for d in adopt.walked_dirs(rel_here, dirnames) if d not in OUTSIDE_SKIPPED]
         for name in filenames:
             if not any(fnmatch.fnmatchcase(name, p) for p in TEST_LOOKING):
                 continue
