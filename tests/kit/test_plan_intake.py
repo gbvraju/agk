@@ -39,52 +39,26 @@ PRD_TEXT = (
     "# Orders\n\nOrders are listed by date.\n\nPayments are in scope.\n"  # lines 8 and 10
 )
 TITLE = "Order list for example.com"  # an item's text; never printed
-GOOD: dict = {
-    "schema": 1,
-    "scope": {
-        "in": [{"key": "S1", "text": TITLE, "sources": [f"{SOW}:8"]}],
-        "out": [],
-        "assumptions": [],
-        "constraints": [],
-        "open_questions": [
-            {"key": "Q1", "text": "Who signs the list off? (verify)", "sources": [f"{SOW}#Scope"]}
-        ],
-    },
-    "milestones": [
-        {
-            "id": "M1",
-            "title": TITLE,
-            "exit": "exit: all 3 list screens pass",
-            "acceptance": "The list shows orders",
-            "target": "2026-12-18",
-            "sources": [f"{SOW}#Milestones"],
-        }
-    ],
-    "requirements": [
-        {
-            "key": "R1",
-            "title": TITLE,
-            "criteria": ["Given orders, when the list opens, then they show by date"],
-            "milestone": "M1",
-            "sources": [f"{PRD}:8"],
-        }
-    ],
-    "areas": [{"name": "Orders", "requirements": ["R1"]}],
-    "briefs": [
-        {
-            "key": "B1",
-            "milestone": "M1",
-            "title": TITLE,
-            "size": "M",
-            "expected": "4-8 hours",
-            "advances": ["R1"],
-            "touches": ["src/orders.py"],
-            "depends_on": [],
-            "sources": [f"{SOW}#Estimates"],
-        }
-    ],
-    "conflicts": [],
+SCOPE_IN = {"key": "S1", "text": TITLE, "sources": [f"{SOW}:8"]}
+QUESTION = {"key": "Q1", "text": "Who signs the list off? (verify)", "sources": [f"{SOW}#Scope"]}
+MILESTONE = {"id": "M1", "title": TITLE, "exit": "exit: all 3 list screens pass"}
+MILESTONE |= {"acceptance": "The list shows orders", "target": "2026-12-18"}
+MILESTONE |= {"sources": [f"{SOW}#Milestones"]}
+CRITERIA = ["Given orders, when the list opens, then they show by date"]
+REQUIREMENT = {"key": "R1", "title": TITLE, "criteria": CRITERIA, "milestone": "M1"}
+REQUIREMENT |= {"sources": [f"{PRD}:8"]}
+BRIEF = {"key": "B1", "milestone": "M1", "title": TITLE, "size": "M", "expected": "4-8 hours"}
+BRIEF |= {"advances": ["R1"], "touches": ["src/orders.py"], "depends_on": []}
+BRIEF |= {"sources": [f"{SOW}#Estimates"]}
+SCOPE = {
+    "in": [SCOPE_IN],
+    "out": [],
+    "assumptions": [],
+    "constraints": [],
+    "open_questions": [QUESTION],
 }
+GOOD: dict = {"schema": 1, "scope": SCOPE, "milestones": [MILESTONE], "requirements": [REQUIREMENT]}
+GOOD |= {"areas": [{"name": "Orders", "requirements": ["R1"]}], "briefs": [BRIEF], "conflicts": []}
 CONFLICT = {"locations": [f"{SOW}:20", f"{PRD}:10"], "description": "payments in or out"}
 
 
@@ -175,7 +149,8 @@ def test_ac2_the_script_uses_only_the_kit_and_the_standard_library(repo: Path, c
     finally:
         socket.socket = original  # type: ignore[misc]
     assert code == 0 and out.strip() == "ok proposals", out
-    assert plan_intake.location_problem is check_plan.location_problem
+    source = SCRIPT.read_text(encoding="utf-8")
+    assert "check_plan.location_problem(" in source and "def location_problem" not in source
     assert plan_intake.ESTIMATE_LINES is common.ESTIMATE_LINES
 
 
@@ -418,7 +393,7 @@ def test_ac2_states_lists_the_inventory_states_no_heading_covers(repo: Path, cap
     lines = capsys.readouterr().out.splitlines()
     first = "docs/sources/proto-prototype-i1.md#form/default"
     assert lines == [f"{first} error (verify)", f"{first} empty (verify)"]
-    assert plan_intake.location_problem(repo, first) is None
+    assert check_plan.location_problem(repo, first) is None
 
 
 def test_ac2_states_prints_nothing_without_a_design_source(repo: Path, capsys) -> None:
