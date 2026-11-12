@@ -129,7 +129,7 @@ jobs:
     needs: sweep-gate
     if: ${{ !cancelled() && needs.sweep-gate.outputs.sweep == 'on' }}
     concurrency:
-      group: agk-merger-sweep-job
+      group: agk-merger-sweep-job-2
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: merge
