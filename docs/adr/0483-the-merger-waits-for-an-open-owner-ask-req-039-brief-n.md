@@ -31,8 +31,9 @@ the merger run 43283562751 merged it at 18:51:23Z with no approval on it.
 3. No change to `route.py`, the labels, `conductor.py` or any workflow. The owner approves with
    `Approve: <head> SPEC-nnnn` on the pull request; no session posts it.
 
-Protected path classes changed: `scripts/agk/` (`merge_cleared.py`), `tests/kit/` (`test_merge_cleared_owner_ask.py`)
-and `tests/kit_dev/` (`test_conductor_catches.py`: the row count of the catch log).
+Protected path classes changed: `scripts/agk/` (`merge_cleared.py`), `tests/kit/` (`test_merge_cleared_owner_ask.py`),
+`tests/kit_dev/` (`test_conductor_catches.py`: the row count of the catch log) and `agk.toml` (the new test file in
+the `[[testing.map]]` entry of `scripts/agk/merge_cleared.py`).
 
 ## Consequences
 
