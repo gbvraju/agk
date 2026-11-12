@@ -18,8 +18,6 @@ ROOT = Path(__file__).resolve().parents[2]
 GUIDE = ROOT / "docs" / "guides" / "planning.md"
 REFERENCE = ROOT / "docs" / "guides" / "reference.md"
 SPECS = ROOT / "docs" / "specs"
-SPEC_0043 = next(SPECS.glob("0043-*.md"))
-SPEC_0037 = next(SPECS.glob("0037-*.md"))
 HONEST = (
     "Estimates are ranges from this project's own history, not promises;"
     " AGK drafts from the sources and the person owns scope."
@@ -47,6 +45,12 @@ WALK_STEPS = (
     "Approve: plan",
     "plan_intake.py publish",
 )
+
+
+def spec(number: str) -> Path:
+    """The spec file of NUMBER, read when a test runs and not at import: a copied kit without
+    `docs/specs/` still collects this file (brief #1128, as #1103)."""
+    return next(SPECS.glob(f"{number}-*.md"))
 
 
 def walks() -> list[Path]:
@@ -126,13 +130,14 @@ def test_the_walk_uses_invented_data_only():
 
 def test_amendment_163_is_in_the_spec_texts():
     """REQ-050"""
-    spec = " ".join(SPEC_0043.read_text(encoding="utf-8").split())
-    assert re.search(r"(?m)^2a\. \*\*", SPEC_0043.read_text(encoding="utf-8"))
-    assert "design_import.py source --version i<n> --slug <slug>" in spec
+    raw = spec("0043").read_text(encoding="utf-8")
+    text = " ".join(raw.split())
+    assert re.search(r"(?m)^2a\. \*\*", raw)
+    assert "design_import.py source --version i<n> --slug <slug>" in text
     # The owner's ruling on Q-1073-2 over the merged text of amendment 163 item 2.
-    assert "all text outside `script`, `style` and `template` elements, in document order" in spec
-    assert "each `## <screen>/<state>` heading is one in-scope source location" in spec
-    assert "the states that `docs/design/inventory.md` gives that screen as `yes`" in spec
-    assert "(k) **the prototype source**" in spec
-    design = " ".join(SPEC_0037.read_text(encoding="utf-8").split())
+    assert "all text outside `script`, `style` and `template` elements, in document order" in text
+    assert "each `## <screen>/<state>` heading is one in-scope source location" in text
+    assert "the states that `docs/design/inventory.md` gives that screen as `yes`" in text
+    assert "(k) **the prototype source**" in text
+    design = " ".join(spec("0037").read_text(encoding="utf-8").split())
     assert "The one exception is the source file that `design_import.py source` writes" in design
