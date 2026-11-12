@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
@@ -436,8 +437,11 @@ def test_no_check_or_import_opens_a_page(tmp_path):
     """REQ-044: amendment 161 item 3 (pages are read as text only: no browser, no subprocess)."""
     assert di is not None, "scripts/agk/design_import.py is missing"
     text = (KIT_ROOT / "scripts" / "agk" / "design_import.py").read_text(encoding="utf-8")
-    for word in ("subprocess", "webbrowser", "urllib", "socket", "http.client"):
-        assert f"import {word}" not in text, word
+    assert not re.search(
+        r"^\s*(?:import|from)\s+(?:subprocess|webbrowser|socket|urllib|http|requests|ssl)\b",
+        text,
+        re.M,
+    )
 
 
 def test_without_an_imported_version_check_design_is_unchanged(tmp_path):

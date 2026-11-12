@@ -1,6 +1,6 @@
 """The design check (SPEC-0029 rule 7; SPEC-0037 rules 2, 3). Installed: `kit/manifest.json` lists
 it in `verbatim`, with the modules it imports, `design_standard.py`, `design_inventory.py`,
-`design_prototype_check.py` and `design_signoff.py`.
+`design_prototype_check.py`, `design_signoff.py` and `design_import.py`.
 
 Reads `docs/design/theme.md` and the folders of `docs/design/mockups/` and fails, naming the rule
 and the path and never a value, on: a script or an event handler in a mockup, an external request
@@ -23,6 +23,11 @@ a change in its folder outside `screenshots/` fails naming the version. Two thin
 and not failures: a theme whose evidence folder has no approval line, or whose prototype version has
 no `design` row of its digest (rule 12), reads "not approved yet", and a placeholder brand is
 reported as at risk.
+Each imported version `docs/design/imported/i<n>/` is checked by `design_import.py` (SPEC-0037
+rule 15 as amendment 161 items 2 and 3 propose): its files against `manifest.json` and
+`external.txt`, its `map.md` against the manifest and the inventory, and every `yes` state of the
+inventory must be covered by a row of an imported version or a page of a kit version. Rules 5 to 7
+do not apply to an imported version, whose pages are read as text and never opened.
 Files only: no network, no model, nothing written.
 """
 
@@ -34,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import design_import
 import design_inventory
 import design_prototype_check
 import design_signoff
@@ -268,7 +274,8 @@ def cmd_check(root: Path) -> int:
     inventory = (root / INVENTORY).is_file()
     versions = design_prototype_check.versions(root)
     signoffs = (root / design_signoff.SIGNOFFS).is_file()
-    if not theme.is_file() and not folders and not inventory and not versions and not signoffs:
+    imported = design_import.versions(root)
+    if not (theme.is_file() or folders or inventory or versions or signoffs or imported):
         print("ok design (no design record)")
         return 0
     problems: list[str] = []
@@ -291,6 +298,7 @@ def cmd_check(root: Path) -> int:
         problems += design_prototype_check.version_problems(root, version)
         if design_prototype_check.reflow_not_run(root, version):
             print(f"design: reflow not run ({version})")
+    problems += design_import.imported_problems(root)  # rule 15: rules 5 to 7 do not apply
     problems += design_signoff.frozen_problems(root)  # rule 9: a signed-off version is frozen
     for line in notes if not problems else []:
         print(line)

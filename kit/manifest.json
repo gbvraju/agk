@@ -75,6 +75,7 @@
     "scripts/agk/common.py",
     "scripts/agk/conductor.py",
     "scripts/agk/config.py",
+    "scripts/agk/design_import.py",
     "scripts/agk/design_inventory.py",
     "scripts/agk/design_prototype_check.py",
     "scripts/agk/design_signoff.py",

@@ -5,6 +5,7 @@ Usage:
     python3 design.py screenshots --folder FOLDER [--root DIR]
     python3 design.py screenshots --version v<n> [--root DIR]
     python3 design.py inventory [--root DIR]
+    python3 design.py import <folder> [--root DIR]
     python3 design.py write ...   (refused: SPEC-0037 rule 12)
 
 Kit-only (never installed). `prototype` writes the next version folder
@@ -19,6 +20,10 @@ browser found on PATH and runs nothing else; with none it says so and succeeds (
 version, offline, at each breakpoint of the standard in light and dark, and writes one screenshot
 of each and `screenshots/reflow.json` (`ok` or `sideways`); with no browser it says
 `design: no headless browser found; reflow not run`, writes every entry as `not run` and succeeds.
+`import <folder>` (SPEC-0037 rule 15 as amendment 161 item 1 proposes, `design_import.py`) copies a
+customer's prototype byte for byte into the next imported version `docs/design/imported/i<n>/files/`
+with its `manifest.json` and `external.txt`, and refuses a symbolic link, a source inside
+`docs/design/` and an empty folder, copying nothing; it reads files only and opens no page.
 `inventory` writes the skeleton of `docs/design/inventory.md` from
 `kit/templates/design-inventory.md` (SPEC-0037 rule 3): one section for each requirement of
 `docs/requirements.md`, its `- Specs:` filled from the `Requirements:` lines of `docs/specs/*.md`
@@ -38,6 +43,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
+import design_import
 import design_prototype
 from common import CheckError, parse_requirements
 
@@ -45,9 +51,9 @@ KIT = Path(__file__).resolve().parents[2]
 TEMPLATES = KIT / "kit" / "templates"
 USAGE = (
     "usage: design.py prototype | screenshots --folder FOLDER | screenshots --version v<n>"
-    " | inventory  [--root DIR]"
+    " | inventory | import <folder>  [--root DIR]"
 )
-COMMANDS = ("prototype", "write", "screenshots", "inventory")
+COMMANDS = ("prototype", "write", "screenshots", "inventory", "import")
 WRITE_REFUSAL = "rule 12: a new mockup folder is not written; use /agk:design prototype"
 FLAGS = ("--root", "--name", "--date", "--theme-file", "--folder", "--version")
 FOLDER = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*$")
@@ -172,13 +178,27 @@ def cmd_inventory(root: Path, opts: dict[str, str]) -> int:
     return 0
 
 
+def cmd_import(root: Path, source: str, opts: dict[str, str]) -> int:
+    if set(opts) - {"root"}:
+        raise UsageError("import takes a folder and only --root")
+    design_import.import_folder(root, Path(source))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] not in COMMANDS:
         print(USAGE, file=sys.stderr)
         return 2
+    source = None
+    rest = args[1:]
+    if args[0] == "import":
+        if not rest or rest[0].startswith("--"):
+            print(USAGE, file=sys.stderr)
+            return 2
+        source, rest = rest[0], rest[1:]
     opts: dict[str, str] = {}
-    it = iter(args[1:])
+    it = iter(rest)
     for arg in it:
         value = next(it, None)
         if arg not in FLAGS or value is None:
@@ -193,6 +213,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_prototype(root, opts)
         if args[0] == "inventory":
             return cmd_inventory(root, opts)
+        if source is not None:
+            return cmd_import(root, source, opts)
         return cmd_screenshots(root, opts)
     except UsageError:
         print(USAGE, file=sys.stderr)
