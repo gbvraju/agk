@@ -43,3 +43,5 @@ file changes.
   2026-11-30).
 - 2026-11-12: the texts are copies of the rules of `config/session-rules.md` and the role files; nothing checks that a
   later rule change reaches them beyond the first words test (due 2026-12-31).
+- 2026-11-12: `Q-1117-1`, whether the templates should also be installed into a project (the `templates` maps of
+  `kit/manifest.json`), is the maintainers' to rule; until then they stay kit-side, by answer 3 (due 2026-11-30).
