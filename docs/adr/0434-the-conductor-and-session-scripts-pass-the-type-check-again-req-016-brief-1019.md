@@ -1,6 +1,6 @@
 # ADR-0434: The conductor and session scripts pass the type check again (REQ-016, brief 1019)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: ADR-0010, ADR-0307, ADR-0427, ADR-0428, issue #986, brief #1019
