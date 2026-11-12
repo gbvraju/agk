@@ -278,3 +278,164 @@ def test_ac5_a_hand_written_red_brief_is_never_updated_and_closed_only_when_gree
     branch(stub, [bad("proof")])
     push(proj, stub, tmp_path)
     assert [(w[0], w[1]) for w in issue_writes(stub)] == [("POST", f"repos/{REPO}/issues")]
+
+
+# --- the merger starts when the default branch turns green (brief #1143, ADR-0485) -----------
+
+ON = 'default_branch = "main"\n\n[flow]\nauto_merge = true\nauto_merge_method = "squash"\n'
+DISPATCH = f"repos/{REPO}/actions/workflows/merger.yml/dispatches"
+SUITE = 4242
+
+
+def ready_pulls(stub: RouteStub, *numbers: int, others: tuple[int, ...] = ()) -> None:
+    """Open pull requests: NUMBERS labelled `agk:merge-ready` with a cleared verdict on the head,
+    OTHERS labelled `agk:review`."""
+    from test_route import HEAD, said
+
+    for n in numbers:
+        stub.pull(n, labels=["agk:merge-ready"])
+        stub.serve(f"issues/{n}/comments", [said(1, "boss", f"Verdict: cleared {HEAD[:7]}")])
+    for n in others:
+        stub.pull(n, labels=["agk:review"])
+    listed = [(n, "agk:merge-ready") for n in numbers] + [(n, "agk:review") for n in others]
+    stub.serve(
+        "pulls",
+        [
+            {"number": n, "head": {"sha": HEAD}, "state": "open", "labels": [{"name": label}]}
+            for n, label in listed
+        ],
+    )
+
+
+def in_suite(check: dict, suite: int = SUITE) -> dict:
+    return {**check, "check_suite": {"id": suite}}
+
+
+def finished_on_main(suite: int = SUITE) -> dict:
+    run = {"head_branch": "main", "head_sha": TIP, "check_suite_id": suite}
+    return {"workflow_run": run, "repository": REPO_INFO}
+
+
+def started(stub: RouteStub) -> list[str]:
+    return sorted(
+        next(a for a in w[2] if a.startswith("inputs[pr]="))
+        for w in stub.writes()
+        if w[1] == DISPATCH
+    )
+
+
+def test_1143_a_red_branch_turning_green_starts_the_merger_once_per_merge_ready_pull(
+    proj, stub, tmp_path
+):
+    """REQ-039: brief #1143 answer 3a (red then green, two `agk:merge-ready` pull requests)."""
+    (proj / "agk.toml").write_text(ON, encoding="utf-8")
+    ready_pulls(stub, 7, 8, others=(9,))
+    branch(stub, [ok("governance"), ok("proof")])
+    issues(stub, red_issue(11))
+    proc = push(proj, stub, tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert started(stub) == ["inputs[pr]=7", "inputs[pr]=8"]
+    sent = [w for w in stub.writes() if w[1] == DISPATCH]
+    assert all(w[0] == "POST" and "ref=main" in w[2] for w in sent)
+    assert "#7 merger started" in proc.stdout and "#8 merger started" in proc.stdout
+
+
+def test_1143_the_last_required_check_finishing_green_starts_the_merger(proj, stub, tmp_path):
+    """REQ-039: brief #1143 answer 1 (pending for the head until this run's own checks)."""
+    (proj / "agk.toml").write_text(ON, encoding="utf-8")
+    ready_pulls(stub, 7)
+    branch(stub, [ok("governance"), in_suite(ok("proof"))])
+    proc = run_router(proj, stub, tmp_path, "workflow_run", finished_on_main())
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert started(stub) == ["inputs[pr]=7"]
+
+
+def test_1143_green_then_green_starts_nothing(proj, stub, tmp_path):
+    """REQ-039: brief #1143 answer 3b (no red issue to close, and this run changed no state)."""
+    (proj / "agk.toml").write_text(ON, encoding="utf-8")
+    ready_pulls(stub, 7, 8)
+    branch(stub, [ok("governance"), ok("proof")])
+    proc = push(proj, stub, tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert started(stub) == []
+    other = [ok("governance"), ok("proof"), in_suite(ok("docs-preview"))]  # not required
+    (proj / "agk.toml").write_text(
+        'default_branch = "main"\nrequired_checks = ["governance", "proof"]\n\n'
+        '[flow]\nauto_merge = true\nauto_merge_method = "squash"\n',
+        encoding="utf-8",
+    )
+    branch(stub, other)
+    run_router(proj, stub, tmp_path, "workflow_run", finished_on_main())
+    branch(stub, [ok("governance"), ok("proof")])  # a run on the tip with no check of its own
+    run_router(proj, stub, tmp_path, "workflow_run", finished_on_main())
+    assert started(stub) == []
+
+
+def test_1143_red_then_red_and_still_running_start_nothing(proj, stub, tmp_path):
+    """REQ-039: brief #1143 answer 3c (a branch that stays red, or has not finished)."""
+    (proj / "agk.toml").write_text(ON, encoding="utf-8")
+    ready_pulls(stub, 7, 8)
+    branch(stub, [ok("governance"), in_suite(bad("proof"))])
+    issues(stub, red_issue(11, sha=TIP))
+    run_router(proj, stub, tmp_path, "workflow_run", finished_on_main())
+    push(proj, stub, tmp_path)
+    running = {"name": "proof", "status": "in_progress", "conclusion": None}
+    branch(stub, [in_suite(ok("governance")), running])
+    run_router(proj, stub, tmp_path, "workflow_run", finished_on_main())
+    assert started(stub) == []
+
+
+def test_1143_without_auto_merge_or_in_local_mode_nothing_starts(proj, stub, tmp_path):
+    """REQ-039: brief #1143 answer 3d (`merger_on`: `[flow] auto_merge = true` in GitHub mode)."""
+    ready_pulls(stub, 7, 8)
+    branch(stub, [ok("governance"), ok("proof")])
+    issues(stub, red_issue(11))
+    push(proj, stub, tmp_path)
+    assert started(stub) == []
+    local = ON.replace('"main"\n', '"main"\nexecution = "local"\n', 1)
+    (proj / "agk.toml").write_text(local, encoding="utf-8")
+    push(proj, stub, tmp_path)
+    assert started(stub) == []
+    closes = [w for w in issue_writes(stub) if w[1] == f"repos/{REPO}/issues/11"]
+    assert len(closes) == 2  # the red issue is still closed each time: only the start is off
+
+
+def test_1143_routing_the_branch_by_hand_or_dry_starts_nothing(proj, stub, tmp_path):
+    """REQ-039: brief #1143 answer 1 (only the router's event job starts the merger, as #1116)."""
+    (proj / "agk.toml").write_text(ON, encoding="utf-8")
+    ready_pulls(stub, 7)
+    branch(stub, [ok("governance"), ok("proof")])
+    issues(stub, red_issue(11))
+    run_router(proj, stub, tmp_path, "workflow_dispatch", {}, "--branch")
+    push(proj, stub, tmp_path, "--dry-run")
+    assert started(stub) == []
+
+
+def test_1143_a_pull_request_started_on_entering_is_not_started_twice(proj, stub, tmp_path):
+    """REQ-039: brief #1143 answer 1 (once per pull request in one run)."""
+    from test_route import HEAD, said
+
+    (proj / "agk.toml").write_text(ON, encoding="utf-8")
+    ready_pulls(stub, 8)
+    stub.pull(7, labels=["agk:ci-running"])
+    stub.serve("issues/7/comments", [said(1, "boss", f"Verdict: cleared {HEAD[:7]}")])
+    both = [{"number": n, "head": {"sha": HEAD}, "state": "open"} for n in (7, 8)]
+    both[0]["labels"] = [{"name": "agk:merge-ready"}]  # the listing after this run's own label
+    both[1]["labels"] = [{"name": "agk:merge-ready"}]
+    stub.serve("pulls", both)
+    branch(stub, [ok("governance"), ok("proof")])
+    issues(stub, red_issue(11))
+    proc = push(proj, stub, tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert started(stub) == ["inputs[pr]=7", "inputs[pr]=8"]
+
+
+def test_1143_an_unreadable_list_of_pull_requests_fails_naming_the_rule(proj, stub, tmp_path):
+    """REQ-039: brief #1143 answer 1 (the red issue is still closed; the run says what failed)."""
+    (proj / "agk.toml").write_text(ON, encoding="utf-8")
+    branch(stub, [ok("governance"), ok("proof")])
+    issues(stub, red_issue(11))
+    stub.serve("pulls", "FAIL")
+    proc = push(proj, stub, tmp_path)
+    assert proc.returncode == 1 and "rule 7" in proc.stdout
+    assert started(stub) == []
