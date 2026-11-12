@@ -140,14 +140,13 @@ def test_ac1_rule_3_every_source_is_scanned_before_any_location_resolves(
     assert calls[:2] == ["scan", "scan"] and "scan" not in calls[2:] and "resolve" in calls
 
 
-def test_ac2_the_script_uses_only_the_kit_and_the_standard_library(repo: Path, capsys) -> None:
+def test_ac2_the_script_uses_only_the_kit_and_the_standard_library(
+    repo: Path, capsys, monkeypatch
+) -> None:
     """REQ-050 AC2: no network (a socket guard), and the imports of build (b) and common.py."""
-    original = socket.socket
-    socket.socket = None  # type: ignore[assignment,misc]
-    try:
-        code, out = validate(repo, good(), capsys)
-    finally:
-        socket.socket = original  # type: ignore[misc]
+    monkeypatch.setattr(socket, "socket", None)
+    code, out = validate(repo, good(), capsys)
+    monkeypatch.undo()
     assert code == 0 and out.strip() == "ok proposals", out
     source = SCRIPT.read_text(encoding="utf-8")
     assert "check_plan.location_problem(" in source and "def location_problem" not in source

@@ -605,6 +605,16 @@ The `[design]` table of `agk.toml` (off when absent): `ui_paths`, the globs of t
 page of a screen and state into `AGK_DESIGN_OUT`; and `pixel_tolerance`, the share of a screenshot's pixels that may differ
 before pixels are reported as drift (0.01 by default; it only reports, never fails).
 
+## Plan intake
+
+    python3 scripts/agk/plan_intake.py validate --proposals FILE [--root DIR]
+    python3 scripts/agk/plan_intake.py states [--root DIR]
+
+Validates the plan's proposals file: `validate` prints `ok proposals` or one line per problem naming the rule and the item's
+`key` or `id`, never its text; `states` prints the inventory's `yes` states that no design source covers. Every command runs
+the data guard over each source first and stops with exit 2 when the guard is not installed. It reads files only, with no
+network and no model, and writes nothing. See SPEC-0043 rules 3 to 6.
+
 ## Upgrade
 
     python3 scripts/agk/upgrade.py TARGET [--dry-run]
