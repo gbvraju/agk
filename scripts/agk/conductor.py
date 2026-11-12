@@ -129,12 +129,12 @@ does. `MAIN GREEN after #<n>: merge of main #<pr> (<session>) ...` ends a watch 
 issue has closed, naming the pull requests whose every failed required check finished inside it;
 with none, the line is `MAIN GREEN after #<n>`.
 
-Brief #1151 (ADR-0489): with `builder_start = "assign"`, when a poll of `watch` finds no new line and
-no held review, it reads the plan as `session.py plan` does, at most once per minute across watches
-(the file `agk/starts` of the git directory), and ends with `START #<brief>[ build (<x>)] <kind>`
-for each `Assign` row whose brief has no `Started: cb` or `taken:` comment in the last 2 hours, a
-brief titled `The default branch is red` first as `START #<brief> red`; one brief is returned again
-only after 10 minutes. The conductor's start rule itself is unchanged.
+Brief #1151 (ADR-0489): with `builder_start = "assign"`, when a poll of `watch` finds no new line
+and no held review, it reads the plan as `session.py plan` does, at most once per minute across
+watches (the file `agk/starts` of the git directory), and ends with `START #<brief>[ build (<x>)]
+<kind>` for each `Assign` row whose brief has no `Started: cb` or `taken:` comment in the last 2
+hours, a brief titled `The default branch is red` first as `START #<brief> red`; one brief is
+returned again only after 10 minutes. The conductor's start rule itself is unchanged.
 
 Brief #1071 (amendment 162, ADR-0453): `sweep` prints `HANDOVER #<pr> <minutes>m` for each open pull
 request labelled `agk:handover`, counted from its newest handing-over `Report:` (`unknown` without
