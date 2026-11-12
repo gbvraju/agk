@@ -42,5 +42,9 @@
   {
     "name": "agk:merge-ready",
     "description": "AGK: merger acts next: the guarded merge"
+  },
+  {
+    "name": "agk:handover",
+    "description": "AGK: launcher acts next: a new builder for a pull request whose builder stopped"
   }
 ]

@@ -15,7 +15,10 @@ section of `DIR/docs/requirements.md` also fails, and (SPEC-0037 rule 10) a UI b
 `Touches:` glob meets a glob of `ui_paths` in the `[design]` table of `DIR/agk.toml`, needs exactly
 one line `Screens: v<n> <screen>/<state>, ...` (`*` is every state of the screen) whose version has
 a `design` row in `docs/design/signoffs.md` and a page `<screen>--<state>.html` for each pair in
-its frozen folder. No `ui_paths` means no UI briefs.
+its frozen folder. No `ui_paths` means no UI briefs. Amendment 161 item 5 (brief #1063): the line
+may name an imported version `i<n>` instead, with a `design` row too, whose pairs are the
+`<file> -> <screen>/<state>` rows of `docs/design/imported/i<n>/map.md` (`*` is every state of the
+screen that the map covers; an `out:` row covers nothing).
 With `--root DIR` and `plan_issue` in the `[flow]` table of `DIR/agk.toml` a brief also needs one
 line `Wave: n` (amendment 140), a wave of `--waves` when that list is given. With `--root DIR` the
 `Touches:` and `Adds:` lines are also judged against the tree (amendment 141 item 1); an optional
@@ -58,12 +61,13 @@ from session_plan import touch_problems, touch_rules
 NAME = "brief"
 USAGE = "usage: check_brief.py (FILE | --event PAYLOAD) [--root DIR] [--waves N,N]"
 REQUIREMENTS = "docs/requirements.md"
-SCREENS = re.compile(r"Screens: (v[1-9]\d*) (\S.*)")
+SCREENS = re.compile(r"Screens: ([vi][1-9]\d*) (\S.*)")
 PAIR = re.compile(r"([a-z0-9][a-z0-9-]*)/([a-z0-9][a-z0-9-]*|\*)")
 NO_LINE = "rule 10: a brief that touches ui_paths has no Screens line"
-SHAPE = "rule 10: the Screens line is not one line Screens: v<n> <screen>/<state>, ..."
+SHAPE = "rule 10: the Screens line is not one line Screens: v<n>|i<n> <screen>/<state>, ..."
 NOT_SIGNED = f"rule 10: the Screens version is not signed off in {design_signoff.SIGNOFFS}"
 NOT_IN = "rule 10: a Screens screen or state is not in the version"
+NOT_MAPPED = "rule 10: a Screens screen or state is not covered by the map of the version"
 BRIEF_LABEL = "agk-brief"
 INVALID_LABEL = "agk-brief-invalid"
 COMMENT_MARK = "<!-- agk-brief-check -->"
@@ -129,6 +133,21 @@ def version_pages(root: Path, version: str) -> list[tuple[str, str]]:
     return found
 
 
+def imported_map(root: Path, version: str) -> dict[tuple[str, str], str]:
+    """{(screen, state): file} of the `<file> -> <screen>/<state>` rows of an imported version's
+    `map.md`, in the map's order; an `out:` row and a row of another shape cover nothing, and the
+    first row of a pair counts (a second fails `check_design.py`). No map is an empty map."""
+    import design_import  # installed beside this script; read only for an imported version
+
+    folder = root / design_import.IMPORTED / version
+    found: dict[tuple[str, str], str] = {}
+    for name, target in design_import._rows(folder):
+        match = design_import.TARGET.match(target)
+        if match:
+            found.setdefault((match.group(1), match.group(2)), name)
+    return found
+
+
 def screens_named(line: str, root: Path) -> list[tuple[str, str]]:
     """The pairs a `Screens:` line names, `*` expanded to every state of the screen in the
     version, in the line's order; refused naming rule 10 and never a value."""
@@ -142,13 +161,14 @@ def screens_named(line: str, root: Path) -> list[tuple[str, str]]:
     signed = {r["version"] for r in design_signoff.rows(root) if r["kind"] == "design"}
     if version not in signed:
         raise CheckError(NOT_SIGNED)
-    pages = version_pages(root, version)
+    imported = version.startswith("i")
+    pages = list(imported_map(root, version)) if imported else version_pages(root, version)
     found: list[tuple[str, str]] = []
     for pair in filter(None, pairs):
         screen, state = pair.group(1), pair.group(2)
         named = [p for p in pages if p[0] == screen and state in ("*", p[1])]
         if not named:
-            raise CheckError(NOT_IN)
+            raise CheckError(NOT_MAPPED if imported else NOT_IN)
         found += [p for p in named if p not in found]
     return found
 

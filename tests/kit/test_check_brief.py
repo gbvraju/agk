@@ -305,3 +305,129 @@ def test_rule4b_a_failing_brief_still_fails_and_the_event_carries_the_warning(tm
     result = json.loads(out.stdout)
     assert result["action"] == "pass"
     assert result["warnings"] and WARN_4B in result["warnings"][0]
+
+
+# --- brief #1063: a Screens line names an imported version i<n> (amendment 161 item 5) ----------
+
+DIGEST = "ab" * 32
+HEAD = "0123456789abcdef0123456789abcdef01234567"
+LINK = "https://example.com/owner/project/pull/7#issuecomment-1"
+UNSEEN = "zz-hidden-screen"  # an invented value that a refusal must never print
+IMPORTED_MAP = """# Map of i1
+
+- index.html -> books/default
+- `empty.html` -> books/empty
+- shot.png -> account/default
+- old.html -> out: replaced by the list
+"""
+
+
+def ui_brief(screens: str) -> str:
+    return GOOD.replace("Touches: scripts/agk/*.py, docs/**", "Touches: web/**") + screens + "\n"
+
+
+def imported_root(tmp_path: Path, signed=("i1",)) -> Path:
+    """An invented project: `web/**` is UI, a kit version v1 has the page books--error.html, and
+    an imported version i1 maps books/default, books/empty and account/default."""
+    root = tmp_path / "project"
+    (root / "docs" / "design" / "prototype" / "v1").mkdir(parents=True)
+    (root / "docs" / "design" / "prototype" / "v1" / "books--error.html").write_text("x\n", "utf-8")
+    (root / "docs" / "requirements.md").write_text(
+        "# Requirements\n\n### REQ-001 — One\n\n### REQ-002 — Two\n", encoding="utf-8"
+    )
+    (root / "agk.toml").write_text('[design]\nui_paths = ["web/**"]\n', encoding="utf-8")
+    rows = "".join(
+        f"| design | {v} | {DIGEST} | {HEAD} | 2026-11-12 | {LINK} |\n" for v in ("v1", *signed)
+    )
+    (root / "docs" / "design" / "signoffs.md").write_text(
+        "# Design sign-offs\n\n| kind | version | digest | head | date | comment |\n"
+        "|---|---|---|---|---|---|\n" + rows,
+        encoding="utf-8",
+    )
+    folder = root / "docs" / "design" / "imported" / "i1"
+    (folder / "files").mkdir(parents=True)
+    for name in ("index.html", "empty.html", "old.html"):
+        (folder / "files" / name).write_text("<!doctype html>\n", encoding="utf-8")
+    (folder / "map.md").write_text(IMPORTED_MAP, encoding="utf-8")
+    return root
+
+
+def check_screens(tmp_path: Path, line: str, signed=("i1",), drop_map=False):
+    root = imported_root(tmp_path, signed)
+    if drop_map:
+        (root / "docs" / "design" / "imported" / "i1" / "map.md").unlink()
+    return check(tmp_path, ui_brief(line), "--root", str(root))
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Screens: i1 books/default",
+        "Screens: i1 books/empty, account/default",
+        "Screens: i1 books/*",
+    ],
+)
+def test_ac5_a_screens_line_naming_a_mapped_imported_state_passes(tmp_path, line):
+    """REQ-044 AC5: amendment 161 item 5 (`i<n>` with states that its map covers)."""
+    out = check_screens(tmp_path, line)
+    assert out.returncode == 0 and out.stdout.strip() == "ok brief", out.stdout + out.stderr
+
+
+def test_ac5_a_star_of_an_imported_version_is_every_mapped_state_of_the_screen(tmp_path):
+    """REQ-044 AC5: amendment 161 item 5 (`*` is every state of the screen the map covers; an
+    `out:` row covers nothing, and a page of a kit version is not the imported version's)."""
+    sys.path.insert(0, str(SCRIPTS))
+    import check_brief
+
+    root = imported_root(tmp_path)
+    found = check_brief.screens_named("Screens: i1 books/*, account/default", root)
+    assert found == [("books", "default"), ("books", "empty"), ("account", "default")]
+    assert check_brief.imported_map(root, "i1") == {
+        ("books", "default"): "index.html",
+        ("books", "empty"): "empty.html",
+        ("account", "default"): "shot.png",
+    }
+
+
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        ("Screens: i1 books/error", "rule 10: a Screens screen or state is not covered by the map"),
+        (f"Screens: i1 {UNSEEN}/*", "rule 10: a Screens screen or state is not covered"),
+        ("Screens: i2 books/default", "rule 10: the Screens version is not signed off"),
+    ],
+)
+def test_ac5_an_unmapped_state_or_an_unlisted_imported_version_is_refused(tmp_path, line, message):
+    """REQ-044 AC5: amendment 161 item 5 (refused naming the rule, never a value)."""
+    out = check_screens(tmp_path, line)
+    assert out.returncode == 1, out.stdout
+    assert message in out.stdout
+    for value in (UNSEEN, "books/error", "i2"):
+        assert value not in out.stdout + out.stderr
+
+
+def test_ac5_an_imported_version_without_a_signoff_row_is_refused(tmp_path):
+    """REQ-044 AC5: amendment 161 item 5 (a version `docs/design/signoffs.md` does not list)."""
+    out = check_screens(tmp_path, "Screens: i1 books/default", signed=())
+    assert out.returncode == 1
+    assert "rule 10: the Screens version is not signed off in docs/design/signoffs.md" in out.stdout
+
+
+def test_ac5_an_imported_version_without_a_map_covers_nothing(tmp_path):
+    """REQ-044 AC5: amendment 161 item 5 (no map, no covered state)."""
+    out = check_screens(tmp_path, "Screens: i1 books/default", drop_map=True)
+    assert out.returncode == 1 and "not covered by the map" in out.stdout
+
+
+@pytest.mark.parametrize("line", ["Screens: x1 books/default", "Screens: i0 books/default"])
+def test_ac5_a_version_of_neither_kind_is_a_shape_error(tmp_path, line):
+    """REQ-044 AC5: the version is `v<n>` or `i<n>`, n from 1."""
+    out = check_screens(tmp_path, line)
+    assert out.returncode == 1 and "rule 10: the Screens line is not one line" in out.stdout
+
+
+def test_ac5_a_kit_version_line_still_reads_its_pages(tmp_path):
+    """REQ-044 AC5: SPEC-0037 rule 10 unchanged for `v<n>` beside an imported version."""
+    assert check_screens(tmp_path, "Screens: v1 books/error").returncode == 0
+    out = check_screens(tmp_path / "x", "Screens: v1 books/default")
+    assert out.returncode == 1 and "rule 10: a Screens screen or state is not in" in out.stdout
