@@ -490,7 +490,9 @@ class FakeGh:
 
 
 def test_live_runs_are_paged_with_the_query_and_capped(tmp_path):
-    """REQ-020: fix 3 of 8e06ed5 (the query strings, the run cap and the `at least` mark)."""
+    """REQ-020: fix 3 of 8e06ed5 (the query strings and the paging); brief #1116 answer 4: the
+    query is a time window of the run's creation, and a list over the cap is split (the cap of
+    one window is the test above)."""
     from datetime import UTC, datetime
 
     from minutes import estimate
@@ -500,9 +502,9 @@ def test_live_runs_are_paged_with_the_query_and_capped(tmp_path):
             page = int(endpoint.rsplit("page=", 1)[1])
             runs = [
                 {"id": page * 1000 + i, "name": "w", "created_at": "2026-10-02T00:00:00Z"}
-                for i in range(100)
+                for i in range(100 if page < 9 else 0)
             ]
-            return 200, {"total_count": 2500, "workflow_runs": runs}
+            return 200, {"total_count": 800, "workflow_runs": runs}
         if "/jobs?" in endpoint:
             return 200, {
                 "total_count": 1,
@@ -520,11 +522,14 @@ def test_live_runs_are_paged_with_the_query_and_capped(tmp_path):
     fake = FakeGh(answer)
     est = estimate(fake.gh, datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 11, 1, tzinfo=UTC))
     runs = [c for c in fake.calls if "/actions/runs?" in c]
-    assert runs[0] == "/repos/o/r/actions/runs?created=%3E%3D2026-09-30&per_page=100&page=1"
-    assert len(runs) == 10  # 1,000 runs: the cap
-    assert est.runs == 1000 and est.minutes == 1000 and est.complete is False
+    assert runs[0] == (
+        "/repos/o/r/actions/runs?created=2026-09-30T00:00:00Z..2026-10-31T23:59:59Z"
+        "&per_page=100&page=1"
+    )
+    assert len(runs) == 8  # 800 runs, all of them
+    assert est.runs == 800 and est.minutes == 800 and est.complete is True
     jobs = [c for c in fake.calls if "/jobs?" in c]
-    assert len(jobs) == 1000
+    assert len(jobs) == 800
     assert all(c.endswith("/jobs?filter=all&per_page=100&page=1") for c in jobs)
 
 
@@ -683,3 +688,132 @@ def test_the_text_report_carries_the_line(repo, tmp_path):
     """REQ-020: brief #370 answer 1 (the full report says the level and the day too)."""
     out = minutes(repo, billed(tmp_path, 1000), today="2026-10-02").stdout
     assert "level: 50%; runs out about 2026-10-04" in out
+
+
+# --- brief #1116: the run list read by time windows, and the last 7 days ------------------------
+
+
+def add_late_run(api: Path) -> None:
+    """One more run on 28 October (a 3-minute job) and one more merge on 29 October."""
+    runs = json.loads((api / "runs.json").read_text(encoding="utf-8"))
+    late = {"id": 106, "name": "proof", "created_at": "2026-10-28T10:00:00Z", "run_attempt": 1}
+    runs["workflow_runs"].insert(0, late)
+    runs["total_count"] += 1
+    save(api, "runs", runs)
+    job = {
+        "started_at": "2026-10-28T10:00:00Z",
+        "completed_at": "2026-10-28T10:02:30Z",
+        "conclusion": "success",
+        "labels": ["ubuntu-latest"],
+    }
+    save(api, "jobs-106", {"total_count": 1, "jobs": [job]})
+    pulls = json.loads((api / "pulls.json").read_text(encoding="utf-8"))
+    merged = "2026-10-29T09:00:00Z"
+    pulls.insert(
+        0,
+        {
+            "number": 15,
+            "state": "closed",
+            "merged_at": merged,
+            "closed_at": merged,
+            "updated_at": merged,
+        },
+    )
+    save(api, "pulls", pulls)
+
+
+def test_minutes_per_merged_pull_request_over_the_last_7_days(repo, tmp_path):
+    """REQ-020: brief #1116 answer 4 (the last 7 days beside the month)."""
+    api = case(tmp_path)
+    add_late_run(api)
+    data = report(repo, api)
+    assert data["per_merged_pull"] == round(20 / 3, 1)
+    assert data["week"] == {
+        "from": "2026-10-24",
+        "through": TODAY,
+        "minutes": 3,
+        "merged_pulls": 1,
+        "per_merged_pull": 3.0,
+    }
+    out = minutes(repo, api).stdout
+    assert "minutes per merged pull request, last 7 days: 3.0 (1 merged since 2026-10-24)" in out
+
+
+def test_the_last_7_days_cross_into_the_month_before(repo, tmp_path):
+    """REQ-020: brief #1116 answer 4 (on 2 November the 7 days begin in October)."""
+    api = case(tmp_path)
+    add_late_run(api)
+    data = report(repo, api, today="2026-11-02")
+    assert data["estimate"]["minutes"] == 0 and data["merged_pulls"] == 0
+    assert data["week"]["minutes"] == 3 and data["week"]["merged_pulls"] == 1
+    assert data["week"]["from"] == "2026-10-27"
+
+
+def test_no_merge_in_the_last_7_days(repo, tmp_path):
+    """REQ-020: brief #1116 answer 4 (nothing merged: no figure, never a division by zero)."""
+    out = minutes(repo, case(tmp_path)).stdout
+    assert "minutes per merged pull request, last 7 days: - (none merged since 2026-10-24)" in out
+
+
+def run_page(ids: range, created: str) -> list[dict]:
+    return [{"id": i, "name": "w", "created_at": created} for i in ids]
+
+
+def test_a_capped_window_is_read_as_two_windows_and_added(tmp_path):
+    """REQ-020: brief #1116 answer 4 (the list is read by time windows, not capped at 1,000)."""
+    from datetime import UTC, datetime
+
+    from minutes import estimate
+
+    def answer(endpoint: str):
+        if "/actions/runs?" in endpoint:
+            query = endpoint.split("created=", 1)[1].split("&", 1)[0]
+            page = int(endpoint.rsplit("page=", 1)[1])
+            if query == "2026-09-30T00:00:00Z..2026-10-31T23:59:59Z":  # the whole range: 1,500
+                return 200, {"total_count": 1500, "workflow_runs": run_page(range(100), "x")}
+            halves = {
+                "2026-09-30T00:00:00Z..2026-10-15T23:59:59Z": (0, "2026-10-02T00:00:00Z"),
+                "2026-10-16T00:00:00Z..2026-10-31T23:59:59Z": (10000, "2026-10-20T00:00:00Z"),
+            }
+            if query not in halves:
+                return 404, None
+            base, created = halves[query]
+            first = base + (page - 1) * 100
+            ids = range(first, min(first + 100, base + 750))
+            return 200, {"total_count": 750, "workflow_runs": run_page(ids, created)}
+        if "/jobs?" in endpoint:
+            job = {
+                "started_at": "2026-10-02T00:00:00Z",
+                "completed_at": "2026-10-02T00:00:30Z",
+                "conclusion": "success",
+                "labels": ["ubuntu-latest"],
+            }
+            return 200, {"total_count": 1, "jobs": [job]}
+        return 404, None
+
+    fake = FakeGh(answer)
+    est = estimate(fake.gh, datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 11, 1, tzinfo=UTC))
+    assert est.runs == 1500 and est.minutes == 1500 and est.complete is True
+    windows = {c.split("created=", 1)[1].split("&", 1)[0] for c in fake.calls if "/runs?" in c}
+    assert len(windows) == 3
+
+
+def test_a_window_still_over_the_cap_at_one_hour_is_a_lower_bound():
+    """REQ-020: brief #1116 answer 4 (a window is not split below one hour; then `at least`)."""
+    from datetime import UTC, datetime
+
+    def answer(endpoint: str):
+        page = int(endpoint.rsplit("page=", 1)[1])
+        ids = range(page * 1000, page * 1000 + 100)
+        return 200, {"total_count": 2500, "workflow_runs": run_page(ids, "2026-10-01T00:30:00Z")}
+
+    fake = FakeGh(answer)
+    window = (datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 10, 1, 1, tzinfo=UTC))
+    status, data = fake.gh.get("runs", "/repos/{repo}/actions/runs", window)
+    assert status == 200 and len(data["workflow_runs"]) == 1000
+    assert data["total_count"] > len(data["workflow_runs"])  # the estimate reads `at least`
+    assert len(fake.calls) == 10
+    assert fake.calls[0] == (
+        "/repos/o/r/actions/runs?created=2026-10-01T00:00:00Z..2026-10-01T00:59:59Z"
+        "&per_page=100&page=1"
+    )
