@@ -102,6 +102,14 @@ def commands(out: str) -> list[list[str]]:
     return found
 
 
+def hidden(body: str) -> str:
+    """Amendment 169: the rendered brief between the line `<!-- agk` and the line `-->`."""
+    lines = body.splitlines(keepends=True)
+    start = lines.index("<!-- agk\n")
+    assert lines[-1] == "-->\n", "the hidden block ends the body"
+    return "".join(lines[start + 1 : -1])
+
+
 def field(command: list[str], name: str) -> str:
     """The value of `-f name=...` or `-F name=...` in a printed command."""
     for flag, value in zip(command, command[1:], strict=False):
@@ -170,7 +178,7 @@ def test_ac2_rule_25_a_dependent_brief_waits_until_numbers_names_its_dependency(
     assert re.findall(r"(?m)^Depends-on: .*$", body) == ["Depends-on: #12"]
     assert re.findall(r"(?m)^published (\S+) (#\d+)$", out) == [("B0", "#11"), ("B1", "#12")]
     rendered = (plan / "docs/plan/briefs/M1/B2.md").read_text(encoding="utf-8")
-    assert body == rendered.replace("Depends-on: B1", "Depends-on: #12")
+    assert hidden(body) == rendered.replace("Depends-on: B1", "Depends-on: #12")
 
 
 def test_ac2_rule_25_a_brief_that_check_brief_fails_is_refused(plan: Path, capsys) -> None:
@@ -269,6 +277,7 @@ def test_ac2_rule_25_personal_mode_writes_the_briefs_through_the_files_forge(
     b2 = forge.load(f"issues/{numbers['B2']}.json")
     assert b2["title"] == TITLE and b2["labels"] == [{"name": "agk-brief"}]
     assert f"Depends-on: #{numbers['B1']}" in b2["body"] and "Milestone: M1" in b2["body"]
+    assert b2["body"].startswith("## What\n") and "\n<!-- agk\n" in b2["body"]  # amendment 169
     code, out = publish(sidecar, capsys, approved(), numbers)
     assert code == 0 and "created" not in out
     assert sorted(forge.numbers("issues")) == sorted(numbers.values())
@@ -292,3 +301,71 @@ def test_ac2_rule_8_the_approval_inside_the_person_s_confirmation(
     assert code == 2 and "gh api" not in out
     code, out = publish(plan, capsys, [comment(f"Approve: plan {HEAD[:12]}")], {"M1": 7})
     assert code == 2 and "gh api" not in out
+
+
+# --- amendment 169 (brief #1124, ADR-0481): engineer-first issues, AGK's fields hidden ------------
+
+
+def test_ac2_amendment_169_the_issue_reads_as_an_engineering_issue(plan: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 169 item 1, `## What` with the sentence, `## Acceptance` with the
+    `Answers` items as checkboxes, the milestone and the dependence in words, then the rendered
+    brief, unchanged but for its numbered `Depends-on:`, in a block GitHub does not show."""
+    code, out = publish(plan, capsys, approved(), {"M1": 7, "B0": 11, "B1": 12})
+    assert code == 0, out
+    [brief] = commands(out)
+    body = field(brief, "body")
+    rendered = (plan / "docs/plan/briefs/M1/B2.md").read_text(encoding="utf-8")
+    shown = body[: body.index("<!-- agk\n")]
+    answers = [x for x in rendered.splitlines() if re.match(r"\d+\. ", x)]
+    assert answers, rendered
+    assert shown == "\n".join(
+        ["## What", "", TITLE, "", "## Acceptance", ""]
+        + ["- [ ] " + re.sub(r"^\d+\. ", "", x) for x in answers]
+        + ["", "Part of milestone M1. Depends on #12.", "", ""]
+    )
+    assert hidden(body) == rendered.replace("Depends-on: B1", "Depends-on: #12")
+    assert field(brief, "title") == TITLE
+    for line in shown.splitlines():
+        assert not re.match(r"(Sentence|Answers|Advances|Touches|Size|Depends-on|Milestone):", line)
+
+
+def test_ac2_amendment_169_without_a_dependence_only_the_milestone(plan: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 169 item 1, `Depends on` only when the brief depends on another."""
+    code, out = publish(plan, capsys, approved(), {"M1": 7})
+    assert code == 0, out
+    for command in commands(out):
+        body = field(command, "body")
+        assert "\nPart of milestone M1.\n" in body and "Depends on" not in body
+
+
+def test_ac2_amendment_169_every_reader_reads_the_same_lines(plan: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 169 item 1, `session.brief_problems` (and `check_brief.py`'s check)
+    give the same result for the whole issue body and for the rendered body alone, both for a
+    good brief and for one that breaks a rule."""
+    import check_brief  # noqa: PLC0415 - its `brief_problems` is `session.brief_problems`
+
+    code, out = publish(plan, capsys, approved(), {"M1": 7, "B0": 11, "B1": 12})
+    assert code == 0, out
+    body = field(commands(out)[0], "body")
+    inner = hidden(body)
+    assert check_brief.brief_problems(body) == check_brief.brief_problems(inner) == []
+    assert check_brief.body_problems(body, None, None) == check_brief.body_problems(
+        inner, None, None
+    )
+    broken = plan_intake.issue_body(
+        {"body": inner.replace("Size: M", "Size: XL"), "milestone": "M1"}, {}
+    )
+    assert check_brief.brief_problems(broken) == check_brief.brief_problems(hidden(broken)) != []
+
+
+def test_ac2_amendment_169_a_brief_holding_the_end_of_a_comment_is_refused(
+    plan: Path, capsys
+) -> None:
+    """REQ-050 AC2: amendment 169 item 1, `-->` would end the hidden block early: refused by key,
+    nothing printed to run."""
+    path = plan / "docs/plan/briefs/M1/B1.md"
+    path.write_text(path.read_text("utf-8").replace("Size: M", "Size: M\nNote: a --> b"), "utf-8")
+    code, out = publish(plan, capsys, approved(), {"M1": 7})
+    assert code == 1
+    assert "rule 25: briefs B1: the body holds `-->`" in out
+    assert "gh api" not in out

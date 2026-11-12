@@ -529,6 +529,28 @@ release. It replaces each kit file you have not edited and refuses, writing noth
   (`git -c core.autocrlf=false clone --branch v<version> <the kit repository URL>`), or use the plugin cache. A copy
   with CRLF line endings is read as LF by the upgrade, so line endings alone never cause a refusal.
 
+## Handing a project over without AGK
+
+A project can drop AGK at any time; its engineers keep building from the same issues without it. The issues that
+`plan_intake.py publish` printed read as ordinary issues (a `## What` paragraph, `## Acceptance` checkboxes, the milestone
+and what each depends on), with AGK's own fields in a hidden block that GitHub does not show; you may delete that block once
+AGK is gone. `/agk:uninstall` (see [the reference](reference.md)) prints every GitHub item AGK left; do them in this order:
+
+1. **Stop the sessions.** Stop the scheduled tasks or loops that start AGK sessions (conductors and builders) for this
+   project, so nothing acts while you remove the kit.
+2. **Pause.** `/agk:uninstall --pause` makes one branch with `paused = true`; merge it. Governance and proof then pass with
+   `agk paused`, the router labels nothing, and engineers merge as in any repository.
+3. **Relax the ruleset.** Delete or relax the default branch's ruleset, whose required checks name the kit's workflows.
+   Local mode has no ruleset: skip this step.
+4. **Merge the removal branch.** `/agk:uninstall` makes one branch that deletes the kit's unchanged files and keeps your
+   own work; review it, commit it and merge it.
+5. **Then the rest.** Delete the `merge` environment and its secret `AGK_MERGE_TOKEN`, the branches named `claude/*` that
+   builders left once their pull requests are closed, and the kit's labels; close the kit's own issues; remove the plugin on
+   each machine.
+
+Install from a release, not between releases, if you want step 4 to delete every kit file: an install from the default
+branch with `--unreleased` holds files no release lists, and the removal keeps those as `changed`, for you to delete by hand.
+
 ## When something goes wrong
 
 - **A scheduled run did not happen on Monday.** Expect the Monday issues hours late; in India, usually Monday evening. On

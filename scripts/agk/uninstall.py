@@ -18,8 +18,8 @@ holds only the kit's settings. The project's own work (answer 3: requirements, A
 the vision, the design documents, the records under docs/runs/, the tests other than the kit's own
 tests/kit/) is never deleted or edited; `--remove-docs` lists it for the person to delete by hand.
 A legacy install (kits 0.1.0 and 0.2.0, stamped `[tool.agk]` in pyproject.toml) loses that table.
-The GitHub side (answer 4) is printed, never done. `--pause` (answer 1) adds the top-level line
-`paused = true` to agk.toml.
+The GitHub side (answer 4) is printed, never done, in order (brief #1124, ADR-0481). `--pause`
+(answer 1) adds the top-level line `paused = true` to agk.toml.
 """
 
 from __future__ import annotations
@@ -51,6 +51,14 @@ PAUSE_BRANCH = "agk-pause"
 PAUSE_LINE = "paused = true"
 CODEOWNERS = ".github/CODEOWNERS"
 RULESET = "kit/templates/ruleset.json"
+# Brief #1124 (ADR-0481): GitHub items named by name or pattern, never read from GitHub.
+STOP_SESSIONS = "stop the scheduled tasks or loops that start AGK sessions for this project"
+MERGE_ENVIRONMENT, MERGE_SECRET = "merge", "AGK_MERGE_TOKEN"
+BUILDER_BRANCHES = "claude/*"
+ORDER = (
+    "order: stop the sessions, pause (`uninstall.py TARGET --pause --write`, merged), relax the "
+    "ruleset, merge the removal branch, then the rest"
+)
 INCLUDE = re.compile(r"^-?include\s+agk\.mk\s*$")
 # The kit's labels: the router's states and the old `agk:ready` (ADR-0385), then the labels of the
 # issues the kit reads or opens.
@@ -486,14 +494,21 @@ def github_lines(kit_root: Path) -> list[str]:
     """Answer 4: printed, never done; each is a person's act with admin rights."""
     return [
         "GitHub (print only; each is a person's act with admin rights; this tool does none):",
+        f"- sessions: {STOP_SESSIONS}",
         f"- ruleset: delete or relax the ruleset {ruleset_name(kit_root)} of the default branch "
-        "(Settings, Rules, Rulesets); its required checks name workflows this removal deletes",
+        "(Settings, Rules, Rulesets); its required checks name workflows this removal deletes; "
+        "local mode has no ruleset: skip this line",
+        f"- environment: delete the `{MERGE_ENVIRONMENT}` environment and its secret "
+        f"{MERGE_SECRET} (Settings, Environments), which the merger workflow used",
+        f"- branches: delete the branches named {BUILDER_BRANCHES} that builders left, once their "
+        "pull requests are merged or closed",
         f"- labels: delete {', '.join(LABELS)}",
         f'- issues: close the issue "{RED_TITLE}" (label agk-brief) and the open issues labelled '
         "agk-drift-audit, agk-metrics and agk-product-report",
         "- plugin: on each machine, "
         + " and then ".join(f"`{c}`" for c in PLUGIN_COMMANDS)
         + " (verify)",
+        ORDER,
     ]
 
 
