@@ -81,12 +81,12 @@ def test_ac1_good_sources_and_no_plan_pass(tmp_path):
 
 
 def test_ac1_sources_with_a_plan_folder_pass_as_sources_only(tmp_path):
-    """REQ-050 AC1: with docs/plan/ the sources are checked; the plan rules are later builds."""
+    """REQ-050 AC1: with docs/plan/ the sources are checked, then build (d)'s coverage line."""
     write(tmp_path, "docs/sources/sow.md", GOOD + BODY)
     (tmp_path / "docs" / "plan").mkdir(parents=True)
     code, out = check(tmp_path)
     assert code == 0, out
-    assert out.splitlines()[-1] == "ok plan sources"
+    assert out.splitlines()[-1].startswith("ok plan: 0 of 0 in-scope source lines ")
     assert "(no plan)" not in out
 
 

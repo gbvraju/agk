@@ -1,0 +1,1 @@
+- `check_plan.py --trace` prints each plan source location with its requirement, spec rule, brief, merged pull request and test; with a `docs/plan/` the check fails an uncited in-scope line or prototype screen, a requirement without a resolving `Source:` and a milestone with no brief, and ends with the coverage counts (brief #1076, SPEC-0043 build (d), ADR-0457)
