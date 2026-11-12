@@ -34,7 +34,8 @@ APPROVE_ACCEPTANCE = re.compile(  # SPEC-0051 rule 6: the owner's yes on an acce
     r"Approve: acceptance ([a-z0-9]+(?:-[a-z0-9]+)*) ([0-9a-f]{40})"
 )
 APPROVE_INVENTORY = re.compile(r"Approve: inventory ([0-9a-f]{40})")  # SPEC-0037 rule 3
-APPROVE_DESIGN = re.compile(r"Approve: design (v[1-9]\d*) ([0-9a-f]{40})")  # SPEC-0037 rule 9
+# SPEC-0037 rule 9; a kit version v<n> or an imported version i<n> (amendment 161 item 4, ADR-0449)
+APPROVE_DESIGN = re.compile(r"Approve: design ([vi][1-9]\d*) ([0-9a-f]{40})")
 CONFIRMED = re.compile(r"Confirmed: ([0-9a-f]{40})")  # brief 277: the full head ID
 CONFIRMED_VERDICT = re.compile(r"Verdict: (?:cleared|fix list|rejected) ([0-9a-f]{40})")
 CONFIRMED_BY = re.compile(
@@ -414,9 +415,9 @@ def design_approvals(
     items: list[dict], approvers: list[str], agent_apps: tuple[str, ...] | list[str] = ()
 ) -> set[tuple[str, str, str]]:
     """The (`inventory`, `-`, head) and (`design`, version, head) a listed approver gave by the
-    first line `Approve: inventory <full head ID>` or `Approve: design v<n> <full head ID>`, never
-    through an app of `agent_apps` (SPEC-0037 rules 3 and 9). Pass `confirmed_comments` output so
-    a solo confirmation counts too."""
+    first line `Approve: inventory <full head ID>` or `Approve: design v<n>|i<n> <full head ID>`,
+    never through an app of `agent_apps` (SPEC-0037 rules 3 and 9). Pass
+    `confirmed_comments` output so a solo confirmation counts too."""
     allowed = {a.lstrip("@").lower() for a in approvers}
     found: set[tuple[str, str, str]] = set()
     for item in items:
