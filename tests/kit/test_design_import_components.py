@@ -46,7 +46,8 @@ NAV = (
 
 def table(rows: int) -> str:
     body = "".join(f"<tr><td>Kilo row {n}</td></tr>" for n in range(rows))
-    return f'<table class="results"><thead><tr><th>Kilo head</th></tr></thead><tbody>{body}</tbody></table>'
+    head = "<thead><tr><th>Kilo head</th></tr></thead>"
+    return f'<table class="results">{head}<tbody>{body}</tbody></table>'
 
 
 PAGES = {
@@ -66,9 +67,7 @@ PAGES = {
         '<div class="card"><p>Twice here</p></div><div class="card"><p>Twice here</p></div>'
         '<div class="legacy"><p>Old block</p></div></main></body></html>\n'
     ),
-    "old.html": (
-        f'<!doctype html><body>{NAV}<div class="legacy"><p>Old block</p></div></body>\n'
-    ),
+    "old.html": (f'<!doctype html><body>{NAV}<div class="legacy"><p>Old block</p></div></body>\n'),
 }
 ROWS = [
     "orders.html -> orders/default",
@@ -155,7 +154,7 @@ def tree(folder: Path) -> dict[str, bytes]:
 
 
 def test_the_header_is_rule_1s_four_lines_then_one_blank_line(tmp_path):
-    """REQ-050 AC1: rule 16, the header of SPEC-0043 rule 1 (`Kind: design`, the version's digest)."""
+    """REQ-050 AC1: rule 16, the header of SPEC-0043 rule 1 (`Kind: design`, the digest)."""
     root = imported(tmp_path)
     text = written(root)
     digest = json.loads((root / I1 / "manifest.json").read_text())["digest"]
@@ -201,7 +200,7 @@ def test_one_page_structures_classless_leaves_and_nested_repeats_are_not_listed(
 
 
 def test_a_structure_inside_a_listed_one_on_other_pages_is_listed(tmp_path):
-    """REQ-044: rule 16 with Q-1089-5, the badge is inside the nav on two pages and alone on a third."""
+    """REQ-044: rule 16 with Q-1089-5, the badge is in the nav on two pages and alone on a third."""
     assert "badge" in check_plan.headings(written(imported(tmp_path)))
 
 
