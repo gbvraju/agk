@@ -94,6 +94,7 @@ MAP = """# Screen map of i1
 - orders.html -> orders/default
 - img/empty-sketch.png -> orders/empty
 - old.html -> out: an older page the customer replaced
+- empty.html -> out: the sketch shows the empty list instead
 - error.html -> orders/error
 """
 
@@ -175,7 +176,7 @@ def test_one_heading_per_mapped_row_in_the_maps_order_and_none_for_out(tmp_path)
         "orders/empty",
         "orders/error",
     ]
-    assert "old text" not in text and "Old" not in text
+    assert "old text" not in text and "Old" not in text and "no orders." not in text
 
 
 def test_every_visible_text_of_the_page_one_per_line_in_document_order(tmp_path):

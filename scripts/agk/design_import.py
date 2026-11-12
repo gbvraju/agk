@@ -23,6 +23,22 @@ that neither a row of an imported version nor a page `<screen>--<state>.html` of
 covers. Rules 5 to 7 do not apply to an imported version. Every file is read as bytes or text: no
 page is opened or run, no network, no model, and the check writes nothing. Messages name the rule
 and the file, or the screen and state, never a value.
+
+`python3 design_import.py source --version i<n> --slug <slug> [--root DIR]` (SPEC-0043 rule 2a as
+amendment 163 item 2 proposes, with the owner's ruling on Q-1073-2; brief #1077, ADR-0458) writes
+once, as a new file only, `docs/sources/<slug>-prototype-i<n>.md`: rule 1's header
+(`Source: imported prototype i<n>`, `Kind: design`, `Version: i<n> <digest>`, `Date:` from the
+clock in UTC) and one blank line, then for each row of the version's `map.md` that is not `out:`,
+in the map's order, one `## <screen>/<state>` heading and under it the page's visible text: every
+text outside `script`, `style` and `template` elements, in document order, with the names and
+placeholders of fields and the value of an input button, one per line, white space collapsed,
+empty ones left out; `picture: <file>` for a picture page. A text line that Markdown would read as
+a heading or a fence gets a leading backslash. It refuses with exit 1, naming the rule and the
+version and writing nothing, a version that is not there and one for which `imported_problems`
+names a problem of that version or of the coverage; an existing target file, naming the file; and
+a missing or malformed `--slug` or `--version` with exit 2. `source_text(root, version)` returns
+the text and writes nothing. Pages are parsed as text by the standard library: nothing is run,
+opened or fetched.
 """
 
 from __future__ import annotations
@@ -34,6 +50,8 @@ import posixpath
 import re
 import shutil
 import sys
+from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -405,3 +423,187 @@ def imported_problems(root: Path) -> list[str]:
                     " no version covers the state"
                 )
     return out
+
+
+# --- the prototype source (SPEC-0043 rule 2a) -----------------------------------------------------
+
+SOURCES = "docs/sources"
+SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+SKIPPED = frozenset({"script", "style", "template"})
+# Phrasing elements whose text runs on with the text around it; every other tag ends a line.
+INLINE = frozenset(
+    {"abbr", "b", "bdi", "bdo", "cite", "code", "data", "dfn", "em", "i", "kbd", "mark", "q",
+     "s", "samp", "small", "span", "strong", "sub", "sup", "time", "u", "var", "wbr"}
+)
+FIELDS = frozenset({"input", "select", "textarea"})
+INPUT_BUTTONS = frozenset({"submit", "button", "reset"})
+MARKDOWN_LEAD = re.compile(r"^(#|```|~~~)")
+SOURCE_USAGE = "usage: design_import.py source --version i<n> --slug <slug> [--root DIR]"
+
+
+class _VisibleText(HTMLParser):
+    """The visible text of a page (the Q-1073-2 ruling): every text outside `script`, `style` and
+    `template`, in document order, with the names and placeholders of fields."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.lines: list[str] = []
+        self._run: list[str] = []
+        self._skip: list[str] = []
+
+    def _flush(self) -> None:
+        text = " ".join("".join(self._run).split())
+        self._run = []
+        if text:
+            self.lines.append(text)
+
+    def _add(self, value: str | None) -> None:
+        text = " ".join((value or "").split())
+        if text:
+            self.lines.append(text)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self._skip:
+            if tag == "template":
+                self._skip.append(tag)
+            return
+        if tag in SKIPPED:
+            self._flush()
+            self._skip.append(tag)
+            return
+        if tag in INLINE:
+            return
+        self._flush()
+        if tag in FIELDS:
+            values = dict(attrs)
+            kind = (values.get("type") or "").lower()
+            if tag == "input" and kind == "hidden":
+                return
+            if tag == "input" and kind in INPUT_BUTTONS:
+                self._add(values.get("value"))
+                return
+            self._add(values.get("name"))
+            self._add(values.get("placeholder"))
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._skip:
+            if tag == self._skip[-1]:
+                self._skip.pop()
+            return
+        if tag not in INLINE:
+            self._flush()
+
+    def handle_data(self, data: str) -> None:
+        if not self._skip:
+            self._run.append(data)
+
+    def close(self) -> None:
+        super().close()
+        self._flush()
+
+
+def visible_text(html: str) -> list[str]:
+    """The visible text lines of a page read as text; nothing is run, opened or fetched."""
+    parser = _VisibleText()
+    parser.feed(html)
+    parser.close()
+    return ["\\" + line if MARKDOWN_LEAD.match(line) else line for line in parser.lines]
+
+
+def _version_problems(root: Path, version: str) -> list[str]:
+    """The `imported_problems` that name VERSION's folder or the coverage (no other version)."""
+    own = f"{IMPORTED}/{version}/"
+    other = re.compile(rf"{re.escape(IMPORTED)}/i\d+/")
+    return [p for p in imported_problems(root) if own in p or not other.search(p)]
+
+
+def source_text(root: Path, version: str, today: str | None = None) -> str:
+    """The prototype source of VERSION (rule 2a); refuses a missing or failing version."""
+    folder = root / IMPORTED / version
+    if not VERSION.match(version) or version not in versions(root):
+        raise CheckError(f"rule 2a: {version}: no such imported version; nothing is written")
+    problems = _version_problems(root, version)
+    if problems:
+        for problem in problems:
+            print(f"FAIL design: {problem}")
+        raise CheckError(
+            f"rule 2a: {version}: the import or map check fails; nothing is written"
+        )
+    record = json.loads((folder / MANIFEST).read_text(encoding="utf-8"))
+    date = today or datetime.now(timezone.utc).date().isoformat()
+    out = [
+        f"Source: imported prototype {version}",
+        "Kind: design",
+        f"Version: {version} {record['digest']}",
+        f"Date: {date}",
+        "",
+    ]
+    for name, target in _rows(folder):
+        if OUT.match(target):
+            continue
+        out += [f"## {target}", ""]
+        if name.lower().endswith(PAGES):
+            data = (folder / FILES / name).read_bytes()
+            out += visible_text(_text(data))
+        else:
+            out.append(f"picture: {name}")
+        out.append("")
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def write_source(root: Path, version: str, slug: str) -> Path:
+    """Write the prototype source once as `docs/sources/<slug>-prototype-<version>.md`."""
+    rel = f"{SOURCES}/{slug}-prototype-{version}.md"
+    path = root / rel
+    if path.exists():
+        raise CheckError(f"rule 2a: {rel}: the file exists; nothing is written")
+    text = source_text(root, version)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8") as handle:  # never over an existing file
+        handle.write(text)
+    print(f"wrote {rel} ({text.count(chr(10) + '## ')} headings)")
+    return path
+
+
+def _options(args: list[str]) -> dict[str, str] | None:
+    opts: dict[str, str] = {}
+    while args:
+        flag = args.pop(0)
+        if flag not in ("--version", "--slug", "--root") or flag in opts or not args:
+            return None
+        opts[flag] = args.pop(0)
+    return opts
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args[:1] != ["source"]:
+        print(SOURCE_USAGE, file=sys.stderr)
+        return 2
+    opts = _options(args[1:])
+    if opts is None:
+        print(SOURCE_USAGE, file=sys.stderr)
+        return 2
+    if not SLUG.match(opts.get("--slug", "")):
+        print("design_import: --slug is required, a lower-case slug [a-z0-9][a-z0-9-]*",
+              file=sys.stderr)
+        return 2
+    if not VERSION.match(opts.get("--version", "")):
+        print("design_import: --version is required, an imported version i<n>", file=sys.stderr)
+        return 2
+    from common import repo_root, run
+
+    root = Path(opts["--root"]) if "--root" in opts else repo_root()
+
+    def write() -> int:
+        write_source(root, opts["--version"], opts["--slug"])
+        return 0
+
+    return run("design", write)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
