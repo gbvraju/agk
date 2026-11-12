@@ -24,7 +24,6 @@ from pathlib import Path
 import personal_state as ps
 import plan_intake
 import pytest
-import reviewers
 from forge import FilesForge
 from test_plan_intake import TITLE, write
 from test_plan_render import proposals, render
@@ -275,24 +274,21 @@ def test_ac2_rule_25_personal_mode_writes_the_briefs_through_the_files_forge(
     assert sorted(forge.numbers("issues")) == sorted(numbers.values())
 
 
-def test_ac2_rule_8_the_plan_approval_reader(plan: Path) -> None:
-    """REQ-050 AC2: rule 8, `reviewers.plan_approvals` beside `design_approvals`, and the line
-    inside the one person's whole `Confirmed:` comment in solo mode (session rule 29)."""
-    items = approved() + approved(OTHER, STRANGER) + approved(OTHER, OWNER, "claude")
-    assert reviewers.plan_approvals(items, [OWNER], ["claude"]) == {HEAD}
-    assert reviewers.APPROVE_PLAN.fullmatch(f"Approve: plan {HEAD[:12]}") is None
-    confirmed = "\n".join(
-        [
-            f"Confirmed: {OTHER}",
-            f"Verdict: cleared {OTHER}",
-            f"Approve: plan {OTHER}",
-            f"Approve: plan {HEAD}",
-            "Shown:",
-            "one",
-            "two",
-            "three",
-            f"confirmed by {OWNER} in a session at 2026-11-12T13:00:00Z",
-        ]
-    )
-    found = reviewers.confirmed_comments([comment(confirmed)], ["claude"], OWNER)
-    assert reviewers.plan_approvals(found, [OWNER], ["claude"]) == {OTHER}
+@pytest.mark.parametrize("solo", [False, True])
+def test_ac2_rule_8_the_approval_inside_the_person_s_confirmation(
+    plan: Path, capsys, solo: bool
+) -> None:
+    """REQ-050 AC2: rule 8, in solo mode the line counts inside the one person's whole
+    `Confirmed:` comment, and only for the head it confirms (session rule 29); in team mode a
+    `Confirmed:` comment confirms nothing. A short head ID never counts."""
+    if solo:
+        write(plan, "agk.toml", 'review_mode = "solo"\n')
+    lines = [f"Confirmed: {HEAD}", f"Verdict: cleared {HEAD}", f"Approve: plan {OTHER}"]
+    lines += [f"Approve: plan {HEAD}", "Shown:", "one", "two", "three"]
+    lines.append(f"confirmed by {OWNER} in a session at 2026-11-12T13:00:00Z")
+    code, out = publish(plan, capsys, [comment("\n".join(lines))], {"M1": 7})
+    assert code == (0 if solo else 2), out
+    code, out = publish(plan, capsys, [comment("\n".join(lines))], {"M1": 7}, head=OTHER)
+    assert code == 2 and "gh api" not in out
+    code, out = publish(plan, capsys, [comment(f"Approve: plan {HEAD[:12]}")], {"M1": 7})
+    assert code == 2 and "gh api" not in out
