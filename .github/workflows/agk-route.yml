@@ -11,6 +11,8 @@
 # A `pull_request` event of a draft starts no job: a draft's governance run wakes the router when it finishes, and the label is
 # set again when it is marked ready, by the router run that the `ready_for_review` governance run wakes. A `workflow_run` whose
 # conclusion is `skipped` (proof on a draft) starts no job either, since a skipped run changes no label.
+# Brief #1116 (ADR-0476): when it labels a pull request `agk:merge-ready` it starts the merger once for it with `workflow_dispatch`
+# (`actions: write`, the one event the job's token may start), so the merger no longer starts on every finished run.
 name: agk-route
 
 on:
@@ -35,6 +37,7 @@ permissions:
   issues: write
   checks: read
   statuses: read
+  actions: write
 
 # Fast CI (brief #283): the router runs on drafts too, since it labels every pull request and runs no test; it installs and
 # caches nothing and builds nothing, and its one upload (the pipeline document) keeps a retention of 7 days. The concurrency
@@ -66,19 +69,4 @@ jobs:
           AGK_PIPELINE_FILE: ${{ runner.temp }}/pipeline.json
         run: |
           # The script reaches the default branch with the pull request that adds it; until then there is nothing to route.
-          if [ -f scripts/agk/route.py ]; then
-            python3 scripts/agk/route.py
-          else
-            echo "route.py is not on the default branch yet: nothing to route"
-          fi
-      # SPEC-0036 rule 5: the pipeline document is an artifact, overwritten by the next run; a failed upload fails no routing.
-      - name: Publish the pipeline document
-        if: ${{ always() }}
-        continue-on-error: true
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
-        with:
-          name: agk-pipeline
-          path: ${{ runner.temp }}/pipeline.json
-          retention-days: 7
-          if-no-files-found: ignore
-          overwrite: true
+          if [ -f scripts/agk/route.py ];
