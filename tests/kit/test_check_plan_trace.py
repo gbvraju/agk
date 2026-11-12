@@ -760,3 +760,106 @@ def test_ac3_the_scenarios_are_the_ones_the_reading_drafts(tmp_path):
     ]
     assert [location for location, _ in check_plan.scenarios(tmp_path) or []] == drafted
     assert drafted == [SHOW, EMPTY, STORED]
+
+
+# --- amendment 167 (brief #1118, ADR-0478): business rules and persona access in the trace -------
+
+LIMIT_BLOCK = (
+    "\n### loan-limit Loan limit\n\n"
+    "Statement: A borrower SHALL see the loan limit at loans.example.com. The limit SHALL NOT "
+    "exceed 50000. The portal SHALL record every application.\n\n"
+    "Criteria:\n\n"
+    "- Given a borrower, when the form opens, then the limit shows (rules r1, r2)\n\n"
+    "- Source: docs/sources/sow.md:8\n"
+)
+REQ_RULES = (
+    "### REQ-007 Loan approval\n\n"
+    "- Statement: An officer SHALL approve a loan. A borrower SHALL NOT approve a loan.\n"
+    "- Acceptance: AC1 an officer approves (rules r1) (access P2/Loan approval); "
+    "AC2 a borrower is refused (rules r2) (access P1/Loan approval)\n"
+    "- Source: docs/sources/sow.md:8\n"
+)
+ACCESS_TABLE = (
+    "# Access\n\n"
+    "| Persona | Screen | Allowed | Sources |\n"
+    "| --- | --- | --- | --- |\n"
+    "| P1 | Loan application | yes | `docs/sources/sow.md:8` |\n"
+    "| P1 | Loan approval | no | `docs/sources/sow.md:8` |\n"
+    "| P2 | Loan application | yes | `docs/sources/sow.md:8` |\n"
+    "| P2 | Loan approval | yes | `docs/sources/sow.md:8` |\n"
+)
+
+
+def loans_plan(root: Path) -> Path:
+    """The passing plan with a loans requirement of three rules (r1 and r2 named), REQ-007 of two
+    rules each named by an AC that a test marks (AC1 only), and a two-by-two access table whose
+    two approval cells have acceptance lines."""
+    plan(root, prototype=False)
+    write(root, PROPOSED, REQS + LIMIT_BLOCK)
+    write(root, "docs/requirements.md", REQ_RULES)
+    write(root, "tests/test_loans.py", '"""REQ-007 AC1: an officer approves."""\n')
+    write(root, "docs/plan/access.md", ACCESS_TABLE)
+    return root
+
+
+def test_ac3_the_trace_counts_rules_and_lists_the_ones_with_none(tmp_path):
+    """REQ-050 AC3: amendment 167 item (a), three SHALL sentences give three rules; an acceptance
+    line naming two leaves one listed; REQ-007's two rules are named by its AC1 and AC2."""
+    loans_plan(tmp_path)
+    code, out = check(tmp_path, "--trace")
+    assert code == 0, out
+    assert infos(out)[:2] == [
+        "info plan: 4 of 5 rules have an acceptance line and a test: not read",
+        "info plan: rule loan-limit.r3: no acceptance line",
+    ]
+
+
+def test_ac3_with_facts_a_rule_counts_a_test_of_its_criterion(tmp_path):
+    """REQ-050 AC3: amendment 167 item (a), only REQ-007.r1 is named by an AC a test marks."""
+    loans_plan(tmp_path)
+    _, out = check(tmp_path, "--trace", "--facts", str(facts(tmp_path)))
+    rules = [line for line in infos(out) if "rule" in line]
+    assert rules[0] == "info plan: 4 of 5 rules have an acceptance line and 1 a test"
+    assert "info plan: rule loan-limit.r3: no acceptance line" in rules
+    assert "info plan: rule REQ-007.r2: no test" in rules
+
+
+def test_ac3_the_trace_counts_access_cells_with_a_test(tmp_path):
+    """REQ-050 AC3: amendment 167 item (b), two of four cells have an acceptance line, and one,
+    the officer's approval (REQ-007 AC1), a test."""
+    loans_plan(tmp_path)
+    _, out = check(tmp_path, "--trace")
+    cells = [line for line in infos(out) if "access" in line]
+    assert cells == [
+        "info plan: 4 access cells; with a test: not read",
+        "info plan: access P1/Loan application: no acceptance line",
+        "info plan: access P2/Loan application: no acceptance line",
+    ]
+    _, out = check(tmp_path, "--trace", "--facts", str(facts(tmp_path)))
+    cells = [line for line in infos(out) if "access" in line]
+    assert cells[0] == "info plan: 1 of 4 access cells have a test"
+    assert "info plan: access P1/Loan approval: no test" in cells
+
+
+def test_ac3_rules_and_access_are_information_only_with_trace(tmp_path):
+    """REQ-050 AC3: amendment 167, the lines never fail the plan and print only with `--trace`;
+    a plan without a statement or an access table prints neither."""
+    loans_plan(tmp_path)
+    code, out = check(tmp_path)
+    assert code == 0, out
+    assert infos(out) == [] and last(out).startswith("ok plan: ")
+    plan(tmp_path / "plain", prototype=False)
+    _, out = check(tmp_path / "plain", "--trace")
+    assert not [line for line in infos(out) if "rule" in line or "access" in line]
+
+
+def test_ac3_rules_and_access_open_no_network(tmp_path, monkeypatch, capsys):
+    """REQ-050 AC3: amendment 167, the reading in process with the network refused."""
+    loans_plan(tmp_path)
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("no network")
+
+    monkeypatch.setattr(socket, "socket", refuse)
+    assert check_plan.cmd_check(tmp_path, trace=True) == 0
+    assert "rules have an acceptance line" in capsys.readouterr().out

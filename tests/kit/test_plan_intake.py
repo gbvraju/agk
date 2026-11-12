@@ -405,3 +405,158 @@ def test_ac2_states_prints_nothing_without_a_design_source(repo: Path, capsys) -
     write(repo, "docs/design/inventory.md", INVENTORY)
     assert plan_intake.main(["states", "--root", str(repo)]) == 0
     assert capsys.readouterr().out.strip() == "ok states (none to ask)"
+
+
+# --- amendment 167 (brief #1118, ADR-0478): business rules and persona access ------------------
+
+LOANS = "docs/sources/loans-prd.md"
+LOANS_TEXT = (
+    "Source: Example loans requirements\nKind: prd\nVersion: 1\nDate: 2026-11-12\n\n"
+    "# Loan application\n\nA borrower applies at loans.example.com.\n\n"
+    "# Loan approval\n\nAn officer approves; a borrower never does.\n"
+)
+LOANS_INVENTORY = (
+    "# Inventory\n\n## Screens\n\n"
+    "### Loan application\n\n- State default: yes\n\n"
+    "### Loan approval\n\n- State default: yes\n"
+)
+LIMITS = (
+    "A borrower SHALL see the loan limit before applying. The limit SHALL NOT exceed 50000. "
+    "The portal SHALL record every application."
+)
+APPLY, APPROVE = f"{LOANS}#Loan application", f"{LOANS}#Loan approval"
+
+
+def loans() -> dict:
+    """Two personas, two screens, one `no` cell with its denial line, and one requirement whose
+    statement holds three rules, two of them named by its acceptance line."""
+    data = good()
+    officer = {"key": "P2", "name": "Loan officer", "goals": ["Approves loans"]}
+    data["personas"].append(officer | {"sources": [APPROVE]})
+    r = data["requirements"][0]
+    r["statement"] = LIMITS
+    r["criteria"] = [
+        "Given a borrower, when the form opens, then the limit shows (rules r1, r2)",
+        "Given a borrower, when the approval screen opens, then it is refused "
+        "(access P1/Loan approval)",
+    ]
+    data["access"] = [
+        {"persona": "P1", "screen": "Loan application", "allowed": "yes", "sources": [APPLY]},
+        {"persona": "P1", "screen": "Loan approval", "allowed": "no", "sources": [APPROVE]},
+        {"persona": "P2", "screen": "Loan application", "allowed": "yes", "sources": [APPLY]},
+        {"persona": "P2", "screen": "Loan approval", "allowed": "yes", "sources": [APPROVE]},
+    ]
+    return data
+
+
+@pytest.fixture
+def loans_repo(repo: Path) -> Path:
+    write(repo, LOANS, LOANS_TEXT)
+    write(repo, "docs/design/inventory.md", LOANS_INVENTORY)
+    return repo
+
+
+def test_ac2_rules_each_shall_sentence_is_one_rule() -> None:
+    """REQ-050 AC2: amendment 167 item (a), three SHALL sentences give three rules, `SHALL NOT`
+    included, and a sentence without SHALL is none."""
+    rules = check_plan.rules_of(LIMITS + " Loans are shown at example.com.")
+    assert len(rules) == 3
+    assert "SHALL NOT" in rules[1]
+    assert check_plan.rules_of("Loans are listed.") == []
+
+
+def test_ac2_rules_and_access_a_complete_table_passes(loans_repo: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 167, two personas by two screens, the `no` cell with its denial
+    line, and an acceptance line naming two of three rules: `ok proposals`."""
+    code, out = validate(loans_repo, loans(), capsys)
+    assert code == 0, out
+    assert out.strip() == "ok proposals"
+
+
+def test_ac2_access_is_optional(loans_repo: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 167 item (b), a plan draft without `access` passes as before."""
+    data = loans()
+    del data["access"]
+    data["requirements"][0]["criteria"].pop()
+    code, out = validate(loans_repo, data, capsys)
+    assert code == 0, out
+
+
+def test_ac2_access_a_cell_without_a_source_is_refused(loans_repo: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 167 item (b), a cell with no source is an open question, never a
+    guess, so `validate` refuses it."""
+    data = loans()
+    data["access"][3]["sources"] = []
+    refused(loans_repo, data, capsys, "rule 4: access P2/Loan approval: sources is empty")
+
+
+def test_ac2_access_a_no_cell_needs_a_denial_line(loans_repo: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 167 item (b), each `no` cell needs an acceptance line naming it."""
+    data = loans()
+    data["requirements"][0]["criteria"].pop()
+    refused(
+        loans_repo,
+        data,
+        capsys,
+        "rule 5: access P1/Loan approval: no without a denial acceptance line",
+    )
+
+
+def test_ac2_access_cells_name_a_persona_a_screen_and_yes_or_no(loans_repo: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 167 item (b), the persona, the screen and `allowed` are checked."""
+    data = loans()
+    data["access"][3]["allowed"] = "maybe"
+    refused(loans_repo, data, capsys, "rule 4: access P2/Loan approval: allowed is not yes or no")
+    data = loans()
+    data["access"][0]["persona"] = "P9"
+    data["access"][2]["screen"] = "Loan history"
+    refused(
+        loans_repo,
+        data,
+        capsys,
+        "rule 5: access P9/Loan application: persona names nothing",
+        "rule 5: access P2/Loan history: screen names no screen of the inventory",
+    )
+
+
+def test_ac2_access_a_repeated_cell_is_refused(loans_repo: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 167 item (b), one row per persona and screen."""
+    data = loans()
+    data["access"].append(copy.deepcopy(data["access"][0]))
+    refused(loans_repo, data, capsys, "rule 4: access P1/Loan application: the key is repeated")
+
+
+def test_ac2_marks_name_rules_and_cells_that_exist(loans_repo: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 167, `(rules r4)` names no rule of a three-rule statement, and
+    `(access P2/Loan history)` names no cell of the table."""
+    data = loans()
+    data["requirements"][0]["criteria"][0] += " (rules r4)"
+    data["requirements"][0]["criteria"].append("Then nothing (access P2/Loan history)")
+    refused(
+        loans_repo,
+        data,
+        capsys,
+        "rule 5: requirements R1: criterion 1 names a rule its statement does not hold",
+        "rule 5: requirements R1: criterion 3 names an access cell the access table does not hold",
+    )
+
+
+def test_ac2_render_writes_the_access_table(loans_repo: Path, capsys) -> None:
+    """REQ-050 AC2: amendment 167 item (b), `render` writes `docs/plan/access.md`, one row per
+    cell, which `check_plan.py` reads back."""
+    data = loans()
+    data["areas"] = []
+    path = loans_repo.parent / "proposals.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    code = plan_intake.main(["render", "--proposals", str(path), "--root", str(loans_repo)])
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "created docs/plan/access.md" in out
+    text = (loans_repo / "docs/plan/access.md").read_text(encoding="utf-8")
+    assert f"| P1 | Loan approval | no | `{APPROVE}` |" in text
+    assert check_plan.access_cells(loans_repo) == [
+        ("P1/Loan application", "yes"),
+        ("P1/Loan approval", "no"),
+        ("P2/Loan application", "yes"),
+        ("P2/Loan approval", "yes"),
+    ]

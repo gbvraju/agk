@@ -50,6 +50,15 @@ names none and one `unmatched screen: <screen>` per screen no scenario names are
 `--trace` adds `info plan: scenario <location>: <screens>` (or `names no screen`) per scenario
 after the matrix: information, never a failure.
 
+Brief #1118, amendment 167 (ADR-0478), with `--trace` and information only: each sentence of a
+block's `Statement:` line holding `SHALL` is one rule `<key>.r<n>`, and an acceptance line names
+the rules it proves with `(rules r1, r2)`; when a block has a statement, `info plan: <a> of <b>
+rules have an acceptance line and <c> a test` and one line per rule with none. When
+`docs/plan/access.md` (`| Persona | Screen | Allowed | Sources |`) exists, an acceptance line names
+a cell with `(access <persona>/<screen>)`, and `info plan: <a> of <b> access cells have a test`
+with one line per cell no acceptance line names. A test is a `REQ-nnn ACn` marker of the naming
+criterion, read with `--facts`, else `not read`.
+
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
 or a charter's `docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013; the `CHARTER_NAME` of
@@ -111,6 +120,13 @@ ACCEPTANCE_LINE = re.compile(r"^\s*(?:[-*]\s+)?Acceptance:\s")
 AC_NUMBER = re.compile(r"(?:^|[:;]\s*)AC(\d+)\s")
 CRITERIA = re.compile(r"^\s*Criteria:\s*$")
 REQ_KEY = re.compile(r"^REQ-\d+$")
+STATEMENT_LINE = re.compile(r"^\s*(?:[-*]\s+)?Statement:\s*(.+?)\s*$")
+SHALL = re.compile(r"\bSHALL\b")
+SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+RULES_MARK = re.compile(r"\(rules?\s+(r[1-9]\d*(?:\s*,\s*r[1-9]\d*)*)\)")
+ACCESS_MARK = re.compile(r"\(access\s+(P[1-9]\d*/[^()]*[^()\s])\s*\)")
+ACCESS = f"{PLAN}/access.md"
+ACCESS_COLUMNS = ("Persona", "Screen", "Allowed", "Sources")
 
 
 def _value(line: str, key: str) -> str | None:
@@ -424,6 +440,77 @@ def names_screen(steps: list[str], screen: str) -> bool:
     )
 
 
+def rules_of(statement: str) -> list[str]:
+    """Amendment 167 item 1: each sentence of a statement that holds `SHALL` is one rule."""
+    return [s for s in SENTENCE_END.split(statement.strip()) if SHALL.search(s)]
+
+
+def marked_rules(text: str) -> list[str]:
+    """The `r<n>` of every `(rules r1, r2)` mark of an acceptance line."""
+    return [r.strip() for m in RULES_MARK.finditer(text) for r in m.group(1).split(",")]
+
+
+def marked_cells(text: str) -> list[str]:
+    """The `<persona>/<screen>` of every `(access ...)` mark of an acceptance line."""
+    return [m.group(1).strip() for m in ACCESS_MARK.finditer(text)]
+
+
+def blocks(root: Path) -> list[tuple[str, str, list[tuple[int | None, str]]]]:
+    """Amendment 167: each requirement block as (id, its statement, its acceptance lines as
+    (criterion n, text)): an `ACn` segment of an `Acceptance:` line is criterion n, the n-th list
+    line after `Criteria:` criterion n, and any other line None, as `acceptance_lines` reads."""
+    out: list[tuple[str, str, list[tuple[int | None, str]]]] = []
+    for rel, pattern in ((PROPOSED, BLOCK), (REQUIREMENTS, REQ_HEADER)):
+        lines: list[tuple[int | None, str]] | None = None
+        place: int | None = None
+        for line in (_read(root / rel) or "").splitlines():
+            if match := pattern.match(line):
+                lines, place = [], None
+                out.append((match.group(1).rstrip(":"), "", lines))
+                continue
+            if line.startswith("#"):
+                lines = None
+            if lines is None:
+                continue
+            if statement := STATEMENT_LINE.match(line):
+                key, text, _ = out[-1]
+                out[-1] = (key, f"{text} {statement.group(1)}".strip(), lines)
+                continue
+            if CRITERIA.match(line):
+                place = 0
+                continue
+            listed = LIST_ITEM.match(line) is not None and place is not None
+            if listed:
+                place = (place or 0) + 1
+            elif line.strip() and place is not None:
+                place = None
+            starts = list(AC_NUMBER.finditer(line)) if ACCEPTANCE_LINE.match(line) else []
+            if starts:
+                ends = [m.start() for m in starts[1:]] + [len(line)]
+                lines += [
+                    (int(m.group(1)), line[m.start() : e])
+                    for m, e in zip(starts, ends, strict=True)
+                ]
+            else:
+                lines.append((place if listed else None, line))
+    return out
+
+
+def access_cells(root: Path) -> list[tuple[str, str]] | None:
+    """Amendment 167 item 2: the rows of `docs/plan/access.md` as (`<persona>/<screen>`,
+    allowed), or None without the file."""
+    text = _read(root / ACCESS)
+    if text is None:
+        return None
+    out: list[tuple[str, str]] = []
+    for line in text.splitlines():
+        cells = _cells(line) if line.strip().startswith("|") else []
+        if len(cells) == len(ACCESS_COLUMNS) and tuple(cells) != ACCESS_COLUMNS:
+            if not _separator(cells):
+                out.append((f"{cells[0]}/{cells[1]}", cells[2]))
+    return out
+
+
 def scope_lines(root: Path) -> list[tuple[int, list[str]]]:
     """The list lines under the `In scope` heading of scope.md: (line number, locations)."""
     text = _read(root / SCOPE) or ""
@@ -695,6 +782,59 @@ class Plan:
             for loc, found in self.matches()
         ]
 
+    def _tested(self, facts: bool) -> set[tuple[str, str]] | None:
+        """The `(REQ-nnn, ACn)` pairs a test marks, read with `--facts` only (ADR-0474)."""
+        if not facts:
+            return None
+        return {(m["req"], m["ac"]) for m in ac_markers_for(self.root) if m["ac"]}
+
+    @staticmethod
+    def _has_test(found: list[tuple[str, int | None]], marked: set[tuple[str, str]]) -> bool:
+        return any(REQ_KEY.match(r) and n is not None and (r, f"AC{n}") in marked for r, n in found)
+
+    def rule_lines(self, facts: bool) -> list[str]:
+        """Amendment 167 item 1: the rules count and each rule with no acceptance line or test."""
+        found = blocks(self.root)
+        if not any(statement for _, statement, _ in found):
+            return []
+        marked = self._tested(facts)
+        total, named, tested, missing = 0, 0, 0, []
+        for key, statement, lines in found:
+            for n in range(1, len(rules_of(statement)) + 1):
+                total += 1
+                hits = [(key, c) for c, text in lines if f"r{n}" in marked_rules(text)]
+                if not hits:
+                    missing.append(f"info plan: rule {key}.r{n}: no acceptance line")
+                    continue
+                named += 1
+                if marked is not None and self._has_test(hits, marked):
+                    tested += 1
+                elif marked is not None:
+                    missing.append(f"info plan: rule {key}.r{n}: no test")
+        head = f"info plan: {named} of {total} rules have an acceptance line and"
+        count = f"{head} a test: {NOT_READ}" if marked is None else f"{head} {tested} a test"
+        return [count, *missing]
+
+    def access_lines(self, facts: bool) -> list[str]:
+        """Amendment 167 item 2: the access cells with a test, and each cell with none."""
+        cells = access_cells(self.root)
+        if cells is None:
+            return []
+        marked = self._tested(facts)
+        lines = [(key, c, text) for key, _, found in blocks(self.root) for c, text in found]
+        tested, missing = 0, []
+        for cell, _ in cells:
+            hits = [(key, c) for key, c, text in lines if cell in marked_cells(text)]
+            if not hits:
+                missing.append(f"info plan: access {cell}: no acceptance line")
+            elif marked is not None and self._has_test(hits, marked):
+                tested += 1
+            elif marked is not None:
+                missing.append(f"info plan: access {cell}: no test")
+        if marked is None:
+            return [f"info plan: {len(cells)} access cells; with a test: {NOT_READ}", *missing]
+        return [f"info plan: {tested} of {len(cells)} access cells have a test", *missing]
+
     def trace(self, facts: bool) -> list[str]:
         rows = [u for u in self.in_scope() if u is not None]
         rows += [loc for loc in self.cited if loc not in rows]
@@ -736,7 +876,9 @@ def cmd_check(
         return 1 if problems else 0
     plan = Plan(root, facts, numbers or {})
     if trace:
-        print("\n".join(plan.trace(facts is not None) + plan.screen_lines()))
+        lines = plan.trace(facts is not None) + plan.screen_lines()
+        lines += plan.rule_lines(facts is not None) + plan.access_lines(facts is not None)
+        print("\n".join(lines))
     problems += plan.problems()
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
