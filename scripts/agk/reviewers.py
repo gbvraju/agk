@@ -36,6 +36,7 @@ APPROVE_ACCEPTANCE = re.compile(  # SPEC-0051 rule 6: the owner's yes on an acce
 APPROVE_INVENTORY = re.compile(r"Approve: inventory ([0-9a-f]{40})")  # SPEC-0037 rule 3
 # SPEC-0037 rule 9; a kit version v<n> or an imported version i<n> (amendment 161 item 4, ADR-0449)
 APPROVE_DESIGN = re.compile(r"Approve: design ([vi][1-9]\d*) ([0-9a-f]{40})")
+APPROVE_PLAN = re.compile(r"Approve: plan ([0-9a-f]{40})")  # SPEC-0043 rule 8 (brief #1078)
 CONFIRMED = re.compile(r"Confirmed: ([0-9a-f]{40})")  # brief 277: the full head ID
 CONFIRMED_VERDICT = re.compile(r"Verdict: (?:cleared|fix list|rejected) ([0-9a-f]{40})")
 CONFIRMED_BY = re.compile(
@@ -361,18 +362,19 @@ def confirmed_comments(
     confirmation, so team mode, and solo mode with nobody or more than one person listed, read none.
     A confirmation is a comment by that person whose lines are `Confirmed: <40-hex sha>`, then
     `Verdict: cleared|fix list|rejected <the same sha>`, then any lines (`Final:` lines, findings,
-    `Approve: SPEC-nnnn`, `Approve: design|inventory`), then `Shown:` and exactly three lines (the
-    summary the person was shown),
+    `Approve: SPEC-nnnn`, `Approve: design|inventory|plan`), then `Shown:` and exactly three lines
+    (the summary the person was shown),
     and last `confirmed by <login> in a session at <YYYY-MM-DDTHH:MM:SSZ>`, where the login is the
     comment's author. The sha must be a head the reader names: one of `heads` when given (the
     router: the head, or the parent of a head that may be its Final commit), and, when `runs` is
     given, the head GitHub shows for the comment's time, by the rule of a team `Approve: SPEC-nnnn`
     line (`head_before_comment`). It adds, as the same author at the same time, one comment holding
     the verdict (its lines up to `Shown:`) and, for each `Approve: SPEC-nnnn` line, one comment
-    `Approve: <sha> SPEC-nnnn`, and each `Approve: design|inventory` line that names the confirmed
-    sha as its own comment (brief #459). A comment posted through an app of `agent_apps`, or of
-    any other shape, adds nothing (answers 2, 3 and 7; the verdicts on f58803a and 1ae4fd4). Only
-    the person posts a confirmation; a session never does (session rule 29)."""
+    `Approve: <sha> SPEC-nnnn`, and each `Approve: design|inventory|plan` line that names the
+    confirmed sha as its own comment (brief #459; `plan`, brief #1078). A comment posted through
+    an app of `agent_apps`, or of any other shape, adds nothing (answers 2, 3 and 7; the verdicts
+    on f58803a and 1ae4fd4). Only the person posts a confirmation; a session never does (session
+    rule 29)."""
     if not person:
         return list(comments)
     found: list[dict] = []
@@ -406,7 +408,10 @@ def confirmed_comments(
                 found.append({**item, "body": f"Approve: {sha.group(1)} {approve.group(1)}"})
             design = APPROVE_DESIGN.fullmatch(line.strip())
             inventory = APPROVE_INVENTORY.fullmatch(line.strip())
+            plan = APPROVE_PLAN.fullmatch(line.strip())
             if (design and design[2] == sha[1]) or (inventory and inventory[1] == sha[1]):
+                found.append({**item, "body": line.strip()})
+            elif plan and plan[1] == sha[1]:
                 found.append({**item, "body": line.strip()})
     return found
 
@@ -429,6 +434,22 @@ def design_approvals(
         elif named := APPROVE_DESIGN.fullmatch(line):
             found.add(("design", named[1], named[2]))
     return found
+
+
+def plan_approvals(
+    items: list[dict], approvers: list[str], agent_apps: tuple[str, ...] | list[str] = ()
+) -> set[str]:
+    """The full head IDs of a plan's pull request that a listed approver confirmed by the first
+    line `Approve: plan <full head ID>`, never through an app of `agent_apps` (SPEC-0043 rule 8,
+    the rules of a design sign-off). Pass `confirmed_comments` output so that, in solo mode, the
+    line counts inside the person's whole `Confirmed:` comment too."""
+    allowed = {a.lstrip("@").lower() for a in approvers}
+    return {
+        named[1]
+        for item in items
+        if login_of(item) in allowed and not via_agent(item, agent_apps)
+        if (named := APPROVE_PLAN.fullmatch(first_line(item)))
+    }
 
 
 def acceptance_heads(

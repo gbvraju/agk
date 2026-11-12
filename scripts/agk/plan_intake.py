@@ -1,10 +1,11 @@
 """The plan's proposals, validated and rendered (SPEC-0043 rules 3 to 7). Installed:
 `kit/manifest.json` lists it in `verbatim`. Build (c1) of SPEC-0043 rule 27 (amendment 163,
-ADR-0456) and build (c2), `render` (ADR-0461).
+ADR-0456), build (c2), `render` (ADR-0461), and build (i), `publish` (ADR-0459).
 
     python3 plan_intake.py validate --proposals FILE [--root DIR]
     python3 plan_intake.py states [--root DIR]
     python3 plan_intake.py render --proposals FILE [--root DIR]
+    python3 plan_intake.py publish --comments FILE --head SHA [--numbers FILE] [--root DIR]
 
 Rule 3: every command exits 2 with `data guard not installed: <path>` when `scripts/agk/guard.py`
 or `.claude/hooks/data_guard.py` is absent, and runs `guard.scan_text` on the whole text of every
@@ -17,13 +18,19 @@ the inventory's `yes` states that no `<screen>/<state>` heading of a `Kind: desi
 writes, as new files only and all or nothing, `docs/plan/scope.md`, `docs/plan/milestones.md`,
 `docs/plan/requirements-proposed.md`, one Draft spec per area (`new_spec.make_spec`, imported from
 the plugin's copy beside this script) and `docs/plan/briefs/M<n>/<key>.md`; it never edits
-`docs/requirements.md`. Files only: no network, no model; only `render` writes.
+`docs/requirements.md`. Rules 8 and 25: `publish` exits 2 without `Approve: plan <--head>` by an
+account of `spec_approvers` in the saved comments (`reviewers.plan_approvals`), refuses a brief that
+`check_brief.py --root .` fails, and prints one `gh api` command per milestone and per brief,
+briefs in `depends_on` order, each withheld until `--numbers` gives its milestone's and its
+dependences' numbers; it runs none. In personal mode it writes the briefs through
+`forge.FilesForge`. Files only: no network, no model; only `render` and personal `publish` write.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -37,6 +44,7 @@ NAME = "plan-intake"
 USAGE = (
     "usage: plan_intake.py validate --proposals FILE [--root DIR] | states [--root DIR]"
     " | render --proposals FILE [--root DIR]"
+    " | publish --comments FILE --head SHA [--numbers FILE] [--root DIR]"
 )
 GUARDS = ("scripts/agk/guard.py", ".claude/hooks/data_guard.py")
 # The pattern of `playbook.py check-start` (SPEC-0013 rule 5). playbook.py is kit-only, so it is
@@ -463,6 +471,233 @@ def cmd_render(root: Path, proposals: Path) -> int:
     return 0
 
 
+# --- rule 25: publish, after the person's confirmation of rule 8 (build (i), ADR-0459) ------------
+
+HEAD_ID = re.compile(r"[0-9a-f]{40}")
+MILESTONE_HEADING = re.compile(r"### (M[1-9]\d*) (.+)")
+DEPENDS_ON = re.compile(r"Depends-on: (.+)")
+ISSUE_REF = re.compile(r"#[1-9]\d*")
+BRIEF_LABEL = "agk-brief"
+MILESTONES = f"{PLAN}/milestones.md"
+NO_CONFIRMATION = (
+    "publish needs the person's confirmation: a comment whose first line is"
+    " `Approve: plan <full head ID>` by an account of spec_approvers, naming this head"
+    " (setting: spec_approvers in config/reviewers.yaml)"
+)
+BAD_COMMENTS = "publish reads a saved list of the plan's comments (option: --comments)"
+BAD_NUMBERS = (
+    "--numbers is a JSON object from a key to an issue or milestone number (option: --numbers)"
+)
+
+
+def _json(path: Path) -> object:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+
+
+def confirmed(root: Path, comments: list, head: str) -> bool:
+    """Rule 8: `Approve: plan <head>` by a listed approver, never through an agent app; in solo
+    mode inside the person's whole `Confirmed:` comment too (session rule 29)."""
+    import reviewers  # noqa: PLC0415 - only publish reads approvals
+    from common import agent_apps  # noqa: PLC0415
+
+    apps = agent_apps(root)
+    items = reviewers.confirmed_comments(
+        [c for c in comments if isinstance(c, dict)], apps, reviewers.solo_person(root)
+    )
+    return head in reviewers.plan_approvals(items, reviewers.spec_approvers(root), apps)
+
+
+def plan_milestones(text: str) -> list[dict]:
+    """`### M<n> <title>` blocks of `docs/plan/milestones.md`, each with its `Target:` date."""
+    out: list[dict] = []
+    for line in text.splitlines():
+        if heading := MILESTONE_HEADING.fullmatch(line.strip()):
+            out.append({"id": heading[1], "title": _one(heading[2]), "target": None})
+        elif out and line.startswith("Target: "):
+            value = line.removeprefix("Target: ").strip()
+            out[-1]["target"] = value if check_plan.real_date(value) else None
+    return out
+
+
+def plan_briefs(root: Path, milestones: list[str]) -> tuple[list[dict], list[str]]:
+    """Each `docs/plan/briefs/M<n>/<key>.md`: its key, milestone, title, body and dependences."""
+    briefs: list[dict] = []
+    out: list[str] = []
+    folder = root / PLAN / "briefs"
+    for path in sorted(folder.glob("*/*.md")) if folder.is_dir() else []:
+        key, milestone, where = path.stem, path.parent.name, f"rule 25: briefs {path.stem}"
+        body = _read(path)
+        lines = (body or "").splitlines()
+        if body is None or not lines or not lines[0].startswith("# ") or not lines[0][2:].strip():
+            out.append(f"{where}: the file has no `# <title>` first line")
+            continue
+        named = [
+            x.removeprefix("Milestone: ").strip() for x in lines if x.startswith("Milestone: ")
+        ]
+        if milestone not in milestones:
+            out.append(f"{where}: milestone names nothing")
+        elif named != [milestone]:
+            out.append(f"{where}: Milestone: is not its folder")
+        deps = [m[1].strip() for x in lines if (m := DEPENDS_ON.fullmatch(x.rstrip()))]
+        briefs.append(
+            {"key": key, "milestone": milestone, "title": _one(lines[0][2:]), "body": body}
+            | {"depends_on": deps}
+        )
+    keys = [b["key"] for b in briefs]
+    out += [
+        f"rule 25: briefs {k}: the key is repeated" for k in sorted(set(keys)) if keys.count(k) > 1
+    ]
+    for b in briefs:
+        if any(not ISSUE_REF.fullmatch(d) and d not in keys for d in b["depends_on"]):
+            out.append(f"rule 25: briefs {b['key']}: depends_on names nothing")
+    graph = {b["key"]: [d for d in b["depends_on"] if d in keys] for b in briefs}
+    out += [f"rule 25: briefs {k}: depends_on makes a cycle" for k in sorted(_cycle(graph))]
+    return briefs, out
+
+
+def in_order(briefs: list[dict], milestones: list[str]) -> list[dict]:
+    """Rule 25: `depends_on` order; among the briefs that are free, by milestone, then by key."""
+    rank = {m: n for n, m in enumerate(milestones)}
+    left = {b["key"]: b for b in briefs}
+    done: list[dict] = []
+    while left:
+        ready = [b for b in left.values() if not any(d in left for d in b["depends_on"])]
+        first = min(ready, key=lambda b: (rank.get(b["milestone"], len(rank)), b["key"]))
+        done.append(left.pop(first["key"]))
+    return done
+
+
+def numbered_body(body: str, numbers: dict[str, int]) -> str:
+    """Each `Depends-on: <key>` as `Depends-on: #<n>`; `#1` stands in for one not yet numbered,
+    only for the shape check of `check_brief.py`."""
+
+    def swap(match: re.Match) -> str:
+        value = match[1].strip()
+        return match[0] if ISSUE_REF.fullmatch(value) else f"Depends-on: #{numbers.get(value, 1)}"
+
+    return re.sub(r"(?m)^Depends-on: (.+?)[ \t]*$", swap, body)
+
+
+def brief_check(root: Path, briefs: list[dict], numbers: dict[str, int]) -> list[str]:
+    """Rule 25: every brief not yet published passes `check_brief.py --root .` once numbered."""
+    import check_brief  # noqa: PLC0415 - only publish needs it
+
+    out: list[str] = []
+    for b in briefs:
+        if b["key"] in numbers:
+            continue
+        problems = check_brief.body_problems(numbered_body(b["body"], numbers), root, None)
+        if problems:
+            out.append(f"rule 25: briefs {b['key']}: check_brief.py fails: " + "; ".join(problems))
+    return out
+
+
+def milestone_command(m: dict) -> str:
+    args = ["gh", "api", "repos/{owner}/{repo}/milestones", "-X", "POST"]
+    args += ["-f", f"title={m['id']} {m['title']}"]
+    args += ["-f", f"due_on={m['target']}T00:00:00Z"] if m["target"] else []
+    return shlex.join(args)
+
+
+def brief_command(b: dict, body: str, milestone: int) -> str:
+    args = ["gh", "api", "repos/{owner}/{repo}/issues", "-X", "POST", "-f", f"title={b['title']}"]
+    args += ["-f", f"body={body}", "-f", f"labels[]={BRIEF_LABEL}", "-F", f"milestone={milestone}"]
+    return shlex.join(args)
+
+
+def cmd_publish(root: Path, comments: Path, head: str, numbers_path: Path | None) -> int:
+    saved = _json(comments)
+    if not isinstance(saved, list):
+        print(BAD_COMMENTS)
+        return 2
+    numbers = {} if numbers_path is None else _json(numbers_path)
+    if not isinstance(numbers, dict) or not all(
+        isinstance(n, int) and not isinstance(n, bool) and n > 0 for n in numbers.values()
+    ):
+        print(BAD_NUMBERS)
+        return 2
+    if not confirmed(root, saved, head):
+        print(NO_CONFIRMATION)
+        return 2
+    text = _read(root / MILESTONES)
+    milestones = plan_milestones(text or "")
+    if not milestones:
+        print(f"rule 25: {MILESTONES} is missing or holds no milestone; nothing to publish")
+        return 1
+    ids = [m["id"] for m in milestones]
+    briefs, problems = plan_briefs(root, ids)
+    if not problems:
+        briefs = in_order(briefs, ids)
+        problems = brief_check(root, briefs, numbers)
+    if problems:
+        print("\n".join(problems))
+        print("nothing was printed to run and nothing was created")
+        return 1
+    from common import personal_table  # noqa: PLC0415
+
+    if personal_table(root) is not None:
+        return publish_files(root, milestones, briefs, dict(numbers))
+    return publish_github(milestones, briefs, numbers)
+
+
+def publish_github(milestones: list[dict], briefs: list[dict], numbers: dict[str, int]) -> int:
+    """Rule 25: the commands for the person's own `gh`, printed and never run."""
+    counts = dict.fromkeys(("milestones", "briefs", "withheld", "published"), 0)
+    for m in milestones:
+        if m["id"] in numbers:
+            print(f"published {m['id']} milestone {numbers[m['id']]}")
+            counts["published"] += 1
+        else:
+            print(milestone_command(m))
+            counts["milestones"] += 1
+    for b in briefs:
+        if b["key"] in numbers:
+            print(f"published {b['key']} #{numbers[b['key']]}")
+            counts["published"] += 1
+            continue
+        waits = [b["milestone"]] if b["milestone"] not in numbers else []
+        waits += [d for d in b["depends_on"] if not ISSUE_REF.fullmatch(d) and d not in numbers]
+        if waits:
+            print(f"withheld {b['key']}: waits for {', '.join(waits)}")
+            counts["withheld"] += 1
+            continue
+        print(brief_command(b, numbered_body(b["body"], numbers), numbers[b["milestone"]]))
+        counts["briefs"] += 1
+    print(
+        f"ok publish: {counts['milestones']} milestone and {counts['briefs']} brief commands"
+        f" printed, {counts['withheld']} withheld, {counts['published']} published before;"
+        " nothing was run (save each number into --numbers and run publish again)"
+    )
+    return 0
+
+
+def publish_files(
+    root: Path, milestones: list[dict], briefs: list[dict], numbers: dict[str, int]
+) -> int:
+    """Rule 25 in personal mode: the briefs as issues of the files forge, in order."""
+    import os  # noqa: PLC0415
+
+    from forge import FilesForge  # noqa: PLC0415 - only personal mode writes
+
+    forge = FilesForge(root, env=os.environ)
+    for m in milestones:
+        print(f"milestone {m['id']}: kept in each brief's Milestone: line (no forge record)")
+    made = 0
+    for b in briefs:
+        if b["key"] in numbers:
+            print(f"published {b['key']} #{numbers[b['key']]}")
+            continue
+        number = forge.create_issue(b["title"], numbered_body(b["body"], numbers), [BRIEF_LABEL])
+        numbers[b["key"]] = number
+        print(f"created {b['key']} #{number}")
+        made += 1
+    print(f"ok publish: {made} briefs written to the files forge; nothing was sent to GitHub")
+    return 0
+
+
 def missing_states(root: Path) -> list[str]:
     """Amendment 163 item 5: `<first heading's location> <state>` for each state to ask."""
     inventory = design_import.inventory_states(root) or {}
@@ -495,11 +730,17 @@ def main(argv: list[str] | None = None) -> int:
     command, rest = (args[0], args[1:]) if args else ("", [])
     options = dict(zip(rest[::2], rest[1::2], strict=False)) if len(rest) % 2 == 0 else None
     allowed = {"validate": {"--proposals", "--root"}, "states": {"--root"}}
+    allowed["publish"] = {"--comments", "--head", "--numbers", "--root"}
     allowed = (allowed | {"render": allowed["validate"]}).get(command)
     if allowed is None or options is None or not set(options) <= allowed:
         print(USAGE, file=sys.stderr)
         return 2
     if command in ("validate", "render") and "--proposals" not in options:
+        print(USAGE, file=sys.stderr)
+        return 2
+    if command == "publish" and (
+        "--comments" not in options or not HEAD_ID.fullmatch(options.get("--head", ""))
+    ):
         print(USAGE, file=sys.stderr)
         return 2
     return run(NAME, lambda: dispatch(command, options))
@@ -514,6 +755,9 @@ def dispatch(command: str, options: dict[str, str]) -> int:
         return cmd_states(root)
     if command == "render":
         return cmd_render(root, Path(options["--proposals"]))
+    if command == "publish":
+        numbers = Path(options["--numbers"]) if "--numbers" in options else None
+        return cmd_publish(root, Path(options["--comments"]), options["--head"], numbers)
     return cmd_validate(root, Path(options["--proposals"]))
 
 
