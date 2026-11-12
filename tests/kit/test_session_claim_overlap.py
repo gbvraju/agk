@@ -232,3 +232,79 @@ def test_the_default_list_is_the_five_indexes_of_rule_3():
     import session_plan
 
     assert tuple(session_plan.SHARED_INDEXES) == INDEXES
+
+
+# --- a red branch's fix brief is claimed before the overlap (brief #1052) -----------------------
+
+RED_TITLE = "The default branch is red"
+RED_BODY = (
+    'Sentence: "The default branch is red: the required checks of its head fail."\n'
+    "Answers:\n1. Failing check: proof\n2. Head: " + "a" * 40 + "\n3. Run: https://x.test/runs/1\n"
+    "Priority: 0\nAdvances: none\nTouches: **\nSize: S\n"
+)
+OVERLAP = f"waits for pull request #20 (it changes {FILE})"
+
+
+def alarm(number: int = 9) -> dict:
+    return {**issue(number, RED_BODY), "title": RED_TITLE, "user": {"login": "github-actions[bot]"}}
+
+
+def red_fix_scene(stub: Stub, said_by: str = "boss", red: bool = True) -> None:
+    """Alarm #9, fix brief #6 named on it by `fix brief filed: #6`, brief #7 of the same file and
+    an open builder pull request #20 that changes it (the case of #1048 and #1045)."""
+    stub.serve(PULLS, [pr(20, 1)])
+    changed(stub, 20, ("modified", FILE))
+    listing(stub, [*([alarm()] if red else []), issue(6, brief(FILE)), issue(7, brief(FILE))])
+    stub.serve(f"{ISSUES}/9/comments", [comment(1, said_by, "fix brief filed: #6")])
+    free(stub, 6, 7)
+
+
+def test_1052_b_claim_takes_the_fix_brief_without_the_overlap(proj, stub):
+    """REQ-039 REQ-041: brief #1052 answer 2, test (b)."""
+    red_fix_scene(stub)
+    out = claim(proj, stub)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.strip() == "claimed #6"
+    assert [p[1] for p in posts(stub)] == [f"{ISSUES}/6/comments"]
+    assert posts(stub)[0][2][1].startswith(f"body=taken: s-me {DAY}")
+
+
+def test_1052_c_another_brief_of_the_same_overlap_is_still_refused_while_red(proj, stub):
+    """REQ-039 REQ-041: brief #1052 answer 3, test (c)."""
+    red_fix_scene(stub)
+    out = claim(proj, stub, 7)
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert out.stdout.strip() == f"skip #7: {OVERLAP}"
+    assert posts(stub) == []
+
+
+def test_1052_d_an_unlisted_authors_line_makes_no_fix_brief_for_claim(proj, stub):
+    """REQ-039 REQ-041: brief #1052 answer 1, test (d)."""
+    red_fix_scene(stub, said_by="someone")
+    out = claim(proj, stub)
+    assert out.returncode == 1 and out.stdout.strip() == f"skip #6: {OVERLAP}"
+    assert posts(stub) == []
+
+
+def test_1052_e_with_the_branch_green_the_former_fix_brief_waits_for_the_overlap(proj, stub):
+    """REQ-039 REQ-041: brief #1052 answer 3, test (e)."""
+    red_fix_scene(stub, red=False)
+    out = claim(proj, stub)
+    assert out.returncode == 1 and out.stdout.strip() == f"skip #6: {OVERLAP}"
+    assert posts(stub) == []
+
+
+def test_1052_f_an_approvers_hold_still_stops_the_fix_brief(proj, stub):
+    """REQ-039 REQ-041: brief #1052 answer 2, test (f)."""
+    proj.write(
+        "config/reviewers.yaml",
+        "version: 1\nverdict_authors: [boss, second]\nspec_approvers: [owner-example]\n",
+    )
+    red_fix_scene(stub)
+    stub.serve(f"{ISSUES}/6/comments", [comment(2, "owner-example", "Hold: #6 wait for a ruling")])
+    out = claim(proj, stub)
+    assert out.returncode == 1
+    assert out.stdout.strip() == "skip #6: held by the owner: wait for a ruling"
+    assert posts(stub) == []
+    got = data(proj, stub)
+    assert 6 not in [row["brief"] for row in got.get("start", []) + got.get("assign", [])]

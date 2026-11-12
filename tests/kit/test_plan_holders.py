@@ -250,7 +250,7 @@ def test_962_each_naming_line_names_the_alarm(proj, stub, line):
     """REQ-039 REQ-041: brief #962 answer 1, the lines that name `#<red>`."""
     proj.write("agk.toml", SLOTS)
     red_scene(stub, [fixing(955, line)], [])
-    assert assigned(data(proj, stub)) == []
+    assert assigned(data(proj, stub)) == [955]  # the fix, not the alarm (brief #1052 answer 2)
 
 
 @pytest.mark.parametrize(
@@ -275,7 +275,7 @@ def test_962_a_listed_author_naming_an_open_brief_on_the_alarm_stops_it(proj, st
     proj.write("agk.toml", SLOTS)
     red_scene(stub, [fixing(955, "")], [], [comment(1, "boss", "Fix brief filed: #955.")])
     found = data(proj, stub)
-    assert assigned(found) == []
+    assert assigned(found) == [955]  # the fix, not the alarm (brief #1052 answer 2)
     assert {"brief": 953, "fixed_by": 955, "why": "is fixed by #955"} in found["waits"]
 
 
