@@ -774,3 +774,79 @@ def test_1071_only_a_builders_state_becomes_handover_and_the_label_is_known():
     assert route.decide(stranger) == "agk:fix"
     assert "agk:handover" in route.LABELS and route.COLORS["agk:handover"]
     assert route.description_of("agk:handover").startswith("AGK: launcher acts next: ")
+
+
+# --- brief #1101 (ADR-0471): the owner's turn wins over the builder's --------------------------
+
+
+def fix_list() -> dict:
+    return said(1, "boss", f"Verdict: fix list {HEAD[:7]}\n\n1. change nothing until the ruling")
+
+
+def owner_needed(cid: int = 4) -> dict:
+    return said(cid, "boss", "Owner needed: a size ruling on this pull request")
+
+
+def test_1101a_a_fix_list_and_a_later_open_owner_ask_is_question():
+    """REQ-039: brief #1101 answer 4(a) (an open owner ask is decided before `agk:fix`)."""
+    assert route.pr_state(facts(comments=[fix_list(), owner_needed()])) == ("agk:question", "owner")
+    asked = said(4, "builder", "Question: Q-1101-9 for the maintainers: a ruling, please")
+    assert route.decide(facts(comments=[fix_list(), asked])) == "agk:question"
+
+
+def test_1101a_an_open_owner_ask_wins_over_every_builder_state_but_parked():
+    """REQ-039: brief #1101 answer 1 (before `agk:fix` and every other builder state)."""
+    red = {"name": "proof", "status": "completed", "conclusion": "failure"}
+    asks = [owner_needed()]
+    assert route.decide(facts(comments=asks, checks=[ok("governance"), red])) == "agk:question"
+    assert route.decide(facts(comments=asks, mergeable_state="dirty")) == "agk:question"
+    assert route.decide(facts(comments=asks, body="Brief: #5\n")) == "agk:question"
+    assert route.decide(facts(comments=asks, labels=["agk:parked"])) == "agk:parked"
+
+
+def test_1101b_a_maintainer_answer_by_an_approver_returns_the_state_the_facts_give():
+    """REQ-039: brief #1101 answer 4(b) (the answer closes the ask; `agk:fix` returns)."""
+    answer = said(5, "maintainer", "Maintainer answer: keep the size")
+    assert route.decide(facts(comments=[fix_list(), owner_needed(), answer])) == "agk:fix"
+    stranger = said(5, "stranger", "Maintainer answer: keep the size")
+    comments = [fix_list(), owner_needed(), stranger]
+    assert route.decide(facts(comments=comments)) == "agk:question"
+    later = {"commit": {"committer": {"date": "2026-10-25T11:00:00Z"}}}
+    assert route.decide(facts(comments=[fix_list(), owner_needed()], commit=later)) == "agk:fix"
+
+
+def handing_over(cid: int = 6, reason: str = "six hours") -> dict:
+    return said(cid, "builder", f"Report: {HEAD[:12]} handing over: {reason}")
+
+
+def test_1101c_a_hand_over_while_an_owner_ask_is_open_keeps_question():
+    """REQ-039: brief #1101 answer 4(c) (an owner state is never replaced by `agk:handover`)."""
+    comments = [fix_list(), owner_needed(), handing_over()]
+    assert route.pr_state(facts(comments=comments)) == ("agk:question", "owner")
+    blocked = [fix_list(), owner_needed(), handing_over(reason="blocked: the owner's ruling")]
+    assert route.decide(facts(comments=blocked)) == "agk:question"
+
+
+def test_1101d_a_hand_over_with_no_owner_ask_still_gives_handover():
+    """REQ-039: brief #1101 answer 4(d) (amendment 162 unchanged for a builder's state)."""
+    assert route.pr_state(facts(comments=[fix_list(), handing_over()])) == (
+        "agk:handover",
+        "launcher",
+    )
+    answered = said(5, "maintainer", "Maintainer answer: keep the size")
+    comments = [fix_list(), owner_needed(), answered, handing_over()]
+    assert route.decide(facts(comments=comments)) == "agk:handover"
+
+
+def test_1101_an_owner_state_is_never_replaced_by_handover():
+    """REQ-039: brief #1101 answer 1 (`OWNER_STATES` and `state_of`)."""
+    assert set(route.OWNER_STATES) == {
+        "agk:question",
+        "agk:approve",
+        "agk:owner-merge",
+        "agk:parked",
+    }
+    assert all(route.ACTOR[label] == "owner" for label in route.OWNER_STATES)
+    assert not set(route.OWNER_STATES) & set(route.BUILDER_STATES)
+    parked = facts(comments=[fix_list(), handing_over()], labels=["agk:parked"])
+    assert route.decide(parked) == "agk:parked"

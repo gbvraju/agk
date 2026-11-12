@@ -168,7 +168,20 @@ def test_the_checks_that_take_the_body_are_in_the_kept_set():
 # --- the router on comments (answer 5) -----------------------------------------------------------
 
 # brief #836 answer 1 (ADR-0383): `Final:` starts it only when edited
-PREFIXES = ("Verdict:", "Approve:", "Final:", "Approval:", "Correction:", "Assign:", "Request:")
+PREFIXES = (
+    "Verdict:",
+    "Approve:",
+    "Final:",
+    "Approval:",
+    "Correction:",
+    "Assign:",
+    "Request:",
+    # brief #1101 answer 2 (ADR-0471): asks, answers and hand-overs
+    "Owner needed:",
+    "Question:",
+    "Maintainer answer:",
+    "Report:",
+)
 
 
 def router_condition() -> str:
@@ -191,6 +204,11 @@ def runs_for(event: str, body: str | None = None) -> bool:
         "Approve: abc1234 SPEC-0001",
         "Approval: SPEC-0001 docs/specs/x.md Draft -> Approved",
         "Correction: a; b",
+        # brief #1101 answer 2 (ADR-0471): an ask, an answer and a hand-over now change a state
+        "Report: abc1234 handing over: six hours",
+        "Question: Q-1 for the maintainers: why",
+        "Owner needed: a ruling",
+        "Maintainer answer: yes",
     ],
 )
 def test_the_router_runs_for_a_comment_that_can_change_a_state(body):
@@ -201,8 +219,7 @@ def test_the_router_runs_for_a_comment_that_can_change_a_state(body):
 @pytest.mark.parametrize(
     "body",
     [
-        "Report: abc1234 pushed",
-        "Question: Q-1 why",
+        "Progress: abc1234 done 1/6",
         "taken: builder-c 2026-10-25",
         "a note",
         " Verdict: x",
@@ -211,7 +228,8 @@ def test_the_router_runs_for_a_comment_that_can_change_a_state(body):
     ],
 )
 def test_the_router_starts_no_job_for_a_comment_that_changes_no_state(body):
-    """Brief #216 answer 5: reports, questions and notes."""
+    """Brief #216 answer 5: progress lines, takes and notes (reports and questions route since
+    brief #1101, ADR-0471)."""
     assert not runs_for("issue_comment", body)
 
 
