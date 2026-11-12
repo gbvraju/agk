@@ -697,3 +697,80 @@ def test_an_owner_needed_line_on_a_draft_is_question():
     assert route.decide(facts(draft=True, comments=[asked], commit=EARLY)) == "agk:question"
     unlisted = said(4, "stranger", "Owner needed: anything")
     assert route.decide(facts(draft=True, comments=[unlisted], commit=EARLY)) == "agk:build"
+
+
+# --- a stopped builder hands over (brief #1071, amendment 162, ADR-0453) -----------------------
+
+FIX = said(1, "boss", f"Verdict: fix list {HEAD[:7]}\n\n1. do this")
+BRIEF_BODY = "Brief: #9\nSummary: A person sees who acts next.\n"
+
+
+def handing(cid: int, reason: str | None, login: str = "builder") -> dict:
+    tail = f": {reason}" if reason is not None else ""
+    return said(cid, login, f"Report: {HEAD[:12]} handing over{tail}\n\nUsage: not shown")
+
+
+def test_1071a_a_handing_over_report_on_a_fix_list_is_handover():
+    """REQ-039: brief #1071 test (a) (`handing over: six hours` in `agk:fix`)."""
+    f = facts(comments=[FIX, handing(4, "six hours")], commit=EARLY)
+    assert route.pr_state(f) == ("agk:handover", "launcher")
+    blocked = facts(comments=[FIX, handing(4, "blocked: the cloud refuses a file")], commit=EARLY)
+    assert route.decide(blocked) == "agk:handover"
+
+
+def test_1071b_the_old_form_with_no_reason_reads_as_six_hours():
+    """REQ-039: brief #1071 test (b) and answer 2 (no reason is `six hours`)."""
+    assert route.handover_reason(f"Report: {HEAD[:12]} handing over") == "six hours"
+    f = facts(comments=[FIX, handing(4, None)], commit=EARLY)
+    assert route.decide(f) == "agk:handover"
+    draft = facts(draft=True, body=BRIEF_BODY, comments=[handing(4, None)], commit=EARLY)
+    assert route.decide(draft) == "agk:handover"
+
+
+def test_1071c_a_hand_over_to_a_session_or_done_is_not_handover():
+    """REQ-039: brief #1071 test (c) (`to <session>` and `done` need no restart)."""
+    for reason in ("to cb1048r", "done"):
+        f = facts(comments=[FIX, handing(4, reason)], commit=EARLY)
+        assert route.decide(f) == "agk:fix", reason
+    old = said(4, "builder", f"Report: {HEAD[:7]} handing over to cb1030r (started 11:13Z)")
+    assert route.decide(facts(comments=[FIX, old], commit=EARLY)) == "agk:fix"
+
+
+def test_1071d_a_later_builder_comment_or_a_push_clears_it():
+    """REQ-039: brief #1071 test (d) (the next builder's comment or push)."""
+    progress = said(5, "builder", f"Progress: {HEAD[:7]} done 1/3; next: 2; Usage: not shown")
+    assert route.decide(facts(comments=[FIX, handing(4, None), progress], commit=EARLY)) == (
+        "agk:fix"
+    )
+    assert route.decide(facts(comments=[FIX, handing(4, None)], commit=LATER)) == "agk:fix"
+
+
+def test_1071e_the_owners_states_keep_their_label():
+    """REQ-039: brief #1071 test (e) (`agk:question` and `agk:parked` never become handover)."""
+    asked = said(3, "builder", ASKED)
+    draft = facts(draft=True, comments=[asked, handing(4, None)], commit=EARLY)
+    assert route.decide(draft) == "agk:question"
+    parked = facts(labels=["agk:parked"], comments=[FIX, handing(4, None)], commit=EARLY)
+    assert route.decide(parked) == "agk:parked"
+
+
+def test_1071f_a_later_verdict_answer_or_correction_does_not_clear_it():
+    """REQ-039: brief #1071 test (f) (the conductor's lines are not a builder's)."""
+    for line in (f"Verdict: fix list {HEAD[:7]}\n\n1. again", "Answer: Q-9-1 yes", "Correction: x"):
+        f = facts(comments=[FIX, handing(4, None), said(5, "boss", line)], commit=EARLY)
+        assert route.decide(f) == "agk:handover", line
+    stranger = said(5, "stranger", "Progress: abc done 1/2; next: 2")
+    assert route.decide(facts(comments=[FIX, handing(4, None), stranger], commit=EARLY)) == (
+        "agk:handover"
+    )
+
+
+def test_1071_only_a_builders_state_becomes_handover_and_the_label_is_known():
+    """REQ-039: brief #1071 answers 1 and 3 (a cleared head stays merge-ready; a colour)."""
+    cleared = said(5, "boss", f"Verdict: cleared {HEAD[:7]}")
+    f = facts(comments=[handing(4, None), cleared], commit=EARLY)
+    assert route.decide(f) == "agk:merge-ready"
+    stranger = facts(comments=[FIX, handing(4, None, login="stranger")], commit=EARLY)
+    assert route.decide(stranger) == "agk:fix"
+    assert "agk:handover" in route.LABELS and route.COLORS["agk:handover"]
+    assert route.description_of("agk:handover").startswith("AGK: launcher acts next: ")

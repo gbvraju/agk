@@ -65,6 +65,7 @@ LABELS = (
     "agk:approve",
     "agk:owner-merge",
     "agk:merge-ready",
+    "agk:handover",
     "agk:ready",
     "agk:parked",
     "agk-brief",

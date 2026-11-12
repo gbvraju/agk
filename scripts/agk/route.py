@@ -105,6 +105,8 @@ STATES = (  # (label, actor, what), amendment 150 item 1; pr_state's precedence 
     ("agk:approve", "owner", "a spec approval the head needs"),
     ("agk:owner-merge", "owner", "the merge of a path only a person merges"),
     ("agk:merge-ready", "merger", "the guarded merge"),
+    # amendment 162 (ADR-0453): not in the order; it replaces a builder's state, see `state_of`
+    ("agk:handover", "launcher", "a new builder for a pull request whose builder stopped"),
 )
 ACTOR = {label: actor for label, actor, _ in STATES}
 PARKED = "agk:parked"
@@ -112,6 +114,11 @@ OLD_READY = "agk:ready"  # read as agk:merge-ready until the next release (amend
 LABELS = (*(label for label, _, _ in STATES if label != PARKED), OLD_READY)  # set or removed
 OWNER_PATHS = PROTECTED  # the one list merge_cleared.py refuses (SPEC-0039 rule 5)
 BRIEF_LINE = re.compile(r"^Brief: #\d+", re.MULTILINE)
+HANDOVER = "agk:handover"
+BUILDER_STATES = ("agk:build", "agk:ci-red", "agk:conflict", "agk:fix")  # amendment 162 item 3
+HANDING_OVER = re.compile(r"Report: ([0-9a-f]{7,40}) handing over\b:?\s*(.*)$")  # item 2
+NO_RESTART = re.compile(r"(?:to \S|done\b)")  # a successor named, or nothing left
+NOT_A_BUILDER = ("Verdict:", "Answer:", "Correction:")  # lines that never clear a hand-over
 BUILT = re.compile(
     r"Report: ([0-9a-f]{7,40}) (?:ready for review|fix list applied|merge of main)\b"
 )
@@ -126,6 +133,7 @@ COLORS = {
     "agk:approve": "5319e7",
     "agk:owner-merge": "5319e7",
     "agk:merge-ready": "0e8a16",
+    "agk:handover": "f9d0c4",
     "agk-brief": "1d76db",
     "agk-health": "b60205",
     "agk:parked": "c5def5",
@@ -319,7 +327,52 @@ def asks_owner(f: dict, comments: list[dict], authors: list[str] | None) -> bool
     return open_ask
 
 
+def handover_reason(line: str) -> str | None:
+    """The reason of a `Report: <head> handing over: <reason>` first line, `six hours` for the
+    older form with none, or None for any other line (amendment 162 item 2, ADR-0453)."""
+    match = HANDING_OVER.match(line)
+    if not match:
+        return None
+    return match.group(2).strip() or "six hours"
+
+
+def handed_over(f: dict) -> dict | None:
+    """The newest `Report:` by the pull request's author or a listed verdict author when it hands
+    over with a reason that needs a new builder (not `to <session>` or `done`), with no later
+    comment by those authors but a `Verdict:`, `Answer:` or `Correction:`, and no later push;
+    else None (amendment 162 item 3). Comments are in the order GitHub lists them."""
+    speakers = {str(a).lstrip("@").lower() for a in f.get("authors") or []}
+    speakers.add(str(f.get("author") or "").lstrip("@").lower())
+    speakers.discard("")
+    newest = None
+    for c in f.get("comments") or []:
+        if login_of(c) not in speakers:
+            continue
+        line = first_line(c)
+        if line.startswith("Report:"):
+            newest = c
+        elif newest is not None and not line.startswith(NOT_A_BUILDER):
+            newest = None  # a builder spoke again after the hand-over
+    reason = handover_reason(first_line(newest)) if newest is not None else None
+    if reason is None or NO_RESTART.match(reason):
+        return None
+    pushed = str(
+        (((f.get("commit") or {}).get("commit") or {}).get("committer") or {}).get("date") or ""
+    )
+    if pushed and pushed > str(newest.get("created_at") or ""):
+        return None
+    return newest
+
+
 def state_of(f: dict) -> str:
+    """The state of `pr_state`; a builder's state becomes `agk:handover` while its builder has
+    handed over with no successor (amendment 162 item 3, ADR-0453)."""
+    label = base_state(f)
+    return HANDOVER if label in BUILDER_STATES and handed_over(f) is not None else label
+
+
+def base_state(f: dict) -> str:
+    """The first state of `STATES` that holds, before a hand-over is read."""
     if PARKED in (f.get("labels") or ()):  # a person's hold; never set or removed (Q-846-1)
         return PARKED
     if f.get("draft"):  # brief #1043 answer 2: a draft that waits on the owner (ADR-0442)

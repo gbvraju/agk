@@ -1,0 +1,1 @@
+- A builder that stops posts `Report: <head> handing over: <reason>` (`six hours`, `to <session>`, `blocked: <what>` or `done`); the router labels its pull request `agk:handover` until the next builder comment or push, `session.py queue --role builder` lists those first and `conductor.py sweep` prints `HANDOVER #<pr> <minutes>m` (brief #1071, ADR-0453)
