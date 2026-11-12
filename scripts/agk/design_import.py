@@ -39,6 +39,19 @@ names a problem of that version or of the coverage; an existing target file, nam
 a missing or malformed `--slug` or `--version` with exit 2. `source_text(root, version)` returns
 the text and writes nothing. Pages are parsed as text by the standard library: nothing is run,
 opened or fetched.
+
+`python3 design_import.py components --version i<n> --slug <slug> [--root DIR]` (SPEC-0037 rule 16
+as amendment 164 item 3 proposes, with its Q-1089-5 reading; brief #1091, ADR-0463) writes once,
+as a new file only, `docs/sources/<slug>-components-i<n>.md`: rule 1's header
+(`Source: shared components of imported prototype i<n>`, `Kind: design`, `Version:`, `Date:`)
+and one blank line, then one `## <name>` heading per element structure (the tag, the class names
+as written, the child tags in order; never a text) of the elements below `body` that two or more
+different mapped pages share (rows not `out:`, pages, not picture pages), the element having a
+child element or a class and not inside a listed structure on exactly the same pages, in the order
+of first appearance. The name is the first class name, else the tag path from `body` joined with
+`>`, with `-2`, `-3` added to a name used; under it one `structure:` line and one
+`- <screen>/<state>` line per row it appears on, in the map's order; else one `none:` line. It
+refuses as `source` does, naming `rule 16`. `components_text(root, version)` writes nothing.
 """
 
 from __future__ import annotations
@@ -566,6 +579,163 @@ def write_source(root: Path, version: str, slug: str) -> Path:
     return path
 
 
+# --- the shared components (SPEC-0037 rule 16) ----------------------------------------------------
+
+VOID = frozenset("area base br col embed hr img input link meta param source track wbr".split())
+OUTSIDE = frozenset({"html", "head", "body"})
+NONE_LINE = "none: no element structure appears on two or more mapped pages"
+USAGE = "usage: design_import.py source|components --version i<n> --slug <slug> [--root DIR]"
+
+
+class _Structures(HTMLParser):
+    """The elements below `body` of a page as (structure, path, ancestors), in document order: the
+    structure is (tag, the class names as written, the child tags in order)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.elements: list[dict] = []
+        self._open: list[dict] = []  # the open elements, `html`/`head`/`body` included
+        self._head = 0
+
+    def _start(self, tag: str, attrs: list[tuple[str, str | None]], void: bool) -> None:
+        if self._head or tag == "head":
+            if tag == "head" and not void:
+                self._head += 1
+            return
+        parent = next((e for e in reversed(self._open) if e["read"]), None)
+        if parent is not None:
+            parent["children"].append(tag)
+        read = tag not in OUTSIDE
+        element = {"tag": tag, "read": read, "children": [], "index": None}
+        classes = " ".join(v or "" for k, v in attrs if k == "class").split()
+        element["classes"] = tuple(classes)
+        if read:
+            ancestors = [e for e in self._open if e["read"]]
+            element["path"] = ">".join([*(e["tag"] for e in ancestors), tag])
+            element["ancestors"] = [e["index"] for e in ancestors]
+            element["index"] = len(self.elements)
+            self.elements.append(element)
+        if not void and tag not in VOID:
+            self._open.append(element)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._start(tag, attrs, False)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._start(tag, attrs, True)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._head:
+            if tag == "head":
+                self._head -= 1
+            return
+        for depth in range(len(self._open) - 1, -1, -1):
+            if self._open[depth]["tag"] == tag:  # an unclosed element ends with its parent
+                del self._open[depth:]
+                return
+
+
+def page_structures(html: str) -> list[tuple[tuple, str, list[int]]]:
+    """[(structure, tag path from `body`, the indexes of its ancestors)] of a page read as text."""
+    parser = _Structures()
+    parser.feed(html)
+    parser.close()
+    return [
+        ((e["tag"], e["classes"], tuple(e["children"])), e["path"], e["ancestors"])
+        for e in parser.elements
+    ]
+
+
+def _listed(pages: list[list[tuple[tuple, str, list[int]]]]) -> list[tuple[tuple, str, list[int]]]:
+    """[(structure, path of its first appearance, the page numbers it appears on)] of rule 16, in
+    the order of first appearance; Q-1089-5: one inside a listed structure on the same pages is not
+    listed when every occurrence of it is inside an occurrence of that structure."""
+    first: dict[tuple, tuple[int, str]] = {}
+    where: dict[tuple, set[int]] = {}
+    for number, elements in enumerate(pages):
+        for structure, path, _ in elements:
+            first.setdefault(structure, (len(first), path))
+            where.setdefault(structure, set()).add(number)
+    candidates = {s for s, found in where.items() if len(found) >= 2 and (s[1] or s[2])}
+    within: dict[tuple, set[tuple] | None] = {}  # the structures around every occurrence
+    for elements in pages:
+        for structure, _, ancestors in elements:
+            if structure in candidates:
+                around = {elements[i][0] for i in ancestors} & candidates
+                known = within.get(structure)
+                within[structure] = around if known is None else known & around
+    decided: dict[tuple, bool] = {}
+
+    def listed(structure: tuple) -> bool:
+        if structure not in decided:
+            decided[structure] = True  # an outer structure is decided first, so no loop
+            for outer in within.get(structure) or ():
+                if outer != structure and where[outer] == where[structure] and listed(outer):
+                    decided[structure] = False
+                    break
+        return decided[structure]
+
+    order = sorted(candidates, key=lambda s: first[s][0])
+    return [(s, first[s][1], sorted(where[s])) for s in order if listed(s)]
+
+
+def components_text(root: Path, version: str, today: str | None = None) -> str:
+    """The shared components source of VERSION (rule 16); refuses a missing or failing version."""
+    folder = root / IMPORTED / version
+    if not VERSION.match(version) or version not in versions(root):
+        raise CheckError(f"rule 16: {version}: no such imported version; nothing is written")
+    problems = _version_problems(root, version)
+    if problems:
+        for problem in problems:
+            print(f"FAIL design: {problem}")
+        raise CheckError(f"rule 16: {version}: the import or map check fails; nothing is written")
+    record = json.loads((folder / MANIFEST).read_text(encoding="utf-8"))
+    rows = [
+        (name, target)
+        for name, target in _rows(folder)
+        if not OUT.match(target) and name.lower().endswith(PAGES)
+    ]
+    pages = [page_structures(_text((folder / FILES / name).read_bytes())) for name, _ in rows]
+    date = today or datetime.now(UTC).date().isoformat()
+    out = [
+        f"Source: shared components of imported prototype {version}",
+        "Kind: design",
+        f"Version: {version} {record['digest']}",
+        f"Date: {date}",
+        "",
+    ]
+    found = _listed(pages)
+    if not found:
+        out.append(NONE_LINE)
+    used: set[str] = set()
+    for (tag, classes, children), path, numbers in found:
+        name = classes[0] if classes and "/" not in classes[0] else path
+        base, count = name, 1
+        while name in used:
+            count += 1
+            name = f"{base}-{count}"
+        used.add(name)
+        shape = "".join([tag, *(f".{c}" for c in classes)])
+        out += [f"## {name}", "", f"structure: {shape}:{''.join(' ' + c for c in children)}"]
+        out += [f"- {rows[n][1]}" for n in numbers]
+        out.append("")
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def write_components(root: Path, version: str, slug: str) -> Path:
+    """Write the shared components once as `docs/sources/<slug>-components-<version>.md`."""
+    rel = f"{SOURCES}/{slug}-components-{version}.md"
+    path = root / rel
+    if path.exists():
+        raise CheckError(f"rule 16: {rel}: the file exists; nothing is written")
+    text = components_text(root, version)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8") as handle:  # never over an existing file
+        handle.write(text)
+    print(f"wrote {rel} ({text.count(chr(10) + '## ')} structures)")
+    return path
+
+
 def _options(args: list[str]) -> dict[str, str] | None:
     opts: dict[str, str] = {}
     while args:
@@ -578,12 +748,13 @@ def _options(args: list[str]) -> dict[str, str] | None:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    if args[:1] != ["source"]:
-        print(SOURCE_USAGE, file=sys.stderr)
+    command = args[0] if args else ""
+    if command not in ("source", "components"):
+        print(USAGE, file=sys.stderr)
         return 2
     opts = _options(args[1:])
     if opts is None:
-        print(SOURCE_USAGE, file=sys.stderr)
+        print(SOURCE_USAGE if command == "source" else USAGE, file=sys.stderr)
         return 2
     if not SLUG.match(opts.get("--slug", "")):
         print(
@@ -599,7 +770,8 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(opts["--root"]) if "--root" in opts else repo_root()
 
     def write() -> int:
-        write_source(root, opts["--version"], opts["--slug"])
+        writer = write_source if command == "source" else write_components
+        writer(root, opts["--version"], opts["--slug"])
         return 0
 
     return run("design", write)
