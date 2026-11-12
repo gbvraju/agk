@@ -329,7 +329,7 @@ def test_conductor_watch_with_no_event_returns_within_five_minutes(monkeypatch, 
     monkeypatch.setattr(conductor, "time", clock)
     monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
     monkeypatch.setattr(conductor.session, "flow_int", lambda *a: 60)
-    monkeypatch.setattr(conductor, "new_lines", lambda repo, since: [])
+    monkeypatch.setattr(conductor, "new_lines", lambda repo, since, approvers=(): [])
     monkeypatch.setattr(conductor, "renew_lease", lambda root: 0)
     monkeypatch.setattr(conductor, "green_lines", lambda root, repo, since: [])
     monkeypatch.setattr(conductor, "stall_report", lambda root, repo: [])
@@ -342,7 +342,7 @@ def test_conductor_watch_is_bounded_while_github_cannot_be_read(monkeypatch, cap
     """REQ-041: a read that keeps failing does not lose the bound."""
     clock = Clock()
 
-    def broken(repo, since):
+    def broken(repo, since, approvers=()):
         raise conductor.CheckError("the open briefs cannot be read")
 
     monkeypatch.setattr(conductor, "time", clock)
@@ -368,7 +368,7 @@ def test_conductor_watch_renews_at_each_pass_in_time(monkeypatch, capsys):
     monkeypatch.setattr(conductor, "time", clock)
     monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
     monkeypatch.setattr(conductor.session, "flow_int", lambda *a: 60)
-    monkeypatch.setattr(conductor, "new_lines", lambda repo, since: [])
+    monkeypatch.setattr(conductor, "new_lines", lambda repo, since, approvers=(): [])
     monkeypatch.setattr(conductor, "renew_lease", renew)
     monkeypatch.setattr(conductor, "green_lines", lambda root, repo, since: [])
     monkeypatch.setattr(conductor, "stall_report", lambda root, repo: [])
