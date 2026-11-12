@@ -16,8 +16,9 @@ A numbered item of the latest fix list that does not end with `(rule: <file> <n>
 is a warning, and a failure from the date in `rule_tags_from` of agk.toml on (brief 647, ADR-0310).
 Each row that the pull request adds to `docs/design/signoffs.md` (absent at the merge base with the
 default branch) counts only with the `Approve: design|inventory` line of an account in
-`spec_approvers` naming its head, and each commit that adds a row (absent at every parent) changes
-only that file (SPEC-0037 rules 3 and 9, brief #459).
+`spec_approvers` naming its head and, for a `design` row, its version, `v<n>` or an imported `i<n>`
+(SPEC-0037 amendment 161 item 4, ADR-0449), and each commit that adds a row (absent at every
+parent) changes only that file (SPEC-0037 rules 3 and 9, brief #459).
 Anything else passes unchecked. With `review_mode = "solo"` in agk.toml the one listed person's
 confirmation counts as its verdict and its `Approve:` lines (brief 277,
 `reviewers.confirmed_comments`). Without
