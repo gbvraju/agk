@@ -26,6 +26,7 @@ from test_plan_intake import CONFLICT, GOOD, PRD, PRD_TEXT, SOW, SOW_TEXT, TITLE
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS = "# Requirements\n\n### REQ-101 — Example orders\n\n- Status: planned\n"
+REQUIREMENTS += f"- Source: `{PRD}:8`\n"
 LISTED = [
     "docs/plan/briefs/M1/B1.md",
     "docs/plan/briefs/M1/B2.md",
@@ -60,6 +61,7 @@ def proposals() -> dict:
     data = copy.deepcopy(GOOD)
     second = copy.deepcopy(data["briefs"][0]) | {"key": "B2", "depends_on": ["B1"]}
     data["briefs"].append(second)
+    data["requirements"][0]["sources"].append(f"{SOW}:8")
     data["conflicts"] = [CONFLICT | {"settled": f"Settled: {SOW}:20"}]
     return data
 
@@ -136,7 +138,7 @@ def test_ac2_rule_7_a_second_render_refuses_and_changes_nothing(repo: Path, caps
     assert tree(repo) == before
 
 
-@pytest.mark.parametrize("rel", ["docs/plan/briefs/M1/B2.md", "docs/specs/0001-orders.md"])
+@pytest.mark.parametrize("rel", ["docs/plan/briefs/M1/B2.md", "docs/plan/requirements-proposed.md"])
 def test_ac2_rule_7_any_existing_target_refuses_before_a_file_is_written(
     repo: Path, rel: str, capsys
 ) -> None:
@@ -233,9 +235,17 @@ def test_ac2_rule_7_a_brief_that_cannot_be_rendered_is_refused(
     assert tree(repo) == before
 
 
-def test_ac2_rule_7_the_spec_comes_from_new_spec_make_spec(
-    repo: Path, capsys, monkeypatch
-) -> None:
+def test_ac2_rule_7_an_area_without_a_file_name_is_refused(repo: Path, capsys) -> None:
+    """REQ-050 AC2: rule 7, `new_spec.slug` needs a letter or digit; nothing is written."""
+    data = proposals()
+    data["areas"][0]["name"] = "--"
+    before = tree(repo)
+    code, out = render(repo, data, capsys)
+    assert code == 1 and "rule 7: areas --: the name has no letters or digits" in out, out
+    assert tree(repo) == before
+
+
+def test_ac2_rule_7_the_spec_comes_from_new_spec_make_spec(repo: Path, capsys, monkeypatch) -> None:
     """REQ-050 AC2: rule 7, `make_spec` of `new_spec.py spec`, imported, not copied."""
     calls: list[str] = []
     real = new_spec.make_spec
