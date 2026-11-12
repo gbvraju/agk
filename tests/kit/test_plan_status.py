@@ -15,7 +15,7 @@ from __future__ import annotations
 import copy
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import plan_estimate
@@ -32,7 +32,7 @@ PARTS = ("briefs ", "hours ", "forecast ", "target ", "status ", "trend ", "caus
 
 def closes(until="2026-11-03"):
     """One brief of M0 closed as completed each Tuesday from 2026-08-25 to `until`."""
-    out, day, number = [], datetime(2026, 8, 25, 10, tzinfo=timezone.utc), 50
+    out, day, number = [], datetime(2026, 8, 25, 10, tzinfo=UTC), 50
     while day.date().isoformat() <= until:
         out.append(brief(number, "M0", state="closed", closed=day.strftime("%Y-%m-%dT%H:%M:%SZ")))
         day += timedelta(days=7)
@@ -46,7 +46,7 @@ def plan_briefs():
 
 
 def done_pull(**extra):
-    """The merged pull request of brief 10 (M1): 5.0 hours against 2-4, first verdict in the week."""
+    """The merged pull request of brief 10 (M1): 5.0 hours against 2-4, verdict in the week."""
     p = pull(201, "S", "5.0", "2026-10-30T12:00:00Z", waits=("3.0", "1.0", "0.5"))
     p |= {"brief": 10, "estimated_hours": "2-4", "verdicts": [{"kind": "cleared", "sha": None}]}
     p["verdicts"][0]["at"] = "2026-10-28T09:00:00Z"
@@ -236,7 +236,7 @@ def test_rule18_the_trend_is_the_estimate_from_the_week_s_start(tmp_path, monkey
     extra["created_at"] = "2026-10-27T09:00:00Z"  # scope that grew in the week
     got = data(tmp_path, monkeypatch, capsys, briefs=plan_briefs() + [extra] + closes())
     doc = json.loads((tmp_path / "facts.json").read_text(encoding="utf-8"))
-    then = plan_status.as_of(doc, datetime(2026, 10, 26, tzinfo=timezone.utc))
+    then = plan_status.as_of(doc, datetime(2026, 10, 26, tzinfo=UTC))
     assert [b["number"] for b in then["flow"]["briefs"] if b["milestone"] == "M1"] == [10, 1, 2]
     assert next(b for b in then["flow"]["briefs"] if b["number"] == 10)["state"] == "open"
     assert all(p["merged_at"] < "2026-10-26" for p in then["pull_requests"])
@@ -300,7 +300,9 @@ def report_facts(tmp_path, monkeypatch, capsys, **kwargs):
         tmp_path, monkeypatch, capsys, "--base", str(base), "--into", "out.json", **kwargs
     )
     assert (code, out, err) == (0, "", "")
-    return json.loads(base.read_text("utf-8")), json.loads((tmp_path / "out.json").read_text("utf-8"))
+    return json.loads(base.read_text("utf-8")), json.loads(
+        (tmp_path / "out.json").read_text("utf-8")
+    )
 
 
 def test_rule19_into_writes_the_base_and_one_key_plan(tmp_path, monkeypatch, capsys):
