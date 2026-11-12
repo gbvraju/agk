@@ -257,7 +257,10 @@ IMPORTED_MAP = """# Map of i1
 - brief.pdf#page=2 -> home/error
 - intro.html -> out: a splash page the product drops
 """
-IMPORTED_SIGNOFF = "| design | i1 | " + "c" * 64 + " | " + "d" * 40 + " | 2026-11-12 | x |\n"
+IMPORTED_SIGNOFF = (
+    "| design | i1 | " + "c" * 64 + " | " + "d" * 40 + " | 2026-11-12 | "
+    "https://example.com/comment/2 |\n"
+)
 
 
 def imported(tmp_path, heading="Home", signed=True):
@@ -363,7 +366,7 @@ def test_ac6_with_a_browser_an_imported_page_is_shot_once_at_1440_light_through_
     far = png(tmp_path.parent / (tmp_path.name + "-f.png"), [[white, black, black, black]])
     for built, want in ((same, "match"), (far, "drift: pixels")):
         log = imported_browser(tmp_path.parent / (tmp_path.name + f"-b-{built.stem}"), same, built)
-        path = f"{log.parent}{os.pathsep}{os.path.dirname(sys.executable)}"
+        path = str(log.parent)  # no PDF renderer and no other browser on it
         proc = compare(tmp_path, "--version", "i1", "--screens", "home/default", path=path)
         assert proc.returncode == 0, proc.stdout + proc.stderr
         assert proc.stdout == f"home/default {want}\n"
@@ -383,7 +386,7 @@ def test_ac6_a_picture_page_with_a_browser_is_compared_at_the_width_of_the_image
     white = (255, 255, 255)
     same = png(tmp_path.parent / (tmp_path.name + "-s.png"), [[white] * 2])
     log = imported_browser(tmp_path.parent / (tmp_path.name + "-b"), same, same)
-    path = f"{log.parent}{os.pathsep}{os.path.dirname(sys.executable)}"
+    path = str(log.parent)  # no PDF renderer and no other browser on it
     proc = compare(tmp_path, "--version", "i1", "--screens", "home/empty", path=path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert proc.stdout == "home/empty match\n"
@@ -399,7 +402,7 @@ def test_ac6_a_pdf_page_without_a_pdf_renderer_reads_pixels_not_run(tmp_path):
     white = (255, 255, 255)
     same = png(tmp_path.parent / (tmp_path.name + "-s.png"), [[white] * 2])
     log = imported_browser(tmp_path.parent / (tmp_path.name + "-b"), same, same)
-    path = f"{log.parent}{os.pathsep}{os.path.dirname(sys.executable)}"
+    path = str(log.parent)  # no PDF renderer and no other browser on it
     proc = compare(tmp_path, "--version", "i1", "--screens", "home/error", path=path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert proc.stdout == "home/error pixels: not run\n"
