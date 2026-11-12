@@ -31,6 +31,7 @@ LISTED = [
     "docs/plan/briefs/M1/B1.md",
     "docs/plan/briefs/M1/B2.md",
     "docs/plan/milestones.md",
+    "docs/plan/personas.md",  # amendment 164 item 2 (ADR-0462)
     "docs/plan/requirements-proposed.md",
     "docs/plan/scope.md",
     "docs/specs/0001-orders.md",
@@ -83,7 +84,7 @@ def tree(root: Path) -> dict[str, bytes]:
 
 
 def test_ac2_rule_7_render_writes_exactly_the_listed_files(repo: Path, capsys) -> None:
-    """REQ-050 AC2: rule 7, the five kinds of file and nothing else."""
+    """REQ-050 AC2: rule 7, the six kinds of file and nothing else."""
     before = tree(repo)
     code, out = render(repo, proposals(), capsys)
     assert code == 0, out
