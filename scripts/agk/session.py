@@ -168,7 +168,9 @@ from metrics import author_of, counted_authors, latest_verdict_body
 from reviewers import APPROVE, spec_approvers, verdict_authors
 
 from config import (
+    BRIEF_CODE_PATHS,
     MODEL_KINDS,
+    brief_code_paths,
     caps_settings,
     model_providers,
     model_routes,
@@ -708,8 +710,9 @@ class Told:
 # --- the shape of a brief (rule 4) ------------------------------------------------------------
 
 
-def brief_problems(body: str | None) -> list[str]:
-    """What rule 4 finds wrong with an issue body; it never repeats the sentence."""
+def brief_problems(body: str | None, limits: dict[str, int] | None = None) -> list[str]:
+    """What rule 4 finds wrong with an issue body; it never repeats the sentence. `limits` is
+    `config.brief_code_paths(root)`, the defaults when None (amendment 168)."""
     lines = (body or "").splitlines()
     problems: list[str] = []
     sentences = [m for m in (SENTENCE.fullmatch(x.rstrip()) for x in lines) if m]
@@ -729,7 +732,34 @@ def brief_problems(body: str | None) -> list[str]:
             problems.append("rule 4: a Depends-on line is not Depends-on: #n")
     if sum(1 for x in lines if SIZE.fullmatch(x.rstrip())) != 1:
         problems.append("rule 4: exactly one line Size: S, Size: M or Size: L")
+    else:
+        problems += size_problems(lines, BRIEF_CODE_PATHS if limits is None else limits)
     return problems + line_problems(lines)
+
+
+NOT_CODE = ("tests/", "docs/", "changelog.d/")  # amendment 168: none is a code path
+
+
+def size_problems(lines: list[str], limits: dict[str, int]) -> list[str]:
+    """Amendment 168 of rule 4 (brief #1121, ADR-0479): `Size: S` and `Size: M` allow at most
+    `limits` code paths, a `Touches:` entry outside tests, docs, changelog fragments and
+    `kit/hashes.json`; a `Broad:` line lifts that limit. `Size: L` is refused with `Wave:`."""
+    size = next(x.rstrip()[-1] for x in lines if SIZE.fullmatch(x.rstrip()))
+    if size == "L":
+        if any(x.startswith("Wave:") for x in lines):
+            return ["rule 4: Size L is refused for a planned build (Wave:): split the brief"]
+        return []
+    if any(x.startswith("Broad:") for x in lines):
+        return []
+    touches = [x.rstrip()[len("Touches:") :] for x in lines if x.startswith("Touches:")][:1]
+    entries = {e.strip() for t in touches for e in t.split(",") if e.strip()}
+    code = len({e for e in entries if not e.startswith(NOT_CODE) and e != "kit/hashes.json"})
+    if code <= limits[size]:
+        return []
+    return [
+        f"rule 4: Size {size} allows at most {limits[size]} code paths, Touches names {code}:"
+        " split the brief or raise Size"
+    ]
 
 
 def contexts_line_problems(body: str | None) -> list[str]:
@@ -1052,9 +1082,10 @@ def brief_shape(root, repo: str) -> Callable:
     rules = touch_rules(root)
     known = plan_waves(repo) if plan_issue_set(root) else None
     waves = plan_issue_set(root)
+    limits = brief_code_paths(root)
 
     def shape(body: str | None) -> list[str]:
-        found = brief_problems(body) + (wave_problems(body, known) if waves else [])
+        found = brief_problems(body, limits) + (wave_problems(body, known) if waves else [])
         return found or touch_problems(str(body), rules)
 
     return shape
