@@ -29,8 +29,10 @@ frozen. This is build (b) of the amendment's item 8; build (a), the import and t
    `rule 9: docs/design/imported/i<n>: a signed-off version changed`, naming the rule and the version, never a digest; a
    corrected map or a new delivery is a new version `i<n+1>`.
 
-Protected path classes changed: `scripts/agk/` (`reviewers.py`, `design_signoff.py`, `check_final_clearance.py`) and
-`tests/kit/` (`test_design_signoff.py`); `kit/hashes.json` is unchanged (`kit_hashes.py` prints `ok kit-hashes`).
+Protected path classes changed: `scripts/agk/` (`reviewers.py`, `design_signoff.py`, `check_final_clearance.py`),
+`tests/kit/` (`test_design_signoff.py`) and `agk.toml` (the `[[testing.map]]` entries of `check_final_clearance.py` and
+`reviewers.py` list `tests/kit/test_design_signoff.py`, which now tests them; the verdict on 0c34a82);
+`kit/hashes.json` is unchanged (`kit_hashes.py` prints `ok kit-hashes`).
 
 ## Consequences
 
