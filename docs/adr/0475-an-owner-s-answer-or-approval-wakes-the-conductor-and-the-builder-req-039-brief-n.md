@@ -28,12 +28,14 @@ and the pull request sat green at `agk:review` until a person restarted its buil
    `approve <head7> SPEC-nnnn` and exits 0; an approval needs no change, so a restarted watch does not wake on it again.
 3. The builder's handling is unchanged in meaning: on `answer` it applies the answer and posts a fresh
    `Report: <head> ready for review`; on `approve` there is nothing to change. `config/session-rules.md` rule 10 lists the
-   watch's ends; its text is the maintainers' (Q-1112-1).
+   watch's ends; its text is the maintainers', who added the two lines to it on this pull request (Q-1112-1), with the
+   same wake in `.claude/agents/conductor.md`.
 
 Protected path classes changed: `scripts/agk/` (`conductor.py`, `session.py`) and `tests/kit/`
 (`test_conductor_wakes.py`, `test_session_watch_answers.py`, and the `new_lines` stand-ins of `test_pool_health.py`
-and `test_builder_assign.py`, which take the new `approvers` argument), and `agk.toml` (the test map only: the two new
-test files under `conductor.py` and `session.py`).
+and `test_builder_assign.py`, which take the new `approvers` argument), `agk.toml` (the test map only: the two new
+test files under `conductor.py` and `session.py`), `config/` (`session-rules.md` rule 10, the maintainers' text of
+Q-1112-1) and `.claude/` (`agents/conductor.md`, the watch line).
 
 ## Consequences
 
