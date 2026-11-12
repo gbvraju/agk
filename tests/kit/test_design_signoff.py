@@ -7,7 +7,8 @@ version changed`, naming the version and never a digest; `screenshots/` stays ou
 approved only with a `design` row of a matching digest (rule 12). No check writes a file.
 
 An imported version `i<n>` (amendment 161 item 4, brief #1062, ADR-0449) is signed off with
-`Approve: design i<n> <full head ID>` by an account of `spec_approvers` on the head it names, inside a
+`Approve: design i<n> <full head ID>` by an account of `spec_approvers` on the head it names,
+inside a
 solo `Confirmed:` comment too; its `design` row carries `i<n>` and the digest of the whole folder
 `docs/design/imported/i<n>/` by rule 9's formula, and a change, an addition or a removal anywhere in
 that folder fails `rule 9: docs/design/imported/i<n>: a signed-off version changed`.
@@ -173,7 +174,10 @@ I_CHANGED = "rule 9: docs/design/imported/i1: a signed-off version changed"
 OWNER = "example-owner"
 OTHER = "example-other"
 AT = "2026-11-12T03:00:00Z"
-TABLE = "# Design sign-offs\n\n| kind | version | digest | head | date | comment |\n|---|---|---|---|---|---|\n"
+TABLE = (
+    "# Design sign-offs\n\n| kind | version | digest | head | date | comment |\n"
+    "|---|---|---|---|---|---|\n"
+)
 
 
 def imported(root: Path) -> Path:
@@ -181,12 +185,16 @@ def imported(root: Path) -> Path:
     folder = root / I1
     (folder / "files" / "img").mkdir(parents=True)
     (folder / "files" / "index.html").write_text(
-        '<!doctype html><title>Books</title><script>go()</script>\n', encoding="utf-8"
+        "<!doctype html><title>Books</title><script>go()</script>\n", encoding="utf-8"
     )
     (folder / "files" / "img" / "logo.svg").write_text("<svg></svg>\n", encoding="utf-8")
-    (folder / "manifest.json").write_text('{"files": [], "digest": "", "pages": []}\n', encoding="utf-8")
+    (folder / "manifest.json").write_text(
+        '{"files": [], "digest": "", "pages": []}\n', encoding="utf-8"
+    )
     (folder / "map.md").write_text("index.html -> books/default\n", encoding="utf-8")
-    (folder / "external.txt").write_text("files/index.html https://example.com/a.css\n", encoding="utf-8")
+    (folder / "external.txt").write_text(
+        "files/index.html https://example.com/a.css\n", encoding="utf-8"
+    )
     return folder
 
 
@@ -232,7 +240,9 @@ def test_ac5_a_design_row_reads_i_n_and_refuses_another_version(tmp_path):
     sign_imported(tmp_path)
     assert [r["version"] for r in ds.rows(tmp_path)] == ["i1"]
     bad = TABLE + f"| design | x1 | {'a' * 64} | {HEAD} | 2026-11-12 | {LINK} |\n"
-    with pytest.raises(ds.CheckError, match="row 1: the version of a design row is not v<n> or i<n>$"):
+    with pytest.raises(
+        ds.CheckError, match="row 1: the version of a design row is not v<n> or i<n>$"
+    ):
         ds.parse_rows(bad)
 
 
@@ -245,7 +255,7 @@ def test_ac5_a_signed_off_imported_version_passes_while_unchanged(tmp_path):
 
 @pytest.mark.parametrize("change", ["map", "page", "add", "remove", "external", "manifest", "gone"])
 def test_ac5_a_changed_signed_off_imported_folder_fails_naming_the_version(tmp_path, change):
-    """REQ-044 AC5: a change, an addition or a removal anywhere in the folder fails, never a digest."""
+    """REQ-044 AC5: a change, an addition or a removal anywhere fails, never naming a digest."""
     folder = sign_imported(tmp_path)
     before = ds.imported_digest(tmp_path, "i1")
     if change == "map":
@@ -334,7 +344,7 @@ def _confirmed(head: str, line: str) -> dict:
 
 
 def test_ac5_a_solo_confirmed_comment_counts_for_i_n_as_for_v_n():
-    """REQ-044 AC5: inside the person's `Confirmed:` comment the `i<n>` line counts on that head only."""
+    """REQ-044 AC5: inside the person's `Confirmed:` the `i<n>` line counts on that head only."""
     head = "2" * 40
     for version in ("v1", "i1"):
         items = reviewers.confirmed_comments(

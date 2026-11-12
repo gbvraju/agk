@@ -415,9 +415,9 @@ def design_approvals(
     items: list[dict], approvers: list[str], agent_apps: tuple[str, ...] | list[str] = ()
 ) -> set[tuple[str, str, str]]:
     """The (`inventory`, `-`, head) and (`design`, version, head) a listed approver gave by the
-    first line `Approve: inventory <full head ID>` or `Approve: design v<n>|i<n> <full head ID>`, never
-    through an app of `agent_apps` (SPEC-0037 rules 3 and 9). Pass `confirmed_comments` output so
-    a solo confirmation counts too."""
+    first line `Approve: inventory <full head ID>` or `Approve: design v<n>|i<n> <full head ID>`,
+    never through an app of `agent_apps` (SPEC-0037 rules 3 and 9). Pass
+    `confirmed_comments` output so a solo confirmation counts too."""
     allowed = {a.lstrip("@").lower() for a in approvers}
     found: set[tuple[str, str, str]] = set()
     for item in items:

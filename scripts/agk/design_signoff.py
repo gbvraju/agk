@@ -9,13 +9,15 @@ project root with `/`. `version_digest(root, version)` applies it to every file 
 `imported_digest(root, version)` applies it to every file of the whole folder
 `docs/design/imported/<version>/` of an imported version `i<n>` (`files/`, `manifest.json`, `map.md`
 and `external.txt`; SPEC-0037 amendment 161 item 4, ADR-0449), and `version_digest` reads an `i<n>`
-through it; `inventory_digest(root)` applies it to `docs/design/inventory.md`. `rows(root)` reads the one table
+through it; `inventory_digest(root)` applies it to `docs/design/inventory.md`.
+`rows(root)` reads the one table
 of `docs/design/signoffs.md` (columns kind, version, digest, head, date and comment) and returns its
 `inventory` and `design` rows in file order, refusing a row of another shape naming the rule and
 the row number, never a value. Whether a row counts (the person's `Approve:` line on the head it
 names) is `check_final_clearance.py`'s question, not this module's; `parse_rows(text)` reads the
 same table from a text (the file at a commit). `frozen_problems(root)` fails each `design` row whose
-folder (`folder_of`) no longer has the row's digest (rule 9: a signed-off version changed, naming the version and
+folder (`folder_of`) no longer has the row's digest (rule 9: a signed-off version changed,
+naming the version and
 never a digest), and `signed_off(root, version)` is rule 12's evidence reading (brief #459). Files
 only: no network, no model, nothing written.
 """
@@ -61,12 +63,12 @@ def digest(root: Path, paths: list[str] | list[Path]) -> str:
 
 
 def folder_of(version: str) -> str:
-    """The folder of a version from the project root: `i<n>` under imported, `v<n>` under prototype."""
+    """The folder of a version from the root: `i<n>` under imported, `v<n>` under prototype."""
     return f"{IMPORTED if version.startswith('i') else PROTOTYPE}/{version}"
 
 
 def imported_digest(root: Path, version: str) -> str:
-    """The digest of every file of the whole imported version folder `docs/design/imported/i<n>/`."""
+    """The digest of every file of the whole imported folder `docs/design/imported/i<n>/`."""
     if not VERSION.match(version) or not version.startswith("i"):
         raise CheckError("rule 9: the version is not i<n>")
     folder = root / IMPORTED / version
