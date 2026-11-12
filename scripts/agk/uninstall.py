@@ -18,8 +18,8 @@ holds only the kit's settings. The project's own work (answer 3: requirements, A
 the vision, the design documents, the records under docs/runs/, the tests other than the kit's own
 tests/kit/) is never deleted or edited; `--remove-docs` lists it for the person to delete by hand.
 A legacy install (kits 0.1.0 and 0.2.0, stamped `[tool.agk]` in pyproject.toml) loses that table.
-The GitHub side (answer 4) is printed, never done, in order (brief #1124, ADR-0481). `--pause` (answer 1) adds the top-level line
-`paused = true` to agk.toml.
+The GitHub side (answer 4) is printed, never done, in order (brief #1124, ADR-0481). `--pause`
+(answer 1) adds the top-level line `paused = true` to agk.toml.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ PAUSE_BRANCH = "agk-pause"
 PAUSE_LINE = "paused = true"
 CODEOWNERS = ".github/CODEOWNERS"
 RULESET = "kit/templates/ruleset.json"
-# Brief #1124 (ADR-0481): the GitHub items the list names by name or pattern, never read from GitHub.
+# Brief #1124 (ADR-0481): GitHub items named by name or pattern, never read from GitHub.
 STOP_SESSIONS = "stop the scheduled tasks or loops that start AGK sessions for this project"
 MERGE_ENVIRONMENT, MERGE_SECRET = "merge", "AGK_MERGE_TOKEN"
 BUILDER_BRANCHES = "claude/*"

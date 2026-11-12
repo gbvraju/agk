@@ -339,24 +339,23 @@ def test_ac2_amendment_169_without_a_dependence_only_the_milestone(plan: Path, c
 
 
 def test_ac2_amendment_169_every_reader_reads_the_same_lines(plan: Path, capsys) -> None:
-    """REQ-050 AC2: amendment 169 item 1, `brief_problems` (and `check_brief.py`'s shape check)
+    """REQ-050 AC2: amendment 169 item 1, `session.brief_problems` (and `check_brief.py`'s check)
     give the same result for the whole issue body and for the rendered body alone, both for a
     good brief and for one that breaks a rule."""
-    import check_brief  # noqa: PLC0415
-    import session  # noqa: PLC0415
+    import check_brief  # noqa: PLC0415 - its `brief_problems` is `session.brief_problems`
 
     code, out = publish(plan, capsys, approved(), {"M1": 7, "B0": 11, "B1": 12})
     assert code == 0, out
     body = field(commands(out)[0], "body")
     inner = hidden(body)
-    assert session.brief_problems(body) == session.brief_problems(inner) == []
+    assert check_brief.brief_problems(body) == check_brief.brief_problems(inner) == []
     assert check_brief.body_problems(body, None, None) == check_brief.body_problems(
         inner, None, None
     )
     broken = plan_intake.issue_body(
         {"body": inner.replace("Size: M", "Size: XL"), "milestone": "M1"}, {}
     )
-    assert session.brief_problems(broken) == session.brief_problems(hidden(broken)) != []
+    assert check_brief.brief_problems(broken) == check_brief.brief_problems(hidden(broken)) != []
 
 
 def test_ac2_amendment_169_a_brief_holding_the_end_of_a_comment_is_refused(
