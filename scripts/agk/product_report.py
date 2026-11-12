@@ -421,8 +421,10 @@ PLAN_FILES = ("docs/plan/milestones.md", "docs/plan/scope-changes.md")
 def plan_of(doc: dict) -> dict | None:
     """The optional `plan` of the facts (SPEC-0043 rule 19), when it can be read."""
     plan = doc.get("plan")
-    readable = isinstance(plan, dict) and is_list(plan.get("milestones"))
-    return plan if readable and isinstance(plan.get("waiting"), dict) else None
+    if not isinstance(plan, dict):
+        return None
+    readable = is_list(plan.get("milestones")) and isinstance(plan.get("waiting"), dict)
+    return plan if readable else None
 
 
 def plan_waiting(doc: dict, links: Links) -> dict:

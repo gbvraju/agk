@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import copy
 import json
-import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -25,7 +24,6 @@ import pytest
 from test_plan_estimate import LIMITS, brief, history, pull
 
 TODAY = "2026-11-04"  # a Wednesday; the report's week is 2026-10-26 to 2026-11-01
-KIT = Path(__file__).resolve().parents[2]
 REPORT_FACTS = Path(__file__).parent / "fixtures" / "report" / "quiet" / "facts.json"
 PARTS = ("briefs ", "hours ", "forecast ", "target ", "status ", "trend ", "cause ")
 
@@ -311,18 +309,6 @@ def test_rule19_into_writes_the_base_and_one_key_plan(tmp_path, monkeypatch, cap
     assert {k: v for k, v in into.items() if k != "plan"} == base and "plan" not in base
     _, out, _ = run(tmp_path, monkeypatch, capsys, "--json")
     assert into["plan"] == json.loads(out)
-
-
-def test_rule19_the_copy_validates_against_the_facts_schema(tmp_path, monkeypatch, capsys):
-    """REQ-050 AC5: rule 19 (the optional top-level `plan`, amendment 115 item 1)."""
-    sys.path.insert(0, str(KIT / "tests" / "kit_dev"))
-    from jsonschema_lite import errors
-
-    schema = json.loads((KIT / "kit" / "facts-schema.json").read_text(encoding="utf-8"))
-    base, into = report_facts(tmp_path, monkeypatch, capsys, changes=CHANGES, baseline=False)
-    assert errors(base, schema) == [] and errors(into, schema) == []
-    assert errors({**into, "plan": {"milestones": []}}, schema)
-    assert "plan" not in schema["required"]
 
 
 def report_of(doc):

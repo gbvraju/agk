@@ -171,6 +171,8 @@ def test_ac1_needs_you_is_a_list_of_groups_with_a_count(name, facts):
             "pull-request",
             "residual",
             "requirement",
+            "scope-change",
+            "plan",
         }
         unknown = any(i["kind"] == "unknown" for i in group["items"])
         assert group["count"] == ("unknown" if unknown else len(group["items"])), group

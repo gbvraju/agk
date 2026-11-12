@@ -184,7 +184,7 @@ def test_ac4_the_schema_number_is_4_and_the_kinds_are_the_same():
         "counts",
         "notices",
     ]
-    assert len(pr.ITEM_KINDS) == 33
+    assert len(pr.ITEM_KINDS) == 36  # three kinds of the plan, schema 9 (ADR-0466)
 
 
 # --- open pull requests with unknown verdicts (rule 5) ---------------------------------------
