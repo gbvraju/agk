@@ -125,7 +125,7 @@ def expected_hours(milestone, sizes):
     pools = {
         s: sorted((p for p in history() if p["estimated_size"] == s), key=_order) for s in SIZES
     }
-    rng = random.Random(f"hours:{milestone}")
+    rng = random.Random(f"hours:{milestone}")  # nosec B311 - a seeded simulation, not security
     sums = [
         sum((Decimal(rng.choice(pools[s])["actual_hours"]) for s in sizes), Decimal(0))
         for _ in range(10000)
@@ -138,7 +138,7 @@ def _order(p):
 
 
 def expected_weeks(milestone, need, weeks=(2, 1, 0, 3)):
-    rng = random.Random(f"weeks:{milestone}")
+    rng = random.Random(f"weeks:{milestone}")  # nosec B311 - a seeded simulation, not security
     ks = []
     for _ in range(10000):
         got = k = 0

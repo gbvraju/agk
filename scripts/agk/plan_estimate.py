@@ -213,12 +213,12 @@ def declared(briefs: list[tuple[str, str]], defaults: dict) -> str:
 
 
 def hours_of(history: list[dict], sizes: list[str], milestone: str) -> list[str]:
-    pools = {
-        s: [number(p["actual_hours"]) for p in history if p["estimated_size"] == s] for s in SIZES
+    pools: dict[str, list[Decimal]] = {
+        s: [Decimal(p["actual_hours"]) for p in history if p["estimated_size"] == s] for s in SIZES
     }
     joined = pools["S"] + pools["M"] + pools["L"]
     chosen = [pools[s] if s in SIZES else joined for s in sizes]
-    rng = random.Random(f"hours:{milestone}")
+    rng = random.Random(f"hours:{milestone}")  # nosec B311 - a seeded simulation, not security
     sums = [sum((rng.choice(pool) for pool in chosen), Decimal(0)) for _ in range(TRIALS)]
     return [tenth(v) for v in ranks(sums)]
 
@@ -226,7 +226,7 @@ def hours_of(history: list[dict], sizes: list[str], milestone: str) -> list[str]
 def dates_of(weeks: list[int], need: int, milestone: str, today: date) -> list[str]:
     if sum(weeks) == 0:
         return [UNKNOWN, UNKNOWN]
-    rng = random.Random(f"weeks:{milestone}")
+    rng = random.Random(f"weeks:{milestone}")  # nosec B311 - a seeded simulation, not security
     counts = []
     for _ in range(TRIALS):
         got = k = 0
