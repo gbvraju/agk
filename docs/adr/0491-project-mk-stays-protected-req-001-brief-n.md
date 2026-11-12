@@ -6,7 +6,7 @@
 - Related: brief #1155, issue #485, brief #390, ADR-0214
 - Requirements: REQ-001
 
-Protected classes: `scripts/agk/`, `agk.toml`, `kit/`, `tests/kit/`
+Protected classes: `scripts/agk/`, `agk.toml`, `kit/`, `tests/kit/`, `tests/kit_dev/`
 
 ## Context
 
@@ -25,8 +25,11 @@ project's governance targets out of its protected paths. The pilot run of 2026-1
 2. `PROJECT_MK_FIX` gains one clause: "and, where Makefile is protected, add project.mk to config/protected-paths.txt
    and config/reviewers.yaml in the same pull request".
 3. `docs/guides/getting-started.md` says it in the bullet that describes `project.mk`.
-4. `tests/kit/test_project_mk_protected.py` tests the three, and the `[[testing.map]]` entry of `scripts/agk/upgrade.py`
-   in `agk.toml` lists it.
+4. The init project's first ADR (`kit/templates/adr-0001.md`), which names every protected entry, names `project.mk`.
+5. `tests/kit/test_project_mk_protected.py` tests the above, and the `[[testing.map]]` entries of `scripts/agk/upgrade.py`
+   and `scripts/agk/reviewers.py` (whose `--check` it runs) in `agk.toml` list it. The pinned lists of
+   `tests/kit_dev/test_init.py` and `tests/kit_dev/test_kit_manifest.py` gain `project.mk`; the latter now reads this
+   repository's own `config/protected-paths.txt` as the template without `project.mk`, plus the kit-only entries.
 
 ## Consequences
 
