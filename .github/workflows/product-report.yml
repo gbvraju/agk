@@ -50,6 +50,13 @@ jobs:
             echo "no facts were produced; nothing written"
             exit 1
           fi
+          if [ -f docs/plan/milestones.md ]; then
+            plan_facts="$RUNNER_TEMP/plan-facts.json"
+            python3 scripts/agk/facts.py --today "$today" --repo "$GITHUB_REPOSITORY" --weeks 12 > "$plan_facts"
+            python3 scripts/agk/plan_status.py --facts "$plan_facts" --today "$today" --weeks 12 \
+              --base "$facts" --into "$RUNNER_TEMP/facts-plan.json"
+            mv "$RUNNER_TEMP/facts-plan.json" "$facts"
+          fi
           python3 scripts/agk/product_report.py --facts "$facts" --today "$today" --json "$report_json" > "$report"
           week=$(sed -n '1s/^<!-- agk-product-report: \(.*\) -->$/\1/p' "$report")
           if ! printf '%s' "$week" | grep -Eq '^[0-9]{4}-W[0-9]{2}$' || [ ! -s "$report_json" ]; then

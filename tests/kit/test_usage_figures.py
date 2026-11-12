@@ -123,7 +123,7 @@ def test_ac8_the_report_schema_is_6_and_the_fields_are_in_the_tables():
     """REQ-040 AC8"""
     import product_report as pr
 
-    assert pr.REPORT_SCHEMA == 8 and build(load())["schema"] == 8
+    assert pr.REPORT_SCHEMA == 9 and build(load())["schema"] == 9
     assert pr.ITEM_KINDS["pull-request-cost"][-1] == "usage"
     assert pr.ITEM_KINDS["week-totals"][-4:-2] == ("usage", "usage_reported")
 
