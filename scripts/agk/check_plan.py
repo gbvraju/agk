@@ -2,7 +2,7 @@
 `kit/manifest.json` lists it in `verbatim`. Build (b) of SPEC-0043 rule 27 (amendment 163).
 
 Rule 1: every file under `docs/sources/` (any depth) is `.md` or `.txt`, UTF-8 text, and starts
-with exactly the lines `Source: <title>`, `Kind: <sow|brd|prd|design|charter|other>`,
+with exactly the lines `Source: <title>`, `Kind: <sow|brd|prd|design|charter|openspec|other>`,
 `Version: <version>` and `Date: <YYYY-MM-DD>`, in this order, then one blank line and the text.
 Rule 2: the design links are the rows of `docs/sources/design-links.md` (`Kind: design`), a table
 with the columns `Name`, `Link` (an `https://` address), `Version` and `Frames`, each row with the
@@ -59,7 +59,7 @@ SOURCES = "docs/sources"
 PLAN = "docs/plan"
 LINKS = f"{SOURCES}/design-links.md"
 HEADER = ("Source", "Kind", "Version", "Date")
-KINDS = ("sow", "brd", "prd", "design", "charter", "other")
+KINDS = ("sow", "brd", "prd", "design", "charter", "openspec", "other")
 SUFFIXES = (".md", ".txt")
 COLUMNS = ("Name", "Link", "Version", "Frames")
 CHARTER_NAME = re.compile(r"^docs/adr/(\d{4})-project-charter\.md$")

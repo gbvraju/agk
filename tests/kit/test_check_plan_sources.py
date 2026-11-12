@@ -183,7 +183,8 @@ def test_ac1_the_header_is_parsed_for_the_later_builds():
     }
     assert check_plan.header(BODY) is None
     assert check_plan.HEADER == ("Source", "Kind", "Version", "Date")
-    assert check_plan.KINDS == ("sow", "brd", "prd", "design", "charter", "other")
+    # amendment 166 item 2 (ADR-0473): `openspec` joins the list before `other`
+    assert check_plan.KINDS == ("sow", "brd", "prd", "design", "charter", "openspec", "other")
 
 
 # --- rule 1: a location -------------------------------------------------------------------------

@@ -2,12 +2,15 @@
 `kit/manifest.json` lists it in `verbatim`. Build (c1) of SPEC-0043 rule 27 (amendment 163,
 ADR-0456), build (c2), `render` (ADR-0461), build (i), `publish` (ADR-0459), build (p), personas
 and user stories (amendment 164 item 2, ADR-0462), and build (r), shared components and demoable
-slices (amendment 164 items 3 and 4, ADR-0464).
+slices (amendment 164 items 3 and 4, ADR-0464), and build (a) of brief #1109, an OpenSpec file
+(amendment 166 items 2 to 4, ADR-0472, ADR-0473).
 
     python3 plan_intake.py validate --proposals FILE [--root DIR]
     python3 plan_intake.py states [--root DIR]
     python3 plan_intake.py render --proposals FILE [--root DIR]
     python3 plan_intake.py publish --comments FILE --head SHA [--numbers FILE] [--root DIR]
+    python3 plan_intake.py openspec-import PATH --slug SLUG [--root DIR]
+    python3 plan_intake.py openspec --slug SLUG --out FILE [--root DIR]
 
 Rule 3: every command exits 2 with `data guard not installed: <path>` when `scripts/agk/guard.py` or
 `.claude/hooks/data_guard.py` is absent, and runs `guard.scan_text` on the whole text of every
@@ -36,17 +39,31 @@ prints the declared playbook's `batch_by` as `Milestone order for the person: ..
 account of `spec_approvers` in the saved comments (`reviewers.plan_approvals`), refuses a brief that
 `check_brief.py --root .` fails, and prints one `gh api` command per milestone and per brief, briefs
 in `depends_on` order, each withheld until `--numbers` gives its milestone's and its dependences'
-numbers; it runs none. In personal mode it writes the briefs through `forge.FilesForge`. Files only:
-no network, no model; only `render` and personal `publish` write.
+numbers; it runs none. In personal mode it writes the briefs through `forge.FilesForge`.
+
+Amendment 166 (ADR-0473): `openspec-import` copies a combined OpenSpec `.md` file, or an `openspec/`
+folder that holds `specs/` (its `.md` and `.txt` files; any other is printed `skipped:`), under
+`docs/sources/openspec-<slug>/`, each file the rule 1 header (`Kind: openspec`, `Version:
+sha256:<digest of the original>`), a blank line and the original bytes unchanged; never over an
+existing folder, and only after `guard.scan_text` passed every file. `openspec` (also
+`openspec-draft`) reads that folder by script into a proposals file outside `docs/` that `validate`
+accepts: a capability is one area, a `Requirement: ` heading one requirement (its `statement` the
+text exactly, `changing` when its change is open), a `Scenario: ` heading one criterion `Given ...,
+when ..., then ... (<location>)`; `milestone` is null for the skill to set, the actor that starts a
+`WHEN` step is a persona with `(verify)` goals, and what the file leaves open is an open question.
+A heading it does not read inside a capability is printed `ignored: <file>:<line>`. Files only: no
+network, no model; only `render`, personal `publish` and the two OpenSpec commands write.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shlex
 import sys
 import tomllib
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -62,6 +79,8 @@ USAGE = (
     "usage: plan_intake.py validate --proposals FILE [--root DIR] | states [--root DIR]"
     " | render --proposals FILE [--root DIR]"
     " | publish --comments FILE --head SHA [--numbers FILE] [--root DIR]"
+    " | openspec-import PATH --slug SLUG [--root DIR]"
+    " | openspec --slug SLUG --out FILE [--root DIR]"
 )
 GUARDS = ("scripts/agk/guard.py", ".claude/hooks/data_guard.py")
 # The pattern of `playbook.py check-start` (SPEC-0013 rule 5). playbook.py is kit-only, so it is
@@ -95,7 +114,9 @@ OPTIONAL = {
     "milestones": ("screens",),
     "briefs": ("component", "screens"),
 }
-TYPED = ("component", "screens")  # the optional keys whose type rule 4 checks
+OPTIONAL["requirements"] = ("statement", "changing")  # amendment 166 (`Q-1108-1`, `Q-1108-2`)
+KINDS |= {"statement": MAYBE, "changing": "true or false"}
+TYPED = ("component", "screens", "statement", "changing")  # optional keys whose type rule 4 checks
 KEYED = {"personas": "P", COMPONENTS: "C"}  # keys run P1, P2, ... and C1, C2, ... in order
 FOUNDATION = "Foundation"
 ID = {"milestones": "id", "areas": "name"}
@@ -195,7 +216,9 @@ def shape_problems(data: object) -> list[str]:
         out += [f"{where}: unknown key {k}" for k in item if k not in known]
         out += [f"{where}: missing key {k}" for k in fields if k not in item]
         for key in (*fields, *(k for k in TYPED if k in item and k in known)):
-            kind_of = KINDS.get(key, TEXT)
+            # a requirement's milestone may be null until the skill sets it (amendment 166)
+            unset = (kind, key) == ("requirements", "milestone")
+            kind_of = MAYBE if unset else KINDS.get(key, TEXT)
             if key in item and not _typed(item[key], kind_of):
                 out.append(f"{where}: {key} is not {kind_of}")
             elif (kind_of == LOCS or key in NON_EMPTY) and item.get(key) == []:
@@ -227,6 +250,8 @@ def shape_problems(data: object) -> list[str]:
 
 
 def _typed(value: object, kind: str) -> bool:
+    if kind == "true or false":
+        return isinstance(value, bool)
     if kind == MAYBE:
         return value is None or _typed(value, TEXT)
     if kind == TEXT:
@@ -292,7 +317,7 @@ def plan_problems(root: Path, data: dict) -> list[str]:
         if not any(b["milestone"] == m["id"] for b in data["briefs"]):
             out.append(f"rule 5: milestones {m['id']}: no brief")
     for r in data["requirements"]:
-        if r["milestone"] not in milestones:
+        if r["milestone"] is not None and r["milestone"] not in milestones:
             out.append(f"rule 5: requirements {r['key']}: milestone names nothing")
         out += story_problems(r, personas)
     for a in data["areas"]:
@@ -320,6 +345,7 @@ def plan_problems(root: Path, data: dict) -> list[str]:
         if VERIFY not in q["text"]:
             out.append(f"rule 6: scope.open_questions {q['key']}: no {VERIFY} mark")
     out += component_problems(root, data) + slice_problems(root, data)
+    out += openspec_problems(root, data)
     return out + conflict_problems(items)
 
 
@@ -397,6 +423,47 @@ def slice_problems(root: Path, data: dict) -> list[str]:
         if heading.partition("#")[2] not in listed:
             out.append(f"rule 5: {heading}: no milestone lists this screen and state")
     return out
+
+
+def _loc_file(location: str) -> str:
+    return location.partition("#")[0] if "#" in location else location.rpartition(":")[0]
+
+
+def openspec_files(root: Path) -> set[str]:
+    """The `Kind: openspec` sources of rule 1, by their paths."""
+    return {
+        p.relative_to(root).as_posix()
+        for p in check_plan.source_files(root)
+        if (check_plan.header(_read(p) or "") or {}).get("Kind") == OPENSPEC
+    }
+
+
+def openspec_problems(root: Path, data: dict) -> list[str]:
+    """Rule 5 with amendment 166 item 3 and 4: a requirement cited to a `Kind: openspec` source
+    keeps its statement; a criterion's closing location resolves; a `changing` requirement is in
+    `M1` only with an open question that cites one of its locations (`Q-1108-2`)."""
+    files = openspec_files(root)
+    asked = {loc for q in data["scope"]["open_questions"] for loc in q["sources"]}
+    out: list[str] = []
+    for r in data["requirements"]:
+        where = f"rule 5: requirements {r['key']}"
+        if r.get("statement") is None and any(_loc_file(s) in files for s in r["sources"]):
+            out.append(f"{where}: statement is null for a Kind: {OPENSPEC} source")
+        for n, criterion in enumerate(r["criteria"], start=1):
+            loc = _closing_location(criterion)
+            if loc is not None and check_plan.location_problem(root, loc) is not None:
+                out.append(f"{where}: criterion {n} ends with a location that does not resolve")
+        if r.get("changing") is True and r["milestone"] == "M1" and not asked & set(r["sources"]):
+            out.append(f"{where}: changing in M1 without an open question citing it")
+    return out
+
+
+def _closing_location(criterion: str) -> str | None:
+    """The `(docs/...)` location a criterion ends with, or None."""
+    start = criterion.rfind(" (docs/")
+    if start < 0 or not criterion.endswith(")"):
+        return None
+    return criterion[start + 2 : -1]
 
 
 def story_problems(r: dict, personas: dict[str, str]) -> list[str]:
@@ -530,6 +597,10 @@ def requirements_text(data: dict) -> str:
     for r in data["requirements"]:
         out += ["", f"### {r['key']} {_one(r['title'])}", ""]
         out += [f"Persona: {r['persona']} {names[r['persona']]}", f"Story: {_one(r['story'])}"]
+        if r.get("statement") is not None:  # amendment 166 item 3
+            out.append(f"Statement: {_one(r['statement'])}")
+        if r.get("changing") is True:
+            out.append("Changing: yes")
         out += ["", "Criteria:", ""]
         out += [f"- {_one(c)}" for c in r["criteria"]] or [f"- {VERIFY}"]
         out += ["", f"Milestone: {r['milestone']}", "Status: planned", *_sources(r["sources"])]
@@ -569,6 +640,9 @@ def render_problems(data: dict) -> list[str]:
         out += [f"{where}: {field} is empty" for field in ("touches", "advances") if not b[field]]
         if len(_one(b["title"])) > SENTENCE_MAX:
             out.append(f"{where}: the title is over {SENTENCE_MAX} characters")
+    for r in data["requirements"]:
+        if r["milestone"] is None:
+            out.append(f"rule 7: requirements {r['key']}: milestone is not set")
     for a in data["areas"]:
         if not re.search(r"[a-z0-9]", a["name"].lower()):
             out.append(f"rule 7: areas {a['name']}: the name has no letters or digits")
@@ -915,14 +989,399 @@ def cmd_states(root: Path) -> int:
     return 1 if problems else 0
 
 
+# --- amendment 166: an OpenSpec file (build (a) of brief #1109, ADR-0473) -------------------------
+
+OPENSPEC = "openspec"
+OPENSPEC_SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
+BAD_SLUG = (
+    "--slug is lowercase letters, digits and hyphens, starting with a letter or digit"
+    " (option: --slug)"
+)
+CAPABILITY_LINE = re.compile(r"^\*Capability `([^`]+)`")
+CHANGE_STATUS = re.compile(r"Defined by:[^(]*\(([^,()]+)")
+STEP = re.compile(r"^\s*[-*+]\s+(?:\*\*)?(GIVEN|WHEN|THEN|AND)\b(?:\*\*)?:?\s*(.*?)\s*$", re.I)
+ACTOR = re.compile(r"^(an?\s+[A-Za-z][\w-]*)\b")
+CROSS_REF = re.compile(r"\(([^()]*)\)")
+KIND_NUMBER = re.compile(r"([A-Za-z]+)\s+(\d+(?:\.\d+)*)")
+REQUIREMENT, SCENARIO = "Requirement: ", "Scenario: "
+
+
+def _import_files(given: Path) -> tuple[list[tuple[str, Path]], list[str]] | None:
+    """(relative path, file) to copy and the `skipped:` lines, or None when `given` is neither a
+    `.md` file nor a folder that holds `specs/` (rule 2b, `Q-1108-4`)."""
+    if given.is_file() and given.suffix == ".md":
+        return [(given.name, given)], []
+    if not (given.is_dir() and (given / "specs").is_dir()):
+        return None
+    files: list[tuple[str, Path]] = []
+    skipped: list[str] = []
+    for path in sorted(given.rglob("*")):
+        rel = path.relative_to(given).as_posix()
+        if path.is_symlink():
+            skipped.append(f"skipped: {rel} (a link is not copied)")
+        elif path.is_file() and path.suffix in check_plan.SUFFIXES:
+            files.append((rel, path))
+        elif path.is_file():
+            skipped.append(f"skipped: {rel} (rule 1: .md or .txt only)")
+    return files, skipped
+
+
+def cmd_openspec_import(root: Path, given: Path, slug: str) -> int:
+    """Rule 2b: the original bytes under the rule 1 header, guarded first, never overwritten."""
+    import guard  # noqa: PLC0415 - here: only after the gate has found it installed
+
+    if not OPENSPEC_SLUG.fullmatch(slug):
+        print(f"openspec-import: {BAD_SLUG}")
+        return 2
+    rel_target = f"{check_plan.SOURCES}/{OPENSPEC}-{slug}"
+    target = root / rel_target
+    if target.exists() or target.is_symlink():
+        print(f"openspec-import: {rel_target}/ exists; nothing was written (option: --slug)")
+        return 2
+    found = _import_files(given)
+    if found is None:
+        print(
+            "openspec-import: the path is a .md file or a folder that holds specs/ (option: PATH)"
+        )
+        return 2
+    files, skipped = found
+    originals: list[tuple[str, bytes]] = []
+    for rel, path in files:
+        data = path.read_bytes()
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError:
+            print(f"openspec-import: {rel}: not UTF-8 text; nothing was written")
+            return 2
+        originals.append((rel, data))
+    findings = [
+        f"rule 3: {rel}: {f.kind} line {f.line}, column {f.column}"
+        for rel, data in originals
+        for f in guard.scan_text(data.decode("utf-8"))
+    ]
+    if findings:
+        print("\n".join([*findings, "openspec-import: nothing was written"]))
+        return 1
+    today = datetime.now(UTC).date().isoformat()
+    for rel, data in originals:
+        head = (
+            f"Source: OpenSpec {rel}\nKind: {OPENSPEC}\n"
+            f"Version: sha256:{hashlib.sha256(data).hexdigest()}\nDate: {today}\n\n"
+        )
+        path = target / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(head.encode("utf-8") + data)
+    for line in skipped:
+        print(line)
+    print(f"imported {len(originals)} files into {rel_target}/")
+    return 0
+
+
+class Reading:
+    """Rule 4b: the requirements, personas and open questions of one imported folder, in order."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.areas: list[dict] = []
+        self.requirements: list[dict] = []
+        self.personas: dict[str, dict] = {}
+        self.questions: list[tuple[str, str]] = []  # (text, location)
+        self.warnings: list[str] = []
+        self.unnamed: list[str] = []  # requirement keys with no actor
+        self.scenarios = 0
+
+    def ask(self, text: str, location: str) -> None:
+        self.questions.append((f"{text} {VERIFY}", location))
+
+    def capability(self, name: str, changing: bool) -> dict:
+        area = {"name": name, "requirements": [], "changing": changing}
+        self.areas.append(area)
+        return area
+
+    def read_file(self, rel: str, text: str, area: dict | None) -> None:
+        """One file: `area` is set for a folder's `specs/<slug>/` file; a combined file finds its
+        capabilities by their `*Capability ` line."""
+        lines = text.splitlines()
+        counts: dict[str, int] = {}
+        for h in check_plan.headings(text):
+            counts[h] = counts.get(h, 0) + 1
+
+        def loc(heading: str, number: int) -> str:
+            return f"{rel}#{heading}" if counts.get(heading) == 1 else f"{rel}:{number}"
+
+        combined = area is None
+        req: dict | None = None
+        scenario: list[tuple[str, str]] | None = None
+        statement: list[str] | None = None
+        seen_requirement = False
+        fenced = False
+        for index, line in enumerate(lines):
+            if check_plan.FENCE.match(line):
+                fenced = not fenced
+                continue
+            heading = None if fenced else check_plan.HEADING.match(line)
+            if heading is None:
+                if fenced or CAPABILITY_LINE.match(line.strip()):
+                    continue
+                if statement is not None and line.strip():
+                    statement.append(line.strip())
+                elif scenario is not None and (step := STEP.match(line)):
+                    scenario.append((step.group(1).upper(), step.group(2)))
+                continue
+            name, number = heading.group(1), index + 1
+            self._close(req, statement)
+            statement = scenario = None
+            following = next((x.strip() for x in lines[index + 1 :] if x.strip()), "")
+            if combined and CAPABILITY_LINE.match(following):
+                status = CHANGE_STATUS.search(following)
+                changing = status is not None and status.group(1).strip().lower() == "open"
+                area, req, seen_requirement = self.capability(name, changing), None, False
+            elif area is not None and name.startswith(REQUIREMENT):
+                req = self._requirement(area, name, loc(name, number))
+                statement, seen_requirement = [], True
+            elif req is not None and name.startswith(SCENARIO):
+                scenario = []
+                req["_scenarios"].append((loc(name, number), scenario))
+            elif seen_requirement or name.startswith((REQUIREMENT, SCENARIO)):
+                self.warnings.append(
+                    f"ignored: {rel}:{number}: heading is not a capability, requirement or"
+                    " scenario (rule 4b)"
+                )
+                req = None
+        self._close(req, statement)
+
+    def _requirement(self, area: dict, name: str, location: str) -> dict:
+        key = f"R{len(self.requirements) + 1}"
+        req: dict = {"key": key, "title": name[len(REQUIREMENT) :].strip(), "location": location}
+        req |= {"changing": area["changing"], "_scenarios": [], "statement": None}
+        self.requirements.append(req)
+        area["requirements"].append(key)
+        return req
+
+    @staticmethod
+    def _close(req: dict | None, statement: list[str] | None) -> None:
+        if req is not None and statement:
+            req["statement"] = " ".join(statement)
+
+    def finish(self) -> None:
+        """The criteria, the persona of each requirement and the cross-references (rule 6)."""
+        for r in self.requirements:
+            r["criteria"], r["sources"], actor = [], [r["location"]], None
+            for location, steps in r.pop("_scenarios"):
+                self.scenarios += 1
+                r["criteria"].append(f"{criterion(steps)} ({location})")
+                for word, text in steps:
+                    if actor is None and word == "WHEN" and (m := ACTOR.match(text)):
+                        actor = m.group(1)
+                        self.personas.setdefault(actor, {"sources": [location]})
+            if not r["criteria"]:
+                r["criteria"] = [VERIFY]
+                self.ask(
+                    f"requirements {r['key']}: no scenario, so no acceptance line", r["location"]
+                )
+            if r["statement"] is None:
+                self.ask(f"requirements {r['key']}: no requirement text", r["location"])
+            r["actor"] = actor
+            if actor is None:
+                self.unnamed.append(r["key"])
+            self.cross_references(r)
+
+    def cross_references(self, r: dict) -> None:
+        """Rule 6: `<kind> <number>` resolves to the one heading of the one source of that kind;
+        any other is an open question naming its position, never its text (`Q-1108-9`)."""
+        refs = [
+            part.strip()
+            for group in CROSS_REF.findall(r["statement"] or "")
+            for part in group.split(",")
+        ]
+        for n, ref in enumerate(refs, start=1):
+            target = self.resolve(ref)
+            if target is not None:
+                r["sources"].append(target)
+            else:
+                self.ask(
+                    f"requirements {r['key']}: cross-reference {n} of its statement names no one"
+                    " source heading",
+                    r["location"],
+                )
+
+    def resolve(self, ref: str) -> str | None:
+        match = KIND_NUMBER.fullmatch(ref)
+        if match is None:
+            return None
+        kind, number = match.group(1).lower(), match.group(2)
+        paths = [  # every source of the kind, `.md` or `.txt`; only one `.md` can link
+            p
+            for p in check_plan.source_files(self.root)
+            if (check_plan.header(_read(p) or "") or {}).get("Kind") == kind
+        ]
+        if len(paths) != 1 or paths[0].suffix != ".md":
+            return None
+        text = _read(paths[0]) or ""
+        found = [
+            h for h in check_plan.headings(text) if re.match(rf"{re.escape(number)}(?:\s|$)", h)
+        ]
+        if len(found) != 1 or check_plan.headings(text).count(found[0]) != 1:
+            return None
+        return f"{paths[0].relative_to(self.root).as_posix()}#{found[0]}"
+
+    def proposals(self) -> dict:
+        personas = [
+            {"key": f"P{n}", "name": name, "goals": [VERIFY], "sources": p["sources"]}
+            for n, (name, p) in enumerate(self.personas.items(), start=1)
+        ]
+        keys = {p["name"]: p["key"] for p in personas}
+        if self.unnamed:
+            first = next(r for r in self.requirements if r["key"] == self.unnamed[0])
+            unnamed = {"key": f"P{len(personas) + 1}", "name": VERIFY, "goals": [VERIFY]}
+            personas.append(unnamed | {"sources": [first["location"]]})
+            self.ask(
+                f"personas {unnamed['key']}: no step names who uses requirements "
+                + ", ".join(self.unnamed),
+                first["location"],
+            )
+        requirements = []
+        for r in self.requirements:
+            persona = keys.get(r["actor"]) if r["actor"] else personas[-1]["key"]
+            name = r["actor"] or VERIFY
+            requirements.append(
+                {"key": r["key"], "title": r["title"], "statement": r["statement"]}
+                | {"criteria": r["criteria"], "milestone": None, "persona": persona}
+                | {"story": f"As {name}{WANT}{VERIFY}{SO_THAT}{VERIFY}"}
+                | {"changing": r["changing"], "sources": r["sources"]}
+            )
+        questions = [
+            {"key": f"Q{n}", "text": text, "sources": [location]}
+            for n, (text, location) in enumerate(self.questions, start=1)
+        ]
+        scope: dict[str, list[dict]] = {name: [] for name in SCOPE[:-1]}
+        scope["open_questions"] = questions
+        areas = [{"name": a["name"], "requirements": a["requirements"]} for a in self.areas]
+        return {"schema": 1, "scope": scope, "personas": personas, "milestones": []} | {
+            "requirements": requirements,
+            "areas": areas,
+            "briefs": [],
+            "conflicts": [],
+        }
+
+
+def criterion(steps: list[tuple[str, str]]) -> str:
+    """`Given ..., when ..., then ...` of a scenario's steps; `AND` joins the clause before it."""
+    clauses: dict[str, list[str]] = {"GIVEN": [], "WHEN": [], "THEN": []}
+    last = "GIVEN"
+    for word, text in steps:
+        if word == "AND":
+            clauses[last].append(text)
+        else:
+            clauses[word].append(text)
+            last = word
+    parts = [f"{word.lower()} {' and '.join(texts)}" for word, texts in clauses.items() if texts]
+    if not parts:
+        return VERIFY
+    text = ", ".join(parts)
+    return text[0].upper() + text[1:]
+
+
+def read_openspec(root: Path, folder: Path) -> Reading:
+    """Rule 4b over `docs/sources/openspec-<slug>/`: the folder layout when it holds `specs/`,
+    else each combined `.md` file at its top; nothing under `changes/` is a requirement."""
+    reading = Reading(root)
+
+    def body(path: Path) -> str:
+        return _read(path) or ""
+
+    def rel(path: Path) -> str:
+        return path.relative_to(root).as_posix()
+
+    specs, changes = folder / "specs", folder / "changes"
+    if not specs.is_dir():
+        for path in sorted(folder.glob("*.md")):
+            reading.read_file(rel(path), body(path), None)
+        reading.finish()
+        return reading
+    live = (
+        [c for c in sorted(changes.iterdir()) if c.is_dir() and c.name != "archive"]
+        if changes.is_dir()
+        else []
+    )
+    for cap in sorted(p for p in specs.iterdir() if p.is_dir()):
+        changing = any((c / "specs" / cap.name).is_dir() for c in live)
+        area = reading.capability(cap.name, changing)
+        for path in sorted(cap.glob("*.md")):
+            reading.read_file(rel(path), body(path), area)
+    reading.finish()
+    for n, change in enumerate(live, start=1):
+        files = sorted(change.rglob("*.md"), key=lambda p: (p.name != "proposal.md", p.as_posix()))
+        if not files:
+            continue
+        heads = check_plan.headings(body(files[0]))
+        first = heads[0] if heads and heads.count(heads[0]) == 1 else None
+        location = (
+            f"{rel(files[0])}#{first}" if first else f"{rel(files[0])}:{len(check_plan.HEADER) + 2}"
+        )
+        reading.ask(
+            f"change {n}: its tasks and delta specs are hints for the briefs, never requirements",
+            location,
+        )
+    return reading
+
+
+def cmd_openspec(root: Path, slug: str, out_file: Path) -> int:
+    """Rule 4b: the partial proposals file the skill completes, outside `docs/`, never over one."""
+    if not OPENSPEC_SLUG.fullmatch(slug):
+        print(f"openspec: {BAD_SLUG}")
+        return 2
+    rel_folder = f"{check_plan.SOURCES}/{OPENSPEC}-{slug}"
+    folder = root / rel_folder
+    if not folder.is_dir():
+        print(f"openspec: {rel_folder}/ does not exist; run openspec-import first (option: --slug)")
+        return 2
+    if out_file.resolve().is_relative_to((root / "docs").resolve()):
+        print("openspec: the proposals file is outside docs/ (option: --out)")
+        return 2
+    if out_file.exists() or out_file.is_symlink():
+        print("openspec: the proposals file exists; nothing was written (option: --out)")
+        return 2
+    problems = scan_problems(root, [])
+    if problems:
+        print("\n".join(problems))
+        return 1
+    reading = read_openspec(root, folder)
+    data = reading.proposals()
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    for line in reading.warnings:
+        print(line)
+    print(
+        f"wrote the proposals: {len(data['areas'])} areas, {len(data['requirements'])}"
+        f" requirements, {reading.scenarios} scenarios, {len(data['personas'])} personas,"
+        f" {len(data['scope']['open_questions'])} open questions; set each milestone, then"
+        " add milestones and briefs"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     command, rest = (args[0], args[1:]) if args else ("", [])
+    if command == "openspec-draft":  # amendment 166's name for `openspec` (ADR-0473)
+        command = "openspec"
+    if command == "openspec-import":  # the path first, then the options
+        if not rest or rest[0].startswith("--"):
+            print(USAGE, file=sys.stderr)
+            return 2
+        rest = ["--path", *rest]
     options = dict(zip(rest[::2], rest[1::2], strict=False)) if len(rest) % 2 == 0 else None
     allowed = {"validate": {"--proposals", "--root"}, "states": {"--root"}}
     allowed["publish"] = {"--comments", "--head", "--numbers", "--root"}
-    allowed = (allowed | {"render": allowed["validate"]}).get(command)
-    if allowed is None or options is None or not set(options) <= allowed:
+    allowed["openspec-import"] = {"--path", "--slug", "--root"}
+    allowed["openspec"] = {"--slug", "--out", "--root"}
+    known = (allowed | {"render": allowed["validate"]}).get(command)
+    if known is None or options is None or not set(options) <= known:
+        print(USAGE, file=sys.stderr)
+        return 2
+    needed = {"openspec-import": {"--slug"}, "openspec": {"--slug", "--out"}}.get(command, set())
+    if not needed <= set(options):
         print(USAGE, file=sys.stderr)
         return 2
     if command in ("validate", "render") and "--proposals" not in options:
@@ -943,6 +1402,10 @@ def dispatch(command: str, options: dict[str, str]) -> int:
         return 2
     if command == "states":
         return cmd_states(root)
+    if command == "openspec-import":
+        return cmd_openspec_import(root, Path(options["--path"]), options["--slug"])
+    if command == "openspec":
+        return cmd_openspec(root, options["--slug"], Path(options["--out"]))
     if command == "render":
         return cmd_render(root, Path(options["--proposals"]))
     if command == "publish":
