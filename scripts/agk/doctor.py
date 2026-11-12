@@ -28,6 +28,8 @@ there, one line suggests `proof_timeout` as ceil(n * 1.5 / 60) * 60, the formula
 warning (ADR-0258); and when the configured `test_dirs` and `test_patterns` match no test file
 while `adopt.FRONTEND_PATTERNS` match some outside `adopt.py`'s skipped folders, one line names
 `test_dirs`. Both are information lines: they write nothing and change no exit code.
+Brief #1154 (ADR-0490): when files that look like tests sit outside every `test_dirs` folder and match
+no `test_patterns`, one information line names up to three of their topmost folders and the fix.
 Brief #632 (ADR-0306): one information line after the checks (before `tidy:` and the summary),
 and the same text as `secret_scan` in `--json`, says whether gitleaks is on PATH and which version
 `gitleaks version` prints (that one fixed argument list, no shell), naming the governance
@@ -1724,6 +1726,55 @@ def frontend_lines(root: Path) -> list[str]:
     ]
 
 
+# Names of files that look like tests, whatever the configured patterns (brief #1154, ADR-0490).
+TEST_LOOKING = ("test_*.py", "*_test.py", "*.test.*", "*.spec.*", "*_test.go")
+OUTSIDE_SKIPPED = ("vendor",)
+OUTSIDE_NAMED = 3
+
+
+def outside_test_dirs_lines(root: Path) -> list[str]:
+    """Brief #1154 answer 2: files that look like tests sit outside every `test_dirs` folder and
+    match no `test_patterns`. Names up to three topmost folders. A malformed setting gives none
+    here; the commands that read it refuse it by name."""
+    try:
+        cfg = load_config(root)
+    except (CheckError, OSError, UnicodeDecodeError, ValueError):
+        return []
+    dirs, patterns = cfg.get("test_dirs"), cfg.get("test_patterns")
+    if not (isinstance(dirs, list) and isinstance(patterns, list)):
+        return []
+    if not all(isinstance(i, str) for i in [*dirs, *patterns]):
+        return []
+    inside = [d.strip("/") for d in dirs]
+    if any(d in ("", ".") for d in inside):
+        return []
+    found: set[str] = set()
+    for here, dirnames, filenames in os.walk(root):
+        rel_here = Path(here).relative_to(root).as_posix()
+        rel_here = "" if rel_here == "." else rel_here
+        if any(rel_here == d or rel_here.startswith(d + "/") for d in inside):
+            dirnames[:] = []
+            continue
+        dirnames[:] = [
+            d for d in adopt.walked_dirs(rel_here, dirnames) if d not in OUTSIDE_SKIPPED
+        ]
+        for name in filenames:
+            if not any(fnmatch.fnmatchcase(name, p) for p in TEST_LOOKING):
+                continue
+            if any(fnmatch.fnmatchcase(name, p) for p in patterns):
+                continue
+            found.add(rel_here or ".")
+    top = sorted(
+        d for d in found if not any(d.startswith(e + "/") for e in found if e not in (d, "."))
+    )
+    if not top:
+        return []
+    return [
+        f"doctor: warning: test files outside test_dirs: {', '.join(top[:OUTSIDE_NAMED])}; "
+        "fix: add them to test_dirs in agk.toml"
+    ]
+
+
 def secret_scan_line() -> str:
     """Whether gitleaks is on PATH and at which version (brief #632, ADR-0306)."""
     tool = shutil.which("gitleaks")
@@ -1971,7 +2022,12 @@ def main(argv: list[str] | None = None) -> int:
         api = Path(options["api"]) if options["api"] else None
         tidy = tidy_line(root.resolve(), Reads(options["repo"] or origin_repo(root.resolve()), api))
         extra = record_lines(root.resolve(), Path(options["record"])) if options["record"] else []
-        extra = extra + frontend_lines(root.resolve()) + unmapped_lines(root.resolve())
+        extra = (
+            extra
+            + frontend_lines(root.resolve())
+            + outside_test_dirs_lines(root.resolve())
+            + unmapped_lines(root.resolve())
+        )
         deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()
         work, work_failed = work_type_line(root.resolve())
