@@ -818,7 +818,8 @@ tests = ["tests/kit/test_test_map.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/test_plan.py"
 tests = [
-  "tests/kit/test_evidence.py", "tests/kit/test_impact.py", "tests/kit/test_long_temp_dir.py",
+  "tests/kit/test_evidence.py", "tests/kit/test_guide_testing_map.py", "tests/kit/test_impact.py",
+  "tests/kit/test_long_temp_dir.py",
   "tests/kit/test_prepush.py", "tests/kit/test_prepush_proof_timeout_warning.py", "tests/kit/test_prepush_record.py",
   "tests/kit/test_test_plan.py", "tests/kit_dev/test_intelligent_testing.py",
   "tests/kit_dev/test_reference_commands.py",
