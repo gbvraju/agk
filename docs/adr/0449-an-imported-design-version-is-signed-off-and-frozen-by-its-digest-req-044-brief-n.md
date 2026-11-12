@@ -1,6 +1,6 @@
 # ADR-0449: An imported design version is signed off and frozen by its digest
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0037, ADR-0446, amendment 161, brief #1062, plan #661
