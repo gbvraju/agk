@@ -719,7 +719,8 @@ tests = ["tests/kit/test_scorecard.py"]
 code = "scripts/agk/session.py"
 tests = [
   "tests/kit/test_pr_state_lifecycle.py",
-  "tests/kit/test_always_full_infra.py", "tests/kit/test_brief_contexts.py", "tests/kit/test_builder_assign.py",
+  "tests/kit/test_always_full_infra.py", "tests/kit/test_architect_review_guard.py",
+  "tests/kit/test_brief_contexts.py", "tests/kit/test_builder_assign.py",
   "tests/kit/test_builder_slots.py",
   "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_conductor_guard_queue.py",
   "tests/kit/test_conductor_guard_tell.py", "tests/kit/test_conductor_sweep_late_line.py",
@@ -734,7 +735,7 @@ tests = [
   "tests/kit/test_session_plan_malformed.py", "tests/kit/test_session_plan_overlap.py",
   "tests/kit/test_session_prompt.py", "tests/kit/test_session_resume.py", "tests/kit/test_session_review.py",
   "tests/kit/test_session_rules.py", "tests/kit/test_session_silent.py", "tests/kit/test_session_tell.py",
-  "tests/kit/test_session_tidy.py", "tests/kit/test_stalls.py", "tests/kit_dev/test_guide_loop.py",
+  "tests/kit/test_session_tidy.py", "tests/kit/test_shadow_guard.py", "tests/kit/test_stalls.py", "tests/kit_dev/test_guide_loop.py",
   "tests/kit_dev/test_intake.py", "tests/kit_dev/test_launch_skill.py", "tests/kit_dev/test_launcher_guide.py",
   "tests/kit_dev/test_local_mode_guide.py", "tests/kit_dev/test_remote_builders_guide.py",
   "tests/kit_dev/test_review_pass_skill.py", "tests/kit_dev/test_session_rules_found_bug.py",

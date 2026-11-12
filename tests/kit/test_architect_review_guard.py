@@ -8,6 +8,7 @@ write is ever allowed, not even under docs/; Bash is judged as for the deciding 
 from __future__ import annotations
 
 import json
+import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
@@ -151,8 +152,15 @@ def test_review_mode_allows_the_review_bundle_and_no_redirect_of_it(project):
 
 # --- brief #1050 (Q-1013-3, ADR-0444): the reviewer slot's steps run under the guard ----------
 
-sys.path.insert(0, str(HOOK.parent))
-from architect_guard import REVIEW_RULE  # noqa: E402  (the hook's own text)
+# The hook's own text, read when a test runs: a module-level import fails the collection of a copied
+# kit that has no `.claude/hooks/` (test_agk_mk.py AC1).
+REVIEW_RULE_LINE = re.compile(r'^REVIEW_RULE = "([^"]+)"$', re.M)
+
+
+def review_rule() -> str:
+    found = REVIEW_RULE_LINE.search(HOOK.read_text(encoding="utf-8"))
+    assert found, HOOK
+    return found.group(1)
 
 
 class Slot:
@@ -261,17 +269,17 @@ def test_brief_1050_a_write_anywhere_else_is_denied_with_the_review_rule(slot):
         "",
     ):
         found = slot.write(path)
-        assert found is not None and found["permissionDecisionReason"] == REVIEW_RULE, path
+        assert found is not None and found["permissionDecisionReason"] == review_rule(), path
     (slot.root / "agk-review-in").mkdir()
     found = slot.write(slot.root / "agk-review-in" / "v.md")
-    assert found is not None and found["permissionDecisionReason"] == REVIEW_RULE
+    assert found is not None and found["permissionDecisionReason"] == review_rule()
 
 
 @pytest.mark.parametrize("tool", ["Edit", "MultiEdit", "NotebookEdit"])
 def test_brief_1050_an_edit_of_a_scratch_file_is_denied(slot, tool):
     """REQ-046: brief #1050 answer 1 and 5(c)."""
     found = slot.write(slot.verdict, tool)
-    assert found is not None and found["permissionDecisionReason"] == REVIEW_RULE
+    assert found is not None and found["permissionDecisionReason"] == review_rule()
 
 
 def test_brief_1050_each_slot_step_is_allowed_in_its_exact_form(slot):
