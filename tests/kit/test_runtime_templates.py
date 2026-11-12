@@ -1,8 +1,8 @@
 """The round-the-clock task texts ship as templates (brief #1117, ADR-0477; REQ-039).
 
-`kit/templates/runtime/` holds the texts of the conductor, launcher and builder tasks a project sets up
-in its own runtime, and one README; `docs/guides/getting-started.md` names each of them. The kit
-installs and starts none of them (answer 3). Reads tracked files only; no network."""
+`kit/templates/runtime/` holds the texts of the conductor, launcher and builder tasks a project
+sets up in its own runtime, and one README; `docs/guides/getting-started.md` names each of them.
+The kit installs and starts none of them (answer 3). Reads tracked files only; no network."""
 
 from __future__ import annotations
 
@@ -14,6 +14,12 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = "kit/templates/runtime"
 TEXTS = ("conductor.txt", "launcher.txt", "builder.txt")
 FILES = (*TEXTS, "README.md")
+PATHS = (
+    "kit/templates/runtime/conductor.txt",
+    "kit/templates/runtime/launcher.txt",
+    "kit/templates/runtime/builder.txt",
+    "kit/templates/runtime/README.md",
+)
 GUIDE = ROOT / "docs" / "guides" / "getting-started.md"
 
 # Answer 1: no repository name, no person's name, no date, no scheduled-task id.
@@ -81,7 +87,7 @@ def test_b_the_check_catches_a_named_repository_a_date_and_a_handle():
 
 
 def test_c_the_builder_text_carries_every_rule_by_its_first_words():
-    """REQ-039: answer 4 (c): LIFETIME, hand-over, final lines, maintainers' questions, the tiers."""
+    """REQ-039: answer 4 (c): LIFETIME, hand-over, final lines, maintainers, the tiers."""
     body = text("builder.txt")
     for words in (
         "LIFETIME",
@@ -105,8 +111,9 @@ def test_c_the_builder_text_carries_every_rule_by_its_first_words():
 def test_c_the_launcher_and_conductor_texts_keep_their_rules():
     """REQ-039: answer 1: the launcher's steps and the conductor's placeholder for its long run."""
     launcher = text("launcher.txt")
-    for words in ("session.py kind --brief", "Capacity:", "Started: cb", "agk:handover", "REST only"):
+    for words in ("session.py kind --brief", "Capacity:", "Started: cb", "agk:handover"):
         assert words in launcher, words
+    assert "REST only" in launcher
     conductor = text("conductor.txt")
     assert "<long-run rules>" in conductor
     assert ".claude/agents/conductor.md" in conductor
@@ -117,7 +124,9 @@ def test_d_the_guide_names_every_template_and_both_ways_to_wait():
     guide = GUIDE.read_text(encoding="utf-8")
     assert "Running around the clock" in guide
     section = guide.split("Running around the clock", 1)[1].split("\n8. ", 1)[0]
-    for name in FILES:
-        assert f"{RUNTIME}/{name}" in section, name
-    for words in ("foreground", "background", "for the maintainers", "/agk:launch", "30 minutes", "12 hours"):
+    assert PATHS == tuple(f"{RUNTIME}/{name}" for name in FILES)
+    for path in PATHS:
+        assert path in section, path
+    for words in ("foreground", "background", "for the maintainers", "/agk:launch"):
         assert words in section, words
+    assert "30 minutes" in section and "12 hours" in section
