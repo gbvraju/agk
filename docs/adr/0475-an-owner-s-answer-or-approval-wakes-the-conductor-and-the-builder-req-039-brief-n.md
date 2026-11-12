@@ -32,7 +32,8 @@ and the pull request sat green at `agk:review` until a person restarted its buil
 
 Protected path classes changed: `scripts/agk/` (`conductor.py`, `session.py`) and `tests/kit/`
 (`test_conductor_wakes.py`, `test_session_watch_answers.py`, and the `new_lines` stand-ins of `test_pool_health.py`
-and `test_builder_assign.py`, which take the new `approvers` argument).
+and `test_builder_assign.py`, which take the new `approvers` argument), and `agk.toml` (the test map only: the two new
+test files under `conductor.py` and `session.py`).
 
 ## Consequences
 
