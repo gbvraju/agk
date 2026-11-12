@@ -1412,7 +1412,9 @@ def brief_route(root, number: int) -> int:
         return 0
     tier, route = found
     key, value = next(iter(route.items()))
-    shown = {"task": f"task {value}", "flag": "flag", "slots": f"slots {' '.join(value or [])}"}[key]
+    shown = {"task": f"task {value}", "flag": "flag", "slots": f"slots {' '.join(value or [])}"}[
+        key
+    ]
     via = f" via {tier}" if tier != setting["tier"] else ""
     print(f"route: {setting['tier']} {setting['effort']} {shown}{via}")
     return 0

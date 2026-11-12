@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import doctor
 import pytest
 from test_session import ISSUES, session
 from test_session import proj as session_proj  # noqa: F401  (the fixtures of test_session)
@@ -20,7 +21,6 @@ from test_session import stub as session_stub  # noqa: F401
 from test_session_kind import PROTECTED, brief
 
 import config
-import doctor
 
 ODD = "zz-odd-label-9"  # an invented value that a refusal must never echo
 STRONG = "builder-strongest"
@@ -51,7 +51,7 @@ def test_task_and_flag_routes_are_read(tmp_path):
     """REQ-052 AC7: rule 3, a task label per tier, and a flag route with a name for the tier."""
     root = project(
         tmp_path,
-        "[models.names]\nmid = \"example-mid\"\n"
+        '[models.names]\nmid = "example-mid"\n'
         f'[models.routes]\nstrongest = {{ task = "{STRONG}" }}\nmid = {{ flag = true }}\n',
     )
     assert config.model_routes(root) == {"strongest": {"task": STRONG}, "mid": {"flag": True}}
@@ -66,7 +66,8 @@ def test_the_routes_key_does_not_refuse_the_models_table(tmp_path):
 def test_slot_routes_under_assign(tmp_path):
     """REQ-052 AC7: rule 3, under `assign` every slot is in exactly one route."""
     root = project(
-        tmp_path, '[models.routes]\nstrongest = { slots = ["s1", "s2"] }\nmid = { slots = ["s3"] }\n'
+        tmp_path,
+        '[models.routes]\nstrongest = { slots = ["s1", "s2"] }\nmid = { slots = ["s3"] }\n',
     )
     got = config.model_routes(root, "assign", 3)
     assert got == {"strongest": {"slots": ["s1", "s2"]}, "mid": {"slots": ["s3"]}}
@@ -76,31 +77,83 @@ def test_slot_routes_under_assign(tmp_path):
     ("text", "start", "slots", "setting"),
     [
         (f'[models]\nroutes = "{ODD}"\n', "start", 0, "models.routes"),
-        (f'[models.routes]\nstrongest = {{ task = "{STRONG}" }}\n{ODD} = {{ task = "x" }}\n',
-         "start", 0, "models.routes"),  # a tier outside the three
-        (f'[models.routes]\nmid = {{ task = "{MID}" }}\n', "start", 0, "models.routes"),  # no strongest
+        (
+            f'[models.routes]\nstrongest = {{ task = "{STRONG}" }}\n{ODD} = {{ task = "x" }}\n',
+            "start",
+            0,
+            "models.routes",
+        ),  # a tier outside the three
+        (
+            f'[models.routes]\nmid = {{ task = "{MID}" }}\n',
+            "start",
+            0,
+            "models.routes",
+        ),  # no strongest
         (f'[models.routes]\nstrongest = "{ODD}"\n', "start", 0, "models.routes.strongest"),
-        (f'[models.routes]\nstrongest = {{ {ODD} = "x" }}\n', "start", 0, "models.routes.strongest"),
-        (f'[models.routes]\nstrongest = {{ task = "{STRONG}", flag = true }}\n',
-         "start", 0, "models.routes.strongest"),  # two of them
+        (
+            f'[models.routes]\nstrongest = {{ {ODD} = "x" }}\n',
+            "start",
+            0,
+            "models.routes.strongest",
+        ),
+        (
+            f'[models.routes]\nstrongest = {{ task = "{STRONG}", flag = true }}\n',
+            "start",
+            0,
+            "models.routes.strongest",
+        ),  # two of them
         ("[models.routes]\nstrongest = {}\n", "start", 0, "models.routes.strongest"),  # none
-        ('[models.routes]\nstrongest = { task = "has space!" }\n',
-         "start", 0, "models.routes.strongest"),  # a label of the wrong shape
+        (
+            '[models.routes]\nstrongest = { task = "has space!" }\n',
+            "start",
+            0,
+            "models.routes.strongest",
+        ),  # a label of the wrong shape
         ("[models.routes]\nstrongest = { task = 7 }\n", "start", 0, "models.routes.strongest"),
-        ("[models.routes]\nstrongest = { flag = true }\n",
-         "start", 0, "models.routes.strongest"),  # no name and no provider list
-        ('[models.names]\nstrongest = "example-s"\n[models.routes]\nstrongest = { flag = false }\n',
-         "start", 0, "models.routes.strongest"),
-        ('[models.routes]\nstrongest = { slots = ["s1"] }\n',
-         "start", 1, "models.routes.strongest"),  # slots under start
-        (f'[models.routes]\nstrongest = {{ task = "{STRONG}" }}\n',
-         "assign", 1, "models.routes.strongest"),  # a task under assign
-        ('[models.routes]\nstrongest = { slots = ["s1", "s9"] }\n',
-         "assign", 2, "models.routes.strongest"),  # a slot outside s1 to s<builder_slots>
-        ('[models.routes]\nstrongest = { slots = [] }\n', "assign", 1, "models.routes.strongest"),
-        ('[models.routes]\nstrongest = { slots = ["s1"] }\nmid = { slots = ["s1"] }\n',
-         "assign", 1, "models.routes"),  # a slot in two routes
-        ('[models.routes]\nstrongest = { slots = ["s1"] }\n', "assign", 2, "models.routes"),  # s2 in none
+        (
+            "[models.routes]\nstrongest = { flag = true }\n",
+            "start",
+            0,
+            "models.routes.strongest",
+        ),  # no name and no provider list
+        (
+            '[models.names]\nstrongest = "example-s"\n'
+            "[models.routes]\nstrongest = { flag = false }\n",
+            "start",
+            0,
+            "models.routes.strongest",
+        ),
+        (
+            '[models.routes]\nstrongest = { slots = ["s1"] }\n',
+            "start",
+            1,
+            "models.routes.strongest",
+        ),  # slots under start
+        (
+            f'[models.routes]\nstrongest = {{ task = "{STRONG}" }}\n',
+            "assign",
+            1,
+            "models.routes.strongest",
+        ),  # a task under assign
+        (
+            '[models.routes]\nstrongest = { slots = ["s1", "s9"] }\n',
+            "assign",
+            2,
+            "models.routes.strongest",
+        ),  # a slot outside s1 to s<builder_slots>
+        ("[models.routes]\nstrongest = { slots = [] }\n", "assign", 1, "models.routes.strongest"),
+        (
+            '[models.routes]\nstrongest = { slots = ["s1"] }\nmid = { slots = ["s1"] }\n',
+            "assign",
+            1,
+            "models.routes",
+        ),  # a slot in two routes
+        (
+            '[models.routes]\nstrongest = { slots = ["s1"] }\n',
+            "assign",
+            2,
+            "models.routes",
+        ),  # s2 in none
     ],
 )
 def test_each_refusal_names_the_setting_never_the_value(tmp_path, text, start, slots, setting):
@@ -114,7 +167,8 @@ def test_a_flag_route_takes_the_name_from_the_provider_list(tmp_path):
     """REQ-052 AC7: rule 3, a flag route is allowed with a provider list for the tier."""
     root = project(
         tmp_path,
-        '[models.providers]\nstrongest = ["example-p1"]\n[models.routes]\nstrongest = { flag = true }\n',
+        '[models.providers]\nstrongest = ["example-p1"]\n'
+        "[models.routes]\nstrongest = { flag = true }\n",
     )
     assert config.model_routes(root) == {"strongest": {"flag": True}}
 
@@ -211,7 +265,9 @@ def test_doctor_row_warns_on_a_tier_without_its_own_route(tmp_path):
 
 def test_doctor_row_warns_on_a_refused_table(tmp_path):
     """REQ-052 AC7: the doctor row's third case, naming the setting, never the value."""
-    got = doctor.model_routes_result(project(tmp_path, f'[models.routes]\nmid = {{ task = "{ODD}" }}\n'))
+    got = doctor.model_routes_result(
+        project(tmp_path, f'[models.routes]\nmid = {{ task = "{ODD}" }}\n')
+    )
     assert got.status == "fail"
     assert got.message == " (setting: models.routes)"
 
@@ -224,8 +280,8 @@ def test_doctor_row_is_ok_when_every_used_tier_has_a_route(tmp_path):
 
 
 def test_the_kit_ships_no_routes_table_and_the_templates_only_a_comment():
-    """REQ-052 AC7: rule 3, no routes table in the kit's `agk.toml` or templates (brief #1099 answer 3:
-    the templates carry it commented, with no model name)."""
+    """REQ-052 AC7: rule 3, no routes table in the kit's `agk.toml` or templates (brief #1099
+    answer 3: the templates carry it commented, with no model name)."""
     kit = Path(__file__).resolve().parents[2]
     assert config.model_routes(kit) == {}
     for name in ("agk.toml", "agk.adopt.toml"):

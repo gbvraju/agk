@@ -74,7 +74,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 # the check names of a workflow's jobs as the router reads them (brief #283); the minutes line as
 # minutes.py prints it (brief #370).
 import adopt  # noqa: E402
-import config as models  # noqa: E402
 import design_import  # noqa: E402
 import impact  # noqa: E402
 import merge_cleared  # noqa: E402
@@ -98,6 +97,8 @@ from common import (  # noqa: E402
     router_wanted,
     with_router_names,
 )
+
+import config as models  # noqa: E402
 
 NO_RECORD = "tests: the prepush record cannot be read; nothing about the suite (option: --record)"
 USAGE = (
@@ -1095,7 +1096,8 @@ def model_routes_result(root: Path) -> Result:
     missing = [t for t in models.MODEL_TIERS if t in tiers and t not in routes]
     if missing:
         moved = "; ".join(
-            f"{t} has no route; it uses the route of {models.route_of(routes, t)[0]}" for t in missing
+            f"{t} has no route; it uses the route of {models.route_of(routes, t)[0]}"
+            for t in missing
         )
         return Result("fail", message=f" ({moved})")
     return Result("ok", message=" (each tier the kinds use has its own route)")
