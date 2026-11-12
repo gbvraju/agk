@@ -59,11 +59,27 @@ a cell with `(access <persona>/<screen>)`, and `info plan: <a> of <b> access cel
 with one line per cell no acceptance line names. A test is a `REQ-nnn ACn` marker of the naming
 criterion, read with `--facts`, else `not read`.
 
+Build (g), rules 20 to 22 (brief #1095, ADR-0467), when `docs/plan/` exists: rule 20 fails a
+`docs/plan/baseline.json` that is not `schema` 1 with a full `head`, a real `date`, an `https://`
+`link` and a list of `milestones` (each an `id` `M<n>`, its `briefs` keys, its `target` date or
+null and its `estimate` text), and, read from git, a baseline that the merge base with `--base REF`
+(else the default branch) holds and the working tree changed or removed; with no base it is not
+read. Rule 21 fails a `Scope change: SC-<n>` block of `docs/plan/scope-changes.md` without its
+`What:`, `Why:`, `Source:` (a location, or `person <date>`), `Effect:` or `Status: proposed` line,
+a number used twice, and a `Briefs:` entry other than `+M<n>/<key> <size> <low>-<high> hours` or
+`-M<n>/<key>` (`; ` between entries). Rule 22 fails an `Approved:` line that is not `<date>
+<https link>`, a brief file whose `Milestone:` is a baseline milestone and whose key is neither in
+that milestone's `briefs` nor added there by an approved scope change, and a baseline brief no
+longer under its milestone that no approved scope change removes, naming the key. A scope change
+is approved by its `Approved:` line; with `--comments FILE` (the saved comments of the pull
+request) only when an account of `spec_approvers` also gave `Approve: scope SC-<n> <full head
+ID>` (`reviewers.scope_approvals`, in solo mode inside the person's `Confirmed:` comment).
+
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
 or a charter's `docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013; the `CHARTER_NAME` of
 `playbook.py`, which is kit-only, so the pattern is kept here and a test holds the two equal).
-Files only: no network, no model, nothing written (principle 5).
+Files and a read of git only: no network, no model, nothing written (principle 5).
 """
 
 from __future__ import annotations
@@ -76,7 +92,18 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import REQ_HEADER, ac_markers_for, markers_for, repo_root, run
+from common import (
+    REQ_HEADER,
+    CheckError,
+    ac_markers_for,
+    agent_apps,
+    markers_for,
+    merge_base,
+    repo_root,
+    resolve_base,
+    run,
+    show,
+)
 
 NAME = "plan"
 SOURCES = "docs/sources"
@@ -92,7 +119,10 @@ DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*$")
 FENCE = re.compile(r"^\s*(```|~~~)")
 ITEM = re.compile(r"^\d+\.\s+\*\*([^*]+)\*\*")
-USAGE = "usage: check_plan.py [--root DIR] [--trace] [--facts FILE] [--numbers FILE]"
+USAGE = (
+    "usage: check_plan.py [--root DIR] [--trace] [--facts FILE] [--numbers FILE] "
+    "[--comments FILE] [--base REF]"
+)
 SCOPE = f"{PLAN}/scope.md"
 PROPOSED = f"{PLAN}/requirements-proposed.md"
 PERSONAS = f"{PLAN}/personas.md"
@@ -618,6 +648,175 @@ def spec_rules(root: Path) -> dict[str, list[str]]:
     return out
 
 
+# --- build (g): the baseline and the scope changes (rules 20 to 22) -----------------------------
+
+BASELINE = f"{PLAN}/baseline.json"
+CHANGES = f"{PLAN}/scope-changes.md"
+FULL_HEAD = re.compile(r"^[0-9a-f]{40}$")
+CHANGE_HEAD = re.compile(r"^Scope change: (SC-[1-9]\d*)\s*$")
+CHANGE_FIELDS = ("What", "Why", "Source", "Effect", "Status")
+CHANGE_LINE = re.compile(r"^(What|Why|Source|Effect|Status|Briefs|Approved):[ \t]*(.*?)\s*$")
+ADDED = re.compile(
+    r"^\+(M[1-9]\d*)/([A-Za-z0-9][A-Za-z0-9._-]*) ([SML]) (\d+(?:\.\d+)?-\d+(?:\.\d+)? hours)$"
+)
+REMOVED = re.compile(r"^-(M[1-9]\d*)/([A-Za-z0-9][A-Za-z0-9._-]*)$")
+PERSON = re.compile(r"^person (\d{4}-\d{2}-\d{2})$")
+APPROVED_LINE = re.compile(r"^(\d{4}-\d{2}-\d{2}) (https://\S+)$")
+BAD_BRIEFS = "a Briefs: entry is not +M<n>/<key> <size> <low>-<high> hours or -M<n>/<key>"
+
+
+def _milestone_ok(item: object) -> bool:
+    if not isinstance(item, dict) or set(item) != {"id", "briefs", "target", "estimate"}:
+        return False
+    keys = item["briefs"]
+    target = item["target"]
+    return (
+        isinstance(item["id"], str)
+        and MILESTONE.match(f"### {item['id']}") is not None
+        and isinstance(keys, list)
+        and all(isinstance(k, str) and k for k in keys)
+        and len(set(keys)) == len(keys)
+        and (target is None or (isinstance(target, str) and real_date(target)))
+        and isinstance(item["estimate"], str)
+    )
+
+
+def read_baseline(root: Path) -> tuple[dict[str, list[str]] | None, list[str]]:
+    """Rule 20: the baseline's brief keys per milestone, or None, and the problems of its shape."""
+    path = root / BASELINE
+    if not path.is_file():
+        return None, []
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        doc = None
+    if not isinstance(doc, dict):
+        return None, [f"rule 20: {BASELINE}: not a JSON object"]
+    fields = {
+        "schema": doc.get("schema") == 1 and not isinstance(doc.get("schema"), bool),
+        "head": isinstance(doc.get("head"), str) and FULL_HEAD.match(doc["head"]) is not None,
+        "date": isinstance(doc.get("date"), str) and real_date(doc["date"]),
+        "link": isinstance(doc.get("link"), str) and doc["link"].startswith("https://"),
+        "milestones": isinstance(doc.get("milestones"), list),
+    }
+    out = [f"rule 20: {BASELINE}: {k} is not as rule 20 says" for k, ok in fields.items() if not ok]
+    found: dict[str, list[str]] = {}
+    for n, item in enumerate(doc["milestones"] if fields["milestones"] else [], start=1):
+        if not _milestone_ok(item) or item["id"] in found:
+            out.append(f"rule 20: {BASELINE}: milestones[{n}] is not as rule 20 says")
+        else:
+            found[item["id"]] = list(item["briefs"])
+    return (None if out else found), out
+
+
+def baseline_changed(root: Path, base: str | None) -> list[str]:
+    """Rule 20: a baseline the merge base holds is never changed or removed (principle 4)."""
+    try:
+        ref = resolve_base(root, base)
+        old = show(root, merge_base(root, ref), BASELINE) if ref else None
+    except (CheckError, OSError, ValueError):
+        return []  # no base to read: the change is not read (the shape still is)
+    if old is None:
+        return []
+    path = root / BASELINE
+    now = path.read_bytes().decode("utf-8", "replace") if path.is_file() else None
+    if now == old:
+        return []
+    return [f"rule 20: {BASELINE}: changed or removed after it was written"]
+
+
+def scope_changes(root: Path) -> tuple[list[dict], list[str]]:
+    """Rule 21: the blocks of `scope-changes.md` (id, fields, adds, removes, approved) and the
+    problems of their shape; rule 22's `Approved:` line shape too."""
+    out: list[dict] = []
+    for line in (_read(root / CHANGES) or "").splitlines():
+        if head := CHANGE_HEAD.match(line):
+            out.append({"id": head[1], "fields": {}, "adds": [], "removes": [], "approved": None})
+        elif out and (field := CHANGE_LINE.match(line)):
+            out[-1]["fields"].setdefault(field[1], field[2])
+    problems: list[str] = []
+    seen: set[str] = set()
+    for sc in out:
+        where = f"{CHANGES}: {sc['id']}"
+        fields = sc["fields"]
+        if sc["id"] in seen:
+            problems.append(f"rule 21: {where}: the number is used twice")
+        seen.add(sc["id"])
+        problems += [f"rule 21: {where}: no {k}: line" for k in CHANGE_FIELDS if k not in fields]
+        if "Status" in fields and fields["Status"] != "proposed":
+            problems.append(f"rule 21: {where}: Status: is not proposed")
+        source = fields.get("Source")
+        if source is not None and not _source_ok(root, source):
+            problems.append(f"rule 21: {where}: Source: is neither a location nor person <date>")
+        for entry in filter(None, (e.strip() for e in fields.get("Briefs", "").split(";"))):
+            if added := ADDED.match(entry):
+                sc["adds"].append((added[1], added[2], added[3], added[4]))
+            elif removed := REMOVED.match(entry):
+                sc["removes"].append((removed[1], removed[2]))
+            else:
+                problems.append(f"rule 21: {where}: {BAD_BRIEFS}")
+                break
+        if "Approved" in fields:
+            approved = APPROVED_LINE.match(fields["Approved"])
+            if approved and real_date(approved[1]):
+                sc["approved"] = approved[1]
+            else:
+                problems.append(f"rule 22: {where}: Approved: is not <date> <https link>")
+    return out, problems
+
+
+def _source_ok(root: Path, source: str) -> bool:
+    person = PERSON.match(source)
+    if person:
+        return real_date(person[1])
+    return location_problem(root, source.strip("`")) is None
+
+
+def approved_ids(root: Path, changes: list[dict], comments: list | None) -> set[str]:
+    """Rule 22: the scope changes with an `Approved:` line and, with the saved comments, a listed
+    approver's `Approve: scope SC-<n> <full head ID>` (never through an agent app)."""
+    ids = {sc["id"] for sc in changes if sc["approved"]}
+    if comments is None:
+        return ids
+    import reviewers  # noqa: PLC0415 - only a check given --comments reads approvals
+
+    apps = agent_apps(root)
+    items = reviewers.confirmed_comments(
+        [c for c in comments if isinstance(c, dict)], apps, reviewers.solo_person(root)
+    )
+    given = {sc for sc, _ in reviewers.scope_approvals(items, reviewers.spec_approvers(root), apps)}
+    return ids & given
+
+
+def scope_problems(root: Path, comments: list | None = None, base: str | None = None) -> list[str]:
+    """Rules 20 to 22 together, in that order."""
+    baseline, problems = read_baseline(root)
+    problems += baseline_changed(root, base)
+    changes, found = scope_changes(root)
+    problems += found
+    if baseline is None:
+        return problems
+    approved = approved_ids(root, changes, comments)
+    adds = {(m, k) for sc in changes if sc["id"] in approved for m, k, _, _ in sc["adds"]}
+    removes = {(m, k) for sc in changes if sc["id"] in approved for m, k in sc["removes"]}
+    current = {(milestone, key) for key, milestone, _ in briefs(root)}
+    for key, milestone, _ in briefs(root):
+        if milestone in baseline and key not in baseline[milestone]:
+            if (milestone, key) not in adds:
+                problems.append(
+                    f"rule 22: {BRIEFS}: {key}: under baselined milestone {milestone}, in neither "
+                    "the baseline nor an approved scope change"
+                )
+    for milestone, keys in baseline.items():
+        for key in keys:
+            if (milestone, key) not in current and (milestone, key) not in removes:
+                problems.append(
+                    f"rule 22: {BASELINE}: {key}: removed from {milestone} with no approved "
+                    "scope change"
+                )
+    return problems
+
+
 def _cell(values: list[str]) -> str:
     return ", ".join(dict.fromkeys(values)) or "none"
 
@@ -866,6 +1065,8 @@ def cmd_check(
     trace: bool = False,
     facts: dict | None = None,
     numbers: dict[str, int] | None = None,
+    comments: list | None = None,
+    base: str | None = None,
 ) -> int:
     problems = source_problems(root) + link_problems(root)
     if not (root / PLAN).is_dir():
@@ -879,7 +1080,7 @@ def cmd_check(
         lines = plan.trace(facts is not None) + plan.screen_lines()
         lines += plan.rule_lines(facts is not None) + plan.access_lines(facts is not None)
         print("\n".join(lines))
-    problems += plan.problems()
+    problems += plan.problems() + scope_problems(root, comments, base)
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
     for line in plan.unmatched():
@@ -895,6 +1096,9 @@ def _json(path: str, option: str) -> object:
         raise SystemExit(f"check_plan.py: {option}: not a readable JSON file") from None
 
 
+OPTIONS = ("--root", "--facts", "--numbers", "--comments", "--base")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     values: dict[str, str] = {}
@@ -903,7 +1107,7 @@ def main(argv: list[str] | None = None) -> int:
         arg = args.pop(0)
         if arg == "--trace":
             trace = True
-        elif arg in ("--root", "--facts", "--numbers") and args and arg not in values:
+        elif arg in OPTIONS and args and arg not in values:
             values[arg] = args.pop(0)
         else:
             print(USAGE, file=sys.stderr)
@@ -911,6 +1115,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         facts = _json(values["--facts"], "--facts") if "--facts" in values else None
         numbers = _json(values["--numbers"], "--numbers") if "--numbers" in values else {}
+        comments = _json(values["--comments"], "--comments") if "--comments" in values else None
     except SystemExit as exc:
         print(exc, file=sys.stderr)
         return 2
@@ -924,8 +1129,14 @@ def main(argv: list[str] | None = None) -> int:
             "check_plan.py: --numbers: not an object of brief key to issue number", file=sys.stderr
         )
         return 2
+    if comments is not None and not isinstance(comments, list):
+        print("check_plan.py: --comments: not a list of comments", file=sys.stderr)
+        return 2
     root = Path(values["--root"]) if "--root" in values else None
-    return run(NAME, lambda: cmd_check(root or repo_root(), trace, facts, numbers))
+    base = values.get("--base")
+    return run(
+        NAME, lambda: cmd_check(root or repo_root(), trace, facts, numbers, comments, base)
+    )
 
 
 if __name__ == "__main__":

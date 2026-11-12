@@ -16,6 +16,14 @@ the facts made with `facts.py --weeks N` for the same `N` (12 by default, 4 to 5
   throughput is below the minimum (rule 14); the waits are shown apart and never added (rule 15);
 - one `inputs:` line after each estimate (rule 16), and the limits line last (rule 26).
 
+Build (g), rule 21 (brief #1095, ADR-0467): `--with SC-<n>` prints the effect of that block of
+`DIR/scope-changes.md`: `effect of SC-<n>: before`, the estimate without the change, then `effect
+of SC-<n>: after`, the estimate with it, each milestone with its `inputs:` line, and the limits
+line once. A `Briefs:` entry `+M<n>/<key> <size> <low>-<high> hours` adds that brief to the
+milestone after the change (its brief file, when it already exists, counts only after), and
+`-M<n>/<key>` leaves the brief file `M<n>/<key>.md` out after it; briefs read from the facts have no
+key, so a removal changes only brief files.
+
 The same facts, plan and `--today` print the same bytes. A facts, plan, date or `[plan]` setting
 that cannot be read exits 2 naming the option or the setting, never its value. Files only: no
 network, no model, nothing written.
@@ -41,8 +49,14 @@ from common import ESTIMATE_LINES, CheckError, estimate_parts, plan_settings  # 
 from facts import window_start  # noqa: E402
 from metrics import stamp, start_of  # noqa: E402
 
+import check_plan  # noqa: E402
+
 UNKNOWN = "unknown"
-USAGE = "usage: plan_estimate.py --facts FILE [--plan DIR] [--today YYYY-MM-DD] [--weeks N]"
+USAGE = (
+    "usage: plan_estimate.py --facts FILE [--plan DIR] [--today YYYY-MM-DD] [--weeks N] "
+    "[--with SC-<n>]"
+)
+SC_ID = re.compile(r"SC-[1-9]\d*")
 SIZES = ("S", "M", "L")
 TRIALS = 10000
 PERCENTS = (50, 85)
@@ -76,7 +90,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--plan", default="docs/plan")
     parser.add_argument("--today")
     parser.add_argument("--weeks", default="12")
+    parser.add_argument("--with", dest="change")
     args = parser.parse_args(argv)
+    if args.change is not None and not SC_ID.fullmatch(args.change):
+        raise Refusal("--with names a scope change SC-<n> (option: --with)")
     if not (args.weeks.isdigit() and 4 <= int(args.weeks) <= 52):
         raise Refusal("--weeks must be a whole number from 4 to 52 (option: --weeks)")
     args.weeks = int(args.weeks)
@@ -159,15 +176,48 @@ def throughput_of(briefs: Any, start: datetime, end: datetime, today: date) -> l
     return [sum(1 for m in mondays if (m - first).days // 7 == i) for i in range(count)]
 
 
-def open_briefs(briefs: list, plan: Path, milestone: str) -> list[tuple[str, str]]:
+def open_briefs(
+    briefs: list, plan: Path, milestone: str, change: dict | None = None, after: bool = False
+) -> list[tuple[str, str]]:
     """(size, expected) of the milestone's open briefs: the facts' by number, or before publish
-    its brief files by key (rule 13)."""
+    its brief files by key (rule 13). With a scope change (rule 21) its added keys are left out
+    before it and counted from the change after it, and its removed keys are left out after it."""
+    adds = [(k, size, hours) for m, k, size, hours in (change or {}).get("adds", []) if m == milestone]
+    removes = {k for m, k in (change or {}).get("removes", []) if m == milestone}
+    added = [(size, hours) for _, size, hours in adds] if after else []
     mine = [b for b in briefs if isinstance(b, dict) and b.get("milestone") == milestone]
     if mine:
         listed = sorted((b for b in mine if b.get("state") == "open"), key=lambda b: b["number"])
-        return [(b.get("size", UNKNOWN), b.get("expected", UNKNOWN)) for b in listed]
+        return [(b.get("size", UNKNOWN), b.get("expected", UNKNOWN)) for b in listed] + added
+    skip = {k for k, _, _ in adds} | (removes if after else set())
     files = sorted((plan / "briefs" / milestone).glob("*.md"), key=lambda f: f.stem)
-    return [estimate_parts(f.read_text(encoding="utf-8")) for f in files]
+    found = [estimate_parts(f.read_text(encoding="utf-8")) for f in files if f.stem not in skip]
+    return found + added
+
+
+def scope_change(plan: Path, wanted: str) -> dict:
+    """The block `Scope change: <wanted>` of `scope-changes.md`: its added and removed briefs."""
+    try:
+        text = (plan / "scope-changes.md").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        text = ""
+    found: dict | None = None
+    for line in text.splitlines():
+        if head := check_plan.CHANGE_HEAD.match(line):
+            if found is not None:
+                break
+            found = {"adds": [], "removes": []} if head[1] == wanted else None
+        elif found is not None and line.startswith("Briefs:"):
+            for entry in filter(None, (e.strip() for e in line[len("Briefs:") :].split(";"))):
+                if added := check_plan.ADDED.match(entry):
+                    found["adds"].append((added[1], added[2], added[3], added[4]))
+                elif removed := check_plan.REMOVED.match(entry):
+                    found["removes"].append((removed[1], removed[2]))
+                else:
+                    raise Refusal(f"{check_plan.BAD_BRIEFS} (option: --with)")
+    if found is None:
+        raise Refusal("the scope change is not in scope-changes.md (option: --with)")
+    return found
 
 
 def median_of(items: list[dict], key: str) -> str:
@@ -285,7 +335,7 @@ def hours_text(value: str) -> str:
 # --- the command -------------------------------------------------------------------------------
 
 
-def report(args: argparse.Namespace) -> list[str]:
+def report(args: argparse.Namespace, change: dict | None = None, after: bool = False) -> list[str]:
     try:
         doc = json.loads(Path(args.facts).read_text(encoding="utf-8"))
     except (OSError, ValueError, UnicodeDecodeError):
@@ -321,7 +371,7 @@ def report(args: argparse.Namespace) -> list[str]:
             out += [f"{milestone} {title}: {UNKNOWN} (the facts' briefs cannot be read)"]
             out += [ctx["waits"], inputs_line(milestone, ctx)]
             continue
-        found = open_briefs(briefs, plan, milestone)
+        found = open_briefs(briefs, plan, milestone, change, after)
         ctx["need"] += len(found)
         out += estimate(milestone, title, found, ctx)
     return [*out, LIMITS]
@@ -330,7 +380,13 @@ def report(args: argparse.Namespace) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(list(sys.argv[1:] if argv is None else argv))
-        lines = report(args)
+        if args.change is None:
+            lines = report(args)
+        else:
+            change = scope_change(Path(args.plan), args.change)
+            before = report(args, change)[:-1]
+            lines = [f"effect of {args.change}: before", *before]
+            lines += [f"effect of {args.change}: after", *report(args, change, after=True)]
     except Refusal as refusal:
         print(f"plan_estimate: {refusal}", file=sys.stderr)
         return 2
