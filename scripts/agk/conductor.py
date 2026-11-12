@@ -357,12 +357,14 @@ def held_lines(root, repo: str) -> list[str]:
     checked = when(str(marks.get("checked")))
     if checked is not None and now - checked < timedelta(seconds=HELD_EVERY):
         return []
-    said = marks.get("said") if isinstance(marks.get("said"), dict) else {}
+    found = marks.get("said")
+    said: dict = found if isinstance(found, dict) else {}
     keep = {"checked": stamp_of(now), "said": said}
     write_held(mark, keep)
     authors = verdict_authors(root)
     pulls = read(f"repos/{repo}/pulls?state=open", "the open pull requests")
-    lines, held = [], {}
+    lines: list[str] = []
+    held: dict = {}
     for pull in sorted(pulls, key=lambda p: p["number"]):
         line = None if pull.get("draft") else held_verdict_line(root, repo, pull, authors, now)
         if line is None:
