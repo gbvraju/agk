@@ -61,7 +61,7 @@ def world(tmp_path: Path, head_files: dict, main_files: dict) -> tuple[Path, str
     """A checkout whose `main` and branch `feature` each change the shared base: (the checkout,
     the branch's head, main's head)."""
     root = tmp_path / "work"
-    root.mkdir()
+    root.mkdir(parents=True)
     git(root, "init", "-q", "-b", "main")
     commit(root, BASE, "base")
     git(root, "checkout", "-q", "-b", "feature")

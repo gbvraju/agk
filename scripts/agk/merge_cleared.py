@@ -115,6 +115,14 @@ max_behind_merges` (opt-in, an integer of at least 0; anything else refused nami
 is set and the first-parent commits of the default branch after the merge base are above it; the
 third when either read fails. A line names the rule or the setting, never a file, count or sha.
 
+SPEC-0050 amendment 171 (brief #1163, ADR-0495): the clearing verdict on a head carries over to
+the merge commit the light re-prove makes (`conductor.py reprove --apply`, GitHub's update-branch)
+when that commit's first parent is the cleared head, its second parent is on the default branch
+as last fetched, every re-prove file of the cleared head is a shared index (`[flow]
+shared_indexes` of the default branch), and its tree is exactly the clean merge of the two, so it
+adds nothing beyond the default branch's change (`judge_head`). The required checks of the new
+head, the holds and the pre-merge governance run on the would-be merge stay as they are.
+
 `--sweep` (brief #797, ADR-0373; brief #836, ADR-0383) is the merger's pass after every finished
 check and on its schedule: the open, non-draft pull requests, oldest first, the guarded merge above
 on at most five whose latest verdict clears the current head, one line each, `MERGED #<n> <m> min
@@ -209,6 +217,7 @@ PAUSE = 1.0  # seconds between two tries of one read
 PAGE = 100
 SHA = re.compile(r"[0-9a-f]{40}")
 FALLBACK = " (conductor fallback)"  # a verdict's first-line ending (ADR-0431 decision 3)
+CLEARED_LINE = re.compile(r"Verdict: cleared ([0-9a-f]{40})")  # amendment 171's carried verdict
 NUMBER = re.compile(r"[1-9][0-9]{0,9}")
 ORIGIN = re.compile(r"github\.com[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$")
 USAGE = "usage: merge_cleared.py --pr <n> --sha <40-character sha>"
@@ -569,6 +578,46 @@ def judge(comments: list[dict], sha: str, allowed: list[str]) -> tuple[str, str]
             "(rule 3; setting: conductor_accounts in config/reviewers.yaml)"
         )
     return "cleared", ""
+
+
+def judge_carried(
+    root: Path, comments: list[dict], sha: str, allowed: list[str], default: str, shared: list[str]
+) -> tuple[str, str]:
+    """`judge`, and the carried verdict of SPEC-0050 amendment 171 (brief #1163, ADR-0495): when
+    the latest verdict is `Verdict: cleared <old>` by an allowed author and SHA is the light
+    re-prove's merge of the default branch DEFAULT into OLD that adds nothing beyond the default
+    branch's change (`session_plan.light_merge` with the shared indexes SHARED), it clears SHA.
+    Only a plain clearing verdict carries; a fix list with `Final:` lines never does."""
+    state, reason = judge(comments, sha, allowed)
+    verdict = latest_verdict(comments)
+    if state == "cleared" or verdict is None:
+        return state, reason
+    found = CLEARED_LINE.fullmatch(first_line(verdict).removesuffix(FALLBACK))
+    if found is None or found.group(1) == sha or (allowed and login(verdict) not in allowed):
+        return state, reason
+    if not session_plan.light_merge(root, found.group(1), sha, default, shared):
+        return state, reason
+    return "cleared", ""
+
+
+def judge_head(
+    root: Path, number: int, comments: list[dict], sha: str, allowed: list[str]
+) -> tuple[str, str]:
+    """`judge_carried` on the default branch as last fetched and its `[flow] shared_indexes`,
+    fetching the head once when it is not in the checkout; a carry that cannot be read is the
+    plain `judge`."""
+    state, reason = judge(comments, sha, allowed)
+    if state == "cleared" or latest_verdict(comments) is None:
+        return state, reason
+    try:
+        base, data = default_ref(root)
+    except Refused:
+        return state, reason
+    flow = data.get("flow") if isinstance(data.get("flow"), dict) else {}
+    shared = flow.get("shared_indexes", list(session_plan.SHARED_INDEXES))
+    if not isinstance(shared, list) or not head_present(root, number, sha):
+        return state, reason
+    return judge_carried(root, comments, sha, allowed, base, [str(p) for p in shared])
 
 
 def accepted_adrs(verdict: dict, sha: str) -> list[str] | None:
@@ -1734,7 +1783,7 @@ def event_main(path: str, name: str, root: Path) -> int:
         issues = read_pages(f"repos/{repo}/issues?state=open", "the open issues")
         if titled(issues, RECORD_TITLE):
             raise Nothing("local mode: the conductor merges (the local-mode record issue is open)")
-        state, reason = judge(read_comments(repo, number), sha, [])
+        state, reason = judge_head(root, number, read_comments(repo, number), sha, [])
         if state != "cleared":
             raise Nothing(f"#{number} not cleared: {reason}")
     except Nothing as err:
@@ -1815,7 +1864,7 @@ def sweep_one(root: Path, repo: str, pull: dict, merging: bool, tried: int) -> t
     prefix = f"merge-cleared #{number} {sha[:12]}:"
     try:
         comments = read_comments(repo, number)
-        state, why = judge(comments, sha, [])
+        state, why = judge_head(root, number, comments, sha, [])
     except Unreadable as err:
         print(f"{prefix} not read: GitHub cannot be read ({err})")
         return tried, False
@@ -2023,7 +2072,7 @@ def verdict_state(root: Path, repo: str, number: int, sha: str, rules: Rules) ->
     if not isinstance(head, dict) or head.get("sha") != sha:
         raise Refused("head moved (rule 3: --sha is not the pull request's head)", EXIT_HELD)
     comments = read_comments(repo, number)
-    state, reason = judge(comments, sha, rules.allowed)
+    state, reason = judge_head(root, number, comments, sha, rules.allowed)
     if state != "cleared":
         return "pending", verdict_reason(comments, sha, reason)
     accepts = accepted_adrs(latest_verdict(comments) or {}, sha) or []
@@ -2190,7 +2239,7 @@ def holds(
     if head_sha != sha:
         raise Refused("head moved (rule 3: --sha is not the pull request's head)", EXIT_HELD)
     comments = read_comments(repo, number)
-    state, reason = judge(comments, sha, rules.allowed)
+    state, reason = judge_head(root, number, comments, sha, rules.allowed)
     if state != "cleared":
         raise NotCleared(reason)
     verdict = latest_verdict(comments) or {}

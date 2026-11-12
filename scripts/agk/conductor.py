@@ -1,5 +1,5 @@
 """The conductor's routines as kit commands (brief #643, ADR-0308). Read-only: GET only, posts
-nothing and writes no file.
+nothing and writes no file, but for the `--apply` and merge forms named below.
 
     python3 conductor.py watch [--since ISO] [--once]
     python3 conductor.py sweep
@@ -136,6 +136,17 @@ watches (the file `agk/starts` of the git directory), and ends with `START #<bri
 hours, a brief titled `The default branch is red` first as `START #<brief> red`; one brief is
 returned again only after 10 minutes. The conductor's start rule itself is unchanged.
 
+Brief #1163 (SPEC-0050 amendment 171, ADR-0495): a `re-prove:` line whose files are all shared
+indexes ends ` light`, and
+
+    python3 conductor.py reprove --pr N [--apply]
+
+takes the light re-prove: when every re-prove file is a shared index and the merge is clean, it
+prints `PUT repos/<repo>/pulls/<n>/update-branch expected_head_sha=<head>` (a merge commit, never
+a rebase or a force-push) and, with `--apply`, makes it and posts `Report: <new head> merge of
+main (light re-prove, SPEC-0050 amendment 171)`; any other re-prove file or a conflict prints
+`full re-prove (...)`, exit 3, and changes nothing.
+
 Brief #1071 (amendment 162, ADR-0453): `sweep` prints `HANDOVER #<pr> <minutes>m` for each open pull
 request labelled `agk:handover`, counted from its newest handing-over `Report:` (`unknown` without
 one), so the launcher restarts a builder for exactly those.
@@ -178,8 +189,12 @@ USAGE = (
     "usage: conductor.py watch [--since ISO] [--once] | conductor.py sweep | "
     "conductor.py merge-queue [--dry-run] [--max-batch N] | "
     "conductor.py rerun --pr N [--apply] | conductor.py check-verdict FILE [--pr N] | "
-    "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N"
+    "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N | "
+    "conductor.py reprove --pr N [--apply]"
 )
+REPROVE_REPORT = "merge of main (light re-prove, SPEC-0050 amendment 171)"
+REPROVE_WAITS = 10  # reads of the pull request for the new head after update-branch
+REPROVE_PAUSE = 3  # seconds between two of those reads
 TRIGGERS = ("Question:", "Report:")
 # What wakes `watch` (brief #1112, ADR-0475): `TRIGGERS` and an owner's answer or approval;
 # `waiting_on` keeps `TRIGGERS`.
@@ -867,6 +882,7 @@ def proof_lines(root, repo: str, pulls: list, branch: str) -> list[str]:
     pull requests, from `GET pulls/N/files` and one `GET compare/<head>...<branch>` each. An
     `overlap:` leaves out the files of the table of rule 3 (amendment 141 item 8)."""
     shared = session_plan.exempt(root)
+    indexes = set(session_plan.shared_indexes(root))
     mine: dict[int, set[str]] = {}
     brief: dict[int, int] = {}
     reprove: list[str] = []
@@ -885,8 +901,9 @@ def proof_lines(root, repo: str, pulls: list, branch: str) -> list[str]:
         both = sorted(mine[n] & paths_of(compare.get("files") or []))
         if both:
             by = changed_by(repo, branch, both[0], compare)
+            light = " light" if all(p in indexes for p in both) else ""  # amendment 171
             reprove.append(
-                f"re-prove: #{n} {both[0]} (changed by #{by})"
+                f"re-prove: #{n} {both[0]} (changed by #{by}){light}"
                 if by
                 else f"re-prove: #{n} unknown (cannot be read)"
             )
@@ -1490,6 +1507,58 @@ def post(endpoint: str, what: str, *extra: str, method: str = "POST") -> None:
         raise CheckError(what)
 
 
+def reprove(root, number: int, apply: bool) -> int:
+    """SPEC-0050 amendment 171 (brief #1163): the light re-prove of pull request NUMBER. It reads
+    the pull request (GET), fetches its base branch and `refs/pull/<n>/head`, and judges with
+    `session_plan.reprove_kind`; only `light` goes on: it prints the one update it would make and,
+    with APPLY, makes it (`PUT pulls/<n>/update-branch` pinned by `expected_head_sha`), reads the
+    new head and posts `Report: <new head> merge of main (light re-prove, ...)`. A full re-prove or
+    a conflict exits 3 and writes nothing; a refused or unreadable step is an error (exit 1)."""
+    repo = session.repo_name(root)
+    pull = read_one(f"repos/{repo}/pulls/{number}", "the pull request")
+    head = str((pull.get("head") or {}).get("sha") or "")
+    branch = str((pull.get("base") or {}).get("ref") or "")
+    if not re.fullmatch(r"[0-9a-f]{40}", head) or not branch:
+        raise CheckError("the pull request cannot be read")
+    lead = f"reprove: #{number} {head[:12]}:"
+    fetched = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+        ["git", "fetch", "-q", "origin", branch, f"refs/pull/{number}/head"],
+        cwd=root, capture_output=True, text=True, encoding="utf-8",
+    )  # fmt: skip
+    if fetched.returncode != 0:
+        raise CheckError("the default branch or the head cannot be fetched")
+    kind, files = session_plan.reprove_kind(root, f"refs/remotes/origin/{branch}", head)
+    if kind is None:
+        raise CheckError("the re-prove state cannot be read")
+    if kind == "none":
+        print(f"{lead} not in the re-prove state; nothing to update")
+        return 0
+    if kind != "light":
+        other = [f for f in files if f not in session_plan.shared_indexes(root)]
+        why = "conflict" if kind == "conflict" else f"{other[0]} is not a shared index"
+        print(f"{lead} full re-prove ({why}); the builder merges the default branch")
+        return merge_cleared.EXIT_HELD
+    step = f"PUT repos/{repo}/pulls/{number}/update-branch expected_head_sha={head}"
+    print(f"{lead} light ({', '.join(files)}); the step: {step}" + ("" if apply else "; add --apply to do it"))
+    if not apply:
+        return 0
+    endpoint = f"repos/{repo}/pulls/{number}/update-branch"
+    post(endpoint, "update-branch was refused", "-f", f"expected_head_sha={head}", method="PUT")
+    new = head
+    for _ in range(REPROVE_WAITS):
+        found = session.gh(f"repos/{repo}/pulls/{number}")
+        new = str(((found or {}).get("head") or {}).get("sha") or "") if isinstance(found, dict) else ""
+        if new and new != head:
+            break
+        time.sleep(REPROVE_PAUSE)
+    if not re.fullmatch(r"[0-9a-f]{40}", new) or new == head:
+        raise CheckError("the branch was updated but its new head cannot be read; no Report posted")
+    body = f"body=Report: {new} {REPROVE_REPORT}"
+    post(f"repos/{repo}/issues/{number}/comments", "the Report cannot be posted", "-f", body)
+    print(f"{lead} updated to {new[:12]}; Report posted")
+    return 0
+
+
 def rerun(root, number: int, apply: bool) -> int:
     repo = session.repo_name(root)
     pull = read_one(f"repos/{repo}/pulls/{number}", "the pull request")
@@ -1749,6 +1818,9 @@ def routine_args(args: list[str]) -> tuple | None:
             return ("lease", args[1], args[2])
     if args[:2] == ["over", "--pr"] and len(args) == 3 and PR_NUMBER.fullmatch(args[2]):
         return ("over", int(args[2]))
+    if args[:2] == ["reprove", "--pr"] and len(args) in (3, 4) and PR_NUMBER.fullmatch(args[2]):
+        if args[3:] in ([], ["--apply"]):
+            return ("reprove", int(args[2]), args[3:] == ["--apply"])
     return None
 
 
@@ -1791,6 +1863,8 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
                 return check_verdict(routine[1], root, routine[2])
             if routine[0] == "over":
                 return over(root, routine[1])
+            if routine[0] == "reprove":
+                return reprove(root, routine[1], routine[2])
             return lease(root, routine[1], routine[2])
         if args == ["sweep"]:
             return sweep(root)
