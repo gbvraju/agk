@@ -39,6 +39,12 @@ pull request merged on it ends with `agk:merge-ready` (brief #601, ADR-0293).
 With `builder_start = "assign"` every run of the job also reads the conductor lease and the slot
 leases and opens, updates or closes the plain issues `No live conductor` and `Builder pool down`,
 labelled `agk-health` (brief #776 answer 5, ADR-0368); with `start` it reads none of them.
+Brief #1116 (ADR-0476): a run of the event job that labels a pull request `agk:merge-ready`, the
+state it did not have before (nor the old `agk:ready`), starts the merger workflow once for it with
+`workflow_dispatch` and the input `pr`, only while `[flow] auto_merge = true` in GitHub mode (the
+setting the merger reads), and not for a `Verdict:` or `Approve:` comment or an edited `Final:`,
+on which the merger starts by itself. `--pr`, `--all` and `--dry-run` start nothing, and a start
+that GitHub refuses prints one line and fails no routing: the merger's schedule still sweeps.
 While the checkout's agk.toml sets `paused = true` (brief #348, ADR-0196) it prints `agk paused`
 and reads and writes nothing, whatever it was asked to route.
 """
@@ -52,7 +58,9 @@ import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
+from functools import partial
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -62,6 +70,7 @@ from common import (
     PAUSED_LINE,
     CheckError,
     agent_apps,
+    config_source,
     covered_fix_list,
     final_accepts,
     finished_brief,
@@ -72,7 +81,7 @@ from common import (
     required_checks,
     verdict_problem,
 )
-from merge_cleared import PROTECTED
+from merge_cleared import PROTECTED, Nothing, github_mode
 from metrics import counted_authors, covered_head, latest_verdict_body, verdicts
 from reviewers import (
     APPROVE,
@@ -93,6 +102,9 @@ from session import RED_TITLE, ROUTER_PAIR, gh, is_red, pages, repo_name
 NAME = "route"
 USAGE = "usage: route.py [--pr N | --all | --branch | --health] [--dry-run]"
 ROUTER_JOB = "agk-route"
+MERGER_WORKFLOW = "merger.yml"  # brief #1116 (ADR-0476): started once per pull request entering
+MERGE_READY = "agk:merge-ready"
+MERGER_STARTS = ("Verdict:", "Approve:")  # comments on which merger.yml starts by itself
 STATES = (  # (label, actor, what), amendment 150 item 1; pr_state's precedence (ADR-0385)
     ("agk:parked", "owner", "a person holds it"),
     ("agk:build", "builder", "a draft, or no ready Report: on the head"),
@@ -730,7 +742,9 @@ def report_unreadable(
         )
 
 
-def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str | None:
+def route_one(
+    repo: str, n: int, root: Path, labels: Labels, dry: bool, entered: Any = None
+) -> str | None:
     """Route pull request `n`; its label, or None when it is over; CheckError if unreadable."""
     got = read_facts(repo, n, root)
     if got is None:
@@ -755,6 +769,8 @@ def route_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str |
         )
     changed = [name for name in current if name in LABELS] != [wanted]
     print(f"#{n} {wanted}" + (" (changed)" if changed and not dry else ""))
+    if entered is not None and not dry and entering_merge_ready(current, wanted):
+        entered(n)
     return wanted
 
 
@@ -837,7 +853,9 @@ def stale_running(repo: str, done: set[int]) -> list[int]:
     ]
 
 
-def sweep_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str | None:
+def sweep_one(
+    repo: str, n: int, root: Path, labels: Labels, dry: bool, entered: Any = None
+) -> str | None:
     """Relabel one pull request left at `agk:ci-running` once its required checks have finished,
     by the same rules as `route_one`; it writes the label only, and nothing while checks run."""
     got = read_facts(repo, n, root)
@@ -853,7 +871,57 @@ def sweep_one(repo: str, n: int, root: Path, labels: Labels, dry: bool) -> str |
     if not dry:
         apply(repo, n, current, wanted, labels)
     print(f"#{n} {wanted} (swept)")
+    if entered is not None and not dry and entering_merge_ready(current, wanted):
+        entered(n)
     return wanted
+
+
+# --- the start of the merger (brief #1116, ADR-0476) -------------------------------------------
+
+
+def entering_merge_ready(current: list[str], wanted: str) -> bool:
+    """WANTED is `agk:merge-ready` and the pull request had neither it nor the old `agk:ready`."""
+    return wanted == MERGE_READY and not {MERGE_READY, OLD_READY} & set(current)
+
+
+def merger_on(root: Path) -> bool:
+    """The merger merges here: `[flow] auto_merge = true` in GitHub mode, as merge_cleared.py
+    reads it (`github_mode`); a setting it refuses starts nothing."""
+    try:
+        github_mode(config_source(root))
+    except (Nothing, CheckError, ValueError):
+        return False
+    return True
+
+
+def merger_starts_itself(name: str, event: dict) -> bool:
+    """The comment of this event already starts merger.yml (its `issue_comment` condition)."""
+    if name != "issue_comment":
+        return False
+    body = str((event.get("comment") or {}).get("body") or "")
+    if body.startswith(MERGER_STARTS):
+        return True
+    return event.get("action") == "edited" and body.startswith("Final:")
+
+
+def start_merger(repo: str, default: str, n: int) -> None:
+    """One `workflow_dispatch` of merger.yml on the default branch with the input `pr`; a refusal
+    prints one line and is not a failure of the routing."""
+    endpoint = f"repos/{repo}/actions/workflows/{MERGER_WORKFLOW}/dispatches"
+    try:
+        write(
+            endpoint,
+            "-f",
+            f"ref={default}",
+            "-f",
+            f"inputs[pr]={n}",
+            method="POST",
+            what="brief #1116: the start of the merger",
+        )
+    except (ReadOnly, CheckError):
+        print(f"merger: not started for #{n} (permission actions: write on the router's job)")
+        return
+    print(f"#{n} merger started")
 
 
 # --- the default branch (rule 7) ---------------------------------------------------------------
@@ -1191,10 +1259,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     labels = Labels(repo)
     failed = False
+    starts = not rest and not dry and not merger_starts_itself(name, event) and merger_on(root)
+    entered = partial(start_merger, repo, default) if starts else None
+
     try:
         for n in dict.fromkeys(numbers):
             try:
-                route_one(repo, n, root, labels, dry)
+                route_one(repo, n, root, labels, dry, entered)
             except CheckError as exc:
                 print(f"FAIL {NAME}: {exc}")
                 failed = True
@@ -1209,7 +1280,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 for n in stale_running(repo, set(numbers)):
                     try:
-                        sweep_one(repo, n, root, labels, dry)
+                        sweep_one(repo, n, root, labels, dry, entered)
                     except CheckError as exc:
                         print(f"FAIL {NAME}: {exc}")
                         failed = True
