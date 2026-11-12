@@ -469,3 +469,294 @@ def test_ac3_an_unknown_option_is_a_usage_error(tmp_path):
     code, out = check(tmp_path, "--trace", "--wide")
     assert code == 2
     assert "usage: check_plan.py" in out
+
+
+# --- amendment 166 item 5 (brief #1110, ADR-0474): scenarios beside rule 11's line --------------
+
+OPENSPEC_REL = "docs/sources/openspec-shop/shop.md"
+OPENSPEC = (
+    "Source: OpenSpec shop.md\nKind: openspec\nVersion: sha256:abc123\nDate: 2026-11-12\n\n"
+    "# Shop functional spec\n\n"
+    "### Order list\n\n"
+    "*Capability `order-list`. Defined by: `order-rules` (archived, 3/3 tasks done).*\n\n"
+    "#### Requirement: Orders are listed\n\n"
+    "The portal at example.com SHALL list each order.\n\n"
+    "##### Scenario: Orders show\n\n"
+    "- **WHEN** a buyer opens the orders page\n"
+    "- **THEN** each order shows\n\n"
+    "##### Scenario: Empty list\n\n"
+    "- GIVEN no orders\n"
+    "- WHEN a buyer opens the Orders screen\n"
+    "- THEN an empty note shows\n\n"
+    "#### Requirement: Invoices are kept\n\n"
+    "The portal SHALL keep invoices.\n\n"
+    "##### Scenario: Invoice is stored\n\n"
+    "- **WHEN** an order is paid\n"
+    "- **THEN** its invoice is stored\n"
+)
+SHOW = f"{OPENSPEC_REL}#Scenario: Orders show"
+EMPTY = f"{OPENSPEC_REL}#Scenario: Empty list"
+STORED = f"{OPENSPEC_REL}#Scenario: Invoice is stored"
+SCREENS = "docs/sources/shop-prototype-i1.md"
+
+
+def openspec_plan(root: Path, *, prototype: bool = True) -> Path:
+    """The invented project with an OpenSpec source: `Orders show` has an acceptance line of a
+    proposed requirement, `Empty list` one of REQ-007, which a test marks; `Invoice is stored`
+    has none."""
+    plan(root, prototype=prototype)
+    write(root, OPENSPEC_REL, OPENSPEC)
+    write(
+        root,
+        PROPOSED,
+        REQS.replace(
+            "- Status: planned\n- Source: docs/sources/sow.md:8\n",
+            f"- Given a buyer, when the list opens, then each order shows ({SHOW})\n"
+            "- Status: planned\n- Source: docs/sources/sow.md:8\n",
+            1,
+        ),
+    )
+    write(
+        root,
+        "docs/requirements.md",
+        "### REQ-007 Orders\n\nCriteria:\n\n"
+        f"- Given no orders, when a buyer opens the list, then an empty note shows ({EMPTY})\n\n"
+        "- Source: docs/sources/sow.md:8\n",
+    )
+    write(root, "tests/test_orders.py", '"""REQ-007 AC1: orders."""\n')
+    return root
+
+
+def infos(out: str) -> list[str]:
+    return [line for line in out.splitlines() if line.startswith("info plan: ")]
+
+
+def counted(out: str) -> str:
+    """The scenario part of rule 11's line."""
+    return next(p for p in last(out).split(", ") if "scenarios have" in p)
+
+
+def test_ac3_scenarios_are_counted_beside_the_source_lines(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, `<a> of <b> scenarios have an acceptance line and a
+    test: not read` follows the source-line count of rule 11 without `--facts`, a hand count."""
+    openspec_plan(tmp_path, prototype=False)
+    code, out = check(tmp_path)
+    assert code == 0, out
+    assert last(out) == (
+        "ok plan: 2 of 2 in-scope source lines have a requirement, "
+        "2 of 3 scenarios have an acceptance line and a test: not read, "
+        "requirements have a brief: not read, briefs have a merged pull request: not read, "
+        "requirements have a test: not read"
+    )
+
+
+def test_ac3_with_facts_the_scenarios_with_a_test_are_counted(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, with `--facts` `<c>` counts the scenario whose
+    acceptance line is criterion 1 of REQ-007, which a test marks `REQ-007 AC1`."""
+    openspec_plan(tmp_path, prototype=False)
+    _, out = check(tmp_path, "--facts", str(facts(tmp_path)))
+    assert counted(out) == "2 of 3 scenarios have an acceptance line and 1 a test"
+
+
+def test_ac3_a_test_of_another_criterion_does_not_count(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, a requirement with two criteria and a test of AC1 only:
+    the scenario of criterion 2 has no test, though the requirement has one."""
+    openspec_plan(tmp_path, prototype=False)
+    write(
+        tmp_path,
+        "docs/requirements.md",
+        "### REQ-007 Orders\n\nCriteria:\n\n"
+        f"- Given orders, when a buyer opens the list, then each order shows ({SHOW})\n"
+        f"- Given no orders, when a buyer opens the list, then an empty note shows ({EMPTY})\n\n"
+        "- Source: docs/sources/sow.md:8\n",
+    )
+    write(tmp_path, PROPOSED, REQS)
+    path = str(facts(tmp_path))
+    _, out = check(tmp_path, "--facts", path)
+    assert counted(out) == "2 of 3 scenarios have an acceptance line and 1 a test"
+    write(tmp_path, "tests/test_orders.py", '"""REQ-007 AC2: the empty list."""\n')
+    _, out = check(tmp_path, "--facts", path)
+    assert counted(out) == "2 of 3 scenarios have an acceptance line and 1 a test"
+    write(tmp_path, "tests/test_orders.py", '"""REQ-007 AC3: none."""\n')
+    _, out = check(tmp_path, "--facts", path)
+    assert counted(out) == "2 of 3 scenarios have an acceptance line and 0 a test"
+
+
+def test_ac3_an_acceptance_line_names_its_criterion_by_its_ac_number(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, on a requirement's `Acceptance:` line the criterion the
+    location ends is its last `ACn`; a bare `REQ-007` marker marks no criterion."""
+    openspec_plan(tmp_path, prototype=False)
+    write(
+        tmp_path,
+        "docs/requirements.md",
+        "### REQ-007 Orders\n\n"
+        "- Acceptance: AC1 given orders, when listed, then shown; AC2 given no orders, when"
+        f" listed, then an empty note shows ({EMPTY})\n"
+        "- Source: docs/sources/sow.md:8\n",
+    )
+    path = str(facts(tmp_path))
+    _, out = check(tmp_path, "--facts", path)
+    assert counted(out) == "2 of 3 scenarios have an acceptance line and 0 a test"
+    write(tmp_path, "tests/test_orders.py", '"""REQ-007 AC2: the empty list."""\n')
+    _, out = check(tmp_path, "--facts", path)
+    assert counted(out) == "2 of 3 scenarios have an acceptance line and 1 a test"
+    write(tmp_path, "tests/test_orders.py", '"""REQ-007: orders."""\n')
+    _, out = check(tmp_path, "--facts", path)
+    assert counted(out) == "2 of 3 scenarios have an acceptance line and 0 a test"
+
+
+def test_ac3_a_proposed_key_is_no_requirement_a_test_marks(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, `<c>` reads `REQ-nnn ACn` only, never a proposed key."""
+    openspec_plan(tmp_path, prototype=False)
+    write(tmp_path, "docs/requirements.md", "")
+    write(tmp_path, "tests/test_orders.py", '"""orders-list AC1 REQ-001 AC1."""\n')
+    _, out = check(tmp_path, "--facts", str(facts(tmp_path)))
+    assert counted(out) == "1 of 3 scenarios have an acceptance line and 0 a test"
+
+
+def test_ac3_without_an_openspec_source_the_line_has_no_scenario_count(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, no `Kind: openspec` source, the line is as before."""
+    plan(tmp_path)
+    _, out = check(tmp_path, "--trace")
+    assert "scenario" not in out
+    assert infos(out) == []
+
+
+def test_ac3_a_scenario_under_changes_is_not_counted(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, a delta spec under `changes/` holds hints, not
+    scenarios of the plan (ADR-0473 decision 3)."""
+    openspec_plan(tmp_path, prototype=False)
+    write(
+        tmp_path,
+        "docs/sources/openspec-shop/changes/c1/specs/order-list/spec.md",
+        OPENSPEC.replace("Source: OpenSpec shop.md", "Source: OpenSpec delta"),
+    )
+    _, out = check(tmp_path)
+    assert counted(out) == "2 of 3 scenarios have an acceptance line and a test: not read"
+
+
+def test_ac3_a_scenario_outside_a_requirement_is_not_counted(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, a `Scenario:` heading before any `Requirement:`
+    heading is no scenario of the reading."""
+    openspec_plan(tmp_path, prototype=False)
+    text = OPENSPEC.replace(
+        "# Shop functional spec\n\n", "# Shop functional spec\n\n## Scenario: Stray\n\n- WHEN x\n\n"
+    )
+    write(tmp_path, OPENSPEC_REL, text)
+    _, out = check(tmp_path)
+    assert counted(out) == "2 of 3 scenarios have an acceptance line and a test: not read"
+
+
+def test_ac3_a_repeated_scenario_heading_is_located_by_its_line(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, a heading that repeats in its file is `<file>:<line>`,
+    the location the reading writes (ADR-0473 decision 3), and an acceptance line ending with
+    that location meets it."""
+    openspec_plan(tmp_path, prototype=False)
+    text = OPENSPEC.replace("Scenario: Invoice is stored", "Scenario: Orders show")
+    write(tmp_path, OPENSPEC_REL, text)
+    _, out = check(tmp_path)
+    # `Orders show` repeats, so its acceptance line by heading no longer meets either one.
+    assert counted(out) == "1 of 3 scenarios have an acceptance line and a test: not read"
+    proposed = (tmp_path / PROPOSED).read_text(encoding="utf-8")
+    write(tmp_path, PROPOSED, proposed.replace(SHOW, f"{OPENSPEC_REL}:16"))
+    _, out = check(tmp_path)
+    assert counted(out) == "2 of 3 scenarios have an acceptance line and a test: not read"
+    locations = [location for location, _ in check_plan.scenarios(tmp_path) or []]
+    assert locations == [f"{OPENSPEC_REL}:16", EMPTY, f"{OPENSPEC_REL}:31"]
+
+
+def unmatched(out: str) -> list[str]:
+    return [line for line in out.splitlines() if line.startswith("unmatched ")]
+
+
+def test_ac3_unmatched_scenarios_and_screens_are_listed_before_the_line(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, with a `Kind: design` source one `unmatched scenario:
+    <location>` per scenario that names no screen and one `unmatched screen: <screen>` per screen
+    no scenario names, before rule 11's line, with or without `--trace`, never as a failure."""
+    openspec_plan(tmp_path)
+    for args in ((), ("--trace",)):
+        _, out = check(tmp_path, *args)
+        assert unmatched(out) == [
+            f"unmatched scenario: {STORED}",
+            "unmatched screen: cart",
+        ]
+        lines = out.splitlines()
+        assert lines.index("unmatched screen: cart") == len(lines) - 2
+        assert not any("scenario" in line or "unmatched" in line for line in fails(out))
+
+
+def test_ac3_the_trace_names_each_scenarios_screens(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, a scenario whose steps name a screen is matched to its
+    states; `--trace` prints them, and `names no screen` for an unmatched one."""
+    openspec_plan(tmp_path)
+    _, out = check(tmp_path, "--trace")
+    assert infos(out) == [
+        f"info plan: scenario {SHOW}: {SCREENS}#orders/default, {SCREENS}#orders/empty",
+        f"info plan: scenario {EMPTY}: {SCREENS}#orders/default, {SCREENS}#orders/empty",
+        f"info plan: scenario {STORED}: names no screen",
+    ]
+    _, out = check(tmp_path)
+    assert infos(out) == []
+
+
+def test_ac3_without_a_design_source_nothing_is_unmatched(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, the lists need a prototype source."""
+    openspec_plan(tmp_path, prototype=False)
+    _, out = check(tmp_path, "--trace")
+    assert unmatched(out) == [] and infos(out) == []
+
+
+def test_ac3_the_lists_are_information_and_never_fail_the_plan(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, a plan that passes still passes with unmatched lists."""
+    openspec_plan(tmp_path)
+    reqs = (tmp_path / PROPOSED).read_text(encoding="utf-8")
+    reqs += (
+        "\n### cart Cart\n\n- Source: docs/sources/shop-prototype-i1.md#cart/default\n"
+        "- Source: docs/sources/shop-prototype-i1.md#orders/empty\n"
+    )
+    write(tmp_path, PROPOSED, reqs)
+    brief = BRIEF.replace("orders-list", "orders-list, cart")
+    write(tmp_path, "docs/plan/briefs/M1/orders-page.md", brief)
+    write(tmp_path, "docs/plan/milestones.md", MILESTONES.replace("Exit:", "Demo: orders\n\nExit:"))
+    code, out = check(tmp_path)
+    assert code == 0, out
+    assert unmatched(out) == [f"unmatched scenario: {STORED}", "unmatched screen: cart"]
+    assert last(out).startswith("ok plan: ")
+
+
+def test_ac3_a_screen_named_with_spaces_for_its_hyphens_matches(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, `order-list/default` is named by `the Order List`,
+    case and hyphens aside, and only as whole words (`ordersx` is not named by `orders`)."""
+    openspec_plan(tmp_path)
+    write(
+        tmp_path,
+        SCREENS,
+        PROTOTYPE.replace("## cart/default", "## order-list/default").replace(
+            "## orders/", "## ordersx/"
+        ),
+    )
+    text = OPENSPEC.replace("opens the orders page", "opens the Order List")
+    write(tmp_path, OPENSPEC_REL, text)
+    _, out = check(tmp_path, "--trace")
+    assert f"info plan: scenario {SHOW}: {SCREENS}#order-list/default" in infos(out)
+    assert unmatched(out) == [
+        f"unmatched scenario: {EMPTY}",
+        f"unmatched scenario: {STORED}",
+        "unmatched screen: ordersx",
+    ]
+
+
+def test_ac3_the_scenarios_are_the_ones_the_reading_drafts(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, the check finds the scenarios, and their locations, that
+    `plan_intake.py openspec` writes as acceptance lines (ADR-0473 decision 3)."""
+    import plan_intake  # noqa: PLC0415 - only this test reads the draft
+
+    openspec_plan(tmp_path, prototype=False)
+    reading = plan_intake.read_openspec(tmp_path, tmp_path / "docs/sources/openspec-shop")
+    drafted = [
+        c.rpartition(" (")[2][:-1]
+        for r in reading.proposals()["requirements"]
+        for c in r["criteria"]
+    ]
+    assert [location for location, _ in check_plan.scenarios(tmp_path) or []] == drafted
+    assert drafted == [SHOW, EMPTY, STORED]
