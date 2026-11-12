@@ -105,3 +105,21 @@ def test_ac2_the_skill_writes_personas_and_stories_and_invents_no_user():
         "is a `scope.open_questions` item whose text ends `(verify)`",
     ):
         assert phrase in text, phrase
+
+
+def test_ac2_the_skill_puts_shared_components_first_and_slices_the_milestones():
+    """REQ-050 AC2: rules 4 and 5 with amendment 164 items 3 and 4 (ADR-0464), build (r)."""
+    text = flat()
+    for phrase in (
+        '"components": [{"key": "C1", "name": "", "screens": ["<screen>", "<screen>"]',
+        '"component": "C1", "screens": ["<screen>/<state>"]',
+        "design_import.py components --version i<n> --slug <slug>",
+        "Each component has exactly one brief, in `M1`",
+        "`M1` is titled `Foundation`",
+        "names in `depends_on`, directly, the brief of every component those screens use",
+        "every milestone after `M1` lists in `screens`",
+        "reads `match` in `design_compare.py` against the signed-off version",
+        "the declared playbook's `[milestones] batch_by`",
+        'playbook.py" split',
+    ):
+        assert phrase in text, phrase

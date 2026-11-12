@@ -1,15 +1,16 @@
 """The plan's proposals, validated and rendered (SPEC-0043 rules 3 to 7). Installed:
 `kit/manifest.json` lists it in `verbatim`. Build (c1) of SPEC-0043 rule 27 (amendment 163,
-ADR-0456), build (c2), `render` (ADR-0461), build (i), `publish` (ADR-0459), and build (p), personas
-and user stories (amendment 164 item 2, ADR-0462).
+ADR-0456), build (c2), `render` (ADR-0461), build (i), `publish` (ADR-0459), build (p), personas
+and user stories (amendment 164 item 2, ADR-0462), and build (r), shared components and demoable
+slices (amendment 164 items 3 and 4, ADR-0464).
 
     python3 plan_intake.py validate --proposals FILE [--root DIR]
     python3 plan_intake.py states [--root DIR]
     python3 plan_intake.py render --proposals FILE [--root DIR]
     python3 plan_intake.py publish --comments FILE --head SHA [--numbers FILE] [--root DIR]
 
-Rule 3: every command exits 2 with `data guard not installed: <path>` when `scripts/agk/guard.py`
-or `.claude/hooks/data_guard.py` is absent, and runs `guard.scan_text` on the whole text of every
+Rule 3: every command exits 2 with `data guard not installed: <path>` when `scripts/agk/guard.py` or
+`.claude/hooks/data_guard.py` is absent, and runs `guard.scan_text` on the whole text of every
 source before it reads a line of one; a finding refuses with exit 1, naming the file, the kind and
 `line <l>, column <c>`, never the matched text. Rules 4 to 6: `validate` prints `ok proposals` or
 one line per problem naming the rule and the item's `key` or `id`, never its text. `states` prints
@@ -17,18 +18,26 @@ the inventory's `yes` states that no `<screen>/<state>` heading of a `Kind: desi
 (amendment 163 item 5). Build (p): the proposals hold `personas` (`P1`, `P2`, ... in order, each
 with a `name`, non-empty `goals` and `sources`), and each requirement names its `persona` and one
 `story` `As <the persona's name>, I want <capability>, so that <outcome>`, whose form only is
-checked (`Q-1089-4`). Rule 7: `render` runs `validate` first, prints every conflict under
-`Conflicts for the person` and then every open question under `Open questions for the person`, and
-writes, as new files only and all or nothing, `docs/plan/scope.md`, `docs/plan/personas.md`,
-`docs/plan/milestones.md`, `docs/plan/requirements-proposed.md` (each block with its `Persona:` and
-`Story:` lines before its criteria), one Draft spec per area (`new_spec.make_spec`, imported from
-the plugin's copy beside this script) and `docs/plan/briefs/M<n>/<key>.md`; it never edits
-`docs/requirements.md`. Rules 8 and 25: `publish` exits 2 without `Approve: plan <--head>` by an
+checked (`Q-1089-4`). Build (r): the proposals may hold `components` (`C1`, `C2`, ... in order, each
+with two or more inventory `screens`, a `pattern` or null, and exactly one brief in `M1 Foundation`
+whose `component` names it); a brief whose `screens` use a component names that brief in
+`depends_on`. While a `Kind: design` source has a `<screen>/<state>` heading, every milestone after
+`M1` has `screens`, its `exit` names `design_compare.py`, `match` and a signed-off version, and
+every such heading is in a milestone's `screens`. Rule 7: `render` runs `validate` first, prints
+every conflict under `Conflicts for the person` and then every open question under `Open questions
+for the person`, and writes, as new files only and all or nothing, `docs/plan/scope.md`,
+`docs/plan/personas.md`, `docs/plan/milestones.md`, `docs/plan/requirements-proposed.md` (each block
+with its `Persona:` and `Story:` lines before its criteria; a milestone's `Demo:` line after its
+`Exit:` and a brief's `Screens: <version> ...` line, build (r)), one Draft spec per area
+(`new_spec.make_spec`, imported from the plugin's copy beside this script) and
+`docs/plan/briefs/M<n>/<key>.md`; it never edits `docs/requirements.md`. With a design source it
+prints the declared playbook's `batch_by` as `Milestone order for the person: ...`
+(`playbook_format`). Rules 8 and 25: `publish` exits 2 without `Approve: plan <--head>` by an
 account of `spec_approvers` in the saved comments (`reviewers.plan_approvals`), refuses a brief that
-`check_brief.py --root .` fails, and prints one `gh api` command per milestone and per brief,
-briefs in `depends_on` order, each withheld until `--numbers` gives its milestone's and its
-dependences' numbers; it runs none. In personal mode it writes the briefs through
-`forge.FilesForge`. Files only: no network, no model; only `render` and personal `publish` write.
+`check_brief.py --root .` fails, and prints one `gh api` command per milestone and per brief, briefs
+in `depends_on` order, each withheld until `--numbers` gives its milestone's and its dependences'
+numbers; it runs none. In personal mode it writes the briefs through `forge.FilesForge`. Files only:
+no network, no model; only `render` and personal `publish` write.
 """
 
 from __future__ import annotations
@@ -37,13 +46,16 @@ import json
 import re
 import shlex
 import sys
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import check_plan
 import design_import
-from common import ESTIMATE_LINES, repo_root, run
+import design_signoff
+import playbook_format
+from common import ESTIMATE_LINES, CheckError, repo_root, run
 
 NAME = "plan-intake"
 USAGE = (
@@ -58,10 +70,13 @@ MEASURABLE = re.compile(r"\d|\b(?:all|every|none|zero)\b", re.IGNORECASE)
 VERIFY = "(verify)"
 SCOPE = ("in", "out", "assumptions", "constraints", "open_questions")
 TOP = ("schema", "scope", "personas", "milestones", "requirements", "areas", "briefs", "conflicts")
-LIST, TEXT, LOCS = "list", "text", "locations"
+COMPONENTS = "components"  # build (r): optional, an empty list when absent (`Q-1092-1`)
+SECTIONS = ("personas", COMPONENTS, *TOP[3:])
+LIST, TEXT, LOCS, MAYBE = "list", "text", "locations", "text or null"
 FIELDS = {
     "scope": ("key", "text", "sources"),
     "personas": ("key", "name", "goals", "sources"),
+    COMPONENTS: ("key", "name", "screens", "pattern", "sources"),
     "milestones": ("id", "title", "exit", "acceptance", "target", "sources"),
     "requirements": ("key", "title", "criteria", "milestone", "persona", "story", "sources"),
     "areas": ("name", "requirements"),
@@ -69,11 +84,20 @@ FIELDS = {
     + ("depends_on", "sources"),
     "conflicts": ("locations", "description"),
 }
-KINDS = {"sources": LOCS, "target": "date"} | dict.fromkeys(
-    ("criteria", "requirements", "advances", "touches", "depends_on", "locations", "goals"), LIST
+KINDS = {"sources": LOCS, "target": "date", "pattern": MAYBE} | dict.fromkeys(
+    ("criteria", "requirements", "advances", "touches", "depends_on", "locations", "goals")
+    + ("screens",),
+    LIST,
 )
 NON_EMPTY = ("goals",)  # a list that holds at least one item, as `sources` does
-OPTIONAL = {"conflicts": ("settled",)}
+OPTIONAL = {
+    "conflicts": ("settled",),
+    "milestones": ("screens",),
+    "briefs": ("component", "screens"),
+}
+TYPED = ("component", "screens")  # the optional keys whose type rule 4 checks
+KEYED = {"personas": "P", COMPONENTS: "C"}  # keys run P1, P2, ... and C1, C2, ... in order
+FOUNDATION = "Foundation"
 ID = {"milestones": "id", "areas": "name"}
 SETTLED = "Settled: "
 STATE_HEADING = re.compile(r"^([^/]+)/([^/]+)$")
@@ -131,10 +155,14 @@ def cited_text(root: Path, location: str) -> str:
     return "\n".join(out)
 
 
+def _sections(data: dict) -> list[str]:
+    return [s for s in SECTIONS if s in data]
+
+
 def _items(data: dict) -> list[tuple[str, str, dict]]:
     """(section, name, item) of every item of the proposals, scope by its five lists."""
     out: list[tuple[str, str, dict]] = []
-    for section in ("scope", *TOP[2:]):
+    for section in ("scope", *_sections(data)):
         groups = [(f"scope.{n}", data["scope"][n]) for n in SCOPE] if section == "scope" else []
         for label, items in groups or [(section, data[section])]:
             kind = label.split(".")[0]
@@ -148,7 +176,7 @@ def shape_problems(data: object) -> list[str]:
     """Rule 4: the top level, then every item's keys and types."""
     if not isinstance(data, dict):
         return ["rule 4: the proposals file is not a JSON object"]
-    out = [f"rule 4: proposals: unknown key {k}" for k in data if k not in TOP]
+    out = [f"rule 4: proposals: unknown key {k}" for k in data if k not in (*TOP, COMPONENTS)]
     missing = [f"rule 4: proposals: missing key {k}" for k in TOP if k not in data]
     if missing:
         return out + missing
@@ -157,7 +185,7 @@ def shape_problems(data: object) -> list[str]:
     scope = data["scope"]
     if not isinstance(scope, dict) or sorted(scope) != sorted(SCOPE):
         return [*out, "rule 4: proposals: scope holds exactly " + ", ".join(SCOPE)]
-    lists = [scope[n] for n in SCOPE] + [data[k] for k in TOP[2:]]
+    lists = [scope[n] for n in SCOPE] + [data[k] for k in _sections(data)]
     if not all(isinstance(x, list) and all(isinstance(i, dict) for i in x) for x in lists):
         return [*out, "rule 4: proposals: every section is a list of objects"]
     for label, name, item in _items(data):
@@ -166,7 +194,7 @@ def shape_problems(data: object) -> list[str]:
         known = (*fields, *OPTIONAL.get(kind, ()))
         out += [f"{where}: unknown key {k}" for k in item if k not in known]
         out += [f"{where}: missing key {k}" for k in fields if k not in item]
-        for key in fields:
+        for key in (*fields, *(k for k in TYPED if k in item and k in known)):
             kind_of = KINDS.get(key, TEXT)
             if key in item and not _typed(item[key], kind_of):
                 out.append(f"{where}: {key} is not {kind_of}")
@@ -175,19 +203,32 @@ def shape_problems(data: object) -> list[str]:
         if kind == "conflicts" and isinstance(item.get("locations"), list):
             if len(item["locations"]) != 2:
                 out.append(f"{where}: locations is not two locations")
+        pairs = item.get("screens") if kind in ("milestones", "briefs") else None
+        if isinstance(pairs, list) and not all(STATE_HEADING.match(str(p)) for p in pairs):
+            out.append(f"{where}: screens is not <screen>/<state> pairs")
     for n, milestone in enumerate(data["milestones"], start=1):
         if milestone.get("id") != f"M{n}":
             out.append(f"rule 4: milestones {milestone.get('id', n)}: ids run M1, M2, ... in order")
-    seen: list[object] = []  # a repeated key is rule 4's `the key is repeated`, said once
-    for persona in data["personas"]:
-        if (key := persona.get("key")) not in seen:
-            seen.append(key)
-            if key != f"P{len(seen)}":
-                out.append(f"rule 4: personas {key}: keys run P1, P2, ... in order")
+    for section, letter in KEYED.items():
+        seen: list[object] = []  # a repeated key is rule 4's `the key is repeated`, said once
+        for item in data.get(section, []):
+            if (key := item.get("key")) not in seen:
+                seen.append(key)
+                if key != f"{letter}{len(seen)}":
+                    out.append(
+                        f"rule 4: {section} {key}: keys run {letter}1, {letter}2, ... in order"
+                    )
+    first = data["milestones"][0] if data["milestones"] else {}
+    if data.get(COMPONENTS) and first.get("id") == "M1" and first.get("title") != FOUNDATION:
+        out.append(
+            f"rule 4: milestones M1: title is not {FOUNDATION} while components is not empty"
+        )
     return out
 
 
 def _typed(value: object, kind: str) -> bool:
+    if kind == MAYBE:
+        return value is None or _typed(value, TEXT)
     if kind == TEXT:
         return isinstance(value, str) and bool(value.strip())
     if kind == "date":
@@ -278,7 +319,84 @@ def plan_problems(root: Path, data: dict) -> list[str]:
     for q in data["scope"]["open_questions"]:
         if VERIFY not in q["text"]:
             out.append(f"rule 6: scope.open_questions {q['key']}: no {VERIFY} mark")
+    out += component_problems(root, data) + slice_problems(root, data)
     return out + conflict_problems(items)
+
+
+def component_problems(root: Path, data: dict) -> list[str]:
+    """Rule 5 with amendment 164 item 3: two or more inventory screens, exactly one brief in `M1`,
+    and every brief whose `screens` use a component names that brief in `depends_on` directly
+    (`Q-1089-3`)."""
+    components = {c["key"]: c for c in data.get(COMPONENTS, [])}
+    listed = {screen for screen, _ in design_import.inventory_states(root) or {}}
+    brief_of: dict[str, str] = {}
+    out: list[str] = []
+    for key, c in components.items():
+        where = f"rule 5: components {key}"
+        if len(set(c["screens"])) < 2:
+            out.append(f"{where}: screens names fewer than two screens")
+        elif not set(c["screens"]) <= listed:
+            out.append(f"{where}: screens names a screen the inventory does not list")
+        own = [b for b in data["briefs"] if b.get("component") == key]
+        if len(own) > 1:
+            out.append(f"{where}: more than one brief")
+        elif not own or own[0]["milestone"] != "M1":
+            out.append(f"{where}: no brief in M1")
+        else:
+            brief_of[key] = own[0]["key"]
+    for b in data["briefs"]:
+        if "component" in b and b["component"] not in components:
+            out.append(f"rule 5: briefs {b['key']}: component names nothing")
+        used = {pair.partition("/")[0] for pair in b.get("screens", [])}
+        where = f"rule 5: briefs {b['key']}: depends_on does not name"
+        for key, dep in brief_of.items():
+            if dep != b["key"] and used & set(components[key]["screens"]):
+                if dep not in b["depends_on"]:
+                    out.append(f"{where} {dep} of component {key}")
+    return out
+
+
+SIGNED = re.compile(r"\b[vi][1-9]\d*\b")
+COMPARE, MATCH = "design_compare.py", re.compile(r"\bmatch\b")
+
+
+def signed_versions(root: Path) -> list[str]:
+    """The versions of the `design` rows of `docs/design/signoffs.md` in file order (rule 9)."""
+    try:
+        return [r["version"] for r in design_signoff.rows(root) if r["kind"] == "design"]
+    except CheckError:
+        return []
+
+
+def slice_problems(root: Path, data: dict) -> list[str]:
+    """Rule 5 with amendment 164 item 4, only while a `Kind: design` source has a
+    `<screen>/<state>` heading: each later milestone a slice proved by `design_compare.py`, and
+    every such heading in a milestone (`Q-1089-6`)."""
+    headings = check_plan.screens(root)
+    if not headings:
+        return []
+    pairs = {f"{s}/{state}" for s, state in design_import.inventory_states(root) or {}}
+    signed = set(signed_versions(root))
+    out: list[str] = []
+    for n, m in enumerate(data["milestones"]):
+        where = f"rule 5: milestones {m['id']}"
+        if not m.get("screens"):
+            out += [f"{where}: no screens"] if n else []
+            continue
+        exit_text = m["exit"]
+        if (
+            COMPARE not in exit_text
+            or not MATCH.search(exit_text)
+            or not set(SIGNED.findall(exit_text)) & signed
+        ):
+            out.append(f"{where}: exit does not name {COMPARE}, match and a signed-off version")
+        if not set(m["screens"]) <= pairs:
+            out.append(f"{where}: screens names a pair the inventory does not list")
+    listed = {pair for m in data["milestones"] for pair in m.get("screens", [])}
+    for heading in headings:
+        if heading.partition("#")[2] not in listed:
+            out.append(f"rule 5: {heading}: no milestone lists this screen and state")
+    return out
 
 
 def story_problems(r: dict, personas: dict[str, str]) -> list[str]:
@@ -388,10 +506,16 @@ def personas_text(data: dict) -> str:
 
 
 def milestones_text(data: dict) -> str:
+    """Rule 7 with amendment 164 item 4: a `Demo:` line after `Exit:` for a slice and for
+    `M1 Foundation`."""
     out = ["# Milestones"]
     for m in data["milestones"]:
-        out += ["", f"### {m['id']} {_one(m['title'])}", ""]
-        out += [f"Exit: {_one(m['exit'])}", f"Acceptance: {_one(m['acceptance'])}"]
+        out += ["", f"### {m['id']} {_one(m['title'])}", "", f"Exit: {_one(m['exit'])}"]
+        if m.get("screens"):
+            out.append(f"Demo: {', '.join(m['screens'])}")
+        elif m["id"] == "M1" and data.get(COMPONENTS):
+            out.append("Demo: none (foundation)")
+        out.append(f"Acceptance: {_one(m['acceptance'])}")
         out += [f"Target: {m['target'] or VERIFY}", *_sources(m["sources"])]
     return "\n".join(out) + "\n"
 
@@ -412,7 +536,7 @@ def requirements_text(data: dict) -> str:
     return "\n".join(out) + "\n"
 
 
-def brief_text(data: dict, b: dict) -> str:
+def brief_text(data: dict, b: dict, version: str = VERIFY) -> str:
     """SPEC-0034 rule 2 and SPEC-0030 rule 4, with keys on `Advances:` and `Depends-on:`."""
     from check_specs import CONTEXTS  # noqa: PLC0415 - only render needs it
 
@@ -427,6 +551,8 @@ def brief_text(data: dict, b: dict) -> str:
         out.append(f"{n}. {key}: {_one(reqs[key]['title'])}. Criteria: {criteria}")
     out += ["", f"Advances: {', '.join(b['advances'])}", f"Touches: {', '.join(b['touches'])}"]
     out += [f"Size: {b['size']}", f"Expected: {b['expected']}", f"Milestone: {b['milestone']}"]
+    if b.get("screens"):  # SPEC-0037 rule 10's line, with the signed-off version (`Q-1092-3`)
+        out.append(f"Screens: {version} {', '.join(b['screens'])}")
     out += [f"Depends-on: {key}" for key in b["depends_on"]]
     out.append("Contexts: " + "; ".join(f"{c}: {VERIFY} for the person to state" for c in CONTEXTS))
     return "\n".join([*out, *_sources(b["sources"])]) + "\n"
@@ -462,6 +588,18 @@ def for_the_person(data: dict) -> list[str]:
     return out
 
 
+def milestone_order(root: Path) -> str:
+    """Amendment 164 item 4: the declared playbook's `[milestones] batch_by`, read through
+    `playbook_format` (SPEC-0038 rule 7); the order itself is the person's to judge."""
+    lines, problems = playbook_format.split(root)
+    path = playbook_format.selected(root)
+    head = "Milestone order for the person: "
+    if not lines or problems or path is None:
+        return head + "no playbook declares batch_by"
+    batch_by = tomllib.loads(path.read_text(encoding="utf-8"))["milestones"]["batch_by"]
+    return f"{head}{_one(batch_by)} (playbook {path.relative_to(root).as_posix()})"
+
+
 def cmd_render(root: Path, proposals: Path) -> int:
     data, problems = validation(root, proposals)
     problems = problems or render_problems(data)
@@ -479,8 +617,11 @@ def cmd_render(root: Path, proposals: Path) -> int:
         f"{PLAN}/milestones.md": milestones_text(data),
         f"{PLAN}/requirements-proposed.md": requirements_text(data),
     }
+    versions = signed_versions(root)
+    version = versions[-1] if versions else VERIFY
     files |= {
-        f"{PLAN}/briefs/{b['milestone']}/{b['key']}.md": brief_text(data, b) for b in data["briefs"]
+        f"{PLAN}/briefs/{b['milestone']}/{b['key']}.md": brief_text(data, b, version)
+        for b in data["briefs"]
     }
     first = new_spec.next_number(root / "docs" / "specs")
     specs = [
@@ -498,6 +639,8 @@ def cmd_render(root: Path, proposals: Path) -> int:
         print("\n".join(sorted(problems)))
         return 1
     print("\n".join(for_the_person(data)))
+    if check_plan.screens(root):
+        print(milestone_order(root))
     for rel, text in files.items():
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
