@@ -45,10 +45,14 @@ status script exists and the report has no milestone line. This is build (f) of 
    byte-identical; `REPORT_SCHEMA` and `kit/report-schema.json` rise from 8 to 9 (amendment 115 item 2, which named
    3 to 4 when it was written). The report computes no estimate: it prints what the facts carry (amendment 115
    item 3).
-8. The `product-report` workflow's one step is not in this change: builders never change a workflow, so the exact
-   step is asked of the maintainers as Q-1094-1.
+8. The `product-report` workflow gains one step, committed by the owner on this branch (Q-1094-1, builders never
+   change a workflow): when `docs/plan/milestones.md` exists it makes the plan's facts with `facts.py --weeks 12` and
+   runs `plan_status.py --facts PLAN --weeks 12 --base IN --into OUT` before the report; `OUT` replaces the report's
+   facts file, so the report reads one file and the uploaded `facts.json` is `OUT`. A project without a plan runs
+   neither command.
 
-Protected path classes changed: `scripts/agk/` (`plan_status.py`, new; `product_report.py`), `kit/`
+Protected path classes changed: `.github/` (`.github/workflows/product-report.yml`, the one step of decision 8),
+`scripts/agk/` (`plan_status.py`, new; `product_report.py`), `kit/`
 (`kit/manifest.json`, `kit/facts-schema.json`, `kit/report-schema.json`, and `kit/hashes.json` only as
 `kit_hashes.py` prints it), `agk.toml` (two `[[testing.map]]` entries), `tests/kit/` (`test_plan_status.py`, new; the report goldens'
 `schema`, one new report fixture and the tests that pin the schema to 8) and `tests/kit_dev/`
@@ -63,5 +67,3 @@ its confirmation. A project without a plan sees the same report text; only the r
 
 - 2026-11-12: the facts list only the briefs closed in their own `--weeks` window, so a milestone's done count leaves
   out briefs closed before it (due 2026-12-31).
-- 2026-11-12: until the maintainers commit the workflow step of Q-1094-1, the weekly report carries no plan lines
-  (due 2026-11-30).
