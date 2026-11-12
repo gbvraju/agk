@@ -29,7 +29,7 @@ LINKS = (
     "| --- | --- | --- | --- |\n"
     "| Orders | https://design.example.com/file/abc | 2026-10-02 | List, Detail |\n"
 )
-SECRET_VALUE = "Example statement of work"  # a header value; never printed
+HEADER_TITLE = "Example statement of work"  # a header value; never printed
 
 
 def write(root: Path, rel: str, text: str) -> Path:
@@ -53,7 +53,7 @@ def fails(root: Path, rule: str, rel: str) -> str:
     code, out = check(root)
     assert code == 1, out
     assert f"rule {rule}: {rel}" in out, out
-    assert SECRET_VALUE not in out
+    assert HEADER_TITLE not in out
     return out
 
 
