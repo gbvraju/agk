@@ -78,6 +78,19 @@ branch and start a pull request", and open the pull request. When `governance` i
 
 AGK only lists these. It never decides one of them for you, and nothing it does approves a spec, accepts an ADR or merges.
 
+## Your design: import the customer's prototype, or draw one
+
+When a customer hands you a click-through prototype, the customer's prototype is the design: ask your session to run
+`/agk:design import <folder>`. It keeps every file unchanged as an imported version (`i1`, `i2` and so on), lists each
+file with its fingerprint, and the check shows that every screen of it is mapped to a screen of your inventory or set
+aside with a reason, so nothing is lost. When there is no prototype yet, the kit draws one: `/agk:design inventory`
+lists the screens and states, and `/agk:design prototype` draws them for you to click through (SPEC-0037). A project
+may hold both.
+
+You decide, before the import, what of the customer's prototype may be committed to the repository. It may hold real
+names and data, and no check can tell them from invented ones. You sign off a version, imported or drawn, with a comment
+`Approve: design <version> <full head ID>` on its pull request; no session posts that line for you.
+
 ## What `unknown` means
 
 The report never guesses. When a value cannot be found, the line says `unknown` and says what it is waiting for. For example the
