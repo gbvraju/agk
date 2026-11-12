@@ -32,6 +32,7 @@ from common import (
     REQ_ID,
     CheckError,
     declares_unchanged,
+    estimate_parts,
     final_records,
     find_ac_markers,
     find_questions,
@@ -68,6 +69,8 @@ BRIEF_LINE = re.compile(r"Brief: #(\d+)")
 TAKE_LINE = re.compile(
     r"taken: \S+ \d{4}-\d{2}-\d{2}(?: build \([A-Za-z0-9._-]+\))?( retakes)?( reserves .*)?"
 )
+MILESTONE_LINE = re.compile(r"^(?:[-*] )?Milestone:[ \t]*(M\d+)[ \t]*$", re.MULTILINE)
+CLOSE_REASONS = ("completed", "not_planned")
 ADVANCES = re.compile(r"Advances: (new|none|REQ-\d{3}(?:, REQ-\d{3})*)")
 WAITING_ON_BUILDER = ("agk:fix", "agk:conflict", "agk:ci-red")
 FLOW_DEFAULTS = {"max_builders": 3, "stall_hours": 4}
@@ -698,10 +701,16 @@ def distinct_moments(seen: list[tuple]) -> Any:
 
 
 def flow_section(
-    src: Any, limits: dict, authors: list[str] | None, seen: list | None = None
+    src: Any,
+    limits: dict,
+    authors: list[str] | None,
+    seen: list | None = None,
+    start: datetime | None = None,
 ) -> dict[str, Any]:
     """What the weekly report needs of the flow (SPEC-0034 rule 10): the limits, the open briefs
-    with what they advance, the retakes and the corrections as moments; the report counts them."""
+    with what they advance, the retakes and the corrections as moments; the report counts them.
+    With the window's first Monday as `start`, the briefs closed in the window are listed too,
+    and every brief carries its state, close and plan lines (amendment 115 item 1, ADR-0465)."""
     listed = get_list(
         src, "issues-agk-brief", f"repos/{{repo}}/issues?state=all&labels={BRIEF_LABEL}"
     )
@@ -726,7 +735,8 @@ def flow_section(
             if (m := TAKE_LINE.fullmatch(c["body"].splitlines()[0].strip())) and m.group(1)
         ]
         seen += corrections_of(comments, authors)
-        if issue.get("state") == "open":
+        shut = metrics.stamp(issue.get("closed_at"))
+        if issue.get("state") == "open" or (start and shut is not None and shut >= start):
             line = next(
                 (x for x in str(issue.get("body") or "").splitlines() if ADVANCES.fullmatch(x)), ""
             )
@@ -746,12 +756,30 @@ def flow_section(
                     "title": issue.get("title") or "",
                     "created_at": issue.get("created_at"),
                     "advances": advances,
+                    **brief_lines(issue),
                 }
             )
     section["briefs"] = briefs
     section["retakes"] = sorted(retakes)
     section["corrections"] = distinct_moments(seen)
     return section
+
+
+def brief_lines(issue: dict) -> dict[str, Any]:
+    """The state, close and plan lines of one brief issue (amendment 115 item 1)."""
+    body = str(issue.get("body") or "")
+    opened = issue.get("state") == "open"
+    reason = issue.get("state_reason")
+    size, expected = estimate_parts(body)
+    milestones = MILESTONE_LINE.findall(body.replace("\r\n", "\n"))
+    return {
+        "state": "open" if opened else "closed",
+        "closed_at": None if opened else issue.get("closed_at"),
+        "state_reason": None if opened else (reason if reason in CLOSE_REASONS else UNKNOWN),
+        "milestone": milestones[0] if len(milestones) == 1 else None,
+        "size": size,
+        "expected": expected,
+    }
 
 
 def shadow_section(src: Any, kept: dict, authors: list[str] | None) -> Any:
@@ -987,7 +1015,7 @@ def build(root: Path, today: date, repo: str, src: Any, weeks: int) -> dict:
     seen: list[tuple] = []
     kept: dict = {}
     pulls = pulls_section(src, today, weeks, authors, limits, seen, kept)
-    flow = flow_section(src, limits, authors, seen)
+    flow = flow_section(src, limits, authors, seen, window_start(today, weeks))
     return {
         "schema": SCHEMA,
         "commit": git(root, "rev-parse", "HEAD").strip(),

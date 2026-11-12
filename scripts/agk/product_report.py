@@ -755,6 +755,7 @@ def flow_risks(doc: dict, links: Links, today: date) -> list[dict]:
         return items + [
             unknown_item("open briefs", "search", f"{links.repo}/issues?q=label%3Aagk-brief")
         ]
+    briefs = [b for b in briefs if b.get("state", "open") == "open"]  # amendment 115 item 1
     named = {p.get("brief") for p in ordered}
     idle = []
     for b in sorted(briefs, key=lambda b: b["number"]):

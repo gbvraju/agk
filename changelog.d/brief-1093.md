@@ -1,0 +1,1 @@
+- `plan_estimate.py` estimates each plan milestone's hours and finish dates as P50 and P85 from the project's own merged pull requests and weekly throughput, prints its inputs, and prints `uncalibrated` rather than a guess; the facts list the briefs closed in their window with their state and plan lines, and `agk.toml` may hold a `[plan]` table (brief #1093, ADR-0465 Proposed)

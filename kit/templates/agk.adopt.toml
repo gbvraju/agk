@@ -81,6 +81,14 @@ review_mode = "team"
 # queue_idle_minutes = 10
 # queue_order = "priority"
 # queue_max_wait = 120
+# The plan's estimator (SPEC-0043 rules 12, 14 and 23, brief #1093, ADR-0465): optional, and the defaults apply when the table is absent.
+# calibration_min (10): the merged pull requests with a size and actual hours a calibrated estimate needs; iteration_days (10, 1 to 30):
+# the working days of an iteration; default_hours: the owner's range per size for a brief without an Expected: line, printed as
+# "owner default". The table holds only these keys; any other value is refused naming the setting. A change needs an ADR (agk.toml is protected).
+# [plan]
+# calibration_min = 10
+# iteration_days = 10
+# default_hours = { S = "2-4", M = "4-8", L = "8-16" }
 # The data guard (SPEC-0042 rule 1, brief #589): always on; no key turns it off or removes a built-in rule. The [guard] table may only add:
 # patterns (detector kinds CUSTOM-<name>), deny_paths (globs added to the secret files), deny_commands (added to the log commands),
 # allowed_hosts (added to the local hosts), and allow_paths, the one escape: one relative file with a reason, never a built-in secret

@@ -80,7 +80,11 @@ def closes():
 
 
 def open_briefs():
-    return [brief(1, "M1", "S", "2-4 hours"), brief(2, "M1", "M"), brief(3, "M2", "L", "10-20 hours")]
+    return [
+        brief(1, "M1", "S", "2-4 hours"),
+        brief(2, "M1", "M"),
+        brief(3, "M2", "L", "10-20 hours"),
+    ]
 
 
 def write(tmp_path, pulls=None, briefs=None, milestones=("M1 Orders", "M2 Payments"), **extra):
@@ -118,7 +122,9 @@ def percentiles(values):
 
 
 def expected_hours(milestone, sizes):
-    pools = {s: sorted((p for p in history() if p["estimated_size"] == s), key=_order) for s in SIZES}
+    pools = {
+        s: sorted((p for p in history() if p["estimated_size"] == s), key=_order) for s in SIZES
+    }
     rng = random.Random(f"hours:{milestone}")
     sums = [
         sum((Decimal(rng.choice(pools[s])["actual_hours"]) for s in sizes), Decimal(0))
@@ -147,7 +153,9 @@ def expected_weeks(milestone, need, weeks=(2, 1, 0, 3)):
 
 
 @pytest.mark.parametrize("weeks", ["3", "53", "ten"])
-def test_rule12_weeks_outside_4_to_52_exit_2_naming_the_option(tmp_path, monkeypatch, capsys, weeks):
+def test_rule12_weeks_outside_4_to_52_exit_2_naming_the_option(
+    tmp_path, monkeypatch, capsys, weeks
+):
     """REQ-050 AC4: rule 12."""
     code, out, err = run(tmp_path, monkeypatch, capsys, "--weeks", weeks)
     assert code == 2 and "--weeks" in err and out == ""
@@ -311,7 +319,9 @@ def test_rule14_a_history_that_cannot_be_read_is_unknown_never_zero(tmp_path, mo
         ("buffer = 2", "[plan] buffer"),
     ],
 )
-def test_rule14_a_bad_plan_setting_is_refused_naming_it(tmp_path, monkeypatch, capsys, table, setting):
+def test_rule14_a_bad_plan_setting_is_refused_naming_it(
+    tmp_path, monkeypatch, capsys, table, setting
+):
     """REQ-050 AC4: rules 14 and 25, the `[plan]` table holds three settings."""
     (tmp_path / "agk.toml").write_text(f"[plan]\n{table}\n")
     code, out, err = run(tmp_path, monkeypatch, capsys)
@@ -323,7 +333,9 @@ def test_rule14_the_plan_settings_default_without_the_table(tmp_path):
     """REQ-050 AC4: rule 14 (`Q-S0043-3`, `Q-S0043-5`)."""
     expected = {"iteration_days": 10, "calibration_min": 10, "default_hours": {}}
     assert common.plan_settings(tmp_path) == expected
-    (tmp_path / "agk.toml").write_text('[plan]\ncalibration_min = 4\ndefault_hours = { L = "8-16" }\n')
+    (tmp_path / "agk.toml").write_text(
+        '[plan]\ncalibration_min = 4\ndefault_hours = { L = "8-16" }\n'
+    )
     assert common.plan_settings(tmp_path)["calibration_min"] == 4
     assert common.plan_settings(tmp_path)["default_hours"] == {"L": "8-16"}
 
@@ -363,7 +375,8 @@ def test_rule16_every_estimate_is_followed_by_its_inputs(tmp_path, monkeypatch, 
         assert block(out, f"M{n}")[2] == (
             "inputs: window 2026-08-17 to 2026-11-04 (12 ISO weeks), history S 4 M 4 L 4 "
             "(2026-10-10 to 2026-10-21), throughput 4 weeks median 1.5 a week, "
-            f"waits review 1.0 h merge 0.5 h queue unknown, trials 10000 seeds hours:M{n} weeks:M{n}"
+            "waits review 1.0 h merge 0.5 h queue unknown, "
+            f"trials 10000 seeds hours:M{n} weeks:M{n}"
         )
     assert out.splitlines()[-1] == LIMITS
 
@@ -371,7 +384,10 @@ def test_rule16_every_estimate_is_followed_by_its_inputs(tmp_path, monkeypatch, 
 def test_rule16_a_short_window_is_shown(tmp_path, monkeypatch, capsys):
     """REQ-050 AC4: rules 12 and 16 (`Q-S0043-19`)."""
     _, out, _ = run(tmp_path, monkeypatch, capsys, "--weeks", "4")
-    assert "inputs: window 2026-10-12 to 2026-11-04 (4 ISO weeks), history S 4 M 4 L 4 " in out
+    assert (
+        "inputs: window 2026-10-12 to 2026-11-04 (4 ISO weeks), history S 2 M 4 L 4 "
+        "(2026-10-12 to 2026-10-21)"
+    ) in out
 
 
 def test_rule16_input_problems_exit_2_naming_the_option(tmp_path, monkeypatch, capsys):
@@ -442,7 +458,10 @@ def test_amendment115_size_and_expected_are_read_apart():
     """REQ-050 AC4: amendment 115 item 1, each line by SPEC-0018 rule 2's pattern, imported."""
     assert common.estimate_parts("Size: S\n") == ("S", "unknown")
     assert common.estimate_parts("Expected: 5-2 hours\nSize: L\n") == ("L", "unknown")
-    assert common.estimate_parts("Size: M\nSize: S\nExpected: 1-2 hours") == ("unknown", "1-2 hours")
+    assert common.estimate_parts("Size: M\nSize: S\nExpected: 1-2 hours") == (
+        "unknown",
+        "1-2 hours",
+    )
     assert common.estimate_parts(None) == ("unknown", "unknown")
     assert plan_estimate.ESTIMATE_LINES is common.ESTIMATE_LINES
     assert plan_estimate.window_start is facts.window_start
