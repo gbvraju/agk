@@ -121,6 +121,14 @@ Fixtures in `tmp_path` only: a temporary repository with invented sources (`exam
 
 REQ-050 AC1: *sources are the person's, headed, never fetched by a check, and guarded first.* Rules 1 to 3. REQ-050 AC2: *the scope, milestones, requirements, specs and briefs are drafted from the sources with a location for every item, nothing invented, conflicts shown, nothing created before the person confirms.* Rules 4 to 8. REQ-050 AC3: *every item traces back to a source line, and the gaps are counted.* Rules 9 to 11. REQ-050 AC4: *a milestone's estimate is a range from the project's own history, reproducible, with its inputs, and honest when there is not enough history.* Rules 12 to 16. REQ-050 AC5: *the plan is tracked against what happened, with a forecast, a status and a cause.* Rules 17 to 19. REQ-050 AC6: *scope changes only by an approved record against a baseline that never changes.* Rules 20 to 22. REQ-050 AC7: *the work runs in time boxes with four short ceremony outputs for the person, and AGK runs no meeting.* Rules 23 and 24. REQ-050 AC8: *GitHub objects are created by the person, nothing new runs on its own, and the limits are stated.* Rules 25 to 27. The recorded walk of build (j) runs every rule on an invented project, and the first weeks of a real project show `uncalibrated` until its history reaches the minimum.
 
+## Contexts
+
+- kit: installed, so every project can turn its sources and its imported prototype into a plan (rules 1 to 11, 2a and 25)
+- github: `check_plan.py` is one governance step, and `publish` prints `gh api` commands and runs none (rules 10 and 25)
+- local: the same commands on a laptop, files only and no network (rules 1 to 11 and 25)
+- personal: the same files in the developer's private state, and `publish` writes through `forge.py` `FilesForge` (rules 3 and 25)
+- stacks: not applicable: no test or build step of a stack changes
+
 ## Residual
 
 - 2026-11-04: the estimate assumes the future briefs of a size behave like the past ones; a project whose briefs change in kind (a new stack, a new team) is mis-estimated until its history catches up, and the range says nothing about that (due 2027-02-28).
