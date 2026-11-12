@@ -36,6 +36,11 @@ unknown key, a non-number or a negative number is refused, naming `setting: scor
 `caps_settings(root)` reads the optional `[caps]` table (SPEC-0049 rule 2, brief #714): `S`, `M`
 and `L`, each `{ tokens = <n>, hours = <h> }`, whole numbers above zero, a larger size never below
 a smaller one; None without the table. Any other shape is refused, naming `setting: caps.<key>`.
+
+`brief_code_paths(root)` reads `brief_code_paths` of the `[flow]` table (amendment 168 of SPEC-0030
+rule 4, brief #1121, ADR-0479): the most code paths a brief of `Size: S` and of `Size: M` may name,
+`{ S = 3, M = 6 }` when unset. A table of other keys, or a value that is not a whole number of 1 or
+more, is refused naming `setting: flow.brief_code_paths`, never the value.
 """
 
 from __future__ import annotations
@@ -456,6 +461,32 @@ def caps_settings(root: Path) -> dict | None:
         if any(table[larger][k] < table[smaller][k] for k in CAP_KEYS):
             raise _refuse_caps(f"caps.{larger}")
     return {size: dict(table[size]) for size in CAP_SIZES}
+
+
+# --- the size of a brief (amendment 168 of SPEC-0030 rule 4, brief #1121, ADR-0479) ---------------
+
+BRIEF_CODE_PATHS = {"S": 3, "M": 6}
+
+
+class BriefSizeSettingError(CheckError):
+    """`[flow] brief_code_paths` is refused, naming the setting and never the value."""
+
+
+def brief_code_paths(root: Path) -> dict[str, int]:
+    """The most code paths each of `Size: S` and `Size: M` allows; the defaults when unset."""
+    refused = BriefSizeSettingError("rule 4: the setting is refused (setting: flow.brief_code_paths)")
+    try:
+        flow = config_source(root).get("flow", {})
+    except (OSError, ValueError):
+        raise refused from None
+    value = flow.get("brief_code_paths", BRIEF_CODE_PATHS) if isinstance(flow, dict) else None
+    if (
+        not isinstance(value, dict)
+        or not set(value) <= set(BRIEF_CODE_PATHS)
+        or not all(type(n) is int and n >= 1 for n in value.values())
+    ):
+        raise refused
+    return BRIEF_CODE_PATHS | value
 
 
 # --- the [capacity] table (SPEC-0034 rule 1, brief #842 build (b), ADR-0409) ---------------

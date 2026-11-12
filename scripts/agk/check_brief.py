@@ -25,6 +25,10 @@ line `Wave: n` (amendment 140), a wave of `--waves` when that list is given. Wit
 line `Adds:` lists the new files a brief creates and `Broad: <reason>` says that it is a sweep.
 Amendment 142: one line `Contexts:` states every context of `session.CONTEXTS`, each with how the
 change works there or `not applicable: <reason>`.
+Amendment 168 (brief #1121): `Size: S` names at most 3 code paths in `Touches:` and `Size: M` at most
+6 (entries outside `tests/`, `docs/`, `changelog.d/` and `kit/hashes.json`; with `--root DIR`, the
+limits of `brief_code_paths` in the `[flow]` table of `DIR/agk.toml`); `Broad:` lifts the limit, and
+`Size: L` is refused beside a `Wave:` line.
 Brief #982 (rule 4b): with `--root DIR`, a `Touches:` glob that meets a class of
 `DIR/config/protected-paths.txt` in a brief that reserves no ADR and names no `Covered-by:` is
 warned (`warning: ...` before `ok brief`, a `warnings` list in a passing event), never failed.
@@ -47,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import design_signoff
 from common import REQ_HEADER, CheckError, config_source, run
+from config import brief_code_paths
 from session import (
     advances_ids,
     brief_problems,
@@ -222,7 +227,8 @@ def protected_warnings(body: str, root: Path | None) -> list[str]:
 
 def body_problems(body: str, root: Path | None, waves: set[int] | None) -> list[str]:
     """Every rule the body breaks: the shape first, then what needs the root."""
-    problems = brief_problems(body) + contexts_line_problems(body)
+    limits = None if root is None else brief_code_paths(root)  # amendment 168
+    problems = brief_problems(body, limits) + contexts_line_problems(body)
     if root is None or problems:
         return problems
     problems = (

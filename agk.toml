@@ -76,6 +76,9 @@ launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"
 slot_seen_minutes = 90
 # The conductor's review capacity (SPEC-0034 rule 15): equal to max_builders, the default when unset (brief #842, ADR-0384).
 reviews_in_flight = 9
+# A brief's size limits its code paths (amendment 168 of SPEC-0030 rule 4, brief #1121, ADR-0479): `Size: S` names at most S
+# and `Size: M` at most M `Touches:` entries outside tests/, docs/, changelog.d/ and kit/hashes.json; the kit defaults. A change needs an ADR.
+brief_code_paths = { S = 3, M = 6 }
 # The conductor lease (ADR-0330): one live conductor at a time, marked on the plan issue; merge-queue refuses while another holds it (ADR-0353).
 plan_issue = 661
 # The heavy-run queue (SPEC-0040 rule 1, brief #529): off by default and when absent. This repository keeps it off; turning it on is the
