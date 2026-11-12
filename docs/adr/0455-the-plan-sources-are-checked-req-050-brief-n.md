@@ -35,9 +35,11 @@ of rule 1, that a design link of rule 2 is complete, or that a location of rule 
 4. `agk.mk`'s `agk-governance` target runs it. The governance workflow runs each check as its own step; its step after
    `check_design` is the owner's commit (`Q-1074-1`), since a builder never changes a workflow.
 
-Protected path classes changed: `scripts/agk/` (`check_plan.py`), `tests/kit/` (`test_check_plan_sources.py`),
-`agk.mk` (one line of `agk-governance`) and `kit/` (`kit/manifest.json`, one `verbatim` row; `kit/hashes.json` as
-`kit_hashes.py` prints it). `.github/` (the workflow step) changes only by the owner's commit.
+Protected path classes changed: `scripts/agk/` (`check_plan.py`), `tests/kit/` (`test_check_plan_sources.py`, and
+`test_workflow.py`'s two counts of governance checks, 16 to 17), `agk.mk` (one line of `agk-governance`), `kit/`
+(`kit/manifest.json`, one `verbatim` row; `kit/hashes.json` as `kit_hashes.py` prints it) and `agk.toml` (one
+`[[testing.map]]` entry for `check_plan.py`, the answer to `Q-1074-2` in the verdict on 6871e8c). `.github/` (the
+workflow step) changes only by the owner's commit.
 
 ## Consequences
 
