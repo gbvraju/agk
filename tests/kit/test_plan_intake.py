@@ -505,14 +505,15 @@ def test_ac2_access_a_no_cell_needs_a_denial_line(loans_repo: Path, capsys) -> N
 def test_ac2_access_cells_name_a_persona_a_screen_and_yes_or_no(loans_repo: Path, capsys) -> None:
     """REQ-050 AC2: amendment 167 item (b), the persona, the screen and `allowed` are checked."""
     data = loans()
+    data["access"][3]["allowed"] = "maybe"
+    refused(loans_repo, data, capsys, "rule 4: access P2/Loan approval: allowed is not yes or no")
+    data = loans()
     data["access"][0]["persona"] = "P9"
     data["access"][2]["screen"] = "Loan history"
-    data["access"][3]["allowed"] = "maybe"
     refused(
         loans_repo,
         data,
         capsys,
-        "rule 4: access P2/Loan approval: allowed is yes or no",
         "rule 5: access P9/Loan application: persona names nothing",
         "rule 5: access P2/Loan history: screen names no screen of the inventory",
     )

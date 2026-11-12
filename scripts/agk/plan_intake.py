@@ -53,6 +53,15 @@ when ..., then ... (<location>)`; `milestone` is null for the skill to set, the 
 `WHEN` step is a persona with `(verify)` goals, and what the file leaves open is an open question.
 A heading it does not read inside a capability is printed `ignored: <file>:<line>`. Files only: no
 network, no model; only `render`, personal `publish` and the two OpenSpec commands write.
+
+Amendment 167 (brief #1118, ADR-0478): a criterion names the rules it proves with `(rules r1, r2)`,
+each sentence of its requirement's `statement` holding `SHALL` one rule (`check_plan.rules_of`),
+and `validate` refuses a mark naming a rule the statement does not hold. The proposals may hold
+`access`, cells `{persona, screen, allowed, sources}` keyed `<persona>/<screen>`: a persona key, a
+screen of `docs/design/inventory.md`, `yes` or `no`, and at least one source (a cell without one
+is an open question, never a guess). A criterion names a cell with `(access <persona>/<screen>)`;
+each `no` cell needs one, its denial line, and a mark naming no cell is refused. `render` writes
+`docs/plan/access.md` when `access` is not empty.
 """
 
 from __future__ import annotations
@@ -90,7 +99,8 @@ VERIFY = "(verify)"
 SCOPE = ("in", "out", "assumptions", "constraints", "open_questions")
 TOP = ("schema", "scope", "personas", "milestones", "requirements", "areas", "briefs", "conflicts")
 COMPONENTS = "components"  # build (r): optional, an empty list when absent (`Q-1092-1`)
-SECTIONS = ("personas", COMPONENTS, *TOP[3:])
+ACCESS = "access"  # amendment 167 item 2: optional, as components is
+SECTIONS = ("personas", COMPONENTS, *TOP[3:], ACCESS)
 LIST, TEXT, LOCS, MAYBE = "list", "text", "locations", "text or null"
 FIELDS = {
     "scope": ("key", "text", "sources"),
@@ -102,6 +112,7 @@ FIELDS = {
     "briefs": ("key", "milestone", "title", "size", "expected", "advances", "touches")
     + ("depends_on", "sources"),
     "conflicts": ("locations", "description"),
+    ACCESS: ("persona", "screen", "allowed", "sources"),
 }
 KINDS = {"sources": LOCS, "target": "date", "pattern": MAYBE} | dict.fromkeys(
     ("criteria", "requirements", "advances", "touches", "depends_on", "locations", "goals")
@@ -115,7 +126,7 @@ OPTIONAL = {
     "briefs": ("component", "screens"),
 }
 OPTIONAL["requirements"] = ("statement", "changing")  # amendment 166 (`Q-1108-1`, `Q-1108-2`)
-KINDS |= {"statement": MAYBE, "changing": "true or false"}
+KINDS |= {"statement": MAYBE, "changing": "true or false", "allowed": "yes or no"}
 TYPED = ("component", "screens", "statement", "changing")  # optional keys whose type rule 4 checks
 KEYED = {"personas": "P", COMPONENTS: "C"}  # keys run P1, P2, ... and C1, C2, ... in order
 FOUNDATION = "Foundation"
@@ -189,6 +200,8 @@ def _items(data: dict) -> list[tuple[str, str, dict]]:
             kind = label.split(".")[0]
             for n, item in enumerate(items, start=1):
                 name = str(n) if kind == "conflicts" else str(item.get(ID.get(kind, "key"), n))
+                if kind == ACCESS:
+                    name = f"{item.get('persona', n)}/{item.get('screen', n)}"
                 out.append((label, name, item))
     return out
 
@@ -197,7 +210,9 @@ def shape_problems(data: object) -> list[str]:
     """Rule 4: the top level, then every item's keys and types."""
     if not isinstance(data, dict):
         return ["rule 4: the proposals file is not a JSON object"]
-    out = [f"rule 4: proposals: unknown key {k}" for k in data if k not in (*TOP, COMPONENTS)]
+    out = [
+        f"rule 4: proposals: unknown key {k}" for k in data if k not in (*TOP, COMPONENTS, ACCESS)
+    ]
     missing = [f"rule 4: proposals: missing key {k}" for k in TOP if k not in data]
     if missing:
         return out + missing
@@ -250,6 +265,8 @@ def shape_problems(data: object) -> list[str]:
 
 
 def _typed(value: object, kind: str) -> bool:
+    if kind == "yes or no":
+        return value in ("yes", "no")
     if kind == "true or false":
         return isinstance(value, bool)
     if kind == MAYBE:
@@ -345,7 +362,7 @@ def plan_problems(root: Path, data: dict) -> list[str]:
         if VERIFY not in q["text"]:
             out.append(f"rule 6: scope.open_questions {q['key']}: no {VERIFY} mark")
     out += component_problems(root, data) + slice_problems(root, data)
-    out += openspec_problems(root, data)
+    out += openspec_problems(root, data) + rule_problems(data) + access_problems(root, data)
     return out + conflict_problems(items)
 
 
@@ -455,6 +472,52 @@ def openspec_problems(root: Path, data: dict) -> list[str]:
                 out.append(f"{where}: criterion {n} ends with a location that does not resolve")
         if r.get("changing") is True and r["milestone"] == "M1" and not asked & set(r["sources"]):
             out.append(f"{where}: changing in M1 without an open question citing it")
+    return out
+
+
+def rule_problems(data: dict) -> list[str]:
+    """Amendment 167 item 1: a criterion's `(rules ...)` mark names rules its statement holds."""
+    out: list[str] = []
+    for r in data["requirements"]:
+        held = len(check_plan.rules_of(r.get("statement") or ""))
+        for n, criterion in enumerate(r["criteria"], start=1):
+            if any(int(rule[1:]) > held for rule in check_plan.marked_rules(criterion)):
+                out.append(
+                    f"rule 5: requirements {r['key']}: criterion {n} names a rule its statement "
+                    "does not hold"
+                )
+    return out
+
+
+def access_problems(root: Path, data: dict) -> list[str]:
+    """Amendment 167 item 2: each cell names a persona and an inventory screen, each `no` cell
+    has a denial line, and every `(access ...)` mark names a cell."""
+    cells = data.get(ACCESS, [])
+    personas = {p["key"] for p in data["personas"]}
+    screens = {screen for screen, _ in design_import.inventory_states(root) or {}}
+    marks = [
+        (r["key"], n, cell)
+        for r in data["requirements"]
+        for n, criterion in enumerate(r["criteria"], start=1)
+        for cell in check_plan.marked_cells(criterion)
+    ]
+    named = {cell for _, _, cell in marks}
+    out: list[str] = []
+    for c in cells:
+        where = f"rule 5: access {c['persona']}/{c['screen']}"
+        if c["persona"] not in personas:
+            out.append(f"{where}: persona names nothing")
+        if c["screen"] not in screens:
+            out.append(f"{where}: screen names no screen of the inventory")
+        if c["allowed"] == "no" and f"{c['persona']}/{c['screen']}" not in named:
+            out.append(f"{where}: no without a denial acceptance line")
+    held = {f"{c['persona']}/{c['screen']}" for c in cells}
+    for key, n, cell in marks:
+        if cell not in held:
+            out.append(
+                f"rule 5: requirements {key}: criterion {n} names an access cell the access "
+                "table does not hold"
+            )
     return out
 
 
@@ -569,6 +632,22 @@ def personas_text(data: dict) -> str:
     for p in data["personas"]:
         out += ["", f"### {p['key']} {_one(p['name'])}", ""]
         out += [f"Goal: {_one(g)}" for g in p["goals"]] + _sources(p["sources"])
+    return "\n".join(out) + "\n"
+
+
+def access_text(data: dict) -> str:
+    """Rule 7 with amendment 167 item 2: one table row per access cell."""
+    out = [
+        "# Access",
+        "",
+        "Drafted by `plan_intake.py render` (SPEC-0043 rule 7); the person owns it.",
+        "",
+        "| " + " | ".join(check_plan.ACCESS_COLUMNS) + " |",
+        "| --- | --- | --- | --- |",
+    ]
+    for c in data[ACCESS]:
+        cells = [c["persona"], _one(c["screen"]), c["allowed"], _locs(c["sources"])]
+        out.append("| " + " | ".join(cells) + " |")
     return "\n".join(out) + "\n"
 
 
@@ -691,6 +770,8 @@ def cmd_render(root: Path, proposals: Path) -> int:
         f"{PLAN}/milestones.md": milestones_text(data),
         f"{PLAN}/requirements-proposed.md": requirements_text(data),
     }
+    if data.get(ACCESS):
+        files[f"{PLAN}/access.md"] = access_text(data)
     versions = signed_versions(root)
     version = versions[-1] if versions else VERIFY
     files |= {
