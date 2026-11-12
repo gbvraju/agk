@@ -305,7 +305,8 @@ tests = [
   "tests/kit/test_agk_config.py", "tests/kit/test_agk_mk.py", "tests/kit/test_capacity_adapt.py",
   "tests/kit/test_capacity_profiles.py",
   "tests/kit/test_caps.py",
-  "tests/kit/test_failures.py", "tests/kit/test_models_table.py", "tests/kit/test_usage_transcript.py",
+  "tests/kit/test_failures.py", "tests/kit/test_model_routes.py", "tests/kit/test_models_table.py",
+  "tests/kit/test_usage_transcript.py",
   "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
