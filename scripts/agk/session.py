@@ -22,11 +22,10 @@ than the start, on the pull request or on the brief named by its `Brief: #n` lin
 10), and with `label <name>` (or `label none`) when the `agk:` label that the router sets
 (SPEC-0032) changes from the one it read at its first poll; it prints its event and exits (no
 loop): each event is one wake. `queue` prints `#N <label>` for each open pull request whose router
-label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder: `agk:handover`
-first (amendment 162), then `agk:build`, `agk:fix`, `agk:conflict`, `agk:ci-red`, of `--author` when
-given; person: `agk:question`,
-`agk:approve`, `agk:owner-merge`, `agk:parked`; merger: `agk:merge-ready`, `agk:ready`), or
-`empty`, so a session that starts or restarts resumes from GitHub with one GET.
+label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder:
+`agk:handover` first (amendment 162), then `agk:build`, `agk:fix`, `agk:conflict`, `agk:ci-red`, of
+`--author` when given; person: `agk:question`, `agk:approve`, `agk:owner-merge`, `agk:parked`;
+merger: `agk:merge-ready`, `agk:ready`), or `empty`, so a session that starts or restarts resumes from GitHub with one GET.
 `review-queue` (brief 306) prints, read-only, the open pull requests that need a conductor's verdict
 and why, one line `#N <head7> review: <reason>; ...` each, or `empty`: a pull request labelled
 `agk:review`; one with a `Question:`, `Report:`, `Correction:` or `Maintainer answer:` comment
