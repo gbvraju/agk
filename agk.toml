@@ -310,6 +310,7 @@ tests = [
   "tests/kit/test_conductor_wakes.py",
   "tests/kit/test_caps.py", "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py",
+  "tests/kit/test_conductor_start_wake.py",
 ]
 [[testing.map]]
 code = "scripts/agk/config.py"
@@ -761,7 +762,7 @@ tests = ["tests/kit/test_scorecard.py"]
 [[testing.map]]
 code = "scripts/agk/session.py"
 tests = [
-  "tests/kit/test_session_watch_answers.py", "tests/kit/test_check_brief.py",
+  "tests/kit/test_session_watch_answers.py", "tests/kit/test_conductor_start_wake.py", "tests/kit/test_check_brief.py",
   "tests/kit/test_model_routes.py", "tests/kit/test_models_table.py", "tests/kit/test_pr_state_lifecycle.py",
   "tests/kit/test_always_full_infra.py", "tests/kit/test_architect_review_guard.py",
   "tests/kit/test_brief_contexts.py", "tests/kit/test_builder_assign.py",
