@@ -59,6 +59,14 @@ merged by the next scheduled sweep. Until the owner commits the workflow lines, 
 branch and the router's start is refused (it lacks `actions: write`) without harm. A busy repository's `minutes.py`
 report reads every run of the month and the last 7 days, so the measurement of this brief can be repeated.
 
+`actions: write` on the router's job allows more than the dispatch: with it the job's token can start, re-run and cancel
+any workflow run of the repository and delete run logs. On a `pull_request` event the router runs the workflow file of
+the pull request's merge commit, so a pull request of this repository could change what that token does in its own run.
+What bounds it: the job holds no `contents: write`, so the token pushes nothing and merges nothing; it writes labels,
+issues and pull request fields as before; and a merger it starts runs the default branch's `merger.yml`, whose
+`merge_cleared.py` refuses any head without a cleared verdict and green checks and merges only with the `merge`
+environment's secret, which a run of any other ref cannot read.
+
 ## Residual
 
 - 2026-11-12: `minutes.py` counts a cancelled job's wait in a concurrency group (no runner, no step) as minutes, so its
@@ -68,3 +76,8 @@ report reads every run of the month and the last 7 days, so the measurement of t
 - 2026-11-12: the `created=<from>..<to>` form with times and the cap of 1,000 runs are read from GitHub's behaviour,
   not its documentation (verify, due 2026-11-30).
 - 2026-11-12: the conductor's `SWEEP late` line counts a dispatched merger run as a recent sweep (due 2026-12-31).
+- 2026-11-12: the router's job holds `actions: write` on every event, a `pull_request` one included; a later brief may
+  move the dispatch to a job that runs only from the default branch (a `workflow_run` of the router itself, or the
+  merger's schedule) and drop the permission from the router (due 2026-12-31).
+- 2026-11-12: a dispatch that GitHub refuses (a rate limit) is not retried; the pull request waits for the 15-minute
+  scheduled sweep (due 2026-12-31).
