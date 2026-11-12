@@ -812,7 +812,7 @@ def test_1101b_a_maintainer_answer_by_an_approver_returns_the_state_the_facts_gi
     comments = [fix_list(), owner_needed(), stranger]
     assert route.decide(facts(comments=comments)) == "agk:question"
     later = {"commit": {"committer": {"date": "2026-10-25T11:00:00Z"}}}
-    assert route.decide(facts(comments=[fix_list(), owner_needed()], commit=later)) == "agk:review"
+    assert route.decide(facts(comments=[fix_list(), owner_needed()], commit=later)) == "agk:fix"
 
 
 def handing_over(cid: int = 6, reason: str = "six hours") -> dict:

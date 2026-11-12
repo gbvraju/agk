@@ -116,6 +116,8 @@ OWNER_PATHS = PROTECTED  # the one list merge_cleared.py refuses (SPEC-0039 rule
 BRIEF_LINE = re.compile(r"^Brief: #\d+", re.MULTILINE)
 HANDOVER = "agk:handover"
 BUILDER_STATES = ("agk:build", "agk:ci-red", "agk:conflict", "agk:fix")  # amendment 162 item 3
+# brief #1101 answer 1 (ADR-0471): the owner's turn; never replaced by agk:handover
+OWNER_STATES = ("agk:question", "agk:approve", "agk:owner-merge", "agk:parked")
 HANDING_OVER = re.compile(r"Report: ([0-9a-f]{7,40}) handing over\b:?\s*(.*)$")  # item 2
 NO_RESTART = re.compile(r"(?:to \S|done\b)")  # a successor named, or nothing left
 NOT_A_BUILDER = ("Verdict:", "Answer:", "Correction:")  # lines that never clear a hand-over
@@ -366,20 +368,19 @@ def handed_over(f: dict) -> dict | None:
 
 def state_of(f: dict) -> str:
     """The state of `pr_state`; a builder's state becomes `agk:handover` while its builder has
-    handed over with no successor (amendment 162 item 3, ADR-0453)."""
+    handed over with no successor (amendment 162 item 3, ADR-0453), and an owner's state never
+    does (brief #1101 answer 1, ADR-0471)."""
     label = base_state(f)
-    return HANDOVER if label in BUILDER_STATES and handed_over(f) is not None else label
+    if label in OWNER_STATES or label not in BUILDER_STATES:
+        return label
+    return HANDOVER if handed_over(f) is not None else label
 
 
 def base_state(f: dict) -> str:
-    """The first state of `STATES` that holds, before a hand-over is read."""
+    """The first state of `STATES` that holds, before a hand-over is read; an open owner ask comes
+    right after `agk:parked`, before every builder state (brief #1101 answer 1, ADR-0471)."""
     if PARKED in (f.get("labels") or ()):  # a person's hold; never set or removed (Q-846-1)
         return PARKED
-    if f.get("draft"):  # brief #1043 answer 2: a draft that waits on the owner (ADR-0442)
-        authors = counted_authors(f.get("authors"), f.get("author"))
-        return "agk:question" if asks_owner(f, f.get("comments") or [], authors) else "agk:build"
-    if f.get("mergeable_state") == "dirty":  # before the checks: none start on it (Q-846-8)
-        return "agk:conflict"
     head = str(f.get("head") or "")
     comments = f.get("comments") or []
     if f.get("solo_person"):  # brief 277: the person's confirmation is the verdict and approval
@@ -389,6 +390,12 @@ def base_state(f: dict) -> str:
             comments, f.get("agent_apps") or (), f["solo_person"], heads=heads
         )
     authors = counted_authors(f.get("authors"), f.get("author"))
+    if asks_owner(f, comments, authors):  # on a draft too (brief #1043 answer 2, ADR-0442)
+        return "agk:question"
+    if f.get("draft"):
+        return "agk:build"
+    if f.get("mergeable_state") == "dirty":  # before the checks: none start on it (Q-846-8)
+        return "agk:conflict"
     listed = verdicts(comments, authors) or []
     kind, sha = listed[-1] if listed else ("", "")
     names_head = bool(sha) and head.startswith(sha)
@@ -423,8 +430,6 @@ def base_state(f: dict) -> str:
     accepted = names_head and final_accept_clears(latest, head, f.get("files") or [])
     if names_head and kind in ("fix", "rejected") and not accepted:
         return "agk:fix"
-    if asks_owner(f, comments, authors):
-        return "agk:question"
     if names_head and asked_for(latest) - people:
         return "agk:approve"
     if (names_head and kind == "cleared") or accepted or covered:
