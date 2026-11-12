@@ -37,8 +37,9 @@ ORDER = [
     "agk:approve",
     "agk:owner-merge",
     "agk:merge-ready",
+    "agk:handover",
 ]
-ACTORS = {"builder", "checks", "conductor", "owner", "merger"}
+ACTORS = {"builder", "checks", "conductor", "owner", "merger", "launcher"}
 BRIEF = "Brief: #5\nSummary: A person sees who acts next.\n"
 RED = {"name": "proof", "status": "completed", "conclusion": "failure"}
 

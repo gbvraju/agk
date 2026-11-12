@@ -371,6 +371,15 @@ def test_sweep_the_new_lines_follow_the_pull_request_lines(proj, stub):
     ]
 
 
+def test_1071g_sweep_prints_a_handover_line_with_its_minutes(proj, stub):
+    """REQ-039: brief #1071 answer 4 and test (g) (`HANDOVER #<pr> <minutes>m`)."""
+    item = pr(7)
+    item["labels"] = [{"name": "agk:handover"}]
+    gone = comment(6, "builder", f"Report: {SHORT} handing over: six hours", ago(42))
+    serve_pr(stub, item, [verdict("fix list", minutes=60), gone])
+    assert "HANDOVER #7 42m" in sweep(proj, stub)
+
+
 def test_a_quiet_sweep_is_unchanged_byte_for_byte(proj, stub):
     """REQ-057 AC7: rule 5, with no overlap, no re-prove and nothing behind, nothing more."""
     serve_pr(stub, pr(7), [verdict("cleared")])
