@@ -145,7 +145,7 @@ def test_ac2_project_tests_run_only_where_the_kits_own_suite_is_not_installed():
         + " && github.event.action != 'edited' && steps.status.outputs.skip != 'true'"
         + " && steps.paused.outputs.paused != 'true' }}\n"  # brief #348
         + "        env:\n"  # brief #453: the event decides under `pr_tests = selected`
-        + "          # With `[testing] pr_tests = \"selected\"` a pull request runs only the"
+        + '          # With `[testing] pr_tests = "selected"` a pull request runs only the'
         + " selected tests; a push and a release pull\n"
         + "          # request run the full suite (brief #453, ADR-0242). Without the setting the"
         + " step runs the full suite as before.\n"
@@ -375,8 +375,7 @@ def test_the_secret_scan_keeps_its_name_its_place_and_its_condition():
     # brief #261: `!cancelled()`, so that a failed body step no longer hides the scan
     assert (
         "        if: ${{ !cancelled() && github.event.action != 'edited'"
-        " && steps.paused.outputs.paused != 'true' }}\n"
-        in blocks["Secret scan"]  # brief #348
+        " && steps.paused.outputs.paused != 'true' }}\n" in blocks["Secret scan"]  # brief #348
     )
 
 
@@ -462,7 +461,9 @@ def test_the_latest_full_run_step_stays_the_fallback_and_fails_closed():
     block = step_blocks(WORKFLOW.read_text(encoding="utf-8"))["Latest full run"]
     assert "github.event.action == 'edited'" in block.split("\n", 2)[1]
     assert "scripts/agk/full_run.py" in block
-    assert 'echo "rule 2: the full governance run of the head did not finish in 20 minutes"' in block
+    assert (
+        'echo "rule 2: the full governance run of the head did not finish in 20 minutes"' in block
+    )
     assert block.rstrip().endswith("exit 1")
 
 
@@ -489,7 +490,8 @@ id="${4##*/}"
 log="$SHIM_DIR/calls"
 echo "$id" >> "$log"
 case "$id" in
-  10) n=0; while [ ! -f "$SHIM_DIR/started-20" ] && [ "$n" -lt 100 ]; do sleep 0.05; n=$((n+1)); done
+  10) n=0
+      while [ ! -f "$SHIM_DIR/started-20" ] && [ "$n" -lt 100 ]; do sleep 0.05; n=$((n+1)); done
       [ -f "$SHIM_DIR/started-20" ] || { echo '{"message": "never overlapped"}'; exit 1; } ;;
   20) : > "$SHIM_DIR/started-20"; sleep 0.2 ;;
   30) echo '{"message": "Not Found"}'; exit 1 ;;
@@ -529,7 +531,9 @@ def test_the_record_step_reads_in_parallel_and_writes_the_comments_in_id_order(t
     read, so the reads overlap; the file holds the readable comments in id order, whatever order
     they were answered in, and leaves out the one that cannot be read, naming it (fail closed)."""
     work, env = record_world(tmp_path)
-    proc = call(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", record_script()], work, env)
+    proc = call(
+        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", record_script()], work, env
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     saved = (tmp_path / "tmp" / "record-comments.json").read_text(encoding="utf-8")
     ids = [json.loads(line)["id"] for line in saved.splitlines()]
@@ -544,7 +548,9 @@ def test_the_record_step_reads_nothing_without_the_kit(tmp_path):
     """Brief #1122 answer 2: in a project (no `kit/agk-kit.mk`) the file stays empty, as before."""
     work, env = record_world(tmp_path)
     (work / "kit" / "agk-kit.mk").unlink()
-    proc = call(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", record_script()], work, env)
+    proc = call(
+        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", record_script()], work, env
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert (tmp_path / "tmp" / "record-comments.json").read_text(encoding="utf-8") == ""
     assert not (tmp_path / "calls").exists()
