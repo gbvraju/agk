@@ -126,6 +126,10 @@ name's `lease --take` then posts that line on the plan issue and takes the lease
 does. `MAIN GREEN after #<n>: merge of main #<pr> (<session>) ...` ends a watch when a red-branch
 issue has closed, naming the pull requests whose every failed required check finished inside it;
 with none, the line is `MAIN GREEN after #<n>`.
+
+Brief #1071 (amendment 162, ADR-0453): `sweep` prints `HANDOVER #<pr> <minutes>m` for each open pull
+request labelled `agk:handover`, counted from its newest handing-over `Report:` (`unknown` without
+one), so the launcher restarts a builder for exactly those.
 """
 
 from __future__ import annotations
@@ -175,6 +179,7 @@ POLL = ("conductor_poll_seconds", 60)
 LATE = ("conductor_late_minutes", 30)
 SILENT = ("silent_minutes", 30)
 STALL_SETTING = "stall_minutes"
+HANDOVER_LABEL = "agk:handover"  # route.HANDOVER (amendment 162); route imports session
 ALIVE = ("Progress:", "Report:", "Question:")
 STALL_CHECK_MINUTES = 15  # a failed required check with no `Progress:` for this long (brief #776)
 SAYS = ("Verdict:", "Assign:", "Tell:", "Correction:", "Owner needed:", "STALL ", "Conductor ")
@@ -551,6 +556,24 @@ def pull_line(root, repo: str, pull: dict, authors, approvers, late: int, now) -
     return f"#{number} {head[:7]} {text}"
 
 
+def handover_line(repo: str, pull: dict, now) -> str:
+    """`HANDOVER #<pr> <minutes>m` from the newest handing-over `Report:` of the pull request's
+    author, or `unknown` (amendment 162 item 4); the label is the router's, never recounted."""
+    from route import handover_reason  # route imports session
+
+    number = pull["number"]
+    comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+    me = str((pull.get("user") or {}).get("login") or "").lower()
+    said = [
+        session.moment(c.get("created_at"))
+        for c in comments
+        if session.author_of(c) == me and handover_reason(session.first_line(c)) is not None
+    ]
+    when = max((t for t in said if t is not None), default=None)
+    minutes = f"{max(0, int((now - when).total_seconds() // 60))}m" if when else "unknown"
+    return f"HANDOVER #{number} {minutes}"
+
+
 def held_verdict_line(root, repo: str, pull: dict, authors, now) -> str | None:
     """`HELD VERDICT #<n>` when a ready head waits with no verdict (brief #854 answer 9): the newest
     `Report:` of the pull request's author says ready, its checks are green, no verdict names the
@@ -748,6 +771,7 @@ def sweep(root) -> int:
     lines += proof_lines(root, repo, pulls, branch)
     lines += caps.over_lines(root, repo, pulls, {a.lower() for a in authors}, now)
     lines += [x for p in pulls if (x := held_verdict_line(root, repo, p, authors, now))]
+    lines += [handover_line(repo, p, now) for p in pulls if session.label_of(p) == HANDOVER_LABEL]
     lines.append(branch_line(root, repo, branch))
     issues = read(f"repos/{repo}/issues?state=open", "the open issues")
     lines += [f"red-branch issue: #{i['number']}" for i in issues if session.is_red(i)]

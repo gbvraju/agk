@@ -535,6 +535,19 @@ def test_ac3_queue_lists_for_each_role_the_pull_requests_with_its_labels(proj, s
         assert out.stdout.splitlines() == lines, role
 
 
+def test_1071g_queue_lists_handover_pull_requests_first_for_the_builder(proj, stub):
+    """REQ-039: brief #1071 answer 4 and test (g) (`agk:handover` first, then by number)."""
+    stub.serve(
+        OPEN,
+        [listed(2, "agk:fix"), listed(3, "agk:handover"), listed(4, "agk:build")],
+    )
+    out = session(proj, stub, "queue", "--role", "builder")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.splitlines() == ["#3 agk:handover", "#2 agk:fix", "#4 agk:build"]
+    out = session(proj, stub, "queue", "--role", "conductor")
+    assert out.stdout.strip() == "empty"
+
+
 def test_ac3_queue_for_a_builder_can_name_its_own_author(proj, stub):
     """REQ-039 AC3: rule 3 (the builder of that pull request)."""
     stub.serve(OPEN, [listed(3, "agk:fix", "alice"), listed(4, "agk:fix", "bob")])
