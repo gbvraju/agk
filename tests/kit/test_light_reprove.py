@@ -136,9 +136,7 @@ def test_the_sweep_marks_a_shared_index_only_re_prove_light(tmp_path, monkeypatc
     ]
     files = {7: [{"filename": "agk.toml"}], 8: [{"filename": "agk.toml"}, {"filename": SCRIPT}]}
     main_files = [{"filename": "agk.toml"}, {"filename": SCRIPT}]
-    monkeypatch.setattr(
-        conductor.session, "pages", lambda e: files[int(e.split("/")[-2])]
-    )
+    monkeypatch.setattr(conductor.session, "pages", lambda e: files[int(e.split("/")[-2])])
     monkeypatch.setattr(
         conductor.session, "gh", lambda e, *a, **k: {"files": main_files, "ahead_by": 0}
     )
@@ -197,7 +195,9 @@ def test_reprove_apply_updates_the_branch_pinned_to_the_head_and_posts_the_repor
     stubbed(monkeypatch, stub)
     assert conductor.main(["reprove", "--pr", "7", "--apply"], root) == 0
     puts = [c for c in stub.calls if c[0] == "PUT"]
-    assert puts == [("PUT", f"repos/{REPO}/pulls/7/update-branch", "-f", f"expected_head_sha={head}")]
+    assert puts == [
+        ("PUT", f"repos/{REPO}/pulls/7/update-branch", "-f", f"expected_head_sha={head}")
+    ]
     posts = [c for c in stub.calls if c[0] == "POST"]
     assert posts == [
         ("POST", f"repos/{REPO}/issues/7/comments", "-f", f"body=Report: {new} {REPORT}")
@@ -258,9 +258,10 @@ def test_the_merger_carries_the_verdict_to_a_merge_that_adds_nothing(tmp_path):
     assert session_plan.light_merge(root, head, merged, "main", shared)
     state = merge_cleared.judge_carried(root, [verdict(head)], merged, [], "main", shared)
     assert state == ("cleared", "")
-    assert merge_cleared.judge(
-        [verdict(head)], merged, ["conductor-example"]
-    ) == ("held", "the latest verdict does not clear this head (rule 3)")
+    assert merge_cleared.judge([verdict(head)], merged, ["conductor-example"]) == (
+        "held",
+        "the latest verdict does not clear this head (rule 3)",
+    )
 
 
 @pytest.mark.parametrize("case", ["extra", "script", "other-verdict", "author", "not-a-merge"])

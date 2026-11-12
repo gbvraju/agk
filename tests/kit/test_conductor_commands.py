@@ -268,7 +268,10 @@ def test_sweep_prints_a_re_prove_naming_the_earliest_merged_change(proj, stub):
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml", "scripts/agk/example.py"))
     by = ((OLD, "Intake: a requirement (#41)\n\nbody"), (NEW, "A later change (#42)"))
     main_changed(stub, SHA, changed("agk.toml", "docs/y.md"), by=by)
-    assert proof_of(sweep(proj, stub)) == ["re-prove: #7 agk.toml (changed by #41) light", "BEHIND #7 2"]
+    assert proof_of(sweep(proj, stub)) == [
+        "re-prove: #7 agk.toml (changed by #41) light",
+        "BEHIND #7 2",
+    ]
 
 
 def test_sweep_re_prove_names_the_first_shared_file_sorted(proj, stub):

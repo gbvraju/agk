@@ -614,7 +614,9 @@ def judge_head(
     except Refused:
         return state, reason
     flow = data.get("flow")
-    shared = (flow if isinstance(flow, dict) else {}).get("shared_indexes", list(session_plan.SHARED_INDEXES))
+    shared = (flow if isinstance(flow, dict) else {}).get(
+        "shared_indexes", list(session_plan.SHARED_INDEXES)
+    )
     if not isinstance(shared, list) or not head_present(root, number, sha):
         return state, reason
     return judge_carried(root, comments, sha, allowed, base, [str(p) for p in shared])

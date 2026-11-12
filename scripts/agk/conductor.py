@@ -1539,7 +1539,10 @@ def reprove(root, number: int, apply: bool) -> int:
         print(f"{lead} full re-prove ({why}); the builder merges the default branch")
         return merge_cleared.EXIT_HELD
     step = f"PUT repos/{repo}/pulls/{number}/update-branch expected_head_sha={head}"
-    print(f"{lead} light ({', '.join(files)}); the step: {step}" + ("" if apply else "; add --apply to do it"))
+    print(
+        f"{lead} light ({', '.join(files)}); the step: {step}"
+        + ("" if apply else "; add --apply to do it")
+    )
     if not apply:
         return 0
     endpoint = f"repos/{repo}/pulls/{number}/update-branch"
@@ -1547,7 +1550,11 @@ def reprove(root, number: int, apply: bool) -> int:
     new = head
     for _ in range(REPROVE_WAITS):
         found = session.gh(f"repos/{repo}/pulls/{number}")
-        new = str(((found or {}).get("head") or {}).get("sha") or "") if isinstance(found, dict) else ""
+        new = (
+            str(((found or {}).get("head") or {}).get("sha") or "")
+            if isinstance(found, dict)
+            else ""
+        )
         if new and new != head:
             break
         time.sleep(REPROVE_PAUSE)
