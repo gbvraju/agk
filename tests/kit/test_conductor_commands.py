@@ -1017,3 +1017,22 @@ def test_the_report_has_no_slot_line_with_builder_start_start(proj, stub):
     """REQ-041"""
     lines = sweep(proj, stub)
     assert not [x for x in lines if x.startswith("slot ")]
+
+
+# --- a slot with no run log (brief #1019, ADR-0434): the type fix keeps the output -------------
+
+
+def test_1019_an_assign_to_a_slot_with_no_run_log_is_unacted_only_after_75_minutes(
+    monkeypatch, tmp_path
+):
+    """REQ-016: brief #1019 answer 3 (no slot marker at all, so no run log to read)."""
+    from datetime import UTC
+
+    from test_builder_slots import Pool, ago, conductor
+
+    old = Pool(monkeypatch, tmp_path / "old", [comment(2, "boss", "Assign: s1 #12", ago(90))])
+    lines = conductor.unacted_lines(old.root, REPO, datetime.now(UTC))
+    assert len(lines) == 1 and lines[0].startswith("UNACTED: Assign: s1 #12 (90 min")
+    assert lines[0].endswith("; no run recorded)")
+    new = Pool(monkeypatch, tmp_path / "new", [comment(2, "boss", "Assign: s1 #12", ago(30))])
+    assert conductor.unacted_lines(new.root, REPO, datetime.now(UTC)) == []
