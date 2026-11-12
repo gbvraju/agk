@@ -35,6 +35,17 @@ Build (r), amendment 164 item 4 (ADR-0464): when `docs/sources/` holds a `Kind: 
 10 also fails a `### M<n>` block of `docs/plan/milestones.md` after `M1` with no `Demo:` line,
 naming the milestone.
 
+Build (u), amendment 166 item 5 (ADR-0474): when `docs/sources/` holds a `Kind: openspec` file,
+rule 11's line gains `<a> of <b> scenarios have an acceptance line and <c> a test` after its first
+count. A scenario is a `Scenario: ` heading under a `Requirement: ` heading of such a file outside
+`changes/`, located as the reading writes it (`<file>#<heading>`, or `<file>:<line>` when the
+heading repeats in its file); it has an acceptance line when a line of a requirement block ends
+with ` (<location>)`, and a test when that block's id has a test marker. With `--trace` and a
+`Kind: design` source, each scenario is printed `info plan: scenario <location>: <screens>` (the
+`<screen>/<state>` headings whose screen its `GIVEN`, `WHEN`, `THEN` or `AND` steps name as whole
+words, case, hyphens and underscores aside) or `...: names no screen`, then each screen no
+scenario names `info plan: screen <location>: no scenario names it`: information, never a failure.
+
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
 or a charter's `docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013; the `CHARTER_NAME` of
@@ -87,6 +98,11 @@ SPEC_TITLE = re.compile(r"^#\s+(SPEC-\d{4})\b")
 SPEC_REQS = re.compile(r"^-\s+Requirements:\s*(.*)$")
 RULE = re.compile(r"^(\d+[a-z]?)\.\s")
 NOT_READ = "not read"
+OPENSPEC = "openspec"
+REQUIREMENT, SCENARIO = "Requirement: ", "Scenario: "
+CAPABILITY_LINE = re.compile(r"^\*Capability `[^`]+`")
+STEP = re.compile(r"^\s*[-*+]\s+(?:\*\*)?(GIVEN|WHEN|THEN|AND)\b(?:\*\*)?:?\s*(.*?)\s*$", re.I)
+ACCEPTANCE = re.compile(r"\s\((docs/[^()]+)\)\s*$")
 
 
 def _value(line: str, key: str) -> str | None:
@@ -301,6 +317,86 @@ def screens(root: Path) -> list[str]:
     return out
 
 
+def _scenarios_of(rel: str, text: str, folder: bool) -> list[tuple[str, list[str]]]:
+    """The scenarios of one `Kind: openspec` file as (location, step texts), in order. A combined
+    file (`folder` False) reads requirements only under a capability, as `plan_intake.py` does."""
+    lines = text.splitlines()
+    counts: dict[str, int] = {}
+    for h in headings(text):
+        counts[h] = counts.get(h, 0) + 1
+    out: list[tuple[str, list[str]]] = []
+    capability, requirement = folder, False
+    steps: list[str] | None = None
+    fenced = False
+    for index, line in enumerate(lines):
+        if FENCE.match(line):
+            fenced = not fenced
+            continue
+        match = None if fenced else HEADING.match(line)
+        if match is None:
+            if steps is not None and not fenced and (step := STEP.match(line)):
+                steps.append(step.group(2))
+            continue
+        name, steps = match.group(1), None
+        following = next((x.strip() for x in lines[index + 1 :] if x.strip()), "")
+        if not folder and CAPABILITY_LINE.match(following):
+            capability, requirement = True, False
+        elif capability and name.startswith(REQUIREMENT):
+            requirement = True
+        elif requirement and name.startswith(SCENARIO):
+            location = f"{rel}#{name}" if counts[name] == 1 else f"{rel}:{index + 1}"
+            steps = []
+            out.append((location, steps))
+        else:
+            requirement = False
+    return out
+
+
+def scenarios(root: Path) -> list[tuple[str, list[str]]] | None:
+    """Build (u): the scenarios of the `Kind: openspec` sources outside `changes/`, or None when
+    there is no such source."""
+    found = False
+    out: list[tuple[str, list[str]]] = []
+    for path in source_files(root):
+        text = _read(path) if path.suffix == ".md" else None
+        if text is None or (header(text) or {}).get("Kind") != OPENSPEC:
+            continue
+        found = True
+        parts = path.relative_to(root / SOURCES).parts
+        if "changes" in parts:
+            continue
+        folder = "specs" in parts[:-1]
+        out += _scenarios_of(path.relative_to(root).as_posix(), text, folder)
+    return out if found else None
+
+
+def acceptance_lines(root: Path) -> dict[str, list[str]]:
+    """Build (u): each location a requirement block's line ends with, to the blocks' ids."""
+    out: dict[str, list[str]] = {}
+    for rel, pattern in ((PROPOSED, BLOCK), (REQUIREMENTS, REQ_HEADER)):
+        current: str | None = None
+        for line in (_read(root / rel) or "").splitlines():
+            if match := pattern.match(line):
+                current = match.group(1).rstrip(":")
+            elif line.startswith("#"):
+                current = None
+            elif current is not None and (end := ACCEPTANCE.search(line)):
+                out.setdefault(end.group(1), []).append(current)
+    return out
+
+
+def _words(text: str) -> str:
+    return " " + " ".join(re.sub(r"[-_]", " ", text).lower().split()) + " "
+
+
+def names_screen(steps: list[str], screen: str) -> bool:
+    """Whether a step names the screen of a `<file>#<screen>/<state>` location, as whole words."""
+    name = _words(screen.partition("#")[2].partition("/")[0]).strip()
+    return bool(name) and any(
+        re.search(rf"(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", _words(step)) for step in steps
+    )
+
+
 def scope_lines(root: Path) -> list[tuple[int, list[str]]]:
     """The list lines under the `In scope` heading of scope.md: (line number, locations)."""
     text = _read(root / SCOPE) or ""
@@ -428,6 +524,7 @@ class Plan:
         self.scope = scope_lines(root)
         self.screens = screens(root)
         self.persona_of, self.personas = personas(root)
+        self.scenarios = scenarios(root)
         self.cited: dict[str, list[str]] = {}
         for _, req, sources in self.reqs:
             for source in sources:
@@ -502,6 +599,8 @@ class Plan:
         units = self.in_scope()
         a = sum(1 for unit in units if unit is not None and unit in self.cited)
         parts = [f"{a} of {len(units)} in-scope source lines have a requirement"]
+        if self.scenarios is not None:
+            parts.append(self.scenario_count())
         ids = [req for _, req, _ in self.reqs]
         if not facts:
             return ", ".join(parts + [f"{what}: {NOT_READ}" for what in self.LAST])
@@ -519,6 +618,30 @@ class Plan:
             f"{sum(1 for r in ids if tested.get(r))} of {len(ids)} requirements have a test"
         )
         return ", ".join(parts)
+
+    def scenario_count(self) -> str:
+        """Build (u): `<a> of <b> scenarios have an acceptance line and <c> a test`."""
+        accepted = acceptance_lines(self.root)
+        tested = markers_for(self.root)
+        lines = [accepted.get(location, []) for location, _ in self.scenarios or []]
+        a = sum(1 for ids in lines if ids)
+        c = sum(1 for ids in lines if any(tested.get(i) for i in ids))
+        return f"{a} of {len(lines)} scenarios have an acceptance line and {c} a test"
+
+    def screen_lines(self) -> list[str]:
+        """Build (u): each scenario's screens, then each screen no scenario names (`--trace`)."""
+        if self.scenarios is None or not design_source(self.root):
+            return []
+        out: list[str] = []
+        named: set[str] = set()
+        for location, steps in self.scenarios:
+            matched = [s for s in self.screens if names_screen(steps, s)]
+            named.update(matched)
+            out.append(
+                f"info plan: scenario {location}: " + (", ".join(matched) or "names no screen")
+            )
+        out += [f"info plan: screen {s}: no scenario names it" for s in self.screens if s not in named]
+        return out
 
     def trace(self, facts: bool) -> list[str]:
         rows = [u for u in self.in_scope() if u is not None]
@@ -561,7 +684,7 @@ def cmd_check(
         return 1 if problems else 0
     plan = Plan(root, facts, numbers or {})
     if trace:
-        print("\n".join(plan.trace(facts is not None)))
+        print("\n".join(plan.trace(facts is not None) + plan.screen_lines()))
     problems += plan.problems()
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")

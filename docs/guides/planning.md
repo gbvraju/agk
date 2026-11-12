@@ -38,7 +38,7 @@ checkout; the other scripts are installed under `scripts/agk/`.
    with the names and placeholders of fields), or `picture: <file>` for a picture page. It refuses a version whose import
    or map check fails, and an existing file. Read the file before anything else reads it: it carries the customer's text.
 3. **Add your documents** under `docs/sources/`, one Markdown or text file each, converted and cleaned by you, each
-   starting with `Source:`, `Kind:` (`sow`, `brd`, `prd`, `design`, `charter` or `other`), `Version:` and `Date:` and a
+   starting with `Source:`, `Kind:` (`sow`, `brd`, `prd`, `design`, `charter`, `openspec` or `other`), `Version:` and `Date:` and a
    blank line (rule 1). `python3 scripts/agk/check_plan.py` checks the headers and prints `ok plan (no plan)` while there
    is no `docs/plan/`.
 4. **Draft the proposals.** `/agk:plan-intake <path outside docs/>` first runs `python3 scripts/agk/plan_intake.py states`:
@@ -69,6 +69,39 @@ checkout; the other scripts are installed under `scripts/agk/`.
    `--numbers` (a JSON object from key to number, which you save from the commands you ran) names its milestone and every
    brief it depends on, so each `Depends-on:` names `#<n>`. Run `publish` again after each round until nothing is
    withheld. In personal mode it writes the briefs through the file forge instead.
+
+## From a prototype and an OpenSpec file
+
+When the customer gives a click-through prototype and an OpenSpec functional file (capabilities, each `Requirement:` with
+its `SHALL` text and each `Scenario:` with its `GIVEN`, `WHEN`, `THEN` and `AND` steps, in one Markdown file or as an
+`openspec/` folder with `specs/` and `changes/`), the file's own requirements and scenarios become the plan's, read by a
+script and never rewritten by a model (SPEC-0043 amendment 166, ADR-0472, ADR-0473, ADR-0474).
+
+A customer's file is processed only where the customer's contract allows it, and never enters the kit's repository. It
+goes into the customer project's own `docs/sources/` (in personal mode, the private state), and every example and test of
+the kit uses invented files only.
+
+1. **Import the prototype** with `/agk:design import <folder>`, write its map, and turn it into a source with
+   `python3 scripts/agk/design_import.py source --version i<n> --slug <slug>`, as in steps 1 and 2 above.
+2. **Import the OpenSpec file.** `python3 scripts/agk/plan_intake.py openspec-import <file or folder> --slug <slug>`
+   runs the data guard over every file first, then copies each one unchanged under its `Kind: openspec` header into
+   `docs/sources/openspec-<slug>/`, never over an existing folder.
+3. **Read it.** `python3 scripts/agk/plan_intake.py openspec --slug <slug> --out FILE` (with `FILE` outside `docs/`)
+   writes the partial proposals file: one area per capability, one requirement per `Requirement:` heading with its text
+   exactly, one acceptance line per scenario ending with its location, persona candidates, and an open question for each
+   point the file leaves open, such as a requirement without a scenario or an open change.
+4. **Complete the draft.** `/agk:plan-intake <FILE>` starts from that file and adds only milestones, briefs, sizes and
+   screens; it never rewrites a requirement the file defines.
+5. **Validate and render** with `python3 scripts/agk/plan_intake.py validate --proposals FILE` and
+   `python3 scripts/agk/plan_intake.py render --proposals FILE`, as in steps 5 and 6 above.
+6. **Trace and count.** `python3 scripts/agk/check_plan.py --trace` adds, after the first count of the coverage line,
+   `<a> of <b> scenarios have an acceptance line and <c> a test`. With the prototype source it also prints one
+   `info plan: scenario <location>: ...` line per scenario, naming the screens and states whose screen its steps name, or
+   `names no screen`, and one `info plan: screen <location>: no scenario names it` line per screen no scenario names.
+   These lines are information, not failures: read each one with the person before the plan is confirmed.
+7. **Approve and publish.** The approver posts `Approve: plan <full head ID>`, and
+   `python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE]` prints the commands, as in
+   steps 8 and 9 above.
 
 ## When a step refuses
 

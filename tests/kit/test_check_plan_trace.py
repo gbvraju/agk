@@ -650,3 +650,17 @@ def test_ac3_without_trace_no_list_is_printed(tmp_path):
     _, out = check(tmp_path)
     assert infos(out) == []
     assert "2 of 3 scenarios have an acceptance line and 1 a test" in last(out)
+
+
+def test_ac3_the_scenarios_are_the_ones_the_reading_drafts(tmp_path):
+    """REQ-050 AC3: amendment 166 item 5, the check finds the scenarios, and their locations, that
+    `plan_intake.py openspec` writes as acceptance lines (ADR-0473 decision 3)."""
+    import plan_intake  # noqa: PLC0415 - only this test reads the draft
+
+    openspec_plan(tmp_path, prototype=False)
+    reading = plan_intake.read_openspec(tmp_path, tmp_path / "docs/sources/openspec-shop")
+    drafted = [
+        c.rpartition(" (")[2][:-1] for r in reading.proposals()["requirements"] for c in r["criteria"]
+    ]
+    assert [location for location, _ in check_plan.scenarios(tmp_path) or []] == drafted
+    assert drafted == [SHOW, EMPTY, STORED]
