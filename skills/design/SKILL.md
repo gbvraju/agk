@@ -75,7 +75,7 @@ Do not commit or push, and do not open a pull request: the person or their sessi
 
 ## /agk:design import
 
-`/agk:design import <folder>` copies a customer's click-through prototype into the next imported version
+`/agk:design import <folder>` copies the prototype a customer gave you into the next imported version
 `docs/design/imported/i<n>/` (`i1`, `i2` and so on, never overwritten), byte for byte and whatever its file types, into
 `files/`, and writes `manifest.json` (each file's path, size and SHA-256, the digest and the pages) and `external.txt`
 (the external links its pages make, for the person to read; they block nothing). It reads files only and opens no page.
