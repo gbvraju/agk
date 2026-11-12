@@ -189,8 +189,15 @@ def test_merge_cleared_holds_a_parked_pull_request_and_sees_a_stale_build_label(
 
 
 def test_each_role_lists_its_own_labels():
-    """REQ-039: amendment 150 item 4 (builder, conductor, person and the new merger role)."""
-    assert set(session.ROLES["builder"]) == {"agk:build", "agk:ci-red", "agk:conflict", "agk:fix"}
+    """REQ-039: amendment 150 item 4 (builder, conductor, person and the new merger role) and
+    amendment 162 item 4 (`agk:handover` is the builder's, listed first)."""
+    assert set(session.ROLES["builder"]) == {
+        "agk:handover",
+        "agk:build",
+        "agk:ci-red",
+        "agk:conflict",
+        "agk:fix",
+    }
     assert set(session.ROLES["conductor"]) == {"agk:review", "agk:ci-red"}
     assert set(session.ROLES["person"]) == {
         "agk:question",
