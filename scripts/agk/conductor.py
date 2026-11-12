@@ -129,6 +129,13 @@ does. `MAIN GREEN after #<n>: merge of main #<pr> (<session>) ...` ends a watch 
 issue has closed, naming the pull requests whose every failed required check finished inside it;
 with none, the line is `MAIN GREEN after #<n>`.
 
+Brief #1151 (ADR-0489): with `builder_start = "assign"`, when a poll of `watch` finds no new line
+and no held review, it reads the plan as `session.py plan` does, at most once per minute across
+watches (the file `agk/starts` of the git directory), and ends with `START #<brief>[ build (<x>)]
+<kind>` for each `Assign` row whose brief has no `Started: cb` or `taken:` comment in the last 2
+hours, a brief titled `The default branch is red` first as `START #<brief> red`; one brief is
+returned again only after 10 minutes. The conductor's start rule itself is unchanged.
+
 Brief #1071 (amendment 162, ADR-0453): `sweep` prints `HANDOVER #<pr> <minutes>m` for each open pull
 request labelled `agk:handover`, counted from its newest handing-over `Report:` (`unknown` without
 one), so the launcher restarts a builder for exactly those.
@@ -180,6 +187,10 @@ WAKES = TRIGGERS + ("Answer:", "Maintainer answer:", "Approve:")
 QUESTION_ID = re.compile(r"Question: (Q-\S+)")
 HELD_MINUTES = 15  # a ready, green head with no verdict for this long (brief #854 answer 9)
 HELD_EVERY = 300  # seconds between two held-review checks of `watch` (brief #1125 answer 1)
+START_EVERY = 60  # seconds between two plan reads of `watch` (brief #1151 answer 1)
+START_AGAIN = 10  # minutes before a returned `START` brief is returned again (brief #1151)
+START_HOURS = 2  # a `Started: cb` or `taken:` this recent holds a brief (brief #1151 answer 1)
+STARTED = ("Started: cb", "taken:")
 SWEEP_LATE = 30  # minutes without a finished sweep run before `SWEEP late` (brief #836 answer 4)
 SWEEP_RUNS = "repos/{}/actions/workflows/merger.yml/runs?status=completed&per_page=100"
 SWEEP_EVENTS = ("schedule", "workflow_dispatch", "workflow_run")
@@ -321,6 +332,7 @@ def watch(root, since: datetime, once: bool) -> int:
             approvers = {a.lstrip("@").lower() for a in spec_approvers(Path(root))}
             lines = new_lines(repo, since, approvers) + green_lines(root, repo, since)
             lines = lines or held_lines(root, repo)
+            lines = lines or start_lines(root, repo)
         except CheckError as exc:
             if once:
                 raise
@@ -384,6 +396,67 @@ def write_held(mark: Path, marks: dict) -> None:
     with contextlib.suppress(OSError):  # an unwritten mark only makes the next check come sooner
         mark.parent.mkdir(parents=True, exist_ok=True)
         mark.write_text(json.dumps(marks, sort_keys=True), encoding="utf-8")
+
+
+def start_mark(root) -> Path | None:
+    """The file of the git directory that holds the start marks of `watch` (never tracked)."""
+    try:
+        found = lease_mark(root)
+    except OSError:
+        return None
+    return found.with_name("starts") if found else None
+
+
+def started(repo: str, number: int, now: datetime) -> bool:
+    """Whether a `Started: cb` or `taken:` comment on the brief is newer than START_HOURS."""
+    comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
+    edge = now - timedelta(hours=START_HOURS)
+    return any(
+        session.first_line(c).startswith(STARTED) and session.moment(c.get("created_at")) > edge
+        for c in comments
+    )
+
+
+def start_lines(root, repo: str, now: datetime | None = None) -> list[str]:
+    """The `START #<brief>[ build (<x>)] <kind>` lines (brief #1151, ADR-0489): one per `Assign`
+    row of the plan whose brief nobody started, a red-branch brief first as `START #<brief> red`,
+    read at most once per START_EVERY; one brief is returned again only after START_AGAIN."""
+    now = now or datetime.now(UTC)
+    mark = start_mark(root)
+    if mark is None or session.builder_start(root) != "assign":
+        return []  # no checkout to keep the marks in, or a conductor that assigns nothing
+    try:
+        marks = json.loads(mark.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        marks = {}
+    marks = marks if isinstance(marks, dict) else {}
+    checked = when(str(marks.get("checked")))
+    if checked is not None and now - checked < timedelta(seconds=START_EVERY):
+        return []
+    found = marks.get("said")
+    said: dict = found if isinstance(found, dict) else {}
+    keep = {"checked": stamp_of(now), "said": said}
+    write_held(mark, keep)
+    try:
+        rows = session_plan.build(root).get("assign") or []
+    except CheckError:
+        return []  # tried again after START_EVERY
+    red = [r for r in rows if r.get("title") == session.RED_TITLE]
+    lines: list[str] = []
+    kept: dict = {}
+    for r in red + [r for r in rows if r not in red]:
+        build = f" build ({r['build']})" if r.get("build") else ""
+        key = f"{r['brief']} ({r['build']})" if build else str(r["brief"])
+        before = when(str(said.get(key)))
+        if before is not None and now - before < timedelta(minutes=START_AGAIN):
+            kept[key] = said[key]
+            continue
+        if started(repo, r["brief"], now):
+            continue
+        kept[key] = stamp_of(now)
+        lines.append(f"START #{r['brief']}{build} {'red' if r in red else r.get('kind')}")
+    write_held(mark, {"checked": keep["checked"], "said": kept})
+    return lines
 
 
 # --- ticks and stalls (brief #776 build (c), ADR-0402) ----------------------------------------
