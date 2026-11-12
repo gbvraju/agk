@@ -636,3 +636,21 @@ def test_ac7_watching_a_correction_only_gets(proj, stub):
     brief_polls(stub, [(with_brief(), [], []), (with_brief(), [], [said])])
     session(proj, stub, *WATCH)
     assert stub.calls() and all(call[0] == "GET" for call in stub.calls())
+
+
+# --- the type fix keeps the output (brief #1019, ADR-0434) -------------------------------------
+
+
+def test_1019_follow_up_owed_without_approvers_reads_as_with_none(monkeypatch):
+    """REQ-016: brief #1019 answer 3 (the default of `approvers` is an empty, frozen set)."""
+    sys.path.insert(0, str(SCRIPTS))
+    import session as mod
+
+    said = [comment(3, "boss", f"Verdict: fix list {SHA}")]
+    monkeypatch.setattr(mod, "gh", lambda endpoint, *a, **k: {"number": 7, "mergeable_state": ""})
+    monkeypatch.setattr(mod, "pages", lambda endpoint: said)
+    monkeypatch.setattr(mod, "reports_after", lambda repo, number, cid: False)
+    assert mod.follow_up_owed(REPO, {"number": 7}, {"boss"}) == "fix list"
+    assert mod.follow_up_owed(REPO, {"number": 7}, {"boss"}, set()) == "fix list"
+    monkeypatch.setattr(mod, "pages", lambda endpoint: [])
+    assert mod.follow_up_owed(REPO, {"number": 7}, {"boss"}) is None

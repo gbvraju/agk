@@ -1,0 +1,1 @@
+- `conductor.py` and `session.py` pass the pinned type check again (mypy 2.3.1) with the same output; the `session.py` baseline lines that fell are lowered (brief #1019, ADR-0434)
