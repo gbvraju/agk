@@ -256,6 +256,31 @@ def test_the_first_write_and_an_unchanged_baseline_pass(tmp_path, capsys):
     assert failures(lines) == [] and code == 0
 
 
+def test_in_ci_a_base_that_does_not_resolve_fails_naming_the_base(tmp_path, capsys, monkeypatch):
+    """REQ-050 AC6: in CI an unread base is a failure, never a pass (principle 11)."""
+    root = plan(tmp_path, baseline())
+    git(root, "init", "-q", "-b", "trunk")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "the confirmed plan")
+    for name in ("AGK_BASE", "GITHUB_BASE_REF"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("CI", "true")
+    code, lines = check(root, capsys)
+    assert code == 1
+    assert lines == ["FAIL plan: no base ref resolves in CI"]
+
+
+def test_outside_ci_with_no_base_the_change_is_not_read(tmp_path, capsys, monkeypatch):
+    root = plan(tmp_path, baseline())
+    git(root, "init", "-q", "-b", "trunk")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "the confirmed plan")
+    for name in ("AGK_BASE", "GITHUB_BASE_REF", "CI"):
+        monkeypatch.delenv(name, raising=False)
+    code, lines = check(root, capsys)
+    assert failures(lines) == [] and code == 0
+
+
 # --- rule 21: a scope change is a record --------------------------------------------------------
 
 

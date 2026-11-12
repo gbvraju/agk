@@ -63,17 +63,19 @@ Build (g), rules 20 to 22 (brief #1095, ADR-0467), when `docs/plan/` exists: rul
 `docs/plan/baseline.json` that is not `schema` 1 with a full `head`, a real `date`, an `https://`
 `link` and a list of `milestones` (each an `id` `M<n>`, its `briefs` keys, its `target` date or
 null and its `estimate` text), and, read from git, a baseline that the merge base with `--base REF`
-(else the default branch) holds and the working tree changed or removed; with no base it is not
-read. Rule 21 fails a `Scope change: SC-<n>` block of `docs/plan/scope-changes.md` without its
-`What:`, `Why:`, `Source:` (a location, or `person <date>`), `Effect:` or `Status: proposed` line,
-a number used twice, and a `Briefs:` entry other than `+M<n>/<key> <size> <low>-<high> hours` or
-`-M<n>/<key>` (`; ` between entries). Rule 22 fails an `Approved:` line that is not `<date>
-<https link>`, a brief file whose `Milestone:` is a baseline milestone and whose key is neither in
-that milestone's `briefs` nor added there by an approved scope change, and a baseline brief no
-longer under its milestone that no approved scope change removes, naming the key. A scope change
-is approved by its `Approved:` line; with `--comments FILE` (the saved comments of the pull
-request) only when an account of `spec_approvers` also gave `Approve: scope SC-<n> <full head
-ID>` (`reviewers.scope_approvals`, in solo mode inside the person's `Confirmed:` comment).
+(else the default branch) holds and the working tree changed or removed; a base that does not
+resolve in CI fails (`common.resolve_base`), and only outside CI with no base, or outside a git
+work tree, is it not read. Rule 21 fails a `Scope change: SC-<n>` block of
+`docs/plan/scope-changes.md` without its `What:`, `Why:`, `Source:` (a location, or `person
+<date>`), `Effect:` or `Status: proposed` line, a number used twice, and a `Briefs:` entry other
+than `+M<n>/<key> <size> <low>-<high> hours` or `-M<n>/<key>` (`; ` between entries). Rule 22
+fails an `Approved:` line that is not `<date> <https link>`, a brief file whose `Milestone:` is a
+baseline milestone and whose key is neither in that milestone's `briefs` nor added there by an
+approved scope change, and a baseline brief no longer under its milestone that no approved scope
+change removes, naming the key. A scope change is approved by its `Approved:` line; with
+`--comments FILE` (the saved comments of the pull request) only when an account of
+`spec_approvers` also gave `Approve: scope SC-<n> <full head ID>` (`reviewers.scope_approvals`, in
+solo mode inside the person's `Confirmed:` comment).
 
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
@@ -94,9 +96,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from common import (
     REQ_HEADER,
-    CheckError,
     ac_markers_for,
     agent_apps,
+    git,
     markers_for,
     merge_base,
     repo_root,
@@ -710,12 +712,14 @@ def read_baseline(root: Path) -> tuple[dict[str, list[str]] | None, list[str]]:
 
 
 def baseline_changed(root: Path, base: str | None) -> list[str]:
-    """Rule 20: a baseline the merge base holds is never changed or removed (principle 4)."""
-    try:
-        ref = resolve_base(root, base)
-        old = show(root, merge_base(root, ref), BASELINE) if ref else None
-    except (CheckError, OSError, ValueError):
-        return []  # no base to read: the change is not read (the shape still is)
+    """Rule 20: a baseline the merge base holds is never changed or removed (principle 4). The
+    base is `common.resolve_base`'s: a base that does not resolve in CI raises `CheckError`, which
+    `run` prints as a failure; only outside CI with no base, or a root outside any git work tree
+    (no history to compare), is the comparison not made."""
+    if git(root, "rev-parse", "--is-inside-work-tree", check=False).strip() != "true":
+        return []
+    ref = resolve_base(root, base)
+    old = show(root, merge_base(root, ref), BASELINE) if ref else None
     if old is None:
         return []
     path = root / BASELINE

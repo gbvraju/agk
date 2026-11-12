@@ -24,7 +24,9 @@ of a change, and `scripts/agk/reviewers.py` reads no `Approve: scope` line. This
 2. The baseline is never rewritten (rule 20, as `check_build_state.py` for principle 4): `check_plan.py` reads, with
    git, the file at the merge base with `--base REF` (else `AGK_BASE`, `GITHUB_BASE_REF` or the default branch, the
    order of `common.resolve_base`), and fails a baseline the merge base holds that the working tree changed or
-   removed. With no base to read the comparison is not made and the shape is still checked.
+   removed. A base that does not resolve in CI is a failure (`common.resolve_base` raises and `run` prints it, as in
+   the other checks that read a base); only outside CI with no base, or with a root outside any git work tree (no
+   history to compare), is the comparison not made, and the shape is still checked.
 3. A scope change is one block of `docs/plan/scope-changes.md` that starts `Scope change: SC-<n>` and holds the lines
    `What:`, `Why:`, `Source:` (a location of rule 1, or `person <date>`), `Effect:` and `Status: proposed`
    (rule 21), the shape `plan_status.py` already reads. The briefs it adds and removes are named on one more line,
