@@ -1045,7 +1045,7 @@ def unacted_lines(
         found = session.slot_marker(comments, name, allowed)
         log = session.slot_log(found[0]) if found else None
         start = when(log[0]) if log else None
-        if start is not None and start >= posted:
+        if log is not None and start is not None and start >= posted:
             if acted(log[2], match):
                 continue
         elif now - posted <= timedelta(minutes=UNACTED_MINUTES):

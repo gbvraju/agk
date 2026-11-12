@@ -66,6 +66,11 @@ max_builders = 6
 # How a builder starts (SPEC-0034, brief #776, ADR-0402): "assign" means no session starts one; each slot runs from four staggered
 # scheduled starts an hour (`doctor.py` prints them and warns of a slot with none) and the conductor posts `Assign:` lines.
 builder_start = "assign"
+# Auto-start by the owner's direction of 2026-11-11 (brief #1030, ADR-0439): on the owner's Windows laptop the conductor's
+# re-plan starts each planned builder through this adapter, one Windows Terminal tab and worktree per session. The adapter
+# is this repository's own script (the kit installs no launcher) and needs PowerShell 7 (winget install Microsoft.PowerShell).
+auto_start = true
+launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"
 # A slot counts alive in `Builder pool down` when its lease marker was taken, renewed or released within these minutes (brief #960,
 # ADR-0412): one hourly run plus margin.
 slot_seen_minutes = 90
