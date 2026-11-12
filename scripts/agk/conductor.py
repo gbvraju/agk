@@ -9,7 +9,9 @@ the last 30 minutes and a cleared pull request is open (brief #836 answer 4, ADR
 
 `watch` polls the comments of every open issue labelled `agk-brief` and every open pull request,
 and exits 0 printing one line `<number> <first line>` for each comment created after `--since`
-(default: the start) whose first line starts `Question:` or `Report:` (conductor catch log row 1);
+(default: the start) whose first line starts `Question:` or `Report:` (conductor catch log row 1),
+or is an owner's answer or approval: an `Answer: Q-…` or `Maintainer answer: Q-…`, or an `Approve:`
+by a listed spec approver (brief #1112, ADR-0475);
 `--once` reads once, printing `nothing new` when there is none. The poll interval is
 `conductor_poll_seconds` of the `[flow]` table of agk.toml (60 by default); a read that fails is
 printed and retried. `sweep` prints one line `#<n> <head7> <state> <age>` per open pull request,
@@ -137,10 +139,12 @@ from __future__ import annotations
 import base64
 import contextlib
 import io
+import json
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import time
+from collections.abc import Set as AbstractSet
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -170,8 +174,12 @@ USAGE = (
     "conductor.py lease (--show | --take NAME | --release NAME) | conductor.py over --pr N"
 )
 TRIGGERS = ("Question:", "Report:")
+# What wakes `watch` (brief #1112, ADR-0475): `TRIGGERS` and an owner's answer or approval;
+# `waiting_on` keeps `TRIGGERS`.
+WAKES = TRIGGERS + ("Answer:", "Maintainer answer:", "Approve:")
 QUESTION_ID = re.compile(r"Question: (Q-\S+)")
 HELD_MINUTES = 15  # a ready, green head with no verdict for this long (brief #854 answer 9)
+HELD_EVERY = 300  # seconds between two held-review checks of `watch` (brief #1125 answer 1)
 SWEEP_LATE = 30  # minutes without a finished sweep run before `SWEEP late` (brief #836 answer 4)
 SWEEP_RUNS = "repos/{}/actions/workflows/merger.yml/runs?status=completed&per_page=100"
 SWEEP_EVENTS = ("schedule", "workflow_dispatch", "workflow_run")
@@ -222,7 +230,20 @@ def age(since: datetime, now: datetime) -> str:
 # --- watch (row 1) ----------------------------------------------------------------------------
 
 
-def new_lines(repo: str, since: datetime) -> list[str]:
+def wakes(comment: dict, approvers: AbstractSet[str]) -> bool:
+    """Whether a comment's first line wakes `watch`: a `Question:` or `Report:`; an `Answer:` or
+    `Maintainer answer:` that names a `Q-` id; an `Approve:` by a spec approver (brief #1112)."""
+    first = session.first_line(comment)
+    if not first.startswith(WAKES):
+        return False
+    if first.startswith(TRIGGERS):
+        return True
+    if first.startswith("Approve:"):
+        return session.author_of(comment) in approvers
+    return bool(session.ANSWER_LINE.match(first))
+
+
+def new_lines(repo: str, since: datetime, approvers: AbstractSet[str] = frozenset()) -> list[str]:
     briefs = session.labelled(
         read(f"repos/{repo}/issues?state=open&labels={session.LABEL}", "the open briefs"),
         session.LABEL,
@@ -234,7 +255,7 @@ def new_lines(repo: str, since: datetime) -> list[str]:
         comments = read(f"repos/{repo}/issues/{number}/comments", f"the comments of #{number}")
         for c in sorted(comments, key=lambda c: c.get("id") or 0):
             first = session.first_line(c)
-            if first.startswith(TRIGGERS) and session.moment(c.get("created_at")) > since:
+            if wakes(c, approvers) and session.moment(c.get("created_at")) > since:
                 lines.append(f"{number} {first}")
     return lines
 
@@ -297,7 +318,9 @@ def watch(root, since: datetime, once: bool) -> int:
                 if code := renew_lease(root):
                     return code
                 renewed = time.monotonic()
-            lines = new_lines(repo, since) + green_lines(root, repo, since)
+            approvers = {a.lstrip("@").lower() for a in spec_approvers(Path(root))}
+            lines = new_lines(repo, since, approvers) + green_lines(root, repo, since)
+            lines = lines or held_lines(root, repo)
         except CheckError as exc:
             if once:
                 raise
@@ -309,6 +332,58 @@ def watch(root, since: datetime, once: bool) -> int:
             print("\n".join(said + sweep_late(root, repo)))
             return 0
         time.sleep(interval)
+
+
+def held_mark(root) -> Path | None:
+    """The file of the git directory that holds the held-review marks of `watch` (never tracked)."""
+    try:
+        found = lease_mark(root)
+    except OSError:
+        return None
+    return found.with_name("held") if found else None
+
+
+def held_lines(root, repo: str) -> list[str]:
+    """The `HELD VERDICT #<n>` lines of the open, ready pull requests (brief #1125, ADR-0482), read
+    at most once per HELD_EVERY; one pull request is returned again only after HELD_MINUTES."""
+    mark, now = held_mark(root), datetime.now(UTC)
+    if mark is None:  # no checkout to keep the marks in: no check, so reads stay few
+        return []
+    try:
+        marks = json.loads(mark.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        marks = {}
+    marks = marks if isinstance(marks, dict) else {}
+    checked = when(str(marks.get("checked")))
+    if checked is not None and now - checked < timedelta(seconds=HELD_EVERY):
+        return []
+    found = marks.get("said")
+    said: dict = found if isinstance(found, dict) else {}
+    keep = {"checked": stamp_of(now), "said": said}
+    write_held(mark, keep)
+    authors = verdict_authors(root)
+    pulls = read(f"repos/{repo}/pulls?state=open", "the open pull requests")
+    lines: list[str] = []
+    held: dict = {}
+    for pull in sorted(pulls, key=lambda p: p["number"]):
+        line = None if pull.get("draft") else held_verdict_line(root, repo, pull, authors, now)
+        if line is None:
+            continue
+        number = str(pull["number"])
+        before = when(str(said.get(number)))
+        if before is not None and now - before < timedelta(minutes=HELD_MINUTES):
+            held[number] = said[number]
+            continue
+        held[number] = stamp_of(now)
+        lines.append(line)
+    write_held(mark, {"checked": keep["checked"], "said": held})
+    return lines
+
+
+def write_held(mark: Path, marks: dict) -> None:
+    with contextlib.suppress(OSError):  # an unwritten mark only makes the next check come sooner
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        mark.write_text(json.dumps(marks, sort_keys=True), encoding="utf-8")
 
 
 # --- ticks and stalls (brief #776 build (c), ADR-0402) ----------------------------------------

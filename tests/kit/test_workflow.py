@@ -145,7 +145,7 @@ def test_ac2_project_tests_run_only_where_the_kits_own_suite_is_not_installed():
         + " && github.event.action != 'edited' && steps.status.outputs.skip != 'true'"
         + " && steps.paused.outputs.paused != 'true' }}\n"  # brief #348
         + "        env:\n"  # brief #453: the event decides under `pr_tests = selected`
-        + "          # With `[testing] pr_tests = \"selected\"` a pull request runs only the"
+        + '          # With `[testing] pr_tests = "selected"` a pull request runs only the'
         + " selected tests; a push and a release pull\n"
         + "          # request run the full suite (brief #453, ADR-0242). Without the setting the"
         + " step runs the full suite as before.\n"
@@ -375,8 +375,7 @@ def test_the_secret_scan_keeps_its_name_its_place_and_its_condition():
     # brief #261: `!cancelled()`, so that a failed body step no longer hides the scan
     assert (
         "        if: ${{ !cancelled() && github.event.action != 'edited'"
-        " && steps.paused.outputs.paused != 'true' }}\n"
-        in blocks["Secret scan"]  # brief #348
+        " && steps.paused.outputs.paused != 'true' }}\n" in blocks["Secret scan"]  # brief #348
     )
 
 
@@ -430,3 +429,128 @@ def test_every_step_after_the_first_body_step_runs_unless_cancelled():
         head = blocks[name].split("\n        run:", 1)[0]
         assert re.search(r"(?m)^        if: \$\{\{ !cancelled\(\)", head), name
     assert names[-1] == "Secret scan"
+
+
+# --- an edited run waits for the full run without a runner (brief #1122, ADR-0480) --------------
+
+
+def concurrency_block() -> str:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    return text.split("\nconcurrency:\n", 1)[1].split("\njobs:", 1)[0]
+
+
+def test_an_edited_run_is_in_the_full_runs_group_and_never_cancels_it():
+    """Brief #1122 answer 1 (REQ-039): a description edit joins the group of the head's full run,
+    so it waits there as a pending run that holds no runner, and an edit never cancels a running
+    full run: `cancel-in-progress` is false for an edited run and true for every other pull
+    request run, so a new push still cancels a superseded run."""
+    block = concurrency_block()
+    group = re.search(r"(?m)^  group: (.+)$", block).group(1)
+    pull = group.split("||", 1)[1]
+    assert "format('governance-{0}-code', github.event.pull_request.number || github.sha)" in pull
+    assert "'edited'" not in group  # one group for the full and the edited run of a pull request
+    cancel = re.search(r"(?m)^  cancel-in-progress: (.+)$", block).group(1)
+    assert cancel == (
+        "${{ github.event_name == 'pull_request' && github.event.action != 'edited' }}"
+    )
+
+
+def test_the_latest_full_run_step_stays_the_fallback_and_fails_closed():
+    """Brief #1122 answer 1: the step that reads the full run is kept for an edited run, and a
+    full run that never finished still fails it."""
+    block = step_blocks(WORKFLOW.read_text(encoding="utf-8"))["Latest full run"]
+    assert "github.event.action == 'edited'" in block.split("\n", 2)[1]
+    assert "scripts/agk/full_run.py" in block
+    assert (
+        'echo "rule 2: the full governance run of the head did not finish in 20 minutes"' in block
+    )
+    assert block.rstrip().endswith("exit 1")
+
+
+def record_script() -> str:
+    block = step_blocks(WORKFLOW.read_text(encoding="utf-8"))["Record comments"]
+    body = block.split("run: |\n", 1)[1]
+    return "\n".join(line[10:] for line in body.splitlines()).replace(
+        "${{ github.repository }}", "acme/widgets"
+    )
+
+
+def test_the_record_step_reads_at_most_eight_comments_at_a_time():
+    """Brief #1122 answer 2: the ids are read in parallel, at most 8 at a time, with GETs only."""
+    script = record_script()
+    assert re.search(r"xargs\b[^\n]*-P 8\b", script)
+    assert "gh api --method GET" in script
+    assert "--record-ids" in script
+
+
+GH_SHIM = """#!/bin/sh
+# An invented `gh`: comment 10 is read only once comment 20 has started (so the reads overlap),
+# comment 30 cannot be read, every other comment answers with its own id.
+id="${4##*/}"
+log="$SHIM_DIR/calls"
+echo "$id" >> "$log"
+case "$id" in
+  10) n=0
+      while [ ! -f "$SHIM_DIR/started-20" ] && [ "$n" -lt 100 ]; do sleep 0.05; n=$((n+1)); done
+      [ -f "$SHIM_DIR/started-20" ] || { echo '{"message": "never overlapped"}'; exit 1; } ;;
+  20) : > "$SHIM_DIR/started-20"; sleep 0.2 ;;
+  30) echo '{"message": "Not Found"}'; exit 1 ;;
+esac
+printf '{"id": %s, "body": "Final: comment %s"}\\n' "$id" "$id"
+"""
+
+PY_SHIM = """#!/bin/sh
+# An invented `python`: the record ids, printed in id order as `--record-ids` prints them.
+printf '10\\n20\\n30\\n40\\n50\\n60\\n70\\n80\\n90\\n'
+"""
+
+
+def record_world(tmp_path):
+    import os
+
+    work = tmp_path / "work"
+    (work / "kit").mkdir(parents=True)
+    (work / "kit" / "agk-kit.mk").write_text("# kit\n", encoding="utf-8")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    for name, text in (("gh", GH_SHIM), ("python", PY_SHIM)):
+        (shim / name).write_text(text, encoding="utf-8")
+        (shim / name).chmod(0o755)
+    (tmp_path / "tmp").mkdir()
+    env = {
+        **os.environ,
+        "RUNNER_TEMP": str(tmp_path / "tmp"),
+        "SHIM_DIR": str(tmp_path),
+        "PATH": f"{shim}:{os.environ['PATH']}",
+    }
+    return work, env
+
+
+def test_the_record_step_reads_in_parallel_and_writes_the_comments_in_id_order(tmp_path):
+    """Brief #1122 answer 2 (REQ-039): comment 10 is answered only while comment 20 is being
+    read, so the reads overlap; the file holds the readable comments in id order, whatever order
+    they were answered in, and leaves out the one that cannot be read, naming it (fail closed)."""
+    work, env = record_world(tmp_path)
+    proc = call(
+        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", record_script()], work, env
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    saved = (tmp_path / "tmp" / "record-comments.json").read_text(encoding="utf-8")
+    ids = [json.loads(line)["id"] for line in saved.splitlines()]
+    assert ids == [10, 20, 40, 50, 60, 70, 80, 90]
+    assert "Not Found" not in saved and "never overlapped" not in saved
+    assert "Record comments: comment 30 could not be read" in proc.stdout
+    calls = (tmp_path / "calls").read_text(encoding="utf-8").split()
+    assert sorted(calls, key=int) == [str(n) for n in range(10, 100, 10)]  # each read once
+
+
+def test_the_record_step_reads_nothing_without_the_kit(tmp_path):
+    """Brief #1122 answer 2: in a project (no `kit/agk-kit.mk`) the file stays empty, as before."""
+    work, env = record_world(tmp_path)
+    (work / "kit" / "agk-kit.mk").unlink()
+    proc = call(
+        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", record_script()], work, env
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (tmp_path / "tmp" / "record-comments.json").read_text(encoding="utf-8") == ""
+    assert not (tmp_path / "calls").exists()

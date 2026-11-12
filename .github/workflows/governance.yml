@@ -13,6 +13,7 @@ name: governance
 
 # A run for an edited description is named `governance edited`, every other one `governance full`: the first step of the partial run reads
 # the latest completed full run of the head by that name (brief #216), so that a partial run cannot turn a failed full run green.
+# The edited run waits for that full run in the full run's own concurrency group, as a pending run that holds no runner (brief #1122, ADR-0480).
 run-name: governance ${{ github.event.action == 'edited' && 'edited' || 'full' }}
 
 on:
@@ -29,7 +30,7 @@ permissions:
   actions: read
 
 # CI runs only where it can change a result (brief #216): a superseded run of a pull request is cancelled, a running push to the
-# default branch never is (a waiting one is replaced by a newer push, brief #621), and a run for an edited description has a group of its own so that it cannot cancel the full run of the same commit. On an
+# default branch never is (a waiting one is replaced by a newer push, brief #621), and a run for an edited description waits in the full run's group and never cancels it (brief #1122, ADR-0480). On an
 # edited description only the steps that read the pull request body run (those without the condition `github.event.action != 'edited'`);
 # the job and its name stay, so the required check still reports.
 # Fast CI (brief #283): on a draft pull request the heavy steps (lint, the tests, the project tests) are skipped and the job
@@ -41,8 +42,8 @@ permissions:
 # most one waiting run per group and replaces an older waiting run with the newer one, which checks the newest commit and so every
 # change before it. A commit whose waiting run was replaced is covered by the next completed full run that contains it.
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && format('governance-{0}-code', github.ref_name) || format('governance-{0}-{1}', github.event.pull_request.number || github.sha, github.event.action == 'edited' && 'edited' || 'code') }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && format('governance-{0}-code', github.ref_name) || format('governance-{0}-code', github.event.pull_request.number || github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' }}
 
 jobs:
   governance:
@@ -135,7 +136,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The required check reads the latest governance run of the head: a partial run must not turn a failed full run green.
-          # A full run still queued or in progress is waited for: the same GET every 30 seconds, at most 20 minutes.
+          # The concurrency group starts this run only after the full run ends (brief #1122); a full run still queued or in
+          # progress is waited for here as the fallback: the same GET every 30 seconds, at most 20 minutes.
           # A red full run passes only when every failed step of it reads the body (brief #216, build b): one more GET of its jobs.
           for attempt in $(seq 0 40); do
             gh api --method GET "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.event.pull_request.head.sha }}&event=pull_request&per_page=100" > "$RUNNER_TEMP/runs.json" || : > "$RUNNER_TEMP/runs.json"
@@ -206,15 +208,19 @@ jobs:
       - name: Record comments
         # The Final comment of each record line (SPEC-0021 rule 3a, brief #557): the release check and the release
         # exemption of check_protected_changes count a record only once its comment verifies it. A comment that
-        # cannot be read is left out, so its record counts for nothing (fail closed).
+        # cannot be read is left out, so its record counts for nothing (fail closed). The comments are read at most 8 at a
+        # time and joined in id order (brief #1122, ADR-0480).
         if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           : > "$RUNNER_TEMP/record-comments.json"
           if [ -f kit/agk-kit.mk ]; then
-            for id in $(python scripts/agk/check_adrs.py --record-ids); do
-              gh api --method GET "repos/${{ github.repository }}/issues/comments/$id" >> "$RUNNER_TEMP/record-comments.json" || echo "Record comments: comment $id could not be read"
+            ids="$(python scripts/agk/check_adrs.py --record-ids)" || ids=""
+            mkdir -p "$RUNNER_TEMP/records"
+            printf '%s\n' $ids | xargs -r -P 8 -I '{}' sh -c 'id="$1"; gh api --method GET "repos/${{ github.repository }}/issues/comments/$id" > "$2/$id.json" || { rm -f "$2/$id.json"; echo "Record comments: comment $id could not be read"; }' _ '{}' "$RUNNER_TEMP/records"
+            for id in $ids; do
+              if [ -f "$RUNNER_TEMP/records/$id.json" ]; then cat "$RUNNER_TEMP/records/$id.json" >> "$RUNNER_TEMP/record-comments.json"; fi
             done
           fi
       - name: check_protected_changes

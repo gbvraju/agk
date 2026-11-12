@@ -1,0 +1,1 @@
+- The governance workflow puts a run for an edited description in the full run's concurrency group, where it waits without a runner and never cancels the full run, and reads the record comments at most 8 at a time in id order (brief #1122, ADR-0480)

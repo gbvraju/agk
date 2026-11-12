@@ -20,7 +20,11 @@ conflicts with its base (`mergeable_state` dirty), since CI does not start on it
 `correction #n (comment id): <first line>` on a `Correction:` comment by a listed author, newer
 than the start, on the pull request or on the brief named by its `Brief: #n` line (SPEC-0032 rule
 10), and with `label <name>` (or `label none`) when the `agk:` label that the router sets
-(SPEC-0032) changes from the one it read at its first poll; it prints its event and exits (no
+(SPEC-0032) changes from the one it read at its first poll. Brief #1112 (ADR-0475): `--pr` also
+ends with `answer <Q-id> (comment <id>)` on an `Answer: Q-…` or `Maintainer answer: Q-…` by a
+listed verdict author or spec approver that names a Q id of an earlier `Question:` by the pull
+request's author, and with `approve <head7> SPEC-nnnn` on a new `Approve: <sha> SPEC-nnnn` by a
+spec approver that names the current head. It prints its event and exits (no
 loop): each event is one wake. `queue` prints `#N <label>` for each open pull request whose router
 label belongs to the role (conductor: `agk:review`, `agk:ci-red`, not drafts; builder:
 `agk:handover` first (amendment 162), then `agk:build`, `agk:fix`, `agk:conflict`, `agk:ci-red`, of
@@ -161,10 +165,12 @@ from common import (
 )
 from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
-from reviewers import spec_approvers, verdict_authors
+from reviewers import APPROVE, spec_approvers, verdict_authors
 
 from config import (
+    BRIEF_CODE_PATHS,
     MODEL_KINDS,
+    brief_code_paths,
     caps_settings,
     model_providers,
     model_routes,
@@ -459,6 +465,47 @@ def correction_line(
     return None
 
 
+def answer_line(
+    comments: list, seen: int, own: str | None, answerers: AbstractSet[str]
+) -> str | None:
+    """`answer <Q-id> (comment <id>)` for the first `Answer: Q-…` or `Maintainer answer: Q-…` newer
+    than `seen`, by one of `answerers`, that names a Q id of an earlier `Question:` by `own`, the
+    pull request's author (brief #1112 answer 2, ADR-0475)."""
+    me = (own or "").lstrip("@").lower()
+    asked: dict[str, int] = {}
+    for comment in sorted(comments, key=lambda c: c.get("id", 0)):
+        first, cid = first_line(comment), comment.get("id", 0)
+        if me and author_of(comment) == me and first.startswith("Question:"):
+            for q in QUESTION_ID.findall(str(comment.get("body") or "")):
+                asked.setdefault(q, cid)
+            continue
+        match = ANSWER_LINE.match(first)
+        if (
+            match
+            and cid > seen
+            and author_of(comment) in answerers
+            and asked.get(match.group(1), cid) < cid
+        ):
+            return f"answer {match.group(1)} (comment {cid})"
+    return None
+
+
+def approve_line(comments: list, seen: int, head: str, approvers: AbstractSet[str]) -> str | None:
+    """`approve <head7> SPEC-nnnn` for the first `Approve: <sha> SPEC-nnnn` newer than `seen`, by a
+    spec approver, whose sha names the current head (brief #1112 answer 2, ADR-0475)."""
+    for comment in sorted(comments, key=lambda c: c.get("id", 0)):
+        match = APPROVE.match(first_line(comment))
+        if (
+            match
+            and comment.get("id", 0) > seen
+            and author_of(comment) in approvers
+            and head
+            and head.startswith(match.group(1))
+        ):
+            return f"approve {head[:7]} {match.group(2)}"
+    return None
+
+
 FAILED_POLLS = 5  # polls in a row that cannot read GitHub before a wait ends with an error
 EXIT_UNREADABLE = 4
 
@@ -554,20 +601,24 @@ def watch(root, args: dict[str, str]) -> int:
             if comments is not None:
                 own = (pr.get("user") or {}).get("login")
                 authors = counted_authors(verdict_authors(root), own)
+                approvers = {a.lstrip("@").lower() for a in spec_approvers(root)}
+                answerers = approvers | {
+                    a.lstrip("@").lower() for a in verdict_authors(root) or []
+                }
                 head = str((pr.get("head") or {}).get("sha") or "")
                 if first:  # what landed after the last Report: and before this watch started
                     first = False
                     floor = max(report_floor(comments, own), since)
                     line = missed_verdict(comments, floor, head, authors)
                     line = line or correction_line(comments, floor, authors, int(number))
+                    line = line or answer_line(comments, floor, own, answerers)
                     if line:
                         print(line)
                         return 0
                 line = verdict_line(comments, seen, head, authors)
-                if line:
-                    print(line)
-                    return 0
-                line = correction_line(comments, seen, authors, int(number))
+                line = line or correction_line(comments, seen, authors, int(number))
+                line = line or answer_line(comments, seen, own, answerers)
+                line = line or approve_line(comments, max(seen, since), head, approvers)
                 if line:
                     print(line)
                     return 0
@@ -659,8 +710,9 @@ class Told:
 # --- the shape of a brief (rule 4) ------------------------------------------------------------
 
 
-def brief_problems(body: str | None) -> list[str]:
-    """What rule 4 finds wrong with an issue body; it never repeats the sentence."""
+def brief_problems(body: str | None, limits: dict[str, int] | None = None) -> list[str]:
+    """What rule 4 finds wrong with an issue body; it never repeats the sentence. `limits` is
+    `config.brief_code_paths(root)`, the defaults when None (amendment 168)."""
     lines = (body or "").splitlines()
     problems: list[str] = []
     sentences = [m for m in (SENTENCE.fullmatch(x.rstrip()) for x in lines) if m]
@@ -680,7 +732,34 @@ def brief_problems(body: str | None) -> list[str]:
             problems.append("rule 4: a Depends-on line is not Depends-on: #n")
     if sum(1 for x in lines if SIZE.fullmatch(x.rstrip())) != 1:
         problems.append("rule 4: exactly one line Size: S, Size: M or Size: L")
+    else:
+        problems += size_problems(lines, BRIEF_CODE_PATHS if limits is None else limits)
     return problems + line_problems(lines)
+
+
+NOT_CODE = ("tests/", "docs/", "changelog.d/")  # amendment 168: none is a code path
+
+
+def size_problems(lines: list[str], limits: dict[str, int]) -> list[str]:
+    """Amendment 168 of rule 4 (brief #1121, ADR-0479): `Size: S` and `Size: M` allow at most
+    `limits` code paths, a `Touches:` entry outside tests, docs, changelog fragments and
+    `kit/hashes.json`; a `Broad:` line lifts that limit. `Size: L` is refused with `Wave:`."""
+    size = next(x.rstrip()[-1] for x in lines if SIZE.fullmatch(x.rstrip()))
+    if size == "L":
+        if any(x.startswith("Wave:") for x in lines):
+            return ["rule 4: Size L is refused for a planned build (Wave:): split the brief"]
+        return []
+    if any(x.startswith("Broad:") for x in lines):
+        return []
+    touches = [x.rstrip()[len("Touches:") :] for x in lines if x.startswith("Touches:")][:1]
+    entries = {e.strip() for t in touches for e in t.split(",") if e.strip()}
+    code = len({e for e in entries if not e.startswith(NOT_CODE) and e != "kit/hashes.json"})
+    if code <= limits[size]:
+        return []
+    return [
+        f"rule 4: Size {size} allows at most {limits[size]} code paths, Touches names {code}:"
+        " split the brief or raise Size"
+    ]
 
 
 def contexts_line_problems(body: str | None) -> list[str]:
@@ -1003,9 +1082,10 @@ def brief_shape(root, repo: str) -> Callable:
     rules = touch_rules(root)
     known = plan_waves(repo) if plan_issue_set(root) else None
     waves = plan_issue_set(root)
+    limits = brief_code_paths(root)
 
     def shape(body: str | None) -> list[str]:
-        found = brief_problems(body) + (wave_problems(body, known) if waves else [])
+        found = brief_problems(body, limits) + (wave_problems(body, known) if waves else [])
         return found or touch_problems(str(body), rules)
 
     return shape
