@@ -141,3 +141,58 @@ def test_amendment_163_is_in_the_spec_texts():
     assert "(k) **the prototype source**" in text
     design = " ".join(spec("0037").read_text(encoding="utf-8").split())
     assert "The one exception is the source file that `design_import.py source` writes" in design
+
+
+# Brief #1110 answer 2 (ADR-0474): the path from a prototype and an OpenSpec file, in order.
+OPENSPEC_SECTION = "## From a prototype and an OpenSpec file"
+OPENSPEC_PATH = (
+    "/agk:design import",
+    "design_import.py source",
+    "plan_intake.py openspec-import",
+    "plan_intake.py openspec --slug",
+    "/agk:plan-intake",
+    "plan_intake.py validate",
+    "plan_intake.py render",
+    "check_plan.py --trace",
+    "Approve: plan",
+    "plan_intake.py publish",
+)
+CONFIDENTIAL = (
+    "A customer's file is processed only where the customer's contract allows it,"
+    " and never enters the kit's repository."
+)
+
+
+def openspec_section() -> str:
+    text = GUIDE.read_text(encoding="utf-8")
+    assert OPENSPEC_SECTION in text.splitlines(), "the guide has no OpenSpec section"
+    rest = text.split(OPENSPEC_SECTION + "\n", 1)[1]
+    end = rest.find("\n## ")
+    return rest if end == -1 else rest[:end]
+
+
+def test_the_openspec_section_names_each_command_in_order():
+    """REQ-050"""
+    section = openspec_section()
+    places = [section.find(name) for name in OPENSPEC_PATH]
+    missing = [name for name, at in zip(OPENSPEC_PATH, places, strict=True) if at == -1]
+    assert not missing, f"the OpenSpec section does not name {missing}"
+    assert places == sorted(places), "the OpenSpec section names the path out of order"
+
+
+def test_the_openspec_section_states_the_confidentiality_sentence():
+    """REQ-050"""
+    assert CONFIDENTIAL in " ".join(openspec_section().split())
+
+
+def test_the_openspec_section_names_the_scenario_count():
+    """REQ-050"""
+    section = " ".join(openspec_section().split())
+    assert "scenarios have an acceptance line and" in section
+    assert "info plan:" in section
+
+
+def test_the_guide_lists_openspec_among_the_kinds():
+    """REQ-050"""
+    text = " ".join(GUIDE.read_text(encoding="utf-8").split())
+    assert "`charter`, `openspec` or `other`" in text
