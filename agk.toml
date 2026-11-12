@@ -766,7 +766,7 @@ tests = [
   "tests/kit/test_builder_slots.py",
   "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_conductor_guard_queue.py",
   "tests/kit/test_conductor_guard_tell.py", "tests/kit/test_conductor_sweep_late_line.py",
-  "tests/kit/test_draft_and_progress.py", "tests/kit/test_flow_rules.py", "tests/kit/test_front_door_entry.py",
+  "tests/kit/test_draft_and_progress.py", "tests/kit/test_flow_rules.py", "tests/kit/test_front_door_entry.py", "tests/kit/test_guide_team.py",
   "tests/kit/test_holds_metric.py", "tests/kit/test_impact.py", "tests/kit/test_launch.py",
   "tests/kit/test_launch_auto_start.py", "tests/kit/test_launch_kinds.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_next_red.py", "tests/kit/test_over_cap_builder.py", "tests/kit/test_plan_exact_touches.py",
