@@ -19,6 +19,8 @@ raise max_builders to 12". `session.py plan` caps its `Assign` rows by `max_buil
 2. `reviews_in_flight` stays as it is on the default branch (9, pinned by `test_this_repository_sets_its_review_capacity`);
    this ADR does not change the conductor's review capacity.
 3. `tests/kit/test_plan_holders.py` reads the repository's `[flow]` table and now pins `of 12`; no test of the rule changes.
+4. The `scripts/agk/session.py` entry of `[testing.map]` names `tests/kit/test_guide_team.py`, which runs `session.py`
+   (added by brief #1145 without a map entry, so `test_always_full_infra.py` failed on the default branch).
 
 Protected path classes changed: `agk.toml`, `tests/kit/` (`test_plan_holders.py`).
 

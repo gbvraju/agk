@@ -291,9 +291,9 @@ def test_962_an_unlisted_author_or_a_brief_not_open_does_not_stop_it(proj, stub,
 
 
 def test_this_repository_plans_up_to_twelve_builders(proj, stub):
-    """REQ-039 REQ-041: brief #1148 answers 1 and 2 (this repository's `[flow]` table, all slots free:
-    `max_builders = 12` by the owner's answer Q-1145-1, ADR-0487, so no `Assign` row names a slot past
-    s12, and the capacity reads `of 12`; it read `of 6` under brief #1009)."""
+    """REQ-039 REQ-041: brief #1148 answers 1 and 2 (this repository's `[flow]` table, all slots
+    free: `max_builders = 12` by the owner's answer Q-1145-1, ADR-0487, so no `Assign` row names a
+    slot past s12, and the capacity reads `of 12`; it read `of 6` under brief #1009)."""
     text = (ROOT / "agk.toml").read_text(encoding="utf-8")
     table = text[text.index("[flow]") : text.index("\n[testing]")]
     # The plan issue asks every brief for a `Wave:` line; the slots and the capacity do not read it.
