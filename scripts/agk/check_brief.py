@@ -25,10 +25,10 @@ line `Wave: n` (amendment 140), a wave of `--waves` when that list is given. Wit
 line `Adds:` lists the new files a brief creates and `Broad: <reason>` says that it is a sweep.
 Amendment 142: one line `Contexts:` states every context of `session.CONTEXTS`, each with how the
 change works there or `not applicable: <reason>`.
-Amendment 168 (brief #1121): `Size: S` names at most 3 code paths in `Touches:` and `Size: M` at most
-6 (entries outside `tests/`, `docs/`, `changelog.d/` and `kit/hashes.json`; with `--root DIR`, the
-limits of `brief_code_paths` in the `[flow]` table of `DIR/agk.toml`); `Broad:` lifts the limit, and
-`Size: L` is refused beside a `Wave:` line.
+Amendment 168 (brief #1121): `Size: S` names at most 3 code paths in `Touches:` and `Size: M`
+at most 6 (entries outside `tests/`, `docs/`, `changelog.d/` and `kit/hashes.json`; with
+`--root DIR`, the limits of `brief_code_paths` in the `[flow]` table of `DIR/agk.toml`); `Broad:`
+lifts the limit, and `Size: L` is refused beside a `Wave:` line.
 Brief #982 (rule 4b): with `--root DIR`, a `Touches:` glob that meets a class of
 `DIR/config/protected-paths.txt` in a brief that reserves no ADR and names no `Covered-by:` is
 warned (`warning: ...` before `ok brief`, a `warnings` list in a passing event), never failed.
@@ -51,7 +51,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import design_signoff
 from common import REQ_HEADER, CheckError, config_source, run
-from config import brief_code_paths
 from session import (
     advances_ids,
     brief_problems,
@@ -62,6 +61,8 @@ from session import (
     wave_problems,
 )
 from session_plan import touch_problems, touch_rules
+
+from config import brief_code_paths
 
 NAME = "brief"
 USAGE = "usage: check_brief.py (FILE | --event PAYLOAD) [--root DIR] [--waves N,N]"

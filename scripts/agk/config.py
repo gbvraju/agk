@@ -474,7 +474,9 @@ class BriefSizeSettingError(CheckError):
 
 def brief_code_paths(root: Path) -> dict[str, int]:
     """The most code paths each of `Size: S` and `Size: M` allows; the defaults when unset."""
-    refused = BriefSizeSettingError("rule 4: the setting is refused (setting: flow.brief_code_paths)")
+    refused = BriefSizeSettingError(
+        "rule 4: the setting is refused (setting: flow.brief_code_paths)"
+    )
     try:
         flow = config_source(root).get("flow", {})
     except (OSError, ValueError):

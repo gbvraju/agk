@@ -737,13 +737,13 @@ def brief_problems(body: str | None, limits: dict[str, int] | None = None) -> li
     return problems + line_problems(lines)
 
 
-NOT_CODE = ("tests/", "docs/", "changelog.d/")  # amendment 168: with `kit/hashes.json`, no code path
+NOT_CODE = ("tests/", "docs/", "changelog.d/")  # amendment 168: none is a code path
 
 
 def size_problems(lines: list[str], limits: dict[str, int]) -> list[str]:
     """Amendment 168 of rule 4 (brief #1121, ADR-0479): `Size: S` and `Size: M` allow at most
     `limits` code paths, a `Touches:` entry outside tests, docs, changelog fragments and
-    `kit/hashes.json`; a `Broad:` line lifts that limit. `Size: L` is refused with a `Wave:` line."""
+    `kit/hashes.json`; a `Broad:` line lifts that limit. `Size: L` is refused with `Wave:`."""
     size = next(x.rstrip()[-1] for x in lines if SIZE.fullmatch(x.rstrip()))
     if size == "L":
         if any(x.startswith("Wave:") for x in lines):
