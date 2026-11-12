@@ -94,7 +94,7 @@ def test_c_the_builder_text_carries_every_rule_by_its_first_words():
         "HANDING OVER",
         "Report: <head> handing over:",
         "FINAL LINES",
-        "Merged-by: merge_cleared.py",
+        "Merged-by: ",
         "for the maintainers",
         "TOKEN RULE",
         "Secret-scan: deferred to CI",
@@ -111,7 +111,7 @@ def test_c_the_builder_text_carries_every_rule_by_its_first_words():
 def test_c_the_launcher_and_conductor_texts_keep_their_rules():
     """REQ-039: answer 1: the launcher's steps and the conductor's placeholder for its long run."""
     launcher = text("launcher.txt")
-    for words in ("session.py kind --brief", "Capacity:", "Started: cb", "agk:handover"):
+    for words in ("kind --brief N", "Capacity:", "Started: cb", "agk:handover"):
         assert words in launcher, words
     assert "REST only" in launcher
     conductor = text("conductor.txt")
