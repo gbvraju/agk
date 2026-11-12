@@ -63,6 +63,7 @@
     "scripts/agk/check_kit_tests.py",
     "scripts/agk/check_neutrality.py",
     "scripts/agk/check_numbers.py",
+    "scripts/agk/check_plan.py",
     "scripts/agk/check_playbooks.py",
     "scripts/agk/check_pr_body.py",
     "scripts/agk/check_pr_mode.py",
