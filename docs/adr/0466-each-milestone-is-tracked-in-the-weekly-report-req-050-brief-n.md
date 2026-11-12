@@ -50,8 +50,9 @@ status script exists and the report has no milestone line. This is build (f) of 
 
 Protected path classes changed: `scripts/agk/` (`plan_status.py`, new; `product_report.py`), `kit/`
 (`kit/manifest.json`, `kit/facts-schema.json`, `kit/report-schema.json`, and `kit/hashes.json` only as
-`kit_hashes.py` prints it), `agk.toml` (one `[[testing.map]]` entry) and `tests/kit/` (`test_plan_status.py`, new; the report goldens'
-`schema` and the tests that pin it to 8).
+`kit_hashes.py` prints it), `agk.toml` (two `[[testing.map]]` entries), `tests/kit/` (`test_plan_status.py`, new; the report goldens'
+`schema`, one new report fixture and the tests that pin the schema to 8) and `tests/kit_dev/`
+(`test_facts_wiring.py`, which alone may name the facts schema, validates the `plan` key).
 
 ## Consequences
 
