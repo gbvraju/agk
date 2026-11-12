@@ -1,6 +1,6 @@
 # ADR-0450: A UI brief names an imported version and is compared with its pages
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0037, ADR-0446, ADR-0448, ADR-0449, amendment 161, brief #1063, plan #661
