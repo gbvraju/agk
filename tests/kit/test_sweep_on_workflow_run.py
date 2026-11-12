@@ -89,9 +89,13 @@ def test_the_sweep_job_is_not_skipped_with_the_event_job():
 
 
 def test_one_sweep_at_a_time_across_pull_requests():
-    """REQ-046: brief #836 answer 3 (each finished run has its own group; the sweep job has one)."""
+    """REQ-046: brief #836 answer 3 (each finished run has its own group; the sweep job has one).
+
+    Brief #1066 (ADR-0452): the group is `agk-merger-sweep-job-2`, so the run of 2026-11-09 that waits for the
+    `merge` environment under the old group no longer holds every later sweep.
+    """
     body = job("sweep")
-    assert re.search(r"^    concurrency:\n      group: agk-merger-sweep-job\n", body, re.M)
+    assert re.search(r"^    concurrency:\n      group: agk-merger-sweep-job-2\n", body, re.M)
     assert "cancel-in-progress: false" in body
 
 
