@@ -129,6 +129,7 @@ import sys
 import time
 import tomllib
 from collections.abc import Callable
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -557,15 +558,15 @@ def watch(root, args: dict[str, str]) -> int:
                     return 0
                 brief = brief_number(pr)
                 if brief is not None:
-                    found = pages(f"repos/{repo}/issues/{brief}/comments")
-                    if found is not None and brief_seen is UNSET:
-                        brief_seen = newest(found)
-                        line = correction_line(found, floor, authors, brief)
+                    said = pages(f"repos/{repo}/issues/{brief}/comments")
+                    if said is not None and brief_seen is UNSET:
+                        brief_seen = newest(said)
+                        line = correction_line(said, floor, authors, brief)
                         if line:
                             print(line)
                             return 0
-                    elif found is not None:
-                        line = correction_line(found, brief_seen, authors, brief)
+                    elif said is not None:
+                        line = correction_line(said, brief_seen, authors, brief)
                         if line:
                             print(line)
                             return 0
@@ -1839,7 +1840,7 @@ def answer_owed(pull: dict, comments: list, answerers: set[str]) -> bool:
 
 
 def follow_up_owed(
-    repo: str, pull: dict, allowed: set[str], approvers: set[str] = frozenset()
+    repo: str, pull: dict, allowed: set[str], approvers: AbstractSet[str] = frozenset()
 ) -> str | None:
     """`conflict`, `fix list` (the newest verdict, with no `Report:` after it), `answer` (an
     answered question the builder stopped on, brief #961) or None."""
@@ -2206,12 +2207,12 @@ def next_brief(root, me: str, taking: bool = False) -> int:
     read_gone(root, s)
     freed, s.skipped = settle_takes(s)
     s.held = [h for h in s.held if h[0] not in freed]
-    for number, why in s.skipped:
-        print(f"skip #{number}: {why}")
+    for number, reason in s.skipped:
+        print(f"skip #{number}: {reason}")
     ready = [*s.free, *(s.briefs[n] for n in sorted(freed))]
     for brief in sorted(ready, key=lambda b: (priority_of(b["body"]), b["number"])):
-        found = None if brief["number"] in s.fixes else running_conflict(root, s, brief, shared)
-        why = wait_text(found) if found else None  # a red branch's fix: before the overlap (#1052)
+        waits = None if brief["number"] in s.fixes else running_conflict(root, s, brief, shared)
+        why = wait_text(waits) if waits else None  # a red branch's fix: before the overlap (#1052)
         if taking:
             why = why or take(s, brief, lambda b=brief: reservation(root, s, b))
         if why:

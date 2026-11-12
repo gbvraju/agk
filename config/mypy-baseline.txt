@@ -45,8 +45,7 @@ scripts/agk/proof.py misc 1
 scripts/agk/route.py union-attr 2
 scripts/agk/route.py var-annotated 1
 scripts/agk/ruleset.py arg-type 1
-scripts/agk/session.py arg-type 6
-scripts/agk/session.py assignment 4
+scripts/agk/session.py arg-type 2
 scripts/agk/session.py index 1
 scripts/agk/session.py return-value 1
 scripts/agk/session.py union-attr 4
