@@ -247,3 +247,30 @@ def test_the_router_still_labels_a_pull_request_after_an_edit():
             "event": {"workflow_run": run, "repository": {"default_branch": "main"}},
         }
         assert holds(router_condition(), wake), conclusion
+
+
+# --- brief #1101 (ADR-0471): asks, answers and hand-overs wake the router ---------------------
+
+WAKE_LINES = ("Owner needed:", "Question:", "Maintainer answer:", "Report:")
+
+
+@pytest.mark.parametrize("word", WAKE_LINES)
+def test_1101e_the_router_filter_names_the_four_new_first_lines_for_a_created_comment(word):
+    """REQ-039: brief #1101 answer 2 and 4(e) (a created comment starting one of them routes)."""
+    from test_ci_saving import comment_event, holds, router_condition
+
+    cond = router_condition()
+    created = cond.split("github.event.action == 'created' && (", 1)[1]
+    assert f"startsWith(github.event.comment.body, '{word}')" in created, word
+    assert holds(cond, comment_event(f"{word} something on the head"))
+    edited = comment_event(f"{word} something on the head")
+    edited["event"]["action"] = "edited"
+    assert not holds(cond, edited), word
+
+
+def test_1101e_a_comment_with_another_first_line_still_starts_no_job():
+    """REQ-039: brief #1101 answer 2 (the filter grows by four lines only)."""
+    from test_ci_saving import comment_event, holds, router_condition
+
+    for body in ("Progress: abc1234 done 1/6", "thanks", "Tell: cb1 hello", "Started: cb1"):
+        assert not holds(router_condition(), comment_event(body)), body
