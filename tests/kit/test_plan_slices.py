@@ -41,7 +41,8 @@ for _screen in ("orders", "order-detail", "settings"):
     INVENTORY += f"### {_screen}\n\n- Flow: orders\n- Pattern: detail\n- Links to: none\n"
     INVENTORY += "- State default: yes\n- State empty: n/a: never empty\n\n"
 SIGNOFFS = (
-    "# Sign-offs\n\n| kind | version | digest | head | date | comment |\n|---|---|---|---|---|---|\n"
+    "# Sign-offs\n\n| kind | version | digest | head | date | comment |\n"
+    "|---|---|---|---|---|---|\n"
     f"| design | i1 | {'b' * 64} | {'c' * 40} | 2026-11-02 | https://example.com/c/1 |\n"
 )
 EXIT = "every screen and state reads match in design_compare.py against i1"
@@ -60,7 +61,7 @@ def no_network(monkeypatch) -> None:
 
 @pytest.fixture
 def design(repo: Path) -> Path:  # noqa: F811 - the reused fixture
-    """The repository with a prototype source, its components source, an inventory and a sign-off."""
+    """The repository with a prototype source, its components, an inventory and a sign-off."""
     write(repo, PROTO, PROTO_TEXT)
     write(repo, PARTS, PARTS_TEXT)
     write(repo, "docs/design/inventory.md", INVENTORY)
@@ -69,7 +70,7 @@ def design(repo: Path) -> Path:  # noqa: F811 - the reused fixture
 
 
 def sliced() -> dict:
-    """M1 Foundation with the component brief B1, and M2 a slice whose brief B2 builds the screens."""
+    """M1 Foundation with the component brief B1; M2 a slice whose brief B2 builds the screens."""
     data = proposals()
     data["components"] = [copy.deepcopy(COMPONENT)]
     m1 = data["milestones"][0] | {"title": "Foundation", "exit": "all 1 component briefs merge"}
@@ -102,10 +103,12 @@ def test_ac2_components_and_slices_pass(design: Path, capsys) -> None:
 
 
 def test_ac2_a_screen_brief_must_depend_on_its_components_brief(design: Path, capsys) -> None:
-    """REQ-050 AC2: rule 5 with `Q-1089-3`, directly, naming the brief, the component and its brief."""
+    """REQ-050 AC2: rule 5 with `Q-1089-3`, directly, naming brief, component and its brief."""
     data = sliced()
     data["briefs"][1]["depends_on"] = []
-    out = refused(design, data, capsys, "rule 5: briefs B2: depends_on does not name B1 of component C1")
+    out = refused(
+        design, data, capsys, "rule 5: briefs B2: depends_on does not name B1 of component C1"
+    )
     no_text(out)
     data["briefs"].append(copy.deepcopy(data["briefs"][1]) | {"key": "B3", "depends_on": ["B2"]})
     data["briefs"][1]["depends_on"] = ["B1"]
@@ -152,7 +155,7 @@ def test_ac2_a_brief_component_must_name_a_component(design: Path, capsys) -> No
 
 
 def test_ac2_m1_is_titled_foundation_and_component_keys_run_in_order(design: Path, capsys) -> None:
-    """REQ-050 AC2: rule 4, `M1` is `Foundation` while `components` is not empty; keys C1, C2, ..."""
+    """REQ-050 AC2: rule 4, `M1` is `Foundation` with `components`; keys run C1, C2, ..."""
     data = sliced()
     data["milestones"][0]["title"] = "Start"
     out = refused(design, data, capsys, "rule 4: milestones M1: title is not Foundation")
@@ -194,7 +197,9 @@ def test_ac2_a_slice_exit_names_the_comparison_and_a_signed_off_version(
     """REQ-044, REQ-050 AC2: rule 5, `design_compare.py`, `match` and a `design` row's version."""
     data = sliced()
     data["milestones"][1]["exit"] = exit_text
-    out = refused(design, data, capsys, "rule 5: milestones M2: exit does not name design_compare.py")
+    out = refused(
+        design, data, capsys, "rule 5: milestones M2: exit does not name design_compare.py"
+    )
     assert exit_text not in out
 
 
