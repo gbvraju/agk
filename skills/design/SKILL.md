@@ -2,7 +2,7 @@
 name: design
 description: List every screen and state of a product (the inventory), then write a prototype version of them to click through, from the kit's design standard and the theme, for the person to sign off by a line. Writes files; never commits.
 disable-model-invocation: true
-argument-hint: "prototype | inventory"
+argument-hint: "prototype | inventory | import <folder>"
 ---
 
 # /agk:design
@@ -11,6 +11,12 @@ argument-hint: "prototype | inventory"
 as a prototype version to click through (SPEC-0037). `/agk:design <name>` no longer writes a mockup folder: `design.py
 write` refuses, naming rule 12 and pointing to `/agk:design prototype`, and writes nothing. The existing folders of
 `docs/design/mockups/` are only read and checked, as before.
+
+**When to import and when to draw.** Import when the customer's prototype is the design: `/agk:design import <folder>`
+keeps it unchanged as an imported version `i<n>` (SPEC-0037 rule 15). Draw when there is no prototype yet:
+`/agk:design inventory`, then `/agk:design prototype`. A project may hold both kinds. What of a customer's prototype may
+be committed is the person's call, made before the import: it may hold real names and data that no check can tell from
+invented ones, so ask the person, and import only the folder they name.
 
 An engine only drafts. If `[engines]` in `agk.toml` has a `design` key, it names a skill the session can see (`agk doctor`
 reports it as present, absent or missing); use that skill to draft the brand record and the inventory's slots. If the key
@@ -66,6 +72,35 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/engines.py" design-next-steps --req R
 ```
 
 Do not commit or push, and do not open a pull request: the person or their session does.
+
+## /agk:design import
+
+`/agk:design import <folder>` copies the prototype a customer gave you into the next imported version
+`docs/design/imported/i<n>/` (`i1`, `i2` and so on, never overwritten), byte for byte and whatever its file types, into
+`files/`, and writes `manifest.json` (each file's path, size and SHA-256, the digest and the pages) and `external.txt`
+(the external links its pages make, for the person to read; they block nothing). It reads files only and opens no page.
+
+1. Before the import, ask the person which folder may be committed to the repository; import only that folder. Fetch
+   the default branch, make sure the work tree is clean (stop and say so if it is not), create the branch from the
+   default branch, and import:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/design.py" import <folder>
+```
+
+   It refuses, naming rule 15 and copying nothing, a symbolic link, a folder inside `docs/design/` and an empty folder.
+2. Do not edit, rename or remove a file of `files/`, and copy nothing of it into the theme, the inventory, a fixture, a
+   test or a kit version. The inventory is still made from the requirements and the specs alone; the person turns the
+   prototype into requirements first.
+3. Draft `docs/design/imported/i<n>/map.md` for the person: one row for each page of the manifest,
+   `<file> -> <screen>/<state>` with a screen and state of the inventory, or `<file> -> out: <reason>`. The map is the
+   person's work; the check judges it. Check, and correct the map on a failure, at most three rounds, then stop and
+   report: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/check_design.py"`, then `make governance`.
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/doctor.py"` prints one `design import:` line per version with its manifest
+   and map state, as information.
+4. Sign-off is the person's: `Approve: design i<n> <full head ID>` from an account listed in `spec_approvers`. A session
+   never posts it. Once signed off the version is frozen; a corrected map or a new delivery is a new version, imported
+   again. Do not commit or push, and do not open a pull request: the person or their session does.
 
 ## A UI build against its signed-off version
 
