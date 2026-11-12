@@ -1,0 +1,1 @@
+- The router starts the merger once, with `workflow_dispatch` and the input `pr`, when it labels a pull request `agk:merge-ready`; a finished `governance` or `proof` run no longer starts the merger job or its sweep, and `minutes.py` reads the run list by time windows and prints the minutes per merged pull request of the last 7 days (brief #1116, ADR-0476 Proposed)

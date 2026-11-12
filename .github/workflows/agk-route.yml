@@ -11,6 +11,8 @@
 # A `pull_request` event of a draft starts no job: a draft's governance run wakes the router when it finishes, and the label is
 # set again when it is marked ready, by the router run that the `ready_for_review` governance run wakes. A `workflow_run` whose
 # conclusion is `skipped` (proof on a draft) starts no job either, since a skipped run changes no label.
+# Brief #1116 (ADR-0476): when it labels a pull request `agk:merge-ready` it starts the merger once for it with `workflow_dispatch`
+# (`actions: write`, the one event the job's token may start), so the merger no longer starts on every finished run.
 name: agk-route
 
 on:
@@ -35,6 +37,7 @@ permissions:
   issues: write
   checks: read
   statuses: read
+  actions: write
 
 # Fast CI (brief #283): the router runs on drafts too, since it labels every pull request and runs no test; it installs and
 # caches nothing and builds nothing, and its one upload (the pipeline document) keeps a retention of 7 days. The concurrency

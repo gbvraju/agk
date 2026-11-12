@@ -135,7 +135,8 @@ def test_a_failed_reply_does_not_stop_the_label(proj, stub, tmp_path):
 
 
 def test_the_workflow_gains_no_permission():
-    """Brief 238 answer 2: the router's five permissions stay."""
+    """Brief 238 answer 2: the router's five permissions stay; brief #1116 (ADR-0476) adds the
+    one `actions: write`, to start the merger for a pull request entering `agk:merge-ready`."""
     from pathlib import Path
 
     text = (
@@ -149,6 +150,7 @@ def test_the_workflow_gains_no_permission():
         "issues": "write",
         "checks": "read",
         "statuses": "read",
+        "actions": "write",
     }
 
 

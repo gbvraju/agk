@@ -552,6 +552,7 @@ tests = [
   "tests/kit/test_merge_cleared_merger.py", "tests/kit/test_merge_cleared_pre_tests.py",
   "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_merger_on_status.py", "tests/kit/test_merger_sweep.py",
+  "tests/kit/test_merger_trigger.py",
   "tests/kit/test_personal_mode_rules.py", "tests/kit/test_rule3a_covered_and_label.py",
   "tests/kit/test_rule3a_record_comments.py", "tests/kit/test_session_kind.py", "tests/kit/test_session_rules.py",
   "tests/kit/test_sweep_by_verdict.py", "tests/kit/test_verdict_status.py",
@@ -730,7 +731,7 @@ tests = [
   "tests/kit/test_route_required.py", "tests/kit/test_rule3a_covered_and_label.py",
   "tests/kit/test_runbook_pointers.py", "tests/kit/test_session_kind.py", "tests/kit/test_session_parked.py",
   "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py", "tests/kit/test_stalls.py",
-  "tests/kit/test_sweep_by_verdict.py", "tests/kit_dev/test_uninstall.py",
+  "tests/kit/test_sweep_by_verdict.py", "tests/kit/test_merger_trigger.py", "tests/kit_dev/test_uninstall.py",
 ]
 [[testing.map]]
 code = "scripts/agk/rules.py"
