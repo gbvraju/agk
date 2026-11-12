@@ -62,6 +62,14 @@ REQ-057 AC1: *the planner and `claim` refuse an overlap on a file.* Rules 2 and 
 - 2026-11-06: a brief whose `Touches:` line omits a file it then changes is refused by nothing at take time; the sweep's `overlap:` line finds it only once both pull requests are open (due 2026-12-31).
 - 2026-11-06: with two merges an hour, a pull request that waits for review may need several merges of the default branch before it clears; with `max_behind_merges` absent by default that cost is not imposed; the `BEHIND` lines and the weekly scorecard (draft intake #673) measure it before any default is proposed (due 2027-01-31).
 
+## Contexts
+
+- kit: the installed `session_plan.py`, `session.py`, `conductor.py` and `merge_cleared.py` apply the overlap, the re-prove and its hold in every project with builders, and amendment 171's light re-prove lets a shared-index line skip the builder round trip (rules 6, 7, 7a and 8)
+- github: no workflow change, and the light re-prove's update-branch is one REST call by the conductor's own token, so the checks run as for a push (rule 7a)
+- local: a local conductor runs the same commands, and with `auto_merge = false` a person still merges and rule 7's sweep line stays the guard (rules 7 and 7a)
+- personal: not applicable: no conductor and no builders run at once, so nothing changes
+- stacks: not applicable: no test or build step of a stack changes
+
 ## Open questions
 
 Each is a point the brief leaves open; the reading after it is the most conservative one, and the rules above apply it until a person rules.

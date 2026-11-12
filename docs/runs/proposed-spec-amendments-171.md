@@ -50,6 +50,8 @@ Read in the code by this session (main 40ca3ff):
 - New rule 7a, the text of item 1 and item 2 above, with item 3's last sentence (`Q-S0050-16`).
 - `Q-S0050-7`, at its end: "; amendment 171 (rule 7a) lets a re-prove whose files are all shared indexes and whose merge
   is clean carry the verdict over on the checks alone."
+- A `## Contexts` section, which the amended Approved spec must state (amendment 142, `check_specs.py`), from the brief's
+  `Contexts:` line.
 - New answer `Q-S0050-16`: the brief reserved `Q-S0050-14`, which the spec already holds (the rule budget, ruled
   2026-11-06), so the answer takes the next free number.
 
