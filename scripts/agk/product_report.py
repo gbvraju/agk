@@ -33,6 +33,8 @@ KINDS = (
     ("pull-request", "Pull requests without a verdict"),
     ("residual", "Overdue residuals"),
     ("requirement", "Planned requirements with no spec"),
+    ("scope-change", "Scope changes waiting for approval"),
+    ("plan", "Plans waiting for confirmation"),
 )
 REQUIRED = (
     "config requirements markers specs adrs residuals questions pull_requests issues drift"
@@ -168,7 +170,7 @@ def unknown_line(what: str, link: str) -> str:
 # An item is `{"kind", <its fields>, "links"}`. The fields of a kind are fixed here; a kind or a
 # field that is not in the table does not exist (a new one is a new schema number).
 
-REPORT_SCHEMA = 8
+REPORT_SCHEMA = 9
 SHADOW_COUNTS = (
     "heads",
     "right_conductor_only",
@@ -236,6 +238,9 @@ ITEM_KINDS = {
     "pull-requests-merged-no-verdict": ("entries", "count"),
     "pull-requests-merged-not-cleared": ("entries", "count"),
     "drift-audit": ("total", "counts", "open_issue"),
+    "milestone-at-risk": ("id", "title", "status", "p85", "target", "cause"),
+    "scope-change-waiting": ("id",),
+    "plan-waiting": ("milestones",),
 }
 OPTIONAL_FIELDS = {"metrics-issue": ("number", "title"), "drift-audit-issue": ("number", "title")}
 SECTION_KEYS = ("delivered", "proven", "needs_you", "at_risk", "cost", "flow")
@@ -410,6 +415,57 @@ def requirement_items(doc: dict, links: Links) -> list[dict]:
     ]
 
 
+PLAN_FILES = ("docs/plan/milestones.md", "docs/plan/scope-changes.md")
+
+
+def plan_of(doc: dict) -> dict | None:
+    """The optional `plan` of the facts (SPEC-0043 rule 19), when it can be read."""
+    plan = doc.get("plan")
+    readable = isinstance(plan, dict) and is_list(plan.get("milestones"))
+    return plan if readable and isinstance(plan.get("waiting"), dict) else None
+
+
+def plan_waiting(doc: dict, links: Links) -> dict:
+    """The plan and the scope changes that wait for the person (SPEC-0043 rules 8, 19 and 22)."""
+    plan = plan_of(doc)
+    if plan is None:
+        return {"scope-change": [], "plan": []}
+    wait = plan["waiting"]
+    changes = [
+        item("scope-change-waiting", [link("file", links.file(PLAN_FILES[1]))], id=sc)
+        for sc in wait.get("scope_changes", [])
+    ]
+    milestones = len(plan["milestones"])
+    confirm = [
+        item("plan-waiting", [link("file", links.file(PLAN_FILES[0]))], milestones=milestones)
+    ]
+    return {"scope-change": changes, "plan": confirm if wait.get("plan") is True else []}
+
+
+def plan_risks(doc: dict, links: Links) -> list[dict]:
+    """One At risk item per milestone `at risk` or `late` (SPEC-0043 rule 19); a `plan` that
+    cannot be read is one `unknown` item, and no `plan` adds nothing."""
+    if "plan" not in doc:
+        return []
+    plan = plan_of(doc)
+    if plan is None:
+        return [unknown_item("the plan", "file", links.file(PLAN_FILES[0]))]
+    return [
+        item(
+            "milestone-at-risk",
+            [link("file", links.file(PLAN_FILES[0]))],
+            id=m["id"],
+            title=m["title"],
+            status=m["status"],
+            p85=m["forecast"]["p85"],
+            target=m["target"],
+            cause=list(m["cause"]),
+        )
+        for m in plan["milestones"]
+        if m.get("status") in ("at risk", "late")
+    ]
+
+
 def inbox(doc: dict, links: Links, today: date) -> list[dict]:
     """The groups of what waits for a person, for the kinds that have an item, in the order of
     the table: `{"group", "count", "items"}` (the count is `unknown` for an unknown item)."""
@@ -421,6 +477,7 @@ def inbox(doc: dict, links: Links, today: date) -> list[dict]:
         "pull-request": pull_request_items(doc, links, today),
         "residual": residual_items(doc, links, today),
         "requirement": requirement_items(doc, links),
+        **plan_waiting(doc, links),
     }
     groups = []
     for kind, _ in KINDS:
@@ -730,7 +787,7 @@ def at_risk(doc: dict, links: Links, today: date, start: date, end: date) -> lis
             if state:
                 late.append((f"pull-requests-merged-{state}", p["number"], p["title"], {}))
         items += grouped(late, links)
-    return items + flow_risks(doc, links, today)
+    return items + flow_risks(doc, links, today) + plan_risks(doc, links)
 
 
 def flow_risks(doc: dict, links: Links, today: date) -> list[dict]:
@@ -1310,6 +1367,13 @@ RENDER = {
     "requirements-without-brief": without_brief_text,
     "flow-figures": flow_text,
     "drift-audit": drift_text,
+    "milestone-at-risk": lambda i: bullet_of(
+        i,
+        f'Milestone {i["id"]} "{i["title"]}" is {i["status"]}: P85 {i["p85"]} after target '
+        f"{i['target']}; " + "; ".join(i["cause"]),
+    ),
+    "scope-change-waiting": lambda i: bullet_of(i, f"Scope change {i['id']} waits for approval"),
+    "plan-waiting": lambda i: bullet_of(i, "The plan waits for its confirmation (Approve: plan)"),
     "unknown": unknown_text,
     "requirement-done": lambda i: bullet_of(
         i,

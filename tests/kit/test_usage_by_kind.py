@@ -157,7 +157,7 @@ def test_ac7_the_facts_and_the_report_are_unchanged(setup):
     import facts
     import product_report
 
-    assert facts.SCHEMA == 1 and product_report.REPORT_SCHEMA == 8
+    assert facts.SCHEMA == 1 and product_report.REPORT_SCHEMA == 9
 
     class Src:
         def get(self, name, endpoint, until=None):

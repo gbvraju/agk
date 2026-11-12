@@ -1319,6 +1319,183 @@
           "const": "unknown"
         }
       ]
+    },
+    "plan": {
+      "description": "The milestones' status from plan_status.py --base IN --into OUT (SPEC-0043 rules 17 to 19, ADR-0466). Optional: only a project with docs/plan/milestones.md has it.",
+      "type": "object",
+      "required": [
+        "today",
+        "milestones",
+        "waiting",
+        "limits"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "today": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "milestones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "briefs",
+              "estimate",
+              "reasons",
+              "hours",
+              "forecast",
+              "target",
+              "status",
+              "trend",
+              "cause"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^M\\d+$"
+              },
+              "title": {
+                "type": "string"
+              },
+              "briefs": {
+                "type": "object",
+                "required": [
+                  "done",
+                  "open"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "done": {
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "const": "unknown"
+                      }
+                    ]
+                  },
+                  "open": {
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "const": "unknown"
+                      }
+                    ]
+                  }
+                }
+              },
+              "estimate": {
+                "enum": [
+                  "calibrated",
+                  "uncalibrated",
+                  "done",
+                  "unknown"
+                ]
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "hours": {
+                "type": "object",
+                "required": [
+                  "spent",
+                  "p50",
+                  "p85"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "spent": {
+                    "type": "string"
+                  },
+                  "p50": {
+                    "type": "string"
+                  },
+                  "p85": {
+                    "type": "string"
+                  }
+                }
+              },
+              "forecast": {
+                "type": "object",
+                "required": [
+                  "p50",
+                  "p85"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "p50": {
+                    "type": "string"
+                  },
+                  "p85": {
+                    "type": "string"
+                  }
+                }
+              },
+              "target": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  {
+                    "const": "none"
+                  }
+                ]
+              },
+              "status": {
+                "enum": [
+                  "late",
+                  "unknown",
+                  "at risk",
+                  "on track"
+                ]
+              },
+              "trend": {
+                "type": "string"
+              },
+              "cause": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "waiting": {
+          "type": "object",
+          "required": [
+            "plan",
+            "scope_changes"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "plan": {
+              "type": "boolean"
+            },
+            "scope_changes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^SC-\\d+$"
+              }
+            }
+          }
+        },
+        "limits": {
+          "type": "string"
+        }
+      }
     }
   },
   "additionalProperties": false

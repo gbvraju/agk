@@ -341,7 +341,7 @@ def test_rule19_no_plan_key_gives_the_report_it_had(tmp_path, monkeypatch, capsy
 
 def test_rule19_a_milestone_at_risk_is_one_at_risk_line(tmp_path, monkeypatch, capsys):
     """REQ-050 AC5: rule 19 (`Milestone M<n> "<title>" is <status>: ...; <cause>`)."""
-    _, into = report_facts(tmp_path, monkeypatch, capsys, targets={"M1": "2026-11-20"})
+    _, into = report_facts(tmp_path, monkeypatch, capsys, targets={"M1": "2026-11-06"})
     m1 = next(m for m in into["plan"]["milestones"] if m["id"] == "M1")
     assert m1["status"] == "at risk"
     structure, text = report_of(into)
@@ -349,7 +349,7 @@ def test_rule19_a_milestone_at_risk_is_one_at_risk_line(tmp_path, monkeypatch, c
     assert len(risky) == 1 and risky[0]["id"] == "M1"
     line = (
         f'- Milestone M1 "Orders" is at risk: P85 {m1["forecast"]["p85"]} after target '
-        f"2026-11-20; waiting on review 3.0 h this week; 1 of 1 estimates missed"
+        f"2026-11-06; waiting on review 3.0 h this week; 1 of 1 estimates missed"
     )
     assert sum(1 for x in text.splitlines() if x.startswith("- Milestone M")) == 1
     assert any(x.startswith(line + " — https://github.com/") for x in text.splitlines())
@@ -380,7 +380,7 @@ def test_rule19_an_unreadable_plan_key_is_one_unknown_item(tmp_path, monkeypatch
 
 def test_rule19_the_report_still_reads_one_file(tmp_path, monkeypatch, capsys):
     """REQ-050 AC5: rule 19 (SPEC-0011 rule 2: the renderer is a function of `OUT` alone)."""
-    _, into = report_facts(tmp_path, monkeypatch, capsys, targets={"M1": "2026-11-20"})
+    _, into = report_facts(tmp_path, monkeypatch, capsys, targets={"M1": "2026-11-06"})
     (tmp_path / "docs").rename(tmp_path / "gone")
     again = copy.deepcopy(into)
     assert report_of(again) == report_of(into)
