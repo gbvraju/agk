@@ -84,6 +84,14 @@ plan_issue = 661
 # queue = false
 # queue_order = "fifo"
 # queue_max_wait = 120
+# The plan's estimator (SPEC-0043 rules 12, 14 and 23, brief #1093, ADR-0465): optional, and the defaults apply when the table is absent.
+# calibration_min (10): the merged pull requests with a size and actual hours a calibrated estimate needs; iteration_days (10, 1 to 30):
+# the working days of an iteration; default_hours: the owner's range per size for a brief without an Expected: line, printed as
+# "owner default". The table holds only these keys; any other value is refused naming the setting. A change needs an ADR (agk.toml is protected).
+# [plan]
+# calibration_min = 10
+# iteration_days = 10
+# default_hours = { S = "2-4", M = "4-8", L = "8-16" }
 # The work type (SPEC-0038 rule 5, REQ-045): `[delivery] work_type` selects a delivery playbook. This repository declares no work
 # type (SPEC-0038 rule 12 (b)); declaring one is the owner's change, by an ADR in the same pull request, and a session never writes it.
 # [delivery]
@@ -427,7 +435,8 @@ tests = [
   "tests/kit/test_architect_guard.py", "tests/kit/test_checklist.py", "tests/kit/test_decision_files.py",
   "tests/kit/test_facts.py",
   "tests/kit/test_facts_done_on.py", "tests/kit/test_facts_shadow.py", "tests/kit/test_final_accepts.py",
-  "tests/kit/test_head_cleared.py", "tests/kit/test_product_report_facts_artifact.py",
+  "tests/kit/test_head_cleared.py", "tests/kit/test_plan_estimate.py",
+  "tests/kit/test_product_report_facts_artifact.py",
   "tests/kit/test_product_report_workflow.py", "tests/kit/test_retired_requirements.py",
   "tests/kit/test_runbook_measures.py", "tests/kit/test_self_clearance.py", "tests/kit/test_session.py",
   "tests/kit/test_usage_by_kind.py", "tests/kit/test_usage_figures.py", "tests/kit/test_verdict_forms.py",
@@ -587,6 +596,9 @@ tests = ["tests/kit/test_personal_state.py", "tests/kit_dev/test_kit_manifest.py
 [[testing.map]]
 code = "scripts/agk/plan_intake.py"
 tests = ["tests/kit/test_plan_intake.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_plan_intake_skill.py"]
+[[testing.map]]
+code = "scripts/agk/plan_estimate.py"
+tests = ["tests/kit/test_plan_estimate.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/playbook.py"
 tests = [
