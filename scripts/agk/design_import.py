@@ -50,7 +50,7 @@ import posixpath
 import re
 import shutil
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -432,8 +432,8 @@ SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 SKIPPED = frozenset({"script", "style", "template"})
 # Phrasing elements whose text runs on with the text around it; every other tag ends a line.
 INLINE = frozenset(
-    {"abbr", "b", "bdi", "bdo", "cite", "code", "data", "dfn", "em", "i", "kbd", "mark", "q",
-     "s", "samp", "small", "span", "strong", "sub", "sup", "time", "u", "var", "wbr"}
+    "abbr b bdi bdo cite code data dfn em i kbd mark q s samp small span strong sub sup time u"
+    " var wbr".split()
 )
 FIELDS = frozenset({"input", "select", "textarea"})
 INPUT_BUTTONS = frozenset({"submit", "button", "reset"})
@@ -529,11 +529,9 @@ def source_text(root: Path, version: str, today: str | None = None) -> str:
     if problems:
         for problem in problems:
             print(f"FAIL design: {problem}")
-        raise CheckError(
-            f"rule 2a: {version}: the import or map check fails; nothing is written"
-        )
+        raise CheckError(f"rule 2a: {version}: the import or map check fails; nothing is written")
     record = json.loads((folder / MANIFEST).read_text(encoding="utf-8"))
-    date = today or datetime.now(timezone.utc).date().isoformat()
+    date = today or datetime.now(UTC).date().isoformat()
     out = [
         f"Source: imported prototype {version}",
         "Kind: design",
@@ -588,8 +586,10 @@ def main(argv: list[str] | None = None) -> int:
         print(SOURCE_USAGE, file=sys.stderr)
         return 2
     if not SLUG.match(opts.get("--slug", "")):
-        print("design_import: --slug is required, a lower-case slug [a-z0-9][a-z0-9-]*",
-              file=sys.stderr)
+        print(
+            "design_import: --slug is required, a lower-case slug [a-z0-9][a-z0-9-]*",
+            file=sys.stderr,
+        )
         return 2
     if not VERSION.match(opts.get("--version", "")):
         print("design_import: --version is required, an imported version i<n>", file=sys.stderr)

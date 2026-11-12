@@ -81,7 +81,7 @@ ORDERS = """<!doctype html>
 """
 
 EMPTY = "<!doctype html><title>No orders</title><p>You have no orders.</p>\n"
-ERROR = "<!doctype html><title>Error</title><div role=\"status\">The list could not load.</div>\n"
+ERROR = '<!doctype html><title>Error</title><div role="status">The list could not load.</div>\n'
 SIGNIN = (
     "<!doctype html><title>Sign in</title>"
     '<form><input type="email" name="email" placeholder="you@example.com">'
@@ -147,7 +147,9 @@ def section(text: str, heading: str) -> list[str]:
 
 
 def tree(folder: Path) -> dict[str, bytes]:
-    return {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+    return {
+        p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()
+    }
 
 
 # --- the file -------------------------------------------------------------------------------------
@@ -283,8 +285,9 @@ def test_a_version_whose_import_or_map_check_fails_is_refused_writing_nothing(tm
     assert tree(root) == before
 
 
-@pytest.mark.parametrize("args", [[], ["--slug"], ["--slug", "Shop"], ["--slug", "-shop"],
-                                  ["--slug", "shop/x"]])
+@pytest.mark.parametrize(
+    "args", [[], ["--slug"], ["--slug", "Shop"], ["--slug", "-shop"], ["--slug", "shop/x"]]
+)
 def test_a_missing_or_malformed_slug_exits_2_naming_slug(tmp_path, args):
     """REQ-050 AC1: rule 2a, `--slug` is required and a lower-case slug (Q-1073-1)."""
     root = imported(tmp_path)
