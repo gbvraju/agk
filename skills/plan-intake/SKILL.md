@@ -26,6 +26,27 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/plan_intake.py" states
 2. **Read the sources.** Read only the files under `docs/sources/` (and a charter's `#Milestones` item), only after step
    1 passed. A location is `<file>:<line>` or `<file>#<heading>` (the exact heading text).
 
+   **An OpenSpec file** (SPEC-0043 amendment 166, ADR-0473). When the person brings one, a combined `.md` file or an
+   `openspec/` folder that holds `specs/`, import it first; it is copied unchanged under its header, after the guard:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/plan_intake.py" openspec-import "<the file or folder>" --slug <slug>
+```
+
+   When `docs/sources/` holds a `Kind: openspec` source, start from its reading, never from your own:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/plan_intake.py" openspec --slug <slug> --out "<the proposals file>"
+```
+
+   It writes the proposals file of step 3 with the file's areas, requirements (each `statement` exactly as written and
+   `changing` when its change is open), one Given, when, then criterion per scenario ending with its location, persona
+   candidates and open questions, and `milestone` `null`. Then add only what it leaves: set each requirement's
+   `milestone`, add `milestones`, `briefs` with their sizes, and `screens` where a prototype exists, and replace a
+   `(verify)` story or goal only from a location. Never rewrite a `title`, `statement` or criterion that the file
+   defines; keep a `changing` requirement out of `M1`, or put it there only with an open question that cites it. Each
+   `ignored:` line it prints is a heading it did not read: tell the person.
+
 3. **Write the proposals file** at the path the person names, outside `docs/`:
 
 ```
@@ -36,7 +57,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/plan_intake.py" states
  "milestones": [{"id": "M1", "title": "", "exit": "", "acceptance": "", "target": null, "sources": [],
                  "screens": ["<screen>/<state>"]}],
  "requirements": [{"key": "", "title": "", "criteria": ["Given ..., when ..., then ..."], "milestone": "M1",
-                   "persona": "P1", "story": "As <name>, I want <capability>, so that <outcome>", "sources": []}],
+                   "persona": "P1", "story": "As <name>, I want <capability>, so that <outcome>", "sources": [],
+                   "statement": null, "changing": false}],
  "areas": [{"name": "", "requirements": []}],
  "briefs": [{"key": "", "milestone": "M1", "title": "", "size": "S|M|L", "expected": "<low>-<high> hours",
              "advances": [], "touches": [], "depends_on": [], "sources": [],
