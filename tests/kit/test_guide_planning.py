@@ -35,7 +35,7 @@ PATH = (
 )
 # The commands as the walk runs them, in order.
 WALK_STEPS = (
-    "design.py\" import",
+    'design.py" import',
     "design_import.py source --version i1",
     "check_plan.py",
     "plan_intake.py states",

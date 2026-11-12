@@ -660,7 +660,9 @@ def test_ac3_the_scenarios_are_the_ones_the_reading_drafts(tmp_path):
     openspec_plan(tmp_path, prototype=False)
     reading = plan_intake.read_openspec(tmp_path, tmp_path / "docs/sources/openspec-shop")
     drafted = [
-        c.rpartition(" (")[2][:-1] for r in reading.proposals()["requirements"] for c in r["criteria"]
+        c.rpartition(" (")[2][:-1]
+        for r in reading.proposals()["requirements"]
+        for c in r["criteria"]
     ]
     assert [location for location, _ in check_plan.scenarios(tmp_path) or []] == drafted
     assert drafted == [SHOW, EMPTY, STORED]

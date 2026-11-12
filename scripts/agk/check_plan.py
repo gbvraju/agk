@@ -640,7 +640,9 @@ class Plan:
             out.append(
                 f"info plan: scenario {location}: " + (", ".join(matched) or "names no screen")
             )
-        out += [f"info plan: screen {s}: no scenario names it" for s in self.screens if s not in named]
+        out += [
+            f"info plan: screen {s}: no scenario names it" for s in self.screens if s not in named
+        ]
         return out
 
     def trace(self, facts: bool) -> list[str]:
