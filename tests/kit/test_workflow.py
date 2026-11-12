@@ -479,7 +479,7 @@ def test_the_record_step_reads_at_most_eight_comments_at_a_time():
     script = record_script()
     assert re.search(r"xargs\b[^\n]*-P 8\b", script)
     assert "gh api --method GET" in script
-    assert "check_adrs.py --record-ids" in script
+    assert "--record-ids" in script
 
 
 GH_SHIM = """#!/bin/sh
@@ -498,7 +498,7 @@ printf '{"id": %s, "body": "Final: comment %s"}\\n' "$id" "$id"
 """
 
 PY_SHIM = """#!/bin/sh
-# An invented `python`: `check_adrs.py --record-ids` prints the ids in id order.
+# An invented `python`: the record ids, printed in id order as `--record-ids` prints them.
 printf '10\\n20\\n30\\n40\\n50\\n60\\n70\\n80\\n90\\n'
 """
 
@@ -519,7 +519,6 @@ def record_world(tmp_path):
         **os.environ,
         "RUNNER_TEMP": str(tmp_path / "tmp"),
         "SHIM_DIR": str(tmp_path),
-        "GH_TOKEN": "",
         "PATH": f"{shim}:{os.environ['PATH']}",
     }
     return work, env

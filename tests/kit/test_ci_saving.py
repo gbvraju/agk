@@ -73,14 +73,18 @@ def test_proof_cancels_the_run_on_a_superseded_commit():
 
 
 def test_governance_cancels_a_superseded_run_of_a_pull_request_and_never_a_push():
-    """Brief #216 answer 3: a push to the default branch is never cancelled."""
+    """Brief #216 answer 3: a push to the default branch is never cancelled (and, since brief
+    #1122, ADR-0480, neither is a run by an edited description's run)."""
     block = (
         workflow("governance.yml")
         .split("\nconcurrency:\n", 1)[1]
         .split("\n\n", 1)[0]
         .split("\njobs:", 1)[0]
     )
-    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in block
+    assert (
+        "cancel-in-progress: ${{ github.event_name == 'pull_request'"
+        " && github.event.action != 'edited' }}"
+    ) in block
     assert "github.event.pull_request.number || github.sha" in block
 
 
