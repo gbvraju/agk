@@ -45,6 +45,12 @@ state it did not have before (nor the old `agk:ready`), starts the merger workfl
 setting the merger reads), and not for a `Verdict:` or `Approve:` comment or an edited `Final:`,
 on which the merger starts by itself. `--pr`, `--all` and `--dry-run` start nothing, and a start
 that GitHub refuses prints one line and fails no routing: the merger's schedule still sweeps.
+Brief #1143 (ADR-0485): a run of the event job for the default branch that reads its required
+checks green when the branch turns green (this run closes the red-branch issue, or the checks
+were pending or red before the run of the finished workflow that woke it) starts the merger the
+same way once for every open pull request labelled `agk:merge-ready`, under the same setting, and
+not twice for one that entered that state in the same run. A branch that stays green, stays red
+or still runs starts nothing, and `--branch` starts nothing.
 While the checkout's agk.toml sets `paused = true` (brief #348, ADR-0196) it prints `agk paused`
 and reads and writes nothing, whatever it was asked to route.
 """
@@ -58,7 +64,6 @@ import os
 import re
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
-from functools import partial
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -1004,10 +1009,42 @@ def red_copies(found: list[dict]) -> list[dict]:
     return sorted((i for i in found if shaped(i)), key=lambda i: i["number"])
 
 
+def turned_green(
+    state: str,
+    checks: list[dict],
+    statuses: list[dict],
+    required: list[str] | None,
+    closed: bool,
+    suite: Any = None,
+) -> bool:
+    """The default branch turns green in this run (brief #1143 answer 1): its head is green and
+    either this run closes the red-branch issue, or the head was pending or red without the
+    check runs of SUITE, the check suite of the finished workflow that woke the run."""
+    if state != "green":
+        return False
+    if closed:
+        return True
+    if suite is None:
+        return False
+    before = [
+        {**c, "status": "in_progress", "conclusion": None}
+        if (c.get("check_suite") or {}).get("id") == suite
+        else c
+        for c in checks
+    ]
+    return branch_state(before, statuses, required) != "green"
+
+
 def route_branch(
-    repo: str, default: str, labels: Labels, dry: bool, required: list[str] | None = None
-) -> str:
-    """Open, update or close the red-branch brief from the checks of the default branch's head."""
+    repo: str,
+    default: str,
+    labels: Labels,
+    dry: bool,
+    required: list[str] | None = None,
+    suite: Any = None,
+) -> tuple[str, bool]:
+    """Open, update or close the red-branch brief from the checks of the default branch's head;
+    the state and whether the branch turned green in this run (`turned_green`)."""
     tip = gh(f"repos/{repo}/branches/{default}")
     sha = str(((tip or {}).get("commit") or {}).get("sha") or "") if isinstance(tip, dict) else ""
     checks = listing(f"repos/{repo}/commits/{sha}/check-runs", "check_runs") if sha else None
@@ -1020,17 +1057,38 @@ def route_branch(
     open_red = sorted((i for i in found if is_red(i)), key=lambda i: i["number"])
     print(f"default branch {state}")
     if state == "pending" or dry:
-        return state
+        return state, False
     issues = f"repos/{repo}/issues"
     if state == "green":
-        for item in red_copies(found):
+        closing = red_copies(found)
+        for item in closing:
             args = ("-f", "state=closed", "-f", "state_reason=completed")
             write(f"{issues}/{item['number']}", *args, method="PATCH", what="rule 7: the issue")
-        return state
+        return state, turned_green(state, checks, statuses, required, bool(closing), suite)
     name, url = failing(checks, statuses, repo, sha, required)
     body = red_body(name, sha, url)
     write_red(repo, open_red, body, labels)
-    return state
+    return state, False
+
+
+def merge_ready(repo: str) -> list[int]:
+    """The open pull requests labelled `agk:merge-ready` (brief #1143 answer 1)."""
+    found = pages(f"repos/{repo}/pulls?state=open")
+    if found is None:
+        raise CheckError("rule 7: the open pull requests cannot be read for the merger")
+    return [
+        int(p["number"])
+        for p in found
+        if isinstance(p.get("number"), int)
+        and MERGE_READY in {str((x or {}).get("name")) for x in p.get("labels") or []}
+    ]
+
+
+def branch_suite(name: str, event: dict) -> Any:
+    """The check suite of the finished workflow on the default branch that woke this run."""
+    if name != "workflow_run":
+        return None
+    return (event.get("workflow_run") or {}).get("check_suite_id")
 
 
 def write_red(repo: str, open_red: list[dict], body: str, labels: Labels) -> None:
@@ -1260,7 +1318,13 @@ def main(argv: list[str] | None = None) -> int:
     labels = Labels(repo)
     failed = False
     starts = not rest and not dry and not merger_starts_itself(name, event) and merger_on(root)
-    entered = partial(start_merger, repo, default) if starts else None
+    begun: set[int] = set()
+
+    def enter(n: int) -> None:
+        begun.add(n)
+        start_merger(repo, default, n)
+
+    entered = enter if starts else None
 
     try:
         for n in dict.fromkeys(numbers):
@@ -1289,7 +1353,13 @@ def main(argv: list[str] | None = None) -> int:
                 failed = True
         if rest == ["--branch"] or (not rest and on_default_branch(name, event, default)):
             try:
-                route_branch(repo, default, labels, dry, required)
+                _, green = route_branch(
+                    repo, default, labels, dry, required, branch_suite(name, event)
+                )
+                if green and entered is not None:  # brief #1143 (ADR-0485)
+                    for n in merge_ready(repo):
+                        if n not in begun:
+                            entered(n)
             except CheckError as exc:
                 print(f"FAIL {NAME}: {exc}")
                 failed = True
