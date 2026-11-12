@@ -382,7 +382,8 @@ def test_ac3_the_trace_prints_one_row_per_source_location(tmp_path):
     code, out = check(
         tmp_path, "--trace", "--facts", str(facts(tmp_path)), "--numbers", str(numbers(tmp_path))
     )
-    assert "| Location | Requirement | Spec rule | Brief | Pull request | Test |" in out
+    head = "| Location | Requirement | Persona | Spec rule | Brief | Pull request | Test |"
+    assert head in out  # the persona column of amendment 164 item 2 (ADR-0462)
     rows = trace_rows(out)
     assert list(rows) == [
         "docs/sources/sow.md:8",
@@ -391,15 +392,23 @@ def test_ac3_the_trace_prints_one_row_per_source_location(tmp_path):
         "docs/sources/shop-prototype-i1.md#orders/empty",
         "docs/sources/shop-prototype-i1.md#cart/default",
     ]
-    assert rows["docs/sources/sow.md:8"] == ["orders-list", "none", "orders-page", "#31", "none"]
+    assert rows["docs/sources/sow.md:8"] == [
+        "orders-list",
+        "none",
+        "none",
+        "orders-page",
+        "#31",
+        "none",
+    ]
     assert rows["docs/sources/sow.md#Invoices"] == [
         "invoices",
+        "none",
         "none",
         "invoice-page",
         "none",
         "none",
     ]
-    assert rows["docs/sources/shop-prototype-i1.md#orders/empty"] == ["none"] * 5
+    assert rows["docs/sources/shop-prototype-i1.md#orders/empty"] == ["none"] * 6
     assert code == 1, out  # the checks still run after the trace
 
 
@@ -422,6 +431,7 @@ def test_ac3_the_trace_names_the_spec_rule_and_the_test(tmp_path):
     row = trace_rows(out)["docs/sources/sow.md:8"]
     assert row == [
         "orders-list, REQ-007",
+        "none",
         "SPEC-0001 rule 1",
         "orders-page",
         "not read",
