@@ -16,7 +16,7 @@ Kinds (fixed list): `watch` (a wait or a watch that missed an event, stalled or 
 but not in full, before reporting), `parallel-merge` (changes green alone and red together), `false-red` (a red that was not a
 defect of the change), `kit-gap` (a kit rule that refuses a valid case), `history` (a fix that leaves the bad commit in the
 branch), `sequence` (a step after the reviewed head), `stale-input` (a rerun that used an old input), `conflict` (a shared file
-that every pull request touches). None of them is a kind of the architect catch logs, so no row here changes
+that every pull request touches), `owner-ask-unholds` (an open owner ask that took away a hold, brief #1134). None of them is a kind of the architect catch logs, so no row here changes
 `config/review-checklist.md` (brief #604 item 3).
 
 Guard forms: `` check `<path>` `` (a check that fails the case), `` test `<path>` `` (a test that fails the case), `` rule `<path>` ``
@@ -52,6 +52,7 @@ merged pull request that builds the guard), `pending (to be filed)` (a guard who
 | 23 | 2026-11-08 | kit-gap | five open briefs failed the brief check and could not start for two days (#365, #689, #693, #694, #696); ten had no wave | 37 h (four of the five, filed 2026-11-06 18:17Z, counted to the check at 2026-11-08 06:55Z) | the check ran only in the conductor's guard, a refused brief became no action for anyone, and nothing on GitHub checked a brief when it was filed or edited | check `scripts/agk/session_plan.py` (`MALFORMED:` lines, brief #770); check `scripts/agk/check_brief.py` (`--event` and the `Wave:` line, brief #770); check `.github/workflows/agk-brief.yml` (a brief is checked when filed or edited, brief #770) |
 | 24 | 2026-11-08 | kit-gap | three merges were blocked by a conductor line in the wrong form (#800, #810, #831) | (unknown) | nothing refused a post that skipped `conductor.py check-verdict` | check `.claude/hooks/conductor_guard.py` (refuses the post, brief #854); check `scripts/agk/route.py` (marks a line it cannot read) |
 | 25 | 2026-11-09 | kit-gap | three briefs stayed open after their pull request merged without `Closes #n` (#769, #829, #783's brief), each holding up to six briefs | (unknown) | the review did not ask for the line | check `scripts/agk/route.py` (closes the brief named by `Closes`, brief #854) |
+| 26 | 2026-11-12 | owner-ask-unholds | #1132 merged 3 minutes after the verdict without the owner's spec approval because the owner ask relabelled it (`agk:question`, not `agk:approve`) | 1 merge (one spec change merged unapproved) | the merger held only on the label `agk:approve` or the body's `Approval:` line | check `scripts/agk/merge_cleared.py` (the `owner ask` and verdict `spec approval` holds, brief #1134); test `tests/kit/test_merge_cleared_owner_ask.py` |
 
 ## What this shows
 

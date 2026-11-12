@@ -78,6 +78,10 @@ Brief #628 (ADR-0304, amendment 124 of SPEC-0039 rule 5) keeps a spec approval o
 apart from the status flip from `Draft` to `Approved`, read with local `git` (the head fetched
 from `refs/pull/<n>/head` only when missing); anything unreadable holds as `spec approval`.
 
+Brief #1134 (ADR-0483, amendment 170 of SPEC-0039 rule 5) adds two holds: a pull request labelled
+`agk:question`, an open owner ask (`owner ask`), and an `Approval: SPEC-nnnn` line of the clearing
+verdict (the latest `Verdict:`, naming the head) read beside the body's (`spec approval`).
+
 Brief #667 (ADR-0320, amendment 132 of SPEC-0039 rule 6) adds the kit tests that read the whole
 tree to the check before the merge. After governance passes on the would-be merge, in the same
 worktree, the command runs the test files of `[testing] pre_merge_tests` (agk.toml on the default
@@ -251,6 +255,7 @@ PROTECTED = (  # (class, a prefix) of SPEC-0039 rule 5; a class without a slash 
 HOLD_LABEL = "agk:hold"
 HOLD_LABELS = (HOLD_LABEL, "agk:parked")  # a person's hold, on a brief or a pull request (Q-846-1)
 APPROVE_LABEL = "agk:approve"
+QUESTION_LABEL = "agk:question"  # the router's label of an open owner ask (brief #1134)
 CONFLICT = ("dirty", "unknown")
 HTTP = re.compile(r"HTTP (\d{3})")
 RULESET = "rule violation"  # GitHub's words for a merge its ruleset refuses (brief #765, verify)
@@ -784,6 +789,34 @@ def same_text(root: Path, sha: str, spec: str, approved: str) -> bool:
         return False
 
 
+def asked_specs(pull: dict, comments: list[dict], sha: str) -> list[str]:
+    """The specs that the `Approval: SPEC-nnnn` lines ask for, sorted: those of the pull
+    request's body and those of the clearing verdict, the latest `Verdict:` when its first line
+    names the head SHA (amendment 170 of rule 5, brief #1134), each read the same way."""
+    asked = set(APPROVAL.findall(str(pull.get("body") or "")))
+    verdict = latest_verdict(comments)
+    if verdict is not None and sha and sha in first_line(verdict):
+        asked |= set(APPROVAL.findall(str(verdict.get("body") or "")))
+    return sorted(asked)
+
+
+def spec_unapproved(
+    spec: str,
+    approved: dict[str, list[str]],
+    sha: str,
+    root: Path | None = None,
+    number: int = 0,
+) -> bool:
+    """Whether SPEC has no approval in APPROVED for the head SHA, or for an earlier commit of its
+    history whose spec text the head keeps apart from the status flip (amendment 124)."""
+    shas = approved.get(spec, [])
+    if any(sha.startswith(s) for s in shas):
+        return False
+    if root is None or not shas or not head_present(root, number, sha):
+        return True
+    return not any(same_text(root, sha, spec, s) for s in shas)
+
+
 def unapproved(
     pull: dict,
     comments: list[dict],
@@ -792,24 +825,17 @@ def unapproved(
     root: Path | None = None,
     number: int = 0,
 ) -> bool:
-    """SPEC-0039 rule 5 (`spec approval`): an `Approval:` line whose spec has no approval by an
-    account in `spec_approvers` for the head SHA, or for an earlier commit of its history whose
-    spec text the head keeps apart from the status flip (amendment 124, brief 628)."""
+    """SPEC-0039 rule 5 (`spec approval`): an `Approval:` line of the body or of the clearing
+    verdict (amendment 170, brief #1134) whose spec has no approval by an account in
+    `spec_approvers` for the head SHA, or for an earlier commit of its history whose spec text
+    the head keeps apart from the status flip (amendment 124, brief 628)."""
     if APPROVE_LABEL in labels_of(pull):
         return True
-    asked = set(APPROVAL.findall(str(pull.get("body") or "")))
+    asked = asked_specs(pull, comments, sha)
     if not asked:
         return False
     approved = approval_shas(comments, [], approvers)
-    for spec in sorted(asked):
-        shas = approved.get(spec, [])
-        if any(sha.startswith(s) for s in shas):
-            continue
-        if root is None or not shas or not head_present(root, number, sha):
-            return True
-        if not any(same_text(root, sha, spec, s) for s in shas):
-            return True
-    return False
+    return any(spec_unapproved(spec, approved, sha, root, number) for spec in asked)
 
 
 def approved_still_draft(
@@ -897,6 +923,8 @@ def hold_list(
         raise Held(f"protected class {klass} (rule 5)")
     if held_label(pull):
         raise Held("hold label (rule 5)")
+    if QUESTION_LABEL in labels_of(pull):  # an open owner ask (amendment 170, brief #1134)
+        raise Held("owner ask (rule 5)")
     if pull.get("draft") is not False:
         raise Held("draft (rule 5)")
     if dependence_unmet(repo, pull):
@@ -1977,12 +2005,12 @@ def verdict_reason(comments: list[dict], sha: str, reason: str) -> str:
 def spec_waiting(
     root: Path, number: int, pull: dict, comments: list[dict], sha: str, approvers: list[str]
 ) -> str:
-    """The first spec of an `Approval:` line that has no approval for the head; `the spec` for a
-    pull request held by its `agk:approve` label alone."""
-    asked = sorted(set(APPROVAL.findall(str(pull.get("body") or ""))))
+    """The first spec of an `Approval:` line (of the body or of the clearing verdict) that has no
+    approval for the head; `the spec` for a pull request held by its `agk:approve` label alone."""
+    asked = asked_specs(pull, comments, sha)
+    approved = approval_shas(comments, [], approvers) if asked else {}
     for spec in asked:
-        alone = {**pull, "body": f"Approval: {spec}", "labels": []}
-        if unapproved(alone, comments, sha, approvers, root, number):
+        if spec_unapproved(spec, approved, sha, root, number):
             return spec
     return asked[0] if asked else "the spec"
 
