@@ -524,7 +524,9 @@ release. It replaces each kit file you have not edited and refuses, writing noth
 - **Your own make targets go in `project.mk`.** The kit's `Makefile` is a kit file, so an edit to it stops every upgrade. It
   includes `project.mk` after `agk.mk` when that file exists; the kit never installs, lists or writes `project.mk`, so your
   targets survive every upgrade. If an upgrade refuses over `Makefile`, move your own targets to `project.mk`, restore the
-  kit's `Makefile`, and run the upgrade again.
+  kit's `Makefile`, and run the upgrade again. A new project protects `project.mk` beside `Makefile`; where yours protects
+  `Makefile` but not `project.mk`, add `project.mk` to `config/protected-paths.txt` and `config/reviewers.yaml` in the same
+  pull request.
 - **`project.mk` adds targets; it extends a kit target only by a prerequisite.** Never give a kit target (`test`, `lint`,
   `governance`, `traceability` or an `agk-` one) a second recipe: make keeps one recipe per target and, when it sees two,
   drops one and only prints `warning: overriding recipe`. To run your own steps with a kit target, give them a target of

@@ -91,10 +91,13 @@ FIX = (
     "file, then run again"
 )
 # Brief #390: an init project's own make targets go to project.mk, which the kit's Makefile
-# includes and the kit never installs, lists, hashes or writes.
+# includes and the kit never installs, lists, hashes or writes. Brief #1155 (ADR-0491): the moved
+# targets stay protected where Makefile is.
 PROJECT_MK_FIX = (
     "fix: move the project's own make targets from Makefile to project.mk, which the kit's "
-    "Makefile includes and an upgrade never writes, then run again"
+    "Makefile includes and an upgrade never writes, and, where Makefile is protected, add "
+    "project.mk to config/protected-paths.txt and config/reviewers.yaml in the same pull "
+    "request, then run again"
 )
 
 
