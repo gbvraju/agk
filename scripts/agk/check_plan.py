@@ -8,18 +8,33 @@ Rule 2: the design links are the rows of `docs/sources/design-links.md` (`Kind: 
 with the columns `Name`, `Link` (an `https://` address), `Version` and `Frames`, each row with the
 four values. No link is opened. A failure names the rule and the file (and the row), never a value.
 
-With no problem it prints `ok plan (no plan)` when `docs/plan/` does not exist (rule 10), and
-`ok plan sources` when it does: the plan's own rules (9 to 11) are build (d)'s.
+With no problem it prints `ok plan (no plan)` when `docs/plan/` does not exist (rule 10).
+
+Build (d), rules 9 to 11 with amendment 163 item 4 (ADR-0457), when `docs/plan/` exists:
+- rule 10 fails a requirement block of `docs/plan/requirements-proposed.md` (`### <key> <title>`)
+  or `docs/requirements.md` (`### REQ-nnn`) with no `Source:` line that resolves, an `In scope`
+  location of `docs/plan/scope.md` (a backticked `docs/...` span of a list line) that no
+  requirement's `Source:` line cites, an `In scope` line with no location, a `## <screen>/<state>`
+  heading of a `Kind: design` source that no requirement cites, and a `### M<n>` milestone of
+  `docs/plan/milestones.md` that no brief file (`docs/plan/briefs/**/<key>.md`) names in its
+  `Milestone:` line; each names the rule and the item, never its text;
+- rule 11 ends with one line `ok plan: <a> of <b> in-scope source lines have a requirement, ...`
+  (`plan: ...` after a failure); the last three counts need `--facts FILE`, else `not read`;
+- rule 9, `--trace` prints the matrix first, one row per source location: requirement, spec rule,
+  brief, merged pull request (the facts' `brief` of a merged pull request, the brief's number from
+  `--numbers FILE`, rule 25's key-to-number file) and test (`common.markers_for`, the reading
+  `traceability.py` prints), `none` where a link is missing. It is printed, never written.
 
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
 or a charter's `docs/adr/<NNNN>-project-charter.md#Milestones` (SPEC-0013; the `CHARTER_NAME` of
 `playbook.py`, which is kit-only, so the pattern is kept here and a test holds the two equal).
-Files only: no network, no model, nothing written.
+Files only: no network, no model, nothing written (principle 5).
 """
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from datetime import date
@@ -27,7 +42,7 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import repo_root, run
+from common import REQ_HEADER, markers_for, repo_root, run
 
 NAME = "plan"
 SOURCES = "docs/sources"
@@ -43,7 +58,22 @@ DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*$")
 FENCE = re.compile(r"^\s*(```|~~~)")
 ITEM = re.compile(r"^\d+\.\s+\*\*([^*]+)\*\*")
-USAGE = "usage: check_plan.py [--root DIR]"
+USAGE = "usage: check_plan.py [--root DIR] [--trace] [--facts FILE] [--numbers FILE]"
+SCOPE = f"{PLAN}/scope.md"
+PROPOSED = f"{PLAN}/requirements-proposed.md"
+REQUIREMENTS = "docs/requirements.md"
+MILESTONES = f"{PLAN}/milestones.md"
+BRIEFS = f"{PLAN}/briefs"
+IN_SCOPE = "In scope"
+BLOCK = re.compile(r"^###\s+(\S+)")
+MILESTONE = re.compile(r"^###\s+(M\d+)\b")
+SOURCE_LINE = re.compile(r"^\s*(?:[-*]\s+)?Source:\s*(.+?)\s*$")
+LIST_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+")
+SPAN = re.compile(r"`(docs/[^`]+)`")
+SPEC_TITLE = re.compile(r"^#\s+(SPEC-\d{4})\b")
+SPEC_REQS = re.compile(r"^-\s+Requirements:\s*(.*)$")
+RULE = re.compile(r"^(\d+[a-z]?)\.\s")
+NOT_READ = "not read"
 
 
 def _value(line: str, key: str) -> str | None:
@@ -229,23 +259,294 @@ def location_problem(root: Path, location: str) -> str | None:
     return None
 
 
-def cmd_check(root: Path) -> int:
+def _line_value(text: str, key: str) -> str | None:
+    for line in text.splitlines():
+        value = _value(line.strip(), key)
+        if value is not None:
+            return value
+    return None
+
+
+def screens(root: Path) -> list[str]:
+    """Amendment 163 item 4: each `## <screen>/<state>` heading of a `Kind: design` source."""
+    out: list[str] = []
+    for path in source_files(root):
+        text = _read(path) if path.suffix == ".md" else None
+        values = header(text) if text is not None else None
+        if text is None or values is None or values["Kind"] != "design":
+            continue
+        rel = path.relative_to(root).as_posix()
+        fenced = False
+        for line in text.splitlines():
+            if FENCE.match(line):
+                fenced = not fenced
+                continue
+            name = line[3:].strip() if line.startswith("## ") and not fenced else ""
+            screen, slash, state = name.partition("/")
+            if slash and screen.strip() and state.strip() and "/" not in state:
+                out.append(f"{rel}#{name}")
+    return out
+
+
+def scope_lines(root: Path) -> list[tuple[int, list[str]]]:
+    """The list lines under the `In scope` heading of scope.md: (line number, locations)."""
+    text = _read(root / SCOPE) or ""
+    out: list[tuple[int, list[str]]] = []
+    inside = False
+    for n, line in enumerate(text.splitlines(), start=1):
+        match = HEADING.match(line)
+        if match:
+            inside = match.group(1) == IN_SCOPE
+        elif inside and LIST_ITEM.match(line):
+            out.append((n, SPAN.findall(line)))
+    return out
+
+
+def requirements(root: Path) -> list[tuple[str, str, list[str]]]:
+    """Each requirement block as (file, id or key, its Source: locations), proposed file first."""
+    out: list[tuple[str, str, list[str]]] = []
+    for rel, pattern in ((PROPOSED, BLOCK), (REQUIREMENTS, REQ_HEADER)):
+        current: list[str] | None = None
+        for line in (_read(root / rel) or "").splitlines():
+            match = pattern.match(line)
+            if match:
+                current = []
+                out.append((rel, match.group(1).rstrip(":"), current))
+            elif line.startswith("#"):
+                current = None
+            elif current is not None and (source := SOURCE_LINE.match(line)):
+                current.append(source.group(1).strip("`"))
+    return out
+
+
+def briefs(root: Path) -> list[tuple[str, str | None, list[str]]]:
+    """Each brief file as (key, its Milestone:, its Advances: ids)."""
+    folder = root / BRIEFS
+    out: list[tuple[str, str | None, list[str]]] = []
+    for path in sorted(folder.rglob("*.md")) if folder.is_dir() else []:
+        text = _read(path) or ""
+        advances = re.split(r"[,\s]+", _line_value(text, "Advances") or "")
+        out.append((path.stem, _line_value(text, "Milestone"), [a for a in advances if a]))
+    return out
+
+
+def milestones(root: Path) -> list[str]:
+    text = _read(root / MILESTONES) or ""
+    return [m.group(1) for m in map(MILESTONE.match, text.splitlines()) if m]
+
+
+def spec_rules(root: Path) -> dict[str, list[str]]:
+    """Requirement id to `SPEC-nnnn rule N` (the rules citing it) or `SPEC-nnnn`."""
+    out: dict[str, list[str]] = {}
+    folder = root / "docs" / "specs"
+    for path in sorted(folder.glob("*.md")) if folder.is_dir() else []:
+        lines = (_read(path) or "").splitlines()
+        title = SPEC_TITLE.match(lines[0]) if lines else None
+        names = next((m.group(1) for m in map(SPEC_REQS.match, lines) if m), "")
+        if title is None:
+            continue
+        in_rules = False
+        cited: dict[str, list[str]] = {}
+        for line in lines:
+            if line.startswith("## "):
+                in_rules = line.strip() == "## Rules"
+            elif in_rules and (rule := RULE.match(line)):
+                for token in set(re.findall(r"[A-Za-z0-9_-]+", line)):
+                    cited.setdefault(token, []).append(f"{title.group(1)} rule {rule.group(1)}")
+        for req in (n for n in re.split(r"[,\s]+", names) if n):
+            out.setdefault(req, []).extend(cited.get(req) or [title.group(1)])
+    return out
+
+
+def _cell(values: list[str]) -> str:
+    return ", ".join(dict.fromkeys(values)) or "none"
+
+
+class Plan:
+    """What rules 9 to 11 read from the plan's files, once."""
+
+    LAST = (
+        "requirements have a brief",
+        "briefs have a merged pull request",
+        "requirements have a test",
+    )
+
+    def __init__(self, root: Path, facts: dict | None, numbers: dict[str, int]) -> None:
+        self.root = root
+        self.reqs = requirements(root)
+        self.briefs = briefs(root)
+        self.scope = scope_lines(root)
+        self.screens = screens(root)
+        self.cited: dict[str, list[str]] = {}
+        for _, req, sources in self.reqs:
+            for source in sources:
+                self.cited.setdefault(source, []).append(req)
+        pulls = (facts or {}).get("pull_requests")
+        self.merged: dict[int, list[int]] | None = None
+        if isinstance(pulls, list):
+            self.merged = {}
+            for pr in pulls:
+                if (
+                    isinstance(pr, dict)
+                    and pr.get("state") == "merged"
+                    and isinstance(pr.get("brief"), int)
+                ):
+                    self.merged.setdefault(pr["brief"], []).append(int(pr.get("number", 0)))
+        self.numbers = numbers
+
+    def in_scope(self) -> list[str | None]:
+        """Rule 11's in-scope locations, each once, in order; None for a line with no location."""
+        seen: dict[str, None] = {}
+        units: list[str | None] = []
+        for _, locations in self.scope:
+            if not locations:
+                units.append(None)
+            for location in locations:
+                if location not in seen:
+                    seen[location] = None
+                    units.append(location)
+        units += [s for s in self.screens if s not in seen]
+        return units
+
+    def problems(self) -> list[str]:
+        out: list[str] = []
+        for rel, req, sources in self.reqs:
+            if not any(location_problem(self.root, s) is None for s in sources):
+                out.append(f"rule 10: {rel}: {req}: no Source: line resolves")
+        reported: set[str] = set()
+        for n, locations in self.scope:
+            if not locations:
+                out.append(f"rule 10: {SCOPE}:{n}: an In scope line names no location")
+            for location in locations:
+                if location not in self.cited and location not in reported:
+                    reported.add(location)
+                    out.append(f"rule 10: {SCOPE}:{n}: no requirement cites {location}")
+        for screen in self.screens:
+            if screen not in self.cited and screen not in reported:
+                out.append(f"rule 10: {screen}: no requirement cites this screen and state")
+        named = {milestone for _, milestone, _ in self.briefs}
+        for milestone in milestones(self.root):
+            if milestone not in named:
+                out.append(f"rule 10: {MILESTONES}: {milestone}: no brief names this milestone")
+        return out
+
+    def _merged_of(self, keys: list[str]) -> list[str]:
+        merged = self.merged or {}
+        return [
+            f"#{n}"
+            for key in keys
+            if key in self.numbers
+            for n in merged.get(self.numbers[key], [])
+        ]
+
+    def coverage(self, facts: bool) -> str:
+        units = self.in_scope()
+        a = sum(1 for unit in units if unit is not None and unit in self.cited)
+        parts = [f"{a} of {len(units)} in-scope source lines have a requirement"]
+        ids = [req for _, req, _ in self.reqs]
+        if not facts:
+            return ", ".join(parts + [f"{what}: {NOT_READ}" for what in self.LAST])
+        advanced = {req for _, _, advances in self.briefs for req in advances}
+        parts.append(
+            f"{sum(1 for r in ids if r in advanced)} of {len(ids)} requirements have a brief"
+        )
+        if self.merged is None:
+            parts.append(f"{self.LAST[1]}: {NOT_READ}")
+        else:
+            done = sum(1 for key, _, _ in self.briefs if self._merged_of([key]))
+            parts.append(f"{done} of {len(self.briefs)} briefs have a merged pull request")
+        tested = markers_for(self.root)
+        parts.append(
+            f"{sum(1 for r in ids if tested.get(r))} of {len(ids)} requirements have a test"
+        )
+        return ", ".join(parts)
+
+    def trace(self, facts: bool) -> list[str]:
+        rows = [u for u in self.in_scope() if u is not None]
+        rows += [loc for loc in self.cited if loc not in rows]
+        specs = spec_rules(self.root)
+        tested = markers_for(self.root)
+        out = [
+            "| Location | Requirement | Spec rule | Brief | Pull request | Test |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+        for location in rows:
+            reqs = list(dict.fromkeys(self.cited.get(location, [])))
+            keys = [key for key, _, advances in self.briefs if set(advances) & set(reqs)]
+            pulls = _cell(self._merged_of(keys)) if facts and self.merged is not None else NOT_READ
+            cells = [
+                location,
+                _cell(reqs),
+                _cell([rule for req in reqs for rule in specs.get(req, [])]),
+                _cell(keys),
+                pulls,
+                _cell([file for req in reqs for file in tested.get(req, [])]),
+            ]
+            out.append("| " + " | ".join(cells) + " |")
+        return out
+
+
+def cmd_check(
+    root: Path,
+    trace: bool = False,
+    facts: dict | None = None,
+    numbers: dict[str, int] | None = None,
+) -> int:
     problems = source_problems(root) + link_problems(root)
+    if not (root / PLAN).is_dir():
+        for problem in problems:
+            print(f"FAIL {NAME}: {problem}")
+        if not problems:
+            print("ok plan (no plan)")
+        return 1 if problems else 0
+    plan = Plan(root, facts, numbers or {})
+    if trace:
+        print("\n".join(plan.trace(facts is not None)))
+    problems += plan.problems()
     for problem in problems:
         print(f"FAIL {NAME}: {problem}")
-    if problems:
-        return 1
-    print("ok plan sources" if (root / PLAN).is_dir() else "ok plan (no plan)")
-    return 0
+    print(("plan: " if problems else "ok plan: ") + plan.coverage(facts is not None))
+    return 1 if problems else 0
+
+
+def _json(path: str, option: str) -> object:
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        raise SystemExit(f"check_plan.py: {option}: not a readable JSON file") from None
 
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    root = Path(args[1]) if args[:1] == ["--root"] and len(args) == 2 else None
-    if root is None and args:
-        print(USAGE, file=sys.stderr)
+    values: dict[str, str] = {}
+    trace = False
+    while args:
+        arg = args.pop(0)
+        if arg == "--trace":
+            trace = True
+        elif arg in ("--root", "--facts", "--numbers") and args and arg not in values:
+            values[arg] = args.pop(0)
+        else:
+            print(USAGE, file=sys.stderr)
+            return 2
+    try:
+        facts = _json(values["--facts"], "--facts") if "--facts" in values else None
+        numbers = _json(values["--numbers"], "--numbers") if "--numbers" in values else {}
+    except SystemExit as exc:
+        print(exc, file=sys.stderr)
         return 2
-    return run(NAME, lambda: cmd_check(root or repo_root()))
+    if facts is not None and not isinstance(facts, dict):
+        print("check_plan.py: --facts: not a facts object", file=sys.stderr)
+        return 2
+    if not isinstance(numbers, dict) or not all(
+        isinstance(k, str) and isinstance(v, int) for k, v in numbers.items()
+    ):
+        print(
+            "check_plan.py: --numbers: not an object of brief key to issue number", file=sys.stderr
+        )
+        return 2
+    root = Path(values["--root"]) if "--root" in values else None
+    return run(NAME, lambda: cmd_check(root or repo_root(), trace, facts, numbers))
 
 
 if __name__ == "__main__":

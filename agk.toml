@@ -584,6 +584,9 @@ tests = ["tests/kit/test_personal_baseline.py", "tests/kit_dev/test_kit_manifest
 code = "scripts/agk/personal_state.py"
 tests = ["tests/kit/test_personal_state.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
+code = "scripts/agk/plan_intake.py"
+tests = ["tests/kit/test_plan_intake.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_plan_intake_skill.py"]
+[[testing.map]]
 code = "scripts/agk/playbook.py"
 tests = [
   "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",

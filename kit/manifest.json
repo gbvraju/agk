@@ -105,6 +105,7 @@
     "scripts/agk/minutes.py",
     "scripts/agk/parity.py",
     "scripts/agk/personal.py",
+    "scripts/agk/plan_intake.py",
     "scripts/agk/playbook_format.py",
     "scripts/agk/prepush.py",
     "scripts/agk/product_report.py",
