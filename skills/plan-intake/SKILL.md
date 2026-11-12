@@ -1,6 +1,6 @@
 ---
 name: plan-intake
-description: Draft a project's plan from its source documents under docs/sources/ as one proposals file (scope, milestones, requirements, feature areas, briefs, conflicts), every item citing a source location, and validate it. Writes that one file outside docs/ only; never a requirement, spec, brief or GitHub object.
+description: Draft a project's plan from its source documents under docs/sources/ as one proposals file (scope, personas, milestones, requirements with their user stories, feature areas, briefs, conflicts), every item citing a source location, and validate it. Writes that one file outside docs/ only; never a requirement, spec, brief or GitHub object.
 disable-model-invocation: true
 argument-hint: "<path for the proposals file, outside docs/>"
 ---
@@ -31,17 +31,26 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/plan_intake.py" states
 ```
 {"schema": 1,
  "scope": {"in": [ITEM], "out": [ITEM], "assumptions": [ITEM], "constraints": [ITEM], "open_questions": [ITEM]},
+ "personas": [{"key": "P1", "name": "", "goals": [""], "sources": []}],
  "milestones": [{"id": "M1", "title": "", "exit": "", "acceptance": "", "target": null, "sources": []}],
- "requirements": [{"key": "", "title": "", "criteria": ["Given ..., when ..., then ..."], "milestone": "M1", "sources": []}],
+ "requirements": [{"key": "", "title": "", "criteria": ["Given ..., when ..., then ..."], "milestone": "M1",
+                   "persona": "P1", "story": "As <name>, I want <capability>, so that <outcome>", "sources": []}],
  "areas": [{"name": "", "requirements": []}],
  "briefs": [{"key": "", "milestone": "M1", "title": "", "size": "S|M|L", "expected": "<low>-<high> hours",
              "advances": [], "touches": [], "depends_on": [], "sources": []}],
  "conflicts": [{"locations": ["<one side>", "<the other side>"], "description": ""}]}
 ```
 
-   where `ITEM` is `{"key": "", "text": "", "sources": []}`. Every item of `scope`, `milestones`, `requirements` and
-   `briefs` has `sources`, a non-empty list of locations. Milestone ids run `M1`, `M2`, ... in order; each `exit` is
-   measurable (a number, `all`, `every`, `none` or `zero`); every milestone has a brief.
+   where `ITEM` is `{"key": "", "text": "", "sources": []}`. Every item of `scope`, `personas`, `milestones`,
+   `requirements` and `briefs` has `sources`, a non-empty list of locations. Milestone ids run `M1`, `M2`, ... in order;
+   each `exit` is measurable (a number, `all`, `every`, `none` or `zero`); every milestone has a brief.
+
+   **Personas and stories** (SPEC-0043 amendment 164 item 2). A persona is a user, a role or a customer that a location
+   names: persona keys run `P1`, `P2`, ... in order, each with its `name`, its `goals` (at least one plain sentence) and
+   the locations that name it. Every requirement names the `persona` it serves by key and has one `story` that starts
+   `As <that persona's name>, I want ` and goes on `, so that <outcome>`, beside its Given, when, then criteria. A user
+   that the sources only imply, named by no location as a user, a role or a customer, is never a persona you make up: it
+   is a `scope.open_questions` item whose text ends `(verify)`, with the location where the sources fall silent.
 
    Nothing is invented (SPEC-0043 rule 6): a point the sources do not settle is a `scope.open_questions` item whose text
    ends `(verify)`, with its location where the sources fall silent, never a value made up. A `target` date, a `size`

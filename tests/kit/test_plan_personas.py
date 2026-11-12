@@ -108,9 +108,7 @@ def test_ac2_a_story_of_another_form_is_refused(repo: Path, story: str, capsys) 
 
 
 @pytest.mark.parametrize("field", ["sources", "goals"])
-def test_ac2_a_persona_without_sources_or_goals_is_refused(
-    repo: Path, field: str, capsys
-) -> None:
+def test_ac2_a_persona_without_sources_or_goals_is_refused(repo: Path, field: str, capsys) -> None:
     """REQ-050 AC2: rule 4, a persona's `sources` and `goals` are non-empty, as for every item."""
     data = two_personas()
     data["personas"][1][field] = []
@@ -211,7 +209,9 @@ def test_ac3_the_trace_has_a_persona_column(repo: Path, capsys) -> None:
     """REQ-050 AC3: rule 9, the persona after the requirement, `none` where it has none."""
     assert render(repo, two_personas(), capsys)[0] == 0
     proposed = read(repo, "docs/plan/requirements-proposed.md")
-    write(repo, "docs/plan/requirements-proposed.md", proposed.replace(f"Persona: P2 {CLERK}\n", ""))
+    write(
+        repo, "docs/plan/requirements-proposed.md", proposed.replace(f"Persona: P2 {CLERK}\n", "")
+    )
     code = check_plan.main(["--root", str(repo), "--trace"])
     out = capsys.readouterr().out
     assert code == 0, out
@@ -219,16 +219,14 @@ def test_ac3_the_trace_has_a_persona_column(repo: Path, capsys) -> None:
     assert head in out
     rows = trace_rows(out)
     assert rows[f"{SOW}:8"][:2] == ["R1, R2", "P1"]
-    assert rows[f"{PRD}:8"][:2] == ["R1, R2", "P1"]
+    assert rows[f"{PRD}:8"][:2] == ["R1, R2, REQ-101", "P1"]  # REQ-101 of requirements.md
     write(repo, "docs/plan/requirements-proposed.md", f"### R9 Other\n\nSource: `{SOW}:8`\n")
     write(repo, "docs/plan/personas.md", "# Personas\n")
     check_plan.main(["--root", str(repo), "--trace"])
     assert trace_rows(capsys.readouterr().out)[f"{SOW}:8"][:2] == ["R9", "none"]
 
 
-def test_ac3_check_plan_fails_a_persona_that_personas_md_does_not_list(
-    repo: Path, capsys
-) -> None:
+def test_ac3_check_plan_fails_a_persona_that_personas_md_does_not_list(repo: Path, capsys) -> None:
     """REQ-050 AC3: rule 10 with amendment 164 item 2, naming the requirement and the key."""
     assert render(repo, two_personas(), capsys)[0] == 0
     assert check_plan.main(["--root", str(repo)]) == 0, capsys.readouterr().out
@@ -250,13 +248,13 @@ def test_ac3_check_plan_fails_a_persona_that_personas_md_does_not_list(
     assert "R1: Persona: P1 names no persona" in out and "R2: Persona: P2" in out
 
 
-def test_ac3_a_requirement_block_without_a_persona_line_is_not_failed(
-    repo: Path, capsys
-) -> None:
+def test_ac3_a_requirement_block_without_a_persona_line_is_not_failed(repo: Path, capsys) -> None:
     """REQ-050 AC3: rule 10, only a `Persona:` that names nothing fails; a block drafted before
     personas has none and its trace cell is `none` (rule 9)."""
     assert render(repo, proposals(), capsys)[0] == 0
     proposed = read(repo, "docs/plan/requirements-proposed.md")
-    write(repo, "docs/plan/requirements-proposed.md", proposed.replace(f"Persona: P1 {OWNER}\n", ""))
+    write(
+        repo, "docs/plan/requirements-proposed.md", proposed.replace(f"Persona: P1 {OWNER}\n", "")
+    )
     (repo / "docs/plan/personas.md").unlink()
     assert check_plan.main(["--root", str(repo)]) == 0, capsys.readouterr().out

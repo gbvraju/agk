@@ -1,6 +1,7 @@
 """The plan's proposals, validated and rendered (SPEC-0043 rules 3 to 7). Installed:
 `kit/manifest.json` lists it in `verbatim`. Build (c1) of SPEC-0043 rule 27 (amendment 163,
-ADR-0456), build (c2), `render` (ADR-0461), and build (i), `publish` (ADR-0459).
+ADR-0456), build (c2), `render` (ADR-0461), build (i), `publish` (ADR-0459), and build (p), personas
+and user stories (amendment 164 item 2, ADR-0462).
 
     python3 plan_intake.py validate --proposals FILE [--root DIR]
     python3 plan_intake.py states [--root DIR]
@@ -13,10 +14,14 @@ source before it reads a line of one; a finding refuses with exit 1, naming the 
 `line <l>, column <c>`, never the matched text. Rules 4 to 6: `validate` prints `ok proposals` or
 one line per problem naming the rule and the item's `key` or `id`, never its text. `states` prints
 the inventory's `yes` states that no `<screen>/<state>` heading of a `Kind: design` source covers
-(amendment 163 item 5). Rule 7: `render` runs `validate` first, prints every conflict under
+(amendment 163 item 5). Build (p): the proposals hold `personas` (`P1`, `P2`, ... in order, each
+with a `name`, non-empty `goals` and `sources`), and each requirement names its `persona` and one
+`story` `As <the persona's name>, I want <capability>, so that <outcome>`, whose form only is
+checked (`Q-1089-4`). Rule 7: `render` runs `validate` first, prints every conflict under
 `Conflicts for the person` and then every open question under `Open questions for the person`, and
-writes, as new files only and all or nothing, `docs/plan/scope.md`, `docs/plan/milestones.md`,
-`docs/plan/requirements-proposed.md`, one Draft spec per area (`new_spec.make_spec`, imported from
+writes, as new files only and all or nothing, `docs/plan/scope.md`, `docs/plan/personas.md`,
+`docs/plan/milestones.md`, `docs/plan/requirements-proposed.md` (each block with its `Persona:` and
+`Story:` lines before its criteria), one Draft spec per area (`new_spec.make_spec`, imported from
 the plugin's copy beside this script) and `docs/plan/briefs/M<n>/<key>.md`; it never edits
 `docs/requirements.md`. Rules 8 and 25: `publish` exits 2 without `Approve: plan <--head>` by an
 account of `spec_approvers` in the saved comments (`reviewers.plan_approvals`), refuses a brief that
@@ -52,24 +57,28 @@ GUARDS = ("scripts/agk/guard.py", ".claude/hooks/data_guard.py")
 MEASURABLE = re.compile(r"\d|\b(?:all|every|none|zero)\b", re.IGNORECASE)
 VERIFY = "(verify)"
 SCOPE = ("in", "out", "assumptions", "constraints", "open_questions")
-TOP = ("schema", "scope", "milestones", "requirements", "areas", "briefs", "conflicts")
+TOP = ("schema", "scope", "personas", "milestones", "requirements", "areas", "briefs", "conflicts")
 LIST, TEXT, LOCS = "list", "text", "locations"
 FIELDS = {
     "scope": ("key", "text", "sources"),
+    "personas": ("key", "name", "goals", "sources"),
     "milestones": ("id", "title", "exit", "acceptance", "target", "sources"),
-    "requirements": ("key", "title", "criteria", "milestone", "sources"),
+    "requirements": ("key", "title", "criteria", "milestone", "persona", "story", "sources"),
     "areas": ("name", "requirements"),
     "briefs": ("key", "milestone", "title", "size", "expected", "advances", "touches")
     + ("depends_on", "sources"),
     "conflicts": ("locations", "description"),
 }
 KINDS = {"sources": LOCS, "target": "date"} | dict.fromkeys(
-    ("criteria", "requirements", "advances", "touches", "depends_on", "locations"), LIST
+    ("criteria", "requirements", "advances", "touches", "depends_on", "locations", "goals"), LIST
 )
+NON_EMPTY = ("goals",)  # a list that holds at least one item, as `sources` does
 OPTIONAL = {"conflicts": ("settled",)}
 ID = {"milestones": "id", "areas": "name"}
 SETTLED = "Settled: "
 STATE_HEADING = re.compile(r"^([^/]+)/([^/]+)$")
+STORY_FORM = "As <the persona's name>, I want <capability>, so that <outcome>"
+WANT, SO_THAT = ", I want ", ", so that "
 
 
 def guard_missing(root: Path) -> str | None:
@@ -161,7 +170,7 @@ def shape_problems(data: object) -> list[str]:
             kind_of = KINDS.get(key, TEXT)
             if key in item and not _typed(item[key], kind_of):
                 out.append(f"{where}: {key} is not {kind_of}")
-            elif kind_of == LOCS and item.get(key) == []:
+            elif (kind_of == LOCS or key in NON_EMPTY) and item.get(key) == []:
                 out.append(f"{where}: {key} is empty")
         if kind == "conflicts" and isinstance(item.get("locations"), list):
             if len(item["locations"]) != 2:
@@ -169,6 +178,12 @@ def shape_problems(data: object) -> list[str]:
     for n, milestone in enumerate(data["milestones"], start=1):
         if milestone.get("id") != f"M{n}":
             out.append(f"rule 4: milestones {milestone.get('id', n)}: ids run M1, M2, ... in order")
+    seen: list[object] = []  # a repeated key is rule 4's `the key is repeated`, said once
+    for persona in data["personas"]:
+        if (key := persona.get("key")) not in seen:
+            seen.append(key)
+            if key != f"P{len(seen)}":
+                out.append(f"rule 4: personas {key}: keys run P1, P2, ... in order")
     return out
 
 
@@ -226,6 +241,7 @@ def plan_problems(root: Path, data: dict) -> list[str]:
     if out:
         return out
     milestones, reqs = set(names.get("milestones", [])), set(names.get("requirements", []))
+    personas = {p["key"]: p["name"] for p in data["personas"]}
     briefs = {b["key"]: b["depends_on"] for b in data["briefs"]}
     for m in data["milestones"]:
         if not MEASURABLE.search(m["exit"]):
@@ -237,6 +253,7 @@ def plan_problems(root: Path, data: dict) -> list[str]:
     for r in data["requirements"]:
         if r["milestone"] not in milestones:
             out.append(f"rule 5: requirements {r['key']}: milestone names nothing")
+        out += story_problems(r, personas)
     for a in data["areas"]:
         if not set(a["requirements"]) <= reqs:
             out.append(f"rule 5: areas {a['name']}: requirements names nothing")
@@ -262,6 +279,19 @@ def plan_problems(root: Path, data: dict) -> list[str]:
         if VERIFY not in q["text"]:
             out.append(f"rule 6: scope.open_questions {q['key']}: no {VERIFY} mark")
     return out + conflict_problems(items)
+
+
+def story_problems(r: dict, personas: dict[str, str]) -> list[str]:
+    """Rule 5 with amendment 164 item 2: the persona names a persona, and the story's form only
+    (`Q-1089-4`): `As <its name>, I want `, then `, so that ` after it."""
+    where = f"rule 5: requirements {r['key']}"
+    if r["persona"] not in personas:
+        return [f"{where}: persona names nothing"]
+    prefix = f"As {personas[r['persona']]}{WANT}"
+    rest = r["story"][len(prefix) :] if r["story"].startswith(prefix) else ""
+    if SO_THAT not in rest:
+        return [f"{where}: story is not `{STORY_FORM}` with its persona's name"]
+    return []
 
 
 def conflict_problems(items: list[tuple[str, str, dict]]) -> list[str]:
@@ -344,6 +374,19 @@ def scope_text(data: dict) -> str:
     return "\n".join(out) + "\n"
 
 
+def personas_text(data: dict) -> str:
+    """Rule 7 with amendment 164 item 2: one `### P<n> <name>` block per persona."""
+    out = [
+        "# Personas",
+        "",
+        "Drafted by `plan_intake.py render` (SPEC-0043 rule 7); the person owns it.",
+    ]
+    for p in data["personas"]:
+        out += ["", f"### {p['key']} {_one(p['name'])}", ""]
+        out += [f"Goal: {_one(g)}" for g in p["goals"]] + _sources(p["sources"])
+    return "\n".join(out) + "\n"
+
+
 def milestones_text(data: dict) -> str:
     out = ["# Milestones"]
     for m in data["milestones"]:
@@ -359,8 +402,11 @@ def requirements_text(data: dict) -> str:
         "",
         "Each enters `docs/requirements.md` through its own intake.",
     ]
+    names = {p["key"]: _one(p["name"]) for p in data["personas"]}
     for r in data["requirements"]:
-        out += ["", f"### {r['key']} {_one(r['title'])}", "", "Criteria:", ""]
+        out += ["", f"### {r['key']} {_one(r['title'])}", ""]
+        out += [f"Persona: {r['persona']} {names[r['persona']]}", f"Story: {_one(r['story'])}"]
+        out += ["", "Criteria:", ""]
         out += [f"- {_one(c)}" for c in r["criteria"]] or [f"- {VERIFY}"]
         out += ["", f"Milestone: {r['milestone']}", "Status: planned", *_sources(r["sources"])]
     return "\n".join(out) + "\n"
@@ -429,6 +475,7 @@ def cmd_render(root: Path, proposals: Path) -> int:
 
     files = {
         f"{PLAN}/scope.md": scope_text(data),
+        f"{PLAN}/personas.md": personas_text(data),
         f"{PLAN}/milestones.md": milestones_text(data),
         f"{PLAN}/requirements-proposed.md": requirements_text(data),
     }
