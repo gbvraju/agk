@@ -487,7 +487,10 @@ def blocks(root: Path) -> list[tuple[str, str, list[tuple[int | None, str]]]]:
             starts = list(AC_NUMBER.finditer(line)) if ACCEPTANCE_LINE.match(line) else []
             if starts:
                 ends = [m.start() for m in starts[1:]] + [len(line)]
-                lines += [(int(m.group(1)), line[m.start() : e]) for m, e in zip(starts, ends)]
+                lines += [
+                    (int(m.group(1)), line[m.start() : e])
+                    for m, e in zip(starts, ends, strict=True)
+                ]
             else:
                 lines.append((place if listed else None, line))
     return out
