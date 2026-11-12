@@ -1330,6 +1330,60 @@ def parse_estimate(body: object) -> tuple[str, str]:
     return found["Size"].group(0), f"{low}-{high}"
 
 
+def estimate_parts(body: object) -> tuple[str, str]:
+    """(size, expected) of a brief issue, each line read apart (amendment 115 item 1): the
+    `Size:` and `Expected:` grammars of SPEC-0018 rule 2, each once; a missing, repeated or
+    malformed line, or a low above its high, makes that one `unknown`."""
+    text = body.replace("\r\n", "\n") if isinstance(body, str) else ""
+    found = []
+    for name, grammar in ESTIMATE_LINES.items():
+        lines = re.findall(rf"^(?:[-*] )?{name}:[ \t]*(.*?)[ \t]*$", text, re.MULTILINE)
+        match = grammar.fullmatch(lines[0]) if len(lines) == 1 else None
+        if match and name == "Expected" and float(match.group(1)) > float(match.group(2)):
+            match = None
+        found.append(match.group(0) if match else "unknown")
+    return found[0], found[1]
+
+
+PLAN_TABLE = "plan"
+PLAN_DEFAULTS: dict = {"iteration_days": 10, "calibration_min": 10, "default_hours": {}}
+PLAN_RANGE = re.compile(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)(?: hours)?")
+
+
+def plan_settings(root: Path) -> dict:
+    """The `[plan]` table of agk.toml (SPEC-0043 rules 12, 14, 23 and 25, ADR-0465): only
+    `iteration_days` (1 to 30, 10 by default), `calibration_min` (a positive whole number, 10)
+    and `default_hours` (a table of `S`, `M` and `L` to `"<low>-<high>"`, empty). Any other key
+    or value is a refusal that names the setting, never the value."""
+    table = config_source(root).get(PLAN_TABLE)
+    found = {**PLAN_DEFAULTS, "default_hours": {}}
+    if table is None:
+        return found
+    if not isinstance(table, dict):
+        raise CheckError("plan must be a table of the plan's settings (setting: [plan])")
+    for key, value in table.items():
+        if key not in PLAN_DEFAULTS:
+            raise CheckError(f"[plan] holds only the plan's settings (setting: [plan] {key})")
+        whole = isinstance(value, int) and not isinstance(value, bool)
+        if key == "iteration_days":
+            ok, want = whole and 1 <= value <= 30, "a whole number from 1 to 30"
+        elif key == "calibration_min":
+            ok, want = whole and value >= 1, "a positive whole number"
+        else:
+            ok = isinstance(value, dict) and all(
+                size in ("S", "M", "L")
+                and isinstance(text, str)
+                and (m := PLAN_RANGE.fullmatch(text)) is not None
+                and float(m.group(1)) <= float(m.group(2))
+                for size, text in value.items()
+            )
+            want = 'a table of S, M and L to "<low>-<high>" hours'
+        if not ok:
+            raise CheckError(f"{key} must be {want} (setting: [plan] {key})")
+        found[key] = dict(value) if key == "default_hours" else value
+    return found
+
+
 def proof_timeout(root: Path) -> int:
     """`proof_timeout` (seconds) from agk.toml; anything but a positive integer is a refusal."""
     value = load_config(root)["proof_timeout"]
