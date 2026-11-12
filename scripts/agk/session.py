@@ -102,7 +102,12 @@ or unreadable line, a brief that cannot be read, or a glob that may match a desi
 requirements, specs, ADRs, constitution, `.github/`, the reviewers file, the hooks, the merge path
 or a guard file, Q-S0045-4); `small` for `Size: S` whose every glob may match no protected class of
 `config/protected-paths.txt` but the test folders; `build` otherwise. Never `review` or
-`mechanical`.
+`mechanical`. Amendment 165 (brief #1099, ADR-0470): a glob of the brief's own new ADR (an `ADR-<n>`
+of its one `Reserved:` line, not yet in `docs/adr/`) is not a design path.
+Brief #1099 (SPEC-0045 rules 3 and 5, ADR-0470): `route --brief N` (GET only, posts nothing) prints
+`route: <tier> <effort> task <label>` (or `flag`, or `slots <s...>`) for the tier of the brief's
+kind, with ` via <tier>` when that tier has no route of its own, or `route: none` with no
+`[models.routes]` table, when the caller uses today's one route.
 Brief #700 (ADR-0330): `prompt --brief N [--session ID] [--follow-up TEXT]` (GET only, two reads:
 the brief and its comments) prints the builder's standing prompt from the kit's files, so that a
 project's scheduled builder and the conductor's re-fire use one text and nothing is kept by hand:
@@ -158,7 +163,14 @@ from facts import ORIGIN
 from metrics import author_of, counted_authors, latest_verdict_body
 from reviewers import spec_approvers, verdict_authors
 
-from config import MODEL_KINDS, caps_settings, model_providers, model_settings
+from config import (
+    MODEL_KINDS,
+    caps_settings,
+    model_providers,
+    model_routes,
+    model_settings,
+    route_of,
+)
 
 NAME = "session"
 USAGE = (
@@ -179,6 +191,7 @@ USAGE = (
     "       session.py inbox --session ID\n"
     "       session.py mine --session ID (--pr N | --brief N)\n"
     "       session.py kind --brief N\n"
+    "       session.py route --brief N\n"
     "       session.py prompt --brief N [--session ID] [--follow-up TEXT]\n"
     "       session.py tidy [--apply] [--json]\n"
     "       session.py fallback --kind KIND [--after LABEL]"
@@ -200,6 +213,7 @@ COMMANDS = (
     "inbox",
     "mine",
     "kind",
+    "route",
     "prompt",
     "tidy",
     "fallback",
@@ -1313,9 +1327,24 @@ def may_touch(glob: str, entry: str) -> bool:
     return bool(glob_regex(glob).fullmatch(entry))
 
 
-def kind_of(body: str, protected: list[str] | None) -> str:
+RESERVED_ADR = re.compile(r"\bADR-(\d{4})\b")
+
+
+def own_adrs(lines: list[str], existing: frozenset[int]) -> tuple[str, ...]:
+    """Amendment 165: the `docs/adr/<n>-` starts of the brief's own new ADRs, the `ADR-<n>` of
+    its one `Reserved:` line with no ADR of that number yet; a repeated line names none."""
+    reserved = [x for x in lines if x.startswith("Reserved:")]
+    if len(reserved) != 1:
+        return ()
+    numbers = {int(n) for n in RESERVED_ADR.findall(reserved[0])} - existing
+    return tuple(f"docs/adr/{n:04d}-" for n in sorted(numbers))
+
+
+def kind_of(body: str, protected: list[str] | None, existing: frozenset[int] = frozenset()) -> str:
     """Rule 4, in order: an unreadable line or a design path gives `design`, `Size: S` touching
-    only unprotected paths and the test folders gives `small`, anything else `build`."""
+    only unprotected paths and the test folders gives `small`, anything else `build`. A glob of
+    the brief's own new ADR (amendment 165) is not a design path; EXISTING holds the numbers of
+    the ADRs already in `docs/adr/`."""
     lines = [x.rstrip() for x in body.splitlines()]
     sizes = [x for x in lines if x.startswith("Size")]
     touches = [x for x in lines if x.startswith("Touches")]
@@ -1328,6 +1357,8 @@ def kind_of(body: str, protected: list[str] | None) -> str:
     globs += [g.strip() for g in added.group(1).split(",")] if added else []
     if len(sizes) != 1 or not SIZE.fullmatch(sizes[0]) or not globs or not all(globs):
         return "design"
+    own = own_adrs(lines, existing)
+    globs = [g for g in globs if not literal(g).startswith(own or ("\0",))]
     design = (*DESIGN_DIRS, *DESIGN_FILES, GUARD_PREFIX)
     if any("guard" in g or any(may_touch(g, e) for e in design) for g in globs):
         return "design"
@@ -1347,11 +1378,43 @@ def protected_entries(root) -> list[str] | None:
     return [x.strip() for x in text.splitlines() if x.strip() and not x.startswith("#")]
 
 
-def brief_kind(root, number: int) -> int:
-    """`kind --brief N`: one GET; a brief that cannot be read gives `design`, never lower."""
+def existing_adrs(root) -> frozenset[int]:
+    """The numbers of the ADRs in the checkout's `docs/adr/` (amendment 165)."""
+    found = (re.match(r"(\d{4})-", p.name) for p in (Path(root) / "docs" / "adr").glob("*.md"))
+    return frozenset(int(m.group(1)) for m in found if m)
+
+
+def kind_of_brief(root, number: int) -> str:
+    """One GET; a brief that cannot be read gives `design`, never lower."""
     brief = gh(f"repos/{repo_name(root)}/issues/{number}")
     body = brief.get("body") if isinstance(brief, dict) else None
-    print(f"kind: {kind_of(body, protected_entries(root)) if isinstance(body, str) else 'design'}")
+    if not isinstance(body, str):
+        return "design"
+    return kind_of(body, protected_entries(root), existing_adrs(root))
+
+
+def brief_kind(root, number: int) -> int:
+    """`kind --brief N`: prints `kind: <kind>`."""
+    print(f"kind: {kind_of_brief(root, number)}")
+    return 0
+
+
+def brief_route(root, number: int) -> int:
+    """`route --brief N` (SPEC-0045 rules 3 and 5, brief #1099): the route of the brief's kind's
+    tier, or of the next stronger tier with `via <tier>`; `route: none` with no routes table, and
+    the caller then uses today's one route. Reads `agk.toml` and one GET, posts nothing."""
+    start = builder_start(root)
+    routes = model_routes(root, start, builder_slots(root) if start == "assign" else 0)
+    setting = model_settings(root)[kind_of_brief(root, number)]
+    found = route_of(routes, setting["tier"])
+    if found is None:
+        print("route: none")
+        return 0
+    tier, route = found
+    key, value = next(iter(route.items()))
+    shown = {"task": f"task {value}", "flag": "flag", "slots": f"slots {' '.join(value or [])}"}[key]
+    via = f" via {tier}" if tier != setting["tier"] else ""
+    print(f"route: {setting['tier']} {setting['effort']} {shown}{via}")
     return 0
 
 
@@ -3369,6 +3432,7 @@ def main(argv: list[str] | None = None) -> int:
         "inbox": {"--session"},
         "mine": {"--session", "--pr", "--brief"},
         "kind": {"--brief"},
+        "route": {"--brief"},
         "prompt": {"--brief", "--session", "--follow-up"},
         "fallback": {"--kind", "--after"},
     }
@@ -3407,7 +3471,7 @@ def main(argv: list[str] | None = None) -> int:
         ok = len(opts) == 1 and all(SESSION_ID.fullmatch(v) for v in opts.values())
     elif cmd == "tell":
         ok = bool(SESSION_ID.fullmatch(opts.get("--session", ""))) and "--text" in opts
-    elif cmd == "kind":
+    elif cmd in ("kind", "route"):
         ok = number_of(opts.get("--brief"))
     elif cmd == "prompt":
         ok = number_of(opts.get("--brief")) and bool(
@@ -3455,6 +3519,8 @@ def main(argv: list[str] | None = None) -> int:
             return inbox(root, opts["--session"])
         if cmd == "kind":
             return brief_kind(root, int(opts["--brief"]))
+        if cmd == "route":
+            return brief_route(root, int(opts["--brief"]))
         if cmd == "prompt":
             return prompt(
                 root, int(opts["--brief"]), opts.get("--session"), opts.get("--follow-up")

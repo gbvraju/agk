@@ -247,6 +247,61 @@ def model_prices(root: Path) -> dict[str, int | float]:
     return dict(table)
 
 
+ROUTE_KEYS = ("task", "flag", "slots")
+SLOT_NAME = re.compile(r"s([1-9]\d*)")
+
+
+def _route_problem(route: object, start: str, slots: int, has_name: bool) -> bool:
+    """Whether one route of rule 3 is refused: exactly one of `task`, `flag` or `slots`, of the
+    shape rule 3 gives and allowed under `builder_start` (amendment 145, item 1)."""
+    if not isinstance(route, dict) or len(route) != 1 or next(iter(route)) not in ROUTE_KEYS:
+        return True
+    key, value = next(iter(route.items()))
+    if key == "task":
+        return start != "start" or not (isinstance(value, str) and MODEL_LABEL.fullmatch(value))
+    if key == "flag":
+        return start != "start" or value is not True or not has_name
+    if start != "assign" or not isinstance(value, list) or not value:
+        return True
+    found = [SLOT_NAME.fullmatch(x) if isinstance(x, str) else None for x in value]
+    return not all(m and int(m.group(1)) <= slots for m in found) or len(set(value)) != len(value)
+
+
+def model_routes(root: Path, start: str = "start", slots: int = 0) -> dict[str, dict]:
+    """The optional `[models.routes]` table (SPEC-0045 rule 3): a tier to one route, `{ task =
+    "<label>" }` or `{ flag = true }` under `builder_start = "start"`, `{ slots = [...] }` under
+    `assign`. A table that routes any tier routes `strongest`; under `assign` each slot `s1` to
+    `s<slots>` is in exactly one route. A refusal names the setting, never the value."""
+    table = _models_table(root).get("routes", {})
+    if not isinstance(table, dict):
+        raise _refuse_model("models.routes")
+    if not table:
+        return {}
+    if any(tier not in MODEL_TIERS for tier in table) or "strongest" not in table:
+        raise _refuse_model("models.routes")
+    names, providers = model_names(root), model_providers(root)
+    for tier, route in table.items():
+        has_name = tier in names or bool(providers.get(tier))
+        if _route_problem(route, start, slots, has_name):
+            raise _refuse_model(f"models.routes.{tier}")
+    if start == "assign":
+        listed = [s for route in table.values() for s in route["slots"]]
+        if sorted(listed) != sorted(f"s{n}" for n in range(1, slots + 1)):
+            raise _refuse_model("models.routes")
+    return {tier: dict(route) for tier, route in table.items()}
+
+
+def route_of(routes: dict[str, dict], tier: str) -> tuple[str, dict] | None:
+    """Rule 5: the route of a tier, else of the next stronger tier, never a weaker one; None with
+    no table (today's one route)."""
+    if not routes:
+        return None
+    for name in MODEL_TIERS[: MODEL_TIERS.index(tier) + 1][::-1]:
+        if name in routes:
+            return name, routes[name]
+    return None  # unreachable: a table without `strongest` is refused
+
+
 def model_settings(root: Path) -> dict[str, dict[str, str]]:
     """The tier and effort of every kind (rule 2): the table's entry or the default. A kind, tier
     or effort outside the lists, a value that is not a string, an entry that is not exactly
@@ -256,7 +311,7 @@ def model_settings(root: Path) -> dict[str, dict[str, str]]:
     model_prices(root)
     settings = {k: {"tier": t, "effort": e} for k, (t, e) in MODEL_DEFAULTS.items()}
     for kind, entry in table.items():
-        if kind in ("names", "providers", "prices"):
+        if kind in ("names", "providers", "prices", "routes"):
             continue
         if (
             kind not in MODEL_KINDS

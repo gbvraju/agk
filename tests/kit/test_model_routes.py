@@ -10,6 +10,7 @@ stub, invented values, no network. The tests were written first (answer 5)."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -220,3 +221,15 @@ def test_doctor_row_is_ok_when_every_used_tier_has_a_route(tmp_path):
     got = doctor.model_routes_result(project(tmp_path, ROUTES))
     assert got.status == "ok"
     assert doctor.CHECKS["model-routes"][0] == "warn"
+
+
+def test_the_kit_ships_no_routes_table_and_the_templates_only_a_comment():
+    """REQ-052 AC7: rule 3, no routes table in the kit's `agk.toml` or templates (brief #1099 answer 3:
+    the templates carry it commented, with no model name)."""
+    kit = Path(__file__).resolve().parents[2]
+    assert config.model_routes(kit) == {}
+    for name in ("agk.toml", "agk.adopt.toml"):
+        text = (kit / "kit" / "templates" / name).read_text(encoding="utf-8")
+        assert "# [models.routes]" in text
+        live = [x for x in text.splitlines() if not x.lstrip().startswith("#")]
+        assert not any(re.match(r"\s*\[models", x) for x in live), name

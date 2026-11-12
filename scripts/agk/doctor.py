@@ -74,6 +74,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 # the check names of a workflow's jobs as the router reads them (brief #283); the minutes line as
 # minutes.py prints it (brief #370).
 import adopt  # noqa: E402
+import config as models  # noqa: E402
 import design_import  # noqa: E402
 import impact  # noqa: E402
 import merge_cleared  # noqa: E402
@@ -402,6 +403,12 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "a builder slot has no run in the last hour",
         "create the scheduled tasks this line lists, one task per slot at each of its minutes "
         "(setting: builder_slots in the flow table of agk.toml)",
+    ),
+    "model-routes": (  # SPEC-0006 rule 5, amendment 145 item 6 (brief #1099, ADR-0470)
+        "warn",
+        "the model routes are read",
+        "a model route needs attention",
+        "correct the setting the refusal names, or add the tier's route (SPEC-0045 rule 3)",
     ),
     "always-full-infra": (  # SPEC-0055 rule 6 as amendment 153 proposes (brief #878, ADR-0393)
         "error",
@@ -1071,6 +1078,29 @@ def slot_schedule_result(root: Path, reads: Reads) -> Result:
     return Result("ok", message=needed)
 
 
+def model_routes_result(root: Path) -> Result:
+    """Amendment 145 item 6: a refused `[models.routes]` names the setting; a tier that a kind uses
+    and that has no route of its own names the route it uses instead; no table is one route. It
+    never fails the run (severity `warn`)."""
+    try:
+        start = session.builder_start(root)
+        slots = session.builder_slots(root) if start == "assign" else 0
+        routes = models.model_routes(root, start, slots)
+        tiers = {s["tier"] for s in models.model_settings(root).values()}
+    except CheckError as exc:
+        found = re.search(r"\(setting: [^)]+\)", str(exc))
+        return Result("fail", message=f" {found.group(0) if found else '(setting: models)'}")
+    if not routes:
+        return Result("ok", message=" (one route)")
+    missing = [t for t in models.MODEL_TIERS if t in tiers and t not in routes]
+    if missing:
+        moved = "; ".join(
+            f"{t} has no route; it uses the route of {models.route_of(routes, t)[0]}" for t in missing
+        )
+        return Result("fail", message=f" ({moved})")
+    return Result("ok", message=" (each tier the kinds use has its own route)")
+
+
 def always_full_result(root: Path) -> Result:
     """Brief #878 answer 3: each `always_full` entry names test infrastructure or has a reason. A
     malformed `[testing]` table is ok here; the commands that read it refuse it naming the
@@ -1518,6 +1548,7 @@ def run_checks(
     results["actions-minutes"] = minutes_result(root, reads)
     results["auto-merge-setting"] = auto_merge_result(config)
     results["merge-queue-setting"] = merge_queue_result(config)
+    results["model-routes"] = model_routes_result(root)
     results["always-full-infra"] = always_full_result(root)
     results["slot-schedule"] = slot_schedule_result(root, reads)
     results["design-ui-paths"] = design_ui_result(root, config)
