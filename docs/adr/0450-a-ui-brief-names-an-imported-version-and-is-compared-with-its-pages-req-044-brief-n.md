@@ -38,8 +38,8 @@ This is build (c) of the amendment's item 8.
    version without a `design` row, or a pair the map does not cover.
 4. The imported page is opened only by this script, through `FilesServer`. This is a server on 127.0.0.1 that the
    browser uses as its proxy for every request, the loopback included (`--proxy-server`,
-   `--proxy-bypass-list=<-loopback>`, with the existing offline host rules; measured on a headless Google Chrome on 2026-11-12: every request of a page,
-   the browser's own included, reached the server). It serves `GET` and `HEAD` of
+   `--proxy-bypass-list=<-loopback>`, with the existing offline host rules; measured on a headless Google Chrome on
+   2026-11-12: every request of a page, the browser's own included, reached the server). It serves `GET` and `HEAD` of
    `http://agk-imported.invalid/<path>` only for a file inside `docs/design/imported/i<n>/files/`, and answers 403 to
    every other request: another host, `https:` (`CONNECT`), a path outside the folder, a missing file, any other
    method. A page with an external reference therefore renders without it. No check and no workflow runs the script.
@@ -59,6 +59,6 @@ still judged by the build's own checks.
 
 - 2026-11-12: `FilesServer` keeps the browser to the version's files by proxy, not by an operating-system sandbox. The
   imported page's scripts run in the headless browser (amendment 161 Residual) (due 2026-12-31).
-- 2026-11-12: a PDF page is compared only where `pdftoppm` is installed; elsewhere it reads `pixels: not run`; whether the
-  kit should carry a renderer of its own is open (due 2026-12-31).
+- 2026-11-12: a PDF page is compared only where `pdftoppm` is installed; elsewhere it reads `pixels: not run`.
+  Whether the kit should carry a renderer of its own is open (due 2026-12-31).
 - 2026-11-12: the spec text of SPEC-0037 does not yet carry amendment 161; build (d) writes it (due 2026-11-30).
