@@ -6,13 +6,18 @@
 project root with `/`. `version_digest(root, version)` applies it to every file of
 `docs/design/prototype/<version>/` except its `screenshots/` folder, which only
 `design.py screenshots` writes and which stays outside what the person signs off;
-`inventory_digest(root)` applies it to `docs/design/inventory.md`. `rows(root)` reads the one table
+`imported_digest(root, version)` applies it to every file of the whole folder
+`docs/design/imported/<version>/` of an imported version `i<n>` (`files/`, `manifest.json`, `map.md`
+and `external.txt`; SPEC-0037 amendment 161 item 4, ADR-0449), and `version_digest` reads an `i<n>`
+through it; `inventory_digest(root)` applies it to `docs/design/inventory.md`.
+`rows(root)` reads the one table
 of `docs/design/signoffs.md` (columns kind, version, digest, head, date and comment) and returns its
 `inventory` and `design` rows in file order, refusing a row of another shape naming the rule and
 the row number, never a value. Whether a row counts (the person's `Approve:` line on the head it
 names) is `check_final_clearance.py`'s question, not this module's; `parse_rows(text)` reads the
 same table from a text (the file at a commit). `frozen_problems(root)` fails each `design` row whose
-folder no longer has the row's digest (rule 9: a signed-off version changed, naming the version and
+folder (`folder_of`) no longer has the row's digest (rule 9: a signed-off version changed,
+naming the version and
 never a digest), and `signed_off(root, version)` is rule 12's evidence reading (brief #459). Files
 only: no network, no model, nothing written.
 """
@@ -31,10 +36,11 @@ from common import CheckError
 
 INVENTORY = "docs/design/inventory.md"
 PROTOTYPE = "docs/design/prototype"
+IMPORTED = "docs/design/imported"
 SIGNOFFS = "docs/design/signoffs.md"
 SCREENSHOTS = "screenshots"
 COLUMNS = ("kind", "version", "digest", "head", "date", "comment")
-VERSION = re.compile(r"^v[1-9]\d*$")
+VERSION = re.compile(r"^[vi][1-9]\d*$")  # a kit version v<n> or an imported version i<n>
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 COMMIT = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -56,10 +62,28 @@ def digest(root: Path, paths: list[str] | list[Path]) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def folder_of(version: str) -> str:
+    """The folder of a version from the root: `i<n>` under imported, `v<n>` under prototype."""
+    return f"{IMPORTED if version.startswith('i') else PROTOTYPE}/{version}"
+
+
+def imported_digest(root: Path, version: str) -> str:
+    """The digest of every file of the whole imported folder `docs/design/imported/i<n>/`."""
+    if not VERSION.match(version) or not version.startswith("i"):
+        raise CheckError("rule 9: the version is not i<n>")
+    folder = root / IMPORTED / version
+    if not folder.is_dir():
+        raise CheckError("rule 9: the version folder does not exist")
+    return digest(root, [p for p in folder.rglob("*") if p.is_file()])
+
+
 def version_digest(root: Path, version: str) -> str:
-    """The digest of every file of a prototype version folder except `screenshots/`."""
+    """The digest of every file of a prototype version folder except `screenshots/`, or, for an
+    imported version `i<n>`, of its whole folder (`imported_digest`)."""
     if not VERSION.match(version):
-        raise CheckError("rule 9: the version is not v<n>")
+        raise CheckError("rule 9: the version is not v<n> or i<n>")
+    if version.startswith("i"):
+        return imported_digest(root, version)
     folder = root / PROTOTYPE / version
     if not folder.is_dir():
         raise CheckError("rule 9: the version folder does not exist")
@@ -105,7 +129,7 @@ def _row_problem(row: dict[str, str]) -> str | None:
     if kind == "inventory" and row["version"] != "-":
         return "the version of an inventory row is not -"
     if kind == "design" and not VERSION.match(row["version"]):
-        return "the version of a design row is not v<n>"
+        return "the version of a design row is not v<n> or i<n>"
     if not SHA256.match(row["digest"]):
         return "the digest is not a SHA-256 in lower-case hex"
     if not COMMIT.match(row["head"]):
@@ -163,7 +187,7 @@ def frozen_problems(root: Path) -> list[str]:
             same = version_digest(root, row["version"]) == row["digest"]
         except CheckError:
             same = False  # a signed-off folder that is gone has changed too
-        problem = f"rule 9: {PROTOTYPE}/{row['version']}: a signed-off version changed"
+        problem = f"rule 9: {folder_of(row['version'])}: a signed-off version changed"
         if not same and problem not in out:
             out.append(problem)
     return out

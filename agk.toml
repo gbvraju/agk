@@ -191,6 +191,7 @@ tests = [
   "tests/kit/test_fix_list_tags.py", "tests/kit/test_self_clearance.py", "tests/kit/test_session.py",
   "tests/kit/test_session_rules.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
   "tests/kit/test_status_only.py", "tests/kit_dev/test_final_clearance_design.py",
+  "tests/kit/test_design_signoff.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_kit_tests.py"
@@ -682,6 +683,7 @@ tests = [
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
   "tests/kit/test_verdict_authors.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
   "tests/kit_dev/test_final_clearance_design.py", "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
+  "tests/kit/test_design_signoff.py",
 ]
 [[testing.map]]
 code = "scripts/agk/route.py"
