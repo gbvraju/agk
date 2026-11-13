@@ -186,11 +186,14 @@ def test_ac2_kit_protected_list_is_template_plus_kit_only_entries():
         "CLAUDE.md",
         "scripts/agk/",
         "Makefile",
+        "project.mk",
         "pyproject.toml",
         "agk.mk",
         "agk.toml",
     ]
-    assert lines("config/protected-paths.txt") == template + [
+    # Brief #1155 (ADR-0491): the kit's own config/ is owner-held and has no project.mk entry.
+    own = [entry for entry in template if entry != "project.mk"]
+    assert lines("config/protected-paths.txt") == own + [
         "tests/kit/",
         "kit/",
         "tests/kit_dev/",

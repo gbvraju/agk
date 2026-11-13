@@ -35,6 +35,7 @@ INSTALLED_PROTECTED = [
     "CLAUDE.md",
     "scripts/agk/",
     "Makefile",
+    "project.mk",
     "pyproject.toml",
     "agk.mk",
     "agk.toml",

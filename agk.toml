@@ -721,7 +721,8 @@ code = "scripts/agk/reviewers.py"
 tests = [
   "tests/kit/test_agent_apps.py", "tests/kit/test_agk_mk.py", "tests/kit/test_approve_short.py",
   "tests/kit/test_approved_spec_not_draft.py", "tests/kit/test_check_kit_tests.py",
-  "tests/kit/test_forge.py", "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_personal_state.py", "tests/kit/test_reviewers.py",
+  "tests/kit/test_forge.py", "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_personal_state.py",
+  "tests/kit/test_project_mk_protected.py", "tests/kit/test_reviewers.py",
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
   "tests/kit/test_verdict_authors.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
   "tests/kit_dev/test_final_clearance_design.py", "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
@@ -837,8 +838,9 @@ tests = ["tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_uninstall.py"
 [[testing.map]]
 code = "scripts/agk/upgrade.py"
 tests = [
-  "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_route_triggers.py",
-  "tests/kit/test_upgrade_project_mk.py", "tests/kit_dev/test_experimental_reviewer.py",
+  "tests/kit/test_project_mk_protected.py", "tests/kit/test_reviewers_approvers_install.py",
+  "tests/kit/test_route_triggers.py", "tests/kit/test_upgrade_project_mk.py",
+  "tests/kit_dev/test_experimental_reviewer.py",
   "tests/kit_dev/test_kit_hashes.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
   "tests/kit_dev/test_pyproject_installs_as_nothing.py", "tests/kit_dev/test_reviewer_wiring.py",
   "tests/kit_dev/test_route_concurrency_install.py", "tests/kit_dev/test_route_finishes_install.py",
