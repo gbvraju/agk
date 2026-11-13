@@ -1,6 +1,6 @@
 # ADR-0505: A workflow proposal is applied by one owner command
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: ADR-0499, ADR-0271, brief #1189, plan #661
