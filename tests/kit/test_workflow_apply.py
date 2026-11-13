@@ -147,7 +147,8 @@ def test_a_the_dry_run_lists_the_proposal_its_target_and_the_diff_and_changes_no
     assert "-      - run: echo old" in proc.stdout
     assert "+          echo two" in proc.stdout
     assert "Q-7-2" in proc.stdout
-    assert "dry run" in proc.stdout and "--yes" in proc.stdout
+    assert "dry run" in proc.stdout
+    assert f"--yes --head {world.head}" in proc.stdout  # the head the owner was shown
     assert world.remote("rev-parse", f"refs/heads/{BRANCH}") == before
     assert git(world.owner, "status", "--porcelain") == owner_before
     assert world.posts() == []
@@ -170,7 +171,7 @@ def test_b_a_proposal_that_does_not_parse_is_refused_naming_the_file(tmp_path, t
     w.serve_pull()
     w.serve_comments(QUESTION)
     before = w.remote("rev-parse", f"refs/heads/{BRANCH}")
-    proc = w.run("--pr", "7", "--yes")
+    proc = w.run("--pr", "7", "--yes", "--head", w.head)
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert f"refused: {PROPOSAL}" in proc.stdout and why in proc.stdout
     assert w.remote("rev-parse", f"refs/heads/{BRANCH}") == before
@@ -179,7 +180,7 @@ def test_b_a_proposal_that_does_not_parse_is_refused_naming_the_file(tmp_path, t
 
 def test_c_yes_commits_the_moved_file_removes_the_folder_pushes_and_answers(world):
     """REQ-039: answer 2 (`--yes` applies, commits, pushes and posts the `Answer:` line)."""
-    proc = world.run("--pr", "7", "--yes")
+    proc = world.run("--pr", "7", "--yes", "--head", world.head)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     new = world.remote("rev-parse", f"refs/heads/{BRANCH}")
     assert new != world.head
@@ -206,7 +207,7 @@ def test_c_the_q_id_is_read_from_the_newest_maintainers_question_naming_the_comm
         "Question: Q-7-4 a question for the conductor that names /agk:workflow-apply",
         "Question: Q-7-5 for the maintainers: another ask with no command",
     )
-    proc = world.run("--pr", "7", "--yes")
+    proc = world.run("--pr", "7", "--yes", "--head", world.head)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "(Q-7-3)" in world.remote("log", "-1", "--format=%s", f"refs/heads/{BRANCH}")
 
@@ -215,7 +216,7 @@ def test_c_no_maintainers_question_naming_the_command_changes_nothing(world):
     """REQ-039: answer 2 (without the Q id there is nothing to answer; it prints what is
     missing)."""
     world.serve_comments("Question: Q-7-1 for the maintainers: a ruling please")
-    proc = world.run("--pr", "7", "--yes")
+    proc = world.run("--pr", "7", "--yes", "--head", world.head)
     assert proc.returncode == 1
     assert "/agk:workflow-apply" in proc.stdout and "for the maintainers" in proc.stdout
     assert world.remote("rev-parse", f"refs/heads/{BRANCH}") == world.head
@@ -226,7 +227,7 @@ def test_d_it_never_pushes_to_the_default_branch(world):
     """REQ-039: answer 2 (never to the default branch)."""
     world.serve_pull(ref="main", sha=world.remote("rev-parse", "refs/heads/main"))
     main = world.remote("rev-parse", "refs/heads/main")
-    proc = world.run("--pr", "7", "--yes")
+    proc = world.run("--pr", "7", "--yes", "--head", world.head)
     assert proc.returncode == 1
     assert "default branch" in proc.stdout
     assert world.remote("rev-parse", "refs/heads/main") == main
@@ -237,7 +238,7 @@ def test_d_it_never_force_pushes_a_branch_that_moved(world):
     """REQ-039: answer 2 (never a force-push: a branch that moved since the pull request was read is
     refused, and the push it makes is a fast-forward of the fetched head)."""
     world.serve_pull(sha="0" * 40)
-    proc = world.run("--pr", "7", "--yes")
+    proc = world.run("--pr", "7", "--yes", "--head", world.head)
     assert proc.returncode == 1
     assert "moved" in proc.stdout
     assert world.remote("rev-parse", f"refs/heads/{BRANCH}") == world.head
@@ -252,7 +253,7 @@ def test_d_it_never_force_pushes_a_branch_that_moved(world):
 def test_d_a_closed_pull_request_or_a_fork_is_refused(world):
     """REQ-039: answer 2 (it prints, and never does, what it cannot do)."""
     world.serve_pull(state="closed")
-    proc = world.run("--pr", "7", "--yes")
+    proc = world.run("--pr", "7", "--yes", "--head", world.head)
     assert proc.returncode == 1 and "not open" in proc.stdout
     world.stub.serve(
         f"repos/{REPO}/pulls/7",
@@ -263,7 +264,7 @@ def test_d_a_closed_pull_request_or_a_fork_is_refused(world):
             "base": {"ref": "main", "repo": {"full_name": REPO, "default_branch": "main"}},
         },
     )
-    proc = world.run("--pr", "7", "--yes")
+    proc = world.run("--pr", "7", "--yes", "--head", world.head)
     assert proc.returncode == 1 and "fork" in proc.stdout
     assert world.remote("rev-parse", f"refs/heads/{BRANCH}") == world.head
     assert world.posts() == []
@@ -279,7 +280,7 @@ def test_d_a_push_refused_for_the_workflow_permission_names_the_refresh(world):
         encoding="utf-8",
     )
     hook.chmod(0o755)
-    proc = world.run("--pr", "7", "--yes")
+    proc = world.run("--pr", "7", "--yes", "--head", world.head)
     assert proc.returncode == 1
     assert "gh auth refresh -s workflow" in proc.stdout
     assert world.remote("rev-parse", f"refs/heads/{BRANCH}") == world.head
@@ -296,7 +297,7 @@ def test_d_no_proposal_on_the_branch_changes_nothing(tmp_path):
     git(seed, "push", "-q", "origin", BRANCH)
     w.head = git(seed, "rev-parse", "HEAD")
     w.serve_pull()
-    proc = w.run("--pr", "7", "--yes")
+    proc = w.run("--pr", "7", "--yes", "--head", w.head)
     assert proc.returncode == 1 and "no proposal" in proc.stdout
     assert w.posts() == []
 
@@ -304,7 +305,7 @@ def test_d_no_proposal_on_the_branch_changes_nothing(tmp_path):
 def test_personal_mode_has_no_pull_requests(world):
     """REQ-039: brief context `personal` (the command prints that it needs one and exits)."""
     write(world.owner, "agk.toml", '[personal]\nforge = "files"\n')
-    proc = world.run("--pr", "7", "--yes")
+    proc = world.run("--pr", "7", "--yes", "--head", world.head)
     assert proc.returncode == 1
     assert "pull request" in proc.stdout and "personal" in proc.stdout
     assert world.stub.calls() == []
@@ -361,3 +362,86 @@ def test_b_every_workflow_of_the_kit_passes_the_parse_check():
     assert files
     for path in files:
         assert workflow_apply.yaml_problem(path.read_text(encoding="utf-8")) is None, path.name
+
+
+# --- review fix list on cc18354: what the owner approves, and links ------------------------------
+
+
+def test_d_yes_needs_the_head_of_the_dry_run(world):
+    """REQ-039: answer 2 (`--yes` applies only the head the dry run showed; fix list item 1)."""
+    proc = world.run("--pr", "7", "--yes")
+    assert proc.returncode == 2
+    assert "--head" in proc.stdout + proc.stderr
+    assert world.remote("rev-parse", f"refs/heads/{BRANCH}") == world.head
+    assert world.posts() == []
+
+
+def test_d_a_branch_that_moved_between_the_dry_run_and_yes_is_refused(world, tmp_path):
+    """REQ-039: answer 2 (a push between the two runs is never applied unseen; fix list item 1)."""
+    shown = world.run("--pr", "7")
+    assert shown.returncode == 0 and f"--head {world.head}" in shown.stdout
+    seed = tmp_path / "seed"
+    write(seed, PROPOSAL, NEW.replace("echo two", "echo three"))
+    git(seed, "commit", "-q", "-am", "checkpoint: a later proposal")
+    git(seed, "push", "-q", "origin", BRANCH)
+    later = git(seed, "rev-parse", "HEAD")
+    world.serve_pull(sha=later)
+    proc = world.run("--pr", "7", "--yes", "--head", world.head)
+    assert proc.returncode == 1
+    assert "dry run" in proc.stdout and "moved" in proc.stdout
+    assert world.remote("rev-parse", f"refs/heads/{BRANCH}") == later
+    assert world.posts() == []
+
+
+def linked(tmp_path: Path, link: str, to: str, proposal: bool = True) -> World:
+    """A world whose branch also commits LINK as a symbolic link to TO."""
+    w = World(tmp_path)
+    seed = tmp_path / "seed"
+    path = seed / link
+    if path.exists() or path.is_symlink():
+        if path.is_dir() and not path.is_symlink():
+            git(seed, "rm", "-q", "-r", link)
+        else:
+            path.unlink()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.symlink(to, path)
+    if not proposal:
+        write(seed, PROPOSAL, NEW)
+    git(seed, "add", "-A")
+    git(seed, "commit", "-q", "-m", "checkpoint: a link")
+    git(seed, "push", "-q", "origin", BRANCH)
+    w.head = git(seed, "rev-parse", "HEAD")
+    w.serve_pull()
+    w.serve_comments(QUESTION)
+    return w
+
+
+@pytest.mark.parametrize("yes", [False, True])
+def test_d_a_proposal_that_is_a_link_is_refused_naming_the_file(tmp_path, yes):
+    """REQ-039: answer 2 (a proposal that is not a regular file is refused; fix list item 2)."""
+    w = linked(tmp_path, PROPOSAL, "../../README.md")
+    args = ["--yes", "--head", w.head] if yes else []
+    proc = w.run("--pr", "7", *args)
+    assert proc.returncode == 1
+    assert f"refused: {PROPOSAL}" in proc.stdout and "not a regular file" in proc.stdout
+    assert "proj" not in proc.stdout  # the linked file is never read
+    assert w.remote("rev-parse", f"refs/heads/{BRANCH}") == w.head
+    assert w.posts() == []
+
+
+@pytest.mark.parametrize(
+    ("link", "to"),
+    [(TARGET, "OUTSIDE"), (".github/workflows", "../src"), (".github", "src")],
+)
+def test_d_a_target_path_through_a_link_is_refused_and_nothing_is_written(tmp_path, link, to):
+    """REQ-039: answer 2 (no part of the target path may be a link; fix list item 2)."""
+    outside = tmp_path / "owner-file.txt"
+    outside.write_text("mine\n", encoding="utf-8")
+    w = linked(tmp_path, link, str(outside) if to == "OUTSIDE" else to, proposal=False)
+    proc = w.run("--pr", "7", "--yes", "--head", w.head)
+    assert proc.returncode == 1
+    assert "refused:" in proc.stdout and "symbolic link" in proc.stdout
+    assert link in proc.stdout
+    assert outside.read_text(encoding="utf-8") == "mine\n"
+    assert w.remote("rev-parse", f"refs/heads/{BRANCH}") == w.head
+    assert w.posts() == []
