@@ -55,7 +55,10 @@ checkout; the other scripts are installed under `scripts/agk/`.
    questions for you, and writes, as new files only, `docs/plan/scope.md`, `docs/plan/milestones.md`,
    `docs/plan/requirements-proposed.md`, one Draft spec per feature area under `docs/specs/` and one brief per brief under
    `docs/plan/briefs/M<n>/`. From then on these files are yours. The requirements enter `docs/requirements.md` through
-   your own intake pull request, and you replace each brief's `Advances:` key with its `REQ-n` number.
+   your own intake pull request, and you replace each brief's `Advances:` key with its `REQ-n` number. Once they are in,
+   run `python3 "$AGK/scripts/agk/design.py" inventory` once: it keeps every line of `docs/design/inventory.md` and adds a
+   section for each new requirement, so you fill only the new `- Screens:` slots, which the requirements' `Source:` lines
+   point at; the kit's own requirements already read `no screen: a rule of the kit`.
 7. **Trace and count.** `python3 scripts/agk/check_plan.py --trace` prints one row per source location: the requirement,
    the spec rule, the brief, the merged pull request (with `--facts FILE` and `--numbers FILE`) and the test, `none` where
    a link is missing. It ends with the coverage line, `ok plan: <a> of <b> in-scope source lines have a requirement, ...`.

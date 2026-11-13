@@ -27,10 +27,14 @@ with its `manifest.json` and `external.txt`, and refuses a symbolic link, a sour
 `inventory` writes the skeleton of `docs/design/inventory.md` from
 `kit/templates/design-inventory.md` (SPEC-0037 rule 3): one section for each requirement of
 `docs/requirements.md`, its `- Specs:` filled from the `Requirements:` lines of `docs/specs/*.md`
-(`none` when no spec names it), every other slot empty, and an empty `## Screens` part; it refuses
-when the file exists and never fills a slot. Messages name the rule, never a value. No network and
-no model; `check_design.py` checks what `prototype` and `inventory` made. A version's
-`screenshots/` folder is written only by `design.py screenshots`, never by hand.
+(`none` when no spec names it), every other slot empty, and an empty `## Screens` part; a kit
+requirement (REQ-001 to REQ-099) reads `- Screens: no screen: a rule of the kit` instead of an empty
+slot. On an existing inventory it keeps every line and only appends, at the end of the Requirements
+part and in number order, a section for each requirement that has none, printing `added REQ-<n>`
+for each; it never removes or rewrites a section, refuses a file with no Requirements part and
+never fills a project requirement's slot (brief #1185, ADR-0504). Messages name the rule, never a
+value. No network and no model; `check_design.py` checks what `prototype` and `inventory` made. A
+version's `screenshots/` folder is written only by `design.py screenshots`, never by hand.
 """
 
 from __future__ import annotations
@@ -44,8 +48,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import design_import
+import design_inventory
 import design_prototype
-from common import CheckError, parse_requirements
+from common import PROJECT_FIRST_REQ, CheckError, parse_requirements
 
 KIT = Path(__file__).resolve().parents[2]
 TEMPLATES = KIT / "kit" / "templates"
@@ -61,6 +66,7 @@ MOCKUPS = "docs/design/mockups"
 THEME = "docs/design/theme.md"
 INVENTORY = "docs/design/inventory.md"
 REQUIREMENTS = "docs/requirements.md"
+KIT_NO_SCREEN = "no screen: a rule of the kit"
 SPEC_FILE = re.compile(r"^(\d{4})-[^/]*\.md$")
 SPEC_REQS = re.compile(r"(?m)^- Requirements:\s*(.*?)\s*$")
 REQ = re.compile(r"\bREQ-\d{3}\b")
@@ -155,22 +161,61 @@ def spec_index(root: Path) -> dict[str, list[str]]:
     return index
 
 
+def requirement_section(req: dict, specs: dict[str, list[str]]) -> str:
+    """One `### REQ-<n> \u2014 <title>` section: its specs, and an empty Screens slot or, for a kit
+    requirement (REQ-001 to REQ-099), the kit's no-screen reason (brief #1185, ADR-0504)."""
+    heading = f"### {req['id']} \u2014 {req['title']}" if req["title"] else f"### {req['id']}"
+    named = ", ".join(specs.get(req["id"], [])) or "none"
+    screens = f" {KIT_NO_SCREEN}" if int(req["id"][4:]) < PROJECT_FIRST_REQ else ""
+    return f"{heading}\n\n- Specs: {named}\n- Screens:{screens}\n\n"
+
+
+def update_inventory(target: Path, reqs: list[dict], specs: dict[str, list[str]]) -> int:
+    """Append a section for each requirement that has none, before the part after Requirements;
+    every other byte of the file is kept, and nothing is removed or rewritten."""
+    try:
+        text = target.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise CheckError(f"rule 3: {INVENTORY} cannot be read") from None
+    have = design_inventory.sectioned_requirements(text)
+    if have is None:
+        raise CheckError(f"rule 3: {INVENTORY} has no Requirements part; it is never rewritten")
+    missing = sorted((r for r in reqs if r["id"] not in have), key=lambda r: int(r["id"][4:]))
+    if not missing:
+        return 0
+    lines = text.splitlines(keepends=True)
+    start = next(
+        i
+        for i, line in enumerate(lines)
+        if line.startswith("## ") and line[3:].strip() == "Requirements"
+    )
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    before = "".join(lines[:end])
+    if before and not before.endswith("\n"):
+        before += "\n"
+    if before and not before.endswith("\n\n"):
+        before += "\n"
+    added = "".join(requirement_section(r, specs) for r in missing)
+    if end == len(lines):
+        added = added.rstrip("\n") + "\n"
+    target.write_text(before + added + "".join(lines[end:]), encoding="utf-8")
+    for req in missing:
+        print(f"added {req['id']}")
+    return 0
+
+
 def cmd_inventory(root: Path, opts: dict[str, str]) -> int:
     if set(opts) - {"root"}:
         raise UsageError("inventory takes only --root")
     target = root / INVENTORY
-    if target.exists():
-        raise CheckError(f"rule 3: {INVENTORY} already exists; it is never overwritten")
     try:
         reqs = parse_requirements((root / REQUIREMENTS).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError):
         raise CheckError(f"rule 3: {REQUIREMENTS} cannot be read") from None
     specs = spec_index(root)
-    sections = []
-    for req in reqs:
-        heading = f"### {req['id']} \u2014 {req['title']}" if req["title"] else f"### {req['id']}"
-        named = ", ".join(specs.get(req["id"], [])) or "none"
-        sections.append(f"{heading}\n\n- Specs: {named}\n- Screens:\n\n")
+    if target.exists():
+        return update_inventory(target, reqs, specs)
+    sections = [requirement_section(req, specs) for req in reqs]
     text = template("design-inventory.md").replace("{{requirements}}\n", "".join(sections))
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
