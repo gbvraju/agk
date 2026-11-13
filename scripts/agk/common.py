@@ -1353,8 +1353,9 @@ PLAN_RANGE = re.compile(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)(?: hours)?")
 def plan_settings(root: Path) -> dict:
     """The `[plan]` table of agk.toml (SPEC-0043 rules 12, 14, 23 and 25, ADR-0465): only
     `iteration_days` (1 to 30, 10 by default), `calibration_min` (a positive whole number, 10)
-    and `default_hours` (a table of `S`, `M` and `L` to `"<low>-<high>"`, empty). Any other key
-    or value is a refusal that names the setting, never the value."""
+    and `default_hours` (a table of `S`, `M` and `L` to `"<low>-<high>"`, empty), and `board` (the
+    plan's Project number, a positive whole number, absent by default; ADR-0506). Any other key or
+    value is a refusal that names the setting, never the value."""
     table = config_source(root).get(PLAN_TABLE)
     found = {**PLAN_DEFAULTS, "default_hours": {}}
     if table is None:
@@ -1362,6 +1363,11 @@ def plan_settings(root: Path) -> dict:
     if not isinstance(table, dict):
         raise CheckError("plan must be a table of the plan's settings (setting: [plan])")
     for key, value in table.items():
+        if key == "board":
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise CheckError("board must be a positive whole number (setting: [plan] board)")
+            found[key] = value
+            continue
         if key not in PLAN_DEFAULTS:
             raise CheckError(f"[plan] holds only the plan's settings (setting: [plan] {key})")
         whole = isinstance(value, int) and not isinstance(value, bool)

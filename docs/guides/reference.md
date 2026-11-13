@@ -630,7 +630,17 @@ the conflicts and the open questions, and writes once, as new files only, the sc
 requirements, one Draft spec per feature area and one brief per brief under `docs/plan/` (rule 7). `publish` exits 2 without
 `Approve: plan <--head>` by an account of `spec_approvers` in the saved comments, and prints one `gh api` command per
 milestone and per brief, briefs in dependency order, each withheld until `--numbers` names its milestone and its
-dependences; it runs none (rules 8 and 25).
+dependences; it runs none (rules 8 and 25). Once nothing is withheld its last line ends `; next: /agk:board --yes`.
+
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/board.py" [--title TEXT] [--owner LOGIN] [--project N] [--yes]
+
+`/agk:board` (the plugin's copy, run with your own `gh` and its `project` scope) makes the plan's GitHub Project board and
+keeps it in step (ADR-0506). Without `--yes` it prints the steps and changes nothing. With `--yes` it creates the board
+once (`<repository> plan`, under the repository's owner) and prints `board = <n>` for you to add under `[plan]` of
+`agk.toml` and commit; every run links the repository, adds the `Size` and `Expected hours` fields when missing and adds
+each open `agk-brief` issue not yet on the board with its size and the high end of its hours. It never removes or edits
+an item already there, and ends `ok board: <a> added, <b> already there`. A missing scope prints
+`gh auth refresh -s project` (exit 2); in a cloud session it prints one `board: needs a machine ...` line and exits 0.
 
     python3 scripts/agk/design_import.py source --version i<n> --slug <slug> [--root DIR]
     python3 scripts/agk/check_plan.py [--root DIR] [--trace] [--facts FILE] [--numbers FILE]
@@ -746,6 +756,7 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:issue` | the issue templates and your own `gh issue create`, after asking | one GitHub issue |
 | `/agk:brief` | `scripts/agk/new_spec.py` | one brief |
 | `/agk:review` | `review_context.py`, the project's `reviewer` subagent, `check_review_report.py` | local files, never committed |
+| `/agk:board` | `scripts/agk/board.py` (a dry run; `--yes` after you say yes), your own `gh project` | the plan's GitHub Project board: created once, linked, two fields, and each open brief issue added with its size and hours (add-only, ADR-0506) |
 
 No command commits, pushes or merges (`/agk:ruleset` and `/agk:issue` write to GitHub only after you say yes, and `/agk:review-pass` writes only `Verdict:` comments, from a conductor session), and none sets a spec `Approved` or an ADR `Accepted`. `/agk:review` is advisory.
 GitHub issues are intake only: decisions, requirements, specs and ADRs live in the repository, and an issue decides

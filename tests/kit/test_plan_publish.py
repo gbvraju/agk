@@ -181,6 +181,19 @@ def test_ac2_rule_25_a_dependent_brief_waits_until_numbers_names_its_dependency(
     assert hidden(body) == rendered.replace("Depends-on: B1", "Depends-on: #12")
 
 
+def test_ac2_rule_25_the_last_round_names_the_board_command(plan: Path, capsys) -> None:
+    """REQ-050 AC2: brief #1190 answer 6 (ADR-0506), once nothing is withheld the final line names
+    `/agk:board --yes`; a round that withholds a brief does not."""
+    code, out = publish(plan, capsys, approved(), {"M1": 7})
+    assert code == 0, out
+    assert "/agk:board" not in out
+    code, out = publish(plan, capsys, approved(), {"M1": 7, "B0": 11, "B1": 12})
+    assert code == 0, out
+    last = out.strip().splitlines()[-1]
+    assert last.startswith("ok publish: ") and "0 withheld" in last
+    assert last.endswith("; next: /agk:board --yes (ADR-0506)")
+
+
 def test_ac2_rule_25_a_brief_that_check_brief_fails_is_refused(plan: Path, capsys) -> None:
     """REQ-050 AC2: rule 25 and rule 7, a brief whose `Advances:` is still a key, or a REQ that is
     not in `docs/requirements.md`, is refused with no command printed at all."""
