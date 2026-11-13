@@ -12,9 +12,9 @@ Read these first.
 
 - Estimates are ranges from this project's own history, not promises; AGK drafts from the sources and the person owns
   scope. AGK proposes; you decide what is in and out, and every file it renders is yours to edit.
-- There is no estimate on this path yet. The estimator, the milestone status, the baseline with its scope changes and the
-  ceremonies (SPEC-0043 builds (e) to (h)) are specified but not built, so a milestone's `Target:` is your own date or
-  `(verify)`, and the first iterations, once the estimator exists, are uncalibrated until the project has its own history.
+- The estimator, the milestone status, the baseline with its scope changes and the ceremonies (SPEC-0043 builds (e) to
+  (h)) read the project's own history. Until it has enough there is no estimate: the first iterations are
+  uncalibrated, and a milestone's `Target:` is your own date or `(verify)`.
 - AGK never contacts the customer, and it never reads a source the person did not provide. Never forward a source AGK
   should not read: you choose which documents and which prototype folder go into the repository, and you clean them first.
   The data guard finds secrets and personal data by pattern only, so what it cannot tell from invented text is your call.
@@ -105,6 +105,28 @@ the kit uses invented files only.
 7. **Approve and publish.** The approver posts `Approve: plan <full head ID>`, and
    `python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE]` prints the commands, as in
    steps 8 and 9 above.
+
+## Sprints and ceremonies
+
+Once the plan has its baseline (`docs/plan/baseline.json`), it runs in iterations of `[plan] iteration_days` working days,
+Monday to Friday (10 by default, a whole number from 1 to 30), numbered from 1 from the baseline's date (SPEC-0043 rules 23
+and 24). Four commands print the text of each ceremony from the facts (`facts.py --weeks N`); you paste it, post it or save
+it under `docs/plan/iterations/<n>/`. AGK runs no meeting, posts nothing and files nothing.
+
+- `python3 scripts/agk/plan_ceremony.py planning --facts FILE` proposes the open briefs for the next iteration, in
+  milestone, then `Depends-on`, then priority order, up to the measured capacity (the P50 of briefs closed per past
+  iteration), or `capacity unknown` while uncalibrated, with the estimator's forecast. You accept or change the list.
+- `python3 scripts/agk/plan_ceremony.py daily --facts FILE --stalls FILE` prints at most ten lines: what finished since
+  the previous working day, what is in progress, and what is blocked and why, from a saved `stalls.py --json` output.
+- `python3 scripts/agk/plan_ceremony.py review --facts FILE --matches FILE` lists, per milestone touched in the iteration,
+  its exit criterion with the merged pull requests, requirements done and proof, or `no evidence yet`; the signed-off
+  design version; and each `Demo:` screen and state with the `Design match:` line of a merged pull request and the persona
+  whose story it completes. `--matches` is a JSON file you save: pull request number to its `Design match:` lines.
+- `python3 scripts/agk/plan_ceremony.py retro --facts FILE --stalls FILE` prints measured facts only (estimates within
+  range by size, median waits, rework, stalls by kind) and at most three candidate briefs, printed for you and never filed.
+
+Estimates are ranges from this project's own history, not promises; AGK drafts from the sources and the person owns scope.
+The first iterations are uncalibrated, AGK never contacts the customer, and it never reads a source you did not provide.
 
 ## When a step refuses
 
