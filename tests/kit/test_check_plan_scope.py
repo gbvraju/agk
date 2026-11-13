@@ -401,6 +401,157 @@ def test_an_approval_through_an_agent_app_or_for_a_short_head_does_not_count(tmp
     assert code == 1
 
 
+# --- rule 22 with the saved comments: the approver is checked (brief #1166, ADR-0496) -----------
+
+M1_EXPORT = (
+    "FAIL plan: rule 22: docs/plan/briefs: m1-export: under baselined milestone M1, in "
+    "neither the baseline nor an approved scope change"
+)
+
+
+def saved_comments(tmp_path: Path, *items: dict) -> Path:
+    saved = tmp_path / "saved" / "comments.json"
+    saved.parent.mkdir(parents=True, exist_ok=True)
+    saved.write_text(json.dumps(list(items)), encoding="utf-8")
+    return saved
+
+
+@pytest.mark.parametrize(
+    "items",
+    [
+        [],
+        [comment("Looks good to me, approved")],
+        [comment(f"Approve: scope SC-2 {HEAD}")],
+        [comment(f"Approve: plan {HEAD}")],
+    ],
+)
+def test_with_the_saved_comments_an_approved_line_alone_does_not_approve(tmp_path, capsys, items):
+    """REQ-050 AC6 (a): the `Approved:` line written into the file without a listed approver's
+    `Approve: scope SC-<n> <full head ID>` on the pull request approves nothing; the brief it adds
+    fails rule 22."""
+    root = plan(tmp_path, baseline())
+    brief(root, "M1", "m1-export")
+    changes(root, change(approved=True))
+    code, lines = check(root, capsys, "--comments", str(saved_comments(tmp_path, *items)))
+    assert code == 1
+    assert failures(lines) == [M1_EXPORT]
+
+
+def test_with_the_approvers_line_in_the_saved_comments_it_passes(tmp_path, capsys):
+    """REQ-050 AC6 (b): the listed approver's line on the pull request and the `Approved:` line."""
+    root = plan(tmp_path, baseline())
+    brief(root, "M1", "m1-export")
+    changes(root, change(approved=True))
+    saved = saved_comments(tmp_path, comment("a note"), comment(f"Approve: scope SC-1 {HEAD}"))
+    code, lines = check(root, capsys, "--comments", str(saved))
+    assert failures(lines) == [] and code == 0
+
+
+def test_the_approvers_line_without_the_approved_line_does_not_approve(tmp_path, capsys):
+    """REQ-050 AC6: both are needed; the comment alone leaves the record proposed."""
+    root = plan(tmp_path, baseline())
+    brief(root, "M1", "m1-export")
+    changes(root, change())
+    saved = saved_comments(tmp_path, comment(f"Approve: scope SC-1 {HEAD}"))
+    code, lines = check(root, capsys, "--comments", str(saved))
+    assert code == 1 and failures(lines) == [M1_EXPORT]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [None, "", "{not json", '{"body": "Approve: scope SC-1"}', b"\xff\xfe\x00"],
+    ids=["missing", "empty", "malformed", "not-a-list", "not-utf8"],
+)
+def test_a_comments_file_that_cannot_be_read_fails_naming_the_option(tmp_path, capsys, content):
+    """REQ-050 AC6 (c): an unread comments file is a failure naming `--comments`, never a pass
+    and never a fallback to the `Approved:` line alone (principle 11)."""
+    root = plan(tmp_path, baseline())
+    brief(root, "M1", "m1-export")
+    changes(root, change(approved=True))
+    saved = tmp_path / "saved" / "comments.json"
+    saved.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(content, bytes):
+        saved.write_bytes(content)
+    elif content is not None:
+        saved.write_text(content, encoding="utf-8")
+    code = check_plan.main(["--root", str(root), "--comments", str(saved)])
+    out = capsys.readouterr()
+    assert code == 2
+    assert "--comments" in out.err
+    assert str(saved) not in out.err and "PASS" not in out.out
+
+
+def test_a_record_approved_on_an_earlier_pull_request_keeps_its_approval(tmp_path, capsys):
+    """REQ-050 AC6: a scope change whose block the merge base already holds, `Approved:` line and
+    all, was approved on the pull request that merged it; a later pull request's comments do not
+    name it, and it still approves (brief #1166, Decisions taken)."""
+    root = plan(tmp_path, baseline())
+    brief(root, "M1", "m1-export")
+    changes(root, change(approved=True))
+    committed(root)
+    git(root, "checkout", "-q", "-b", "later")
+    write(root, "app/other.py", "print('example')\n")
+    saved = saved_comments(tmp_path)
+    code, lines = check(root, capsys, "--comments", str(saved), "--base", "main")
+    assert failures(lines) == [] and code == 0
+
+
+def test_a_record_changed_since_the_merge_base_needs_the_approvers_line_again(tmp_path, capsys):
+    """REQ-050 AC6: a block that differs from the merge base's, or is new, carries no approval
+    from it: a widened `Briefs:` line needs a fresh `Approve: scope` on this pull request."""
+    root = plan(tmp_path, baseline())
+    brief(root, "M1", "m1-export")
+    changes(root, change(approved=True))
+    committed(root)
+    git(root, "checkout", "-q", "-b", "later")
+    brief(root, "M1", "m1-import")
+    changes(root, change(briefs="+M1/m1-export M 4-8 hours; +M1/m1-import S 2-4 hours", approved=True))
+    saved = saved_comments(tmp_path)
+    code, lines = check(root, capsys, "--comments", str(saved), "--base", "main")
+    assert code == 1
+    assert M1_EXPORT in failures(lines)
+    saved = saved_comments(tmp_path, comment(f"Approve: scope SC-1 {HEAD}"))
+    code, lines = check(root, capsys, "--comments", str(saved), "--base", "main")
+    assert failures(lines) == [] and code == 0
+
+
+def test_without_the_saved_comments_the_approved_line_counts_as_today(tmp_path, capsys):
+    """REQ-050 AC6, the local context: a local run has no comments; the `Approved:` line alone
+    counts there (ADR-0496 decision 3)."""
+    root = plan(tmp_path, baseline())
+    brief(root, "M1", "m1-export")
+    changes(root, change(approved=True))
+    code, lines = check(root, capsys)
+    assert failures(lines) == [] and code == 0
+
+
+WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "governance.yml"
+
+
+def _plan_step(text: str) -> str:
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip() == "- name: check_plan")
+    end = next(
+        (i for i in range(start + 1, len(lines)) if lines[i].strip().startswith("- name:")),
+        len(lines),
+    )
+    return "\n".join(lines[start:end])
+
+
+def test_the_governance_step_passes_the_saved_comments_on_a_pull_request():
+    """REQ-050 AC6: the governance job's `check_plan` step reads the pull request's saved comments
+    on a pull request event, and runs as before (no comments) on a push (brief #1166 answer 1)."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    step = _plan_step(text)
+    saved = text.index('> "$RUNNER_TEMP/comments.json"')
+    assert saved < text.index("- name: check_plan")
+    assert 'if [ "$EVENT" = pull_request ]; then' in step
+    assert "EVENT: ${{ github.event_name }}" in step
+    assert 'python scripts/agk/check_plan.py --comments "$RUNNER_TEMP/comments.json"' in step
+    plain = [line.strip() for line in step.splitlines()]
+    assert "python scripts/agk/check_plan.py" in plain
+
+
 def test_a_removed_baseline_brief_needs_an_approved_record(tmp_path, capsys):
     """REQ-050 AC6: a baseline brief whose file is gone fails until a scope change removes it."""
     root = plan(tmp_path, baseline())
