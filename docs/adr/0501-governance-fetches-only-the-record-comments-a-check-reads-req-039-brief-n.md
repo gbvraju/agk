@@ -33,9 +33,11 @@ token's limit was hit at 06:26 IST (and at 02:10 IST the night before), turning 
 4. The workflow change, adding `--body "$RUNNER_TEMP/pr-body.md"` to the `--record-ids` call (the `PR body file`
    step already runs before it and writes an empty body on a push), is the owner's commit; a session never changes a
    workflow.
-5. `agk.toml`'s `[[testing.map]]` entry for `scripts/agk/check_adrs.py` names `tests/kit/test_rule3a_record_comments.py`,
+5. `Record comments` now reads the body, so it is one of `full_run.py`'s `BODY_STEPS`: an edited body (a
+   `Covered-by:` line added) re-runs it with the other body steps.
+6. `agk.toml`'s `[[testing.map]]` entry for `scripts/agk/check_adrs.py` names `tests/kit/test_rule3a_record_comments.py`,
    which now runs `check_adrs.py`, so the test plan selects it.
-6. No spec rule says the workflow fetches every record: SPEC-0021 rule 3a names no fetch, and SPEC-0039 rule 6
+7. No spec rule says the workflow fetches every record: SPEC-0021 rule 3a names no fetch, and SPEC-0039 rule 6
    (amendment 122) describes the after-merge run of `merge_cleared.py`, which keeps fetching every record of the
    merge commit's history. No amendment is written.
 
