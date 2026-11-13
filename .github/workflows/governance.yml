@@ -96,13 +96,27 @@ jobs:
           else
             echo "paused=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: PR draft state
+        id: draft
+        if: ${{ github.event_name == 'pull_request' && steps.paused.outputs.paused != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          # Brief #1174 (ADR-0499): the payload's draft state can be stale when a push and a ready-for-review land together
+          # and the later run cancels the other; one GET reads the state when the job runs. A failed read is not a draft.
+          gh api --method GET "repos/${{ github.repository }}/pulls/$PR_NUMBER" > "$RUNNER_TEMP/pull.json" 2>/dev/null || : > "$RUNNER_TEMP/pull.json"
+          draft="$(python scripts/agk/pr_state.py --pull "$RUNNER_TEMP/pull.json" --event-draft "$EVENT_DRAFT" || echo false)"
+          echo "draft state at run time: $draft"
+          echo "draft=$draft" >> "$GITHUB_OUTPUT"
       - name: Status-only final commit
         id: status
         if: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_DRAFT: ${{ steps.draft.outputs.draft }}
         run: |
           # A draft pull request (brief #283): the same steps are skipped, and they run in full on `ready_for_review`.
           if [ "$PR_DRAFT" = true ]; then
@@ -287,7 +301,7 @@ jobs:
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_DRAFT: ${{ steps.draft.outputs.draft }}
         run: python scripts/agk/check_final_clearance.py --comments "$RUNNER_TEMP/comments.json" --reviews "$RUNNER_TEMP/reviews.json" --head "$HEAD_SHA" --author "$PR_AUTHOR" --draft "$PR_DRAFT"
       # The release pull request check is a kit script (SPEC-0028): it runs where the kit's own suite is installed.
       - name: Release check
@@ -302,7 +316,7 @@ jobs:
         if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.paused.outputs.paused != 'true' }}
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_DRAFT: ${{ steps.draft.outputs.draft }}
         run: printf '%s\n' "$PR_BODY" | python scripts/agk/check_pr_body.py --draft "$PR_DRAFT" --issues "$RUNNER_TEMP/briefs.json" -
       - name: Lint
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.status.outputs.skip != 'true' && steps.paused.outputs.paused != 'true' }}

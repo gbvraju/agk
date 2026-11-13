@@ -142,6 +142,7 @@ BODY_STEPS = {
     "check_pr_mode",
     "Open briefs",
     "PR body shape",
+    "PR draft state",  # the draft state the body check reads, at run time (brief #1174, ADR-0499)
 }
 
 

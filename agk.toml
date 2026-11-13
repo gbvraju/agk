@@ -659,6 +659,9 @@ tests = [
   "tests/kit_dev/test_upgrade_route_triggers.py", "tests/kit_dev/test_windows_line_endings.py",
 ]
 [[testing.map]]
+code = "scripts/agk/pr_state.py"
+tests = ["tests/kit/test_pr_state.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
 code = "scripts/agk/prepush.py"
 tests = [
   "tests/kit/test_batch.py", "tests/kit/test_evidence.py", "tests/kit/test_evidence_windows_tool.py",
