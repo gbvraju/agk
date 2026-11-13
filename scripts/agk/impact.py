@@ -195,7 +195,9 @@ NAMED = "(names it)"  # the `code` of a test selected because it names the chang
 IMPORTER = "(imports it)"  # the `code` of a test selected through a file that imports the change
 CONFIG = "agk.toml"
 MAP_ONLY = "agk.toml (testing map only)"  # the `code` of a test that a map-only change names
-MAP_INFRA = "tests/kit/test_always_full_infra.py"  # checks the map entries (brief #1198)
+# The base name of the test that checks the map entries, in whichever test folder (brief #1198); a
+# lean install names no kit test path, so its folder is not written here.
+MAP_INFRA = "test_always_full_infra.py"
 FULL_REASON = re.compile(r"#\s*full:\s*\S")  # what an always_full entry that is not infra needs
 FULL_KEY = re.compile(r"\s*always_full\s*=")
 TESTING_HEADS = ("[testing]", "[tool.agk.testing]")
@@ -1084,8 +1086,8 @@ def _map_split(text: str | None) -> tuple[dict, set[tuple[str, str]]] | None:
 
 def map_only_tests(root: Path, base: str, head: str, tests: list[str]) -> list[str] | None:
     """When every difference of `agk.toml` between BASE and HEAD lies inside `[[testing.map]]`
-    entries, the head's test files whose names were added, removed or moved there, with
-    `MAP_INFRA` (brief #1198, ADR-0509); None otherwise, and today's rule holds."""
+    entries, the head's test files whose names were added, removed or moved there, and each one
+    named `MAP_INFRA` (brief #1198, ADR-0509); None otherwise, and today's rule holds."""
     ends = []
     for rev in (base, head):
         found = _blobs(root, rev, [CONFIG])
@@ -1093,7 +1095,9 @@ def map_only_tests(root: Path, base: str, head: str, tests: list[str]) -> list[s
     if ends[0] is None or ends[1] is None or ends[0][0] != ends[1][0]:
         return None
     names = {t for _code, t in ends[0][1] ^ ends[1][1]}
-    return [t for t in tests if t == MAP_INFRA or any(matches(t, g) for g in names)]
+    return [
+        t for t in tests if t.rsplit("/", 1)[-1] == MAP_INFRA or any(matches(t, g) for g in names)
+    ]
 
 
 def add_importers(

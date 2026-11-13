@@ -21,8 +21,9 @@ pull request test steps averaged 495 s against 593 s for the full suite.
 1. Before the unmapped rule for `agk.toml`, `scripts/agk/impact.py` reads the file at the base and at the head with
    `tomllib` and compares them with every `[[testing.map]]` entry left out. When they are equal, `agk.toml` is not
    unmapped and selects only the head's test files matching a test name that was added to, removed from or moved
-   between entries (a (code, test) pair present at one end only), plus `tests/kit/test_always_full_infra.py` when it
-   exists at the head.
+   between entries (a (code, test) pair present at one end only), plus each test file of the head named
+   `test_always_full_infra.py` (in this repository `tests/kit/test_always_full_infra.py`). The installed script names
+   the file by its base name only, because a lean install names no kit test path (ADR-0052).
 2. Any other difference in `agk.toml`, or a file that does not parse at either end, keeps today's rule exactly.
 3. The selected tests carry `agk.toml (testing map only)` in the `code` field, and the plan prints it as the reason.
 4. No profile, `always_full`, importers rule or workflow changes; no new dependency.
