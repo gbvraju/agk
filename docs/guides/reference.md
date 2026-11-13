@@ -359,6 +359,15 @@ With `pool` or `hybrid` set and no repository variable `AGK_HEAVY_RUNNER`, a sec
 [self-hosted-runner.md](self-hosted-runner.md). It reads through `minutes.py` (GET only), changes no workflow and writes
 nothing (ADR-0237).
 
+## Draft state at run time
+
+    python3 scripts/agk/pr_state.py --pull FILE [--event-draft true|false]
+
+Prints `true` when the pull request is a draft at the time the governance job runs, else `false`: `FILE` holds the answer
+of the one GET of the pull request that the job makes, and the payload's draft state, when given, can only turn a draft
+into `false`. A read that failed, or an answer without a true or false `draft`, prints `false`, so the heavy steps run. It
+reads a file only, with no network. See ADR-0499.
+
 ## CI tools
 
     python3 scripts/agk/ci_tools.py check [--upstream] [--responses DIR]

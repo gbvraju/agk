@@ -1,0 +1,1 @@
+- Governance reads the pull request's draft state when the run starts (`pr_state.py`, one GET, fail closed), so a run that survives a push and a ready-for-review at the same moment checks a ready pull request in full (brief #1174, ADR-0499)
