@@ -211,6 +211,91 @@ def test_a_third_of_the_slots_dead_opens_nothing(proj, stub, tmp_path):
     assert stub.writes() == []
 
 
+# --- retired slots (brief #1172, ADR-0498) ------------------------------------------------------
+
+DAYS3 = 3 * 24 * 60  # minutes: three days ago
+TWELVE = '[flow]\nbuilder_start = "assign"\nbuilder_slots = 12\nplan_issue = 61\n'
+
+
+def pool_text(proj: Path, stub: Stub, tmp: Path) -> tuple[bool, str]:
+    """The `Builder pool down` row of conductor.pool_state through the gh stub: (down, text)."""
+    (stub.dir / "fixtures.json").write_text(json.dumps(stub.fixtures), encoding="utf-8")
+    env = {"PATH": f"{stub.bin}{os.pathsep}{os.environ['PATH']}", "GH_STUB_DIR": str(stub.dir)}
+    saved = {k: os.environ.get(k) for k in env}
+    os.environ.update(env)
+    try:
+        rows = conductor.pool_state(proj, REPO)
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+    row = next(r for r in rows if r[0] == conductor.POOL_DOWN)
+    return row[1], row[3]
+
+
+def nine_old_slots() -> list[dict]:
+    return [slot(f"s{n}", n + 1, minutes=DAYS3) for n in range(1, 10)]
+
+
+def test_slots_older_than_slot_active_days_are_retired_and_raise_nothing(proj, stub, tmp_path):
+    """REQ-037: (a) 12 slots, s1 to s9 seen 3 days ago and s10 to s12 never, a 2-day setting:
+    every slot is retired, none counts, so the alarm is off and an open issue closes."""
+    (proj / "agk.toml").write_text(TWELVE + "slot_active_days = 2\n", encoding="utf-8")
+    stub.fixtures[ASSIGNMENTS] = nine_old_slots()
+    down, text = pool_text(proj, stub, tmp_path)
+    assert not down
+    retired = text.split("Retired")[1]
+    assert all(f"s{n} (" in retired for n in range(1, 13)), text
+    assert "s10 (never)" in retired and "of 0 counted" in text
+    assert "slot_active_days" in text and "= 2" not in text
+    stub.fixtures[HEALTH] = [{"number": 1159, "title": "Builder pool down", "body": "old"}]
+    (stub.dir / "calls.log").unlink(missing_ok=True)
+    router(proj, stub, tmp_path)
+    assert ["PATCH", f"{ISSUES}/1159", ["state=closed", "state_reason=completed"]] in stub.writes()
+    assert opened(stub) == []
+
+
+def test_with_the_default_seven_days_late_slots_still_count(proj, stub, tmp_path):
+    """REQ-037: (b) the default 7 days: s1 to s9 seen 3 days ago count and are late (9 of 9 dead,
+    s10 to s12 never seen are retired), so the alarm opens as today."""
+    (proj / "agk.toml").write_text(TWELVE, encoding="utf-8")
+    stub.fixtures[ASSIGNMENTS] = nine_old_slots()
+    down, text = pool_text(proj, stub, tmp_path)
+    assert down and "of 9 counted" in text
+    assert "s1 (last seen" in text.split("Retired")[0]
+    assert "s12 (never)" in text.split("Retired")[1]
+    router(proj, stub, tmp_path)
+    assert opened(stub) == ["Builder pool down"]
+
+
+def test_a_slot_seen_ten_minutes_ago_is_alive(proj, stub, tmp_path):
+    """REQ-037: (c) seen 10 minutes ago (no valid lease: released) counts and is not dead."""
+    stub.fixtures[ASSIGNMENTS] = [
+        slot("s1", 2, minutes=10, state="released"),
+        slot("s2", 3, minutes=10, state="released"),
+    ]
+    down, text = pool_text(proj, stub, tmp_path)
+    assert not down and "window: none, of 2 counted" in text
+    assert "s3 (never)" in text.split("Retired")[1]
+
+
+@pytest.mark.parametrize("bad", ["0", "-1", "2.5", '"7"', "true"])
+def test_a_bad_slot_active_days_is_refused_naming_the_setting(proj, stub, tmp_path, bad):
+    """REQ-037: (d) refused with `setting: flow.slot_active_days`, never the value; the router's
+    health step skips and writes nothing."""
+    (proj / "agk.toml").write_text(ON + f"slot_active_days = {bad}\n", encoding="utf-8")
+    with pytest.raises(conductor.CheckError) as caught:
+        conductor.slot_active_days(proj)
+    assert "setting: flow.slot_active_days" in str(caught.value)
+    assert bad not in str(caught.value).replace("slot_active_days", "")
+    out = router(proj, stub, tmp_path)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "health: skipped" in out.stdout and "setting: flow.slot_active_days" in out.stdout
+    assert stub.writes() == []
+
+
 def test_no_work_waiting_opens_nothing(proj, stub, tmp_path):
     """REQ-041: a draft is not work for the conductor, and nothing is open for the slots."""
     stub.fixtures[PLAN] = []
