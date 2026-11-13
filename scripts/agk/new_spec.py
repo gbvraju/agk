@@ -5,9 +5,10 @@ Usage:
     python3 new_spec.py requirement TITLE [--issue N --issue-text FILE|-] [--root DIR]
     python3 new_spec.py brief TITLE [--root DIR]
 
-Kit-only (never installed): the plugin runs it from its own root against the repository in `--root`
-(default `.`). Standard library only. No network, no git or gh calls. It writes new files only and
-refuses to overwrite: `docs/specs/NNNN-slug.md` (Status: Draft), `docs/adr/NNNN-slug.md` (Status:
+Installed in projects (ADR-0503) so that the project's own `plan_intake.py render` imports it from
+beside itself; the plugin also runs its own copy against the repository in `--root` (default `.`).
+Standard library only. No network, no git or gh calls. It writes new files only and refuses to
+overwrite: `docs/specs/NNNN-slug.md` (Status: Draft), `docs/adr/NNNN-slug.md` (Status:
 Proposed, carrying the proposed requirement text; `docs/requirements.md` is protected and never
 edited) or `docs/briefs/slug.md`. Issue text is data: it is copied into the file as quoted lines and
 `Issue: #N` is recorded there; nothing reads the issue to decide. It never sets a spec `Approved` or
