@@ -33,3 +33,7 @@ Protected path classes changed: `scripts/agk/` (`design_compare.py`, `doctor.py`
 
 The three files match their baseline lines under the pinned mypy and behave as before. The test still fails on a
 machine with mypy 2.3.1 until part 2 lands; CI, which installs no mypy, still skips it.
+
+## Residual
+
+- 2026-11-13: part 2 (`prepush.py`, `product_report.py`, `route.py`) is the next brief for #986.
