@@ -172,7 +172,7 @@ def test_1202_b_the_conductor_starts_builders_within_the_limits():
 
 
 def test_1202_c_the_conductor_may_fire_only_the_builder_tasks():
-    """REQ-039: brief #1202 answer 4 (c): the last paragraph allows firing the two builder tasks only."""
+    """REQ-039: brief #1202 answer 4 (c): the last paragraph allows only firing builder tasks."""
     last = last_paragraph("conductor.txt")
     assert (
         "never create, change or delete a scheduled task; firing the two builder tasks is the "
@@ -187,7 +187,8 @@ def test_1202_d_the_launcher_is_the_backup_at_45_minutes():
     assert "45 minutes" in launcher
     assert "90 minutes" not in launcher
     assert "backup" in launcher
-    for words in ("<mid builder task>", "<strongest builder task>", "<conductor task>", "<plan issue>"):
+    tasks = ("<mid builder task>", "<strongest builder task>", "<conductor task>", "<plan issue>")
+    for words in tasks:
         assert words in launcher, words
 
 
