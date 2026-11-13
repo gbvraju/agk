@@ -223,14 +223,15 @@ jobs:
         # The Final comment of each record line (SPEC-0021 rule 3a, brief #557): the release check and the release
         # exemption of check_protected_changes count a record only once its comment verifies it. A comment that
         # cannot be read is left out, so its record counts for nothing (fail closed). The comments are read at most 8 at a
-        # time and joined in id order (brief #1122, ADR-0480).
+        # time and joined in id order (brief #1122, ADR-0480). With the body, only the comments a check reads are fetched:
+        # every record's for a release pull request, those of the ADR a `Covered-by:` line names, else none (brief #1181, ADR-0501).
         if: ${{ !cancelled() && steps.paused.outputs.paused != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           : > "$RUNNER_TEMP/record-comments.json"
           if [ -f kit/agk-kit.mk ]; then
-            ids="$(python scripts/agk/check_adrs.py --record-ids)" || ids=""
+            ids="$(python scripts/agk/check_adrs.py --record-ids --body "$RUNNER_TEMP/pr-body.md")" || ids=""
             mkdir -p "$RUNNER_TEMP/records"
             printf '%s\n' $ids | xargs -r -P 8 -I '{}' sh -c 'id="$1"; gh api --method GET "repos/${{ github.repository }}/issues/comments/$id" > "$2/$id.json" || { rm -f "$2/$id.json"; echo "Record comments: comment $id could not be read"; }' _ '{}' "$RUNNER_TEMP/records"
             for id in $ids; do
