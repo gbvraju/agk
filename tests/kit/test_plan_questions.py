@@ -23,13 +23,14 @@ from pathlib import Path
 import check_brief
 import personal_state as ps
 import pytest
+from conftest import Repo
 from forge import FilesForge
 from test_plan_intake import PRD, SOW, write
 from test_plan_publish import (
     OWNER,
     REVIEWERS,
     approved,
-    commands,
+    every_command,
     field,
     numbered,
     publish,
@@ -37,10 +38,9 @@ from test_plan_publish import (
 from test_plan_publish import no_network as no_network  # noqa: F401 - the guard, reused
 from test_plan_render import proposals, render
 from test_plan_render import repo as repo  # noqa: F401 - the fixture, reused
-from test_session import Stub, issue, listing, state
+from test_session import REPO, Stub, issue, listing, state
 from test_session_flow import brief
 from test_session_plan import free, plan
-from test_session_plan import proj as proj  # noqa: F401 - the fixture, reused
 
 LABEL = "agk-business-question"
 QUESTION = "Who signs the list off?"
@@ -53,11 +53,11 @@ def raw(command: list[str]) -> list[str]:
 
 
 def questions_only(out: str) -> list[list[str]]:
-    return [c for c in commands(out) if f"labels[]={LABEL}" in c]
+    return [c for c in every_command(out) if f"labels[]={LABEL}" in c]
 
 
 def briefs_only(out: str) -> list[list[str]]:
-    return [c for c in commands(out) if "labels[]=agk-brief" in c]
+    return [c for c in every_command(out) if "labels[]=agk-brief" in c]
 
 
 @pytest.fixture
@@ -110,7 +110,6 @@ def test_1196_a_publish_prints_one_question_issue_per_open_question_and_conflict
     assert "proposals" not in body
     assert briefs_only(out) == []  # each brief waits for its question's number
     assert re.findall(r"(?m)^withheld (\S+): waits for (.+)$", out) == [
-        ("B0", "Q1, conflict-2"),
         ("B1", "Q1, conflict-2"),
         ("B2", "B1, Q1, conflict-2"),
     ]
@@ -126,9 +125,12 @@ def test_1196_b_a_second_publish_with_the_numbers_prints_no_question_again(
     code, out = publish(asked, capsys, approved(), numbers)
     assert code == 0, out
     assert questions_only(out) == [] and "gh label create" not in out
-    assert re.findall(r"(?m)^published (\S+) (#\d+)$", out) == [("Q1", "#31"), ("conflict-2", "#32")]
+    assert re.findall(r"(?m)^published (\S+) (#\d+)$", out) == [
+        ("Q1", "#31"),
+        ("conflict-2", "#32"),
+    ]
     printed = briefs_only(out)
-    assert len(printed) == 2
+    assert len(printed) == 1  # B1; B2 waits for B1's number
     body = field(printed[0], "body")
     assert re.findall(r"(?m)^Blocked-by: .*$", body) == ["Blocked-by: #31", "Blocked-by: #32"]
     assert check_brief.body_problems(body, None, None) == []
@@ -142,7 +144,7 @@ def test_1196_a_question_that_blocks_nothing_lets_the_briefs_go(repo: Path, caps
     assert "\nBlocks: none\n" in (repo / "docs/plan/scope.md").read_text(encoding="utf-8")
     code, out = publish(repo, capsys, approved(), {"M1": 7})
     assert code == 0, out
-    assert len(questions_only(out)) == 1 and len(briefs_only(out)) == 2
+    assert len(questions_only(out)) == 1 and len(briefs_only(out)) == 1  # B2 waits for B1
     assert all("Blocked-by" not in field(c, "body") for c in briefs_only(out))
 
 
@@ -190,7 +192,24 @@ def stub(tmp_path):
     return Stub(tmp_path)
 
 
-def test_1196_d_a_brief_blocked_by_an_open_question_is_not_offered(proj, stub) -> None:  # noqa: F811
+@pytest.fixture
+def proj(tmp_path: Path) -> Repo:
+    """The project of `test_session_plan.proj`, on its own git repository (the name `repo` is
+    the rendered plan's fixture in this file)."""
+    where = tmp_path / "git"
+    where.mkdir()
+    r = Repo(where)
+    r.git("init", "-q", "-b", "main")
+    r.git("config", "user.email", "t@example.invalid")
+    r.git("config", "user.name", "t")
+    r.git("config", "commit.gpgsign", "false")
+    r.git("remote", "add", "origin", f"https://github.com/{REPO}.git")
+    r.write("config/reviewers.yaml", "version: 1\nverdict_authors: [boss, second]\n")
+    r.write("config/protected-paths.txt", "config/\nscripts/agk/\n")
+    return r
+
+
+def test_1196_d_a_brief_blocked_by_an_open_question_is_not_offered(proj, stub) -> None:
     """REQ-050: brief #1196 answer 3 and answer 5 (d)."""
     listing(stub, [issue(5, brief("a/") + "Blocked-by: #31\n"), issue(6, brief("b/"))])
     free(stub, 5, 6)
@@ -202,7 +221,7 @@ def test_1196_d_a_brief_blocked_by_an_open_question_is_not_offered(proj, stub) -
     assert {"brief": 5, "question": 31, "why": "it is open"} in data["waits"]
 
 
-def test_1196_d_once_the_question_closes_the_brief_is_offered(proj, stub) -> None:  # noqa: F811
+def test_1196_d_once_the_question_closes_the_brief_is_offered(proj, stub) -> None:
     """REQ-050: brief #1196 answer 3 and answer 5 (d)."""
     listing(stub, [issue(5, brief("a/") + "Blocked-by: #31\n"), issue(6, brief("b/"))])
     free(stub, 5, 6)
@@ -213,7 +232,7 @@ def test_1196_d_once_the_question_closes_the_brief_is_offered(proj, stub) -> Non
     assert "question" not in out.stdout
 
 
-def test_1196_d_a_question_that_cannot_be_read_holds_the_brief(proj, stub) -> None:  # noqa: F811
+def test_1196_d_a_question_that_cannot_be_read_holds_the_brief(proj, stub) -> None:
     """REQ-050: brief #1196 answer 3, a failed read is never taken as closed."""
     listing(stub, [issue(5, brief("a/") + "Blocked-by: #31\n")])
     free(stub, 5)
@@ -221,7 +240,7 @@ def test_1196_d_a_question_that_cannot_be_read_holds_the_brief(proj, stub) -> No
     assert "#5 waits for question #31 (it cannot be read)." in lines
 
 
-def test_1196_d_next_does_not_offer_it_either(proj, stub) -> None:  # noqa: F811
+def test_1196_d_next_does_not_offer_it_either(proj, stub) -> None:
     """REQ-050: brief #1196 answer 3, `next` judges by the same rule as `plan`."""
     from test_session import session
 
@@ -231,4 +250,3 @@ def test_1196_d_next_does_not_offer_it_either(proj, stub) -> None:  # noqa: F811
     out = session(proj, stub, "next", "--session", "s1")
     assert "skip #5: waits for question #31" in out.stdout, out.stdout + out.stderr
     assert "brief #5" not in out.stdout
-

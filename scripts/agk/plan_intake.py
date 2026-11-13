@@ -43,6 +43,12 @@ numbers; it runs none. In personal mode it writes the briefs through `forge.File
 (ADR-0507): each brief issue shows one `Persona: <key> <name>` line before its milestone line, the
 persona of the requirements its `Advances:` names (their `requirements-proposed.md` block, else
 their `docs/requirements.md` section), and none when no requirement names one.
+Brief #1196 (ADR-0508): `render` writes each open question and unsettled conflict into the
+`Questions for business` section of `docs/plan/scope.md` (`### <key>`, `Question:`, `Source:`,
+`Blocks:` the keys that cite one of its locations); `publish` reads that section, prints before the
+briefs one `gh label create` and one issue command per question not in `--numbers`, labelled
+`agk-business-question`, and withholds a brief it blocks until its number, then adds
+`Blocked-by: #<n>` to the brief issue.
 
 Amendment 166 (ADR-0473): `openspec-import` copies a combined OpenSpec `.md` file, or an `openspec/`
 folder that holds `specs/` (its `.md` and `.txt` files; any other is printed `skipped:`), under
@@ -622,7 +628,44 @@ def scope_text(data: dict) -> str:
         out += ["", f"## {heading}", ""]
         items = data["scope"][name]
         out += [f"- {_one(i['text'])} ({_locs(i['sources'])})" for i in items] or ["- none"]
+    questions = business_questions(data)
+    out += ["", f"## {QUESTIONS_HEADING}"]
+    for q in questions:
+        out += ["", f"### {q['key']}", "", f"Question: {q['question']}"]
+        out += [f"Source: {_locs(q['sources'])}", f"Blocks: {', '.join(q['blocks']) or 'none'}"]
+    out += [] if questions else ["", "- none"]
     return "\n".join(out) + "\n"
+
+
+QUESTIONS_HEADING = "Questions for business"  # brief #1196 (ADR-0508): what publish reads
+CONFLICT_KEY = "conflict-{}"
+
+
+def _blocks(data: dict, sources: list[str]) -> list[str]:
+    """Brief #1196 answer 1: the requirements that cite one of SOURCES, then the briefs that cite
+    one or advance such a requirement, by key."""
+    cited = set(sources)
+    reqs = [r["key"] for r in data["requirements"] if cited & set(r["sources"])]
+    briefs = [
+        b["key"]
+        for b in data["briefs"]
+        if cited & set(b["sources"]) or set(b["advances"]) & set(reqs)
+    ]
+    return reqs + briefs
+
+
+def business_questions(data: dict) -> list[dict]:
+    """Brief #1196: every open question, then every conflict the person has not settled (a
+    settled one has its answer), keyed `conflict-<n>` by its place among the conflicts."""
+    out = [
+        {"key": str(q["key"]), "question": _one(q["text"]), "sources": q["sources"]}
+        for q in data["scope"]["open_questions"]
+    ]
+    for n, c in enumerate(data["conflicts"], start=1):
+        if c.get("settled") is None:
+            text = f"The sources disagree: {_one(c['description']).rstrip('.')}. Which one holds?"
+            out.append({"key": CONFLICT_KEY.format(n), "question": text, "sources": c["locations"]})
+    return [q | {"blocks": _blocks(data, q["sources"])} for q in out]
 
 
 def personas_text(data: dict) -> str:
@@ -827,6 +870,12 @@ DEPENDS_ON = re.compile(r"Depends-on: (.+)")
 ISSUE_REF = re.compile(r"#[1-9]\d*")
 BRIEF_LABEL = "agk-brief"
 MILESTONES = f"{PLAN}/milestones.md"
+SCOPE_FILE = f"{PLAN}/scope.md"
+QUESTION_LABEL = "agk-business-question"  # brief #1196 (ADR-0508): never a builder's work
+QUESTION_LABEL_TEXT = "A question for business: answer it in the issue, then close it"
+QUESTION_HEADING = re.compile(r"### (\S.*?)\s*")
+VERIFY_MARK = re.compile(r"\s*\(verify\)")
+TITLE_MAX = 256  # GitHub's longest issue title
 NO_CONFIRMATION = (
     "publish needs the person's confirmation: a comment whose first line is"
     " `Approve: plan <full head ID>` by an account of spec_approvers, naming this head"
@@ -954,11 +1003,13 @@ def issue_body(b: dict, numbers: dict[str, int]) -> str:
     sentence = next((m[1] for x in lines if (m := SENTENCE_LINE.fullmatch(x.rstrip()))), VERIFY)
     deps = [x.rstrip().removeprefix("Depends-on: ") for x in lines if DEPENDS_ON.fullmatch(x)]
     persona = [f"Persona: {b['persona']}", ""] if b.get("persona") else []  # brief #1195
+    blocked = [f"Blocked-by: #{numbers.get(k, 1)}" for k in b.get("blocked_by", [])]  # #1196
     where = f"Part of milestone {b['milestone']}."
     where += f" Depends on {', '.join(deps)}." if deps else ""
     shown = ["## What", "", sentence, "", "## Acceptance", ""]
     shown += [f"- [ ] {item}" for item in acceptance(lines)] or [f"- [ ] {VERIFY}"]
-    shown += ["", *persona, where, "", HIDDEN_OPEN, body.rstrip("\n"), HIDDEN_CLOSE]
+    shown += ["", *persona, where, "", *blocked, *([""] if blocked else [])]
+    shown += [HIDDEN_OPEN, body.rstrip("\n"), HIDDEN_CLOSE]
     return "\n".join(shown) + "\n"
 
 
@@ -1014,6 +1065,71 @@ def brief_check(root: Path, briefs: list[dict], numbers: dict[str, int]) -> list
     return out
 
 
+def plan_questions(text: str, taken: list[str]) -> tuple[list[dict], list[str]]:
+    """Brief #1196 answer 1: each `### <key>` block of the `Questions for business` section of
+    `docs/plan/scope.md`, with its `Question:`, `Source:` and `Blocks:` lines; TAKEN holds the
+    milestone ids and brief keys, which a question's key must not repeat (one number per key)."""
+    found: list[dict] = []
+    inside = False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            inside = line[3:].strip() == QUESTIONS_HEADING
+        elif inside and (heading := QUESTION_HEADING.fullmatch(line)):
+            found.append({"key": heading[1], "question": None, "source": "", "blocks": []})
+        elif inside and found:
+            name, _, value = line.partition(": ")
+            value = value.strip()
+            if name == "Question" and value:
+                found[-1]["question"] = _one(value)
+            elif name == "Source":
+                found[-1]["source"] = value
+            elif name == "Blocks" and value != "none":
+                found[-1]["blocks"] = [x.strip() for x in value.split(",") if x.strip()]
+    keys = [q["key"] for q in found]
+    out = [
+        f"rule 25: questions {k}: the key is repeated"
+        for k in sorted(set(keys))
+        if keys.count(k) > 1
+    ]
+    out += [
+        f"rule 25: questions {k}: the key is also a brief's or a milestone's"
+        for k in keys
+        if k in taken
+    ]
+    out += [
+        f"rule 25: questions {q['key']}: the block has no Question: line"
+        for q in found
+        if not q["question"]
+    ]
+    return found, out
+
+
+def question_title(q: dict) -> str:
+    """The question's plain text: without its `(verify)` mark, cut to GitHub's longest title."""
+    text = _one(VERIFY_MARK.sub("", q["question"]))
+    return text if len(text) <= TITLE_MAX else text[: TITLE_MAX - 3].rstrip() + "..."
+
+
+def question_body(q: dict) -> str:
+    """Brief #1196 answer 1: `## Question`, the source, `Blocks:` and an empty `## Answer`."""
+    blocks = ", ".join(q["blocks"]) or "none"
+    lines = ["## Question", "", _one(VERIFY_MARK.sub("", q["question"])), ""]
+    lines += [f"Source: {q['source'] or VERIFY}", f"Blocks: {blocks}", "", "## Answer"]
+    return "\n".join(lines) + "\n"
+
+
+def label_command() -> str:
+    """The label, made when missing (`--force` leaves one that exists as it is named)."""
+    args = ["gh", "label", "create", QUESTION_LABEL, "--description", QUESTION_LABEL_TEXT]
+    return shlex.join([*args, "--color", "d4c5f9", "--force"])
+
+
+def question_command(q: dict) -> str:
+    args = ["gh", "api", "repos/{owner}/{repo}/issues", "-X", "POST"]
+    args += ["-f", f"title={question_title(q)}", "-f", f"body={question_body(q)}"]
+    return shlex.join([*args, "-f", f"labels[]={QUESTION_LABEL}"])
+
+
 def milestone_command(m: dict) -> str:
     args = ["gh", "api", "repos/{owner}/{repo}/milestones", "-X", "POST"]
     args += ["-f", f"title={m['id']} {m['title']}"]
@@ -1048,10 +1164,15 @@ def cmd_publish(root: Path, comments: Path, head: str, numbers_path: Path | None
         return 1
     ids = [m["id"] for m in milestones]
     briefs, problems = plan_briefs(root, ids)
+    questions, asked = plan_questions(
+        _read(root / SCOPE_FILE) or "", ids + [b["key"] for b in briefs]
+    )
+    problems += asked
     if not problems:
         briefs = in_order(briefs, ids)
         for b in briefs:
             b["persona"] = brief_persona(root, b["body"])
+            b["blocked_by"] = [q["key"] for q in questions if b["key"] in q["blocks"]]
         problems = brief_check(root, briefs, numbers)
     if problems:
         print("\n".join(problems))
@@ -1060,13 +1181,16 @@ def cmd_publish(root: Path, comments: Path, head: str, numbers_path: Path | None
     from common import personal_table  # noqa: PLC0415
 
     if personal_table(root) is not None:
-        return publish_files(root, milestones, briefs, dict(numbers))
-    return publish_github(milestones, briefs, numbers)
+        return publish_files(root, milestones, questions, briefs, dict(numbers))
+    return publish_github(milestones, questions, briefs, numbers)
 
 
-def publish_github(milestones: list[dict], briefs: list[dict], numbers: dict[str, int]) -> int:
-    """Rule 25: the commands for the person's own `gh`, printed and never run."""
-    counts = dict.fromkeys(("milestones", "briefs", "withheld", "published"), 0)
+def publish_github(
+    milestones: list[dict], questions: list[dict], briefs: list[dict], numbers: dict[str, int]
+) -> int:
+    """Rule 25: the commands for the person's own `gh`, printed and never run; brief #1196: the
+    questions after the milestones and before every brief, the label once before the first."""
+    counts = dict.fromkeys(("milestones", "questions", "briefs", "withheld", "published"), 0)
     for m in milestones:
         if m["id"] in numbers:
             print(f"published {m['id']} milestone {numbers[m['id']]}")
@@ -1074,6 +1198,15 @@ def publish_github(milestones: list[dict], briefs: list[dict], numbers: dict[str
         else:
             print(milestone_command(m))
             counts["milestones"] += 1
+    for q in questions:
+        if q["key"] in numbers:
+            print(f"published {q['key']} #{numbers[q['key']]}")
+            counts["published"] += 1
+            continue
+        if not counts["questions"]:
+            print(label_command())
+        print(question_command(q))
+        counts["questions"] += 1
     for b in briefs:
         if b["key"] in numbers:
             print(f"published {b['key']} #{numbers[b['key']]}")
@@ -1081,6 +1214,7 @@ def publish_github(milestones: list[dict], briefs: list[dict], numbers: dict[str
             continue
         waits = [b["milestone"]] if b["milestone"] not in numbers else []
         waits += [d for d in b["depends_on"] if not ISSUE_REF.fullmatch(d) and d not in numbers]
+        waits += [k for k in b["blocked_by"] if k not in numbers]  # brief #1196
         if waits:
             print(f"withheld {b['key']}: waits for {', '.join(waits)}")
             counts["withheld"] += 1
@@ -1088,7 +1222,8 @@ def publish_github(milestones: list[dict], briefs: list[dict], numbers: dict[str
         print(brief_command(b, issue_body(b, numbers), numbers[b["milestone"]]))
         counts["briefs"] += 1
     print(
-        f"ok publish: {counts['milestones']} milestone and {counts['briefs']} brief commands"
+        f"ok publish: {counts['milestones']} milestone, {counts['questions']} question and"
+        f" {counts['briefs']} brief commands"
         f" printed, {counts['withheld']} withheld, {counts['published']} published before;"
         " nothing was run (save each number into --numbers and run publish again)"
         + ("" if counts["withheld"] else "; next: /agk:board --yes (ADR-0506)")
@@ -1097,9 +1232,14 @@ def publish_github(milestones: list[dict], briefs: list[dict], numbers: dict[str
 
 
 def publish_files(
-    root: Path, milestones: list[dict], briefs: list[dict], numbers: dict[str, int]
+    root: Path,
+    milestones: list[dict],
+    questions: list[dict],
+    briefs: list[dict],
+    numbers: dict[str, int],
 ) -> int:
-    """Rule 25 in personal mode: the briefs as issues of the files forge, in order."""
+    """Rule 25 in personal mode: the questions (brief #1196), then the briefs, as issues of the
+    files forge, in order."""
     import os  # noqa: PLC0415
 
     from forge import FilesForge  # noqa: PLC0415 - only personal mode writes
@@ -1108,6 +1248,13 @@ def publish_files(
     for m in milestones:
         print(f"milestone {m['id']}: kept in each brief's Milestone: line (no forge record)")
     made = 0
+    for q in questions:
+        if q["key"] in numbers:
+            print(f"published {q['key']} #{numbers[q['key']]}")
+            continue
+        number = forge.create_issue(question_title(q), question_body(q), [QUESTION_LABEL])
+        numbers[q["key"]] = number
+        print(f"created question {q['key']} #{number}")
     for b in briefs:
         if b["key"] in numbers:
             print(f"published {b['key']} #{numbers[b['key']]}")

@@ -50,8 +50,10 @@ def out(data):
     save()
     sys.exit(0)
 
-if args[:1] == ["api"]:
-    out(state["issues"])
+if args[:1] == ["api"]:  # the REST read of the open issues, filtered by its label (brief #1196)
+    wanted = [a.split("labels=", 1)[1].split("&")[0] for a in args if "labels=" in a]
+    out([i for i in state["issues"]
+         if not wanted or wanted[0] in [x["name"] for x in i.get("labels", [])]])
 if args[:1] != ["project"]:
     sys.stderr.write("fake gh: unknown command\n")
     sys.exit(1)
@@ -614,3 +616,70 @@ def test_1195_d_an_old_board_gets_the_new_fields_filled_once(world: World) -> No
     before = len(world.calls())
     assert world.run("--yes", "--project", "5").returncode == 0
     assert not [c for c in world.calls()[before:] if c[:2] == ["project", "item-edit"]]
+
+
+# --- brief #1196 (ADR-0508): the business questions on the board ----------------------------------
+
+QUESTION_LABEL = "agk-business-question"
+
+
+def question_issue(n: int) -> dict:
+    """An invented business question issue as `plan_intake.py publish` prints it."""
+    body = (
+        "## Question\n\nWho signs the list off at example.com?\n\n"
+        "Source: `docs/sources/sow.md#Scope`\nBlocks: B1\n\n## Answer\n"
+    )
+    return issue(n) | {"body": body, "labels": [{"name": QUESTION_LABEL}]}
+
+
+def test_1196_c_the_board_adds_the_questions_with_type_question(world: World) -> None:
+    """REQ-050: brief #1196 answer 2 and answer 5 (c): Type Question, Sign-off left empty; the
+    `Type` field is added once a question is there, and the briefs are Work."""
+    world.state["issues"] = [issue(11, "S", "2-4 hours"), question_issue(31)]
+    world.save()
+    dry = world.run()
+    assert dry.returncode == 0, dry.stdout + dry.stderr
+    assert "would add field Type (single select Work, Question)" in dry.stdout
+    assert "would add #31 Type Question" in dry.stdout
+    assert "note: #31" not in dry.stdout
+    proc = world.run("--yes")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    fields = {f["name"]: f for f in world.load()["projects"]["5"]["fields"]}
+    assert [o["name"] for o in fields["Type"]["options"]] == ["Work", "Question"]
+    values = item_values(world.state)
+    assert values[31] == {"F_Type": "opt_Question"}
+    assert values[11]["F_Type"] == "opt_Work" and values[11]["F_Sign-off"] == "opt_Pending"
+    assert "set #31 Type Question" in proc.stdout and "note: #31" not in proc.stdout
+    assert proc.stdout.strip().splitlines()[-1] == "ok board: 2 added, 0 already there"
+
+
+def test_1196_c_a_later_question_fills_type_once_on_the_cards_there(world: World) -> None:
+    """REQ-050: brief #1196 answer 2, an old board gains `Type`; its brief cards are Work once."""
+    assert world.run("--yes").returncode == 0
+    assert "Type" not in field_creates(world.calls())
+    world.load()
+    world.state["issues"].append(question_issue(31))
+    world.save()
+    before = len(world.calls())
+    proc = world.run("--yes", "--project", "5")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert field_creates(world.calls()[before:]) == ["Type"]
+    values = item_values(world.load())
+    assert {values[n]["F_Type"] for n in (11, 12, 13)} == {"opt_Work"}
+    assert values[31] == {"F_Type": "opt_Question"}
+    assert proc.stdout.strip().splitlines()[-1] == "ok board: 1 added, 3 already there"
+    before = len(world.calls())
+    assert world.run("--yes", "--project", "5").returncode == 0
+    assert not [c for c in world.calls()[before:] if c[:2] == ["project", "item-edit"]]
+
+
+def test_1196_c_a_closed_question_is_not_read(world: World) -> None:
+    """REQ-050: brief #1196 answer 2, only the open questions are read, with one REST call."""
+    world.state["issues"] = [issue(11)]
+    world.save()
+    assert world.run("--yes").returncode == 0
+    reads = [c for c in world.calls() if c[:1] == ["api"]]
+    assert [c[-1] for c in reads] == [
+        f"repos/{REPO}/issues?state=open&labels=agk-brief&per_page=100",
+        f"repos/{REPO}/issues?state=open&labels={QUESTION_LABEL}&per_page=100",
+    ]
