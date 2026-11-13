@@ -170,19 +170,20 @@ def test_ac3_one_resolving_source_is_enough(tmp_path):
 
 
 def test_ac3_a_requirement_of_the_requirements_file_needs_a_source(tmp_path):
-    """REQ-050 AC3: rule 10 reads docs/requirements.md's blocks too, by their REQ id."""
+    """REQ-050 AC3: rule 10 reads docs/requirements.md's blocks too, by their REQ id (a project
+    number: REQ-001 to REQ-099 with no Source: line are the kit's, ADR-0502)."""
     plan(tmp_path, prototype=False)
     write(
         tmp_path,
         "docs/requirements.md",
-        "# Requirements\n\n### REQ-001 Orders\n\n- Status: planned\n"
+        "# Requirements\n\n### REQ-101 Orders\n\n- Status: planned\n"
         "- Source: docs/sources/sow.md:8\n\n"
-        "### REQ-002 Search\n\n- Status: planned\n",
+        "### REQ-102 Search\n\n- Status: planned\n",
     )
     code, out = check(tmp_path)
     assert code == 1, out
     assert fails(out) == [
-        "FAIL plan: rule 10: docs/requirements.md: REQ-002: no Source: line resolves"
+        "FAIL plan: rule 10: docs/requirements.md: REQ-102: no Source: line resolves"
     ]
 
 
