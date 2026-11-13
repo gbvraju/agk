@@ -1098,10 +1098,8 @@ def model_routes_result(root: Path) -> Result:
         return Result("ok", message=" (one route)")
     missing = [t for t in models.MODEL_TIERS if t in tiers and t not in routes]
     if missing:
-        moved = "; ".join(
-            f"{t} has no route; it uses the route of {cast(tuple[str, dict], models.route_of(routes, t))[0]}"
-            for t in missing
-        )
+        used = {t: cast(tuple[str, dict], models.route_of(routes, t))[0] for t in missing}
+        moved = "; ".join(f"{t} has no route; it uses the route of {used[t]}" for t in missing)
         return Result("fail", message=f" ({moved})")
     return Result("ok", message=" (each tier the kinds use has its own route)")
 
