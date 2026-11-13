@@ -152,7 +152,9 @@ def test_rule23_the_planning_header_names_the_iteration(tmp_path, monkeypatch, c
     """REQ-050 AC7: rule 23, with `iteration_days` read from agk.toml."""
     code, out, _ = run(tmp_path, monkeypatch, capsys, "planning")
     assert code == 0
-    assert out.splitlines()[0] == "Planning: iteration 2 (2026-10-26 to 2026-11-06), 10 working days"
+    assert (
+        out.splitlines()[0] == "Planning: iteration 2 (2026-10-26 to 2026-11-06), 10 working days"
+    )
     code, out, _ = run(tmp_path, monkeypatch, capsys, "planning", days="5")
     assert out.splitlines()[0] == "Planning: iteration 4 (2026-11-02 to 2026-11-06), 5 working days"
 
@@ -323,10 +325,14 @@ def review_plan(tmp_path):
     )
     design = tmp_path / "docs" / "design"
     design.mkdir(parents=True, exist_ok=True)
-    head = "| kind | version | digest | head | date | comment |\n| --- | --- | --- | --- | --- | --- |\n"
+    head = "| kind | version | digest | head | date | comment |\n"
+    head += "| --- | --- | --- | --- | --- | --- |\n"
     (design / "signoffs.md").write_text(f"# Sign-offs\n\n{head}{DESIGN_ROW}\n", encoding="utf-8")
     matches = tmp_path / "matches.json"
-    lines = {"201": ["Design match: orders/default match"], "301": ["Design match: orders/empty match"]}
+    lines = {
+        "201": ["Design match: orders/default match"],
+        "301": ["Design match: orders/empty match"],
+    }
     matches.write_text(json.dumps(lines), encoding="utf-8")
     return str(matches)
 
@@ -365,7 +371,7 @@ def test_rule24_review_prints_the_signed_off_design_version(tmp_path, monkeypatc
 def test_rule24_review_lists_each_demo_screen_with_its_match_and_persona(
     tmp_path, monkeypatch, capsys
 ):
-    """REQ-050 AC7: rule 24 with amendment 164 item 4; an open pull request's line is no evidence."""
+    """REQ-050 AC7: rule 24, amendment 164 item 4; an open pull request's line is no evidence."""
     pulls = [*history(), done_pull(), pull(301, "M", None, None) | {"state": "open", "brief": 1}]
     code, out, _ = review(tmp_path, monkeypatch, capsys, pulls=pulls)
     lines = out.splitlines()
@@ -377,9 +383,7 @@ def test_rule24_review_lists_each_demo_screen_with_its_match_and_persona(
 def test_rule24_a_criterion_without_evidence_prints_no_evidence_yet(tmp_path, monkeypatch, capsys):
     """REQ-050 AC7: rule 24, a touched milestone with nothing merged and nothing done."""
     requirements = [{"id": "REQ-001", "title": "Orders", "status": "planned"}]
-    code, out, _ = review(
-        tmp_path, monkeypatch, capsys, pulls=history(), requirements=requirements
-    )
+    code, out, _ = review(tmp_path, monkeypatch, capsys, pulls=history(), requirements=requirements)
     lines = out.splitlines()
     assert code == 0 and "M1 Orders" in lines  # brief 10 closed in the iteration
     assert "    no evidence yet" in lines
