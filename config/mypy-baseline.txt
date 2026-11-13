@@ -31,13 +31,12 @@ scripts/agk/lock.py union-attr 2
 scripts/agk/minutes.py arg-type 2
 scripts/agk/playbook_format.py arg-type 1
 scripts/agk/playbook_format.py union-attr 3
-scripts/agk/product_report.py index 2
+scripts/agk/product_report.py index 1
 scripts/agk/product_report.py list-item 2
-scripts/agk/product_report.py misc 1
 scripts/agk/product_report.py operator 1
 scripts/agk/product_report.py return-value 2
 scripts/agk/product_report.py type-var 1
-scripts/agk/product_report.py union-attr 2
+scripts/agk/product_report.py union-attr 1
 scripts/agk/product_report.py var-annotated 2
 scripts/agk/proof.py assignment 1
 scripts/agk/proof.py misc 1

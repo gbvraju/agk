@@ -1,0 +1,1 @@
+- The type check baseline now runs in CI: `config/ci-tools.txt` pins mypy 2.3.1, and `prepush.py`, `product_report.py` and `route.py` get type-only fixes for the errors added since the baseline, which drops three lines (brief #1158, ADR-0493).

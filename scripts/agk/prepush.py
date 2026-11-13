@@ -746,7 +746,7 @@ def xdist_ready(python: str, folder: Path, root: Path | None) -> str | None:
     if imports_xdist(python, folder):
         return None
     tools = tools_file(root) if root is not None else None
-    if tools is None:
+    if tools is None or root is None:  # tools is None whenever root is
         return NO_XDIST
     key = (python, str(root / tools))
     if key not in INSTALLS:

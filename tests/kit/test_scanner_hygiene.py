@@ -3,7 +3,8 @@
 Pure checks of the source text; bandit and mypy are run only where they are installed. Governance
 installs bandit with its other tooling, so the bandit test runs in CI (brief #338, ADR-0192). The
 mypy errors may only go down from config/mypy-baseline.txt, made with the mypy version it pins
-(brief #633); CI installs no mypy, so that test runs where the pinned version is installed.
+(brief #633). CI installs the pinned mypy of config/ci-tools.txt (brief #1158, ADR-0493), the
+version the baseline pins, so that test runs in CI as well as where the pinned version is installed.
 """
 
 from __future__ import annotations
@@ -319,6 +320,14 @@ def test_mypy_errors_on_scripts_match_the_baseline():
     assert not problems, "\n".join(problems) + f"\n\n{rel} now reads:\n" + baseline_text(
         version, current
     )
+
+
+def test_ci_tools_pins_the_mypy_version_of_the_baseline():
+    """REQ-051: brief #1158 answer 3. Governance installs config/ci-tools.txt; its mypy pin is the
+    version the baseline's mypy line pins, so the baseline test above runs in CI, never skips."""
+    version, _ = read_baseline(MYPY_BASELINE.read_text(encoding="utf-8"))
+    pins = (ROOT / "config" / "ci-tools.txt").read_text(encoding="utf-8").splitlines()
+    assert f"mypy=={version}" in [ln.strip() for ln in pins]
 
 
 # --- governance installs bandit (brief #338, ADR-0192) --------------------------------------------

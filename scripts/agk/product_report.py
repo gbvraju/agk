@@ -13,6 +13,7 @@ import sys
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+from typing import TypeGuard
 
 SCHEMA = 1
 UNKNOWN = "unknown"
@@ -122,7 +123,7 @@ def week_window(today: date, week: str | None) -> tuple[date, date, str]:
 # --- small formatting helpers -------------------------------------------------------------------
 
 
-def is_list(value) -> bool:
+def is_list(value) -> TypeGuard[list]:
     return isinstance(value, list)
 
 
