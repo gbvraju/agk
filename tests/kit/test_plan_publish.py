@@ -382,3 +382,48 @@ def test_ac2_amendment_169_a_brief_holding_the_end_of_a_comment_is_refused(
     assert code == 1
     assert "rule 25: briefs B1: the body holds `-->`" in out
     assert "gh api" not in out
+
+
+# --- brief #1195 (ADR-0507): a Persona line on each brief issue ----------------------------------
+
+
+def test_1195_e_the_issue_names_the_persona_of_the_requirement_it_advances(
+    plan: Path, capsys
+) -> None:
+    """REQ-050 AC2: brief #1195 answer 5 (e) and answer 3, the person numbered the proposed
+    requirement as REQ-101, so the brief issue shows `Persona: P1 Shop owner` before its
+    milestone, keeps the hidden brief unchanged and still passes `check_brief.py --root`."""
+    import check_brief  # noqa: PLC0415
+
+    proposed = plan / "docs/plan/requirements-proposed.md"
+    proposed.write_text(proposed.read_text("utf-8").replace("### R1 ", "### REQ-101 "), "utf-8")
+    code, out = publish(plan, capsys, approved(), {"M1": 7})
+    assert code == 0, out
+    printed = commands(out)
+    assert len(printed) == 2
+    for command in printed:
+        body = field(command, "body")
+        shown = body[: body.index("<!-- agk\n")]
+        assert re.findall(r"(?m)^Persona: .*$", body) == ["Persona: P1 Shop owner"]
+        assert "\n\nPersona: P1 Shop owner\n\nPart of milestone M1.\n" in shown
+        assert "Persona:" not in hidden(body)
+        assert check_brief.body_problems(body, plan, None) == []
+
+
+def test_1195_e_the_persona_from_the_requirements_file_and_none_when_unknown(
+    plan: Path, capsys
+) -> None:
+    """REQ-050 AC2: brief #1195 answer 3, a `Persona:` line of the `### REQ-101` section of
+    `docs/requirements.md` names it too; a requirement with no persona anywhere gives no line."""
+    code, out = publish(plan, capsys, approved(), {"M1": 7})
+    assert code == 0, out
+    assert all("Persona:" not in field(c, "body") for c in commands(out))
+    requirements = plan / "docs/requirements.md"
+    text = requirements.read_text("utf-8").replace(
+        "- Status: planned\n", "- Status: planned\n- Persona: P2 Buyer\n", 1
+    )
+    requirements.write_text(text, "utf-8")
+    code, out = publish(plan, capsys, approved(), {"M1": 7})
+    assert code == 0, out
+    for command in commands(out):
+        assert re.findall(r"(?m)^Persona: .*$", field(command, "body")) == ["Persona: P2 Buyer"]
