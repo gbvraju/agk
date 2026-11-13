@@ -450,3 +450,78 @@ def test_without_an_imported_version_check_design_is_unchanged(tmp_path):
     proc = run(str(CHECK), "--root", str(root))
     assert proc.returncode == 0, proc.stdout
     assert "rule 15" not in proc.stdout
+
+
+# --- brief #1204: a one-page prototype drawn by script --------------------------------------------
+
+NOTICE = "has one page drawn by script; capture each screen and state as its own page"
+GUIDE = KIT_ROOT / "docs" / "guides" / "planning.md"
+SKILL = KIT_ROOT / "skills" / "plan-intake" / "SKILL.md"
+SCRIPTED = """<!doctype html><html><head><title>App</title></head>
+<body><div id="app"></div>
+<script>document.getElementById("app").textContent = "Books";</script>
+</body></html>
+"""
+
+
+def import_of(tmp_path: Path, pages: dict[str, str]) -> subprocess.CompletedProcess:
+    root = project(tmp_path / "proj")
+    source = tmp_path / "customer"
+    source.mkdir()
+    for name, text in pages.items():
+        (source / name).write_text(text, encoding="utf-8")
+    return run(str(DESIGN), "import", str(source), "--root", str(root))
+
+
+def test_a_one_page_import_drawn_by_script_prints_the_notice_once_and_exits_0(tmp_path):
+    """REQ-050: brief #1204 answer 1 (a one-page prototype drawn by script is flagged)."""
+    proc = import_of(tmp_path, {"index.html": SCRIPTED, "app.css": "body { color: tomato }\n"})
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = [line for line in proc.stdout.splitlines() if line.startswith("notice: ")]
+    assert lines == [
+        f"notice: i1 {NOTICE} and import that folder instead"
+        ' (docs/guides/planning.md "From a prototype")'
+    ]
+    assert (tmp_path / "proj" / I1 / "files" / "index.html").is_file()
+
+
+@pytest.mark.parametrize(
+    "pages",
+    [
+        {"index.html": EMPTY},
+        {"index.html": SCRIPTED, "empty.html": EMPTY},
+    ],
+    ids=["one-page-no-script", "two-pages"],
+)
+def test_a_one_page_import_without_script_or_a_two_page_import_prints_no_notice(tmp_path, pages):
+    """REQ-050: brief #1204 answer 1 (only one page that holds a script is flagged)."""
+    proc = import_of(tmp_path, pages)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "notice:" not in proc.stdout
+
+
+def test_the_fixture_prototype_of_two_pages_prints_no_notice(tmp_path):
+    """REQ-050: brief #1204 answer 4 (c) (the existing import is unchanged)."""
+    root = project(tmp_path / "proj")
+    proc = run(str(DESIGN), "import", str(prototype(tmp_path / "customer")), "--root", str(root))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "notice:" not in proc.stdout
+
+
+def test_the_guide_captures_a_scripted_prototype_first_and_traces_before_approval():
+    """REQ-050: brief #1204 answer 2 (step 0, and `unmatched screen:` read before approval)."""
+    text = GUIDE.read_text(encoding="utf-8")
+    section = text.split("## From a prototype and an OpenSpec file", 1)[1].split("\n## ", 1)[0]
+    step0 = section.index("0. **Capture")
+    assert step0 < section.index("1. **Import the prototype")
+    assert "<screen>--<state>.html" in section[step0:]
+    approve = re.search(r"approved only after `check_plan\.py --trace`[^\n]*\n?[^\n]*", section)
+    assert approve, "the guide says the plan is approved only after the trace"
+    assert section.index("`unmatched screen:`", step0) < section.index("7. **Approve and publish")
+
+
+def test_the_plan_intake_skill_points_at_step_0_for_a_one_page_import():
+    """REQ-050: brief #1204 answer 3 (say so before drafting, point at step 0)."""
+    text = SKILL.read_text(encoding="utf-8")
+    assert "no version with more than one page" in text
+    assert "step 0" in text
