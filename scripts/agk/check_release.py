@@ -231,6 +231,8 @@ def check(root: Path, comments: list[dict] | None = None) -> int:
         return 0
     old = toml_version(show(root, mb, "agk.toml"))
     new = toml_version((root / "agk.toml").read_text(encoding="utf-8"))
+    if new is None or old is None:  # reads_records tested both; this narrows the types
+        raise CheckError("rule 5: the version of agk.toml cannot be read")
     changes = changed_files(root, mb)
     fragments = set(tree_fragments(root, mb))
     flips = recorded_adrs(root, mb, comments)
