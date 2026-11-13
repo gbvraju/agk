@@ -328,10 +328,10 @@ def for_maintainers(line: str) -> bool:
 
 
 def asks_owner(f: dict, comments: list[dict], authors: list[str] | None) -> bool:
-    """An `Owner needed:` by a listed verdict author with no later answer by a spec approver, which a
-    new head does not close (amendment 172, ADR-0497), or a `for_maintainers` question with no later
-    such answer and no later head (amendment 150 item 1, Q-846-4, ADR-0442); comments are in the
-    order GitHub lists them."""
+    """An `Owner needed:` by a listed verdict author with no later answer by a spec approver, which
+    a new head does not close (amendment 172, ADR-0497), or a `for_maintainers` question with no
+    later such answer and no later head (amendment 150 item 1, Q-846-4, ADR-0442); comments are in
+    the order GitHub lists them."""
     approvers = {str(a).lower() for a in f.get("approvers") or []}
     listed = {str(a).lstrip("@").lower() for a in authors or []}
     pushed = str(
