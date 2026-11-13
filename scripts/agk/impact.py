@@ -1060,12 +1060,16 @@ def select(root: Path, base: str, head: str) -> Impact:
 def _map_split(text: str | None) -> tuple[dict, set[tuple[str, str]]] | None:
     """`agk.toml` without its `[[testing.map]]` entries, and their (code, test) pairs; None when
     it does not parse or its map is not a list of tables."""
+    if text is None:
+        return None
     try:
-        data = tomllib.loads(text) if text is not None else None
+        data = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
         return None
-    testing = data.get("testing") if isinstance(data, dict) else None
-    entries = testing.get("map", []) if isinstance(testing, dict) else None
+    testing = data.get("testing")
+    if not isinstance(testing, dict):
+        return None
+    entries = testing.get("map", [])
     if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
         return None
     rest = {**data, "testing": {k: v for k, v in testing.items() if k != "map"}}
