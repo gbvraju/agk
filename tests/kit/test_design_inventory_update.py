@@ -1,10 +1,11 @@
-"""Tests of `design.py inventory` on an existing inventory (SPEC-0037 rule 3; REQ-044 AC2, brief #1185).
+"""Tests of `design.py inventory` on an existing inventory (SPEC-0037 rule 3; REQ-044 AC2).
 
-`design.py inventory` on a new inventory writes the skeleton as before, and on an existing one keeps every line the
-person wrote and only appends a `### REQ-<n> — <title>` section, with `- Specs:` and an empty `- Screens:`, for each
-requirement that has none, in number order, printing one `added REQ-<n>` line each; it never removes or rewrites a
-section. In both cases a kit requirement (REQ-001 to REQ-099) gets `- Screens: no screen: a rule of the kit` instead
-of an empty slot, so `check_design.py` passes after the plan's intake once the new slots are filled (ADR-0504).
+Brief #1185: `design.py inventory` on a new inventory writes the skeleton as before, and on an
+existing one keeps every line the person wrote and only appends a `### REQ-<n> — <title>` section,
+with `- Specs:` and an empty `- Screens:`, for each requirement that has none, in number order,
+printing one `added REQ-<n>` line each; it never removes or rewrites a section. In both cases a kit
+requirement (REQ-001 to REQ-099) gets `- Screens: no screen: a rule of the kit` instead of an empty
+slot, so `check_design.py` passes after the plan's intake once the new slots are filled (ADR-0504).
 Invented data only (example.com), in `tmp_path`; files only, no network and no model.
 """
 
@@ -55,7 +56,8 @@ def write_requirements(root: Path, project: dict[int, str]) -> None:
     specs = root / "docs" / "specs"
     specs.mkdir(exist_ok=True)
     (specs / "0101-the-shop.md").write_text(
-        "# SPEC-0101: The shop\n\n- Status: Draft\n- Requirements: REQ-101, REQ-102\n", encoding="utf-8"
+        "# SPEC-0101: The shop\n\n- Status: Draft\n- Requirements: REQ-101, REQ-102\n",
+        encoding="utf-8",
     )
 
 
@@ -66,7 +68,7 @@ def screen(name: str) -> str:
 
 
 def filled_inventory() -> str:
-    """An inventory the person wrote by hand: the kit's three, REQ-101 with a screen, and prose of their own."""
+    """An inventory written by hand: the kit's three, REQ-101 with a screen, and a note."""
     return (
         "# Design inventory\n\nThe person's own note about example.com.\n\n## Requirements\n\n"
         "### REQ-001 — The kit keeps its rules\n\n- Specs: none\n- Screens: no screen: kit\n\n"
@@ -88,7 +90,10 @@ def design(root: Path, *args: str) -> subprocess.CompletedProcess:
 
 def check(root: Path) -> subprocess.CompletedProcess:
     return subprocess.run(  # nosec B603 - a fixed argument list, no shell
-        [sys.executable, str(CHECK), "--root", str(root)], capture_output=True, text=True, check=False
+        [sys.executable, str(CHECK), "--root", str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
 
@@ -137,11 +142,17 @@ def test_ac2_an_existing_inventory_gains_only_the_missing_requirement(tmp_path):
 
 def test_ac2_new_sections_are_appended_in_number_order_kit_ones_with_no_screen(tmp_path):
     """REQ-044 AC2: brief #1185 answers 1 and 2, number order and the kit reason on update."""
-    write_requirements(tmp_path, {101: "A visitor browses the shop", 102: "A visitor pays", 103: "A visitor leaves"})
+    write_requirements(
+        tmp_path,
+        {101: "A visitor browses the shop", 102: "A visitor pays", 103: "A visitor leaves"},
+    )
     path = tmp_path / INVENTORY
     path.parent.mkdir(parents=True)
     text = filled_inventory()
-    text = text.replace("### REQ-002 — The kit records decisions\n\n- Specs: none\n- Screens: no screen: kit\n\n", "")
+    text = text.replace(
+        "### REQ-002 — The kit records decisions\n\n- Specs: none\n- Screens: no screen: kit\n\n",
+        "",
+    )
     path.write_text(text, encoding="utf-8")
     proc = design(tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
@@ -177,7 +188,11 @@ def test_ac2_the_check_passes_once_the_new_slot_is_filled(tmp_path):
     assert failing.returncode == 1
     assert f"rule 3: {INVENTORY}: REQ-102: the slot Screens is empty" in failing.stdout
     text = path.read_text(encoding="utf-8")
-    path.write_text(text.replace("- Specs: SPEC-0101\n- Screens:\n", "- Specs: SPEC-0101\n- Screens: catalogue\n"))
+    path.write_text(
+        text.replace(
+            "- Specs: SPEC-0101\n- Screens:\n", "- Specs: SPEC-0101\n- Screens: catalogue\n"
+        )
+    )
     passing = check(tmp_path)
     assert passing.returncode == 0, passing.stdout + passing.stderr
 
