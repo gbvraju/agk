@@ -103,6 +103,7 @@
     "scripts/agk/merge_cleared.py",
     "scripts/agk/metrics.py",
     "scripts/agk/minutes.py",
+    "scripts/agk/new_spec.py",
     "scripts/agk/parity.py",
     "scripts/agk/personal.py",
     "scripts/agk/plan_ceremony.py",

@@ -32,7 +32,7 @@ for the person`, and writes, as new files only and all or nothing, `docs/plan/sc
 `docs/plan/personas.md`, `docs/plan/milestones.md`, `docs/plan/requirements-proposed.md` (each block
 with its `Persona:` and `Story:` lines before its criteria; a milestone's `Demo:` line after its
 `Exit:` and a brief's `Screens: <version> ...` line, build (r)), one Draft spec per area
-(`new_spec.make_spec`, imported from the plugin's copy beside this script) and
+(`new_spec.make_spec`, imported from the copy beside this script, installed or the plugin's) and
 `docs/plan/briefs/M<n>/<key>.md`; it never edits `docs/requirements.md`. With a design source it
 prints the declared playbook's `batch_by` as `Milestone order for the person: ...`
 (`playbook_format`). Rules 8 and 25: `publish` exits 2 without `Approve: plan <--head>` by an
@@ -762,7 +762,7 @@ def cmd_render(root: Path, proposals: Path) -> int:
     if not (Path(__file__).resolve().parent / "new_spec.py").is_file():
         print(f"render needs new_spec.py: {NEW_SPEC}")
         return 2
-    import new_spec  # noqa: PLC0415 - kit-only: the plugin's copy, beside this script
+    import new_spec  # noqa: PLC0415 - the copy beside this script (installed, ADR-0503)
 
     files = {
         f"{PLAN}/scope.md": scope_text(data),

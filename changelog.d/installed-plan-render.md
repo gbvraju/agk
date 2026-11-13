@@ -1,0 +1,1 @@
+- `scripts/agk/new_spec.py` is now installed in projects, so the project's own `plan_intake.py render` writes the plan and its Draft specs in a cloud session or on a laptop without the plugin, where it exited 2 with `render needs new_spec.py` before (brief #1184, ADR-0503)
