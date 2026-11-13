@@ -1,6 +1,6 @@
 # ADR-0509: A test-map-only change to agk.toml selects only its tests
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: SPEC-0055 rule 6, ADR-0359, brief #1198, plan #661

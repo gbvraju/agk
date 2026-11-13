@@ -1,6 +1,6 @@
 # ADR-0507: The board is copied from a template and carries business fields
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: ADR-0506, SPEC-0043 rule 25, ADR-0481, brief #1195, brief #1190, plan #661
