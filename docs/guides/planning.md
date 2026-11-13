@@ -74,7 +74,9 @@ checkout; the other scripts are installed under `scripts/agk/`.
    2. It prints one `gh api` command per milestone, then per brief in dependency order, and runs none. A brief waits until
    `--numbers` (a JSON object from key to number, which you save from the commands you ran) names its milestone and every
    brief it depends on, so each `Depends-on:` names `#<n>`. Run `publish` again after each round until nothing is
-   withheld. In personal mode it writes the briefs through the file forge instead.
+   withheld. In personal mode it writes the briefs through the file forge instead. Once nothing is withheld, run
+   `/agk:board --yes` on your own machine: it makes the plan's GitHub Project board once and adds every brief with its
+   milestone, size and expected hours, and each later run adds only the new ones (ADR-0506).
 
 ## From a prototype and an OpenSpec file
 

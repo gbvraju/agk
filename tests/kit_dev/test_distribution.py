@@ -18,6 +18,7 @@ SKILLS = KIT_ROOT / "skills"
 COMMANDS = [
     "adopt",
     "architect",
+    "board",
     "brief",
     "confirm",
     "design",
@@ -39,6 +40,7 @@ COMMANDS = [
 ]
 USER_ONLY = [
     "adopt",
+    "board",
     "brief",
     "confirm",
     "design",
@@ -145,6 +147,7 @@ def test_ac2_each_skill_names_the_script_it_runs_and_the_script_exists():
         "ruleset": {"ruleset"},
         "architect": {"playbook"},
         "start": {"playbook"},
+        "board": {"board"},
         "workflow-apply": {"workflow_apply"},
     }
     for name, scripts in expected.items():
