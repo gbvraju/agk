@@ -1,0 +1,1 @@
+- `Builder pool down` counts only slots that held a lease or ran within `slot_active_days` of the `[flow]` table (default 7); a slot never seen or older is listed as retired and not counted, so retired slots raise no alarm (brief #1172, ADR-0498)
