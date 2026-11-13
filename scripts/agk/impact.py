@@ -193,6 +193,9 @@ UNKNOWN_TIMING = {"source": "unknown", "total_seconds": None, "files": []}
 NAME_WORD = re.compile(r"[\w./-]+")  # a path-like word of a test file (SPEC-0055 rule 6)
 NAMED = "(names it)"  # the `code` of a test selected because it names the changed file
 IMPORTER = "(imports it)"  # the `code` of a test selected through a file that imports the change
+CONFIG = "agk.toml"
+MAP_ONLY = "agk.toml (testing map only)"  # the `code` of a test that a map-only change names
+MAP_INFRA = "tests/kit/test_always_full_infra.py"  # checks the map entries (brief #1198)
 FULL_REASON = re.compile(r"#\s*full:\s*\S")  # what an always_full entry that is not infra needs
 FULL_KEY = re.compile(r"\s*always_full\s*=")
 TESTING_HEADS = ("[testing]", "[tool.agk.testing]")
@@ -1022,6 +1025,12 @@ def select(root: Path, base: str, head: str) -> Impact:
                         chosen[test] = Selected(test, path, entry["code"], list(entry["tests"]))
         # A file that no entry covers, or whose entries select no existing test file, is
         # unmapped; only a real test file (the change's own test) and documentation are not.
+        if path == CONFIG and not guarded and not covering:
+            only = map_only_tests(root, base, head, tests)
+            if only is not None:  # brief #1198: not unmapped, only the tests the map changed
+                for test in only:
+                    chosen.setdefault(test, Selected(test, path, MAP_ONLY, []))
+                continue
         if not guarded and not is_doc(path) and not is_test_file(path, dirs, patterns):
             unmapped.append(path)
             if profile == "balanced" and not hit and not covering:  # SPEC-0055 rule 6
@@ -1046,6 +1055,41 @@ def select(root: Path, base: str, head: str) -> Impact:
     found.map_notes = map_notes
     found.counts = counts
     return found
+
+
+def _map_split(text: str | None) -> tuple[dict, set[tuple[str, str]]] | None:
+    """`agk.toml` without its `[[testing.map]]` entries, and their (code, test) pairs; None when
+    it does not parse or its map is not a list of tables."""
+    try:
+        data = tomllib.loads(text) if text is not None else None
+    except tomllib.TOMLDecodeError:
+        return None
+    testing = data.get("testing") if isinstance(data, dict) else None
+    entries = testing.get("map", []) if isinstance(testing, dict) else None
+    if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+        return None
+    rest = {**data, "testing": {k: v for k, v in testing.items() if k != "map"}}
+    pairs = {
+        (repr(e.get("code")), t)
+        for e in entries
+        for t in e.get("tests") or []
+        if isinstance(t, str)
+    }
+    return rest, pairs
+
+
+def map_only_tests(root: Path, base: str, head: str, tests: list[str]) -> list[str] | None:
+    """When every difference of `agk.toml` between BASE and HEAD lies inside `[[testing.map]]`
+    entries, the head's test files whose names were added, removed or moved there, with
+    `MAP_INFRA` (brief #1198, ADR-0509); None otherwise, and today's rule holds."""
+    ends = []
+    for rev in (base, head):
+        found = _blobs(root, rev, [CONFIG])
+        ends.append(_map_split(found[0][1] if found else None))
+    if ends[0] is None or ends[1] is None or ends[0][0] != ends[1][0]:
+        return None
+    names = {t for _code, t in ends[0][1] ^ ends[1][1]}
+    return [t for t in tests if t == MAP_INFRA or any(matches(t, g) for g in names)]
 
 
 def add_importers(
@@ -1188,6 +1232,8 @@ def file_line(s: Selected) -> str:
     """Why a test file of the selection runs."""
     if s.code == NAMED:
         return f"  file: {s.test} (names {s.changed})"
+    if s.code == MAP_ONLY:
+        return f"  file: {s.test} ({MAP_ONLY})"
     if s.code == IMPORTER:
         through = s.tests[0]
         return (

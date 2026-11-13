@@ -384,24 +384,27 @@ def map_toml(tests: str = '"tests/test_a.py"', builders: int = 2) -> str:
     )
 
 
-def map_change(repo, head_toml: str) -> impact.Impact:
-    repo.commit({"agk.toml": map_toml(), **MAP_FILES}, "base")
+def map_change(repo, head_toml: str, base_toml: str | None = None) -> impact.Impact:
+    repo.commit({"agk.toml": base_toml or map_toml(), **MAP_FILES}, "base")
     repo.branch("feature")
     repo.commit({"agk.toml": head_toml}, "change")
     return result(repo)
 
 
+AB = '"tests/test_a.py", "tests/test_b.py"'
+
+
 @pytest.mark.parametrize(
-    ("head", "picked"),
+    ("base", "head", "picked"),
     [
-        ('"tests/test_a.py", "tests/test_b.py"', [INFRA, "tests/test_b.py"]),  # a name added
-        ("", [INFRA, "tests/test_a.py"]),  # a name removed
-        ('"tests/test_a.py", "tests/gone.py"', [INFRA]),  # an added name that is no file
+        ('"tests/test_a.py"', AB, [INFRA, "tests/test_b.py"]),  # a name added
+        (AB, '"tests/test_b.py"', [INFRA, "tests/test_a.py"]),  # a name removed
+        ('"tests/test_a.py"', '"tests/test_a.py", "tests/gone.py"', [INFRA]),  # no such file
     ],
 )
-def test_a_test_map_only_change_of_agk_toml_selects_only_its_tests(repo, head, picked):
+def test_a_test_map_only_change_of_agk_toml_selects_only_its_tests(repo, base, head, picked):
     """REQ-051: brief #1198 answers 1, 2 and 4a (the names the map changed, and the infra test)."""
-    found = map_change(repo, map_toml(head))
+    found = map_change(repo, map_toml(head), map_toml(base))
     assert found.full is False and found.unmapped == [] and found.named == {}
     assert [s.test for s in found.selected] == picked
     assert {(s.changed, s.code) for s in found.selected} == {("agk.toml", impact.MAP_ONLY)}
@@ -413,18 +416,19 @@ def test_a_test_map_only_change_of_agk_toml_selects_only_its_tests(repo, head, p
 
 def test_a_name_moved_between_map_entries_is_selected(repo):
     """REQ-051: brief #1198 answer 1 (a name moved from one entry to another)."""
-    repo.commit({"agk.toml": map_toml(), **MAP_FILES}, "base")
-    repo.branch("feature")
-    moved = map_toml("") + '[[testing.map]]\ncode = "app/b.py"\ntests = ["tests/test_a.py"]\n'
-    repo.commit({"agk.toml": moved}, "change")
-    assert [s.test for s in result(repo).selected] == [INFRA, "tests/test_a.py"]
+    moved = (
+        map_toml('"tests/test_b.py"')
+        + '[[testing.map]]\ncode = "app/b.py"\ntests = ["tests/test_a.py"]\n'
+    )
+    found = map_change(repo, moved, map_toml(AB))
+    assert [s.test for s in found.selected] == [INFRA, "tests/test_a.py"]
 
 
 @pytest.mark.parametrize(
     "head",
     [
         map_toml(builders=3),  # 4b: another setting changed
-        map_toml('"tests/test_a.py", "tests/test_b.py"', builders=3),  # 4c: both
+        map_toml(AB, builders=3),  # 4c: both
     ],
 )
 def test_any_other_change_of_agk_toml_keeps_the_tests_that_name_it(repo, head):
@@ -437,7 +441,7 @@ def test_any_other_change_of_agk_toml_keeps_the_tests_that_name_it(repo, head):
 @pytest.mark.parametrize("end", ["base", "head"])
 def test_an_agk_toml_that_does_not_parse_keeps_todays_rule(repo, end):
     """REQ-051: brief #1198 answers 1 and 4d (a file that does not parse at either end)."""
-    good = map_toml('"tests/test_a.py", "tests/test_b.py"')
+    good = map_toml(AB)
     repo.commit({"agk.toml": map_toml() + ("[[x\n" if end == "base" else ""), **MAP_FILES}, "base")
     repo.branch("feature")
     repo.commit({"agk.toml": good + ("[[x\n" if end == "head" else "")}, "change")

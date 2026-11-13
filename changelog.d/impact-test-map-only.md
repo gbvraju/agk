@@ -1,0 +1,1 @@
+- `impact.py`: a change to `agk.toml` that only edits `[[testing.map]]` entries selects the test files whose names were added, removed or moved there (and `tests/kit/test_always_full_infra.py`), shown as `agk.toml (testing map only)`, instead of every test that names `agk.toml`; any other change keeps today's rule (brief #1198, ADR-0509)
