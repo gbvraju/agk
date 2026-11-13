@@ -6,7 +6,7 @@
 - Related: ADR-0277, ADR-0293, ADR-0480, brief #557, brief #601, brief #1181, plan #661
 - Requirements: REQ-039
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `tests/kit/`, `kit/`, `agk.toml`, `.github/`
 
 ## Context
 
