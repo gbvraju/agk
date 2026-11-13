@@ -105,6 +105,7 @@
     "scripts/agk/minutes.py",
     "scripts/agk/parity.py",
     "scripts/agk/personal.py",
+    "scripts/agk/plan_ceremony.py",
     "scripts/agk/plan_estimate.py",
     "scripts/agk/plan_intake.py",
     "scripts/agk/plan_status.py",

@@ -633,6 +633,16 @@ source headers and design links (rules 1 and 2), the plan's checks (rule 10) and
 (rule 11); `--trace` first prints the matrix from source location to requirement, spec rule, brief, pull request and test
 (rule 9). The whole path, with a recorded walk, is in `docs/guides/planning.md`.
 
+## Plan ceremony
+
+    python3 scripts/agk/plan_ceremony.py planning|daily|review|retro --facts FILE [--plan DIR] [--today YYYY-MM-DD] [--weeks N] [--stalls FILE] [--matches FILE]
+
+Prints the text of one ceremony of the plan's iteration of `[plan] iteration_days` working days, numbered from the
+baseline's date: `planning` the open briefs up to the measured capacity with the forecast, `daily` at most ten lines of
+what finished, runs and is blocked (with a saved `stalls.py --json` output), `review` each touched milestone's evidence,
+design version and `Demo:` screens with their `Design match:` lines (a saved JSON file), and `retro` measured facts with
+at most three candidate briefs. It posts nothing, files nothing and runs no other program. See SPEC-0043 rules 23 and 24.
+
 ## Plan estimate
 
     python3 scripts/agk/plan_estimate.py --facts FILE [--plan DIR] [--today YYYY-MM-DD] [--weeks N]
