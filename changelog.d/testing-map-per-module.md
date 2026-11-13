@@ -1,0 +1,1 @@
+- `docs/guides/testing.md` has a section "A map per module": a worked `[[testing.map]]` with one entry per module and the shared code in `always_full`, and why one broad `backend/**` entry runs every back-end test on every change (brief #1156, issue #487, ADR-0492)

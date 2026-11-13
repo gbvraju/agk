@@ -87,6 +87,38 @@ For a change, the selection is worked out from git and files only, with no netwo
   them matches `always_full`. Such a file is never unmapped.
 - **No table.** Without a `[testing]` table the selection is the full suite, which is what governance runs today.
 
+## A map per module
+
+Give each module of the project its own map entry, naming only that module's tests. An invented project with a back end of
+two modules and one front end:
+
+```toml
+[testing]
+profile = "balanced"
+pr_tests = "selected"
+always_full = [
+  "pytest.ini", "package.json",
+  "backend/common/**", # full: every back-end module imports the shared code
+]
+
+[[testing.map]]
+code = "backend/orders/**"
+tests = ["tests/backend/orders/**"]
+
+[[testing.map]]
+code = "backend/users/**"
+tests = ["tests/backend/users/**"]
+
+[[testing.map]]
+code = "frontend/src/**"
+tests = ["tests/frontend/**"]
+```
+
+A change to `backend/orders/x.py` then selects only the tests under `tests/backend/orders/`, and a change to
+`backend/common/x.py` selects the full suite. One broad entry such as `{ code = "backend/**", tests = ["tests/backend/**"] }`
+makes every back-end change run every back-end test, which is the full back-end suite on each pull request. The full suite
+still runs on each push to the default branch, which is once per merge wave, so a selection never replaces it (ADR-0492).
+
 ## The plan
 
 ```
