@@ -26,6 +26,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/plan_intake.py" states
 2. **Read the sources.** Read only the files under `docs/sources/` (and a charter's `#Milestones` item), only after step
    1 passed. A location is `<file>:<line>` or `<file>#<heading>` (the exact heading text).
 
+   When `docs/design/imported/` has no version with more than one page and `docs/sources/` holds no `Kind: design`
+   file, say so to the person before drafting: a prototype drawn by script on one page is captured screen by screen and
+   imported first (step 0 of "From a prototype and an OpenSpec file" in `docs/guides/planning.md`, brief #1204).
+
    **An OpenSpec file** (SPEC-0043 amendment 166, ADR-0473). When the person brings one, a combined `.md` file or an
    `openspec/` folder that holds `specs/`, import it first; it is copied unchanged under its header, after the guard:
 

@@ -110,6 +110,13 @@ A customer's file is processed only where the customer's contract allows it, and
 goes into the customer project's own `docs/sources/` (in personal mode, the private state), and every example and test of
 the kit uses invented files only.
 
+0. **Capture a prototype drawn by script.** When the prototype is one HTML file whose screens a script draws, an import
+   of it holds one page, its map one row and its source almost no screen text, so it cannot be compared with the plan.
+   First capture each screen and each state as its own HTML file, named `<screen>--<state>.html`, with any headless
+   browser you have (the kit installs none), and import that folder instead; `/agk:design import` prints a `notice:`
+   line when a version has one page drawn by script (brief #1204, ADR-0511). The plan is approved only after
+   `check_plan.py --trace` has run with the prototype source, so its `unmatched screen:` lines are read before the
+   approval, not after.
 1. **Import the prototype** with `/agk:design import <folder>`, write its map, and turn it into a source with
    `python3 scripts/agk/design_import.py source --version i<n> --slug <slug>`, as in steps 1 and 2 above.
 2. **Import the OpenSpec file.** `python3 scripts/agk/plan_intake.py openspec-import <file or folder> --slug <slug>`

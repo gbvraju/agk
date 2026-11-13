@@ -515,8 +515,9 @@ def test_the_guide_captures_a_scripted_prototype_first_and_traces_before_approva
     step0 = section.index("0. **Capture")
     assert step0 < section.index("1. **Import the prototype")
     assert "<screen>--<state>.html" in section[step0:]
-    approve = re.search(r"approved only after `check_plan\.py --trace`[^\n]*\n?[^\n]*", section)
-    assert approve, "the guide says the plan is approved only after the trace"
+    flat = " ".join(section[step0 : section.index("1. **Import the prototype")].split())
+    assert "approved only after `check_plan.py --trace`" in flat
+    assert "`unmatched screen:` lines are read before the approval" in flat
     assert section.index("`unmatched screen:`", step0) < section.index("7. **Approve and publish")
 
 
