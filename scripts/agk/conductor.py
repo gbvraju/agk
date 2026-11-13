@@ -1283,7 +1283,7 @@ def pool_state(root, repo: str) -> list[tuple[str, bool, bool, str]]:
             retired.append(said)  # never ran, or not this week: not counted (ADR-0498)
             continue
         counted += 1
-        if not alive and now - seen >= window:
+        if not alive and seen is not None and now - seen >= window:
             dead.append(said)
     text = (
         f"Slots not seen within the window: {', '.join(dead) or 'none'}, of {counted} counted. "

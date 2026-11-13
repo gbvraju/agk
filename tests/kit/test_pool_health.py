@@ -197,7 +197,8 @@ def test_an_expired_or_released_or_strangers_marker_is_no_live_conductor(proj, s
 def test_more_than_a_third_of_the_slots_dead_opens_the_pool_issue(proj, stub, tmp_path):
     """REQ-041: of 3 slots, 2 not seen within slot_seen_minutes (2 > 3 / 3; ADR-0412); s3 ran
     this week, so it counts (a never-seen slot is retired, ADR-0498)."""
-    stub.fixtures[ASSIGNMENTS] = [slot("s1", 2), slot("s2", 3, minutes=91), slot("s3", 4, minutes=91)]
+    late = [slot("s2", 3, minutes=91), slot("s3", 4, minutes=91)]
+    stub.fixtures[ASSIGNMENTS] = [slot("s1", 2), *late]
     router(proj, stub, tmp_path)
     assert opened(stub) == ["Builder pool down"]
     made = next(c for c in stub.writes() if c[1] == ISSUES)
@@ -309,7 +310,8 @@ def test_no_work_waiting_opens_nothing(proj, stub, tmp_path):
 
 def test_the_open_issue_is_updated_only_when_its_text_changes(proj, stub, tmp_path):
     """REQ-041: one issue per kind; the same state writes nothing (s2 and s3 late, ADR-0498)."""
-    stub.fixtures[ASSIGNMENTS] = [slot("s1", 2), slot("s2", 3, minutes=91), slot("s3", 4, minutes=91)]
+    late = [slot("s2", 3, minutes=91), slot("s3", 4, minutes=91)]
+    stub.fixtures[ASSIGNMENTS] = [slot("s1", 2), *late]
     router(proj, stub, tmp_path)
     made = next(c for c in stub.writes() if c[1] == ISSUES)
     body = next(f[5:] for f in made[2] if f.startswith("body="))
