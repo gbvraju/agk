@@ -38,7 +38,8 @@ at 45 minutes of silence rather than 90; and the builders carry the CI-red, answ
 A project set up from the templates gets the same autopilot as this repository. `tests/kit/test_runtime_templates.py`
 checks the replaced placeholder, the start rules and limits, the conductor's one scheduled-task permission, the
 launcher's 45 minutes and the builder's rules by their first words. Protected path classes changed: `kit/` (the
-templates) and `tests/kit/` (their test). No workflow, script or installed file changes.
+templates) and `tests/kit/` (their test). No workflow, script or installed file changes, and `kit/hashes.json` does not
+change: the templates are not hashed.
 
 ## Residual
 
