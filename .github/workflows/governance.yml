@@ -254,7 +254,14 @@ jobs:
         run: python scripts/agk/check_design.py
       - name: check_plan
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
-        run: python scripts/agk/check_plan.py
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            python scripts/agk/check_plan.py --comments "$RUNNER_TEMP/comments.json"
+          else
+            python scripts/agk/check_plan.py
+          fi
       - name: check_playbooks
         if: ${{ !cancelled() && github.event.action != 'edited' && steps.paused.outputs.paused != 'true' }}
         run: python scripts/agk/check_playbooks.py
