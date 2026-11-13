@@ -402,6 +402,7 @@ tests = [
   "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_pause.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_route_triggers.py",
   "tests/kit/test_run_folders.py", "tests/kit/test_session_rules.py", "tests/kit/test_session_tidy.py",
+  "tests/kit/test_test_dirs_front_end.py",
   "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_doctor_wiring.py",
   "tests/kit_dev/test_engines_local_profile.py", "tests/kit_dev/test_experimental_reviewer.py",
   "tests/kit_dev/test_guide_fixes.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_origin_message.py",
@@ -490,6 +491,7 @@ code = "scripts/agk/init.py"
 tests = [
   "tests/kit/test_architect_guard.py", "tests/kit/test_flakes.py", "tests/kit/test_personal_mode_rules.py",
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_route_triggers.py",
+  "tests/kit/test_test_dirs_front_end.py",
   "tests/kit/test_upgrade_project_mk.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
   "tests/kit_dev/test_adopt_from_release.py", "tests/kit_dev/test_experimental_reviewer.py",
   "tests/kit_dev/test_guide_fixes.py", "tests/kit_dev/test_init.py", "tests/kit_dev/test_install_from_release.py",
