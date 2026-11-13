@@ -99,6 +99,8 @@ if sub == "item-edit":
                 item.setdefault("values", {})[opt("--field-id")] = value
     out({"id": opt("--id")})
 p = projects.get(number)
+if p is None and sub == "field-list":  # the dry run reads a template board's fields
+    p = state.get("templates", {}).get(number)
 if p is None:
     sys.stderr.write("could not find project\n")
     sys.exit(1)

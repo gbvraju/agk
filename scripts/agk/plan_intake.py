@@ -39,7 +39,10 @@ prints the declared playbook's `batch_by` as `Milestone order for the person: ..
 account of `spec_approvers` in the saved comments (`reviewers.plan_approvals`), refuses a brief that
 `check_brief.py --root .` fails, and prints one `gh api` command per milestone and per brief, briefs
 in `depends_on` order, each withheld until `--numbers` gives its milestone's and its dependences'
-numbers; it runs none. In personal mode it writes the briefs through `forge.FilesForge`.
+numbers; it runs none. In personal mode it writes the briefs through `forge.FilesForge`. Brief #1195
+(ADR-0507): each brief issue shows one `Persona: <key> <name>` line before its milestone line, the
+persona of the requirements its `Advances:` names (their `requirements-proposed.md` block, else
+their `docs/requirements.md` section), and none when no requirement names one.
 
 Amendment 166 (ADR-0473): `openspec-import` copies a combined OpenSpec `.md` file, or an `openspec/`
 folder that holds `specs/` (its `.md` and `.txt` files; any other is printed `skipped:`), under
@@ -950,12 +953,44 @@ def issue_body(b: dict, numbers: dict[str, int]) -> str:
     lines = body.splitlines()
     sentence = next((m[1] for x in lines if (m := SENTENCE_LINE.fullmatch(x.rstrip()))), VERIFY)
     deps = [x.rstrip().removeprefix("Depends-on: ") for x in lines if DEPENDS_ON.fullmatch(x)]
+    persona = [f"Persona: {b['persona']}", ""] if b.get("persona") else []  # brief #1195
     where = f"Part of milestone {b['milestone']}."
     where += f" Depends on {', '.join(deps)}." if deps else ""
     shown = ["## What", "", sentence, "", "## Acceptance", ""]
     shown += [f"- [ ] {item}" for item in acceptance(lines)] or [f"- [ ] {VERIFY}"]
-    shown += ["", where, "", HIDDEN_OPEN, body.rstrip("\n"), HIDDEN_CLOSE]
+    shown += ["", *persona, where, "", HIDDEN_OPEN, body.rstrip("\n"), HIDDEN_CLOSE]
     return "\n".join(shown) + "\n"
+
+
+PERSONA_TEXT = re.compile(r"(?:- )?Persona: (\S.*?)\s*")
+BLOCK_KEY = re.compile(r"### (\S+)")
+
+
+def persona_texts(text: str) -> dict[str, str]:
+    """Each `### <id>` block's first `Persona:` text (a `- Persona:` list item counts too)."""
+    out: dict[str, str] = {}
+    current: str | None = None
+    for line in text.splitlines():
+        if line.startswith("#"):
+            current = m[1] if (m := BLOCK_KEY.match(line)) else None
+        elif current and current not in out and (m := PERSONA_TEXT.fullmatch(line)):
+            out[current] = m[1]
+    return out
+
+
+def brief_persona(root: Path, body: str) -> str | None:
+    """Brief #1195 answer 3 (ADR-0507): the persona of each requirement the brief advances, from
+    its block of `requirements-proposed.md`, else its section of `docs/requirements.md`; several
+    distinct ones joined by `, `; None when no requirement names one."""
+    proposed = persona_texts(_read(root / PLAN / "requirements-proposed.md") or "")
+    accepted = persona_texts(_read(root / "docs/requirements.md") or "")
+    line = next((x for x in body.splitlines() if x.startswith("Advances: ")), "")
+    found: list[str] = []
+    for req in re.split(r"[,\s]+", line.removeprefix("Advances: ").strip()):
+        text = proposed.get(req) or accepted.get(req)
+        if text and text not in found:
+            found.append(text)
+    return ", ".join(found) or None
 
 
 def brief_check(root: Path, briefs: list[dict], numbers: dict[str, int]) -> list[str]:
@@ -1015,6 +1050,8 @@ def cmd_publish(root: Path, comments: Path, head: str, numbers_path: Path | None
     briefs, problems = plan_briefs(root, ids)
     if not problems:
         briefs = in_order(briefs, ids)
+        for b in briefs:
+            b["persona"] = brief_persona(root, b["body"])
         problems = brief_check(root, briefs, numbers)
     if problems:
         print("\n".join(problems))
