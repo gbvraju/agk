@@ -1,6 +1,6 @@
 # ADR-0461: A validated plan is rendered once, as new draft files the person owns
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0034, SPEC-0030, SPEC-0018, ADR-0269, ADR-0454, ADR-0456, ADR-0457, amendment 163, brief #1081, plan #661

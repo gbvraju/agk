@@ -1,1 +1,0 @@
-- `conductor.py sweep` prints the default branch line from the newest run of each check of `required_checks` on the branch's head: `failure` when one failed, `pending` while one runs, `success` when all that reported passed, `no run` when none reported; a skipped run of another workflow no longer sets it (brief #736, REQ-037, ADR-0329)

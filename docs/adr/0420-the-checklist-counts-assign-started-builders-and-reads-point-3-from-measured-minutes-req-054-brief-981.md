@@ -1,6 +1,6 @@
 # ADR-0420: The checklist counts Assign-started builders and reads point 3 from measured minutes
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0374

@@ -1,6 +1,6 @@
 # ADR-0284: merge_cleared.py passes the merged pull request's body to its after-merge governance (REQ-046, brief 576)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-05
 - Deciders: maintainers
 - Related: ADR-0273, ADR-0271, ADR-0261, SPEC-0039

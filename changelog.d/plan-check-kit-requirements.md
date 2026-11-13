@@ -1,1 +1,0 @@
-- `check_plan.py` leaves the kit's own requirements (REQ-001 to REQ-099 of `docs/requirements.md` with no `Source:` line) out of rule 10, the trace and the counts, so a project's plan pull request is not red for lines the person never wrote; such a requirement with a `Source:` line is still checked (brief #1183, ADR-0502)

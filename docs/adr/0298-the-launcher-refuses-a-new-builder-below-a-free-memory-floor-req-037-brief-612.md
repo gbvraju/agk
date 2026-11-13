@@ -1,6 +1,6 @@
 # ADR-0298: The launcher refuses a new builder below a free-memory floor (REQ-037, brief 612)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0190, ADR-0219, ADR-0223

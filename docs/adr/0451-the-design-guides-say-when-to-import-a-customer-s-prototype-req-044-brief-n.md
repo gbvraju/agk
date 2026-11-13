@@ -1,6 +1,6 @@
 # ADR-0451: The design guides say when to import a customer's prototype, and doctor reports each imported version
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: brief #1064, SPEC-0037, amendment 161 (`docs/runs/proposed-spec-amendments-161.md`, #1057), ADR-0446, ADR-0448

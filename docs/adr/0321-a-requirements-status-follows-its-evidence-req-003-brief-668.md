@@ -1,6 +1,6 @@
 # ADR-0321: A requirement's status follows its evidence (REQ-003, brief 668)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0172, SPEC-0010, SPEC-0011

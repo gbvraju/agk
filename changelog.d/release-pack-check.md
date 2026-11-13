@@ -1,1 +1,0 @@
-- `release_pack.py check` checks a release's evidence pack offline: its six files, their form and digests, and that the tag is a release (brief #769, SPEC-0052 build (b), ADR-0343)

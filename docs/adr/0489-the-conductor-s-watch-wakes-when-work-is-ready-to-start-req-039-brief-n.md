@@ -1,6 +1,6 @@
 # ADR-0489: The conductor's watch wakes when work is ready to start
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: ADR-0402, ADR-0475, ADR-0482, brief #1125, brief #1151, plan #661

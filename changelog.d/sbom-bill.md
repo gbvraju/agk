@@ -1,1 +1,0 @@
-- `scripts/agk/sbom.py` makes one CycloneDX JSON bill of materials of a commit (`make [--ref REF] --out FILE`) from the repository's files, and `check FILE [--ref REF]` says offline whether a bill is well-formed and belongs to its commit, naming the component class and never a value (brief #787, SPEC-0054 build (b), REQ-061, ADR-0349)

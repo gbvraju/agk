@@ -1,1 +1,0 @@
-- `[flow] min_free_memory_mb` (optional): below that free memory `launch.py prompts --adapter` starts and resumes no session and prints one line naming the setting; a memory that cannot be read never blocks a start (brief #612, ADR-0298)

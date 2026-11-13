@@ -1,6 +1,6 @@
 # ADR-0411: After a merge, check the issues a pull request closes and close a finished brief (REQ-046)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0273, SPEC-0039, brief #959, plan #661, issue #614, issue #606

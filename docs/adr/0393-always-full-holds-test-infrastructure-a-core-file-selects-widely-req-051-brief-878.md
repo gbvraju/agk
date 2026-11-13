@@ -1,6 +1,6 @@
 # ADR-0393: `always_full` holds test infrastructure; a core file selects its mapped tests and importers
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: ADR-0285, ADR-0359, ADR-0360, brief #878, amendment 153

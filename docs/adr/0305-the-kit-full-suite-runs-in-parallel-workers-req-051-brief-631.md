@@ -1,6 +1,6 @@
 # ADR-0305: The kit's full suite runs in parallel workers where xdist is importable (REQ-051, brief 631)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0270, ADR-0302

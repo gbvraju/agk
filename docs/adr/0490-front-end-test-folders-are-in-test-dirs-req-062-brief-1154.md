@@ -1,6 +1,6 @@
 # ADR-0490: Front-end and end-to-end test folders are in test_dirs
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: brief #1154, issue #484, plan #661, ADR-0407

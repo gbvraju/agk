@@ -1,6 +1,6 @@
 # ADR-0470: A brief runs on its kind's tier, and the route of that tier can be read
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0045, SPEC-0006, ADR-0289, ADR-0402, amendment 145, amendment 165, brief #1099, plan #661

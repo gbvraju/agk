@@ -1,6 +1,6 @@
 # ADR-0340: Add REQ-058: A product is accepted against its goals by evidence
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: SPEC-0051, SPEC-0012, SPEC-0047, SPEC-0048, SPEC-0046, SPEC-0020, ADR-0310, plan #661, brief #685

@@ -1,1 +1,0 @@
-- The second delivery playbook, `config/playbooks/rag-app.toml`, is installed: corpus with its privacy review, then the evaluation set, then retrieval, answers and joins, with the four rag-app gates and only `expected` speed claims; nothing reads it until a project declares the work type (brief #662, SPEC-0038 build (d), ADR-0315)

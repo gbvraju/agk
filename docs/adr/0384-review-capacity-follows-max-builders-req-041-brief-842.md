@@ -1,6 +1,6 @@
 # ADR-0384: Review capacity follows `max_builders` unless a team sets it
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: SPEC-0034 rule 15, ADR-0153, ADR-0341, brief #842

@@ -1,6 +1,6 @@
 # ADR-0448: A customer's prototype is imported unchanged and its map is checked
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: brief #1061, SPEC-0037, amendment 161 (`docs/runs/proposed-spec-amendments-161.md`, #1057), ADR-0446, Q-1061-1, Q-1061-2, Q-1061-3

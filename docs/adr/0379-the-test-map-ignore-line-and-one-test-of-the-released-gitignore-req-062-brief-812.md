@@ -1,6 +1,6 @@
 # ADR-0379: The test map's ignore line and the one test of the released `.gitignore` (REQ-062, brief 812)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: ADR-0360, SPEC-0055, brief #812, Q-812-1

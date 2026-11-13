@@ -1,6 +1,6 @@
 # ADR-0343: Add REQ-059: Every release carries one evidence pack, named by its tag
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: SPEC-0052, SPEC-0012, SPEC-0028, SPEC-0046, SPEC-0047, ADR-0171, ADR-0326, ADR-0328, plan #661, issues #433 and #476

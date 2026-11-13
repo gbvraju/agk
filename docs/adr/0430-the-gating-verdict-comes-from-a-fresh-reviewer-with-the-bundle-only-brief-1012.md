@@ -1,6 +1,6 @@
 # ADR-0430: The gating verdict comes from a fresh reviewer session that reads the bundle only
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: SPEC-0023, SPEC-0035, SPEC-0034, SPEC-0045, amendment 160, brief #1012, brief #1013, brief #1014, plan #661

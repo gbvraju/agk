@@ -1,6 +1,6 @@
 # ADR-0428: Five more kit scripts pass the type check again (REQ-016, brief 1007)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0010, ADR-0307, ADR-0427, issue #986, brief #1007

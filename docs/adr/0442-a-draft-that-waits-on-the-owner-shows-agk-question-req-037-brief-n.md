@@ -1,6 +1,6 @@
 # ADR-0442: A draft that waits on the owner shows agk:question
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Deciders: maintainers
 - Related: brief #1043, plan #661, amendment 150 item 1, Q-846-4, ADR-0385, Q-1023-1

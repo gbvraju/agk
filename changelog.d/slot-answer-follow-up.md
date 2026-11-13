@@ -1,1 +1,0 @@
-- `session.py slot --next` prints `follow-up pr #<n> answer` when a listed verdict author or a spec approver answers (`Answer:`, `Maintainer answer:` or `Correction:` naming its Q id) the question a builder's escalate or blocked `Report:`, or its `Question:`, stopped on, until the builder posts a newer `Report:` (brief #961, ADR-0413)

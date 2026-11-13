@@ -1,1 +1,0 @@
-- `test_map.py build` also maps Gradle modules (`settings.gradle` and the `project(...)` dependencies), Xcode targets (`project.pbxproj`, read as text) and Go packages (the import lines and `go.mod`); a stack that cannot be read adds no entries, and folder conventions stay the fallback (brief #826, SPEC-0055 build (d), ADR-0360)

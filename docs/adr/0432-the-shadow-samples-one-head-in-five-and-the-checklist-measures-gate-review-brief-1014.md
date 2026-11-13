@@ -1,6 +1,6 @@
 # ADR-0432: The shadow samples one head in five and the checklist measures gate review (REQ-054)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Deciders: maintainers
 - Related: ADR-0430, ADR-0431, ADR-0374, ADR-0420, SPEC-0023, SPEC-0035, amendment 160, brief #1012, brief #1013, brief #1014, plan #661

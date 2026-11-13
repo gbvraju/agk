@@ -1,6 +1,6 @@
 # ADR-0440: A shared-file change runs its mapped tests locally and the full suite in CI
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Deciders: maintainers
 - Related: brief #1031, plan #661, SPEC-0044 rule 1, ADR-0227 (brief #417), ADR-0242 (brief #453), ADR-0422 (brief #980), ADR-0436 (brief #1021)

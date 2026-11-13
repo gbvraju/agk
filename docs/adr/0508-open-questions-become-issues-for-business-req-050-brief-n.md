@@ -1,6 +1,6 @@
 # ADR-0508: Open questions become issues for business
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: ADR-0459, ADR-0461, ADR-0506, ADR-0507, SPEC-0043 rules 6, 7 and 25, brief #1196, plan #661

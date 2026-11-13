@@ -1,1 +1,0 @@
-- `checklist.py` passes the pinned type check again: each optional time or saved part is handled where it is read, with the same nine lines on the same saved inputs (brief #1004, ADR-0427)

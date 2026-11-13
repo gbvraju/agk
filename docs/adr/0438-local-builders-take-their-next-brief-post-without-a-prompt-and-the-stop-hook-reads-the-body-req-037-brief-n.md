@@ -1,6 +1,6 @@
 # ADR-0438: Local builders take their next brief, post without a prompt, and the stop hook reads the body
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Deciders: maintainers
 - Related: brief #1029, plan #661, session rule 18, ADR-0271 (brief #545), ADR-0417, ADR-0402

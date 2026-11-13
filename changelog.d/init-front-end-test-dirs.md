@@ -1,1 +1,0 @@
-- `agk init` writes the front-end and end-to-end test folders it finds (`e2e/`, `tests/e2e/`, `frontend/src/test/`, `frontend/tests/`, `src/__tests__/`, `cypress/`) into `test_dirs` beside `tests`, and `agk doctor` warns, naming up to three folders, when files that look like tests sit outside every `test_dirs` folder (brief #1154, ADR-0490)

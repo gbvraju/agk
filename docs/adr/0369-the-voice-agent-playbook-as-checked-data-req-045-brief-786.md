@@ -1,6 +1,6 @@
 # ADR-0369: The voice-agent playbook as checked data (REQ-045, brief 786)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: ADR-0251, ADR-0365, ADR-0352, ADR-0315, ADR-0259, SPEC-0038

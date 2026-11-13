@@ -1,1 +1,0 @@
-- `plan_intake.py render` writes a validated proposals file once, as new files only (the scope, the milestones, the proposed requirements, one Draft spec per feature area and one brief per brief under `docs/plan/`), printing every conflict and then every open question first, and never editing `docs/requirements.md` (brief #1081, SPEC-0043 build (c2), ADR-0461)

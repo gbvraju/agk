@@ -1,6 +1,6 @@
 # ADR-0371: Add REQ-064: The kit proposes a repository's work type and stack and a person confirms
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: SPEC-0057, SPEC-0002, SPEC-0012, SPEC-0021, SPEC-0038, SPEC-0041, SPEC-0048, SPEC-0055, plan #661

@@ -1,1 +1,0 @@
-- `plan_intake.py publish` prints, after the person's `Approve: plan <full head ID>`, one `gh api` command per milestone and per brief of the plan, in `depends_on` order with real issue numbers, refuses a brief `check_brief.py` fails and runs nothing; in personal mode it writes the briefs to the files forge (brief #1078, SPEC-0043 build (i), ADR-0459)

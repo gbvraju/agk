@@ -1,6 +1,6 @@
 # ADR-0467: The plan has a baseline and approved scope changes
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, ADR-0269, ADR-0454, ADR-0465, ADR-0466, `Q-S0043-7`, brief #1095, brief #1094, plan #661

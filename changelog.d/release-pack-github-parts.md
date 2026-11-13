@@ -1,1 +1,0 @@
-- `release_pack.py make` records the required checks with their conclusions and counts (`tests.json`) and the secret and dependency scans (`scans.json`), read with GET only or from `--api-dir`; what cannot be read is `unknown`, never a pass, and a scan nothing configures is `not run` (brief #829, SPEC-0052 build (d), ADR-0343)

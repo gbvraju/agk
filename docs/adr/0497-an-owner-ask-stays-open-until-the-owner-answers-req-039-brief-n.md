@@ -1,6 +1,6 @@
 # ADR-0497: An owner ask stays open until the owner answers
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: brief #1168, plan #661, amendment 172, amendment 150 item 1, Q-846-4, ADR-0385, ADR-0442, ADR-0483

@@ -1,6 +1,6 @@
 # ADR-0412: The builder pool counts a slot alive when it ran on time, not only while it holds a lease
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0368, ADR-0402, brief #960, issue #937

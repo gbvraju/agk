@@ -1,1 +1,0 @@
-- A project can set the tier and effort of each kind of work in an optional `[models]` table of `agk.toml` (refused naming the setting, never the value), and `session.py kind --brief N` prints a brief's kind from its `Size:` and `Touches:` lines (SPEC-0045 build (b), brief #623, ADR-0289)

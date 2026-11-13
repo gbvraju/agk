@@ -1,6 +1,6 @@
 # ADR-0460: The planning guide walks a prototype to briefs, and amendment 163 is in the spec texts
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0037, ADR-0269, ADR-0454, ADR-0455, ADR-0456, ADR-0457, ADR-0458, ADR-0459, ADR-0461, amendment 163, amendment 115, brief #1079, plan #661

@@ -1,6 +1,6 @@
 # ADR-0457: The plan is traced to its sources, and its coverage is counted
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, ADR-0269, ADR-0454, ADR-0455, amendment 163, brief #1076, brief #1074, plan #661

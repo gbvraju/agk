@@ -1,1 +1,0 @@
-- `merge_cleared.py` after a merge closes a brief that has no `Builds:` line only when the merged body carries the line `Finishes: #<brief>`; a brief with a `Builds:` line closes when every listed build has merged, as before (brief #992, ADR-0424)

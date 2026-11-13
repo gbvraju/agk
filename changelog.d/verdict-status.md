@@ -1,1 +1,0 @@
-- The conductor's verdict is the commit status `agk/verdict` (`merge_cleared.py --status`), the status starts the merger job at once, `doctor.py` warns when a pull request need not be up to date before merge, and `[flow] merge_queue` hands merging to GitHub's queue (brief #853, ADR-0387)

@@ -1,6 +1,6 @@
 # ADR-0329: The conductor's merge queue merges in batches and waits once (REQ-037, brief 643)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0308, ADR-0297, ADR-0302, ADR-0265, SPEC-0039

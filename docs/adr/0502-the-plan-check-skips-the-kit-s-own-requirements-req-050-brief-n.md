@@ -1,6 +1,6 @@
 # ADR-0502: The plan check skips the kit's own requirements
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: brief #1183, plan #661, ADR-0457

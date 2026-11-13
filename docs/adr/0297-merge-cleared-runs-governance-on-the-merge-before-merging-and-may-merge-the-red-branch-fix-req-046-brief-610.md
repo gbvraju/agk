@@ -1,6 +1,6 @@
 # ADR-0297: merge_cleared.py runs governance on the merge before merging, and may merge the red-branch fix (REQ-046, brief 610)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0261, ADR-0273, ADR-0284, SPEC-0039, SPEC-0032

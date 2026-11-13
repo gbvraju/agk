@@ -1,6 +1,6 @@
 # ADR-0311: Add REQ-054: Every repository has one weekly scorecard of numbers with thresholds and trends
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: SPEC-0047, SPEC-0012, SPEC-0004, SPEC-0007, SPEC-0032, SPEC-0042, SPEC-0046, ADR-0303, ADR-0310, plan #542, tracker #630

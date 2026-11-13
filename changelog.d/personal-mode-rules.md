@@ -1,1 +1,0 @@
-- Principle 10 counts the state's test map in personal mode, session rule 37 says what a session never does in personal mode (push to the product's remote, confirm or sync, strip attribution), and SPEC-0041 gains rule 31: the governance levels in team mode through `[governance] level`, `light` for a new adopter once build (o) lands, the floor fixed (brief #562, ADR-0280 Proposed)

@@ -1,6 +1,6 @@
 # ADR-0495: A shared-index change re-proves on the checks alone
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: ADR-0325, ADR-0339, SPEC-0050 amendment 171, brief #1163, plan #661

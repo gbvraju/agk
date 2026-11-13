@@ -1,6 +1,6 @@
 # ADR-0338: The cloud-migration playbook as checked data (REQ-045, brief 724)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: ADR-0251, ADR-0315, ADR-0337, ADR-0313, ADR-0259, SPEC-0038

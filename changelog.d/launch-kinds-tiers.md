@@ -1,1 +1,0 @@
-- Each launch prompt names its kind, tier and effort, with a lean reading list for small and mechanical work; a builder below the strongest tier escalates instead of going on, and every review runs on the strongest tier (brief #709, SPEC-0045 rules 5 to 7)

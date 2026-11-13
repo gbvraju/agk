@@ -1,1 +1,0 @@
-- Every brief carries a `Contexts:` line and every new or re-statused spec a `## Contexts` section, checked by `check_brief.py` and `check_specs.py`; a `Hold: #<brief> <reason>` comment by a listed approver makes `session.py plan`, `next` and `claim` skip the brief until a `Release: #<brief>`, and `plan` prints `HELD:` and `HOLD IGNORED:` lines (brief #775, ADR-0361)

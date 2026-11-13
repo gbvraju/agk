@@ -1,6 +1,6 @@
 # ADR-0482: The conductor's watch wakes on a held review
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: ADR-0388, ADR-0402, ADR-0475, brief #854, brief #1125, plan #661

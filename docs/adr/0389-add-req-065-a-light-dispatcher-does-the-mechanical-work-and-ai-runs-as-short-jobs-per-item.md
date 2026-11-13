@@ -1,6 +1,6 @@
 # ADR-0389: Add REQ-065: A light dispatcher does the mechanical work and AI runs as short jobs per item
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: SPEC-0058, SPEC-0012, SPEC-0030, SPEC-0032, SPEC-0034, SPEC-0039, SPEC-0045, SPEC-0049, ADR-0330, ADR-0353, ADR-0354, ADR-0368, brief #855, plan #661

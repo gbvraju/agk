@@ -1,1 +1,0 @@
-- Reviewer slots `r<N>` take `Review: <rN> #<pr> <head>` lines with `session.py slot --next`, `review_bundle.py` prints the one document a reviewer reads (the review context of the head, the brief, the rulings and the checks), and a verdict whose first line ends `(conductor fallback)` gates like any other (brief #1013, ADR-0431)

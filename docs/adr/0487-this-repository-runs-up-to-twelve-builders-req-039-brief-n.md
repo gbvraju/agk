@@ -1,6 +1,6 @@
 # ADR-0487: This repository runs up to twelve builders
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: ADR-0341, ADR-0384, ADR-0486, brief #1148, brief #1145, plan #661

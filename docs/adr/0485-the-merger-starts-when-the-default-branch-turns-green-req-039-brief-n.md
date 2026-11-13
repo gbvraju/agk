@@ -1,6 +1,6 @@
 # ADR-0485: The merger starts when the default branch turns green
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0032, SPEC-0039, ADR-0373, ADR-0383, ADR-0476, brief #1143, plan #661

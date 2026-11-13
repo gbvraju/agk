@@ -1,6 +1,6 @@
 # ADR-0431: Reviewer slots take `Review:` lines and post the gating verdict from the bundle only (REQ-046)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0020, ADR-0430, ADR-0362, ADR-0425, SPEC-0023, SPEC-0034, amendment 160, brief #1012, brief #1013, plan #661

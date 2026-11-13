@@ -1,1 +1,0 @@
-- `merge_cleared.py` reads a pull request's `Depends-on: #n` only from a line of its own, as `check_pr_mode.py` does, so a body that quotes the words in a sentence or backticks is no longer held from merging (brief #991, ADR-0265)

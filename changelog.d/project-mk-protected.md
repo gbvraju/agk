@@ -1,1 +1,0 @@
-- A new init project protects `project.mk` beside `Makefile` in `config/protected-paths.txt` and `config/reviewers.yaml`, and an upgrade refused over an edited `Makefile` now says to protect `project.mk` in the same pull request (brief #1155, ADR-0491)

@@ -1,6 +1,6 @@
 # ADR-0473: An OpenSpec file is imported unchanged and read by a script into the plan draft
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, ADR-0269, ADR-0472, ADR-0462, ADR-0461, ADR-0456, amendment 166, amendment 164, brief #1109,

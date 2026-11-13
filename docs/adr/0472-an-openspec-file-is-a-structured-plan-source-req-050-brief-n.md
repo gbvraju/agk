@@ -1,6 +1,6 @@
 # ADR-0472: An OpenSpec file is a structured plan source whose requirements and scenarios are read exactly
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0042, SPEC-0037, ADR-0269, ADR-0454, ADR-0469, amendment 163, amendment 164, amendment 166, brief #1108, plan #661

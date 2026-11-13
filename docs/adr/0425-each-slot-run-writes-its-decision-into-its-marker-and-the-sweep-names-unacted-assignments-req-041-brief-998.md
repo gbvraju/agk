@@ -1,6 +1,6 @@
 # ADR-0425: Each slot run writes its decision into its marker, and the sweep names unacted assignments (REQ-041)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0362, ADR-0368, ADR-0402, SPEC-0034, brief #998, plan #661

@@ -1,6 +1,6 @@
 # ADR-0372: Add REQ-063: Runbooks for a red default branch, blocked Actions and a leaked secret
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: SPEC-0056, SPEC-0009, SPEC-0011, SPEC-0012, SPEC-0021, SPEC-0032, SPEC-0041, SPEC-0042, SPEC-0046, SPEC-0047, plan #661

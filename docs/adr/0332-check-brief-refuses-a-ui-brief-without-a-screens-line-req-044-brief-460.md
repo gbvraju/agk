@@ -1,6 +1,6 @@
 # ADR-0332: check_brief refuses a UI brief without a Screens line (REQ-044, brief 460)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-07
 - Deciders: maintainers
 - Related: ADR-0204, SPEC-0037, ADR-0170

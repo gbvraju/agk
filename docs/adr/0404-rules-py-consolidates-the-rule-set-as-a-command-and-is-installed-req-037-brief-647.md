@@ -1,6 +1,6 @@
 # ADR-0404: rules.py consolidates the rule set as a command, and is installed (REQ-037, brief 647)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0052, ADR-0243, ADR-0310

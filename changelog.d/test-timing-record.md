@@ -1,1 +1,0 @@
-- `prepush.py --record` keeps each test file's duration on every run of the tests step, read from pytest's durations table or the `[testing] junit` report the project's command writes; `proof.py --manifest` gives one timing line per run and `lock.py status --ticket` one separate timing line after a result whose record holds a total (brief #560, SPEC-0044 build (a), ADR-0270)

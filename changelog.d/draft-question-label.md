@@ -1,1 +1,0 @@
-- The router labels a pull request `agk:question`, even while it is a draft, when it has an unanswered `Question: Q-…` whose first line says `for the maintainers`, or an unanswered `Owner needed:`; a later maintainer answer, `Approve:` or push closes it (brief #1043, ADR-0442)

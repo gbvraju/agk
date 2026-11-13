@@ -1,6 +1,6 @@
 # ADR-0408: the Approve design line and the frozen signed-off version (REQ-044, brief 459)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0204, ADR-0334, SPEC-0037

@@ -1,6 +1,6 @@
 # ADR-0468: Iterations and the four ceremonies are printed from facts
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0037, ADR-0269, ADR-0454, ADR-0465, ADR-0466, ADR-0467, ADR-0469, amendment 164 item 4, brief #1096, plan #661

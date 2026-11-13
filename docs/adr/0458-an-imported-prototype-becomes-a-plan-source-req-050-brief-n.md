@@ -1,6 +1,6 @@
 # ADR-0458: An imported prototype becomes a plan source, one heading per mapped screen and state
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0037, ADR-0269, ADR-0446, ADR-0448, ADR-0454, ADR-0455, amendment 161, amendment 163,

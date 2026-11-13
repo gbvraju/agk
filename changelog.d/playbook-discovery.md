@@ -1,1 +1,0 @@
-- Every playbook now carries `[[discovery]]` questions (at least `constraints`, `success`, `data-rules`, `environments` and `non-functional`), checked by `check_playbooks.py`, and `/agk:vision` asks them after the ten common topics with `engines.py questions --work-type` (SPEC-0048 build (c), brief #686, amendment 130)

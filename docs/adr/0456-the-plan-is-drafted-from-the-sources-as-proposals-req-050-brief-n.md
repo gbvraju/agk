@@ -1,6 +1,6 @@
 # ADR-0456: The plan is drafted from the sources as proposals, and validate refuses anything invented
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0042, SPEC-0018, SPEC-0013, ADR-0269, ADR-0454, ADR-0455, amendment 163, brief #1075, brief #1081, plan #661

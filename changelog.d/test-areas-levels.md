@@ -1,1 +1,0 @@
-- A `[proof]` area can hold levels with their own command, events and environment, and `[testing] map_source` says which map a repository uses (brief #788, SPEC-0055 build (a), ADR-0360)

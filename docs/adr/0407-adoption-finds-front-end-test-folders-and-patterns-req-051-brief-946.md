@@ -1,6 +1,6 @@
 # ADR-0407: Adoption finds front-end test folders and patterns (REQ-051)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0270, SPEC-0044, brief #946, plan #661, issue #484

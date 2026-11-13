@@ -1,6 +1,6 @@
 # ADR-0323: A flaky test is rerun alone once and recorded, never hidden (REQ-051, brief 670)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0234, ADR-0270, ADR-0303, SPEC-0044, SPEC-0046

@@ -1,6 +1,6 @@
 # ADR-0344: Add REQ-060: Work falls back to another provider of its own tier, never to a weaker model
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: SPEC-0053, SPEC-0045, SPEC-0012, ADR-0289, ADR-0310, plan #661, pull request #711

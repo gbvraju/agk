@@ -1,1 +1,0 @@
-- The kit's rule-cutting command works again on machines with other text settings, and the kit encoding check passes again (brief #955, issue #953, Covered-by ADR-0404)

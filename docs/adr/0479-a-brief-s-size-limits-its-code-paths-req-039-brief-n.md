@@ -1,6 +1,6 @@
 # ADR-0479: A brief's size limits its code paths
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0030, SPEC-0043, amendment 168, brief #1121, plan #661

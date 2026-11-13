@@ -1,6 +1,6 @@
 # ADR-0370: The bill of materials of a commit and its offline check (REQ-061)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: ADR-0349, ADR-0326, ADR-0328, SPEC-0054, SPEC-0052, brief #787, plan #661

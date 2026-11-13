@@ -1,6 +1,6 @@
 # ADR-0318: `session.py plan` names each ready brief's lane (REQ-045, brief 665)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-07
 - Deciders: maintainers
 - Related: ADR-0251, ADR-0312, SPEC-0038, SPEC-0034

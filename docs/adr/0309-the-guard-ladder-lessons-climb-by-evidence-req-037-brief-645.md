@@ -1,6 +1,6 @@
 # ADR-0309: The guard ladder: a lesson climbs to a rule, a test, a check or a workflow by evidence (REQ-037, brief 645)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0294, SPEC-0004

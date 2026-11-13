@@ -1,1 +1,0 @@
-- Conductor rows 1, 8, 12 and 13 shortened; the conductor.md rule budget drops to 4538 words.

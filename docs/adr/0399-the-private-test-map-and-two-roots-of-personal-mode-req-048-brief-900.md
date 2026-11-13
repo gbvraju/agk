@@ -1,6 +1,6 @@
 # ADR-0399: In a sidecar the marker readers read the private test map
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: ADR-0267, SPEC-0041, brief #900

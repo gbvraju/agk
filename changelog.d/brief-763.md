@@ -1,1 +1,0 @@
-- A project can list, per model tier, the providers to try in order, and `session.py fallback` names the next one of the same tier, never a weaker one (brief #763, REQ-060, ADR-0344)

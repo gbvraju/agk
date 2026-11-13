@@ -1,6 +1,6 @@
 # ADR-0464: Shared components first, and each later milestone a demoable slice of screens
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0037, SPEC-0038, ADR-0269, ADR-0454, ADR-0462, ADR-0463, ADR-0469, amendment 164,

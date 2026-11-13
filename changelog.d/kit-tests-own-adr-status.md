@@ -1,1 +1,0 @@
-- `check_kit_tests.py` fails a test file that a pull request adds or changes when it pins an ADR the same pull request adds to `Proposed` only, naming the test file and the ADR, so the status-only `Final:` commit can no longer turn the default branch red that way; the brief template says a test never pins its own ADR's status (brief #483, ADR-0276 Proposed)

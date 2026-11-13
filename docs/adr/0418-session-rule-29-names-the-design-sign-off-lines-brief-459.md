@@ -1,6 +1,6 @@
 # ADR-0418: Session rule 29 names the design and inventory sign-off lines
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: SPEC-0037 rule 9, brief #976, brief #459 answer 6, Q-459-1 on #949, ADR-0310

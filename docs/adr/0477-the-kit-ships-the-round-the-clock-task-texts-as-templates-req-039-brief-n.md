@@ -1,6 +1,6 @@
 # ADR-0477: The kit ships the round-the-clock task texts as templates
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0045, brief #1117, plan #661

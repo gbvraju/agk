@@ -1,6 +1,6 @@
 # ADR-0414: The plan does not assign a red-branch alarm that a fix already names (REQ-039, REQ-041)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: SPEC-0032, brief #962, plan #661, issue #953, brief #955

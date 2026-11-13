@@ -1,1 +1,0 @@
-- Each numbered item of a `Verdict: fix list` ends with `(rule: <file> <n>)` or `(rule: none)` (item 8 of the review protocol in the architect, architect-review, conductor and shadow agents); `check_final_clearance.py` warns on an item without a tag and fails on it from the date in `rule_tags_from` of `agk.toml`, and without that setting it only warns (brief #647, ADR-0310)

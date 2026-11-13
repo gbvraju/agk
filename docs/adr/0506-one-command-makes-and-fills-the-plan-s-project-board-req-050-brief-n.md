@@ -1,6 +1,6 @@
 # ADR-0506: One command makes and fills the plan's Project board
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: SPEC-0043 rule 25, ADR-0459, brief #1190, plan #661

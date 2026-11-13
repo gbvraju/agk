@@ -1,6 +1,6 @@
 # ADR-0433: AGK is all rights reserved until a go-to-market licence is chosen (REQ-014, brief 1016)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: brief #1016, plan #661

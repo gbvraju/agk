@@ -1,6 +1,6 @@
 # ADR-0291: The drift audit's D1 exempts a valid release commit (REQ-011, brief 594)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-05
 - Deciders: maintainers
 - Related: ADR-0012, ADR-0277, SPEC-0004, SPEC-0028

@@ -1,6 +1,6 @@
 # ADR-0488: The team guide test is mapped to session.py
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: brief #1150, brief #1145, pull request #1146, ADR-0486, ADR-0447

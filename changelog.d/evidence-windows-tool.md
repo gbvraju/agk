@@ -1,1 +1,0 @@
-- `evidence.py check` reads a recorded secret-scan tool of any case, with or without `.exe` and with a Windows path, as gitleaks and repeats the scan, so a Windows record no longer reads `differs` on argv (brief #504, ADR-0253 Proposed)

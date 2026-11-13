@@ -1,6 +1,6 @@
 # ADR-0474: The plan's coverage counts OpenSpec scenarios, and the planning guide walks an OpenSpec file to a plan
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, ADR-0269, ADR-0472, ADR-0473, ADR-0457, ADR-0460, amendment 166, amendment 163, brief #1110,

@@ -1,6 +1,6 @@
 # ADR-0314: Add REQ-055: A problem in a person's words takes one guided path from discovery to the builds
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: SPEC-0048, SPEC-0012, SPEC-0037, SPEC-0038, SPEC-0042, SPEC-0041, ADR-0251, ADR-0259, ADR-0289, ADR-0303, plan #542, plan #365, tracker #630

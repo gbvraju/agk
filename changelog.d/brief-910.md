@@ -1,1 +1,0 @@
-- The scorecard unpacks the archive of the default branch with `tarfile.TarFile`, which the encoding check accepts; its behaviour is unchanged (brief #910, issue #911)

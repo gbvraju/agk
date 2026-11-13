@@ -1,6 +1,6 @@
 # ADR-0385: One state label per pull request, naming who acts next
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: SPEC-0032 rules 2 and 3, SPEC-0006 rule 5, amendment 150, ADR-0293, ADR-0384, brief #846

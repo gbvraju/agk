@@ -1,1 +1,0 @@
-- `lessons.py ladder` prints each catch-log row's guard level (lesson, rule, test, check, workflow), the rows due to climb by the written rules, and fails a malformed guard or a missing rule line (brief #645, ADR-0309 Proposed)

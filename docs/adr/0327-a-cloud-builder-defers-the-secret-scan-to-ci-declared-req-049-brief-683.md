@@ -1,6 +1,6 @@
 # ADR-0327: A cloud builder defers the secret scan to CI, declared in the body (REQ-049, brief 683)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0306, ADR-0158, SPEC-0039, SPEC-0042
