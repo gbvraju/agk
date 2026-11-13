@@ -1,1 +1,0 @@
-- `survey.py` carries the scanner notes the kit's checks ask for, and the reference names it (brief #875, issue #874, ADR-0386)

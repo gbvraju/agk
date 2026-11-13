@@ -1,1 +1,0 @@
-- `check_acceptance.py --comments FILE` passes an `accepted` acceptance record only when an account of `spec_approvers` said `Approve: acceptance <slug> <full head ID>` at a head where the record equals its text apart from the status line, in solo mode only inside the person's `Confirmed:` comment; a session's comment never counts (brief #902, SPEC-0051 build (c), ADR-0340)

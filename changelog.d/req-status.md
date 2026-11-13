@@ -1,1 +1,0 @@
-- `scripts/agk/req_status.py report` prints each requirement whose status disagrees with its proof (SPEC-0010: every criterion has a passing test, run by its `[proof]` area), and `apply` sets those statuses to `done`, editing only `- Status:` lines (brief #668, ADR-0321)

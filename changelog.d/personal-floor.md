@@ -1,1 +1,0 @@
-- In personal mode `personal.py floor` runs the floor at every level: a secret scan of the branch's commits (a missing gitleaks fails it) and, with `--approve`, the test command on the base and the head, failing on a test that passed before and fails now (brief #947, SPEC-0041 build (h) second part, ADR-0406 Proposed)

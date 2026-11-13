@@ -1,1 +1,0 @@
-- `agk adopt` also finds front-end test files (`*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`) and the topmost folders that hold them, and writes them to `test_dirs` and `test_patterns`; a project without them, and an already adopted project, read as before (brief #946, SPEC-0044 build (d), ADR-0407)

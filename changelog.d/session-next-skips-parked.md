@@ -1,1 +1,0 @@
-- `session.py next` skips a brief that has the label `agk:parked` or a `Parked:` line, with `skip #<n>: parked`; the router can create the label (brief #615, ADR-0301 Proposed)

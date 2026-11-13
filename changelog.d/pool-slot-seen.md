@@ -1,1 +1,0 @@
-- `Builder pool down` counts a slot alive when its lease marker was taken, renewed or released within `slot_seen_minutes` of the `[flow]` table (default 90), and names each dead slot with the time it was last seen or `never` (brief #960, ADR-0412)

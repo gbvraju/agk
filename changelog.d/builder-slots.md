@@ -1,1 +1,0 @@
-- `session.py slot` adds builder slots behind `[flow] builder_start = "assign"` and `builder_slots`: a lease per slot on the assignments issue and one next step per pass, so a schedule can restart a builder and no session starts one; off by default (brief #776, ADR-0362 Proposed)

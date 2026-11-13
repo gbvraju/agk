@@ -1,1 +1,0 @@
-- `prepush.py --record FILE --queue` and `proof.py --queue` hand their run to the heavy-run queue and return at once, and `lock.py status --ticket T --head SHA` exits 0 only for a passed result of exactly that head (brief #566, SPEC-0040 build (c), REQ-047).

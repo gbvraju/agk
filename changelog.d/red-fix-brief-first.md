@@ -1,1 +1,0 @@
-- While the default branch is red, the fix brief that a red alarm names (a brief that names it, or a listed author's `fix brief filed: #n` on it) is kept by `session.py` beside the alarm: `plan` assigns it with at least one slot, and `next` and `claim` take it, before the capacity and the overlap; a hold, the shape check and a live take still apply (brief #1052, ADR-0445)

@@ -1,1 +1,0 @@
-- `front_door.py detect [--root DIR] [--json]` reads a repository's head commit and prints a proposed work type and stack, each with the files behind it, for a person to confirm in discovery; it runs nothing it reads, writes nothing and never decides (brief #834, SPEC-0057 build (b), ADR-0371)

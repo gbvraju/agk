@@ -1,1 +1,0 @@
-- `route.py` labels a pull request `agk:question` while an owner ask is open, before `agk:fix` and every other builder state, and never turns an owner state into `agk:handover`; `agk-route.yml` wakes on a created `Owner needed:`, `Question:`, `Maintainer answer:` or `Report:` comment (brief #1101, ADR-0471)

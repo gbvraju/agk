@@ -1,1 +1,0 @@
-- The secret scan is mandatory in every mode: `prepush.py` fails at `secret-scan`, naming the tool and the pinned gitleaks version, when gitleaks is not installed (also with `--quick`), instead of `not run`; `doctor.py` prints whether gitleaks is installed and at which version (brief #632, ADR-0306 Proposed)

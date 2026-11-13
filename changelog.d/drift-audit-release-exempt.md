@@ -1,1 +1,0 @@
-- The drift audit's D1 no longer reports a valid release commit as a protected change without an ADR: `drift_audit.py` asks `check_release.valid_release` about the release part at its parent, with the Final comments of `--comments FILE` (brief #594, ADR-0291 Proposed)

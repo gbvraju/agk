@@ -1,1 +1,0 @@
-- The review agent's guard lets a reviewer slot write its verdict in its own scratch folder and run its slot steps, and the shadow's guard lets it take and release its own slot (brief #1050, ADR-0444).

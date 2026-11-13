@@ -1,1 +1,0 @@
-- With `[testing] rerun_alone = true`, `project_tests.py` reruns each failed test alone once and records a pass as a strike in the flake ledger (`flakes.py add`); `flakes.py` lists a watched strike past its expiry (brief #670, ADR-0323 Proposed)

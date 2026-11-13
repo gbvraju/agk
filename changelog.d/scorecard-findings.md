@@ -1,1 +1,0 @@
-- `scripts/agk/scorecard.py findings` prints the last four weeks of every metric, read from the previous audit body (`--previous FILE`), and the level and trend findings; `scorecard.py issues` then opens, comments on or closes one `agk-scorecard` issue per metric, numbers only, withheld when the guard scan finds anything (brief #723, SPEC-0047, ADR-0311)

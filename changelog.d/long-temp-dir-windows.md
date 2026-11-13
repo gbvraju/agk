@@ -1,1 +1,0 @@
-- On Windows, `proof.py`, `evidence.py` and `prepush.py` resolve the temporary folder to its long path before they make a folder in it or hand it to the tests in `TEMP`, `TMP` and `TMPDIR`, so an 8.3 short path can no longer make a front-end suite miss its own setup file; nothing changes on POSIX (brief #508, ADR-0257 Proposed)

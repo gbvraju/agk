@@ -1,1 +1,0 @@
-- `release_pack.py make --tag <tag> --out DIR` writes the bill of materials and the decisions of a release to `<out>/<tag>/` from the tagged commit with local `git` and no network, and refuses a tag that is not a release or a folder that exists or that git would track (brief #820, SPEC-0052 build (c), ADR-0343)

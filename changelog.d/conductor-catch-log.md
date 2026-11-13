@@ -1,1 +1,0 @@
-- The conductor role gains "Operating lessons": each conductor incident is a row of a conductor catch log with its strongest guard, and each rule row is a cited line of the role (brief #604, ADR-0294 Proposed)

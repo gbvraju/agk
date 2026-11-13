@@ -1,1 +1,0 @@
-- The router starts the merger once for every pull request labelled `agk:merge-ready` when the default branch turns green, so a pull request cleared while the branch was red or still running merges without a hand dispatch; the merger's schedule stays for the three paths only it covers (brief #1143, ADR-0485)

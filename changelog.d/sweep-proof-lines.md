@@ -1,1 +1,0 @@
-- `conductor.py sweep` prints `overlap:`, `re-prove:` and `BEHIND` lines for the open builder pull requests after its pull request lines, from GET reads only (brief #755, SPEC-0050 rule 5, ADR-0325)

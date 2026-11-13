@@ -1,1 +1,0 @@
-- Personal mode has one record interface, and an agent's comment there can never count as an approval (brief #894 first part, REQ-048, ADR-0397)

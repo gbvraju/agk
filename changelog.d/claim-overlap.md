@@ -1,1 +1,0 @@
-- `session.py claim` refuses a brief that overlaps running work with the same `skip` line as `next` and `plan`, and posts nothing; `[flow] shared_indexes` (default `kit/manifest.json`, `agk.toml`, `config/rule-budget.txt`, `docs/requirements.md`, `docs/build-state.md`) never makes an overlap, and still counts for the re-prove hold (brief #751, SPEC-0050 build (c), ADR-0351)

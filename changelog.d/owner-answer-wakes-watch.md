@@ -1,1 +1,0 @@
-- `conductor.py watch` also wakes on an `Answer: Q-…` or `Maintainer answer: Q-…` and on an `Approve:` by a spec approver; `session.py watch --pr N` ends with `answer <Q-id> (comment <id>)` on an answer to the builder's own question and with `approve <head7> SPEC-nnnn` on an approval of the current head (brief #1112, ADR-0475)

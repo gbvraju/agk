@@ -1,1 +1,0 @@
-- `CLAUDE.md`'s compaction recovery re-reads only the `docs/runs/decisions/` files that `grep -l` finds for the brief's number, spec, Q ids and touched paths, no longer the frozen `docs/runs/decisions-log.md`; `tests/kit/test_compaction_reads.py` checks it (brief #941, REQ-052, ADR-0403)

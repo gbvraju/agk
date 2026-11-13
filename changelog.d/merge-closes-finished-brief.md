@@ -1,1 +1,0 @@
-- `merge_cleared.py`, after its record line, notes once on each issue the merged body closes (`Closes`, `Fixes`, `Resolves` with `#n`) that is still open after a short wait, and closes the body's `Brief: #N` as completed when every build of it has merged; the merge stands and nothing is held (brief #959, REQ-046, ADR-0411)

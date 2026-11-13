@@ -1,1 +1,0 @@
-- The conductor's and the slots' leases last 10 minutes and are renewed at every watch pass, both watches return within 5 minutes, and with `builder_start = "assign"` the router keeps the issues `No live conductor` and `Builder pool down` in step with the leases (brief #776, ADR-0368 Proposed)

@@ -1,1 +1,0 @@
-- The check before an automatic merge also runs the kit tests that read the whole tree (`[testing] pre_merge_tests`, none when absent; this repository lists its rule budget, testing map and manifest tests), so two pull requests green alone and red together are held, not merged (brief #667, ADR-0320 Proposed)

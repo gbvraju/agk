@@ -1,1 +1,0 @@
-- The type errors added since the mypy baseline in `design_compare.py`, `doctor.py` and `merge_cleared.py` are fixed without a change of behaviour, and the baseline of `doctor.py` is lowered (brief #1157, ADR-0494)

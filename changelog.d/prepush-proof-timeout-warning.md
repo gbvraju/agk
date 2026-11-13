@@ -1,1 +1,0 @@
-- `prepush.py` prints one warning line naming `proof_timeout`, both durations and a value with headroom when the full suite finishes after more seconds than `proof_timeout`, and keeps the line in the record's new `notes`; the outcome does not change (brief #509, ADR-0258 Proposed)

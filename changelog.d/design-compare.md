@@ -1,1 +1,0 @@
-- `design.py screenshots --version v<n>` writes a prototype version's screenshots and `reflow.json` at every breakpoint in light and dark, and `design_compare.py` names match or drift of each built screen against the signed-off version; the conductor's verdict names every drift (brief #461, ADR-0350 Proposed)

@@ -1,1 +1,0 @@
-- The README opens with AGK's north star: an AI engineering workforce that works like a disciplined agile team, fast, governed, secured and proven (plan #542, REQ-020)

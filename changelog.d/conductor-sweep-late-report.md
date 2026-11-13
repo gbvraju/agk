@@ -1,1 +1,0 @@
-- The conductor's role file puts `SWEEP late` lines of `conductor.py watch` under `Needs a fix` in every hourly report, so a person sees a quiet merger job the same hour (brief #857, ADR-0390)

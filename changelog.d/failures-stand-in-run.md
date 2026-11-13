@@ -1,1 +1,0 @@
-- `failures.py run --on default|release`: when GitHub Actions cannot run, one command run by a person runs the project's full tests, opens or updates the `found-bug` issue of each failure and closes a fixed one with its record (SPEC-0046 rules 12 and 14, brief #888, ADR-0303)

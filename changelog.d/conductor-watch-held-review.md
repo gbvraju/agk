@@ -1,1 +1,0 @@
-- `conductor.py watch` also ends with `HELD VERDICT #<n>` when a poll finds no new line and an open, ready, green head has waited 15 minutes with no verdict; it checks at most once per 5 minutes and returns one pull request again only after a further 15 minutes (brief #1125, ADR-0482)

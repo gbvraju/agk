@@ -1,1 +1,0 @@
-- The generated test map is read and rebuilt before tests are chosen: with `[testing] map_source = "generated"` a selection is the union of the generated map and the project's own, and a missing or stale file is rebuilt first (SPEC-0055 rule 5, brief #833).

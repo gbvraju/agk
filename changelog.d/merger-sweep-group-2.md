@@ -1,1 +1,0 @@
-- The merger's `sweep` job uses the concurrency group `agk-merger-sweep-job-2`, so a sweep that waits for the `merge` environment under the old group no longer holds every later sweep; one sweep at a time still holds (brief #1066, REQ-046, ADR-0452)

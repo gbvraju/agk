@@ -1,1 +1,0 @@
-- A builder's `released: <session>` comment frees its take when a reason follows on the lines after it: the release is read from the comment's first line alone, while a `taken:` comment is still read whole (brief #1026, ADR-0437)

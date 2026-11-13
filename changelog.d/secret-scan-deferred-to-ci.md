@@ -1,1 +1,0 @@
-- A cloud builder may defer the secret scan to CI, declared by `Secret-scan: deferred to CI` on a builder branch; CI's scan stays the gate (ADR-0327).

@@ -1,1 +1,0 @@
-- `kit/templates/runtime/` ships the texts of the launcher, conductor and builder tasks as templates, and the getting-started guide gains `Running around the clock`: the laptop and cloud ways to run them, what the person still does, and when a builder waits in the foreground (brief #1117, ADR-0477)
