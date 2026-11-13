@@ -95,6 +95,7 @@ plan_issue = 661
 # calibration_min = 10
 # iteration_days = 10
 # default_hours = { S = "2-4", M = "4-8", L = "8-16" }
+# board = 5  # the plan's GitHub Project number, printed by /agk:board for you to commit (ADR-0506)
 # The work type (SPEC-0038 rule 5, REQ-045): `[delivery] work_type` selects a delivery playbook. This repository declares no work
 # type (SPEC-0038 rule 12 (b)); declaring one is the owner's change, by an ADR in the same pull request, and a session never writes it.
 # [delivery]
@@ -144,6 +145,9 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/batch.py"
 tests = ["tests/kit/test_batch.py"]
+[[testing.map]]
+code = "scripts/agk/board.py"
+tests = ["tests/kit/test_board.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/caps.py"
 tests = ["tests/kit/test_caps.py"]
@@ -610,8 +614,8 @@ tests = ["tests/kit/test_personal_state.py", "tests/kit_dev/test_kit_manifest.py
 [[testing.map]]
 code = "scripts/agk/plan_intake.py"
 tests = [
-  "tests/kit/test_plan_intake.py", "tests/kit/test_plan_render_installed.py", "tests/kit_dev/test_kit_manifest.py",
-  "tests/kit_dev/test_plan_intake_skill.py",
+  "tests/kit/test_board.py", "tests/kit/test_plan_intake.py", "tests/kit/test_plan_render_installed.py",
+  "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_plan_intake_skill.py",
 ]
 [[testing.map]]
 code = "scripts/agk/plan_ceremony.py"

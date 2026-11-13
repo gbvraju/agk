@@ -1054,6 +1054,7 @@ def publish_github(milestones: list[dict], briefs: list[dict], numbers: dict[str
         f"ok publish: {counts['milestones']} milestone and {counts['briefs']} brief commands"
         f" printed, {counts['withheld']} withheld, {counts['published']} published before;"
         " nothing was run (save each number into --numbers and run publish again)"
+        + ("" if counts["withheld"] else "; next: /agk:board --yes (ADR-0506)")
     )
     return 0
 
