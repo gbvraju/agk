@@ -224,8 +224,8 @@ tests = ["tests/kit/test_check_numbers_amendments.py", "tests/kit/test_numbers.p
 [[testing.map]]
 code = "scripts/agk/check_plan.py"
 tests = [
-  "tests/kit/test_agk_mk.py", "tests/kit/test_check_plan_scope.py", "tests/kit/test_check_plan_sources.py",
-  "tests/kit/test_workflow.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit/test_agk_mk.py", "tests/kit/test_check_plan_kit_requirements.py", "tests/kit/test_check_plan_scope.py",
+  "tests/kit/test_check_plan_sources.py", "tests/kit/test_workflow.py", "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_playbooks.py"

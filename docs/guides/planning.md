@@ -60,7 +60,9 @@ checkout; the other scripts are installed under `scripts/agk/`.
    the spec rule, the brief, the merged pull request (with `--facts FILE` and `--numbers FILE`) and the test, `none` where
    a link is missing. It ends with the coverage line, `ok plan: <a> of <b> in-scope source lines have a requirement, ...`.
    Each heading of a prototype source counts as one in-scope location, so `<a> of <b>` shows every mapped screen and
-   state has a requirement. The trace is printed, never committed.
+   state has a requirement. The trace is printed, never committed. The kit's own requirements (REQ-001 to REQ-099 of
+   `docs/requirements.md`) have no project source, so the check, the trace and the counts leave them out unless one
+   carries a `Source:` line.
 8. **Approve.** On the plan's pull request, an account listed in `spec_approvers` of `config/reviewers.yaml` posts
    `Approve: plan <full head ID>`. A session never posts it; in solo mode it is part of your `Confirmed:` comment.
 9. **Publish.** Save the pull request's comments as a file and run
