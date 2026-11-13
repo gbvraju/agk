@@ -153,6 +153,17 @@ def _screen_problems(sections: list[tuple[str, list[str]]], out: list[str]) -> N
         _state_problems(heading, {n: v for n, v in found.items() if n.startswith("State ")}, out)
 
 
+def sectioned_requirements(text: str) -> set[str] | None:
+    """The REQ ids with a section in the Requirements part, or None when there is no such part.
+
+    `design.py inventory` reads it to add only the missing sections (brief #1185, ADR-0504).
+    """
+    parts = _parts(text)
+    if "Requirements" not in parts:
+        return None
+    return {m.group(1) for heading, _ in parts["Requirements"] if (m := REQ_HEADING.match(heading))}
+
+
 def inventory_problems(root: Path) -> list[str]:
     """The rule 3 problems of `docs/design/inventory.md`; an empty list when it passes."""
     text = (root / INVENTORY).read_text(encoding="utf-8")
