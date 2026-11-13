@@ -757,8 +757,9 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:brief` | `scripts/agk/new_spec.py` | one brief |
 | `/agk:review` | `review_context.py`, the project's `reviewer` subagent, `check_review_report.py` | local files, never committed |
 | `/agk:board` | `scripts/agk/board.py` (a dry run; `--yes` after you say yes), your own `gh project` | the plan's GitHub Project board: created once, linked, two fields, and each open brief issue added with its size and hours (add-only, ADR-0506) |
+| `/agk:workflow-apply` | `scripts/agk/workflow_apply.py --pr <n>` (a dry run; `--yes --head <sha>` of that dry run after you say yes) | the pull request's branch: each `.agk/workflow-proposals/<name>.yml` moved to `.github/workflows/<name>.yml` in one commit, pushed (never forced, never to the default branch), and one `Answer:` comment (ADR-0505) |
 
-No command commits, pushes or merges (`/agk:ruleset` and `/agk:issue` write to GitHub only after you say yes, and `/agk:review-pass` writes only `Verdict:` comments, from a conductor session), and none sets a spec `Approved` or an ADR `Accepted`. `/agk:review` is advisory.
+No command merges, and none commits or pushes but `/agk:workflow-apply`, which, only after you say yes, commits a builder's proposed workflow file to its pull request's branch and pushes that branch with your own credentials (`/agk:ruleset` and `/agk:issue` write to GitHub only after you say yes, and `/agk:review-pass` writes only `Verdict:` comments, from a conductor session), and none sets a spec `Approved` or an ADR `Accepted`. `/agk:review` is advisory.
 GitHub issues are intake only: decisions, requirements, specs and ADRs live in the repository, and an issue decides
 nothing (`.github/ISSUE_TEMPLATE/`; a pull request may link one with an optional `Issue: #nnn` line).
 

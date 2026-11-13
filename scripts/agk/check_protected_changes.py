@@ -17,6 +17,10 @@ Brief #924 (SPEC-0049 rule 13, ADR-0324): a change set that changes the `[caps]`
 `agk.toml` against the merge base (added, removed or a value changed) also needs exactly one body
 line `Caps-evidence: scorecard #<issue>:<YYYY-MM-DD> usage <S>/<M>/<L>`, each size
 `<tokens P50>,<tokens P85>,<hours P50>,<hours P85>`; it is in addition to the ADR, never instead.
+
+Brief #1189 (ADR-0505): a head that tracks a file under `.agk/workflow-proposals/` fails, whatever
+ADR it carries, with `apply it with /agk:workflow-apply <pr>`, so a proposed workflow file never
+reaches the default branch.
 """
 
 from __future__ import annotations
@@ -60,6 +64,19 @@ OWN_ADR = (
     "kit/templates/ruleset.json",
     ".github/CODEOWNERS",
 )
+
+
+PROPOSALS = ".agk/workflow-proposals/"  # a builder's proposed workflow files (ADR-0505)
+PROPOSAL_RULE = (
+    f"path class '{PROPOSALS}' is still on the head: a proposed workflow file never reaches the "
+    "default branch; apply it with /agk:workflow-apply <pr>"
+)
+
+
+def proposal_problems(root) -> list[str]:
+    """[] unless the head tracks a file under the proposals folder (brief #1189, ADR-0505)."""
+    tracked = git(root, "ls-files", "--", PROPOSALS).strip()
+    return [PROPOSAL_RULE] if tracked else []
 
 
 CONFIG = "agk.toml"
@@ -320,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
                 classes.append(entry)
             break
 
-    caps = caps_problems(root, mb, changed, argv)
+    always = caps_problems(root, mb, changed, argv) + proposal_problems(root)  # never covered
     ok = None
     if not classes:
         ok = f"ok {NAME}"
@@ -334,10 +351,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         if problems == []:
             ok = f"ok {NAME} (protected change covered by an Accepted ADR named in '{COVERED_BY}')"
-    if ok is not None and not caps:
+    if ok is not None and not always:
         print(ok)
         return 0
-    for problem in caps:
+    for problem in always:
         print(f"FAIL {NAME}: {problem}")
     if ok is not None:
         return 1
