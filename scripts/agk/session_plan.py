@@ -473,9 +473,9 @@ def question_wait(s: Survey, brief: dict) -> dict | None:
     that is not closed, read once per survey with one GET; a failed read is never closed."""
     states: dict = s.__dict__.setdefault("question_states", {})
     for line in str(brief.get("body") or "").splitlines():
-        if not (found := BLOCKED_BY.fullmatch(line.rstrip())):
+        if not (line_match := BLOCKED_BY.fullmatch(line.rstrip())):
             continue
-        number = int(found[1])
+        number = int(line_match[1])
         if number not in states:
             issue = gh(f"repos/{s.repo}/issues/{number}")
             states[number] = issue.get("state") if isinstance(issue, dict) else None
@@ -488,8 +488,8 @@ def question_wait(s: Survey, brief: dict) -> dict | None:
 def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
     """What running work the brief waits for: an open business question it names (brief #1196),
     a taken brief or an open builder pull request."""
-    if found := question_wait(s, brief):
-        return found
+    if asked := question_wait(s, brief):
+        return asked
     mine = unshared(root, entries_of(root, touches_of(brief["body"])), shared)
     for number, theirs in s.held:
         if number == brief["number"]:

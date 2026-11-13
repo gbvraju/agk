@@ -18,12 +18,12 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import subprocess  # nosec B404 - git only, fixed argument lists
 from pathlib import Path
 
 import check_brief
 import personal_state as ps
 import pytest
-from conftest import Repo
 from forge import FilesForge
 from test_plan_intake import PRD, SOW, write
 from test_plan_publish import (
@@ -192,13 +192,30 @@ def stub(tmp_path):
     return Stub(tmp_path)
 
 
+class GitProject:
+    """The project of `test_session_plan.proj` on its own git repository: the name `repo` is the
+    rendered plan's fixture in this file, so conftest's `repo` cannot be asked for here."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    def git(self, *args: str) -> str:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["git", *args], cwd=self.root, capture_output=True, text=True, check=True
+        )
+        return proc.stdout
+
+    def write(self, rel: str, text: str) -> None:
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+
 @pytest.fixture
-def proj(tmp_path: Path) -> Repo:
-    """The project of `test_session_plan.proj`, on its own git repository (the name `repo` is
-    the rendered plan's fixture in this file)."""
+def proj(tmp_path: Path) -> GitProject:
     where = tmp_path / "git"
     where.mkdir()
-    r = Repo(where)
+    r = GitProject(where)
     r.git("init", "-q", "-b", "main")
     r.git("config", "user.email", "t@example.invalid")
     r.git("config", "user.name", "t")
