@@ -290,20 +290,21 @@ def test_962_an_unlisted_author_or_a_brief_not_open_does_not_stop_it(proj, stub,
     assert assigned(data(proj, stub)) == [953]
 
 
-def test_this_repository_plans_no_assign_for_a_paused_slot(proj, stub):
-    """REQ-041: brief #1009 answers 1 and 2 (this repository's `[flow]` table, all slots free:
-    `max_builders = 6`, so no `Assign` row names s7, s8 or s9, and the capacity reads `of 6`)."""
+def test_this_repository_plans_up_to_twelve_builders(proj, stub):
+    """REQ-039 REQ-041: brief #1148 answers 1 and 2 (this repository's `[flow]` table, all slots
+    free: `max_builders = 12` by the owner's answer Q-1145-1, ADR-0487, so no `Assign` row names a
+    slot past s12, and the capacity reads `of 12`; it read `of 6` under brief #1009)."""
     text = (ROOT / "agk.toml").read_text(encoding="utf-8")
     table = text[text.index("[flow]") : text.index("\n[testing]")]
     # The plan issue asks every brief for a `Wave:` line; the slots and the capacity do not read it.
     table = "\n".join(x for x in table.splitlines() if not x.startswith("plan_issue"))
     proj.write("agk.toml", table + "\n")
-    numbers = list(range(5, 14))
+    numbers = list(range(5, 20))
     listing(stub, [issue(n, brief(f"src/f{n}.py")) for n in numbers])
     stub.serve(PULLS, [])
     free(stub, *numbers)
     out = plan(proj, stub)
     assert out.returncode == 0, out.stdout + out.stderr
     rows = [x for x in out.stdout.splitlines() if x.startswith("Assign ")]
-    assert rows and not any(f"s{n} #" in row for row in rows for n in (7, 8, 9))
-    assert any(x.startswith("Capacity: ") and " of 6 " in x for x in out.stdout.splitlines())
+    assert rows and not any(f"s{n} #" in row for row in rows for n in (13, 14, 15))
+    assert any(x.startswith("Capacity: ") and " of 12 " in x for x in out.stdout.splitlines())
