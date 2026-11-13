@@ -6,7 +6,7 @@
 - Related: ADR-0499, ADR-0271, brief #1189, plan #661
 - Requirements: REQ-039
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `skills/`, `agk.toml`, `kit/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `skills/`, `agk.toml`
 
 ## Context
 
