@@ -1255,6 +1255,7 @@ def pool_state(root, repo: str) -> list[tuple[str, bool, bool, str]]:
     issue; none with `builder_start = "start"`, and no conductor row while its lease is off."""
     if session.builder_start(root) != "assign":
         return []
+    days = timedelta(days=slot_active_days(root))
     now = datetime.now(UTC)
     briefs = session.labelled(
         read(f"repos/{repo}/issues?state=open&labels={session.LABEL}", "the open briefs"),
@@ -1273,22 +1274,38 @@ def pool_state(root, repo: str) -> list[tuple[str, bool, bool, str]]:
         rows.append((NO_CONDUCTOR, down, bool(briefs or ready), text))
     comments, allowed, names = assignments(root, repo)
     window = timedelta(minutes=session.flow_int(root, SEEN, SLOT_SEEN_MINUTES, 1))
-    dead = []
+    dead, retired, counted = [], [], 0
     for name in names:
         seen = slot_seen(comments, name, allowed)
-        late = seen is None or now - seen >= window
-        if late and not slot_state(comments, name, allowed, now)[0]:
-            dead.append(f"{name} ({f'last seen {stamp_of(seen)}' if seen else 'never'})")
+        said = f"{name} ({f'last seen {stamp_of(seen)}' if seen else 'never'})"
+        alive = slot_state(comments, name, allowed, now)[0]
+        if not alive and (seen is None or now - seen >= days):
+            retired.append(said)  # never ran, or not this week: not counted (ADR-0498)
+            continue
+        counted += 1
+        if not alive and seen is not None and now - seen >= window:
+            dead.append(said)
     text = (
-        f"Slots not seen within the window: {', '.join(dead) or 'none'}, of {len(names)} "
-        f"(settings: builder_slots and {SEEN} in the flow table of agk.toml). This issue closes "
-        "when the slots run again."
+        f"Slots not seen within the window: {', '.join(dead) or 'none'}, of {counted} counted. "
+        f"Retired (not seen within {ACTIVE} days, not counted): {', '.join(retired) or 'none'} "
+        f"(settings: builder_slots, {SEEN} and {ACTIVE} in the flow table of agk.toml). This "
+        "issue closes when the slots run again."
     )
-    rows.append((POOL_DOWN, len(dead) * 3 > len(names), bool(briefs), text))
+    rows.append((POOL_DOWN, len(dead) * 3 > counted, bool(briefs), text))
     return rows
 
 
 SEEN, SLOT_SEEN_MINUTES = "slot_seen_minutes", 90  # one hourly run plus margin (ADR-0412)
+ACTIVE, SLOT_ACTIVE_DAYS = "slot_active_days", 7  # a slot that ran this week counts (ADR-0498)
+
+
+def slot_active_days(root) -> int:
+    """`slot_active_days` of the `[flow]` table, 7 when unset: a positive whole number of days, or
+    refused naming the setting, never the value (brief #1172, ADR-0498)."""
+    value = session.flow_value(root, ACTIVE, SLOT_ACTIVE_DAYS, 1)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CheckError(f"setting: flow.{ACTIVE} must be a whole number of days, 1 or more")
+    return value
 
 
 def slot_seen(comments: list, name: str, allowed: set[str]) -> datetime | None:
