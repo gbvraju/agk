@@ -389,12 +389,23 @@ def test_the_hours_field_takes_the_high_end_of_the_range() -> None:
 
 TEMPLATE_FIELDS = [
     {"id": "T_title", "name": "Title", "type": "ProjectV2Field"},
-    {"id": "T_status", "name": "Status", "type": "ProjectV2SingleSelectField",
-     "options": [{"id": "s1", "name": "Todo"}, {"id": "s2", "name": "Done"}]},
+    {
+        "id": "T_status",
+        "name": "Status",
+        "type": "ProjectV2SingleSelectField",
+        "options": [{"id": "s1", "name": "Todo"}, {"id": "s2", "name": "Done"}],
+    },
     {"id": "T_persona", "name": "Persona", "type": "ProjectV2Field"},
-    {"id": "T_signoff", "name": "Sign-off", "type": "ProjectV2SingleSelectField",
-     "options": [{"id": "p1", "name": "Pending"}, {"id": "p2", "name": "Signed off"},
-                 {"id": "p3", "name": "Changes asked"}]},
+    {
+        "id": "T_signoff",
+        "name": "Sign-off",
+        "type": "ProjectV2SingleSelectField",
+        "options": [
+            {"id": "p1", "name": "Pending"},
+            {"id": "p2", "name": "Signed off"},
+            {"id": "p3", "name": "Changes asked"},
+        ],
+    },
 ]
 BUSINESS = ("Persona", "Requirement", "Screens", "Sign-off")
 VIEWS_LINE = (
@@ -514,7 +525,9 @@ def test_1195_b_the_four_fields_are_added_only_when_missing(world: World) -> Non
         "Sign-off": "SINGLE_SELECT",
     }
     signoff = [c for c in made if "Sign-off" in c][0]
-    assert signoff[signoff.index("--single-select-options") + 1] == "Pending,Signed off,Changes asked"
+    assert (
+        signoff[signoff.index("--single-select-options") + 1] == "Pending,Signed off,Changes asked"
+    )
     before = len(fresh.calls())
     assert fresh.run("--yes", "--project", "5").returncode == 0
     assert field_creates(fresh.calls()[before:]) == []
@@ -569,10 +582,23 @@ def test_1195_d_an_old_board_gets_the_new_fields_filled_once(world: World) -> No
     items get them filled once, in the run that added them."""
     world.state["issues"] = [business_issue(21)]
     world.state["projects"] = {
-        "5": {"id": "PVT_5", "title": "proj plan", "links": [], "fields": [], "items": [
-            {"id": "PVTI_21", "content": {"url": f"https://github.com/{REPO}/issues/21",
-                                          "number": 21, "repository": REPO},
-             "values": {"F_Size": "opt_L"}}]}
+        "5": {
+            "id": "PVT_5",
+            "title": "proj plan",
+            "links": [],
+            "fields": [],
+            "items": [
+                {
+                    "id": "PVTI_21",
+                    "content": {
+                        "url": f"https://github.com/{REPO}/issues/21",
+                        "number": 21,
+                        "repository": REPO,
+                    },
+                    "values": {"F_Size": "opt_L"},
+                }
+            ],
+        }
     }
     world.save()
     proc = world.run("--yes", "--project", "5")
