@@ -250,7 +250,7 @@ code = "scripts/agk/check_protected_changes.py"
 tests = [
   "tests/kit/test_check_protected_changes.py", "tests/kit/test_engines.py",
   "tests/kit/test_protected_changes_covered_by.py", "tests/kit/test_review_context.py",
-  "tests/kit_dev/test_merge_ref_base.py", "tests/kit_dev/test_release_check.py",
+  "tests/kit/test_workflow_apply.py", "tests/kit_dev/test_merge_ref_base.py", "tests/kit_dev/test_release_check.py",
   "tests/kit_dev/test_release_protected.py",
 ]
 [[testing.map]]
@@ -866,6 +866,11 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/usage.py"
 tests = ["tests/kit/test_usage_transcript.py", "tests/kit_dev/test_kit_manifest.py"]
+[[testing.map]]
+code = "scripts/agk/workflow_apply.py"
+tests = [
+  "tests/kit/test_workflow_apply.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_kit_manifest.py",
+]
 [[testing.map]]
 code = "kit/manifest.json"
 tests = [
