@@ -567,7 +567,7 @@ def scope_lines(root: Path) -> list[tuple[int, list[str]]]:
 
 def kit_requirement(rel: str, req: str, sources: list[str]) -> bool:
     """Brief #1183 (ADR-0502): a block of `docs/requirements.md` numbered REQ-001 to REQ-099, the
-    range that file reserves for the kit, with no `Source:` line; such a block has no project source."""
+    range that file reserves for the kit, with no `Source:` line: it has no project source."""
     match = KIT_RANGE.match(req) if rel == REQUIREMENTS else None
     return match is not None and 1 <= int(match.group(1)) <= 99 and not sources
 
