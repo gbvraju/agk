@@ -328,9 +328,10 @@ def for_maintainers(line: str) -> bool:
 
 
 def asks_owner(f: dict, comments: list[dict], authors: list[str] | None) -> bool:
-    """An `Owner needed:` by a listed verdict author, or a `for_maintainers` question, with no later
-    answer by a spec approver and no later head (amendment 150 item 1, Q-846-4, ADR-0442); comments
-    are in the order GitHub lists them."""
+    """An `Owner needed:` by a listed verdict author with no later answer by a spec approver, which a
+    new head does not close (amendment 172, ADR-0497), or a `for_maintainers` question with no later
+    such answer and no later head (amendment 150 item 1, Q-846-4, ADR-0442); comments are in the
+    order GitHub lists them."""
     approvers = {str(a).lower() for a in f.get("approvers") or []}
     listed = {str(a).lstrip("@").lower() for a in authors or []}
     pushed = str(
@@ -339,7 +340,9 @@ def asks_owner(f: dict, comments: list[dict], authors: list[str] | None) -> bool
     open_ask = False
     for c in comments:
         line = first_line(c)
-        if (line.startswith("Owner needed:") and login_of(c) in listed) or for_maintainers(line):
+        if line.startswith("Owner needed:") and login_of(c) in listed:
+            open_ask = True  # only the owner's answer closes it (brief #1168)
+        elif for_maintainers(line):
             open_ask = not pushed or str(c.get("created_at") or "") >= pushed
         elif line.startswith(("Maintainer answer:", "Approve:")) and login_of(c) in approvers:
             open_ask = False

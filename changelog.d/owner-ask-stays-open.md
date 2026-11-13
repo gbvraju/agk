@@ -1,0 +1,1 @@
+- An `Owner needed:` on a pull request keeps `agk:question`, and so holds the merger, through a push until a spec approver answers it with `Maintainer answer:` or `Approve:`; a builder's `Question: ... for the maintainers` still closes at a new head (brief #1168, ADR-0497)

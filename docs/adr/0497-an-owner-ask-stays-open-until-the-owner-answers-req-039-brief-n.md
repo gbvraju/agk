@@ -6,7 +6,7 @@
 - Related: brief #1168, plan #661, amendment 172, amendment 150 item 1, Q-846-4, ADR-0385, ADR-0442, ADR-0483
 - Requirements: REQ-039
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `agk.toml`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `agk.toml`
 
 ## Context
 
@@ -25,6 +25,8 @@ the default branch at 00:33Z removed `agk:question`, and the pull request merged
    change. `tests/kit/test_route_owner_ask.py` holds its tests and is listed in the `route.py` entry of `[[testing.map]]`
    in `agk.toml`. Two assertions of the existing route tests that read a push as closing an `Owner needed:` now read it
    as staying open.
+4. The conductor catch log gets row 27 (`owner-ask-unholds`, #1165), and the row count of
+   `tests/kit_dev/test_conductor_catches.py` moves from 26 to 27.
 
 ## Consequences
 

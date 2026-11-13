@@ -130,7 +130,8 @@ def test_a_cleared_head_that_changes_an_owner_path_is_owner_merge():
 
 
 def test_an_open_owner_needed_line_is_question_until_answered():
-    """REQ-039: amendment 150 item 1 and Q-846-4 (`agk:question`, closed by an answer or a head)."""
+    """REQ-039: amendment 150 item 1, Q-846-4 and amendment 172 (`agk:question`, closed by an answer;
+    a later head no longer closes it, brief #1168, ADR-0497)."""
     asked = said(4, "boss", "Owner needed: may this change the workflow?")
     commit = {"commit": {"committer": {"date": "2026-10-25T09:00:00Z"}}}
     assert state(comments=[cleared(), asked], commit=commit) == ("agk:question", "owner")
@@ -139,7 +140,7 @@ def test_an_open_owner_needed_line_is_question_until_answered():
     stranger = said(5, "stranger", "Maintainer answer: yes")
     assert state(comments=[cleared(), asked, stranger], commit=commit)[0] == "agk:question"
     later = {"commit": {"committer": {"date": "2026-10-25T11:00:00Z"}}}
-    assert state(comments=[cleared(), asked], commit=later)[0] == "agk:merge-ready"
+    assert state(comments=[cleared(), asked], commit=later)[0] == "agk:question"
     unlisted = said(4, "stranger", "Owner needed: anything")
     assert state(comments=[cleared(), unlisted], commit=commit)[0] == "agk:merge-ready"
 
