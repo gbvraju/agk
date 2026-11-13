@@ -223,7 +223,10 @@ code = "scripts/agk/check_numbers.py"
 tests = ["tests/kit/test_check_numbers_amendments.py", "tests/kit/test_numbers.py"]
 [[testing.map]]
 code = "scripts/agk/check_plan.py"
-tests = ["tests/kit/test_agk_mk.py", "tests/kit/test_check_plan_sources.py", "tests/kit/test_workflow.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = [
+  "tests/kit/test_agk_mk.py", "tests/kit/test_check_plan_scope.py", "tests/kit/test_check_plan_sources.py",
+  "tests/kit/test_workflow.py", "tests/kit_dev/test_kit_manifest.py",
+]
 [[testing.map]]
 code = "scripts/agk/check_playbooks.py"
 tests = ["tests/kit/test_check_playbooks.py", "tests/kit/test_delivery_declaration.py"]
@@ -607,7 +610,7 @@ tests = ["tests/kit/test_plan_intake.py", "tests/kit_dev/test_kit_manifest.py", 
 [[testing.map]]
 code = "scripts/agk/plan_estimate.py"
 tests = [
-  "tests/kit/test_plan_estimate.py", "tests/kit/test_plan_status.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit/test_check_plan_scope.py", "tests/kit/test_plan_estimate.py", "tests/kit/test_plan_status.py", "tests/kit_dev/test_kit_manifest.py",
 ]
 [[testing.map]]
 code = "scripts/agk/plan_status.py"
@@ -724,7 +727,7 @@ tests = [
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
   "tests/kit/test_verdict_authors.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
   "tests/kit_dev/test_final_clearance_design.py", "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
-  "tests/kit/test_design_signoff.py",
+  "tests/kit/test_design_signoff.py", "tests/kit/test_check_plan_scope.py",
 ]
 [[testing.map]]
 code = "scripts/agk/route.py"
@@ -822,7 +825,8 @@ tests = ["tests/kit/test_test_map.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/test_plan.py"
 tests = [
-  "tests/kit/test_evidence.py", "tests/kit/test_impact.py", "tests/kit/test_long_temp_dir.py",
+  "tests/kit/test_evidence.py", "tests/kit/test_guide_testing_map.py", "tests/kit/test_impact.py",
+  "tests/kit/test_long_temp_dir.py",
   "tests/kit/test_prepush.py", "tests/kit/test_prepush_proof_timeout_warning.py", "tests/kit/test_prepush_record.py",
   "tests/kit/test_test_plan.py", "tests/kit_dev/test_intelligent_testing.py",
   "tests/kit_dev/test_reference_commands.py",
