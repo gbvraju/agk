@@ -23,7 +23,10 @@ of each and `screenshots/reflow.json` (`ok` or `sideways`); with no browser it s
 `import <folder>` (SPEC-0037 rule 15 as amendment 161 item 1 proposes, `design_import.py`) copies a
 customer's prototype byte for byte into the next imported version `docs/design/imported/i<n>/files/`
 with its `manifest.json` and `external.txt`, and refuses a symbolic link, a source inside
-`docs/design/` and an empty folder, copying nothing; it reads files only and opens no page.
+`docs/design/` and an empty folder, copying nothing; it reads files only and opens no page. When the
+new version has exactly one HTML page and that page holds a `<script` element, it prints one line
+`notice: i<n> has one page drawn by script; ...` pointing at the planning guide's step 0, and still
+succeeds (brief #1204, ADR-0511).
 `inventory` writes the skeleton of `docs/design/inventory.md` from
 `kit/templates/design-inventory.md` (SPEC-0037 rule 3): one section for each requirement of
 `docs/requirements.md`, its `- Specs:` filled from the `Requirements:` lines of `docs/specs/*.md`
@@ -226,8 +229,27 @@ def cmd_inventory(root: Path, opts: dict[str, str]) -> int:
 def cmd_import(root: Path, source: str, opts: dict[str, str]) -> int:
     if set(opts) - {"root"}:
         raise UsageError("import takes a folder and only --root")
-    design_import.import_folder(root, Path(source))
+    version = design_import.import_folder(root, Path(source))
+    notice = scripted_one_page(root, version)
+    if notice:
+        print(notice)
     return 0
+
+
+def scripted_one_page(root: Path, version: str) -> str | None:
+    """Brief #1204: the notice for a version of exactly one HTML page that holds a `<script`
+    element, read as bytes only (nothing is run, no network), else None."""
+    files = root / design_import.IMPORTED / version / design_import.FILES
+    html = sorted(
+        p for p in files.rglob("*") if p.is_file() and p.name.lower().endswith(design_import.PAGES)
+    )
+    if len(html) != 1 or b"<script" not in html[0].read_bytes().lower():
+        return None
+    return (
+        f"notice: {version} has one page drawn by script; capture each screen and state as its"
+        " own page and import that folder instead"
+        ' (docs/guides/planning.md "From a prototype")'
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
