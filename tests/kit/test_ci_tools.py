@@ -87,10 +87,11 @@ def test_pin_file_has_one_exact_pin_per_line_sorted_and_unique():
     assert names == sorted(names) and len(names) == len(set(names))
 
 
-def test_pin_file_pins_the_four_ci_tools_and_the_measured_xdist():
-    """REQ-051: brief #698 answer 1. pytest, pytest-xdist (3.8.0, #642 measured), ruff, bandit."""
+def test_pin_file_pins_the_ci_tools_and_the_measured_xdist():
+    """REQ-051: brief #698 answer 1 and brief #1158 answer 3. pytest, pytest-xdist (3.8.0, #642
+    measured), ruff, bandit and mypy."""
     pins = dict(ln.split("==", 1) for ln in pin_lines(PINS.read_text(encoding="utf-8")))
-    assert {"bandit", "pytest", "pytest-xdist", "ruff"} <= set(pins)
+    assert {"bandit", "mypy", "pytest", "pytest-xdist", "ruff"} <= set(pins)
     assert pins["pytest-xdist"] == "3.8.0"
 
 

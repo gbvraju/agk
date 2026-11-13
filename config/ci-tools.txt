@@ -2,6 +2,7 @@
 # workflow's Install tooling step installs this file; an update changes this file only.
 # `python3 scripts/agk/ci_tools.py check --upstream` prints the pins that are behind.
 bandit==1.9.4
+mypy==2.3.1
 pytest==9.2.0
 pytest-xdist==3.8.0
 ruff==0.17.4

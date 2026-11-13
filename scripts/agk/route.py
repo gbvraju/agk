@@ -378,7 +378,8 @@ def handed_over(f: dict) -> dict | None:
         elif newest is not None and not line.startswith(NOT_A_BUILDER):
             newest = None  # a builder spoke again after the hand-over
     reason = handover_reason(first_line(newest)) if newest is not None else None
-    if reason is None or NO_RESTART.match(reason):
+    # reason is None whenever newest is; the first test only narrows newest for the type check
+    if newest is None or reason is None or NO_RESTART.match(reason):
         return None
     pushed = str(
         (((f.get("commit") or {}).get("commit") or {}).get("committer") or {}).get("date") or ""
