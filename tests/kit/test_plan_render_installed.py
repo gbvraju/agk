@@ -11,7 +11,7 @@ sources only (example.com); the render runs in a child process from the project'
 from __future__ import annotations
 
 import json
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
@@ -49,7 +49,7 @@ def test_ac2_the_manifest_installs_new_spec_verbatim() -> None:
 
 
 def test_ac2_the_installed_render_writes_the_plan_and_the_draft_spec(project: Path) -> None:
-    """REQ-050 AC2: (b) the project's own `plan_intake.py render` exits 0 and writes the Draft spec."""
+    """REQ-050 AC2: (b) the project's own `render` exits 0 and writes the Draft spec."""
     path = project.parent / "proposals.json"
     path.write_text(json.dumps(proposals()), encoding="utf-8")
     script = project / "scripts/agk/plan_intake.py"

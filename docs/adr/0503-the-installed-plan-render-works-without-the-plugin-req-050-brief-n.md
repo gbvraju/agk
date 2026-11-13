@@ -33,3 +33,7 @@ does not load the plugin, so a cloud builder or conductor could not render a pla
 `render` works in every project, in a cloud session or on a laptop, with or without the plugin. A project now also
 carries `new_spec.py spec|requirement|brief`, which writes new files only and refuses to overwrite, so nothing that
 was refused before is now allowed. `upgrade.py` installs it into existing projects as any other verbatim file.
+
+## Residual
+
+- 2026-11-13: none known; the trial's other steps worked as the guides say.
