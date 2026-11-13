@@ -243,8 +243,10 @@ def test_d_it_never_force_pushes_a_branch_that_moved(world):
     assert world.remote("rev-parse", f"refs/heads/{BRANCH}") == world.head
     assert world.posts() == []
     source = (SCRIPTS / "workflow_apply.py").read_text(encoding="utf-8")
-    for flag in ("--force", "--force-with-lease", '"-f"', "+refs/", '"+'):
-        assert flag not in source, flag
+    pushes = [ln for ln in source.splitlines() if '"push"' in ln]
+    assert len(pushes) == 1, pushes
+    for flag in ("--force", "-f", "+refs/", '"+', "--mirror", "--delete"):
+        assert flag not in pushes[0], flag
 
 
 def test_d_a_closed_pull_request_or_a_fork_is_refused(world):
@@ -347,3 +349,15 @@ def test_e_a_proposal_fails_even_with_an_adr_and_names_no_value(base):
     proc = base.run("check_protected_changes.py", "--base", "main")
     assert proc.returncode == 1
     assert "secret-looking-value-123" not in proc.stdout
+
+
+def test_b_every_workflow_of_the_kit_passes_the_parse_check():
+    """REQ-039: answer 2 (the structure check accepts the workflows a project really has)."""
+    sys.path.insert(0, str(SCRIPTS))
+    import workflow_apply  # noqa: PLC0415 - the script under test
+
+    folder = SCRIPTS.parents[1] / ".github" / "workflows"
+    files = sorted(folder.glob("*.yml"))
+    assert files
+    for path in files:
+        assert workflow_apply.yaml_problem(path.read_text(encoding="utf-8")) is None, path.name
