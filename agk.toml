@@ -175,8 +175,8 @@ code = "scripts/agk/check_adrs.py"
 tests = [
   "tests/kit/test_check_adrs.py", "tests/kit/test_conductor_guard.py", "tests/kit/test_core_audit.py",
   "tests/kit/test_final_accepts.py", "tests/kit/test_personal_state.py", "tests/kit/test_review_context.py",
-  "tests/kit_dev/test_doctor_wiring.py", "tests/kit_dev/test_intake.py", "tests/kit_dev/test_new_spec.py",
-  "tests/kit_dev/test_release_check.py",
+  "tests/kit/test_rule3a_record_comments.py", "tests/kit_dev/test_doctor_wiring.py", "tests/kit_dev/test_intake.py",
+  "tests/kit_dev/test_new_spec.py", "tests/kit_dev/test_release_check.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_brief.py"
