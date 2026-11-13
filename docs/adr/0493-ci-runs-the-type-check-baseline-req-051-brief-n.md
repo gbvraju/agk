@@ -21,8 +21,9 @@ ADR-0307 (brief #633) keeps `config/mypy-baseline.txt`; `tests/kit/test_scanner_
    the pin and the baseline's mypy line name the same version, so the baseline test never skips in CI.
 2. Part 2 fixes the added errors type-only, as ADR-0494 decision 1 says: `prepush.py` returns early when `root` is
    `None` (then `tools` already is); `route.py` tests `newest is None` beside `reason is None` (the reason is `None`
-   whenever `newest` is); `product_report.py`'s `is_list` returns `TypeGuard[list]` instead of `bool`, an annotation
-   that narrows its callers. No `# type: ignore`, no line raised.
+   whenever `newest` is); `product_report.py` tests `isinstance(..., list)`, the body of its own `is_list`, at the
+   `briefs` loop and in `verdict_count`, which mypy narrows on (the renderer may import nothing more, so no
+   `typing.TypeGuard`). No `# type: ignore`, no line raised.
 3. The baseline lowers where the files got cleaner: `product_report.py` `index` 2 to 1 and `union-attr` 2 to 1, and
    its `misc` line, now 0, leaves.
 

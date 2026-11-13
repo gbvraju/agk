@@ -13,7 +13,6 @@ import sys
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
-from typing import TypeGuard
 
 SCHEMA = 1
 UNKNOWN = "unknown"
@@ -123,7 +122,7 @@ def week_window(today: date, week: str | None) -> tuple[date, date, str]:
 # --- small formatting helpers -------------------------------------------------------------------
 
 
-def is_list(value) -> TypeGuard[list]:
+def is_list(value) -> bool:
     return isinstance(value, list)
 
 
@@ -659,7 +658,7 @@ def proven(doc: dict, links: Links) -> list[dict]:
 
 def verdict_count(p: dict, kind: str) -> int | None:
     verdicts = p.get("verdicts")
-    return sum(1 for v in verdicts if v.get("kind") == kind) if is_list(verdicts) else None
+    return sum(1 for v in verdicts if v.get("kind") == kind) if isinstance(verdicts, list) else None
 
 
 def cleared_state(p: dict) -> str | None:
@@ -811,7 +810,7 @@ def flow_risks(doc: dict, links: Links, today: date) -> list[dict]:
     if any(p.get("stalled") == UNKNOWN for p in ordered):
         items.append(unknown_item("stalled pull requests", "search", f"{links.repo}/pulls"))
     briefs = flow.get("briefs", UNKNOWN) if isinstance(flow, dict) else UNKNOWN
-    if not is_list(briefs):
+    if not isinstance(briefs, list):  # is_list's own test, which mypy narrows on
         return items + [
             unknown_item("open briefs", "search", f"{links.repo}/issues?q=label%3Aagk-brief")
         ]
