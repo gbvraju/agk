@@ -58,6 +58,17 @@ PLACEHOLDER = "@REPLACE-ME"
 MIN_PYTHON = (3, 11)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 VAR_RE = re.compile(r"\{\{(\w+)\}\}")
+# Front-end and end-to-end test folders that init writes into `test_dirs` beside `tests`, in this
+# order, when the repository already holds them (brief #1154, ADR-0490).
+FRONT_END_TEST_DIRS = (
+    "e2e",
+    "tests/e2e",
+    "frontend/src/test",
+    "frontend/tests",
+    "src/__tests__",
+    "cypress",
+)
+TEST_DIRS_LINE = 'test_dirs = ["tests"]'
 
 
 class Refusal(Exception):
@@ -132,6 +143,22 @@ def render(text: str, variables: dict[str, str], source: str) -> str:
     return VAR_RE.sub(sub, text)
 
 
+def found_test_dirs(target: Path) -> list[str]:
+    """The folders of `FRONT_END_TEST_DIRS` that TARGET holds, in that order. None when TARGET
+    already has an agk.toml: a re-run of init keeps comparing against the same rendered file."""
+    if (target / "agk.toml").exists():
+        return []
+    return [d for d in FRONT_END_TEST_DIRS if (target / d).is_dir()]
+
+
+def with_test_dirs(rendered: str, added: list[str]) -> str:
+    """The rendered agk.toml with ADDED after `tests` on its `test_dirs` line."""
+    if not added:
+        return rendered
+    line = "test_dirs = " + json.dumps(["tests", *added])
+    return re.sub(rf"(?m)^{re.escape(TEST_DIRS_LINE)}$", lambda _m: line, rendered, count=1)
+
+
 def path_class(rel: str, entries: list[str]) -> str:
     for entry in entries:
         if matches(rel, entry):
@@ -155,7 +182,10 @@ def build_items(target: Path, today: str) -> tuple[list[tuple[str, bytes]], list
         items[rel] = kit_bytes(KIT_ROOT / rel)
     for dest, src in manifest["templates"].items():
         text = (KIT_ROOT / src).read_text(encoding="utf-8")
-        items[dest] = render(text, variables, src).encode("utf-8")
+        rendered = render(text, variables, src)
+        if dest == "agk.toml":
+            rendered = with_test_dirs(rendered, found_test_dirs(target))
+        items[dest] = rendered.encode("utf-8")
     if ROUTER_WORKFLOW in items:
         items[ROUTER_WORKFLOW] = router_bytes(target, items[ROUTER_WORKFLOW], items["agk.toml"])
     codeowners = render_codeowners(parse(items["config/reviewers.yaml"].decode("utf-8")))
@@ -341,6 +371,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"notice: {UNRELEASED}: {not_released.replace(PLUGINS, 'the kit files', 1)}")
     for rel, action, _, detail in plan:
         print(f"{action} {rel}{detail}")
+    added = found_test_dirs(target)
+    if added:
+        print(f"test_dirs: added {', '.join(added)} (front-end and end-to-end test folders found)")
     if any(action == "conflict" for _, action, _, _ in plan):
         print("refused: existing files differ; nothing was written (merging is `agk adopt`)")
         print_branch_rules(branch)
