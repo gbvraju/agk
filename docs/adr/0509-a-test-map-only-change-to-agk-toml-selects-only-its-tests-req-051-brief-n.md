@@ -32,3 +32,8 @@ pull request test steps averaged 495 s against 593 s for the full suite.
 A pull request whose `agk.toml` change only edits the test map selects a few test files instead of about 210 (the
 merge of #1187: 28 instead of 210). The comparison is of parsed values, so a comment-only change outside the map counts
 as no difference; comments of `always_full` are checked by `check_kit_tests.py` in governance, not by this selection.
+
+## Residual
+
+- 2026-11-13: a project whose `[testing]` table lives in `pyproject.toml` (`[tool.agk.testing]`) keeps today's rule for a
+  map-only change there; a later brief may extend the comparison to that file (due 2027-01-31).
