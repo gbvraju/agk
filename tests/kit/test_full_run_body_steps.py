@@ -23,6 +23,7 @@ RUN_ID = 4242
 BODY = (
     "PR body file",
     "PR states and open pull requests",
+    "Record comments",  # reads the body for `--record-ids` (brief #1181, ADR-0501)
     "check_protected_changes",  # reads `Covered-by:` (brief #545, ADR-0271)
     "check_specs",
     "check_pr_mode",
