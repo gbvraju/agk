@@ -505,7 +505,9 @@ def test_a_record_changed_since_the_merge_base_needs_the_approvers_line_again(tm
     committed(root)
     git(root, "checkout", "-q", "-b", "later")
     brief(root, "M1", "m1-import")
-    changes(root, change(briefs="+M1/m1-export M 4-8 hours; +M1/m1-import S 2-4 hours", approved=True))
+    changes(
+        root, change(briefs="+M1/m1-export M 4-8 hours; +M1/m1-import S 2-4 hours", approved=True)
+    )
     saved = saved_comments(tmp_path)
     code, lines = check(root, capsys, "--comments", str(saved), "--base", "main")
     assert code == 1

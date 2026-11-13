@@ -75,7 +75,10 @@ approved scope change, and a baseline brief no longer under its milestone that n
 change removes, naming the key. A scope change is approved by its `Approved:` line; with
 `--comments FILE` (the saved comments of the pull request) only when an account of
 `spec_approvers` also gave `Approve: scope SC-<n> <full head ID>` (`reviewers.scope_approvals`, in
-solo mode inside the person's `Confirmed:` comment).
+solo mode inside the person's `Confirmed:` comment) on this pull request, or when the merge base
+already holds the whole approved block unchanged (approved on the pull request that merged it;
+brief #1166, ADR-0496). The governance job passes the saved comments on a pull request event; a
+push and a local run read the `Approved:` line alone.
 
 `header(text)` and `location_problem(root, location)` are imported by builds (c) and (d): a
 location of rule 1 is `<file>:<line>` or `<file>#<heading>` with the file under `docs/sources/`,
@@ -732,8 +735,12 @@ def baseline_changed(root: Path, base: str | None) -> list[str]:
 def scope_changes(root: Path) -> tuple[list[dict], list[str]]:
     """Rule 21: the blocks of `scope-changes.md` (id, fields, adds, removes, approved) and the
     problems of their shape; rule 22's `Approved:` line shape too."""
+    return _changes_of(root, _read(root / CHANGES) or "")
+
+
+def _changes_of(root: Path, text: str) -> tuple[list[dict], list[str]]:
     out: list[dict] = []
-    for line in (_read(root / CHANGES) or "").splitlines():
+    for line in text.splitlines():
         if head := CHANGE_HEAD.match(line):
             out.append({"id": head[1], "fields": {}, "adds": [], "removes": [], "approved": None})
         elif out and (field := CHANGE_LINE.match(line)):
@@ -776,9 +783,29 @@ def _source_ok(root: Path, source: str) -> bool:
     return location_problem(root, source.strip("`")) is None
 
 
-def approved_ids(root: Path, changes: list[dict], comments: list | None) -> set[str]:
+def merged_approvals(root: Path, changes: list[dict], base: str | None) -> set[str]:
+    """Rule 22 with the saved comments (brief #1166, ADR-0496 decision 2): the approved scope
+    changes whose whole block the merge base already holds unchanged. Each was approved on the
+    pull request that merged it, so a later pull request's comments need not name it again. A new
+    or changed block gets nothing here; outside a git work tree, or outside CI with no base, no
+    block is carried (the stricter reading); a base that does not resolve in CI raises
+    `CheckError` as in rule 20."""
+    if git(root, "rev-parse", "--is-inside-work-tree", check=False).strip() != "true":
+        return set()
+    ref = resolve_base(root, base)
+    old = show(root, merge_base(root, ref), CHANGES) if ref else None
+    if old is None:
+        return set()
+    kept = [sc for sc in _changes_of(root, old)[0] if sc["approved"]]
+    return {sc["id"] for sc in changes if sc["approved"] and sc in kept}
+
+
+def approved_ids(
+    root: Path, changes: list[dict], comments: list | None, base: str | None = None
+) -> set[str]:
     """Rule 22: the scope changes with an `Approved:` line and, with the saved comments, a listed
-    approver's `Approve: scope SC-<n> <full head ID>` (never through an agent app)."""
+    approver's `Approve: scope SC-<n> <full head ID>` (never through an agent app) on this pull
+    request, or an unchanged approved block of the merge base (`merged_approvals`)."""
     ids = {sc["id"] for sc in changes if sc["approved"]}
     if comments is None:
         return ids
@@ -789,7 +816,7 @@ def approved_ids(root: Path, changes: list[dict], comments: list | None) -> set[
         [c for c in comments if isinstance(c, dict)], apps, reviewers.solo_person(root)
     )
     given = {sc for sc, _ in reviewers.scope_approvals(items, reviewers.spec_approvers(root), apps)}
-    return ids & given
+    return ids & (given | merged_approvals(root, changes, base))
 
 
 def scope_problems(root: Path, comments: list | None = None, base: str | None = None) -> list[str]:
@@ -800,7 +827,7 @@ def scope_problems(root: Path, comments: list | None = None, base: str | None = 
     problems += found
     if baseline is None:
         return problems
-    approved = approved_ids(root, changes, comments)
+    approved = approved_ids(root, changes, comments, base)
     adds = {(m, k) for sc in changes if sc["id"] in approved for m, k, _, _ in sc["adds"]}
     removes = {(m, k) for sc in changes if sc["id"] in approved for m, k in sc["removes"]}
     current = {(milestone, key) for key, milestone, _ in briefs(root)}
