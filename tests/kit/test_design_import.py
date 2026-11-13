@@ -516,7 +516,8 @@ def test_the_guide_captures_a_scripted_prototype_first_and_traces_before_approva
     assert step0 < section.index("1. **Import the prototype")
     assert "<screen>--<state>.html" in section[step0:]
     flat = " ".join(section[step0 : section.index("1. **Import the prototype")].split())
-    assert "approved only after `check_plan.py --trace`" in flat
+    assert "approved only after the trace of step 6" in flat
+    assert "check_plan.py" not in flat
     assert "`unmatched screen:` lines are read before the approval" in flat
     assert section.index("`unmatched screen:`", step0) < section.index("7. **Approve and publish")
 
