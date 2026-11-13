@@ -59,6 +59,10 @@ a cell with `(access <persona>/<screen>)`, and `info plan: <a> of <b> access cel
 with one line per cell no acceptance line names. A test is a `REQ-nnn ACn` marker of the naming
 criterion, read with `--facts`, else `not read`.
 
+Brief #1183 (ADR-0502): a block of `docs/requirements.md` numbered REQ-001 to REQ-099, the range
+that file reserves for the kit, with no `Source:` line is left out of rule 10, the trace and the
+counts of rule 11; such a block that carries a `Source:` line is checked as any other.
+
 Build (g), rules 20 to 22 (brief #1095, ADR-0467), when `docs/plan/` exists: rule 20 fails a
 `docs/plan/baseline.json` that is not `schema` 1 with a full `head`, a real `date`, an `https://`
 `link` and a list of `milestones` (each an `id` `M<n>`, its `briefs` keys, its `target` date or
@@ -139,6 +143,7 @@ BRIEFS = f"{PLAN}/briefs"
 IN_SCOPE = "In scope"
 BLOCK = re.compile(r"^###\s+(\S+)")
 MILESTONE = re.compile(r"^###\s+(M\d+)\b")
+KIT_RANGE = re.compile(r"^REQ-(\d{3})$")
 SOURCE_LINE = re.compile(r"^\s*(?:[-*]\s+)?Source:\s*(.+?)\s*$")
 LIST_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+")
 SPAN = re.compile(r"`(docs/[^`]+)`")
@@ -560,8 +565,16 @@ def scope_lines(root: Path) -> list[tuple[int, list[str]]]:
     return out
 
 
+def kit_requirement(rel: str, req: str, sources: list[str]) -> bool:
+    """Brief #1183 (ADR-0502): a block of `docs/requirements.md` numbered REQ-001 to REQ-099, the
+    range that file reserves for the kit, with no `Source:` line; such a block has no project source."""
+    match = KIT_RANGE.match(req) if rel == REQUIREMENTS else None
+    return match is not None and 1 <= int(match.group(1)) <= 99 and not sources
+
+
 def requirements(root: Path) -> list[tuple[str, str, list[str]]]:
-    """Each requirement block as (file, id or key, its Source: locations), proposed file first."""
+    """Each requirement block as (file, id or key, its Source: locations), proposed file first,
+    without the kit's own requirements (`kit_requirement`)."""
     out: list[tuple[str, str, list[str]]] = []
     for rel, pattern in ((PROPOSED, BLOCK), (REQUIREMENTS, REQ_HEADER)):
         current: list[str] | None = None
@@ -574,7 +587,7 @@ def requirements(root: Path) -> list[tuple[str, str, list[str]]]:
                 current = None
             elif current is not None and (source := SOURCE_LINE.match(line)):
                 current.append(source.group(1).strip("`"))
-    return out
+    return [block for block in out if not kit_requirement(*block)]
 
 
 def personas(root: Path) -> tuple[dict[str, str], set[str]]:
