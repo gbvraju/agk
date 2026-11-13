@@ -21,7 +21,7 @@ USAGE = "usage: pr_state.py --pull FILE [--event-draft true|false]"
 
 
 def is_draft(pull_text: str, event_draft: str | None = None) -> bool:
-    """True only when the run-time read says draft and the payload (when given) does not say ready."""
+    """True only when the run-time read says draft and the payload does not say ready."""
     if event_draft == "false":
         return False
     try:

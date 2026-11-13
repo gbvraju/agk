@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
+import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 from pathlib import Path
 
@@ -53,7 +53,7 @@ def decide(tmp_path: Path, text: str | None, *extra: str) -> str:
 
 
 def test_a_payload_draft_and_read_ready_runs_the_heavy_steps(tmp_path):
-    """REQ-051: brief #1174 answer 3 (a): the payload says draft, the read says ready: run in full."""
+    """REQ-051: brief #1174 answer 3 (a): payload draft, read ready: run in full."""
     assert decide(tmp_path, pull(False), "--event-draft", "true") == "false"
 
 
@@ -80,7 +80,7 @@ def test_c_a_missing_file_runs_the_heavy_steps(tmp_path):
 
 
 def test_a_ready_payload_and_a_draft_read_still_runs_in_full(tmp_path):
-    """REQ-051: brief #1174 answer 2: a draft is reported only when nothing says ready (fail closed)."""
+    """REQ-051: brief #1174 answer 2: a draft only when nothing says ready."""
     assert decide(tmp_path, pull(True), "--event-draft", "false") == "false"
 
 
@@ -126,12 +126,13 @@ def test_d_the_workflow_sets_pr_draft_from_the_read():
 
 
 def test_d_one_get_of_the_pull_request_feeds_pr_state_before_the_draft_is_used():
-    """REQ-051: brief #1174 answer 1: one GET of pulls/<n>, read by pr_state.py, before its first use."""
+    """REQ-051: brief #1174 answer 1: one GET, read by pr_state.py, first."""
     all_steps = steps()
     draft = [i for i, s in enumerate(all_steps) if re.search(r"^\s*id: draft\s*$", s, re.M)]
     assert len(draft) == 1, "one step with id `draft`"
     step = all_steps[draft[0]]
-    assert re.search(r'gh api --method GET "repos/\$\{\{ github\.repository \}\}/pulls/\$PR_NUMBER"', step)
+    get = r'gh api --method GET "repos/\$\{\{ github\.repository \}\}/pulls/\$PR_NUMBER"'
+    assert re.search(get, step)
     assert "scripts/agk/pr_state.py" in step
     assert "EVENT_DRAFT: ${{ github.event.pull_request.draft }}" in step
     assert "github.event_name == 'pull_request'" in step
