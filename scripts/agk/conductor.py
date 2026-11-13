@@ -347,7 +347,7 @@ def watch(root, since: datetime, once: bool) -> int:
             approvers = {a.lstrip("@").lower() for a in spec_approvers(Path(root))}
             lines = new_lines(repo, since, approvers) + green_lines(root, repo, since)
             lines = lines or held_lines(root, repo)
-            lines = lines or start_lines(root, repo)
+            lines = lines + start_lines(root, repo)  # with every return (brief #1179, ADR-0500)
         except CheckError as exc:
             if once:
                 raise
@@ -435,7 +435,8 @@ def started(repo: str, number: int, now: datetime) -> bool:
 def start_lines(root, repo: str, now: datetime | None = None) -> list[str]:
     """The `START #<brief>[ build (<x>)] <kind>` lines (brief #1151, ADR-0489): one per `Assign`
     row of the plan whose brief nobody started, a red-branch brief first as `START #<brief> red`,
-    read at most once per START_EVERY; one brief is returned again only after START_AGAIN."""
+    read at most once per START_EVERY; one brief is returned again only after START_AGAIN. `watch`
+    adds them to every return and `sweep` prints them last (brief #1179, ADR-0500)."""
     now = now or datetime.now(UTC)
     mark = start_mark(root)
     if mark is None or session.builder_start(root) != "assign":
@@ -954,6 +955,7 @@ def sweep(root) -> int:
     lines += slot_lines(root, repo, issues, every, now)
     lines += stall_report(root, repo)
     lines += unacted_lines(root, repo, now, issues, pulls)
+    lines += start_lines(root, repo, now)  # ready work after a review or a merge (ADR-0500)
     print("\n".join(lines))
     return 0
 

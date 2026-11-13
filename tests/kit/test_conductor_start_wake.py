@@ -5,6 +5,9 @@ When a poll of `watch` finds no new line, and at most once a minute, it reads th
 whose brief has no `Started: cb` comment and no `taken:` in the last 2 hours; a brief titled as the
 red default branch comes first as `START #<brief> red`. A brief returned once is not returned again
 for 10 minutes. The plan and the comments are stubbed; invented names, no network.
+
+Brief #1179 (ADR-0500): the `START` lines come with every return of `watch`, after its other lines,
+and `sweep` prints them too, with the same once-a-minute plan read and 10-minute repeat guard.
 """
 
 from __future__ import annotations
@@ -156,17 +159,108 @@ def test_1151_a_start_line_ends_the_bounded_watch_after_the_held_check(monkeypat
     assert seen and seen[0] <= 60
 
 
-def test_1151_a_held_line_wins_over_a_start_line(monkeypatch, capsys):
-    """REQ-039: the start check runs only when the poll found no other line."""
-    called: list[int] = []
+def quiet_watch(monkeypatch, found: list[str], held: list[str]) -> None:
+    """Stub every read of `watch` but `start_lines`: `found` is the poll's new lines."""
     monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
     monkeypatch.setattr(conductor.session, "flow_int", lambda *a: 60)
     monkeypatch.setattr(conductor, "spec_approvers", lambda root: [])
-    monkeypatch.setattr(conductor, "new_lines", lambda repo, since, approvers=(): [])
+    monkeypatch.setattr(conductor, "new_lines", lambda repo, since, approvers=(): list(found))
     monkeypatch.setattr(conductor, "renew_lease", lambda root: 0)
     monkeypatch.setattr(conductor, "green_lines", lambda root, repo, since: [])
+    monkeypatch.setattr(conductor, "stall_report", lambda root, repo: [])
     monkeypatch.setattr(conductor, "sweep_late", lambda root, repo: [])
-    monkeypatch.setattr(conductor, "held_lines", lambda root, repo: ["HELD VERDICT #7"])
-    monkeypatch.setattr(conductor, "start_lines", lambda *a: called.append(1) or ["START #1 x"])
-    assert conductor.watch("root", datetime.now(UTC), True) == 0
-    assert capsys.readouterr().out.strip() == "HELD VERDICT #7" and not called
+    monkeypatch.setattr(conductor, "held_lines", lambda root, repo: list(held))
+
+
+REPORT = "#40 Report: 1234567 ready for review (comment 9001)"
+
+
+def test_1179a_a_report_and_an_offered_brief_return_both_start_last(plan, monkeypatch, capsys):
+    """REQ-039: brief #1179 answer 1 and test (a)."""
+    plan.rows = [row(21)]
+    quiet_watch(monkeypatch, [REPORT], [])
+    assert conductor.watch("root", NOW, True) == 0
+    assert capsys.readouterr().out.strip().splitlines() == [REPORT, "START #21 build"]
+
+
+def test_1179b_a_held_review_and_an_offered_brief_return_both(plan, monkeypatch, capsys):
+    """REQ-039: brief #1179 answer 1 and test (b); the held line still comes first."""
+    plan.rows = [row(21)]
+    quiet_watch(monkeypatch, [], ["HELD VERDICT #7"])
+    assert conductor.watch("root", NOW, True) == 0
+    assert capsys.readouterr().out.strip().splitlines() == ["HELD VERDICT #7", "START #21 build"]
+
+
+def stub_sweep(monkeypatch, plan) -> None:
+    """Stub every read of `sweep` but `start_lines`; the brief comments come from `plan`."""
+    monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
+    monkeypatch.setattr(conductor.session, "flow_int", lambda *a: 60)
+    monkeypatch.setattr(conductor, "verdict_authors", lambda root: ["conductor-bot"])
+    monkeypatch.setattr(conductor, "spec_approvers", lambda root: [])
+
+    def read(endpoint, what):
+        if "/issues/" in endpoint:
+            return plan.comments.get(int(endpoint.split("/issues/")[1].split("/")[0]), [])
+        return []
+
+    monkeypatch.setattr(conductor, "read", read)
+    monkeypatch.setattr(conductor.session, "gh", lambda endpoint: {"default_branch": "main"})
+    monkeypatch.setattr(conductor, "proof_lines", lambda *a: [])
+    monkeypatch.setattr(conductor.caps, "over_lines", lambda *a: [])
+    monkeypatch.setattr(conductor, "branch_line", lambda *a: "main: green")
+    monkeypatch.setattr(conductor, "slot_lines", lambda *a: [])
+    monkeypatch.setattr(conductor, "stall_report", lambda root, repo: [])
+    monkeypatch.setattr(conductor, "unacted_lines", lambda *a: [])
+
+
+def test_1179c_sweep_prints_start_for_an_offered_brief_only(plan, monkeypatch, capsys):
+    """REQ-039: brief #1179 answer 2 and test (c); a brief started 30 minutes ago is held."""
+    plan.rows = [row(21), row(22, "small")]
+    plan.comments = {22: [said(1, "Started: cb22 2026-11-12T22:30Z by the conductor (small)", 30)]}
+    stub_sweep(monkeypatch, plan)
+    monkeypatch.setattr(conductor, "datetime", Frozen)
+    assert conductor.sweep("root") == 0
+    out = capsys.readouterr().out.strip().splitlines()
+    assert out[-1] == "START #21 build" and not any("#22" in line for line in out)
+    assert out.index("START #21 build") > out.index("main: green")
+
+
+class Frozen(datetime):
+    """`datetime.now` at NOW, so the 2-hour hold reads the invented comment times."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return NOW
+
+
+def test_1179d_two_returns_within_a_minute_read_the_plan_once(plan, monkeypatch, capsys):
+    """REQ-039: brief #1179 answer 1 and test (d)."""
+    plan.rows = [row(21)]
+    quiet_watch(monkeypatch, [REPORT], [])
+    conductor.watch("root", NOW, True)
+    conductor.watch("root", NOW, True)
+    assert plan.builds == 1
+    assert capsys.readouterr().out.strip().splitlines() == [REPORT, "START #21 build", REPORT]
+
+
+def test_1179e_a_returned_brief_is_not_returned_again_within_10_minutes(plan, monkeypatch, capsys):
+    """REQ-039: brief #1179 test (e): a watch return, then a sweep 2 minutes later, then 11."""
+    plan.rows = [row(21)]
+    quiet_watch(monkeypatch, [REPORT], [])
+    conductor.watch("root", NOW, True)
+    assert capsys.readouterr().out.strip().splitlines()[-1] == "START #21 build"
+    stub_sweep(monkeypatch, plan)
+
+    class Later(datetime):
+        minutes = 2.0
+
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.now(UTC) + timedelta(minutes=cls.minutes)
+
+    monkeypatch.setattr(conductor, "datetime", Later)
+    conductor.sweep("root")
+    assert "START" not in capsys.readouterr().out
+    Later.minutes = 11.0
+    conductor.sweep("root")
+    assert capsys.readouterr().out.strip().splitlines()[-1] == "START #21 build"
