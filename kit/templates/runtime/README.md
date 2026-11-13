@@ -9,10 +9,10 @@ runtime, replaces `<owner>/<repo>` and `<default branch>`, and keeps every rule.
 | --- | --- | --- | --- |
 | `launcher.txt` | keeps one conductor alive, starts one builder per brief the plan offers, restarts a builder whose pull request was handed over or went silent | every 30 minutes | mid |
 | `conductor.txt` | the conductor role of `.claude/agents/conductor.md` on a long run, holding the `conductor-long` lease | every 12 hours | strongest |
-| `builder.txt` | one builder per brief, kept until its pull request closes; one text for two tasks, by its `Tier:` line | fired by the launcher | strongest for `design` and `build`; mid for `small` and `mechanical` |
+| `builder.txt` | one builder per brief, kept until its pull request closes; one text for two tasks, by its `Tier:` line | fired by the conductor, or the launcher as its backup | strongest for `design` and `build`; mid for `small` and `mechanical` |
 
-The launcher fires the two builder tasks and the conductor task and nothing else. A builder started by it gets its item in
+The launcher fires the two builder tasks and the conductor task and nothing else; the conductor fires only the two builder tasks. A builder started by either gets its item in
 a second message (`Session name: ... Item: brief #<n> ... Reserved: ...`); with no such message it stops.
 
-`conductor.txt` holds a `<long-run rules>` placeholder where the long-run additions will go once the maintainers settle
-them; until then the role file and the guide's loop are the whole rule.
+The conductor text starts builders itself, in real time, on every `START` line of its watch and after every merge and
+verdict, and restarts handed-over and silent ones; the launcher is its backup, at 45 minutes of silence (brief #1202).

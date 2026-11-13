@@ -115,7 +115,6 @@ def test_c_the_launcher_and_conductor_texts_keep_their_rules():
         assert words in launcher, words
     assert "REST only" in launcher
     conductor = text("conductor.txt")
-    assert "<long-run rules>" in conductor
     assert ".claude/agents/conductor.md" in conductor
 
 
@@ -130,3 +129,93 @@ def test_d_the_guide_names_every_template_and_both_ways_to_wait():
     for words in ("foreground", "background", "for the maintainers", "/agk:launch"):
         assert words in section, words
     assert "30 minutes" in section and "12 hours" in section
+
+
+# Brief #1202 (ADR-0510): the texts match the running autopilot.
+
+
+def last_paragraph(name: str) -> str:
+    return [p for p in text(name).strip().split("\n\n") if p.strip()][-1]
+
+
+def test_1202_a_the_conductor_text_holds_no_long_run_placeholder():
+    """REQ-039: brief #1202 answer 4 (a): the `<long-run rules>` line is replaced by the rules."""
+    conductor = text("conductor.txt")
+    assert "<long-run rules>" not in conductor
+    assert not [ln for ln in conductor.splitlines() if ln.strip() == "<long-run rules>"]
+    readme = text("README.md")
+    assert "<long-run rules>" not in readme
+
+
+def test_1202_b_the_conductor_starts_builders_within_the_limits():
+    """REQ-039: brief #1202 answer 4 (b) and answer 1: both builder tasks, `Started: cb`, limits."""
+    conductor = text("conductor.txt")
+    for words in (
+        "<mid builder task>",
+        "<strongest builder task>",
+        "kind: small",
+        "START #<brief>",
+        "Started: cb<brief> <UTC time> by the conductor (<kind>)",
+        "Session name: cb<brief>[<build letter>]. Item: brief #<brief>[ build (<x>)].",
+        "2 hours",
+        "Capacity:",
+        "cb<brief>r",
+        "agk:handover",
+        "45 minutes",
+        "Owner needed:",
+        "<plan issue>",
+        "merger.yml",
+    ):
+        assert words in conductor, words
+    six = [ln for ln in conductor.splitlines() if ln.startswith("6. ")]
+    assert len(six) == 1 and "START" in six[0], six
+
+
+def test_1202_c_the_conductor_may_fire_only_the_builder_tasks():
+    """REQ-039: brief #1202 answer 4 (c): the last paragraph allows only firing builder tasks."""
+    last = last_paragraph("conductor.txt")
+    assert (
+        "never create, change or delete a scheduled task; firing the two builder tasks is the "
+        "only scheduled-task action allowed" in last
+    ), last
+    assert "conductor task" not in last
+
+
+def test_1202_d_the_launcher_is_the_backup_at_45_minutes():
+    """REQ-039: brief #1202 answer 4 (d) and answer 2: 45 minutes of silence, not 90; a backup."""
+    launcher = text("launcher.txt")
+    assert "45 minutes" in launcher
+    assert "90 minutes" not in launcher
+    assert "backup" in launcher
+    tasks = ("<mid builder task>", "<strongest builder task>", "<conductor task>", "<plan issue>")
+    for words in tasks:
+        assert words in launcher, words
+
+
+def test_1202_e_the_builder_text_carries_the_running_rules():
+    """REQ-039: brief #1202 answer 4 (e) and answer 2: hand-over, CI red, Finishes, testing map."""
+    body = text("builder.txt")
+    for words in (
+        "Before you start work on an open pull request",
+        "On a red `governance` or `proof` on your head",
+        "Finishes: #<N>",
+        "[[testing.map]]",
+        "On an `Answer:`, `Correction:` or `Maintainer answer:`",
+        "a merge of main without a conflict, a status or body fix",
+    ):
+        assert words in body, words
+    kit_only = "Kit repository only (where kit/agk-kit.mk exists):"
+    assert body.count(kit_only) == 1, kit_only
+    tail = body.split(kit_only, 1)[1]
+    for words in ("ALWAYS ALSO", "RELEASE EXCEPTION", "kit_hashes.py", "changelog.d"):
+        assert words in tail, words
+        assert words not in body.split(kit_only, 1)[0], words
+
+
+def test_1202_f_the_readme_and_guide_say_the_launcher_is_the_backup():
+    """REQ-039: brief #1202 answer 3: the conductor starts builders; the launcher is its backup."""
+    readme = text("README.md")
+    assert "starts builders itself" in readme and "backup" in readme
+    guide = GUIDE.read_text(encoding="utf-8")
+    section = guide.split("Running around the clock", 1)[1].split("\n8. ", 1)[0]
+    assert "starts builders itself" in section and "backup" in section
