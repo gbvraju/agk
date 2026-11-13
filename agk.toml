@@ -594,8 +594,8 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/new_spec.py"
 tests = [
-  "tests/kit_dev/test_intake.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_new_spec.py",
-  "tests/kit_dev/test_project_req_ids.py",
+  "tests/kit/test_plan_render_installed.py", "tests/kit_dev/test_intake.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_new_spec.py", "tests/kit_dev/test_project_req_ids.py",
 ]
 [[testing.map]]
 code = "scripts/agk/parity.py"
@@ -608,7 +608,10 @@ code = "scripts/agk/personal_state.py"
 tests = ["tests/kit/test_personal_state.py", "tests/kit_dev/test_kit_manifest.py"]
 [[testing.map]]
 code = "scripts/agk/plan_intake.py"
-tests = ["tests/kit/test_plan_intake.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_plan_intake_skill.py"]
+tests = [
+  "tests/kit/test_plan_intake.py", "tests/kit/test_plan_render_installed.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_plan_intake_skill.py",
+]
 [[testing.map]]
 code = "scripts/agk/plan_ceremony.py"
 tests = ["tests/kit/test_plan_ceremony.py", "tests/kit_dev/test_kit_manifest.py"]

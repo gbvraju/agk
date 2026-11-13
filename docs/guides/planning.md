@@ -51,10 +51,10 @@ checkout; the other scripts are installed under `scripts/agk/`.
 5. **Validate.** `python3 scripts/agk/plan_intake.py validate --proposals FILE` prints `ok proposals` or one line per
    problem, naming the rule and the item's key, never its text. A size, a range or a date that no cited location states
    is refused as an open question.
-6. **Render, once.** `python3 scripts/agk/plan_intake.py render --proposals FILE` prints the conflicts and then the open
-   questions for you, and writes, as new files only, `docs/plan/scope.md`, `docs/plan/milestones.md`,
-   `docs/plan/requirements-proposed.md`, one Draft spec per feature area under `docs/specs/` and one brief per brief under
-   `docs/plan/briefs/M<n>/`. From then on these files are yours. The requirements enter `docs/requirements.md` through
+6. **Render, once.** `python3 scripts/agk/plan_intake.py render --proposals FILE` (the plugin's copy works the same)
+   prints the conflicts and then the open questions for you, and writes, as new files only, `docs/plan/scope.md`,
+   `docs/plan/milestones.md`, `docs/plan/requirements-proposed.md`, one Draft spec per feature area under `docs/specs/`
+   and one brief per brief under `docs/plan/briefs/M<n>/`. From then on these files are yours. The requirements enter `docs/requirements.md` through
    your own intake pull request, and you replace each brief's `Advances:` key with its `REQ-n` number.
 7. **Trace and count.** `python3 scripts/agk/check_plan.py --trace` prints one row per source location: the requirement,
    the spec rule, the brief, the merged pull request (with `--facts FILE` and `--numbers FILE`) and the test, `none` where
