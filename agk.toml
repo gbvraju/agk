@@ -60,9 +60,9 @@ auto_merge_method = "squash"
 # head to GitHub's merge queue instead of merging it. GitHub offers the queue only to organization-owned repositories (verify),
 # so this repository keeps it off; the guide gives the switch-over order. A change needs an ADR.
 merge_queue = false  # brief #972, ADR-0417
-# The builder capacity (SPEC-0034 rule 1): six builder sessions at once, the six slots that run, by the owner's direction of
-# 2026-11-10 (brief #1009, ADR-0341): s1 to s3 the build lane, s4 to s6 the follow-up lane; s7 to s9 are paused.
-max_builders = 6
+# The builder capacity (SPEC-0034 rule 1): twelve builder sessions at once, so a team of four can run three each, by the
+# owner's answer Q-1145-1 of 2026-11-12 (brief #1148, ADR-0487); it was six under brief #1009 (ADR-0341).
+max_builders = 12
 # How a builder starts (SPEC-0034, brief #776, ADR-0402): "assign" means no session starts one; each slot runs from four staggered
 # scheduled starts an hour (`doctor.py` prints them and warns of a slot with none) and the conductor posts `Assign:` lines.
 builder_start = "assign"
@@ -723,7 +723,8 @@ code = "scripts/agk/reviewers.py"
 tests = [
   "tests/kit/test_agent_apps.py", "tests/kit/test_agk_mk.py", "tests/kit/test_approve_short.py",
   "tests/kit/test_approved_spec_not_draft.py", "tests/kit/test_check_kit_tests.py",
-  "tests/kit/test_forge.py", "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_personal_state.py", "tests/kit/test_reviewers.py",
+  "tests/kit/test_forge.py", "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_personal_state.py",
+  "tests/kit/test_project_mk_protected.py", "tests/kit/test_reviewers.py",
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
   "tests/kit/test_verdict_authors.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
   "tests/kit_dev/test_final_clearance_design.py", "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
@@ -840,8 +841,9 @@ tests = ["tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_uninstall.py"
 [[testing.map]]
 code = "scripts/agk/upgrade.py"
 tests = [
-  "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_route_triggers.py",
-  "tests/kit/test_upgrade_project_mk.py", "tests/kit_dev/test_experimental_reviewer.py",
+  "tests/kit/test_project_mk_protected.py", "tests/kit/test_reviewers_approvers_install.py",
+  "tests/kit/test_route_triggers.py", "tests/kit/test_upgrade_project_mk.py",
+  "tests/kit_dev/test_experimental_reviewer.py",
   "tests/kit_dev/test_kit_hashes.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
   "tests/kit_dev/test_pyproject_installs_as_nothing.py", "tests/kit_dev/test_reviewer_wiring.py",
   "tests/kit_dev/test_route_concurrency_install.py", "tests/kit_dev/test_route_finishes_install.py",
