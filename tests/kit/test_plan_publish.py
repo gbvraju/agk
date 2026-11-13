@@ -86,7 +86,13 @@ def publish(
 
 
 def commands(out: str) -> list[list[str]]:
-    """Each printed command, its quoted body spanning lines as the shell reads it."""
+    """Each printed milestone and brief command, its quoted body spanning lines as the shell reads
+    it; the fixture's open question prints its own issue command (brief #1196), which
+    `test_plan_questions.py` reads, and is left out here."""
+    return [c for c in every_command(out) if "labels[]=agk-business-question" not in c]
+
+
+def every_command(out: str) -> list[list[str]]:
     found: list[list[str]] = []
     pending: list[str] = []
     for line in out.splitlines():
@@ -286,14 +292,15 @@ def test_ac2_rule_25_personal_mode_writes_the_briefs_through_the_files_forge(
     created = re.findall(r"(?m)^created (\S+) #(\d+)$", out)
     assert [key for key, _ in created] == ["B0", "B1", "B2"]
     numbers = {key: int(n) for key, n in created}
+    asked = {k: int(n) for k, n in re.findall(r"(?m)^created question (\S+) #(\d+)$", out)}  # #1196
     forge = FilesForge(sidecar, env={})
     b2 = forge.load(f"issues/{numbers['B2']}.json")
     assert b2["title"] == TITLE and b2["labels"] == [{"name": "agk-brief"}]
     assert f"Depends-on: #{numbers['B1']}" in b2["body"] and "Milestone: M1" in b2["body"]
     assert b2["body"].startswith("## What\n") and "\n<!-- agk\n" in b2["body"]  # amendment 169
-    code, out = publish(sidecar, capsys, approved(), numbers)
+    code, out = publish(sidecar, capsys, approved(), numbers | asked)
     assert code == 0 and "created" not in out
-    assert sorted(forge.numbers("issues")) == sorted(numbers.values())
+    assert sorted(forge.numbers("issues")) == sorted((numbers | asked).values())
 
 
 @pytest.mark.parametrize("solo", [False, True])
@@ -382,3 +389,48 @@ def test_ac2_amendment_169_a_brief_holding_the_end_of_a_comment_is_refused(
     assert code == 1
     assert "rule 25: briefs B1: the body holds `-->`" in out
     assert "gh api" not in out
+
+
+# --- brief #1195 (ADR-0507): a Persona line on each brief issue ----------------------------------
+
+
+def test_1195_e_the_issue_names_the_persona_of_the_requirement_it_advances(
+    plan: Path, capsys
+) -> None:
+    """REQ-050 AC2: brief #1195 answer 5 (e) and answer 3, the person numbered the proposed
+    requirement as REQ-101, so the brief issue shows `Persona: P1 Shop owner` before its
+    milestone, keeps the hidden brief unchanged and still passes `check_brief.py --root`."""
+    import check_brief  # noqa: PLC0415
+
+    proposed = plan / "docs/plan/requirements-proposed.md"
+    proposed.write_text(proposed.read_text("utf-8").replace("### R1 ", "### REQ-101 "), "utf-8")
+    code, out = publish(plan, capsys, approved(), {"M1": 7})
+    assert code == 0, out
+    printed = commands(out)
+    assert len(printed) == 2
+    for command in printed:
+        body = field(command, "body")
+        shown = body[: body.index("<!-- agk\n")]
+        assert re.findall(r"(?m)^Persona: .*$", body) == ["Persona: P1 Shop owner"]
+        assert "\n\nPersona: P1 Shop owner\n\nPart of milestone M1.\n" in shown
+        assert "Persona:" not in hidden(body)
+        assert check_brief.body_problems(body, plan, None) == []
+
+
+def test_1195_e_the_persona_from_the_requirements_file_and_none_when_unknown(
+    plan: Path, capsys
+) -> None:
+    """REQ-050 AC2: brief #1195 answer 3, a `Persona:` line of the `### REQ-101` section of
+    `docs/requirements.md` names it too; a requirement with no persona anywhere gives no line."""
+    code, out = publish(plan, capsys, approved(), {"M1": 7})
+    assert code == 0, out
+    assert all("Persona:" not in field(c, "body") for c in commands(out))
+    requirements = plan / "docs/requirements.md"
+    text = requirements.read_text("utf-8").replace(
+        "- Status: planned\n", "- Status: planned\n- Persona: P2 Buyer\n", 1
+    )
+    requirements.write_text(text, "utf-8")
+    code, out = publish(plan, capsys, approved(), {"M1": 7})
+    assert code == 0, out
+    for command in commands(out):
+        assert re.findall(r"(?m)^Persona: .*$", field(command, "body")) == ["Persona: P2 Buyer"]

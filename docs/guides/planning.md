@@ -66,7 +66,9 @@ checkout; the other scripts are installed under `scripts/agk/`.
    Each heading of a prototype source counts as one in-scope location, so `<a> of <b>` shows every mapped screen and
    state has a requirement. The trace is printed, never committed. The kit's own requirements (REQ-001 to REQ-099 of
    `docs/requirements.md`) have no project source, so the check, the trace and the counts leave them out unless one
-   carries a `Source:` line.
+   carries a `Source:` line. Each open question and unsettled conflict is also in the `Questions for business` section
+   of `docs/plan/scope.md`, with the keys of the requirements and briefs it blocks on its `Blocks:` line, which you may
+   edit.
 8. **Approve.** On the plan's pull request, an account listed in `spec_approvers` of `config/reviewers.yaml` posts
    `Approve: plan <full head ID>`. A session never posts it; in solo mode it is part of your `Confirmed:` comment.
 9. **Publish.** Save the pull request's comments as a file and run
@@ -74,9 +76,28 @@ checkout; the other scripts are installed under `scripts/agk/`.
    2. It prints one `gh api` command per milestone, then per brief in dependency order, and runs none. A brief waits until
    `--numbers` (a JSON object from key to number, which you save from the commands you ran) names its milestone and every
    brief it depends on, so each `Depends-on:` names `#<n>`. Run `publish` again after each round until nothing is
-   withheld. In personal mode it writes the briefs through the file forge instead. Once nothing is withheld, run
+   withheld. Before the briefs it prints one issue command per question of that section, labelled
+   `agk-business-question` and never `agk-brief`, and each brief a question blocks waits for its number and then names it
+   with `Blocked-by: #<n>`, so `session.py plan` holds it as `waits for question #<n>` until business answers in the
+   issue and closes it (ADR-0508). In personal mode it writes the questions and the briefs through the file forge
+   instead. Once nothing is withheld, run
    `/agk:board --yes` on your own machine: it makes the plan's GitHub Project board once and adds every brief with its
-   milestone, size and expected hours, and each later run adds only the new ones (ADR-0506).
+   milestone, size and expected hours, and each later run adds only the new ones (ADR-0506). Each brief issue shows a
+   `Persona: <key> <name>` line, the persona of the requirement it advances, and the board is one business can sign
+   off from (ADR-0507):
+   - **The template board, made once.** In GitHub, make one Project (your template) with three views: `Sign-off`, a
+     board grouped by Status; `Questions`, a table; and `Roadmap`, a roadmap by Milestone. Then put its
+     `<owner>/<number>` in `[plan] board_template` of `agk.toml` (or pass `--template OWNER/NUMBER`): each project's
+     first `/agk:board --yes` copies it, with its views and columns. Without a template the command creates an empty
+     board and prints the three views to make once.
+   - **The fields.** The command adds `Persona`, `Requirement` (the `REQ-n` numbers), `Screens` and `Sign-off`
+     (Pending, Signed off, Changes asked) when the board lacks them, fills them on each new card from the brief issue
+     and sets `Sign-off` to Pending; it never changes a value a person set.
+   - **How business signs off.** The business reader opens a card, reads its `What`, `Acceptance`, persona and screens
+     in plain words, and sets `Sign-off` to Signed off, or to Changes asked with a comment on the issue. An open
+     question is an issue of its own, so it shows in the `Questions` view.
+   - **The formal gate.** The board's `Sign-off` is a reading aid, not a record: the plan's gate stays the owner's
+     `Approve: plan <full head ID>` line of step 8.
 
 ## From a prototype and an OpenSpec file
 
