@@ -110,6 +110,7 @@
     "scripts/agk/plan_intake.py",
     "scripts/agk/plan_status.py",
     "scripts/agk/playbook_format.py",
+    "scripts/agk/pr_state.py",
     "scripts/agk/prepush.py",
     "scripts/agk/product_report.py",
     "scripts/agk/project_tests.py",
