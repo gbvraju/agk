@@ -75,6 +75,20 @@ def test_1168c_a_question_for_the_maintainers_followed_by_a_push_still_clears():
     assert route.decide(facts(draft=True, comments=[asked], commit=early)) == "agk:question"
 
 
+def test_1168c_a_question_after_an_owner_needed_and_a_push_keeps_question():
+    """REQ-039: the fix list on 26ee3af (a maintainers question never closes an `Owner needed:`)."""
+    asked = at(5, "builder", "Question: Q-1-1 for the maintainers: may I edit it?", ASKED_AT)
+    comments = [owner_needed(), asked]
+    assert route.decide(facts(comments=comments, commit=PUSHED)) == "agk:question"
+    answer = at(6, "maintainer", "Maintainer answer: yes to both", "2026-11-13T00:45:00Z")
+    comments = [owner_needed(), asked, answer]
+    assert route.decide(facts(comments=comments, commit=PUSHED)) == "agk:review"
+    more = "Question: Q-1-2 for the maintainers: one more?"
+    later = at(7, "builder", more, "2026-11-13T00:50:00Z")
+    comments = [owner_needed(), answer, later]
+    assert route.decide(facts(comments=comments, commit=PUSHED)) == "agk:question"
+
+
 def test_1168c_an_unlisted_owner_needed_still_asks_nothing():
     """REQ-039: brief #1168 answer 1 (`Owner needed:` counts only by a listed verdict author)."""
     unlisted = at(4, "stranger", "Owner needed: anything", ASKED_AT)

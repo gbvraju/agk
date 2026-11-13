@@ -20,7 +20,8 @@ the default branch at 00:33Z removed `agk:question`, and the pull request merged
 1. An `Owner needed:` comment by a listed verdict author closes only at a later `Maintainer answer:` or `Approve:` by an
    account in `spec_approvers`, in the order GitHub lists the comments. A new head no longer closes it.
 2. A builder's `Question: Q-... for the maintainers` closes as before: at such an answer or at a head pushed after it,
-   since the builder may have resolved it (ADR-0442).
+   since the builder may have resolved it (ADR-0442). The two kinds are kept apart: the pull request waits on the owner
+   while either is open, so a question that a newer head closes never closes an earlier `Owner needed:`.
 3. The change is in `scripts/agk/route.py` `asks_owner` alone; `merge_cleared.py`, the labels and the workflows do not
    change. `tests/kit/test_route_owner_ask.py` holds its tests and is listed in the `route.py` entry of `[[testing.map]]`
    in `agk.toml`. Two assertions of the existing route tests that read a push as closing an `Owner needed:` now read it

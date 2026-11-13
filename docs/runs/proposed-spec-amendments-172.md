@@ -26,7 +26,8 @@ Read in the code by this session on `origin/main` (8143696):
 1. **Amendment 150 item 1, the `agk:question` state, replaced.** "`agk:question` (owner): an `Owner needed:` comment by a
    listed verdict author on the pull request has no later `Maintainer answer:` or `Approve:` by an account in
    `spec_approvers`; a new head does not close it. A comment whose first line starts `Question: Q-` and contains
-   `for the maintainers`, by any author, has no later such answer and no later head (ADR-0442)."
+   `for the maintainers`, by any author, has no later such answer and no later head (ADR-0442). The two are read
+   apart: the state holds while either is open, and a question never closes an `Owner needed:`."
 2. **`Q-846-4`, its reading replaced.** "An `Owner needed:` comment by a listed verdict author on the pull request, closed
    only by a later `Maintainer answer:` or `Approve:` by an account in `spec_approvers`."
 3. **No other change.** `merge_cleared.py`, the labels, their order and every workflow stay as they are: the merger still
@@ -34,4 +35,4 @@ Read in the code by this session on `origin/main` (8143696):
 4. **Tests.** `tests/kit/test_route_owner_ask.py`: an `Owner needed:` followed by a push keeps `agk:question`, on a draft
    too, and a router run on it writes no label; a later `Maintainer answer:` or `Approve:` by a spec approver clears it,
    and one by another account or one before the ask does not; a `Question: Q-1-1 for the maintainers` followed by a push
-   still clears; an `Owner needed:` by an unlisted account still asks nothing.
+   still clears; an `Owner needed:`, then such a question, then a push keeps `agk:question`; an `Owner needed:` by an unlisted account still asks nothing.
