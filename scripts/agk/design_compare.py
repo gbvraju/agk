@@ -57,6 +57,7 @@ import urllib.parse
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
@@ -476,7 +477,7 @@ def compare_imported(root: Path, version: str, screens: str) -> int:
                 if reference is not None:
                     w, h = design_render.decode_png(reference)[:2]
                     shot = work / "built.png"
-                    shoot_at(browser, built.resolve().as_uri(), (w, h), shot)
+                    shoot_at(cast(str, browser), built.resolve().as_uri(), (w, h), shot)
                     if design_render.pixel_share(reference, shot) > tolerance:
                         kinds.append("pixels")
             elif ran:
@@ -484,10 +485,10 @@ def compare_imported(root: Path, version: str, screens: str) -> int:
                 if not page:
                     size = image_size(source) or size
                 first, second = work / "built.png", work / "imported.png"
-                shoot_at(browser, built.resolve().as_uri(), size, first)
+                shoot_at(cast(str, browser), built.resolve().as_uri(), size, first)
                 url = f"http://{HOST}/" + urllib.parse.quote(name)
                 with FilesServer(files) as port:
-                    shoot_at(browser, url, size, second, port)
+                    shoot_at(cast(str, browser), url, size, second, port)
                 if design_render.pixel_share(first, second) > tolerance:
                     kinds.append("pixels")
             if page:

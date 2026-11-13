@@ -12,7 +12,6 @@ scripts/agk/check_kit_tests.py return-value 1
 scripts/agk/check_release.py operator 3
 scripts/agk/core_audit.py return-value 1
 scripts/agk/core_audit.py union-attr 1
-scripts/agk/doctor.py arg-type 2
 scripts/agk/doctor.py assignment 2
 scripts/agk/doctor.py union-attr 2
 scripts/agk/facts.py assignment 2

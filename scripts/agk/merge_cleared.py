@@ -1134,7 +1134,7 @@ def merged_titles(repo: str, brief: int) -> list[str] | None:
             source = event.get("source") if isinstance(event, dict) else None
             item = source.get("issue") if isinstance(source, dict) else None
             pull = item.get("pull_request") if isinstance(item, dict) else None
-            if isinstance(pull, dict) and pull.get("merged_at"):
+            if isinstance(item, dict) and isinstance(pull, dict) and pull.get("merged_at"):
                 titles.append(str(item.get("title") or ""))
         if len(chunk) < PAGE:
             return titles
