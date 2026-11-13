@@ -6,7 +6,7 @@
 - Related: SPEC-0043, ADR-0467, ADR-0269, `Q-1095-1`, brief #1166, brief #1095, plan #661
 - Requirements: REQ-050
 
-Protected classes: `scripts/agk/`, `tests/kit/`, `.github/`
+Protected classes: `scripts/agk/`, `tests/kit/`, `tests/kit_dev/`, `.github/`
 
 ## Context
 
@@ -36,7 +36,7 @@ conductor's ruling on `Q-1095-1` (#1147) asked for this follow-up.
    never a fallback to the `Approved:` line alone (principle 11); this was already so and is now tested.
 
 Protected path classes changed: `scripts/agk/` (`check_plan.py`: `merged_approvals` and the base passed to
-`approved_ids`), `tests/kit/` (`test_check_plan_scope.py`) and `.github/` (`.github/workflows/governance.yml`, the
+`approved_ids`), `tests/kit/` (`test_check_plan_scope.py`; `test_workflow.py`, whose step test reads a `run: |` step's `python` lines), `tests/kit_dev/` (`test_init.py`, whose `ci_steps` takes the pull request branch of that step, the event it simulates) and `.github/` (`.github/workflows/governance.yml`, the
 `check_plan` step, committed by the owner). `kit/hashes.json` is not edited by hand.
 
 ## Consequences

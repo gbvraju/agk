@@ -566,6 +566,9 @@ def test_ac1_older_install_stamp_in_pyproject_is_still_read(tmp_path):
 CI_STEP = re.compile(r"^\s*run:\s*((?:make -f agk\.mk|python scripts/agk/)[^\n]*?)\s*$", re.M)
 
 
+BLOCK_STEP = re.compile(r"^\s*((?:make -f agk\.mk|python scripts/agk/)[^\n]*?)\s*$", re.M)
+
+
 def ci_steps(root: Path) -> list[str]:
     """The `run:` commands of the workflow that a repository at ROOT runs: a step guarded by the
     presence of the kit's own suite (`kit/agk-kit.mk`, SPEC-0028) is left out of a project."""
@@ -575,7 +578,12 @@ def ci_steps(root: Path) -> list[str]:
     for block in re.split(r"(?m)^      - ", text):
         if "hashFiles('kit/agk-kit.mk') != ''" in block and not kit:
             continue
-        steps += CI_STEP.findall(block)
+        found = CI_STEP.findall(block)
+        if not found and "run: |\n" in block and 'if [ "$EVENT" = pull_request ]' in block:
+            # brief #1166 (ADR-0496): a `run: |` step that picks its options by event; a pull
+            # request (the event `run_ci` saves comments for) runs its first command
+            found = BLOCK_STEP.findall(block.split("run: |\n", 1)[1])[:1]
+        steps += found
     return steps
 
 
