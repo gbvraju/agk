@@ -259,7 +259,9 @@ RELEASE_ADRS = {
 }
 RECORDS = {"0009": (7, 42), "0010": (8, 77)}
 RELEASE_CLASSES = "config/\nscripts/agk/\nkit/\nagk.toml\n.claude-plugin/\ndocs/adr/\n"
-CHANGES = "# Changelog\n\n## Unreleased\n\n- #5 an invented change\n\n## 1.0.0 (2026-01-01)\n\n- #1 x\n"
+CHANGES = (
+    "# Changelog\n\n## Unreleased\n\n- #5 an invented change\n\n## 1.0.0 (2026-01-01)\n\n- #1 x\n"
+)
 RELEASED = (
     "# Changelog\n\n## Unreleased\n\n## 1.1.0 (2026-11-13)\n\n- #5 an invented change\n\n"
     "## 1.0.0 (2026-01-01)\n\n- #1 x\n"
