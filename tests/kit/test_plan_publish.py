@@ -86,7 +86,13 @@ def publish(
 
 
 def commands(out: str) -> list[list[str]]:
-    """Each printed command, its quoted body spanning lines as the shell reads it."""
+    """Each printed milestone and brief command, its quoted body spanning lines as the shell reads
+    it; the fixture's open question prints its own issue command (brief #1196), which
+    `test_plan_questions.py` reads, and is left out here."""
+    return [c for c in every_command(out) if "labels[]=agk-business-question" not in c]
+
+
+def every_command(out: str) -> list[list[str]]:
     found: list[list[str]] = []
     pending: list[str] = []
     for line in out.splitlines():
@@ -286,14 +292,15 @@ def test_ac2_rule_25_personal_mode_writes_the_briefs_through_the_files_forge(
     created = re.findall(r"(?m)^created (\S+) #(\d+)$", out)
     assert [key for key, _ in created] == ["B0", "B1", "B2"]
     numbers = {key: int(n) for key, n in created}
+    asked = {k: int(n) for k, n in re.findall(r"(?m)^created question (\S+) #(\d+)$", out)}  # #1196
     forge = FilesForge(sidecar, env={})
     b2 = forge.load(f"issues/{numbers['B2']}.json")
     assert b2["title"] == TITLE and b2["labels"] == [{"name": "agk-brief"}]
     assert f"Depends-on: #{numbers['B1']}" in b2["body"] and "Milestone: M1" in b2["body"]
     assert b2["body"].startswith("## What\n") and "\n<!-- agk\n" in b2["body"]  # amendment 169
-    code, out = publish(sidecar, capsys, approved(), numbers)
+    code, out = publish(sidecar, capsys, approved(), numbers | asked)
     assert code == 0 and "created" not in out
-    assert sorted(forge.numbers("issues")) == sorted(numbers.values())
+    assert sorted(forge.numbers("issues")) == sorted((numbers | asked).values())
 
 
 @pytest.mark.parametrize("solo", [False, True])

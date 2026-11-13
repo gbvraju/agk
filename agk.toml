@@ -147,7 +147,10 @@ code = "scripts/agk/batch.py"
 tests = ["tests/kit/test_batch.py"]
 [[testing.map]]
 code = "scripts/agk/board.py"
-tests = ["tests/kit/test_board.py", "tests/kit_dev/test_distribution.py", "tests/kit_dev/test_kit_manifest.py"]
+tests = [
+  "tests/kit/test_board.py", "tests/kit/test_plan_questions.py", "tests/kit_dev/test_distribution.py",
+  "tests/kit_dev/test_kit_manifest.py",
+]
 [[testing.map]]
 code = "scripts/agk/caps.py"
 tests = ["tests/kit/test_caps.py"]
@@ -614,8 +617,9 @@ tests = ["tests/kit/test_personal_state.py", "tests/kit_dev/test_kit_manifest.py
 [[testing.map]]
 code = "scripts/agk/plan_intake.py"
 tests = [
-  "tests/kit/test_board.py", "tests/kit/test_plan_intake.py", "tests/kit/test_plan_render_installed.py",
-  "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_plan_intake_skill.py",
+  "tests/kit/test_board.py", "tests/kit/test_plan_intake.py", "tests/kit/test_plan_questions.py",
+  "tests/kit/test_plan_render_installed.py", "tests/kit_dev/test_kit_manifest.py",
+  "tests/kit_dev/test_plan_intake_skill.py",
 ]
 [[testing.map]]
 code = "scripts/agk/plan_ceremony.py"
@@ -784,7 +788,7 @@ code = "scripts/agk/session.py"
 tests = [
   "tests/kit/test_session_watch_answers.py", "tests/kit/test_conductor_start_wake.py", "tests/kit/test_check_brief.py",
   "tests/kit/test_model_routes.py", "tests/kit/test_models_table.py", "tests/kit/test_pr_state_lifecycle.py",
-  "tests/kit/test_always_full_infra.py", "tests/kit/test_architect_review_guard.py",
+  "tests/kit/test_always_full_infra.py", "tests/kit/test_architect_review_guard.py", "tests/kit/test_plan_questions.py",
   "tests/kit/test_brief_contexts.py", "tests/kit/test_builder_assign.py",
   "tests/kit/test_builder_slots.py",
   "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_launch.py", "tests/kit/test_conductor_guard_queue.py",
@@ -811,7 +815,7 @@ code = "scripts/agk/session_plan.py"
 tests = [
   "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_capacity_adapt.py",
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_holds_metric.py", "tests/kit/test_launch_kinds.py",
-  "tests/kit/test_merge_cleared_reprove.py",
+  "tests/kit/test_merge_cleared_reprove.py", "tests/kit/test_plan_questions.py",
   "tests/kit/test_plan_exact_touches.py", "tests/kit/test_plan_reprove_paths.py",
   "tests/kit/test_session_claim_overlap.py", "tests/kit/test_builder_slots.py",
   "tests/kit/test_light_reprove.py",

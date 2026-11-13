@@ -9,7 +9,9 @@ The plan, in the order it is decided:
 
 1. **Ready briefs.** Open, not taken (a `taken:` comment counts even with no pull request yet),
    `Depends-on` merged and not stale (`session.py` already judged those).
-2. **Waves.** A brief whose `Touches:` overlap running work (a taken brief, an open builder pull
+2. **Waves.** A brief whose `Blocked-by: #<n>` business question is not closed waits for it
+   (`waits for question #<n>`, brief #1196, ADR-0508), in `next` and `claim` too. A brief whose
+   `Touches:` overlap running work (a taken brief, an open builder pull
    request's files) waits for it. Of two ready briefs that overlap, the one earlier by priority
    and then number starts; the other waits for it. Shared mechanical files never overlap.
    Overlap is judged by files (brief #330, ADR-0189): entries that name files overlap on a file
@@ -462,8 +464,32 @@ def entries_of(root, globs: list[str]) -> list[str]:
     return out
 
 
+BLOCKED_BY = re.compile(r"Blocked-by: #([1-9]\d*)")  # brief #1196 (ADR-0508), from publish
+QUESTION_OPEN, QUESTION_UNREAD = "it is open", "it cannot be read"
+
+
+def question_wait(s: Survey, brief: dict) -> dict | None:
+    """Brief #1196 answer 3: the first business question the brief's `Blocked-by: #<n>` lines name
+    that is not closed, read once per survey with one GET; a failed read is never closed."""
+    states: dict = s.__dict__.setdefault("question_states", {})
+    for line in str(brief.get("body") or "").splitlines():
+        if not (line_match := BLOCKED_BY.fullmatch(line.rstrip())):
+            continue
+        number = int(line_match[1])
+        if number not in states:
+            issue = gh(f"repos/{s.repo}/issues/{number}")
+            states[number] = issue.get("state") if isinstance(issue, dict) else None
+        if states[number] != "closed":
+            why = QUESTION_UNREAD if states[number] is None else QUESTION_OPEN
+            return {"brief": brief["number"], "question": number, "why": why}
+    return None
+
+
 def running_conflict(root, s: Survey, brief: dict, shared: list) -> dict | None:
-    """What running work the brief waits for: a taken brief or an open builder pull request."""
+    """What running work the brief waits for: an open business question it names (brief #1196),
+    a taken brief or an open builder pull request."""
+    if asked := question_wait(s, brief):
+        return asked
     mine = unshared(root, entries_of(root, touches_of(brief["body"])), shared)
     for number, theirs in s.held:
         if number == brief["number"]:
@@ -692,6 +718,8 @@ def record_holds(root, s: Survey, ready: list[dict], chosen: list[dict], now: da
 
 def holder_name(wait: dict, names: dict[int, str]) -> str:
     """The saved file that holds a brief back, or the number of the open work."""
+    if "question" in wait:
+        return f"question #{wait['question']}"
     number = int(wait.get("waits_for", wait.get("pull_request", 0)))
     return names.get(number) or f"#{number}"
 
@@ -1031,6 +1059,9 @@ def wait_text(w: dict) -> str:
     """Why a brief waits, in the words of the plan and of the skips of `next` (brief #345)."""
     if "held_by" in w or "waits_for_build" in w or "fixed_by" in w:
         return str(w["why"])
+    if "question" in w:  # brief #1196 answer 3
+        why = "" if w["why"] == QUESTION_OPEN else f" ({w['why']})"
+        return f"waits for question #{w['question']}{why}"
     target = f"#{w['waits_for']}" if "waits_for" in w else f"pull request #{w['pull_request']}"
     return f"waits for {target} ({w['why']})"
 
