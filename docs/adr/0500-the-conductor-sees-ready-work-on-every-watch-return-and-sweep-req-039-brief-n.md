@@ -32,3 +32,8 @@ minutes after #1147 merged while the conductor was reviewing #1160 and #1162.
 A brief that becomes ready while the conductor is busy is named in its next watch return or sweep, so it is started at
 the conductor's next step instead of by hand. A `START` line that a watch named is not repeated by a sweep within 10
 minutes, so the conductor acts on the first one it sees.
+
+## Residual
+
+- 2026-11-13: a `START` line on a busy return is read only once a minute, so a brief offered just after a plan read
+  waits up to a minute more (due 2027-01-31).
