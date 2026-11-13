@@ -1,6 +1,6 @@
 # ADR-0319: The verdict's evidence lines per playbook gate (REQ-045, brief 666)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-07
 - Deciders: maintainers
 - Related: ADR-0251, ADR-0312, ADR-0310, SPEC-0038

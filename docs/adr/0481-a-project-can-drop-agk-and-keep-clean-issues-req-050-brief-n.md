@@ -1,6 +1,6 @@
 # ADR-0481: A project can drop AGK and keep clean issues
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: ADR-0203, ADR-0459, ADR-0160, brief #348, brief #1124, plan #661, amendment 169

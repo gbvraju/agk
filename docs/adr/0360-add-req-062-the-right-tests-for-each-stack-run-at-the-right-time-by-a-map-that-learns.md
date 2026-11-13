@@ -1,6 +1,6 @@
 # ADR-0360: Add REQ-062: The right tests for each stack, run at the right time by a map that learns
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: SPEC-0055, SPEC-0012, SPEC-0021, SPEC-0038, SPEC-0039, SPEC-0041, SPEC-0044, SPEC-0046, SPEC-0047, ADR-0242, ADR-0323, ADR-0359, plan #661

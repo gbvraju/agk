@@ -1,6 +1,6 @@
 # ADR-0402: The conductor assigns its builders, and a stall is seen on a tick and acted on (REQ-041)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: ADR-0330, ADR-0353, ADR-0362, ADR-0368, SPEC-0034, brief #776, plan #661

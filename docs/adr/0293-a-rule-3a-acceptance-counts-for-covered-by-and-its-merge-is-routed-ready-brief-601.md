@@ -1,6 +1,6 @@
 # ADR-0293: A rule 3a acceptance counts for Covered-by, and its merge is routed ready (brief 601)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0271, ADR-0277, ADR-0284, ADR-0186, SPEC-0021, SPEC-0039, plan #542

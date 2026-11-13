@@ -1,6 +1,6 @@
 # ADR-0486: The guide says how a team of four works one repository
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: ADR-0330, ADR-0368, brief #1145, plan #661

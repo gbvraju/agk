@@ -1,6 +1,6 @@
 # ADR-0310: A rule budget that only shrinks, and fix-list items tagged by rule (REQ-037, brief 647)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0247, ADR-0294, SPEC-0021, SPEC-0023, SPEC-0045

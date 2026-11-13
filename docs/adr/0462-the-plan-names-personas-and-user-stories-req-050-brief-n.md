@@ -1,6 +1,6 @@
 # ADR-0462: The plan names personas and writes each requirement as a user story
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, ADR-0269, ADR-0454, ADR-0456, ADR-0457, ADR-0461, ADR-0469, amendment 163, amendment 164,

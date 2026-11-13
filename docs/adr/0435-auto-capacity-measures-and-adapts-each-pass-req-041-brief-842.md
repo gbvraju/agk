@@ -1,6 +1,6 @@
 # ADR-0435: The `auto` capacity profile measures the machine and adapts by evidence each pass
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Deciders: maintainers
 - Related: SPEC-0034 rule 15, amendment 149 items 4 to 6, ADR-0409, ADR-0384, ADR-0223, brief #842

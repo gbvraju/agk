@@ -1,6 +1,6 @@
 # ADR-0341: Nine builder sessions at once for this repository
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: SPEC-0034, ADR-0266, plan #661

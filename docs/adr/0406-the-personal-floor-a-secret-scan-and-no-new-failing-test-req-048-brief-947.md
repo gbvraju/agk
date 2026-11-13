@@ -1,6 +1,6 @@
 # ADR-0406: The personal floor, a secret scan and no new failing test at every level
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0267, ADR-0400, SPEC-0041, brief #947

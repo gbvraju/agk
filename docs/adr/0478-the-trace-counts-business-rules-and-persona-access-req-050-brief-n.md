@@ -1,6 +1,6 @@
 # ADR-0478: The plan's trace counts business rules and persona access
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, ADR-0269, ADR-0462, ADR-0473, ADR-0474, amendment 167, amendment 166, amendment 164, brief #1118,

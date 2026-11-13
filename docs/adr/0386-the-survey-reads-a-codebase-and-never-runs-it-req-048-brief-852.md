@@ -1,6 +1,6 @@
 # ADR-0386: The survey reads a codebase and never runs it
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: SPEC-0041 rules 10 to 12 and 30 (f), ADR-0267, SPEC-0002 rule 3, Q-S0041-13, brief #852

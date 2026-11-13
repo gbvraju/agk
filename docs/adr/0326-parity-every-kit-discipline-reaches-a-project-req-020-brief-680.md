@@ -1,6 +1,6 @@
 # ADR-0326: Parity: every kit discipline reaches a project, and the exception list only shrinks (REQ-020, brief 680)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0052, ADR-0307, ADR-0310, SPEC-0001, SPEC-0005

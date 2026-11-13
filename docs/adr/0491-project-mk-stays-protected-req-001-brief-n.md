@@ -1,6 +1,6 @@
 # ADR-0491: project.mk stays protected beside Makefile
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: brief #1155, issue #485, brief #390, ADR-0214

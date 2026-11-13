@@ -1,6 +1,6 @@
 # ADR-0503: The installed plan render works without the plugin
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: brief #1184, plan #661, SPEC-0043 rule 7

@@ -1,6 +1,6 @@
 # ADR-0492: The testing guide maps one entry per module
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: brief #1156, issue #487, ADR-0220, ADR-0242, ADR-0393

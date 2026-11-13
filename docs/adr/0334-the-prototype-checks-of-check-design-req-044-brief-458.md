@@ -1,6 +1,6 @@
 # ADR-0334: the prototype checks of check_design.py and their test map entry (REQ-044, brief 458)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-07
 - Deciders: maintainers
 - Related: ADR-0204, ADR-0248, ADR-0249, ADR-0252, ADR-0285, SPEC-0037

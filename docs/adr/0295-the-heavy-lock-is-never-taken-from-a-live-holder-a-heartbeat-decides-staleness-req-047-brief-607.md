@@ -1,6 +1,6 @@
 # ADR-0295: The heavy lock is never taken from a live holder; a heartbeat, not age, decides staleness (REQ-047, brief 607)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0191, ADR-0231, ADR-0264, ADR-0274

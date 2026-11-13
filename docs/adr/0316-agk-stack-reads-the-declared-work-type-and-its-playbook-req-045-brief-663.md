@@ -1,6 +1,6 @@
 # ADR-0316: `/agk:stack` reads the declared work type and its playbook (REQ-045, brief 663)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-07
 - Deciders: maintainers
 - Related: ADR-0251, ADR-0259, ADR-0312, ADR-0313, ADR-0241, SPEC-0038

@@ -1,6 +1,6 @@
 # ADR-0390: The conductor reports a late sweep under `Needs a fix`
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: ADR-0383, ADR-0310, brief #857, Q-836-1

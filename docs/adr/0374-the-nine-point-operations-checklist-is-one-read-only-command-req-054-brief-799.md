@@ -1,6 +1,6 @@
 # ADR-0374: The nine-point operations checklist is one read-only command
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: ADR-0311, ADR-0327

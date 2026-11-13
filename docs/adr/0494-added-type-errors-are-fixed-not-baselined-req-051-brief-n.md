@@ -1,6 +1,6 @@
 # ADR-0494: Added type errors are fixed, not baselined
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: ADR-0307, issue #986, brief #1157, plan #661

@@ -1,6 +1,6 @@
 # ADR-0400: The personal baseline and the checks of the ten personal keys
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: ADR-0267, ADR-0399, SPEC-0041, brief #922

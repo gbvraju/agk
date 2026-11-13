@@ -1,6 +1,6 @@
 # ADR-0301: `session.py next` skips a parked brief (REQ-037, brief 615)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0195

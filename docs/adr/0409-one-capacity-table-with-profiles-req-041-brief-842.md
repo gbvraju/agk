@@ -1,6 +1,6 @@
 # ADR-0409: One capacity table with profiles decides how many builders start
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: SPEC-0034 rules 1 and 15, SPEC-0006 rule 5, amendment 149, ADR-0384, ADR-0223, ADR-0153, brief #842

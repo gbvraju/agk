@@ -1,6 +1,6 @@
 # ADR-0322: The conductor's sweep marks a silent builder (REQ-041, brief 669)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0308, SPEC-0034, SPEC-0030

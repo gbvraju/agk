@@ -1,6 +1,6 @@
 # ADR-0441: Auto test workers are capped by free memory
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Deciders: maintainers
 - Related: brief #1032, plan #661, SPEC-0044 rule 4, ADR-0305 (brief #631), ADR-0422 (brief #980), ADR-0436 (brief #1021)

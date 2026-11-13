@@ -1,6 +1,6 @@
 # ADR-0401: The smoke run by change kind, and its test map entry
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0270, SPEC-0044, brief #923

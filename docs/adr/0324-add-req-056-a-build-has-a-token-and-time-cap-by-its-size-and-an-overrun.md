@@ -1,6 +1,6 @@
 # ADR-0324: Add REQ-056: A build has a token and time cap by its size, and an overrun stops it
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: SPEC-0049, SPEC-0012, SPEC-0018, SPEC-0033, SPEC-0034, SPEC-0045, SPEC-0047, ADR-0308, ADR-0310, plan #542, plan #661

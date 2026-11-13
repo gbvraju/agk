@@ -1,6 +1,6 @@
 # ADR-0424: A brief with no Builds: line closes after a merge only on Finishes (REQ-046)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Deciders: maintainers
 - Related: ADR-0411, ADR-0273, SPEC-0039, brief #992, brief #959, brief #846, plan #661

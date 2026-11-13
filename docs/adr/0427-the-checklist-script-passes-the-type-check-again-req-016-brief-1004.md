@@ -1,6 +1,6 @@
 # ADR-0427: The checklist script passes the type check again (REQ-016, brief 1004)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0010, ADR-0307, ADR-0374, ADR-0420, issue #986, brief #1004

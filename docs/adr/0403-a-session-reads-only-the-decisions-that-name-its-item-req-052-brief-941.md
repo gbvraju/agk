@@ -1,6 +1,6 @@
 # ADR-0403: A session reads only the decisions that name its item, not the frozen log (REQ-052)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0247, ADR-0277, ADR-0310, SPEC-0045, brief #941, plan #661

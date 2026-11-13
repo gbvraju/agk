@@ -1,6 +1,6 @@
 # ADR-0325: Add REQ-057: Overlapping work never runs at once, and a second change to a file re-proves
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: SPEC-0050, SPEC-0012, SPEC-0034, SPEC-0039, ADR-0189, ADR-0297, ADR-0310, plan #661, brief #667

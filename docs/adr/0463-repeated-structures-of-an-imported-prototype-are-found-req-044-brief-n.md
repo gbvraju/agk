@@ -1,6 +1,6 @@
 # ADR-0463: The structures an imported prototype repeats across its pages are found and written as a design source
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0037, SPEC-0043, ADR-0269, ADR-0448, ADR-0454, ADR-0458, ADR-0469, amendment 161, amendment 163,

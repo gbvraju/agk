@@ -1,6 +1,6 @@
 # ADR-0307: The type check is a ratchet: its known errors may only go down (REQ-016, brief 633)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0010

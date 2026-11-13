@@ -1,6 +1,6 @@
 # ADR-0333: SPEC-0048 build (b) adds the testing map entry of front_door.py (REQ-055, brief 685)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-07
 - Deciders: maintainers
 - Related: ADR-0314, SPEC-0048, SPEC-0038, SPEC-0042, SPEC-0012, ADR-0259, ADR-0271, ADR-0293

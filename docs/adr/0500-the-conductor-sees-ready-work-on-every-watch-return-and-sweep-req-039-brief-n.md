@@ -1,6 +1,6 @@
 # ADR-0500: The conductor sees ready work on every watch return and sweep
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: ADR-0489, ADR-0482, brief #1151, brief #1179, plan #661

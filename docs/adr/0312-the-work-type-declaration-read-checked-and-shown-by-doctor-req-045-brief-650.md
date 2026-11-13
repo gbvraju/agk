@@ -1,6 +1,6 @@
 # ADR-0312: The work-type declaration, read, checked and shown by doctor (REQ-045, brief 650)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0251, ADR-0259, SPEC-0038

@@ -1,6 +1,6 @@
 # ADR-0388: A conductor line in the wrong form is refused before and after posting
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: ADR-0178, ADR-0330, ADR-0310, brief #854, conductor catch log rows 24 and 25

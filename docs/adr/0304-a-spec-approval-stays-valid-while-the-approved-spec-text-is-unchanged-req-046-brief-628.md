@@ -1,6 +1,6 @@
 # ADR-0304: A spec approval stays valid while the approved spec text is unchanged (REQ-046, brief 628)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0261, ADR-0265, ADR-0297, SPEC-0039, SPEC-0032

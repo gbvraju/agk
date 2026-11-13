@@ -1,6 +1,6 @@
 # ADR-0285: This repository runs a change's own and affected tests before a push, and the full suite on main (REQ-016, brief 578)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-05
 - Deciders: maintainers
 - Related: ADR-0185, ADR-0220, ADR-0227, ADR-0238, ADR-0242, SPEC-0044

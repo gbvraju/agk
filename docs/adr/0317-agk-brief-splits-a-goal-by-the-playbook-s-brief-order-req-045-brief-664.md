@@ -1,6 +1,6 @@
 # ADR-0317: /agk:brief splits a goal by the playbook's brief order (REQ-045, brief 664)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-07
 - Deciders: maintainers
 - Related: ADR-0251, ADR-0259, ADR-0312, SPEC-0038

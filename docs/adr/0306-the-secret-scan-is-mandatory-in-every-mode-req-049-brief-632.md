@@ -1,6 +1,6 @@
 # ADR-0306: The secret scan is mandatory in every mode: a missing gitleaks fails the run, never skips it (REQ-049, brief 632)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0186, ADR-0158, ADR-0208, ADR-0233, ADR-0280

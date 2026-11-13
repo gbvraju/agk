@@ -1,6 +1,6 @@
 # ADR-0483: The merger waits for an open owner ask or spec approval
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: ADR-0265, ADR-0304, ADR-0387, brief #1101, brief #1134, plan #661

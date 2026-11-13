@@ -1,6 +1,6 @@
 # ADR-0459: An approved plan is published as milestones and briefs
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0041, SPEC-0037, SPEC-0030, ADR-0269, ADR-0461, amendment 163, brief #1078, plan #661

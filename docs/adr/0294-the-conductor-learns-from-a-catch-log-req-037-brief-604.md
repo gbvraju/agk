@@ -1,6 +1,6 @@
 # ADR-0294: The conductor learns from a catch log, each incident turned into a check, a test or a rule line (REQ-037, brief 604)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0265, ADR-0271, ADR-0277

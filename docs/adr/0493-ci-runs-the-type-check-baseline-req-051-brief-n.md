@@ -1,6 +1,6 @@
 # ADR-0493: CI runs the type check baseline
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: ADR-0307, ADR-0328, ADR-0494, issue #986, brief #1158, plan #661

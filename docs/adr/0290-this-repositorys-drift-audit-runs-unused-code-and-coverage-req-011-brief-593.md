@@ -1,6 +1,6 @@
 # ADR-0290: This repository's weekly drift audit runs its unused-code and coverage commands (REQ-011, brief 593)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-05
 - Deciders: maintainers
 - Related: ADR-0177, ADR-0282, SPEC-0004

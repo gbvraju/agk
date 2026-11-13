@@ -1,6 +1,6 @@
 # ADR-0351: Claim judges overlap as next and plan do, and the shared indexes are exempt (REQ-057, brief 751)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: ADR-0325, ADR-0339, ADR-0189, ADR-0195, SPEC-0050, SPEC-0034

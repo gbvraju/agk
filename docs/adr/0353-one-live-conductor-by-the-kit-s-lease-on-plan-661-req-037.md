@@ -1,6 +1,6 @@
 # ADR-0353: One live conductor at a time, by the kit's lease on plan #661 (REQ-037)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: ADR-0330, ADR-0341, SPEC-0030, SPEC-0039, plan #661

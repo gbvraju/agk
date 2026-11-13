@@ -1,6 +1,6 @@
 # ADR-0465: Each milestone is estimated from the project's own history
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, ADR-0269, ADR-0456, ADR-0457, amendment 115 item 1, brief #1093, brief #1075, plan #661

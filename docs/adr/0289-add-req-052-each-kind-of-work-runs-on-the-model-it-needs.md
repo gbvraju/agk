@@ -1,6 +1,6 @@
 # ADR-0289: Add REQ-052: Each kind of work runs on the model it needs and its token usage is recorded
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-05
 - Deciders: maintainers
 - Related: SPEC-0045, SPEC-0012, SPEC-0033, SPEC-0011, SPEC-0007, ADR-0247, ADR-0270, ADR-0271, REQ-040, plan #542, #489

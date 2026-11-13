@@ -1,6 +1,6 @@
 # ADR-0303: Add REQ-053: A failing test opens one bug issue, and its fix leaves a record for the next one
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: SPEC-0046, SPEC-0012, SPEC-0042, SPEC-0028, ADR-0299, ADR-0289, ADR-0242, ADR-0297, plan #542

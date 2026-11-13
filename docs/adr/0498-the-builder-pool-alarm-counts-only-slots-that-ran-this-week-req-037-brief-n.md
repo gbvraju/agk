@@ -1,6 +1,6 @@
 # ADR-0498: The builder pool alarm counts only slots that ran this week
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: brief #1172, plan #661, issue #1159, issue #1028, ADR-0368, ADR-0412, ADR-0487

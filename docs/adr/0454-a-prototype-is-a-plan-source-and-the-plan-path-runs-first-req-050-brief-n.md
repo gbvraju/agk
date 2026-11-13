@@ -1,6 +1,6 @@
 # ADR-0454: An imported prototype is a plan source, and SPEC-0043's plan path runs first
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0043, SPEC-0037, ADR-0269, ADR-0446, amendment 161, amendment 163, brief #1073, plan #661

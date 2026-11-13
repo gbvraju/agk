@@ -1,6 +1,6 @@
 # ADR-0361: Every brief and spec states its contexts, and the owner can hold a brief
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: amendment 142, brief #775, SPEC-0030, SPEC-0021

@@ -1,6 +1,6 @@
 # ADR-0426: Personal mode records each floor run and reports the defects caught before a push
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: ADR-0267, ADR-0406, SPEC-0041, brief #999

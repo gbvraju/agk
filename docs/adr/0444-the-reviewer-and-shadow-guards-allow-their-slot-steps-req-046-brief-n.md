@@ -1,6 +1,6 @@
 # ADR-0444: The reviewer and shadow guards allow their slot steps
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-11
 - Deciders: maintainers
 - Related: brief #1050, plan #661, brief #1013, brief #1014, ADR-0431, Q-1013-3, Q-1014-1

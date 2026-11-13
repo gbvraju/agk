@@ -1,6 +1,6 @@
 # ADR-0504: The inventory update adds missing requirements
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: SPEC-0037, brief #456, brief #1185, plan #661

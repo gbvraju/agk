@@ -1,6 +1,6 @@
 # ADR-0359: A file the test map does not cover selects the tests that name it (REQ-051, REQ-062, brief 773)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: SPEC-0055, ADR-0360, ADR-0220, ADR-0285, ADR-0348, plan #661

@@ -1,6 +1,6 @@
 # ADR-0422: Selected pull request tests run in the full suite's workers
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: brief #980, plan #661, SPEC-0044 rules 4 and 5, ADR-0305 (brief #631), ADR-0348 (brief #749), ADR-0242

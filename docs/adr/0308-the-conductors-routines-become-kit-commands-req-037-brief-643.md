@@ -1,6 +1,6 @@
 # ADR-0308: The conductor's routines become kit commands (REQ-037, brief 643)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0294, ADR-0265, ADR-0297, ADR-0302, SPEC-0039

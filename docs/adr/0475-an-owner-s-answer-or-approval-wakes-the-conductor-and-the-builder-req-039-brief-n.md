@@ -1,6 +1,6 @@
 # ADR-0475: An owner's answer or approval wakes the conductor and the builder
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainers
 - Related: SPEC-0032, ADR-0308, brief #961, brief #1102, brief #1112, plan #661

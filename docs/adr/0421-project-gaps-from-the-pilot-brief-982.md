@@ -1,6 +1,6 @@
 # ADR-0421: Three project gaps from the pilot: a protected-path brief warning, local mode adopts workflows already off, the review agent re-runs the evidence check
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: brief #982, issues #482, #485, #486 and #488, plan #661, brief #390 (ADR-0214), brief #371 (ADR-0213), brief #434 (ADR-0233), SPEC-0023, SPEC-0030 rule 4

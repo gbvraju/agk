@@ -1,6 +1,6 @@
 # ADR-0377: The pilot playbook as checked data (REQ-045, brief 805)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-08
 - Deciders: maintainers
 - Related: ADR-0251, ADR-0260, ADR-0369, SPEC-0038

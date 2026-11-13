@@ -1,6 +1,6 @@
 # ADR-0330: The conductor's last private routines become kit commands (REQ-037, brief 700)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-07
 - Deciders: maintainers
 - Related: ADR-0308, ADR-0329, ADR-0322, ADR-0327, ADR-0154, SPEC-0021, SPEC-0039

@@ -1,6 +1,6 @@
 # ADR-0419: The real token figure from the session's transcript, and the cost per kind
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Deciders: maintainers
 - Related: SPEC-0045 rules 2, 8 and 9, amendment 145 items 7 to 10 and 13, ADR-0289, brief #798 build (a), pull request #977

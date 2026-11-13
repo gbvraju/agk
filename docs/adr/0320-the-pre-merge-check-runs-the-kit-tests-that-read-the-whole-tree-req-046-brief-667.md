@@ -1,6 +1,6 @@
 # ADR-0320: The pre-merge check runs the kit tests that read the whole tree (REQ-046, brief 667)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Deciders: maintainers
 - Related: ADR-0297, ADR-0273, ADR-0310, SPEC-0039

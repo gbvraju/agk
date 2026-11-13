@@ -1,6 +1,6 @@
 # ADR-0358: The planner holds a brief only for a real clash, and measures every hold
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Deciders: maintainers
 - Related: amendment 141, brief #772, SPEC-0050, SPEC-0030, SPEC-0006, SPEC-0007, ADR-0189, ADR-0325, ADR-0339, ADR-0357
