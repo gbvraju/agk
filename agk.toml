@@ -314,6 +314,7 @@ tests = [
   "tests/kit/test_caps.py", "tests/kit/test_conductor_commands.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py",
   "tests/kit/test_conductor_start_wake.py",
+  "tests/kit/test_light_reprove.py",
 ]
 [[testing.map]]
 code = "scripts/agk/config.py"
@@ -569,6 +570,7 @@ tests = [
   "tests/kit/test_sweep_by_verdict.py", "tests/kit/test_verdict_status.py",
   "tests/kit_dev/test_conductor_catches.py", "tests/kit_dev/test_drift_audit_release.py",
   "tests/kit_dev/test_release_check.py",
+  "tests/kit/test_light_reprove.py",
 ]
 [[testing.map]]
 code = "scripts/agk/metrics.py"
@@ -801,6 +803,7 @@ tests = [
   "tests/kit/test_merge_cleared_reprove.py",
   "tests/kit/test_plan_exact_touches.py", "tests/kit/test_plan_reprove_paths.py",
   "tests/kit/test_session_claim_overlap.py", "tests/kit/test_builder_slots.py",
+  "tests/kit/test_light_reprove.py",
 ]
 [[testing.map]]
 code = "scripts/agk/shadow_count.py"

@@ -75,6 +75,12 @@ shared-mechanical files and the shared indexes of `[flow] shared_indexes` (exact
 `SHARED_INDEXES`; a set list replaces it, a bad value is refused naming the setting). A shared
 index never makes an overlap; it still counts for the re-prove above, which has no exemption.
 
+The light re-prove (SPEC-0050 amendment 171, brief #1163, ADR-0495): `reprove_state` returns the
+re-prove files and whether every one is a shared index; `reprove_kind` says `light` when they all
+are and the merge is clean (`git merge-tree --write-tree`), else `full`, `conflict` or `none`; and
+`light_merge` says whether a commit is that light merge of the default branch into a head and
+adds nothing beyond the default branch's change, the test `merge_cleared.py` carries a verdict by.
+
 The table of files (amendment 141 item 3, build (b)): `exempt` also holds `Prose`, the row of
 `[flow] reprove_paths`. Prose never makes an overlap, and the later change re-proves. A folder or
 wildcard entry is in a row only when every file it matches in the tree is, and one that matches
@@ -1308,6 +1314,59 @@ def reprove_files(root, default: str, head: str) -> list[str] | None:
     if mine is None or theirs is None:
         return None
     return sorted(mine & theirs)
+
+
+def reprove_state(
+    root, default: str, head: str, shared: list[str] | None = None
+) -> tuple[list[str] | None, bool]:
+    """(`reprove_files`, whether every one is a shared index of rule 3) (SPEC-0050 amendment 171,
+    brief #1163); SHARED defaults to `shared_indexes(root)`. An empty or unreadable list is never
+    all shared."""
+    files = reprove_files(root, default, head)
+    indexes = set(shared_indexes(root) if shared is None else shared)
+    return files, bool(files) and all(name in indexes for name in files or [])
+
+
+def clean_merge(root, first: str, second: str) -> str | None:
+    """The tree of the merge of FIRST and SECOND (`git merge-tree --write-tree`), or None on a
+    conflict or a read that fails."""
+    out = _git(root, "merge-tree", "--write-tree", "--no-messages", first, second)
+    tree = (out or "").strip()
+    return tree if re.fullmatch(r"[0-9a-f]{40}", tree) else None
+
+
+def reprove_kind(
+    root, default: str, head: str, shared: list[str] | None = None
+) -> tuple[str | None, list[str]]:
+    """(`none`, `light`, `full` or `conflict`, the re-prove files) of HEAD against DEFAULT
+    (amendment 171): `light` when every re-prove file is a shared index and the merge is clean;
+    `conflict` when it is not; (None, []) when git cannot read it, never `light`."""
+    files, all_shared = reprove_state(root, default, head, shared)
+    if files is None:
+        return None, []
+    if not files:
+        return "none", []
+    if not all_shared:
+        return "full", files
+    return ("light" if clean_merge(root, head, default) else "conflict"), files
+
+
+def light_merge(root, old: str, new: str, default: str, shared: list[str]) -> bool:
+    """Whether NEW is the light re-prove's merge of the default branch into OLD (amendment 171):
+    a commit with exactly the parents OLD and one commit of DEFAULT, OLD in the light state
+    against that parent, and NEW's tree the clean merge of the two, so that it adds nothing beyond
+    the default branch's change. Any read that fails is False."""
+    out = _git(root, "rev-list", "--parents", "-n", "1", new)
+    parents = (out or "").split()[1:]
+    if len(parents) != 2 or parents[0] != old:
+        return False
+    theirs = parents[1]
+    if _git(root, "merge-base", "--is-ancestor", theirs, default) is None:
+        return False
+    kind, _ = reprove_kind(root, theirs, old, shared)
+    tree = clean_merge(root, old, theirs)
+    own = (_git(root, "rev-parse", f"{new}^{{tree}}") or "").strip()
+    return kind == "light" and tree is not None and tree == own
 
 
 def behind_merges(root, default: str, head: str) -> int | None:
