@@ -54,13 +54,19 @@ checkout; the other scripts are installed under `scripts/agk/`.
 6. **Render, once.** `python3 scripts/agk/plan_intake.py render --proposals FILE` (the plugin's copy works the same)
    prints the conflicts and then the open questions for you, and writes, as new files only, `docs/plan/scope.md`,
    `docs/plan/milestones.md`, `docs/plan/requirements-proposed.md`, one Draft spec per feature area under `docs/specs/`
-   and one brief per brief under `docs/plan/briefs/M<n>/`. From then on these files are yours. The requirements enter `docs/requirements.md` through
-   your own intake pull request, and you replace each brief's `Advances:` key with its `REQ-n` number.
+   and one brief per brief under `docs/plan/briefs/M<n>/`. From then on these files are yours. The requirements enter
+   `docs/requirements.md` through your own intake pull request, and you replace each brief's `Advances:` key with its
+   `REQ-n` number. Once they are in, run `python3 "$AGK/scripts/agk/design.py" inventory` once: it keeps every line of
+   `docs/design/inventory.md` and adds a section for each new requirement, so you fill only the new `- Screens:` slots,
+   which the requirements' `Source:` lines point at; the kit's own requirements already read
+   `no screen: a rule of the kit`.
 7. **Trace and count.** `python3 scripts/agk/check_plan.py --trace` prints one row per source location: the requirement,
    the spec rule, the brief, the merged pull request (with `--facts FILE` and `--numbers FILE`) and the test, `none` where
    a link is missing. It ends with the coverage line, `ok plan: <a> of <b> in-scope source lines have a requirement, ...`.
    Each heading of a prototype source counts as one in-scope location, so `<a> of <b>` shows every mapped screen and
-   state has a requirement. The trace is printed, never committed.
+   state has a requirement. The trace is printed, never committed. The kit's own requirements (REQ-001 to REQ-099 of
+   `docs/requirements.md`) have no project source, so the check, the trace and the counts leave them out unless one
+   carries a `Source:` line.
 8. **Approve.** On the plan's pull request, an account listed in `spec_approvers` of `config/reviewers.yaml` posts
    `Approve: plan <full head ID>`. A session never posts it; in solo mode it is part of your `Confirmed:` comment.
 9. **Publish.** Save the pull request's comments as a file and run
