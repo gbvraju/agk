@@ -68,7 +68,7 @@ import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
@@ -877,7 +877,7 @@ def finished_result(reads: Reads, now: datetime.datetime | None = None) -> Resul
     held: dict[int, list[dict]] = {}
     for pr in pulls:
         number = brief_of(pr.get("body")) if isinstance(pr, dict) else None
-        if number in open_numbers:
+        if number is not None and number in open_numbers:
             held.setdefault(number, []).append(pr)
     listed = []
     for number in sorted(held):
@@ -1098,10 +1098,8 @@ def model_routes_result(root: Path) -> Result:
         return Result("ok", message=" (one route)")
     missing = [t for t in models.MODEL_TIERS if t in tiers and t not in routes]
     if missing:
-        moved = "; ".join(
-            f"{t} has no route; it uses the route of {models.route_of(routes, t)[0]}"
-            for t in missing
-        )
+        used = {t: cast(tuple[str, dict], models.route_of(routes, t))[0] for t in missing}
+        moved = "; ".join(f"{t} has no route; it uses the route of {used[t]}" for t in missing)
         return Result("fail", message=f" ({moved})")
     return Result("ok", message=" (each tier the kinds use has its own route)")
 
@@ -1120,7 +1118,7 @@ def always_full_result(root: Path) -> Result:
 SUGGEST_GB = ((8, "small"), (32, "balanced"))  # free memory under n GB suggests the profile
 
 
-def suggested_profile(available: int | None) -> str | None:
+def suggested_profile(available: float | None) -> str | None:
     """`small` under 8 GB free, `balanced` under 32 GB, `full` above; None when unread."""
     if available is None:
         return None
@@ -1609,8 +1607,9 @@ def full_seconds(record: dict) -> float | None:
                     "regression",
                 ):
                     seconds = run.get("seconds")
-                    ok = isinstance(seconds, (int, float)) and not isinstance(seconds, bool)
-                    return float(seconds) if ok else None
+                    if isinstance(seconds, (int, float)) and not isinstance(seconds, bool):
+                        return float(seconds)
+                    return None
     return None
 
 
