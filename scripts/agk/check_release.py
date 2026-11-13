@@ -208,20 +208,29 @@ def read_or_empty(path: Path) -> str:
         return ""
 
 
+def reads_records(root: Path, mb: str) -> bool:
+    """Whether `check` reads the base's records (and `valid_release` can be true): flow mode, this
+    check on MB (the pull request that adds it is the last build that bumps itself) and a version
+    of `agk.toml` other than MB's. `check_adrs.py --record-ids --body` asks, so that the workflow
+    fetches every record's Final comment for a release pull request only (brief #1181, ADR-0501)."""
+    if pr_mode(root) != "flow" or show(root, mb, "scripts/agk/check_release.py") is None:
+        return False
+    old = toml_version(show(root, mb, "agk.toml"))
+    new = toml_version((root / "agk.toml").read_text(encoding="utf-8"))
+    return not (new is None or old is None or new == old)
+
+
 def check(root: Path, comments: list[dict] | None = None) -> int:
     if pr_mode(root) != "flow":
         print(f"ok {NAME}")
         return 0
     base = resolve_base(root, None)
     mb = merge_base(root, base) if base else "HEAD"
-    if show(root, mb, "scripts/agk/check_release.py") is None:
-        print(f"ok {NAME}")  # the pull request that adds this check is the last build that bumps
+    if not reads_records(root, mb):
+        print(f"ok {NAME}")
         return 0
     old = toml_version(show(root, mb, "agk.toml"))
     new = toml_version((root / "agk.toml").read_text(encoding="utf-8"))
-    if new is None or old is None or new == old:
-        print(f"ok {NAME}")
-        return 0
     changes = changed_files(root, mb)
     fragments = set(tree_fragments(root, mb))
     flips = recorded_adrs(root, mb, comments)
@@ -264,11 +273,7 @@ def valid_release(root: Path, mb: str, comments: list[dict] | None = None) -> bo
     every rule of `check` met, with the Final COMMENTS of the base's records (SPEC-0021 rule 3a;
     without them while a record exists, not a release). `check_protected_changes.py` asks, so
     that a release needs no ADR for the protected files it must change (brief #212)."""
-    if pr_mode(root) != "flow" or show(root, mb, "scripts/agk/check_release.py") is None:
-        return False
-    old = toml_version(show(root, mb, "agk.toml"))
-    new = toml_version((root / "agk.toml").read_text(encoding="utf-8"))
-    if old is None or new is None or old == new:
+    if not reads_records(root, mb):
         return False
     try:
         with contextlib.redirect_stdout(io.StringIO()):

@@ -7,7 +7,9 @@ ADR whose file still says `Proposed` and whose record its Final comment in FILE 
 comments as `gh api repos/{repo}/issues/comments/<id>` answers): the flips the release pull request
 makes. A record that FILE does not verify is not counted; without FILE, while a record exists, it
 fails closed. `check_adrs.py --record-ids` prints the Final comment id of each record read in
-HEAD's history, one a line, so that the governance workflow can fetch those comments.
+HEAD's history, one a line, so that the governance workflow can fetch those comments; with
+`--body FILE` only those a check will read: all for a release pull request, those of the ADRs a
+`Covered-by:` line names, else none (brief #1181, ADR-0501).
 """
 
 from __future__ import annotations
@@ -129,12 +131,46 @@ def read_comments(path: str | None) -> list[dict] | None:
     return comments_of(Path(path))
 
 
-def record_ids(root: Path) -> int:
-    """Print the Final comment id of each record that `final_records` reads in HEAD's history,
-    one a line: the governance workflow fetches each one for `--comments`."""
-    for cid in sorted({record[1] for record in final_records(root, "HEAD").values()}):
+def record_ids(root: Path, argv: list[str]) -> int:
+    """Print, one a line, the Final comment id of each record that `final_records` reads in HEAD's
+    history: the governance workflow fetches each one for `--comments`. With `--body FILE` (the pull
+    request body), only the ids a check will read (brief #1181, ADR-0501): every record's (in HEAD's
+    history or the merge base's) for a release pull request (`check_release.reads_records`), else
+    those of each ADR that a `Covered-by:` line of FILE names, else none. A body that cannot be
+    read or a base that does not resolve narrows nothing: every id, as without the option."""
+    records = final_records(root, "HEAD")
+    wanted = {record[1] for record in records.values()}
+    at = argv.index("--body") + 1 if "--body" in argv else None
+    try:
+        if at is not None:
+            if at >= len(argv):
+                raise CheckError("--body needs a value")
+            text = Path(argv[at]).read_text(encoding="utf-8")
+            base = resolve_base(root, base_arg(argv))
+            mb = merge_base(root, base) if base else "HEAD"
+            wanted = needed_ids(root, mb, text, records)
+    except (OSError, UnicodeDecodeError, CheckError):
+        pass  # fail closed: every id
+    for cid in sorted(wanted):
         print(cid)
     return 0
+
+
+def needed_ids(root: Path, mb: str, body: str, records: dict[str, tuple[int, int]]) -> set[int]:
+    """The Final comment ids that `check_release` and `check_protected_changes` read for BODY on
+    merge base MB, given RECORDS of HEAD's history (`record_ids`)."""
+    import check_release  # noqa: PLC0415 - kit-only, imports this module
+    from check_protected_changes import COVERED_BY, COVERED_FORM  # noqa: PLC0415
+
+    sources = (records, final_records(root, mb))
+    if check_release.reads_records(root, mb):
+        return {record[1] for source in sources for record in source.values()}
+    named = {
+        m.group(1)
+        for line in body.splitlines()
+        if line.startswith(COVERED_BY) and (m := COVERED_FORM.search(line))
+    }
+    return {source[n][1] for source in sources for n in named if n in source}
 
 
 def pending(root: Path, files: list[Path], comments: list[dict] | None = None) -> int:
@@ -195,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     known = {m.group(1) for p in files if (m := FILE_RE.match(p.name))}
     args = sys.argv[1:] if argv is None else argv
     if "--record-ids" in args:
-        return record_ids(root)
+        return record_ids(root, list(args))
     if "--pending" in args:
         at = args.index("--comments") + 1 if "--comments" in args else None
         try:
