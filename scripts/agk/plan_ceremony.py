@@ -510,8 +510,8 @@ def retro(args: argparse.Namespace, ctx: dict) -> list[str]:
         )
     else:
         kinds = Counter(str(s.get("kind", UNKNOWN)) for s in stalls)
-    found = ", ".join(f"{k} {n}" for k, n in kinds.most_common())
-    lines.append(f"stalls by kind: {found or 'none'}")
+    listed = ", ".join(f"{k} {n}" for k, n in kinds.most_common())
+    lines.append(f"stalls by kind: {listed or 'none'}")
     ideas = []
     missed = [(w / j, s, w, j) for s, (w, j) in sized.items() if j and w < j]
     if missed:
