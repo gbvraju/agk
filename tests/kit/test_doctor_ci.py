@@ -187,7 +187,8 @@ def test_governance_skips_its_heavy_steps_on_a_draft_and_still_reports():
     """REQ-039: brief #283 answer 2 (the same skip as a status-only commit; the job stays)."""
     text = (WORKFLOWS / "governance.yml").read_text(encoding="utf-8")
     part = step(text, "Status-only final commit")
-    assert "PR_DRAFT: ${{ github.event.pull_request.draft }}" in part
+    # brief #1174 (ADR-0499): the draft state is read when the run runs, not from the payload
+    assert "PR_DRAFT: ${{ steps.draft.outputs.draft }}" in part
     draft = part.split('if [ "$PR_DRAFT" = true ]', 1)[1].split("fi\n", 1)[0]
     assert 'echo "skip=true" >> "$GITHUB_OUTPUT"' in draft and "GITHUB_STEP_SUMMARY" in draft
     assert "ready for review" in draft and "exit 0" in draft
