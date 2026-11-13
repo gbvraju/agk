@@ -27,7 +27,10 @@ Projects follow the same rule, so every project's workflow change has the same m
    pull request (GET), refuses one that is not open, comes from a fork or whose head is the default branch, fetches the
    head branch into a temporary worktree, lists each `.agk/workflow-proposals/<name>.yml` with its target
    `.github/workflows/<name>.yml`, refuses a proposal that does not parse or names no `jobs`, prints the diff against
-   the branch's current workflow and stops (a dry run). With `--yes` it also needs the newest
+   the branch's current workflow and stops (a dry run), ending with the head it showed. `--yes` needs that head as
+   `--head <sha>` and refuses any other, so a push between the dry run and `--yes` is never applied unseen. A
+   proposal that is not a regular file, or a target path any part of which is a symbolic link, is refused before
+   anything is read through it or written. With `--yes` it also needs the newest
    `Question: Q-… for the maintainers` comment that names the command; it moves each proposal into place, deletes the
    proposals folder, commits `workflow: apply the proposal of #<n> (<Q id>)` on the branch, checks the committed files
    byte for byte against the proposals, pushes a fast-forward of the fetched head to the head branch (never a

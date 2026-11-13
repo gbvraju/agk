@@ -1,6 +1,7 @@
 """Apply a builder's proposed workflow file to its pull request's branch (brief #1189, ADR-0505).
 
-    python3 scripts/agk/workflow_apply.py --pr N [--yes] [--repo OWNER/REPO] [--remote NAME]
+    python3 scripts/agk/workflow_apply.py --pr N [--yes --head SHA] [--repo OWNER/REPO]
+                                          [--remote NAME]
 
 The owner's command `/agk:workflow-apply <pr>`, run on the owner's machine with the owner's own
 `git` and `gh`. A session never changes `.github/workflows/`; a builder commits the whole proposed
@@ -10,14 +11,18 @@ It reads the pull request (GET), refuses one that is not open, comes from a fork
 the default branch, fetches the head branch into a temporary worktree (removed when it ends), lists
 each proposal with its target `.github/workflows/<name>.yml`, refuses a proposal that does not
 parse or names no `jobs`, prints the diff against the branch's current workflow and stops: a dry
-run, which changes nothing.
+run, which changes nothing, and ends with the head it showed and the `--yes --head <sha>` command.
+A proposal that is not a regular file, or a target path any part of which is a symbolic link, is
+refused before anything is read through it or written.
 
-With `--yes` it needs the newest `Question: Q-... for the maintainers` comment that names the
-command (its Q id), moves each proposal into place, deletes the proposals folder, commits
-`workflow: apply the proposal of #<n> (<Q id>)`, checks the committed files byte for byte, pushes
-a fast-forward of the fetched head to the head branch (never a force-push, never the default
-branch) and posts one comment `Answer: <Q id> done: <commit> applied by /agk:workflow-apply`. What
-it cannot do it prints and never does. Personal mode (a `[personal]` table) has no pull requests.
+`--yes` needs `--head <sha>`, the head the dry run printed, and refuses any other head, so a push
+between the two runs is never applied unseen. With `--yes` it needs the newest
+`Question: Q-... for the maintainers` comment that names the command (its Q id), moves each
+proposal into place, deletes the proposals folder, commits `workflow: apply the proposal of #<n>
+(<Q id>)`, checks the committed files byte for byte, pushes a fast-forward of the fetched head
+to the head branch (never a force-push, never the default branch) and posts one comment
+`Answer: <Q id> done: <commit> applied by /agk:workflow-apply`. What it cannot do it prints and
+never does. Personal mode (a `[personal]` table) has no pull requests.
 
 The parse check is a structural check of the YAML subset a workflow uses, standard library only
 (ADR-0001 decision 4): block mappings and lists, quoted and flow scalars, block scalars, no tab in
@@ -304,18 +309,38 @@ def read_pull(repo: str, number: int) -> tuple[str, str]:
     return ref, sha
 
 
+def link_in(tree: Path, rel: str) -> str | None:
+    """The first part of REL under TREE that is a symbolic link, else None."""
+    path = tree
+    for part in Path(rel).parts:
+        path = path / part
+        if path.is_symlink():
+            return path.relative_to(tree).as_posix()
+    return None
+
+
 def proposals(tree: Path) -> list[tuple[str, str, bytes]]:
-    """(proposal path, target path, bytes) of each proposal; refuses a bad name or a bad file."""
+    """(proposal path, target path, bytes) of each proposal; refuses a bad name, a file that is
+    not a regular file, a target path through a symbolic link and a file that does not parse."""
+    linked = link_in(tree, PROPOSALS)
+    if linked:
+        raise Refused(f"{linked}: a symbolic link, not a folder; nothing was changed")
     folder = tree / PROPOSALS
     if not folder.is_dir():
         return []
     found = []
-    for path in sorted(folder.rglob("*")):
+    for path in sorted(folder.iterdir()):
         rel = path.relative_to(tree).as_posix()
-        if path.is_dir():
-            continue
-        if path.parent != folder or not PROPOSAL_NAME.fullmatch(path.name):
+        if path.is_symlink() or not path.is_file():
+            raise Refused(f"{rel}: not a regular file (a link or a folder); nothing was changed")
+        if not PROPOSAL_NAME.fullmatch(path.name):
             raise Refused(f"{rel}: not a {PROPOSALS}/<name>.yml file")
+        target = f"{WORKFLOWS}/{path.name}"
+        linked = link_in(tree, target)
+        if linked:
+            raise Refused(
+                f"{target}: its path holds a symbolic link ({linked}); nothing was changed"
+            )
         data = path.read_bytes()
         try:
             text = data.decode("utf-8")
@@ -324,7 +349,7 @@ def proposals(tree: Path) -> list[tuple[str, str, bytes]]:
         problem = yaml_problem(text)
         if problem:
             raise Refused(f"{rel}: {problem}")
-        found.append((rel, f"{WORKFLOWS}/{path.name}", data))
+        found.append((rel, target, data))
     return found
 
 
@@ -340,6 +365,8 @@ def show_diff(tree: Path, target: str, data: bytes) -> None:
 def apply(tree: Path, found: list[tuple[str, str, bytes]], number: int, qid: str) -> str:
     """Move each proposal into place, remove the folder and commit; the new commit."""
     for _rel, target, data in found:
+        if link_in(tree, target):
+            raise Refused(f"{target}: its path holds a symbolic link; nothing was changed")
         path = tree / target
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
@@ -382,6 +409,11 @@ def work(args: argparse.Namespace, root: Path) -> int:
         raise Refused(
             f"the branch of pull request #{args.pr} moved since it was read: run the command again"
         )
+    if args.yes and fetched != args.head:
+        raise Refused(
+            f"the branch of pull request #{args.pr} moved since the dry run you read: run the "
+            "dry run again and read its diff; nothing was changed"
+        )
     temp = Path(tempfile.mkdtemp(prefix="agk-workflow-apply-"))
     tree = temp / "tree"
     try:
@@ -405,7 +437,11 @@ def work(args: argparse.Namespace, root: Path) -> int:
         else:
             print(f"answers: {qid}")
         if not args.yes:
-            print(f"dry run: nothing changed; run again with --yes to apply it to {ref}")
+            print(f"head: {fetched}")
+            print(
+                f"dry run: nothing changed; to apply exactly this diff to {ref}, run again with "
+                f"--yes --head {fetched}"
+            )
             return 0
         commit = apply(tree, found, args.pr, qid or "")
         push(tree, args.remote, ref)
@@ -430,7 +466,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--yes", action="store_true", help="apply, commit, push and answer")
     parser.add_argument("--repo", help="OWNER/REPO (default: read from the remote)")
     parser.add_argument("--remote", default="origin", help="the remote to fetch and push")
+    parser.add_argument(
+        "--head", help="with --yes: the full head commit the dry run printed; any other is refused"
+    )
     args = parser.parse_args(argv)
+    if args.yes and not (args.head and re.fullmatch(r"[0-9a-f]{40}", args.head)):
+        parser.error("--yes needs --head <the 40-character head commit the dry run printed>")
     top = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
         ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, encoding="utf-8"
     ) if shutil.which("git") else None

@@ -24,15 +24,19 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/workflow_apply.py" --pr <n>
    the branch's current workflow, and the Q id it will answer. It changes nothing. A line starting `refused:` says
    why it stops: the pull request is not open or comes from a fork, its head is the default branch, the branch moved
    since it was read, there is no proposal, a proposal does not parse or names no `jobs`, or (personal mode) there
-   are no pull requests. Show the person the diff and every `refused:` or `note:` line in plain words.
+   are no pull requests, or a proposal is not a regular file or its target path holds a symbolic link. Its last lines
+   are `head: <sha>` and the exact `--yes --head <sha>` command for that head. Show the person the diff and every
+   `refused:` or `note:` line in plain words.
 
 2. **Ask.** Ask the person whether to apply exactly this diff to the branch. Stop on anything but a clear yes.
 
-3. **Apply.** After the yes, run the same command with `--yes`:
+3. **Apply.** After the yes, run the same command with `--yes` and the head the dry run printed, copied whole:
 
 ```
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/workflow_apply.py" --pr <n> --yes
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/workflow_apply.py" --pr <n> --yes --head <sha>
 ```
+
+   It refuses, changing nothing, when the branch moved since that dry run: then run the dry run again and ask again.
 
    It moves each proposal into place, deletes the proposals folder, commits
    `workflow: apply the proposal of #<n> (<Q id>)` on the pull request's branch, checks the committed files byte for
