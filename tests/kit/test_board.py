@@ -28,7 +28,7 @@ NEEDS_MACHINE = (
 )
 WRITES = ("create", "link", "field-create", "item-add", "item-edit")
 
-FAKE = r'''#!/usr/bin/env python3
+FAKE = r"""#!/usr/bin/env python3
 import json, os, sys
 state_path = os.environ["FAKE_GH_STATE"]
 with open(state_path, encoding="utf-8") as f:
@@ -60,7 +60,8 @@ if fail == "scope":
                      "To request it, run:  gh auth refresh -s project\n")
     sys.exit(1)
 if fail == "graphql":
-    sys.stderr.write("gh: GitHub GraphQL is not available from these sessions; use the REST API (HTTP 403)\n")
+    sys.stderr.write("gh: GitHub GraphQL is not available from these sessions;"
+                     " use the REST API (HTTP 403)\n")
     sys.exit(1)
 sub = args[1]
 if fail == sub:
@@ -71,7 +72,8 @@ if sub == "create":
     number = str(state.get("next", 5))
     projects[number] = {"id": "PVT_" + number, "title": opt("--title"), "links": [],
                         "fields": [{"id": "F_title", "name": "Title", "type": "ProjectV2Field"},
-                                   {"id": "F_status", "name": "Status", "type": "ProjectV2SingleSelectField",
+                                   {"id": "F_status", "name": "Status",
+                                    "type": "ProjectV2SingleSelectField",
                                     "options": [{"id": "o1", "name": "Todo"}]},
                                    {"id": "F_ms", "name": "Milestone", "type": "ProjectV2Field"}],
                         "items": []}
@@ -99,7 +101,8 @@ if sub == "field-create":
     field = {"id": "F_" + opt("--name").replace(" ", "_"), "name": opt("--name")}
     if opt("--data-type") == "SINGLE_SELECT":
         field["type"] = "ProjectV2SingleSelectField"
-        field["options"] = [{"id": "opt_" + n, "name": n} for n in opt("--single-select-options").split(",")]
+        names = opt("--single-select-options").split(",")
+        field["options"] = [{"id": "opt_" + n, "name": n} for n in names]
     else:
         field["type"] = "ProjectV2Field"
     p["fields"].append(field)
@@ -114,7 +117,7 @@ if sub == "item-add":
     out(item)
 sys.stderr.write("fake gh: unknown project command\n")
 sys.exit(1)
-'''
+"""
 
 
 def issue(n: int, size: str = "M", expected: str = "4-8 hours", pull: bool = False) -> dict:
@@ -142,10 +145,14 @@ class World:
         self.bin = tmp / "bin"
         self.bin.mkdir()
         gh = self.bin / "gh"
-        gh.write_text(FAKE.replace("#!/usr/bin/env python3", f"#!{sys.executable}"), encoding="utf-8")
+        gh.write_text(
+            FAKE.replace("#!/usr/bin/env python3", f"#!{sys.executable}"), encoding="utf-8"
+        )
         gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
         self.state_path = tmp / "gh-state.json"
-        self.state: dict = {"issues": [issue(11, "S", "2-4 hours"), issue(12), issue(13, "L", "8-16 hours")]}
+        self.state: dict = {
+            "issues": [issue(11, "S", "2-4 hours"), issue(12), issue(13, "L", "8-16 hours")]
+        }
         self.save()
 
     def save(self) -> None:
@@ -161,7 +168,9 @@ class World:
 
     def run(self, *args: str) -> subprocess.CompletedProcess:
         env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "CI")}
-        env.update(PATH=f"{self.bin}{os.pathsep}{os.environ['PATH']}", FAKE_GH_STATE=str(self.state_path))
+        env.update(
+            PATH=f"{self.bin}{os.pathsep}{os.environ['PATH']}", FAKE_GH_STATE=str(self.state_path)
+        )
         return subprocess.run(  # nosec B603 - fixed argument list, no shell
             [sys.executable, str(SCRIPTS / "board.py"), "--repo", REPO, *args],
             cwd=self.root,
@@ -276,7 +285,10 @@ def test_d_an_item_already_on_the_board_is_not_edited(world: World) -> None:
     assert writes(world.calls()[before:]) == [
         c for c in world.calls()[before:] if c[:2] == ["project", "link"]
     ]
-    assert world.load()["projects"]["5"]["items"][1]["values"] == {"F_status": "o1", "F_Size": "opt_L"}
+    assert world.load()["projects"]["5"]["items"][1]["values"] == {
+        "F_status": "o1",
+        "F_Size": "opt_L",
+    }
     assert proc.stdout.strip().splitlines()[-1] == "ok board: 0 added, 3 already there"
 
 

@@ -162,17 +162,29 @@ def dry_run(repo: str, owner: str, title: str, project: int | None) -> int:
 
 
 def fields_of(project: int, owner: str) -> list[dict]:
-    found = gh("project", "field-list", str(project), "--owner", owner, "--format", "json", "--limit", "100")
+    found = gh(
+        "project",
+        "field-list",
+        str(project),
+        "--owner",
+        owner,
+        "--format",
+        "json",
+        "--limit",
+        "100",
+    )
     return list((found or {}).get("fields") or [])
 
 
 def items_of(project: int, owner: str) -> list[dict]:
-    found = gh("project", "item-list", str(project), "--owner", owner, "--format", "json", "--limit", LIMIT)
+    found = gh(
+        "project", "item-list", str(project), "--owner", owner, "--format", "json", "--limit", LIMIT
+    )
     return list((found or {}).get("items") or [])
 
 
 def ensure_fields(project: int, owner: str) -> dict[str, dict]:
-    fields = {f.get("name"): f for f in fields_of(project, owner)}
+    fields: dict[str, dict] = {str(f.get("name")): f for f in fields_of(project, owner)}
     wanted = (
         (SIZE_FIELD, ["--data-type", "SINGLE_SELECT", "--single-select-options", ",".join(SIZES)]),
         (HOURS_FIELD, ["--data-type", "NUMBER"]),
@@ -180,8 +192,16 @@ def ensure_fields(project: int, owner: str) -> dict[str, dict]:
     for name, kind in wanted:
         if name not in fields:
             made = gh(
-                "project", "field-create", str(project), "--owner", owner, "--name", name, *kind,
-                "--format", "json",
+                "project",
+                "field-create",
+                str(project),
+                "--owner",
+                owner,
+                "--name",
+                name,
+                *kind,
+                "--format",
+                "json",
             )
             print(f"added field {name}")
             fields[name] = made or {}
@@ -206,8 +226,15 @@ def apply(repo: str, owner: str, title: str, project: int | None) -> int:
         if n in present:
             continue
         item = gh(
-            "project", "item-add", str(project), "--owner", owner, "--url", str(i["html_url"]),
-            "--format", "json",
+            "project",
+            "item-add",
+            str(project),
+            "--owner",
+            owner,
+            "--url",
+            str(i["html_url"]),
+            "--format",
+            "json",
         )
         added += 1
         print(f"added #{n}")
@@ -222,7 +249,13 @@ def apply(repo: str, owner: str, title: str, project: int | None) -> int:
             if option is None:
                 print(f"note: the {SIZE_FIELD} field has no option {size}")
             else:
-                gh(*edit, "--field-id", str(fields[SIZE_FIELD]["id"]), "--single-select-option-id", str(option["id"]))
+                gh(
+                    *edit,
+                    "--field-id",
+                    str(fields[SIZE_FIELD]["id"]),
+                    "--single-select-option-id",
+                    str(option["id"]),
+                )
                 print(f"set #{n} Size {size}")
         if hours is not None:
             gh(*edit, "--field-id", str(fields[HOURS_FIELD]["id"]), "--number", hours_text(hours))
