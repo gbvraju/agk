@@ -21,7 +21,7 @@ import pytest
 from test_merge_cleared_after import MERGED, in_process, main_in
 from test_merge_cleared_verdict import BASE
 from test_prepush import GOOD_BODY, TOML, path_with
-from test_rule3a_covered_and_label import RECORD, base, final_comment
+from test_rule3a_covered_and_label import CONFIG, RECORD, base, final_comment, fix_list
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts" / "agk"
 sys.path.insert(0, str(SCRIPTS))
@@ -246,3 +246,184 @@ def test_req028_prepush_fetches_nothing_without_covered_by_or_a_record(
     proc = prepush(repo, tools, "--body", str(body))
     assert "prepush: governance ok" in proc.stdout, proc.stdout
     assert gh_calls(tmp_path) == []
+
+
+# --- 3. brief #1181: the workflow fetches only the record comments a check reads ----------------
+# `check_adrs.py --record-ids --body FILE` prints every record's id for a release pull request
+# (a version of agk.toml other than the merge base's, as `check_release.check` tests it), else the
+# ids of the records of the ADRs that a `Covered-by:` line names, else nothing (ADR-0501).
+
+RELEASE_ADRS = {
+    "0009": "docs/adr/0009-intake-of-an-invented-requirement.md",
+    "0010": "docs/adr/0010-another-invented-decision.md",
+}
+RECORDS = {"0009": (7, 42), "0010": (8, 77)}
+RELEASE_CLASSES = "config/\nscripts/agk/\nkit/\nagk.toml\n.claude-plugin/\ndocs/adr/\n"
+CHANGES = "# Changelog\n\n## Unreleased\n\n- #5 an invented change\n\n## 1.0.0 (2026-01-01)\n\n- #1 x\n"
+RELEASED = (
+    "# Changelog\n\n## Unreleased\n\n## 1.1.0 (2026-11-13)\n\n- #5 an invented change\n\n"
+    "## 1.0.0 (2026-01-01)\n\n- #1 x\n"
+)
+
+
+def adr_of(number: str, status: str) -> str:
+    return (
+        f"# ADR-{number}: An invented decision\n\n- Status: {status}\n- Date: 2026-01-01\n"
+        "- Deciders: maintainers\n- Related: none\n- Requirements: REQ-028\n\n"
+        "## Decision\n\nThe build changes `config/` `scripts/agk/`.\n"
+    )
+
+
+def versions_of(version: str) -> dict[str, str]:
+    return {
+        "agk.toml": f'version = "{version}"\npr_mode = "flow"\n',
+        "kit/manifest.json": json.dumps({"kit_version": version}),
+        ".claude-plugin/plugin.json": json.dumps({"name": "example", "version": version}),
+    }
+
+
+def all_comments() -> list[dict]:
+    """The Final comment of each record, as `gh api repos/{repo}/issues/comments/<id>` answers."""
+    return [
+        {
+            "id": cid,
+            "issue_url": f"https://api.example.com/repos/example-owner/example-repo/issues/{pr}",
+            "user": {"login": "reviewer"},
+            "body": fix_list("a1b2c3d", f"Final: {RELEASE_ADRS[n]} Proposed -> Accepted"),
+        }
+        for n, (pr, cid) in sorted(RECORDS.items())
+    ]
+
+
+def records_world(repo, change: str):
+    """A flow-mode kit at 1.0.0 whose base records ADR-0009 (Final 42) and ADR-0010 (Final 77),
+    and a branch that makes CHANGE: `plain` (a file outside every protected class), `covered`
+    (a protected file, for a `Covered-by:` body) or `release` (the three versions raised, the
+    changelog moved and both recorded ADRs flipped)."""
+    files = {
+        "config/protected-paths.txt": "# c\n" + RELEASE_CLASSES,
+        "config/reviewers.yaml": CONFIG,
+        "config/x.txt": "x\n",
+        "CHANGELOG.md": CHANGES,
+        "kit/hashes.json": "{}\n",
+        "scripts/agk/check_release.py": "# the check exists on the base\n",
+        "src/code.txt": "base\n",
+        **versions_of("1.0.0"),
+        **{path: adr_of(n, "Proposed") for n, path in RELEASE_ADRS.items()},
+    }
+    repo.commit(files, "base")
+    for n, (pr, cid) in sorted(RECORDS.items()):
+        record = f"Example (#{pr})\n\nADR-{n} Accepted (Final {cid})\nMerged-by: merge_cleared.py\n"
+        repo.commit({"README.md": f"{n}\n"}, record)
+    repo.branch()
+    if change == "plain":
+        repo.commit({"src/code.txt": "change\n"})
+    elif change == "covered":
+        repo.commit({"config/x.txt": "y\n"})
+    else:
+        flips = {path: adr_of(n, "Accepted") for n, path in RELEASE_ADRS.items()}
+        repo.commit(
+            {**versions_of("1.1.0"), "CHANGELOG.md": RELEASED, "kit/hashes.json": "{}\n\n", **flips}
+        )
+    return repo
+
+
+@pytest.fixture
+def outside(tmp_path_factory) -> Path:
+    """A folder outside the repository (the runner's temporary directory): `check_release`
+    counts every file of the checkout as changed."""
+    return tmp_path_factory.mktemp("runner-temp")
+
+
+def body_file(tmp_path: Path, text: str) -> str:
+    path = tmp_path / "pr-body.md"
+    path.write_text(text, encoding="utf-8")
+    return str(path)
+
+
+def printed_ids(repo, *args: str) -> list[int]:
+    proc = repo.run("check_adrs.py", "--record-ids", *args)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return [int(x) for x in proc.stdout.split()]
+
+
+NO_COVER = "Brief: #1\nAdvances: REQ-028\n"
+COVER_0009 = "Brief: #1\nAdvances: REQ-028\nCovered-by: ADR-0009\n"
+
+
+def test_req039_a_body_without_covered_by_and_no_version_change_prints_nothing(repo, outside):
+    """REQ-039: brief #1181 answer 4 (a): an ordinary pull request fetches no record comment."""
+    records_world(repo, "plain")
+    assert printed_ids(repo, "--body", body_file(outside, NO_COVER)) == []
+
+
+def test_req039_a_push_writes_an_empty_body_and_prints_nothing(repo, outside):
+    """REQ-039: brief #1181 answer 2 (the `PR body file` step writes an empty body on a push)."""
+    records_world(repo, "plain")
+    assert printed_ids(repo, "--body", body_file(outside, "\n")) == []
+
+
+def test_req039_covered_by_a_recorded_adr_prints_that_record_id_only(repo, outside):
+    """REQ-039: brief #1181 answer 4 (b)."""
+    records_world(repo, "covered")
+    assert printed_ids(repo, "--body", body_file(outside, COVER_0009)) == [42]
+
+
+def test_req039_covered_by_an_adr_without_a_record_prints_nothing(repo, outside):
+    """REQ-039: brief #1181 answer 1 (only an ADR that has a record)."""
+    records_world(repo, "covered")
+    text = COVER_0009.replace("ADR-0009", "ADR-0011")
+    assert printed_ids(repo, "--body", body_file(outside, text)) == []
+
+
+def test_req039_a_version_change_prints_every_id(repo, outside):
+    """REQ-039: brief #1181 answer 4 (c): a release pull request reads every record."""
+    records_world(repo, "release")
+    assert printed_ids(repo, "--body", body_file(outside, NO_COVER)) == [42, 77]
+
+
+def test_req039_without_body_every_id_is_printed_as_before(repo):
+    """REQ-039: brief #1181 answer 4 (d): nothing changes until the workflow passes `--body`."""
+    records_world(repo, "plain")
+    assert printed_ids(repo) == [42, 77]
+
+
+def test_req039_an_unreadable_body_prints_every_id(repo, outside):
+    """REQ-039: brief #1181 answer 1 (fail closed: a body that cannot be read narrows nothing)."""
+    records_world(repo, "plain")
+    assert printed_ids(repo, "--body", str(outside / "missing.md")) == [42, 77]
+
+
+def results(repo, tmp_path: Path, body: str, comments: list[dict]) -> tuple:
+    """The exit and output of `check_protected_changes.py` and `check_release.py` given COMMENTS."""
+    saved = tmp_path / "record-comments.json"
+    saved.write_text(json.dumps(comments), encoding="utf-8")
+    env = {"AGK_BASE": "main"}
+    protected = repo.run(
+        "check_protected_changes.py", "--body", body, "--comments", str(saved), **env
+    )
+    release = repo.run("check_release.py", "--comments", str(saved), **env)
+    return (protected.returncode, protected.stdout, release.returncode, release.stdout)
+
+
+@pytest.mark.parametrize(
+    ("change", "text", "expected"),
+    [
+        ("plain", NO_COVER, "ok protected-changes\n"),
+        ("covered", COVER_0009, "Covered-by"),
+        ("release", NO_COVER, "(a release pull request)"),
+    ],
+    ids=["a-nothing", "b-covered-by", "c-release"],
+)
+def test_req039_the_printed_comments_give_the_checks_the_same_result_as_all(
+    repo, outside, change, text, expected
+):
+    """REQ-039: brief #1181 answer 4 (e): only the printed comments, the same verdicts."""
+    records_world(repo, change)
+    body = body_file(outside, text)
+    ids = set(printed_ids(repo, "--body", body))
+    full = results(repo, outside, body, all_comments())
+    narrow = results(repo, outside, body, [c for c in all_comments() if c["id"] in ids])
+    assert narrow == full
+    assert full[0] == 0 and expected in full[1], full
+    assert full[2:] == (0, "ok release\n"), full
