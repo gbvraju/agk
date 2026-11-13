@@ -807,14 +807,17 @@ def test_1101a_an_open_owner_ask_wins_over_every_builder_state_but_parked():
 
 
 def test_1101b_a_maintainer_answer_by_an_approver_returns_the_state_the_facts_give():
-    """REQ-039: brief #1101 answer 4(b) (the answer closes the ask; `agk:fix` returns)."""
+    """REQ-039: brief #1101 answer 4(b) (the answer closes the ask; `agk:fix` returns); a later head
+    no longer closes it (brief #1168, ADR-0497)."""
     answer = said(5, "maintainer", "Maintainer answer: keep the size")
     assert route.decide(facts(comments=[fix_list(), owner_needed(), answer])) == "agk:fix"
     stranger = said(5, "stranger", "Maintainer answer: keep the size")
     comments = [fix_list(), owner_needed(), stranger]
     assert route.decide(facts(comments=comments)) == "agk:question"
     later = {"commit": {"committer": {"date": "2026-10-25T11:00:00Z"}}}
-    assert route.decide(facts(comments=[fix_list(), owner_needed()], commit=later)) == "agk:fix"
+    assert route.decide(facts(comments=[fix_list(), owner_needed()], commit=later)) == (
+        "agk:question"
+    )
 
 
 def handing_over(cid: int = 6, reason: str = "six hours") -> dict:
