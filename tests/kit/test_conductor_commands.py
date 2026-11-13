@@ -268,7 +268,10 @@ def test_sweep_prints_a_re_prove_naming_the_earliest_merged_change(proj, stub):
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml", "scripts/agk/example.py"))
     by = ((OLD, "Intake: a requirement (#41)\n\nbody"), (NEW, "A later change (#42)"))
     main_changed(stub, SHA, changed("agk.toml", "docs/y.md"), by=by)
-    assert proof_of(sweep(proj, stub)) == ["re-prove: #7 agk.toml (changed by #41)", "BEHIND #7 2"]
+    assert proof_of(sweep(proj, stub)) == [
+        "re-prove: #7 agk.toml (changed by #41) light",
+        "BEHIND #7 2",
+    ]
 
 
 def test_sweep_re_prove_names_the_first_shared_file_sorted(proj, stub):
@@ -327,7 +330,7 @@ def test_sweep_names_the_pull_request_of_a_commit_without_a_number(proj, stub):
     stub.serve(f"repos/{REPO}/pulls/7/files", changed("agk.toml"))
     main_changed(stub, SHA, changed("agk.toml"), ahead=1, by=((OLD, "Merge branch x"),))
     stub.serve(f"repos/{REPO}/commits/{OLD}/pulls", [{"number": 43, "merged_at": ago(60)}])
-    assert proof_of(sweep(proj, stub))[0] == "re-prove: #7 agk.toml (changed by #43)"
+    assert proof_of(sweep(proj, stub))[0] == "re-prove: #7 agk.toml (changed by #43) light"
 
 
 @pytest.mark.parametrize("setting", ["", "max_behind_merges = 3\n"])
@@ -351,7 +354,11 @@ def test_sweep_no_overlap_for_prose_or_a_shared_index_and_still_a_re_prove(proj,
     stub.serve(f"repos/{REPO}/pulls/7/files", changed(path))
     stub.serve(f"repos/{REPO}/pulls/8/files", changed(path))
     main_changed(stub, SHA, changed(path), ahead=1, by=((OLD, "A (#41)"),))
-    assert proof_of(sweep(proj, stub)) == [f"re-prove: #7 {path} (changed by #41)", "BEHIND #7 1"]
+    light = " light" if path == "agk.toml" else ""  # a shared index alone (amendment 171)
+    assert proof_of(sweep(proj, stub)) == [
+        f"re-prove: #7 {path} (changed by #41){light}",
+        "BEHIND #7 1",
+    ]
 
 
 def test_sweep_the_new_lines_follow_the_pull_request_lines(proj, stub):
