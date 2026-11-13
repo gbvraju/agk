@@ -734,7 +734,7 @@ tests = [
 [[testing.map]]
 code = "scripts/agk/route.py"
 tests = [
-  "tests/kit/test_pr_state_lifecycle.py",
+  "tests/kit/test_pr_state_lifecycle.py", "tests/kit/test_route_owner_ask.py",
   "tests/kit/test_agent_apps.py", "tests/kit/test_approve_short.py", "tests/kit/test_approved_spec_not_draft.py",
   "tests/kit/test_ci_saving.py", "tests/kit/test_conductor_guard_launch.py",
   "tests/kit/test_conductor_guard_queue.py", "tests/kit/test_conductor_playbook_evidence.py",
