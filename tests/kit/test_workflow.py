@@ -72,7 +72,14 @@ def test_ac2_governance_is_one_step_per_check_named_by_its_check_id():
         script, _, flag = command.removeprefix("scripts/agk/").partition(".py")
         check_id = script if script.startswith("check_") else f"reviewers{flag}"
         assert check_id in blocks, check_id
-        assert f"run: python {command}" in blocks[check_id], check_id
+        block = blocks[check_id]
+        # brief #1166 (ADR-0496): a `run: |` step may choose the command's options by event; each
+        # of its `python` lines still runs this command
+        runs = [ln.strip() for ln in block.split("run: |\n", 1)[-1].splitlines()]
+        branches = [ln for ln in runs if ln.startswith("python ")] if "run: |\n" in block else []
+        assert f"run: python {command}" in block or (
+            branches and all(ln.startswith(f"python {command}") for ln in branches)
+        ), check_id
     ids = [n for n in names if n.startswith(("check_", "reviewers"))]
     assert len(ids) == len(commands) == 17
     assert names.index(ids[0]) < names.index("PR body shape")
