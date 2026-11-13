@@ -76,7 +76,22 @@ checkout; the other scripts are installed under `scripts/agk/`.
    brief it depends on, so each `Depends-on:` names `#<n>`. Run `publish` again after each round until nothing is
    withheld. In personal mode it writes the briefs through the file forge instead. Once nothing is withheld, run
    `/agk:board --yes` on your own machine: it makes the plan's GitHub Project board once and adds every brief with its
-   milestone, size and expected hours, and each later run adds only the new ones (ADR-0506).
+   milestone, size and expected hours, and each later run adds only the new ones (ADR-0506). Each brief issue shows a
+   `Persona: <key> <name>` line, the persona of the requirement it advances, and the board is one business can sign
+   off from (ADR-0507):
+   - **The template board, made once.** In GitHub, make one Project (your template) with three views: `Sign-off`, a
+     board grouped by Status; `Questions`, a table; and `Roadmap`, a roadmap by Milestone. Then put its
+     `<owner>/<number>` in `[plan] board_template` of `agk.toml` (or pass `--template OWNER/NUMBER`): each project's
+     first `/agk:board --yes` copies it, with its views and columns. Without a template the command creates an empty
+     board and prints the three views to make once.
+   - **The fields.** The command adds `Persona`, `Requirement` (the `REQ-n` numbers), `Screens` and `Sign-off`
+     (Pending, Signed off, Changes asked) when the board lacks them, fills them on each new card from the brief issue
+     and sets `Sign-off` to Pending; it never changes a value a person set.
+   - **How business signs off.** The business reader opens a card, reads its `What`, `Acceptance`, persona and screens
+     in plain words, and sets `Sign-off` to Signed off, or to Changes asked with a comment on the issue. An open
+     question is an issue of its own, so it shows in the `Questions` view.
+   - **The formal gate.** The board's `Sign-off` is a reading aid, not a record: the plan's gate stays the owner's
+     `Approve: plan <full head ID>` line of step 8.
 
 ## From a prototype and an OpenSpec file
 

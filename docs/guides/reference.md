@@ -633,13 +633,18 @@ milestone and per brief, briefs in dependency order, each withheld until `--numb
 dependences; it runs none (rules 8 and 25). Once nothing is withheld its last line ends `; next: /agk:board --yes`.
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/board.py" [--title TEXT] [--owner LOGIN] [--project N] [--yes]
+        [--template OWNER/NUMBER]
 
 `/agk:board` (the plugin's copy, run with your own `gh` and its `project` scope) makes the plan's GitHub Project board and
 keeps it in step (ADR-0506). Without `--yes` it prints the steps and changes nothing. With `--yes` it creates the board
 once (`<repository> plan`, under the repository's owner) and prints `board = <n>` for you to add under `[plan]` of
-`agk.toml` and commit; every run links the repository, adds the `Size` and `Expected hours` fields when missing and adds
-each open `agk-brief` issue not yet on the board with its size and the high end of its hours. It never removes or edits
-an item already there, and ends `ok board: <a> added, <b> already there`. A missing scope prints
+`agk.toml` and commit. With `--template OWNER/NUMBER` (or `[plan] board_template = "<owner>/<number>"`) that first run
+copies your template board with its views and columns instead (ADR-0507); without one it prints the three views to make
+once. Every run links the repository, adds the `Size`, `Expected hours`, `Persona`, `Requirement`, `Screens` and
+`Sign-off` fields when missing and adds each open `agk-brief` issue not yet on the board with its size, the high end of
+its hours, its `Persona:`, `Advances:` and `Screens:` lines and `Sign-off` Pending. It never removes or edits an item
+already there (a field the run added to the board is filled on it once), and ends `ok board: <a> added, <b> already
+there`. A missing scope prints
 `gh auth refresh -s project` (exit 2); in a cloud session it prints one `board: needs a machine ...` line and exits 0.
 
     python3 scripts/agk/design_import.py source --version i<n> --slug <slug> [--root DIR]
@@ -756,7 +761,7 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:issue` | the issue templates and your own `gh issue create`, after asking | one GitHub issue |
 | `/agk:brief` | `scripts/agk/new_spec.py` | one brief |
 | `/agk:review` | `review_context.py`, the project's `reviewer` subagent, `check_review_report.py` | local files, never committed |
-| `/agk:board` | `scripts/agk/board.py` (a dry run; `--yes` after you say yes), your own `gh project` | the plan's GitHub Project board: created once, linked, two fields, and each open brief issue added with its size and hours (add-only, ADR-0506) |
+| `/agk:board` | `scripts/agk/board.py` (a dry run; `--yes` after you say yes), your own `gh project` | the plan's GitHub Project board: copied once from your template board (or created), linked, its fields, and each open brief issue added with its size, hours, persona, requirement, screens and Sign-off Pending (add-only, ADR-0506, ADR-0507) |
 | `/agk:workflow-apply` | `scripts/agk/workflow_apply.py --pr <n>` (a dry run; `--yes --head <sha>` of that dry run after you say yes) | the pull request's branch: each `.agk/workflow-proposals/<name>.yml` moved to `.github/workflows/<name>.yml` in one commit, pushed (never forced, never to the default branch), and one `Answer:` comment (ADR-0505) |
 
 No command merges, and none commits or pushes but `/agk:workflow-apply`, which, only after you say yes, commits a builder's proposed workflow file to its pull request's branch and pushes that branch with your own credentials (`/agk:ruleset` and `/agk:issue` write to GitHub only after you say yes, and `/agk:review-pass` writes only `Verdict:` comments, from a conductor session), and none sets a spec `Approved` or an ADR `Accepted`. `/agk:review` is advisory.
