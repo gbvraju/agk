@@ -3,9 +3,11 @@
 SPEC-0037 rule 3 (REQ-044 AC2, brief #456): the script writes `docs/design/inventory.md` from
 `kit/templates/design-inventory.md`, one section for each requirement of `docs/requirements.md`
 with its `- Specs:` slot filled from the `Requirements:` lines of `docs/specs/*.md` and every other
-slot empty, and an empty `## Screens` part. It refuses, naming the rule, when the file exists, and
-it never fills a slot: the check, not the script, decides that the inventory is complete. Invented
-data only, in `tmp_path`; files only, no network and no model.
+slot empty, and an empty `## Screens` part. On an existing file it only appends the missing sections
+and refuses, naming the rule, a file with no Requirements part (brief #1185, whose own tests are in
+`tests/kit/test_design_inventory_update.py`), and it never fills a project slot: the check, not the
+script, decides that the inventory is complete. Invented data only, in `tmp_path`; files only, no
+network and no model.
 """
 
 from __future__ import annotations
@@ -25,26 +27,26 @@ REQUIREMENTS = """# Requirements
 
 Each requirement is a `### REQ-nnn` section with a `- Status:` line.
 
-### REQ-001 — A reader keeps a list of books
+### REQ-101 — A reader keeps a list of books
 
 - Acceptance: AC1 a reader adds a book; AC2 a reader removes a book
 - Status: planned
 
-### REQ-002 — A nightly job tidies the list
+### REQ-102 — A nightly job tidies the list
 
 - Acceptance: AC1 the job removes duplicates
 - Status: planned
 
-### REQ-003 — A reader shares a list
+### REQ-103 — A reader shares a list
 
 - Acceptance: AC1 a reader sends a link on example.com
 - Status: planned
 """
 
 SPECS = {
-    "0001-the-list.md": "# SPEC-0001: The list\n\n- Status: Draft\n- Requirements: REQ-001\n",
+    "0001-the-list.md": "# SPEC-0001: The list\n\n- Status: Draft\n- Requirements: REQ-101\n",
     "0002-the-job.md": (
-        "# SPEC-0002: The job\n\n- Status: Approved\n- Requirements: REQ-002, REQ-001\n"
+        "# SPEC-0002: The job\n\n- Status: Approved\n- Requirements: REQ-102, REQ-101\n"
     ),
     "TEMPLATE.md": "# SPEC-nnnn: Title\n\n- Status: Draft\n- Requirements: REQ-nnn\n",
 }
@@ -120,9 +122,9 @@ def test_ac2_inventory_writes_one_section_for_each_requirement_with_its_specs(tm
     text = (tmp_path / INVENTORY).read_text(encoding="utf-8")
     reqs = sections(text, "Requirements")
     assert list(reqs) == [
-        "REQ-001 — A reader keeps a list of books",
-        "REQ-002 — A nightly job tidies the list",
-        "REQ-003 — A reader shares a list",
+        "REQ-101 — A reader keeps a list of books",
+        "REQ-102 — A nightly job tidies the list",
+        "REQ-103 — A reader shares a list",
     ]
     first, second, third = reqs.values()
     assert first == ["- Specs: SPEC-0001, SPEC-0002", "- Screens:"]
@@ -149,11 +151,11 @@ def test_ac2_the_skeleton_fails_the_check_naming_the_rule_and_the_requirement(tm
     assert design(tmp_path, "inventory").returncode == 0
     proc = check(tmp_path)
     assert proc.returncode == 1, proc.stdout
-    assert f"FAIL design: rule 3: {INVENTORY}: REQ-001: the slot Screens is empty" in proc.stdout
+    assert f"FAIL design: rule 3: {INVENTORY}: REQ-101: the slot Screens is empty" in proc.stdout
 
 
 def test_ac2_inventory_refuses_when_the_file_exists_and_changes_nothing(tmp_path):
-    """REQ-044 AC2: SPEC-0037 rule 3 (an inventory is never overwritten)."""
+    """REQ-044 AC2: SPEC-0037 rule 3 (never overwritten; brief #1185 appends only)."""
     project(tmp_path)
     path = tmp_path / INVENTORY
     path.parent.mkdir(parents=True)
@@ -161,7 +163,7 @@ def test_ac2_inventory_refuses_when_the_file_exists_and_changes_nothing(tmp_path
     proc = design(tmp_path, "inventory")
     assert proc.returncode == 1
     assert "FAIL design: rule 3:" in proc.stdout
-    assert "already exists" in proc.stdout
+    assert "has no Requirements part; it is never rewritten" in proc.stdout
     assert path.read_text(encoding="utf-8") == "# Design inventory\n\nfilled by hand\n"
 
 
