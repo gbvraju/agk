@@ -1,0 +1,1 @@
+- The round-the-clock task texts match the running autopilot: the conductor text starts and restarts builders itself within the 2-hour and capacity limits, the launcher is its backup at 45 minutes, and the builder text carries the CI-red, hand-over, `Finishes:` and testing-map rules, with the kit-only rules under one line (brief #1202, ADR-0510)
