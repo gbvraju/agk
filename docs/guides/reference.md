@@ -746,8 +746,9 @@ The workflow commands are also a Claude Code plugin; this repository is its mark
 | `/agk:issue` | the issue templates and your own `gh issue create`, after asking | one GitHub issue |
 | `/agk:brief` | `scripts/agk/new_spec.py` | one brief |
 | `/agk:review` | `review_context.py`, the project's `reviewer` subagent, `check_review_report.py` | local files, never committed |
+| `/agk:workflow-apply` | `scripts/agk/workflow_apply.py --pr <n>` (a dry run; `--yes` after you say yes) | the pull request's branch: each `.agk/workflow-proposals/<name>.yml` moved to `.github/workflows/<name>.yml` in one commit, pushed (never forced, never to the default branch), and one `Answer:` comment (ADR-0505) |
 
-No command commits, pushes or merges (`/agk:ruleset` and `/agk:issue` write to GitHub only after you say yes, and `/agk:review-pass` writes only `Verdict:` comments, from a conductor session), and none sets a spec `Approved` or an ADR `Accepted`. `/agk:review` is advisory.
+No command merges, and none commits or pushes but `/agk:workflow-apply`, which, only after you say yes, commits a builder's proposed workflow file to its pull request's branch and pushes that branch with your own credentials (`/agk:ruleset` and `/agk:issue` write to GitHub only after you say yes, and `/agk:review-pass` writes only `Verdict:` comments, from a conductor session), and none sets a spec `Approved` or an ADR `Accepted`. `/agk:review` is advisory.
 GitHub issues are intake only: decisions, requirements, specs and ADRs live in the repository, and an issue decides
 nothing (`.github/ISSUE_TEMPLATE/`; a pull request may link one with an optional `Issue: #nnn` line).
 

@@ -58,8 +58,10 @@ class Refused(Exception):
 
 # --- the YAML structure check --------------------------------------------------------------------
 
-KEY = re.compile(r"""(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^\s#'"\[\]{},&*!|>%@`-][^#]*?|-[^\s#]*?)"""
-                 r"""\s*:(?=\s|$)""")
+KEY = re.compile(
+    r"""(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^\s#'"\[\]{},&*!|>%@`-][^#]*?|-[^\s#]*?)"""
+    r"""\s*:(?=\s|$)"""
+)
 BLOCK_HEADER = re.compile(r"[|>][0-9+-]*\s*(#.*)?$")
 PROPERTY = re.compile(r"(?:[&!][^\s]*\s+)+")
 
@@ -229,7 +231,7 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
             encoding="utf-8",
         )
     except FileNotFoundError:
-        raise Refused("gh is not installed: install the GitHub CLI and run `gh auth login`") from None
+        raise Refused("gh is not installed: install the GitHub CLI, then `gh auth login`") from None
     if proc.returncode != 0:
         return None
     try:
@@ -293,7 +295,7 @@ def read_pull(repo: str, number: int) -> tuple[str, str]:
     head, base = pull["head"], pull.get("base") or {}
     ref, sha = str(head.get("ref") or ""), str(head.get("sha") or "")
     if (head.get("repo") or {}).get("full_name") != repo:
-        raise Refused(f"pull request #{number} comes from a fork: its branch is not pushed from here")
+        raise Refused(f"pull request #{number} comes from a fork: its branch is not pushed here")
     default = (base.get("repo") or {}).get("default_branch") or ""
     if not ref or not sha or not default:
         raise Refused(f"pull request #{number} names no head branch or default branch")
@@ -409,7 +411,8 @@ def work(args: argparse.Namespace, root: Path) -> int:
         push(tree, args.remote, ref)
         print(f"pushed {commit} to {ref}")
         line = f"Answer: {qid} done: {commit} applied by {COMMAND}"
-        posted = gh(f"repos/{repo}/issues/{args.pr}/comments", "--raw-field", f"body={line}", method="POST")
+        endpoint = f"repos/{repo}/issues/{args.pr}/comments"
+        posted = gh(endpoint, "--raw-field", f"body={line}", method="POST")
         if posted is None:
             print(f"the comment could not be posted; post it on #{args.pr} yourself:\n{line}")
             return 1
