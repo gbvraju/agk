@@ -119,7 +119,8 @@ def verdict_file(world, text: str) -> str:
 
 
 def check(world, capsys, text: str) -> tuple[int, str]:
-    code, out, err = conductor(world, capsys, "check-verdict", verdict_file(world, text), "--pr", "7")
+    path = verdict_file(world, text)
+    code, out, err = conductor(world, capsys, "check-verdict", path, "--pr", "7")
     return code, out + err
 
 
@@ -177,7 +178,8 @@ def test_no_reviewer_answer_within_review_minutes_allows_one_fallback(world, cap
 
 def test_the_flow_review_minutes_sets_the_wait(world, capsys):
     """REQ-046: brief #1248 answer 1 (`[flow] review_minutes`, read before `[capacity]`)."""
-    settle(world, toml_of(world["adapter"], extra="review_minutes = 30\n[capacity]\nreview_minutes = 5\n"))
+    extra = "review_minutes = 30\n[capacity]\nreview_minutes = 5\n"
+    settle(world, toml_of(world["adapter"], extra=extra))
     world["stub"].serve(CONDUCTOR, [review_line(16)])
     code, _ = check(world, capsys, f"Verdict: cleared {SHA} (conductor fallback)\n")
     assert code == 1
@@ -211,10 +213,10 @@ def test_a_busy_slot_starts_nothing_more(world, capsys):
 
 def test_the_memory_floor_applies_to_a_reviewer_start(world, capsys, monkeypatch):
     """REQ-046: brief #1248 answer 3 (`[flow] min_free_memory_mb`, as for builders)."""
-    import common
+    import launch
 
     settle(world, toml_of(world["adapter"], extra="min_free_memory_mb = 4096\n"))
-    monkeypatch.setattr(common, "available_memory", lambda: 1 * GIB)
+    monkeypatch.setattr(launch, "available_memory", lambda: 1 * GIB)
     code, _, err = conductor(world, capsys, "review", "--pr", "7", "--start")
     assert code == 1
     assert "min_free_memory_mb" in err

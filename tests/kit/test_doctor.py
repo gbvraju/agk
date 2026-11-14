@@ -546,8 +546,8 @@ def test_ac1_default_root_is_the_current_directory(tmp_path):
 def test_ac1_every_id_has_a_severity_and_a_printed_fix():
     """REQ-002 AC1: rule 5."""
     # `capacity`, ADR-0409; `state-labels`, ADR-0385; `merge-queue-setting`, ADR-0417;
-    # `launch-adapter`, ADR-0525
-    assert len(IDS) == 46
+    # `launch-adapter`, ADR-0525; `reviewer-slots`, ADR-0528
+    assert len(IDS) == 47
     for severity, ok_text, fail_text, fix in CHECKS.values():
         assert severity in ("error", "warn") and ok_text and fail_text and fix
     assert CHECKS["ruleset-missing"][3].endswith("use a ruleset (ADR-0001 decision 3)")

@@ -171,7 +171,9 @@ from reviewers import APPROVE, spec_approvers, verdict_authors
 from config import (
     BRIEF_CODE_PATHS,
     MODEL_KINDS,
+    REVIEW_MINUTES,
     brief_code_paths,
+    capacity_settings,
     caps_settings,
     model_providers,
     model_routes,
@@ -1782,6 +1784,36 @@ SLOT_IDLE_MINUTES = 10
 SLOT_ENDS = 3  # the exit of a run that must end: no slots, or its slot is another run's
 
 
+REVIEWER_SETTING = "(setting: reviewer_slots in the flow table of agk.toml)"
+REVIEW_WAIT_SETTING = "(setting: review_minutes in the flow table of agk.toml)"
+
+
+def reviewer_slots(root) -> int:
+    """`[flow] reviewer_slots` (brief #1248 answer 1, ADR-0528): a whole number, 0 when unset; 0
+    keeps the conductor's verdict as today, 1 or more puts the slots `r1` to `r<count>` at the
+    gate."""
+    value = flow_value(root, "reviewer_slots", 0, 1)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise CheckError(
+            "rule 1: reviewer_slots of the flow table must be a whole number, 0 or more"
+        )
+    return value
+
+
+def review_minutes(root) -> int:
+    """How long a reviewer slot has a head before the conductor's fallback (ADR-0528 decision 2):
+    `[flow] review_minutes`, else `[capacity] review_minutes`, else 15."""
+    value = flow_value(root, "review_minutes", None, 1)
+    if value is None:
+        table = capacity_settings(root)
+        return table["review_minutes"] if table else REVIEW_MINUTES
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise CheckError(
+            "rule 1: review_minutes of the flow table must be a whole number, 1 or more"
+        )
+    return value
+
+
 def builder_start(root) -> str:
     """`builder_start` of the flow table: `start` (the default) or `assign`."""
     value = flow_value(root, "builder_start", "start", 1)
@@ -2209,7 +2241,13 @@ def is_slot(root, me: str) -> bool:
 
 def slot(root, mode: str, name: str) -> int:
     """`slot --take|--renew|--release|--next <slot>`; with `builder_start = "start"` there are no
-    slots: it says so, calls nothing and exits 3, so that a slot run ends at once."""
+    slots: it says so, calls nothing and exits 3, so that a slot run ends at once. A reviewer slot
+    within `[flow] reviewer_slots` runs whatever `builder_start` says (ADR-0528 decision 1)."""
+    count = reviewer_slots(root) if REVIEWER_NAME.fullmatch(name) else 0
+    if count:  # ADR-0528 decision 1: counted reviewer slots need no builder pool
+        if int(name[1:]) > count:
+            raise CheckError(f"slot: the name is not one of the reviewer slots {REVIEWER_SETTING}")
+        return slot_next(root, name) if mode == "--next" else slot_lease(root, mode, name)
     if builder_start(root) != "assign":
         print(f"slot: off {SLOT_SETTING}")
         return SLOT_ENDS
