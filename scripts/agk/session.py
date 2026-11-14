@@ -308,6 +308,9 @@ OVER_CAP = re.compile(r"Report: \S+ over cap (\d+(?:\.\d+)?)/\d+ (tokens|hours)\
 
 
 LAST_ERROR = ""  # what `gh` said about the last failed call (empty after a good one)
+CALLS = 0  # the `gh api` calls this run made (brief #1251 answer 5, ADR-0529)
+CACHED = 0  # of them, the ones answered from a cache (0 until brief #1251 build (b))
+MEMO: dict | None = None  # within one plan run, each GET read once (ADR-0529 decision 2)
 RATE_LIMIT = re.compile(r"rate limit|HTTP 429", re.IGNORECASE)
 RATE_WAITS = 5  # rate limits waited out for one call before it counts as failed
 RESET_SLACK = 1.0  # seconds after the reset time that GitHub reports
@@ -335,8 +338,12 @@ def rate_reset() -> float | None:
 def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
     """One `gh api` call; a failed or unreadable call is None. A rate limit is not a failure
     (brief #210 answer 6): the call waits until the reset time that GitHub reports and retries."""
-    global LAST_ERROR
+    global LAST_ERROR, CALLS
+    key = (endpoint, *extra)
+    if MEMO is not None and method == "GET" and key in MEMO:
+        return MEMO[key]
     for attempt in range(RATE_WAITS + 1):
+        CALLS += 1
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
             ["gh", "api", "--method", method, endpoint, *extra],
             capture_output=True,
@@ -346,9 +353,12 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
         LAST_ERROR = proc.stderr if proc.returncode != 0 else ""
         if proc.returncode == 0:
             try:
-                return json.loads(proc.stdout) if proc.stdout.strip() else {}
+                found = json.loads(proc.stdout) if proc.stdout.strip() else {}
             except ValueError:
                 return None
+            if MEMO is not None and method == "GET":
+                MEMO[key] = found
+            return found
         reset = rate_reset() if RATE_LIMIT.search(proc.stderr) else None
         if reset is None or attempt == RATE_WAITS:
             return None
@@ -985,6 +995,19 @@ class Survey:
     fixes: dict = field(default_factory=dict)  # red-branch fix brief -> its alarm (brief #1052)
     gone: dict = field(default_factory=dict)  # session -> hours since its last post (plan only)
     posts: dict = field(default_factory=dict)  # pull request number -> its comments (plan only)
+    recent: bool = False  # the closed pull requests are those of a window only (ADR-0529)
+    unread: list = field(default_factory=list)  # briefs whose comments the walk left (plan only)
+    closed: list | None = None  # every closed pull request, read once when needed (plan only)
+
+
+@dataclass
+class Walk:
+    """How the plan reads (brief #1251 answer 1, ADR-0529): the briefs that pass the listing in
+    `key` order, comments only until `want` are free; pull requests of `hours` back."""
+
+    key: Callable
+    want: int
+    hours: int
 
 
 def is_stale(brief: dict) -> bool:
@@ -1031,8 +1054,14 @@ def judge(
     hours: int,
     shape: Callable = brief_problems,
     root=None,
-) -> tuple[str | None, list]:
-    """Why the brief is not for this session (or None when it is free), and its comments."""
+    known_open: set[int] | None = None,
+    read: bool = True,
+) -> tuple[str | None, list | None]:
+    """Why the brief is not for this session (or None when it is free), and its comments.
+
+    With `known_open` (the plan, ADR-0529) a dependency is open when that set holds it, else
+    closed; with `read` false the comments are not read and (None, None) says the listing alone
+    found nothing against the brief."""
     if is_stale(brief):
         return "stale", []
     if is_parked(brief):
@@ -1041,11 +1070,17 @@ def judge(
     if problems:
         return problems[0], []
     for dep in depends_on(brief["body"]):
+        if known_open is not None:  # ADR-0529: judged from the listings, no GET per dependency
+            if dep in known_open:
+                return f"depends on #{dep}, which is open", []
+            continue
         issue = gh(f"repos/{repo}/issues/{dep}")
         if not isinstance(issue, dict) or "state" not in issue:
             return f"depends on #{dep}, which cannot be read", []
         if issue["state"] != "closed":
             return f"depends on #{dep}, which is open", []
+    if not read:
+        return None, None
     comments = pages(f"repos/{repo}/issues/{brief['number']}/comments")
     if comments is None:
         return "its comments cannot be read", []
@@ -1094,7 +1129,47 @@ def brief_shape(root, repo: str) -> Callable:
     return shape
 
 
-def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
+TAKEN_LABEL = "agk:taken"  # a take shown in the issue listing (brief #1251 answer 2, ADR-0529)
+
+
+def has_label(issue: dict, name: str) -> bool:
+    return name in {str(x.get("name")) for x in issue.get("labels") or [] if isinstance(x, dict)}
+
+
+def recent_pulls(repo: str, hours: int) -> list | None:
+    """The open pull requests and the closed ones updated in the last `hours` (ADR-0529 decision
+    4): `state=open`, then `state=closed` by `sort=updated`, newest first, until a page reaches
+    past the window. A pull request whose update time cannot be read is kept."""
+    opened = pages(f"repos/{repo}/pulls?state=open")
+    if opened is None:
+        return None
+    found = [p for p in opened if isinstance(p, dict) and p.get("state") == "open"]
+    seen = {p.get("number") for p in found}
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+
+    def old(p: dict) -> bool:
+        when = str(p.get("updated_at") or "")
+        return bool(when) and moment(when) < cutoff
+
+    page = 1
+    while True:
+        endpoint = f"repos/{repo}/pulls?state=closed&sort=updated&direction=desc"
+        chunk = gh(f"{endpoint}&per_page={PAGE}&page={page}")
+        if not isinstance(chunk, list):
+            return None
+        for p in chunk:
+            if isinstance(p, dict) and p.get("state") != "open" and p.get("number") not in seen:
+                if not old(p):
+                    found.append(p)
+                    seen.add(p.get("number"))
+        if len(chunk) < PAGE or any(isinstance(p, dict) and old(p) for p in chunk):
+            return found
+        page += 1
+
+
+def survey(
+    root, repo: str, me: str, issues: list | None = None, walk: Walk | None = None
+) -> Survey:
     """Everything `next`, `demand` and `ids` read: the pull requests, the briefs and their takes.
 
     While the default branch is red only its brief is left (SPEC-0032 rule 7), with each fix brief
@@ -1108,20 +1183,47 @@ def survey(root, repo: str, me: str, issues: list | None = None) -> Survey:
     red = {i["number"] for i in issues if is_red(i)}
     issues = [i for i in issues if i["number"] in red] if red else issues
     # The red-branch brief goes before the capacity and the overlap, and no pull request is read.
-    prs = [] if red else pages(f"repos/{repo}/pulls?state=all")
+    walk = None if red else walk
+    if red:
+        prs = []
+    elif walk is not None:
+        prs = recent_pulls(repo, max(walk.hours, hours))
+    else:
+        prs = pages(f"repos/{repo}/pulls?state=all")
     if prs is None:
         raise CheckError("rule 1: the pull requests cannot be read")
     builders = [p for p in prs if p.get("state") == "open" and brief_number(p) is not None]
-    found = Survey(repo, me, limit, hours, prs, builders)
+    found = Survey(repo, me, limit, hours, prs, builders, recent=walk is not None)
     found.briefs = {i["number"]: i for i in issues if "pull_request" not in i}
     named = {brief_number(p) for p in prs if p.get("state") == "open"}
     shape = brief_shape(root, repo)
+    known_open = None
+    if walk is not None:
+        known_open = {i["number"] for i in everything if isinstance(i.get("number"), int)}
+        known_open |= {p["number"] for p in prs if p.get("state") == "open" and "number" in p}
+
+    want = 0
+    if walk is not None:  # the free slots: the ceiling less the running work the listings show
+        running = {i["number"] for i in issues if has_label(i, TAKEN_LABEL)} | (named - {None})
+        want = max(1, walk.want - len(running))
+
+    def order(briefs: list) -> list:
+        listed = [i for i in briefs if "pull_request" not in i]
+        if walk is None:
+            return sorted(listed, key=lambda i: i["number"])
+        return sorted(listed, key=walk.key)
 
     def sort(briefs: list, pulls: list) -> None:
-        for brief in sorted(
-            (i for i in briefs if "pull_request" not in i), key=lambda i: i["number"]
-        ):
-            why, comments = judge(repo, brief, me, pulls, hours, shape, root)
+        for brief in order(briefs):
+            if walk is not None:  # ADR-0529: comments only while the free slots are not filled
+                must = has_label(brief, TAKEN_LABEL) or brief["number"] in named
+                if not must and len(found.free) >= want:
+                    why, _ = judge(repo, brief, me, pulls, hours, shape, root, known_open, False)
+                    if why is None:
+                        found.unread.append(brief["number"])
+                        continue
+            why, comments = judge(repo, brief, me, pulls, hours, shape, root, known_open)
+            comments = comments or []
             found.comments[brief["number"]] = comments
             if why is None:
                 found.free.append(brief)
@@ -1628,6 +1730,9 @@ def claim(root, me: str, number: int, build: str | None) -> int:
         print(f"skip #{number}: {why}")
         return 1
     print(f"claimed #{number}" + (f" build ({build})" if build else ""))
+    label = gh(f"repos/{repo}/issues/{number}/labels", "-f", f"labels[]={TAKEN_LABEL}", method="POST")
+    if label is None:  # ADR-0529 decision 3: a hint only; the take comment decides
+        print(f"note: the label {TAKEN_LABEL} could not be added; the take stands", file=sys.stderr)
     return 0
 
 

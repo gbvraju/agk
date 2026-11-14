@@ -69,7 +69,8 @@ def big_plan(count: int = 600) -> list[dict]:
 
 
 def comment_reads(stub: Stub) -> list[str]:
-    return [c[1] for c in stub.calls() if re.search(r"/issues/\d+/comments", c[1])]
+    found = (c[1].split("?")[0] for c in stub.calls())
+    return [e for e in found if re.search(r"/issues/\d+/comments$", e)]
 
 
 def plan(proj, stub, *extra: str):
@@ -233,7 +234,8 @@ def test_a_build_merged_before_the_window_is_found_on_the_briefs_timeline(proj, 
 
 def test_the_plan_prints_its_reads_and_the_data_carries_them(proj, stub):
     """REQ-050"""
-    pages_of(stub, [at(5, brief("a/**"), MILESTONES[0])])
+    stub.serve(ISSUES, [at(5, brief("a/**"), MILESTONES[0])])
+    stub.serve(PULLS, [])
     stub.serve(f"{ISSUES}/5/comments", [])
     out = plan(proj, stub)
     found = READS.fullmatch(out.stdout.rstrip().splitlines()[-1])
