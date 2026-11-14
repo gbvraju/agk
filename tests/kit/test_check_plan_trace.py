@@ -257,7 +257,12 @@ def test_ac3_a_prototype_source_with_three_screens_and_two_cited_prints_2_of_3(t
 def test_ac3_the_same_headings_in_another_kind_are_not_counted(tmp_path):
     """REQ-050 AC3: rule 11, only a `Kind: design` source's screen headings count."""
     write(tmp_path, "docs/sources/notes.md", PROTOTYPE.replace("Kind: design", "Kind: other"))
-    (tmp_path / "docs" / "plan").mkdir(parents=True)
+    # brief #1217 (ADR-0516): a source no requirement cites is listed out of scope with a reason
+    write(
+        tmp_path,
+        "docs/plan/scope.md",
+        "## Out of scope\n\n- Notes only (`docs/sources/notes.md`)\n",
+    )
     code, out = check(tmp_path)
     assert code == 0, out
     assert last(out).startswith("ok plan: 0 of 0 in-scope source lines have a requirement, ")
@@ -522,7 +527,8 @@ def openspec_plan(root: Path, *, prototype: bool = True) -> Path:
         "docs/requirements.md",
         "### REQ-007 Orders\n\nCriteria:\n\n"
         f"- Given no orders, when a buyer opens the list, then an empty note shows ({EMPTY})\n\n"
-        "- Source: docs/sources/sow.md:8\n",
+        "- Source: docs/sources/sow.md:8\n"
+        f"- Source: {OPENSPEC_REL}#Order list\n",  # brief #1217: every source is cited
     )
     write(root, "tests/test_orders.py", '"""REQ-007 AC1: orders."""\n')
     return root

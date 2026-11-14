@@ -37,7 +37,9 @@ NOTES = (
     "```\n# not a heading\n```\n"
 )
 SECRET_TEXT = "sells tea"  # a source's text; never printed
-HANDOFF = "Source: Example handoff\nKind: other\nVersion: 1\nDate: 2026-10-03\n\nOne line of text.\n"
+HANDOFF = (
+    "Source: Example handoff\nKind: other\nVersion: 1\nDate: 2026-10-03\n\nOne line of text.\n"
+)
 SCOPE = "# Scope\n\n## In scope\n\n- Orders are listed (`docs/sources/sow.md:8`)\n"
 REQS = (
     "# Proposed requirements\n\n"
@@ -91,7 +93,9 @@ def test_ac3_a_source_no_requirement_cites_fails_naming_the_file(tmp_path):
     assert code == 1, out
     assert fails(out) == [FAIL_NOTES]
     assert SECRET_TEXT not in out
-    assert out.splitlines()[-1].startswith("plan: 1 of 1 in-scope source lines have a requirement, ")
+    assert out.splitlines()[-1].startswith(
+        "plan: 1 of 1 in-scope source lines have a requirement, "
+    )
 
 
 def test_ac3_each_uncited_source_fails_once(tmp_path):
@@ -127,7 +131,9 @@ def test_ac3_a_location_out_of_scope_does_not_cover_the_whole_file(tmp_path):
     """REQ-050 AC3: item 1, an Out of scope location of one line is not the file listed, and a
     path under In scope is not Out of scope."""
     scope = (
-        SCOPE.replace("(`docs/sources/sow.md:8`)", "(`docs/sources/sow.md:8`, `docs/sources/notes.md`)")
+        SCOPE.replace(
+            "(`docs/sources/sow.md:8`)", "(`docs/sources/sow.md:8`, `docs/sources/notes.md`)"
+        )
         + "\n## Out of scope\n\n- Tea is not sold here (`docs/sources/notes.md:8`)\n"
     )
     code, out = check(plan(tmp_path, scope=scope))
@@ -138,7 +144,10 @@ def test_ac3_a_location_out_of_scope_does_not_cover_the_whole_file(tmp_path):
 def test_ac3_one_citation_passes_and_the_trace_shows_the_count(tmp_path):
     """REQ-050 AC3: items 1 and 2, one resolving citation passes; the trace prints one line per
     source with its headings and table rows (fenced lines aside) cited."""
-    reqs = REQS + "\n### dated Orders by date\n\n- Status: planned\n- Source: docs/sources/notes.md:14\n"
+    reqs = (
+        REQS
+        + "\n### dated Orders by date\n\n- Status: planned\n- Source: docs/sources/notes.md:14\n"
+    )
     code, out = check(plan(tmp_path, reqs=reqs), "--trace")
     assert code == 0, out
     assert fails(out) == []
@@ -171,6 +180,6 @@ def test_ac3_a_citation_that_does_not_resolve_does_not_count(tmp_path):
 
 
 def test_ac3_a_project_with_no_plan_is_not_checked(tmp_path):
-    """REQ-050 AC3: rule 10, with no docs/plan/ an uncited source still prints `ok plan (no plan)`."""
+    """REQ-050 AC3: rule 10, with no docs/plan/ an uncited source prints `ok plan (no plan)`."""
     write(tmp_path, "docs/sources/notes.md", NOTES)
     assert check(tmp_path) == (0, "ok plan (no plan)\n")

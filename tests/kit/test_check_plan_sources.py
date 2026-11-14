@@ -83,7 +83,12 @@ def test_ac1_good_sources_and_no_plan_pass(tmp_path):
 def test_ac1_sources_with_a_plan_folder_pass_as_sources_only(tmp_path):
     """REQ-050 AC1: with docs/plan/ the sources are checked, then build (d)'s coverage line."""
     write(tmp_path, "docs/sources/sow.md", GOOD + BODY)
-    (tmp_path / "docs" / "plan").mkdir(parents=True)
+    # brief #1217 (ADR-0516): a source no requirement cites is listed out of scope with a reason
+    write(
+        tmp_path,
+        "docs/plan/scope.md",
+        "## Out of scope\n\n- Not planned yet (`docs/sources/sow.md`)\n",
+    )
     code, out = check(tmp_path)
     assert code == 0, out
     assert out.splitlines()[-1].startswith("ok plan: 0 of 0 in-scope source lines ")
