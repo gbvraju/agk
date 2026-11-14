@@ -115,8 +115,11 @@ or `... check <RECORD> --head <hex>`, with `--sample <n>` and `--json` allowed t
 most once and in any order, the project's own regular file; RECORD is an existing regular file,
 named by its absolute path with no link, of a scratch directory or directly in the clone's shared
 evidence folder (`<git common dir>/agk-evidence`, found with one `git rev-parse --git-common-dir`).
-Both forms only read, so they are allowed in CI mode too. Another subcommand or option, a second
-RECORD, a record elsewhere and another copy of the script stay denied.
+Without a matching record the check runs the head's governance and a sample of its tests in a
+temporary worktree with the conductor's environment, so it is allowed only while the project is in
+local mode, judged as for `route.py` above; in CI mode it is refused with a message naming the
+setting. Another subcommand or option, a second RECORD, a record elsewhere and another copy of the
+script stay denied.
 A comment whose first line is `Confirmed:` (the person's one yes of solo mode, brief 277) is refused
 by name in both modes: only the person posts it, from the browser or the GitHub app (session rule
 29), because GitHub cannot tell a comment the person typed from one a session posted.
@@ -124,7 +127,7 @@ A comment `POST` whose `body=@` file is not an absolute path is refused with a m
 the likely cause (a backslash path loses its backslashes in a POSIX shell such as Git Bash), so
 that the conductor writes the forward-slash form; nothing more is allowed by it.
 The message names the rule, never the command or the path. Standard library only; no network but
-the reads of `check-verdict` and of the router's local mode named above.
+the reads of `check-verdict` and of local mode (the router and the evidence check) named above.
 """
 
 from __future__ import annotations
@@ -211,6 +214,10 @@ EVIDENCE_VALUES = {"--head": SHA, "--sample": re.compile(r"[1-9][0-9]{0,5}")}
 ROUTE_RULE = (  # brief #1263 (ADR-0534): the setting, never a value
     "conductor guard rule 6: the router runs from its workflow unless the project is in local"
     " mode (setting: execution, or the one local-mode record issue)"
+)
+EVIDENCE_RULE = (  # brief #1281 (ADR-0542): the setting, never a value
+    "conductor guard rule 6: the evidence check runs only while the project is in local mode"
+    " (setting: execution, or the one local-mode record issue)"
 )
 ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 MERGE_PR = re.compile(r"[1-9][0-9]{0,9}")
@@ -679,12 +686,19 @@ def evidence_form(args: list[str]) -> bool:
     return "--head" in seen and all(evidence_record_ok(r) for r in records)
 
 
-def evidence_allowed(words: list[str], cwd: object) -> bool:
+def evidence_command(words: list[str], cwd: object) -> bool:
     """`python3|python scripts/agk/evidence.py check ...`, the project's own regular file, in the
-    two forms of `evidence_form`; in CI mode as in local mode, since it writes nothing."""
+    two forms of `evidence_form`; the mode is judged by `evidence_allowed`."""
     if len(words) < 3 or words[0] not in ("python3", "python"):
         return False
     return evidence_form(words[2:]) and own_script(words[1], cwd, EVIDENCE_SCRIPT)
+
+
+def evidence_allowed(words: list[str], cwd: object) -> bool:
+    """The evidence check while the project is in local mode only (brief #1281, Verdict on 09f9127):
+    without a matching record it runs the head's governance and a test sample in a temporary
+    worktree with the conductor's environment, so it is not a read."""
+    return evidence_command(words, cwd) and local_mode_here()
 
 
 def local_mode_here() -> bool:
@@ -857,6 +871,8 @@ def decide(payload: dict, shadow: bool = False) -> str | None:
         words = tokens_of(command) if isinstance(command, str) else None
         if not shadow and words and route_form(words, payload.get("cwd")):
             return ROUTE_RULE  # the form is right, the mode is not (brief #1263 (c))
+        if not shadow and words and evidence_command(words, payload.get("cwd")):
+            return EVIDENCE_RULE  # the form is right, the mode is not (brief #1281)
         return PATH_RULE if body_path_not_absolute(command) else BASH_RULE
     return None
 

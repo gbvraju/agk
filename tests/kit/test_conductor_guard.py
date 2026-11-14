@@ -755,6 +755,7 @@ class Evidence(Work):
         super().__init__(root)
         (self.root / "scripts" / "agk").mkdir(parents=True)
         (self.root / EVIDENCE_SCRIPT).write_text("print('x')\n", encoding="utf-8")
+        (self.root / "agk.toml").write_text('execution = "local"\n', encoding="utf-8")
         self.scratch.mkdir()
         self.record = self.scratch / "record.json"
         self.record.write_text("{}\n", encoding="utf-8")
@@ -897,3 +898,35 @@ def test_the_agent_names_the_check_before_a_clearing_verdict_and_in_the_guard_li
     assert "before a clearing verdict" in local
     never = next(line for line in agent.splitlines() if line.startswith("- Edit a file"))
     assert "`evidence.py check`" in never
+
+
+EVIDENCE_MARK = "setting: execution"
+
+
+@pytest.mark.parametrize("issues", [[], None])
+def test_a_the_evidence_check_is_refused_in_ci_mode_naming_the_setting(ev, tmp_path, issues):
+    """REQ-039: brief #1281, the Verdict on 09f9127: the check runs the head's code, so local mode
+    only; in CI mode it is refused naming the setting, never a value."""
+    (ev.root / "agk.toml").write_text('execution = "github"\n', encoding="utf-8")
+    found, _ = run_route_hook(
+        ev.root, f"python3 {EVIDENCE_SCRIPT} check --head {HEX}", issues, tmp_path
+    )
+    assert found is not None and found["permissionDecision"] == "deny"
+    reason = found["permissionDecisionReason"]
+    assert MARK in reason and EVIDENCE_MARK in reason and "evidence check" in reason
+
+
+def test_a_the_evidence_check_is_allowed_while_the_record_issue_is_open(ev, tmp_path):
+    """REQ-039: brief #1281, local mode as route.py reads it (one search call)."""
+    (ev.root / "agk.toml").write_text('execution = "github"\n', encoding="utf-8")
+    command = f"python3 {EVIDENCE_SCRIPT} check --head {HEX}"
+    found, calls = run_route_hook(ev.root, command, [RECORD_ISSUE], tmp_path)
+    assert found is None
+    assert len(calls) == 1 and any(a.startswith("search/issues") for a in calls[0])
+
+
+def test_b_a_wrong_form_in_ci_mode_gets_the_general_rule(ev, tmp_path):
+    """REQ-039: brief #1281, only the right form is told about the setting."""
+    (ev.root / "agk.toml").write_text('execution = "github"\n', encoding="utf-8")
+    found, _ = run_route_hook(ev.root, f"python3 {EVIDENCE_SCRIPT} check", [], tmp_path)
+    assert found is not None and EVIDENCE_MARK not in found["permissionDecisionReason"]
