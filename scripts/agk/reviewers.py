@@ -690,7 +690,7 @@ def drop_placeholder_lines(text: str) -> str:
 def write_codeowners(root, rendered: str, adopt_mode: bool) -> str:
     """Write CODEOWNERS (in adopt mode only the marked block) and say what changed. In adopt mode
     the plain lines outside the block that name only the placeholder owner are removed, since they
-    name an owner nobody holds and would own every path the block leaves out (brief #1223 answer 3)."""
+    name an owner nobody holds and would own each path the block leaves out (brief #1223)."""
     path = root / CODEOWNERS
     existing = path.read_text(encoding="utf-8") if path.is_file() else None
     if not adopt_mode or existing is None:

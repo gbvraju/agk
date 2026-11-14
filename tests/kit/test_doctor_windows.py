@@ -1,12 +1,12 @@
 """A Windows setup works on the first run (brief #1223, ADR-0522; REQ-014).
 
-Answer 1: on Windows only, the doctor's `windows-tools` check names the fix of each missing tool: a
-`python3` that is the Microsoft Store shortcut (under `WindowsApps`), an absent `make` and an absent
-`gitleaks`. Answer 2: the account's admin rights come from `permissions.admin` of the repository read
-(`gh api repos/{owner}/{repo} --jq .permissions.admin`); when that cannot be read, a refused read is
-`cannot check (admin-unknown)`, never `no-admin`. Answer 3: `reviewers.py --codeowners --write`
-removes the plain lines outside the agk block that name only the placeholder owner. The platform,
-the paths and every GitHub answer are simulated: no Windows and no network are needed.
+Answer 1: on Windows only, the doctor's `windows-tools` check names the fix of each missing tool:
+a `python3` that is the Microsoft Store shortcut (under `WindowsApps`), an absent `make` and an
+absent `gitleaks`. Answer 2: the account's admin rights come from `permissions.admin` of the
+repository read (`gh api repos/{owner}/{repo} --jq .permissions.admin`); when that cannot be read,
+a refused read is `cannot check (admin-unknown)`, never `no-admin`. Answer 3: `reviewers.py
+--codeowners --write` removes the plain lines outside the agk block that name only the placeholder
+owner. The platform, the paths and every GitHub answer are simulated: no Windows, no network.
 """
 
 from __future__ import annotations
@@ -191,7 +191,7 @@ def test_answer2_other_callers_of_the_reads_keep_no_admin(tmp_path):
     assert doctor.admin_reason("no-admin", None) == "no-admin"
 
 
-# --- answer 3: CODEOWNERS placeholder lines --------------------------------------------------------
+# --- answer 3: CODEOWNERS placeholder lines ----------------------------------------------
 
 
 RENDERED = "# Generated\n/docs/ @example-owner\n"
