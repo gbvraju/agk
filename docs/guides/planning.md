@@ -71,7 +71,12 @@ checkout; the other scripts are installed under `scripts/agk/`.
    carries a `Source:` line. Each open question and unsettled conflict is also in the `Questions for business` section
    of `docs/plan/scope.md`, with the keys of the requirements and briefs it blocks on its `Blocks:` line, which you may
    edit.
-8. **Approve.** On the plan's pull request, an account listed in `spec_approvers` of `config/reviewers.yaml` posts
+8. **Review the scope, then approve.** Before the approval, run `/agk:scope-review <report path outside docs/>` in a
+   fresh session (ADR-0517): without reading `docs/plan/scope.md`, `docs/plan/prototype-coverage.md` or a planning
+   report, it compares every source and imported prototype version with `docs/requirements.md` and the briefs, and
+   writes one report of what nothing covers and of each conflict, changing no file. Read it; when you ask, its second
+   step triages each finding (covered, gap, out of scope or decision) into `docs/plan/scope-triage.md`, and you bring
+   each gap into the plan before approving. Then, on the plan's pull request, an account listed in `spec_approvers` of `config/reviewers.yaml` posts
    `Approve: plan <full head ID>`. A session never posts it; in solo mode it is part of your `Confirmed:` comment.
 9. **Publish.** Save the pull request's comments as a file and run
    `python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE]`. Without the approval it exits
@@ -148,7 +153,8 @@ the kit uses invented files only.
    scenario names; with `--trace` it also prints one `info plan: scenario <location>: ...` line per scenario, naming the
    screens and states it is matched to. These lines are information, not failures: read each one with the person before
    the plan is confirmed.
-7. **Approve and publish.** The approver posts `Approve: plan <full head ID>`, and
+7. **Approve and publish.** First run `/agk:scope-review` in a fresh session and read its report, as in step 8
+   above; then the approver posts `Approve: plan <full head ID>`, and
    `python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE]` prints the commands, as in
    steps 8 and 9 above.
 
