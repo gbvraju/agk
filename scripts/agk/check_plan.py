@@ -63,6 +63,19 @@ Brief #1183 (ADR-0502): a block of `docs/requirements.md` numbered REQ-001 to RE
 that file reserves for the kit, with no `Source:` line is left out of rule 10, the trace and the
 counts of rule 11; such a block that carries a `Source:` line is checked as any other.
 
+Brief #1217, amendment 175 (ADR-0516): rule 10 also fails each file under `docs/sources/` with no
+location that a requirement's `Source:` line cites and that resolves, unless a list line under the
+`Out of scope` heading of `docs/plan/scope.md` names the file by its own path (a backticked span
+with no line or heading) and gives a reason (text beside its spans), with one line
+`<file> is a source no requirement cites (list it out of scope or cite it)`, never its text. With
+`--trace`, after the matrix, one line per source file `<file>: <a> of <b> headings or rows cited`:
+the units are a Markdown file's headings (outside fences) and table rows (after a separator line),
+or a text file's non-blank lines after its header, each cited by `<file>#<heading>` or by
+`<file>:<line>` of its line. Rule 11's coverage line is unchanged. With the maintainers' answer to
+`Q-1217-1`, two more locations cite a source: a requirement's acceptance line ending with
+` (<location>)` into a `Kind: openspec` source, and a `Source:` line of a brief file that carries a
+`Component:` line (the brief of a shared component, which `plan_intake.py render` writes).
+
 Build (g), rules 20 to 22 (brief #1095, ADR-0467), when `docs/plan/` exists: rule 20 fails a
 `docs/plan/baseline.json` that is not `schema` 1 with a full `head`, a real `date`, an `https://`
 `link` and a list of `milestones` (each an `id` `M<n>`, its `briefs` keys, its `target` date or
@@ -149,6 +162,7 @@ REQUIREMENTS = "docs/requirements.md"
 MILESTONES = f"{PLAN}/milestones.md"
 BRIEFS = f"{PLAN}/briefs"
 IN_SCOPE = "In scope"
+OUT_OF_SCOPE = "Out of scope"
 BLOCK = re.compile(r"^###\s+(\S+)")
 MILESTONE = re.compile(r"^###\s+(M\d+)\b")
 KIT_RANGE = re.compile(r"^REQ-(\d{3})$")
@@ -573,6 +587,77 @@ def scope_lines(root: Path) -> list[tuple[int, list[str]]]:
     return out
 
 
+def out_of_scope_files(root: Path) -> set[str]:
+    """Brief #1217 (ADR-0516): the files under `docs/sources/` that a list line under the
+    `Out of scope` heading of scope.md names by its own path (a backticked span with no `:<line>`
+    or `#<heading>`) with a reason, that is with text beside its spans."""
+    text = _read(root / SCOPE) or ""
+    out: set[str] = set()
+    inside = False
+    for line in text.splitlines():
+        match = HEADING.match(line)
+        if match:
+            inside = match.group(1) == OUT_OF_SCOPE
+        elif inside and (item := LIST_ITEM.match(line)):
+            rest = SPAN.sub("", line[item.end() :])
+            if not re.sub(r"[\W_]", "", rest):
+                continue  # no reason given
+            for span in SPAN.findall(line):
+                if span.startswith(f"{SOURCES}/") and (root / span).is_file():
+                    out.add(span)
+    return out
+
+
+def source_units(text: str, markdown: bool) -> list[tuple[int, str | None]]:
+    """Brief #1217 answer 2: the headings (outside fenced blocks) and the table rows (a `|` line
+    after a separator line) of a Markdown source, or each non-blank line of a text source after
+    its header, as (line number, heading text or None)."""
+    lines = text.splitlines()
+    if not markdown:
+        start = next((i for i, line in enumerate(lines) if not line.strip()), len(lines))
+        return [(n, None) for n in range(start + 2, len(lines) + 1) if lines[n - 1].strip()]
+    out: list[tuple[int, str | None]] = []
+    fenced, table = False, False
+    for n, line in enumerate(lines, start=1):
+        if FENCE.match(line):
+            fenced, table = not fenced, False
+            continue
+        if fenced:
+            continue
+        if match := HEADING.match(line):
+            out.append((n, match.group(1)))
+            table = False
+        elif line.lstrip().startswith("|"):
+            if _separator(_cells(line)):
+                table = True
+            elif table:
+                out.append((n, None))
+        else:
+            table = False
+    return out
+
+
+def other_citations(root: Path) -> set[str]:
+    """Q-1217-1 (maintainer answer): the locations that cite a source outside a requirement's
+    `Source:` line: an acceptance line's ` (<location>)` into a `Kind: openspec` source, and the
+    `Source:` lines of a brief file that carries a `Component:` line (a component's brief)."""
+    out: set[str] = set()
+    for location in acceptance_lines(root):
+        rel = location.partition("#")[0] if "#" in location else location.rpartition(":")[0]
+        text = _read(root / rel) if rel.startswith(f"{SOURCES}/") else None
+        if text is not None and (header(text) or {}).get("Kind") == OPENSPEC:
+            out.add(location)
+    folder = root / BRIEFS
+    for path in sorted(folder.rglob("*.md")) if folder.is_dir() else []:
+        text = _read(path) or ""
+        if _line_value(text, "Component") is None:
+            continue
+        for line in text.splitlines():
+            if source := SOURCE_LINE.match(line):
+                out.add(source.group(1).strip("`"))
+    return out
+
+
 def kit_requirement(rel: str, req: str, sources: list[str]) -> bool:
     """Brief #1183 (ADR-0502): a block of `docs/requirements.md` numbered REQ-001 to REQ-099, the
     range that file reserves for the kit, with no `Source:` line: it has no project source."""
@@ -950,6 +1035,8 @@ class Plan:
         for _, req, sources in self.reqs:
             for source in sources:
                 self.cited.setdefault(source, []).append(req)
+        self.resolved = {s for s in self.cited if location_problem(root, s) is None}
+        self.resolved |= {s for s in other_citations(root) if location_problem(root, s) is None}
         pulls = (facts or {}).get("pull_requests")
         self.merged: dict[int, list[int]] | None = None
         if isinstance(pulls, list):
@@ -999,12 +1086,47 @@ class Plan:
         for screen in self.screens:
             if screen not in self.cited and screen not in reported:
                 out.append(f"rule 10: {screen}: no requirement cites this screen and state")
+        out += self.uncited()
         named = {milestone for _, milestone, _ in self.briefs}
         for milestone in milestones(self.root):
             if milestone not in named:
                 out.append(f"rule 10: {MILESTONES}: {milestone}: no brief names this milestone")
         if design_source(self.root):
             out += [f"rule 10: {MILESTONES}: {m}: no Demo: line" for m in undemoed(self.root)]
+        return out
+
+    def _file_of(self, location: str) -> str:
+        return location.partition("#")[0] if "#" in location else location.rpartition(":")[0]
+
+    def uncited(self) -> list[str]:
+        """Brief #1217 answer 1: each source file with no resolving cited location that is not
+        listed out of scope, named by its path and never its text."""
+        cited = {self._file_of(location) for location in self.resolved}
+        skipped = out_of_scope_files(self.root)
+        out: list[str] = []
+        for path in source_files(self.root):
+            rel = path.relative_to(self.root).as_posix()
+            if rel not in cited and rel not in skipped:
+                out.append(
+                    f"{rel} is a source no requirement cites (list it out of scope or cite it)"
+                )
+        return out
+
+    def file_lines(self) -> list[str]:
+        """Brief #1217 answer 2: one `<file>: <a> of <b> headings or rows cited` per source file,
+        a unit cited by `<file>#<heading>` or by `<file>:<line>` of its line."""
+        out: list[str] = []
+        for path in source_files(self.root):
+            rel = path.relative_to(self.root).as_posix()
+            text = _read(path) if path.suffix in SUFFIXES else None
+            units = source_units(text, path.suffix == ".md") if text is not None else []
+            a = sum(
+                1
+                for n, name in units
+                if f"{rel}:{n}" in self.resolved
+                or (name is not None and f"{rel}#{name}" in self.resolved)
+            )
+            out.append(f"{rel}: {a} of {len(units)} headings or rows cited")
         return out
 
     def _merged_of(self, keys: list[str]) -> list[str]:
@@ -1185,7 +1307,7 @@ def cmd_check(
         return 1 if problems else 0
     plan = Plan(root, facts, numbers or {})
     if trace:
-        lines = plan.trace(facts is not None) + plan.screen_lines()
+        lines = plan.trace(facts is not None) + plan.file_lines() + plan.screen_lines()
         lines += plan.rule_lines(facts is not None) + plan.access_lines(facts is not None)
         print("\n".join(lines))
     problems += plan.problems() + scope_lock_problems(root) + scope_problems(root, comments, base)

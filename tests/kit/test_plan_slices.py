@@ -289,6 +289,10 @@ def test_ac2_render_without_a_design_source_is_unchanged(repo: Path, capsys) -> 
 def test_ac3_check_plan_fails_a_later_milestone_without_a_demo_line(design: Path, capsys) -> None:
     """REQ-050 AC3: rule 10 with amendment 164 item 4, while a `Kind: design` file exists."""
     assert render(design, sliced(), capsys)[0] == 0
+    # Q-1217-1: the component's brief carries its key and sources, so the components file is cited
+    assert f"Component: C1\nSource: `{PARTS}#app-nav`\n" in read(
+        design, "docs/plan/briefs/M1/B1.md"
+    )
     assert check_plan.main(["--root", str(design)]) == 0, capsys.readouterr().out
     capsys.readouterr()
     rel = "docs/plan/milestones.md"
