@@ -20,7 +20,8 @@ and names every other decision for the maintainers; nothing else answers, and th
 keeps no memory past a compaction. One evening of a customer project in local mode showed most of the owner's questions
 settled by the kit's own code and state, a few that needed the owner, and three misses of the co-owner that evidence
 found. The owner's correction on the brief (comment 6881131563) ruled its three open questions and made the steward the
-owner's one entry point, and a second (comment 6881233447) set a cost and speed budget and skills first. The kit recognises `Answer:` and `Maintainer answer:` only by their prefixes, and the sessions and the owner post
+owner's one entry point, a second (comment 6881233447) set a cost and speed budget and skills first, and a third (comment 6881300953) bounded
+every role's wait on the owner. The kit recognises `Answer:` and `Maintainer answer:` only by their prefixes, and the sessions and the owner post
 as one login, so the login cannot show who wrote an owner's answer.
 
 ## Decision
@@ -40,8 +41,10 @@ as one login, so the login cannot show who wrote an owner's answer.
    `Priority: 0` brief). Kit briefs, corrections and questions go straight to the kit repository, from any project, only
    through an outbound data guard that refuses, fail closed, a text holding a project token, an e-mail address, a phone
    number, a project host or another repository's name.
-4. A question for the owner never holds a builder: its pull request is parked with `agk:parked`, the builder ends and
-   the slot is filled, and the owner's answer restarts a builder on the same pull request.
+4. A wait on the owner holds no role longer than `[flow] owner_wait_minutes` (30 by default), for the steward, the
+   conductor and the builder alike: then the pull request is parked with `agk:parked`, the builder hands over and takes
+   its next brief, the slot is filled, and the owner's answer, whenever it comes, resumes a builder on the same pull
+   request ahead of new briefs of its milestone. Session rule 21's wait changes by build (c)'s own ADR.
 5. The steward spends little: it reads through the kit's cached and conditional readers, runs `session.py plan` at most
    once per start, routes mechanical answers below `strongest`, and holds a measured budget of at most 15 counted GitHub
    calls for a pass that answers one mechanical question and 5 for a quiet start. It uses the kit's skill for every stage
