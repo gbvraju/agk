@@ -146,12 +146,14 @@ def history(root: Path, base: str) -> list[tuple[str, str, Snapshot]]:
     return out
 
 
-def build_table(root: Path, base: str) -> dict:
+def build_table(
+    root: Path, base: str, hist: list[tuple[str, str, Snapshot]] | None = None
+) -> dict:
     """The table from history up to `base`, plus the working tree as the current version."""
     snaps: dict[str, list[Snapshot]] = {}
     commits: dict[str, list[str]] = {}
     flow = pr_mode(root) == "flow"
-    for commit, version, snap in history(root, base):
+    for commit, version, snap in history(root, base) if hist is None else hist:
         if flow and version != EXCEPTION and version in snaps:
             continue  # a build after the release of this version belongs to the next version
         if snap not in snaps.setdefault(version, []):
@@ -194,6 +196,60 @@ def dump(table: dict) -> str:
         lines.append("  }" + ("," if v + 1 < len(versions) else ""))
     lines += [" }", "}"]
     return "\n".join(lines) + "\n"
+
+
+def tree_digests(root: Path, blobs: Blobs, commit: str, paths: list[str]) -> dict[str, str]:
+    """SHA-256 of each of `paths` that exists at `commit`."""
+    listing = git_out(root, "ls-tree", "-r", "-z", commit).split(b"\0")
+    tree: dict[str, str] = {}
+    for entry in filter(None, listing):
+        meta, _, path = entry.partition(b"\t")
+        tree[path.decode()] = meta.split()[2].decode()
+    blobs.fetch([tree[p] for p in paths if p in tree])
+    return {p: hashlib.sha256(blobs.cache[tree[p]]).hexdigest() for p in paths if p in tree}
+
+
+def commit_problems(
+    root: Path,
+    base: str,
+    committed: dict | None = None,
+    hist: list[tuple[str, str, Snapshot]] | None = None,
+) -> list[str]:
+    """Each release row against the files its commit ships (brief #1259, ADR-0532).
+
+    A row other than the current version's lists at least one commit. Every row with a commit has,
+    for each `verbatim` path, a digest of that file at its last commit. The current version's row
+    with no commits is, between two releases in flow mode, checked against its release commit (the
+    first first-parent commit up to `base` at that version); otherwise the full comparison with
+    the working tree covers it. Lines name the version and the path, never a digest."""
+    if committed is None:
+        committed = json.loads((root / TABLE).read_text(encoding="utf-8"))
+    rows = committed.get("releases", {})
+    current, _ = snapshot_worktree(root)
+    base_row = snapshot_commit(root, Blobs(root), base)
+    between = pr_mode(root) == "flow" and base_row is not None and base_row[0] == current
+    blobs = Blobs(root)
+    found: list[str] = []
+    for version in sorted(rows, key=version_key):
+        row = rows[version]
+        listed = row.get("commits") or []
+        commit = listed[-1] if listed else None
+        if commit is None and version != current:
+            found.append(f"{TABLE}: row {version} lists no commits")
+            continue
+        if commit is None and between:
+            hist = history(root, base) if hist is None else hist
+            commit = next((c for c, v, _ in hist if v == current), None)
+        if commit is None:
+            continue
+        verbatim = row.get("verbatim") or {}
+        have = tree_digests(root, blobs, commit, sorted(verbatim))
+        for path in sorted(verbatim):
+            if have.get(path) not in verbatim[path]:
+                found.append(
+                    f"{TABLE}: row {version}: {path} does not match its file at the row's commit"
+                )
+    return found
 
 
 CHANGELOG = "CHANGELOG.md"
@@ -292,7 +348,8 @@ def problems(root: Path, base: str | None = None) -> list[str]:
     if not path.is_file():
         return [f"{TABLE} is missing"]
     committed = json.loads(path.read_text(encoding="utf-8"))
-    fresh = build_table(root, base)
+    hist = history(root, base)
+    fresh = build_table(root, base, hist)
     current, _ = snapshot_worktree(root)
     found: list[str] = []
     old_row = snapshot_commit(root, Blobs(root), base)
@@ -324,6 +381,7 @@ def problems(root: Path, base: str | None = None) -> list[str]:
             ok = listed == regenerated
         if not ok:
             found.append(f"{TABLE}: row {version} names commits that differ from the history")
+    found += commit_problems(root, base, committed, hist)
     if pr_mode(root) == "flow":
         return found + flow_problems(root, base)
     for version, row in fresh["releases"].items():
