@@ -1,8 +1,9 @@
 """Session rule 18 names the label that `session.py claim` adds (brief #1276, ADR-0547; REQ-050).
 
-`claim` posts one `taken:` comment and adds the label `agk:taken` (brief #1251, ADR-0529), for a brief and for
-a build alike. Rule 18 of `config/session-rules.md` names that label exactly when `claim` adds it, so the rule
-and the planner cannot drift apart again. Read from the files; no network.
+`claim` posts one `taken:` comment and adds the label `agk:taken` (brief #1251, ADR-0529), for a
+brief and for a build alike. Rule 18 of `config/session-rules.md` names that label exactly when
+`claim` adds it, so the rule and the planner cannot drift apart again. Read from the files; no
+network.
 """
 
 from __future__ import annotations
@@ -36,12 +37,10 @@ def taken_label() -> str | None:
 
 
 def claim_label_guards() -> list[list[str]] | None:
-    """For each call in `claim` that names TAKEN_LABEL, the source of the `if` tests above it; None when
-    `claim` names no label."""
+    """For each call in `claim` that names TAKEN_LABEL, the source of the `if` tests above it;
+    None when `claim` names no label."""
     tree = ast.parse(SESSION.read_text(encoding="utf-8"))
-    fn = next(
-        (n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "claim"), None
-    )
+    fn = next((n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "claim"), None)
     assert fn is not None, "session.py has no claim()"
     found: list[list[str]] = []
 
@@ -82,11 +81,13 @@ def test_req050_rule_18_names_the_label_exactly_when_claim_adds_it():
     assert (f"`{label}`" in text) is adds
     assert "posts one comment and nothing else" not in text
     if adds:
-        assert f"which posts one comment and adds the label `{label}`, and nothing else" in text
+        wanted = f"which posts one comment and adds the label `{label}`, and nothing else"
+        assert wanted in text
 
 
 def test_req050_the_build_sentence_names_the_label_when_a_build_claim_adds_it():
-    """REQ-050: brief #1276 answer 1; `claim --build` adds the label unless a `build` test guards it."""
+    """REQ-050: brief #1276 answer 1; `claim --build` adds the label unless a `build` test
+    guards it."""
     guards = claim_label_guards() or []
     build_adds = any(not any("build" in t for t in g) for g in guards)
     assert (f"`{taken_label()}`" in build_sentence(rule(18))) is build_adds
@@ -97,7 +98,8 @@ def test_req050_rule_18_keeps_its_other_words():
     text = rule(18)
     for phrase in (
         "A session finds its next item with `python3 scripts/agk/session.py next --session ID`",
-        "a builder takes a brief only with `python3 scripts/agk/session.py claim --session ID --brief N`",
+        "a builder takes a brief only with "
+        "`python3 scripts/agk/session.py claim --session ID --brief N`",
         "or with `next --session ID --take`, which chooses and takes in one step",
         "which posts `taken: <id> <date> build (<x>)`",
         "and refuses a build that a live take holds",
