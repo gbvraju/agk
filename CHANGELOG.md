@@ -7,6 +7,8 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 ## 0.64.4 (2026-11-14)
 
 - #1249 `agk doctor` reports, as `misplaced-settings`, a setting that the kit reads from a table of `agk.toml` (`[flow]`, `[testing]`, `[capacity]`, `[plan]`, `[design]`, `[delivery]`) but that stands at the top level or in another table, naming the key and both tables, never its value; the template's flow block says the keys belong in the `[flow]` table (brief #1245, ADR-0527)
+- #1250 A fresh reviewer gives every gating verdict, in local mode too: `[flow] reviewer_slots` puts reviewer slots at the gate, `conductor.py review --pr N [--start]` asks one and in local mode starts it through the launch adapter, `check-verdict` keeps the conductor's own verdict to a timed `(conductor fallback)`, and the review guard lets a slot save its bundle in its scratch folder (brief #1248, ADR-0528)
+- #1255 The stop hook runs only the governance checks a session's own changes need: none when nothing changed, the checks that read the changed documentation or configuration files, and the full set for any other path; `[flow] stop_check = "changed" | "full" | "off"` chooses the mode (`"off"` is refused in solo review mode), and each run prints one `stop check:` line (brief #1254, ADR-0531)
 
 ## 0.64.3 (2026-11-14)
 
