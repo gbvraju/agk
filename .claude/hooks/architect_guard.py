@@ -12,7 +12,8 @@ With the argument `--review` (the review agent, SPEC-0023) it denies `Edit`, `Mu
 review scratch directory: `agk-review-<name>` directly in the system temp directory and outside the
 project, judged by its real path, with no link and no `..` out of it (brief #1050, Q-1013-3,
 ADR-0444; the limit of the conductor's guard). It judges `Bash` the same way, and allows besides
-`evidence.py check RECORD [--head SHA] [--sample N] [--json]` (brief #982), which writes nothing in
+`evidence.py check RECORD [--head SHA] [--sample N] [--json]` (brief #982), or the same with no
+RECORD and `--head SHA` (the clone's shared record, brief #1269), which writes nothing in
 the repository: its worktree is a temporary folder it removes; and the steps of a reviewer slot run
 (`.claude/agents/architect-review.md`, brief #1050), exactly: `git fetch origin`;
 `git checkout --detach <sha>`, the sha 7 to 40 lower-case hex characters and on a branch of origin
@@ -319,15 +320,17 @@ def gh_api_allowed(words: list[str]) -> bool:
 
 
 def evidence_check_allowed(args: list[str]) -> bool:
-    """`check` and one record, with only the options that change no file (brief #982)."""
+    """`check` and one record, with only the options that change no file (brief #982); or no record
+    with `--head`, the clone's shared record (brief #1269)."""
     if not args or args[0] != "check":
         return False
-    records, i = 0, 1
+    records, head, i = 0, False, 1
     while i < len(args):
         arg = args[i]
         if arg in EVIDENCE_VALUES:
             if i + 1 >= len(args) or not EVIDENCE_VALUES[arg].fullmatch(args[i + 1]):
                 return False
+            head = head or arg == "--head"
             i += 2
             continue
         if arg != "--json":
@@ -335,7 +338,7 @@ def evidence_check_allowed(args: list[str]) -> bool:
                 return False
             records += 1
         i += 1
-    return records == 1
+    return records == 1 or (records == 0 and head)
 
 
 def bash_allowed(command: object, review: bool = False) -> bool:

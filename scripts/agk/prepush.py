@@ -1,7 +1,7 @@
 """The fast checks before a push (brief #326, ADR-0186).
 
-    python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE]
-        [--queue]
+    python3 scripts/agk/prepush.py [--body FILE] [--base REF] [--quick] [--no-lock]
+        [--record [FILE]] [--queue]
 
 Runs, in order, the checks CI would fail a pull request on first, and stops at the first failure
 with that step's own output:
@@ -91,6 +91,14 @@ still writes it. Then it prints one line for the pull request body:
 `Evidence: prepush schema 1, head <sha12>, <n> steps ok, record <sha12 of the file>`. A record
 file that cannot be written exits 2.
 
+Brief #1269 (ADR-0536): `--record` with no FILE, or `--record auto`, writes the record to
+`<git common dir>/agk-evidence/<40-hex head>.json`, the folder `git rev-parse --git-common-dir`
+names: one per clone, shared by every worktree of it, never tracked and never making the tree
+dirty, so the conductor finds it from the head alone (`evidence.py check --head <sha>`). The
+folder is made when missing. `--record FILE` writes FILE as before, and the `Evidence:` line is
+the same either way. A `--queue` run passes `auto` on, so the record is named by the head the
+job runs on.
+
 SPEC-0046 rule 11 (build (f)): the run folders of brief #613 (ADR-0299) are retired. The keys
 `[testing] results_dir`, `keep_passed` and `keep_runs` keep their checks and do nothing: no folder,
 no `AGK_RUN_DIR`, no `run_dir` in the record. When one is set, prepush prints one line
@@ -168,9 +176,11 @@ from test_map import refresh
 
 HERE = Path(__file__).resolve().parent
 USAGE = (
-    "usage: prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record FILE] [--queue]"
+    "usage: prepush.py [--body FILE] [--base REF] [--quick] [--no-lock] [--record [FILE]] [--queue]"
 )
 SCHEMA = 1
+AUTO_RECORD = "auto"  # `--record` with no FILE (brief #1269, ADR-0536)
+EVIDENCE_FOLDER = "agk-evidence"  # in the git common dir, shared by every worktree of a clone
 LEFT_TO_CI = "selected (full left to CI)"  # the record's set of such a run (brief #1031 answer 3)
 LEFT_LINE = (
     "tests: full suite left to CI's proof job (always_full {glob}); ran the {n} mapped test files"
@@ -243,7 +253,10 @@ def parse_args(args: list[str]) -> dict:
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in ("--body", "--base", "--record") and i + 1 < len(args):
+        if arg == "--record" and (i + 1 == len(args) or args[i + 1].startswith("--")):
+            options["record"] = AUTO_RECORD  # brief #1269: the clone's shared evidence folder
+            i += 1
+        elif arg in ("--body", "--base", "--record") and i + 1 < len(args):
             options[arg[2:]] = args[i + 1]
             i += 2
         elif arg == "--quick":
@@ -278,7 +291,8 @@ def queued(options: dict) -> int:
     args: list[str] = []
     for key in ("body", "base", "record"):
         if options[key]:
-            value = options[key] if key == "base" else os.path.abspath(options[key])
+            keep = key == "base" or (key == "record" and options[key] == AUTO_RECORD)
+            value = options[key] if keep else os.path.abspath(options[key])
             args += [f"--{key}", value]
     args += [] if options["lock"] else ["--no-lock"]
     return heavy_lock.queue_self("prepush.py", "prepush", Path(__file__), args, options["body"])
@@ -1101,6 +1115,32 @@ def step_record(name: str, result: Step, seconds: float, root: Path) -> dict:
     return entry
 
 
+def shared_record(root: Path, head: str) -> Path | None:
+    """`<git common dir>/agk-evidence/<head>.json` of the clone at ROOT (brief #1269), or None
+    when git names no common dir."""
+    code, out = run(["git", "rev-parse", "--git-common-dir"], root)
+    if code != 0 or not out.strip():
+        return None
+    return (root / out.strip()).resolve() / EVIDENCE_FOLDER / f"{head}.json"
+
+
+def record_file(root: Path, option: str | None) -> Path | None:
+    """The record path of `--record`: FILE as given, or for `auto` the clone's shared folder,
+    made when missing. A folder that cannot be made is left for the writability check."""
+    if not option:
+        return None
+    if option != AUTO_RECORD:
+        return Path(option)
+    path = shared_record(root, git(root, "rev-parse", "HEAD").strip())
+    if path is None:
+        return Path(EVIDENCE_FOLDER) / "missing" / "record.json"  # refused below, naming the option
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass  # the check below refuses it naming the option
+    return path
+
+
 def write_record(path: Path, record: dict) -> str:
     """Write the record; return the sha256 of the file. OSError when it cannot be written."""
     data = (json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8")
@@ -1143,7 +1183,7 @@ def main(argv: list[str] | None = None) -> int:
     except CheckError:
         print("prepush: the base does not resolve (setting: --base, AGK_BASE, default_branch)")
         return 2
-    record_path = Path(options["record"]) if options["record"] else None
+    record_path = record_file(root, options["record"])
     record: dict | None = None
     if record_path is not None:
         if not record_path.parent.is_dir():
