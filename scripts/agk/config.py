@@ -552,6 +552,101 @@ def capacity_settings(root: Path) -> dict | None:
     return found | table
 
 
+# --- the known keys of each table (brief #1245, ADR-0527) ---------------------------------------
+
+TABLE_KEYS: dict[str, frozenset[str]] = {
+    "flow": frozenset(
+        {
+            "after_merge_timeout",
+            "assign",
+            "auto_merge",
+            "auto_merge_method",
+            "auto_start",
+            "brief_code_paths",
+            "builder_memory_gb",
+            "builder_slots",
+            "builder_start",
+            "claim_hours",
+            "claim_stale_hours",
+            "launch_adapter",
+            "max_behind_merges",
+            "max_builders",
+            "max_touch_glob",
+            "merge_hours",
+            "merge_queue",
+            "min_free_memory_mb",
+            "plan_issue",
+            "reprove_paths",
+            "reviews_in_flight",
+            "shared_indexes",
+            "slot_seen_minutes",
+            "stale_commits",
+            "stall_hours",
+            "stall_minutes",
+        }
+    ),
+    "testing": frozenset(
+        {
+            "always_full",
+            "budget_seconds",
+            "excluded",
+            "full_when_share",
+            "junit",
+            "keep_passed",
+            "keep_runs",
+            "links",
+            "local_full",
+            "map",
+            "map_source",
+            "parallel_command",
+            "pr_tests",
+            "pre_merge_tests",
+            "profile",
+            "proof_regression",
+            "rerun_alone",
+            "results_dir",
+            "slow_suite_seconds",
+            "smoke",
+            "tools_file",
+            "worker_memory_mb",
+            "workers",
+        }
+    ),
+    "capacity": frozenset({"profile", "builders_run", *CAPACITY_NUMBERS}),
+    "plan": frozenset(
+        {
+            "active_milestones",
+            "board",
+            "board_template",
+            "calibration_min",
+            "default_hours",
+            "iteration_days",
+            "max_questions",
+        }
+    ),
+    "design": frozenset({"pixel_tolerance", "render", "ui_paths"}),
+    "delivery": frozenset({"work_type"}),
+}
+TOP_LEVEL = "top level"
+
+
+def misplaced_settings(source: dict) -> list[tuple[str, str, tuple[str, ...]]]:
+    """(key, where it is, the tables it belongs to) for each key of TABLE_KEYS found at the top
+    level of an agk.toml or in a table that does not read it, sorted; a top-level setting of the
+    kit (DEFAULT_CONFIG) is never one. Only names are returned, never a value."""
+    homes: dict[str, tuple[str, ...]] = {}
+    for table, keys in TABLE_KEYS.items():
+        for key in keys:
+            homes[key] = tuple(sorted({*homes.get(key, ()), table}))
+    found = []
+    for name, value in source.items():
+        if isinstance(value, dict):
+            found += [(k, name, homes[k]) for k in value if k in homes and name not in homes[k]]
+        elif name in homes and name not in DEFAULT_CONFIG:
+            found.append((name, TOP_LEVEL, homes[name]))
+    return sorted(found)
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
