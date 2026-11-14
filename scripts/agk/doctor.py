@@ -62,6 +62,7 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
@@ -435,6 +436,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "capacity: ",
         "the [capacity] table of agk.toml is refused",
         "correct the setting the refusal names in agk.toml (a protected path)",
+    ),
+    "launch-adapter": (  # brief #1237 (ADR-0525): information, never a failure of the run
+        "warn",
+        "launch adapter: ",
+        "launch adapter: ",
+        "install the kit's adapter (python3 scripts/agk/upgrade.py writes a missing template) and "
+        "set launch_adapter in the flow table of agk.toml to the line above (a protected path)",
     ),
     "engines-keys": (
         "warn",
@@ -1185,6 +1193,54 @@ def capacity_result(root: Path, measure: bool = True) -> Result:
     return Result("ok", message=text)
 
 
+ADAPTERS = {  # the kit's adapter templates (brief #1237): the file and the line that runs it
+    "win32": (
+        "scripts/start-session-windows.ps1",
+        'launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"',
+    ),
+    "posix": (
+        "scripts/start-session-local.sh",
+        'launch_adapter = "bash scripts/start-session-local.sh"',
+    ),
+}
+SCRIPT_SUFFIXES = (".ps1", ".sh", ".py", ".cmd", ".bat")
+
+
+def launch_adapter_result(root: Path, platform: str | None = None) -> Result:
+    """With `auto_start` on, the kit's adapter for the platform and the `launch_adapter` line,
+    when that setting is unset or a script file it names is missing (brief #1237, ADR-0525).
+    A word of the command that names a file of the project (a path, or a script suffix) must
+    exist; a command found on PATH alone is not checked. The project's command is never printed."""
+    import launch
+
+    file, line = ADAPTERS["win32" if (platform or sys.platform) == "win32" else "posix"]
+    try:
+        auto, adapter = launch.launch_settings(root)
+    except CheckError as err:
+        return Result("fail", message=f"{err}")
+    if not auto:
+        return Result("ok", message="auto_start off")
+    if adapter is None:
+        return Result(
+            "fail",
+            message=f"auto_start is on and launch_adapter is unset; the kit's "
+            f"adapter is {file}: set {line}",
+        )
+    try:
+        words = shlex.split(adapter)
+    except ValueError:
+        words = []
+    named = [w for w in words if "/" in w or "\\" in w or w.lower().endswith(SCRIPT_SUFFIXES)]
+    missing = [w for w in named if not (Path(w) if Path(w).is_absolute() else root / w).is_file()]
+    if missing:
+        return Result(
+            "fail",
+            message=f"auto_start is on and a file launch_adapter names is "
+            f"missing; the kit's adapter is {file}: set {line}",
+        )
+    return Result("ok", message="auto_start on, the adapter is there")
+
+
 def design_ui_result(root: Path, config: dict) -> Result:
     """`ui_paths` of the `[design]` table (SPEC-0037 rule 10): `absent` when a prototype folder
     exists and the list is unset or empty; always ok, and never a glob in the message."""
@@ -1641,6 +1697,7 @@ def run_checks(
     results["slot-schedule"] = slot_schedule_result(root, reads)
     results["design-ui-paths"] = design_ui_result(root, config)
     results["capacity"] = capacity_result(root, measure=api_dir is None)
+    results["launch-adapter"] = launch_adapter_result(root)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():
         res = results[check]

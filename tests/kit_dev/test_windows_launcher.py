@@ -129,7 +129,14 @@ def test_the_setting_names_its_direction_and_powershell_7():
         assert word in comment, word
 
 
-def test_the_script_is_not_installed_by_the_kit():
-    """REQ-037: answer 1: the kit's manifest does not change."""
-    manifest = (ROOT / "kit" / "manifest.json").read_text(encoding="utf-8")
-    assert "start-session-windows" not in manifest
+def test_the_kit_installs_the_guides_script_as_a_template_and_this_copy_stays():
+    """REQ-037: answer 1, as ADR-0525 (brief #1237) changed it: the kit installs the guide's
+    adapter as a template, written only where the file is absent, so this repository's own copy,
+    with its reuse of a worktree, is the one it keeps."""
+    import json
+
+    manifest = json.loads((ROOT / "kit" / "manifest.json").read_text(encoding="utf-8"))
+    template = "kit/templates/start-session-windows.ps1"
+    assert manifest["templates"]["scripts/start-session-windows.ps1"] == template
+    assert "start-session-windows" not in " ".join(manifest["verbatim"])
+    assert (ROOT / template).read_text(encoding="utf-8") != text()

@@ -168,6 +168,47 @@ remove` without `--force`, then `git branch -D` after the tip is checked again);
 prints the same as JSON. The conductor runs `tidy --apply` at its start and after each merge it makes; a builder never does.
 `doctor.py` prints `tidy: <n> finished worktrees; run session.py tidy` when more than five have piled up.
 
+## Running unattended
+
+In local mode nothing in the cloud starts a session: the launcher tasks of the cloud need Actions and cloud sessions. So that a
+night is not lost when a builder or the conductor dies of a crash or a memory hit while nobody is watching, set up these four
+things on the machine that runs the sessions, in this order (brief #1237, ADR-0525). Each change to `agk.toml` is a protected
+change with an ADR in the same pull request.
+
+1. **The adapter.** The kit installs two launch adapters, which a project then owns: `scripts/start-session-windows.ps1`
+   (a Windows Terminal tab per session, in its own worktree; it needs PowerShell 7) and `scripts/start-session-local.sh`
+   (Linux and macOS: a GNOME Terminal tab when a desktop is there, otherwise the background, with its output in the worktree's
+   `.agk-session.log`). Each writes `<worktree>/.agk-session-exit` when its session ends. Set the one for the machine in the
+   `[flow]` table, and try it once by hand as [the getting-started guide](getting-started.md) shows ("Automatic starts after
+   a review pass"):
+
+       launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"
+       launch_adapter = "bash scripts/start-session-local.sh"
+
+   `python3 scripts/agk/doctor.py` prints `launch adapter: auto_start is on and ...` with the file and the line to set when
+   `auto_start` is on and the adapter is missing.
+2. **`auto_start = true`** in the same table. The conductor then restarts a builder whose pull request is handed over or
+   silent through that adapter, and the watchdog below starts the conductor through it; with it off, nothing starts.
+3. **The capacity.** `[capacity] profile = "auto"`, with `builder_memory_gb` (in `[flow]` or `[capacity]`; the smaller
+   counts) set to the memory one builder needs with its containers, so that the plan starts no more builders than the
+   machine's free memory holds.
+4. **The watchdog.** `python3 scripts/agk/conductor.py watchdog` is one pass, never a loop. It starts nothing while the project
+   is paused, or unless `auto_start` and `launch_adapter` are set in the checkout and on the default branch alike. It reads the
+   conductor's lease on the plan issue (`plan_issue` of the `[flow]` table; without it, nothing starts): while a live
+   conductor holds it, it prints `watchdog: lease held by <name> until <time>; nothing started`. When the lease is free or
+   expired, it prints the machine's free memory against `builder_memory_gb`, starts nothing when that is below one builder
+   (`nothing started: free memory is below one builder`), and otherwise starts one conductor through the adapter, named
+   `conductor-local` (or `--session NAME`), which takes the lease itself; the lease keeps two from running. It posts nothing.
+   To run it every 30 minutes, print the one scheduler line for the machine and run that line yourself; the command runs
+   nothing:
+
+       python3 scripts/agk/conductor.py watchdog --install
+
+   On Windows it is a `schtasks /Create /SC MINUTE /MO 30 /TN "AGK conductor watchdog" ...` line, elsewhere a crontab line
+   (add it with `crontab -e`). Each runs `git fetch` in the checkout and then the pass `(verify: a scheduled task and a cron
+   job start with a short PATH; check that python, git, gh and the adapter's terminal are found, and that the task runs
+   while you are signed in, which a terminal tab needs)`.
+
 ## What is lost
 
 Say it plainly to everyone working on the project:

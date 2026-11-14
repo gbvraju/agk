@@ -368,13 +368,13 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    launch_adapter = "scripts/start-session-cloud.sh"
    ```
 
-   The pass then runs `python3 scripts/agk/launch.py prompts --plan <the plan> --adapter <launch_adapter>`, the one new command the conductor's guard allows, and only with the adapter exactly as written there and only while the default branch (as the conductor last fetched it) says the same: turning `auto_start` off on the default branch stops the starts even for a conductor whose checkout is older. `launch.py` splits the command into words and runs it without a shell, from the folder the conductor runs in, once for each session the plan names, with the prompt on its standard input and `AGK_SESSION`, `AGK_BRIEF` and, for a brief built in parts, `AGK_BUILD` in its environment; it starts nothing for a plan without its capacity, never more than the plan's capacity or `max_builders`, and each started session claims its own brief. A failing adapter is reported in the pass's last lines and not retried. The adapter is a short script the project owns, and runs with the environment of the conductor's session; it holds no credential of its own. The kit installs neither of the two examples below, nor the Windows one after them; adapt each to your setup and try it once by hand (`echo hello | AGK_SESSION=builder-x scripts/start-session-local.sh`) before you turn `auto_start` on.
+   The pass then runs `python3 scripts/agk/launch.py prompts --plan <the plan> --adapter <launch_adapter>`, the one new command the conductor's guard allows, and only with the adapter exactly as written there and only while the default branch (as the conductor last fetched it) says the same: turning `auto_start` off on the default branch stops the starts even for a conductor whose checkout is older. `launch.py` splits the command into words and runs it without a shell, from the folder the conductor runs in, once for each session the plan names, with the prompt on its standard input and `AGK_SESSION`, `AGK_BRIEF` and, for a brief built in parts, `AGK_BUILD` in its environment; it starts nothing for a plan without its capacity, never more than the plan's capacity or `max_builders`, and each started session claims its own brief. A failing adapter is reported in the pass's last lines and not retried. The adapter is a short script the project owns, and runs with the environment of the conductor's session; it holds no credential of its own. The kit installs two adapters as templates, written once and then the project's own (brief #1237, ADR-0525): `scripts/start-session-local.sh`, for Linux and macOS, and the Windows one below, `scripts/start-session-windows.ps1`; `doctor.py` names the missing one and the `launch_adapter` line to set while `auto_start` is on. It installs neither of the two short examples below. Adapt the one you use to your setup and try it once by hand (`echo hello | AGK_SESSION=builder-x bash scripts/start-session-local.sh`) before you turn `auto_start` on. [The local-mode guide](local-mode.md), "Running unattended", adds the watchdog that restarts the conductor.
 
-   A local terminal adapter, a new terminal tab running `claude` with the prompt `(verify: the terminal's command and its options are your desktop's; this one is GNOME Terminal)`:
+   A local terminal adapter at its shortest, a new terminal tab running `claude` with the prompt and no worktree of its own `(verify: the terminal's command and its options are your desktop's; this one is GNOME Terminal)`; the installed `scripts/start-session-local.sh` is the Windows adapter's twin, with a worktree per session, the background where there is no desktop, and the exit file:
 
    ```bash
    #!/usr/bin/env bash
-   # scripts/start-session-local.sh: one new terminal tab per session, running claude with the prompt.
+   # scripts/start-session-tab.sh: one new terminal tab per session, running claude with the prompt.
    set -euo pipefail
    prompt="$(cat)"
    gnome-terminal --tab --title "$AGK_SESSION" -- claude "$prompt"
@@ -390,7 +390,7 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    claude --remote "$prompt"
    ```
 
-   A Windows Terminal adapter, a new tab in its own worktree that closes when the session ends `(verify: the options of wt, the profile settings of Windows Terminal and the PowerShell calls are the terminal's and the shell's, and were not run by the session that wrote this example)`. The script `scripts/start-session-windows.ps1` is shown here and not installed by the kit; set `launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"`. It reads `AGK_SESSION`, `AGK_BRIEF` and the prompt on standard input; creates the session's worktree with `git worktree add` and waits until its folder exists, so that no tab opens on a folder that is not there yet; and writes a small wrapper that the tab runs. The wrapper builds the tab's environment itself, because a tab opened in a running Windows Terminal window may start from the terminal's environment rather than the adapter's: PATH read fresh from the machine and user values, `TEMP`, `TMP` and `TMPDIR` set to the long path of the temporary folder (not its short `~1` form), and `CLAUDE_CODE_CHILD_SESSION` removed, so the builder is a session of its own and its transcript is saved. It then starts `claude` with the prompt, and when `claude` exits it writes `<worktree>/.agk-session-exit` with the exit code and the UTC time, and exits with the same code. Once the worktree exists, the script appends `.agk-session-exit` to the worktree's exclude file (the path `git -C <worktree> rev-parse --git-path info/exclude` names), so the exit file, which is written into the worktree untracked, never reaches a commit, not even through a later `git add -A` in that worktree. The adapter needs PowerShell 7 (`pwsh`; install it with `winget install Microsoft.PowerShell`), which Windows does not install by default, and it must not be run under Windows PowerShell 5.1 (`powershell.exe`): there, `& claude $prompt` passes the prompt to a native program with its embedded double quotes stripped, so a prompt that holds quotes arrives changed.
+   A Windows Terminal adapter, a new tab in its own worktree that closes when the session ends `(verify: the options of wt, the profile settings of Windows Terminal and the PowerShell calls are the terminal's and the shell's, and were not run by the session that wrote this example)`. The kit installs the script `scripts/start-session-windows.ps1` shown here, as a template that is written only where the file is absent; set `launch_adapter = "pwsh -NoProfile -File scripts/start-session-windows.ps1"`. It reads `AGK_SESSION`, `AGK_BRIEF` and the prompt on standard input; creates the session's worktree with `git worktree add`, or, when the folder `..\agk-<session>` is still there from an earlier start (a session that ended or crashed), reuses it if it is a clean worktree of this repository (fetch, then the default branch checked out detached) and otherwise starts nothing, exiting 2 with one line naming the folder, so a restart after a crash works (brief #1237, ADR-0525); and waits until its folder exists, so that no tab opens on a folder that is not there yet; and writes a small wrapper that the tab runs. The wrapper builds the tab's environment itself, because a tab opened in a running Windows Terminal window may start from the terminal's environment rather than the adapter's: PATH read fresh from the machine and user values, `TEMP`, `TMP` and `TMPDIR` set to the long path of the temporary folder (not its short `~1` form), and `CLAUDE_CODE_CHILD_SESSION` removed, so the builder is a session of its own and its transcript is saved. It then starts `claude` with the prompt, and when `claude` exits it writes `<worktree>/.agk-session-exit` with the exit code and the UTC time, and exits with the same code. Once the worktree exists, the script appends `.agk-session-exit` to the worktree's exclude file (the path `git -C <worktree> rev-parse --git-path info/exclude` names), so the exit file, which is written into the worktree untracked, never reaches a commit, not even through a later `git add -A` in that worktree. The adapter needs PowerShell 7 (`pwsh`; install it with `winget install Microsoft.PowerShell`), which Windows does not install by default, and it must not be run under Windows PowerShell 5.1 (`powershell.exe`): there, `& claude $prompt` passes the prompt to a native program with its embedded double quotes stripped, so a prompt that holds quotes arrives changed.
 
    ```powershell
    # scripts/start-session-windows.ps1: one Windows Terminal tab per session, in its own worktree.
@@ -404,8 +404,30 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    $repo = (git rev-parse --show-toplevel).Trim()
    $worktree = Join-Path (Split-Path $repo -Parent) "agk-$session"
    git -C $repo fetch --quiet origin
-   git -C $repo worktree add --detach $worktree origin/main   # your default branch
-   if ($LASTEXITCODE -ne 0) { throw 'git worktree add failed' }
+   if (Test-Path -LiteralPath $worktree) {
+       # The folder is there from an earlier start (a session that ended or crashed): reuse it when it is a clean
+       # worktree of this repository, otherwise start nothing for this session.
+       function Get-FullPath([string]$Path) {
+           [IO.Path]::GetFullPath($Path).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+       }
+       $ours = Get-FullPath (git -C $repo rev-parse --path-format=absolute --git-common-dir).Trim()
+       $common = git -C $worktree rev-parse --path-format=absolute --git-common-dir 2>$null
+       $top = git -C $worktree rev-parse --show-toplevel 2>$null
+       if ($LASTEXITCODE -ne 0 -or -not $common -or -not $top -or
+           (Get-FullPath $common.Trim()) -ne $ours -or (Get-FullPath $top.Trim()) -ne (Get-FullPath $worktree)) {
+           [Console]::Error.WriteLine("start-session-windows: $worktree exists and is not a worktree of this repository; nothing started"); exit 2
+       }
+       $changes = @(git -C $worktree status --porcelain --untracked-files=all | Where-Object { $_ -and $_ -notmatch '\.agk-session-exit$' })
+       if ($LASTEXITCODE -ne 0 -or $changes.Count -gt 0) {
+           [Console]::Error.WriteLine("start-session-windows: $worktree is not clean; nothing started"); exit 2
+       }
+       git -C $worktree fetch --quiet origin
+       git -C $worktree checkout --quiet --detach origin/main   # your default branch
+       if ($LASTEXITCODE -ne 0) { throw 'git checkout of origin/main failed' }
+   } else {
+       git -C $repo worktree add --detach $worktree origin/main   # your default branch
+       if ($LASTEXITCODE -ne 0) { throw 'git worktree add failed' }
+   }
    $deadline = (Get-Date).AddSeconds(30)
    while (-not (Test-Path -LiteralPath (Join-Path $worktree '.git'))) {
        if ((Get-Date) -gt $deadline) { throw 'the worktree folder did not appear' }
@@ -449,6 +471,7 @@ Contexts: kit (not applicable: a change to this project only); github (the same)
    # 3. The tab, only now that the worktree exists.
    wt -w 0 new-tab --profile "AGK builder" --title $session -d $worktree `
        pwsh -NoProfile -File $wrapper $worktree $promptFile $longTemp $session $brief
+
    ```
 
    The tab uses a Windows Terminal profile named "AGK builder". Add it to the `profiles.list` of the terminal's `settings.json`:

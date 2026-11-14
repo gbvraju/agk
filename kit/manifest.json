@@ -156,7 +156,9 @@
     "docs/runs/decisions-log.md": "kit/templates/decisions-log.md",
     "docs/runs/flakes.md": "kit/templates/flakes.md",
     "docs/runs/residuals.md": "kit/templates/residuals.md",
-    "pyproject.toml": "kit/templates/pyproject.toml"
+    "pyproject.toml": "kit/templates/pyproject.toml",
+    "scripts/start-session-local.sh": "kit/templates/start-session-local.sh",
+    "scripts/start-session-windows.ps1": "kit/templates/start-session-windows.ps1"
   },
   "rendered": [
     ".github/CODEOWNERS"
@@ -183,7 +185,9 @@
       "docs/requirements.md": "kit/templates/requirements.md",
       "docs/runs/decisions-log.md": "kit/templates/decisions-log.md",
       "docs/runs/flakes.md": "kit/templates/flakes.md",
-      "docs/runs/residuals.md": "kit/templates/residuals.md"
+      "docs/runs/residuals.md": "kit/templates/residuals.md",
+      "scripts/start-session-local.sh": "kit/templates/start-session-local.sh",
+      "scripts/start-session-windows.ps1": "kit/templates/start-session-windows.ps1"
     },
     "block_sources": {
       ".gitattributes": "kit/templates/gitattributes",

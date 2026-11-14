@@ -50,14 +50,14 @@ def test_the_script_is_named_and_marked_verify():
     body = section()
     assert "scripts/start-session-windows.ps1" in script()
     assert "(verify" in body
-    assert "not installed by the kit" in body
+    assert "The kit installs the script `scripts/start-session-windows.ps1`" in body  # ADR-0525
 
 
 def test_the_worktree_is_made_before_the_tab_opens():
     """REQ-041"""
     code = script()
     add = code.find("git worktree add")
-    wait = code.find("Test-Path")
+    wait = code.find("while (-not (Test-Path")  # the wait, after the reuse check (ADR-0525)
     tab = code.find("new-tab")
     assert -1 < add < wait < tab
 
@@ -147,7 +147,7 @@ def test_the_exit_file_is_kept_out_of_git_by_the_worktree_exclude():
     """REQ-041"""
     code = script()
     exclude = code.find("rev-parse --git-path info/exclude")
-    wait = code.find("Test-Path")
+    wait = code.find("while (-not (Test-Path")
     tab = code.find("new-tab")
     assert -1 < wait < exclude < tab
     assert re.search(r"Add-Content[^\n]*\$exclude[^\n]*\.agk-session-exit", code)
