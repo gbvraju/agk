@@ -283,8 +283,11 @@ def log(status):
         out.write(json.dumps([method, endpoint, rest, status]) + "\\n")
 if method != "GET":
     log(201)
-    print("{}")
+    made = os.path.join(root, name + "." + method + ".json")
+    print(open(made).read() if os.path.exists(made) else "{}")
     sys.exit(0)
+if "state" in params and os.path.exists(os.path.join(root, name + "@" + params["state"] + ".GET.json")):
+    name = name + "@" + params["state"]  # a fixture of one state: `issues?state=all` alone
 chosen = None
 for k in range(n, 0, -1):
     candidate = os.path.join(root, name + "." + method + "." + str(k) + ".json")
@@ -404,3 +407,192 @@ def test_a_cold_plan_costs_at_most_twenty_calls_and_a_warm_one_at_most_five(dpro
     assert [s["brief"] for s in warm["start"]] == earliest[:2]  # the same starts
     assert len(double.counted()) <= 5, double.counted()
     assert warm["reads"]["cached"] >= 1
+
+
+def test_a_304_reuses_the_cached_body(dproj, double):
+    """REQ-050"""
+    dproj.write("agk.toml", "[flow]\nmax_builders = 2\n")
+    double.serve(ISSUES, [at(5, brief("a/**"), MILESTONES[0])])
+    double.serve(PULLS, [])
+    double.serve(f"{ISSUES}/5/comments", [])
+    double.serve(f"{ISSUES}/comments", [])
+    first = dplan(dproj, double)
+    double.forget()
+    second = dplan(dproj, double)
+    listing = [c for c in double.calls() if c[1].startswith(f"{ISSUES}?state=open")]
+    assert listing and all(c[3] == 304 for c in listing)  # the body came from the cache
+    assert any(a.startswith("If-None-Match: ") for c in listing for a in c[2])
+    assert [s["brief"] for s in second["start"]] == [s["brief"] for s in first["start"]] == [5]
+
+
+def test_a_take_posted_between_passes_is_read_again(dproj, double):
+    """REQ-050: the repository-wide `since` read names the brief whose comments changed, and only
+    that brief's comments are asked again."""
+    dproj.write("agk.toml", "[flow]\nmax_builders = 1\n")
+    double.serve(ISSUES, [at(5, brief("a/**"), MILESTONES[0]), at(6, brief("b/**"), MILESTONES[0])])
+    double.serve(PULLS, [])
+    double.serve(f"{ISSUES}/comments", [])
+    double.serve(f"{ISSUES}/5/comments", [])
+    double.serve(f"{ISSUES}/6/comments", [])
+    assert [s["brief"] for s in dplan(dproj, double)["start"]] == [5]
+    take = comment(40, "someone", f"taken: other {DAY}", "2999-01-01T00:00:00Z")
+    take["issue_url"] = f"https://api.github.com/{ISSUES}/5"
+    double.serve(f"{ISSUES}/5/comments", [take], nth=2)
+    double.serve(f"{ISSUES}/comments", [take])  # the first `since` read is the second pass's
+    double.forget()
+    again = dplan(dproj, double)
+    assert 5 not in [s["brief"] for s in again["start"]]
+    asked = [c[1] for c in double.calls() if "/comments?" in c[1] and "/issues/5/" in c[1]]
+    assert asked  # brief 5 changed, so its comments were asked again
+
+
+# --- answer 3b: the waits read only what is new ------------------------------------------------
+
+CONDUCTOR_ISSUE = {
+    "number": 204,
+    "title": "Conductor: assignments",
+    "comments": 1,
+    "labels": [{"name": "agk-conductor"}],
+}
+OLD = comment(10, "boss", "Assign: s-other #3", "2026-11-14T10:00:00Z")
+PR = f"repos/{REPO}/pulls/7"
+
+
+def waiting(double: Double, conductor: list | None = None) -> None:
+    from test_session import pull
+
+    double.serve(PR, pull())
+    double.serve(f"{ISSUES}/7/comments", [comment(5, "builder", "Report: a1b2c3d ready")])
+    double.serve(ISSUES, [CONDUCTOR_ISSUE])
+    double.serve(f"{ISSUES}/204/comments", conductor or [OLD])
+
+
+def test_a_quiet_minute_of_a_waiting_builder_costs_no_counted_call_after_the_first(dproj, double):
+    """REQ-050"""
+    waiting(double)
+    out = run(dproj, double, "watch", "--pr", "7", "--session", "s-me", "--interval", "0",
+              "--timeout", "3")
+    assert out.returncode == 3 and out.stdout.splitlines() == ["timeout"], out.stdout
+    calls = double.calls()
+    assert len([c for c in calls if c[1] == PR]) >= 3  # it polled
+    seen: set[str] = set()
+    for call in calls:
+        assert call[3] == 304 or call[1] not in seen, call  # only an endpoint's first read counts
+        seen.add(call[1])
+    since = [c[1] for c in calls if "since=" in c[1]]
+    assert since and all("/issues/7/comments?since=" in e or "/204/comments?since=" in e
+                         for e in since)
+
+
+def test_a_new_tell_is_seen_within_one_poll(dproj, double):
+    """REQ-050"""
+    waiting(double)
+    tell = comment(11, "boss", "Tell: s-me #52 merged, rebase", "2026-11-14T10:05:00Z")
+    double.serve(f"{ISSUES}/204/comments", [OLD, tell], nth=4)
+    out = run(dproj, double, "watch", "--pr", "7", "--session", "s-me", "--interval", "0",
+              "--timeout", "20")
+    assert out.returncode == 0 and out.stdout.splitlines() == ["tell #52 merged, rebase"]
+    reads = [c for c in double.calls() if c[1].startswith(f"{ISSUES}/204/comments")]
+    assert len(reads) == 4 and reads[-1][3] == 200  # the first read that could see it ended it
+
+
+def test_the_wait_follows_a_rolled_over_conductor_issue(dproj, double):
+    """REQ-050: answer 3c, a `Continued in #<n>` by a listed author moves the reads."""
+    waiting(double)
+    link = comment(12, "boss", "Continued in #300", "2026-11-14T10:06:00Z")
+    double.serve(f"{ISSUES}/204/comments", [OLD, link], nth=3)
+    tell = comment(13, "boss", "Tell: s-me stop and look", "2026-11-14T10:07:00Z")
+    double.serve(f"{ISSUES}/300/comments", [tell])
+    out = run(dproj, double, "watch", "--pr", "7", "--session", "s-me", "--interval", "0",
+              "--timeout", "20")
+    assert out.returncode == 0 and out.stdout.splitlines() == ["tell stop and look"]
+
+
+def test_the_assign_wait_follows_a_rolled_over_conductor_issue(dproj, double):
+    """REQ-050"""
+    dproj.write("agk.toml", '[flow]\nassign = "conductor"\n')
+    asked = comment(20, "builder", "Request: s-me new", "2026-11-14T10:00:00Z")
+    double.serve(ISSUES, [CONDUCTOR_ISSUE])
+    double.serve(f"{ISSUES}/204/comments", [asked])
+    link = comment(21, "boss", "Continued in #300", "2026-11-14T10:06:00Z")
+    double.serve(f"{ISSUES}/204/comments", [asked, link], nth=3)
+    double.serve(f"{ISSUES}/300/comments", [comment(22, "boss", "Assign: s-me #77")])
+    out = run(dproj, double, "watch", "--assign", "s-me", "--interval", "0", "--timeout", "20")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.splitlines()[-1] == "assign #77"
+
+
+def test_the_poll_interval_backs_off_while_nothing_changes_and_resets_on_a_change():
+    """REQ-050"""
+    import session
+
+    pause = 60.0
+    for _ in range(5):
+        pause = session.backoff(pause, 60.0, changed=False)
+    assert pause == 300.0
+    assert session.backoff(pause, 60.0, changed=True) == 60.0
+    assert session.backoff(0.0, 0.0, changed=False) == 0.0
+    assert session.backoff(600.0, 600.0, changed=False) == 600.0  # never under the base
+
+
+# --- answer 3c: the conductor issue rolls over -------------------------------------------------
+
+
+def test_rollover_opens_a_new_issue_links_it_and_closes_the_old(dproj, double):
+    """REQ-050"""
+    double.serve(ISSUES, [{**CONDUCTOR_ISSUE, "comments": 501}])
+    double.serve(f"{ISSUES}/204/comments", [OLD])
+    double.serve(ISSUES, {"number": 300}, method="POST")
+    out = run(dproj, double, "rollover")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.splitlines() == ["rolled over #204 to #300"]
+    sent = [c for c in double.calls() if c[0] != "GET"]
+    assert [c[:2] for c in sent] == [
+        ["POST", ISSUES],
+        ["POST", f"{ISSUES}/204/comments"],
+        ["PATCH", f"{ISSUES}/204"],
+    ]
+    assert "labels[]=agk-conductor" in sent[0][2] and "title=Conductor: assignments" in sent[0][2]
+    assert "body=Continued in #300" in sent[1][2] and "state=closed" in sent[2][2]
+
+
+def test_rollover_waits_under_the_limit_and_while_a_request_waits(dproj, double):
+    """REQ-050"""
+    double.serve(ISSUES, [{**CONDUCTOR_ISSUE, "comments": 500}])
+    double.serve(f"{ISSUES}/204/comments", [OLD])
+    out = run(dproj, double, "rollover")
+    assert out.stdout.splitlines() == ["rollover: #204 has 500 comments, at most 500; no change"]
+    double.serve(ISSUES, [{**CONDUCTOR_ISSUE, "comments": 501}])
+    double.serve(f"{ISSUES}/204/comments", [OLD, comment(30, "builder", "Request: s-me new")])
+    out = run(dproj, double, "rollover")
+    assert out.stdout.splitlines() == [
+        "rollover: not now, a Request: waits for its Assign: on #204"
+    ]
+    assert all(c[0] == "GET" for c in double.calls())
+
+
+# --- answer 6: the conductor re-plans only on a change -----------------------------------------
+
+
+def test_the_re_plan_reuses_the_last_plan_until_something_changes(dproj, double):
+    """REQ-050"""
+    dproj.write("agk.toml", "[flow]\nmax_builders = 2\n")
+    double.serve(ISSUES, [at(5, brief("a/**"), MILESTONES[0])])
+    double.serve(PULLS, [])
+    double.serve(f"{ISSUES}/5/comments", [])
+    double.serve(f"{ISSUES}/comments", [])
+    double.serve(f"{ISSUES}@all", [{"number": 5, "updated_at": "2026-11-14T10:00:00Z"}])
+    first = dplan(dproj, double, "--if-changed")
+    assert "unchanged" not in first and [s["brief"] for s in first["start"]] == [5]
+    double.forget()
+    second = dplan(dproj, double, "--if-changed")
+    assert second["unchanged"] and second["start"] == first["start"]
+    assert double.counted() == []  # one read of the newest change, a 304
+    words = run(dproj, double, "plan", "--if-changed").stdout.splitlines()
+    assert words[0].startswith("plan: unchanged since ")
+    newer = [{"number": 9, "updated_at": "2026-11-14T11:00:00Z"}]
+    double.serve(f"{ISSUES}@all", newer, nth=4)
+    double.forget()
+    third = dplan(dproj, double, "--if-changed")
+    assert "unchanged" not in third
+    assert any(c[1].startswith(f"{ISSUES}?state=open") for c in double.calls())

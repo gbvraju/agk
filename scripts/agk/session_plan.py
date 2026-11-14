@@ -125,6 +125,7 @@ refused unless the brief has one `Broad:` line, and an `Adds:` entry may not nam
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -2539,7 +2540,69 @@ def write_capacity(root, row: dict) -> None:
         raise CheckError("rule 15: the record of capacity cannot be written") from exc
 
 
-def plan(root, as_json: bool, record: bool = False) -> int:
-    found = build(root, record)
-    print(json.dumps(found, indent=2) if as_json else words(found), end="" if not as_json else "\n")
+LAST_PLAN = "plan_last"  # the read cache's copy of the last plan (brief #1251 answer 6)
+REPLAN_MINUTES = 30  # a saved plan is reused at most this long: takes and stalls age by the clock
+NEWEST = "issues?state=all&sort=updated&direction=desc&per_page=1"
+
+
+def plan_key(root) -> str:
+    """What else the plan reads: the checkout's commit and its `agk.toml`."""
+    head = _git(root, "rev-parse", "HEAD") or ""
+    try:
+        text = (Path(root) / "agk.toml").read_bytes()
+    except OSError:
+        text = b""
+    return f"{head.strip()} {hashlib.sha256(text).hexdigest()}"
+
+
+def newest_change(repo: str) -> list | None:
+    """(number, updated_at) of the most recently updated issue or pull request: a comment, a
+    label, a push, a close or a merge moves it, and a read of it that finds it unchanged is a
+    304 (brief #1251 answer 6). None when it cannot be read."""
+    found = reads.gh(f"repos/{repo}/{NEWEST}")
+    if not isinstance(found, list):
+        return None
+    top = found[0] if found and isinstance(found[0], dict) else {}
+    return [top.get("number"), top.get("updated_at")]
+
+
+def unchanged_plan(root, repo: str, record: bool, mark: list | None) -> dict | None:
+    """The last plan, when nothing changed since it (brief #1251 answer 6): the same commit and
+    `agk.toml`, younger than REPLAN_MINUTES, and the same newest change on GitHub (`mark`).
+    `--record` always plans."""
+    saved = reads.CACHE.meta(f"repos/{repo}/", LAST_PLAN)
+    if record or mark is None or not isinstance(saved, dict):
+        return None
+    if not isinstance(saved.get("plan"), dict) or saved.get("key") != plan_key(root):
+        return None
+    if time.time() - saved.get("at", 0) > REPLAN_MINUTES * 60 or mark != saved.get("mark"):
+        return None
+    return {**saved["plan"], "unchanged": reads.stamp_iso(saved["at"])}
+
+
+def plan(root, as_json: bool, record: bool = False, if_changed: bool = False) -> int:
+    found = None
+    if if_changed:
+        began = time.monotonic()
+        first = reads.CALLS, reads.CACHED
+        repo = reads.repo_name(root)
+        mark = newest_change(repo)
+        found = unchanged_plan(root, repo, record, mark)
+        if found is None:
+            fresh = build(root, record)
+            if mark is not None:
+                saved = {"at": time.time(), "key": plan_key(root), "mark": mark, "plan": fresh}
+                reads.CACHE.set_meta(f"repos/{repo}/", LAST_PLAN, saved)
+            found = fresh
+        found["reads"] = {
+            "calls": reads.CALLS - first[0],
+            "cached": reads.CACHED - first[1],
+            "seconds": round(time.monotonic() - began, 1),
+        }
+        save_reads(root, found["reads"])
+    found = found or build(root, record)
+    text = words(found)
+    if "unchanged" in found:
+        text = f"plan: unchanged since {found['unchanged']}\n{text}"
+    print(json.dumps(found, indent=2) if as_json else text, end="" if not as_json else "\n")
     return 0

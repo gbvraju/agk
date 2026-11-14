@@ -195,10 +195,11 @@ USAGE = (
     "       session.py resume --pr N\n"
     "       session.py ids [--exclude-pr N]\n"
     "       session.py demand\n"
-    "       session.py plan [--json] [--record] | plan --what-if DIR\n"
+    "       session.py plan [--json] [--record] [--if-changed] | plan --what-if DIR\n"
     "       session.py push-check\n"
     "       session.py slot (--take | --renew | --release | --next) SLOT\n"
     "       session.py tell --session ID --text MESSAGE\n"
+    "       session.py rollover\n"
     "       session.py inbox --session ID\n"
     "       session.py mine --session ID (--pr N | --brief N)\n"
     "       session.py kind --brief N\n"
@@ -221,6 +222,7 @@ COMMANDS = (
     "push-check",
     "slot",
     "tell",
+    "rollover",
     "inbox",
     "mine",
     "kind",
@@ -231,7 +233,7 @@ COMMANDS = (
 )
 PAGE = 100
 PAUSED_EXIT = 5
-PAUSED_COMMANDS = frozenset({"claim", "next", "queue", "watch", "after", "slot"})
+PAUSED_COMMANDS = frozenset({"claim", "next", "queue", "watch", "after", "slot", "rollover"})
 PAUSED_REFUSAL = (
     f"{PAUSED_LINE} (setting: paused in agk.toml of the default branch): session.py claims, takes,"
     " lists and waits on nothing; remove the line `paused = true` to resume"
@@ -2702,6 +2704,66 @@ def tell(root, me: str, text: str) -> int:
     return 0
 
 
+ROLLOVER_AT = 500  # comments on the `agk-conductor` issue before it rolls over (answer 3c)
+
+
+def rollover(root) -> int:
+    """Brief #1251 answer 3c: when the newest open `agk-conductor` issue has more than
+    ROLLOVER_AT comments, open a new one with the same title and label, link it from the old one
+    with `Continued in #<new>` (which the waits follow) and close the old one. It waits, posting
+    nothing, while a `Request:` there has no `Assign:` or a slot's lease there is live, since both
+    are read on the newest issue."""
+    repo = repo_name(root)
+    found = pages(f"repos/{repo}/issues?state=open&labels={ASSIGN_LABEL}")
+    issues = [i for i in found or [] if "pull_request" not in i and isinstance(i.get("number"), int)]
+    if found is None or not issues:
+        raise CheckError(f"rule 12: an open issue labelled {ASSIGN_LABEL} is needed")
+    old = max(issues, key=lambda i: i["number"])
+    count = old.get("comments") if isinstance(old.get("comments"), int) else 0
+    if count <= ROLLOVER_AT:
+        print(f"rollover: #{old['number']} has {count} comments, at most {ROLLOVER_AT}; no change")
+        return 0
+    authors = counted_authors(verdict_authors(root), None)
+    waiting, _ = waiting_requests(repo, authors)
+    comments = pages(f"repos/{repo}/issues/{old['number']}/comments")
+    if comments is None:
+        raise CheckError(f"rollover: the comments of #{old['number']} cannot be read")
+    allowed = {a.lstrip("@").lower() for a in authors or []}
+    now = datetime.now(UTC)
+    leases = [
+        m.group(3)
+        for c in comments
+        if (m := SLOT_LINE.fullmatch(first_line(c)))
+        and author_of(c) in allowed
+        and slot_holder((c, m), now)
+    ]
+    if waiting or leases:
+        why = "a Request: waits for its Assign:" if waiting else "a slot's lease is live"
+        print(f"rollover: not now, {why} on #{old['number']}")
+        return 0
+    title = str(old.get("title") or "Conductor: assignments")
+    made = gh(
+        f"repos/{repo}/issues",
+        "-f",
+        f"title={title}",
+        "-f",
+        f"labels[]={ASSIGN_LABEL}",
+        "-f",
+        f"body=Continues #{old['number']}.",
+        method="POST",
+    )
+    new = made.get("number") if isinstance(made, dict) else None
+    if not isinstance(new, int):
+        raise CheckError(f"rollover: the new issue labelled {ASSIGN_LABEL} could not be opened")
+    link = f"body=Continued in #{new}"
+    if gh(f"repos/{repo}/issues/{old['number']}/comments", "-f", link, method="POST") is None:
+        raise CheckError(f"rollover: the link on #{old['number']} could not be posted")
+    if gh(f"repos/{repo}/issues/{old['number']}", "-f", "state=closed", method="PATCH") is None:
+        raise CheckError(f"rollover: #{old['number']} could not be closed")
+    print(f"rolled over #{old['number']} to #{new}")
+    return 0
+
+
 def tell_line(comment: dict, me: str, allowed: set[str]) -> str | None:
     """The `Tell: <me> <message>` first line of a comment by a listed author, else None."""
     body = comment.get("body")
@@ -3899,7 +3961,7 @@ def main(argv: list[str] | None = None) -> int:
         flags = args[1:]
         what_if_dir = flags[1] if len(flags) == 2 and flags[0] == "--what-if" else None
         if what_if_dir is None and (
-            set(flags) - {"--json", "--record"} or len(set(flags)) != len(flags)
+            set(flags) - {"--json", "--record", "--if-changed"} or len(set(flags)) != len(flags)
         ):
             print(USAGE)
             return 2
@@ -3908,7 +3970,9 @@ def main(argv: list[str] | None = None) -> int:
 
             if what_if_dir is not None:
                 return what_if(repo_root(), what_if_dir)
-            return plan(repo_root(), "--json" in flags, "--record" in flags)
+            return plan(
+                repo_root(), "--json" in flags, "--record" in flags, "--if-changed" in flags
+            )
         except CheckError as exc:
             print(f"FAIL {NAME}: {exc}")
             return 2
@@ -3964,6 +4028,7 @@ def main(argv: list[str] | None = None) -> int:
         "push-check": set(),
         "slot": {"--take", "--renew", "--release", "--next"},
         "tell": {"--session", "--text"},
+        "rollover": set(),
         "inbox": {"--session"},
         "mine": {"--session", "--pr", "--brief"},
         "kind": {"--brief"},
@@ -4000,7 +4065,7 @@ def main(argv: list[str] | None = None) -> int:
         ok = ok and bool(SESSION_ID.fullmatch(opts.get("--build", "x")))
     elif cmd == "ids":
         ok = number_of(opts.get("--exclude-pr", "1"))
-    elif cmd in ("demand", "push-check"):
+    elif cmd in ("demand", "push-check", "rollover"):
         ok = True
     elif cmd == "slot":
         ok = len(opts) == 1 and all(SESSION_ID.fullmatch(v) for v in opts.values())
@@ -4050,6 +4115,8 @@ def main(argv: list[str] | None = None) -> int:
             return slot(root, *next(iter(opts.items())))
         if cmd == "tell":
             return tell(root, opts["--session"], opts["--text"])
+        if cmd == "rollover":
+            return rollover(root)
         if cmd == "inbox":
             return inbox(root, opts["--session"])
         if cmd == "kind":
