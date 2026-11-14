@@ -42,7 +42,9 @@ pull request: the files, the ADR with every section and the body, so that the ow
 An upgrade pull request carries a Proposed ADR that passes `check_adrs.py` and names each class that the target's
 `check_protected_changes` asks for, so governance is green without a hand-written ADR; the maintainers still decide by
 accepting it. Protected path classes changed: `scripts/agk/` (`upgrade.py`), `skills/` (`skills/upgrade/SKILL.md`) and
-`tests/kit/` (`test_upgrade_adr.py`, new). No workflow, ruleset, `config/` or `.claude/` change.
+`tests/kit/` (`test_upgrade_adr.py`, new) and `agk.toml` (the new test added to the `[[testing.map]]` entries of
+`upgrade.py`, `check_adrs.py`, `check_pr_body.py` and `merge_cleared.py`, the scripts it imports or names). No workflow,
+ruleset, `config/` or `.claude/` change.
 
 ## Residual
 
