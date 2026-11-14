@@ -82,8 +82,8 @@ def test_1221_200_questions_of_one_kind_are_one_per_area(repo: Path, capsys) -> 
     assert first.startswith("Q1\n") and second.startswith("Q2\n")
     assert f"\nQuestion: requirements R1 (area Orders): {KIND}\n" in first
     assert f"\nQuestion: requirements R2 (area Billing): {KIND}\n" in second
-    assert first.split("\nBlocks: ", 1)[1].split(", ")[0] == "R1"
-    assert second.split("\nBlocks: ", 1)[1].split(", ")[0] == "R2"
+    assert first.split("\nBlocks: ", 1)[1].split("\n")[0].split(", ")[0] == "R1"
+    assert second.split("\nBlocks: ", 1)[1].split("\n")[0].split(", ")[0] == "R2"
     assert out.count(KIND) == 2  # the person's list is grouped too
     _, out = validate(repo, many(two_areas(), 200), capsys)
     assert "warning:" not in out and "ok proposals" in out

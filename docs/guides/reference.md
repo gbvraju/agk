@@ -619,7 +619,7 @@ before pixels are reported as drift (0.01 by default; it only reports, never fai
 
     python3 scripts/agk/plan_intake.py validate --proposals FILE [--root DIR]
     python3 scripts/agk/plan_intake.py states [--root DIR]
-    python3 scripts/agk/plan_intake.py render --proposals FILE [--root DIR]
+    python3 scripts/agk/plan_intake.py render --proposals FILE [--again] [--root DIR]
     python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE] [--root DIR]
 
 Validates the plan's proposals file: `validate` prints `ok proposals` or one line per problem naming the rule and the item's
@@ -630,7 +630,10 @@ the conflicts and the open questions, and writes once, as new files only, the sc
 requirements, one Draft spec per feature area and one brief per brief under `docs/plan/` (rule 7). `publish` exits 2 without
 `Approve: plan <--head>` by an account of `spec_approvers` in the saved comments, and prints one `gh api` command per
 milestone and per brief, briefs in dependency order, each withheld until `--numbers` names its milestone and its
-dependences; it runs none (rules 8 and 25). Once nothing is withheld its last line ends `; next: /agk:board --yes`.
+dependences; it runs none (rules 8 and 25). Questions of one kind about one feature area are one question for business, a
+cross-reference gap is a `Note:` of its requirement, and `validate` warns above `[plan] max_questions` (60 by default).
+`render --again` rewrites only the files the last render wrote whose bytes are unchanged since (the digests in
+`docs/plan/render-digests.json`), creates new ones and names each edited file it leaves (ADR-0520). Once nothing is withheld its last line ends `; next: /agk:board --yes`.
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/board.py" [--title TEXT] [--owner LOGIN] [--project N] [--yes]
         [--template OWNER/NUMBER]

@@ -279,7 +279,8 @@ def test_ac2_change_status_cross_references_and_a_requirement_without_scenario(
     repo: Path, combined: Path, capsys
 ) -> None:
     """REQ-050 AC2: rule 6, `(open, ...)` marks `changing`; `BRD 2.1` resolves exactly; `design
-    option a` and a missing scenario are open questions with `(verify)`, never values."""
+    option a` is a note of its requirement and a missing scenario an open question, both with
+    `(verify)`, never values (brief #1221 answer 1: a cross-reference gap is never a question)."""
     do_import(repo, combined, capsys)
     _, out, data = draft(repo, capsys)
     r1, r2, r3 = data["requirements"]
@@ -292,26 +293,30 @@ def test_ac2_change_status_cross_references_and_a_requirement_without_scenario(
     questions = data["scope"]["open_questions"]
     assert all("(verify)" in q["text"] for q in questions)
     texts = " ".join(q["text"] for q in questions)
-    assert "R1" in texts and "cross-reference 2" in texts and "design option a" not in texts
+    assert "cross-reference" not in texts and "design option a" not in texts
+    assert r1["notes"] == [
+        "cross-reference 2 of its statement names no one source heading (verify)"
+    ]
     assert any(
         "R3" in q["text"] and q["sources"] == [f"{FOLDER}/library.md#Requirement: Return receipt"]
         for q in questions
     )
 
 
-def test_ac2_a_second_source_of_the_kind_as_txt_makes_the_reference_a_question(
+def test_ac2_a_second_source_of_the_kind_as_txt_makes_the_reference_a_note(
     repo: Path, combined: Path, capsys
 ) -> None:
     """REQ-050 AC2: rule 6 (`Q-1108-9`), `BRD 2.1` links only when exactly one file under
-    `docs/sources/` has `Kind: brd`, `.md` or `.txt`; a second one makes it an open question."""
+    `docs/sources/` has `Kind: brd`, `.md` or `.txt`; a second one makes it a note of the
+    requirement (brief #1221 answer 1; before it, an open question)."""
     write(repo, "docs/sources/brd-two.txt", BRD_TEXT.replace("Loan limits", "Other limits"))
     do_import(repo, combined, capsys)
     _, _, data = draft(repo, capsys)
     r1 = data["requirements"][0]
     assert r1["sources"] == [f"{FOLDER}/library.md#Requirement: Loan limit"]
     texts = [q["text"] for q in data["scope"]["open_questions"]]
-    assert any("R1" in t and "cross-reference 1" in t for t in texts), texts
-    assert any("R1" in t and "cross-reference 2" in t for t in texts), texts
+    assert not any("cross-reference" in t for t in texts), texts  # brief #1221 answer 1
+    assert [n.split(" of ")[0] for n in r1["notes"]] == ["cross-reference 1", "cross-reference 2"]
 
 
 def test_ac2_persona_candidates_come_from_the_steps(repo: Path, combined: Path, capsys) -> None:

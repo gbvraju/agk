@@ -52,7 +52,9 @@ checkout; the other scripts are installed under `scripts/agk/`.
    never a made-up value.
 5. **Validate.** `python3 scripts/agk/plan_intake.py validate --proposals FILE` prints `ok proposals` or one line per
    problem, naming the rule and the item's key, never its text. A size, a range or a date that no cited location states
-   is refused as an open question.
+   is refused as an open question. Above `[plan] max_questions` of `agk.toml` (60 by default) it also prints
+   `warning: <n> open questions`: questions of one kind about one feature area count as one, and a cross-reference that
+   names no source heading is a note on its requirement, never a question.
 6. **Render, once.** `python3 scripts/agk/plan_intake.py render --proposals FILE` (the plugin's copy works the same)
    prints the conflicts and then the open questions for you, and writes, as new files only, `docs/plan/scope.md`,
    `docs/plan/milestones.md`, `docs/plan/requirements-proposed.md`, one Draft spec per feature area under `docs/specs/`
@@ -62,6 +64,9 @@ checkout; the other scripts are installed under `scripts/agk/`.
    `docs/design/inventory.md` and adds a section for each new requirement, so you fill only the new `- Screens:` slots,
    which the requirements' `Source:` lines point at; the kit's own requirements already read
    `no screen: a rule of the kit`.
+   After a fix to the proposals, `render --proposals FILE --again` runs a second pass: it rewrites only the files the
+   last render wrote that nobody has edited since (it keeps their digests in `docs/plan/render-digests.json`), creates
+   the new ones, and leaves each file you edited as it is, naming it; a feature area's Draft spec is written once.
 7. **Trace and count.** `python3 scripts/agk/check_plan.py --trace` prints one row per source location: the requirement,
    the spec rule, the brief, the merged pull request (with `--facts FILE` and `--numbers FILE`) and the test, `none` where
    a link is missing. It ends with the coverage line, `ok plan: <a> of <b> in-scope source lines have a requirement, ...`.

@@ -7,7 +7,7 @@ slices (amendment 164 items 3 and 4, ADR-0464), and build (a) of brief #1109, an
 
     python3 plan_intake.py validate --proposals FILE [--root DIR]
     python3 plan_intake.py states [--root DIR]
-    python3 plan_intake.py render --proposals FILE [--root DIR]
+    python3 plan_intake.py render --proposals FILE [--again] [--root DIR]
     python3 plan_intake.py publish --comments FILE --head SHA [--numbers FILE] [--root DIR]
     python3 plan_intake.py openspec-import PATH --slug SLUG [--root DIR]
     python3 plan_intake.py openspec --slug SLUG --out FILE [--root DIR]
@@ -71,6 +71,15 @@ screen of `docs/design/inventory.md`, `yes` or `no`, and at least one source (a 
 is an open question, never a guess). A criterion names a cell with `(access <persona>/<screen>)`;
 each `no` cell needs one, its denial line, and a mark naming no cell is refused. `render` writes
 `docs/plan/access.md` when `access` is not empty.
+
+Brief #1221 (ADR-0520): open questions of one kind (the text after `<section> <key>: `, else the
+whole text) and one area (the feature area of the requirement named, else the file of the first
+source) are one question for business, keyed by the first, its `Blocks:` naming the keys it holds;
+a requirement's cross-reference gap is a `Note:` line of its block (`notes`), never a question.
+`validate` prints `warning: <n> open questions` above `[plan] max_questions` (60). `render` keeps
+`docs/plan/render-digests.json`, the digest of each file it wrote and the spec of each area;
+`render --again` rewrites only listed files whose bytes still have their digest, creates missing
+ones, names each file it keeps and writes a Draft spec only for an area not yet listed.
 """
 
 from __future__ import annotations
@@ -90,12 +99,12 @@ import check_plan
 import design_import
 import design_signoff
 import playbook_format
-from common import ESTIMATE_LINES, CheckError, repo_root, run
+from common import ESTIMATE_LINES, CheckError, plan_settings, repo_root, run
 
 NAME = "plan-intake"
 USAGE = (
     "usage: plan_intake.py validate --proposals FILE [--root DIR] | states [--root DIR]"
-    " | render --proposals FILE [--root DIR]"
+    " | render --proposals FILE [--again] [--root DIR]"
     " | publish --comments FILE --head SHA [--numbers FILE] [--root DIR]"
     " | openspec-import PATH --slug SLUG [--root DIR]"
     " | openspec --slug SLUG --out FILE [--root DIR]"
@@ -135,8 +144,9 @@ OPTIONAL = {
     "briefs": ("component", "screens"),
 }
 OPTIONAL["requirements"] = ("statement", "changing")  # amendment 166 (`Q-1108-1`, `Q-1108-2`)
-KINDS |= {"statement": MAYBE, "changing": "true or false", "allowed": "yes or no"}
-TYPED = ("component", "screens", "statement", "changing")  # optional keys whose type rule 4 checks
+OPTIONAL["requirements"] += ("notes",)  # brief #1221 (ADR-0520): cross-reference gaps
+KINDS |= {"statement": MAYBE, "changing": "true or false", "allowed": "yes or no", "notes": LIST}
+TYPED = ("component", "screens", "statement", "changing", "notes")  # optional keys rule 4 types
 KEYED = {"personas": "P", COMPONENTS: "C"}  # keys run P1, P2, ... and C1, C2, ... in order
 FOUNDATION = "Foundation"
 ID = {"milestones": "id", "areas": "name"}
@@ -587,13 +597,20 @@ def validation(root: Path, proposals: Path) -> tuple[dict, list[str]]:
 
 
 def cmd_validate(root: Path, proposals: Path) -> int:
-    _, problems = validation(root, proposals)
+    data, problems = validation(root, proposals)
     for problem in problems:
         print(problem)
     if problems:
         return 1
+    limit = plan_settings(root).get(MAX_QUESTIONS, MAX_QUESTIONS_DEFAULT)
+    count = len(business_questions(data))
+    if count > limit:  # brief #1221 answer 1: a warning, never a refusal
+        print(f"warning: {count} open questions, above [plan] {MAX_QUESTIONS} ({limit})")
     print("ok proposals")
     return 0
+
+
+MAX_QUESTIONS, MAX_QUESTIONS_DEFAULT = "max_questions", 60  # brief #1221 (ADR-0520)
 
 
 # --- rule 7: render, once, as drafts the person owns (build (c2), ADR-0461) ----------------------
@@ -654,18 +671,76 @@ def _blocks(data: dict, sources: list[str]) -> list[str]:
     return reqs + briefs
 
 
+# Brief #1221 (ADR-0520): `<section> <key>: <text>`, the form of the questions the skill and the
+# OpenSpec reader write; a cross-reference gap of that form is a note of its requirement.
+ABOUT = re.compile(r"(requirements|personas|milestones|briefs|components) (\S+): (.+)")
+CROSS_GAP = re.compile(r"cross-reference \d+ of its statement names no one source heading\b.*")
+
+
+def _unique(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
+
+def _area(data: dict, section: str | None, key: str | None, sources: list[str]) -> str:
+    """The feature area of the requirement a question names, else the file of its first source."""
+    if section == "requirements":
+        for a in data["areas"]:
+            if key in a["requirements"]:
+                return _one(a["name"])
+    return _loc_file(sources[0]) if sources else ""
+
+
+def cross_gaps(data: dict) -> dict[str, list[str]]:
+    """Brief #1221 answer 1: each requirement's notes, with every open question that is a
+    cross-reference gap of it, in order; such a question is never asked."""
+    notes = {r["key"]: list(r.get("notes") or []) for r in data["requirements"]}
+    for q in data["scope"]["open_questions"]:
+        about = ABOUT.fullmatch(_one(q["text"]))
+        if about and about[1] == "requirements" and about[2] in notes:
+            if CROSS_GAP.fullmatch(about[3]):
+                notes[about[2]].append(about[3])
+    return notes
+
+
+def grouped_questions(data: dict) -> list[dict]:
+    """Brief #1221 answer 1: the open questions, those of one kind (the text after `<section>
+    <key>: `, else the whole text) and one area (`_area`) as one question keyed by the first of
+    them, whose blocks name the keys it holds first; a cross-reference gap is left out."""
+    groups: dict[tuple, list[tuple[dict, str | None]]] = {}
+    for q in data["scope"]["open_questions"]:
+        text = _one(q["text"])
+        about = ABOUT.fullmatch(text)
+        if about and about[1] == "requirements" and CROSS_GAP.fullmatch(about[3]):
+            if any(r["key"] == about[2] for r in data["requirements"]):
+                continue
+        section, key, kind = about.groups() if about else (None, None, text)
+        area = _area(data, section, key, q["sources"])
+        groups.setdefault((section, kind, area), []).append((q, key))
+    out: list[dict] = []
+    for (section, kind, area), members in groups.items():
+        first = members[0][0]
+        sources = _unique([loc for q, _ in members for loc in q["sources"]])
+        if len(members) == 1:
+            question, blocks = _one(first["text"]), _blocks(data, sources)
+        else:
+            keys = _unique([k for _, k in members if k is not None])
+            question = f"{section} {', '.join(keys)} (area {area}): {kind}" if section else kind
+            blocks = _unique(keys + [k for q, _ in members for k in _blocks(data, q["sources"])])
+        out.append({"key": str(first["key"]), "question": question, "sources": sources})
+        out[-1]["blocks"] = blocks
+    return out
+
+
 def business_questions(data: dict) -> list[dict]:
-    """Brief #1196: every open question, then every conflict the person has not settled (a
-    settled one has its answer), keyed `conflict-<n>` by its place among the conflicts."""
-    out = [
-        {"key": str(q["key"]), "question": _one(q["text"]), "sources": q["sources"]}
-        for q in data["scope"]["open_questions"]
-    ]
+    """Brief #1196: every open question, grouped (brief #1221), then every conflict the person has
+    not settled (a settled one has its answer), keyed `conflict-<n>` by its place among them."""
+    out = grouped_questions(data)
     for n, c in enumerate(data["conflicts"], start=1):
         if c.get("settled") is None:
             text = f"The sources disagree: {_one(c['description']).rstrip('.')}. Which one holds?"
-            out.append({"key": CONFLICT_KEY.format(n), "question": text, "sources": c["locations"]})
-    return [q | {"blocks": _blocks(data, q["sources"])} for q in out]
+            q = {"key": CONFLICT_KEY.format(n), "question": text, "sources": c["locations"]}
+            out.append(q | {"blocks": _blocks(data, c["locations"])})
+    return out
 
 
 def personas_text(data: dict) -> str:
@@ -719,6 +794,7 @@ def requirements_text(data: dict) -> str:
         "Each enters `docs/requirements.md` through its own intake.",
     ]
     names = {p["key"]: _one(p["name"]) for p in data["personas"]}
+    notes = cross_gaps(data)
     for r in data["requirements"]:
         out += ["", f"### {r['key']} {_one(r['title'])}", ""]
         out += [f"Persona: {r['persona']} {names[r['persona']]}", f"Story: {_one(r['story'])}"]
@@ -726,6 +802,7 @@ def requirements_text(data: dict) -> str:
             out.append(f"Statement: {_one(r['statement'])}")
         if r.get("changing") is True:
             out.append("Changing: yes")
+        out += [f"Note: {_one(n)}" for n in notes[r["key"]]]  # brief #1221 answer 1
         out += ["", "Criteria:", ""]
         out += [f"- {_one(c)}" for c in r["criteria"]] or [f"- {VERIFY}"]
         out += ["", f"Milestone: {r['milestone']}", "Status: planned", *_sources(r["sources"])]
@@ -782,8 +859,8 @@ def for_the_person(data: dict) -> list[str]:
         out.append(f"- {' '.join(c['locations'])}: {_one(c['description'])}{settled}")
     out += ["- none"] if not data["conflicts"] else []
     out.append("Open questions for the person")
-    questions = data["scope"]["open_questions"]
-    out += [f"- {_one(q['text'])} ({_locs(q['sources'])})" for q in questions] or ["- none"]
+    questions = grouped_questions(data)  # brief #1221 answer 1
+    out += [f"- {q['question']} ({_locs(q['sources'])})" for q in questions] or ["- none"]
     return out
 
 
@@ -799,7 +876,51 @@ def milestone_order(root: Path) -> str:
     return f"{head}{_one(batch_by)} (playbook {path.relative_to(root).as_posix()})"
 
 
-def cmd_render(root: Path, proposals: Path) -> int:
+DIGESTS = f"{PLAN}/render-digests.json"  # brief #1221 answer 2 (ADR-0520)
+
+
+def _digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def read_digests(root: Path) -> dict | None:
+    """The digest list of the last render: `files`, a path to the digest of the bytes it wrote,
+    and `specs`, an area's name to the Draft spec it made; None when it cannot be read."""
+    found = _json(root / DIGESTS)
+    if not isinstance(found, dict) or found.get("schema") != 1:
+        return None
+    files, specs = found.get("files"), found.get("specs")
+    if not isinstance(files, dict) or not isinstance(specs, dict):
+        return None
+    if not all(isinstance(v, str) for v in (*files.values(), *specs.values())):
+        return None
+    return {"files": dict(files), "specs": dict(specs)}
+
+
+def again_plan(root: Path, files: dict[str, str], listed: dict) -> tuple[list, list[str]]:
+    """Brief #1221 answer 2: (path, text, what is printed) for each file to write, and the lines
+    of the files left as they are. A file is rewritten only when the list holds it and its bytes
+    still have the listed digest; a missing file is created."""
+    write: list[tuple[str, str, str]] = []
+    kept: list[str] = []
+    for rel, text in files.items():
+        path = root / rel
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            kept.append(f"kept {rel}: not a file render wrote")
+        elif not path.exists():
+            write.append((rel, text, "created"))
+        elif rel not in listed["files"]:
+            kept.append(f"kept {rel}: not written by render")
+        elif _digest(path.read_bytes()) != listed["files"][rel]:
+            kept.append(f"kept {rel}: edited since the last render")
+        elif path.read_bytes() == text.encode("utf-8"):
+            write.append((rel, text, "unchanged"))
+        else:
+            write.append((rel, text, "rewrote"))
+    return write, kept
+
+
+def cmd_render(root: Path, proposals: Path, again: bool = False) -> int:
     data, problems = validation(root, proposals)
     problems = problems or render_problems(data)
     if problems:
@@ -824,17 +945,33 @@ def cmd_render(root: Path, proposals: Path) -> int:
         f"{PLAN}/briefs/{b['milestone']}/{b['key']}.md": brief_text(data, b, version)
         for b in data["briefs"]
     }
+    listed = read_digests(root) if again else {"files": {}, "specs": {}}
+    if listed is None:
+        print(f"rule 7: {DIGESTS} cannot be read; nothing was written")
+        return 1
+    areas = [a for a in data["areas"] if _one(a["name"]) not in listed["specs"]]
     first = new_spec.next_number(root / "docs" / "specs")
     specs = [
         (f"docs/specs/{first + n:04d}-{new_spec.slug(a['name'])}.md", a)
-        for n, a in enumerate(data["areas"])
+        for n, a in enumerate(areas)
     ]
+    if again:
+        write, kept = again_plan(root, files, listed)
+        news = [s for s, _ in specs]
+        kept += [
+            f"kept {listed['specs'][_one(a['name'])]}: a Draft spec is written once"
+            for a in data["areas"]
+            if _one(a["name"]) in listed["specs"]
+        ]
+    else:
+        write, kept = [(rel, text, "created") for rel, text in files.items()], []
+        news = [*files, *(s for s, _ in specs), DIGESTS]
     problems = [
         f"rule 7: {rel} already exists; nothing was written"
-        for rel in [*files, *(s for s, _ in specs)]
+        for rel in news
         if (root / rel).exists() or (root / rel).is_symlink()
     ]
-    if data["areas"] and _read(root / SPEC_TEMPLATE) is None:
+    if areas and _read(root / SPEC_TEMPLATE) is None:
         problems.append(f"rule 7: {SPEC_TEMPLATE} cannot be read; nothing was written")
     if problems:
         print("\n".join(sorted(problems)))
@@ -842,12 +979,16 @@ def cmd_render(root: Path, proposals: Path) -> int:
     print("\n".join(for_the_person(data)))
     if check_plan.screens(root):
         print(milestone_order(root))
-    for rel, text in files.items():
+    for rel, text, said in write:
         path = root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        print(f"created {rel}")
-    for _, area in specs:
+        if said != "unchanged":
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        listed["files"][rel] = _digest(path.read_bytes())
+        print(f"{said} {rel}")
+    for line in kept:
+        print(line)
+    for rel, area in specs:
         keys = ", ".join(area["requirements"]) or VERIFY
         issue = (
             "Feature area drafted by `plan_intake.py render` (SPEC-0043 rule 7). Its requirements "
@@ -859,6 +1000,11 @@ def cmd_render(root: Path, proposals: Path) -> int:
         except new_spec.Refusal as exc:
             print(f"rule 7: refused: {exc}")
             return 1
+        listed["specs"][_one(area["name"])] = rel
+    out = {"schema": 1, "files": dict(sorted(listed["files"].items()))}
+    out["specs"] = listed["specs"]
+    (root / DIGESTS).write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+    print(f"{'rewrote' if again else 'created'} {DIGESTS}")
     return 0
 
 
@@ -1493,7 +1639,8 @@ class Reading:
 
     def cross_references(self, r: dict) -> None:
         """Rule 6: `<kind> <number>` resolves to the one heading of the one source of that kind;
-        any other is an open question naming its position, never its text (`Q-1108-9`)."""
+        any other is a note of the requirement naming its position, never its text (`Q-1108-9`),
+        and never an open question (brief #1221 answer 1, ADR-0520)."""
         refs = [
             part.strip()
             for group in CROSS_REF.findall(r["statement"] or "")
@@ -1504,10 +1651,8 @@ class Reading:
             if target is not None:
                 r["sources"].append(target)
             else:
-                self.ask(
-                    f"requirements {r['key']}: cross-reference {n} of its statement names no one"
-                    " source heading",
-                    r["location"],
+                r.setdefault("notes", []).append(
+                    f"cross-reference {n} of its statement names no one source heading {VERIFY}"
                 )
 
     def resolve(self, ref: str) -> str | None:
@@ -1554,6 +1699,7 @@ class Reading:
                 | {"criteria": r["criteria"], "milestone": None, "persona": persona}
                 | {"story": f"As {name}{WANT}{VERIFY}{SO_THAT}{VERIFY}"}
                 | {"changing": r["changing"], "sources": r["sources"]}
+                | ({"notes": r["notes"]} if r.get("notes") else {})
             )
         questions = [
             {"key": f"Q{n}", "text": text, "sources": [location]}
@@ -1676,6 +1822,9 @@ def main(argv: list[str] | None = None) -> int:
             print(USAGE, file=sys.stderr)
             return 2
         rest = ["--path", *rest]
+    again = command == "render" and "--again" in rest  # brief #1221: a flag of render alone
+    rest = [a for a in rest if not (again and a == "--again")]
+    flags = {"--again": ""} if again else {}
     options = dict(zip(rest[::2], rest[1::2], strict=False)) if len(rest) % 2 == 0 else None
     allowed = {"validate": {"--proposals", "--root"}, "states": {"--root"}}
     allowed["publish"] = {"--comments", "--head", "--numbers", "--root"}
@@ -1697,7 +1846,7 @@ def main(argv: list[str] | None = None) -> int:
     ):
         print(USAGE, file=sys.stderr)
         return 2
-    return run(NAME, lambda: dispatch(command, options))
+    return run(NAME, lambda: dispatch(command, options | flags))
 
 
 def dispatch(command: str, options: dict[str, str]) -> int:
@@ -1712,7 +1861,7 @@ def dispatch(command: str, options: dict[str, str]) -> int:
     if command == "openspec":
         return cmd_openspec(root, options["--slug"], Path(options["--out"]))
     if command == "render":
-        return cmd_render(root, Path(options["--proposals"]))
+        return cmd_render(root, Path(options["--proposals"]), "--again" in options)
     if command == "publish":
         numbers = Path(options["--numbers"]) if "--numbers" in options else None
         return cmd_publish(root, Path(options["--comments"]), options["--head"], numbers)
