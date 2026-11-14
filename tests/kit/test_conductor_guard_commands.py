@@ -11,13 +11,16 @@ from __future__ import annotations
 import json
 
 import pytest
-from test_conductor_guard import (
+from test_conductor_guard import (  # noqa: F401 - work is a fixture
     FLOW_OFF,
     FLOW_ON,
+    MARK,
     REPO_ROOT,
     allows_merge,
+    env,
     merge_decision,
     merge_project,
+    work,
 )
 from test_conductor_guard_queue import RULE, reason, run_hook
 
@@ -194,3 +197,48 @@ def test_the_shadow_reviewer_runs_none_of_the_new_routines(project):
     for command in (f"python3 {SCRIPT} lease --show", f"python3 {SCRIPT} rerun --pr 7"):
         result = run_hook(command, project, shadow=True)
         assert reason(result.stdout) is not None, command
+
+
+# --- brief #1264: the kit's own make file in a scratch run ---------------------------------------
+
+
+def test_the_kit_make_file_forms_are_allowed_beside_the_old_ones(work):
+    """REQ-039: brief #1264 answer 2 (a) and (c): `make -C <scratch> -f agk.mk agk-governance` and
+    `... agk-project-test`, with or without AGK_BASE, and the old `test` and `governance` forms."""
+    s, sha = work.scratch, work.feature
+    for tail in (
+        f"make -C {s} -f agk.mk agk-governance",
+        f"make -C {s} -f agk.mk agk-project-test",
+        f"make -C {s} governance",
+        f"make -C {s} test",
+    ):
+        assert work.bash(f"{env(s)}{tail}") is None, tail
+        assert work.bash(f"{env(s)}AGK_BASE={sha} {tail}") is None, tail
+
+
+def test_another_make_file_target_or_argument_is_denied(work):
+    """REQ-039: brief #1264 answer 2 (b): nothing else is allowed."""
+    s, root = work.scratch, work.root
+    for tail in (
+        f"make -C {s} -f Makefile agk-governance",
+        f"make -C {s} -f {s}/agk.mk agk-governance",
+        f"make -C {s} -f ../agk.mk agk-governance",
+        f"make -C {s} -f kit/agk-kit.mk agk-governance",
+        f"make -C {s} -f agk.mk agk-test",
+        f"make -C {s} -f agk.mk agk-lint",
+        f"make -C {s} -f agk.mk governance",
+        f"make -C {s} -f agk.mk",
+        f"make -C {s} -f agk.mk agk-governance agk-project-test",
+        f"make -C {s} -f agk.mk agk-governance X=1",
+        f"make -C {s} -f agk.mk -f agk.mk agk-governance",
+        f"make -C {s} --file=agk.mk agk-governance",
+        f"make -C {s} -fagk.mk agk-governance",
+        f"make -f agk.mk -C {s} agk-governance",
+        f"make -f agk.mk agk-governance",
+        f"make -C {root} -f agk.mk agk-governance",
+        f"make -C {s} -f agk.mk agk-governance; rm x",
+    ):
+        found = work.bash(f"{env(s)}{tail}")
+        assert found is not None and MARK in found["permissionDecisionReason"], tail
+    found = work.bash(f"make -C {s} -f agk.mk agk-governance")  # no clean environment
+    assert found is not None and MARK in found["permissionDecisionReason"]

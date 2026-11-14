@@ -870,3 +870,38 @@ def test_the_merge_command_closes_a_finished_brief_after_its_record_line(tmp_pat
     assert targets[0] == f"repos/{REPO}/issues/{AUTO_ISSUE['number']}/comments"
     assert targets[1:3] == [f"repos/{REPO}/issues/500/comments", f"repos/{REPO}/issues/500"]
     assert comment_of(posts[1]) == f"All builds merged; last #7 {MERGE12}"
+
+
+# --- brief #1264: the run calls the kit's own make file -----------------------------------------
+
+
+def test_the_run_names_the_kit_make_file_and_its_governance_target():
+    """REQ-039: brief #1264 answer 1 (d): `make -C <tree> -f agk.mk agk-governance AGK_BASE=<base>`,
+    every other argument unchanged."""
+    home = Path("home")
+    argv = merge_cleared.governance_argv(Path("tree"), home, home / "pr-body.md", BASE, 1800.0)
+    at = argv.index("make")
+    assert argv[at:] == ["make", "-C", "tree", "-f", "agk.mk", "agk-governance", f"AGK_BASE={BASE}"]
+    assert argv[10:12] == ["env", "-i"] and argv[13:at] == [
+        f"HOME={home}",
+        f"AGK_PR_BODY={home / 'pr-body.md'}",
+        f"AGK_RECORD_COMMENTS={home / 'record-comments.json'}",
+    ]
+
+
+def test_an_adopted_project_with_agk_mk_and_no_makefile_reaches_the_target(tmp_path):
+    """REQ-039: brief #1264 answer 1 (e): a project set up with adopt keeps no Makefile of the kit,
+    only `agk.mk`; the run after the merge reaches its `agk-governance` target with AGK_BASE."""
+    tree, home = tmp_path / "tree", tmp_path / "home"
+    tree.mkdir()
+    home.mkdir()
+    seen = tmp_path / "seen.txt"
+    (tree / "agk.mk").write_text(
+        f"agk-governance:\n\t@echo \"reached $(AGK_BASE)\" > {seen.as_posix()}\n", encoding="utf-8"
+    )
+    assert not (tree / "Makefile").exists()
+    argv = merge_cleared.governance_argv(tree, home, home / "pr-body.md", BASE, 60.0)
+    clean = argv[argv.index("--") + 1 :]  # the command lock.py runs, without the lock
+    proc = subprocess.run(clean, capture_output=True, text=True)  # nosec B603 - fixed list, no shell
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert seen.read_text(encoding="utf-8").strip() == f"reached {BASE}"
