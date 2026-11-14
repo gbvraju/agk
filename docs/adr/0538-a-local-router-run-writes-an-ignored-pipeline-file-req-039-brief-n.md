@@ -35,3 +35,9 @@ Tests: `tests/kit/test_pipeline.py` (a) the local file in the root and no `pipel
 (c) `git check-ignore` matches in a temporary `init.py` and `adopt.py` install; the earlier pipeline and router tests
 stay as they were. Protected path classes changed: `scripts/agk/` (`route.py`), `kit/` (`kit/templates/gitignore`)
 and `tests/kit/` (`test_pipeline.py`).
+
+## Residual
+
+- 2026-11-14: SPEC-0036 rules 2 and 5 and ADR-0141 still name the document `pipeline.json`; the CI file keeps that name,
+  and only the local default changes, so the spec text is left to its reviewers (no amendment in this pull request). A
+  `pipeline.json` left by an earlier local run is not deleted by the kit (due 2026-12-31).
