@@ -54,7 +54,7 @@ $promptFile = Join-Path $work 'prompt.txt'
 Set-Content -LiteralPath $promptFile -Value $prompt -Encoding utf8
 $wrapper = Join-Path $work 'run.ps1'
 Set-Content -LiteralPath $wrapper -Encoding utf8 -Value @'
-param($Worktree, $PromptFile, $LongTemp, $Session, $Brief)
+param($Worktree, $PromptFile, $LongTemp, $Session, $Brief, $Model, $Effort)
 # The tab's environment: PATH fresh, TEMP long, no inherited child-session marker.
 $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
             [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -66,14 +66,19 @@ $env:AGK_SESSION = $Session
 $env:AGK_BRIEF = $Brief
 Set-Location -LiteralPath $Worktree
 $prompt = Get-Content -LiteralPath $PromptFile -Raw
-try { & claude $prompt; $code = $LASTEXITCODE } catch { $code = 1 }
+# The tier's model name and effort (brief #1252, ADR-0530): no flag without a model (verify: the flags are claude's).
+$flags = @()
+if ($Model) { $flags += '--model', $Model; if ($Effort) { $flags += '--effort', $Effort } }
+try { & claude @flags $prompt; $code = $LASTEXITCODE } catch { $code = 1 }
 if ($null -eq $code) { $code = 1 }
 $at = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
 Set-Content -LiteralPath (Join-Path $Worktree '.agk-session-exit') -Value "exit_code=$code", "ended_utc=$at"
 exit $code
 '@
 
-# 3. The tab, only now that the worktree exists.
+# 3. The tab, only now that the worktree exists. The model and effort follow as arguments, never empty ones.
+$extra = @()
+if ($env:AGK_MODEL) { $extra += $env:AGK_MODEL; if ($env:AGK_EFFORT) { $extra += $env:AGK_EFFORT } }
 wt -w 0 new-tab --profile "AGK builder" --title $session -d $worktree `
-    pwsh -NoProfile -File $wrapper $worktree $promptFile $longTemp $session $brief
+    pwsh -NoProfile -File $wrapper $worktree $promptFile $longTemp $session $brief @extra
 
