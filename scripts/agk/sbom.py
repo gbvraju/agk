@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 from ci_tools import LINE as CI_TOOL_LINE
 from ci_tools import PIN_FILE
-from common import CheckError, git, repo_root
+from common import CheckError, git, repo_root, utf8_output
 
 NAME = "bom"
 USAGE = (
@@ -560,6 +560,7 @@ def options(args: list[str]) -> tuple[list[str], dict[str, str]] | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     parsed = options(list(sys.argv[1:] if argv is None else argv))
     words, flags = parsed if parsed else ([], {})
     if len(words) == 2 and words[0] == "findings" and set(flags) == {"--bom"}:

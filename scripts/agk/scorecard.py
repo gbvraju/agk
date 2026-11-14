@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import check_acceptance
 import metrics
-from common import CheckError, git, installed_version, load_config, repo_root, run
+from common import CheckError, git, installed_version, load_config, repo_root, run, utf8_output
 from doctor import kit_repo, version_numbers
 from drift_audit import d4_documents, d4_register
 from full_run import FULL
@@ -767,6 +767,7 @@ def parse_args(args: list[str]) -> dict | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     opts = parse_args(list(sys.argv[1:] if argv is None else argv))
     if opts is None:
         print(USAGE)

@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import session  # noqa: E402
-from common import CheckError, git, repo_root, run  # noqa: E402
+from common import CheckError, git, repo_root, run, utf8_output  # noqa: E402
 from review_context import assemble, fenced  # noqa: E402
 
 NAME = "review-bundle"
@@ -128,6 +128,7 @@ def bundle(root: Path, number: int, sha: str, base: str | None) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     parsed = parse_args(list(sys.argv[1:] if argv is None else argv))
     if parsed is None:
         print(USAGE, file=sys.stderr)

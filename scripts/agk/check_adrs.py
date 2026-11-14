@@ -36,6 +36,7 @@ from common import (
     resolve_base,
     run,
     show,
+    utf8_output,
 )
 
 NAME = "adrs"
@@ -221,6 +222,7 @@ def validate(name: str, text: str, known: set[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     root = repo_root()
     adr_dir = root / "docs" / "adr"
     files = (

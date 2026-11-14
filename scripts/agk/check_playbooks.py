@@ -28,7 +28,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import playbook_format
-from common import repo_root, run
+from common import repo_root, run, utf8_output
 
 NAME = "playbooks"
 CHECK, JUDGEMENT = playbook_format.GATE_KINDS
@@ -122,6 +122,7 @@ def cmd_check(root: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     root = Path(args[1]) if args[:1] == ["--root"] and len(args) == 2 else None
     if root is None and args:

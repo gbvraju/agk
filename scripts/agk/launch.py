@@ -60,7 +60,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, available_memory
+from common import CheckError, available_memory, utf8_output
 
 import config
 
@@ -446,6 +446,7 @@ def start_with(
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     resume = args.count("--resume") == 1 and args[:1] == ["prompts"]
     if resume:

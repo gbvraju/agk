@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import git, repo_root, resolve_base
+from common import git, repo_root, resolve_base, utf8_output
 
 USAGE = (
     "usage: status_only.py --head SHA [--parent-proof CONCLUSION | --parent-governance CONCLUSION]"
@@ -92,6 +92,7 @@ def decide(root: Path, head: str, parent_proof: str, base: str | None, check: st
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     root_arg = args.pop() if len(args) % 2 else None
     opts = dict(zip(args[::2], args[1::2], strict=False))

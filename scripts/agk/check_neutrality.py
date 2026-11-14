@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, git, read_list, repo_root, run
+from common import CheckError, git, read_list, repo_root, run, utf8_output
 
 NAME = "neutrality"
 TOKENS = "config/neutrality.txt"
@@ -15,6 +15,7 @@ EXEMPT_PREFIX = "docs/adr/"
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     root = repo_root()
     path = root / TOKENS
     if not path.is_file():

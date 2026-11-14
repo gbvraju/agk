@@ -36,6 +36,7 @@ from common import (
     resolve_base,
     run,
     show,
+    utf8_output,
 )
 from session import reservations
 
@@ -137,6 +138,7 @@ def check(root: Path, opts: dict[str, str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = sys.argv[1:] if argv is None else argv
     opts = dict(zip(args[::2], args[1::2], strict=False))
     if (

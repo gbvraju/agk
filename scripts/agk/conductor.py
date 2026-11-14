@@ -180,6 +180,7 @@ from common import (
     CheckError,
     fix_items,
     repo_root,
+    utf8_output,
     verdict_problem,
 )
 from full_run import contained_in, covered
@@ -1864,6 +1865,7 @@ def queue_args(args: list[str]) -> tuple[bool, int] | None:
 
 
 def main(argv: list[str] | None = None, root: Path | None = None) -> int:
+    utf8_output()
     args = sys.argv[1:] if argv is None else argv
     since = datetime.now(UTC)
     if args[:1] == ["watch"] and len(args) >= 3 and args[1] == "--since":

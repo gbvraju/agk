@@ -37,6 +37,7 @@ from common import (
     run,
     show,
     test_dirs,
+    utf8_output,
 )
 from full_run import contained_in, covered
 from impact import DEFAULT_BUDGET, durations_sums, testing_table
@@ -1683,6 +1684,7 @@ def load_issues(path: str | None) -> list[dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     options = parse_args(list(sys.argv[1:] if argv is None else argv))
     if options is None:
         print(USAGE, file=sys.stderr)

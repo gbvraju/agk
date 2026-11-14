@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, repo_root, required_checks
+from common import CheckError, repo_root, required_checks, utf8_output
 from route import FAILED_RUN, FAILED_STATUS, decide, judged, listing, read_facts
 from session import (
     CLAIM_HOURS,
@@ -324,6 +324,7 @@ def find(root: Path) -> list[dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = sys.argv[1:] if argv is None else argv
     if args not in ([], ["--json"]):
         print(USAGE)

@@ -55,6 +55,7 @@ from common import (
     show,
     stray_markers,
     untagged_test_files,
+    utf8_output,
 )
 
 NAME = "drift-audit"
@@ -834,6 +835,7 @@ def parse_args(args: list[str]) -> dict | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     options = parse_args(list(sys.argv[1:] if argv is None else argv))
     if options is None:
         print(USAGE, file=sys.stderr)

@@ -22,6 +22,10 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
+from common import utf8_output
+
 MANIFEST = "kit/manifest.json"
 KIT_ONLY = "config/kit-only.txt"
 NO_MANIFEST = "parity: no kit/manifest.json; nothing to check"
@@ -161,6 +165,7 @@ def classify(root: Path) -> tuple[dict[str, str], list[str]]:
 
 
 def main(argv: list[str]) -> int:
+    utf8_output()
     args = list(argv)
     root = Path.cwd()
     if "--root" in args:

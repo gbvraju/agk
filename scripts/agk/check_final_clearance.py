@@ -53,6 +53,7 @@ from common import (
     rule_tags_from,
     run,
     show,
+    utf8_output,
 )
 from metrics import counted_authors, latest_verdict_body
 from reviewers import (
@@ -271,6 +272,7 @@ def check(
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = sys.argv[1:] if argv is None else argv
     opts = dict(zip(args[::2], args[1::2], strict=False))
     known = {"--comments", "--reviews", "--head", "--author", "--draft"}

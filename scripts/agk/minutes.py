@@ -43,7 +43,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, minutes_warn, repo_root, run
+from common import CheckError, minutes_warn, repo_root, run, utf8_output
 from metrics import origin_repo
 
 NAME = "minutes"
@@ -622,6 +622,7 @@ def parse_args(args: list[str]) -> dict | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     options = parse_args(list(sys.argv[1:] if argv is None else argv))
     if options is None:
         print(USAGE, file=sys.stderr)

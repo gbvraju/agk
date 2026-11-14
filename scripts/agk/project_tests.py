@@ -70,7 +70,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, git, load_config, merge_base, proof_areas, repo_root, resolve_base
+from common import (
+    CheckError,
+    git,
+    load_config,
+    merge_base,
+    proof_areas,
+    repo_root,
+    resolve_base,
+    utf8_output,
+)
 from impact import (
     LINK_REASON,
     MAP_FILE,
@@ -339,6 +348,7 @@ def run_all(root: Path, project: str, runs: list, rerun: bool) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     if len(args) > 1 or args[:1] not in ([], ["--rerun-alone"], ["--no-rerun-alone"]):
         print(USAGE)

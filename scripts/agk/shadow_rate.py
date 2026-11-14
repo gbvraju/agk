@@ -26,7 +26,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, repo_root
+from common import CheckError, repo_root, utf8_output
 from metrics import ApiDir, author_of
 from reviewers import verdict_authors
 
@@ -247,6 +247,7 @@ def parse(args: list[str]) -> dict[str, str] | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     opts = parse(sys.argv[1:] if argv is None else argv)
     if opts is None:
         print(USAGE)

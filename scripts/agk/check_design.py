@@ -47,7 +47,7 @@ import design_inventory
 import design_prototype_check
 import design_signoff
 import design_standard
-from common import repo_root, run
+from common import repo_root, run, utf8_output
 
 NAME = "design"
 THEME = "docs/design/theme.md"
@@ -318,6 +318,7 @@ def cmd_check(root: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     root = Path(args[1]) if args[:1] == ["--root"] and len(args) == 2 else None
     if root is None and args:

@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import design_signoff
-from common import STATUS_LINE, CheckError
+from common import STATUS_LINE, CheckError, utf8_output
 
 SOURCES = "docs/sources"
 ADR = "docs/adr"
@@ -118,6 +118,7 @@ COMMANDS = {
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     command = args.pop(0) if args else ""
     root_arg: str | None = None

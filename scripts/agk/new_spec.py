@@ -161,7 +161,23 @@ def parse(args: list[str]) -> dict:
     return opts
 
 
+def utf8_output() -> None:
+    """`common.utf8_output` (brief #1233, ADR-0524), kept here: the script imports only the
+    standard library. Reconfigures stdout and stderr to UTF-8 when they are text streams in
+    another encoding."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        encoding = str(getattr(stream, "encoding", "") or "").lower().replace("_", "-")
+        if reconfigure is None or encoding in ("utf-8", "utf8"):
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            continue
+
+
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         opts = parse(list(sys.argv[1:] if argv is None else argv))
     except ValueError:

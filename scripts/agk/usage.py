@@ -23,6 +23,10 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
+
+from common import utf8_output
+
 USAGE = "usage: usage.py [--transcript FILE] [--since YYYY-MM-DDTHH:MM:SSZ]"
 NOT_SHOWN = "Usage: not shown"
 COUNTS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
@@ -114,6 +118,7 @@ def parse(argv: list[str]) -> dict | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     options = parse(list(sys.argv[1:] if argv is None else argv))
     if options is None:
         print(f"{USAGE}\n(refused: an option of usage.py is missing or malformed)")

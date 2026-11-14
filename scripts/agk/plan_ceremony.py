@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import design_signoff  # noqa: E402
 import plan_estimate as pe  # noqa: E402
-from common import CheckError, plan_settings  # noqa: E402
+from common import CheckError, plan_settings, utf8_output  # noqa: E402
 from facts import window_start  # noqa: E402
 from metrics import stamp, start_of  # noqa: E402
 
@@ -603,6 +603,7 @@ def ceremony(args: argparse.Namespace) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         args = parse_args(list(sys.argv[1:] if argv is None else argv))
         lines = ceremony(args)

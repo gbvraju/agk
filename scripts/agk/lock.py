@@ -108,6 +108,7 @@ from common import (
     lock_slots,
     long_temp_dir,
     queue_settings,
+    utf8_output,
 )
 
 USAGE = (
@@ -1260,6 +1261,7 @@ def stop(child: subprocess.Popen) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         options = parse_args(list(sys.argv[1:] if argv is None else argv))
         root = repo_root()

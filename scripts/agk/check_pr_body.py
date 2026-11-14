@@ -45,6 +45,7 @@ from common import (
     repo_root,
     resolve_base,
     run,
+    utf8_output,
 )
 
 NAME = "pr-body"
@@ -202,6 +203,7 @@ def fix_record_problems(text: str) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     options: dict[str, str] = {}
     while args[:1] in (["--draft"], ["--issues"]):

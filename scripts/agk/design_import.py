@@ -79,7 +79,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) l
 
 import design_inventory
 import design_signoff
-from common import CheckError
+from common import CheckError, utf8_output
 
 IMPORTED = "docs/design/imported"
 DESIGN = "docs/design"
@@ -790,6 +790,7 @@ def _options(args: list[str]) -> dict[str, str] | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     command = args[0] if args else ""
     if command not in ("source", "components"):

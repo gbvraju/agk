@@ -49,6 +49,7 @@ from common import (
     repo_root,
     run,
     show,
+    utf8_output,
 )
 
 NAME = "protected-changes"
@@ -311,6 +312,7 @@ def release_pull_request(root, mb, comments_file: str | None = None) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     root = repo_root()
     mb = base_context(root, NAME, base_arg(argv))
     if mb is None:

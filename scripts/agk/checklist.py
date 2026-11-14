@@ -25,7 +25,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
-from common import CheckError, config_source, git, personal_table, run
+from common import CheckError, config_source, git, personal_table, run, utf8_output
 
 NAME = "checklist"
 SAVED_NAME = "agk-checklist.json"
@@ -776,6 +776,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = parse_args(list(sys.argv[1:] if argv is None else argv))
     if args is None:
         print(USAGE, file=sys.stderr)

@@ -32,7 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # isolated mode (-I) leaves it off
 
 import lock as heavy_lock
-from common import CheckError, git, load_config, repo_root
+from common import CheckError, git, load_config, repo_root, utf8_output
 from impact import changed_files, is_doc, matches, smoke_entries, testing_table
 from prepush import LOCK, caller_slot
 
@@ -130,6 +130,7 @@ def run(root: Path, argv: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     try:
         options = parse_args(list(sys.argv[1:] if argv is None else argv))
         root = repo_root()

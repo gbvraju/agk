@@ -92,6 +92,7 @@ from common import (
     paused,
     repo_root,
     required_checks,
+    utf8_output,
     verdict_problem,
 )
 from merge_cleared import (
@@ -1361,6 +1362,7 @@ def write_pipeline(repo: str, root: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     args = list(sys.argv[1:] if argv is None else argv)
     dry = "--dry-run" in args
     rest = [a for a in args if a != "--dry-run"]
