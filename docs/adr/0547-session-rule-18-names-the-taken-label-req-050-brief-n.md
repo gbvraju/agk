@@ -34,3 +34,7 @@ label is added on the same path for a brief and for a build (`claim --build X`).
 A session that reads rule 18 learns that a claim also changes the brief's labels, as the planner already relies
 on. A later change that drops or renames the label, or guards it for builds, fails the new test until rule 18
 follows.
+
+## Residual
+
+- The rule budget of `config/session-rules.md` (`config/rule-budget.txt`, ADR-0310): the new words are Q-1276-1 on the pull request.
