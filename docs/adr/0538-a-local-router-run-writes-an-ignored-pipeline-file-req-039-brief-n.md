@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-14
 - Deciders: maintainers
-- Related: SPEC-0036, ADR-0141, ADR-0534, brief #1263, brief #1272, plan #661
+- Related: SPEC-0036, amendment 182, ADR-0141, ADR-0534, brief #1263, brief #1272, plan #661
 - Requirements: REQ-039
 
 Protected classes: `scripts/agk/`, `kit/`, `tests/kit/`
@@ -38,6 +38,6 @@ and `tests/kit/` (`test_pipeline.py`).
 
 ## Residual
 
-- 2026-11-14: SPEC-0036 rules 2 and 5 and ADR-0141 still name the document `pipeline.json`; the CI file keeps that name,
-  and only the local default changes, so the spec text is left to its reviewers (no amendment in this pull request). A
-  `pipeline.json` left by an earlier local run is not deleted by the kit (due 2026-12-31).
+- 2026-11-14: SPEC-0036 rule 2 names the document `pipeline.json`; the local default it gains is proposed in
+  `docs/runs/proposed-spec-amendments-182.md` (principle 6), and the spec is not edited here. A `pipeline.json` left by
+  an earlier local run is not deleted by the kit (due 2026-12-31).
