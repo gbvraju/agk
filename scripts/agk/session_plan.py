@@ -1811,10 +1811,12 @@ def build(root, record: bool = False) -> dict:
     """The plan, reading only what it needs (brief #1251, ADR-0529): the comments of the briefs
     in reading order until the free slots are filled, more only while a slot stays free and a
     brief is left unread; each GET is made once in the run. It carries `reads`."""
-    began = time.monotonic()
+    began, wall = time.monotonic(), time.time()
     reads.MEMO = {}  # this run's reads only, never a previous run's
     first = reads.CALLS, reads.CACHED
     want = flow_int(root, "max_builders", reads.MAX_BUILDERS, RULE)
+    repo = reads.repo_name(root)
+    reads.changed_since_pass(repo)  # build (b): unchanged comment pages need no request
     try:
         while True:
             found, more = plan_pass(root, False, want)
@@ -1825,6 +1827,8 @@ def build(root, record: bool = False) -> dict:
             found, _ = plan_pass(root, True, want)
     finally:
         reads.MEMO = None
+        reads.CACHE.unchanged = None
+    reads.end_pass(repo, wall)
     found["reads"] = {
         "calls": reads.CALLS - first[0],
         "cached": reads.CACHED - first[1],
