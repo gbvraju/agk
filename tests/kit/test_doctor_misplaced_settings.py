@@ -11,12 +11,13 @@ import os
 import tomllib
 from pathlib import Path
 
-import config
 import doctor
 import impact
 import launch
 from test_doctor import checks_of, run_case
 from test_doctor import doctor as run_doctor
+
+import config
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = KIT_ROOT / "kit" / "templates" / "agk.toml"
