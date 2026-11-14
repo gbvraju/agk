@@ -105,6 +105,8 @@ EVIDENCE_OK = [
     "python3 scripts/agk/evidence.py check rec.json --head " + "a" * 40,
     "python3 scripts/agk/evidence.py check rec.json --sample 2 --json",
     "python3 ./scripts/agk/evidence.py check --json rec.json",
+    "python3 scripts/agk/evidence.py check --head " + "a" * 40,  # brief #1269: the shared record
+    "python3 scripts/agk/evidence.py check --head " + "a" * 40 + " --sample 2 --json",
 ]
 EVIDENCE_NO = [
     "python3 scripts/agk/evidence.py",
@@ -115,6 +117,7 @@ EVIDENCE_NO = [
     "python3 scripts/agk/evidence.py check a.json b.json",
     "python3 scripts/agk/evidence.py check rec.json > out.txt",
     "python3 scripts/agk/evidence.py check rec.json --head",
+    "python3 scripts/agk/evidence.py check --sample 2 --json",  # no record and no head
 ]
 
 
