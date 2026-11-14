@@ -707,7 +707,8 @@ def test_a_brief_with_comments_and_no_take_is_read_once_then_skipped_while_uncha
     double.forget()
     double.serve(ISSUES, [listing(7, 3, when="2026-11-02T00:00:00Z")])
     double.serve(
-        f"{ISSUES}/7/comments", [note(1, "A field note.", 500), took(2), note(3, "Question: Q", 595)]
+        f"{ISSUES}/7/comments",
+        [note(1, "A field note.", 500), took(2), note(3, "Question: Q", 595)],
     )
     assert dqueue(dproj, double) == ["#7 question on a brief"] and read_briefs(double) == [7]
 
