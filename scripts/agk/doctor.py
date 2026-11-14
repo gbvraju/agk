@@ -455,6 +455,14 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "install the kit's adapter (python3 scripts/agk/upgrade.py writes a missing template) and "
         "set launch_adapter in the flow table of agk.toml to the line above (a protected path)",
     ),
+    "model-names": (  # brief #1252 (ADR-0530): information, never a failure of the run
+        "warn",
+        "model names: ",
+        "model names: ",
+        "set [models.names] in agk.toml to the project's model name for each tier, so that the "
+        "launch adapter starts each builder on its kind's model (docs/guides/local-mode.md, "
+        "Running unattended; agk.toml is a protected path)",
+    ),
     "misplaced-settings": (  # brief #1245 (ADR-0527): a table key written outside its table
         "warn",
         "every setting the kit reads from a table of agk.toml is in that table",
@@ -1289,6 +1297,28 @@ def launch_adapter_result(root: Path, platform: str | None = None) -> Result:
     return Result("ok", message="auto_start on, the adapter is there")
 
 
+def model_names_result(root: Path) -> Result:
+    """Brief #1252 (ADR-0530): with `auto_start` on and `launch_adapter` set, a missing
+    `[models.names]` table starts every builder on the person's default model whatever its kind.
+    A refused setting is named, never its value."""
+    import launch
+
+    try:
+        auto, adapter = launch.launch_settings(root)
+        names = models.model_names(root) if auto and adapter is not None else None
+    except CheckError as err:
+        return Result("fail", message=f"{err}")
+    if names is None:
+        return Result("ok", message="auto_start off or no launch_adapter")
+    if not names:
+        return Result(
+            "fail",
+            message="auto_start is on with a launch_adapter and [models.names] is unset, so "
+            "every adapter-started builder runs on the default model whatever its kind",
+        )
+    return Result("ok", message="set")
+
+
 def design_ui_result(root: Path, config: dict) -> Result:
     """`ui_paths` of the `[design]` table (SPEC-0037 rule 10): `absent` when a prototype folder
     exists and the list is unset or empty; always ok, and never a glob in the message."""
@@ -1747,6 +1777,7 @@ def run_checks(
     results["capacity"] = capacity_result(root, measure=api_dir is None)
     results["reviewer-slots"] = reviewer_slots_result(root)
     results["launch-adapter"] = launch_adapter_result(root)
+    results["model-names"] = model_names_result(root)
     results["misplaced-settings"] = misplaced_settings_result(config)
     report = []
     for check, (severity, ok_text, fail_text, fix) in CHECKS.items():

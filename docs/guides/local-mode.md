@@ -232,6 +232,18 @@ change with an ADR in the same pull request.
    bundle, posts the verdict, releases its slot and ends, so no reviewer stays in memory between heads. Meanwhile the
    conductor gives no verdict of its own; only when no reviewer verdict comes within `[flow] review_minutes` (15 by default)
    does it post one ending `(conductor fallback)`. With `reviewer_slots = 0`, the default, the conductor reviews as before.
+6. **The model for each kind** (brief #1252, ADR-0530). `[models.names]` is the one setting that routes builders by kind:
+   `launch.py` gives each builder the tier of its brief's kind (design and build on `strongest`, small and mechanical on
+   `mid`; a stopped builder resumes one tier up) and hands the adapter that tier's name as `AGK_MODEL`, which both adapters
+   pass to the session command as `--model`, with `--effort` beside it. Without the table every builder runs on the default model of
+   the person's runtime whatever its kind. Write the project's own names in place of the placeholders:
+
+       [models.names]
+       strongest = "<the project's strongest model name>"
+       mid = "<its mid model name>"
+
+   Run the conductor itself on the strongest model, because it reviews. `python3 scripts/agk/doctor.py` warns
+   `model names: ...` when `auto_start` is on with a `launch_adapter` and the table is unset.
 
 ## What is lost
 

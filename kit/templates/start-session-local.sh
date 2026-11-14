@@ -6,6 +6,8 @@
 # otherwise in the background with its output in <worktree>/.agk-session.log (verify: the terminal's options and
 # claude's print mode, -p, are the terminal's and the runtime's, and were not run by the session that wrote this).
 # When claude exits, <worktree>/.agk-session-exit holds exit_code=<code> and ended_utc=<UTC time>.
+# With AGK_MODEL set (the tier's name from [models.names]) claude gets --model AGK_MODEL, and
+# --effort AGK_EFFORT beside it when that is set; without AGK_MODEL it gets no flag (verify: the flags are claude's).
 set -euo pipefail
 session="${AGK_SESSION:?AGK_SESSION is not set}"
 prompt="$(cat)"
@@ -48,16 +50,18 @@ printf '%s' "$prompt" > "$prompt_file"
 wrapper='cd "$1" || exit 1
 unset CLAUDE_CODE_CHILD_SESSION
 prompt="$(cat "$2")"; rm -f "$2"
+flags=()
+if [ -n "${4:-}" ]; then flags=(--model "$4"); if [ -n "${5:-}" ]; then flags+=(--effort "$5"); fi; fi
 code=0
-if [ "$3" = tab ]; then claude "$prompt" || code=$?; else claude -p "$prompt" || code=$?; fi
+if [ "$3" = tab ]; then claude "${flags[@]}" "$prompt" || code=$?; else claude "${flags[@]}" -p "$prompt" || code=$?; fi
 printf "exit_code=%s\nended_utc=%s\n" "$code" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$1/.agk-session-exit"
 exit "$code"'
 
 # 3. A tab on a desktop, the background anywhere else.
 if command -v gnome-terminal >/dev/null 2>&1 && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
     gnome-terminal --tab --title "$session" --working-directory "$worktree" -- \
-        bash -c "$wrapper" agk-session "$worktree" "$prompt_file" tab
+        bash -c "$wrapper" agk-session "$worktree" "$prompt_file" tab "${AGK_MODEL:-}" "${AGK_EFFORT:-}"
 else
-    nohup bash -c "$wrapper" agk-session "$worktree" "$prompt_file" background \
+    nohup bash -c "$wrapper" agk-session "$worktree" "$prompt_file" background "${AGK_MODEL:-}" "${AGK_EFFORT:-}" \
         > "$worktree/.agk-session.log" 2>&1 < /dev/null &
 fi
