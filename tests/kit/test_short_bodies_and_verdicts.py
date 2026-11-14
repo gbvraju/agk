@@ -14,8 +14,23 @@ ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = ROOT / ".github" / "PULL_REQUEST_TEMPLATE.md"
 CONDUCTOR = ROOT / ".claude" / "agents" / "conductor.md"
 SKILL = ROOT / "skills" / "review-pass" / "SKILL.md"
-FIELDS = ("Advances:", "Issue:", "Behaviour:", "Build-state row:", "Decisions taken:", "Questions:", "Verified:")
-PARSED = ("Verdict:", "Local evidence:", "Evidence check:", "Checklist:", "Playbook evidence:", "Approval:")
+FIELDS = (
+    "Advances:",
+    "Issue:",
+    "Behaviour:",
+    "Build-state row:",
+    "Decisions taken:",
+    "Questions:",
+    "Verified:",
+)
+PARSED = (
+    "Verdict:",
+    "Local evidence:",
+    "Evidence check:",
+    "Checklist:",
+    "Playbook evidence:",
+    "Approval:",
+)
 
 
 def test_b_the_template_opens_with_the_summary_then_the_fields_in_order():

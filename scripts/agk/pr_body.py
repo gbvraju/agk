@@ -13,8 +13,8 @@ carries `Brief: none (design)` or `Brief: none (spec)` (`check_pr_body.NONE_FORM
 in either state. Without any of these the state is not known and the body is checked as if a brief
 were open. The `Summary:` line is cut to fit at a word boundary. A body that still fails is never
 printed: the command refuses with the check's own lines, which name the rule and never a value. No
-network. Brief #1270: a printed body that passes `BODY_NOTE_LIMIT` characters outside its `Verified:`
-lines gets one information line after it; nothing else changes, the exit included.
+network. Brief #1270: a printed body that passes `BODY_NOTE_LIMIT` characters outside its
+`Verified:` lines gets one information line after it; nothing else changes, the exit included.
 """
 
 from __future__ import annotations
