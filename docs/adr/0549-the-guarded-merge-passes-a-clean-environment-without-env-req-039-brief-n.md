@@ -1,6 +1,6 @@
 # ADR-0549: The guarded merge passes a clean environment without env
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0191, ADR-0254, ADR-0273, ADR-0297, ADR-0320, SPEC-0039, brief #551, brief #610, brief #667, brief #1264, brief #1290, plan #661

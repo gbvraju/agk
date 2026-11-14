@@ -1,6 +1,6 @@
 # ADR-0546: AGK's posts end with a light Who line
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0059, brief #1289, plan #661

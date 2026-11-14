@@ -1,6 +1,6 @@
 # ADR-0542: The conductor checks local evidence
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: ADR-0233, ADR-0536, SPEC-0030, SPEC-0039, brief #982, brief #1269, brief #1281, plan #661

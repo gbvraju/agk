@@ -1,6 +1,6 @@
 # ADR-0532: A release row is checked against its commit
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: brief #1259, brief #1257, PR #1258 (Q-1257-1), SPEC-0028 rule 4, ADR-0108
