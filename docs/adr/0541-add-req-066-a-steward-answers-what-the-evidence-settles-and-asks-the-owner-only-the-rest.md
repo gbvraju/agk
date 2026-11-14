@@ -21,8 +21,8 @@ keeps no memory past a compaction. One evening of a customer project in local mo
 settled by the kit's own code and state, a few that needed the owner, and three misses of the co-owner that evidence
 found. The owner's correction on the brief (comment 6881131563) ruled its three open questions and made the steward the
 owner's one entry point, a second (comment 6881233447) set a cost and speed budget and skills first, a third (comment 6881300953) bounded
-every role's wait on the owner, and a fourth (comment 6881464547) set the steward's authority by stage and its
-structured notes. The kit recognises `Answer:` and `Maintainer answer:` only by their prefixes, and the sessions and the owner post
+every role's wait on the owner, a fourth (comment 6881464547) set the steward's authority by stage and its
+structured notes, and a fifth (comment 6882432067) added onboarding on day 0, in planning and in execution. The kit recognises `Answer:` and `Maintainer answer:` only by their prefixes, and the sessions and the owner post
 as one login, so the login cannot show who wrote an owner's answer.
 
 ## Decision
@@ -53,10 +53,11 @@ as one login, so the login cannot show who wrote an owner's answer.
    calls for a pass that answers one mechanical question and 5 for a quiet start. It uses the kit's skill for every stage
    and step it covers, and files a kit brief for a missing one.
 6. The steward's memory is one open issue labelled `agk-steward` (a sidecar file in personal mode), read first at every
-   start and rolled over at 500 comments.
+   start and rolled over at 500 comments. A steward that joins a project in execution harvests the repository's existing
+   decisions into it, with their sources, before it answers anything.
 7. The rule on who may answer a question is principle 7 and `CLAUDE.md item 1`, not principle 1 as the brief names it;
    build (a) adds the evidence-settled class there by its own ADR. Principle 2 and session rule 2 are unchanged.
-8. This is the one ADR of REQ-066 for the builds of SPEC-0059 rule 17, (a) to (e), for what it names here. They will change these
+8. This is the one ADR of REQ-066 for the builds of SPEC-0059 rule 17, (a) to (f), for what it names here. They will change these
    protected path classes: `.claude/` (the agent file, its guard and the conductor's guard for the steward's start), `scripts/agk/` (the steward's helpers),
    `tests/kit/`, `tests/kit_dev/` (the install test of the new files), `kit/` (the manifest entries), `agk.toml` (the
    `[[testing.map]]` entries and the `[steward]` table), `config/` (`core-rules.md`, `session-rules.md`,
