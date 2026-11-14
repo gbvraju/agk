@@ -174,6 +174,18 @@ with init or adopt, while a project set up with adopt may have no Makefile with 
 
 A verdict in local mode that clears a head without that line clears nothing.
 
+## The main folder stays on the default branch
+
+Where several sessions share one clone, the main folder (the clone itself, not one of its worktrees) stays on the default
+branch and is only pulled: the conductor and the planner read it. Every session, also one you open by hand, starts in its own
+worktree: `git worktree add ../agk-<session> origin/<default branch>`, then open the session in that folder (brief #1301,
+ADR-0551). In the main folder of such a clone (`execution = "local"`, a `[flow] launch_adapter`, or another `agk-*` worktree),
+`session.py claim` and `next --take` are refused and `prepush.py` refuses a push except from the default branch; in personal
+mode they only warn. When the main folder leaves the default branch or gains untracked files, the stop hook prints
+`main folder: on <branch>, <n> untracked; switch back with git checkout <default branch>`, and `conductor.py sweep` and
+`doctor.py` print `MAIN-FOLDER: on <branch>, <n> untracked`. The plan reads brief paths for its `Adds:` check from
+`origin/<default branch>`, never from the main folder's working files.
+
 ## Tidying finished builders
 
 Each builder session gets a worktree and a branch of its own, and they stay after the pull request merges; `git branch -d`
