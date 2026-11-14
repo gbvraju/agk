@@ -24,6 +24,19 @@ milestone after the change (its brief file, when it already exists, counts only 
 `-M<n>/<key>` leaves the brief file `M<n>/<key>.md` out after it; briefs read from the facts have no
 key, so a removal changes only brief files.
 
+The deadline fit (brief #1220, ADR-0519, amendment 177), the uncalibrated path only (rule 14):
+`--deadline D --builders N[,N...] [--hours-per-day H] [--review-hours R]` reads every brief file
+`DIR/briefs/M<n>/<key>.md` of the milestones in order, each costing the mid point of its
+`Expected:` range (the owner default of its size, else 0 h) plus R hours of review (0.25), and
+schedules them as a list in milestone then key order: a brief starts only when its `Depends-on`
+briefs are done and no running brief's `Touches` or `Adds` overlap its own (the shared-mechanical
+paths of `session.shared_patterns` left out, the prefix rule of `session.overlap`). With N builders
+the finish is the soonest of the schedules with 1 to N lanes, so more builders never finish later;
+the hours become working days Monday to Friday at H a day (6) from the first working day after
+`--today`. It prints `internal estimate`, one `assumptions:` line, then per N the finish date, the
+buffer in working days against D and, on a miss, the briefs to move: the latest in plan order first,
+each with the briefs that depend on it, until the rest meets D. A calibrated history is refused.
+
 The same facts, plan and `--today` print the same bytes. A facts, plan, date or `[plan]` setting
 that cannot be read exits 2 naming the option or the setting, never its value. Files only: no
 network, no model, nothing written.
@@ -38,7 +51,7 @@ import random
 import re
 import sys
 from datetime import date, datetime, timedelta
-from decimal import ROUND_HALF_EVEN, Decimal
+from decimal import ROUND_CEILING, ROUND_HALF_EVEN, Decimal
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -53,8 +66,11 @@ from metrics import stamp, start_of  # noqa: E402
 UNKNOWN = "unknown"
 USAGE = (
     "usage: plan_estimate.py --facts FILE [--plan DIR] [--today YYYY-MM-DD] [--weeks N] "
-    "[--with SC-<n>]"
+    "[--with SC-<n> | --deadline YYYY-MM-DD --builders N[,N...] [--hours-per-day H] "
+    "[--review-hours R]]"
 )
+MOST_BUILDERS = 50
+DEPENDS = re.compile(r"^Depends-on:[ \t]*(.+?)[ \t]*$", re.MULTILINE)
 SC_ID = re.compile(r"SC-[1-9]\d*")
 SIZES = ("S", "M", "L")
 TRIALS = 10000
@@ -90,13 +106,42 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--today")
     parser.add_argument("--weeks", default="12")
     parser.add_argument("--with", dest="change")
+    parser.add_argument("--deadline")
+    parser.add_argument("--builders")
+    parser.add_argument("--hours-per-day", dest="hours_per_day")
+    parser.add_argument("--review-hours", dest="review_hours")
     args = parser.parse_args(argv)
+    fit_options(args)
     if args.change is not None and not SC_ID.fullmatch(args.change):
         raise Refusal("--with names a scope change SC-<n> (option: --with)")
     if not (args.weeks.isdigit() and 4 <= int(args.weeks) <= 52):
         raise Refusal("--weeks must be a whole number from 4 to 52 (option: --weeks)")
     args.weeks = int(args.weeks)
     return args
+
+
+def fit_options(args: argparse.Namespace) -> None:
+    """The deadline fit's options: all or none, never with `--with`; each refusal names one."""
+    if args.deadline is None:
+        if (args.builders, args.hours_per_day, args.review_hours) != (None, None, None):
+            raise Refusal("the builder options need a deadline (option: --deadline)")
+        return
+    if args.change is not None:
+        raise Refusal("a scope change and a deadline fit are run apart (option: --with)")
+    if args.builders is None:
+        raise Refusal("a deadline fit needs the builder counts (option: --builders)")
+    args.deadline = day_of(args.deadline, "--deadline")
+    counts = args.builders.split(",")
+    if not all(c.isdigit() and 1 <= int(c) <= MOST_BUILDERS for c in counts):
+        raise Refusal(f"builders are whole numbers from 1 to {MOST_BUILDERS} (option: --builders)")
+    args.builders = sorted({int(c) for c in counts})
+    hours = number(args.hours_per_day if args.hours_per_day is not None else "6")
+    if hours is None or not 0 < hours <= 24:
+        raise Refusal("hours a day are a number above 0 and at most 24 (option: --hours-per-day)")
+    review = number(args.review_hours if args.review_hours is not None else "0.25")
+    if review is None:
+        raise Refusal("review hours are a number of 0 or more (option: --review-hours)")
+    args.hours_per_day, args.review_hours = hours, review
 
 
 def day_of(text: Any, option: str) -> date:
@@ -336,7 +381,8 @@ def hours_text(value: str) -> str:
 # --- the command -------------------------------------------------------------------------------
 
 
-def report(args: argparse.Namespace, change: dict | None = None, after: bool = False) -> list[str]:
+def load(args: argparse.Namespace) -> tuple[dict, date, Path, str, dict]:
+    """The facts, `today`, the plan folder, its milestones.md and the `[plan]` settings."""
     try:
         doc = json.loads(Path(args.facts).read_text(encoding="utf-8"))
     except (OSError, ValueError, UnicodeDecodeError):
@@ -355,6 +401,11 @@ def report(args: argparse.Namespace, change: dict | None = None, after: bool = F
         raise Refusal(
             str(error) if isinstance(error, CheckError) else "(setting: [plan])"
         ) from None
+    return doc, today, plan, text, settings
+
+
+def report(args: argparse.Namespace, change: dict | None = None, after: bool = False) -> list[str]:
+    doc, today, plan, text, settings = load(args)
     start, end = window_start(today, args.weeks), start_of(today + timedelta(days=1))
     flow = doc.get("flow")
     briefs = flow.get("briefs") if isinstance(flow, dict) else None
@@ -378,10 +429,159 @@ def report(args: argparse.Namespace, change: dict | None = None, after: bool = F
     return [*out, LIMITS]
 
 
+# --- the deadline fit (brief #1220, ADR-0519) --------------------------------------------------
+
+
+def plan_briefs(plan: Path, text: str, defaults: dict, review: Decimal) -> tuple[list, dict]:
+    """Every brief file of the milestones in order, by key, as (id, hours, depends-on, touches),
+    with the counts the assumptions name."""
+    from session import glob_regex, literal, shared_patterns, touches_of  # noqa: PLC0415
+
+    shared = [glob_regex(p) for p in shared_patterns(Path("."))]
+    raw, counts = [], {"owner": 0, "missing": 0, "outside": 0, "sizes": []}
+    for milestone, _ in HEADING.findall(text):
+        for path in sorted((plan / "briefs" / milestone).glob("*.md"), key=lambda f: f.stem):
+            body = path.read_text(encoding="utf-8")
+            size, expected = estimate_parts(body)
+            counts["sizes"].append(size)
+            found = RANGE.fullmatch(expected) if expected != UNKNOWN else None
+            if found is None and size in defaults:
+                found, counts["owner"] = RANGE.fullmatch(defaults[size]), counts["owner"] + 1
+            if found is None:
+                counts["missing"] += 1
+            mid = (Decimal(found[1]) + Decimal(found[2])) / 2 if found else Decimal(0)
+            deps = [d.strip() for line in DEPENDS.findall(body) for d in line.split(",")]
+            touches = [
+                literal(t)
+                for t in touches_of(body)
+                if not any(r.fullmatch(literal(t)) for r in shared)
+            ]
+            raw.append((f"{milestone}/{path.stem}", path.stem, mid + review, deps, touches))
+    keys: dict[str, str] = {}
+    for ident, key, *_ in raw:
+        keys.setdefault(key, ident)
+    items = []
+    for ident, _, hours, deps, touches in raw:
+        inside = {keys[d] for d in deps if d in keys}
+        counts["outside"] += sum(1 for d in deps if d and d not in keys)
+        items.append((ident, hours, frozenset(inside), touches))
+    return items, counts
+
+
+def overlaps(mine: list[str], theirs: list[str]) -> bool:
+    return any(a.startswith(b) or b.startswith(a) for a in mine for b in theirs)
+
+
+def makespan(items: list, lanes: int) -> Decimal | None:
+    """The hours a list schedule of `lanes` builders takes, or None when briefs wait for each
+    other forever (a `Depends-on` cycle)."""
+    pending, running, done, now = list(items), [], set(), Decimal(0)
+    while pending or running:
+        for item in list(pending):
+            if len(running) >= lanes:
+                break
+            _, hours, deps, touches = item
+            if deps <= done and not any(overlaps(touches, r[3]) for _, r in running):
+                running.append((now + hours, item))
+                pending.remove(item)
+        if not running:
+            return None
+        now = min(end for end, _ in running)
+        done |= {r[0] for end, r in running if end == now}
+        running = [(end, r) for end, r in running if end != now]
+    return now
+
+
+def soonest(items: list, builders: int) -> Decimal:
+    """The soonest finish with at most `builders` at once: more builders never finish later."""
+    spans = [makespan(items, lanes) for lanes in range(1, min(builders, len(items)) + 1)]
+    return min((s for s in spans if s is not None), default=Decimal(0))
+
+
+def working_days(hours: Decimal, per_day: Decimal) -> int:
+    return int((hours / per_day).to_integral_value(rounding=ROUND_CEILING))
+
+
+def nth_working_day(today: date, k: int) -> date:
+    day = today
+    while k > 0:
+        day += timedelta(days=1)
+        k -= day.weekday() < 5
+    return day
+
+
+def index_of(today: date, day: date) -> int:
+    """The working days in (today, day], or minus those in (day, today] for an earlier day."""
+    low, high, sign = (today, day, 1) if day >= today else (day, today, -1)
+    days = (high - low).days
+    return sign * sum(1 for i in range(1, days + 1) if (low + timedelta(days=i)).weekday() < 5)
+
+
+def to_move(items: list, builders: int, limit: int, per_day: Decimal) -> list[str]:
+    """The latest briefs first, each with the briefs that depend on it, until the rest fits."""
+    moved: set[str] = set()
+    for ident, *_ in reversed(items):
+        if ident in moved:
+            continue
+        grow = {ident}
+        while True:
+            more = {i for i, _, deps, _ in items if i not in grow | moved and deps & grow}
+            if not more:
+                break
+            grow |= more
+        moved |= grow
+        rest = [item for item in items if item[0] not in moved]
+        if working_days(soonest(rest, builders), per_day) <= limit:
+            break
+    return [item[0] for item in items if item[0] in moved]
+
+
+def deadline_fit(args: argparse.Namespace) -> list[str]:
+    doc, today, plan, text, settings = load(args)
+    review, per_day, deadline = args.review_hours, args.hours_per_day, args.deadline
+    items, counts = plan_briefs(plan, text, settings["default_hours"], review)
+    start, end = window_start(today, args.weeks), start_of(today + timedelta(days=1))
+    flow = doc.get("flow")
+    history = history_of(doc.get("pull_requests"), start, end)
+    weeks = throughput_of(flow.get("briefs") if isinstance(flow, dict) else None, start, end, today)
+    if not reasons_of(history, weeks, counts["sizes"], settings["calibration_min"]):
+        raise Refusal(
+            "the history is calibrated; the fit is for the uncalibrated estimate "
+            "(option: --deadline)"
+        )
+    if makespan(items, 1) is None:
+        raise Refusal("the brief files' Depends-on lines wait for each other (option: --plan)")
+    builders = ", ".join(str(n) for n in args.builders)
+    out = [f"internal estimate: deadline {deadline} for builders {builders} from {today}"]
+    out.append(
+        f"assumptions: {len(items)} briefs from the plan's brief files in milestone then key "
+        f"order; hours per brief the mid point of its Expected: range ({counts['owner']} owner "
+        f"default) plus {plain(review)} h of review; {counts['missing']} briefs without an "
+        f"estimate count 0 h; {plain(per_day)} h a working day Monday to Friday, no holidays, from "
+        f"the first working day after {today}; a brief starts only after its Depends-on and never "
+        "beside a brief whose Touches or Adds overlap (shared-mechanical paths apart); "
+        f"{counts['outside']} Depends-on outside the plan's brief files taken as done; at most N "
+        "builders at once, fewer when that finishes sooner; history and throughput not used"
+    )
+    limit = index_of(today, deadline)
+    for n in args.builders:
+        k = working_days(soonest(items, n), per_day)
+        buffer = limit - k
+        line = f"builders {n}: finish {nth_working_day(today, k)}, buffer {buffer} working days; "
+        if buffer >= 0:
+            line += "meets the deadline"
+        else:
+            line += "to meet the deadline move " + ", ".join(to_move(items, n, limit, per_day))
+        out.append(line)
+    return [*out, LIMITS]
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(list(sys.argv[1:] if argv is None else argv))
-        if args.change is None:
+        if args.deadline is not None:
+            lines = deadline_fit(args)
+        elif args.change is None:
             lines = report(args)
         else:
             change = scope_change(Path(args.plan), args.change)

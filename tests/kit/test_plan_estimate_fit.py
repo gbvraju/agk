@@ -29,7 +29,7 @@ def brief_file(plan: Path, milestone: str, key: str, expected="4-8 hours", touch
     folder = plan / "briefs" / milestone
     folder.mkdir(parents=True, exist_ok=True)
     lines = [f"# {key} for example.com", "", f'Sentence: "{key} for example.com"', ""]
-    lines += [f"Advances: REQ-001", f"Touches: {', '.join(touches or [f'src/{key}/'])}"]
+    lines += ["Advances: REQ-001", f"Touches: {', '.join(touches or [f'src/{key}/'])}"]
     lines += [f"Size: {size}"] + ([f"Expected: {expected}"] if expected else [])
     lines += [f"Milestone: {milestone}", *(f"Depends-on: {d}" for d in deps)]
     (folder / f"{key}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -224,7 +224,9 @@ def test_a_bad_fit_option_exits_2_naming_it(tmp_path, monkeypatch, capsys, args,
 def test_a_dependency_cycle_exits_2(tmp_path, monkeypatch, capsys):
     """REQ-050 AC4: briefs that wait for each other can never start."""
     briefs = [b("M1", "a", deps=["b"]), b("M1", "b", deps=["a"])]
-    code, out, err = fit(tmp_path, monkeypatch, capsys, briefs, "--deadline", FAR, "--builders", "2")
+    code, out, err = fit(
+        tmp_path, monkeypatch, capsys, briefs, "--deadline", FAR, "--builders", "2"
+    )
     assert code == 2 and "--plan" in err and out == ""
 
 
