@@ -35,7 +35,8 @@ pull request: the files, the ADR with every section and the body, so that the ow
    it raises `version` in `agk.toml`, which `merge_cleared.py` holds as a release (its rule 5). The skill still never
    commits, pushes or merges, and never sets an ADR `Accepted`.
 3. This decision replaces, for SPEC-0008, the sentences "It writes no ADR ... there is no `--draft-adr`" of rule 16 and
-   "and does not write the ADR" of rule 17; the spec's text is the reviewers' to amend (principle 6).
+   "and does not write the ADR" of rule 17. The replacement lines are proposed in
+   `docs/runs/proposed-spec-amendments-180.md`; the spec's text is the reviewers' to amend (principle 6).
 
 ## Consequences
 
@@ -48,5 +49,5 @@ ruleset, `config/` or `.claude/` change.
 
 ## Residual
 
-- 2026-11-14: SPEC-0008 rules 16 and 17 still say the upgrade writes no ADR; the amendment that brings them in line
-  with this decision needs a reserved amendment number (Q-1222-1), due 2026-11-30.
+- 2026-11-14: SPEC-0008 rules 16 and 17 say the upgrade writes no ADR until the maintainers apply amendment 180
+  (`docs/runs/proposed-spec-amendments-180.md`), due 2026-11-30.
