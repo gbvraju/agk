@@ -18,8 +18,8 @@ project copied and tested by hand. Nothing restarted the conductor itself in loc
 
 1. The kit ships two launch adapters as templates (`kit/manifest.json`, `templates` and `adopt.templates`), written once by
    `init`, `adopt` or `upgrade` when absent and then the project's own: `scripts/start-session-windows.ps1` from
-   `kit/templates/start-session-windows.ps1`, the guide's Windows Terminal example unchanged in behaviour (its default
-   branch rendered from `{{default_branch}}`; a test keeps it equal to the guide's block), and its POSIX twin
+   `kit/templates/start-session-windows.ps1`, the guide's Windows Terminal example unchanged, byte for byte (a test keeps it
+   equal to the guide's block, `origin/main` marked `# your default branch` as there), and its POSIX twin
    `scripts/start-session-local.sh` from `kit/templates/start-session-local.sh`: a worktree `../agk-<session>` per session,
    `claude` with the prompt in a GNOME Terminal tab when a desktop is there and otherwise in the background (`claude -p`,
    output in `<worktree>/.agk-session.log`), and the exit file `<worktree>/.agk-session-exit`, both kept out of git by the
@@ -52,9 +52,12 @@ comes back within 30 minutes; the conductor then restarts handed-over and silent
 machine short of memory waits instead of starting a session that would make it worse. The conductor's guard is unchanged:
 the watchdog is a command of the person's scheduler, not of the conductor's session. CI mode keeps the cloud launcher; no
 workflow changes.
+The decision of ADR-0439 and of the guide's tests that the kit installs no adapter is changed by this one: the two tests that
+said so (`tests/kit_dev/test_windows_launcher.py`, `tests/kit/test_guide_windows_adapter.py`) now say the kit installs it as
+a template, and this repository keeps its own `scripts/start-session-windows.ps1`, which a template never overwrites.
 Protected path classes changed: `scripts/agk/` (`conductor.py`, `doctor.py`), `kit/` (`manifest.json`, the two new adapter
-templates and the comment of `templates/agk.toml`), `tests/kit/` (`test_conductor_watchdog.py`, new) and `docs/adr/` (this
-file).
+templates and the comment of `templates/agk.toml`), `tests/kit/` (`test_conductor_watchdog.py`, new; `test_doctor.py`, its
+counts; `test_guide_windows_adapter.py`), `tests/kit_dev/` (`test_windows_launcher.py`) and `docs/adr/` (this file).
 
 ## Residual
 

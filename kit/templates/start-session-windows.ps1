@@ -9,7 +9,7 @@ $prompt = [Console]::In.ReadToEnd()
 $repo = (git rev-parse --show-toplevel).Trim()
 $worktree = Join-Path (Split-Path $repo -Parent) "agk-$session"
 git -C $repo fetch --quiet origin
-git -C $repo worktree add --detach $worktree origin/{{default_branch}}   # your default branch
+git -C $repo worktree add --detach $worktree origin/main   # your default branch
 if ($LASTEXITCODE -ne 0) { throw 'git worktree add failed' }
 $deadline = (Get-Date).AddSeconds(30)
 while (-not (Test-Path -LiteralPath (Join-Path $worktree '.git'))) {

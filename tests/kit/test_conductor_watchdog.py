@@ -352,10 +352,9 @@ def test_the_windows_adapter_is_the_guides_example_unchanged():
     template = (ROOT / "kit" / "templates" / "start-session-windows.ps1").read_text(
         encoding="utf-8"
     )
-    rendered = template.replace("{{default_branch}}", "main").rstrip("\n")
+    rendered = template.rstrip("\n")
     shown = guide_block(rendered.splitlines()[0])
     assert rendered.splitlines() == shown.splitlines()
-    assert "{{default_branch}}" in template
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
@@ -375,7 +374,7 @@ def test_the_posix_adapter_starts_claude_in_a_worktree_and_writes_the_exit_file(
         subprocess.run(["git", *args], cwd=work, check=True, capture_output=True)  # nosec B603 B607 - fixed argument list, no shell
     template = (ROOT / "kit" / "templates" / "start-session-local.sh").read_text(encoding="utf-8")
     script = work / "start-session-local.sh"
-    script.write_text(template.replace("{{default_branch}}", "main"), encoding="utf-8")
+    script.write_text(template, encoding="utf-8")
     fake = tmp_path / "bin"
     fake.mkdir()
     claude = fake / "claude"

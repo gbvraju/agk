@@ -50,7 +50,7 @@ def test_the_script_is_named_and_marked_verify():
     body = section()
     assert "scripts/start-session-windows.ps1" in script()
     assert "(verify" in body
-    assert "not installed by the kit" in body
+    assert "The kit installs the script `scripts/start-session-windows.ps1`" in body  # ADR-0525
 
 
 def test_the_worktree_is_made_before_the_tab_opens():
