@@ -109,6 +109,7 @@
     "scripts/agk/plan_ceremony.py",
     "scripts/agk/plan_estimate.py",
     "scripts/agk/plan_intake.py",
+    "scripts/agk/plan_sources.py",
     "scripts/agk/plan_status.py",
     "scripts/agk/playbook_format.py",
     "scripts/agk/pr_state.py",

@@ -1,0 +1,1 @@
+- A project that starts from an idea reaches a published plan: `design_import.py source --version v<n>` turns a signed-off kit version into a design source, and the new `plan_sources.py vision` and `plan_sources.py architecture` write the vision and charter and the accepted stack as planning sources; `docs/guides/planning.md` has the "From an idea" path (brief #1216, ADR-0515)
