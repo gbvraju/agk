@@ -1,0 +1,1 @@
+- In a clone that several sessions share, `session.py claim`, `next --take` and `prepush.py` refuse from the main folder (personal mode warns), the stop hook, `conductor.py sweep` and `doctor.py` report when the main folder leaves the default branch or gains untracked files, and the plan's `Adds:` check reads `origin/<default branch>` (brief #1301, ADR-0551)
