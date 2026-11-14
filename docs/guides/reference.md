@@ -164,6 +164,7 @@ only) and writes nothing; exit 0 with no stall, 3 with any, 1 when the repositor
     python3 scripts/agk/conductor.py check-verdict FILE [--pr N]
     python3 scripts/agk/conductor.py lease (--show | --take NAME | --release NAME)
     python3 scripts/agk/conductor.py watchdog [--session NAME] [--install]
+    python3 scripts/agk/conductor.py review --pr N [--start]
     python3 scripts/agk/session.py prompt --brief N [--session ID] [--follow-up TEXT]
     python3 scripts/agk/session.py slot (--take | --renew | --release | --next) SLOT
 
@@ -194,6 +195,17 @@ the order and merges nothing. It posts nothing; the guard allows the dry run alw
 on in the checkout and on the default branch, and builders are asked first (`.claude/settings.json`).
 
 `watchdog` (brief #1237, ADR-0525) is one pass, for local mode: when no live conductor holds the lease on the plan issue, `auto_start` and `launch_adapter` are set in the checkout and on the default branch, the project is not paused and the machine's free memory holds one builder (`builder_memory_gb`), it starts one conductor through the adapter (`conductor-local`, or `--session NAME`), which takes the lease itself; otherwise it prints why and starts nothing. It posts nothing. `--install` prints the one scheduler line that runs it every 30 minutes (`schtasks` on Windows, a crontab line elsewhere) and runs nothing; the person runs that line. It is not a command of the conductor's session, and its guard does not allow it. [Local mode, "Running unattended"](local-mode.md#running-unattended) says how to set it up.
+
+`review --pr N [--start]` (brief #1248, ADR-0528) puts a fresh reviewer at the gate when `[flow] reviewer_slots` is 1 or more
+(0, the default, prints `review: off` and changes nothing). It reads the pull request, its comments and the `Review:` lines on the
+conductor issue and prints one line: the head has its verdict; a slot has it, and the conductor gives no verdict until
+`review_minutes` pass (`[flow]`, else `[capacity]`, else 15); the fallback is due; no slot is free; or `review: ask Review: r<k>
+#<n> <head>` for the conductor to post. In local mode `--start` posts that line and starts one reviewer session through
+`launch_adapter`, as `launch.py` starts a builder (`auto_start` and the adapter set in the checkout and on the default branch,
+not paused, `[flow] min_free_memory_mb` held). With slots counted, `check-verdict --pr N` refuses a verdict without the slot's
+marker lines (`agent: architect-review`, `tier: strongest`, `session: r<k>`) unless it ends `(conductor fallback)`, and refuses a
+fallback before `review_minutes`, after the reviewer's verdict, or with no `Review:` line for the head. The conductor guard
+allows both forms, `--start` only with the adapter configured.
 
 The last private routines (brief #700, ADR-0330). `rerun --pr N` reads the pull request and the `pull_request` runs of its head and
 prints one line per cancelled run; `--apply` reruns them (catch log row 18). When every run of the head skipped (a push to a ready

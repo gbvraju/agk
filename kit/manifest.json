@@ -91,6 +91,7 @@
     "scripts/agk/forge.py",
     "scripts/agk/front_door.py",
     "scripts/agk/full_run.py",
+    "scripts/agk/governance_map.py",
     "scripts/agk/guard.py",
     "scripts/agk/guard_logs.py",
     "scripts/agk/guard_rules.json",

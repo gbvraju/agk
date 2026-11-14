@@ -120,6 +120,18 @@ the head it ran on:
 with each figure copied verbatim from the output. A new push makes both lines stale: run again and replace them. Mark the pull
 request ready only when they name the current head.
 
+### The stop hook between turns
+
+The stop hook runs at the end of every turn of a session, and in local mode it runs on this machine. It runs only the
+governance checks that the session's own changes need (brief #1254, ADR-0531): it reads the changed files with local git (the
+work tree and the branch's commits that are not on the default branch), runs nothing and lets the turn end at once when there
+are none, runs the checks that read those files when every one is a documentation or configuration path that
+`scripts/agk/governance_map.py` knows, and runs the whole `agk-governance` recipe of `agk.mk` for any other path. A check that
+runs still keeps the turn going while it is red. Each run prints one line, `stop check: <n> checks for <m> changed files, <s> s`
+or `stop check: no changes`. `[flow] stop_check` in `agk.toml` chooses the mode: `"changed"` (the default), `"full"` (every
+check on every turn, as before) or `"off"` (none; refused when `review_mode` is `"solo"`, which has no other gate before a
+push). The gates are unchanged: `prepush.py` before every push, CI's governance and the conductor's review still run every check.
+
 ## What the conductor checks instead of CI
 
 Step 1 of the conductor's protocol (CI first) has nothing to read in local mode, so the conductor runs governance itself:
@@ -171,7 +183,7 @@ prints the same as JSON. The conductor runs `tidy --apply` at its start and afte
 ## Running unattended
 
 In local mode nothing in the cloud starts a session: the launcher tasks of the cloud need Actions and cloud sessions. So that a
-night is not lost when a builder or the conductor dies of a crash or a memory hit while nobody is watching, set up these four
+night is not lost when a builder or the conductor dies of a crash or a memory hit while nobody is watching, set up these
 things on the machine that runs the sessions, in this order (brief #1237, ADR-0525). Each change to `agk.toml` is a protected
 change with an ADR in the same pull request.
 
@@ -208,6 +220,15 @@ change with an ADR in the same pull request.
    (add it with `crontab -e`). Each runs `git fetch` in the checkout and then the pass `(verify: a scheduled task and a cron
    job start with a short PATH; check that python, git, gh and the adapter's terminal are found, and that the task runs
    while you are signed in, which a terminal tab needs)`.
+5. **A fresh reviewer at the gate** (brief #1248, ADR-0528). Set both `experimental_reviewer = true` (top level of
+   `agk.toml`) and `reviewer_slots = 1` in the `[flow]` table, then run `/agk:upgrade` so that the `architect-review` agent
+   is installed; `doctor.py` fails `reviewer-slots` when only the second is set. For each ready head the conductor then
+   runs `python3 scripts/agk/conductor.py review --pr <n> --start`: it posts one `Review: r1 #<n> <head>` line on the
+   conductor issue and starts one reviewer session through the same adapter (`AGK_SESSION=r1`, `AGK_ROLE=reviewer`,
+   `AGK_AGENT=architect-review`), held back by `[flow] min_free_memory_mb` as builders are. That session reads only the
+   bundle, posts the verdict, releases its slot and ends, so no reviewer stays in memory between heads. Meanwhile the
+   conductor gives no verdict of its own; only when no reviewer verdict comes within `[flow] review_minutes` (15 by default)
+   does it post one ending `(conductor fallback)`. With `reviewer_slots = 0`, the default, the conductor reviews as before.
 
 ## What is lost
 

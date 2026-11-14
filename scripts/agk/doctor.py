@@ -94,6 +94,7 @@ from common import (  # noqa: E402
     PAUSED_LINE,
     ROUTER_WORKFLOW,
     CheckError,
+    experimental_enabled,
     jobs_of,
     load_config,
     minutes_warn,
@@ -439,6 +440,13 @@ CHECKS: dict[str, tuple[str, str, str, str]] = {
         "capacity: ",
         "the [capacity] table of agk.toml is refused",
         "correct the setting the refusal names in agk.toml (a protected path)",
+    ),
+    "reviewer-slots": (  # brief #1248 (ADR-0528): the reviewer agent is installed only so
+        "error",
+        "reviewer_slots is 0, or experimental_reviewer = true installs the architect-review agent",
+        "reviewer_slots is 1 or more without the architect-review agent",
+        "set experimental_reviewer = true in agk.toml beside [flow] reviewer_slots and run "
+        "/agk:upgrade (docs/guides/local-mode.md), or set reviewer_slots = 0",
     ),
     "launch-adapter": (  # brief #1237 (ADR-0525): information, never a failure of the run
         "warn",
@@ -1216,6 +1224,22 @@ ADAPTERS = {  # the kit's adapter templates (brief #1237): the file and the line
 SCRIPT_SUFFIXES = (".ps1", ".sh", ".py", ".cmd", ".bat")
 
 
+def reviewer_slots_result(root: Path) -> Result:
+    """Brief #1248 (the co-owner's note): `[flow] reviewer_slots` of 1 or more needs the
+    `architect-review` agent, which the kit installs only with `experimental_reviewer = true`."""
+    try:
+        count = session.reviewer_slots(root)
+    except CheckError:
+        return Result("fail", message=" (setting: reviewer_slots in the flow table of agk.toml)")
+    if count and not experimental_enabled(root):
+        return Result(
+            "fail",
+            message=" (settings: reviewer_slots in the flow table and experimental_reviewer in "
+            "agk.toml)",
+        )
+    return Result("ok")
+
+
 def misplaced_settings_result(config: dict) -> Result:
     """Brief #1245 (ADR-0527): each key the kit reads from a table (`config.TABLE_KEYS`) that is
     at the top level or in another table, with where it is and where it belongs; never a value."""
@@ -1721,6 +1745,7 @@ def run_checks(
     results["slot-schedule"] = slot_schedule_result(root, reads)
     results["design-ui-paths"] = design_ui_result(root, config)
     results["capacity"] = capacity_result(root, measure=api_dir is None)
+    results["reviewer-slots"] = reviewer_slots_result(root)
     results["launch-adapter"] = launch_adapter_result(root)
     results["misplaced-settings"] = misplaced_settings_result(config)
     report = []

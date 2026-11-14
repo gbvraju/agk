@@ -84,7 +84,10 @@ both in that order, the dry run always and a run that merges only when `[flow] a
 `... check-verdict <path>` (with `--pr <n>` after it, brief #854) and `... lease --show`,
 `... lease --take <name>` or `... lease
 --release <name>` too, the same regular file. Brief #781 (ADR-0366): exactly `... over --pr <n>`,
-which only reads GitHub. Every other form stays denied.
+which only reads GitHub. Brief #1248 (ADR-0528): exactly `... review --pr <n>`, which only reads,
+and `... review --pr <n> --start`, which posts one `Review:` line and starts one reviewer through
+the adapter, only when the adapter is configured as for `launch.py --adapter` above. Every other
+form stays denied.
 Without `--shadow` the conductor may also merge a pull request it cleared (brief #531, ADR-0265,
 SPEC-0039 rule 8, the one exception to principle 2 and session rule 2): exactly
 `python3 scripts/agk/merge_cleared.py --pr <n> --sha <40 lower-case hex>` (or `python`), the
@@ -545,17 +548,21 @@ def routine_allowed(words: list[str], cwd: object) -> bool:
         return own_script(words[1], cwd, CONDUCTOR_SCRIPT) and (queue or auto_merge_on_both())
     if rest not in (["sweep"], ["watch"], ["watch", "--once"]) and not routine_form(rest):
         return False
+    if rest[:1] == ["review"] and rest[3:] == ["--start"] and configured_adapter() is None:
+        return False  # brief #1248: a reviewer start needs the adapter, as `launch.py --adapter`
     return own_script(words[1], cwd, CONDUCTOR_SCRIPT)
 
 
 def routine_form(rest: list[str]) -> bool:
     """The routines of brief #700 (ADR-0330): `rerun --pr <n> [--apply]`, `check-verdict <path>`
-    and `lease (--show | --take <name> | --release <name>)`, and brief #781's `over --pr <n>`
-    (ADR-0366), exactly these forms."""
+    and `lease (--show | --take <name> | --release <name>)`, brief #781's `over --pr <n>`
+    (ADR-0366) and brief #1248's `review --pr <n> [--start]` (ADR-0528), exactly these forms."""
     if rest[:2] == ["rerun", "--pr"] and len(rest) in (3, 4) and MERGE_PR.fullmatch(rest[2]):
         return rest[3:] in ([], ["--apply"])
     if rest[:2] == ["over", "--pr"]:
         return len(rest) == 3 and bool(MERGE_PR.fullmatch(rest[2]))
+    if rest[:2] == ["review", "--pr"] and len(rest) in (3, 4) and MERGE_PR.fullmatch(rest[2]):
+        return rest[3:] in ([], ["--start"])  # brief #1248 (ADR-0528)
     if rest[:1] == ["check-verdict"]:
         path_ok = len(rest) > 1 and bool(rest[1]) and not rest[1].startswith("-")
         with_pr = len(rest) == 4 and rest[2] == "--pr" and bool(MERGE_PR.fullmatch(rest[3]))
