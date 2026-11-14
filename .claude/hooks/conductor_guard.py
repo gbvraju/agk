@@ -206,7 +206,7 @@ MERGE_SCRIPT = os.path.join("scripts", "agk", "merge_cleared.py")
 CONDUCTOR_SCRIPT = os.path.join("scripts", "agk", "conductor.py")
 ROUTE_SCRIPT = os.path.join("scripts", "agk", "route.py")
 EVIDENCE_SCRIPT = os.path.join("scripts", "agk", "evidence.py")  # brief #1281 (ADR-0542)
-EVIDENCE_FOLDER = "agk-evidence"  # the clone's shared record folder in the git common dir (ADR-0536)
+EVIDENCE_FOLDER = "agk-evidence"  # the shared record folder in the git common dir (ADR-0536)
 EVIDENCE_VALUES = {"--head": SHA, "--sample": re.compile(r"[1-9][0-9]{0,5}")}
 ROUTE_RULE = (  # brief #1263 (ADR-0534): the setting, never a value
     "conductor guard rule 6: the router runs from its workflow unless the project is in local"

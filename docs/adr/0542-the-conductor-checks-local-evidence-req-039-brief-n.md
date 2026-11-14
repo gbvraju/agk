@@ -40,3 +40,8 @@ repository and removes it (ADR-0233), so the guard's rule that the conductor wri
 `tests/kit/test_conductor_guard.py` (a) both forms allowed, (b) every other form refused, (c) the existing cases stay
 green. Protected path classes changed: `.claude/` (`.claude/hooks/conductor_guard.py`, `.claude/agents/conductor.md`),
 `config/` (`config/rule-budget.txt`) and `tests/kit/` (`tests/kit/test_conductor_guard.py`).
+
+## Residual
+
+- 2026-11-14: a session on another machine still hands the conductor a RECORD file; the guard allows it only from a
+  scratch directory or the shared folder, so the conductor copies it into a scratch directory first (its one `Write`).
