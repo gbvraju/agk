@@ -170,11 +170,11 @@ def _install(tmp_path: Path, script: str) -> Path:
     target = tmp_path / script.removesuffix(".py")
     target.mkdir()
     who = ["-c", "user.name=Example", "-c", "user.email=dev@example.com"]
-    git = ["git", *who]
-    subprocess.run([*git, "init", "-q", "-b", "main"], cwd=target, check=True)  # nosec B603 B607
     (target / "README.md").write_text("An example project, example.com.\n", encoding="utf-8")
-    subprocess.run([*git, "add", "-A"], cwd=target, check=True)  # nosec B603 B607
-    subprocess.run([*git, "commit", "-qm", "one"], cwd=target, check=True)  # nosec B603 B607
+    for step in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-qm", "one"]):
+        subprocess.run(  # nosec B603 B607 - fixed git argument list, no shell
+            ["git", *who, *step], cwd=target, check=True
+        )
     env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_BASE_REF", "AGK_BASE", "CI")}
     done = subprocess.run(  # nosec B603 - fixed argument list from sys.executable, no shell
         [sys.executable, str(KIT / "scripts" / "agk" / script), str(target), "--unreleased"],
