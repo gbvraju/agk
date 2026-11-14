@@ -48,7 +48,7 @@ records none of its choices. This ADR records them.
    and the plan is under 30 minutes old, since takes and stalls age by the clock; it then says `plan: unchanged
    since <time>` (`unchanged` in `--json`). `--record` always plans. The conductor's re-plan is
    `plan --json --if-changed`, and it reads only the plan's `Start`, `waits for` and `reads` lines;
-   `skills/review-pass/SKILL.md` keeps `plan --json`, which still works (the maintainers' answer to Q-1251-3).
+   `skills/review-pass/SKILL.md` keeps `plan --json`, which still works (the conductor's answer to Q-1251-3 (comment 6882605315)).
 
 ## Consequences
 
