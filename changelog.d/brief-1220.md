@@ -1,1 +1,0 @@
-- `plan_estimate.py --deadline D --builders 4,6,8` fits a deadline by builder count before any history exists: per count, the finish date, the buffer in working days and the latest briefs to move, from the brief files' `Expected:`, `Depends-on` and `Touches`, as an `internal estimate` with one `assumptions:` line (brief #1220, ADR-0519)
