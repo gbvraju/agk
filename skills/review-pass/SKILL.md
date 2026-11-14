@@ -107,11 +107,16 @@ and one line `#<brief> question on a brief` per waiting question, or `empty`; wi
    never by the conductor, is the record of the start, so post no `taken:` and run no `claim`. A refused adapter is reported,
    not retried: quote its `FAIL launch:` and `not started:` lines and add `NEEDS-YOU: the adapter refused <session>`; do not run
    the command again in this pass. When the plan starts nothing, run no `launch.py` at all.
-8. **The last lines.** End the pass with one line per pull request of the queue, review and skip lines alike:
+8. **Move the labels in local mode.** In local mode (`execution = "local"` in `agk.toml`, or the one local-mode record issue
+   open) the router's workflow does not run: run `python3 scripts/agk/route.py --all` once at the end of a pass that posted a
+   verdict or found a new head, and once after each `merge_cleared.py` line (brief #1263, ADR-0534). A pass whose
+   fingerprint is unchanged runs nothing, and in CI mode nothing is run: the guard refuses the command there. Its output
+   lines (`#<n> <label>`) go in the last lines, after the pull request lines.
+9. **The last lines.** End the pass with one line per pull request of the queue, review and skip lines alike:
    `#<n> <head7> <action>`, where the action is `verdict cleared (comment <id>)`, `verdict fix list (comment <id>)`,
    `verdict rejected (comment <id>)`, `skip: <why>` or `nothing posted: <why>`; then one line per request,
    `request <session> answered (comment <id>)`, and one per question on a brief, `#<brief> answered (comment <id>)`; then the `Start` and `waits for` lines of the
-   re-plan and any `started` lines; then the `NEEDS-YOU:` lines, if any. Nothing else follows, except the ready-to-paste
+   re-plan and any `started` lines; then, in local mode, the router's lines of step 8; then the `NEEDS-YOU:` lines, if any. Nothing else follows, except the ready-to-paste
    prompts of a re-plan with `auto_start` off.
 
 A pass keeps no state of its own: GitHub holds it (the heads, the labels, the comments), so the next pass reads it again.
