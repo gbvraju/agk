@@ -1633,7 +1633,9 @@ def read_one(endpoint: str, what: str) -> dict:
 
 
 def post(endpoint: str, what: str, *extra: str, method: str = "POST") -> None:
-    if session.gh(endpoint, *extra, method=method) is None:
+    """One write; a comment's body ends with `Who: AGK conductor` (brief #1289, ADR-0546)."""
+    fields = common.who_fields(endpoint, method, extra, role="conductor")
+    if session.gh(endpoint, *fields, method=method) is None:
         raise CheckError(what)
 
 

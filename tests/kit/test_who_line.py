@@ -170,7 +170,8 @@ def test_a_takeover_reads_the_same(body):
 def test_a_release_reads_the_same(body):
     """REQ-050: brief #1289 answer 5c."""
     take = note(1, "taken: s1 2026-11-14")
-    assert session.all_takes([take, note(2, body, when="2026-11-14T11:00:00Z")]) == []
+    found = session.all_takes([take, note(2, body, when="2026-11-14T11:00:00Z")])
+    assert [t[5] for t in found] == [True]  # the take is freed
 
 
 @pytest.mark.parametrize("body", marked("Tell: s1 merge main"))
@@ -208,7 +209,7 @@ def test_a_lease_reads_the_same(body):
 def test_a_verdict_reads_the_same(body):
     """REQ-050: brief #1289 answer 5c (`Verdict:` first lines)."""
     line = session.verdict_line([note(1, body)], 0, SHA, ["boss"])
-    assert line is not None and line.startswith(f"Verdict: cleared {SHA}")
+    assert line == f"verdict cleared {SHA} (comment 1)"
     assert common.verdict_problem(body) is None
 
 

@@ -212,6 +212,7 @@ from common import (  # noqa: E402
     show,
     status_flip_only,
     utf8_output,
+    who_argv,
 )
 from reviewers import (  # noqa: E402
     CONFIG,
@@ -1000,8 +1001,9 @@ def hold_list(
 
 
 def write_once(args: list[str], env: dict[str, str] | None = None) -> tuple[int, str, str]:
-    """One `gh` call that writes: never retried (SPEC-0039 rule 6)."""
-    proc = gh_api(args, env)
+    """One `gh` call that writes: never retried (SPEC-0039 rule 6). A comment's body ends with
+    `Who: AGK` (brief #1289, ADR-0546)."""
+    proc = gh_api(who_argv(args), env)
     return proc.returncode, proc.stdout, proc.stderr
 
 
