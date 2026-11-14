@@ -1360,7 +1360,8 @@ def plan_settings(root: Path) -> dict:
     plan's Project number, a positive whole number, absent by default; ADR-0506),
     `board_template` (`<owner>/<number>`, the owner's template board, absent by default; ADR-0507)
     and `max_questions` (a positive whole number, absent by default, when `plan_intake.py validate`
-    uses 60; ADR-0520).
+    uses 60; ADR-0520), and `active_milestones` (a list of milestone titles, absent by default;
+    ADR-0523).
     Any other key or value is a refusal that names the setting, never the value."""
     table = config_source(root).get(PLAN_TABLE)
     found = {**PLAN_DEFAULTS, "default_hours": {}}
