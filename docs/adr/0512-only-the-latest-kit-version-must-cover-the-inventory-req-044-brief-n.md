@@ -1,6 +1,6 @@
 # ADR-0512: Only the latest kit version must cover the inventory
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0037, ADR-0511, brief #1208, plan #661

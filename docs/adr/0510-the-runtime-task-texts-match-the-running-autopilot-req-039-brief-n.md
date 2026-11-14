@@ -1,6 +1,6 @@
 # ADR-0510: The runtime task texts match the running autopilot
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainers
 - Related: ADR-0477, ADR-0489, SPEC-0045, brief #1117, brief #1151, brief #1179, brief #1202, plan #661

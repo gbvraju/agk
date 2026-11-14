@@ -4,6 +4,14 @@ The changes to the kit of this repository, newest first. In flow mode a build pu
 
 ## Unreleased
 
+## 0.64.1 (2026-11-14)
+
+- #1203 The round-the-clock task texts match the running autopilot: the conductor text starts and restarts builders itself within the 2-hour and capacity limits, the launcher is its backup at 45 minutes, and the builder text carries the CI-red, hand-over, `Finishes:` and testing-map rules, with the kit-only rules under one line (brief #1202, ADR-0510)
+- #1205 A prototype drawn by script on one page is flagged at `/agk:design import` with a `notice:` line, the planning guide's new step 0 captures each screen and state as its own page first, and the plan is approved only after `check_plan.py --trace` has shown its `unmatched screen:` lines (brief #1204, ADR-0511)
+- #1209 Only the latest kit version of a design must cover the current inventory: a signed-off older version is no longer failed for screens added after it, and an older version that lacks a state prints `design: v<n> predates the inventory; v<m> is the version checked for coverage` (brief #1208, ADR-0512)
+- #1213 In local mode the router moves the pull request state labels from the local evidence: `route.py --all` reads a builder's `Evidence:` line on its `Report:` for the checks that never reported, never leaves a pull request at `agk:ci-running`, and needs the verdict's `Evidence check: agrees` for `agk:merge-ready` (brief #1212, ADR-0513)
+- #1215 An installed project's governance job no longer stops at its first step: `doctor.py` no longer imports the kit-only `adopt.py`; the test-walk names both read live in the new installed `scripts/agk/tree_walk.py`, and a new test checks that every installed script imports only installed modules (brief #1214, ADR-0514)
+
 ## 0.64.0 (2026-11-13)
 
 - #464 The eight small weekly-report specs (SPEC-0014, 0015, 0016, 0017, 0019, 0022, 0024, 0026) become sections of SPEC-0011 (rules 24 to 95), text unchanged except SPEC-0022 rules 3, 5 and 7, which carry SPEC-0026's amendment, and each old spec file keeps its number with one pointer line per old rule (brief #385, ADR-0244 Proposed)

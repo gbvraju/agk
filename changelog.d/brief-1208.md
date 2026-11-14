@@ -1,1 +1,0 @@
-- Only the latest kit version of a design must cover the current inventory: a signed-off older version is no longer failed for screens added after it, and an older version that lacks a state prints `design: v<n> predates the inventory; v<m> is the version checked for coverage` (brief #1208, ADR-0512)

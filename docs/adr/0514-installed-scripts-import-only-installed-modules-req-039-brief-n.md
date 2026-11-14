@@ -1,6 +1,6 @@
 # ADR-0514: Installed scripts import only installed modules
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainers
 - Related: SPEC-0006, SPEC-0044 rule 10, ADR-0052, brief #997, brief #1214, plan #661
