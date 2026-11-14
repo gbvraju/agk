@@ -142,11 +142,13 @@ def test_the_check_is_a_line_of_the_doctor_report(tmp_path):
 
 
 def uncommented_flow(text: str) -> str:
-    """The template with every commented flow key line uncommented where it stands."""
+    """The template with every commented flow key line of its flow block uncommented where it
+    stands: each `# <key> = <value>` line of a flow key under the template's `[flow]` line."""
     keys = config.TABLE_KEYS["flow"]
-    out = []
+    out, block = [], False
     for line in text.splitlines():
-        body = line[2:] if line.startswith("# ") else None
+        block = block or line == "[flow]"
+        body = line[2:] if block and line.startswith("# ") else None
         if body is not None and body.split(" = ", 1)[0] in keys and " = " in body:
             out.append(body)
         else:
