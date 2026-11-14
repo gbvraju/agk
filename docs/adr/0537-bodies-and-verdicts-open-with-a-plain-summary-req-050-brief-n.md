@@ -30,6 +30,8 @@ prepush and the conductor parse the body's fields and the verdict's lines, so th
    `merge_cleared.py` and `route.py` parse (`Verdict:`, `Final:`, `Local evidence:`, `Evidence check:`, `Checklist:`,
    `Playbook evidence:`, `Approval:`) keeps its name and form, and the verdict's section labels (`Read:`, `Rules:`,
    `Not proven:`, `Lens:`, `Gaps:`, `Checklist:`) stay, as `shadow_count.py` reads them.
+   The role file stays within its rule budget (`config/rule-budget.txt`, unchanged): two sentences it repeated from the
+   skill (the `Depends-on` order and the timed loop's guide) are cut and one is shortened.
 
 ## Consequences
 
