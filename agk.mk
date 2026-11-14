@@ -5,6 +5,8 @@ AGK_RUFF_FLAGS := --isolated --line-length 100 --target-version py311 --select E
 
 .PHONY: agk-governance agk-lint agk-test agk-project-test agk-traceability
 
+# The stop hook runs a part of this recipe chosen by scripts/agk/governance_map.py, which lists the same
+# commands in this order (a kit test compares them): change both together (brief #1254, ADR-0531).
 agk-governance:
 	$(PY) scripts/agk/check_protected_changes.py
 	$(PY) scripts/agk/check_requirements.py

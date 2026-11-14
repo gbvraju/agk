@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Stop hook: run `make -f agk.mk agk-governance` and block stopping while it is red.
+"""Stop hook: run the governance checks a session's changes need and block stopping while red.
+
+Brief #1254 (ADR-0531): with `[flow] stop_check = "changed"` (the default) the hook reads what the
+session changed with local git only (`governance_map.changed_paths`). No change: it allows the stop
+at once and runs nothing. Changes: it runs only the checks `governance_map.select` names, each with
+this Python, in the recipe's order, stopping at the first red one; a path the map does not know, or
+changes git cannot read, run the full `make -f agk.mk agk-governance` as before. `"full"` runs the
+full set on every stop; `"off"` runs nothing (refused in solo review mode, and a refused setting
+works as `"changed"`). Each run prints one `stop check: ...` line on standard error, and a blocking
+run puts it first in its reason.
 
 Contract (verify): the hook receives JSON on stdin (including `stop_hook_active` and `cwd`);
 printing {"decision": "block", "reason": ...} with exit code 0 keeps the session going.
@@ -19,7 +28,11 @@ import os
 import subprocess  # nosec B404 - fixed argument lists only, no shell
 import sys
 import tempfile
+import time
+from pathlib import Path
 from urllib.parse import quote
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "agk"))
 
 TAIL_LINES = 30
 TIMEOUT_SECONDS = 300
@@ -100,6 +113,64 @@ def body_file(root: str) -> str | None:
     return handle.name
 
 
+def settings(root: str) -> tuple[str, str, str | None]:
+    """(mode, default branch, refusal line or None); the default mode when anything is wrong."""
+    try:
+        import config  # the installed module beside agk.mk's scripts
+
+        cfg = config.load_config(Path(root))
+        branch = cfg.get("default_branch") or "main"
+    except Exception:  # noqa: BLE001 - a broken config must never stop the hook
+        return "changed", "main", None
+    try:
+        return config.stop_check_mode(Path(root)), str(branch), None
+    except config.CheckError as err:
+        return "changed", str(branch), f"stop check: {err}; working as changed"
+
+
+def selection(root: str, branch: str) -> tuple[list[tuple[str, ...]] | None, int | None, int]:
+    """(commands or None for the full set, number of changed files or None, size of the full set)."""
+    try:
+        import governance_map
+    except Exception:  # noqa: BLE001 - without the map the hook runs the full set, as before
+        return None, None, 0
+    full = len(governance_map.CHECKS)
+    paths = governance_map.changed_paths(Path(root), branch)
+    if paths is None:
+        return None, None, full
+    return governance_map.select(paths), len(paths), full
+
+
+def run_commands(root: str, env: dict, commands: list[tuple[str, ...]] | None):
+    """(return code, output, failing command) of the full recipe (None) or of each command."""
+    if commands is None:
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
+            ["make", "-f", "agk.mk", "agk-governance"],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=TIMEOUT_SECONDS,
+        )
+        return proc.returncode, proc.stdout + proc.stderr, "make -f agk.mk agk-governance"
+    deadline = time.monotonic() + TIMEOUT_SECONDS
+    for argv in commands:
+        left = max(1.0, deadline - time.monotonic())
+        proc = subprocess.run(  # nosec B603 - fixed argument list from the map, no shell
+            [sys.executable, *argv],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=left,
+        )
+        if proc.returncode != 0:
+            return proc.returncode, proc.stdout + proc.stderr, " ".join(argv)
+    return 0, "", ""
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -110,34 +181,46 @@ def main() -> int:
     if payload.get("stop_hook_active"):
         return 0
     root = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd()
+    mode, branch, refusal = settings(root)
+    if refusal:
+        print(refusal, file=sys.stderr)
+    if mode == "off":
+        print("stop check: off", file=sys.stderr)
+        return 0
+    commands, changed, full = selection(root, branch)
+    if mode == "full":
+        commands, changed = None, None
+    if commands == []:
+        print("stop check: no changes", file=sys.stderr)
+        return 0
+    began = time.monotonic()
     env = dict(os.environ)
     temp = None if env.get("AGK_PR_BODY") else body_file(root)
     if temp:
         env["AGK_PR_BODY"] = temp
     try:
-        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["make", "-f", "agk.mk", "agk-governance"],
-            cwd=root,
-            env=env,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=TIMEOUT_SECONDS,
-        )
+        code, output, failed = run_commands(root, env, commands)
     except (OSError, subprocess.TimeoutExpired):
-        return block(
-            "`make -f agk.mk agk-governance` could not run to completion; fix the environment."
-        )
+        return block("the governance checks could not run to completion; fix the environment.")
     finally:
         if temp:
             try:
                 os.unlink(temp)
             except OSError:
                 pass
-    if proc.returncode == 0:
+    count = len(commands) if commands is not None else full
+    seconds = f"{time.monotonic() - began:.1f} s"
+    if mode == "full":
+        line = f"stop check: {count} checks (full set), {seconds}"
+    elif changed is None:
+        line = f"stop check: {count} checks (changes not read), {seconds}"
+    else:
+        line = f"stop check: {count} checks for {changed} changed files, {seconds}"
+    print(line, file=sys.stderr)
+    if code == 0:
         return 0
-    tail = "\n".join((proc.stdout + proc.stderr).splitlines()[-TAIL_LINES:])
-    return block(f"`make -f agk.mk agk-governance` is red. Fix it before stopping.\n{tail}")
+    tail = "\n".join(output.splitlines()[-TAIL_LINES:])
+    return block(f"{line}\n`{failed}` is red. Fix it before stopping.\n{tail}")
 
 
 if __name__ == "__main__":

@@ -37,9 +37,10 @@ and 4 min 48 s for the conductor, which changes no file at all. Governance still
    `"off"` when `review_mode` is `"solo"`, which has no other gate before a push, naming `setting:
    flow.stop_check` and never the value; the hook then prints the refusal and works as `"changed"`.
 4. Each run prints one line on standard error: `stop check: <n> checks for <m> changed files, <s> s`,
-   `stop check: no changes`, `stop check: off`, or `stop check: <n> checks (changes not read), <s> s`; a
-   blocking run puts the line first in its reason. Standard error, not standard output, because Claude Code
-   reads a Stop hook's standard output as its JSON decision (verify).
+   `stop check: no changes`, `stop check: off`, `stop check: <n> checks (full set), <s> s` in `"full"` mode,
+   or `stop check: <n> checks (changes not read), <s> s`; a blocking run puts the line first in its reason.
+   Standard error, not standard output, because Claude Code reads a Stop hook's standard output as its JSON
+   decision (verify).
 
 ## Consequences
 

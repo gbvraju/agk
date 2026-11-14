@@ -41,6 +41,10 @@ a smaller one; None without the table. Any other shape is refused, naming `setti
 rule 4, brief #1121, ADR-0479): the most code paths a brief of `Size: S` and of `Size: M` may name,
 `{ S = 3, M = 6 }` when unset. A table of other keys, or a value that is not a whole number of 1 or
 more, is refused naming `setting: flow.brief_code_paths`, never the value.
+
+`stop_check_mode(root)` reads `stop_check` of the `[flow]` table (brief #1254, ADR-0531): `changed`
+(the default), `full` or `off`, the mode of the stop hook. Another value, or `off` while
+`review_mode` is `solo`, is refused naming `setting: flow.stop_check`, never the value.
 """
 
 from __future__ import annotations
@@ -500,6 +504,31 @@ def brief_code_paths(root: Path) -> dict[str, int]:
     return BRIEF_CODE_PATHS | value
 
 
+# --- the stop hook's mode (brief #1254, ADR-0531) -------------------------------------------------
+
+STOP_CHECK_MODES = ("changed", "full", "off")
+
+
+class StopCheckSettingError(CheckError):
+    """`[flow] stop_check` is refused, naming the setting and never the value."""
+
+
+def stop_check_mode(root: Path) -> str:
+    """The stop hook's mode: `changed` when unset; `off` is refused in solo review mode."""
+    refused = StopCheckSettingError("the setting is refused (setting: flow.stop_check)")
+    try:
+        source = config_source(root)
+    except (OSError, ValueError):
+        raise refused from None
+    flow = source.get("flow", {})
+    value = flow.get("stop_check", "changed") if isinstance(flow, dict) else None
+    if value not in STOP_CHECK_MODES:
+        raise refused
+    if value == "off" and source.get("review_mode") == "solo":
+        raise refused
+    return value
+
+
 # --- the [capacity] table (SPEC-0034 rule 1, brief #842 build (b), ADR-0409) ---------------
 
 CAPACITY_PROFILES = ("auto", "full", "balanced", "small", "fixed")
@@ -583,6 +612,7 @@ TABLE_KEYS: dict[str, frozenset[str]] = {
             "stale_commits",
             "stall_hours",
             "stall_minutes",
+            "stop_check",
         }
     ),
     "testing": frozenset(
