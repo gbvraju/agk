@@ -1357,8 +1357,10 @@ def plan_settings(root: Path) -> dict:
     """The `[plan]` table of agk.toml (SPEC-0043 rules 12, 14, 23 and 25, ADR-0465): only
     `iteration_days` (1 to 30, 10 by default), `calibration_min` (a positive whole number, 10)
     and `default_hours` (a table of `S`, `M` and `L` to `"<low>-<high>"`, empty), and `board` (the
-    plan's Project number, a positive whole number, absent by default; ADR-0506) and
-    `board_template` (`<owner>/<number>`, the owner's template board, absent by default; ADR-0507).
+    plan's Project number, a positive whole number, absent by default; ADR-0506),
+    `board_template` (`<owner>/<number>`, the owner's template board, absent by default; ADR-0507)
+    and `max_questions` (a positive whole number, absent by default, when `plan_intake.py validate`
+    uses 60; ADR-0520).
     Any other key or value is a refusal that names the setting, never the value."""
     table = config_source(root).get(PLAN_TABLE)
     found = {**PLAN_DEFAULTS, "default_hours": {}}
@@ -1375,9 +1377,9 @@ def plan_settings(root: Path) -> dict:
                 )
             found[key] = value
             continue
-        if key == "board":
+        if key in ("board", "max_questions"):  # max_questions: brief #1221 (ADR-0520)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-                raise CheckError("board must be a positive whole number (setting: [plan] board)")
+                raise CheckError(f"{key} must be a positive whole number (setting: [plan] {key})")
             found[key] = value
             continue
         if key == "active_milestones":  # brief #1232, ADR-0523: the milestones builders start

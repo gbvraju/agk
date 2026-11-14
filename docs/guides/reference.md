@@ -619,7 +619,7 @@ before pixels are reported as drift (0.01 by default; it only reports, never fai
 
     python3 scripts/agk/plan_intake.py validate --proposals FILE [--root DIR]
     python3 scripts/agk/plan_intake.py states [--root DIR]
-    python3 scripts/agk/plan_intake.py render --proposals FILE [--root DIR]
+    python3 scripts/agk/plan_intake.py render --proposals FILE [--again] [--root DIR]
     python3 scripts/agk/plan_intake.py publish --comments FILE --head SHA [--numbers FILE] [--root DIR]
 
 Validates the plan's proposals file: `validate` prints `ok proposals` or one line per problem naming the rule and the item's
@@ -630,7 +630,10 @@ the conflicts and the open questions, and writes once, as new files only, the sc
 requirements, one Draft spec per feature area and one brief per brief under `docs/plan/` (rule 7). `publish` exits 2 without
 `Approve: plan <--head>` by an account of `spec_approvers` in the saved comments, and prints one `gh api` command per
 milestone and per brief, briefs in dependency order, each withheld until `--numbers` names its milestone and its
-dependences; it runs none (rules 8 and 25). Once nothing is withheld its last line ends `; next: /agk:board --yes`.
+dependences; it runs none (rules 8 and 25). Questions of one kind about one feature area are one question for business, a
+cross-reference gap is a `Note:` of its requirement, and `validate` warns above `[plan] max_questions` (60 by default).
+`render --again` rewrites only the files the last render wrote whose bytes are unchanged since (the digests in
+`docs/plan/render-digests.json`), creates new ones and names each edited file it leaves (ADR-0520). Once nothing is withheld its last line ends `; next: /agk:board --yes`.
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agk/board.py" [--title TEXT] [--owner LOGIN] [--project N] [--yes]
         [--template OWNER/NUMBER]
@@ -648,11 +651,18 @@ there`. A missing scope prints
 `gh auth refresh -s project` (exit 2); in a cloud session it prints one `board: needs a machine ...` line and exits 0.
 
     python3 scripts/agk/design_import.py source --version i<n> --slug <slug> [--root DIR]
+    python3 scripts/agk/design_import.py source --version v<n> --slug <slug> [--root DIR]
+    python3 scripts/agk/plan_sources.py vision|architecture [--root DIR]
     python3 scripts/agk/check_plan.py [--root DIR] [--trace] [--facts FILE] [--numbers FILE]
 
 `design_import.py source` writes once `docs/sources/<slug>-prototype-i<n>.md`, a `Kind: design` source with one
 `## <screen>/<state>` heading per mapped row of an imported version and the page's visible text under it (SPEC-0043 rule
-2a); it refuses a version whose import or map check fails and an existing file. `check_plan.py` is a governance check: the
+2a); it refuses a version whose import or map check fails and an existing file. With `--version v<n>` it writes
+`docs/sources/<slug>-prototype-v<n>.md` from a kit version, one heading per page `<screen>--<state>.html`, and refuses a
+version that is not signed off with the digest its folder has now (brief #1216, ADR-0515). `plan_sources.py vision`
+writes once `docs/sources/vision.md` (`Kind: charter`) from `constitution/vision.md` and the Accepted charter ADR, and
+`plan_sources.py architecture` writes once `docs/sources/architecture.md` (`Kind: other`) from the Accepted stack ADR,
+each text unchanged; each refuses an ADR that is not Accepted, a missing file and an existing target. `check_plan.py` is a governance check: the
 source headers and design links (rules 1 and 2), the plan's checks (rule 10) and the coverage line `ok plan: <a> of <b> ...`
 (rule 11); `--trace` first prints the matrix from source location to requirement, spec rule, brief, pull request and test
 (rule 9). The whole path, with a recorded walk, is in `docs/guides/planning.md`.
