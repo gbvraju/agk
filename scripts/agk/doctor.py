@@ -97,6 +97,7 @@ from common import (  # noqa: E402
     experimental_enabled,
     jobs_of,
     load_config,
+    main_folder_line,
     minutes_warn,
     paused,
     personal_table,
@@ -1262,6 +1263,14 @@ def misplaced_settings_result(config: dict) -> Result:
     return Result("fail", message="; ".join(parts))
 
 
+def main_folder_lines(root: Path) -> list[str]:
+    """`MAIN-FOLDER: on <branch>, <n> untracked` when the main folder of a clone that several
+    sessions share is off the default branch or holds untracked files (brief #1301, ADR-0551);
+    information, never a failure of the run; nothing outside git."""
+    line = main_folder_line(root)
+    return [f"MAIN-FOLDER: {line}"] if line else []
+
+
 def launch_adapter_result(root: Path, platform: str | None = None) -> Result:
     """With `auto_start` on, the kit's adapter for the platform and the `launch_adapter` line,
     when that setting is unset or a script file it names is missing (brief #1237, ADR-0525).
@@ -2248,6 +2257,7 @@ def main(argv: list[str] | None = None) -> int:
             + frontend_lines(root.resolve())
             + outside_test_dirs_lines(root.resolve())
             + unmapped_lines(root.resolve())
+            + main_folder_lines(root.resolve())
         )
         deprecation = deprecation_lines(root.resolve())
         scan = secret_scan_line()

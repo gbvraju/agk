@@ -59,8 +59,11 @@ run's set `selected (full left to CI)`, so the evidence check and the verdict se
 suite did not run here. CI's runs are not changed: `project_tests.py` never calls `left_to_ci`.
 
 One line per step, `prepush: <step> ok|FAIL|skipped (<s>s)`. Exit 0 when no step failed, 1 when
-one did, 2 usage, an unreadable body file or a base that does not resolve. It installs nothing but
-the `tools_file` of brief #1021 when that is set, and changes no file other than the record.
+one did, 2 usage, an unreadable body file, a base that does not resolve, or a run from the main
+folder of a clone that several sessions share off the default branch (brief #1301, ADR-0551:
+`prepush: refused: this is the main folder ...`, naming the setting; personal mode only warns).
+It installs nothing but the `tools_file` of brief #1021 when that is set, and changes no file
+other than the record.
 
 Brief #507 (ADR-0256): when `make lint` exits non-zero and its output shows that a command could not
 be started (`CreateProcess(NULL, <cmd> ...) failed`, `<cmd>: command not found`, `<cmd>: not found`,
@@ -142,6 +145,7 @@ from common import (
     final_records,
     git,
     load_config,
+    main_folder_refusal,
     merge_base,
     proof_areas,
     proof_timeout,
@@ -1171,6 +1175,12 @@ def main(argv: list[str] | None = None) -> int:
         print("prepush: not inside a git work tree (path class: root)")
         return 2
     root = Path(top.strip())
+    # Brief #1301 (ADR-0551): no push from the main folder of a shared clone but on the default
+    # branch; personal mode only warns.
+    if (found := main_folder_refusal(root, push=True)) is not None:
+        print(f"prepush: {found[0]}")
+        if found[1]:
+            return 2
     body = Path(options["body"]) if options["body"] else None
     if body is not None and not body.is_file():
         print("prepush: the body file cannot be read (option: --body)")

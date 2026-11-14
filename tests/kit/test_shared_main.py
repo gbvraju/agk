@@ -107,7 +107,7 @@ def test_local_claim_allowed_in_own_worktree(tmp_path, monkeypatch):
 
 def test_next_take_refused_in_main(tmp_path, monkeypatch, capsys):
     """REQ-039: brief #1301 answer 1: `next --take` is refused, `next` alone only shows."""
-    root = make_clone(tmp_path, "[flow]\nlaunch_adapter = \"bash scripts/start-session-local.sh\"\n")
+    root = make_clone(tmp_path, '[flow]\nlaunch_adapter = "bash scripts/start-session-local.sh"\n')
     no_network(monkeypatch)
     assert session.next_brief(root, "s1", True) == 1
     out = capsys.readouterr().out
@@ -140,7 +140,7 @@ def test_ci_mode_refuses_nothing(tmp_path, monkeypatch):
 def test_cloud_clone_with_adapter_refuses_nothing(tmp_path, monkeypatch):
     """REQ-039: brief #1301 mode check CI (Q-1301-1): a cloud session's clone is its own, so the
     adapter setting alone does not make it shared there (CLAUDE_CODE_REMOTE, verify)."""
-    root = make_clone(tmp_path, "[flow]\nlaunch_adapter = \"bash scripts/start-session-local.sh\"\n")
+    root = make_clone(tmp_path, '[flow]\nlaunch_adapter = "bash scripts/start-session-local.sh"\n')
     monkeypatch.setenv("CLAUDE_CODE_REMOTE", "true")
     no_network(monkeypatch)
     assert common.shared_main(root) is False
@@ -166,7 +166,7 @@ def test_personal_mode_warns_only(tmp_path, monkeypatch, capsys):
 
 
 def test_prepush_refused_off_default_branch(tmp_path, monkeypatch, capsys):
-    """REQ-039: brief #1301 answer 1: prepush refuses from the main folder off the default branch."""
+    """REQ-039: brief #1301 answer 1: prepush refuses from the main folder off its branch."""
     root = make_clone(tmp_path, 'execution = "local"\n')
     git(root, "checkout", "-q", "-b", "claude/brief-5")
     monkeypatch.chdir(root)

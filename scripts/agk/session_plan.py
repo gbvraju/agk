@@ -281,9 +281,22 @@ def is_prose(path: str, rules: list[str]) -> bool:
     return found
 
 
-def tree_files(root) -> list[str]:
-    """The files under ROOT: git's list in a repository, else every file (`.git` is never one)."""
+def tree_files(root, ref: str | None = None) -> list[str]:
+    """The files under ROOT: git's list in a repository, else every file (`.git` is never one).
+    With REF (the planner's `origin/<default branch>`, brief #1301), the files of that commit,
+    never the working files of a folder that may be on another branch; a REF git cannot read
+    falls back to the checkout's list."""
     base = Path(root)
+    if ref is not None and (base / ".git").exists():
+        proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell, read only
+            ["git", "ls-tree", "-r", "-z", "--name-only", f"{ref}^{{commit}}"],
+            cwd=base,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if proc.returncode == 0:
+            return [p for p in proc.stdout.split("\0") if p]
     if (base / ".git").exists():
         return [p for p in common.git(base, "ls-files", "-z").split("\0") if p]
     return sorted(
@@ -293,11 +306,12 @@ def tree_files(root) -> list[str]:
     )
 
 
-def touch_rules(root) -> dict:
-    """What `touch_problems` reads once per run; a bad setting is refused by its name."""
+def touch_rules(root, ref: str | None = None) -> dict:
+    """What `touch_problems` reads once per run; a bad setting is refused by its name. With REF
+    the files are those of that commit (`tree_files`)."""
     held_not = exempt(root)
     shared = [glob_regex(p) for p in shared_patterns(root)]
-    files = tree_files(root)
+    files = tree_files(root, ref)
     return {
         "root": root,
         "limit": flow_int(root, "max_touch_glob", MAX_TOUCH_GLOB, 4),
