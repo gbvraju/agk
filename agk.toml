@@ -189,7 +189,7 @@ tests = [
   "tests/kit/test_check_adrs.py", "tests/kit/test_conductor_guard.py", "tests/kit/test_core_audit.py",
   "tests/kit/test_final_accepts.py", "tests/kit/test_personal_state.py", "tests/kit/test_review_context.py",
   "tests/kit/test_rule3a_record_comments.py", "tests/kit_dev/test_doctor_wiring.py", "tests/kit_dev/test_intake.py",
-  "tests/kit_dev/test_new_spec.py", "tests/kit_dev/test_release_check.py",
+  "tests/kit_dev/test_new_spec.py", "tests/kit_dev/test_release_check.py", "tests/kit/test_upgrade_adr.py",
 ]
 [[testing.map]]
 code = "scripts/agk/check_brief.py"
@@ -251,7 +251,8 @@ tests = [
   "tests/kit/test_decision_files.py", "tests/kit/test_draft_and_progress.py", "tests/kit/test_evidence.py",
   "tests/kit/test_launch_kinds.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_pr_bodies.py",
   "tests/kit/test_pr_body_behaviour.py", "tests/kit/test_pr_summary.py", "tests/kit/test_prepush_record.py",
-  "tests/kit/test_review_context.py", "tests/kit_dev/test_intake.py", "tests/kit_dev/test_local_mode_guide.py",
+  "tests/kit/test_review_context.py", "tests/kit/test_upgrade_adr.py", "tests/kit_dev/test_intake.py",
+  "tests/kit_dev/test_local_mode_guide.py",
   "tests/kit_dev/test_pilot_gaps_first_pr.py", "tests/kit_dev/test_playbook.py",
   "tests/kit_dev/test_pr_bodies_kit.py",
 ]
@@ -572,7 +573,7 @@ tests = [
   "tests/kit/test_conductor_guard.py", "tests/kit/test_conductor_guard_commands.py",
   "tests/kit/test_conductor_merge_queue.py", "tests/kit/test_conductor_playbook_evidence.py",
   "tests/kit/test_final_accepts.py", "tests/kit/test_launch_kinds.py", "tests/kit/test_merge_cleared_after.py",
-  "tests/kit/test_merge_cleared_before.py", "tests/kit/test_merge_cleared_ci.py",
+  "tests/kit/test_merge_cleared_before.py", "tests/kit/test_merge_cleared_ci.py", "tests/kit/test_upgrade_adr.py",
   "tests/kit/test_merge_cleared_close_brief.py",
   "tests/kit/test_merge_cleared_merger.py", "tests/kit/test_merge_cleared_owner_ask.py",
   "tests/kit/test_merge_cleared_pre_tests.py",
@@ -870,7 +871,7 @@ tests = ["tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_uninstall.py"
 code = "scripts/agk/upgrade.py"
 tests = [
   "tests/kit/test_project_mk_protected.py", "tests/kit/test_reviewers_approvers_install.py",
-  "tests/kit/test_route_triggers.py", "tests/kit/test_upgrade_project_mk.py",
+  "tests/kit/test_route_triggers.py", "tests/kit/test_upgrade_adr.py", "tests/kit/test_upgrade_project_mk.py",
   "tests/kit_dev/test_experimental_reviewer.py",
   "tests/kit_dev/test_kit_hashes.py", "tests/kit_dev/test_kit_manifest.py", "tests/kit_dev/test_pr_bodies_kit.py",
   "tests/kit_dev/test_pyproject_installs_as_nothing.py", "tests/kit_dev/test_reviewer_wiring.py",
