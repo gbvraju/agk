@@ -364,9 +364,14 @@ def kit_version(tmp_path: Path, sign: bool = True) -> Path:
     (folder / "orders--error.html").write_text(ERROR, encoding="utf-8")
     (folder / "signin--default.html").write_text(SIGNIN, encoding="utf-8")
     (folder / "screenshots" / "reflow.json").write_text("{}\n", encoding="utf-8")
-    rows = "# Design sign-offs\n\n| kind | version | digest | head | date | comment |\n|---|---|---|---|---|---|\n"
+    rows = (
+        "# Design sign-offs\n\n| kind | version | digest | head | date | comment |\n"
+        "|---|---|---|---|---|---|\n"
+    )
     if sign:
-        rows += f"| design | v1 | {ds.version_digest(root, 'v1')} | {HEAD} | 2026-11-10 | {LINK} |\n"
+        rows += (
+            f"| design | v1 | {ds.version_digest(root, 'v1')} | {HEAD} | 2026-11-10 | {LINK} |\n"
+        )
     (root / ds.SIGNOFFS).write_text(rows, encoding="utf-8")
     return root
 

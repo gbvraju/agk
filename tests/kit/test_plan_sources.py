@@ -327,7 +327,9 @@ def idea_project(tmp_path: Path, pages: dict[str, str] = PAGES) -> Path:
     for command in ("vision", "architecture"):
         proc = sources(root, command)
         assert proc.returncode == 0, proc.stdout + proc.stderr
-    proc = run(str(DESIGN_IMPORT), "source", "--version", "v1", "--slug", "shop", "--root", str(root))
+    proc = run(
+        str(DESIGN_IMPORT), "source", "--version", "v1", "--slug", "shop", "--root", str(root)
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     return root
 
