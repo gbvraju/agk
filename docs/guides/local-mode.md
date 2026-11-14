@@ -260,7 +260,7 @@ Local mode uses the same three `[flow]` settings, labels and comments as CI mode
 For example, `owner_rest_hours = "20:00-08:00"` and `owner_utc_offset = "+05:30"`. Then it is labelled `agk:parked`, its
 builder hands over and moves on, and the parked pull request no longer takes a builder slot. When the owner answers, the
 next `conductor.py sweep` unparks it and prints its `resume --pr <n>` command, before new briefs. A bad value is refused
-with a line naming the setting. In personal mode there are no pull requests: a brief's question is printed and nothing is
+with a line naming the setting. In personal mode there are no pull requests, so nothing is
 parked.
 
 ## What is lost

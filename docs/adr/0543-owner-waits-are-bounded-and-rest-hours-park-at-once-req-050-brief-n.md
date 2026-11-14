@@ -48,8 +48,7 @@ configurable number of minutes, or at once during the owner's configured rest ho
    spoken since the `Unparked-by:` first, before stalled pull requests and new briefs.
 7. `tests/kit/test_owner_wait.py` joins the test map of `scripts/agk/session.py` in `agk.toml`, and the mypy
    baseline of `session.py` (`config/mypy-baseline.txt`) goes down by the one `arg-type` error the change removes.
-8. Personal mode has no pull requests: the wait applies only to a brief's question, which is printed, and
-   nothing is parked.
+8. Personal mode has no pull requests, so nothing is parked there and no code of this change runs in it.
 
 ## Consequences
 

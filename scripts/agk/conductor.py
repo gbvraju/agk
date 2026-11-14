@@ -1060,8 +1060,12 @@ def sweep(root) -> int:
     lines += slot_lines(root, repo, issues, every, now)
     lines += stall_report(root, repo)
     lines += unacted_lines(root, repo, now, issues, pulls)
-    waits = session.owner_wait_settings(Path(root))  # a bad value is refused naming the setting
-    lines += owner_lines(root, repo, pulls, waits, authors, approvers, now)  # before new briefs
+    try:  # a bad value is refused in one line naming the setting; every other line still prints
+        waits = session.owner_wait_settings(Path(root))
+    except CheckError as refused:
+        lines.append(f"owner waits: {refused}")
+    else:
+        lines += owner_lines(root, repo, pulls, waits, authors, approvers, now)  # before new briefs
     lines += start_lines(root, repo, now)  # ready work after a review or a merge (ADR-0500)
     print("\n".join(lines))
     return 0

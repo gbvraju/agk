@@ -308,6 +308,42 @@ def test_1282f_watch_refuses_a_bad_value_naming_the_setting(proj, stub):
     assert "late" not in out.stdout + out.stderr
 
 
+def test_1282f_sweep_refuses_a_bad_value_in_one_line_and_prints_the_rest(
+    monkeypatch, tmp_path, capsys
+):
+    """REQ-050: brief #1282 answer 1 and test (f), from `conductor.py sweep`: one bad owner-wait
+    value gives one refusal line naming the setting, parks nothing, and every other line stays."""
+    (tmp_path / "agk.toml").write_text('[flow]\nowner_rest_hours = "8pm-8am"\n', encoding="utf-8")
+    waiting = {**pull(), "number": 7, "draft": True, "created_at": iso()}
+    writes: list = []
+
+    def read(endpoint, what):
+        if "/pulls" in endpoint:
+            return [waiting]
+        return [asked(90, datetime.now(UTC))] if "/issues/7/" in endpoint else []
+
+    monkeypatch.setattr(conductor.session, "repo_name", lambda root: REPO)
+    monkeypatch.setattr(conductor.session, "flow_int", lambda *a: 60)
+    monkeypatch.setattr(conductor, "verdict_authors", lambda root: ["boss"])
+    monkeypatch.setattr(conductor, "spec_approvers", lambda root: ["owner"])
+    monkeypatch.setattr(conductor, "read", read)
+    monkeypatch.setattr(
+        conductor.session, "gh", lambda endpoint, *a, **k: {"default_branch": "main"}
+    )
+    monkeypatch.setattr(conductor.session, "park_pull", lambda *a: writes.append(a) or True)
+    for name in ("proof_lines", "slot_lines", "unacted_lines", "start_lines"):
+        monkeypatch.setattr(conductor, name, lambda *a: [])
+    monkeypatch.setattr(conductor.caps, "over_lines", lambda *a: [])
+    monkeypatch.setattr(conductor, "branch_line", lambda *a: "main: success at a1b2c3d")
+    monkeypatch.setattr(conductor, "stall_report", lambda root, repo: [])
+    assert conductor.sweep(tmp_path) == 0
+    out = capsys.readouterr().out.strip().splitlines()
+    assert "main: success at a1b2c3d" in out and out[0].startswith("#7 ")
+    refusals = [line for line in out if line.startswith("owner waits:")]
+    assert len(refusals) == 1 and "setting: flow.owner_rest_hours" in refusals[0]
+    assert "8pm" not in "\n".join(out) and writes == []
+
+
 def test_1282g_keys_under_a_commented_flow_header_are_not_read(tmp_path):
     """REQ-050: brief #1282 answer 1 and test (g) (#1245)."""
     text = '# [flow]\nowner_wait_minutes = 0\nowner_rest_hours = "late"\n'
