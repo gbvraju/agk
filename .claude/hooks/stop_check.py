@@ -129,7 +129,7 @@ def settings(root: str) -> tuple[str, str, str | None]:
 
 
 def selection(root: str, branch: str) -> tuple[list[tuple[str, ...]] | None, int | None, int]:
-    """(commands or None for the full set, number of changed files or None, size of the full set)."""
+    """(commands, None for the full set; changed files, None when unread; size of the full set)."""
     try:
         import governance_map
     except Exception:  # noqa: BLE001 - without the map the hook runs the full set, as before
