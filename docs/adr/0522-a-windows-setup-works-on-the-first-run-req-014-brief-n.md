@@ -43,7 +43,8 @@ told to find admin rights; and an adopted project's CODEOWNERS names no owner no
 `no-admin` for a refused ruleset read and a missing merge key; this ADR narrows that to a known non-admin, as brief
 #263 did with `forbidden`, and adds the reason class `admin-unknown` to rule 3's list; the spec text is not amended here
 (Q-1223-1). Protected path classes changed: `scripts/agk/` (`doctor.py`, `reviewers.py`), `tests/kit/`
-(`test_doctor_windows.py`, new) and `docs/adr/` (this file).
+(`test_doctor_windows.py`, new), `agk.toml` (the new test file added to the `[[testing.map]]` entries of
+`scripts/agk/doctor.py` and `scripts/agk/reviewers.py`, nothing else) and `docs/adr/` (this file).
 
 ## Residual
 

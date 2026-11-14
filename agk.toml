@@ -412,7 +412,7 @@ code = "scripts/agk/doctor.py"
 tests = [
   "tests/kit/test_capacity_profiles.py", "tests/kit/test_check_playbooks.py", "tests/kit/test_core_contradictions.py",
   "tests/kit/test_delivery_declaration.py", "tests/kit/test_doctor.py", "tests/kit/test_doctor_ci.py",
-  "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py", "tests/kit/test_model_routes.py",
+  "tests/kit/test_doctor_windows.py", "tests/kit/test_doctor_kit_behind.py", "tests/kit/test_doctor_no_kit.py", "tests/kit/test_model_routes.py",
   "tests/kit/test_engines.py", "tests/kit/test_merge_cleared_queue.py", "tests/kit/test_merge_cleared_run.py",
   "tests/kit/test_merge_cleared_verdict.py", "tests/kit/test_pause.py", "tests/kit/test_pilot_gaps.py", "tests/kit/test_route_triggers.py",
   "tests/kit/test_run_folders.py", "tests/kit/test_session_rules.py", "tests/kit/test_session_tidy.py",
@@ -755,7 +755,7 @@ tests = [
   "tests/kit/test_reviewers_approvers_install.py", "tests/kit/test_solo_mode.py", "tests/kit/test_spec_approvers.py",
   "tests/kit/test_verdict_authors.py", "tests/kit/test_windows_install.py", "tests/kit_dev/test_adopt.py",
   "tests/kit_dev/test_final_clearance_design.py", "tests/kit_dev/test_init.py", "tests/kit_dev/test_upgrade.py",
-  "tests/kit/test_design_signoff.py", "tests/kit/test_check_plan_scope.py",
+  "tests/kit/test_design_signoff.py", "tests/kit/test_check_plan_scope.py", "tests/kit/test_doctor_windows.py",
 ]
 [[testing.map]]
 code = "scripts/agk/route.py"
