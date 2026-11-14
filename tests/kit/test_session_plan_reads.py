@@ -253,3 +253,154 @@ def test_the_checklist_reports_the_last_plans_reads(tmp_path):
     saved.write_text(json.dumps({"calls": 12, "cached": 0, "seconds": 1.5}), encoding="utf-8")
     assert checklist.plan_reads(saved) == "plan reads 12 calls (0 from cache), 1.5 s"
     assert checklist.plan_reads(tmp_path / "missing.json") is None
+
+
+# --- build (b): the cache with conditional requests, the waits and the roll-over ----------------
+# Brief #1251 build (b), answers 3, 3b, 3c and 6 (Covered-by: ADR-0529). The double below answers
+# as GitHub does: each body carries an ETag, a request whose `If-None-Match` names it gets a 304
+# with no body (which GitHub does not count against the rate limit), `since` keeps the items
+# created or updated at or after it, and `page`/`per_page` page a list. A fixture `.N.json` serves
+# from the Nth call of its endpoint on, until a later one replaces it.
+
+DOUBLE = '''#!/usr/bin/env python3
+"""A recorded GitHub double: ETags, 304s, `since` and pages; logs every call and its status."""
+import hashlib, json, os, sys
+from urllib.parse import parse_qs
+args = sys.argv[1:]
+root = os.environ["GH_STUB_DIR"]
+at = args.index("--method")
+method, endpoint, rest = args[at + 1], args[at + 2], args[at + 3:]
+path, _, query = endpoint.partition("?")
+params = {k: v[-1] for k, v in parse_qs(query).items()}
+name = path.replace("/", "__")
+count_file = os.path.join(root, "count." + method + "." + name)
+n = int(open(count_file).read()) + 1 if os.path.exists(count_file) else 1
+open(count_file, "w").write(str(n))
+asked = [rest[i + 1] for i, a in enumerate(rest) if a == "-H" and i + 1 < len(rest)]
+match = [h.split(":", 1)[1].strip() for h in asked if h.lower().startswith("if-none-match:")]
+def log(status):
+    with open(os.path.join(root, "calls.log"), "a") as out:
+        out.write(json.dumps([method, endpoint, rest, status]) + "\\n")
+if method != "GET":
+    log(201)
+    print("{}")
+    sys.exit(0)
+chosen = None
+for k in range(n, 0, -1):
+    candidate = os.path.join(root, name + "." + method + "." + str(k) + ".json")
+    if os.path.exists(candidate):
+        chosen = candidate
+        break
+plain = os.path.join(root, name + "." + method + ".json")
+chosen = chosen or (plain if os.path.exists(plain) else None)
+if chosen is None:
+    log(404)
+    sys.stderr.write("gh: Not Found (HTTP 404)\\n")
+    sys.exit(1)
+data = json.load(open(chosen))
+if isinstance(data, list):
+    if "since" in params:
+        data = [x for x in data if max(x.get("updated_at") or "", x.get("created_at") or "")
+                >= params["since"]]
+    size = int(params.get("per_page", 30))
+    page = int(params.get("page", 1))
+    data = data[(page - 1) * size : page * size]
+text = json.dumps(data)
+etag = '"' + hashlib.sha1(text.encode()).hexdigest()[:16] + '"'
+head = "-i" in rest
+if etag in match:
+    log(304)
+    if head:
+        sys.stdout.write("HTTP/2.0 304 Not Modified\\r\\nEtag: " + etag + "\\r\\n\\r\\n")
+    sys.stderr.write("gh: HTTP 304\\n")
+    sys.exit(1)
+log(200)
+if head:
+    sys.stdout.write("HTTP/2.0 200 OK\\r\\nContent-Type: application/json\\r\\nEtag: " + etag
+                     + "\\r\\n\\r\\n")
+sys.stdout.write(text)
+'''
+
+
+class Double(Stub):
+    """The recorded double; `counted()` are the calls GitHub would count (all but the 304s)."""
+
+    def __init__(self, tmp: Path) -> None:
+        super().__init__(tmp)
+        (self.bin / "gh").write_text(DOUBLE, encoding="utf-8")
+        self.cache = tmp / "cache"
+
+    def counted(self) -> list[list]:
+        return [c for c in self.calls() if c[3] != 304]
+
+    def forget(self) -> None:
+        """A new pass: the call log starts again, the fixtures and the cache stay."""
+        (self.dir / "calls.log").unlink(missing_ok=True)
+
+
+def run(proj, double: Double, *args: str, timeout: int = 60):
+    import os
+    import subprocess  # nosec B404 - fixed argument list, no shell
+
+    from test_session import SCRIPTS, clean_env
+
+    env = clean_env()
+    env.update(
+        PATH=f"{double.bin}{os.pathsep}{os.environ['PATH']}",
+        GH_STUB_DIR=str(double.dir),
+        AGK_READ_CACHE=str(double.cache),
+    )
+    return subprocess.run(  # nosec B603 - fixed argument list, no shell
+        [sys.executable, str(SCRIPTS / "session.py"), *args],
+        cwd=proj.root,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=timeout,
+    )
+
+
+@pytest.fixture
+def double(tmp_path):
+    return Double(tmp_path)
+
+
+@pytest.fixture
+def dproj(repo, double):
+    repo.git("remote", "add", "origin", f"https://github.com/{REPO}.git")
+    repo.write("config/reviewers.yaml", "version: 1\nverdict_authors: [boss, second]\n")
+    return repo
+
+
+def big_double(double: Double, count: int = 600) -> tuple[list[dict], list[int]]:
+    briefs = big_plan(count)
+    for b in briefs:
+        b["updated_at"] = b["created_at"] = "2026-11-01T00:00:00Z"
+    double.serve(ISSUES, briefs)
+    double.serve(PULLS, [])
+    double.serve(f"{ISSUES}/comments", [])
+    earliest = sorted(b["number"] for b in briefs if b["milestone"] is MILESTONES[0])
+    for number in earliest[:4]:
+        double.serve(f"{ISSUES}/{number}/comments", [])
+    return briefs, earliest
+
+
+def dplan(proj, double, *extra: str) -> dict:
+    out = run(proj, double, "plan", "--json", *extra)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert all(c[0] == "GET" for c in double.calls())
+    return json.loads(out.stdout)
+
+
+def test_a_cold_plan_costs_at_most_twenty_calls_and_a_warm_one_at_most_five(dproj, double):
+    """REQ-050"""
+    dproj.write("agk.toml", "[flow]\nmax_builders = 2\n")
+    _, earliest = big_double(double)
+    cold = dplan(dproj, double)
+    assert [s["brief"] for s in cold["start"]] == earliest[:2]
+    assert len(double.counted()) <= 20, len(double.counted())
+    double.forget()
+    warm = dplan(dproj, double)
+    assert [s["brief"] for s in warm["start"]] == earliest[:2]  # the same starts
+    assert len(double.counted()) <= 5, double.counted()
+    assert warm["reads"]["cached"] >= 1
