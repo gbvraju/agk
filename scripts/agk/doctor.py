@@ -486,6 +486,8 @@ HINTS = {
     "then check again",
     "forbidden": "GitHub refused the read although the account is an admin of the repository; read "
     "GitHub's message with `gh api` on the same path",
+    "admin-unknown": "GitHub refused the read and the account's admin rights could not be read; "
+    "`gh api repos/OWNER/REPO --jq .permissions.admin` prints true for an admin (brief #1223)",
     "not-github": "pass --repo OWNER/REPO for a repository on github.com",
     "no-kit-root": "pass --kit-root with the plugin or kit checkout",
     "version-mismatch": "use a kit of the same version as version in agk.toml, or run /agk:upgrade",
@@ -507,6 +509,7 @@ class Result:
     status: str  # ok | fail | cannot-check
     reason: str = ""
     message: str = ""
+    fix: str = ""  # a fix of this result alone (windows-tools), else the check's own
 
 
 class Refusal(Exception):
@@ -527,12 +530,17 @@ def plan_limited(text: str) -> bool:
     return any(words in low for words in PLAN_LIMIT_WORDS)
 
 
+# A 403 or 404 that does not say why: `no-admin` for every reader, but the repository and ruleset
+# reads ask for it raw and name it by `permissions.admin` (admin_reason; brief #1223, ADR-0522).
+REFUSED = "refused"
+
+
 def http_reason(status: str, message: str = "") -> str:
     if status == "403" and plan_limited(message):
         return "plan-limit"
-    return {"401": "gh-unauthenticated", "403": "no-admin", "404": "no-admin"}.get(
-        status, "bad-response"
-    )
+    if status == "403" and "admin rights" in message.lower():
+        return "no-admin"  # GitHub's own message names the missing rights
+    return {"401": "gh-unauthenticated", "403": REFUSED, "404": REFUSED}.get(status, "bad-response")
 
 
 def error_payload(data: Any) -> str | None:
@@ -542,12 +550,26 @@ def error_payload(data: Any) -> str | None:
     return None
 
 
+def admin_of(repo_data: Any) -> bool | None:
+    """`permissions.admin` of the repository read (`gh api repos/{owner}/{repo} --jq
+    .permissions.admin`), or None when it could not be read (brief #1223 answer 2)."""
+    permissions = repo_data.get("permissions") if isinstance(repo_data, dict) else None
+    admin = permissions.get("admin") if isinstance(permissions, dict) else None
+    return admin if isinstance(admin, bool) else None
+
+
 def admin_reason(reason: str, repo_data: Any) -> str:
     """`no-admin` stays only when the account is not known to be an admin: with
-    `permissions.admin` true the refusal has another cause, `forbidden` (brief #263 answer 1)."""
-    permissions = repo_data.get("permissions") if isinstance(repo_data, dict) else None
-    if reason == "no-admin" and isinstance(permissions, dict) and permissions.get("admin") is True:
+    `permissions.admin` true the refusal has another cause, `forbidden` (brief #263 answer 1). A
+    refusal that does not say why (`refused`, a raw read) is `no-admin` only with
+    `permissions.admin` false, and `admin-unknown` when that could not be read (brief #1223)."""
+    admin = admin_of(repo_data)
+    if reason == "no-admin" and admin is True:
         return "forbidden"
+    if reason == REFUSED:
+        if admin is None:
+            return "admin-unknown"
+        return "forbidden" if admin else "no-admin"
     return reason
 
 
@@ -559,13 +581,18 @@ class Reads:
         self.api_dir = api_dir
         self.seen: dict[tuple[str, str, str | None], tuple[Any, str]] = {}
 
-    def get(self, name: str, path: str, not_found: str | None = None) -> tuple[Any, str]:
+    def get(
+        self, name: str, path: str, not_found: str | None = None, raw: bool = False
+    ) -> tuple[Any, str]:
         """(data, "") or (None, reason class); a 404 is `not_found` when that is given. Each read
-        is made once (the repository is read by two checks, brief #370)."""
+        is made once (the repository is read by two checks, brief #370). A refusal that does not
+        say why is `no-admin`, or `refused` with `raw` for a reader that names it by
+        `permissions.admin` (admin_reason, brief #1223)."""
         key = (name, path, not_found)
         if key not in self.seen:
             self.seen[key] = self.read(name, path, not_found)
-        return self.seen[key]
+        data, reason = self.seen[key]
+        return (data, "no-admin") if reason == REFUSED and not raw else (data, reason)
 
     def read(self, name: str, path: str, not_found: str | None = None) -> tuple[Any, str]:
         if self.api_dir is not None:
@@ -612,8 +639,10 @@ def classify_failure(stdout: str, stderr: str) -> str:
         return "gh-unauthenticated"
     if "http 403" in text and plan_limited(text):
         return "plan-limit"
-    if "http 403" in text or "http 404" in text or "admin rights" in text:
-        return "no-admin"
+    if "admin rights" in text:
+        return "no-admin"  # GitHub's own message names the missing rights
+    if "http 403" in text or "http 404" in text:
+        return REFUSED
     if "could not resolve host" in text or "dial tcp" in text or "timeout" in text:
         return "offline"
     try:
@@ -676,14 +705,16 @@ def ruleset_results(reads: Reads, repo_data: Any, branch: str, config: dict) -> 
             out[check] = Result("cannot-check", reason)
 
     everything = ["ruleset-missing", *RULESET_IDS]
-    listing, reason = reads.get("rulesets", "/rulesets")
+    listing, reason = reads.get("rulesets", "/rulesets", raw=True)
     if not isinstance(listing, list):
         cannot_all(admin_reason(reason or "bad-response", repo_data), everything)
         return out
     branch_rulesets = [r for r in listing if isinstance(r, dict) and r.get("target") == "branch"]
     details = []
     for entry in sorted(branch_rulesets, key=lambda r: str(r.get("id"))):
-        data, reason = reads.get(f"ruleset-{entry.get('id')}", f"/rulesets/{entry.get('id')}")
+        data, reason = reads.get(
+            f"ruleset-{entry.get('id')}", f"/rulesets/{entry.get('id')}", raw=True
+        )
         if not isinstance(data, dict):
             cannot_all(admin_reason(reason or "bad-response", repo_data), everything)
             return out
@@ -772,7 +803,8 @@ def remote_results(
     reads: Reads, config: dict, report_installed: bool, writers: list[str]
 ) -> dict[str, Result]:
     out: dict[str, Result] = {}
-    repo_data, reason = reads.get("repo", "")
+    repo_data, reason = reads.get("repo", "", raw=True)
+    reason = admin_reason(reason, None) if reason else reason  # a failed admin read: brief #1223
     out["drift-workflow-state"] = workflow_state_result(reads, report_installed)
     out["issues-disabled"] = issues_result(repo_data, reason, writers)
     if not isinstance(repo_data, dict):
@@ -795,7 +827,8 @@ def remote_results(
         ("repo-delete-branch", "delete_branch_on_merge"),
     ):
         if key not in repo_data:
-            out[check] = Result("cannot-check", "no-admin")  # only shown to users with push access
+            # only shown to users with push access: `no-admin` only with permissions.admin false
+            out[check] = Result("cannot-check", admin_reason(REFUSED, repo_data))
         else:
             out[check] = Result("ok" if repo_data[key] is True else "fail")
     label, why = reads.get("label-agk-brief", "/labels/agk-brief", not_found="missing")
@@ -1171,6 +1204,56 @@ def placeholder_result(path: Path) -> Result:
     except (OSError, UnicodeDecodeError):
         return Result("cannot-check", "bad-response")
     return Result("fail" if PLACEHOLDER in text else "ok")
+
+
+# brief #1223 answer 1 (ADR-0522): reported on Windows only, after the checks of CHECKS.
+WINDOWS_TOOLS = (
+    "warn",
+    "python3, make and gitleaks are on PATH",
+    "a tool the hooks run is missing on this Windows machine",
+)
+WINDOWS_FIXES = {
+    "python3": "python3 is the Microsoft Store shortcut or absent: turn off the App execution "
+    "aliases for python.exe and python3.exe (Settings, Apps, Advanced app settings), then copy "
+    "python.exe to python3.exe in the folder of your Python install",
+    "make": "make is absent: winget install ezwinports.make",
+    "gitleaks": "gitleaks is absent: winget install gitleaks.gitleaks --version " + GITLEAKS_PIN,
+}
+
+
+def store_shortcut(path: str) -> bool:
+    """A `python3` under `WindowsApps` is the Store's alias, which opens the Store instead."""
+    return "windowsapps" in path.replace("/", "\\").lower().split("\\")
+
+
+def windows_tools_result(platform: str, which: Any) -> Result | None:
+    """`windows-tools`: None off Windows; else each tool the hooks run that is missing, with the
+    exact fix of each (brief #1223 answer 1)."""
+    if not platform.startswith("win"):
+        return None
+    python3 = which("python3")
+    missing = [] if python3 and not store_shortcut(python3) else ["python3"]
+    missing += [tool for tool in ("make", "gitleaks") if not which(tool)]
+    if not missing:
+        return Result("ok")
+    return Result(
+        "fail",
+        message=f" ({', '.join(missing)})",
+        fix="; ".join(WINDOWS_FIXES[tool] for tool in missing),
+    )
+
+
+def windows_tools_entry(res: Result) -> dict:
+    severity, ok_text, fail_text = WINDOWS_TOOLS
+    message = (ok_text if res.status == "ok" else fail_text) + res.message
+    fix = res.fix or "; ".join(WINDOWS_FIXES.values())
+    return {
+        "id": "windows-tools",
+        "severity": severity,
+        "status": res.status,
+        "message": message,
+        "fix": fix,
+    }
 
 
 def drift_file_result(root: Path) -> Result:
@@ -1571,6 +1654,9 @@ def run_checks(
         if res.status == "cannot-check":
             entry["reason"] = res.reason
         report.append(entry)
+    windows = windows_tools_result(sys.platform, shutil.which)
+    if windows is not None:
+        report.append(windows_tools_entry(windows))
     return report, version
 
 
@@ -1684,9 +1770,7 @@ def configured_test_found(root: Path, dirs: list[str], patterns: list[str]) -> b
         if not base.is_dir():
             continue
         for _here, dirnames, filenames in os.walk(base):
-            dirnames[:] = [
-                d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS
-            ]
+            dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS]
             if any(fnmatch.fnmatch(n, p) for n in filenames for p in patterns):
                 return True
     return False
@@ -1698,9 +1782,7 @@ def frontend_count(root: Path) -> int:
     for here, dirnames, filenames in os.walk(root):
         rel_here = Path(here).relative_to(root).as_posix()
         dirnames[:] = walked_dirs("" if rel_here == "." else rel_here, dirnames)
-        count += sum(
-            1 for n in filenames if any(fnmatch.fnmatch(n, p) for p in FRONTEND_PATTERNS)
-        )
+        count += sum(1 for n in filenames if any(fnmatch.fnmatch(n, p) for p in FRONTEND_PATTERNS))
     return count
 
 
