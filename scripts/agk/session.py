@@ -560,10 +560,11 @@ def gh(endpoint: str, *extra: str, method: str = "GET") -> Any:
     asked = ["-i"] if cacheable else []
     if entry is not None:
         asked += ["-H", f"If-None-Match: {entry['etag']}"]
+    fields = who_fields(endpoint, method, extra)  # a comment ends `Who: AGK` (ADR-0546)
     for attempt in range(RATE_WAITS + 1):
         CALLS += 1
         proc = subprocess.run(  # nosec B603 B607 - fixed argument list, no shell
-            ["gh", "api", "--method", method, endpoint, *who_fields(endpoint, method, extra), *asked],
+            ["gh", "api", "--method", method, endpoint, *fields, *asked],
             capture_output=True,
             text=True,
             encoding="utf-8",

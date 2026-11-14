@@ -279,7 +279,10 @@ def test_440_next_take_keeps_todays_behaviour_with_the_one_take(proj, stub):
         out = session(proj, stub, *argv) if args else look(proj, stub, "--take")
         assert out.returncode == 0 and taken(out) == 6, out.stdout + out.stderr
         assert claim_line(out) is None
-    assert posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}\n\nWho: AGK"]]] * 2
+    assert (
+        posts(stub)
+        == [["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}\n\nWho: AGK"]]] * 2
+    )
 
 
 def test_440_after_in_next_mode_still_takes(proj, stub):
@@ -288,7 +291,9 @@ def test_440_after_in_next_mode_still_takes(proj, stub):
     free(stub, 6)
     out = session(proj, stub, "after", "--session", "s-me")
     assert out.returncode == 0 and taken(out) == 6, out.stdout + out.stderr
-    assert posts(stub) == [["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}\n\nWho: AGK"]]]
+    assert posts(stub) == [
+        ["POST", f"{ISSUES}/6/comments", ["-f", f"body=taken: s-me {DAY}\n\nWho: AGK"]]
+    ]
 
 
 def test_440_the_printed_claim_command_takes_the_same_brief(proj, stub):
@@ -342,7 +347,9 @@ def test_440_next_shows_a_stalled_pull_request_without_taking_it_over(proj, stub
     assert posts(stub) == []
     out = look(proj, stub, "--take")
     assert out.stdout.startswith("stalled #7\n") and "take it over with" not in out.stdout
-    assert posts(stub) == [["POST", f"{ISSUES}/7/comments", ["-f", f"body=taken over: s-me {DAY}\n\nWho: AGK"]]]
+    assert posts(stub) == [
+        ["POST", f"{ISSUES}/7/comments", ["-f", f"body=taken over: s-me {DAY}\n\nWho: AGK"]]
+    ]
 
 
 @pytest.mark.parametrize(

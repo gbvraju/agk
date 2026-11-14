@@ -813,7 +813,9 @@ def test_a_brief_with_every_build_merged_is_closed(monkeypatch):
     }
     title = f"Example writer (brief #{CLOSE_BRIEF} build (b))"
     writes, _ = after_close(monkeypatch, replies, f"Brief: #{CLOSE_BRIEF}\n", title)
-    assert len(writes) == 2 and comment_of(writes[0]) == f"All builds merged; last #7 {SHA[:12]}{WHO}"
+    assert (
+        len(writes) == 2 and comment_of(writes[0]) == f"All builds merged; last #7 {SHA[:12]}{WHO}"
+    )
 
 
 def test_a_brief_with_build_b_unmerged_stays_open_with_no_comment(monkeypatch):
@@ -904,7 +906,7 @@ def test_an_adopted_project_with_agk_mk_and_no_makefile_reaches_the_target(tmp_p
     home.mkdir()
     seen = tmp_path / "seen.txt"
     (tree / "agk.mk").write_text(
-        f"agk-governance:\n\t@echo \"reached $(AGK_BASE)\" > {seen.as_posix()}\n", encoding="utf-8"
+        f'agk-governance:\n\t@echo "reached $(AGK_BASE)" > {seen.as_posix()}\n', encoding="utf-8"
     )
     assert not (tree / "Makefile").exists()
     argv = merge_cleared.governance_argv(tree, home, home / "pr-body.md", BASE, 60.0)

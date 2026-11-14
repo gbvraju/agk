@@ -1883,7 +1883,7 @@ def who_fields(endpoint: str, method: str, fields, role: str | None = None) -> l
         return out
     for i in range(1, len(out)):
         if out[i - 1] in FIELD_FLAGS and out[i].startswith("body="):
-            out[i] = "body=" + with_who(out[i][len("body="):], role=role)
+            out[i] = "body=" + with_who(out[i][len("body=") :], role=role)
     return out
 
 

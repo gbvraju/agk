@@ -46,7 +46,7 @@ def test_with_who_never_appends_twice():
     once = common.with_who("taken: s1 2026-11-14")
     assert common.with_who(once) == once
     assert common.with_who(once, role="router") == once
-    owner = "Owner decision 2026-11-14 10:00 IST: \"yes\"\n\nWho: ProductOwner"
+    owner = 'Owner decision 2026-11-14 10:00 IST: "yes"\n\nWho: ProductOwner'
     assert common.with_who(owner) == owner
 
 
@@ -127,7 +127,10 @@ def test_route_comments_end_with_who_agk_router(recorded):
     """REQ-050: brief #1289 answers 1 and 5b (route.py)."""
     route.write(COMMENTS, "-f", "body=Correction needed: x (verdict comment 9)", method="POST")
     route.write("repos/example/project/issues", "-f", "body=red", method="POST")
-    assert recorded.bodies() == ["Correction needed: x (verdict comment 9)\n\nWho: AGK router", "red"]
+    assert recorded.bodies() == [
+        "Correction needed: x (verdict comment 9)\n\nWho: AGK router",
+        "red",
+    ]
 
 
 def test_merge_cleared_comments_end_with_who_agk(recorded):
@@ -181,8 +184,11 @@ def test_a_tell_reads_the_same(body):
 
 
 @pytest.mark.parametrize(
-    "body", marked("Slot: active 2026-11-14T10:00:00Z b1 run1\nlast run: "
-                   "2026-11-14T09:00:00Z to 2026-11-14T09:05:00Z\ndecided: none")  # fmt: skip
+    "body",
+    marked(
+        "Slot: active 2026-11-14T10:00:00Z b1 run1\nlast run: "
+        "2026-11-14T09:00:00Z to 2026-11-14T09:05:00Z\ndecided: none"
+    ),  # fmt: skip
 )
 def test_a_slot_marker_reads_the_same(body):
     """REQ-050: brief #1289 answer 5c (the marker and its log lines)."""
@@ -213,9 +219,7 @@ def test_a_verdict_reads_the_same(body):
     assert common.verdict_problem(body) is None
 
 
-@pytest.mark.parametrize(
-    "body", marked(f"Verdict: fix list {SHA}\n1. Fix the test (rule: none)")
-)
+@pytest.mark.parametrize("body", marked(f"Verdict: fix list {SHA}\n1. Fix the test (rule: none)"))
 def test_a_fix_list_reads_the_same(body):
     """REQ-050: brief #1289 answer 5c (the numbered items of a fix list)."""
     assert common.fix_items(body) == ["1. Fix the test (rule: none)"]
@@ -235,7 +239,9 @@ def test_final_lines_read_the_same(body):
 def test_a_report_reads_the_same(body):
     """REQ-050: brief #1289 answer 5c (`Report:` first lines)."""
     first = merge_cleared.first_line({"body": body})
-    assert route.HANDING_OVER.match(first) is not None and first == f"Report: {SHA} handing over: done"
+    assert (
+        route.HANDING_OVER.match(first) is not None and first == f"Report: {SHA} handing over: done"
+    )
 
 
 def test_the_merger_says_a_line_once_with_or_without_the_who_line(monkeypatch, recorded):
