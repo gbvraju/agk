@@ -798,7 +798,7 @@ EVIDENCE_OK = [
 
 @pytest.mark.parametrize("command", EVIDENCE_OK)
 def test_a_both_forms_of_the_evidence_check_are_allowed(ev, command):
-    """REQ-039: brief #1281 answer 3 (a), with no record or one of a scratch or the shared folder."""
+    """REQ-039: brief #1281 answer 3 (a): no record, or one of a scratch or the shared folder."""
     found = ev.decide(command.format(record=ev.record, shared=ev.shared))
     assert found is None, command
 
