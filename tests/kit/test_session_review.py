@@ -570,10 +570,13 @@ def test_an_unreadable_issue_list_or_comments_fail_and_never_read_as_empty(proj,
     assert out.returncode == 2 and "empty" not in out.stdout
 
 
-def test_two_open_conductor_issues_fail_naming_the_label(proj, stub):
-    """REQ-037: brief #408 (the one open `agk-conductor` issue; Q-408-2)."""
+def test_two_open_conductor_issues_read_the_newest(proj, stub):
+    """REQ-037: brief #408 (Q-408-2), as brief #1251 answer 3c changed it (ADR-0529): a
+    roll-over leaves two open issues for a moment, and the newest is read."""
     asks(stub)
     issues(stub, [], extra=[{**CONDUCTOR, "number": 51}])
     stub.serve(f"{ISSUES}/51/comments", [])
     out = session(proj, stub, "review-queue")
-    assert out.returncode == 2 and "agk-conductor" in out.stdout
+    assert out.returncode == 0 and out.stdout.splitlines() == ["empty"], out.stdout
+    read = [c[1].split("?")[0] for c in stub.calls()]
+    assert f"{ISSUES}/51/comments" in read and f"{ISSUES}/50/comments" not in read

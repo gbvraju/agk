@@ -286,8 +286,9 @@ if method != "GET":
     made = os.path.join(root, name + "." + method + ".json")
     print(open(made).read() if os.path.exists(made) else "{}")
     sys.exit(0)
-if "state" in params and os.path.exists(os.path.join(root, name + "@" + params["state"] + ".GET.json")):
-    name = name + "@" + params["state"]  # a fixture of one state: `issues?state=all` alone
+one = name + "@" + params.get("state", "")
+if "state" in params and os.path.exists(os.path.join(root, one + ".GET.json")):
+    name = one  # a fixture of one state: `issues?state=all` alone
 chosen = None
 for k in range(n, 0, -1):
     candidate = os.path.join(root, name + "." + method + "." + str(k) + ".json")

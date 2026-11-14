@@ -131,12 +131,20 @@ def test_the_plan_as_data_is_read_whatever_the_settings(project, tmp, toml):
     assert allowed(run_hook(f"python3 {SESSION} plan --json", project, tmp))
 
 
+@pytest.mark.parametrize("command", ["plan --json --if-changed", "rollover"])
+def test_the_change_only_re_plan_and_the_roll_over_are_allowed(project, tmp, command):
+    """REQ-050: brief #1251 answers 3c and 6 (ADR-0529)."""
+    assert allowed(run_hook(f"python3 {SESSION} {command}", project, tmp))
+
+
 @pytest.mark.parametrize(
     "command",
     [
         f"python3 {SESSION} plan",
         f"python3 {SESSION} plan --json --all",
         f"python3 {SESSION} plan -j",
+        f"python3 {SESSION} plan --if-changed",
+        f"python3 {SESSION} rollover --now",
     ],
 )
 def test_no_other_form_of_the_plan_is_allowed(project, tmp, command):

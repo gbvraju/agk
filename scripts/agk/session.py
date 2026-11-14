@@ -55,6 +55,14 @@ queue does, so a loop wakes the conductor only then. With `[flow] auto_merge = t
 default branch (brief #531, SPEC-0039 rule 9), a pull request that would be skipped for a verdict
 on its head, whose latest `Verdict:` comment is exactly `Verdict: cleared <its full head>`, is
 listed as `#N <head7> cleared, not merged`, and the conductor runs `merge_cleared.py` for it again.
+Brief #1251 build (b) (ADR-0529): every GET goes through a read cache, one file per repository in
+the temp folder (`AGK_READ_CACHE` names another folder, `off` turns it off), that sends the last
+ETag as `If-None-Match` and reuses the kept body on a 304, which GitHub does not count against its
+rate limit; the waits read comments `since` the newest seen, merged by id, and back off from
+`--interval` to 300 s while nothing changes; `plan --if-changed` reuses the last plan while the
+newest change on GitHub, the commit and `agk.toml` are the same (30 minutes at most); `rollover`
+moves the `agk-conductor` issue past 500 comments to a new one, linked `Continued in #<n>`, which a
+wait follows, and every reader takes the newest open issue with that label.
 A wait never goes silent (brief #210): when GitHub cannot be read for 5 polls in a row it prints
 `error: <what> cannot be read` and exits 4, and `--assign` prints `waiting on #<issue> since
 <id>` when it starts. `--assign` also takes at once the newest `Assign:` for the session posted
@@ -446,7 +454,8 @@ class ReadCache:
             except (OSError, ValueError):
                 theirs = {}
             theirs = theirs if isinstance(theirs, dict) else {}
-            entries = theirs.get("entries") if isinstance(theirs.get("entries"), dict) else {}
+            found = theirs.get("entries")
+            entries: dict = found if isinstance(found, dict) else {}
             for key in keys:
                 if key.startswith("\0"):
                     theirs[key[1:]] = mine.get(key[1:])
@@ -562,7 +571,7 @@ def pages(endpoint: str) -> list | None:
         page += 1
 
 
-PASS_STAMP = "plan_pass"  # the read cache's note of when the last plan began (ADR-0529)
+STAMP_NOTE = "plan_pass"  # the read cache's note of when the last plan began (ADR-0529)
 ISSUE_OF = re.compile(r"/issues/(\d+)$")
 
 
@@ -576,7 +585,7 @@ def changed_since_pass(repo: str) -> None:
     every other issue, cached after that stamp, are then read with no request. Without a stamp,
     or when the read fails, every page is asked as before (with its ETag)."""
     CACHE.unchanged = None
-    stamp = CACHE.meta(f"repos/{repo}/", PASS_STAMP)
+    stamp = CACHE.meta(f"repos/{repo}/", STAMP_NOTE)
     if not isinstance(stamp, (int, float)):
         return
     since = stamp - SKEW
@@ -595,7 +604,7 @@ def changed_since_pass(repo: str) -> None:
 def end_pass(repo: str, began: float) -> None:
     """The plan's stamp for the next pass's `since` read; the pass's skips end with it."""
     CACHE.unchanged = None
-    CACHE.set_meta(f"repos/{repo}/", PASS_STAMP, began)
+    CACHE.set_meta(f"repos/{repo}/", STAMP_NOTE, began)
 
 
 def repo_name(root) -> str:
@@ -799,9 +808,10 @@ class Thread:
 
     def moved(self, seen: int, allowed: AbstractSet[str]) -> int | None:
         """The issue a `Continued in #<n>` by a listed author newer than `seen` points to."""
-        for cid in sorted(self.items or {}):
-            match = CONTINUED.fullmatch(first_line(self.items[cid])) if cid > seen else None
-            if match and author_of(self.items[cid]) in allowed:
+        items = self.items or {}
+        for cid in sorted(items):
+            match = CONTINUED.fullmatch(first_line(items[cid])) if cid > seen else None
+            if match and author_of(items[cid]) in allowed:
                 return int(match.group(1))
         return None
 
@@ -2715,7 +2725,9 @@ def rollover(root) -> int:
     are read on the newest issue."""
     repo = repo_name(root)
     found = pages(f"repos/{repo}/issues?state=open&labels={ASSIGN_LABEL}")
-    issues = [i for i in found or [] if "pull_request" not in i and isinstance(i.get("number"), int)]
+    issues = [
+        i for i in found or [] if "pull_request" not in i and isinstance(i.get("number"), int)
+    ]
     if found is None or not issues:
         raise CheckError(f"rule 12: an open issue labelled {ASSIGN_LABEL} is needed")
     old = max(issues, key=lambda i: i["number"])
@@ -2723,7 +2735,7 @@ def rollover(root) -> int:
     if count <= ROLLOVER_AT:
         print(f"rollover: #{old['number']} has {count} comments, at most {ROLLOVER_AT}; no change")
         return 0
-    authors = counted_authors(verdict_authors(root), None)
+    authors = counted_authors(verdict_authors(root), None) or []
     waiting, _ = waiting_requests(repo, authors)
     comments = pages(f"repos/{repo}/issues/{old['number']}/comments")
     if comments is None:
